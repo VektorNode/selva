@@ -22,11 +22,9 @@ function healthy(instanceId: string): RestartHealth {
 	return { status: 'ok', instanceId };
 }
 
-/**
- * Drives the loop on a virtual clock. `sleep` advances the clock instead of
- * waiting, so a 5-minute deadline resolves in microseconds — and a probe that
- * never settles can be modelled without hanging the test.
- */
+// Drives the loop on a virtual clock: `sleep` advances the clock instead of
+// waiting, so a 5-minute deadline resolves in microseconds and a probe that
+// never settles can be modelled without hanging the test.
 function harness(overrides: Partial<RestartProbeScript> = {}) {
 	const script: RestartProbeScript = {
 		health: async () => null,

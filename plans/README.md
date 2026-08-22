@@ -36,11 +36,14 @@ Each plan below links to its tracking issue at the top of the file.
 | [token-plan](./features/token-plan.md)                                          | [#97](https://github.com/VektorNode/selva/issues/97) + [#214](https://github.com/VektorNode/selva/issues/214)/[#215](https://github.com/VektorNode/selva/issues/215)/[#216](https://github.com/VektorNode/selva/issues/216) |
 | [admin-updates-yak-management](./features/admin-updates-yak-management.md)      | [#217](https://github.com/VektorNode/selva/issues/217) — Track A only                                                                                                                                                       |
 | [plugin-compat-gate](./features/plugin-compat-gate.md)                          | [#218](https://github.com/VektorNode/selva/issues/218)                                                                                                                                                                      |
+| [mountable-api](./features/mountable-api.md)                                    | **unfiled** — in flight, handoff is in the plan itself                                                                                                                                                                      |
 | [presolve-bundle](./features/presolve-bundle.md)                                | **unfiled** — parked on a storage decision                                                                                                                                                                                  |
 | [cloud-binary-transport](./features/cloud-binary-transport.md)                  | **unfiled** — deliberately deferred                                                                                                                                                                                         |
 
-The last two have no issue on purpose: an issue for work nobody can start is noise. They stay as
-design documents until something unblocks them.
+The three unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
+blocked, and an issue for work nobody can start is noise; they stay as design documents until
+something unblocks them. mountable-api is the opposite case — it is being worked through directly,
+so the handoff lives in the plan rather than in a tracker.
 
 ## Closed since the last index
 

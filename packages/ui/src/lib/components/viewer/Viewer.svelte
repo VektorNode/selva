@@ -121,6 +121,7 @@
 	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
 	let clearEdges: ((root: THREE.Object3D) => void) | null = null;
 	let invalidate: (() => void) | null = null;
+	let captureImage: ThreeViewer['captureImage'] | null = null;
 	let setLook: ((look: Look) => void) | null = null;
 	let updateGridScale: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
@@ -210,6 +211,7 @@
 		applyEdges = init.applyEdges;
 		clearEdges = init.clearEdges;
 		invalidate = init.invalidate;
+		captureImage = init.captureImage;
 		setLook = init.setLook;
 		updateGridScale = init.updateGridScale;
 		fitToView = init.fitToView;
@@ -322,23 +324,19 @@
 		return usefulEntries.length > 0;
 	}
 
-	function downloadScreenshot() {
-		if (!canvas) return;
+	async function downloadScreenshot() {
+		const blob = await captureImage?.();
+		if (!blob) return;
 
-		requestAnimationFrame(() => {
-			canvas.toBlob((blob) => {
-				if (!blob) return;
-				const url = URL.createObjectURL(blob);
-				const link = document.createElement('a');
-				const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-				link.href = url;
-				link.download = `viewer-${timestamp}.png`;
-				document.body.appendChild(link);
-				link.click();
-				document.body.removeChild(link);
-				URL.revokeObjectURL(url);
-			});
-		});
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+		link.href = url;
+		link.download = `viewer-${timestamp}.png`;
+		document.body.appendChild(link);
+		link.click();
+		document.body.removeChild(link);
+		URL.revokeObjectURL(url);
 	}
 </script>
 
@@ -569,7 +567,7 @@
 		{#if sceneManagerOpen && scene && outliner}
 			<Resizable.Handle withHandle />
 			<Resizable.Pane id="scene-manager" order={2} defaultSize={15} minSize={8} maxSize={30}>
-				<SceneManager {outliner} {sceneVersion} />
+				<SceneManager {outliner} {sceneVersion} onVisibilityChange={() => invalidate?.()} />
 			</Resizable.Pane>
 		{/if}
 	</Resizable.PaneGroup>

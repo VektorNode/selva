@@ -15,8 +15,6 @@ import { env } from '$env/dynamic/private';
 import { isNewer, satisfiesRange } from '@selvajs/server/ops';
 import { channelRegistryUrl, type ReleaseChannel } from './releaseChannel.server';
 
-// Channel-aware comparison lives in `@selvajs/server/ops`; re-exported so
-// existing consumers keep importing it from here.
 export { isNewer };
 
 /**
@@ -37,15 +35,13 @@ export interface NodeCompatibility {
 }
 
 export interface UpdateAvailability {
-	/** The channel this check was run against. */
 	channel: ReleaseChannel;
 	/** Installed @selvajs/selva version, or null if it couldn't be read. */
 	current: string | null;
 	/** Latest published version on the channel, or null if the registry was unreachable. */
 	latest: string | null;
-	/** True when we have both versions and the channel's published one differs (newer, OR a stable revert target). */
+	/** True when both versions are known and differ — a forward update OR a stable revert target. */
 	updateAvailable: boolean;
-	/** Node engine check against the target release. */
 	nodeCompatibility: NodeCompatibility;
 }
 

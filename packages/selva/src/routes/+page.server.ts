@@ -1,5 +1,6 @@
 import type { PageServerLoad } from './$types';
-import { listVisibleDefinitions } from '$lib/server/definitions/visibility.server';
+import { listVisibleDefinitions } from '@selvajs/server/definitions';
+import { accessDepsFromConfig } from '$lib/server/access.server';
 import { renderThrown } from '@selvajs/server/logging';
 import type { DefinitionRecord } from '@selvajs/platform';
 
@@ -28,10 +29,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const profile = locals.profile;
 
 	try {
-		const { items, projects } = await listVisibleDefinitions(locals.ctx!, {
-			limit: 200,
-			statuses: ['published']
-		});
+		const { items, projects } = await listVisibleDefinitions(
+			locals.ctx!,
+			{ limit: 200, statuses: ['published'] },
+			accessDepsFromConfig(locals.providers)
+		);
 
 		const starredIds = new Set(profile.starredDefinitions);
 		const byGuid = new Map(items.map((r) => [r.guid, r]));

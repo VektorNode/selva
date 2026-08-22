@@ -2,9 +2,8 @@ import { env } from '$env/dynamic/private';
 import { createTokenCodec, type TokenCodec } from '@selvajs/server/tokens';
 
 /**
- * Invite-token primitives — thin binding over `@selvajs/server/tokens`
- * (`createTokenCodec`), mirroring the share-link design (see
- * `shareLinks/token.server.ts`).
+ * Invite-token primitives — thin binding over `@selvajs/server/tokens`'s
+ * `createTokenCodec`, mirroring the share-link design.
  *
  * ## Format
  *   raw    = `invite_<base64url(32 random bytes)>`
@@ -15,7 +14,7 @@ import { createTokenCodec, type TokenCodec } from '@selvajs/server/tokens';
 
 const TOKEN_PREFIX = 'invite_';
 
-// Lazy + re-keyed on the secret — same rationale as the share-link binding.
+// Lazy + re-keyed on the secret so tests that mutate the env stub per-scenario see the change.
 let cached: { secret: string; codec: TokenCodec } | null = null;
 function getCodec(): TokenCodec {
 	const secret = env.SELVA_HMAC_KEY;
@@ -28,6 +27,11 @@ function getCodec(): TokenCodec {
 		cached = { secret, codec: createTokenCodec({ prefix: TOKEN_PREFIX, secret }) };
 	}
 	return cached.codec;
+}
+
+/** The codec itself, for the composition root to put on `SelvaDeps.tokens`. */
+export function inviteCodec(): TokenCodec {
+	return getCodec();
 }
 
 /** Mint: generate a fresh raw token. Show to the recipient exactly once. */

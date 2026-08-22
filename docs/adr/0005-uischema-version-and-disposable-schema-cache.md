@@ -54,7 +54,7 @@ Concretely:
    compute plugin can't thrash the cache with schemas that would immediately be stale again.
 
 3. **Newer-than-supported is rejected, loudly.** `assertSupportedSchemaVersion` in
-   [schemaExtraction.server.ts](../../packages/selva/src/lib/server/definitions/schemaExtraction.server.ts)
+   [schema-extraction.ts](../../packages/server/src/definitions/schema-extraction.ts)
    throws `SchemaExtractionError('unsupported')` when an extracted schema's version is **newer** than
    `UI_SCHEMA_VERSION` — surfaced as 422 with a "this server supports ≤ X" message at upload, and as
    a classified `DefinitionLoadError` at render. Older versions pass: older shapes only lack optional

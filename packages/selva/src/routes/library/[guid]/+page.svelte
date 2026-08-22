@@ -5,8 +5,22 @@
 	import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
+	import MainNav from '$lib/components/MainNav.svelte';
+	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import { page } from '$app/state';
+	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	let { data }: PageProps = $props();
+
+	// Reachable anonymously through a share token, so the app nav is gated on a real session.
+	const pageData = $derived(
+		page.data as {
+			user?: { platformPermissions?: PlatformPermission[] } | null;
+			ctx?: { orgPermissions?: OrgPermission[] } | null;
+			branding?: { name: string };
+		}
+	);
+	const isAuthed = $derived(!!pageData.user);
 
 	function shouldShowViewer(): boolean {
 		return Boolean(
@@ -37,10 +51,18 @@
 	title={data.schema?.name || data.schema.description}
 	logo={data.orgLogoUrl ?? undefined}
 	showModeToggle={true}
+	brandName={pageData.branding?.name}
+	homeUrl="/"
 	solveDeadlineMs={data.solveDeadlineMs}
 	footerComponent={ServerFooter}
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >
+	{#snippet navItems()}
+		{#if isAuthed}
+			<MainNav />
+		{/if}
+	{/snippet}
+
 	{#snippet headerRight()}
 		{#if data.versionId}
 			<span
@@ -55,6 +77,12 @@
 				Draft preview
 			</span>
 		{/if}
-		<UserChip />
+		{#if isAuthed}
+			<UserChip />
+			<SettingsMenu
+				platformPermissions={pageData.user?.platformPermissions ?? []}
+				orgPermissions={pageData.ctx?.orgPermissions ?? []}
+			/>
+		{/if}
 	{/snippet}
 </ComputeApp>

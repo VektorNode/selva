@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import { getDataProvider, getEventSink, getPermissionStore } from '$lib/server/providers.server';
 import {
 	assertCanGrantPlatformPermissions,

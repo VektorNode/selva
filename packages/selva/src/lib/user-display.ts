@@ -13,11 +13,9 @@ interface UserLike {
 	email?: string | null;
 }
 
-/**
- * Case-insensitive: the allowlist case-folds the UPN it materializes `email`
- * from, but leaves the forwarded display name as the IdP sent it, so the
- * duplicate pair often differs only in case.
- */
+// Case-insensitive: the allowlist case-folds the UPN it materializes `email`
+// from, but leaves the forwarded display name as the IdP sent it, so the
+// duplicate pair often differs only in case.
 export function displayNameIsEmail(user: UserLike): boolean {
 	if (!user.displayName || !user.email) return false;
 	return user.displayName.trim().toLowerCase() === user.email.trim().toLowerCase();

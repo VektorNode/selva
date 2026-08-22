@@ -8,8 +8,8 @@ import type {
 	PlatformPermission
 } from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
-import { getAuthProvider } from '$lib/server/auth.server';
-import { listAllOrgMembers } from '$lib/server/org-members.server';
+import { getAuthProvider } from '$lib/server/providers.server';
+import { listAllOrgMembers } from '@selvajs/server/organizations';
 import {
 	getLogger,
 	getOrganizationProvider,
@@ -65,7 +65,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			// invalidation of this page.
 			let memberByUserId = new Map<string, OrgMember>();
 			if (activeOrgId) {
-				const members = await listAllOrgMembers(orgs, activeOrgId);
+				const members = await listAllOrgMembers(orgs, activeOrgId, getLogger());
 				memberByUserId = new Map(members.map((m) => [m.userId, m]));
 			}
 			users = page.items.map((u) => {

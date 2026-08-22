@@ -9,7 +9,8 @@
 		SectionHeader,
 		Tabs,
 		Textarea,
-		toast
+		toast,
+		ConfirmDialog
 	} from '@selvajs/ui';
 	import { ArrowLeft, FileText, Plus, Settings, Shield, Trash2, X } from '@lucide/svelte';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -37,6 +38,7 @@
 	let descriptionInput = $state(data.project.description ?? '');
 	let savingSettings = $state(false);
 	let deleting = $state(false);
+	let confirmingDelete = $state(false);
 
 	$effect(() => {
 		nameInput = data.project.name;
@@ -72,7 +74,6 @@
 	}
 
 	async function deleteProject() {
-		if (!confirm(`Delete “${data.project.name}”? This cannot be undone.`)) return;
 		deleting = true;
 		try {
 			const res = await fetch(`/api/admin/projects/${data.project.id}`, { method: 'DELETE' });
@@ -81,6 +82,7 @@
 				throw new Error(body.message ?? `HTTP ${res.status}`);
 			}
 			toast.success('Project deleted');
+			confirmingDelete = false;
 			goto('/admin/projects');
 		} catch (err) {
 			toast.error((err as Error).message);
@@ -387,7 +389,7 @@
 					</div>
 					<div class="flex items-center justify-between pt-2">
 						<Button
-							onclick={deleteProject}
+							onclick={() => (confirmingDelete = true)}
 							variant="ghost"
 							size="sm"
 							disabled={deleting}
@@ -405,3 +407,13 @@
 		</Tabs.Content>
 	</Tabs.Root>
 </div>
+
+<ConfirmDialog
+	bind:open={confirmingDelete}
+	title="Delete project?"
+	description={`Delete "${data.project.name}"? This cannot be undone.`}
+	confirmLabel="Delete"
+	pendingLabel="Deleting…"
+	variant="destructive"
+	onConfirm={deleteProject}
+/>

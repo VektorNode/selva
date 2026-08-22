@@ -66,15 +66,40 @@
 			"types": "./dist/access/index.d.ts",
 			"import": "./dist/access/index.js"
 		},
+		"./api": {
+			"selva-source": "./src/api/index.ts",
+			"types": "./dist/api/index.d.ts",
+			"import": "./dist/api/index.js"
+		},
+		"./handlers": {
+			"selva-source": "./src/handlers/index.ts",
+			"types": "./dist/handlers/index.d.ts",
+			"import": "./dist/handlers/index.js"
+		},
 		"./ops": {
 			"selva-source": "./src/ops/index.ts",
 			"types": "./dist/ops/index.d.ts",
 			"import": "./dist/ops/index.js"
 		},
+		"./projects": {
+			"selva-source": "./src/projects/index.ts",
+			"types": "./dist/projects/index.d.ts",
+			"import": "./dist/projects/index.js"
+		},
+		"./organizations": {
+			"selva-source": "./src/organizations/index.ts",
+			"types": "./dist/organizations/index.d.ts",
+			"import": "./dist/organizations/index.js"
+		},
 		"./notifications": {
 			"selva-source": "./src/notifications/index.ts",
 			"types": "./dist/notifications/index.d.ts",
 			"import": "./dist/notifications/index.js"
+		},
+		"./testing": {
+			"selva-source": "./src/testing/index.ts",
+			"types": "./dist/testing/index.d.ts",
+			"import": "./dist/testing/index.js"
 		}
 	},
 	"files": [
@@ -95,8 +120,10 @@
 	},
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
+		"@selvajs/notifications": "workspace:^",
 		"@selvajs/platform": "workspace:^",
-		"@selvajs/schemas": "workspace:^"
+		"@selvajs/schemas": "workspace:^",
+		"zod": "catalog:"
 	},
 	"peerDependencies": {
 		"@sentry/node": ">=8",
@@ -116,6 +143,7 @@
 	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
+		"@selvajs/local-provider": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/nodemailer": "^8.0.1",
 		"nodemailer": "^9.0.5",

@@ -3,10 +3,10 @@ import { renderThrown } from '@selvajs/server/logging';
 import { getLogger, providers } from './providers.server.js';
 
 /**
- * Boot-time integrity report. Populated once on first import, then cached.
- * Checks at-rest secret decryption (compute server apiKeys) for any provider
- * that exposes `verifySecrets` — both the local (on-disk) and Supabase (in-DB)
- * compute-server stores encrypt apiKeys and implement it.
+ * Boot-time integrity report. Checks at-rest secret decryption (compute
+ * server apiKeys) for any provider that exposes `verifySecrets` — both the
+ * local (on-disk) and Supabase (in-DB) compute-server stores encrypt apiKeys
+ * and implement it.
  *
  * Goals:
  *  - Fail loudly at deploy time when `SELVA_AT_REST_KEY` doesn't match what
@@ -17,7 +17,7 @@ import { getLogger, providers } from './providers.server.js';
  *
  * Does NOT block request serving — paired with per-row tolerance in
  * `LocalComputeServerStore.decryptApiKeys`, the app keeps rendering and an
- * operator can recover via `/admin/compute`. See docs/Troubleshooting.md.
+ * operator can recover via `/admin/compute`.
  */
 export interface BootHealth {
 	checkedAt: string;

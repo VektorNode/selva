@@ -1,9 +1,9 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { ProviderError, type ILogger } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
-import type { ZodError } from 'zod';
-import { SchemaExtractionError } from './definitions/schemaExtraction.server';
-import { ComputeServerUnconfiguredError } from './compute/resolve.server';
+import { isApiError } from '@selvajs/server/api';
+import { SchemaExtractionError } from '@selvajs/server/definitions';
+import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 
 // ============================================================================
 // Error envelope
@@ -82,14 +82,16 @@ function friendlyConstraintMessage(raw: string): string | null {
 	return null;
 }
 
-/**
- * Normalizes any error raised inside an API handler to a structured SvelteKit
- * HTTP error. Re-throws errors already raised via `apiError`/`error`, maps
- * ProviderError to its statusCode, and falls back to a 500 INTERNAL with the
- * provided message.
- */
+/** Normalizes any error raised inside an API handler to a structured SvelteKit HTTP error. */
 export function handleApiError(err: unknown, fallback: string, log?: ILogger): never {
 	if (isHttpError(err)) throw err;
+	// The transport-free parsers in `@selvajs/server/api` raise `ApiError`, not
+	// SvelteKit's `error()`. Routes still wrapped in `apiRoute` reach this path,
+	// so translate rather than letting a validation failure fall through to the
+	// 500 branch below.
+	if (isApiError(err)) {
+		apiError(err.status, err.code, err.message, err.fields);
+	}
 	// Compute unreachable, or serving a schema shape the app cannot read → 503
 	// (both are operator-side); invalid/newer-than-supported schema → 422.
 	if (err instanceof SchemaExtractionError) {
@@ -110,30 +112,12 @@ export function handleApiError(err: unknown, fallback: string, log?: ILogger): n
 	// connection details (host, user, sometimes a DSN) on `cause`, and a raw
 	// console call hands the whole object to stdout, where pino's redaction
 	// never runs and erasure can't follow. `renderThrown` flattens to a stack
-	// string; the logger redacts what remains.
-	// `log` is `locals.log` when a request is in scope. The console fallback is
-	// for the handful of callers outside one; `renderThrown` has already
-	// flattened the error, so no object reaches stdout either way.
+	// string first, so the console fallback below (for the handful of callers
+	// with no `locals.log` in scope) is safe too.
 	const rendered = renderThrown(err);
 	if (log) log.error(`[API] ${fallback}`, { component: 'api', err: rendered });
 	else console.error(`[API] ${fallback}:`, rendered);
 	apiError(500, ApiErrorCode.INTERNAL, fallback);
 }
 
-/**
- * Throws a 400 VALIDATION_FAILED from a Zod error. The top-level `message` is
- * the first issue (human-friendly); `fields` maps every issue's dotted path
- * to its message for machine consumption.
- */
-export function throwZodError(err: ZodError): never {
-	const fields: Record<string, string> = {};
-	for (const issue of err.issues) {
-		const key = issue.path.length ? issue.path.join('.') : '_';
-		// First message per field wins; later issues on the same path are
-		// usually redundant refinements.
-		if (!(key in fields)) fields[key] = issue.message;
-	}
-	const first = err.issues[0];
-	const path = first.path.length ? `${first.path.join('.')}: ` : '';
-	apiError(400, ApiErrorCode.VALIDATION_FAILED, `${path}${first.message}`, fields);
-}
+export { throwZodError } from '@selvajs/server/api';

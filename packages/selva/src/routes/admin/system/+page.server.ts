@@ -3,7 +3,7 @@ import { hasPermission } from '@selvajs/platform';
 import { flag } from '$lib/server/providers.server';
 import { checkForUpdate } from '$lib/server/updateCheck.server';
 import { readChannel, writeChannel } from '$lib/server/releaseChannel.server';
-import { requirePermission } from '$lib/server/access.server';
+import { asHttpError, requirePermission } from '$lib/server/access.server';
 import {
 	SOLVE_DEADLINE_MS,
 	RATE_LIMIT_WINDOW_MS,
@@ -100,7 +100,7 @@ export const actions: Actions = {
 	// Persist the release channel. Switch-only: this does NOT trigger an update —
 	// the operator then uses the Update runner to install from the chosen channel.
 	setChannel: async ({ request, locals }) => {
-		requirePermission(locals, 'manage_updates');
+		await asHttpError(() => requirePermission(locals, 'manage_updates'));
 		const data = await request.formData();
 		const channel = data.get('channel');
 		if (channel !== 'stable' && channel !== 'beta') {

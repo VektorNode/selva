@@ -6,7 +6,7 @@ import {
 	getAuthProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { projectAccessInputFromRows } from '$lib/server/access.server';
+import { accessDepsFromConfig, projectAccessInputFromRowsWith } from '$lib/server/access.server';
 import { renderThrown } from '@selvajs/server/logging';
 import {
 	hasPermission,
@@ -74,6 +74,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		};
 
 	const ctx = locals.ctx!;
+	const accessSrc = { deps: accessDepsFromConfig(locals.providers) };
 	const canManageProjects = hasPermission(ctx, 'manage_projects');
 
 	try {
@@ -114,7 +115,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 		const visibleProjects = allProjects.filter((project) =>
 			canView(
-				projectAccessInputFromRows(ctx, project, {
+				projectAccessInputFromRowsWith(accessSrc, ctx, project, {
 					member: memberByProjectId.get(project.id) ?? null,
 					orgMember: orgMemberByOrgId.get(project.orgId) ?? null
 				})
@@ -127,7 +128,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		const records = recordsPage.items.filter((r) => projectIds.has(r.projectId));
 
 		const accessInput = (project: Project) =>
-			projectAccessInputFromRows(ctx, project, {
+			projectAccessInputFromRowsWith(accessSrc, ctx, project, {
 				member: memberByProjectId.get(project.id) ?? null,
 				orgMember: orgMemberByOrgId.get(project.orgId) ?? null
 			});

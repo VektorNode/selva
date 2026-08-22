@@ -1,11 +1,9 @@
 /**
- * Tests for the self-update outcome reconciliation (audit O2).
- *
  * `reconcileUpdateOutcome` is the exactly-once bridge between the detached
- * bash runner (which can only leave a log + exit marker behind — the app that
- * launched it is killed mid-update) and the audit event log. These tests
- * exercise the classification against real runner log shapes and pin the
- * state-file lifecycle: it is the emission token, consumed on reconcile.
+ * bash runner — which can only leave a log + exit marker behind, since the
+ * app that launched it is killed mid-update — and the audit event log. These
+ * tests exercise the classification against real runner log shapes and pin
+ * the state-file lifecycle: it's the emission token, consumed on reconcile.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -74,7 +72,7 @@ describe('reconcileUpdateOutcome', () => {
 		seedLog('[STEP] Updating @selvajs/* packages\n');
 		expect(await reconcileUpdateOutcome(deps())).toBe('still_running');
 		expect(emitted).toHaveLength(0);
-		// State survives — a later tick can still reconcile.
+		// State survives so a later tick can still reconcile.
 		expect(await reconcileUpdateOutcome(deps())).toBe('still_running');
 	});
 

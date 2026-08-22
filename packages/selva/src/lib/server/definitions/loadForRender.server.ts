@@ -1,8 +1,7 @@
-// App binding for the definition render loader in `@selvajs/server/definitions`.
-// The package owns the loading pipeline (version resolution, blob fetch,
-// schema staleness check, default merging); this file wires in the app's
-// providers, compute-server resolution, and warm-client cache. Access gating
-// stays with the calling route.
+// `@selvajs/server/definitions` owns the loading pipeline (version resolution,
+// blob fetch, schema staleness check, default merging); this wires in the
+// app's providers, compute-server resolution, and warm-client cache. Access
+// gating stays with the calling route.
 
 import {
 	createDefinitionLoader,
@@ -12,8 +11,13 @@ import {
 	type LoadedDefinition
 } from '@selvajs/server/definitions';
 import type { DefinitionRecord, RequestContext } from '@selvajs/platform';
-import { getStorageProvider, getDefinitionMeta, getProjectProvider } from '../providers.server';
-import { resolveServerForOrg } from '../compute/resolve.server';
+import {
+	getStorageProvider,
+	getDefinitionMeta,
+	getProjectProvider,
+	getComputeServerConfigStore
+} from '../providers.server';
+import { resolveServerForOrg } from '@selvajs/server/compute';
 import { getClient, COMPUTE_DEBUG } from '../compute/engine.server';
 
 export { DefinitionLoadError };
@@ -29,7 +33,8 @@ export async function loadDefinitionForRender(
 		storage: getStorageProvider(),
 		definitions: getDefinitionMeta(),
 		projects: getProjectProvider(),
-		resolveServer: (ctx, orgId, opts) => resolveServerForOrg(ctx, orgId, opts),
+		resolveServer: (ctx, orgId, opts) =>
+			resolveServerForOrg(ctx, orgId, getComputeServerConfigStore(), opts),
 		getClient,
 		computeDebug: COMPUTE_DEBUG
 	});

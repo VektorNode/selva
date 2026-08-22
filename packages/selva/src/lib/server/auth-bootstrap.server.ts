@@ -131,7 +131,7 @@ async function ensureSingleTenantDefaultOrg(user: AuthUser): Promise<void> {
 
 /**
  * Whether the signing-in user qualifies for the first-admin grant. Pure — no
- * I/O — so the policy is testable in isolation.
+ * I/O — so the policy is unit-testable.
  *
  * - `tenancy='single'` + no env var → first signer wins (fine for
  *   self-hosted fresh installs).

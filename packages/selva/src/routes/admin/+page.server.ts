@@ -1,4 +1,4 @@
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import { getOrganizationProvider } from '$lib/server/providers.server';
 import { hasPermission, type ILogger, type PlatformPermission } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';

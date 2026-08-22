@@ -8,3 +8,9 @@ export {
 	type RouteClassifier,
 	type RouteClassifierConfig
 } from './route-classifier.js';
+export {
+	createLoginRateLimiter,
+	addressKeysCollapsed,
+	type LoginRateLimiter,
+	type LoginRateLimiterConfig
+} from './login-rate-limit.js';

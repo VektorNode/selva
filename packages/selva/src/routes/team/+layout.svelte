@@ -103,7 +103,7 @@
 
 <AppHeader>
 	{#snippet sidenav()}
-		<SideNav {items} eyebrow="Organization">
+		<SideNav {items} eyebrow="Organization" border={false}>
 			{#snippet header()}
 				{#if data.org}
 					<div

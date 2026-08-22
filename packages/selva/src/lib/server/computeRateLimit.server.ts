@@ -16,7 +16,6 @@ const limiter = createComputeRateLimiter({
 	maxPerWindow: RATE_LIMIT_MAX_REQUESTS
 });
 
-/** Returns `{ allowed: false, retryAfter }` once the bucket for `key` is full. */
 export function checkComputeRateLimit(key: string): RateLimitResult {
 	return limiter.check(key);
 }

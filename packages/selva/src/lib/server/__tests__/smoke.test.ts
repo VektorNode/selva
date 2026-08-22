@@ -1,12 +1,7 @@
 /**
- * Smoke test for the test infrastructure itself. Validates that:
- *  - `freshProviders()` builds a working provider stack in a tmpdir.
- *  - `setTestProviders()` makes the stack visible to the mocked
- *    `$lib/server/providers.server` so route handlers see it.
- *  - `actAs()` produces a usable `App.Locals`.
- *  - `call()` invokes a real `+server.ts` handler and surfaces its result.
- *
- * If this file passes, Phase 2/3 tests have a known-good baseline to build on.
+ * Smoke test for the test infrastructure itself: `freshProviders()` +
+ * `setTestProviders()` + `actAs()` + `call()` end to end, so other test files
+ * have a known-good baseline to build on.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';

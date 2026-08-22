@@ -8,7 +8,7 @@ import {
 	warnIfAddressKeysCollapse,
 	safeRedirectTarget
 } from '$lib/server/admin-auth.server';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import { getPermissionStore } from '$lib/server/providers.server';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 

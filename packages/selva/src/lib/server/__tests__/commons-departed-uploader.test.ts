@@ -1,20 +1,19 @@
 /**
- * Finding 15 — commons edit rights outliving membership.
+ * Commons edit rights used to outlive membership: `canEditDefinition`'s
+ * commons branch matched `userId === definition.ownerId` and nothing else.
+ * `ownerId` is stamped at upload and never revisited, so it records who
+ * uploaded, not who still belongs — a contributor removed from the org kept
+ * edit, delete and share-link authority over everything they had ever
+ * uploaded, and flipping `autoJoinOnUpload` on handed that back retroactively
+ * to every past uploader at once.
  *
- * `canEditDefinition`'s commons branch matched `userId === definition.ownerId`
- * and nothing else. `ownerId` is stamped at upload and never revisited, so it
- * records who uploaded, not who still belongs: a contributor removed from the
- * org kept edit, delete and share-link authority over everything they had ever
- * uploaded. Flipping `autoJoinOnUpload` on handed that back retroactively, to
- * every past uploader at once, with no action taken against any of them.
+ * Commons now grants edit on top of belonging: the rule also requires a live
+ * org membership.
  *
- * Decided (2026-08-17): commons grants edit **on top of** belonging. The rule
- * now also requires a live org membership.
- *
- * These run through `requireCanEditDefinition` rather than the rule directly —
- * the rule's own cases live in the local provider's `rules.test.ts`. What is
+ * These run through `requireCanEditDefinition` rather than the rule directly
+ * — the rule's own cases live in the local provider's `rules.test.ts`. What's
  * only testable here is that the guard actually loads the membership row and
- * hands it to the rule; a rule that reads a field nobody populates would pass
+ * hands it to the rule; a rule reading a field nobody populates would pass
  * every unit test and deny everyone in production.
  */
 

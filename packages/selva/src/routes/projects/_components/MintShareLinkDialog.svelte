@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Dialog, Input, Label, toast } from '@selvajs/ui';
+	import { Button, Callout, Dialog, Input, Label, toast, ConfirmDialog } from '@selvajs/ui';
 	import { Copy, TriangleAlert, Check } from '@lucide/svelte';
 	import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
 
@@ -27,6 +27,8 @@
 	let mintedToken = $state<string | null>(null);
 	let mintedShareUrl = $state<string | null>(null);
 	let copied = $state(false);
+	let confirmingHighCap = $state(false);
+	let confirmingUncapped = $state(false);
 
 	$effect(() => {
 		if (!open) reset();
@@ -45,20 +47,19 @@
 		copied = false;
 	}
 
-	async function submit() {
+	function submit() {
 		if (capEnabled && cap > DEFAULT_SHARE_LINK_MAX_SOLVES) {
-			const ok = confirm(
-				`You're raising the cap above the default of ${DEFAULT_SHARE_LINK_MAX_SOLVES}. An uncapped or high-cap link is a denial-of-wallet vector if leaked. Continue?`
-			);
-			if (!ok) return;
+			confirmingHighCap = true;
+			return;
 		}
 		if (!capEnabled) {
-			const ok = confirm(
-				'Removing the cap means an unlimited number of solves on this link. Recommended only for trusted recipients. Continue?'
-			);
-			if (!ok) return;
+			confirmingUncapped = true;
+			return;
 		}
+		createLink();
+	}
 
+	async function createLink() {
 		creating = true;
 		try {
 			const body = {
@@ -81,6 +82,8 @@
 			const data = (await res.json()) as { token: string; link: { id: string } };
 			mintedToken = data.token;
 			mintedShareUrl = `${window.location.origin}/library/${definitionGuid}?token=${data.token}`;
+			confirmingHighCap = false;
+			confirmingUncapped = false;
 			onMinted();
 		} catch {
 			toast.error('Failed to mint share link');
@@ -208,15 +211,10 @@
 			</Dialog.Header>
 
 			<div class="mt-4 space-y-3">
-				<div class="border-warning/40 bg-warning/5 rounded-md border p-3">
-					<p class="text-warning flex items-start gap-2 text-xs">
-						<TriangleAlert class="mt-0.5 h-3.5 w-3.5 shrink-0" />
-						<span>
-							This URL grants the configured access to anyone who receives it. Treat it like a
-							password — revoke it immediately if it's compromised.
-						</span>
-					</p>
-				</div>
+				<Callout tone="warning">
+					This URL grants the configured access to anyone who receives it. Treat it like a password
+					— revoke it immediately if it's compromised.
+				</Callout>
 
 				<div class="border-border bg-muted/40 rounded-md border p-3">
 					<p class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
@@ -250,3 +248,23 @@
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>
+
+<ConfirmDialog
+	bind:open={confirmingHighCap}
+	title="Raise the solve cap?"
+	description={`You're raising the cap above the default of ${DEFAULT_SHARE_LINK_MAX_SOLVES}. An uncapped or high-cap link is a denial-of-wallet vector if leaked.`}
+	confirmLabel="Continue"
+	pendingLabel="Creating…"
+	variant="destructive"
+	onConfirm={createLink}
+/>
+
+<ConfirmDialog
+	bind:open={confirmingUncapped}
+	title="Remove the solve cap?"
+	description="Removing the cap means an unlimited number of solves on this link. Recommended only for trusted recipients."
+	confirmLabel="Continue"
+	pendingLabel="Creating…"
+	variant="destructive"
+	onConfirm={createLink}
+/>

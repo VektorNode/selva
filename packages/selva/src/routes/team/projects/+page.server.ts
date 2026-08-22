@@ -3,7 +3,8 @@ import type { PageServerLoad } from './$types';
 import type { Project } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, hasPermission } from '@selvajs/platform';
 import { getProjectProvider } from '$lib/server/providers.server';
-import { resolveAccessibleProjects } from '$lib/server/definitions/visibility.server';
+import { resolveAccessibleProjects } from '@selvajs/server/definitions';
+import { accessDepsFromConfig } from '$lib/server/access.server';
 
 export interface ProjectRow extends Project {
 	memberCount: number;
@@ -34,7 +35,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	let rows: ProjectRow[] = [];
 
 	try {
-		const { projects: visible } = await resolveAccessibleProjects(ctx);
+		const { projects: visible } = await resolveAccessibleProjects(
+			ctx,
+			accessDepsFromConfig(locals.providers)
+		);
 		const inOrg = visible.filter((p) => p.orgId === orgId);
 		const store = getProjectProvider();
 		rows = await Promise.all(

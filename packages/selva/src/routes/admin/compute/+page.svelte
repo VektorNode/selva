@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { Button, Card, EmptyState, Input, toast, SectionHeader, randomId } from '@selvajs/ui';
+	import {
+		Button,
+		Card,
+		EmptyState,
+		Input,
+		toast,
+		SectionHeader,
+		randomId,
+		ConfirmDialog
+	} from '@selvajs/ui';
 	import {
 		Circle,
 		Server,
@@ -99,37 +108,66 @@
 	let defaultServerId = $state('');
 	let saving = $state(false);
 	const dirtyIds = new SvelteSet<string>();
+	// Servers the operator deleted. They stay in `servers` (struck through, with
+	// Undo) until a save flushes them, so deletion follows the same stage-then-save
+	// model as every other edit on this page.
+	const removedIds = new SvelteSet<string>();
 	let expandedPlugins = $state<Record<string, boolean>>({});
 	let expandedSharing = $state<Record<string, boolean>>({});
+
+	function toEntry(s: PageData['servers'][number]): ServerEntry {
+		return {
+			id: s.id,
+			label: s.label,
+			serverUrl: s.serverUrl,
+			sharedWith: s.sharedWith === 'all' ? 'all' : [...s.sharedWith],
+			timeoutMs: s.timeoutMs ?? 30000,
+			retryCount: s.retryCount ?? 0,
+			apiKey: '',
+			hasApiKey: s.hasApiKey
+		};
+	}
 
 	function markDirty(id: string) {
 		dirtyIds.add(id);
 	}
 
+	// The whole page is one unit of work: the API replaces the entire platform
+	// server list in a single PUT, so a per-card save would flush every other
+	// card's edits along with it.
+	const pendingCount = $derived(dirtyIds.size + removedIds.size);
+	const defaultChanged = $derived(
+		defaultServerId !== data.defaultServerId && servers.some((s) => !removedIds.has(s.id))
+	);
+	const hasChanges = $derived(pendingCount > 0 || defaultChanged);
+
+	function forgetHealth(id: string) {
+		healthMap[id]?.stop();
+		const { [id]: _, ...rest } = healthMap;
+		healthMap = rest;
+	}
+
 	function discardChanges(id: string) {
 		dirtyIds.delete(id);
-		// $effect resyncs only when dirtyIds is fully empty, so manually reset this server.
+		removedIds.delete(id);
 		const original = data.servers.find((s) => s.id === id);
-		const idx = servers.findIndex((s) => s.id === id);
-		if (idx < 0) return;
 		if (!original) {
 			// Newly-added server that was never saved — drop it.
-			healthMap[id]?.stop();
-			const { [id]: _, ...rest } = healthMap;
-			healthMap = rest;
+			forgetHealth(id);
 			servers = servers.filter((s) => s.id !== id);
 			return;
 		}
-		servers[idx] = {
-			id: original.id,
-			label: original.label,
-			serverUrl: original.serverUrl,
-			sharedWith: original.sharedWith === 'all' ? 'all' : [...original.sharedWith],
-			timeoutMs: original.timeoutMs ?? 30000,
-			retryCount: original.retryCount ?? 0,
-			apiKey: '',
-			hasApiKey: original.hasApiKey
-		};
+		const idx = servers.findIndex((s) => s.id === id);
+		if (idx >= 0) servers[idx] = toEntry(original);
+	}
+
+	function discardAll() {
+		for (const id of [...dirtyIds, ...removedIds]) {
+			if (!data.servers.some((s) => s.id === id)) forgetHealth(id);
+		}
+		dirtyIds.clear();
+		removedIds.clear();
+		servers = data.servers.map(toEntry);
 		defaultServerId = data.defaultServerId;
 	}
 
@@ -145,17 +183,8 @@
 	}
 
 	$effect(() => {
-		if (dirtyIds.size === 0) {
-			servers = data.servers.map((s) => ({
-				id: s.id,
-				label: s.label,
-				serverUrl: s.serverUrl,
-				sharedWith: s.sharedWith === 'all' ? 'all' : [...s.sharedWith],
-				timeoutMs: s.timeoutMs ?? 30000,
-				retryCount: s.retryCount ?? 0,
-				apiKey: '',
-				hasApiKey: s.hasApiKey
-			}));
+		if (dirtyIds.size === 0 && removedIds.size === 0) {
+			servers = data.servers.map(toEntry);
 			defaultServerId = data.defaultServerId;
 		}
 	});
@@ -197,17 +226,21 @@
 		markDirty(id);
 	}
 
-	function removeServer(index: number) {
-		const removed = servers[index];
-		healthMap[removed.id]?.stop();
-		const { [removed.id]: _, ...rest } = healthMap;
-		healthMap = rest;
-		servers = servers.filter((_, i) => i !== index);
-		// Mark all remaining servers dirty so any visible Save button can flush the removal.
-		if (defaultServerId === removed.id && servers[0]) {
-			defaultServerId = servers[0].id;
+	function removeServer(server: ServerEntry) {
+		if (!data.servers.some((s) => s.id === server.id)) {
+			// Never saved — nothing to stage, just drop it.
+			dirtyIds.delete(server.id);
+			forgetHealth(server.id);
+			servers = servers.filter((s) => s.id !== server.id);
+		} else {
+			removedIds.add(server.id);
+			dirtyIds.delete(server.id);
 		}
-		for (const s of servers) markDirty(s.id);
+		showRemoveConfirm = false;
+	}
+
+	function undoRemove(id: string) {
+		removedIds.delete(id);
 	}
 
 	function setSharedWithAll(server: ServerEntry, all: boolean) {
@@ -226,9 +259,12 @@
 	async function save() {
 		saving = true;
 		try {
+			const kept = servers.filter((s) => !removedIds.has(s.id));
 			const payload = {
-				defaultServerId,
-				servers: servers.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
+				defaultServerId: kept.some((s) => s.id === defaultServerId)
+					? defaultServerId
+					: (kept[0]?.id ?? ''),
+				servers: kept.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
 					...s,
 					timeoutMs: Math.min(300000, Math.max(1000, Number(timeoutMs) || 30000)),
 					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
@@ -243,9 +279,15 @@
 				body: JSON.stringify(payload)
 			});
 			if (res.ok) {
-				toast.success('Compute config saved');
+				toast.success(
+					removedIds.size > 0
+						? `Saved — ${removedIds.size} server${removedIds.size === 1 ? '' : 's'} removed`
+						: 'Compute config saved'
+				);
+				for (const id of removedIds) forgetHealth(id);
 				await invalidateAll();
 				dirtyIds.clear();
+				removedIds.clear();
 				// Reset health to idle after save (URL/key may have changed) without
 				// probing — the operator re-checks manually to avoid waking servers.
 				for (const h of Object.values(healthMap)) h.stop();
@@ -265,16 +307,14 @@
 	// Per-server in-flight action ('purge' | 'shutdown') so each card disables only
 	// its own buttons while a fleet action runs.
 	let busyAction = $state<Record<string, 'purge' | 'shutdown' | null>>({});
+	let confirmingShutdown = $state<ServerEntry | null>(null);
+	let confirmingPurge = $state<ServerEntry | null>(null);
+	let showShutdownConfirm = $state(false);
+	let showPurgeConfirm = $state(false);
+	let confirmingRemove = $state<ServerEntry | null>(null);
+	let showRemoveConfirm = $state(false);
 
 	async function runAction(server: ServerEntry, action: 'purge' | 'shutdown') {
-		if (action === 'shutdown') {
-			const ok = confirm(
-				`Shut down ALL child processes on "${server.label}"?\n\n` +
-					'In-flight solves on those children will be interrupted. The pool ' +
-					'auto-respawns on the next request.'
-			);
-			if (!ok) return;
-		}
 		busyAction[server.id] = action;
 		try {
 			const res = await fetch('/api/admin/compute/actions', {
@@ -296,11 +336,13 @@
 						? `Purged ${totalPurged} cached solve${totalPurged === 1 ? '' : 's'}`
 						: `Purged ~${totalPurged} across ${children} children (best-effort)`
 				);
+				showPurgeConfirm = false;
 			} else {
 				const { shutdown = 0, active = 0 } = data;
 				toast.success(
 					`Shut down ${shutdown} child${shutdown === 1 ? '' : 'ren'} (${active} still active)`
 				);
+				showShutdownConfirm = false;
 				// The pool changed — re-probe so the card's status/version refresh.
 				healthMap[server.id]?.check();
 			}
@@ -443,18 +485,39 @@
 	</div>
 {/snippet}
 
-{#snippet serverCard(server: ServerEntry, i: number)}
+{#snippet serverCard(server: ServerEntry)}
 	{@const health = healthMap[server.id]?.state}
 	{@const sc = statusConfig[health?.state ?? 'idle']}
 	{@const isChecking = health?.state === 'checking' || health?.state === 'loading'}
 	{@const pluginEntries = Object.entries(health?.plugins ?? {})}
-	{@const isDirty = dirtyIds.has(server.id)}
+	{@const isRemoved = removedIds.has(server.id)}
+	{@const isDirty = dirtyIds.has(server.id) && !isRemoved}
 	<div
-		class="space-y-3 rounded-lg border p-4 transition-colors {isDirty
-			? 'border-amber-400/60 bg-amber-50/30 dark:border-amber-500/40 dark:bg-amber-950/10'
-			: 'bg-muted/30'}"
+		class="space-y-3 rounded-lg border p-4 transition-colors {isRemoved
+			? 'border-destructive/40 bg-destructive/5'
+			: isDirty
+				? 'border-amber-400/60 bg-amber-50/30 dark:border-amber-500/40 dark:bg-amber-950/10'
+				: 'bg-muted/30'}"
 	>
-		<div class="flex items-center justify-between">
+		{#if isRemoved}
+			<div class="flex items-center justify-between gap-3">
+				<p class="text-destructive text-xs font-medium">
+					<span class="line-through">{server.label}</span> will be removed when you save
+				</p>
+				<Button
+					variant="ghost"
+					size="sm"
+					onclick={() => undoRemove(server.id)}
+					disabled={saving}
+					class="h-7"
+				>
+					Undo
+				</Button>
+			</div>
+		{/if}
+		<div
+			class="flex items-center justify-between {isRemoved ? 'pointer-events-none opacity-50' : ''}"
+		>
 			<div class="flex items-center gap-2">
 				<Input
 					placeholder="label"
@@ -506,7 +569,10 @@
 					<Button
 						variant="outline"
 						size="sm"
-						onclick={() => runAction(server, 'purge')}
+						onclick={() => {
+							confirmingPurge = server;
+							showPurgeConfirm = true;
+						}}
 						disabled={busy !== null && busy !== undefined}
 						class="h-7"
 						title="Clear cached solve results across this server's children (best-effort fleet-wide)"
@@ -517,7 +583,10 @@
 					<Button
 						variant="outline"
 						size="sm"
-						onclick={() => runAction(server, 'shutdown')}
+						onclick={() => {
+							confirmingShutdown = server;
+							showShutdownConfirm = true;
+						}}
 						disabled={busy !== null && busy !== undefined}
 						class="text-destructive hover:text-destructive h-7"
 						title="Gracefully shut down all child processes (they auto-respawn on the next request)"
@@ -533,17 +602,18 @@
 						onclick={() => discardChanges(server.id)}
 						disabled={saving}
 						class="text-muted-foreground hover:text-foreground h-7"
+						title="Revert this server to its saved values"
 					>
 						Discard
-					</Button>
-					<Button size="sm" onclick={save} disabled={saving} class="h-7">
-						{saving ? 'Saving…' : 'Save changes'}
 					</Button>
 				{/if}
 				<Button
 					variant="ghost"
 					size="sm"
-					onclick={() => removeServer(i)}
+					onclick={() => {
+						confirmingRemove = server;
+						showRemoveConfirm = true;
+					}}
 					disabled={server.id === defaultServerId}
 					title={server.id === defaultServerId
 						? 'Set another server as default before deleting'
@@ -555,7 +625,7 @@
 			</div>
 		</div>
 
-		{#if health?.reachable}
+		{#if health?.reachable && !isRemoved}
 			<div class="grid grid-cols-3 gap-2">
 				<div class="bg-muted/40 rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Rhino</p>
@@ -590,7 +660,7 @@
 			</div>
 		{/if}
 
-		<div class="grid gap-2 sm:grid-cols-2">
+		<div class="grid gap-2 sm:grid-cols-2 {isRemoved ? 'pointer-events-none opacity-50' : ''}">
 			<div class="space-y-1">
 				<p class="text-muted-foreground text-xs">Server URL</p>
 				<Input
@@ -666,11 +736,11 @@
 			</div>
 		</div>
 
-		{#if data.tenancy !== 'single'}
+		{#if data.tenancy !== 'single' && !isRemoved}
 			{@render sharingControl(server)}
 		{/if}
 
-		{#if health?.reachable && pluginEntries.length > 0}
+		{#if health?.reachable && pluginEntries.length > 0 && !isRemoved}
 			<div>
 				<button
 					class="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
@@ -717,8 +787,8 @@
 					{/snippet}
 				</EmptyState>
 			{:else}
-				{#each servers as server, i (server.id)}
-					{@render serverCard(server, i)}
+				{#each servers as server (server.id)}
+					{@render serverCard(server)}
 				{/each}
 				<button
 					type="button"
@@ -731,6 +801,30 @@
 			{/if}
 		</Card.Content>
 	</Card.Root>
+
+	{#if hasChanges}
+		<div
+			class="bg-background/95 sticky bottom-4 z-10 flex items-center justify-between gap-4 rounded-lg border border-amber-400/60 p-3 shadow-lg backdrop-blur dark:border-amber-500/40"
+		>
+			<p class="text-sm font-medium">
+				{pendingCount === 0
+					? 'Default server changed'
+					: `${pendingCount} unsaved change${pendingCount === 1 ? '' : 's'}`}
+				{#if removedIds.size > 0}
+					<span class="text-muted-foreground font-normal">
+						· {removedIds.size} pending removal
+					</span>
+				{/if}
+			</p>
+			<div class="flex items-center gap-2">
+				<Button variant="ghost" size="sm" onclick={discardAll} disabled={saving}>Discard all</Button
+				>
+				<Button size="sm" onclick={save} disabled={saving}>
+					{saving ? 'Saving…' : 'Save changes'}
+				</Button>
+			</div>
+		</div>
+	{/if}
 
 	<SectionHeader
 		title="Caching"
@@ -756,3 +850,43 @@
 		</Card.Content>
 	</Card.Root>
 </div>
+
+<ConfirmDialog
+	bind:open={showShutdownConfirm}
+	title="Shutdown children?"
+	description={confirmingShutdown
+		? `Shut down ALL child processes on "${confirmingShutdown.label}"? In-flight solves on those children will be interrupted. The pool auto-respawns on the next request.`
+		: undefined}
+	confirmLabel="Shutdown"
+	pendingLabel="Shutting down…"
+	variant="destructive"
+	onConfirm={async () => {
+		if (confirmingShutdown) await runAction(confirmingShutdown, 'shutdown');
+	}}
+/>
+
+<ConfirmDialog
+	bind:open={showPurgeConfirm}
+	title="Purge cache?"
+	description={confirmingPurge
+		? `Clear cached solve results across "${confirmingPurge.label}"'s children? This is best-effort across the pool.`
+		: undefined}
+	confirmLabel="Purge"
+	pendingLabel="Purging…"
+	onConfirm={async () => {
+		if (confirmingPurge) await runAction(confirmingPurge, 'purge');
+	}}
+/>
+
+<ConfirmDialog
+	bind:open={showRemoveConfirm}
+	title="Remove this server?"
+	description={confirmingRemove
+		? `Remove "${confirmingRemove.label}" from the compute config? It stays listed, struck through, until you save.`
+		: undefined}
+	confirmLabel="Remove"
+	variant="destructive"
+	onConfirm={() => {
+		if (confirmingRemove) removeServer(confirmingRemove);
+	}}
+/>

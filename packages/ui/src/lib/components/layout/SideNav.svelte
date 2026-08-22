@@ -19,10 +19,22 @@
 		eyebrow?: string;
 		header?: Snippet;
 		footer?: Snippet;
+		/**
+		 * Off when the divider is drawn by the surrounding layout instead — a sticky sidenav
+		 * only reaches as far as its own content, so its border would stop mid-page.
+		 */
+		border?: boolean;
 		class?: string;
 	}
 
-	let { items, eyebrow, header, footer, class: className = '' }: SideNavProps = $props();
+	let {
+		items,
+		eyebrow,
+		header,
+		footer,
+		border = true,
+		class: className = ''
+	}: SideNavProps = $props();
 
 	function isActive(item: SideNavItem): boolean {
 		const path = page.url.pathname;
@@ -32,7 +44,9 @@
 </script>
 
 <aside
-	class={`w-60 flex shrink-0 flex-col overflow-y-auto border-r border-border bg-background ${className}`}
+	class={`w-60 flex h-full shrink-0 flex-col overflow-y-auto bg-background ${
+		border ? 'border-r border-border' : ''
+	} ${className}`}
 >
 	{#if eyebrow}
 		<div class="px-4 pt-5 pb-3">

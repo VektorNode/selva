@@ -626,6 +626,9 @@ importers:
       '@selvajs/compute':
         specifier: workspace:^
         version: link:../compute
+      '@selvajs/notifications':
+        specifier: workspace:^
+        version: link:../notifications
       '@selvajs/platform':
         specifier: workspace:^
         version: link:../platform
@@ -638,10 +641,16 @@ importers:
       pino:
         specifier: '>=9'
         version: 10.3.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
     devDependencies:
       '@selvajs/config':
         specifier: workspace:*
         version: link:../config
+      '@selvajs/local-provider':
+        specifier: workspace:*
+        version: link:../providers/local
       '@types/node':
         specifier: 'catalog:'
         version: 26.2.0

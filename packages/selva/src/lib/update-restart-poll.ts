@@ -4,10 +4,9 @@
 //
 // After the update runner is daemonized, the SSE stream dies at `pm2 stop` and
 // the browser's only remaining view of the update is polling. This module owns
-// that poll loop, kept separate from the admin page so the loop's real inputs
-// (three probe results and a clock) and real output (a verdict) stay testable
-// without the `$state` writes and fetch calls as I/O costume — with the clock
-// and probes injected, a 5-minute deadline runs in microseconds.
+// that poll loop, kept separate from the admin page so its inputs (three probe
+// results and a clock) and output (a verdict) stay testable with the clock and
+// probes injected — a 5-minute deadline runs in microseconds.
 //
 // **Every probe MUST settle.** The loop awaits `Promise.all` of the three, so a
 // probe that hangs forever hangs the loop, deadline or not. A probe against a
@@ -43,9 +42,9 @@ export interface PollDeps {
 	probes: RestartProbes;
 	now(): number;
 	sleep(ms: number): Promise<void>;
-	/** Log content that should replace the display. */
+	/** Replaces the displayed log content. */
 	onLog(logs: string): void;
-	/** Each appended line (the waiting notice, the timeout notice). */
+	/** Appends one line — the waiting notice, the timeout notice. */
 	appendLog(line: string): void;
 }
 
@@ -53,7 +52,7 @@ export interface RestartVerdict {
 	exitCode: number;
 }
 
-/** Matches `TIMED_OUT` in update-outcome.ts. */
+/** Must match `TIMED_OUT` in update-outcome.ts. */
 const NEVER_CAME_BACK = -2;
 
 /** How long to give PM2 to actually kill the old process before polling. */
@@ -85,8 +84,7 @@ export function exitCodeFromLog(log: string): number | null {
 }
 
 /**
- * Polls until we're confident the *new* process is serving, or the deadline
- * passes.
+ * Polls until the *new* process is confirmed serving, or the deadline passes.
  *
  * The reliable signal is `instanceId`: a per-boot fingerprint from /api/health
  * that changes on every restart. We wait for it to differ from the process
@@ -99,7 +97,7 @@ export function exitCodeFromLog(log: string): number | null {
  * proxy, so a premature "online" verdict left an immediate reload hitting a
  * 502. The heavier readiness probe closes that gap as an *accelerator*, never
  * a requirement — it re-runs live integrity checks per request, so it reports
- * false whenever an unrelated dependency is down and can outrun the caller's
+ * false whenever an unrelated dependency is down, and can outrun the caller's
  * probe timeout on a slow host. So the loop finishes on either signal:
  * readiness going green, or the runner writing its own terminal marker to the
  * log. Requiring both is what hung a *successful* update on "PM2 is
@@ -114,9 +112,8 @@ export async function pollForRestart(
 	appendLog('\nWaiting for app to come back online…\n');
 	await sleep(SETTLE_MS);
 
-	// A deadline, not an attempt count: a probe that times out costs seconds
-	// instead of returning instantly, so N attempts × interval is not N ×
-	// interval of wall-clock. Budget the wall-clock directly.
+	// A deadline, not an attempt count: a slow probe costs real seconds instead
+	// of returning instantly, so N attempts × interval understates wall-clock.
 	const deadline = now() + RESTART_DEADLINE_MS;
 
 	// Mirrors what the caller displays, so the log-derived verdict sees the

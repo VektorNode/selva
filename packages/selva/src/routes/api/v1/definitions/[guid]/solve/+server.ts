@@ -1,17 +1,13 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { SolveBodySchema } from '$lib/server/api/v1/bodies';
-import { parseBody, requireCaller, requireParams } from '$lib/server/api/v1/route';
+import { apiError, ApiErrorCode, handleApiError } from '$lib/server/api-errors';
+import { SolveBodySchema } from '@selvajs/server/api';
+import { parseBody, requireCaller, requireParams } from '$lib/server/api/http';
 import type { PipelineInput } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { runSolve, mapSolveError } from '$lib/server/compute/solve.server';
-import {
-	withIdempotency,
-	idempotencyKey,
-	toStoredResponse,
-	fromStoredResponse
-} from '$lib/server/computeIdempotency.server';
+import { withIdempotency } from '$lib/server/computeIdempotency.server';
+import { idempotencyKey, toStoredResponse, fromStoredResponse } from '@selvajs/server/compute';
 
 /**
  * The definition-addressed solve — v1's flagship action, and what the CLI's
@@ -37,7 +33,14 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 	const { guid } = requireParams(params, 'guid');
 	const { ctx, user } = requireCaller(locals);
 
-	const body = await parseBody(request, SolveBodySchema, { missingAs: {} });
+	// This route streams and marks its own metrics, so it is deliberately not
+	// wrapped in `apiRoute`/`mount` — nothing above it turns a thrown error into
+	// the response envelope. `parseBody` raises `ApiError` now that the request
+	// helpers are transport-free, so it is funnelled through `handleApiError`
+	// here; without it a bad body escapes as an unhandled 500, not the 400 it is.
+	const body = await parseBody(request, SolveBodySchema, { missingAs: {} }).catch((err) =>
+		handleApiError(err, 'Invalid solve request', locals.log)
+	);
 	mark('body');
 
 	const definitionUrl = `local:${guid}`;

@@ -6,7 +6,7 @@ import { flag, getProjectProvider, getOrganizationProvider } from '$lib/server/p
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, created, parseBody } from '$lib/server/api/http';
-import { createProjectWithUniqueSlug } from '$lib/server/projects/createProject.server';
+import { createProjectWithUniqueSlug } from '@selvajs/server/projects';
 import { SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
 
 const CreatePlatformProjectBody = z.object({

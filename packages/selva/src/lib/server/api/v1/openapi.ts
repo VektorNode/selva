@@ -3,8 +3,7 @@
  *
  * Request schemas come from `z.toJSONSchema` over the actual validators, so a
  * renamed body field changes the spec on the next generate rather than leaving
- * the yaml describing a field that no longer exists. Zod 4 emits JSON Schema
- * natively, so there's no `zod-openapi` dependency here.
+ * the yaml describing a field that no longer exists.
  *
  * Response schemas are *not* derived — handlers build payloads from store
  * records with no Zod validator on the way out. They're described structurally
@@ -37,8 +36,8 @@ function requestBodySchema(schema: ZodType): Json {
 		string,
 		Json
 	>;
-	// A nested schema inherits its dialect from the document; a $schema key here
-	// makes some validators treat the subtree as a separate document.
+	// A nested schema inherits its dialect from the document; a $schema key
+	// here makes some validators treat the subtree as a separate document.
 	delete json.$schema;
 	return json;
 }
@@ -194,7 +193,7 @@ export const API_BASE_PATH = '/api/v1';
  * `info.version` describes the API, not the npm package — they move
  * independently on purpose. `/api/v1` is additive-only, so every release
  * publishes the same contract; embedding the package version made the spec
- * drift on every `chore: version` bump, failing conformance for no API reason.
+ * drift on every version bump for no API reason.
  *
  * Derived from the base path so the major can't contradict the prefix it's
  * served under: shipping `/api/v2` moves both at once, or neither.

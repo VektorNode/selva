@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, noContent, requireParams } from '$lib/server/api/http';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';

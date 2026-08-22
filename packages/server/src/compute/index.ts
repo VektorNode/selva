@@ -46,3 +46,20 @@ export {
 	type RemoteDefinitionFetcher,
 	type RemoteDefinitionConfig
 } from './remote-definition.js';
+
+export { resolveServerForOrg } from './resolve-server.js';
+export { ComputeServerUnconfiguredError } from './errors.js';
+export { evictChangedServers, type ServerConnection } from './evict-changed-servers.js';
+export {
+	validateIncomingServers,
+	resolveApiKey,
+	storedKeysById,
+	type IncomingServerBase
+} from './server-config-write.js';
+export {
+	idempotencyKey,
+	toStoredResponse,
+	fromStoredResponse,
+	IDEMPOTENCY_REPLAYED_HEADER,
+	type StoredResponse
+} from './idempotency-http.js';

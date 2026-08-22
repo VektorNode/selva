@@ -1,13 +1,11 @@
 /**
  * `getConfig` returns the whole instance's server list by default — every
- * platform server and every other org's org-private servers. Both org-facing
- * callers filtered it themselves, which is the shape to avoid: a rule two
- * endpoints must agree on, copied into both. `globalDefaultServerId`
- * passed through unfiltered even so.
- *
- * `scopeToOrgId` moves the filter into the store. What leaks without it is
- * internal network topology (Rhino.Compute hostnames) — `apiKey` is separately
- * withheld unless `includeApiKeys` is set.
+ * platform server and every other org's private servers, leaking internal
+ * network topology (Rhino.Compute hostnames) to org-facing callers unless
+ * they filter it themselves, which is the shape to avoid: a rule two
+ * endpoints must agree on, copied into both. `scopeToOrgId` moves that filter
+ * into the store instead. `apiKey` is separately withheld unless
+ * `includeApiKeys` is set.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
@@ -85,8 +83,8 @@ describe('getConfig({ scopeToOrgId })', () => {
 	it('blanks defaultServerId when the global default is not visible', async () => {
 		tp = await freshProviders();
 		const store = tp.config.data.computeServer;
-		// The default is dormant: shared with nobody and not the global default's
-		// usual free pass, because here the default is a *different* server.
+		// `hidden` is shared with nobody and isn't the global default, so it
+		// gets none of the usual free pass.
 		await store.savePlatformServers(
 			SYSTEM_CONTEXT,
 			[platformServer('hidden', []), platformServer('visible', [ACME])],
@@ -101,7 +99,6 @@ describe('getConfig({ scopeToOrgId })', () => {
 	});
 
 	it('returns the whole instance when no scope is passed', async () => {
-		// Admin surfaces, boot health and the save-diff handlers depend on this.
 		tp = await freshProviders();
 		const store = await seedServers(tp);
 

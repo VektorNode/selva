@@ -14,7 +14,7 @@ import {
 	resolveApiKey,
 	storedKeysById,
 	type IncomingServerBase
-} from '$lib/server/compute/serverConfigWrite';
+} from '@selvajs/server/compute';
 import { renderThrown } from '@selvajs/server/logging';
 
 /**

@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { AuthUser, Invite, OrgMember, OrgRole } from '@selvajs/platform';
 import { hasPermission } from '@selvajs/platform';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import {
 	getInviteStore,
 	getNotificationProvider,

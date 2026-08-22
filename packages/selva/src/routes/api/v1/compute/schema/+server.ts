@@ -1,8 +1,5 @@
-import {
-	resolveServerForOrg,
-	ComputeServerUnconfiguredError
-} from '$lib/server/compute/resolve.server';
-import { requireCanCreateDefinition } from '$lib/server/access.server';
+import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
+import { requireCanCreateDefinition, scoped } from '$lib/server/access.server';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
@@ -33,7 +30,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// Same gate as POST /api/definitions: container projects need owner/editor;
 	// commons projects (`autoJoinOnUpload=true`) accept any authenticated user.
 	// Eliminates the random-authenticated-drain path the auth-only check left open.
-	const { project } = await requireCanCreateDefinition(locals, projectId);
+	const { project } = await requireCanCreateDefinition(scoped(locals), projectId);
 
 	// Pin to the same server the upload will use, so schema extraction runs on
 	// the server that later solves the definition - not the org/global default.
@@ -42,9 +39,12 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 	let server;
 	try {
-		server = await resolveServerForOrg(locals.ctx!, project.orgId, {
-			definitionPin: computeServerId
-		});
+		server = await resolveServerForOrg(
+			locals.ctx!,
+			project.orgId,
+			locals.providers.data.computeServer,
+			{ definitionPin: computeServerId }
+		);
 	} catch (err) {
 		if (err instanceof ComputeServerUnconfiguredError)
 			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, err.message);

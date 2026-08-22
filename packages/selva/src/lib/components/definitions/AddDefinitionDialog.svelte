@@ -47,7 +47,6 @@
 		onSubmit
 	}: Props = $props();
 
-	// Form state
 	let displayName = $state('');
 	let description = $state('');
 	let category = $state('');
@@ -61,11 +60,9 @@
 		if (defaultProjectId) selectedProjectId = defaultProjectId;
 	});
 
-	// Re-run validation when the file, project, or compute server selection changes:
-	// a project unblocks the first validation; changing the server must re-extract
-	// the schema on that server (it may differ, e.g. block-instance support).
-	// lastValidatedKey dedupes so the effect doesn't loop on the validating/schema
-	// writes onFileSelected makes.
+	// Re-extracts the schema whenever project, server, or file changes — the server
+	// may support different features (e.g. block instances). lastValidatedKey stops
+	// the effect from looping on the validating/schema writes onFileSelected makes.
 	let lastValidatedKey = $state<string | null>(null);
 	$effect(() => {
 		if (!selectedProjectId || !selectedFile) return;
@@ -81,15 +78,13 @@
 		onFileSelected();
 	});
 
-	// File inputs
 	let fileInput = $state<HTMLInputElement>();
-	// Reactive mirror of the chosen .gh file so the validation effect can key off
-	// it (the bare input element isn't reactive). Set by the file input onchange.
+	// Mirrors the chosen file so the validation effect can react — the input
+	// element itself isn't reactive.
 	let selectedFile = $state<File | null>(null);
 	let imageInput = $state<HTMLInputElement>();
 	let imageHasFile = $state(false);
 
-	// Validation state
 	let validating = $state(false);
 	let validationError = $state<string | null>(null);
 	let validationSchema = $state<{
@@ -111,10 +106,8 @@
 			.replace(/\b\w/g, (l) => l.toUpperCase());
 	}
 
-	// Mirror the chosen file into reactive state and reset any fields pre-filled
-	// from a previous file's schema. The validation effect picks up the new file
-	// (and re-runs if project/server change). Submission stays blocked until a
-	// project is picked and validation succeeds.
+	// Resets fields that were pre-filled from a previous file's schema; the
+	// validation effect picks up the new file automatically.
 	function onFileChanged() {
 		const file = fileInput?.files?.[0] ?? null;
 		validationError = null;
@@ -125,8 +118,7 @@
 		displayName = file ? nameFromFile(file) : '';
 	}
 
-	// Extract + validate the schema for the current file on the selected server.
-	// Guarded by the effect: selectedProjectId and selectedFile are non-null here.
+	// selectedProjectId and selectedFile are guaranteed non-null: the calling effect checks first.
 	async function onFileSelected() {
 		const file = selectedFile;
 		if (!file || !selectedProjectId) return;
@@ -136,9 +128,8 @@
 		try {
 			const formData = new FormData();
 			formData.append('files', file);
-			// Extract the schema on the same server the upload will use, so the
-			// preview matches what later solves the definition. Mirrors the
-			// computeServerId sent on submit.
+			// Extract on the same server the upload will use, so the preview matches
+			// what later solves the definition.
 			const params = new URLSearchParams(
 				selectedComputeServerId
 					? { projectId: selectedProjectId, computeServerId: selectedComputeServerId }
@@ -150,13 +141,10 @@
 			});
 
 			if (!response.ok) {
-				// Schema extraction is a hard gate: the server rejects uploads that
-				// don't validate, so surface the failure and block submission here.
 				const body = await response.json().catch(() => null);
-				// A 413 can come from the app's size guard OR from an upstream proxy /
+				// A 413 can come from the app's own size guard or from an upstream proxy /
 				// adapter-node BODY_SIZE_LIMIT — the latter returns a non-JSON body, so
-				// don't rely on body.message being present. Either way the cause is the
-				// same: the .gh is too large for the configured upload limit.
+				// body.message may be absent. Either way the .gh exceeds the upload limit.
 				if (response.status === 413) {
 					validationError =
 						body?.message ??
@@ -178,7 +166,6 @@
 				return;
 			}
 
-			// Pre-fill from UISchema
 			validationSchema = schema;
 			if (schema.name) displayName = schema.name;
 			if (schema.description) description = schema.description;
@@ -203,8 +190,6 @@
 			toast.error('Please pick a project');
 			return;
 		}
-		// Schema extraction is a server-side hard gate: the definition can't be
-		// uploaded unless compute is reachable and returns a valid schema.
 		if (!validationSchema) {
 			toast.error(
 				validationError ?? 'The definition must be validated against an online compute server first'
@@ -259,9 +244,8 @@
 		onOpenChange?.(newOpen);
 	}
 
-	// Reset when the dialog is closed externally (e.g. after a successful submit).
-	// bits-ui's onOpenChange only fires for internal closes (X / esc / outside click),
-	// so we mirror the reset here for prop-driven closes.
+	// bits-ui's onOpenChange only fires for internal closes (X / esc / outside click);
+	// this catches prop-driven closes (e.g. after a successful submit).
 	$effect(() => {
 		if (!open) resetForm();
 	});
@@ -275,7 +259,6 @@
 		</Dialog.Header>
 
 		<div class="space-y-4">
-			<!-- Project & compute server -->
 			{#if showProjectDropdown || computeServers.length > 0}
 				<div
 					class="grid gap-3 {showProjectDropdown && computeServers.length > 0
@@ -324,7 +307,6 @@
 				</div>
 			{/if}
 
-			<!-- File Upload -->
 			<div class="space-y-2">
 				<Label for="new-file">
 					Grasshopper File <span class="text-destructive">*</span>
@@ -338,7 +320,6 @@
 					class="border-input bg-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
 				/>
 
-				<!-- Validation status -->
 				{#if validating}
 					<p class="text-muted-foreground flex items-center gap-2 text-xs">
 						<svg class="h-3 w-3 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -377,7 +358,6 @@
 				{/if}
 			</div>
 
-			<!-- Display Name -->
 			<div class="space-y-2">
 				<Label for="new-dn">Display Name <span class="text-destructive">*</span></Label>
 				<Input
@@ -388,7 +368,6 @@
 				/>
 			</div>
 
-			<!-- Description -->
 			<div class="space-y-2">
 				<Label for="new-desc">Description</Label>
 				<Textarea
@@ -399,7 +378,6 @@
 				/>
 			</div>
 
-			<!-- Category & Tags -->
 			<div class="grid grid-cols-1 gap-3 md:grid-cols-2">
 				<div class="space-y-1">
 					<div class="flex items-center justify-between">
@@ -458,7 +436,6 @@
 				</div>
 			</div>
 
-			<!-- Cover Image -->
 			<div class="space-y-2">
 				<Label>Cover Image</Label>
 				<ImageUploadField

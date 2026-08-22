@@ -1,11 +1,9 @@
 /**
- * Tests for the app-side compute client-cache binding. The cache mechanics
- * (LRU, opacity, X-Selva-Definition) live in `@selvajs/solve/server` and are
- * tested there; this covers what the binding adds:
- *   - it keys on the server `id` (ADR 0004 D1) — a rotated URL/key is the SAME
- *     entry, not a fresh client, so it must be evicted explicitly;
- *   - `evictComputeClient` / `evictChangedServers` drop the warm client so the
- *     next request rebuilds against fresh connection details.
+ * Tests what the app-side binding adds on top of `@selvajs/solve/server`'s
+ * cache (tested there): it keys on the server `id`, so a rotated URL/key is
+ * the SAME entry until evicted; `evictComputeClient` / `evictChangedServers`
+ * drop the warm client so the next request rebuilds against fresh connection
+ * details.
  *
  * `GrasshopperClient.create` is mocked so no real Rhino.Compute handshake runs.
  */
@@ -13,8 +11,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { ComputeServerConfig } from '@selvajs/platform';
 
-// Each create() returns a distinct client so we can tell entries apart. The
-// scheduler is a stub with the dispose() the eviction path calls.
+// Each create() returns a distinct client so entries are distinguishable.
 const createSpy = vi.fn(async (cfg: { serverUrl: string; apiKey?: string }) => {
 	const scheduler = { dispose: vi.fn() };
 	return {
@@ -30,7 +27,7 @@ vi.mock('@selvajs/compute/core', () => ({
 	enableDebugLogging: () => {}
 }));
 
-// Import AFTER the mock is registered.
+// Import after the mock is registered.
 const { getClient, evictComputeClient } = await import('../engine.server.js');
 const { evictChangedServers } = await import('../evictChangedServers.js');
 
@@ -73,7 +70,7 @@ describe('app compute client-cache binding', () => {
 		const before = await getClient(server('rot-1', 'https://old.example.com', 'old-key'));
 		const after = await getClient(server('rot-1', 'https://new.example.com', 'new-key'));
 
-		// ADR 0004 D1 — identity is the id, so no fresh client is built on rotation.
+		// Identity is the id, so no fresh client is built on rotation.
 		expect(after.client).toBe(before.client);
 		expect(createSpy).toHaveBeenCalledTimes(1);
 	});

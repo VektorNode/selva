@@ -1,10 +1,9 @@
 /**
- * Stub for SvelteKit's `$env/dynamic/private` virtual module.
- * Wired via `resolve.alias` in vitest.config.ts. Tests can mutate `env`
- * directly to override per-scenario.
+ * Stub for SvelteKit's `$env/dynamic/private`, wired via `resolve.alias` in
+ * vitest.config.ts. Tests can mutate `env` directly to override per-scenario.
  *
- * `SELVA_HMAC_KEY` is defaulted so token.server.ts (share-link HMAC) can run
- * under test without each test setting it explicitly. It matches the secret
+ * `SELVA_HMAC_KEY` defaults here so token.server.ts (share-link HMAC) runs
+ * under test without each test setting it — must match the secret
  * `freshProviders()` passes to LocalAuthProvider.
  */
 export const env: Record<string, string | undefined> = {

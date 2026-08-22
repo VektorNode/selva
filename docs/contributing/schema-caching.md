@@ -19,7 +19,7 @@ color→hex). Caching the merged result would bake defaults in at upload time.
 ## Upload is a hard gate
 
 Extraction runs **before** any write: the route resolves the compute server, calls
-[schemaExtraction.server.ts](../../packages/selva/src/lib/server/definitions/schemaExtraction.server.ts), and fails
+[schema-extraction.ts](../../packages/server/src/definitions/schema-extraction.ts), and fails
 the request (503 unreachable / 422 no valid schema) before `DefinitionService` touches storage.
 A failed upload leaves no orphan blob and no version row. `assertSupportedSchemaVersion` also
 rejects a schema format newer than the app supports.

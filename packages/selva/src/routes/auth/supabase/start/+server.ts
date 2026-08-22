@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getAuthProvider } from '$lib/server/auth.server';
+import { getAuthProvider } from '$lib/server/providers.server';
 import { issueOAuthState } from '$lib/server/auth/oauthState.server';
 
 const ALLOWED_PROVIDERS = ['google', 'github', 'azure', 'gitlab'] as const;
