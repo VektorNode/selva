@@ -9,8 +9,8 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
-	freshProviders,
 	seedUser,
 	seedOrg,
 	seedOrgMember,
@@ -18,12 +18,11 @@ import {
 	seedProjectMember,
 	seedDefinition,
 	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { listVersions } from '$lib/server/api/handlers/definitionVersions.js';
+	callHandler
+} from '../../testing/index.js';
+import { listVersions } from '../definitionVersions.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -34,7 +33,7 @@ afterEach(async () => {
 
 describe('GET /api/v1/definitions/{guid}/versions — visibility', () => {
 	it('404s for a definition in another org, not 403', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 
 		const alice = await seedUser(tp, 'alice@acme.test');
 		const acme = await seedOrg(tp, { name: 'Acme', slug: 'acme', ownerId: alice.id });
@@ -62,7 +61,7 @@ describe('GET /api/v1/definitions/{guid}/versions — visibility', () => {
 
 	it('404s for a guid that does not exist at all', async () => {
 		// Same status as the invisible case — that equality IS the property.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const mallory = await seedUser(tp, 'mallory@other.test');
 		const other = await seedOrg(tp, { name: 'Other', slug: 'other', ownerId: mallory.id });
 		await seedOrgMember(tp, { orgId: other.id, userId: mallory.id, role: 'owner' });
@@ -77,7 +76,7 @@ describe('GET /api/v1/definitions/{guid}/versions — visibility', () => {
 	});
 
 	it('still lists versions for a member of the project', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const alice = await seedUser(tp, 'alice@acme.test');
 		const acme = await seedOrg(tp, { name: 'Acme', slug: 'acme', ownerId: alice.id });
 		await seedOrgMember(tp, { orgId: acme.id, userId: alice.id, role: 'owner' });

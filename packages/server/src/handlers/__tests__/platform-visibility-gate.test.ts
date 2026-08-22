@@ -11,19 +11,18 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
-	freshProviders,
 	seedAcme,
 	seedProject,
 	seedProjectMember,
 	grantPlatformPermissions,
 	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { createProject, updateProject } from '$lib/server/api/handlers/projects.js';
+	callHandler
+} from '../../testing/index.js';
+import { createProject, updateProject } from '../projects.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -34,7 +33,7 @@ afterEach(async () => {
 
 describe('platform visibility is instance-admin only', () => {
 	it('refuses POST with visibility=platform from an org admin', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const locals = await actAs(tp, alice.id);
 
@@ -53,7 +52,7 @@ describe('platform visibility is instance-admin only', () => {
 	});
 
 	it('refuses PATCH to visibility=platform by the project owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const project = await seedProject(tp, {
 			orgId: acme.id,
@@ -77,7 +76,7 @@ describe('platform visibility is instance-admin only', () => {
 	});
 
 	it('allows an instance admin to set platform visibility', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		await grantPlatformPermissions(tp, alice.id, ['instance_admin']);
 		const project = await seedProject(tp, {
@@ -99,7 +98,7 @@ describe('platform visibility is instance-admin only', () => {
 	});
 
 	it('still allows ordinary visibility changes by the owner', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, acme } = await seedAcme(tp);
 		const project = await seedProject(tp, {
 			orgId: acme.id,

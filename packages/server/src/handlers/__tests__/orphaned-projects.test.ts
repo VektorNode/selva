@@ -15,7 +15,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import type { DomainEvent } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { freshHarness, type HandlerHarness } from './harness.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
 	seedAcme,
 	seedUser,

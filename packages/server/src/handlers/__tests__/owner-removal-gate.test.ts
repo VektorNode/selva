@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { freshHarness, type HandlerHarness } from './harness.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import { seedAcme, seedOrgMember, seedUser, actAs, callHandler } from '../../testing/index.js';
 import { removeOrgMember } from '../orgMembers.js';
 

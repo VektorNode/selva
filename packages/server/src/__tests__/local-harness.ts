@@ -6,7 +6,9 @@
  * dependency tree. But a handler test needs *some* real stack to run against,
  * so this file builds one from `@selvajs/local-provider`, a **devDependency**.
  * It sits under `__tests__/`, which `package.json#files` excludes, so nothing
- * here reaches the published tarball.
+ * here reaches the published tarball — which is also why it lives at `src/`
+ * root rather than beside the tests: the visibility and handler suites both
+ * need it, and a copy per directory is a second stack that can drift.
  *
  * No module-global registry: these handlers reach every store through
  * `req.deps`, so a test needs only the harness it passes to `callHandler`.
@@ -28,11 +30,12 @@ import type {
 	SelvaFlags,
 	TenancyMode
 } from '@selvajs/platform';
-import { DefinitionService } from '../../definitions/index.js';
-import { OrgAssetService } from '../../organizations/index.js';
-import { createTokenCodec } from '../../tokens/index.js';
-import { silentLog } from '../../testing/index.js';
-import type { TestHarness } from '../../testing/index.js';
+import { DefinitionService } from '../definitions/index.js';
+import { OrgAssetService } from '../organizations/index.js';
+import { mapCoreError } from '../api/index.js';
+import { createTokenCodec } from '../tokens/index.js';
+import { silentLog } from '../testing/index.js';
+import type { TestHarness } from '../testing/index.js';
 
 const TEST_HMAC_KEY = 'test-hmac-key-32-chars-min-length';
 // Deterministic 32-byte hex — `LocalComputeServerStore.fromEnv` needs a key to
@@ -107,6 +110,10 @@ export async function freshHarness(opts: FreshHarnessOpts = {}): Promise<Handler
 	return {
 		config,
 		deps,
+		// Without this a handler's `SchemaExtractionError` reaches `runHandler`
+		// unrecognized and renders 500, so every status assertion around compute
+		// failures silently weakens to "some error happened".
+		mapError: mapCoreError,
 		definitionService,
 		// `null` password marks an OAuth-allowlisted entry; these tests don't
 		// authenticate, they just need ids to align across stores.

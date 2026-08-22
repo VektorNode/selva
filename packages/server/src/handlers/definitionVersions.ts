@@ -13,19 +13,22 @@ import {
 	created,
 	formText,
 	noContent,
+	parseListOptions,
 	parseParam,
+	requireCaller,
 	requireUpload
-} from '@selvajs/server/api';
-import type { ApiHandler } from '@selvajs/server/api';
+} from '../api/index.js';
+import type { ApiHandler } from '../api/index.js';
 import { GuidSchema } from '@selvajs/platform/definitions';
-import { requireEditableDefinition } from '../../access.server';
+import { requireEditableDefinition } from '../access/index.js';
 import { GH_EXTENSIONS } from '@selvajs/platform';
-import { resolveServerForOrg } from '../../compute/resolve.server';
-import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
-import { getVisibleDefinition, loadVisibleVersion } from '../../definitions/visibility.server';
-import { parseListOptions } from '../../pagination.server';
-import { requireCaller } from '../callers';
-import { definitionService } from '@selvajs/server/handlers';
+import { resolveServerForOrg } from '../compute/index.js';
+import {
+	fetchSchemaFromCompute,
+	getVisibleDefinition,
+	loadVisibleVersion
+} from '../definitions/index.js';
+import { definitionService } from './services.js';
 
 export const listVersions: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');

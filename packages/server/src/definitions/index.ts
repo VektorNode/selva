@@ -20,3 +20,13 @@ export {
 	type DefinitionLoadOptions,
 	type LoadedDefinition
 } from './load-for-render.js';
+
+export {
+	resolveAccessibleProjects,
+	listVisibleDefinitions,
+	getVisibleDefinition,
+	loadVisibleVersion,
+	type VisibilityDeps,
+	type AccessibleProjectSet,
+	type ListVisibleDefinitionsResult
+} from './visibility.js';

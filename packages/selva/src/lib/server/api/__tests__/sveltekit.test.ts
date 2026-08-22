@@ -130,7 +130,7 @@ describe('POST /api/v1/projects through the binding', () => {
 	it('creates a project for a member of the acting org', async () => {
 		tp = await freshProviders();
 		const { alice, acme } = await seedAcme(tp);
-		const { createProject } = await import('../handlers/projects.js');
+		const { createProject } = await import('@selvajs/server/handlers');
 
 		const res = await mount(
 			'Failed to create project',
@@ -151,7 +151,7 @@ describe('POST /api/v1/projects through the binding', () => {
 	it('rejects platform visibility from a non-platform-admin with 403, not 500', async () => {
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);
-		const { createProject } = await import('../handlers/projects.js');
+		const { createProject } = await import('@selvajs/server/handlers');
 
 		const res = await mount(
 			'Failed to create project',
@@ -170,7 +170,7 @@ describe('POST /api/v1/projects through the binding', () => {
 	it('rejects a malformed body with 400 and field detail', async () => {
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);
-		const { createProject } = await import('../handlers/projects.js');
+		const { createProject } = await import('@selvajs/server/handlers');
 
 		const res = await mount(
 			'Failed to create project',
@@ -186,7 +186,7 @@ describe('POST /api/v1/projects through the binding', () => {
 	it('reads the guard’s org membership through the injected deps too', async () => {
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);
-		const { createProject } = await import('../handlers/projects.js');
+		const { createProject } = await import('@selvajs/server/handlers');
 
 		// The guard's read path is the half that stays on the module globals if
 		// only the write path is injected — a split that passes every test in an
@@ -210,7 +210,7 @@ describe('POST /api/v1/projects through the binding', () => {
 	it('writes through the injected deps, not the module-global provider', async () => {
 		tp = await freshProviders();
 		const { alice } = await seedAcme(tp);
-		const { createProject } = await import('../handlers/projects.js');
+		const { createProject } = await import('@selvajs/server/handlers');
 
 		const event = await eventFor(alice.id, {
 			method: 'POST',

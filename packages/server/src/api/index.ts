@@ -18,6 +18,7 @@ export {
 	throwZodError
 } from './request.js';
 export { runHandler, toErrorBody, type ApiErrorBody } from './respond.js';
+export { mapCoreError } from './map-core-error.js';
 export { parseListOptions, parseDefinitionListOptions } from './pagination.js';
 export {
 	SolveBodySchema,

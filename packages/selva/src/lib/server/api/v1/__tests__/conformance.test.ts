@@ -107,17 +107,22 @@ function mountedSources(source: string): string[] {
 	return bodies;
 }
 
-/** The source file behind one export of `@selvajs/server/handlers`. */
+/**
+ * The source file behind one export of `@selvajs/server/handlers`.
+ *
+ * Reads whole `export { … } from './mod.js'` statements rather than lines: the
+ * barrel wraps long lists across lines, and a line-wise match finds the names
+ * but not the `from` that says where they came from.
+ */
 function packageHandlerFile(exportName: string): string {
 	const barrel = readFileSync(join(packageHandlersDir, 'index.ts'), 'utf8');
-	const line = barrel
-		.split('\n')
-		.find((l) => new RegExp(String.raw`\b${exportName}\b`).test(l) && l.includes('from'));
-	const module = line?.match(/from\s+'\.\/([\w.-]+)\.js'/)?.[1];
-	if (!module) {
-		throw new Error(`@selvajs/server/handlers does not export ${exportName} — barrel out of date?`);
+	for (const [, names, module] of barrel.matchAll(
+		/export\s*\{([^}]*)\}\s*from\s+'\.\/([\w.-]+)\.js'/g
+	)) {
+		const exported = names.split(',').map((n) => n.trim().replace(/^type\s+/, ''));
+		if (exported.includes(exportName)) return join(packageHandlersDir, `${module}.ts`);
 	}
-	return join(packageHandlersDir, `${module}.ts`);
+	throw new Error(`@selvajs/server/handlers does not export ${exportName} — barrel out of date?`);
 }
 
 function withMountedHandlers(source: string): string {

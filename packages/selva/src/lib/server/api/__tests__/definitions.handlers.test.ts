@@ -21,7 +21,7 @@ import {
 	listDefinitions,
 	publishDefinition,
 	updateDefinition
-} from '../handlers/definitions.js';
+} from '@selvajs/server/handlers';
 import {
 	freshProviders,
 	seedAcme,

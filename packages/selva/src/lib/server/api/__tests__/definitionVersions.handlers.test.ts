@@ -21,7 +21,7 @@ import {
 	getVersionSchema,
 	listVersions,
 	uploadVersion
-} from '../handlers/definitionVersions.js';
+} from '@selvajs/server/handlers';
 import {
 	freshProviders,
 	seedAcme,

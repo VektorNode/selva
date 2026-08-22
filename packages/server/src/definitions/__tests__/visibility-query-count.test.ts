@@ -10,20 +10,19 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { listVisibleDefinitions } from '../visibility.server.js';
-import { depsFromConfig } from '@selvajs/server/api';
+import { listVisibleDefinitions } from '../visibility.js';
+import { depsFromConfig } from '../../api/index.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
-	freshProviders,
 	seedOrg,
 	seedOrgMember,
 	seedProject,
 	seedDefinition,
 	seedUser,
-	actAs,
-	type TestProviders
-} from '../../__tests__/fixtures.js';
+	actAs
+} from '../../testing/index.js';
 
-let tp: TestProviders;
+let tp: HandlerHarness;
 
 afterEach(async () => {
 	vi.restoreAllMocks();
@@ -35,7 +34,7 @@ afterEach(async () => {
  * implementation called once per org / per project; the bulk versions replacing
  * them are counted separately so a partial regression still shows up.
  */
-function countStoreCalls(tp: TestProviders) {
+function countStoreCalls(tp: HandlerHarness) {
 	const orgs = tp.config.data.orgs;
 	const projects = tp.config.data.projects;
 	const counts = {
@@ -80,7 +79,7 @@ function countStoreCalls(tp: TestProviders) {
 	return counts;
 }
 
-async function seedTenants(tp: TestProviders, orgCount: number, projectsPerOrg: number) {
+async function seedTenants(tp: HandlerHarness, orgCount: number, projectsPerOrg: number) {
 	const user = await seedUser(tp, `counter-${orgCount}x${projectsPerOrg}@test.test`);
 	let homeOrgId = '';
 	for (let o = 0; o < orgCount; o++) {
@@ -107,7 +106,7 @@ async function seedTenants(tp: TestProviders, orgCount: number, projectsPerOrg: 
 
 describe('listVisibleDefinitions query count', () => {
 	it('issues no per-org or per-project membership reads', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { user, homeOrgId } = await seedTenants(tp, 4, 5);
 		const { ctx } = await actAs(tp, user.id);
 
@@ -127,7 +126,7 @@ describe('listVisibleDefinitions query count', () => {
 	});
 
 	it('membership reads stay constant as orgs and projects grow', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const small = await seedTenants(tp, 2, 2);
 		const { ctx: smallCtx } = await actAs(tp, small.user.id);
 
@@ -157,7 +156,7 @@ describe('listVisibleDefinitions query count', () => {
 	});
 
 	it('scans projects once per org — the one call that is linear, and is a list not a row read', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { user, homeOrgId } = await seedTenants(tp, 3, 4);
 		const { ctx } = await actAs(tp, user.id);
 

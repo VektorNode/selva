@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { freshHarness, type HandlerHarness } from './harness.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
 	seedUser,
 	seedOrg,

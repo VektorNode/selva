@@ -13,7 +13,7 @@ import {
 	type Project,
 	type RequestContext
 } from '@selvajs/platform';
-import { createProjectWithUniqueSlug, type ProjectDraft } from '../createProject.server.js';
+import { createProjectWithUniqueSlug, type ProjectDraft } from '../create-project.js';
 
 const OPTS = {
 	writeCtx: SYSTEM_CONTEXT,

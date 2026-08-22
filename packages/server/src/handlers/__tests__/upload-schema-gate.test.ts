@@ -11,19 +11,13 @@
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { createDefinition } from '$lib/server/api/handlers/definitions.js';
+import { createDefinition } from '../definitions.js';
 
-import {
-	freshProviders,
-	seedAcme,
-	seedDefinition,
-	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import { seedAcme, seedDefinition, actAs, callHandler } from '../../testing/index.js';
 import { SYSTEM_CONTEXT, type ComputeServerConfig } from '@selvajs/platform';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	vi.restoreAllMocks();
@@ -106,7 +100,7 @@ async function expectStatus(promise: Promise<{ status: number }>, status: number
 
 describe('definition upload — schema validation gate', () => {
 	it('caches the extracted schema on the created version', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		await seedComputeServer();
 		const locals = await actAs(tp, alice.id);
@@ -124,7 +118,7 @@ describe('definition upload — schema validation gate', () => {
 	});
 
 	it('rejects with 503 and persists nothing when compute is unreachable', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		await seedComputeServer();
 		const locals = await actAs(tp, alice.id);
@@ -141,7 +135,7 @@ describe('definition upload — schema validation gate', () => {
 	});
 
 	it('rejects with 422 when the definition has no valid Schema output', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		await seedComputeServer();
 		const locals = await actAs(tp, alice.id);
@@ -157,7 +151,7 @@ describe('definition upload — schema validation gate', () => {
 	});
 
 	it('rejects with 503 and persists nothing when no compute server is configured', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		// Intentionally NO seedComputeServer() — resolve has nothing to return.
 		const locals = await actAs(tp, alice.id);
@@ -176,7 +170,7 @@ describe('definition upload — schema validation gate', () => {
 
 	it('seedDefinition still produces a version carrying a cached schema', async () => {
 		// Guards the fixture path used by the rest of the suite.
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		expect(def.version.schema).toBeDefined();

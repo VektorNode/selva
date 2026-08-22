@@ -15,19 +15,18 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
-	freshProviders,
 	seedUser,
 	seedOrg,
 	seedOrgMember,
 	seedProject,
 	actAs,
-	callHandler,
-	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { createDefinition } from '$lib/server/api/handlers/definitions.js';
+	callHandler
+} from '../../testing/index.js';
+import { createDefinition } from '../definitions.js';
 
-let tp: TestProviders | null = null;
+let tp: HandlerHarness | null = null;
 
 afterEach(async () => {
 	if (tp) {
@@ -54,7 +53,7 @@ function callUpload(locals: unknown): Promise<{ status: number }> {
 
 describe('POST /api/v1/definitions — implicit project fallback', () => {
 	it('refuses when the org has no project the caller can see', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 
 		// Carol is an org member, but the org's only project is private and owned
 		// by someone else — she is not a member of it.
@@ -82,7 +81,7 @@ describe('POST /api/v1/definitions — implicit project fallback', () => {
 	});
 
 	it('does not pick a project belonging to a different org', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 
 		const alice = await seedUser(tp, 'alice@acme.test');
 		const acme = await seedOrg(tp, { name: 'Acme', slug: 'acme', ownerId: alice.id });

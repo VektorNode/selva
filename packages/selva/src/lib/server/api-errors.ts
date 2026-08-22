@@ -3,7 +3,7 @@ import { ProviderError, type ILogger } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
 import { isApiError } from '@selvajs/server/api';
 import { SchemaExtractionError } from '@selvajs/server/definitions';
-import { ComputeServerUnconfiguredError } from './compute/errors';
+import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 
 // ============================================================================
 // Error envelope

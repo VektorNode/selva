@@ -13,7 +13,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { mount } from '../sveltekit.js';
-import { getProject, updateProject, deleteProject } from '../handlers/projects.js';
+import { getProject, updateProject, deleteProject } from '@selvajs/server/handlers';
 import {
 	addProjectMember,
 	listProjectMembers,

@@ -15,11 +15,13 @@ import {
 	formText,
 	noContent,
 	parseBody,
+	parseDefinitionListOptions,
 	parseParam,
+	requireCaller,
 	requireUpload,
 	throwZodError
-} from '@selvajs/server/api';
-import type { ApiHandler } from '@selvajs/server/api';
+} from '../api/index.js';
+import type { ApiHandler } from '../api/index.js';
 import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
 import {
 	CreateDefinitionInputSchema,
@@ -28,19 +30,17 @@ import {
 	UpdateMetadataInputSchema
 } from '@selvajs/platform/definitions';
 import type { DefinitionVersion } from '@selvajs/platform';
-import { requireCanCreateDefinition, requireEditableDefinition } from '../../access.server';
+import { requireCanCreateDefinition, requireEditableDefinition } from '../access/index.js';
 import { GH_EXTENSIONS } from '@selvajs/platform';
-import { resolveServerForOrg } from '../../compute/resolve.server';
-import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
+import { resolveServerForOrg } from '../compute/index.js';
 import {
+	fetchSchemaFromCompute,
 	getVisibleDefinition,
 	listVisibleDefinitions,
 	loadVisibleVersion,
 	resolveAccessibleProjects
-} from '../../definitions/visibility.server';
-import { parseDefinitionListOptions } from '../../pagination.server';
-import { requireCaller } from '../callers';
-import { definitionService } from '@selvajs/server/handlers';
+} from '../definitions/index.js';
+import { definitionService } from './services.js';
 
 const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived'];
 

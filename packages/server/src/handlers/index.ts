@@ -22,3 +22,27 @@ export { updateOrgMember, removeOrgMember } from './orgMembers.js';
 export { reclaimProject } from './reclaim.js';
 export { uploadOrgAsset, removeOrgAsset } from './orgAssets.js';
 export { listShareLinks, createShareLink, revokeShareLink } from './shareLinks.js';
+export {
+	listDefinitions,
+	createDefinition,
+	getDefinition,
+	deleteDefinition,
+	updateDefinition,
+	getDefinitionSchema,
+	publishDefinition,
+	uploadDefinitionImage
+} from './definitions.js';
+export {
+	listVersions,
+	uploadVersion,
+	getVersion,
+	deleteVersion,
+	getVersionSchema
+} from './definitionVersions.js';
+export {
+	listProjects,
+	createProject,
+	getProject,
+	updateProject,
+	deleteProject
+} from './projects.js';

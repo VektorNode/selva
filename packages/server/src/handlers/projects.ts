@@ -15,9 +15,13 @@ import {
 	created,
 	noContent,
 	parseBody,
+	parseListOptions,
+	requireCaller,
 	requireParams,
+	CreateProjectBodySchema,
+	UpdateProjectBodySchema,
 	type ApiHandler
-} from '@selvajs/server/api';
+} from '../api/index.js';
 import {
 	canChangeVisibilityToPublic,
 	canEdit,
@@ -30,17 +34,14 @@ import {
 	withAdminBypass,
 	type ProjectVisibility
 } from '@selvajs/platform';
-import { resolveAccessibleProjects } from '../../definitions/visibility.server';
-import { parseListOptions } from '../../pagination.server';
+import { resolveAccessibleProjects } from '../definitions/index.js';
 import {
 	projectAccessInputFromRowsWith,
 	requireCanCreateProject,
 	requireCanEditProjectSettings,
 	requireCanManage
-} from '../../access.server';
-import { createProjectWithUniqueSlug } from '../../projects/createProject.server';
-import { CreateProjectBodySchema, UpdateProjectBodySchema } from '../v1/bodies';
-import { requireCaller } from '../callers';
+} from '../access/index.js';
+import { createProjectWithUniqueSlug } from '../projects/index.js';
 
 export const listProjects: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);

@@ -17,21 +17,20 @@ import {
 	listVisibleDefinitions,
 	getVisibleDefinition,
 	resolveAccessibleProjects
-} from '../visibility.server.js';
-import { depsFromConfig } from '@selvajs/server/api';
+} from '../visibility.js';
+import { depsFromConfig } from '../../api/index.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
 import {
-	freshProviders,
 	seedAcme,
 	seedBigClient,
 	seedDefinition,
 	seedProject,
 	seedProjectMember,
-	actAs,
-	type TestProviders
-} from '../../__tests__/fixtures.js';
+	actAs
+} from '../../testing/index.js';
 
-let tp: TestProviders;
+let tp: HandlerHarness;
 
 afterEach(async () => {
 	await tp?.cleanup();
@@ -39,7 +38,7 @@ afterEach(async () => {
 
 describe('listVisibleDefinitions', () => {
 	it('never returns another org’s definitions', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, alicesPrivate, acmeOrg } = await seedAcme(tp);
 		const { bigClient, carol } = await seedBigClient(tp);
 
@@ -70,7 +69,7 @@ describe('listVisibleDefinitions', () => {
 	});
 
 	it('excludes a private project the caller is not a member of', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob, alicesPrivate } = await seedAcme(tp);
 		const hidden = await seedDefinition(tp, {
 			projectId: alicesPrivate.id,
@@ -90,7 +89,7 @@ describe('listVisibleDefinitions', () => {
 	});
 
 	it('includes a private project once the caller is a member', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob, alicesPrivate } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 		await seedProjectMember(tp, {
@@ -110,7 +109,7 @@ describe('listVisibleDefinitions', () => {
 	});
 
 	it('returns an empty page — not an unfiltered one — when nothing is visible', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { alice, alicesPrivate } = await seedAcme(tp);
 		const { bigClient, carol } = await seedBigClient(tp);
 		await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
@@ -127,7 +126,7 @@ describe('listVisibleDefinitions', () => {
 	});
 
 	it('pages over only visible definitions — every page is full until the last', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob, acmeOrg, alicesPrivate } = await seedAcme(tp);
 
 		// 6 visible (org project) interleaved with 6 invisible (Alice's private
@@ -168,7 +167,7 @@ describe('listVisibleDefinitions', () => {
 	});
 
 	it('narrows to one project, and yields nothing for a project the caller cannot see', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob, acmeOrg, alicesPrivate } = await seedAcme(tp);
 		const visible = await seedDefinition(tp, { projectId: acmeOrg.id, ownerId: alice.id });
 		await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
@@ -196,7 +195,7 @@ describe('listVisibleDefinitions', () => {
 
 describe('getVisibleDefinition', () => {
 	it('returns null for a definition in another org', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		const { bigClient, carol } = await seedBigClient(tp);
 		const carolsProject = await seedProject(tp, {
@@ -223,7 +222,7 @@ describe('getVisibleDefinition', () => {
 	});
 
 	it('returns the record when the caller can view its project', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice, bob, acmeOrg } = await seedAcme(tp);
 		const def = await seedDefinition(tp, { projectId: acmeOrg.id, ownerId: alice.id });
 
@@ -238,7 +237,7 @@ describe('getVisibleDefinition', () => {
 	});
 
 	it('returns null for a guid that does not exist', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		const { ctx } = await actAs(tp, alice.id);
 
@@ -267,7 +266,7 @@ describe('getVisibleDefinition', () => {
  */
 describe('resolveAccessibleProjects with injected deps', () => {
 	it('excludes another org’s projects, same as the singleton path', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		const { bigClient, carol } = await seedBigClient(tp);
 
@@ -292,7 +291,7 @@ describe('resolveAccessibleProjects with injected deps', () => {
 	// so there is no globals-resolved second path that could disagree with the
 	// injected one. Parity is structural, not something a test can observe.
 	it('returns the membership rows a second rule needs', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, alice } = await seedAcme(tp);
 		await seedBigClient(tp);
 
@@ -313,7 +312,7 @@ describe('resolveAccessibleProjects with injected deps', () => {
 	});
 
 	it('excludes a private project the caller is not a member of', async () => {
-		tp = await freshProviders();
+		tp = await freshHarness();
 		const { acme, bob, alicesPrivate } = await seedAcme(tp);
 
 		const { ctx } = await actAs(tp, bob.id);
@@ -332,7 +331,7 @@ describe('resolveAccessibleProjects with injected deps', () => {
 	 * assertion above. This is the test that fails when it is wrong.
 	 */
 	it('reads platform grants through the injected store', async () => {
-		tp = await freshProviders({ flags: { ENABLE_PLATFORM_PROJECTS: true } });
+		tp = await freshHarness({ flags: { ENABLE_PLATFORM_PROJECTS: true } });
 		const { acme, alice } = await seedAcme(tp);
 		const { bigClient, carol } = await seedBigClient(tp);
 
