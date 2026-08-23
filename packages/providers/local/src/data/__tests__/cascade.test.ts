@@ -1,0 +1,491 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import * as os from 'node:os';
+import { randomUUID } from 'node:crypto';
+import {
+	ALL_ORG_PERMISSIONS,
+	ALL_PLATFORM_PERMISSIONS,
+	SYSTEM_CONTEXT,
+	type RequestContext,
+	type DefinitionRecord,
+	type ShareLink
+} from '@selvajs/platform';
+import { LocalDataProvider } from '../LocalDataProvider.js';
+import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
+import { LocalProjectStore } from '../LocalProjectStore.js';
+import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
+import { LocalShareLinkStore } from '../LocalShareLinkStore.js';
+import { LocalInviteStore } from '../LocalInviteStore.js';
+import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
+import { LocalPlatformProjectGrantStore } from '../LocalPlatformProjectGrantStore.js';
+
+/**
+ * Cross-store cascade behavior. Lives outside the per-store conformance suites
+ * because the invariants involve both `IOrgStore` and `IProjectStore`.
+ */
+describe('Cross-store cascade', () => {
+	let tempDir: string;
+	let orgs: LocalOrgStore;
+	let projects: LocalProjectStore;
+	let definitions: LocalDefinitionStore;
+
+	beforeEach(async () => {
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'selva-test-'));
+		const loader = new LocalOrgStoreLoader(tempDir);
+		const invites = new LocalInviteStore(tempDir);
+		const computeServer = new LocalComputeServerStore(
+			path.join(tempDir, 'compute.config.json'),
+			Buffer.alloc(32, 0x42)
+		);
+		const grants = new LocalPlatformProjectGrantStore(
+			path.join(tempDir, 'platform-project-grants.json')
+		);
+		orgs = new LocalOrgStore({ loader, invites, computeServer, grants });
+		projects = new LocalProjectStore({ loader, grants });
+		definitions = new LocalDefinitionStore(tempDir);
+		// Mirrors LocalDataProvider wiring: deleteProject's cascade runs through this injected store.
+		definitions.setProjectProvider(projects);
+		projects.setDefinitionProvider(definitions);
+	});
+
+	afterEach(async () => {
+		await fs.rm(tempDir, { recursive: true, force: true });
+	});
+
+	function ctxFor(userId: string): RequestContext {
+		return {
+			userId,
+			platformPermissions: [...ALL_PLATFORM_PERMISSIONS],
+			orgPermissions: [...ALL_ORG_PERMISSIONS]
+		};
+	}
+
+	it('removeOrgMember soft-deletes the user’s project memberships in that org (§9)', async () => {
+		const ownerId = randomUUID();
+		const memberId = randomUUID();
+		const orgId = randomUUID();
+		const projectAId = randomUUID();
+		const projectBId = randomUUID();
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		await orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await orgs.addOrgMember(ownerCtx, {
+			orgId,
+			userId: memberId,
+			role: 'member',
+			permissions: [],
+			joinedAt: now,
+			updatedAt: now,
+			updatedBy: ownerId,
+			deletedAt: null
+		});
+
+		for (const id of [projectAId, projectBId]) {
+			await projects.createProject(ownerCtx, {
+				id,
+				orgId,
+				ownerId,
+				name: `Project ${id.slice(0, 4)}`,
+				slug: `p-${id.slice(0, 4)}`,
+				visibility: 'private',
+				autoJoinOnUpload: false,
+				createdBy: ownerId,
+				updatedBy: ownerId,
+				createdAt: now,
+				updatedAt: now,
+				deletedAt: null
+			});
+			await projects.addProjectMember(ownerCtx, {
+				projectId: id,
+				userId: memberId,
+				role: 'editor',
+				joinedAt: now,
+				updatedAt: now,
+				updatedBy: ownerId,
+				deletedAt: null
+			});
+		}
+
+		// Sanity: memberships are live before the cascade fires.
+		expect(await projects.getProjectMember(ownerCtx, projectAId, memberId)).not.toBeNull();
+		expect(await projects.getProjectMember(ownerCtx, projectBId, memberId)).not.toBeNull();
+
+		await orgs.removeOrgMember(ownerCtx, orgId, memberId);
+
+		expect(await orgs.getOrgMember(ownerCtx, orgId, memberId)).toBeNull();
+		expect(await projects.getProjectMember(ownerCtx, projectAId, memberId)).toBeNull();
+		expect(await projects.getProjectMember(ownerCtx, projectBId, memberId)).toBeNull();
+	});
+
+	it('removeOrgMember does not touch project memberships in other orgs', async () => {
+		const ownerAId = randomUUID();
+		const ownerBId = randomUUID();
+		const memberId = randomUUID();
+		const orgAId = randomUUID();
+		const orgBId = randomUUID();
+		const projectAId = randomUUID();
+		const projectBId = randomUUID();
+		const now = new Date().toISOString();
+
+		await orgs.createOrg(ctxFor(ownerAId), {
+			id: orgAId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId: ownerAId,
+			createdBy: ownerAId,
+			updatedBy: ownerAId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await orgs.createOrg(ctxFor(ownerBId), {
+			id: orgBId,
+			name: 'BigClient',
+			slug: 'bigclient',
+			ownerId: ownerBId,
+			createdBy: ownerBId,
+			updatedBy: ownerBId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+
+		for (const [orgOwner, orgId] of [
+			[ownerAId, orgAId],
+			[ownerBId, orgBId]
+		]) {
+			await orgs.addOrgMember(ctxFor(orgOwner), {
+				orgId,
+				userId: memberId,
+				role: 'member',
+				permissions: [],
+				joinedAt: now,
+				updatedAt: now,
+				updatedBy: orgOwner,
+				deletedAt: null
+			});
+		}
+
+		for (const [orgOwner, orgId, projectId] of [
+			[ownerAId, orgAId, projectAId],
+			[ownerBId, orgBId, projectBId]
+		]) {
+			await projects.createProject(ctxFor(orgOwner), {
+				id: projectId,
+				orgId,
+				ownerId: orgOwner,
+				name: `Project ${projectId.slice(0, 4)}`,
+				slug: `p-${projectId.slice(0, 4)}`,
+				visibility: 'private',
+				autoJoinOnUpload: false,
+				createdBy: orgOwner,
+				updatedBy: orgOwner,
+				createdAt: now,
+				updatedAt: now,
+				deletedAt: null
+			});
+			await projects.addProjectMember(ctxFor(orgOwner), {
+				projectId,
+				userId: memberId,
+				role: 'editor',
+				joinedAt: now,
+				updatedAt: now,
+				updatedBy: orgOwner,
+				deletedAt: null
+			});
+		}
+
+		// Remove from org A only.
+		await orgs.removeOrgMember(ctxFor(ownerAId), orgAId, memberId);
+
+		expect(await projects.getProjectMember(ctxFor(ownerAId), projectAId, memberId)).toBeNull();
+		// Org B membership and its project membership are untouched.
+		expect(await orgs.getOrgMember(ctxFor(ownerBId), orgBId, memberId)).not.toBeNull();
+		expect(await projects.getProjectMember(ctxFor(ownerBId), projectBId, memberId)).not.toBeNull();
+	});
+
+	it('onUserDeleted soft-deletes the user’s org memberships (no orphaned roster rows)', async () => {
+		const ownerId = randomUUID();
+		const memberId = randomUUID();
+		const orgId = randomUUID();
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		const dataProvider = LocalDataProvider.fromEnv({
+			DATA_PATH: tempDir,
+			SELVA_AT_REST_KEY: Buffer.alloc(32, 0x42).toString('hex')
+		});
+
+		await dataProvider.orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await dataProvider.orgs.addOrgMember(ownerCtx, {
+			orgId,
+			userId: memberId,
+			role: 'member',
+			permissions: [],
+			joinedAt: now,
+			updatedAt: now,
+			updatedBy: ownerId,
+			deletedAt: null
+		});
+		await dataProvider.ensureUser(SYSTEM_CONTEXT, memberId);
+
+		await dataProvider.onUserDeleted(SYSTEM_CONTEXT, memberId);
+
+		expect(await dataProvider.orgs.getOrgMember(ownerCtx, orgId, memberId)).toBeNull();
+		// Tolerates a user with no memberships and no user-data row.
+		await expect(dataProvider.onUserDeleted(SYSTEM_CONTEXT, memberId)).resolves.toBeUndefined();
+	});
+
+	it('deleteProject soft-deletes the project’s definitions (they must not keep serving)', async () => {
+		// Regression: deleteProject used to stamp only the project + members, leaving
+		// live definitions that still surfaced in library/public listings.
+		const ownerId = randomUUID();
+		const orgId = randomUUID();
+		const projectId = randomUUID();
+		const otherProjectId = randomUUID();
+		const defA = randomUUID();
+		const defB = randomUUID();
+		const otherDef = randomUUID();
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		await orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+
+		for (const [id, slug] of [
+			[projectId, 'target'],
+			[otherProjectId, 'other']
+		]) {
+			await projects.createProject(ownerCtx, {
+				id,
+				orgId,
+				ownerId,
+				name: `Project ${slug}`,
+				slug,
+				visibility: 'public',
+				autoJoinOnUpload: false,
+				createdBy: ownerId,
+				updatedBy: ownerId,
+				createdAt: now,
+				updatedAt: now,
+				deletedAt: null
+			});
+		}
+
+		const makeDef = (guid: string, project: string): DefinitionRecord => ({
+			guid,
+			projectId: project,
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			displayName: `Def ${guid.slice(0, 4)}`,
+			status: 'published',
+			solveCount: 0,
+			nextVersionNumber: 2,
+			liveVersionId: null,
+			draftVersionId: null,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await definitions.create(ownerCtx, makeDef(defA, projectId));
+		await definitions.create(ownerCtx, makeDef(defB, projectId));
+		await definitions.create(ownerCtx, makeDef(otherDef, otherProjectId));
+
+		// Sanity: all three are live and listed before the delete.
+		expect((await definitions.list(ownerCtx, { limit: 500 })).items).toHaveLength(3);
+
+		await projects.deleteProject(ownerCtx, projectId);
+
+		// The project's definitions are gone from every read path…
+		expect(await definitions.get(ownerCtx, defA)).toBeNull();
+		expect(await definitions.get(ownerCtx, defB)).toBeNull();
+		const byProject = await definitions.listByProject(ownerCtx, projectId, { limit: 500 });
+		expect(byProject.items).toHaveLength(0);
+		const all = await definitions.list(ownerCtx, { limit: 500 });
+		expect(all.items.map((r) => r.guid)).toEqual([otherDef]);
+		// …but the unrelated project's definition survives.
+		expect(await definitions.get(ownerCtx, otherDef)).not.toBeNull();
+	});
+
+	it('LocalDataProvider wires the deleteProject → definitions cascade end-to-end', async () => {
+		// Goes through fromEnv (the real composition root), not the hand-wired
+		// stores above — the wiring itself is what regressed before.
+		const ownerId = randomUUID();
+		const orgId = randomUUID();
+		const projectId = randomUUID();
+		const defId = randomUUID();
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		const dataProvider = LocalDataProvider.fromEnv({
+			DATA_PATH: tempDir,
+			SELVA_AT_REST_KEY: Buffer.alloc(32, 0x42).toString('hex')
+		});
+
+		await dataProvider.orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await dataProvider.projects.createProject(ownerCtx, {
+			id: projectId,
+			orgId,
+			ownerId,
+			name: 'P',
+			slug: 'p',
+			visibility: 'public',
+			autoJoinOnUpload: false,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await dataProvider.definitions.create(ownerCtx, {
+			guid: defId,
+			projectId,
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			displayName: 'Def',
+			status: 'published',
+			solveCount: 0,
+			nextVersionNumber: 2,
+			liveVersionId: null,
+			draftVersionId: null,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+
+		await dataProvider.projects.deleteProject(ownerCtx, projectId);
+
+		expect(await dataProvider.definitions.get(ownerCtx, defId)).toBeNull();
+	});
+
+	it('share-link getByTokenHash returns null when parent definition is soft-deleted (§7)', async () => {
+		// Token resolution must fail closed when its parent definition is soft-deleted.
+		// Supabase enforces this via JOIN; the local store gets the same behavior by
+		// injecting a definition provider (see LocalShareLinkStore.setDefinitionProvider).
+		const ownerId = randomUUID();
+		const orgId = randomUUID();
+		const projectId = randomUUID();
+		const definitionId = randomUUID();
+		const linkId = randomUUID();
+		const tokenHash = `hash-${randomUUID()}`;
+		const now = new Date().toISOString();
+		const ownerCtx = ctxFor(ownerId);
+
+		await orgs.createOrg(ownerCtx, {
+			id: orgId,
+			name: 'Acme',
+			slug: 'acme',
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+		await projects.createProject(ownerCtx, {
+			id: projectId,
+			orgId,
+			ownerId,
+			name: 'P',
+			slug: 'p',
+			visibility: 'private',
+			autoJoinOnUpload: false,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		});
+
+		const definitions = new LocalDefinitionStore(tempDir);
+		const shareLinks = new LocalShareLinkStore({
+			filePath: path.join(tempDir, 'share-links.json')
+		});
+		shareLinks.setDefinitionProvider(definitions);
+
+		const definition: DefinitionRecord = {
+			guid: definitionId,
+			projectId,
+			ownerId,
+			createdBy: ownerId,
+			updatedBy: ownerId,
+			displayName: 'Def',
+			status: 'published',
+			solveCount: 0,
+			nextVersionNumber: 2,
+			liveVersionId: null,
+			draftVersionId: null,
+			createdAt: now,
+			updatedAt: now,
+			deletedAt: null
+		};
+		await definitions.create(ownerCtx, definition);
+
+		const link: ShareLink = {
+			id: linkId,
+			definitionId,
+			channel: 'live',
+			tokenHash,
+			createdBy: ownerId,
+			createdAt: now,
+			expiresAt: null,
+			revokedAt: null,
+			allowSolve: true,
+			maxSolves: null,
+			solveCount: 0
+		};
+		await shareLinks.create(SYSTEM_CONTEXT, link);
+
+		// Sanity: token resolves while parent is live.
+		expect(await shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash)).not.toBeNull();
+
+		// Soft-delete the parent definition.
+		await definitions.delete(ownerCtx, definitionId);
+
+		// Cascade contract: token resolution must now fail closed.
+		expect(await shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash)).toBeNull();
+	});
+});

@@ -1,0 +1,934 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://selva.dev/schemas/ui-schema.json",
+	"title": "Selva UI Schema",
+	"description": "Schema definitions for Selva UI configuration",
+	"constants": {
+		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl"]
+	},
+	"definitions": {
+		"//_PRIMITIVES": "--- PRIMITIVES ---",
+		"ParamType": {
+			"type": "string",
+			"enum": [
+				"number",
+				"integer",
+				"boolean",
+				"text",
+				"valueList",
+				"dynamicValueList",
+				"file",
+				"color",
+				"generic"
+			],
+			"description": "Contextual parameter data types"
+		},
+
+		"//_VISIBILITY_RULES": "--- VISIBILITY RULES --- Visibility conditions define when to show/hide/disable parameters based on other parameter values. Can be applied to individual items or entire groups. Ex1: action='disable'+defaultValue=2 when Leg Type='Square'. Ex2: action='hide' when Height>120. Ex3: mode='all'+action='hide'+defaultValue=5 when Width>100 AND Length<100. Ex4: hide entire 'Advanced Options' group when Mode='Basic'",
+		"VisibilityRule": {
+			"type": "object",
+			"description": "Single rule for conditional visibility/state",
+			"properties": {
+				"paramId": {
+					"type": "string",
+					"description": "Parameter ID to watch for changes"
+				},
+				"operator": {
+					"type": "string",
+					"enum": [
+						"equals",
+						"notEquals",
+						"greaterThan",
+						"lessThan",
+						"greaterThanOrEqual",
+						"lessThanOrEqual",
+						"in",
+						"notIn",
+						"between",
+						"matches",
+						"contains",
+						"containsAny",
+						"isEmpty",
+						"isNotEmpty"
+					],
+					"description": "Comparison operator. 'contains', 'containsAny', 'isEmpty', 'isNotEmpty' apply to array-valued params (e.g., checklist value lists)."
+				},
+				"value": {
+					"description": "Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)"
+				},
+				"values": {
+					"type": "array",
+					"description": "Array of values (used for 'in', 'notIn' operators, or [min, max] for 'between')"
+				}
+			},
+			"required": ["paramId", "operator"],
+			"additionalProperties": false
+		},
+		"VisibilityCondition": {
+			"type": "object",
+			"description": "Defines conditional visibility/state and defaults based on other parameter values. When rules match, the specified action is applied and optional defaultValue is set.",
+			"properties": {
+				"mode": {
+					"type": "string",
+					"enum": ["all", "any"],
+					"default": "all",
+					"description": "Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)"
+				},
+				"rules": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/VisibilityRule" },
+					"minItems": 1,
+					"description": "List of rules to evaluate"
+				},
+				"action": {
+					"type": "string",
+					"enum": ["show", "hide", "disable"],
+					"default": "show",
+					"description": "Action to apply when condition is met: 'show' makes visible and enabled, 'hide' removes from view, 'disable' makes visible but greyed out and non-interactive"
+				},
+				"defaultValue": {
+					"description": "Default value to set for the parameter when condition is met. The value should be compatible with the parameter type (number, string, boolean, etc.)"
+				}
+			},
+			"required": ["rules"],
+			"additionalProperties": false
+		},
+		"GroupVisibilityCondition": {
+			"type": "object",
+			"description": "Defines conditional visibility for a group of parameters. When rules match, all items in the group are hidden or shown. Does not support defaultValue - individual item conditions can set defaults independently.",
+			"properties": {
+				"mode": {
+					"type": "string",
+					"enum": ["all", "any"],
+					"default": "all",
+					"description": "Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)"
+				},
+				"rules": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/VisibilityRule" },
+					"minItems": 1,
+					"description": "List of rules to evaluate"
+				},
+				"action": {
+					"type": "string",
+					"enum": ["show", "hide"],
+					"default": "show",
+					"description": "Action to apply when condition is met: 'show' makes group visible, 'hide' removes group from view"
+				}
+			},
+			"required": ["rules"],
+			"additionalProperties": false
+		},
+
+		"//_WIDGET_CONFIGURATIONS": "--- WIDGET CONFIGURATIONS ---",
+		"NumberWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"minimum": { "type": "number" },
+				"maximum": { "type": "number" },
+				"stepSize": { "type": "number" },
+				"placeholder": { "type": "string" },
+				"renderAsSlider": { "type": "boolean" },
+				"hideRange": {
+					"type": "boolean",
+					"description": "Hide the min/max range hint shown next to the label / under the input"
+				}
+			},
+			"additionalProperties": false
+		},
+		"TextWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"placeholder": { "type": "string" },
+				"required": { "type": "boolean" },
+				"maxLength": {
+					"type": "integer",
+					"description": "Maximum character length for text input"
+				},
+				"pattern": {
+					"type": "string",
+					"description": "Regex pattern for validation (e.g., email, phone)"
+				},
+				"customErrorMessage": {
+					"type": "string",
+					"description": "Custom error message shown when pattern validation fails"
+				}
+			},
+			"additionalProperties": false
+		},
+		"DropdownWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"options": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Key-value pairs for dropdown options"
+				},
+				"required": { "type": "boolean" },
+				"displayAs": {
+					"type": "string",
+					"enum": ["dropdown", "checklist"],
+					"default": "dropdown",
+					"description": "How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter."
+				}
+			},
+			"required": ["options"],
+			"additionalProperties": false
+		},
+		"DynamicValueListWidgetConfig": {
+			"type": "object",
+			"description": "Configuration for a dynamic value list input. Options are populated at runtime from a DynamicValueList output that targets this input. Falls back to defaultOptions before the first solve produces options.",
+			"properties": {
+				"defaultOptions": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Author-provided seed list (name -> value). Shown until computed options replace it. Empty/absent means the input is empty until the first solve produces options."
+				},
+				"emptyBehavior": {
+					"type": "string",
+					"enum": ["hide", "show-empty"],
+					"default": "hide",
+					"description": "What to render when there are no options yet (no defaultOptions and no computed options): 'hide' removes the field from view, 'show-empty' shows a disabled 'no options yet' control."
+				},
+				"displayAs": {
+					"type": "string",
+					"enum": ["dropdown", "checklist"],
+					"default": "dropdown",
+					"description": "How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[])."
+				}
+			},
+			"additionalProperties": false
+		},
+		"DynamicValueListOutputConfig": {
+			"type": "object",
+			"description": "Configuration for a dynamic value list output. Declares which dynamic value list input the computed options feed into.",
+			"properties": {
+				"targetInputId": {
+					"type": "string",
+					"format": "guid",
+					"description": "The backend parameter's GUID (paramId) of the DynamicValueList input that this output's computed options populate."
+				}
+			},
+			"required": ["targetInputId"],
+			"additionalProperties": false
+		},
+		"CheckboxWidgetConfig": {
+			"type": "object",
+			"properties": {},
+			"additionalProperties": false
+		},
+		"FileWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"buttonLabel": {
+					"type": "string",
+					"default": "Download"
+				},
+				"fileFormat": {
+					"type": "string",
+					"description": "File format hint (e.g., '3dm') for setting download extension"
+				}
+			},
+			"additionalProperties": false
+		},
+		"FileInputWidgetConfig": {
+			"type": "object",
+			"properties": {
+				"acceptedFormats": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "List of accepted file extensions (e.g., ['.3dm', '.step'])"
+				},
+				"defaultInputMode": {
+					"type": "string",
+					"enum": ["upload", "url"],
+					"description": "Which mode is active by default when both are allowed"
+				},
+				"allowedInputModes": {
+					"type": "array",
+					"items": { "type": "string", "enum": ["upload", "url"] },
+					"description": "Which input modes the end user can choose from. If omitted, both are allowed."
+				}
+			},
+			"additionalProperties": false
+		},
+
+		"ColorWidgetConfig": {
+			"type": "object",
+			"properties": {},
+			"additionalProperties": false
+		},
+
+		"//_LAYOUT_DEFINITIONS": "--- LAYOUT DEFINITIONS ---",
+		"LayoutItemBase": {
+			"type": "object",
+			"description": "Base properties shared by all layout items",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Unique identifier for this layout item in the UI tree (not the parameter ID)"
+				},
+				"paramId": {
+					"type": "string",
+					"format": "guid",
+					"description": "References the backend parameter's GUID (Data Source)"
+				},
+				"displayName": { "type": "string" },
+				"description": { "type": "string" },
+				"order": {
+					"type": "integer",
+					"default": 0
+				},
+				"span": {
+					"type": "integer",
+					"default": 1
+				},
+				"visible": {
+					"type": "boolean",
+					"default": true,
+					"description": "Base visibility (static). If false, item is always hidden regardless of conditions."
+				},
+				"visibilityCondition": {
+					"$ref": "#/definitions/VisibilityCondition"
+				},
+				"source": {
+					"$ref": "#/definitions/InputSource"
+				}
+			},
+			"required": ["id", "paramId"]
+		},
+
+		"InputSource": {
+			"type": "object",
+			"description": "Where an input's value comes from — its data provider. If omitted, the input defaults to 'user' (the person fills it in). Modeled as an object, not a bare string, so fields like 'key' and 'client' can be added without breaking existing schemas. The kind ('client'/'server') is the provider behind the value; a client 'slot' is a custom UI element the host renders in place of that input, referencing the provider.",
+			"properties": {
+				"kind": {
+					"type": "string",
+					"enum": ["user", "client", "server"],
+					"description": "Which data provider supplies the value. 'user' = the person types it into the form. 'client' = a browser app (e.g. a measurement/producer tool) fills it in before the form runs, not the person. 'server' = looked up on the server from your data when the definition solves; never shown in the form."
+				},
+				"key": {
+					"type": "string",
+					"description": "The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. Keys need not be unique: the same producer/fetch may fill several inputs. Ignored for kind='user'."
+				},
+				"client": {
+					"type": "object",
+					"description": "How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = 'hidden': the value is prefilled silently and the input does not appear. 'slot' = Selva reserves the input's grid cell and lets the host render its own element there; Selva draws nothing itself and never interprets that element.",
+					"properties": {
+						"presentation": {
+							"type": "string",
+							"enum": ["hidden", "slot"],
+							"default": "hidden",
+							"description": "'hidden' = no UI; the producer app prefills the value and the input does not appear. 'slot' = the host renders a custom element (e.g. an 'Edit JSON' button) in this input's place, referencing the producer named by 'key'."
+						}
+					},
+					"additionalProperties": false
+				}
+			},
+			"required": ["kind"],
+			"additionalProperties": false
+		},
+		"InputNumberLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "number" },
+						"config": { "$ref": "#/definitions/NumberWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"InputTextLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "text" },
+						"config": { "$ref": "#/definitions/TextWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"InputDropdownLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "dropdown" },
+						"config": { "$ref": "#/definitions/DropdownWidgetConfig" }
+					},
+					"required": ["type", "widgetType", "config"]
+				}
+			]
+		},
+		"InputDynamicValueListLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "dynamicValueList" },
+						"config": { "$ref": "#/definitions/DynamicValueListWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"InputCheckboxLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "checkbox" },
+						"config": { "$ref": "#/definitions/CheckboxWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"InputFileLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "file" },
+						"config": { "$ref": "#/definitions/FileInputWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"InputColorLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "input" },
+						"widgetType": { "const": "color" },
+						"config": { "$ref": "#/definitions/ColorWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"OutputTextLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "text" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"OutputNumberLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "number" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"OutputFileLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "file" },
+						"config": { "$ref": "#/definitions/FileWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"ChartWidgetConfig": {
+			"type": "object",
+			"properties": {},
+			"additionalProperties": false
+		},
+		"OutputChartLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "chart" },
+						"config": { "$ref": "#/definitions/ChartWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"ImageWidgetConfig": {
+			"type": "object",
+			"description": "Configuration for the image viewer output widget. Renders PNG/JPG/WEBP/GIF/SVG files inline.",
+			"properties": {
+				"allowDownload": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a download button on the image viewer"
+				},
+				"allowFullscreen": {
+					"type": "boolean",
+					"default": true,
+					"description": "Show a fullscreen toggle button on the image viewer"
+				},
+				"backgroundColor": {
+					"type": "string",
+					"pattern": "^#[0-9A-Fa-f]{6}$",
+					"description": "Optional background color shown behind the image (hex string, e.g. '#ffffff')"
+				}
+			},
+			"additionalProperties": false
+		},
+		"OutputImageLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "image" },
+						"config": { "$ref": "#/definitions/ImageWidgetConfig" }
+					},
+					"required": ["type", "widgetType"]
+				}
+			]
+		},
+		"OutputDynamicValueListLayoutItem": {
+			"allOf": [
+				{ "$ref": "#/definitions/LayoutItemBase" },
+				{
+					"type": "object",
+					"properties": {
+						"type": { "const": "output" },
+						"widgetType": { "const": "dynamicValueList" },
+						"config": { "$ref": "#/definitions/DynamicValueListOutputConfig" }
+					},
+					"required": ["type", "widgetType", "config"]
+				}
+			]
+		},
+		"LineBreakLayoutItem": {
+			"type": "object",
+			"description": "A full-width line break that forces subsequent items onto a new grid row",
+			"properties": {
+				"id": {
+					"type": "string",
+					"description": "Unique identifier for this layout item in the UI tree"
+				},
+				"type": { "const": "linebreak" }
+			},
+			"required": ["id", "type"],
+			"additionalProperties": false
+		},
+		"LayoutItem": {
+			"oneOf": [
+				{ "$ref": "#/definitions/InputNumberLayoutItem" },
+				{ "$ref": "#/definitions/InputTextLayoutItem" },
+				{ "$ref": "#/definitions/InputDropdownLayoutItem" },
+				{ "$ref": "#/definitions/InputDynamicValueListLayoutItem" },
+				{ "$ref": "#/definitions/InputCheckboxLayoutItem" },
+				{ "$ref": "#/definitions/InputFileLayoutItem" },
+				{ "$ref": "#/definitions/InputColorLayoutItem" },
+				{ "$ref": "#/definitions/OutputTextLayoutItem" },
+				{ "$ref": "#/definitions/OutputNumberLayoutItem" },
+				{ "$ref": "#/definitions/OutputFileLayoutItem" },
+				{ "$ref": "#/definitions/OutputChartLayoutItem" },
+				{ "$ref": "#/definitions/OutputImageLayoutItem" },
+				{ "$ref": "#/definitions/OutputDynamicValueListLayoutItem" },
+				{ "$ref": "#/definitions/LineBreakLayoutItem" }
+			]
+		},
+		"GroupConfig": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"label": { "type": "string" },
+				"description": { "type": "string" },
+				"order": { "type": "integer", "default": 0 },
+				"collapsed": { "type": "boolean", "default": false },
+				"columns": { "type": "integer", "default": 1 },
+				"items": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/LayoutItem" }
+				},
+				"visibilityCondition": {
+					"$ref": "#/definitions/GroupVisibilityCondition"
+				}
+			},
+			"required": ["id", "label", "items"],
+			"additionalProperties": false
+		},
+		"TabConfig": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"label": { "type": "string" },
+				"icon": { "type": "string" },
+				"order": { "type": "integer", "default": 0 },
+				"groups": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/GroupConfig" }
+				},
+				"position": {
+					"type": "string",
+					"enum": ["left", "center", "right"],
+					"default": "center",
+					"description": "Horizontal region where this tab should be positioned in multi-column layouts"
+				}
+			},
+			"required": ["id", "label", "groups"],
+			"additionalProperties": false
+		},
+		"TabbedLayoutConfig": {
+			"type": "object",
+			"description": "Tabbed layout with multiple tabs containing groups",
+			"properties": {
+				"type": { "const": "tabbed" },
+				"gap": { "type": "integer", "default": 16 },
+				"tabs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/TabConfig" }
+				}
+			},
+			"required": ["type", "tabs"],
+			"additionalProperties": false
+		},
+		"FlatLayoutConfig": {
+			"type": "object",
+			"description": "Flat layout with a single list of groups",
+			"properties": {
+				"type": { "const": "flat" },
+				"gap": { "type": "integer", "default": 16 },
+				"groups": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/GroupConfig" }
+				}
+			},
+			"required": ["type", "groups"],
+			"additionalProperties": false
+		},
+		"LayoutConfig": {
+			"type": "object",
+			"oneOf": [
+				{ "$ref": "#/definitions/TabbedLayoutConfig" },
+				{ "$ref": "#/definitions/FlatLayoutConfig" }
+			]
+		},
+
+		"//_DISCOVERY_MODELS": "--- DISCOVERY MODELS (From Grasshopper) ---",
+		"DiscoveredInput": {
+			"type": "object",
+			"description": "Input parameter discovered in Grasshopper document",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "Grasshopper parameter instance GUID"
+				},
+				"name": { "type": "string" },
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": { "$ref": "#/definitions/ParamType" },
+				"default": {},
+				"minimum": { "type": "number" },
+				"maximum": { "type": "number" },
+				"stepSize": { "type": "number" },
+				"atLeast": { "type": "integer", "default": 1 },
+				"atMost": { "type": "integer", "default": 1 },
+				"treeAccess": { "type": "boolean", "default": false },
+				"options": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Key-value pairs for dropdown/selection options"
+				},
+				"acceptedFormats": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "File extensions the parameter accepts (e.g. ['.png', '.svg'] for an image input, geometry formats for a file input). Used to seed the file widget's accepted-formats default."
+				},
+				"groupName": {
+					"type": "string",
+					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
+				}
+			},
+			"required": ["id", "name", "nickname", "description", "type"]
+		},
+		"DiscoveredOutput": {
+			"type": "object",
+			"description": "Output component discovered in Grasshopper document",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "Grasshopper component instance GUID"
+				},
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": {
+					"type": "string",
+					"enum": ["text", "number", "file", "chart", "dynamicValueList"],
+					"description": "Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input"
+				},
+				"targetInputId": {
+					"type": "string",
+					"format": "guid",
+					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
+				},
+				"groupName": {
+					"type": "string",
+					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
+				}
+			},
+			"required": ["id", "nickname", "type"],
+			"additionalProperties": false
+		},
+		"DiscoveredParameters": {
+			"type": "object",
+			"description": "Collection of input and output parameters discovered in the current Grasshopper document",
+			"properties": {
+				"sessionId": { "type": "string" },
+				"timestamp": { "type": "string", "format": "date-time" },
+				"inputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/DiscoveredInput" },
+					"description": "List of input parameters available for UI building"
+				},
+				"outputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/DiscoveredOutput" },
+					"description": "List of output components available for UI building"
+				}
+			},
+			"required": ["sessionId", "timestamp", "inputs", "outputs"]
+		},
+
+		"//_SCHEMA_MODELS": "--- SCHEMA MODELS (Persisted) ---",
+		"InputStructure": {
+			"type": "string",
+			"enum": ["item", "list", "tree"],
+			"description": "Data access mode for the input parameter: 'item' = single value, 'list' = flat list, 'tree' = branching data tree"
+		},
+		"SchemaInput": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)"
+				},
+				"nickname": { "type": "string" },
+				"paramType": { "$ref": "#/definitions/ParamType" },
+				"description": { "type": "string" },
+				"default": {},
+				"inputStructure": {
+					"$ref": "#/definitions/InputStructure",
+					"default": "item",
+					"description": "Data access mode: 'item' = single value, 'list' = flat list, 'tree' = branching data tree. Defaults to 'item'."
+				}
+			},
+			"required": ["id", "nickname", "paramType"],
+			"additionalProperties": false
+		},
+		"SchemaOutput": {
+			"type": "object",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)"
+				},
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": {
+					"type": "string",
+					"enum": ["text", "number", "file", "chart", "dynamicValueList"],
+					"description": "Output display type"
+				},
+				"targetInputId": {
+					"type": "string",
+					"format": "guid",
+					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
+				}
+			},
+			"required": ["id", "nickname", "type"],
+			"additionalProperties": false
+		},
+		"ViewerOptions": {
+			"type": "object",
+			"description": "Configuration options for the 3D viewer",
+			"properties": {
+				"enableLocal": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, display mesh data is sent to the web preview for local rendering"
+				},
+				"enableRemote": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, enables remote rendering via Rhino Compute"
+				},
+				"backgroundColor": {
+					"type": "string",
+					"pattern": "^#[0-9A-Fa-f]{6}$",
+					"default": "#ffffff",
+					"description": "Background color for the 3D viewer as hex string (e.g., '#ffffff')"
+				}
+			},
+			"additionalProperties": false
+		},
+		"UISchema": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"name": { "type": "string" },
+				"description": { "type": "string" },
+				"projectFileName": {
+					"type": "string",
+					"description": "Grasshopper document file name (e.g., 'myfile.gh')"
+				},
+				"documentId": {
+					"type": "string",
+					"format": "guid",
+					"description": "Grasshopper document unique identifier (GUID)"
+				},
+				"pluginVersion": {
+					"type": "string",
+					"description": "Version of Selva plugin that created/last modified this schema"
+				},
+				"tags": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])"
+				},
+				"category": {
+					"type": "string",
+					"description": "Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')"
+				},
+				"author": {
+					"type": "string",
+					"description": "User or organization who created the schema"
+				},
+				"organization": {
+					"type": "string",
+					"description": "Organization/company name"
+				},
+				"schemaVersion": {
+					"type": "string",
+					"pattern": "^\\d+\\.\\d+\\.\\d+$",
+					"default": "2.14.0",
+					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
+				},
+				"minPluginVersion": {
+					"type": "string",
+					"pattern": "^\\d+\\.\\d+\\.\\d+$",
+					"description": "Minimum plugin version required to load this schema"
+				},
+				"created": { "type": "string", "format": "date-time" },
+				"lastModified": {
+					"type": "string",
+					"format": "date-time",
+					"description": "Last modification timestamp"
+				},
+				"viewerOptions": {
+					"$ref": "#/definitions/ViewerOptions",
+					"description": "Configuration for the 3D viewer"
+				},
+				"instanceSolve": {
+					"type": "boolean",
+					"default": true,
+					"description": "If true, changes trigger immediate solving. If false, user must press Calculate button."
+				},
+				"inputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/SchemaInput" }
+				},
+				"outputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/SchemaOutput" },
+					"description": "All output components (print, bake, file download)"
+				},
+				"layout": { "$ref": "#/definitions/LayoutConfig" }
+			},
+			"required": ["id", "name", "schemaVersion", "inputs", "outputs", "layout"],
+			"additionalProperties": false
+		},
+
+		"//_STATE_AND_RUNTIME": "--- STATE & RUNTIME ---",
+
+		"SessionState": {
+			"type": "object",
+			"properties": {
+				"sessionId": { "type": "string" },
+				"active": { "type": "boolean" },
+				"lastUpdate": { "type": "string", "format": "date-time" },
+				"mode": {
+					"type": "string",
+					"enum": ["builder", "preview"]
+				}
+			},
+			"required": ["sessionId", "active", "lastUpdate", "mode"]
+		},
+		"RuntimeValues": {
+			"type": "object",
+			"properties": {
+				"timestamp": { "type": "string", "format": "date-time" },
+				"values": {
+					"type": "object",
+					"additionalProperties": {}
+				}
+			},
+			"required": ["timestamp", "values"]
+		},
+		"ValidationIssueMessage": {
+			"type": "object",
+			"description": "Validation warning or error for a parameter",
+			"properties": {
+				"paramId": { "type": "string" },
+				"severity": {
+					"type": "string",
+					"enum": ["warning", "error"],
+					"description": "warning = can still load, error = cannot load"
+				},
+				"message": { "type": "string" },
+				"details": {
+					"type": "object",
+					"properties": {
+						"expected": { "type": "string" },
+						"actual": { "type": "string" }
+					}
+				}
+			},
+			"required": ["paramId", "severity", "message"],
+			"additionalProperties": false
+		}
+	},
+	"$ref": "#/definitions/UISchema"
+}

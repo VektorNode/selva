@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- net48 (WindowsForms) and net9.0 Grasshopper (transitive WindowsForms) don't
+		     resolve on the macOS SDK; on non-Windows build only net7.0 (Rhino 8 for Mac). -->
+		<TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net48;net7.0;net9.0</TargetFrameworks>
+		<TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net7.0</TargetFrameworks>
+		<Nullable>enable</Nullable>
+		<NoWarn>NU1701</NoWarn>
+		<RootNamespace>Selva.Drawing.RhinoInterop</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- Rhino 9 ships a different Grasshopper SDK; versions live in Directory.Packages.props. -->
+		<PackageReference Include="Grasshopper" VersionOverride="9.0.25266.10145-wip" Condition="'$(TargetFramework)' == 'net9.0'" ExcludeAssets="runtime"/>
+		<PackageReference Include="Grasshopper" Condition="'$(TargetFramework)' == 'net7.0'" ExcludeAssets="runtime"/>
+		<PackageReference Include="Grasshopper" Condition="'$(TargetFramework)' == 'net48'" ExcludeAssets="runtime"/>
+		<PackageReference Include="System.Drawing.Common" Condition="'$(TargetFramework)' != 'net48'"/>
+		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
+	</ItemGroup>
+
+</Project>

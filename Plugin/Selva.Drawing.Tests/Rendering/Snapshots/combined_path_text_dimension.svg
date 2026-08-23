@@ -1,0 +1,22 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' version='1.1' width='70' height='53.75' viewBox='-10 -35 70 53.75'>
+<title>Drawing</title>
+<defs>
+  <marker id='selva-dim-arrow-4' viewBox='0 0 10 10' refX='10' refY='5' markerUnits='userSpaceOnUse' markerWidth='4' markerHeight='4' orient='auto-start-reverse'>
+    <path d='M 0 0 L 10 5 L 0 10 Z' fill='context-stroke' />
+  </marker>
+  <marker id='selva-dim-tick' viewBox='-5 -5 10 10' refX='0' refY='0' markerWidth='10' markerHeight='10' orient='auto'>
+    <path d='M -3 3 L 3 -3' stroke='context-stroke' stroke-width='1' />
+  </marker>
+</defs>
+<g transform='matrix(1 0 0 -1 0 0)' font-family='Inter, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif'>
+  <path d='M 0 0 L 50 0 L 50 25 L 0 25 Z' fill='none' stroke='black' stroke-width='0.25' />
+  <g class='dimension'>
+    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' x1='0' y1='-1' x2='0' y2='-8.75' />
+    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' x1='50' y1='-1' x2='50' y2='-8.75' />
+    <line stroke='rgb(0,0,0)' stroke-width='0.25' fill='none' marker-start='url(#selva-dim-arrow-4)' marker-end='url(#selva-dim-arrow-4)' x1='0' y1='-8' x2='50' y2='-8' />
+    <text x='0' y='0' font-size='2.5' fill='rgb(0,0,0)' text-anchor='middle' dominant-baseline='middle' transform='translate(25 -9.5) scale(1 -1) rotate(-0)'>50</text>
+  </g>
+  <text x='0' y='0' font-size='3' fill='rgb(0,0,0)' text-anchor='middle' transform='translate(25 12.5) scale(1 -1) rotate(-0)'>Plate</text>
+</g>
+</svg>

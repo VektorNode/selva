@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selva Embed Code Generator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        p.subtitle {
+            margin-top: 0;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1rem;
+        }
+
+        .section {
+            margin-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .section-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #555;
+        }
+
+        .help-text {
+            display: block;
+            font-size: 0.875rem;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        input[type="color"] {
+            width: 100%;
+            height: 42px;
+            padding: 2px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        input[type="text"]:focus,
+        select:focus {
+            outline: none;
+            border-color: #0070f3;
+            box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.1);
+        }
+
+        .input-with-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .input-with-indicator input {
+            flex: 1;
+        }
+
+        .status-indicator {
+            font-size: 1.2rem;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .status-indicator.valid {
+            color: #10a37f;
+        }
+
+        .status-indicator.invalid {
+            color: #ef4444;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            margin-top: 8px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .radio-option input[type="radio"] {
+            width: auto;
+            margin: 0;
+        }
+
+        .radio-option label {
+            margin: 0;
+            font-weight: 400;
+            cursor: pointer;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #0070f3;
+            box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.1);
+        }
+
+        button {
+            padding: 10px 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        button.primary {
+            background-color: #0070f3;
+            color: white;
+            border: none;
+        }
+
+        button.primary:hover {
+            background-color: #0051a2;
+        }
+
+        button.secondary {
+            background-color: white;
+            color: #0070f3;
+            border: 1px solid #0070f3;
+        }
+
+        button.secondary:hover {
+            background-color: #f0f7ff;
+        }
+
+        button.copy-btn {
+            background-color: #10a37f;
+            color: white;
+            border: none;
+        }
+
+        button.copy-btn:hover {
+            background-color: #0d8a6a;
+        }
+
+        button.copy-btn.copied {
+            background-color: #059669;
+        }
+
+        button.icon-btn {
+            padding: 8px 12px;
+            font-size: 0.875rem;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .iframe-wrapper {
+            width: 100%;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        .code-block {
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 12px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: break-all;
+            white-space: pre-wrap;
+            color: #24292e;
+            position: relative;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .url-preview {
+            background: #eef;
+            border-left: 3px solid #0070f3;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 15px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .radio-group {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            .button-group button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Selva Embed Code Generator</h1>
+        <p class="subtitle">Generate HTML code for embedding your Selva app into other platforms (SharePoint, Notion, websites, etc).</p>
+
+        <!-- Configuration Section -->
+        <div class="section">
+            <h2 class="section-title">Configuration</h2>
+
+            <!-- Base URL -->
+            <div class="form-group">
+                <label for="baseUrl">Compute App URL</label>
+                <div class="input-with-indicator">
+                    <input type="text" id="baseUrl" placeholder="http://localhost:5173 or https://your-app.com">
+                    <span class="status-indicator" id="urlStatus"></span>
+                </div>
+                <span class="help-text">URL where your Selva app is hosted (local dev or production)</span>
+            </div>
+
+            <!-- Grasshopper Definition -->
+            <div class="form-group">
+                <label for="definition">Grasshopper Definition (Optional)</label>
+                <input type="text" id="definition" value="" placeholder="pump_calculator or pump_calculator.gh">
+                <span class="help-text">Leave empty to use server default from GH_DEFINITION_URL environment variable</span>
+            </div>
+
+
+            <!-- Dimensions -->
+            <div class="form-group">
+                <label for="iframeHeight">Iframe Height (px)</label>
+                <input type="number" id="iframeHeight" value="800" min="200" max="5000" step="50">
+                <span class="help-text">Height of the embedded iframe in pixels</span>
+            </div>
+
+            <!-- Primary Color -->
+            <div class="form-group">
+                <label for="primaryColor">Primary Color</label>
+                <input type="color" id="primaryColor" value="#000000">
+            </div>
+
+            <!-- Actions -->
+            <div class="button-group">
+                <button class="primary" onclick="updateIframe()">Update Preview</button>
+            </div>
+        </div>
+
+        <!-- Live Preview Section -->
+        <div class="section">
+            <h2 class="section-title">Live Preview</h2>
+            <div class="iframe-wrapper" id="iframeWrapper">
+                <iframe id="selvaFrame" src="" allow="fullscreen"></iframe>
+            </div>
+        </div>
+
+        <!-- Embed Code Section -->
+        <div class="section">
+            <div class="code-header">
+                <h2 class="section-title" style="margin: 0;">Embed Code</h2>
+                <button class="copy-btn" onclick="copyEmbedCode(event)">Copy Code</button>
+            </div>
+            <div class="code-block" id="embedCode">
+                &lt;iframe src="..." width="100%" height="800" frameborder="0" allow="fullscreen"&gt;&lt;/iframe&gt;
+            </div>
+        </div>
+    </div>
+
+    <script>
+
+
+
+        // Get compute app URL from query param or default to localhost
+        function getDefaultComputeAppUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlFromParam = urlParams.get('app_url');
+
+            if (urlFromParam) return urlFromParam;
+
+            // Default to localhost for development
+            return 'http://localhost:5173';
+        }
+
+        // Validate URL
+        function validateUrl(url) {
+            if (!url || url.trim() === '') return false;
+            try {
+                new URL(url);
+                return true;
+            } catch {
+                return false;
+            }
+        }
+
+        // Update URL validation indicator
+        function updateUrlStatus() {
+            const input = document.getElementById('baseUrl');
+            const status = document.getElementById('urlStatus');
+            const url = input.value.trim();
+
+            if (validateUrl(url)) {
+                status.textContent = '✓';
+                status.className = 'status-indicator valid';
+            } else if (url === '') {
+                status.textContent = '';
+                status.className = 'status-indicator';
+            } else {
+                status.textContent = '✗';
+                status.className = 'status-indicator invalid';
+            }
+        }
+
+        // Initialize base URL
+        function initializeBaseUrl() {
+            const baseUrl = getDefaultComputeAppUrl();
+            const input = document.getElementById('baseUrl');
+            const defInput = document.getElementById('definition');
+
+            input.value = baseUrl;
+            updateUrlStatus();
+
+            // Add event listener for real-time validation
+            input.addEventListener('input', updateUrlStatus);
+
+            // Smart paste handler
+            input.addEventListener('paste', function(e) {
+                // Short delay to let the value update
+                setTimeout(() => {
+                    try {
+                        const pasted = new URL(input.value.trim());
+                        const gh = pasted.searchParams.get('gh');
+
+                        // If we found a gh param and the field is empty or matches default, update it
+                        if (gh && (!defInput.value || defInput.value === '')) {
+                            defInput.value = gh;
+                        }
+
+                        // Clean the base URL input to just be the origin
+                        input.value = pasted.origin;
+                        updateUrlStatus();
+                        updateIframe();
+                    } catch (err) {
+                        // Not a full URL, ignore
+                    }
+                }, 10);
+            });
+
+            input.addEventListener('blur', function() {
+                // Auto-update preview when URL changes
+                if (validateUrl(input.value.trim())) {
+                    updateIframe();
+                }
+            });
+        }
+
+        // Get iframe height
+        function getIframeHeight() {
+            return document.getElementById('iframeHeight').value;
+        }
+
+        // Update iframe and embed code
+        function updateIframe() {
+            let baseUrlInput = document.getElementById('baseUrl').value.trim();
+            const definition = document.getElementById('definition').value.trim();
+            const primaryColor = document.getElementById('primaryColor').value;
+            const height = getIframeHeight();
+
+            if (!baseUrlInput) return;
+
+            let finalBase = baseUrlInput;
+
+            // Try to parse as URL to be robust
+            try {
+                if (baseUrlInput.startsWith('http')) {
+                    const parsed = new URL(baseUrlInput);
+                    finalBase = parsed.origin;
+                }
+            } catch (e) {
+                // Fallback to text manipulation
+                finalBase = baseUrlInput.split('?')[0].replace(/\/$/, '');
+                if (finalBase.endsWith('/app')) {
+                    finalBase = finalBase.substring(0, finalBase.length - 4);
+                }
+            }
+
+            // Ensure we don't have trailing slashes
+            finalBase = finalBase.replace(/\/$/, '');
+
+            // Construct URL - Go to root if no definition, otherwise go to /app
+            let url = definition ? (finalBase + '/app') : (finalBase + '/');
+            const params = new URLSearchParams();
+
+            // Add grasshopper definition if specified
+            if (definition) {
+                params.append('gh', definition);
+            }
+
+            // Always add embed flag
+            params.append('embed', 'true');
+
+            // Add primary color
+            if (primaryColor) {
+                params.append('primary', primaryColor);
+            }
+
+            url += '?' + params.toString();
+
+            // Update iframe
+            const iframe = document.getElementById('selvaFrame');
+            iframe.src = url;
+
+            // Update iframe wrapper height
+            const wrapper = document.getElementById('iframeWrapper');
+            wrapper.style.height = height + 'px';
+
+            // Update embed code
+            const embedCode = document.getElementById('embedCode');
+            embedCode.textContent = `<iframe src="${url}" width="100%" height="${height}" frameborder="0" allow="fullscreen"></iframe>`;
+        }
+
+
+        // Copy embed code
+        function copyEmbedCode(event) {
+            const codeBlock = document.getElementById('embedCode');
+            const text = codeBlock.textContent;
+
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const originalText = btn.textContent;
+                btn.textContent = 'Copied!';
+                btn.classList.add('copied');
+
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+                alert('Failed to copy. Please copy manually.');
+            });
+        }
+
+
+        // Load configuration from URL
+        function loadConfigFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+
+            // Load app URL (this will override the default if present)
+            const appUrl = params.get('app_url');
+            if (appUrl) {
+                document.getElementById('baseUrl').value = appUrl;
+                updateUrlStatus();
+            }
+
+            // Load definition
+            const gh = params.get('gh');
+            if (gh) document.getElementById('definition').value = gh;
+
+            // Load primary color
+            const primary = params.get('primary');
+            if (primary) document.getElementById('primaryColor').value = primary;
+
+            // Load height
+            const height = params.get('height');
+            if (height) document.getElementById('iframeHeight').value = height;
+        }
+
+        // Initialize on load
+        initializeBaseUrl();
+        loadConfigFromUrl();
+        updateIframe();
+    </script>
+</body>
+</html>

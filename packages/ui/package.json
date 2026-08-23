@@ -1,0 +1,117 @@
+{
+	"name": "@selvajs/ui",
+	"version": "6.2.0",
+	"description": "Shared UI components and utilities for Selva applications",
+	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"svelte",
+		"sveltekit",
+		"components",
+		"ui",
+		"selva"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/ui"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"type": "module",
+	"svelte": "./dist/public.js",
+	"types": "./dist/public.d.ts",
+	"exports": {
+		".": {
+			"selva-source": {
+				"types": "./dist/index.d.ts",
+				"svelte": "./dist/index.js"
+			},
+			"types": "./dist/public.d.ts",
+			"svelte": "./dist/public.js"
+		},
+		"./external": {
+			"types": "./dist/external/storage.d.ts",
+			"svelte": "./dist/external/storage.js"
+		},
+		"./styles/base.css": "./src/lib/styles/base.css",
+		"./styles/themes/*": "./src/lib/styles/themes/*"
+	},
+	"files": [
+		"dist",
+		"src/lib",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"sideEffects": [
+		"**/*.css"
+	],
+	"scripts": {
+		"predev": "node ../../scripts/sync-shared-assets.js",
+		"dev": "vite dev",
+		"prebuild": "node ../../scripts/sync-shared-assets.js",
+		"build": "rimraf dist && pnpm prepack",
+		"build:fast": "svelte-kit sync && svelte-package",
+		"build:watch": "svelte-kit sync && svelte-package --watch",
+		"preview": "vite preview",
+		"prepack": "svelte-kit sync && svelte-package && publint --strict",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"format": "prettier --write .",
+		"lint": "prettier --check . && eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
+	},
+	"peerDependencies": {
+		"@selvajs/compute": "workspace:^",
+		"@selvajs/schemas": "workspace:^",
+		"@selvajs/solve": "workspace:^",
+		"@selvajs/visualization": "workspace:^",
+		"@sveltejs/kit": "^2",
+		"bits-ui": "^2.18.0",
+		"svelte": "^5",
+		"tailwind-variants": "^3.3.1",
+		"three": "catalog:"
+	},
+	"peerDependenciesMeta": {
+		"three": {
+			"optional": true
+		}
+	},
+	"dependencies": {
+		"@floating-ui/dom": "catalog:",
+		"@iconify/svelte": "catalog:",
+		"@lucide/svelte": "catalog:",
+		"clsx": "catalog:",
+		"mode-watcher": "catalog:",
+		"paneforge": "^1.0.2",
+		"svelte-sonner": "catalog:",
+		"tailwind-merge": "catalog:",
+		"tw-animate-css": "catalog:"
+	},
+	"devDependencies": {
+		"@internationalized/date": "^3.12.3",
+		"@selvajs/compute": "workspace:*",
+		"@selvajs/config": "workspace:*",
+		"@selvajs/schemas": "workspace:*",
+		"@selvajs/visualization": "workspace:*",
+		"@sveltejs/kit": "catalog:",
+		"@sveltejs/vite-plugin-svelte": "catalog:",
+		"@selvajs/solve": "workspace:*",
+		"@types/three": "catalog:",
+		"bits-ui": "catalog:",
+		"rimraf": "catalog:",
+		"svelte": "catalog:",
+		"tailwind-variants": "catalog:",
+		"vitest": "catalog:"
+	}
+}

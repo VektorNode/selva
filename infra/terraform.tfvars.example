@@ -1,0 +1,40 @@
+# Copy this to terraform.tfvars and fill in your values.
+# terraform.tfvars is gitignored — never commit it.
+
+project_id   = "your-gcp-project-id"
+region       = "europe-west1"
+zone         = "europe-west1-d"
+machine_type = "e2-medium"
+
+ssh_user = "selva"
+
+# ============================================================================
+# Domain (optional)
+# ============================================================================
+# Leave commented out for testing — the module auto-derives a free
+# `<dashed-ip>.sslip.io` domain from the reserved static IP. Caddy gets
+# a real Let's Encrypt cert. Zero DNS setup.
+#
+# For production, set this to a domain you own and add an A record
+# pointing at the `static_ip` output after `terraform apply`.
+# domain     = "app.example.dev"
+# acme_email = "you@example.dev"
+
+# ============================================================================
+# Selva CLI configuration (optional)
+# ============================================================================
+# Defaults reproduce the prompt's "single-tenant local-provider behind Caddy"
+# scaffold. Override any of these for a different shape.
+#
+# tenancy           = "single"     # or "multi"
+# auth_provider     = "local"      # "local" | "supabase" | "header"
+# data_provider     = ""           # empty = same as auth_provider
+# storage_provider  = ""           # empty = same as auth_provider
+#
+# Required when auth_provider = "header" or tenancy = "multi":
+# bootstrap_admin_email = "you@your-org.com"
+#
+# Required when any provider = "supabase":
+# supabase_url              = "https://<ref>.supabase.co"
+# supabase_anon_key         = "sb_publishable_…"
+# supabase_service_role_key = "…"     # secret; stored in tf state

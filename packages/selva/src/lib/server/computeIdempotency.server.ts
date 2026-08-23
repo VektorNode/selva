@@ -1,0 +1,40 @@
+/**
+ * This app's instance of the solve idempotency store, and the one policy
+ * decision it owns: how long a completed solve stays replayable.
+ *
+ * The wire contract — key namespacing, the response snapshot, the
+ * `Idempotency-Replayed` header — lives in `@selvajs/server/compute` and is
+ * re-exported through the route that uses it. What cannot live there is the
+ * TTL: it trades a client's retry-on-timeout window against serving a stale
+ * result, and only this deployment knows its own solve deadline.
+ */
+
+import { createIdempotencyStore, type StoredResponse } from '@selvajs/server/compute';
+
+/**
+ * Long enough to cover a client's retry-on-timeout (the solve deadline is on
+ * the order of a minute), short enough that this never functions as a result
+ * cache — a definition's live version can move, and a replay past that window
+ * would serve stale geometry.
+ */
+export const IDEMPOTENCY_TTL_MS = 5 * 60_000;
+
+const store = createIdempotencyStore<StoredResponse>({ ttlMs: IDEMPOTENCY_TTL_MS });
+
+/** `replayed` distinguishes a replay from a fresh run so the caller can stamp a response header. */
+export function withIdempotency(
+	key: string,
+	fn: () => Promise<StoredResponse>
+): Promise<{ value: StoredResponse; replayed: boolean }> {
+	return store.run(key, fn);
+}
+
+/** Test seam — drops all entries. The store is module-global and tests share one process. */
+export function resetIdempotencyStore(): void {
+	store.reset();
+}
+
+/** Retained entry count. Test/observability seam. */
+export function idempotencyStoreSize(): number {
+	return store.size();
+}

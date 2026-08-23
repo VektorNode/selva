@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="coverlet.collector"/>
+		<PackageReference Include="Microsoft.NET.Test.Sdk"/>
+		<PackageReference Include="Verify.Xunit"/>
+		<PackageReference Include="xunit"/>
+		<PackageReference Include="xunit.runner.visualstudio"/>
+		<!--
+			Selva.Drawing marks PdfSharpCore + SharpZipLib as PrivateAssets="all" so they
+			don't flow to Selva.GH (they're ILRepack-merged into Selva.Drawing.dll in Release).
+			Tests need direct access to the public PdfSharpCore API for assertion helpers, so
+			re-pull them here as plain references.
+		-->
+		<!-- Debug only: in Release these types are ILRepack-internalized into
+		     Selva.Drawing.dll and visible here via InternalsVisibleTo, so a direct
+		     package reference would make every type ambiguous (CS0433). -->
+		<PackageReference Include="PdfSharpCore" Condition="'$(Configuration)' == 'Debug'"/>
+		<PackageReference Include="SharpZipLib" Condition="'$(Configuration)' == 'Debug'"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Using Include="Xunit"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="Rendering\Snapshots\*.svg">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+</Project>

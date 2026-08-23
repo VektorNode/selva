@@ -1,0 +1,160 @@
+name: Test
+
+on:
+  pull_request:
+  # Push + cron catch what the PR trigger misses: admin/direct pushes,
+  # Dependabot auto-merges, and advisories that land between merges.
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+
+# Read-only: this workflow only builds and tests, never writes to the repo.
+permissions:
+  contents: read
+
+# Keyed on workflow too, so push-to-main and PR runs for one ref don't cancel
+# each other.
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      # Must precede `uses: ./...` below — GitHub resolves local actions from
+      # the runner's filesystem.
+      - uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+
+      # Publish coverage, bundle-only selva, cli/selva fixed-group.
+      - name: Check publish invariants
+        run: node scripts/publishable-packages.mjs --check
+
+      # Released Grasshopper components bind wires by parameter index — a
+      # changed param list on an existing GUID silently rewires saved
+      # definitions. Structural changes must go through the OBSOLETE +
+      # upgrader procedure (STRUCTURE.md) with a new GUID.
+      - name: Check component signatures
+        run: node scripts/check-component-signatures.mjs --check
+
+      # Mixed or misnamed changesets only fail in `changeset version`, i.e. in
+      # the release job after the test gate has already passed.
+      - name: Validate changeset contents
+        run: node scripts/validate-changesets.mjs
+
+      # Releases are changeset-driven: a publishable-package change without a
+      # changeset never ships. `pnpm changeset --empty` is the opt-out.
+      # The Version Packages PR is exempt by construction: it consumes every
+      # changeset and bumps the versions they called for, so it always touches
+      # publishable packages and never carries a changeset of its own.
+      - name: Check changesets
+        if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
+        run: |
+          git fetch --depth=1 origin "${{ github.base_ref }}"
+          node scripts/check-changesets.mjs --base FETCH_HEAD
+
+      # --prod excludes devDeps, so this gates only what actually ships.
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level moderate
+
+      # ui-schema.json is the source of truth; the generated TS/C# is derived.
+      # This is the CI backstop for both generator guarantees: stale committed
+      # output, and (on PRs) a definitions change without a schemaVersion bump.
+      # The bump guard compares against the PR base — in CI the working tree
+      # always matches HEAD, so its default HEAD comparison can never fire.
+      - name: Verify generated code is up to date
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --depth=1 origin "${{ github.base_ref }}"
+            export SCHEMA_GUARD_BASE_REF=FETCH_HEAD
+          fi
+          pnpm generate
+          if ! git diff --exit-code -- \
+            packages/schemas/src/generated \
+            Plugin/Selva.Schema/Models/UISchema.Generated.cs \
+            Plugin/Selva.Schema/Constants/SchemaVersion.cs; then
+            echo "::error::Generated code is out of date. Run 'pnpm generate' and commit the result."
+            exit 1
+          fi
+
+      # lint, check, type-check and test all run through turbo, which keys each
+      # task on its own inputs, and all four depend on `^build` — so a restored
+      # cache skips the ~75s build they would otherwise each trigger.
+      #
+      # Cache only .turbo/cache (the task outputs). The rest of .turbo is daemon
+      # state and logs, which must not travel between runners.
+      #
+      # actions/cache never overwrites an existing key, so the key carries the
+      # run id to stay unique; restore-keys does the actual work, taking the most
+      # recent prefix match. Keyed on lockfile too: a dependency change
+      # invalidates every task hash anyway, so old entries are dead weight.
+      - uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-js-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.run_id }}
+          restore-keys: |
+            turbo-js-${{ hashFiles('pnpm-lock.yaml') }}-
+            turbo-js-
+
+      # `pnpm format:check` passes --cache-strategy content: the default keys on
+      # mtime, which actions/checkout rewrites every run, so every entry would
+      # miss. Keyed on the prettier config so a rule change busts it.
+      - uses: actions/cache@v6
+        with:
+          path: node_modules/.cache/prettier
+          key: prettier-${{ hashFiles('prettier.config.js', '.prettierignore') }}-${{ github.run_id }}
+          restore-keys: |
+            prettier-${{ hashFiles('prettier.config.js', '.prettierignore') }}-
+            prettier-
+
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm type-check
+      - run: pnpm check
+
+      # Every package's test task. @selvajs/supabase-provider's live-stack
+      # suites self-skip without Supabase creds (no .env.test in CI); its
+      # no-stack unit tests still gate.
+      - run: pnpm exec turbo run test
+
+      # actions/cache has no eviction: .turbo/cache would grow by every task
+      # output every run until it crowds out the repo's 10GB budget. Keep the
+      # most recent entries and drop the rest before the post-step uploads.
+      - name: Prune turbo cache
+        if: always()
+        run: |
+          cd .turbo/cache 2>/dev/null || exit 0
+          ls -1t | tail -n +600 | xargs -r rm -f
+          echo "turbo cache: $(du -sh . | cut -f1) across $(ls -1 | wc -l) files"
+
+  # Rhino-free .NET libraries; runs in parallel with the JS job. The
+  # Rhino-coupled Selva.GH tests still need a Windows+Rhino runner.
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
+      # built-in cache can't be used.
+      - uses: actions/cache@v6
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('Plugin/**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Test Selva.Schema (migration, validation)
+        run: dotnet test Plugin/Selva.Tests/Selva.Tests.csproj --nologo
+
+      # SVG snapshots are deterministic: glyph advances come from the bundled
+      # font via FontMetrics, not the host's installed fonts.
+      - name: Test Selva.Drawing (model + layout + SVG snapshots)
+        run: dotnet test Plugin/Selva.Drawing.Tests/Selva.Drawing.Tests.csproj --nologo

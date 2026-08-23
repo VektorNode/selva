@@ -1,0 +1,274 @@
+<script lang="ts">
+	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, ENV_VAR_GROUPS, type Mode } from '$lib/architecture';
+	import DetailBlocks from './DetailBlocks.svelte';
+	import SolveWalkthrough from './SolveWalkthrough.svelte';
+	import LocalWalkthrough from './LocalWalkthrough.svelte';
+	import Cloud from '@lucide/svelte/icons/cloud';
+	import Plug from '@lucide/svelte/icons/plug';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
+
+	let mode = $state<Mode>('cloud');
+	let expanded = $state<string | null>(null);
+	let wireOpen = $state(false);
+	let configOpen = $state(false);
+
+	const steps = $derived(mode === 'cloud' ? CLOUD_STEPS : LOCAL_STEPS);
+
+	function toggle(id: string) {
+		expanded = expanded === id ? null : id;
+	}
+</script>
+
+<svelte:head>
+	<title>Architecture — how a Selva solve flows</title>
+	<meta
+		name="description"
+		content="Step by step: how a Selva solve flows from a browser input to rendered geometry, in both runtime modes."
+	/>
+</svelte:head>
+
+<div class="mx-auto max-w-5xl px-6 pt-16 pb-24">
+	<!-- Intro -->
+	<p class="text-primary text-sm font-semibold tracking-wide uppercase">Architecture</p>
+	<h1 class="mt-2 text-4xl font-bold tracking-tight text-balance">
+		How a solve flows through Selva
+	</h1>
+	<p class="text-muted-foreground mt-4 max-w-2xl leading-relaxed">
+		From a slider move to rendered geometry, step by step — every layer the request crosses, and
+		what changes between the two runtime modes. Click any step to expand it.
+	</p>
+
+	<!-- Mode switcher -->
+	<div class="mt-10 flex flex-wrap items-center gap-6">
+		<div
+			class="border-border bg-card inline-flex rounded-lg border p-1"
+			role="tablist"
+			aria-label="Runtime mode"
+		>
+			<button
+				role="tab"
+				aria-selected={mode === 'cloud'}
+				class="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition
+					{mode === 'cloud'
+					? 'bg-primary text-primary-foreground'
+					: 'text-muted-foreground hover:text-foreground'}"
+				onclick={() => {
+					mode = 'cloud';
+					expanded = null;
+				}}
+			>
+				<Cloud class="size-4" /> Cloud mode
+			</button>
+			<button
+				role="tab"
+				aria-selected={mode === 'local'}
+				class="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition
+					{mode === 'local'
+					? 'bg-primary text-primary-foreground'
+					: 'text-muted-foreground hover:text-foreground'}"
+				onclick={() => {
+					mode = 'local';
+					expanded = null;
+				}}
+			>
+				<Plug class="size-4" /> Local mode
+			</button>
+		</div>
+	</div>
+
+	<p class="text-muted-foreground mt-4 text-sm leading-relaxed">
+		{#if mode === 'cloud'}
+			The deployed app: the browser talks to the Selva server, which solves through
+			<span class="font-mono text-xs">Rhino.Compute</span>. The server reads records and blobs
+			through provider interfaces, so the flow is the same whether Postgres or files on disk sit
+			behind them.
+		{:else}
+			The plugin preview: the browser talks straight to Grasshopper over one WebSocket. No server,
+			no auth, no database — the definition is already open in Rhino.
+		{/if}
+	</p>
+
+	<!-- Badge legend — the two kinds of thing that interrupt the straight path. -->
+	<div class="text-muted-foreground mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
+		<span class="flex items-center gap-1.5">
+			<span class="size-2 rounded-full bg-amber-500" aria-hidden="true"></span>
+			limits when work runs, stores nothing
+		</span>
+		<span class="flex items-center gap-1.5">
+			<span class="size-2 rounded-full bg-violet-500" aria-hidden="true"></span>
+			a cache — a hit skips what follows
+		</span>
+	</div>
+
+	<!-- Step-by-step walkthrough -->
+	<div class="relative mt-8">
+		<!-- Spine -->
+		<div class="bg-border absolute top-2 bottom-2 left-[7px] w-px" aria-hidden="true"></div>
+
+		<ol class="space-y-3">
+			{#each steps as step, i (step.id)}
+				{@const layer = LAYERS[step.layer]}
+				{@const prevLayer = i > 0 ? steps[i - 1].layer : null}
+				{#if step.layer !== prevLayer}
+					<li class="flex items-center gap-3 pt-6 pl-8 first:pt-0">
+						<span class="rounded-full px-2.5 py-0.5 text-xs font-semibold {layer.chip}"
+							>{layer.label}</span
+						>
+						<span class="text-muted-foreground text-xs">{layer.sub}</span>
+					</li>
+				{/if}
+				<li id="step-{step.id}" class="relative scroll-mt-24 pl-8">
+					<!-- Node dot on the spine -->
+					<span
+						class="absolute top-4 left-[3px] size-[9px] rounded-full ring-4 {layer.dot} ring-background"
+						aria-hidden="true"
+					></span>
+					<div class="border-border bg-card overflow-hidden rounded-lg border">
+						<button
+							class="hover:bg-muted/50 block w-full px-4 py-3.5 text-left transition"
+							aria-expanded={expanded === step.id}
+							onclick={() => toggle(step.id)}
+						>
+							<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+								<span class="text-muted-foreground text-xs tabular-nums">{i + 1}</span>
+								<span class="font-semibold">{step.title}</span>
+								{#if step.gates}
+									{#each step.gates as gate (gate)}
+										<span
+											class="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] text-amber-600 dark:text-amber-400"
+											>{gate}</span
+										>
+									{/each}
+								{/if}
+							</div>
+							<p class="text-muted-foreground mt-1 pl-5 text-sm leading-relaxed">
+								{step.oneliner}
+							</p>
+							{#if step.caches}
+								<div class="mt-2 flex flex-wrap gap-1.5 pl-5">
+									{#each step.caches as cache (cache.label)}
+										<span
+											class="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-600 dark:text-violet-400"
+										>
+											<span class="size-1.5 rounded-full bg-violet-500" aria-hidden="true"></span>
+											{cache.label}<span class="opacity-70"> · {cache.hit}</span>
+										</span>
+									{/each}
+								</div>
+							{/if}
+						</button>
+						{#if expanded === step.id}
+							<div class="border-border border-t px-4 py-3">
+								<DetailBlocks blocks={step.detail} />
+								<div class="mt-3 flex flex-wrap gap-2">
+									{#each step.files as file (file)}
+										<code class="bg-muted text-muted-foreground rounded px-2 py-0.5 text-[11px]"
+											>{file}</code
+										>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+				</li>
+			{/each}
+		</ol>
+	</div>
+
+	<!-- Wire format — same solve, but as the bytes that actually cross each hop -->
+	<div class="mt-20">
+		<p class="text-primary text-sm font-semibold tracking-wide uppercase">Wire format</p>
+		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">
+			<button
+				class="group hover:text-primary flex items-center gap-2 text-left transition"
+				aria-expanded={wireOpen}
+				aria-controls="wire-format-panel"
+				onclick={() => (wireOpen = !wireOpen)}
+			>
+				<ChevronRight
+					class="text-muted-foreground group-hover:text-primary size-5 shrink-0 transition-transform {wireOpen
+						? 'rotate-90'
+						: ''}"
+					aria-hidden="true"
+				/>
+				What actually crosses the wire
+			</button>
+		</h2>
+		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
+			{#if mode === 'cloud'}
+				The same cloud-mode solve as above, as headers and JSON bodies. One request —
+				<code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
+				<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — from the browser to Grasshopper
+				and back. Read the bodies top to bottom: a flat object becomes a named tree, solves, and comes
+				back flat.
+			{:else}
+				The same local-mode solve as above, as the frames that cross the socket. The same two values
+				— <code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
+				<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — but no request and no
+				response: four frames in one direction, then the other. Watch where the meshes go, and what keeps
+				them in order.
+			{/if}
+		</p>
+
+		{#if wireOpen}
+			<div id="wire-format-panel" class="mt-6">
+				{#if mode === 'cloud'}
+					<SolveWalkthrough />
+				{:else}
+					<LocalWalkthrough />
+				{/if}
+			</div>
+		{/if}
+	</div>
+
+	<!-- Configuration — every knob from the steps above, gathered in one place -->
+	<div class="mt-20">
+		<p class="text-primary text-sm font-semibold tracking-wide uppercase">Configuration</p>
+		<h2 class="mt-2 text-2xl font-bold tracking-tight text-balance">
+			<button
+				class="group hover:text-primary flex items-center gap-2 text-left transition"
+				aria-expanded={configOpen}
+				aria-controls="configuration-panel"
+				onclick={() => (configOpen = !configOpen)}
+			>
+				<ChevronRight
+					class="text-muted-foreground group-hover:text-primary size-5 shrink-0 transition-transform {configOpen
+						? 'rotate-90'
+						: ''}"
+					aria-hidden="true"
+				/>
+				Every knob, in one place
+			</button>
+		</h2>
+		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
+			Each one is an environment variable read once at boot — the limits through <code
+				class="bg-muted rounded px-1 py-0.5 text-xs">resolveComputeLimits</code
+			>, the debug flag alongside the solve engine. Unset, every knob falls back to the default
+			below — nothing here is required to run Selva.
+		</p>
+
+		{#if configOpen}
+			<div id="configuration-panel" class="mt-6 space-y-8">
+				{#each ENV_VAR_GROUPS as group (group.title)}
+					<div>
+						<h3 class="text-sm font-semibold">{group.title}</h3>
+						<dl class="border-border divide-border mt-3 divide-y rounded-md border text-sm">
+							{#each group.vars as v (v.name)}
+								<div class="px-3 py-2.5">
+									<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+										<code class="font-mono text-xs font-semibold">{v.name}</code>
+										<span
+											class="rounded bg-violet-500/10 px-1.5 py-0.5 font-mono text-[11px] text-violet-600 dark:text-violet-400"
+											>{v.default}</span
+										>
+									</div>
+									<p class="text-muted-foreground mt-1 text-xs leading-relaxed">{v.text}</p>
+								</div>
+							{/each}
+						</dl>
+					</div>
+				{/each}
+			</div>
+		{/if}
+	</div>
+</div>

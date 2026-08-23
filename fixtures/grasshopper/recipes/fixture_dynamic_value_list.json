@@ -1,0 +1,48 @@
+{
+	"fixture": "fixture_dynamic_value_list.ghx",
+	"description": "Three Get/Set Dynamic Value List pairs — steady, convergent, oscillate — plus a consumer that fails on an empty selection. Backs the E2E scenarios in plans/fixes/dynamic-value-list-loop.md (Phase 5, Level 2).",
+	"groups": {
+		"steady": "Static pair list \"A\"=1, \"B\"=2, \"C\"=3 -> Set DynVL(dvlSelect). Options never change: one user pick = one solve, then quiet. Exercises the session's content-equality gate — N identical option envelopes must produce zero extra dispatches.",
+		"convergent": "count slider (1..5, integer) -> Get Number -> C# emits \"Item {i}\"=i for i in 1..count -> Set DynVL(dvlConvergent). Shrinking count below the current selection invalidates it; the reconciler must re-pick exactly once and then settle.",
+		"oscillate": "C# reads dvlOscillate's own selection and emits every option EXCEPT it, so each solve invalidates the pick. This is the non-convergent case. The script is Locked (disabled) in the committed fixture — unlock it only for the stall test, where the session must cap at MAX_CONSECUTIVE_SYSTEM_SOLVES and surface `stalled`."
+	},
+	"params": {
+		"dvlSelect": "8ef6b3a5-bc7e-4ea1-ae27-636344f7d451",
+		"dvlConvergent": "2c1f7a90-5db4-4a63-9f1e-7c4a86d5e011",
+		"dvlOscillate": "4b8e2d15-6ac9-4f27-83b0-1e5d9a7c3f22",
+		"count (Get Number)": "97a752ce-ff19-4832-9d38-dd30ddd5911c",
+		"count (slider)": "3aefff31-e492-4a62-b0c0-79197ed302dc",
+		"note": "InstanceGuids are pinned here because the embedded UI schema keys inputs/outputs on them. Re-placing a param changes its guid and silently desyncs the schema — update both together."
+	},
+	"components_note": {
+		"9f2c4b7e-3a8d-4c1f-b6e5-2d7a9c0e1f34": "Get Dynamic Value List (Selva.GH, GetDynamicValueListParameter.cs)",
+		"1d8e3f62-7b4a-4c9e-a0f1-5c2d8e7b3a41": "Set Dynamic Value List (Selva.GH, GH_DynamicValueListOutput)",
+		"593bc967-797a-4b1a-9b76-c2133f6b08e2": "UI Bridge (Selva.GH, GH_UIBuilderComponent.cs)",
+		"ae2531b4-bab2-4bb1-b5bf-f2143d10c132": "Context Bake",
+		"b6ba1144-02d6-4a2d-b53c-ec62e290eeb7": "C# Script (RhinoCodePluginGH). Script bodies are NOT reachable through the MCP script sandbox — the source lives in the component's own Script chunk. Hand-edit this fixture's scripts; a rebuild cannot restore them."
+	},
+	"saved_state": {
+		"selections": {
+			"dvlSelect": "2",
+			"dvlConvergent": "Item 2",
+			"dvlOscillate": "X"
+		},
+		"storedItems": "3 per param",
+		"note": "Saved with selections applied so the StoredItems/SelectedValues archive round-trip is exercised on load — verified surviving a close/reopen cycle."
+	},
+	"embedded_schema": "The UI Bridge stores a Schema item keyed on the guids above: 4 inputs (3 paramType dynamicValueList + 1 number, all camelCase), 3 dynamicValueList outputs keyed on the BAKE guids, tabbed layout with Steady/Convergent/Oscillate groups, each carrying an input item plus an OutputDynamicValueListLayoutItem whose paramId is the bake and whose config.targetInputId is the Get param.",
+	"targetInputId_note": "Carried in BOTH schema.outputs[] and the layout item config. The layout item is required: ApplyParameterAccessFromSchema keys the write-back onto the live Set component off the layout item, resolving paramId -> bake -> upstream Set. With no layout item the write-back never runs.",
+	"live_finding": "With no web UI attached, the Get param never learns of new options: _storedItems is only repopulated by LoadItems(), which the UI calls. Driving count 3 -> 1 leaves dvlConvergent holding the stale 3-item list and still emitting \"2\", a value no longer in the emitted options. This is the reconciliation gap the fix plan moves into the solve session, reproducible in Grasshopper alone.",
+	"expect": {
+		"objects": 22,
+		"groups": 3,
+		"runtimeErrors": 0,
+		"note": "Verify with g1_get_canvas_graph after a solve, not with tool return values. 4 Context Bakes: one per DVL output plus the schema bake."
+	},
+	"topology": {
+		"note": "One ContextBake per output — a bake surfaces only its FIRST recognized goo, so N Set DynVL feeding one bake collapses to one payload. See PLUGIN-CONTEXT.md.",
+		"schema_bake": "Input[0] nicknamed \"Schema\", fed by UI Bridge.Schema. BridgeOrchestrator refuses to serve the UI without it. Must carry ONLY the schema goo.",
+		"output_bakes": "Bake steady/convergent/oscillate — input[0] nicknamed steadyOptions/convergentOptions/oscillateOptions. That nickname is the schema output label; GH is authoritative for it.",
+		"output_identity": "schema.outputs[].id is the BAKE guid, never the Set DynVL guid. Pointing at the Set component classifies its Options text input as UnknownType(Text)."
+	}
+}

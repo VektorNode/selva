@@ -1,0 +1,208 @@
+/**
+ * Spec §7 — share-link mint / list / revoke route lifecycle.
+ *
+ * Verifies:
+ *   - POST returns the raw token exactly once and never again
+ *   - GET only exposes tokenHash-stripped metadata (no plaintext)
+ *   - DELETE soft-deletes (revoked links stop appearing in list)
+ *   - Default `maxSolves` cap is applied when omitted; explicit `null` removes it
+ *   - Authorization: container editor + commons def-owner can mint, random user 403
+ */
+
+import { describe, it, expect, afterEach } from 'vitest';
+import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
+import {
+	seedAcme,
+	seedCommons,
+	seedDefinition,
+	seedProjectMember,
+	actAs,
+	callHandler
+} from '../../testing/index.js';
+import { listShareLinks, createShareLink, revokeShareLink } from '../shareLinks.js';
+import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
+
+let tp: HandlerHarness | null = null;
+
+afterEach(async () => {
+	if (tp) {
+		await tp.cleanup();
+		tp = null;
+	}
+});
+
+describe('POST /api/definitions/[guid]/share-links', () => {
+	it('returns raw token in response; default cap applied', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const res = await callHandler(createShareLink, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+		expect(res.status).toBe(201);
+		const body = res.json as {
+			link: { id: string; maxSolves: number };
+			token: string;
+		};
+		expect(body.token).toMatch(/^share_/);
+		expect(body.link.maxSolves).toBe(DEFAULT_SHARE_LINK_MAX_SOLVES);
+	});
+
+	it('explicit maxSolves: null removes the cap', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const res = await callHandler(createShareLink, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid },
+			body: { channel: 'live', allowSolve: true, maxSolves: null }
+		});
+		expect(res.status).toBe(201);
+		const body = res.json as { link: { maxSolves: number | null } };
+		expect(body.link.maxSolves).toBeNull();
+	});
+
+	it('GET strips tokenHash from list responses', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+
+		await callHandler(createShareLink, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+
+		const list = await callHandler(listShareLinks, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid }
+		});
+		expect(list.status).toBe(200);
+		const body = list.json as { items: Array<Record<string, unknown>> };
+		expect(body.items.length).toBe(1);
+		expect(body.items[0]).not.toHaveProperty('tokenHash');
+		expect(body.items[0]).toHaveProperty('hasToken', true);
+	});
+
+	it('Bob (Acme member, no project membership) — 403', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, bob, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const bobLocals = await actAs(tp, bob.id);
+
+		const res = await callHandler(createShareLink, {
+			locals: bobLocals,
+			params: { guid: def.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+		expect(res.status).toBe(403);
+	});
+
+	it('Commons mode: Alice (definition owner) can mint on her own def', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { acme, alice } = await seedAcme(tp);
+		const { alicesCommonsDef } = await seedCommons(tp, { acmeId: acme.id, aliceId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const res = await callHandler(createShareLink, {
+			locals: aliceLocals,
+			params: { guid: alicesCommonsDef.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+		expect(res.status).toBe(201);
+	});
+
+	it("Commons mode: Peter (random user) cannot mint on Alice's def", async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { acme, alice } = await seedAcme(tp);
+		const { alicesCommonsDef, peter } = await seedCommons(tp, {
+			acmeId: acme.id,
+			aliceId: alice.id
+		});
+		const peterLocals = await actAs(tp, peter.id);
+
+		const res = await callHandler(createShareLink, {
+			locals: peterLocals,
+			params: { guid: alicesCommonsDef.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+		expect(res.status).toBe(403);
+	});
+
+	it('Project editor (non-owner) can mint in container mode', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, bob, alicesPrivate } = await seedAcme(tp);
+		await seedProjectMember(tp, {
+			projectId: alicesPrivate.id,
+			userId: bob.id,
+			role: 'editor'
+		});
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const bobLocals = await actAs(tp, bob.id);
+
+		const res = await callHandler(createShareLink, {
+			locals: bobLocals,
+			params: { guid: def.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+		expect(res.status).toBe(201);
+	});
+});
+
+describe('DELETE /api/definitions/[guid]/share-links/[linkId]', () => {
+	it('revoking removes link from subsequent GET list', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const mint = await callHandler(createShareLink, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+		const linkId = (mint.json as { link: { id: string } }).link.id;
+
+		const del = await callHandler(revokeShareLink, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid, linkId }
+		});
+		expect(del.status).toBe(204);
+
+		const list = await callHandler(listShareLinks, {
+			locals: aliceLocals,
+			params: { guid: def.record.guid }
+		});
+		const body = list.json as { items: Array<unknown> };
+		expect(body.items).toHaveLength(0);
+	});
+
+	it('revoking a link that belongs to a different definition → 404', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const defA = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const defB = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+
+		const mint = await callHandler(createShareLink, {
+			locals: aliceLocals,
+			params: { guid: defA.record.guid },
+			body: { channel: 'live', allowSolve: true }
+		});
+		const linkId = (mint.json as { link: { id: string } }).link.id;
+
+		// linkId belongs to defA; we ask DELETE against defB.
+		const del = await callHandler(revokeShareLink, {
+			locals: aliceLocals,
+			params: { guid: defB.record.guid, linkId }
+		});
+		expect(del.status).toBe(404);
+	});
+});

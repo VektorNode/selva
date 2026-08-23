@@ -1,0 +1,105 @@
+:root {
+	--radius: 0.625rem;
+
+	/* Light Mode - Forest Theme */
+	--background: oklch(0.98 0.005 110); /* Very light sage */
+	--foreground: oklch(0.22 0.02 110); /* Deep forest green, darker for better contrast */
+
+	--card: oklch(0.97 0.008 108); /* Slightly tinted white */
+	--card-foreground: oklch(0.25 0.018 105); /* Dark forest text */
+
+	--popover: oklch(0.98 0.005 110);
+	--popover-foreground: oklch(0.22 0.02 110);
+
+	--primary: oklch(0.55 0.16 140); /* Rich forest green, darker for contrast */
+	--primary-foreground: oklch(0.98 0.005 110); /* Light text on primary */
+
+	--secondary: oklch(0.38 0.08 165); /* Deep teal/evergreen */
+	--secondary-foreground: oklch(0.98 0.005 110);
+
+	--muted: oklch(0.92 0.01 120); /* Soft sage background */
+	--muted-foreground: oklch(0.35 0.015 110); /* Darker muted text for contrast */
+
+	--accent: oklch(0.62 0.12 85); /* Moss/olive accent */
+	--accent-foreground: oklch(0.98 0.005 110);
+
+	--destructive: oklch(0.54 0.22 27); /* Autumn red, darker for contrast */
+	--destructive-foreground: oklch(0.98 0.005 110);
+
+	--border: oklch(0.85 0.015 120); /* Soft green-grey border */
+	--input: oklch(0.94 0.008 115); /* Light sage input */
+	--ring: oklch(0.55 0.16 140); /* Focus ring matches primary */
+
+	/* Chart colors - forest palette */
+	--chart-1: oklch(0.55 0.16 140); /* Primary forest green */
+	--chart-2: oklch(0.45 0.12 165); /* Deep evergreen */
+	--chart-3: oklch(0.62 0.12 85); /* Moss green */
+	--chart-4: oklch(0.68 0.08 180); /* Fern green */
+	--chart-5: oklch(0.52 0.1 110); /* Pine green */
+
+	/* Sidebar */
+	--sidebar: oklch(0.96 0.01 115);
+	--sidebar-foreground: oklch(0.25 0.018 105);
+	--sidebar-primary: oklch(0.55 0.16 140);
+	--sidebar-primary-foreground: oklch(0.98 0.005 110);
+	--sidebar-accent: oklch(0.9 0.015 120);
+	--sidebar-accent-foreground: oklch(0.25 0.018 105);
+	--sidebar-border: oklch(0.85 0.015 120);
+	--sidebar-ring: oklch(0.55 0.16 140);
+
+	/* Special parameters */
+	--inputparam: oklch(86.877% 0.02027 155.1); /* Soft blue-lavender */
+	--outputparam: oklch(85.332% 0.0278 145.489); /* Soft yellow-green */
+}
+
+.dark {
+	/* Dark Mode - Deep Forest Theme */
+	--background: oklch(0.18 0.02 140); /* Deep forest background */
+	--foreground: oklch(0.92 0.01 110); /* Soft cream text */
+
+	--card: oklch(0.22 0.025 135); /* Darker forest card */
+	--card-foreground: oklch(0.92 0.01 110);
+
+	--popover: oklch(0.22 0.025 135);
+	--popover-foreground: oklch(0.92 0.01 110);
+
+	--primary: oklch(0.68 0.14 130); /* Bright forest green */
+	--primary-foreground: oklch(0.15 0.02 140); /* Dark text on primary */
+
+	--secondary: oklch(0.35 0.08 165); /* Deep teal */
+	--secondary-foreground: oklch(0.92 0.01 110);
+
+	--muted: oklch(0.28 0.02 130); /* Muted forest */
+	--muted-foreground: oklch(0.72 0.01 115); /* Lighter muted text */
+
+	--accent: oklch(0.52 0.12 85); /* Moss accent */
+	--accent-foreground: oklch(0.92 0.01 110);
+
+	--destructive: oklch(0.65 0.18 25); /* Autumn red-orange */
+	--destructive-foreground: oklch(0.15 0.02 140);
+
+	--border: oklch(0.35 0.02 130 / 60%); /* Subtle forest border */
+	--input: oklch(0.26 0.025 135); /* Dark forest input */
+	--ring: oklch(0.68 0.14 130); /* Bright focus ring */
+
+	/* Chart colors - deep forest palette */
+	--chart-1: oklch(0.68 0.14 130); /* Bright forest green */
+	--chart-2: oklch(0.52 0.12 85); /* Moss green */
+	--chart-3: oklch(0.75 0.08 180); /* Light fern */
+	--chart-4: oklch(0.45 0.1 165); /* Deep evergreen */
+	--chart-5: oklch(0.6 0.1 110); /* Medium pine */
+
+	/* Sidebar */
+	--sidebar: oklch(0.2 0.022 138);
+	--sidebar-foreground: oklch(0.92 0.01 110);
+	--sidebar-primary: oklch(0.68 0.14 130);
+	--sidebar-primary-foreground: oklch(0.15 0.02 140);
+	--sidebar-accent: oklch(0.28 0.025 135);
+	--sidebar-accent-foreground: oklch(0.92 0.01 110);
+	--sidebar-border: oklch(0.92 0.01 110 / 10%);
+	--sidebar-ring: oklch(0.68 0.14 130);
+
+	/* Special parameters */
+	--inputparam: oklch(21.813% 0.00595 156.915); /* Deep forest blue */
+	--outputparam: oklch(16.216% 0.00263 145.779); /* Forest gold */
+}

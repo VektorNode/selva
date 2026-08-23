@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<RootNamespace>Selva.Schema</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+			Release: this assembly is itself merged into Selva.dll (see the ILRepack target in
+			Selva.GH.csproj) together with Newtonsoft, because its public API hands JObject and
+			JsonSerializerSettings to Selva.GH. Both must end up in one assembly or those calls
+			bind across an internalized type boundary. PrivateAssets keeps the sibling DLL out
+			of the .gha output; the merge supplies the types.
+		-->
+		<PackageReference Include="Newtonsoft.Json" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
+	</ItemGroup>
+
+
+</Project>

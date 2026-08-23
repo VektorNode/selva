@@ -1,0 +1,110 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+
+		<!-- Opted out of Directory.Build.props' TreatWarningsAsErrors: the linked-source
+		     workaround below double-compiles Selva.GH files (CS0436) and pulls
+		     nullable-oblivious sources into this nullable-enabled project. -->
+		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="coverlet.collector"/>
+		<PackageReference Include="Microsoft.NET.Test.Sdk"/>
+		<PackageReference Include="Newtonsoft.Json"/>
+		<PackageReference Include="xunit"/>
+		<PackageReference Include="xunit.runner.visualstudio"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Using Include="Xunit"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- NO ProjectReference to Selva.GH: it drags Grasshopper / RhinoCommon /
+		     Windows.Forms into the net8 test host, which then fails to start
+		     ("Failed to create CoreCLR, HRESULT: 0x80070057"). The Rhino-free
+		     sources this project needs are linked below instead. -->
+		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
+		<!-- netstandard2.0, no Rhino/GH dependency — safe for the test host. -->
+		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
+	</ItemGroup>
+
+	<!--
+	  Link source files directly instead of taking a project reference on Selva.GH.
+	  The plugin project pulls in Grasshopper / Windows.Forms / RhinoCommon, which
+	  break the net8 test host (Failed to create CoreCLR). Files linked here must
+	  have no Rhino/GH dependencies.
+	-->
+	<ItemGroup>
+		<Compile Include="..\Selva.GH\Features\Display\Services\BinaryGeometryWriter.cs"
+		         Link="Linked\BinaryGeometryWriter.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\BlobCompressor.cs"
+		         Link="Linked\BlobCompressor.cs"/>
+		<!-- Rhino-free by design: the blob cache is keyed on the extracted float/int arrays and
+		     the metadata JSON, never on a Rhino type, precisely so it can be tested here. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\BatchBlobCache.cs"
+		         Link="Linked\BatchBlobCache.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\HttpRequestParser.cs"
+		         Link="Linked\HttpRequestParser.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\WebSocketHandshake.cs"
+		         Link="Linked\WebSocketHandshake.cs"/>
+		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\OptionPairParser.cs"
+		         Link="Linked\OptionPairParser.cs"/>
+		<Compile Include="..\Selva.GH\Features\FileIO\Services\SafeUrlValidator.cs"
+		         Link="Linked\SafeUrlValidator.cs"/>
+		<Compile Include="..\Selva.GH\Features\FileIO\Services\ServerFilePath.cs"
+		         Link="Linked\ServerFilePath.cs"/>
+		<Compile Include="..\Selva.GH\Features\FileIO\Services\SubFolderPath.cs"
+		         Link="Linked\SubFolderPath.cs"/>
+		<Compile Include="..\Selva.GH\Features\FileIO\Services\ImageDimensions.cs"
+		         Link="Linked\ImageDimensions.cs"/>
+		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\DynamicValueListLogic.cs"
+		         Link="Linked\DynamicValueListLogic.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SchemaHash.cs"
+		         Link="Linked\SchemaHash.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SchemaSaveGuard.cs"
+		         Link="Linked\SchemaSaveGuard.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\LayoutTombstoneStore.cs"
+		         Link="Linked\LayoutTombstoneStore.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ComponentMessageFormatter.cs"
+		         Link="Linked\ComponentMessageFormatter.cs"/>
+		<Compile Include="..\Selva.GH\Features\ComputeIO\Goos\DynamicValueListPayload.cs"
+		         Link="Linked\DynamicValueListPayload.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\OutputPayloadBuilder.cs"
+		         Link="Linked\OutputPayloadBuilder.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SchemaOutputCanonicalizer.cs"
+		         Link="Linked\SchemaOutputCanonicalizer.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SyncModels.cs"
+		         Link="Linked\SyncModels.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SyncDirection.cs"
+		         Link="Linked\SyncDirection.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\InboundMessage.cs"
+		         Link="Linked\InboundMessage.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\InboundMessageParser.cs"
+		         Link="Linked\InboundMessageParser.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\OutboundEnvelopes.cs"
+		         Link="Linked\OutboundEnvelopes.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ComponentStateManager.cs"
+		         Link="Linked\ComponentStateManager.cs"/>
+		<Compile Include="..\Selva.GH\Features\Drawing\Goos\StyleJson.cs"
+		         Link="Linked\StyleJson.cs"/>
+		<!-- Named in OutboundEnvelopes.Outputs(...); its Point3d use is covered by
+		     the stub in RhinoStubs.cs. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\DisplayItem.cs"
+		         Link="Linked\DisplayItem.cs"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="TestFiles\**">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+</Project>

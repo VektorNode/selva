@@ -1,0 +1,220 @@
+import type { UISchema, ValidationIssueMessage } from '@selvajs/schemas';
+
+export interface SchemaExportMetadata {
+	exportedAt: string;
+	exportedBy?: string;
+	exportVersion: string;
+}
+
+export interface ExportedSchema {
+	metadata: SchemaExportMetadata;
+	schema: UISchema;
+}
+
+export interface SchemaValidationResult {
+	isValid: boolean;
+	issues: ValidationIssueMessage[];
+	canLoad: boolean;
+}
+
+export function validateImportedSchema(
+	importedSchema: UISchema,
+	currentDocumentId: string,
+	currentProjectFileName?: string
+): SchemaValidationResult {
+	const issues: ValidationIssueMessage[] = [];
+
+	if (!importedSchema.documentId) {
+		issues.push({
+			paramId: '__document__',
+			severity: 'warning',
+			message:
+				'Imported schema has no document ID. This may be from an older version or different workflow.'
+		});
+	}
+	// Warning only - schema can still be imported if inputs are compatible.
+	else if (importedSchema.documentId !== currentDocumentId) {
+		issues.push({
+			paramId: '__document__',
+			severity: 'warning',
+			message:
+				'Document ID mismatch - this schema was created for a different Grasshopper document',
+			details: {
+				expected: currentDocumentId,
+				actual: importedSchema.documentId,
+				schemaFileName: importedSchema.projectFileName
+			}
+		});
+	}
+
+	if (
+		currentProjectFileName &&
+		importedSchema.projectFileName &&
+		importedSchema.projectFileName !== currentProjectFileName
+	) {
+		issues.push({
+			paramId: '__project__',
+			severity: 'warning',
+			message: 'Project file name differs from current document',
+			details: {
+				expected: currentProjectFileName,
+				actual: importedSchema.projectFileName
+			}
+		});
+	}
+
+	if (!importedSchema.id) {
+		issues.push({
+			paramId: '__schema__',
+			severity: 'error',
+			message: 'Schema is missing required ID field'
+		});
+	}
+
+	if (!importedSchema.name) {
+		issues.push({
+			paramId: '__schema__',
+			severity: 'error',
+			message: 'Schema is missing required name field'
+		});
+	}
+
+	if (!Array.isArray(importedSchema.inputs)) {
+		issues.push({
+			paramId: '__schema__',
+			severity: 'error',
+			message: 'Schema inputs must be an array'
+		});
+	}
+
+	if (!Array.isArray(importedSchema.outputs)) {
+		issues.push({
+			paramId: '__schema__',
+			severity: 'error',
+			message: 'Schema outputs must be an array'
+		});
+	}
+
+	if (
+		!importedSchema.layout ||
+		(importedSchema.layout.type === 'tabbed' && !Array.isArray(importedSchema.layout.tabs)) ||
+		(importedSchema.layout.type === 'flat' && !Array.isArray(importedSchema.layout.groups))
+	) {
+		issues.push({
+			paramId: '__schema__',
+			severity: 'error',
+			message: 'Schema layout is invalid or missing'
+		});
+	}
+
+	if (importedSchema.minPluginVersion) {
+		issues.push({
+			paramId: '__plugin__',
+			severity: 'warning',
+			message: `Schema requires minimum plugin version: ${importedSchema.minPluginVersion}`,
+			details: {
+				minVersion: importedSchema.minPluginVersion,
+				currentVersion: importedSchema.pluginVersion
+			}
+		});
+	}
+
+	const hasErrors = issues.some((i) => i.severity === 'error');
+	const canLoad = !hasErrors;
+
+	return {
+		isValid: issues.length === 0,
+		issues,
+		canLoad
+	};
+}
+
+export function exportSchemaAsFile(schema: UISchema, exportedBy?: string): void {
+	const exportedSchema: ExportedSchema = {
+		metadata: {
+			exportedAt: new Date().toISOString(),
+			exportedBy,
+			exportVersion: '1.0.0'
+		},
+		schema
+	};
+
+	const json = JSON.stringify(exportedSchema, null, 2);
+	const blob = new Blob([json], { type: 'application/json' });
+	const url = URL.createObjectURL(blob);
+
+	const sanitizedName = schema.name.replace(/[^a-z0-9]/gi, '_');
+	const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '_');
+	const fileName = `${sanitizedName}_${timestamp}.sls`;
+
+	const a = document.createElement('a');
+	a.href = url;
+	a.download = fileName;
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	URL.revokeObjectURL(url);
+}
+
+/**
+ * Import schema from .sls (Selva Layout State) file
+ */
+export async function importSchemaFromFile(file: File): Promise<ExportedSchema> {
+	if (!file.name.endsWith('.sls')) {
+		throw new Error('Invalid file type. Expected .sls (Selva Layout State) file.');
+	}
+
+	const text = await file.text();
+	let parsed: ExportedSchema;
+
+	try {
+		parsed = JSON.parse(text) as ExportedSchema;
+	} catch {
+		throw new Error('Invalid JSON format in schema file');
+	}
+
+	if (!parsed.metadata || !parsed.schema) {
+		throw new Error('Invalid schema file format. Missing metadata or schema.');
+	}
+
+	// Migration for v1 schemas (missing layout.type)
+	if (parsed.schema.layout && !parsed.schema.layout.type) {
+		if ('tabs' in parsed.schema.layout) {
+			(parsed.schema.layout as any).type = 'tabbed';
+		} else if ('groups' in parsed.schema.layout) {
+			(parsed.schema.layout as any).type = 'flat';
+		} else {
+			// Default to tabbed
+			(parsed.schema.layout as any).type = 'tabbed';
+			if (!(parsed.schema.layout as any).tabs) {
+				(parsed.schema.layout as any).tabs = [];
+			}
+		}
+	}
+
+	if (!parsed.schema.id || !parsed.schema.name) {
+		throw new Error('Invalid schema structure. Missing required fields.');
+	}
+
+	return parsed;
+}
+
+export function prepareImportedSchema(
+	importedSchema: UISchema,
+	options: {
+		generateNewId?: boolean;
+		updateTimestamp?: boolean;
+	} = {}
+): UISchema {
+	const prepared = { ...importedSchema };
+
+	if (options.generateNewId) {
+		prepared.id = crypto.randomUUID();
+	}
+
+	if (options.updateTimestamp) {
+		prepared.lastModified = new Date().toISOString();
+	}
+
+	return prepared;
+}

@@ -1,0 +1,51 @@
+{
+	"name": "@selvajs/cli",
+	"version": "4.16.0",
+	"description": "Scaffold and operate a Selva white-label deployment. `npx @selvajs/cli <dir>` to bootstrap, `selva <cmd>` to manage.",
+	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"grasshopper",
+		"cli",
+		"scaffolding",
+		"deployment"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/cli"
+	},
+	"type": "module",
+	"bin": {
+		"cli": "./bin/cli.js",
+		"selva": "./bin/selva.js"
+	},
+	"files": [
+		"bin",
+		"src",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"scripts": {
+		"start": "node ./bin/cli.js",
+		"selva": "node ./bin/selva.js",
+		"test": "node --check ./bin/cli.js && node --check ./bin/selva.js && node --input-type=module -e \"for (const m of ['./src/cli.js','./src/prompts.js','./src/env.js','./src/paths.js','./src/secrets.js','./src/node-range.js','./src/deployment-package.js','./src/commands/create.js','./src/commands/init.js','./src/commands/doctor.js','./src/commands/pm2.js','./src/commands/migrate.js','./src/commands/keys.js']) { await import(m); }\" && node --test \"./src/__tests__/*.test.js\""
+	},
+	"dependencies": {
+		"@clack/prompts": "^1.7.0",
+		"picocolors": "^1.1.1"
+	},
+	"devDependencies": {
+		"pm2": "7.0.3"
+	}
+}

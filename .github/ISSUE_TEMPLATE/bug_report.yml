@@ -1,0 +1,51 @@
+name: Bug Report
+description: Something is broken
+type: Bug
+labels: ['needs-triage']
+projects: ['VektorNode/2']
+body:
+  - type: markdown
+    attributes:
+      value: 'Rhino 7 is not supported. For questions, use [Discussions](https://github.com/VektorNode/selva/discussions).'
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, what you got instead, and how to get there.
+      placeholder: |
+        Opened Grasshopper, added a UIBuilder component, linked a slider.
+        Expected the slider in the web UI; the panel stayed empty.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      description: Optional — leave it on "Not sure" if you'd be guessing.
+      options:
+        - Not sure
+        - Grasshopper plugin (C#)
+        - Schema builder / plugin UI
+        - Cloud app
+        - 3D viewer
+        - Solving / Rhino.Compute
+        - Auth, projects, permissions
+        - Build, CI, deployment
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Versions
+      description: Selva, Rhino, and OS. Node version too, if the cloud app is involved.
+      placeholder: 'Selva 0.9.2, Rhino 8.4, Windows 11'
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Errors or logs
+      description: Browser console, Grasshopper component messages, server output. Screenshots welcome.
+      render: shell

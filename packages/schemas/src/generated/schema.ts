@@ -1,0 +1,683 @@
+/* eslint-disable */
+/**
+ * This file was automatically generated from packages/schemas/ui-schema.json.
+ * DO NOT MODIFY IT BY HAND. Instead, modify the source JSON Schema file
+ * and run `pnpm generate` at the repo root to regenerate it.
+ */
+
+export type ParamType =
+	| 'number'
+	| 'integer'
+	| 'boolean'
+	| 'text'
+	| 'valueList'
+	| 'dynamicValueList'
+	| 'file'
+	| 'color'
+	| 'generic';
+export type InputNumberLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'number';
+	config?: NumberWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type InputTextLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'text';
+	config?: TextWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type InputDropdownLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'dropdown';
+	config: DropdownWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type InputDynamicValueListLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'dynamicValueList';
+	config?: DynamicValueListWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type InputCheckboxLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'checkbox';
+	config?: CheckboxWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type InputFileLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'file';
+	config?: FileInputWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type InputColorLayoutItem = LayoutItemBase & {
+	type: 'input';
+	widgetType: 'color';
+	config?: ColorWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type OutputTextLayoutItem = LayoutItemBase & {
+	type: 'output';
+	widgetType: 'text';
+	[k: string]: unknown | undefined;
+};
+export type OutputNumberLayoutItem = LayoutItemBase & {
+	type: 'output';
+	widgetType: 'number';
+	[k: string]: unknown | undefined;
+};
+export type OutputFileLayoutItem = LayoutItemBase & {
+	type: 'output';
+	widgetType: 'file';
+	config?: FileWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type OutputChartLayoutItem = LayoutItemBase & {
+	type: 'output';
+	widgetType: 'chart';
+	config?: ChartWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type OutputImageLayoutItem = LayoutItemBase & {
+	type: 'output';
+	widgetType: 'image';
+	config?: ImageWidgetConfig;
+	[k: string]: unknown | undefined;
+};
+export type OutputDynamicValueListLayoutItem = LayoutItemBase & {
+	type: 'output';
+	widgetType: 'dynamicValueList';
+	config: DynamicValueListOutputConfig;
+	[k: string]: unknown | undefined;
+};
+export type LayoutItem =
+	| InputNumberLayoutItem
+	| InputTextLayoutItem
+	| InputDropdownLayoutItem
+	| InputDynamicValueListLayoutItem
+	| InputCheckboxLayoutItem
+	| InputFileLayoutItem
+	| InputColorLayoutItem
+	| OutputTextLayoutItem
+	| OutputNumberLayoutItem
+	| OutputFileLayoutItem
+	| OutputChartLayoutItem
+	| OutputImageLayoutItem
+	| OutputDynamicValueListLayoutItem
+	| LineBreakLayoutItem;
+export type LayoutConfig = TabbedLayoutConfig | FlatLayoutConfig;
+export type InputStructure = 'item' | 'list' | 'tree';
+
+/**
+ * Schema definitions for Selva UI configuration
+ */
+export interface SelvaUISchema {
+	[k: string]: unknown | undefined;
+}
+export interface VisibilityRule {
+	/**
+	 * Parameter ID to watch for changes
+	 */
+	paramId: string;
+	/**
+	 * Comparison operator. 'contains', 'containsAny', 'isEmpty', 'isNotEmpty' apply to array-valued params (e.g., checklist value lists).
+	 */
+	operator:
+		| 'equals'
+		| 'notEquals'
+		| 'greaterThan'
+		| 'lessThan'
+		| 'greaterThanOrEqual'
+		| 'lessThanOrEqual'
+		| 'in'
+		| 'notIn'
+		| 'between'
+		| 'matches'
+		| 'contains'
+		| 'containsAny'
+		| 'isEmpty'
+		| 'isNotEmpty';
+	/**
+	 * Value to compare against (used for equals, notEquals, greaterThan, lessThan, greaterThanOrEqual, lessThanOrEqual)
+	 */
+	value?: {
+		[k: string]: unknown | undefined;
+	};
+	/**
+	 * Array of values (used for 'in', 'notIn' operators, or [min, max] for 'between')
+	 */
+	values?: unknown[];
+}
+export interface VisibilityCondition {
+	/**
+	 * Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
+	 */
+	mode?: 'all' | 'any';
+	/**
+	 * List of rules to evaluate
+	 *
+	 * @minItems 1
+	 */
+	rules: [VisibilityRule, ...VisibilityRule[]];
+	/**
+	 * Action to apply when condition is met: 'show' makes visible and enabled, 'hide' removes from view, 'disable' makes visible but greyed out and non-interactive
+	 */
+	action?: 'show' | 'hide' | 'disable';
+	/**
+	 * Default value to set for the parameter when condition is met. The value should be compatible with the parameter type (number, string, boolean, etc.)
+	 */
+	defaultValue?: {
+		[k: string]: unknown | undefined;
+	};
+}
+export interface GroupVisibilityCondition {
+	/**
+	 * Evaluation mode: 'all' = AND (all rules must pass), 'any' = OR (at least one rule must pass)
+	 */
+	mode?: 'all' | 'any';
+	/**
+	 * List of rules to evaluate
+	 *
+	 * @minItems 1
+	 */
+	rules: [VisibilityRule, ...VisibilityRule[]];
+	/**
+	 * Action to apply when condition is met: 'show' makes group visible, 'hide' removes group from view
+	 */
+	action?: 'show' | 'hide';
+}
+export interface NumberWidgetConfig {
+	minimum?: number;
+	maximum?: number;
+	stepSize?: number;
+	placeholder?: string;
+	renderAsSlider?: boolean;
+	/**
+	 * Hide the min/max range hint shown next to the label / under the input
+	 */
+	hideRange?: boolean;
+}
+export interface TextWidgetConfig {
+	placeholder?: string;
+	required?: boolean;
+	/**
+	 * Maximum character length for text input
+	 */
+	maxLength?: number;
+	/**
+	 * Regex pattern for validation (e.g., email, phone)
+	 */
+	pattern?: string;
+	/**
+	 * Custom error message shown when pattern validation fails
+	 */
+	customErrorMessage?: string;
+}
+export interface DropdownWidgetConfig {
+	/**
+	 * Key-value pairs for dropdown options
+	 */
+	options: {
+		[k: string]: string | undefined;
+	};
+	required?: boolean;
+	/**
+	 * How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter.
+	 */
+	displayAs?: 'dropdown' | 'checklist';
+}
+export interface DynamicValueListWidgetConfig {
+	/**
+	 * Author-provided seed list (name -> value). Shown until computed options replace it. Empty/absent means the input is empty until the first solve produces options.
+	 */
+	defaultOptions?: {
+		[k: string]: string | undefined;
+	};
+	/**
+	 * What to render when there are no options yet (no defaultOptions and no computed options): 'hide' removes the field from view, 'show-empty' shows a disabled 'no options yet' control.
+	 */
+	emptyBehavior?: 'hide' | 'show-empty';
+	/**
+	 * How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]).
+	 */
+	displayAs?: 'dropdown' | 'checklist';
+}
+export interface DynamicValueListOutputConfig {
+	/**
+	 * The backend parameter's GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+	 */
+	targetInputId: string;
+}
+export interface CheckboxWidgetConfig {}
+export interface FileWidgetConfig {
+	buttonLabel?: string;
+	/**
+	 * File format hint (e.g., '3dm') for setting download extension
+	 */
+	fileFormat?: string;
+}
+export interface FileInputWidgetConfig {
+	/**
+	 * List of accepted file extensions (e.g., ['.3dm', '.step'])
+	 */
+	acceptedFormats?: string[];
+	/**
+	 * Which mode is active by default when both are allowed
+	 */
+	defaultInputMode?: 'upload' | 'url';
+	/**
+	 * Which input modes the end user can choose from. If omitted, both are allowed.
+	 */
+	allowedInputModes?: ('upload' | 'url')[];
+}
+export interface ColorWidgetConfig {}
+export interface LayoutItemBase {
+	/**
+	 * Unique identifier for this layout item in the UI tree (not the parameter ID)
+	 */
+	id: string;
+	/**
+	 * References the backend parameter's GUID (Data Source)
+	 */
+	paramId: string;
+	displayName?: string;
+	description?: string;
+	order?: number;
+	span?: number;
+	/**
+	 * Base visibility (static). If false, item is always hidden regardless of conditions.
+	 */
+	visible?: boolean;
+	visibilityCondition?: VisibilityCondition;
+	source?: InputSource;
+	[k: string]: unknown | undefined;
+}
+export interface InputSource {
+	/**
+	 * Which data provider supplies the value. 'user' = the person types it into the form. 'client' = a browser app (e.g. a measurement/producer tool) fills it in before the form runs, not the person. 'server' = looked up on the server from your data when the definition solves; never shown in the form.
+	 */
+	kind: 'user' | 'client' | 'server';
+	/**
+	 * The address the host resolves to fill this input — opaque to Selva, interpreted by the host per 'kind'. For 'client' it names WHICH producer app supplies the value (e.g. 'line-app', 'file-upload') so the host pre-routes to it; for 'server' it names WHAT to fetch (e.g. 'capture.geometry') for the host's resolver. Keys need not be unique: the same producer/fetch may fill several inputs. Ignored for kind='user'.
+	 */
+	key?: string;
+	/**
+	 * How a client-sourced input appears in the form (only meaningful when kind='client'). Omitted = 'hidden': the value is prefilled silently and the input does not appear. 'slot' = Selva reserves the input's grid cell and lets the host render its own element there; Selva draws nothing itself and never interprets that element.
+	 */
+	client?: {
+		/**
+		 * 'hidden' = no UI; the producer app prefills the value and the input does not appear. 'slot' = the host renders a custom element (e.g. an 'Edit JSON' button) in this input's place, referencing the producer named by 'key'.
+		 */
+		presentation?: 'hidden' | 'slot';
+	};
+}
+export interface ChartWidgetConfig {}
+export interface ImageWidgetConfig {
+	/**
+	 * Show a download button on the image viewer
+	 */
+	allowDownload?: boolean;
+	/**
+	 * Show a fullscreen toggle button on the image viewer
+	 */
+	allowFullscreen?: boolean;
+	/**
+	 * Optional background color shown behind the image (hex string, e.g. '#ffffff')
+	 */
+	backgroundColor?: string;
+}
+export interface LineBreakLayoutItem {
+	/**
+	 * Unique identifier for this layout item in the UI tree
+	 */
+	id: string;
+	type: 'linebreak';
+}
+export interface GroupConfig {
+	id: string;
+	label: string;
+	description?: string;
+	order?: number;
+	collapsed?: boolean;
+	columns?: number;
+	items: LayoutItem[];
+	visibilityCondition?: GroupVisibilityCondition;
+}
+export interface TabConfig {
+	id: string;
+	label: string;
+	icon?: string;
+	order?: number;
+	groups: GroupConfig[];
+	/**
+	 * Horizontal region where this tab should be positioned in multi-column layouts
+	 */
+	position?: 'left' | 'center' | 'right';
+}
+export interface TabbedLayoutConfig {
+	type: 'tabbed';
+	gap?: number;
+	tabs: TabConfig[];
+}
+export interface FlatLayoutConfig {
+	type: 'flat';
+	gap?: number;
+	groups: GroupConfig[];
+}
+export interface DiscoveredInput {
+	/**
+	 * Grasshopper parameter instance GUID
+	 */
+	id: string;
+	name: string;
+	nickname: string;
+	description: string;
+	type: ParamType;
+	default?: unknown;
+	minimum?: number;
+	maximum?: number;
+	stepSize?: number;
+	atLeast?: number;
+	atMost?: number;
+	treeAccess?: boolean;
+	/**
+	 * Key-value pairs for dropdown/selection options
+	 */
+	options?: {
+		[k: string]: string | undefined;
+	};
+	/**
+	 * File extensions the parameter accepts (e.g. ['.png', '.svg'] for an image input, geometry formats for a file input). Used to seed the file widget's accepted-formats default.
+	 */
+	acceptedFormats?: string[];
+	/**
+	 * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
+	 */
+	groupName?: string;
+	[k: string]: unknown | undefined;
+}
+export interface DiscoveredOutput {
+	/**
+	 * Grasshopper component instance GUID
+	 */
+	id: string;
+	nickname: string;
+	description?: string;
+	/**
+	 * Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input
+	 */
+	type: 'text' | 'number' | 'file' | 'chart' | 'dynamicValueList';
+	/**
+	 * For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+	 */
+	targetInputId?: string;
+	/**
+	 * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
+	 */
+	groupName?: string;
+}
+export interface DiscoveredParameters {
+	sessionId: string;
+	timestamp: string;
+	/**
+	 * List of input parameters available for UI building
+	 */
+	inputs: DiscoveredInput[];
+	/**
+	 * List of output components available for UI building
+	 */
+	outputs: DiscoveredOutput[];
+	[k: string]: unknown | undefined;
+}
+export interface SchemaInput {
+	/**
+	 * Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)
+	 */
+	id: string;
+	nickname: string;
+	paramType: ParamType;
+	description?: string;
+	default?: unknown;
+	/**
+	 * Data access mode: 'item' = single value, 'list' = flat list, 'tree' = branching data tree. Defaults to 'item'.
+	 */
+	inputStructure?: 'item' | 'list' | 'tree';
+}
+export interface SchemaOutput {
+	/**
+	 * Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)
+	 */
+	id: string;
+	nickname: string;
+	description?: string;
+	/**
+	 * Output display type
+	 */
+	type: 'text' | 'number' | 'file' | 'chart' | 'dynamicValueList';
+	/**
+	 * For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
+	 */
+	targetInputId?: string;
+}
+export interface ViewerOptions {
+	/**
+	 * If true, display mesh data is sent to the web preview for local rendering
+	 */
+	enableLocal?: boolean;
+	/**
+	 * If true, enables remote rendering via Rhino Compute
+	 */
+	enableRemote?: boolean;
+	/**
+	 * Background color for the 3D viewer as hex string (e.g., '#ffffff')
+	 */
+	backgroundColor?: string;
+}
+export interface UISchema {
+	id: string;
+	name: string;
+	description?: string;
+	/**
+	 * Grasshopper document file name (e.g., 'myfile.gh')
+	 */
+	projectFileName?: string;
+	/**
+	 * Grasshopper document unique identifier (GUID)
+	 */
+	documentId?: string;
+	/**
+	 * Version of Selva plugin that created/last modified this schema
+	 */
+	pluginVersion?: string;
+	/**
+	 * User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])
+	 */
+	tags?: string[];
+	/**
+	 * Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')
+	 */
+	category?: string;
+	/**
+	 * User or organization who created the schema
+	 */
+	author?: string;
+	/**
+	 * Organization/company name
+	 */
+	organization?: string;
+	/**
+	 * Semantic version of the schema format (MAJOR.MINOR.PATCH)
+	 */
+	schemaVersion: string;
+	/**
+	 * Minimum plugin version required to load this schema
+	 */
+	minPluginVersion?: string;
+	created?: string;
+	/**
+	 * Last modification timestamp
+	 */
+	lastModified?: string;
+	viewerOptions?: ViewerOptions1;
+	/**
+	 * If true, changes trigger immediate solving. If false, user must press Calculate button.
+	 */
+	instanceSolve?: boolean;
+	inputs: SchemaInput[];
+	/**
+	 * All output components (print, bake, file download)
+	 */
+	outputs: SchemaOutput[];
+	layout: LayoutConfig;
+}
+/**
+ * Configuration for the 3D viewer
+ */
+export interface ViewerOptions1 {
+	/**
+	 * If true, display mesh data is sent to the web preview for local rendering
+	 */
+	enableLocal?: boolean;
+	/**
+	 * If true, enables remote rendering via Rhino Compute
+	 */
+	enableRemote?: boolean;
+	/**
+	 * Background color for the 3D viewer as hex string (e.g., '#ffffff')
+	 */
+	backgroundColor?: string;
+}
+export interface SessionState {
+	sessionId: string;
+	active: boolean;
+	lastUpdate: string;
+	mode: 'builder' | 'preview';
+	[k: string]: unknown | undefined;
+}
+export interface RuntimeValues {
+	timestamp: string;
+	values: {
+		[k: string]: unknown | undefined;
+	};
+	[k: string]: unknown | undefined;
+}
+export interface ValidationIssueMessage {
+	paramId: string;
+	/**
+	 * warning = can still load, error = cannot load
+	 */
+	severity: 'warning' | 'error';
+	message: string;
+	details?: {
+		expected?: string;
+		actual?: string;
+		[k: string]: unknown | undefined;
+	};
+}
+
+// ============================================================================
+// CONSTANTS (from schema)
+// ============================================================================
+
+export const ACCEPTED_FILE_FORMATS = [
+	'.3dm',
+	'.stp',
+	'.step',
+	'.fbx',
+	'.obj',
+	'.dxf',
+	'.stl'
+] as const;
+
+/** Current UISchema format version (from ui-schema.json's schemaVersion default). */
+export const UI_SCHEMA_VERSION = '2.14.0';
+
+// ============================================================================
+// TYPE ALIASES AND GUARDS (derived from the LayoutItem union)
+// ============================================================================
+
+export type InputLayoutItem =
+	| InputNumberLayoutItem
+	| InputTextLayoutItem
+	| InputDropdownLayoutItem
+	| InputDynamicValueListLayoutItem
+	| InputCheckboxLayoutItem
+	| InputFileLayoutItem
+	| InputColorLayoutItem;
+export type OutputLayoutItem =
+	| OutputTextLayoutItem
+	| OutputNumberLayoutItem
+	| OutputFileLayoutItem
+	| OutputChartLayoutItem
+	| OutputImageLayoutItem
+	| OutputDynamicValueListLayoutItem;
+export type SupportedTypes = string | number | boolean | string[];
+
+export function isInputLayoutItem(item: LayoutItem): item is InputLayoutItem {
+	return item.type === 'input';
+}
+
+export function isOutputLayoutItem(item: LayoutItem): item is OutputLayoutItem {
+	return item.type === 'output';
+}
+
+export function isLineBreakLayoutItem(item: LayoutItem): item is LineBreakLayoutItem {
+	return item.type === 'linebreak';
+}
+
+export function isNumberWidget(item: LayoutItem): item is InputNumberLayoutItem {
+	return item.type === 'input' && item.widgetType === 'number';
+}
+
+export function isTextWidget(item: LayoutItem): item is InputTextLayoutItem {
+	return item.type === 'input' && item.widgetType === 'text';
+}
+
+export function isDropdownWidget(item: LayoutItem): item is InputDropdownLayoutItem {
+	return item.type === 'input' && item.widgetType === 'dropdown';
+}
+
+export function isDynamicValueListWidget(
+	item: LayoutItem
+): item is InputDynamicValueListLayoutItem {
+	return item.type === 'input' && item.widgetType === 'dynamicValueList';
+}
+
+export function isCheckboxWidget(item: LayoutItem): item is InputCheckboxLayoutItem {
+	return item.type === 'input' && item.widgetType === 'checkbox';
+}
+
+export function isFileWidget(item: LayoutItem): item is InputFileLayoutItem {
+	return item.type === 'input' && item.widgetType === 'file';
+}
+
+export function isColorWidget(item: LayoutItem): item is InputColorLayoutItem {
+	return item.type === 'input' && item.widgetType === 'color';
+}
+
+export function isTextOutputWidget(item: LayoutItem): item is OutputTextLayoutItem {
+	return item.type === 'output' && item.widgetType === 'text';
+}
+
+export function isNumberOutputWidget(item: LayoutItem): item is OutputNumberLayoutItem {
+	return item.type === 'output' && item.widgetType === 'number';
+}
+
+export function isFileOutputWidget(item: LayoutItem): item is OutputFileLayoutItem {
+	return item.type === 'output' && item.widgetType === 'file';
+}
+
+export function isChartOutputWidget(item: LayoutItem): item is OutputChartLayoutItem {
+	return item.type === 'output' && item.widgetType === 'chart';
+}
+
+export function isImageOutputWidget(item: LayoutItem): item is OutputImageLayoutItem {
+	return item.type === 'output' && item.widgetType === 'image';
+}
+
+export function isDynamicValueListOutputWidget(
+	item: LayoutItem
+): item is OutputDynamicValueListLayoutItem {
+	return item.type === 'output' && item.widgetType === 'dynamicValueList';
+}

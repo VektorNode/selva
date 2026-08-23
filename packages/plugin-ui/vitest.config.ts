@@ -1,0 +1,21 @@
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { createVitestConfig } from '@selvajs/config/vitest';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Pure-TS logic tests only (no SvelteKit / Tailwind) — avoids a kit prepare step.
+export default createVitestConfig({
+	resolve: {
+		alias: {
+			$lib: path.resolve(__dirname, 'src/lib'),
+			// @selvajs/ui's barrel re-exports `.svelte` components this svelte-plugin-free vitest
+			// can't parse, and only publishes a `svelte` export condition the node-env resolver
+			// won't request. Logic under test reaches the barrel (via features/preview/handlers.ts)
+			// only for the non-UI `getDefaultValue` helper, so alias it to a stub re-exporting just
+			// that — production imports are untouched.
+			'@selvajs/ui': path.resolve(__dirname, 'src/test/selvajs-ui-stub.ts')
+		}
+	}
+});

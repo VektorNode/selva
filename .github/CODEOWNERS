@@ -1,0 +1,21 @@
+# GitHub auto-requests a review from the owner when a PR touches a matching
+# path. Last match wins, so the catch-all goes first.
+#
+# The specific entries below are not about ownership — every path is owned by
+# the same person. They mark the paths where a wrong change fails silently, so
+# the code-owner label shows up on the PR as a signal to slow down.
+
+*                                   @TheVessen
+
+# Grasshopper binds wires by index. A param added or removed on a released
+# component rewires saved definitions unless it goes through the
+# OBSOLETE + upgrader procedure in STRUCTURE.md.
+/Plugin/Selva.GH/Features/          @TheVessen
+
+# Source of truth for both the TS and C# generated types. Editing it without
+# running `pnpm generate` leaves the two stacks disagreeing.
+/packages/schemas/ui-schema.json    @TheVessen
+
+# Runs with repository write access and, for tags, the Yak publish token.
+/.github/workflows/                 @TheVessen
+/.github/actions/                   @TheVessen

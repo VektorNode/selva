@@ -1,0 +1,67 @@
+# Selva — Caddy Configuration Reference
+#
+# Copy to /etc/caddy/Caddyfile and replace app.example.dev with your domain.
+# Edit live config:  sudo nano /etc/caddy/Caddyfile
+# Reload:            sudo systemctl reload caddy
+
+# ============================================================================
+# PRODUCTION (HTTPS, custom domain, behind Caddy)
+# ============================================================================
+# Global ACME email applies to every site below.
+{
+	email you@example.dev
+}
+
+app.example.dev {
+	encode gzip
+
+	# === HEADER AUTH SLOT ===
+	# Insert forward-auth wiring here if you're using @selvajs/header-auth-provider.
+	# See packages/providers/header-auth/README.md for the strip-then-set hygiene
+	# and a working forward_auth block. Leave empty otherwise.
+
+	reverse_proxy 127.0.0.1:3000
+
+	# Browser hardening at the edge. App-level headers stack with these.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options    "nosniff"
+		Referrer-Policy           "strict-origin-when-cross-origin"
+		Permissions-Policy        "geolocation=(), microphone=(), camera=()"
+		-Server
+	}
+
+	@static path /assets/*
+	header @static Cache-Control "public, max-age=31536000, immutable"
+	@api path /api/*
+	header @api Cache-Control "no-cache, no-store, must-revalidate"
+
+	# Must clear COMPUTE_REQUEST_MAX_BYTES / BODY_SIZE_LIMIT (both 256 MB) —
+	# Caddy rejects first, so a lower value here caps every upload.
+	request_body { max_size 256mb }
+
+	log {
+		output file /var/log/caddy/access.log
+		format json
+	}
+}
+
+# Redirect www → apex.
+www.app.example.dev {
+	redir https://app.example.dev{uri} permanent
+}
+
+# ============================================================================
+# DEVELOPMENT (HTTP only — no TLS, cookies not Secure)
+# ============================================================================
+# Use only on a trusted local network. Do not expose to the internet.
+#
+# :80 {
+# 	encode gzip
+# 	reverse_proxy 127.0.0.1:3000
+# 	header {
+# 		X-Content-Type-Options "nosniff"
+# 		Referrer-Policy        "strict-origin-when-cross-origin"
+# 		-Server
+# 	}
+# }

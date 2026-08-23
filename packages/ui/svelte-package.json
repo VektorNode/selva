@@ -1,0 +1,10 @@
+{
+	"exports": {
+		"include": ["**"],
+		"exclude": ["**/routes/**", "**/*.test.*", "**/*.spec.*"]
+	},
+	"files": {
+		"include": ["**"],
+		"exclude": [".*"]
+	}
+}

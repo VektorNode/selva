@@ -1,0 +1,31 @@
+# local-provider
+
+Filesystem implementation of `@selvajs/platform` interfaces. Each subfolder implements one provider (auth, data, storage, permissions, userProfile).
+
+## data/fsJson.ts
+
+Shared read/atomic-write helpers used by every JSON-backed store in this package.
+
+### `readJsonFile<T>(filePath, fallback)`
+
+Reads and parses a JSON file. Returns `fallback` if the file doesn't exist (`ENOENT`); any other error propagates. Lets stores boot against an empty data directory without pre-seeding files.
+
+```ts
+const { users } = await readJsonFile<UsersFile>(path, { users: [] });
+```
+
+### `writeJsonFile<T>(filePath, data)`
+
+Writes to `<path>.<uuid>.tmp`, then renames into place. Each writer gets its own temp file — a shared fixed name broke concurrent writers, since the first rename moved it out from under the rest. The rename is atomic on POSIX, so a crash mid-write leaves either the old file or the new one, never a half-written JSON blob.
+
+```ts
+await writeJsonFile(path, { users: [...] });
+```
+
+Output is tab-indented, so a data dir checked into git diffs readably.
+
+### Caveats
+
+- Not safe across **processes** — no file locking. Fine for a single dev server; don't point two processes at the same data dir.
+- In-process concurrent writes to the same file still race at the read-modify-write level; last write wins. Stores that need serialization wrap calls in their own mutex.
+- Each write rewrites the whole file. Fine for config-scale data (users, orgs, projects); not for high-churn or large datasets.

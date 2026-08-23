@@ -1,0 +1,43 @@
+export { SupabaseStorageProvider } from './storage/SupabaseStorageProvider.js';
+export type { SupabaseStorageProviderConfig } from './storage/SupabaseStorageProvider.js';
+
+export {
+	SupabaseOrgStore,
+	SupabaseProjectStore,
+	SupabaseDefinitionStore,
+	SupabaseInviteStore,
+	SupabaseComputeServerStore,
+	SupabaseShareLinkStore,
+	SupabaseDataProvider,
+	EXPECTED_MIGRATION_HEAD,
+	SupabaseEventSink,
+	SupabaseSolveMetricSink,
+	SupabaseAuditQuery,
+	buildClientBundle,
+	clientBundleFromEnv,
+	DEFAULT_SCHEMA,
+	mapPostgrestError,
+	stampUpdate,
+	stampSoftDelete,
+	notDeleted,
+	toRange,
+	orderColumn,
+	nextCursorFromRange,
+	encodeCursor,
+	decodeCursor
+} from './data/index.js';
+export type {
+	ClientBundle,
+	BuildClientOptions,
+	ForRequestOptions,
+	SchemaClient,
+	SelvaSchemaClient,
+	RangeSpec
+} from './data/index.js';
+
+export { SupabaseUserProfileProvider } from './userProfile/index.js';
+
+export { SupabaseAuthProvider } from './auth/index.js';
+export type { SupabaseAuthProviderConfig } from './auth/index.js';
+
+export { SupabasePlatformPermissionStore } from './permissions/index.js';

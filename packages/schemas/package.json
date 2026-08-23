@@ -1,0 +1,68 @@
+{
+	"name": "@selvajs/schemas",
+	"version": "5.0.1",
+	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
+	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"json-schema",
+		"codegen",
+		"typescript",
+		"csharp",
+		"selva"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/schemas"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"type": "module",
+	"sideEffects": false,
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"selva-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./ui-schema.json": "./ui-schema.json",
+		"./preset-schema.json": "./preset-schema.json"
+	},
+	"files": [
+		"dist",
+		"ui-schema.json",
+		"preset-schema.json",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"prepack": "publint --strict",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"generate": "pnpm run generate:ts && pnpm run generate:cs",
+		"generate:ts": "node scripts/generate-typescript.js",
+		"generate:cs": "node scripts/generate-csharp.js",
+		"lint": "eslint ."
+	},
+	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
+		"json-schema-to-typescript": "^15.0.4",
+		"prettier": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

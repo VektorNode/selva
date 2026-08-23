@@ -1,0 +1,39 @@
+name: CodeQL
+
+# SAST for the TypeScript workspace under packages/.
+#
+# C# is deliberately NOT scanned: Selva.GH / Selva.Rhino need the Windows-only
+# Rhino SDK, so it could only run in `build-mode: none`, and buildless C# on a
+# codebase whose logic sits behind SDK types finds little worth the runtime.
+# The Rhino-free libraries (Selva.Schema, Selva.Drawing) are covered by real
+# unit tests in test.yml instead.
+
+on:
+  pull_request:
+    branches: [main, beta]
+  push:
+    branches: [main, beta]
+  schedule:
+    # Weekly re-scan so newly-published query rules reach unchanged code.
+    - cron: '0 5 * * 1'
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: github/codeql-action/init@v4.37.7
+        with:
+          languages: javascript-typescript
+          build-mode: none
+
+      - uses: github/codeql-action/analyze@v4.37.7

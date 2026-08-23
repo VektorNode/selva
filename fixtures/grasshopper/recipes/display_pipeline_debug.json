@@ -1,0 +1,76 @@
+{
+	"fixture": "display_pipeline_debug.ghx",
+	"description": "General-purpose display-pipeline debugging fixture: one Display component fed by a 4-branch Geo tree covering every geometry kind ComputeBatch handles, plus matching Name/Layer/Metadata trees and a Three Material. Not a single-bug regression fixture — use it as a starting canvas for any display/WebDisplay/BatchBlobCache debugging session.",
+	"branches": [
+		{
+			"path": "{0}",
+			"name": "GridMesh",
+			"layer": "Fixtures/Meshes",
+			"metadata": "kind=grid;cacheable=false",
+			"geometry": "Regular box mesh (Mesh.CreateFromBox, 20x20x20 divisions, 2646 verts / 2400 faces). Deliberately regular/repetitive so DEFLATE crushes it under BatchBlobCache.MinCacheableBytes (16 KB) -- exercises the 'never stored' path."
+		},
+		{
+			"path": "{1}",
+			"name": "RandomMesh",
+			"layer": "Fixtures/Meshes",
+			"metadata": "kind=random;cacheable=true",
+			"geometry": "4000 random vertices (Random(1337)), 1333 faces. High-entropy, does not compress away -- exercises BatchBlobCache's real hit/miss path. Re-solving without changing this branch's inputs is the way to verify a cache hit."
+		},
+		{
+			"path": "{2}",
+			"name": "SampleCurve",
+			"layer": "Fixtures/Curves",
+			"metadata": "kind=curve",
+			"geometry": "4-point closed-ish NURBS polyline. Non-meshable -- exercises the DisplayItem.Curve path in GH_WebDisplay.TryBuildItem, not the mesh-merge path."
+		},
+		{
+			"path": "{3}",
+			"name": "SamplePoint",
+			"layer": "Fixtures/Points",
+			"metadata": "kind=point",
+			"geometry": "Single Point3d(50,50,50). Exercises the DisplayItem.Point path."
+		}
+	],
+	"material": {
+		"component": "b7665e1a-c4cc-49d6-8edb-4aaef045d9a8",
+		"note": "Single Three Material item broadcast across all 4 branches via Grasshopper's shortest-list matching. Color set to RGB(70,130,220) (a distinct blue) so it's visually obvious in a viewer; Metalness 0, Roughness 0.5, Opacity 1, Transparent false (component defaults)."
+	},
+	"apply": {
+		"sliders": [],
+		"components": [
+			{ "Key": "geo", "Selector": "Param_Geometry", "X": 100, "Y": 100, "NickName": "GeoTree" },
+			{ "Key": "name", "Selector": "Param_String", "X": 100, "Y": 200, "NickName": "NameTree" },
+			{ "Key": "layer", "Selector": "Param_String", "X": 100, "Y": 260, "NickName": "LayerTree" },
+			{ "Key": "meta", "Selector": "Param_String", "X": 100, "Y": 320, "NickName": "MetaTree" },
+			{
+				"Key": "display",
+				"Selector": "e4111712-6f0a-4f1b-950f-777eecaebe01",
+				"X": 500,
+				"Y": 100,
+				"NickName": "Display (fixture)"
+			},
+			{
+				"Key": "material",
+				"Selector": "b7665e1a-c4cc-49d6-8edb-4aaef045d9a8",
+				"X": 300,
+				"Y": 400,
+				"NickName": "TM"
+			}
+		],
+		"wires": [
+			{ "SrcKey": "geo", "Src": "Geometry", "DstKey": "display", "Dst": "Geo" },
+			{ "SrcKey": "name", "Src": "Text", "DstKey": "display", "Dst": "Name" },
+			{ "SrcKey": "layer", "Src": "Text", "DstKey": "display", "Dst": "Layer" },
+			{ "SrcKey": "meta", "Src": "Text", "DstKey": "display", "Dst": "Metadata" },
+			{ "SrcKey": "material", "Src": "Material", "DstKey": "display", "Dst": "Material" }
+		],
+		"solve": true
+	},
+	"persistent_data_note": "The recipe format above only covers placement/wiring -- the four branches of geometry/name/layer/metadata are set as PersistentData on the geo/name/layer/meta params directly (SetPersistentData with explicit GH_Path(0..3)), not wired from upstream components. There is no generic recipe step for this; rebuild via run_csharp following the branch table above, then SetPersistentData per param before wiring into Display. See the rhino-mcp skill for the SetPersistentData pattern.",
+	"expect": {
+		"placed": 6,
+		"placeErrors": 0,
+		"wiresOk": 5,
+		"note": "Display's Web Display output should show 4 branches: {0} and {1} report '1 materials, 1 groups' (meshes), {2} and {3} report '0 materials, 0 groups' (curve/point go through DisplayItem, not mesh groups). Verify with g1_get_canvas_graph."
+	}
+}

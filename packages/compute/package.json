@@ -1,0 +1,133 @@
+{
+	"name": "@selvajs/compute",
+	"version": "4.0.2",
+	"description": "TypeScript library for Rhino Compute Server - Grasshopper and RhinoCommon",
+	"author": "VektorNode",
+	"license": "MIT",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/compute"
+	},
+	"type": "module",
+	"keywords": [
+		"compute",
+		"rhino",
+		"grasshopper",
+		"geometry",
+		"3d",
+		"cad",
+		"parametric",
+		"modeling",
+		"rhino3dm",
+		"automation",
+		"geometry-processing",
+		"design",
+		"cloud",
+		"gh",
+		"rhino.compute",
+		"computational-design"
+	],
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
+		},
+		"./grasshopper": {
+			"import": {
+				"types": "./dist/grasshopper.d.ts",
+				"default": "./dist/grasshopper.js"
+			},
+			"require": {
+				"types": "./dist/grasshopper.d.cts",
+				"default": "./dist/grasshopper.cjs"
+			}
+		},
+		"./core": {
+			"import": {
+				"types": "./dist/core.d.ts",
+				"default": "./dist/core.js"
+			},
+			"require": {
+				"types": "./dist/core.d.cts",
+				"default": "./dist/core.cjs"
+			}
+		}
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"publishConfig": {
+		"access": "public",
+		"provenance": false
+	},
+	"sideEffects": false,
+	"scripts": {
+		"build": "pnpm type-check && tsdown",
+		"dev": "tsdown --watch",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"bench": "vitest bench --run",
+		"contract:snapshot": "node scripts/fetch-server-contract.mjs",
+		"contract:check": "node scripts/fetch-server-contract.mjs --check",
+		"test:seams": "vitest run tests/contract",
+		"test:seams:live": "RUN_LIVE_CONTRACT=1 vitest run tests/contract/server-contract.live.test.ts",
+		"test:stats:live": "vitest run tests/contract/compute-server-stats.live.test.ts",
+		"type-check": "tsc --noEmit",
+		"build-docs": "typedoc",
+		"prepack": "publint --strict"
+	},
+	"lint-staged": {
+		"*.{ts,js,mjs,svelte,json,md}": "prettier --write",
+		"*.{ts,js,mjs,svelte}": "eslint --fix"
+	},
+	"dependencies": {
+		"fflate": "^0.8.2",
+		"rhino3dm": "8.32.1"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
+		"eslint": "catalog:",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-svelte": "^3.22.0",
+		"globals": "^17.11.0",
+		"lint-staged": "^17.3.0",
+		"prettier": "catalog:",
+		"prettier-plugin-svelte": "^4.1.1",
+		"prettier-plugin-tailwindcss": "^0.8.1",
+		"svelte": "catalog:",
+		"tsdown": "catalog:",
+		"typedoc": "^0.28.17",
+		"typedoc-plugin-extras": "^4.0.1",
+		"typedoc-plugin-missing-exports": "^4.1.2",
+		"typescript": "catalog:",
+		"typescript-eslint": "^8.66.0",
+		"vite": "catalog:",
+		"vitest": "catalog:"
+	}
+}

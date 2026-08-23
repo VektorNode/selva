@@ -1,0 +1,35 @@
+name: Feature Request
+description: Suggest a feature or improvement
+type: Feature
+labels: ['needs-triage']
+projects: ['VektorNode/2']
+body:
+  - type: textarea
+    id: feature-description
+    attributes:
+      label: What should it do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: What problem does it solve?
+      description: The use case or pain point behind the request.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of Selva?
+      description: Best guess is fine — a maintainer will confirm.
+      options:
+        - Not sure
+        - Grasshopper plugin (C#)
+        - Schema builder / plugin UI
+        - Cloud app
+        - 3D viewer
+        - Solving / Rhino.Compute
+        - Auth, projects, permissions
+        - Build, CI, deployment

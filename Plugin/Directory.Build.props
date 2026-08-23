@@ -1,0 +1,26 @@
+<Project>
+
+	<!-- Shared build settings for all Plugin/ projects. Per-project csprojs only add
+	     what differs (target frameworks, packages, plugin-specific metadata). -->
+	<PropertyGroup>
+		<LangVersion>latest</LangVersion>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<!-- Kills ILRepack.Lib.MSBuild.Task's hidden merge-everything Release target.
+		     See NoAutoILRepack.targets for the full story — removing this property
+		     re-breaks the .gha in a way only visible at load time inside Rhino. -->
+		<ILRepackTargetsFile>$(MSBuildThisFileDirectory)NoAutoILRepack.targets</ILRepackTargetsFile>
+		<!--
+			Nullable is adopted incrementally: enabled in Selva.Rhino and the test
+			projects. Selva.GH / Selva.Drawing / Selva.Schema predate nullable and
+			need a dedicated annotation pass before it can be turned on there.
+		-->
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<Company>VektorNode</Company>
+		<Authors>Felix Brunold, VektorNode</Authors>
+		<Copyright>Copyright © 2025 Selva VektorNode AG</Copyright>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+	</PropertyGroup>
+
+</Project>

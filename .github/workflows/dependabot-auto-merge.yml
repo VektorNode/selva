@@ -1,0 +1,215 @@
+name: Dependabot Auto-Merge
+
+# Branch protection is unavailable on this plan (private repo, no Pro), so this
+# workflow IS the merge gate — not a convenience layer on top of one. It must
+# verify CI itself before approving.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+  contents: write
+  checks: read
+
+jobs:
+  # Dependabot cannot write a correct lockfile for a pnpm catalog. It bumps the
+  # entry in pnpm-workspace.yaml and updates the lockfile's resolved versions,
+  # but records the importer's *specifier* as the literal version (`8.2.0`)
+  # where the manifest says `catalog:`. Every workspace job then dies in
+  # `pnpm install --frozen-lockfile` on a mismatch nothing in the PR can fix.
+  #
+  # Repair it on the branch rather than in each consumer: regenerating only in
+  # the runner would leave the broken lockfile to be merged to main (PR #174).
+  # Ignoring catalog deps isn't an option either — they are most of the
+  # toolchain, and the ignore would silently stop their updates.
+  lockfile:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    permissions:
+      contents: write
+    steps:
+      # pull_request_target checks out the BASE by default, which would
+      # regenerate a lockfile for a tree without Dependabot's bumps in it.
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: pnpm
+
+      - name: Regenerate lockfile if Dependabot left it stale
+        run: |
+          # --ignore-scripts: this workflow is pull_request_target, so it runs
+          # with write access to the repo. Resolving the lockfile needs no
+          # lifecycle scripts, and running a bumped dependency's install hook
+          # under that token is not a trade worth making.
+          pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+
+          # A manifest change here would mean the install did something beyond
+          # reconciling the lockfile — bail rather than commit it unreviewed.
+          if ! git diff --quiet -- ':!pnpm-lock.yaml'; then
+            echo "::error::Install touched files other than pnpm-lock.yaml:"
+            git diff --stat -- ':!pnpm-lock.yaml'
+            exit 1
+          fi
+
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "Lockfile already consistent — nothing to repair."
+            exit 0
+          fi
+
+          git add pnpm-lock.yaml
+          echo "::notice::Regenerated pnpm-lock.yaml — Dependabot left catalog specifiers stale."
+
+      # Dependabot never writes a changeset, so a bump that touches a
+      # publishable package's manifest fails `check-changesets.mjs` forever —
+      # and no human edit can fix it without Dependabot then force-pushing over
+      # it. Author one here instead of exempting the guard: a dependency bump on
+      # a published package IS a shipped change, and skipping it would release
+      # the new dependency under the old version number with a silent CHANGELOG.
+      - name: Write a changeset for the bumped packages
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          # Via env, never `${{ }}` inside the script: a PR title is attacker-
+          # controlled text and this step runs on a write-scoped token.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          CHANGESET: .changeset/dependabot-${{ github.event.pull_request.number }}.md
+        run: |
+          # Same base the `test` job diffs against, so this sees exactly the set
+          # of packages the guard will demand a changeset for.
+          git fetch --depth=1 origin "$BASE_REF"
+          mapfile -t bumped < <(node scripts/changed-publishable-packages.mjs --base FETCH_HEAD)
+
+          # Rewritten from scratch each run, not appended: Dependabot force-
+          # pushes this branch on rebase, and the set of touched packages can
+          # shrink between pushes.
+          rm -f "$CHANGESET"
+
+          if [ ${#bumped[@]} -eq 0 ]; then
+            echo "No publishable package touched — no changeset needed."
+          else
+            printf 'Bumped: %s\n' "${bumped[@]}"
+            {
+              echo '---'
+              printf "'%s': patch\n" "${bumped[@]}"
+              echo '---'
+              echo
+              echo "$PR_TITLE"
+            } > "$CHANGESET"
+          fi
+          git add -A .changeset
+
+      - name: Commit and push repairs
+        run: |
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'chore: repair lockfile and changeset for dependabot bump'
+          git push
+
+  dependabot-auto-merge:
+    runs-on: ubuntu-latest
+    if: github.actor == 'dependabot[bot]'
+    # The push above re-triggers CI on the new head. Gating on this job keeps
+    # the wait below from concluding against the pre-repair commit's checks.
+    needs: lockfile
+    steps:
+      # skip-commit-verification: v3 verifies the head commit's GPG signature,
+      # which reads the PR's commits. Under pull_request_target the token has no
+      # contents access to the head repo, so that read 403s and the whole gate
+      # dies before it ever looks at CI. The lockfile job above already pushes
+      # an unsigned commit to this branch, so signature checking cannot pass
+      # here regardless — the `github.actor == 'dependabot[bot]'` job guard is
+      # what establishes the PR's provenance.
+      - id: metadata
+        uses: dependabot/fetch-metadata@v3
+        with:
+          skip-commit-verification: true
+
+      # `gh pr checks --watch` can't be used: this job's own check run appears
+      # in the PR's checks and would make --watch wait on itself forever. Poll
+      # instead, excluding our own workflow from the set.
+      #
+      # REQUIRED_CHECKS must be named explicitly, and every one of them must
+      # pass. Waiting for "whatever registers" is what merged PR #174 with no CI
+      # at all: Dependabot PRs run under a restricted token, `Test` never
+      # registered a check run, the empty set outlasted the grace window, and
+      # `pending == 0` was read as success — "All 0 check(s) concluded without
+      # failure." An absent check is now indistinguishable from a failing one.
+      - name: Wait for CI checks
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Names as they appear in the checks list (the job's name, not the
+          # workflow's): `test` and `dotnet` from test.yml, `e2e` from e2e.yml.
+          # A rename here without a rename there = a merge that times out,
+          # which is the safe direction.
+          REQUIRED_CHECKS: 'test,dotnet,e2e'
+        run: |
+          deadline=$(( $(date +%s) + 45 * 60 ))
+          required=$(echo "$REQUIRED_CHECKS" | tr ',' '\n' | sed '/^$/d')
+          echo "Required checks:"; echo "$required" | sed 's/^/  · /'
+
+          while :; do
+            # `|| true`: gh exits non-zero while checks are pending; drive off JSON.
+            others=$(gh pr checks "$PR_URL" --json name,bucket 2>/dev/null || echo '[]')
+            others=$(echo "$others" | jq '[.[] | select(.name != "Dependabot Auto-Merge")]')
+
+            if echo "$others" | jq -e 'any(.[]; .bucket == "fail")' >/dev/null; then
+              echo "::error::A check failed — refusing to auto-merge."
+              echo "$others" | jq -r '.[] | select(.bucket == "fail") | "  ✗ \(.name)"'
+              exit 1
+            fi
+
+            # Every required check must be present AND passing. Missing ones are
+            # reported as "waiting", so the job times out rather than merging.
+            missing=$(
+              while IFS= read -r name; do
+                echo "$others" | jq -e --arg n "$name" \
+                  'any(.[]; .name == $n and .bucket == "pass")' >/dev/null || echo "$name"
+              done <<< "$required"
+            )
+
+            if [ -z "$missing" ]; then
+              echo "All required checks passed."
+              exit 0
+            fi
+
+            echo "waiting on: $(echo "$missing" | tr '\n' ' ')"
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "::error::Timed out after 45m. Required checks never passed:"
+              echo "$missing" | sed 's/^/  ✗ /'
+              echo "::error::If a required check no longer runs on Dependabot PRs, fix the"
+              echo "::error::trigger or update REQUIRED_CHECKS — do not merge past this."
+              exit 1
+            fi
+            sleep 30
+          done
+
+      - name: Approve and merge (non-major)
+        if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr review --approve "$PR_URL"
+          gh pr merge --auto --squash "$PR_URL"
+
+      - name: Flag major updates for manual review
+        if: steps.metadata.outputs.update-type == 'version-update:semver-major'
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh pr comment "$PR_URL" --body "⚠️ **Major version update** — needs manual review before merging."

@@ -1,0 +1,96 @@
+:root {
+	/* =========================================================
+     SELVA CANOPY — CORE PALETTE
+     Muted forest / canopy / parchment
+     ========================================================= */
+
+	--color-darkest: oklch(0.185 0.014 155);
+	--color-dark: oklch(0.261 0.022 145);
+	--color-mid-dark: oklch(0.355 0.04 140);
+
+	--color-mid: oklch(0.579 0.065 130);
+	--color-mid-light: oklch(0.636 0.075 130);
+
+	--color-light: oklch(0.747 0.075 122);
+	--color-lightest: oklch(0.858 0.075 119);
+
+	--color-cream: oklch(0.856 0.05 105);
+
+	/* =========================================================
+     NEUTRALS
+     ========================================================= */
+
+	--background: oklch(0.965 0.012 100);
+	--surface: oklch(0.985 0.008 100);
+	--surface-raised: oklch(0.995 0.005 100);
+
+	--foreground: oklch(0.185 0.014 155);
+	--foreground-muted: oklch(0.43 0.018 130);
+
+	--border: oklch(0.87 0.018 105);
+	--border-strong: oklch(0.78 0.025 115);
+
+	/* =========================================================
+     BRAND / INTERACTION
+     ========================================================= */
+
+	--primary: var(--color-mid-dark);
+	--primary-hover: oklch(0.315 0.04 140);
+	--primary-active: var(--color-dark);
+
+	--secondary: var(--color-mid);
+	--secondary-hover: var(--color-mid-light);
+
+	--accent: var(--color-light);
+	--accent-soft: var(--color-lightest);
+
+	--focus: var(--color-mid);
+
+	/* =========================================================
+     SPECIAL SURFACES
+     ========================================================= */
+
+	--surface-green: oklch(0.94 0.025 130);
+	--surface-warm: oklch(0.925 0.025 105);
+
+	--on-primary: oklch(0.985 0.008 100);
+	--on-dark: oklch(0.97 0.012 110);
+	--on-light: var(--color-darkest);
+
+	/* =========================================================
+     SEMANTIC COLORS
+     Kept muted so they don't fight the brand
+     ========================================================= */
+
+	--success: oklch(0.55 0.075 145);
+	--success-soft: oklch(0.9 0.035 145);
+
+	--warning: oklch(0.7 0.09 85);
+	--warning-soft: oklch(0.93 0.035 90);
+
+	--danger: oklch(0.56 0.095 25);
+	--danger-soft: oklch(0.925 0.035 25);
+
+	--info: oklch(0.55 0.055 220);
+	--info-soft: oklch(0.925 0.025 220);
+
+	/* =========================================================
+     STATES
+     ========================================================= */
+
+	--hover: oklch(0.945 0.02 110);
+	--selected: oklch(0.92 0.035 125);
+	--disabled: oklch(0.9 0.01 100);
+
+	--foreground-disabled: oklch(0.6 0.015 120);
+
+	/* =========================================================
+     SHAPE
+     ========================================================= */
+
+	--radius-sm: 6px;
+	--radius-md: 10px;
+	--radius-lg: 14px;
+	--radius-xl: 20px;
+	--radius-pill: 999px;
+}

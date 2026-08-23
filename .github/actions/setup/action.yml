@@ -1,0 +1,39 @@
+name: Setup workspace
+description: >-
+  pnpm, Node, and a frozen install — the shared preamble for the workspace CI
+  jobs (test, e2e). Owning the Node version here means it can't drift between
+  workflows (the reason e2e/plugin-release once lagged at 20). The release
+  workflows keep their own bespoke preambles (conditional setup, registry auth,
+  npm upgrade, full history) and deliberately don't use this.
+
+  Callers MUST run actions/checkout themselves before this action: a local
+  `uses: ./.github/actions/setup` is resolved from the runner's filesystem, so
+  the repo has to be on disk before the step can start. Checking out from
+  inside here is a chicken-and-egg failure ("Can't find 'action.yml' ...").
+
+inputs:
+  node-version:
+    description: Node major to install.
+    required: false
+    default: '24'
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6.0.10
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+
+    # Frozen deliberately: a lockfile that disagrees with a manifest is a real
+    # error, and CI is where it has to surface.
+    #
+    # Dependabot PRs are repaired before this runs — see the lockfile job in
+    # dependabot-auto-merge.yml. It commits the regenerated lockfile to the PR
+    # branch, so by the time this step executes the tree is consistent and the
+    # frozen install is as strict here as anywhere else.
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile

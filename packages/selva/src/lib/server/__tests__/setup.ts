@@ -1,0 +1,78 @@
+/**
+ * Global vitest setup file (wired via `test.setupFiles`). Mocks
+ * `$lib/server/providers.server` so every route handler and access helper
+ * imports a forwarding stub that reads from `currentTestProviders()` instead
+ * of the production singleton initialized from process.env at module load.
+ *
+ * `vi.mock` is hoisted above this file's imports by vitest, so the factory
+ * can only reference top-level imports and the test-providers module.
+ */
+
+import { vi } from 'vitest';
+import {
+	NoopSolveMetricSink,
+	NoopErrorReporter,
+	NoopEventSink,
+	NoopLogger,
+	NoopNotificationProvider
+} from '@selvajs/platform';
+
+vi.mock('$lib/server/providers.server', async () => {
+	const { currentTestProviders } = await import('./test-providers.js');
+	const { OrgAssetService } = await import('@selvajs/server/organizations');
+	const testLogger = new NoopLogger();
+	return {
+		get providers() {
+			return currentTestProviders().config;
+		},
+		resolveProviders: () => currentTestProviders().config,
+		get tenancy() {
+			return currentTestProviders().tenancy;
+		},
+		getTenancy: () => currentTestProviders().tenancy,
+		get flags() {
+			return currentTestProviders().flags;
+		},
+		get definitionService() {
+			return currentTestProviders().definitionService;
+		},
+		getDefinitionService: () => currentTestProviders().definitionService,
+		getOrgAssetService: () => {
+			const config = currentTestProviders().config;
+			return new OrgAssetService(config.data.orgs, config.storage);
+		},
+		flag: (name: string) =>
+			Boolean((currentTestProviders().flags as Record<string, unknown>)[name]),
+		getAuthProvider: () => currentTestProviders().config.auth,
+		getStorageProvider: () => currentTestProviders().config.storage,
+		getDataProvider: () => currentTestProviders().config.data,
+		getOrganizationProvider: () => currentTestProviders().config.data.orgs,
+		getProjectProvider: () => currentTestProviders().config.data.projects,
+		getDefinitionMeta: () => currentTestProviders().config.data.definitions,
+		getComputeServerConfigStore: () => currentTestProviders().config.data.computeServer,
+		getUserProfileStore: () => currentTestProviders().config.data.userProfile,
+		getShareLinkStore: () => currentTestProviders().config.data.shareLinks,
+		getInviteStore: () => currentTestProviders().config.data.invites,
+		getPermissionStore: () => currentTestProviders().config.data.permissions,
+		getPlatformProjectGrantStore: () => currentTestProviders().config.data.platformProjectGrants,
+		getAuditQuery: () => currentTestProviders().config.data.auditQuery ?? null,
+		getEventSink: () => currentTestProviders().config.data.events ?? new NoopEventSink(),
+		getErrorReporter: () => new NoopErrorReporter(),
+		// Nothing is mailed in tests. `not-configured` is a supported runtime
+		// state routes already handle, so asserting on delivery would test the
+		// transport rather than the route.
+		getNotificationProvider: () => new NoopNotificationProvider(),
+		// `deps.instanceName` only fills the org-name slot in an invite mail when
+		// the org has none, so no test's outcome turns on this fixed value.
+		getBranding: () => ({ name: 'Selva' }),
+		// One shared instance, not a fresh one per call, so a test can spy on the
+		// logger and see calls the code under test makes through it — including
+		// through `lazyLogger`, the real module's indirection for long-lived
+		// providers.
+		getLogger: () => testLogger,
+		lazyLogger: testLogger,
+		getSolveMetricSink: () =>
+			(currentTestProviders().config.data as { solveMetrics?: unknown }).solveMetrics ??
+			new NoopSolveMetricSink()
+	};
+});

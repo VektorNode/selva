@@ -1,0 +1,68 @@
+<Project>
+
+	<!--
+		Central package management: every NuGet version for Plugin/ is declared here once,
+		and csprojs carry bare <PackageReference Include="..."/> with no Version.
+
+		This exists because a split version is otherwise invisible until restore. A
+		Dependabot bump (b2997c68) raised System.Drawing.Common in Selva.Drawing alone and
+		left Selva.GH / Selva.Rhino behind; the result was NU1605 and a solution that would
+		not restore at all. With one declaration per package that particular break cannot
+		be expressed.
+
+		Where a package genuinely needs different versions per target framework, use
+		VersionOverride on the reference itself (see Grasshopper below) rather than adding
+		a second entry here.
+	-->
+	<PropertyGroup>
+		<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+			Rhino 8 (net48/net7.0) and Rhino 9 (net9.0) ship different Grasshopper SDKs, so
+			this is the one package with a legitimate per-TFM split. The default here is the
+			Rhino 8 SDK; the net9.0 references carry VersionOverride for the 9.x wip build.
+		-->
+		<PackageVersion Include="Grasshopper" Version="8.0.23304.9001"/>
+		<!-- Direct reference only in Selva.PluginVerifier (elsewhere it flows
+		     transitively via Grasshopper); must stay in lockstep with it. -->
+		<PackageVersion Include="RhinoCommon" Version="8.0.23304.9001"/>
+
+		<!--
+			Pinned to 8.0.0, NOT the latest. Consumers target net7.0, where 10.x ships a
+			System.Drawing.Common that duplicates types already in the framework's
+			System.Drawing.Primitives — every ColorTranslator/Color use then fails to compile
+			with CS0433. Raising this requires dropping net7.0 (Rhino 8) support first.
+		-->
+		<PackageVersion Include="System.Drawing.Common" Version="8.0.0"/>
+
+		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4"/>
+		<PackageVersion Include="System.Net.Http" Version="4.3.4"/>
+		<PackageVersion Include="System.Resources.Extensions" Version="7.0.0"/>
+		<PackageVersion Include="System.Windows.Forms" Version="4.0.0"/>
+
+		<PackageVersion Include="PdfSharpCore" Version="1.3.67"/>
+		<PackageVersion Include="SharpZipLib" Version="1.4.2"/>
+
+		<!--
+			Transitive deps of PdfSharpCore, declared explicitly so Selva.Drawing can merge them
+			(see the ILRepack target there). These versions are what PdfSharpCore 1.3.67 resolves
+			to — raising either independently risks handing it an API it wasn't built against.
+		-->
+		<PackageVersion Include="SixLabors.ImageSharp" Version="2.1.13"/>
+		<PackageVersion Include="SixLabors.Fonts" Version="1.0.1"/>
+		<!-- ImageSharp needs Unsafe >= 5.0 (SkipInit) and CodePages; both are merged
+		     into Selva.Drawing.dll in Release because PrivateAssets severs them. -->
+		<PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0"/>
+		<PackageVersion Include="System.Text.Encoding.CodePages" Version="5.0.0"/>
+		<PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34"/>
+
+		<PackageVersion Include="coverlet.collector" Version="10.0.1"/>
+		<PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0"/>
+		<PackageVersion Include="Verify.Xunit" Version="31.12.5"/>
+		<PackageVersion Include="xunit" Version="2.9.3"/>
+		<PackageVersion Include="xunit.runner.visualstudio" Version="4.0.0"/>
+	</ItemGroup>
+
+</Project>

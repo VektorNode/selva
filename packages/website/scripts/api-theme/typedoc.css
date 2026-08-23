@@ -1,0 +1,237 @@
+/* Restyles the generated @selvajs/compute typedoc reference to match selva.dev.
+   Only typedoc's own custom properties are overridden where possible, so a
+   typedoc upgrade that changes markup still lands on the right palette.
+
+   Values are the dark-mode tokens from @selvajs/ui base.css, copied rather than
+   imported: this file is loaded by a standalone typedoc page that never sees
+   the site's Tailwind build. Keep in sync with packages/ui/src/lib/styles/base.css. */
+
+@font-face {
+	font-family: 'Familjen Grotesk Variable';
+	font-style: normal;
+	font-display: swap;
+	font-weight: 400 700;
+	src: url('familjen-grotesk-latin.woff2') format('woff2');
+	unicode-range:
+		U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+		U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* The site is dark-only (app.html hardcodes class="dark"), so all three of
+   typedoc's theme scopes get the same palette — otherwise a visitor whose OS is
+   in light mode gets typedoc's default light theme against our dark chrome. */
+:root,
+:root[data-theme='light'],
+:root[data-theme='dark'] {
+	color-scheme: dark;
+
+	--color-background: oklch(0.17 0 0);
+	--color-background-secondary: oklch(0.21 0 0);
+	--color-background-active: oklch(0.27 0 0);
+	--color-background-warning: oklch(0.8 0.14 75);
+	--color-warning-text: oklch(0.2 0.03 75);
+	--color-accent: oklch(1 0 0 / 14%);
+
+	--color-text: oklch(0.96 0 0);
+	--color-text-aside: oklch(0.72 0 0);
+	--color-link: oklch(0.74 0.07 135);
+	--color-focus-outline: oklch(0.74 0.07 135);
+	--color-contrast-text: oklch(0.18 0 0);
+	--color-active-menu-item: oklch(0.27 0 0);
+
+	--color-icon-background: transparent;
+	--color-icon-text: oklch(0.96 0 0);
+
+	--color-alert-note: oklch(0.74 0.13 245);
+	--color-alert-tip: oklch(0.74 0.15 145);
+	--color-alert-important: oklch(0.68 0.14 260);
+	--color-alert-warning: oklch(0.8 0.14 75);
+	--color-alert-caution: oklch(0.7 0.17 22);
+
+	--color-comment-tag: oklch(0.27 0 0);
+	--color-comment-tag-text: oklch(0.96 0 0);
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		color-scheme: dark;
+		--color-background: oklch(0.17 0 0);
+		--color-background-secondary: oklch(0.21 0 0);
+		--color-background-active: oklch(0.27 0 0);
+		--color-accent: oklch(1 0 0 / 14%);
+		--color-text: oklch(0.96 0 0);
+		--color-text-aside: oklch(0.72 0 0);
+		--color-link: oklch(0.74 0.07 135);
+		--color-contrast-text: oklch(0.18 0 0);
+		--color-active-menu-item: oklch(0.27 0 0);
+		--color-icon-background: transparent;
+		--color-icon-text: oklch(0.96 0 0);
+	}
+}
+
+body {
+	font-family: 'Familjen Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ============================================================================
+   Header: mirror the site's floating pill nav
+   ============================================================================ */
+
+.tsd-page-toolbar {
+	background-color: color-mix(in oklab, oklch(0.17 0 0) 80%, transparent);
+	border-bottom: 1px solid oklch(1 0 0 / 14%);
+	backdrop-filter: blur(12px);
+}
+
+.tsd-page-toolbar a.title {
+	font-weight: 700;
+	letter-spacing: -0.01em;
+}
+.tsd-page-toolbar a.title:hover {
+	text-decoration: none;
+	color: var(--color-link);
+}
+
+/* navigationLinks render here; style them as the site's nav pills. */
+#tsd-toolbar-links a {
+	color: var(--color-text-aside);
+	font-size: 0.875rem;
+	font-weight: 500;
+	padding: 0.375rem 0.75rem;
+	border-radius: 9999px;
+	transition:
+		color 0.15s,
+		background-color 0.15s;
+}
+#tsd-toolbar-links a:hover {
+	color: var(--color-text);
+	background-color: oklch(0.27 0 0);
+	text-decoration: none;
+}
+
+/* ============================================================================
+   Surfaces
+   ============================================================================ */
+
+.tsd-panel,
+.tsd-accordion,
+.tsd-signature,
+.tsd-member .tsd-signatures .tsd-signature {
+	background-color: oklch(0.23 0 0);
+	border: 1px solid oklch(1 0 0 / 14%);
+	border-radius: 0.625rem;
+}
+
+.tsd-signature,
+code,
+pre {
+	font-variant-ligatures: none;
+}
+
+/* Inline code only. `code` inside `pre` is the highlighted block: giving that a
+   border draws a line through every line of the listing. */
+:not(pre) > code {
+	background-color: oklch(0.27 0 0);
+	border: 1px solid oklch(1 0 0 / 14%);
+	border-radius: 0.25rem;
+	padding: 0.1rem 0.35rem;
+	font-size: 0.9em;
+}
+
+pre {
+	background-color: oklch(0.27 0 0);
+	border: 1px solid oklch(1 0 0 / 14%);
+	border-radius: 0.375rem;
+	padding: 0.75rem 1rem;
+}
+
+.tsd-navigation a,
+.tsd-navigation summary {
+	border-radius: 0.375rem;
+}
+.tsd-navigation a:hover {
+	background-color: oklch(0.27 0 0);
+	text-decoration: none;
+}
+.tsd-navigation a.current {
+	background-color: oklch(0.27 0 0);
+	font-weight: 600;
+}
+
+/* Search dialog reads as a popover, matching the site's card surface. */
+#tsd-search {
+	background-color: oklch(0.23 0 0);
+	border: 1px solid oklch(1 0 0 / 14%);
+	border-radius: 0.625rem;
+	color: var(--color-text);
+}
+#tsd-search-input {
+	background-color: oklch(0.17 0 0);
+	color: var(--color-text);
+	border: 1px solid oklch(1 0 0 / 14%);
+	border-radius: 0.375rem;
+}
+
+.tsd-filter-input input[type='checkbox'],
+button,
+input,
+select {
+	accent-color: oklch(0.74 0.07 135);
+}
+
+/* ============================================================================
+   Syntax highlighting
+   ============================================================================ */
+
+/* highlight.css only selects its dark token set under `prefers-color-scheme:
+   dark`, so a visitor in OS light mode gets navy-on-near-black. Pin the dark
+   variants in every scope, matching the page. */
+:root,
+:root[data-theme='light'],
+:root[data-theme='dark'] {
+	--hl-0: var(--dark-hl-0);
+	--hl-1: var(--dark-hl-1);
+	--hl-2: var(--dark-hl-2);
+	--hl-3: var(--dark-hl-3);
+	--hl-4: var(--dark-hl-4);
+	--hl-5: var(--dark-hl-5);
+	--hl-6: var(--dark-hl-6);
+	--hl-7: var(--dark-hl-7);
+	--hl-8: var(--dark-hl-8);
+	--hl-9: var(--dark-hl-9);
+	--hl-10: var(--dark-hl-10);
+	--hl-11: var(--dark-hl-11);
+	--hl-12: var(--dark-hl-12);
+	--code-background: oklch(0.27 0 0);
+}
+
+@media (prefers-color-scheme: light) {
+	:root {
+		--hl-0: var(--dark-hl-0);
+		--hl-1: var(--dark-hl-1);
+		--hl-2: var(--dark-hl-2);
+		--hl-3: var(--dark-hl-3);
+		--hl-4: var(--dark-hl-4);
+		--hl-5: var(--dark-hl-5);
+		--hl-6: var(--dark-hl-6);
+		--hl-7: var(--dark-hl-7);
+		--hl-8: var(--dark-hl-8);
+		--hl-9: var(--dark-hl-9);
+		--hl-10: var(--dark-hl-10);
+		--hl-11: var(--dark-hl-11);
+		--hl-12: var(--dark-hl-12);
+		--code-background: oklch(0.27 0 0);
+	}
+}
+
+/* ============================================================================
+   Footer
+   ============================================================================ */
+
+footer {
+	border-top: 1px solid oklch(1 0 0 / 14%);
+	color: var(--color-text-aside);
+}
+footer a {
+	color: var(--color-link);
+}

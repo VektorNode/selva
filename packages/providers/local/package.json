@@ -1,0 +1,86 @@
+{
+	"name": "@selvajs/local-provider",
+	"version": "0.15.2",
+	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
+	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"provider",
+		"filesystem",
+		"auth"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/providers/local"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"selva-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./auth": {
+			"selva-source": "./src/auth/index.ts",
+			"types": "./dist/auth/index.d.ts",
+			"import": "./dist/auth/index.js"
+		},
+		"./data": {
+			"selva-source": "./src/data/index.ts",
+			"types": "./dist/data/index.d.ts",
+			"import": "./dist/data/index.js"
+		},
+		"./storage": {
+			"selva-source": "./src/storage/index.ts",
+			"types": "./dist/storage/index.d.ts",
+			"import": "./dist/storage/index.js"
+		},
+		"./permissions": {
+			"selva-source": "./src/permissions/index.ts",
+			"types": "./dist/permissions/index.d.ts",
+			"import": "./dist/permissions/index.js"
+		},
+		"./userProfile": {
+			"selva-source": "./src/userProfile/index.ts",
+			"types": "./dist/userProfile/index.d.ts",
+			"import": "./dist/userProfile/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"prepack": "publint --strict",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"@selvajs/platform": "workspace:^",
+		"sharp": "catalog:",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@types/node": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

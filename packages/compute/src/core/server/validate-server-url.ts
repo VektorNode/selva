@@ -1,0 +1,114 @@
+import { ComputeError, ErrorCodes } from '@/core/errors';
+
+/**
+ * The public McNeel endpoint's host — the default blocked host; users must point at
+ * their own server. Compared against the parsed hostname lowercased and with any
+ * trailing dot stripped, so the FQDN form (`compute.rhino3d.com.`) can't bypass it.
+ * Known limitation: the endpoint's raw IP is not blocked — it sits behind a load
+ * balancer with no single stable, verifiable address to pin.
+ */
+export const DEFAULT_BLOCKED_HOST = 'compute.rhino3d.com';
+
+export interface ValidateServerUrlOptions {
+	/**
+	 * Hostnames rejected as a `serverUrl` — a backend's shared public endpoint,
+	 * which callers must not point at. Defaults to `[DEFAULT_BLOCKED_HOST]`; pass
+	 * `[]` to block nothing. Compared lowercased with any trailing dot stripped.
+	 */
+	blockedHosts?: readonly string[];
+}
+
+/**
+ * Validate and normalize a compute `serverUrl`.
+ *
+ * This is the single source of truth for "is this a usable server URL?" — both
+ * `GrasshopperClient` (via `normalizeComputeConfig`) and the standalone-exported
+ * `ComputeServerStats` constructor delegate here, so a given URL is accepted or
+ * rejected identically no matter which entry point a caller uses.
+ *
+ * Rules (all enforced, on the *trimmed* input — the trimmed form is what's
+ * returned, so no stray whitespace survives into later `fetch` calls):
+ * - non-empty (after trim)
+ * - `http://` or `https://` scheme (case-insensitive, per RFC 3986)
+ * - parseable by `new URL()`
+ * - no embedded credentials (`http://user:pass@host`) — `fetch`/`new Request`
+ *   reject credentialed URLs at runtime, so they must fail here instead
+ * - no query string or fragment — endpoint paths are appended to this URL
+ *   (`${serverUrl}/version`), which a `?…` or `#…` suffix would corrupt
+ * - not a blocked host (by default the public McNeel endpoint) — compared by
+ *   parsed hostname (lowercased, trailing dot stripped), so scheme, casing, port,
+ *   path, trailing-slash, or FQDN-dot variants can't slip past the block
+ *
+ * @param raw - The candidate server URL.
+ * @param options - Override the blocked-host list for a non-Rhino backend.
+ * @returns The trimmed, normalized URL with any trailing slashes removed.
+ * @throws {ComputeError} `INVALID_CONFIG` if any rule fails.
+ */
+export function validateServerUrl(raw: string, options?: ValidateServerUrlOptions): string {
+	const trimmed = raw?.trim() ?? '';
+	if (!trimmed) {
+		throw new ComputeError('serverUrl is required', ErrorCodes.INVALID_CONFIG, {
+			context: { receivedServerUrl: raw }
+		});
+	}
+
+	if (!/^https?:\/\//i.test(trimmed)) {
+		throw new ComputeError(
+			`Invalid serverUrl: "${trimmed}". Must start with "http://" or "https://". ` +
+				`For example: "http://localhost:5000" or "https://example.com"`,
+			ErrorCodes.INVALID_CONFIG,
+			{ context: { receivedServerUrl: raw } }
+		);
+	}
+
+	let parsed: URL;
+	try {
+		parsed = new URL(trimmed);
+	} catch (err) {
+		throw new ComputeError(
+			`Invalid serverUrl: "${trimmed}". Must be a valid URL. ` +
+				`Received error: ${err instanceof Error ? err.message : String(err)}`,
+			ErrorCodes.INVALID_CONFIG,
+			{
+				context: { receivedServerUrl: raw },
+				originalError: err instanceof Error ? err : undefined
+			}
+		);
+	}
+
+	if (parsed.username !== '' || parsed.password !== '') {
+		throw new ComputeError(
+			`Invalid serverUrl: "${trimmed}". Must not embed credentials (user:pass@host) — ` +
+				`fetch rejects credentialed URLs at request time. Pass the API key separately.`,
+			ErrorCodes.INVALID_CONFIG,
+			{ context: { receivedServerUrl: raw } }
+		);
+	}
+
+	// String check rather than parsed.search/hash: a bare trailing "?" or "#"
+	// parses to an empty search/hash but still corrupts endpoint concatenation.
+	if (trimmed.includes('?') || trimmed.includes('#')) {
+		throw new ComputeError(
+			`Invalid serverUrl: "${trimmed}". Must not contain a query string or fragment — ` +
+				`endpoint paths are appended to this URL (e.g. "\${serverUrl}/version"), ` +
+				`and a "?" or "#" suffix would corrupt every request path.`,
+			ErrorCodes.INVALID_CONFIG,
+			{ context: { receivedServerUrl: raw } }
+		);
+	}
+
+	// Lowercase + strip any trailing dot so the FQDN form can't bypass the block.
+	const hostname = parsed.hostname.toLowerCase().replace(/\.+$/, '');
+	const blocked = (options?.blockedHosts ?? [DEFAULT_BLOCKED_HOST]).map((h) =>
+		h.toLowerCase().replace(/\.+$/, '')
+	);
+	if (blocked.includes(hostname)) {
+		throw new ComputeError(
+			'serverUrl must be set to your Compute server URL. The shared public endpoint is not allowed.',
+			ErrorCodes.INVALID_CONFIG,
+			{ context: { receivedServerUrl: raw } }
+		);
+	}
+
+	return trimmed.replace(/\/+$/, '');
+}

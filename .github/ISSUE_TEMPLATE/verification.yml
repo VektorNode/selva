@@ -1,0 +1,47 @@
+name: Verification
+description: Check a claim we have only reasoned about, never measured
+type: Verification
+labels: ['needs-triage']
+projects: ['VektorNode/2']
+body:
+  - type: markdown
+    attributes:
+      value: 'For work whose output is **evidence**, not a code change. If you already know something is broken, file a Bug.'
+
+  - type: textarea
+    id: claim
+    attributes:
+      label: What do we currently believe?
+      description: The claim to be tested, and where it came from.
+      placeholder: 'Reading the code suggests X. This has never been observed against a running system.'
+    validations:
+      required: true
+
+  - type: textarea
+    id: how-to-verify
+    attributes:
+      label: How would we find out?
+      description: What to drive, what to watch, what to record.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcomes
+    attributes:
+      label: What would each outcome mean?
+      placeholder: |
+        Confirmed → ...
+        Refuted → ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: blocking
+    attributes:
+      label: Is other work blocked on this?
+      options:
+        - 'No — informational'
+        - 'Yes — a fix is waiting on the result'
+        - 'Yes — a fix already shipped on this assumption and needs confirming'
+    validations:
+      required: true

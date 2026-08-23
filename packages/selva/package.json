@@ -1,0 +1,88 @@
+{
+	"name": "@selvajs/selva",
+	"version": "4.16.0",
+	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
+	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"grasshopper",
+		"rhino",
+		"rhino-compute",
+		"parametric-design",
+		"web-app",
+		"sveltekit"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/selva"
+	},
+	"type": "module",
+	"main": "./build/index.js",
+	"files": [
+		"build",
+		"templates"
+	],
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"scripts": {
+		"dev": "vite dev",
+		"build": "rimraf build && vite build && node ./scripts/generate-templates.js",
+		"preview": "vite preview",
+		"start": "node build/index.js",
+		"clean": "rimraf build templates",
+		"prepare": "svelte-kit sync || echo ''",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"openapi:generate": "node scripts/generate-openapi.js",
+		"test:e2e": "playwright test",
+		"lint": "eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
+	},
+	"dependencies": {
+		"@lucide/svelte": "catalog:",
+		"@supabase/supabase-js": "^2.112.2",
+		"@sveltejs/kit": "catalog:",
+		"bits-ui": "catalog:",
+		"clsx": "catalog:",
+		"mode-watcher": "catalog:",
+		"nodemailer": "^9.0.5",
+		"pino": "^10.3.1",
+		"sharp": "catalog:",
+		"tailwind-merge": "catalog:",
+		"tailwind-variants": "catalog:",
+		"three": "catalog:",
+		"zod": "catalog:"
+	},
+	"optionalDependencies": {
+		"@sentry/node": "^10.70.0"
+	},
+	"devDependencies": {
+		"@playwright/test": "catalog:",
+		"@selvajs/compute": "workspace:*",
+		"@selvajs/config": "workspace:*",
+		"@selvajs/header-auth-provider": "workspace:*",
+		"@selvajs/local-provider": "workspace:*",
+		"@selvajs/notifications": "workspace:*",
+		"@selvajs/platform": "workspace:*",
+		"@selvajs/schemas": "workspace:*",
+		"@selvajs/server": "workspace:*",
+		"@selvajs/solve": "workspace:*",
+		"@selvajs/supabase-provider": "workspace:*",
+		"@selvajs/ui": "workspace:*",
+		"@selvajs/visualization": "workspace:*",
+		"@sveltejs/adapter-node": "^5.5.4",
+		"@types/nodemailer": "^8.0.1",
+		"@types/three": "catalog:",
+		"rimraf": "catalog:",
+		"tw-animate-css": "catalog:",
+		"vitest": "catalog:"
+	}
+}

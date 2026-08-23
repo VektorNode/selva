@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink' version='1.1' width='51.819805' height='54.648232' viewBox='-10 -44.648232 51.819805 54.648232'>
+<title>Drawing</title>
+<defs>
+  <symbol id='tri' viewBox='0 0 5 4' overflow='visible'>
+  <path d='M 0 0 L 5 0 L 2.5 4 Z' fill='none' stroke='black' stroke-width='0.25' />
+  </symbol>
+</defs>
+<g transform='matrix(1 0 0 -1 0 0)' font-family='Inter, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto, &quot;Helvetica Neue&quot;, Arial, sans-serif'>
+  <use href='#tri' />
+  <use href='#tri' x='20' />
+  <use href='#tri' x='40' transform='matrix(0.707107 0.707107 -0.707107 0.707107 0 0)' />
+</g>
+</svg>

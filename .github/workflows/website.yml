@@ -1,0 +1,62 @@
+name: Website
+
+# @selvajs/website is excluded from the root build/check/type-check scripts:
+# it's private, never published, has no tests, and its only coupling to the
+# workspace is a single stylesheet import. Building it on every PR cost a
+# Chromium download (rehype-mermaid renders diagrams at build time) for a
+# package most changes can't affect. This workflow puts that back on the
+# paths that can actually break it.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/website/**'
+      # The one real dependency: app.css imports @selvajs/ui/styles/base.css,
+      # which the exports map resolves to source rather than dist. Nothing
+      # else in @selvajs/ui reaches the website.
+      - 'packages/ui/src/lib/styles/**'
+      - 'packages/config/**'
+      - '.github/workflows/website.yml'
+      - 'pnpm-lock.yaml'
+
+# Read-only: this workflow only builds the site, never writes to the repo.
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      # Must precede `uses: ./...` below — GitHub resolves local actions from
+      # the runner's filesystem.
+      - uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+
+      - uses: actions/cache@v6
+        with:
+          path: .turbo
+          key: turbo-website-${{ github.sha }}
+          restore-keys: |
+            turbo-website-
+
+      # `prebuild` installs chromium-headless-shell for rehype-mermaid. Keyed
+      # on the installed playwright version so it's only re-downloaded on bump.
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-website-${{ steps.pw.outputs.version }}
+          restore-keys: |
+            playwright-website-
+
+      - run: pnpm check:website
+      - run: pnpm build:website

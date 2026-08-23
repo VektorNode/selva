@@ -1,0 +1,57 @@
+node_modules
+
+# Output
+.output
+.vercel
+.netlify
+.wrangler
+/.svelte-kit
+/build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+.env.*
+!.env.example
+!.env.test
+# Provider dev harness (scripts/dev-provider.mjs). Throwaway keys and the
+# Supabase CLI's published local-dev keys only — tracked so `pnpm dev:<provider>`
+# works on a fresh clone. Never put a real secret in one of these.
+!.env.dev-local
+!.env.dev-supabase
+!.env.dev-header
+
+# Deployment-specific config (edit example.* files instead, setup.sh copies them).
+# Anchored to this directory — templates/ecosystem.config.cjs is the tracked source.
+/ecosystem.config.cjs
+
+# Release channel selection (written at runtime by the admin System page)
+selva-channel.json
+
+# Grasshopper definitions (keep private, not tracked)
+*.gh
+*.ghx
+# ...except the e2e fixtures. The core-loop spec uploads a genuine UI Builder
+# definition through the real dialog, so the schema-extraction gate has
+# something to extract — it can't be synthesized. Without this negation the
+# blanket rule above silently swallows `git add` and the spec fails in CI with
+# ENOENT while passing for anyone who has the file locally.
+!e2e/fixtures/*.gh
+
+# Deployment-specific thumbnails
+static/images/*_Thumbnail.png
+static/images/*_Thumbnail.jpg
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Playwright
+/playwright-report
+/test-results
+/playwright/.cache
+/.e2e
+/e2e/.auth

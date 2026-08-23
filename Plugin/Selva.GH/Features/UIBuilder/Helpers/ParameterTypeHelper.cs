@@ -1,0 +1,653 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Reflection;
+using Grasshopper.Kernel;
+using Grasshopper.Kernel.Special;
+using Selva.Schema.Models;
+using Selva.GH.Features.ComputeIO.Components;
+using Selva.GH.Features.FileIO;
+
+namespace Selva.GH.Features.UIBuilder.Helpers;
+
+public static class ParameterTypeHelper
+{
+    public static bool IsContextOutputComponent(IGH_DocumentObject obj)
+    {
+        if (obj == null)
+        {
+            return false;
+        }
+
+        var typeName = obj.GetType()?.Name;
+        return string.Equals(typeName, "ContextPrintComponent", StringComparison.Ordinal);
+    }
+
+
+    public static bool IsContextBakeComponent(IGH_DocumentObject obj)
+    {
+        if (obj == null)
+        {
+            return false;
+        }
+
+        var typeName = obj.GetType()?.Name;
+        return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
+    }
+
+    public static bool IsSourcedFromFileOutput(IGH_Param inputParam)
+    {
+        if (inputParam == null)
+        {
+            return false;
+        }
+
+        foreach (var source in inputParam.Sources)
+        {
+            if (source?.Attributes?.GetTopLevel?.DocObject is ISelvaFileOutput)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>A ContextBake fed by an ISelvaFileOutput component — a file download output.</summary>
+    public static bool IsFileOutputBakeComponent(GH_Component component)
+    {
+        if (component == null || !IsContextBakeComponent(component))
+        {
+            return false;
+        }
+
+        if (component.Params.Input == null)
+        {
+            return false;
+        }
+
+        foreach (var inputParam in component.Params.Input)
+        {
+            if (IsSourcedFromFileOutput(inputParam))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     A ContextBake fed by a PlotlyFigure-goo producer, detected by TypeName rather than a
+    ///     type reference so Selva.GH has no hard dependency on external chart assemblies.
+    /// </summary>
+    public static bool IsChartOutputBakeComponent(GH_Component component)
+    {
+        if (component == null || !IsContextBakeComponent(component))
+        {
+            return false;
+        }
+
+        if (component.Params.Input == null)
+        {
+            return false;
+        }
+
+        foreach (var inputParam in component.Params.Input)
+        {
+            if (IsSourcedFromChartOutput(inputParam))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     A ContextBake fed by a "Set Dynamic Value List" (GH_DynamicValueListOutput). Detected by
+    ///     upstream component type, not goo TypeName: the Set component's output is a generic param,
+    ///     so the goo's TypeName is only visible in volatile data after a solve — component-type
+    ///     detection also works pre-solve.
+    /// </summary>
+    public static bool IsDynamicValueListBakeComponent(GH_Component component)
+    {
+        if (component == null || !IsContextBakeComponent(component))
+        {
+            return false;
+        }
+
+        return FindUpstreamDynamicValueListOutput(component) != null;
+    }
+
+    /// <summary>
+    ///     The single classifier for ContextBake output types: returns "file" / "chart" /
+    ///     "dynamicValueList" for a qualifying bake, or null otherwise.
+    ///
+    ///     Every caller asking "is this a qualifying bake output, and of what type?" — scope filter,
+    ///     post-solve add/remove sync, schema collectors — must route through here so the set of
+    ///     supported types lives in one place. A duplicated check here is what stripped
+    ///     dynamicValueList outputs every solve before this existed.
+    /// </summary>
+    public static string ClassifyBakeOutputType(GH_Component component)
+    {
+        if (IsFileOutputBakeComponent(component))
+        {
+            return "file";
+        }
+
+        if (IsChartOutputBakeComponent(component))
+        {
+            return "chart";
+        }
+
+        if (IsDynamicValueListBakeComponent(component))
+        {
+            return "dynamicValueList";
+        }
+
+        return null;
+    }
+
+    /// <summary>True if the component is a ContextBake carrying any recognized Selva output.</summary>
+    public static bool IsQualifyingBakeOutput(GH_Component component)
+    {
+        return ClassifyBakeOutputType(component) != null;
+    }
+
+    public static bool IsSourcedFromChartOutput(IGH_Param inputParam)
+    {
+        return IsSourcedFromGooTypeName(inputParam, "Plotly Figure");
+    }
+
+    /// <summary>
+    ///     Finds the "Set Dynamic Value List" component feeding a ContextBake, walking sources
+    ///     upward through the bake's inputs, or null when none is wired.
+    /// </summary>
+    public static GH_DynamicValueListOutput FindUpstreamDynamicValueListOutput(GH_Component bakeComponent)
+    {
+        if (bakeComponent?.Params.Input == null)
+        {
+            return null;
+        }
+
+        foreach (var inputParam in bakeComponent.Params.Input)
+        {
+            var found = WalkUpstreamFor<GH_DynamicValueListOutput>(inputParam, new HashSet<Guid>());
+            if (found != null)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Walks a param's sources upward for a producing component of type <typeparamref name="T" />,
+    ///     passing transparently through wire relays and generic pass-through params (e.g.
+    ///     Param_GenericObject, param painters). Cycle-guarded by visited instance ids.
+    /// </summary>
+    private static T WalkUpstreamFor<T>(IGH_Param param, HashSet<Guid> visited) where T : class
+    {
+        if (param?.Sources == null)
+        {
+            return null;
+        }
+
+        foreach (var source in param.Sources)
+        {
+            if (source == null || !visited.Add(source.InstanceGuid))
+            {
+                continue;
+            }
+
+            var owner = source.Attributes?.GetTopLevel?.DocObject;
+            if (owner is T match)
+            {
+                return match;
+            }
+
+            // A bare param (relay/generic) just forwards data, so keep walking up through it.
+            // A param owned by a real (non-T) component stops the search on this branch — we
+            // don't tunnel through arbitrary components, only wire-forwarding params.
+            if (owner == null || ReferenceEquals(owner, source))
+            {
+                var deeper = WalkUpstreamFor<T>(source, visited);
+                if (deeper != null)
+                {
+                    return deeper;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static Guid ResolveDynamicValueListTargetId(GH_Component bakeComponent)
+    {
+        return FindUpstreamDynamicValueListOutput(bakeComponent)?.TargetInputId ?? Guid.Empty;
+    }
+
+    /// <summary>
+    ///     Checks the bake input's own volatile data and the upstream source params' TypeName and
+    ///     volatile data for a goo matching <paramref name="gooTypeName" />.
+    /// </summary>
+    private static bool IsSourcedFromGooTypeName(IGH_Param inputParam, string gooTypeName)
+    {
+        if (inputParam == null)
+        {
+            return false;
+        }
+
+        if (inputParam.VolatileData != null && !inputParam.VolatileData.IsEmpty)
+        {
+            foreach (var goo in inputParam.VolatileData.AllData(true))
+            {
+                if (goo != null && string.Equals(goo.TypeName, gooTypeName, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+        }
+
+        foreach (var source in inputParam.Sources)
+        {
+            if (source == null)
+            {
+                continue;
+            }
+
+            if (string.Equals(TryGetTypeName(source), gooTypeName, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (source.VolatileData != null && !source.VolatileData.IsEmpty)
+            {
+                foreach (var goo in source.VolatileData.AllData(true))
+                {
+                    if (goo != null && string.Equals(goo.TypeName, gooTypeName, StringComparison.Ordinal))
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Reads <see cref="IGH_Param.TypeName" /> defensively. For a generic param whose backing
+    ///     goo type is an interface or abstract (Param_GenericObject, param painters), GH derives the
+    ///     name via InstantiateT(), which throws "Cannot create an instance of an interface". Return
+    ///     null on failure so callers fall back to volatile-data inspection.
+    /// </summary>
+    private static string TryGetTypeName(IGH_Param param)
+    {
+        try
+        {
+            return param?.TypeName;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static bool IsWiredToOwner(GH_Component component, Guid ownerGuid)
+    {
+        if (component?.Params.Input == null)
+        {
+            return false;
+        }
+
+        foreach (var inputParam in component.Params.Input)
+        foreach (var source in inputParam.Sources)
+        {
+            if (source?.Attributes?.GetTopLevel?.DocObject?.InstanceGuid == ownerGuid)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    ///     Extracts minimum, maximum, and step size for a contextual parameter, preferring a
+    ///     connected slider's values over the parameter's own properties.
+    /// </summary>
+    public static void ExtractNumberParameterConstraints(
+        IGH_ContextualParameter param,
+        IGH_Param ghParam,
+        DiscoveredInput availableParam)
+    {
+        double? minimum = null;
+        double? maximum = null;
+        decimal? stepSize = null;
+
+        var getNumberType = param.GetType();
+
+        if (getNumberType.Name == "GetNumberParameter")
+        {
+            ExtractParameterMinMax(param, availableParam, ref minimum, ref maximum);
+        }
+
+        const double extremeThreshold = 7.9e307;
+
+        bool IsExtreme(double v)
+        {
+            return double.IsInfinity(v) || double.IsNaN(v) || Math.Abs(v) >= extremeThreshold;
+        }
+
+        var needsAlternativeSource = !minimum.HasValue || !maximum.HasValue ||
+                                     IsExtreme(minimum.GetValueOrDefault()) ||
+                                     IsExtreme(maximum.GetValueOrDefault());
+
+        if (needsAlternativeSource)
+        {
+            if (ghParam?.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
+            {
+                try
+                {
+                    minimum = Convert.ToDouble(slider.Slider.Minimum);
+                    maximum = Convert.ToDouble(slider.Slider.Maximum);
+                    stepSize = slider.Slider.Epsilon;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(
+                        $"Warning: Failed to extract slider constraints for '{availableParam.Nickname}': {ex.Message}");
+                    minimum = 0.0;
+                    maximum = 100.0;
+                    stepSize = 1m;
+                }
+            }
+            else
+            {
+                minimum = 0.0;
+                maximum = 100.0;
+                stepSize = 1m;
+            }
+        }
+        else if (ghParam?.SourceCount == 1 && ghParam.Sources[0] is GH_NumberSlider slider)
+        {
+            // Parameter values are already valid; only need the slider's step size.
+            try
+            {
+                stepSize = slider.Slider.Epsilon;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(
+                    $"Warning: Failed to extract slider step size for '{availableParam.Nickname}': {ex.Message}");
+            }
+        }
+
+        availableParam.Minimum = minimum.Value;
+        availableParam.Maximum = maximum.Value;
+        if (stepSize.HasValue)
+        {
+            availableParam.StepSize = (double)stepSize.Value;
+        }
+    }
+
+    private static bool TryGetPropertyValue<T>(object obj, string propName, out T value)
+    {
+        value = default;
+        if (obj == null)
+        {
+            return false;
+        }
+
+        var type = obj.GetType();
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic |
+                                   BindingFlags.FlattenHierarchy;
+
+        var prop = type.GetProperty(propName, flags);
+        if (prop == null)
+        {
+            foreach (var p in type.GetProperties(flags))
+            {
+                if (string.Equals(p.Name, propName, StringComparison.OrdinalIgnoreCase) ||
+                    p.Name.EndsWith("." + propName, StringComparison.Ordinal))
+                {
+                    prop = p;
+                    break;
+                }
+            }
+        }
+
+        if (prop == null)
+        {
+            return false;
+        }
+
+        var raw = prop.GetValue(obj);
+        if (raw == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (raw is T t)
+            {
+                value = t;
+                return true;
+            }
+
+            if (typeof(T) == typeof(double) && raw is decimal dec)
+            {
+                value = (T)(object)Convert.ToDouble(dec);
+                return true;
+            }
+
+            value = (T)Convert.ChangeType(raw, typeof(T), CultureInfo.InvariantCulture);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static void ExtractParameterMinMax(
+        IGH_ContextualParameter param,
+        DiscoveredInput availableParam,
+        ref double? minimum,
+        ref double? maximum)
+    {
+        if (TryGetPropertyValue<double>(param, "Minimum", out var minValue))
+        {
+            if (!double.IsNegativeInfinity(minValue) && !double.IsNaN(minValue) && minValue != 0)
+            {
+                minimum = minValue;
+            }
+        }
+
+        if (TryGetPropertyValue<double>(param, "Maximum", out var maxValue))
+        {
+            if (!double.IsPositiveInfinity(maxValue) && !double.IsNaN(maxValue) && maxValue != 0)
+            {
+                maximum = maxValue;
+            }
+        }
+    }
+
+    public static ClearResult ClearContextualParameters(List<IGH_ContextualParameter> contextualParams,
+        GH_Component component)
+    {
+        var clearedCount = 0;
+        var errorCount = 0;
+        var recipientsToExpire = new HashSet<IGH_ActiveObject>();
+
+        foreach (var contextParam in contextualParams)
+        {
+            try
+            {
+                ClearSingleParameter(contextParam);
+                clearedCount++;
+                CollectRecipients(contextParam, recipientsToExpire);
+            }
+            catch (Exception ex)
+            {
+                var paramName = (contextParam as IGH_DocumentObject)?.NickName ?? "Unknown";
+                component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    $"Error clearing {paramName}: {ex.Message}");
+                errorCount++;
+            }
+        }
+
+        ExpireRecipients(recipientsToExpire, component);
+
+        return new ClearResult
+        {
+            ClearedCount = clearedCount,
+            ExpiredCount = recipientsToExpire.Count,
+            ErrorCount = errorCount,
+            Message =
+                $"Cleared: {clearedCount} parameters\nExpired: {recipientsToExpire.Count} components\nErrors: {errorCount}"
+        };
+    }
+
+    // Cache reflection lookups per concrete type. ClearAllContextualParameters runs on every
+    // solve-end; without caching, every object causes a fresh GetMethod scan.
+    private static readonly Dictionary<Type, MethodInfo> ClearContextualDataMethodCache = new Dictionary<Type, MethodInfo>();
+    private static readonly Dictionary<Type, MethodInfo> CollectVolatileDataMethodCache = new Dictionary<Type, MethodInfo>();
+
+    private static MethodInfo GetCachedMethod(Type type, string name, Dictionary<Type, MethodInfo> cache)
+    {
+        if (cache.TryGetValue(type, out var cached))
+        {
+            return cached;
+        }
+
+        var method = type.GetMethod(name);
+        cache[type] = method; // cache nulls too — avoids repeated misses
+        return method;
+    }
+
+    /// <summary>Invokes ClearContextualData() via cached reflection; true if the method exists on the type.</summary>
+    public static bool TryInvokeClearContextualData(object obj)
+    {
+        if (obj == null)
+        {
+            return false;
+        }
+
+        var method = GetCachedMethod(obj.GetType(), "ClearContextualData", ClearContextualDataMethodCache);
+        if (method == null)
+        {
+            return false;
+        }
+
+        method.Invoke(obj, null);
+        return true;
+    }
+
+    private static void ClearSingleParameter(IGH_ContextualParameter contextParam)
+    {
+        var type = contextParam.GetType();
+
+        var clearMethod = GetCachedMethod(type, "ClearContextualData", ClearContextualDataMethodCache);
+        clearMethod?.Invoke(contextParam, null);
+
+        var collectVolatileData = GetCachedMethod(type, "CollectVolatileData_FromSources", CollectVolatileDataMethodCache);
+        collectVolatileData?.Invoke(contextParam, null);
+    }
+
+    private static void CollectRecipients(IGH_ContextualParameter contextParam,
+        HashSet<IGH_ActiveObject> recipients)
+    {
+        if (contextParam is IGH_Param param)
+        {
+            foreach (var recipient in param.Recipients)
+            {
+                if (recipient is IGH_ActiveObject activeRecipient)
+                {
+                    recipients.Add(activeRecipient);
+                }
+            }
+        }
+    }
+
+    private static void ExpireRecipients(HashSet<IGH_ActiveObject> recipients, GH_Component component)
+    {
+        foreach (var recipient in recipients)
+        {
+            try
+            {
+                recipient.ExpirePreview(false);
+            }
+            catch (Exception ex)
+            {
+                component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    $"Error expiring component: {ex.Message}");
+            }
+        }
+    }
+
+    /// <summary>Finds standalone file params and ContextBake components fed by a file output.</summary>
+    public static (bool HasDownloadableOutputs, List<DiscoveredOutput> DownloadableComponents)
+        DetectDownloadableOutputs(
+            GH_Document document)
+    {
+        var downloadableComponents = new List<DiscoveredOutput>();
+
+        if (document == null)
+        {
+            return (false, downloadableComponents);
+        }
+
+        try
+        {
+            foreach (var obj in document.Objects)
+            {
+                if (obj is IGH_Param fp && obj is ISelvaFileOutput)
+                {
+                    downloadableComponents.Add(new DiscoveredOutput
+                    {
+                        Id = fp.InstanceGuid,
+                        Nickname = fp.NickName,
+                        Type = "file"
+                    });
+                    continue;
+                }
+
+                if (!(obj is GH_Component c))
+                {
+                    continue;
+                }
+
+                if (!IsFileOutputBakeComponent(c))
+                {
+                    continue;
+                }
+
+                downloadableComponents.Add(new DiscoveredOutput
+                {
+                    Id = c.InstanceGuid,
+                    Nickname = c.Params.Input[0].NickName,
+                    Type = "file"
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Warning: Error detecting downloadable outputs: {ex.Message}");
+        }
+
+        return (downloadableComponents.Count > 0, downloadableComponents);
+    }
+
+    public class ClearResult
+    {
+        public int ClearedCount { get; set; }
+        public int ExpiredCount { get; set; }
+        public int ErrorCount { get; set; }
+        public string Message { get; set; }
+    }
+}
