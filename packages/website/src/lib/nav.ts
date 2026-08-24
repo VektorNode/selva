@@ -13,8 +13,7 @@ export interface NavSection {
 	links: NavLink[];
 }
 
-// The repository is private until the first public release, so nothing links to
-// it yet. Restore the GitHub entries in primaryNav/footerNav when it goes public.
+/** The source repository, linked from the header icon and the footer. */
 export const GITHUB_URL = 'https://github.com/vektornode/selva';
 
 /** Selva is built by VektorNode — the company site the footer credits. */
@@ -55,7 +54,8 @@ export const footerNav: NavSection[] = [
 		links: [
 			{ label: 'Company', href: VEKTORNODE_URL, external: true },
 			{ label: 'Contact', href: VEKTORNODE_CONTACT_URL, external: true },
-			{ label: 'GitHub', href: 'https://github.com/vektornode', external: true }
+			{ label: 'GitHub', href: 'https://github.com/vektornode', external: true },
+			{ label: 'Source', href: GITHUB_URL, external: true }
 		]
 	}
 ];
