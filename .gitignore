@@ -122,6 +122,7 @@ Plugin/Selva.GH/obj/
 Plugin/Selva.GH/*.lscache
 !fixtures/**/*.gh
 !fixtures/**/*.ghx
+!examples/**/*.gh
 
 # Definitions config files (production, not checked in)
 definitions-config.json

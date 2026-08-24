@@ -1,8 +1,11 @@
 name: Dependabot Auto-Merge
 
-# Branch protection is unavailable on this plan (private repo, no Pro), so this
-# workflow IS the merge gate — not a convenience layer on top of one. It must
-# verify CI itself before approving.
+# This workflow verifies CI itself rather than trusting the branch ruleset to
+# hold the gate. Dependabot force-pushes on rebase, so a ruleset's view of "the
+# checks passed" can refer to a head this job is no longer merging; and a check
+# that never registers on a Dependabot PR reads as absent, not failing (PR #174
+# merged with no CI that way). The explicit wait below is what establishes the
+# checks ran on the commit being merged.
 
 on:
   pull_request_target:

@@ -65,10 +65,33 @@ cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhi
 
 Write tests that cover workflows and integration, not trivial cases. [docs/contributing/testing.md](./docs/contributing/testing.md) covers where tests live and the shared vitest config.
 
-## Branch naming
+## Sending a change
 
-`feature/`, `fix/`, `docs/` + a short description.
+Fork the repo, branch from `main`, open a PR back to `main`. Name the branch
+`feature/`, `fix/`, or `docs/` + a short description.
 
-## Issues & PRs
+`beta` is the pre-release lane, published from changesets pre mode. Target it
+only if a maintainer asks you to.
 
-Keep descriptions concise: what needs solving and why. Reference related issues. Aim for small, focused changes.
+Neither branch takes direct pushes: every change lands through a PR, including
+a maintainer's own.
+
+### What has to pass
+
+`test`, `dotnet`, and `e2e` run on every PR; `analyze` (CodeQL) runs on PRs to
+`main` and `beta`. All four have to be green before a PR to `main` merges, plus
+one maintainer approval and every review comment resolved.
+
+Run this before pushing and you'll catch most of it locally:
+
+```bash
+pnpm type-check && pnpm lint && pnpm test
+```
+
+The first PR from a new contributor needs a maintainer to approve the CI run
+before it starts. That's a GitHub setting, not something you did wrong.
+
+### Issues & PRs
+
+Keep descriptions concise: what needs solving and why. Reference related issues.
+Aim for small, focused changes.
