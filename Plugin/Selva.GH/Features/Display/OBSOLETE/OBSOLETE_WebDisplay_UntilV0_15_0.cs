@@ -564,7 +564,7 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
                 return;
             }
 
-            var batch = MeshBatchProcessor.CreateBatch(
+            var batch = MeshBatchAssembler.CreateBatch(
                 b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId);
             if (b.Items.Count > 0)
             {

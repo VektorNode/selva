@@ -425,7 +425,7 @@ async function tryBuildViaWorker(
 
 	if (opts.debug) {
 		getLogger().debug(
-			`Mesh batch assembled off-thread: ${meshes.length} meshes, ${raw.indexData.length / 3} triangles`
+			`Mesh batch assembled off-thread: ${meshes.length} meshes, ${indexCount / 3} triangles`
 		);
 	}
 	return meshes;

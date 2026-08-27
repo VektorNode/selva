@@ -60,7 +60,7 @@ namespace Selva.GH.Features.Display.Services;
 ///     Byte lengths and the delta/zigzag semantics are identical to the interleaved v3 layout —
 ///     only byte order within each block changes, and the flag says which a blob uses. The writer
 ///     picks per blob by measuring both (see <see cref="ChoosePlanarLayout" />): planar wins
-///     25-50% on welded surfaces and CAD part scatters, interleaved wins up to 44% when the batch
+///     28-50% on welded surfaces and CAD part scatters, interleaved wins up to 25% when the batch
 ///     is mostly byte-identical repeated parts. Colors keep the interleaved layout unconditionally:
 ///     planar per-channel loses on noisy gradient data (measured +58%), and the chunk is small
 ///     either way.
@@ -444,11 +444,11 @@ public static class BinaryGeometryWriter
     ///     smaller. Neither layout wins universally:
     ///
     ///     Planar byte-split groups like-valued bytes, so the high planes of small deltas collapse to
-    ///     runs of zeros — 25-50% smaller on welded surfaces and CAD part scatters.
+    ///     runs of zeros — 28-50% smaller on welded surfaces and CAD part scatters.
     ///
     ///     Interleaved keeps each mesh's bytes contiguous, so DEFLATE's LZ77 window matches a whole
     ///     repeated part as one long run. Definitions that array or instance one part (a screw placed
-    ///     500 times) compress up to 44% better interleaved, because planar scatters each copy's
+    ///     500 times) compress up to 25% better interleaved, because planar scatters each copy's
     ///     bytes across six distant planes and breaks those matches. The crossover sits around 75-80%
     ///     byte-identical repeats — too close to call from a cheap heuristic, hence the measurement.
     ///

@@ -587,7 +587,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var batch = MeshBatchProcessor.CreateBatch(
+            var batch = MeshBatchAssembler.CreateBatch(
                 b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId,
                 b.MeshUvs, b.MeshColors);
             if (b.Items.Count > 0)

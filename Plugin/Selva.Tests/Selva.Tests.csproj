@@ -113,6 +113,17 @@
 		         Link="Linked\ThreeMaterial.cs"/>
 		<Compile Include="..\Selva.GH\Features\Display\Services\ColorJsonConverter.cs"
 		         Link="Linked\ColorJsonConverter.cs"/>
+		<!-- Batch assembly, split out of MeshBatchProcessor so the offset arithmetic both
+		     decoders slice on is reachable without RhinoCommon. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\MeshBatchAssembler.cs"
+		         Link="Linked\MeshBatchAssembler.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\MaterialCache.cs"
+		         Link="Linked\MaterialCache.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\MeshBatchSerialization.cs"
+		         Link="Linked\MeshBatchSerialization.cs"/>
+		<!-- On-disk .slvm/.dmf container. Pure stream + JSON work, no Rhino. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\SlvmFile.cs"
+		         Link="Linked\SlvmFile.cs"/>
 	</ItemGroup>
 
 	<ItemGroup>

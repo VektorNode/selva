@@ -63,7 +63,7 @@ export const FLAG_HAS_VERTEX_COLORS = 0x10;
  *
  * Byte lengths and delta/zigzag semantics are identical to the interleaved v3 layout — only byte
  * order within each block changes. Near-zero deltas make the hi planes runs of zeros, so the SLVZ
- * DEFLATE pass compresses 25–50% smaller than interleaved. Colors keep the v3 interleaved layout
+ * DEFLATE pass compresses 28–50% smaller than interleaved. Colors keep the v3 interleaved layout
  * (planar loses on noisy per-channel data, measured).
  */
 export const FLAG_PLANAR_BYTESPLIT = 0x20;
