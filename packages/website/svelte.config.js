@@ -62,7 +62,14 @@ const mdsvexOptions = {
 			const html = `<div class="code-block" data-code="${encoded}">${shiki}<button type="button" class="code-copy" aria-label="Copy code">Copy</button></div>`;
 			// Escape curly braces so Svelte doesn't treat them as expressions.
 			const escaped = html.replace(/[{}]/g, (c) => (c === '{' ? '&#123;' : '&#125;'));
-			return `{@html \`${escaped.replace(/`/g, '\\`')}\`}`;
+			// Backslash first, or it re-escapes the escapes added below. A code
+			// fence ending in `\` would otherwise close the template literal early
+			// and break the build with an error pointing nowhere near the doc.
+			const literal = escaped
+				.replace(/\\/g, '\\\\')
+				.replace(/`/g, '\\`')
+				.replace(/\$\{/g, '\\${');
+			return `{@html \`${literal}\`}`;
 		}
 	}
 };
