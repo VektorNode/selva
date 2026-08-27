@@ -53,9 +53,21 @@ export function resolveRequestId(headers: Headers, generate: () => string = rand
  * `[object Object]` and destroy the only record of the failure. Errors keep
  * their stack; anything else is JSON-serialized, with `String()` as the last
  * resort for cycles and exotic values.
+ *
+ * A `code` / `statusCode` carried on the error (ComputeError, ProviderError,
+ * Node's ECONNREFUSED-style errors) is appended as a `[code=… status=…]` tag —
+ * it classifies the failure and stacks alone don't show it.
  */
 export function renderThrown(error: unknown): string {
-	if (error instanceof Error) return error.stack ?? error.message;
+	if (error instanceof Error) {
+		const base = error.stack ?? error.message;
+		const code = (error as { code?: unknown }).code;
+		const statusCode = (error as { statusCode?: unknown }).statusCode;
+		const tags: string[] = [];
+		if (typeof code === 'string' || typeof code === 'number') tags.push(`code=${code}`);
+		if (typeof statusCode === 'number') tags.push(`status=${statusCode}`);
+		return tags.length > 0 ? `${base} [${tags.join(' ')}]` : base;
+	}
 	try {
 		return JSON.stringify(error) ?? String(error);
 	} catch {
