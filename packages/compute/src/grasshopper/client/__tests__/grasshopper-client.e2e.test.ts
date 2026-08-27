@@ -52,6 +52,53 @@ describe('GrasshopperClient.create', () => {
 		});
 	});
 
+	it('stops retrying a refused connection instead of spending the whole ladder', async () => {
+		// A powered-off Rhino.Compute refuses immediately. Retrying cannot help, and
+		// the wait is paid by whoever clicked Solve.
+		let probes = 0;
+		fetchMock.mockImplementation(() => {
+			probes += 1;
+			return Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:6500'));
+		});
+		await expect(
+			GrasshopperClient.create({ serverUrl: SERVER, retry: { attempts: 5 } })
+		).rejects.toMatchObject({
+			code: 'NETWORK_ERROR',
+			context: { probeVerdict: 'refused', probeRetryable: false, attempts: 1 }
+		});
+		expect(probes).toBe(1);
+	});
+
+	it('stops retrying a rejected API key', async () => {
+		let probes = 0;
+		fetchMock.mockImplementation(() => {
+			probes += 1;
+			return Promise.resolve(createMockResponse({}, { ok: false, status: 401 }));
+		});
+		await expect(
+			GrasshopperClient.create({ serverUrl: SERVER, retry: { attempts: 5 } })
+		).rejects.toMatchObject({
+			code: 'NETWORK_ERROR',
+			context: { probeVerdict: 'unauthorized' }
+		});
+		expect(probes).toBe(1);
+	});
+
+	it('still exhausts the ladder for a retryable failure', async () => {
+		let probes = 0;
+		fetchMock.mockImplementation(() => {
+			probes += 1;
+			return Promise.resolve(createMockResponse({}, { ok: false, status: 503 }));
+		});
+		await expect(
+			GrasshopperClient.create({
+				serverUrl: SERVER,
+				retry: { attempts: 2, baseDelayMs: 1, maxDelayMs: 2 }
+			})
+		).rejects.toMatchObject({ code: 'NETWORK_ERROR', context: { probeVerdict: 'http_error' } });
+		expect(probes).toBe(3);
+	});
+
 	it('retries a flaky liveness probe and succeeds once it goes 2xx', async () => {
 		// Cold/busy-but-up server: first probe flickers 503, then recovers.
 		let calls = 0;

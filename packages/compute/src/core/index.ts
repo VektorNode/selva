@@ -61,6 +61,8 @@ export type { DefinitionRef, SolveDefinition } from './definition-ref';
 
 export { validateServerUrl, DEFAULT_BLOCKED_HOST } from './server/validate-server-url';
 export type { ValidateServerUrlOptions } from './server/validate-server-url';
+export { classifyProbeFailure } from './server/classify-probe-failure';
+export type { ProbeFailure, ProbeVerdict } from './server/classify-probe-failure';
 
 export {
 	extractFilesFromComputeResponse,
