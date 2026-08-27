@@ -26,17 +26,23 @@ pnpm add @selvajs/server
 **There is no root export.** Import from a subpath — `import … from '@selvajs/server'` fails to
 resolve, on purpose, so it stays visible which slice a consumer depends on.
 
-| Export                        | Contents                                                                        |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `@selvajs/server/compute`     | Compute limits, rate limiting, idempotency, SSRF guard, remote-definition fetch |
-| `@selvajs/server/definitions` | Definition service, compute-schema extraction, render loader                    |
-| `@selvajs/server/providers`   | Env-driven provider selection over a caller-supplied registry                   |
-| `@selvajs/server/tokens`      | HMAC codec for capability-URL tokens (share links, invites)                     |
-| `@selvajs/server/errors`      | Sentry-backed `IErrorReporter`                                                  |
-| `@selvajs/server/logging`     | pino-backed `ILogger` + request-id correlation                                  |
-| `@selvajs/server/http`        | Security headers, body-size and redirect guards, route classification           |
-| `@selvajs/server/access`      | Builds the input platform's project access rules consume                        |
-| `@selvajs/server/ops`         | Channel-aware semver comparison                                                 |
+| Export                          | Contents                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| `@selvajs/server/compute`       | Compute limits, rate limiting, idempotency, SSRF guard, remote-definition fetch |
+| `@selvajs/server/definitions`   | Definition service, compute-schema extraction, render loader                    |
+| `@selvajs/server/providers`     | Env-driven provider selection over a caller-supplied registry                   |
+| `@selvajs/server/tokens`        | HMAC codec for capability-URL tokens (share links, invites)                     |
+| `@selvajs/server/errors`        | Sentry-backed `IErrorReporter`                                                  |
+| `@selvajs/server/logging`       | pino-backed `ILogger` + request-id correlation                                  |
+| `@selvajs/server/http`          | Security headers, body-size and redirect guards, route classification           |
+| `@selvajs/server/access`        | Builds the input platform's project access rules consume                        |
+| `@selvajs/server/ops`           | Channel-aware semver comparison                                                 |
+| `@selvajs/server/api`           | Transport-free API core: handler contract, injected deps, error envelope        |
+| `@selvajs/server/handlers`      | The API handlers: business logic behind each endpoint, bound via `runHandler`   |
+| `@selvajs/server/projects`      | Project writes whose rules two routes must agree on                             |
+| `@selvajs/server/organizations` | Org-level domain services spanning more than one provider                       |
+| `@selvajs/server/notifications` | `SmtpNotificationProvider`, SMTP config, invite delivery                        |
+| `@selvajs/server/testing`       | Test harness for the transport-free API handlers                                |
 
 Requires a `@selvajs/platform` provider (e.g. `@selvajs/local-provider` or
 `@selvajs/supabase-provider`) for data/storage/auth.

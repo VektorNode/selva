@@ -20,6 +20,7 @@ selva doctor [--fix]       # validate env, providers, Node engine, boot persiste
 selva migrate              # bring package.json onto the current layout
 selva start | stop | restart | logs
 selva update                 # update @selvajs/cli + @selvajs/selva, then restart
+selva setup-proxy [--domain <fqdn>] [--acme-email <addr>]  # front the app with Caddy + Let's Encrypt
 selva keys rotate hmac      # rotate SELVA_HMAC_KEY (logs everyone out)
 selva keys rotate at-rest   # rotate SELVA_AT_REST_KEY (compute API key needs re-entry)
 ```
