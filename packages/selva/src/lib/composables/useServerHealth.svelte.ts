@@ -14,6 +14,11 @@ export interface ServerHealthState {
 	plugins: Record<string, string>;
 	activeChildren: number | null;
 	idleSpanSeconds: number | null;
+	/**
+	 * Why the last probe failed, when the server classified it. Null while
+	 * reachable. Shown to the operator instead of a bare "error" pill.
+	 */
+	failureSummary: string | null;
 }
 
 // A manual check retries a cold/booting server for up to this long, so an
@@ -36,12 +41,17 @@ export function useServerHealth(serverId: () => string) {
 		selvaVersion: null,
 		plugins: {},
 		activeChildren: null,
-		idleSpanSeconds: null
+		idleSpanSeconds: null,
+		failureSummary: null
 	});
 
 	let timerId: ReturnType<typeof setTimeout> | null = null;
 	let deadline = 0;
 	let destroyed = false;
+
+	// Set when the server says the failure cannot resolve itself (connection
+	// refused, rejected API key). Ends the retry window early — see `attempt`.
+	let terminal = false;
 
 	// Return value is the retry loop's stop condition: ready, not merely reachable.
 	async function probe(): Promise<boolean> {
@@ -56,9 +66,12 @@ export function useServerHealth(serverId: () => string) {
 			const data = await res.json();
 			const reachable: boolean = data.reachable;
 			const ready: boolean = data.ready ?? reachable;
+			// Absent field (older server) means "keep the old behaviour and retry".
+			terminal = !reachable && data.retryable === false;
 			state = {
 				reachable,
 				ready,
+				failureSummary: data.failureSummary ?? null,
 				rhinoVersion: data.rhinoVersion,
 				computeVersion: data.computeVersion,
 				selvaInstalled: data.selvaInstalled,
@@ -74,6 +87,9 @@ export function useServerHealth(serverId: () => string) {
 			};
 			return ready;
 		} catch {
+			// A fetch that never reached our own API says nothing about the compute
+			// server — keep retrying.
+			terminal = false;
 			if (!destroyed) state = { ...state, reachable: false, ready: false };
 			return false;
 		}
@@ -82,6 +98,12 @@ export function useServerHealth(serverId: () => string) {
 	async function attempt() {
 		const ready = await probe();
 		if (destroyed || ready) return;
+		if (terminal) {
+			// The server told us waiting cannot help. Settle on the real reason now
+			// rather than spinning out the window.
+			state = { ...state, state: 'error', reachable: false, ready: false };
+			return;
+		}
 		if (Date.now() < deadline) {
 			// Keep the pill in an in-progress state between retries: 'loading' when
 			// the server is up and enumerating plugins, 'checking' otherwise. Never
@@ -104,7 +126,8 @@ export function useServerHealth(serverId: () => string) {
 			timerId = null;
 		}
 		deadline = Date.now() + RETRY_WINDOW_MS;
-		state = { ...state, state: 'checking' };
+		terminal = false;
+		state = { ...state, state: 'checking', failureSummary: null };
 		attempt();
 	}
 

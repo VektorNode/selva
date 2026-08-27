@@ -3,6 +3,7 @@ import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
 import ComputeServerStats from '../server/compute-server-stats';
 import { validateServerUrl } from '@/core/server/validate-server-url';
+import { classifyProbeFailure, type ProbeFailure } from '@/core/server/classify-probe-failure';
 import { ComputeConfig, RetryPolicy } from '@/core/types';
 
 import { fetchDefinitionIO, fetchParsedDefinitionIO, solveGrasshopperDefinition } from '..';
@@ -107,6 +108,14 @@ export default class GrasshopperClient {
 	public readonly serverStats: ComputeServerStats;
 	private disposed = false;
 
+	/**
+	 * Per-probe timeout for the `create()` liveness gate. A healthy `GET /` on the
+	 * proxy answers in milliseconds; this bound only ever applies to a server that
+	 * is not answering, where every extra second is multiplied by the retry count
+	 * and paid by whoever is waiting on the solve.
+	 */
+	private static readonly CREATE_PROBE_TIMEOUT_MS = 2000;
+
 	private constructor(config: GrasshopperComputeConfig) {
 		this.config = this.normalizeComputeConfig(config);
 		this.serverStats = new ComputeServerStats(this.config.serverUrl, this.config.apiKey);
@@ -117,13 +126,21 @@ export default class GrasshopperClient {
 	 *
 	 * The pre-flight liveness probe (a GET on the proxy root `/`) is a
 	 * single-sample boolean gate that reads a cold or briefly-busy-but-up server
-	 * as offline. To avoid failing
-	 * construction on that transient class, the probe is retried with a short
-	 * exponential backoff before giving up. Each probe is also bounded by a
-	 * timeout so a hung connection can't stall construction.
+	 * as offline. To avoid failing construction on that transient class, the probe
+	 * is retried with a short exponential backoff before giving up.
+	 *
+	 * Retries stop early when {@link classifyProbeFailure} says waiting cannot
+	 * change the answer — connection refused, or a 401/403. This runs in front of
+	 * a user who clicked Solve, so the retry ladder must not spend its whole
+	 * budget confirming that a machine is switched off.
+	 *
+	 * Each probe is bounded by {@link CREATE_PROBE_TIMEOUT_MS} rather than the
+	 * stats default: a healthy `GET /` answers in milliseconds, so a longer
+	 * per-probe timeout only multiplies the wait when the server is unreachable.
 	 *
 	 * @throws {ComputeError} with code NETWORK_ERROR if the server stays
-	 *   unreachable across all attempts
+	 *   unreachable across all attempts. `context.probeVerdict` carries the
+	 *   {@link ProbeVerdict} so callers can render a specific cause.
 	 * @throws {ComputeError} with code INVALID_CONFIG if configuration is invalid
 	 */
 	static async create(config: GrasshopperComputeConfig): Promise<GrasshopperClient> {
@@ -135,14 +152,20 @@ export default class GrasshopperClient {
 		const baseDelayMs = config.retry?.baseDelayMs ?? 250;
 		const maxDelayMs = config.retry?.maxDelayMs ?? 1000;
 
-		// The liveness probe is a trivial GET — always bound it, independent of the
-		// solve timeout (which may be 0 to allow arbitrarily long solves).
 		let lastProbe: Awaited<ReturnType<ComputeServerStats['probeServer']>> | undefined;
+		let failure: ProbeFailure | null = null;
+		let used = 0;
 		for (let attempt = 0; attempt < attempts; attempt++) {
-			lastProbe = await client.serverStats.probeServer();
+			used = attempt + 1;
+			lastProbe = await client.serverStats.probeServer(GrasshopperClient.CREATE_PROBE_TIMEOUT_MS);
 			if (lastProbe.online) {
 				return client;
 			}
+
+			failure = classifyProbeFailure(lastProbe);
+			// Nothing about a refused connection or a rejected key improves by
+			// asking again — fail now and let the caller say why.
+			if (failure && !failure.retryable) break;
 
 			if (attempt < attempts - 1) {
 				const delay = Math.min(baseDelayMs * 2 ** attempt, maxDelayMs);
@@ -151,18 +174,19 @@ export default class GrasshopperClient {
 		}
 
 		await client.dispose();
-		// A rejected probe (401/403) is a misconfiguration, not an offline server —
-		// say so, or a wrong API key sends the user debugging their network.
 		const status = lastProbe?.status;
-		const message =
-			status === 401 || status === 403
-				? `Rhino Compute server rejected the liveness probe with HTTP ${status} — check the API key / auth configuration`
-				: 'Rhino Compute server is not online';
+		const message = failure
+			? `Rhino Compute server is not available. ${failure.summary}`
+			: 'Rhino Compute server is not online';
 		throw new ComputeError(message, ErrorCodes.NETWORK_ERROR, {
 			...(status !== undefined && { statusCode: status }),
 			context: {
 				serverUrl: client.config.serverUrl,
-				attempts,
+				// What we actually spent, not the ceiling — an early break makes
+				// these differ, and the gap is the useful part when reading a log.
+				attempts: used,
+				maxAttempts: attempts,
+				...(failure && { probeVerdict: failure.verdict, probeRetryable: failure.retryable }),
 				...(status !== undefined && { lastProbeStatus: status }),
 				...(lastProbe?.error !== undefined && { lastProbeError: lastProbe.error })
 			}
