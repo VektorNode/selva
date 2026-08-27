@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/notifications",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"description": "Message templates for Selva's outbound notifications — pure render, no transport",
 	"license": "MIT",
 	"author": "VektorNode",
