@@ -15,6 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
+**WebDisplay: SLVA v4 — 28–50% smaller mesh payloads**
+
+- The mesh wire format gained a fourth version. Its delta-filtered vertex, index and UV streams can now be stored as byte planes (all X deltas, then Y, then Z, low bytes before high) instead of interleaved values. Near-zero deltas turn the high planes into runs of zeros, so the DEFLATE pass compresses far better. Measured through the real writer: a welded 65k-vertex surface 144 KB → 104 KB (−28%), a 262k-vertex surface 636 KB → 409 KB (−36%), a 3000-part CAD scatter 116 KB → 58 KB (−50%). Cloud delivery multiplies each saving by 1.33×, since the payload is base64-encoded.
+- **The layout is chosen per blob, by measurement.** Neither layout wins everywhere: planar byte-split wins on locally-coherent geometry, but interleaved wins by up to 44% when a batch is mostly byte-identical repeated parts (an arrayed screw, an instanced facade panel), because it keeps each copy's bytes contiguous for DEFLATE's LZ77 window to match as one run. The crossover sits near 75–80% identical repeats — too close for a heuristic — so `BinaryGeometryWriter` trial-deflates both layouts and keeps the smaller, recording the choice in a flag bit. On every measured shape the emitted blob is now no larger than either fixed layout, and an instanced part-array is 3.5% of its quantized payload (was 4.6%).
+- The probe costs two extra `CompressionLevel.Fastest` DEFLATE passes over the vertex stream, and is skipped below 4,096 vertices. Encoding already runs on the component's background task, so this never blocks the solver thread. Decoding is unaffected — slightly faster, in fact, since there is less to inflate.
+- Blobs written by older plugin versions keep decoding unchanged: saved `.gh` files, `.slvm` mesh files and cached compute results. Frozen pre-v4 golden fixtures pin that on both the C# and TypeScript sides.
+- Quantization is untouched, so visual output is identical — this is a pure byte-layout change.
+
 **Geometry To File: task-capable, parallel .3dm export**
 
 - `Geometry To File` is now a task-capable component: the export runs on a background task instead of blocking the Grasshopper UI thread, and each output file in a tree is written in parallel.

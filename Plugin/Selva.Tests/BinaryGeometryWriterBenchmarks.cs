@@ -306,8 +306,103 @@ public class BinaryGeometryWriterBenchmarks
     [Fact]
     public void Ratio_InstancedParts()
     {
-        // Measured 4.5% on net8 (v3: ~9%). Slack covers DEFLATE variance across runtimes.
-        RunRatio("instanced part x2000 (48k verts, 24k tris)", InstancedParts(2000), maxRatio: 0.06);
+        // Repeated byte-identical parts: the regime where the writer's layout probe picks
+        // interleaved. Measured 3.5% on net8 — planar would be 4.5% here, which is exactly the
+        // regression the probe exists to avoid.
+        RunRatio("instanced part x2000 (48k verts, 24k tris)", InstancedParts(2000), maxRatio: 0.05);
+    }
+
+    [Fact]
+    public void Ratio_LayoutProbeNeverLosesToEitherFixedLayout()
+    {
+        // The guarantee the per-blob probe makes: on every shape, the blob it emits is no larger
+        // than committing to planar or to interleaved everywhere. Without it, instanced geometry
+        // regressed ~28% against the v3 interleaved layout.
+        foreach (var (label, mesh) in new[]
+                 {
+                     ("welded grid", WeldedGrid(128)),
+                     ("part scatter", PartScatter(1500)),
+                     ("instanced parts", InstancedParts(2000))
+                 })
+        {
+            var (vertices, indices) = mesh;
+            byte[] blob;
+            BinaryGeometryWriter.WriteResult result;
+            using (var ms = new MemoryStream())
+            {
+                result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+                blob = ms.ToArray();
+            }
+
+            var chosen = BlobCompressor.Compress(blob).Length;
+            var alternative = BlobCompressor.Compress(SwapGeometryLayout(blob, result)).Length;
+
+            _output.WriteLine(
+                $"{label,-16} chose {(result.UsedPlanarByteSplit ? "planar" : "interleaved"),-12} " +
+                $"{chosen,9:N0} bytes (other layout: {alternative,9:N0})");
+
+            Assert.True(chosen <= alternative,
+                $"{label}: emitted {chosen:N0} bytes but the other layout gives {alternative:N0}.");
+        }
+    }
+
+    /// <summary>
+    ///     Rewrites a blob's filtered geometry between the planar and interleaved layouts — same
+    ///     values, same length, only byte order — yielding what the writer would have emitted had
+    ///     the layout probe gone the other way.
+    /// </summary>
+    private static byte[] SwapGeometryLayout(byte[] blob, BinaryGeometryWriter.WriteResult result)
+    {
+        var swapped = (byte[])blob.Clone();
+        var metadataLen = BitConverter.ToUInt32(blob, 8);
+        var offset = 12 + (int)metadataLen + 4 + 48 + 4;
+        var fromPlanar = result.UsedPlanarByteSplit;
+
+        var n = result.VertexCount;
+        for (var i = 0; i < n; i++)
+        {
+            int[] planar =
+            {
+                offset + i, offset + n + i, offset + n * 2 + i,
+                offset + n * 3 + i, offset + n * 4 + i, offset + n * 5 + i
+            };
+            int[] interleaved =
+            {
+                offset + i * 6, offset + i * 6 + 2, offset + i * 6 + 4,
+                offset + i * 6 + 1, offset + i * 6 + 3, offset + i * 6 + 5
+            };
+            for (var c = 0; c < 6; c++)
+            {
+                if (fromPlanar)
+                {
+                    swapped[interleaved[c]] = blob[planar[c]];
+                }
+                else
+                {
+                    swapped[planar[c]] = blob[interleaved[c]];
+                }
+            }
+        }
+
+        offset += n * 6 + 4;
+        var indexCount = result.IndexCount;
+        var width = result.UsedUint16Indices ? 2 : 4;
+        for (var i = 0; i < indexCount; i++)
+        {
+            for (var b = 0; b < width; b++)
+            {
+                if (fromPlanar)
+                {
+                    swapped[offset + i * width + b] = blob[offset + indexCount * b + i];
+                }
+                else
+                {
+                    swapped[offset + indexCount * b + i] = blob[offset + i * width + b];
+                }
+            }
+        }
+
+        return swapped;
     }
 
     private void RunRatio(string label, (float[] vertices, int[] indices) mesh, double maxRatio)

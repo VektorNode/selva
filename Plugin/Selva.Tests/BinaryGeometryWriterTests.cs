@@ -65,6 +65,7 @@ public class BinaryGeometryWriterTests
         Assert.Equal(12, result.IndexCount);
 
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
+        // Below the layout-probe threshold the writer takes planar unconditionally.
         Assert.Equal(
             BinaryGeometryWriter.FlagUint16Indices | BinaryGeometryWriter.FlagDeltaEncoded
             | BinaryGeometryWriter.FlagPlanarByteSplit,
@@ -361,6 +362,239 @@ public class BinaryGeometryWriterTests
             BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: new float[] { 0, 0 }));
         Assert.Throws<ArgumentException>(() =>
             BinaryGeometryWriter.Write(ms, "{}", vertices, indices, colors: new byte[] { 1, 2, 3, 4 }));
+    }
+
+    // ========================================================================
+    // Byte-layout selection (ChoosePlanarLayout)
+    // ========================================================================
+    //
+    // Neither layout wins universally, so the writer measures both and keeps the smaller. These
+    // pin both outcomes and — more importantly — that whichever it picks still round-trips.
+
+    /// <summary>
+    ///     Welded height-field grid: locally-coherent vertices, the case planar byte-split exists
+    ///     for. Sized past the probe threshold so the measurement actually runs.
+    /// </summary>
+    private static (float[] vertices, int[] indices) CoherentGrid(int size)
+    {
+        var vertices = new float[size * size * 3];
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size; x++)
+            {
+                var i = (y * size + x) * 3;
+                vertices[i] = x * 0.05f;
+                vertices[i + 1] = y * 0.05f;
+                vertices[i + 2] = ((x * 7 + y * 13) % 23) * 0.01f;
+            }
+        }
+
+        var indices = new int[(size - 1) * (size - 1) * 6];
+        var k = 0;
+        for (var y = 0; y < size - 1; y++)
+        {
+            for (var x = 0; x < size - 1; x++)
+            {
+                var a = y * size + x;
+                indices[k++] = a;
+                indices[k++] = a + 1;
+                indices[k++] = a + size;
+                indices[k++] = a + 1;
+                indices[k++] = a + size + 1;
+                indices[k++] = a + size;
+            }
+        }
+
+        return (vertices, indices);
+    }
+
+    /// <summary>
+    ///     The same 24-vertex box translated onto a lattice many times. After the delta filter each
+    ///     copy's bytes are identical, so interleaved keeps them contiguous for LZ77 to match.
+    /// </summary>
+    private static (float[] vertices, int[] indices) RepeatedParts(int count)
+    {
+        var vertices = new float[count * 24 * 3];
+        var indices = new int[count * 12 * 3];
+        var vertexCursor = 0;
+        var indexCursor = 0;
+        var state = 4242u;
+        uint Next()
+        {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return state;
+        }
+
+        for (var b = 0; b < count; b++)
+        {
+            AppendUnitBox(vertices, indices, ref vertexCursor, ref indexCursor,
+                Next() % 80u * 5f, Next() % 80u * 5f, Next() % 10u * 5f);
+        }
+
+        return (vertices, indices);
+    }
+
+    private static void AppendUnitBox(
+        float[] vertices, int[] indices, ref int vertexCursor, ref int indexCursor,
+        float cx, float cy, float cz)
+    {
+        int[][] faces =
+        {
+            new[] { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0 },
+            new[] { 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1 },
+            new[] { 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1 },
+            new[] { 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1 },
+            new[] { 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1 },
+            new[] { 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1 }
+        };
+
+        foreach (var face in faces)
+        {
+            var baseIndex = vertexCursor / 3;
+            for (var c = 0; c < 4; c++)
+            {
+                vertices[vertexCursor++] = cx + face[c * 3] * 2f;
+                vertices[vertexCursor++] = cy + face[c * 3 + 1] * 1.5f;
+                vertices[vertexCursor++] = cz + face[c * 3 + 2] * 3f;
+            }
+
+            indices[indexCursor++] = baseIndex;
+            indices[indexCursor++] = baseIndex + 1;
+            indices[indexCursor++] = baseIndex + 2;
+            indices[indexCursor++] = baseIndex;
+            indices[indexCursor++] = baseIndex + 2;
+            indices[indexCursor++] = baseIndex + 3;
+        }
+    }
+
+    [Fact]
+    public void Write_CoherentGeometry_PicksPlanarLayout()
+    {
+        var (vertices, indices) = CoherentGrid(128);
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+
+        Assert.True(result.UsedPlanarByteSplit);
+
+        var decoded = ReadAll(ms.ToArray());
+        Assert.Equal(BinaryGeometryWriter.FlagPlanarByteSplit,
+            decoded.Flags & BinaryGeometryWriter.FlagPlanarByteSplit);
+        AssertRoundtrips(decoded, vertices, indices, tolerance: 0.001f);
+    }
+
+    [Fact]
+    public void Write_RepeatedParts_PicksInterleavedLayout()
+    {
+        // Byte-identical repeats: planar scatters each copy across six planes and breaks the LZ77
+        // matches interleaved preserves, so the probe must land on interleaved here.
+        var (vertices, indices) = RepeatedParts(2000);
+
+        using var ms = new MemoryStream();
+        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+
+        Assert.False(result.UsedPlanarByteSplit);
+
+        var decoded = ReadAll(ms.ToArray());
+        Assert.Equal(0u, decoded.Flags & BinaryGeometryWriter.FlagPlanarByteSplit);
+        Assert.Equal(BinaryGeometryWriter.FlagDeltaEncoded,
+            decoded.Flags & BinaryGeometryWriter.FlagDeltaEncoded);
+        AssertRoundtrips(decoded, vertices, indices, tolerance: 0.05f);
+    }
+
+    [Fact]
+    public void Write_LayoutChoiceActuallyMinimizesTheDeflatedBlob()
+    {
+        // The contract the probe promises: whatever it picks is no larger than the alternative.
+        // Checked on both regimes by re-encoding the blob into the other layout and comparing.
+        foreach (var (label, mesh) in new[]
+                 {
+                     ("coherent grid", CoherentGrid(128)),
+                     ("repeated parts", RepeatedParts(2000))
+                 })
+        {
+            var (vertices, indices) = mesh;
+            using var ms = new MemoryStream();
+            var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+
+            var chosen = BlobCompressor.Compress(ms.ToArray());
+            var alternative = BlobCompressor.Compress(
+                SwapGeometryLayout(ms.ToArray(), result));
+
+            Assert.True(chosen.Length <= alternative.Length,
+                $"{label}: writer chose {(result.UsedPlanarByteSplit ? "planar" : "interleaved")} " +
+                $"at {chosen.Length:N0} bytes, but the other layout deflates to {alternative.Length:N0}.");
+        }
+    }
+
+    /// <summary>
+    ///     Rewrites a blob's filtered geometry between the planar and interleaved layouts. Same
+    ///     values and same length — only byte order moves — so the result is what the writer would
+    ///     have emitted had the probe gone the other way.
+    /// </summary>
+    private static byte[] SwapGeometryLayout(byte[] blob, BinaryGeometryWriter.WriteResult result)
+    {
+        var swapped = (byte[])blob.Clone();
+        var metadataLen = BitConverter.ToUInt32(blob, 8);
+        var offset = 12 + (int)metadataLen + 4 + 48 + 4;
+        var fromPlanar = result.UsedPlanarByteSplit;
+
+        var n = result.VertexCount;
+        for (var i = 0; i < n; i++)
+        {
+            // Plane order [Xlo][Ylo][Zlo][Xhi][Yhi][Zhi] vs interleaved xlo,xhi,ylo,yhi,zlo,zhi.
+            int[] planar = { offset + i, offset + n + i, offset + n * 2 + i, offset + n * 3 + i, offset + n * 4 + i, offset + n * 5 + i };
+            int[] interleaved = { offset + i * 6, offset + i * 6 + 2, offset + i * 6 + 4, offset + i * 6 + 1, offset + i * 6 + 3, offset + i * 6 + 5 };
+            for (var c = 0; c < 6; c++)
+            {
+                if (fromPlanar)
+                {
+                    swapped[interleaved[c]] = blob[planar[c]];
+                }
+                else
+                {
+                    swapped[planar[c]] = blob[interleaved[c]];
+                }
+            }
+        }
+
+        offset += n * 6 + 4;
+        var indexCount = result.IndexCount;
+        var width = result.UsedUint16Indices ? 2 : 4;
+        for (var i = 0; i < indexCount; i++)
+        {
+            for (var b = 0; b < width; b++)
+            {
+                if (fromPlanar)
+                {
+                    swapped[offset + i * width + b] = blob[offset + indexCount * b + i];
+                }
+                else
+                {
+                    swapped[offset + indexCount * b + i] = blob[offset + i * width + b];
+                }
+            }
+        }
+
+        return swapped;
+    }
+
+    private static void AssertRoundtrips(
+        SlvaTestDecoder.DecodedBlob decoded, float[] vertices, int[] indices, float tolerance)
+    {
+        Assert.Equal(vertices.Length, decoded.Vertices.Length);
+        for (var i = 0; i < vertices.Length; i++)
+        {
+            Assert.InRange(decoded.Vertices[i] - vertices[i], -tolerance, tolerance);
+        }
+
+        Assert.Equal(indices.Length, decoded.Indices.Length);
+        for (var i = 0; i < indices.Length; i++)
+        {
+            Assert.Equal((uint)indices[i], decoded.Indices[i]);
+        }
     }
 
     // ========================================================================

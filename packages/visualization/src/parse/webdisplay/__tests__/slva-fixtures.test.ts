@@ -91,7 +91,16 @@ const blobNames = [
 
 describe('SLVA golden fixtures (C#-written blobs)', () => {
 	it('covers every committed blob', () => {
-		expect(blobNames.length).toBeGreaterThanOrEqual(12);
+		expect(blobNames.length).toBeGreaterThanOrEqual(13);
+	});
+
+	it('covers both v4 byte layouts', () => {
+		// The writer picks planar or interleaved per blob, so the parser must be exercised on both.
+		const layouts = blobNames
+			.filter((n) => !n.startsWith('v3/'))
+			.map((n) => (loadFixture(n).parsed.flags & FLAG_PLANAR_BYTESPLIT) !== 0);
+		expect(layouts).toContain(true);
+		expect(layouts).toContain(false);
 	});
 
 	describe.each(blobNames)('%s', (blobName) => {
