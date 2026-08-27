@@ -137,8 +137,10 @@ export default class GrasshopperClient {
 
 		// The liveness probe is a trivial GET — always bound it, independent of the
 		// solve timeout (which may be 0 to allow arbitrarily long solves).
+		let lastProbe: Awaited<ReturnType<ComputeServerStats['probeServer']>> | undefined;
 		for (let attempt = 0; attempt < attempts; attempt++) {
-			if (await client.serverStats.isServerOnline()) {
+			lastProbe = await client.serverStats.probeServer();
+			if (lastProbe.online) {
 				return client;
 			}
 
@@ -149,8 +151,21 @@ export default class GrasshopperClient {
 		}
 
 		await client.dispose();
-		throw new ComputeError('Rhino Compute server is not online', ErrorCodes.NETWORK_ERROR, {
-			context: { serverUrl: client.config.serverUrl, attempts }
+		// A rejected probe (401/403) is a misconfiguration, not an offline server —
+		// say so, or a wrong API key sends the user debugging their network.
+		const status = lastProbe?.status;
+		const message =
+			status === 401 || status === 403
+				? `Rhino Compute server rejected the liveness probe with HTTP ${status} — check the API key / auth configuration`
+				: 'Rhino Compute server is not online';
+		throw new ComputeError(message, ErrorCodes.NETWORK_ERROR, {
+			...(status !== undefined && { statusCode: status }),
+			context: {
+				serverUrl: client.config.serverUrl,
+				attempts,
+				...(status !== undefined && { lastProbeStatus: status }),
+				...(lastProbe?.error !== undefined && { lastProbeError: lastProbe.error })
+			}
 		});
 	}
 
@@ -223,9 +238,11 @@ export default class GrasshopperClient {
 			// Compute may return a partial-success response (HTTP 500 with a body
 			// containing both `values` and `errors`/`warnings`). Surface that as a
 			// COMPUTATION_ERROR so callers don't silently consume a broken result.
-			if (result?.errors && result.errors.length > 0) {
+			// Read case-insensitively — stock mcneel servers serialize `Errors`.
+			const solveErrors = readField<unknown[]>(result, 'errors');
+			if (Array.isArray(solveErrors) && solveErrors.length > 0) {
 				throw new ComputeError(
-					result.errors.join('; ') || 'Computation failed',
+					solveErrors.map(String).join('; ') || 'Computation failed',
 					ErrorCodes.COMPUTATION_ERROR,
 					{
 						context: {
@@ -233,8 +250,8 @@ export default class GrasshopperClient {
 							// Summary only — attaching the full dataTree would pin
 							// multi-MB input buffers in telemetry (issue 83).
 							inputSummary: summarizeDataTree(dataTree),
-							errors: result.errors,
-							warnings: result.warnings,
+							errors: solveErrors,
+							warnings: readField<unknown[]>(result, 'warnings'),
 							// The outputs that DID compute (issue 63): the transport
 							// parses partial values out of the 500 body, so hand them
 							// to callers who want to render what succeeded and inspect

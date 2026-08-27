@@ -6,23 +6,16 @@ import { readField } from '@/core/utils/read-field';
 import { FileBaseInfo, FileData, ProcessedFile } from './types';
 import { groupFilesByRoot, pathBelowRoot, toArchiveName } from './sub-folder';
 
-/** Extracts and processes files from compute response data without downloading them. */
+/**
+ * Extracts and processes files from compute response data without downloading
+ * them. Never throws: undecodable/unnamed items and failed external fetches are
+ * logged and dropped per-file (see {@link fetchRemoteFiles}).
+ */
 export const extractFilesFromComputeResponse = async (
 	downloadableFiles: FileData[],
 	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
 ): Promise<ProcessedFile[]> => {
-	try {
-		return await processFiles(downloadableFiles, additionalFiles);
-	} catch (err) {
-		throw new ComputeError(
-			'Failed to extract files from compute response',
-			ErrorCodes.INVALID_STATE,
-			{
-				context: { originalError: err instanceof Error ? err.message : String(err) },
-				originalError: err instanceof Error ? err : undefined
-			}
-		);
-	}
+	return processFiles(downloadableFiles, additionalFiles);
 };
 
 /** Downloads files from a compute response as a ZIP archive. */

@@ -1,5 +1,5 @@
 import { DataTreeDefault, DataTreePath, InputParam, DataTree } from '../types';
-import { getLogger } from '@/core';
+import { ComputeError, ErrorCodes, getLogger } from '@/core';
 import { isDataTreeDefault, TREE_PATH_RE } from './tree-path';
 
 /**
@@ -434,17 +434,20 @@ export class TreeBuilder {
 	 *
 	 * @param pathStr - Path string
 	 * @returns Array of path indices
-	 * @throws Error when the path string is not a valid Grasshopper branch path.
-	 *   Malformed keys must never silently collapse to a default branch —
-	 *   two distinct unparseable keys would merge their items into one branch.
+	 * @throws {ComputeError} `INVALID_INPUT` when the path string is not a valid
+	 *   Grasshopper branch path. Malformed keys must never silently collapse to a
+	 *   default branch — two distinct unparseable keys would merge their items
+	 *   into one branch.
 	 */
 	public static parsePathString(pathStr: string): number[] {
 		// Allow the legitimate root path "{}" alongside "{0;1;2}" / "{-1;2}"
 		const match = pathStr.match(TREE_PATH_RE);
 		if (!match) {
-			throw new Error(
+			throw new ComputeError(
 				`Invalid Grasshopper tree path: "${pathStr}". ` +
-					`Expected "{}", "{0}", or "{0;1;2}" (negative indices allowed, no empty segments).`
+					`Expected "{}", "{0}", or "{0;1;2}" (negative indices allowed, no empty segments).`,
+				ErrorCodes.INVALID_INPUT,
+				{ context: { pathStr } }
 			);
 		}
 		// Root path "{}" — the (optional) capture group is undefined/empty.

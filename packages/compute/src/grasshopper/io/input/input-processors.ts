@@ -36,10 +36,11 @@ export function processInput(rawInput: InputParamSchema): InputParam {
  * On success: `{ input, error: undefined }`.
  * On a recoverable validation failure: `{ input: <safe default>, error: {...} }`.
  *
- * A single input can fail TWICE — a malformed default (normalization warning)
- * on an input whose type parser then also throws. `errors` carries every
- * failure; `error` remains the primary one (the parser error when present,
- * else the default warning) for convenience.
+ * A single input can report several entries — a malformed default
+ * (normalization warning), warnings the type parser recovered from (e.g. a
+ * ValueList default not in its values map), and a parser error. `errors`
+ * carries every one; `error` remains the primary one (the parser error when
+ * present, else the default warning) for convenience.
  *
  * Error entries report the RAW declared `paramType` per the
  * {@link InputParseError} docs — not the canonicalized casing — so clients can
@@ -103,15 +104,31 @@ export function processInputWithError(rawInput: InputParamSchema): {
 	}
 	const parser = INPUT_TYPE_PARSERS.get(paramType);
 
+	// Recoverable oddities a parser reports while still succeeding (e.g. a
+	// ValueList default not in its values map) — surfaced like default warnings.
+	const parserWarnings: InputParseError[] = [];
+	const warn = (warning: { code: string; message: string }) =>
+		parserWarnings.push({
+			inputName: rawInput.name || 'unknown',
+			paramType: rawInput.paramType,
+			message: warning.message,
+			code: warning.code
+		});
+
 	try {
 		if (!parser) {
 			throw ComputeError.unknownParamType(paramType, rawInput.name);
 		}
-		// A malformed-default warning rides through on the otherwise-successful parse.
+		// Malformed-default and parser warnings ride through on the
+		// otherwise-successful parse.
+		const input = parser.parse(schema, baseInput, warn);
+		const warnings = defaultWarningError
+			? [defaultWarningError, ...parserWarnings]
+			: parserWarnings;
 		return {
-			input: parser.parse(schema, baseInput),
+			input,
 			error: defaultWarningError,
-			...(defaultWarningError && { errors: [defaultWarningError] })
+			...(warnings.length > 0 && { errors: warnings })
 		};
 	} catch (error) {
 		if (error instanceof ComputeError) {
@@ -123,13 +140,17 @@ export function processInputWithError(rawInput: InputParamSchema): {
 				code: error.code
 			};
 			// The parser owns its own fallback; an unknown type falls back to the
-			// geometry-shaped safe default (matching the old behavior). BOTH
-			// failures are reported when the default warning and the parser error
-			// occurred on the same input — the warning must not be shadowed.
+			// geometry-shaped safe default (matching the old behavior). EVERY
+			// failure is reported when the default warning, parser warnings, and
+			// the parser error occurred on the same input — none may be shadowed.
 			return {
 				input: (parser ?? UNKNOWN_TYPE_FALLBACK).fallback(schema, baseInput),
 				error: parserError,
-				errors: defaultWarningError ? [defaultWarningError, parserError] : [parserError]
+				errors: [
+					...(defaultWarningError ? [defaultWarningError] : []),
+					...parserWarnings,
+					parserError
+				]
 			};
 		}
 

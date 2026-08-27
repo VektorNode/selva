@@ -109,6 +109,25 @@ export default class ComputeServerStats {
 	 *   stalling the caller indefinitely.
 	 */
 	public async isServerOnline(timeoutMs: number = 5000): Promise<boolean> {
+		return (await this.probeServer(timeoutMs)).online;
+	}
+
+	/**
+	 * Detailed liveness probe backing {@link isServerOnline}.
+	 *
+	 * Reports what the probe actually saw so callers can distinguish "connection
+	 * failed" (`error` set) from "server answered non-2xx" (`status` set) — e.g.
+	 * a 401 from a proxy that requires an API key is a misconfiguration, not an
+	 * offline server. Same single-sample caveat as {@link isServerOnline}.
+	 *
+	 * @param timeoutMs - Abort the probe after this many ms (default: 5000).
+	 *   Pass `0` to disable the timeout.
+	 * @returns `online` plus either the HTTP `status` the server answered with,
+	 *   or the `error` the connection attempt failed with.
+	 */
+	public async probeServer(
+		timeoutMs: number = 5000
+	): Promise<{ online: boolean; status?: number; error?: string }> {
 		this.ensureNotDisposed();
 
 		// The rhino.compute proxy has no `/healthcheck` route; its real liveness
@@ -120,10 +139,13 @@ export default class ComputeServerStats {
 		try {
 			const response = await this.fetchWithTimeout(url, { method: 'GET' }, timeoutMs);
 
-			return response.ok;
+			return { online: response.ok, status: response.status };
 		} catch (err) {
 			getLogger().debug('[ComputeServerStats] Fetch error:', err);
-			return false;
+			return {
+				online: false,
+				error: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+			};
 		}
 	}
 
@@ -572,7 +594,7 @@ export default class ComputeServerStats {
 	 * @param intervalMs - Milliseconds between checks (default: 5000). Must be a
 	 *   finite number of at least 100 ms — lower values would hot-loop the server.
 	 * @returns Function to stop monitoring
-	 * @throws {RangeError} If `intervalMs` is not a finite number >= 100.
+	 * @throws {ComputeError} `INVALID_CONFIG` if `intervalMs` is not a finite number >= 100.
 	 *
 	 * @example
 	 * ```typescript
@@ -591,9 +613,13 @@ export default class ComputeServerStats {
 		this.ensureNotDisposed();
 
 		if (!Number.isFinite(intervalMs) || intervalMs < ComputeServerStats.MIN_MONITOR_INTERVAL_MS) {
-			throw new RangeError(
+			// ComputeError (not RangeError) so `err instanceof ComputeError` holds
+			// across the package's whole public surface.
+			throw new ComputeError(
 				`monitor() intervalMs must be a finite number >= ${ComputeServerStats.MIN_MONITOR_INTERVAL_MS}ms, ` +
-					`got ${intervalMs}. Sub-${ComputeServerStats.MIN_MONITOR_INTERVAL_MS}ms polling would hot-loop the server.`
+					`got ${intervalMs}. Sub-${ComputeServerStats.MIN_MONITOR_INTERVAL_MS}ms polling would hot-loop the server.`,
+				ErrorCodes.INVALID_CONFIG,
+				{ context: { intervalMs } }
 			);
 		}
 

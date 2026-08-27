@@ -37,6 +37,17 @@ describe('fetchCompute — request shape', () => {
 		expect((init.headers as Record<string, string>)['X-Request-ID']).toBeTruthy();
 	});
 
+	it('rejects a non-JSON-serializable body with INVALID_INPUT before touching the network', async () => {
+		const circular: Record<string, unknown> = {};
+		circular.self = circular;
+
+		await expect(fetchCompute('grasshopper', circular, config)).rejects.toMatchObject({
+			name: 'ComputeError',
+			code: 'INVALID_INPUT'
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it('sends the API key as the RhinoComputeKey header when configured', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
 
@@ -206,6 +217,21 @@ describe('fetchCompute — HTTP status → error code mapping', () => {
 describe('fetchCompute — partial success (HTTP 500 with values)', () => {
 	it('returns the body instead of throwing when a 500 carries values + errors', async () => {
 		const partial = { values: [{ ParamName: 'out' }], errors: ['boom'], warnings: [] };
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(null, {
+				ok: false,
+				status: 500,
+				statusText: 'Internal Server Error',
+				body: JSON.stringify(partial)
+			})
+		);
+
+		const res = await fetchCompute('grasshopper', {}, config);
+		expect(res).toEqual(partial);
+	});
+
+	it('detects a PascalCase partial success (stock mcneel casing) too', async () => {
+		const partial = { Values: [{ ParamName: 'out' }], Errors: ['boom'] };
 		fetchMock.mockResolvedValueOnce(
 			createMockResponse(null, {
 				ok: false,

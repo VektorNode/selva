@@ -17,6 +17,7 @@
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { isApiError } from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
+import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
 import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
 import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 import { engine, COMPUTE_DEBUG } from '$lib/server/compute/engine.server';
@@ -388,11 +389,49 @@ export function mapSolveError(err: unknown, locals: App.Locals): never {
 	const message = err instanceof Error ? err.message : 'Unknown error';
 	locals.log.error('Solve request failed', {
 		component: 'API/Compute',
-		err: renderThrown(err)
+		err: renderThrown(err),
+		// The compute server's raw error body (bounded by the transport) — the
+		// message alone can be scrubbed to a generic string in the server's
+		// production mode, so this is often the only diagnostic that survives.
+		...(err instanceof ComputeError &&
+			typeof err.context?.responseBody === 'string' && {
+				computeResponseBody: err.context.responseBody
+			})
 	});
 
+	// The compute transport classifies its failures — map the classes the caller
+	// can act on. Unreachable/credentials/saturation are operator problems (503),
+	// a deadline is 504; only a genuine solve failure stays 500.
+	if (err instanceof ComputeError) {
+		if (err.code === ErrorCodes.NETWORK_ERROR || err.code === ErrorCodes.CORS_ERROR) {
+			apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server is unreachable');
+		}
+		if (err.code === ErrorCodes.AUTH_ERROR) {
+			apiError(
+				503,
+				ApiErrorCode.COMPUTE_UNAVAILABLE,
+				"Compute server rejected this deployment's credentials — check the compute API key configuration."
+			);
+		}
+		if (err.code === ErrorCodes.RATE_LIMIT) {
+			apiError(
+				503,
+				ApiErrorCode.COMPUTE_UNAVAILABLE,
+				'Compute server is rate-limiting requests. Retry shortly.'
+			);
+		}
+		if (err.code === ErrorCodes.TIMEOUT_ERROR) {
+			apiError(
+				504,
+				ApiErrorCode.COMPUTE_UNAVAILABLE,
+				'Compute server timed out running the solve.'
+			);
+		}
+	}
+
 	// A transport-layer fetch failure means the compute server is unreachable,
-	// not an internal error.
+	// not an internal error. (Raw TypeError only from fetches outside the compute
+	// transport — the transport wraps its own into ComputeError NETWORK_ERROR.)
 	if (err instanceof TypeError && message === 'fetch failed') {
 		apiError(503, ApiErrorCode.COMPUTE_UNAVAILABLE, 'Compute server is unreachable');
 	}

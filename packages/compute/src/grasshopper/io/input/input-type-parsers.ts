@@ -1,4 +1,4 @@
-import { ComputeError, ErrorCodes } from '@/core/errors';
+import { ComputeError, ErrorCodes, type ErrorCode } from '@/core/errors';
 import { getLogger } from '@/core';
 import { isDataTreeDefault } from '../../data-tree/tree-path';
 import type {
@@ -27,11 +27,25 @@ import type {
  * {@link ComputeError} on recoverable bad input; the registry boundary
  * catches it and pairs it with `fallback`.
  */
+/**
+ * A recoverable oddity a parser found while still succeeding (e.g. a ValueList
+ * default not present in its values map). Reported through the optional `warn`
+ * callback and surfaced to clients on the same `parseErrors` channel as
+ * MALFORMED_DEFAULT warnings.
+ */
+export interface ParserWarning {
+	code: ErrorCode;
+	message: string;
+}
+
 export interface InputTypeParser<T extends InputParam = InputParam> {
 	/** Canonical paramType(s) this parser owns, e.g. ['Number','Integer']. */
 	readonly types: readonly string[];
-	/** Schema (with normalized default) → typed param. Throws on bad input. */
-	parse(schema: InputParamSchema, base: BaseInputType): T;
+	/**
+	 * Schema (with normalized default) → typed param. Throws on bad input;
+	 * calls `warn` for oddities the parse recovered from.
+	 */
+	parse(schema: InputParamSchema, base: BaseInputType, warn?: (warning: ParserWarning) => void): T;
 	/** This type's safe fallback param when {@link parse} throws. */
 	fallback(schema: InputParamSchema, base: BaseInputType): T;
 }
@@ -248,7 +262,7 @@ const textParser: InputTypeParser<TextInputType> = {
 
 const valueListParser: InputTypeParser<ValueListInputType> = {
 	types: ['ValueList'],
-	parse(schema, base) {
+	parse(schema, base, warn) {
 		if (
 			!schema.values ||
 			typeof schema.values !== 'object' ||
@@ -275,10 +289,12 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			if (match !== undefined) {
 				defaultValue = match;
 			} else {
-				// Out-of-range default only warns — it still succeeds (pinned behavior).
-				getLogger().warn(
-					`ValueList input "${schema.nickname || 'unnamed'}" default value "${schema.default}" is not in available values`
-				);
+				// Out-of-range default only warns — it still succeeds (pinned
+				// behavior). Reported through `warn` too, so it reaches the client's
+				// parseErrors instead of living only in the logger.
+				const message = `ValueList input "${schema.nickname || 'unnamed'}" default value "${schema.default}" is not in available values`;
+				getLogger().warn(message);
+				warn?.({ code: ErrorCodes.VALIDATION_ERROR, message });
 			}
 		}
 
