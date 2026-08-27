@@ -7,7 +7,7 @@ Message templates for Selva's outbound mail. Pure render: data in,
 import { renderInviteEmail } from '@selvajs/notifications';
 
 const message = renderInviteEmail({ to, acceptUrl, orgName, expiresAt });
-await getNotificationProvider().send(message, log);
+await provider.send(message, log); // an INotificationProvider the host wires up
 ```
 
 ## Where this sits
