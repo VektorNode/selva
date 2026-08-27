@@ -1,7 +1,6 @@
 ﻿using System.Drawing;
 using System.Reflection;
 using Newtonsoft.Json;
-using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.Display.Services;
 

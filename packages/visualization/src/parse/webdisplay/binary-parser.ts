@@ -57,35 +57,13 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
 // ============================================================================
 
 /**
- * Parses a binary mesh batch blob in the SLVA wire format.
+ * Parses a binary mesh batch blob in the SLVA wire format. The field layout and every flag bit are
+ * specified in `binary/header.ts`, next to the constants this reads.
  *
- * Blob layout:
- * ```
- *   [4]  magic        = "SLVA" (0x53 0x4C 0x56 0x41)
- *   [4]  version      = uint32 (currently 4)
- *   [4]  metadataLen  = uint32 byte length of UTF-8 metadata JSON
- *   [N]  metadata     = UTF-8 JSON (materials, groups, sourceComponentId, ...)
- *   [4]  flags        = uint32 (bit 0: 0 = int16 quantized, 1 = float32 raw;
- *                                bit 1: 0 = uint32 indices, 1 = uint16 indices;
- *                                bit 2: 1 = delta+zigzag filtered;
- *                                bit 5: 1 = planar byte-split layout, see FLAG_PLANAR_BYTESPLIT)
- *   [24] origin       = 3 x float64
- *   [24] scale        = 3 x float64 (step per int16 unit; identity for float32)
- *   [4]  vertexCount  = uint32 number of vertices (positions = vertexCount * 3 components)
- *   [V]  vertices     = int16[vertexCount*3] OR float32[vertexCount*3]
- *   [4]  indexCount   = uint32 number of indices
- *   [I]  indices      = uint32[indexCount] OR uint16[indexCount]
- * ```
- *
- * For int16 vertices: world position = `origin + (q + 32767) * scale`. This matches Three.js
- * `BufferAttribute(arr, 3, true)` (`normalized: true`) semantics when the per-mesh transform
- * encodes `origin + scale`.
- *
- * For float32: `origin = (0, 0, 0)`, `scale = (1, 1, 1)`, vertices are raw world positions.
- *
- * With FLAG_DELTA_ENCODED (v3), stored int16 vertex components and indices are wrapped
- * differences from their predecessor, zigzag-mapped — see the flag's doc in `binary/header.ts`.
- * This parser returns reconstructed absolute values; consumers never see the filter.
+ * Returns absolute values: quantized vertices stay int16 (dequantize with `origin + (q + 32767) *
+ * scale`, which is what Three.js `BufferAttribute(arr, 3, true)` expects when the per-mesh
+ * transform encodes origin and scale), but the delta filter and planar byte-split are both undone
+ * here — consumers never see either.
  *
  * @param input - The blob, as either an `ArrayBuffer`/`Uint8Array` (binary transport) or a
  *   base64-encoded string (JSON-envelope transport).

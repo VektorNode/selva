@@ -65,9 +65,9 @@ namespace Selva.GH.Features.Display.Services;
 ///     planar per-channel loses on noisy gradient data (measured +58%), and the chunk is small
 ///     either way.
 ///
-///     Optional trailing chunks (still version 3 — readers ignore trailing bytes, so pre-chunk
-///     decoders render these blobs untextured/uncolored instead of rejecting them). Appended after
-///     the index block, UV chunk first; element counts are implied by vertexCount:
+///     Optional trailing chunks. Readers ignore trailing bytes, so pre-chunk decoders render these
+///     blobs untextured/uncolored instead of rejecting them. Appended after the index block, UV
+///     chunk first; element counts are implied by vertexCount:
 ///
 ///     UV chunk (<see cref="FlagHasUvs" />, bit 3):
 ///     [4]  uvFormat  = uint32 (0 = uint16 quantized, 1 = float32 raw)

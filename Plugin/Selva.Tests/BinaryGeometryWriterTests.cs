@@ -644,33 +644,28 @@ public class BinaryGeometryWriterTests
             maxZ = Math.Max(maxZ, large[i + 2]);
         }
 
+        // The quantized path is where the bbox is observable: origin IS the bbox min.
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", large, new int[0], forceFloat32: true);
+        var result = BinaryGeometryWriter.Write(ms, "{}", large, new int[0]);
 
-        // forceFloat32 keeps origin/scale at identity, so read the bbox back off the reported
-        // struct instead: it surfaces the computed bounds regardless of the chosen format.
+        Assert.False(result.UsedFloat32, "bbox extent pushed the writer onto the float32 path");
         Assert.Equal(90_000, result.VertexCount);
-
-        // Re-run through the quantized path, where origin IS the bbox min and scale the extent.
-        using var qms = new MemoryStream();
-        var qResult = BinaryGeometryWriter.Write(qms, "{}", large, new int[0]);
-
-        Assert.Equal(minX, qResult.OriginX, 6);
-        Assert.Equal(minY, qResult.OriginY, 6);
-        Assert.Equal(minZ, qResult.OriginZ, 6);
-        Assert.Equal(Math.Max((maxX - minX) / 65534.0, 1e-12), qResult.ScaleX, 12);
-        Assert.Equal(Math.Max((maxY - minY) / 65534.0, 1e-12), qResult.ScaleY, 12);
-        Assert.Equal(Math.Max((maxZ - minZ) / 65534.0, 1e-12), qResult.ScaleZ, 12);
+        Assert.Equal(minX, result.OriginX, 6);
+        Assert.Equal(minY, result.OriginY, 6);
+        Assert.Equal(minZ, result.OriginZ, 6);
+        Assert.Equal(Math.Max((maxX - minX) / 65534.0, 1e-12), result.ScaleX, 12);
+        Assert.Equal(Math.Max((maxY - minY) / 65534.0, 1e-12), result.ScaleY, 12);
+        Assert.Equal(Math.Max((maxZ - minZ) / 65534.0, 1e-12), result.ScaleZ, 12);
     }
 
     [Fact]
     public void Write_ParallelBoundsFindsExtremesInEveryPartition()
     {
-        // Plant the true min and max deep inside the cloud, far from index 0 and the final vertex,
-        // so a reduction that dropped a partition's contribution (or seeded from the wrong element)
-        // would miss them. The planted values stay inside SyntheticCloud's own +/-1000 range so the
-        // bbox extent keeps the int16 step under the float32-fallback threshold — otherwise
-        // origin/scale collapse to identity and the assertions below test nothing.
+        // Extremes planted deep inside the cloud, so a reduction that dropped a partition (or
+        // seeded from the wrong element) misses them. Just past SyntheticCloud's own +/-1000
+        // spread: far enough to be unambiguous, close enough that the 2500 extent keeps the int16
+        // step under the 5 cm float32-fallback threshold. On the float32 path origin/scale are
+        // identity and the assertions below would test nothing.
         var verts = SyntheticCloud(120_000);
         verts[3 * 7777] = -1500f;       // x min, early partition
         verts[3 * 61111 + 1] = -1400f;  // y min, middle partition
