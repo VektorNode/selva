@@ -13,9 +13,10 @@ export const BINARY_MESH_MAGIC = 0x41564c53;
  */
 export const COMPRESSED_MESH_MAGIC = 0x5a564c53;
 /**
- * Current writer version. v2 added FLAG_UINT16_INDICES; v3 added FLAG_DELTA_ENCODED.
+ * Current writer version. v2 added FLAG_UINT16_INDICES; v3 added FLAG_DELTA_ENCODED; v4 added
+ * FLAG_PLANAR_BYTESPLIT.
  */
-export const BINARY_MESH_VERSION = 3;
+export const BINARY_MESH_VERSION = 4;
 /**
  * Oldest wire version this parser still decodes. Each version only added a flag bit, so the
  * flag-driven read path handles every older blob unchanged — needed since persisted/cached blobs
@@ -47,6 +48,25 @@ export const FLAG_HAS_UVS = 0x8;
  * r/g/b predictors) iff FLAG_DELTA_ENCODED.
  */
 export const FLAG_HAS_VERTEX_COLORS = 0x10;
+
+/**
+ * Bit 5 (v4): every delta+zigzag-filtered stream (quantized vertices, indices, quantized UVs —
+ * never float32 data, never colors) is stored as byte planes over its element count N instead of
+ * interleaved LE values:
+ *
+ * ```
+ * vertices        [X-lo × N][Y-lo × N][Z-lo × N][X-hi × N][Y-hi × N][Z-hi × N]   N = vertexCount
+ * uint16 indices  [lo × N][hi × N]                                               N = indexCount
+ * uint32 indices  [b0 × N][b1 × N][b2 × N][b3 × N]                               N = indexCount
+ * uvs             [U-lo × N][V-lo × N][U-hi × N][V-hi × N]                       N = vertexCount
+ * ```
+ *
+ * Byte lengths and delta/zigzag semantics are identical to the interleaved v3 layout — only byte
+ * order within each block changes. Near-zero deltas make the hi planes runs of zeros, so the SLVZ
+ * DEFLATE pass compresses 25–50% smaller than interleaved. Colors keep the v3 interleaved layout
+ * (planar loses on noisy per-channel data, measured).
+ */
+export const FLAG_PLANAR_BYTESPLIT = 0x20;
 
 /** uvFormat value inside the UV chunk: uint16 quantized. */
 export const UV_FORMAT_UINT16 = 0;

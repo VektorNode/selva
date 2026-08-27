@@ -27,6 +27,8 @@ function assemblyInputFor(batch: DisplayBatch, mergeByMaterial: boolean): Assemb
 		vertexData: raw.vertexData,
 		isFloat32: raw.isFloat32,
 		deltaEncoded: raw.deltaEncoded,
+		planarByteSplit: raw.planarByteSplit,
+		uint16Indices: raw.uint16Indices,
 		origin: raw.origin,
 		scale: raw.scale,
 		indexData: raw.indexData,

@@ -8,7 +8,7 @@ namespace Selva.Tests;
 public class BinaryGeometryWriterTests
 {
     private const uint ExpectedMagic = 0x41564C53;
-    private const uint ExpectedVersion = 3;
+    private const uint ExpectedVersion = 4;
 
     [Fact]
     public void Write_EmitsMagicAndVersion()
@@ -65,7 +65,10 @@ public class BinaryGeometryWriterTests
         Assert.Equal(12, result.IndexCount);
 
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
-        Assert.Equal(BinaryGeometryWriter.FlagUint16Indices | BinaryGeometryWriter.FlagDeltaEncoded, flags);
+        Assert.Equal(
+            BinaryGeometryWriter.FlagUint16Indices | BinaryGeometryWriter.FlagDeltaEncoded
+            | BinaryGeometryWriter.FlagPlanarByteSplit,
+            flags);
 
         for (var i = 0; i < vertices.Length; i++)
         {
@@ -506,194 +509,21 @@ public class BinaryGeometryWriterTests
         }
     }
 
-    /// <summary>Full decode of a blob, including the optional trailing UV/color chunks.</summary>
-    private sealed class DecodedBlob
-    {
-        public float[] Vertices = null!;
-        public uint[] Indices = null!;
-        public uint Flags;
-        public float[]? Uvs;
-        public byte[]? Colors;
-
-        /// <summary>Bytes consumed by the decode — equals blob length iff nothing trails the format.</summary>
-        public long BytesConsumed;
-    }
-
     /// <summary>
-    ///     Decodes the binary blob the same way the JS parser will: peel envelope, peel geometry
-    ///     header, dequantize int16 (or read float32 directly), and read uint16/uint32 indices per
-    ///     the flags word — undoing the v3 delta+zigzag filter when its flag is set.
+    ///     Decodes the binary blob the same way the JS parser will — see
+    ///     <see cref="SlvaTestDecoder" /> for the flag-driven read path shared with the frozen
+    ///     fixture tests.
     /// </summary>
     private static (float[] vertices, uint[] indices, uint flags) ReadGeometry(byte[] blob)
     {
-        var decoded = ReadAll(blob);
+        var decoded = SlvaTestDecoder.ReadAll(blob);
         return (decoded.Vertices, decoded.Indices, decoded.Flags);
     }
 
-    private static DecodedBlob ReadAll(byte[] blob)
+    private static SlvaTestDecoder.DecodedBlob ReadAll(byte[] blob)
     {
-        using var ms = new MemoryStream(blob);
-        using var br = new BinaryReader(ms);
-
-        Assert.Equal(ExpectedMagic, br.ReadUInt32());
-        Assert.Equal(ExpectedVersion, br.ReadUInt32());
-
-        var metadataLen = br.ReadUInt32();
-        br.ReadBytes((int)metadataLen);
-
-        var flags = br.ReadUInt32();
-        var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
-        var originX = br.ReadDouble();
-        var originY = br.ReadDouble();
-        var originZ = br.ReadDouble();
-        var scaleX = br.ReadDouble();
-        var scaleY = br.ReadDouble();
-        var scaleZ = br.ReadDouble();
-
-        var vertexCount = br.ReadUInt32();
-        var verts = new float[vertexCount * 3];
-
-        if ((flags & BinaryGeometryWriter.FlagFloat32) != 0)
-        {
-            for (var i = 0; i < verts.Length; i++)
-            {
-                verts[i] = br.ReadSingle();
-            }
-        }
-        else
-        {
-            short qx = 0, qy = 0, qz = 0;
-            for (var i = 0; i < vertexCount; i++)
-            {
-                if (deltaEncoded)
-                {
-                    qx = unchecked((short)(qx + UnZigZag16(br.ReadUInt16())));
-                    qy = unchecked((short)(qy + UnZigZag16(br.ReadUInt16())));
-                    qz = unchecked((short)(qz + UnZigZag16(br.ReadUInt16())));
-                }
-                else
-                {
-                    qx = br.ReadInt16();
-                    qy = br.ReadInt16();
-                    qz = br.ReadInt16();
-                }
-
-                verts[i * 3] = (float)(originX + (qx + 32767) * scaleX);
-                verts[i * 3 + 1] = (float)(originY + (qy + 32767) * scaleY);
-                verts[i * 3 + 2] = (float)(originZ + (qz + 32767) * scaleZ);
-            }
-        }
-
-        var indexCount = br.ReadUInt32();
-        var indices = new uint[indexCount];
-        var uint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
-        if (uint16Indices)
-        {
-            ushort prev = 0;
-            for (var i = 0; i < indexCount; i++)
-            {
-                prev = deltaEncoded ? unchecked((ushort)(prev + UnZigZag16(br.ReadUInt16()))) : br.ReadUInt16();
-                indices[i] = prev;
-            }
-        }
-        else
-        {
-            var prev = 0u;
-            for (var i = 0; i < indexCount; i++)
-            {
-                prev = deltaEncoded ? unchecked((uint)((int)prev + UnZigZag32(br.ReadUInt32()))) : br.ReadUInt32();
-                indices[i] = prev;
-            }
-        }
-
-        float[]? uvs = null;
-        if ((flags & BinaryGeometryWriter.FlagHasUvs) != 0)
-        {
-            var uvFormat = br.ReadUInt32();
-            var originU = br.ReadDouble();
-            var originV = br.ReadDouble();
-            var scaleU = br.ReadDouble();
-            var scaleV = br.ReadDouble();
-
-            uvs = new float[vertexCount * 2];
-            if (uvFormat == BinaryGeometryWriter.UvFormatFloat32)
-            {
-                for (var i = 0; i < uvs.Length; i++)
-                {
-                    uvs[i] = br.ReadSingle();
-                }
-            }
-            else
-            {
-                ushort qu = 0, qv = 0;
-                for (var i = 0; i < vertexCount; i++)
-                {
-                    if (deltaEncoded)
-                    {
-                        qu = unchecked((ushort)(qu + UnZigZag16(br.ReadUInt16())));
-                        qv = unchecked((ushort)(qv + UnZigZag16(br.ReadUInt16())));
-                    }
-                    else
-                    {
-                        qu = br.ReadUInt16();
-                        qv = br.ReadUInt16();
-                    }
-
-                    uvs[i * 2] = (float)(originU + qu * scaleU);
-                    uvs[i * 2 + 1] = (float)(originV + qv * scaleV);
-                }
-            }
-        }
-
-        byte[]? colors = null;
-        if ((flags & BinaryGeometryWriter.FlagHasVertexColors) != 0)
-        {
-            colors = new byte[vertexCount * 3];
-            byte r = 0, g = 0, b = 0;
-            for (var i = 0; i < vertexCount; i++)
-            {
-                if (deltaEncoded)
-                {
-                    r = unchecked((byte)(r + UnZigZag8(br.ReadByte())));
-                    g = unchecked((byte)(g + UnZigZag8(br.ReadByte())));
-                    b = unchecked((byte)(b + UnZigZag8(br.ReadByte())));
-                }
-                else
-                {
-                    r = br.ReadByte();
-                    g = br.ReadByte();
-                    b = br.ReadByte();
-                }
-
-                colors[i * 3] = r;
-                colors[i * 3 + 1] = g;
-                colors[i * 3 + 2] = b;
-            }
-        }
-
-        return new DecodedBlob
-        {
-            Vertices = verts,
-            Indices = indices,
-            Flags = flags,
-            Uvs = uvs,
-            Colors = colors,
-            BytesConsumed = ms.Position
-        };
-    }
-
-    private static short UnZigZag16(ushort zz)
-    {
-        return (short)((zz >> 1) ^ -(zz & 1));
-    }
-
-    private static int UnZigZag32(uint zz)
-    {
-        return (int)(zz >> 1) ^ -(int)(zz & 1);
-    }
-
-    private static sbyte UnZigZag8(byte zz)
-    {
-        return (sbyte)((zz >> 1) ^ -(zz & 1));
+        var decoded = SlvaTestDecoder.ReadAll(blob);
+        Assert.Equal(ExpectedVersion, decoded.Version);
+        return decoded;
     }
 }

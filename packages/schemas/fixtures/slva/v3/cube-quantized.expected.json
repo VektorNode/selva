@@ -1,10 +1,9 @@
 {
-	"description": "float32 raw vertices (forced), uint16 indices",
+	"description": "int16 quantized + delta, uint16 indices, no chunks",
 	"flags": {
-		"float32": true,
+		"float32": false,
 		"uint16Indices": true,
 		"deltaEncoded": true,
-		"planarByteSplit": true,
 		"hasUvs": false,
 		"hasColors": false,
 		"float32Uvs": false
@@ -12,8 +11,8 @@
 	"vertexCount": 8,
 	"indexCount": 36,
 	"origin": [0.0, 0.0, 0.0],
-	"scale": [1.0, 1.0, 1.0],
-	"positionTolerance": 1e-6,
+	"scale": [1.5259254737998596e-5, 1.5259254737998596e-5, 1.5259254737998596e-5],
+	"positionTolerance": 1.1444441053498947e-5,
 	"uvTolerance": 0.0,
 	"sourceComponentId": "44444444-4444-4444-8444-444444444444",
 	"positions": [

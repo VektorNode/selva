@@ -5,6 +5,7 @@ import {
 	FLAG_FLOAT32,
 	FLAG_HAS_UVS,
 	FLAG_HAS_VERTEX_COLORS,
+	FLAG_PLANAR_BYTESPLIT,
 	FLAG_UINT16_INDICES,
 	UV_FORMAT_FLOAT32,
 	UV_FORMAT_UINT16
@@ -248,7 +249,7 @@ export function encodeBatchPayload(
 	u8.set(metadataBytes, offset);
 	offset += metadataBytes.length;
 
-	let flags = FLAG_DELTA_ENCODED;
+	let flags = FLAG_DELTA_ENCODED | FLAG_PLANAR_BYTESPLIT;
 	if (useFloat32) flags |= FLAG_FLOAT32;
 	if (useUint16Indices) flags |= FLAG_UINT16_INDICES;
 	if (uvs) flags |= FLAG_HAS_UVS;
@@ -280,17 +281,24 @@ export function encodeBatchPayload(
 		}
 		offset += verticesByteLength;
 	} else {
-		// v3 delta filter: per-component wrapped difference from the previous vertex, zigzagged.
+		// Delta filter (v3) + planar byte-split placement (v4): zigzagged per-component deltas
+		// written as [Xlo][Ylo][Zlo][Xhi][Yhi][Zhi] byte planes, each vertexCount bytes.
 		let px = 0;
 		let py = 0;
 		let pz = 0;
-		for (let i = 0; i < vertices.length; i += 3) {
+		for (let i = 0, v = 0; i < vertices.length; i += 3, v++) {
 			const qx = quantize(vertices[i]!, originX, scaleX);
 			const qy = quantize(vertices[i + 1]!, originY, scaleY);
 			const qz = quantize(vertices[i + 2]!, originZ, scaleZ);
-			view.setUint16(offset + i * 2, zigzag16(wrap16(qx - px)), true);
-			view.setUint16(offset + (i + 1) * 2, zigzag16(wrap16(qy - py)), true);
-			view.setUint16(offset + (i + 2) * 2, zigzag16(wrap16(qz - pz)), true);
+			const zx = zigzag16(wrap16(qx - px));
+			const zy = zigzag16(wrap16(qy - py));
+			const zz = zigzag16(wrap16(qz - pz));
+			u8[offset + v] = zx & 0xff;
+			u8[offset + vertexCount + v] = zy & 0xff;
+			u8[offset + vertexCount * 2 + v] = zz & 0xff;
+			u8[offset + vertexCount * 3 + v] = zx >> 8;
+			u8[offset + vertexCount * 4 + v] = zy >> 8;
+			u8[offset + vertexCount * 5 + v] = zz >> 8;
 			px = qx;
 			py = qy;
 			pz = qz;
@@ -301,15 +309,23 @@ export function encodeBatchPayload(
 	view.setUint32(offset, faces.length, true);
 	offset += 4;
 	if (useUint16Indices) {
+		// v4 planes: [lo × N][hi × N].
 		let prev = 0;
 		for (let i = 0; i < faces.length; i++) {
-			view.setUint16(offset + i * 2, zigzag16(wrap16(faces[i]! - prev)), true);
+			const zz = zigzag16(wrap16(faces[i]! - prev));
+			u8[offset + i] = zz & 0xff;
+			u8[offset + faces.length + i] = zz >> 8;
 			prev = faces[i]!;
 		}
 	} else {
+		// v4 planes: [b0 × N][b1 × N][b2 × N][b3 × N].
 		let prev = 0;
 		for (let i = 0; i < faces.length; i++) {
-			view.setUint32(offset + i * 4, zigzag32(faces[i]! - prev), true);
+			const zz = zigzag32(faces[i]! - prev);
+			u8[offset + i] = zz & 0xff;
+			u8[offset + faces.length + i] = (zz >>> 8) & 0xff;
+			u8[offset + faces.length * 2 + i] = (zz >>> 16) & 0xff;
+			u8[offset + faces.length * 3 + i] = zz >>> 24;
 			prev = faces[i]!;
 		}
 	}
@@ -334,13 +350,19 @@ export function encodeBatchPayload(
 			}
 			offset += uvs.length * 4;
 		} else {
+			// v4 planes: [Ulo][Vlo][Uhi][Vhi], each vertexCount bytes.
+			const n = uvs.length / 2;
 			let pu = 0;
 			let pv = 0;
-			for (let i = 0; i < uvs.length; i += 2) {
+			for (let i = 0, v = 0; i < uvs.length; i += 2, v++) {
 				const qu = quantizeUv(uvs[i]!, uvFormat.originU, uvFormat.scaleU);
 				const qv = quantizeUv(uvs[i + 1]!, uvFormat.originV, uvFormat.scaleV);
-				view.setUint16(offset + i * 2, zigzag16(wrap16(qu - pu)), true);
-				view.setUint16(offset + (i + 1) * 2, zigzag16(wrap16(qv - pv)), true);
+				const zu = zigzag16(wrap16(qu - pu));
+				const zv = zigzag16(wrap16(qv - pv));
+				u8[offset + v] = zu & 0xff;
+				u8[offset + n + v] = zv & 0xff;
+				u8[offset + n * 2 + v] = zu >> 8;
+				u8[offset + n * 3 + v] = zv >> 8;
 				pu = qu;
 				pv = qv;
 			}

@@ -63,6 +63,7 @@ public static class BinaryGeometryReader
             var useFloat32 = (flags & BinaryGeometryWriter.FlagFloat32) != 0;
             var useUint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
             var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
+            var planar = (flags & BinaryGeometryWriter.FlagPlanarByteSplit) != 0;
             var hasUvs = (flags & BinaryGeometryWriter.FlagHasUvs) != 0;
             var hasColors = (flags & BinaryGeometryWriter.FlagHasVertexColors) != 0;
 
@@ -82,6 +83,23 @@ public static class BinaryGeometryReader
                 for (var i = 0; i < componentCount; i++)
                 {
                     vertices[i] = br.ReadSingle();
+                }
+            }
+            else if (planar)
+            {
+                // v4 layout: six byte planes ([Xlo][Ylo][Zlo][Xhi][Yhi][Zhi], each vertexCount
+                // bytes) of the zigzag deltas — read the block, merge planes, prefix-sum.
+                var block = br.ReadBytes(vertexCount * 6);
+                short qx = 0, qy = 0, qz = 0;
+                for (var i = 0; i < vertexCount; i++)
+                {
+                    qx = unchecked((short)(qx + UnZigZag16((ushort)(block[i] | (block[vertexCount * 3 + i] << 8)))));
+                    qy = unchecked((short)(qy + UnZigZag16((ushort)(block[vertexCount + i] | (block[vertexCount * 4 + i] << 8)))));
+                    qz = unchecked((short)(qz + UnZigZag16((ushort)(block[vertexCount * 2 + i] | (block[vertexCount * 5 + i] << 8)))));
+
+                    vertices[i * 3] = (float)(originX + (qx + 32767) * scaleX);
+                    vertices[i * 3 + 1] = (float)(originY + (qy + 32767) * scaleY);
+                    vertices[i * 3 + 2] = (float)(originZ + (qz + 32767) * scaleZ);
                 }
             }
             else
@@ -114,12 +132,39 @@ public static class BinaryGeometryReader
             var indices = new int[indexCount];
             if (useUint16Indices)
             {
-                ushort prev = 0;
+                if (planar)
+                {
+                    var block = br.ReadBytes(indexCount * 2);
+                    ushort prev = 0;
+                    for (var i = 0; i < indexCount; i++)
+                    {
+                        prev = unchecked((ushort)(prev + UnZigZag16((ushort)(block[i] | (block[indexCount + i] << 8)))));
+                        indices[i] = prev;
+                    }
+                }
+                else
+                {
+                    ushort prev = 0;
+                    for (var i = 0; i < indexCount; i++)
+                    {
+                        prev = deltaEncoded
+                            ? unchecked((ushort)(prev + UnZigZag16(br.ReadUInt16())))
+                            : br.ReadUInt16();
+                        indices[i] = prev;
+                    }
+                }
+            }
+            else if (planar)
+            {
+                var block = br.ReadBytes(indexCount * 4);
+                var prev = 0;
                 for (var i = 0; i < indexCount; i++)
                 {
-                    prev = deltaEncoded
-                        ? unchecked((ushort)(prev + UnZigZag16(br.ReadUInt16())))
-                        : br.ReadUInt16();
+                    var zz = (uint)(block[i]
+                                    | (block[indexCount + i] << 8)
+                                    | (block[indexCount * 2 + i] << 16)
+                                    | (block[indexCount * 3 + i] << 24));
+                    prev = unchecked(prev + UnZigZag32(zz));
                     indices[i] = prev;
                 }
             }
@@ -139,7 +184,7 @@ public static class BinaryGeometryReader
             float[] uvs = null;
             if (hasUvs)
             {
-                uvs = ReadUvChunk(br, vertexCount, deltaEncoded);
+                uvs = ReadUvChunk(br, vertexCount, deltaEncoded, planar);
             }
 
             byte[] colors = null;
@@ -159,7 +204,7 @@ public static class BinaryGeometryReader
         }
     }
 
-    private static float[] ReadUvChunk(BinaryReader br, int vertexCount, bool deltaEncoded)
+    private static float[] ReadUvChunk(BinaryReader br, int vertexCount, bool deltaEncoded, bool planar)
     {
         var uvFormat = br.ReadUInt32();
         var originU = br.ReadDouble();
@@ -173,6 +218,22 @@ public static class BinaryGeometryReader
             for (var i = 0; i < uvs.Length; i++)
             {
                 uvs[i] = br.ReadSingle();
+            }
+
+            return uvs;
+        }
+
+        if (planar)
+        {
+            // v4 layout: [Ulo][Vlo][Uhi][Vhi], each vertexCount bytes.
+            var block = br.ReadBytes(vertexCount * 4);
+            ushort pu = 0, pv = 0;
+            for (var i = 0; i < vertexCount; i++)
+            {
+                pu = unchecked((ushort)(pu + UnZigZag16((ushort)(block[i] | (block[vertexCount * 2 + i] << 8)))));
+                pv = unchecked((ushort)(pv + UnZigZag16((ushort)(block[vertexCount + i] | (block[vertexCount * 3 + i] << 8)))));
+                uvs[i * 2] = (float)(originU + pu * scaleU);
+                uvs[i * 2 + 1] = (float)(originV + pv * scaleV);
             }
 
             return uvs;

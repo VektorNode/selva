@@ -25,6 +25,11 @@ namespace Selva.Tests;
 ///
 ///     The .slvz fixture is compared by decompressed content, not file bytes — DEFLATE output is
 ///     not guaranteed stable across .NET runtimes, the SLVA bytes inside are.
+///
+///     The v3/ subdirectory holds frozen pre-v4 blobs that regeneration must NOT touch: they pin
+///     backward compatibility (persisted .gh params, .slvm files, cached compute results decode
+///     forever). <see cref="SlvaFrozenFixtureTests" /> decodes them here; the TS fixtures test
+///     decodes the same files.
 /// </summary>
 public class SlvaFixtureContractTests
 {
@@ -230,6 +235,7 @@ public class SlvaFixtureContractTests
                 ["float32"] = result.UsedFloat32,
                 ["uint16Indices"] = result.UsedUint16Indices,
                 ["deltaEncoded"] = true,
+                ["planarByteSplit"] = true,
                 ["hasUvs"] = c.Uvs != null,
                 ["hasColors"] = c.Colors != null,
                 ["float32Uvs"] = result.UsedFloat32Uvs
@@ -321,7 +327,7 @@ public class SlvaFixtureContractTests
             }
 
             var committed = File.ReadAllBytes(blobPath);
-            var committedRaw = DecompressIfSlvz(committed);
+            var committedRaw = SlvaTestDecoder.DecompressIfSlvz(committed);
             if (!committedRaw.SequenceEqual(rawSlva))
             {
                 failures.Add(
@@ -341,27 +347,6 @@ public class SlvaFixtureContractTests
         }
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));
-    }
-
-    /// <summary>
-    ///     Undoes the SLVZ container (magic + uncompressedLen + raw DEFLATE). BlobCompressor only
-    ///     compresses — the production decoder is TS — so the test inflates locally. Non-SLVZ input
-    ///     passes through, matching the decoder's magic-sniffing.
-    /// </summary>
-    private static byte[] DecompressIfSlvz(byte[] bytes)
-    {
-        if (bytes.Length < 8 || BitConverter.ToUInt32(bytes, 0) != BlobCompressor.CompressedMagic)
-        {
-            return bytes;
-        }
-
-        var uncompressedLen = BitConverter.ToUInt32(bytes, 4);
-        using var input = new MemoryStream(bytes, 8, bytes.Length - 8);
-        using var deflate = new System.IO.Compression.DeflateStream(
-            input, System.IO.Compression.CompressionMode.Decompress);
-        using var output = new MemoryStream((int)uncompressedLen);
-        deflate.CopyTo(output);
-        return output.ToArray();
     }
 
     private static string FindRepoRoot()

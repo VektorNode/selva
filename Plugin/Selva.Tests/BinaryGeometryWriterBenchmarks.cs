@@ -141,4 +141,204 @@ public class BinaryGeometryWriterBenchmarks
 
     /// <summary>Standard base64 length: 4 chars per 3 input bytes, rounded up.</summary>
     private static int Base64Length(int byteCount) => ((byteCount + 2) / 3) * 4;
+
+    // ========================================================================
+    // Compression-ratio regression benches on coherent geometry
+    // ========================================================================
+    //
+    // The facts above use uniformly random vertices — the one input where the delta filter and
+    // the v4 planar byte-split layout show nothing (random deltas are incompressible). Real
+    // Grasshopper output is coherent: welded surfaces, scattered CAD parts, repeated instances.
+    // These facts measure the deflated wire size on such geometry and assert a loose ceiling per
+    // shape, so a change that silently weakens the filter pipeline (e.g. reordering the streams,
+    // breaking the byte planes) fails here instead of shipping. Ceilings sit well above the
+    // measured v4 ratios but below what the v3 interleaved layout produced — regression to either
+    // random-quality or v3-quality compression trips them.
+
+    /// <summary>
+    ///     Welded height-field grid with a smooth swell plus small pseudo-random jitter (~25
+    ///     quantization steps) — the analysis-surface case. Integer-derived jitter keeps the bytes
+    ///     identical on every runtime.
+    /// </summary>
+    private static (float[] vertices, int[] indices) WeldedGrid(int size)
+    {
+        var vertices = new float[size * size * 3];
+        var state = 12345u;
+        for (var y = 0; y < size; y++)
+        {
+            for (var x = 0; x < size; x++)
+            {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                var jitter = (state % 1000u) / 1000.0f * 0.05f - 0.025f;
+                var i = (y * size + x) * 3;
+                vertices[i] = x * 0.5f;
+                vertices[i + 1] = y * 0.5f;
+                vertices[i + 2] = (float)(3.0 * Math.Sin(x * 0.05) * Math.Cos(y * 0.07)
+                                          + 0.6 * Math.Sin(x * 0.21 + y * 0.13)) + jitter;
+            }
+        }
+
+        var indices = new int[(size - 1) * (size - 1) * 6];
+        var k = 0;
+        for (var y = 0; y < size - 1; y++)
+        {
+            for (var x = 0; x < size - 1; x++)
+            {
+                var a = y * size + x;
+                indices[k++] = a;
+                indices[k++] = a + 1;
+                indices[k++] = a + size;
+                indices[k++] = a + 1;
+                indices[k++] = a + size + 1;
+                indices[k++] = a + size;
+            }
+        }
+
+        return (vertices, indices);
+    }
+
+    /// <summary>One axis-aligned box (24 verts / 12 tris, Rhino's box render-mesh shape) at (cx,cy,cz).</summary>
+    private static void AppendBox(
+        float[] vertices, int[] indices, ref int vertexCursor, ref int indexCursor,
+        float cx, float cy, float cz, float sx, float sy, float sz)
+    {
+        var faces = new[]
+        {
+            new[] { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0 },
+            new[] { 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1 },
+            new[] { 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1 },
+            new[] { 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1 },
+            new[] { 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1 },
+            new[] { 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1 }
+        };
+
+        foreach (var face in faces)
+        {
+            var baseIndex = vertexCursor / 3;
+            for (var c = 0; c < 4; c++)
+            {
+                vertices[vertexCursor++] = cx + face[c * 3] * sx;
+                vertices[vertexCursor++] = cy + face[c * 3 + 1] * sy;
+                vertices[vertexCursor++] = cz + face[c * 3 + 2] * sz;
+            }
+
+            indices[indexCursor++] = baseIndex;
+            indices[indexCursor++] = baseIndex + 1;
+            indices[indexCursor++] = baseIndex + 2;
+            indices[indexCursor++] = baseIndex;
+            indices[indexCursor++] = baseIndex + 2;
+            indices[indexCursor++] = baseIndex + 3;
+        }
+    }
+
+    /// <summary>CAD scatter: many small boxes with unique sizes at pseudo-random positions.</summary>
+    private static (float[] vertices, int[] indices) PartScatter(int count)
+    {
+        var vertices = new float[count * 24 * 3];
+        var indices = new int[count * 12 * 3];
+        var vertexCursor = 0;
+        var indexCursor = 0;
+        var state = 777u;
+        float Next()
+        {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return (state % 10000u) / 10000.0f;
+        }
+
+        for (var b = 0; b < count; b++)
+        {
+            AppendBox(vertices, indices, ref vertexCursor, ref indexCursor,
+                Next() * 100f, Next() * 100f, Next() * 20f,
+                0.5f + Next() * 3f, 0.5f + Next() * 3f, 0.5f + Next() * 3f);
+        }
+
+        return (vertices, indices);
+    }
+
+    /// <summary>
+    ///     The same part placed many times on a grid — repeated instances. The delta filter makes
+    ///     each copy's vertex stream translation-invariant, so DEFLATE's LZ77 window dedupes the
+    ///     2nd..Nth copies; this fact pins that behaviour.
+    /// </summary>
+    private static (float[] vertices, int[] indices) InstancedParts(int count)
+    {
+        var vertices = new float[count * 24 * 3];
+        var indices = new int[count * 12 * 3];
+        var vertexCursor = 0;
+        var indexCursor = 0;
+        var state = 4242u;
+        uint Next()
+        {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return state;
+        }
+
+        for (var b = 0; b < count; b++)
+        {
+            AppendBox(vertices, indices, ref vertexCursor, ref indexCursor,
+                Next() % 80u * 5f, Next() % 80u * 5f, Next() % 10u * 5f,
+                2f, 1.5f, 3f);
+        }
+
+        return (vertices, indices);
+    }
+
+    [Fact]
+    public void Ratio_WeldedGrid()
+    {
+        // Measured 9.1% on net8 (the v3 interleaved layout produced 12.4%).
+        RunRatio("welded grid 256x256 (65k verts, 130k tris)", WeldedGrid(256), maxRatio: 0.11);
+    }
+
+    [Fact]
+    public void Ratio_PartScatter()
+    {
+        // Measured 6.8% on net8 (v3: ~14%).
+        RunRatio("part scatter 3000 boxes (72k verts, 36k tris)", PartScatter(3000), maxRatio: 0.09);
+    }
+
+    [Fact]
+    public void Ratio_InstancedParts()
+    {
+        // Measured 4.5% on net8 (v3: ~9%). Slack covers DEFLATE variance across runtimes.
+        RunRatio("instanced part x2000 (48k verts, 24k tris)", InstancedParts(2000), maxRatio: 0.06);
+    }
+
+    private void RunRatio(string label, (float[] vertices, int[] indices) mesh, double maxRatio)
+    {
+        var (vertices, indices) = mesh;
+
+        byte[] rawSlva;
+        BinaryGeometryWriter.WriteResult result;
+        using (var ms = new MemoryStream())
+        {
+            result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+            rawSlva = ms.ToArray();
+        }
+
+        Assert.False(result.UsedFloat32, "coherent bench geometry must stay on the quantized path");
+        var compressed = BlobCompressor.Compress(rawSlva);
+
+        // Ratio baseline: the unfiltered quantized payload (int16 verts + native-width indices),
+        // i.e. what the streams occupy before any filtering or DEFLATE.
+        var indexBytes = indices.Length * (result.UsedUint16Indices ? 2 : 4);
+        var payloadBytes = result.VertexCount * 6 + indexBytes;
+        var ratio = (double)compressed.Length / payloadBytes;
+
+        _output.WriteLine($"=== {label} ===");
+        _output.WriteLine($"Quantized payload   : {payloadBytes,12:N0} bytes");
+        _output.WriteLine($"Raw SLVA            : {rawSlva.Length,12:N0} bytes");
+        _output.WriteLine($"Deflated (SLVZ)     : {compressed.Length,12:N0} bytes");
+        _output.WriteLine($"Ratio               : {ratio * 100:F1}% of quantized payload (ceiling {maxRatio * 100:F0}%)");
+
+        Assert.True(ratio < maxRatio,
+            $"{label}: deflated ratio {ratio:P1} exceeds the {maxRatio:P0} ceiling — " +
+            "the filter/layout pipeline compresses coherent geometry worse than it used to.");
+    }
 }
