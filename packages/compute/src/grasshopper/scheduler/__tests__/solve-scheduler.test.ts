@@ -900,6 +900,26 @@ describe('SolveScheduler', () => {
 			expect(third.filename).toBe('clean');
 			expect(queue).toHaveLength(2);
 		});
+
+		it('recognizes PascalCase `Errors` (stock mcneel casing) for cacheErroredSolves', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { cacheErroredSolves: false, maxBytes: 100_000 }
+			});
+
+			const tree = [{ ParamName: 'x', InnerTree: {} } as any];
+
+			const first = scheduler.solve('def', tree);
+			queue[0].release({ ...makeResponse('errored'), Errors: ['guard tripped'] } as any);
+			await first;
+
+			// Not cached — the identical input executes again.
+			const secondPromise = scheduler.solve('def', tree);
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			queue[1].release(makeResponse('clean'));
+			await secondPromise;
+		});
 	});
 
 	describe('observability', () => {

@@ -1,4 +1,5 @@
 import { ComputeError, ErrorCodes, type ErrorCode } from '../errors';
+import { readField } from '../utils/read-field';
 import { log } from './log';
 import { fireServerTiming } from './server-timing';
 import { setResponseWireSize } from './wire-size';
@@ -51,6 +52,10 @@ export function throwHttpError(
 	};
 
 	const errorMap: Record<number, { message: string; code: ErrorCode }> = {
+		400: {
+			message: `Bad request: ${statusText}${bodyHint}`,
+			code: ErrorCodes.VALIDATION_ERROR
+		},
 		401: { message: `HTTP ${status}: ${statusText}${bodyHint}`, code: ErrorCodes.AUTH_ERROR },
 		403: { message: `HTTP ${status}: ${statusText}${bodyHint}`, code: ErrorCodes.AUTH_ERROR },
 		404: { message: `Endpoint not found: ${fullUrl}`, code: ErrorCodes.NOT_FOUND },
@@ -61,7 +66,7 @@ export function throwHttpError(
 		429: { message: `Rate limit exceeded${bodyHint}`, code: ErrorCodes.RATE_LIMIT },
 		500: { message: `Server error: ${statusText}${bodyHint}`, code: ErrorCodes.COMPUTATION_ERROR },
 		502: {
-			message: `Service unavailable: ${statusText}${bodyHint}`,
+			message: `Bad gateway: ${statusText}${bodyHint}`,
 			code: ErrorCodes.NETWORK_ERROR
 		},
 		503: {
@@ -157,19 +162,25 @@ export async function handleResponse(
 		if (response.status === 500) {
 			try {
 				const parsed = JSON.parse(errorBody);
-				// If it has values, it's a partial success with errors
-				if (parsed?.values && (parsed.errors || parsed.warnings)) {
+				// If it has values, it's a partial success with errors. Read the fields
+				// case-insensitively: `values`/`errors`/`warnings` arrive PascalCase from
+				// stock mcneel servers — a casing miss here would throw the partial
+				// values away as a hard failure.
+				const values = readField(parsed, 'values');
+				const solveErrors = readField<unknown[]>(parsed, 'errors');
+				const solveWarnings = readField<unknown[]>(parsed, 'warnings');
+				if (values && (solveErrors || solveWarnings)) {
 					setResponseWireSize(parsed, errorBody.length);
 					if (debug) {
 						log(
 							`⚠️ Request [${requestId}] completed with solver errors in ${responseTime}ms`,
 							true
 						);
-						if (parsed.errors?.length > 0) {
-							log(`   Errors: ${JSON.stringify(parsed.errors, null, 2)}`, true);
+						if (solveErrors && solveErrors.length > 0) {
+							log(`   Errors: ${JSON.stringify(solveErrors, null, 2)}`, true);
 						}
-						if (parsed.warnings?.length > 0) {
-							log(`   Warnings: ${JSON.stringify(parsed.warnings, null, 2)}`, true);
+						if (solveWarnings && solveWarnings.length > 0) {
+							log(`   Warnings: ${JSON.stringify(solveWarnings, null, 2)}`, true);
 						}
 					}
 					fireServerTiming(response, requestId, onServerTiming, debug);
