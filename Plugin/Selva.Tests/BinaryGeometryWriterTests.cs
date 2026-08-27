@@ -488,8 +488,9 @@ public class BinaryGeometryWriterTests
     [Fact]
     public void Write_RepeatedParts_PicksInterleavedLayout()
     {
-        // Byte-identical repeats: planar scatters each copy across six planes and breaks the LZ77
-        // matches interleaved preserves, so the probe must land on interleaved here.
+        // Eight-vertex boxes: small enough that a copy's delta stream is too short to survive
+        // planar's split across six planes, so the probe must land on interleaved here. Part size
+        // is what decides this, not the repeat count — dense repeated parts go the other way.
         var (vertices, indices) = RepeatedParts(2000);
 
         using var ms = new MemoryStream();

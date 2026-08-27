@@ -129,8 +129,8 @@ public class BinaryGeometryReaderTests
     [Fact]
     public void Read_DecodesTheInterleavedLayout()
     {
-        // Byte-identical repeated boxes: the regime where the probe rejects planar, so this pins
-        // the reader's other branch.
+        // Eight-vertex boxes, the regime where the probe rejects planar (small parts favour
+        // interleaved), so this pins the reader's other branch.
         const int count = 2000;
         var vertices = new float[count * 8 * 3];
         var indices = new int[count * 12 * 3];
