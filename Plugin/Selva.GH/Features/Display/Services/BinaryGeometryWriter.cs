@@ -59,9 +59,9 @@ namespace Selva.GH.Features.Display.Services;
 ///
 ///     Byte lengths and the delta/zigzag semantics are identical to the interleaved v3 layout —
 ///     only byte order within each block changes, and the flag says which a blob uses. The writer
-///     picks per blob by measuring both (see <see cref="ChoosePlanarLayout" />): planar wins
-///     28-50% on welded surfaces and CAD part scatters, interleaved wins up to 25% when the batch
-///     is mostly byte-identical repeated parts. Colors keep the interleaved layout unconditionally:
+///     picks per blob by measuring both (see <see cref="ChoosePlanarLayout" />): planar wins on
+///     welded surfaces and on scatters of substantial parts, interleaved wins when the batch is
+///     many very small repeated parts. Colors keep the interleaved layout unconditionally:
 ///     planar per-channel loses on noisy gradient data (measured +58%), and the chunk is small
 ///     either way.
 ///
@@ -441,16 +441,23 @@ public static class BinaryGeometryWriter
 
     /// <summary>
     ///     Picks the byte layout for the filtered streams by trial-deflating both and keeping the
-    ///     smaller. Neither layout wins universally:
+    ///     smaller. Neither layout wins universally, and which one does turns on the vertex count of
+    ///     the individual repeated part, not on how many copies the batch holds:
     ///
     ///     Planar byte-split groups like-valued bytes, so the high planes of small deltas collapse to
-    ///     runs of zeros — 28-50% smaller on welded surfaces and CAD part scatters.
+    ///     runs of zeros. This needs each plane's run to be long enough to matter, which holds once a
+    ///     part carries more than roughly 64 vertices — from there planar's margin grows fast
+    ///     (measured 21% at 64 vertices per part, 75% at 1024).
     ///
-    ///     Interleaved keeps each mesh's bytes contiguous, so DEFLATE's LZ77 window matches a whole
-    ///     repeated part as one long run. Definitions that array or instance one part (a screw placed
-    ///     500 times) compress up to 25% better interleaved, because planar scatters each copy's
-    ///     bytes across six distant planes and breaks those matches. The crossover sits around 75-80%
-    ///     byte-identical repeats — too close to call from a cheap heuristic, hence the measurement.
+    ///     Interleaved keeps each part's bytes contiguous, so DEFLATE's LZ77 window matches a whole
+    ///     repeated part as one run. Below roughly 16 vertices per part a copy's delta stream is only
+    ///     tens of bytes, too short to form useful matches once planar scatters it across six distant
+    ///     planes, so interleaved wins instead — measured 6-13% on batches of thousands of boxes and
+    ///     similar fixings, which is what an assembly of bolts, posts or panel clips looks like.
+    ///
+    ///     The two regimes sit close together between roughly 16 and 64 vertices per part, where the
+    ///     margin either way is a percent or two. Nothing cheap infers part size from a flat vertex
+    ///     array — a batch is one concatenated buffer with no part boundaries — hence the measurement.
     ///
     ///     The probe deflates the vertex stream only (the dominant block, and the one whose layout
     ///     drives the index stream's fate) at <see cref="CompressionLevel.Fastest" />, which ranks the

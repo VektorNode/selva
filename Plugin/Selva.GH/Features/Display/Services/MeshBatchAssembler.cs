@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Selva.GH.Utilities.Helpers;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -209,20 +208,6 @@ public static class MeshBatchAssembler
         // travel inside a JSON values message or a future binary WebSocket frame.
         var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
 
-        // Skip the encode when this exact content was already encoded. A re-solve triggered by an
-        // unrelated upstream change (dragging one slider) re-runs this for every branch, and
-        // unchanged branches produce byte-identical arrays and metadata — writing + deflating them
-        // again is pure waste, and hashing is a fraction of that cost. See BatchBlobCache for the
-        // identity and memory-policy rationale.
-        var cacheKey = BlobKey.Compute(metadataJson, allVertices, allIndices, allUvs, allColors);
-        var cached = BatchBlobCache.TryGet(cacheKey);
-        if (cached != null)
-        {
-            batch.CompressedData = cached;
-            LogCacheStats();
-            return batch;
-        }
-
         using (var ms = new MemoryStream())
         {
             BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices,
@@ -234,21 +219,7 @@ public static class MeshBatchAssembler
             batch.CompressedData = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
 
-        BatchBlobCache.Store(cacheKey, batch.CompressedData);
-        LogCacheStats();
-
         return batch;
-    }
-
-    /// <summary>
-    ///     Logs <see cref="BatchBlobCache" /> hit rate. The cache's failure mode on a hash
-    ///     collision is silently serving the wrong geometry, so its real-world hit rate is worth
-    ///     watching outside unit tests.
-    /// </summary>
-    private static void LogCacheStats()
-    {
-        var (count, bytes, hits, misses) = BatchBlobCache.Stats();
-        Logger.Log($"BatchBlobCache: entries={count} bytes={bytes} hits={hits} misses={misses}");
     }
 
     /// <summary>
