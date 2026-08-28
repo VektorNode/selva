@@ -43,7 +43,7 @@ public class MeshBatchAssemblerTests
         names ??= verts.ConvertAll(_ => "mesh");
         return MeshBatchAssembler.CreateBatch(
             verts, faces, names, materials, metadataList: null, layers: layers,
-            sourceComponentId: "component-1", uvArrays: uvs, colorArrays: colors);
+            batchId: "component-1", uvArrays: uvs, colorArrays: colors);
     }
 
     // ========================================================================
@@ -285,7 +285,7 @@ public class MeshBatchAssemblerTests
         // "is there geometry?" branch.
         var batch = MeshBatchAssembler.CreateBatch(
             new List<float[]>(), new List<int[]>(), new List<string>(),
-            new List<ThreeMaterial>(), sourceComponentId: "component-1");
+            new List<ThreeMaterial>(), batchId: "component-1");
 
         Assert.NotNull(batch.CompressedData);
 

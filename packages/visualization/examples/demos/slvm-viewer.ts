@@ -22,7 +22,7 @@ import * as THREE from 'three';
 
 import { createPlayground } from '../shared/playground';
 import { parseMeshBatchBlob } from '@/parse/index.js';
-import { updateScene, type ThreeInitializerOptions, type Look } from '@/render/index.js';
+import { LOOKS, updateScene, type ThreeInitializerOptions, type Look } from '@/render/index.js';
 
 // Bundled sample mesh files, served by Vite via ?url.
 import sampleSmallUrl from '../fixtures/test_file.slvm?url';
@@ -91,10 +91,13 @@ const DMF_MAGIC = 0x31464d44; // "DMF1" little-endian
 const DMF_HEADER_PREAMBLE = 12; // magic(4) + version(4) + jsonLen(4)
 
 function dmfBlob(bytes: Uint8Array): Uint8Array {
-	if (bytes.byteLength < DMF_HEADER_PREAMBLE) throw new Error('File too small to be a DMF.');
+	if (bytes.byteLength < DMF_HEADER_PREAMBLE) throw new Error('File too small to be a mesh file.');
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	if (view.getUint32(0, true) !== DMF_MAGIC)
-		throw new Error('Not a DMF file (bad magic — expected "DMF1").');
+
+	// An SLVM v2 file IS the blob (a chunked container the parser sniffs directly); only legacy
+	// DMF1 files carry a sidecar in front that has to be stripped.
+	if (view.getUint32(0, true) !== DMF_MAGIC) return bytes;
+
 	const jsonLen = view.getUint32(8, true);
 	const blobStart = DMF_HEADER_PREAMBLE + jsonLen;
 	if (blobStart > bytes.byteLength)
@@ -196,7 +199,7 @@ pg.addButton('Sample: test_mesh.slvm', () => void loadDmfUrl(sampleMeshUrl, 'tes
 // These are the two controls that shape the look. The look retunes lighting/material; edges overlay
 // crease lines. Both are exactly what Viewer.svelte's Display menu drives (setLook / applyEdges).
 pg.addSection('Display');
-const lookSelect = pg.addSelect('Look', ['technical', 'studio', 'showcase'], 'technical', (v) => {
+const lookSelect = pg.addSelect('Look', [...LOOKS], 'technical', (v) => {
 	renderStyle = v as Look;
 	viewer.setLook(renderStyle);
 });

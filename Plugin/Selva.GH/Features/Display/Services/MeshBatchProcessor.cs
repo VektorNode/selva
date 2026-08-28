@@ -15,7 +15,7 @@ public static class MeshBatchProcessor
         List<ThreeMaterial> materials,
         List<Dictionary<string, string>> metadataList = null,
         List<string> layers = null,
-        string sourceComponentId = null)
+        string batchId = null)
     {
         // Serial conversion path. Callers that already extracted arrays in their own parallel pass
         // should call MeshBatchAssembler directly to skip this.
@@ -36,6 +36,6 @@ public static class MeshBatchProcessor
         }
 
         return MeshBatchAssembler.CreateBatch(vertexArrays, faceArrays, names, materials, metadataList,
-            layers, sourceComponentId);
+            layers, batchId);
     }
 }

@@ -155,6 +155,36 @@
 			PublicKeyToken=b03f5f7f11d50a3a
 		</value>
 	</data>
+	<data name="ParamWebDisplay" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\ParamWebDisplay.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="ParamThreeMaterial" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\ParamThreeMaterial.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="DisplayToFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\DisplayToFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="DisplayFromFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\DisplayFromFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="DeconstructDisplay" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\DeconstructDisplay.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="DisplaySize" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\DisplaySize.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
 	<data name="Icon" type="System.Resources.ResXFileRef, System.Windows.Forms">
 		<value>..\Resources\Icons\Icon.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
 			PublicKeyToken=b03f5f7f11d50a3a

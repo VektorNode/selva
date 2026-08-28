@@ -21,7 +21,7 @@ public class GH_DisplayToFile : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.WebDisplay;
+    protected override Bitmap Icon => Resources.DisplayToFile;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("3C9A7E1F-4D62-4B8A-8F05-6E1D2C3B4A50");
 

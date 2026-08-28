@@ -27,7 +27,7 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
     }
 
     protected override Bitmap Icon => Resources.RenderPdf;
-    public override GH_Exposure Exposure => GH_Exposure.secondary;
+    public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("7A284A84-2669-46B8-9FCB-46161D611689");
 
     public override void CreateAttributes()

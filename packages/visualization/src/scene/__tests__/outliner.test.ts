@@ -47,6 +47,27 @@ describe('createSceneOutliner', () => {
 		expect([...outliner.layerGroups('ridge').keys()]).toEqual(['Roof']);
 	});
 
+	// Hiding one layer used to strike through every other layer in the panel, because meshes that
+	// carried a component id but no index all resolved to one hidden-set key.
+	it('hides only the toggled layer when meshes carry no original index', () => {
+		const { scene } = sceneWith(
+			{ sourceComponentId: 'gh-1', layer: 'IfcWall', name: 'w0' },
+			{ sourceComponentId: 'gh-1', layer: 'IfcWall', name: 'w1' },
+			{ sourceComponentId: 'gh-1', layer: 'IfcSlab', name: 's0' },
+			{ sourceComponentId: 'gh-1', layer: 'IfcDoor', name: 'd0' }
+		);
+		const outliner = createSceneOutliner(scene);
+		const groups = outliner.layerGroups();
+
+		outliner.visibility.toggleLayer(groups.get('IfcWall')!);
+
+		expect(outliner.visibility.isLayerHidden(groups.get('IfcWall')!)).toBe(true);
+		for (const other of ['IfcSlab', 'IfcDoor']) {
+			expect(outliner.visibility.isLayerHidden(groups.get(other)!)).toBe(false);
+			expect(outliner.visibility.isLayerPartial(groups.get(other)!)).toBe(false);
+		}
+	});
+
 	describe('collapse', () => {
 		it('toggles a layer open and shut', () => {
 			const { scene } = sceneWith({ layer: 'Walls' });

@@ -28,6 +28,9 @@ export interface MeshBatchBuilderOptions {
 	 * need exact roundtrips of arbitrary float values.
 	 */
 	forceFloat32?: boolean;
+	/** Meshes cycle over this many layers. 1 pins the batch to one layer, so merging by material
+	 *  is not additionally split by layer. */
+	layerCount?: number;
 }
 
 export interface BuiltMeshBatch {
@@ -66,7 +69,8 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 		vertsPerMesh,
 		sourceComponentId,
 		seed = 1,
-		forceFloat32 = false
+		forceFloat32 = false,
+		layerCount = 4
 	} = options;
 
 	if (materialCount < 1) throw new Error('materialCount must be >= 1');
@@ -121,7 +125,7 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 
 		const meta: MeshMetadata = {
 			name: `mesh_${m}`,
-			layer: `Layer/${m % 4}`,
+			layer: `Layer/${m % layerCount}`,
 			originalIndex: m,
 			vertexCount: vertsPerMesh,
 			indexCount: trianglesPerMesh * 3,

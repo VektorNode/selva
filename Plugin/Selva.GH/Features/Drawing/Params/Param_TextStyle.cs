@@ -9,7 +9,7 @@ public class Param_TextStyle : GH_Param<TextStyleGoo>
     public Param_TextStyle()
         : base("Param Text Style", "PTS",
             "Text style (font, size, color, alignment)",
-            "Selva", "Elements", GH_ParamAccess.item)
+            "Params", "Selva", GH_ParamAccess.item)
     { }
 
     public Param_TextStyle(GH_InstanceDescription tag) : base(tag) { }

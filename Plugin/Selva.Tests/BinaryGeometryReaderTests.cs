@@ -261,7 +261,7 @@ public class BinaryGeometryReaderTests
         // geometry; losing it would draw nothing while the vertex data decoded fine.
         var batch = new DisplayBatch
         {
-            SourceComponentId = "component-42",
+            BatchId = "component-42",
             Materials = new System.Collections.Generic.List<SerializableMaterial>
             {
                 new SerializableMaterial { Color = "#FF0000", Opacity = 1.0 }
@@ -287,7 +287,7 @@ public class BinaryGeometryReaderTests
             new float[] { 0, 0, 0, 1, 1, 1, 2, 0, 2 }, new[] { 0, 1, 2 },
             JsonConvert.SerializeObject(batch));
 
-        Assert.Equal("component-42", decoded.Metadata.SourceComponentId);
+        Assert.Equal("component-42", decoded.Metadata.BatchId);
         Assert.Equal("#FF0000", decoded.Metadata.Materials[0].Color);
         var mesh = decoded.Metadata.Groups[0].Meshes[0];
         Assert.Equal("wall", mesh.Name);

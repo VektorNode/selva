@@ -15,7 +15,7 @@ export type { Logger } from './logger.js';
 export { decodeBase64ToBinary } from './encoding.js';
 
 export { LOOKS } from './types.js';
-export type { Look, LookPreset, MaterialAppearanceOptions } from './types.js';
+export type { Look, LookMaterialOverride, LookPreset, MaterialAppearanceOptions } from './types.js';
 
 export { LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from './looks.js';
 

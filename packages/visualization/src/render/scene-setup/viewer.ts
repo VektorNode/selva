@@ -6,7 +6,7 @@ import type { Grid } from '../grid.js';
 import type { LabelLayer } from '../label-layer.js';
 import type { MeasureTool } from '../measure.js';
 import type { ToolRegistry } from '../tool-registry.js';
-import type { MaterialAppearanceOptions } from '../types.js';
+import type { Look, MaterialAppearanceOptions } from '../types.js';
 import type { ViewGizmo } from '../view-gizmo.js';
 
 export interface ThreeViewer {
@@ -52,7 +52,7 @@ export interface ThreeViewer {
 	 * Retunes lighting/material (tone mapping, fill, IBL, AO) only — never edges/grid. Overwrites
 	 * any granular lighting dials set earlier with the preset's values.
 	 */
-	setLook: (look: 'studio' | 'technical' | 'showcase') => void;
+	setLook: (look: Look) => void;
 	/**
 	 * Raising `hemisphereIntensity` is the most effective way to lift shadowed surfaces a dark HDR
 	 * leaves black. Lazily creates the hemisphere light if the viewer was built without one; `0` turns

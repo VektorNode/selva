@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { buildMeshBatch, encodeBatchPayload } from '@tests/helpers/mesh-batch-builder';
+import type { MeshBatchBuilderOptions } from '@tests/helpers/mesh-batch-builder';
 import { decodeBase64ToBinary } from '../../../shared/index.js';
 
 import { parseMeshBatch, parseMeshBatchObject, parseMeshBatchBlob } from '../batch-parser';
@@ -11,7 +12,12 @@ const COORD_TRANSFORM_TOLERANCE = 1e-5;
 describe('parseMeshBatchObject', () => {
 	describe('merged path (mergeByMaterial=true)', () => {
 		it('produces one mesh per material group', async () => {
-			const { batch } = buildMeshBatch({ materialCount: 3, meshCount: 12, vertsPerMesh: 6 });
+			const { batch } = buildMeshBatch({
+				materialCount: 3,
+				meshCount: 12,
+				vertsPerMesh: 6,
+				layerCount: 1
+			});
 
 			const meshes = await parseMeshBatchObject(batch, {
 				mergeByMaterial: true
@@ -65,7 +71,12 @@ describe('parseMeshBatchObject', () => {
 		});
 
 		it('populates userData with first-mesh metadata and mergedFrom for siblings', async () => {
-			const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 4, vertsPerMesh: 3 });
+			const { batch } = buildMeshBatch({
+				materialCount: 1,
+				meshCount: 4,
+				vertsPerMesh: 3,
+				layerCount: 1
+			});
 
 			const meshes = await parseMeshBatchObject(batch, {
 				mergeByMaterial: true
@@ -78,6 +89,29 @@ describe('parseMeshBatchObject', () => {
 			expect(mesh.userData.originalIndex).toBe(0);
 			expect(mesh.userData.mergedFrom).toHaveLength(3);
 			expect(mesh.userData.mergedFrom[0].name).toBe('mesh_1');
+		});
+
+		it('never merges across layers, so hiding one layer cannot hide another', async () => {
+			// One material, four meshes, two layers. Merging by material alone would produce a single
+			// object filed under the first layer, and the outliner would hide both layers at once.
+			const { batch } = buildMeshBatch({
+				materialCount: 1,
+				meshCount: 4,
+				vertsPerMesh: 3,
+				layerCount: 2
+			});
+
+			const meshes = await parseMeshBatchObject(batch, { mergeByMaterial: true });
+
+			expect(meshes).toHaveLength(2);
+			expect(meshes.map((m) => m.userData.layer).sort()).toEqual(['Layer/0', 'Layer/1']);
+			for (const mesh of meshes) {
+				const layers = [
+					mesh.userData.layer,
+					...(mesh.userData.mergedFrom ?? []).map((m: { layer: string }) => m.layer)
+				];
+				expect(new Set(layers).size).toBe(1);
+			}
 		});
 
 		it('falls through to individual path when a group has only one mesh', async () => {
@@ -255,14 +289,9 @@ describe('parseMeshBatchObject', () => {
 
 	describe('uv and vertex-color attributes', () => {
 		/** Re-encodes a built batch with deterministic per-vertex uv/color ramps for slice checks. */
-		function withChannels(options: {
-			materialCount: number;
-			meshCount: number;
-			vertsPerMesh: number;
-			uvs?: boolean;
-			colors?: boolean;
-			map?: string;
-		}) {
+		function withChannels(
+			options: MeshBatchBuilderOptions & { uvs?: boolean; colors?: boolean; map?: string }
+		) {
 			const built = buildMeshBatch(options);
 			const vertexCount = built.rawVertices.length / 3;
 
@@ -326,6 +355,7 @@ describe('parseMeshBatchObject', () => {
 				materialCount: 1,
 				meshCount: 2,
 				vertsPerMesh: 3,
+				layerCount: 1,
 				uvs: true,
 				colors: true
 			});
@@ -434,6 +464,7 @@ describe('parseMeshBatchObject', () => {
 				materialCount: 1,
 				meshCount: 3,
 				vertsPerMesh: 3,
+				layerCount: 1,
 				sourceComponentId: 'gh-component-xyz'
 			});
 
@@ -446,7 +477,12 @@ describe('parseMeshBatchObject', () => {
 
 describe('parseMeshBatch (JSON entry point)', () => {
 	it('parses a JSON-stringified DisplayBatch end-to-end', async () => {
-		const { batch } = buildMeshBatch({ materialCount: 2, meshCount: 6, vertsPerMesh: 4 });
+		const { batch } = buildMeshBatch({
+			materialCount: 2,
+			meshCount: 6,
+			vertsPerMesh: 4,
+			layerCount: 1
+		});
 
 		const meshes = await parseMeshBatch(JSON.stringify(batch), {
 			mergeByMaterial: true
@@ -568,7 +604,12 @@ describe('parseMeshBatchBlob (binary entry point)', () => {
 	// reads materials/groups/sourceComponentId from the blob's embedded metadata
 	// rather than an outer JSON envelope.
 	it('parses raw blob bytes end-to-end, honoring the shared parsing options', async () => {
-		const { batch } = buildMeshBatch({ materialCount: 2, meshCount: 6, vertsPerMesh: 4 });
+		const { batch } = buildMeshBatch({
+			materialCount: 2,
+			meshCount: 6,
+			vertsPerMesh: 4,
+			layerCount: 1
+		});
 		const blob = decodeBase64ToBinary(batch.compressedData);
 
 		const meshes = await parseMeshBatchBlob(blob, {

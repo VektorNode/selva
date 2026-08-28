@@ -14,7 +14,8 @@ import {
 	createIndividualMeshes,
 	createMergedMesh,
 	finalizeMergedMesh,
-	finalizeSingleMesh
+	finalizeSingleMesh,
+	splitGroupByLayer
 } from './batch/merge.js';
 import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
 
@@ -251,7 +252,10 @@ function buildMeshesFromParsed(
 
 	const meshes: THREE.Mesh[] = [];
 
-	for (const group of groups) {
+	// Merge within a layer, never across one: see `splitGroupByLayer`.
+	const mergeGroups = mergeByMaterial ? groups.flatMap(splitGroupByLayer) : groups;
+
+	for (const group of mergeGroups) {
 		if (mergeByMaterial && group.meshes.length > 1) {
 			const mergedMesh = createMergedMesh(
 				group,
@@ -352,7 +356,9 @@ async function tryBuildViaWorker(
 	});
 	const jobs: AssemblyJob[] = [];
 	const jobRefs: JobRef[] = [];
-	for (const group of groups) {
+	// Same layer-aware merge grouping as the synchronous path.
+	const mergeGroups = opts.mergeByMaterial ? groups.flatMap(splitGroupByLayer) : groups;
+	for (const group of mergeGroups) {
 		if (opts.mergeByMaterial && group.meshes.length > 1) {
 			jobs.push({ kind: 'merged', windows: group.meshes.map(windowOf) });
 			jobRefs.push({ kind: 'merged', group });

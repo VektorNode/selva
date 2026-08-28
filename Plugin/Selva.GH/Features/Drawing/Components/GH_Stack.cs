@@ -24,7 +24,7 @@ public class GH_Stack : GH_Component
     }
 
     protected override Bitmap Icon => Resources.Stack;
-    public override GH_Exposure Exposure => GH_Exposure.quinary;
+    public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("3601FD36-C04E-4E66-A6F1-19A1A3DA301C");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

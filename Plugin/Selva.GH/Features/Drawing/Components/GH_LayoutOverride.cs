@@ -26,7 +26,7 @@ public class GH_LayoutOverride : GH_Component
     }
 
     protected override Bitmap Icon => Resources.SectionSettings;
-    public override GH_Exposure Exposure => GH_Exposure.secondary;
+    public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("3F5F0E10-2A21-4F0E-9F25-7B0F2C7C5E91");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

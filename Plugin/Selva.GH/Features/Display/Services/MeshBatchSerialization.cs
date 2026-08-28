@@ -4,8 +4,9 @@ namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
 ///     Serializes a <see cref="DisplayBatch" /> for the binary mesh blob's metadata header, with the
-///     binary payload stripped out (materials/groups/ids only). Used by both <see cref="MeshBatchProcessor" />
-///     and <see cref="DisplayBatchTransformer" /> so the envelope is produced identically either way.
+///     binary payload stripped out (materials/groups/ids only). Only the legacy re-encode path in
+///     <see cref="DisplayBatchTransformer" /> still needs it: SLVM v2 blobs carry their metadata
+///     in the container's TABL chunk instead of embedded JSON.
 /// </summary>
 public static class MeshBatchSerialization
 {

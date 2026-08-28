@@ -15,7 +15,7 @@ re-exported from `render/`, which is the barrel a viewer host already imports.
 | `errors.ts`           | `VisualizationError`, `ErrorCodes`                                                         |
 | `logger.ts`           | `getLogger`, `setLogger`, `enableDebugLogging`, the `Logger` interface                     |
 | `encoding.ts`         | `decodeBase64ToBinary`                                                                     |
-| `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `MaterialAppearanceOptions`                                  |
+| `types.ts`            | `LOOKS`/`Look`, `LookPreset`, `LookMaterialOverride`, `MaterialAppearanceOptions`          |
 | `looks.ts`            | `LOOK_PRESETS`, `DEFAULT_LOOK`, `materialAppearanceForLook`                                |
 | `geometry.ts`         | `parseColor`, `applyOffset`, `computeCombinedBoundingBox`                                  |
 | `gpu-ownership.ts`    | `canDisposeMaterial`, `protectMaterials` — the module-singleton claim                      |
@@ -39,3 +39,8 @@ in both `parse/` and `render/` obeys — see `gpu-ownership.ts`'s docblock for t
 A new look: add an entry to `LOOKS` and a matching `LOOK_PRESETS` record — `Look` derives from
 `LOOKS`, so the type and the list can't drift. A look carries **only** lighting/material dials, never
 edges or grid (independent overlays).
+
+A look that also repaints the geometry (as `arctic` and `xray` do) sets `materialOverride`.
+`setLook` snapshots each material's parsed values before the first override and restores them when
+switching to a look without one, so the model's own colours survive the round trip. Hosts that
+re-solve must call `setLook` again afterwards: the new meshes arrive with the parser's materials.

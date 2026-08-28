@@ -9,7 +9,7 @@ public class Param_Fill : GH_Param<FillGoo>
     public Param_Fill()
         : base("Param Fill", "PFil",
             "Fill style (color, opacity, hatch pattern)",
-            "Selva", "Elements", GH_ParamAccess.item)
+            "Params", "Selva", GH_ParamAccess.item)
     { }
 
     public Param_Fill(GH_InstanceDescription tag) : base(tag) { }

@@ -94,6 +94,8 @@ export const HOST_IS_LITTLE_ENDIAN = new Uint16Array(new Uint8Array([1, 0]).buff
 export interface BinaryMeshMetadata {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
+	/** The batch's identity namespace — see `DisplayBatch.sourceComponentId`. An SLVM v2 container
+	 *  carries it as `batchId`; the field keeps its wire name here and on mesh `userData`. */
 	sourceComponentId?: string;
 }
 

@@ -58,8 +58,10 @@ export interface DisplayBatch {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
 	compressedData: string;
-	/** InstanceGuid of the WebDisplay GH component that produced this batch; combined with
-	 *  MeshMetadata.originalIndex to backtrack any mesh to its GH source. */
+	/** The batch's identity namespace, combined with `MeshMetadata.originalIndex` to key a mesh
+	 *  across solves. Usually the producing GH component's InstanceGuid, but not always — a
+	 *  combined batch takes the combiner's id, and records each mesh's true origin in its
+	 *  `metadata['gh:component']`. The JSON name is the wire contract and cannot change. */
 	sourceComponentId?: string;
 	/** Non-mesh display items — see {@link DisplayItem}. Parsed by the separate `display-items`
 	 *  path, not the SLVA mesh parser. Omitted when there are none. */

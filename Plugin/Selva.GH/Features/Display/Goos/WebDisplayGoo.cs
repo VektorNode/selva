@@ -1,3 +1,4 @@
+using System.Linq;
 using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
@@ -35,7 +36,11 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     /// <summary>
     ///     Joins every decoded mesh in the batch into a single mesh for a single-item cast. Returns
-    ///     false when the batch has no meshes (e.g. a curves/points-only batch).
+    ///     false when the batch has no meshes (e.g. a curves/points-only batch) or when the join
+    ///     produced an invalid mesh.
+    ///
+    ///     Appends the whole sequence in one call: appending mesh-by-mesh regrows the vertex and
+    ///     face lists on every iteration, which is quadratic over a batch of thousands of meshes.
     /// </summary>
     private bool TryJoinMeshes(out Mesh joined)
     {
@@ -46,9 +51,15 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
         }
 
         joined = new Mesh();
-        foreach (var (mesh, _) in Preview.Meshes)
+        joined.Append(Preview.Meshes.Select(entry => entry.mesh));
+
+        // A batch can exceed what one Mesh can hold. Faces.Count > 0 does not catch that: a mesh
+        // whose faces index past its vertex list still reports faces, and casting it hands
+        // Grasshopper geometry that fails downstream with no indication of where it came from.
+        if (!joined.IsValid)
         {
-            joined.Append(mesh);
+            joined = null;
+            return false;
         }
 
         return joined.Faces.Count > 0;

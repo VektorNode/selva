@@ -38,7 +38,7 @@ public static class MeshBatchAssembler
         List<ThreeMaterial> materials,
         List<Dictionary<string, string>> metadataList = null,
         List<string> layers = null,
-        string sourceComponentId = null,
+        string batchId = null,
         List<float[]> uvArrays = null,
         List<byte[]> colorArrays = null)
     {
@@ -127,7 +127,7 @@ public static class MeshBatchAssembler
                 .Select(SerializableMaterial.FromThreeMaterial)
                 .ToList(),
             Groups = new List<MaterialGroup>(),
-            SourceComponentId = sourceComponentId
+            BatchId = batchId
         };
 
         var allVertices = new float[totalComponentCount];
@@ -203,20 +203,19 @@ public static class MeshBatchAssembler
         // with nothing to spread.
         CopyMeshData(processedMeshes, offsets, allVertices, allIndices, allUvs, allColors);
 
-        // The metadata JSON inside the blob is a self-contained copy of the batch envelope
-        // (without the blob itself), so the format is transport-agnostic — the same bytes can
-        // travel inside a JSON values message or a future binary WebSocket frame.
-        var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
-
+        // The blob is a self-contained SLVM container: geometry as a nested bare SLVA/SLVZ blob,
+        // the object table/materials as binary chunks. The same bytes travel inside a JSON values
+        // message or a binary WebSocket frame; items ride the container only in .slvm files.
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, metadataJson, allVertices, allIndices,
+            BinaryGeometryWriter.Write(ms, "", allVertices, allIndices,
                 uvs: allUvs, colors: allColors);
             // Nothing gzips the blob in transit (no transport gzip on dynamic responses or the
-            // local WS), so this applies an optional gzip pass; Compress returns the original
+            // local WS), so this applies an optional deflate pass; Compress returns the original
             // bytes unchanged when it doesn't help, and the decoder sniffs the leading magic
             // either way. GetBuffer + length avoids a full ToArray copy of the stream.
-            batch.CompressedData = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+            var geometryBlob = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+            batch.CompressedData = SlvmDocument.Write(batch, geometryBlob, includeItems: false);
         }
 
         return batch;

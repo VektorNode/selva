@@ -19,10 +19,11 @@ public class DisplayBatch
     public List<MaterialGroup> Groups { get; set; }
 
     /// <summary>
-    ///     Binary geometry blob written by <see cref="BinaryGeometryWriter" />: magic header,
-    ///     metadata JSON, quantized int16 (or float32) vertices, and uint32 indices. Travels as
-    ///     base64 inside the values JSON for now. Field name is preserved for `.gh` backward
-    ///     compatibility.
+    ///     The batch's binary payload: an SLVM v2 container (<see cref="SlvmDocument" />) holding
+    ///     the geometry blob plus the object table/materials as chunks. Old `.gh` files still hold
+    ///     bare SLVA/SLVZ blobs here; readers dispatch on the leading magic. Travels as base64
+    ///     inside the values JSON, or raw over the WebSocket's binary frames. Field name is
+    ///     preserved for `.gh` backward compatibility.
     ///
     ///     Always present and non-null, even for an items-only batch: the writer emits a valid
     ///     empty blob (vertexCount = 0), so neither side needs an "is the blob present?" branch —
@@ -31,9 +32,23 @@ public class DisplayBatch
     [JsonProperty("compressedData")]
     public byte[] CompressedData { get; set; }
 
-    /// <summary>InstanceGuid of the WebDisplay component that produced this batch.</summary>
+    /// <summary>
+    ///     The batch's identity namespace: one id per batch, which together with a mesh's
+    ///     <see cref="MeshMetadata.OriginalIndex" /> gives the web a key that survives a solve
+    ///     (hidden state, selection, per-object overrides all hang off it).
+    ///
+    ///     Usually the producing Display component's InstanceGuid — stable across solves, which is
+    ///     what makes the key stable. It is NOT always a component: a combined batch takes the
+    ///     combiner's own id, since the sources it merged can no longer own one key space between
+    ///     them. Which component actually produced a mesh is recorded per mesh instead, in the
+    ///     <c>gh:component</c> metadata attr.
+    ///
+    ///     The JSON name stays <c>batchId</c>: it is the wire contract with published
+    ///     `@selvajs/*` releases, and it is baked into every pre-v2 blob, `.gh` archive and
+    ///     `.slvm` file on disk.
+    /// </summary>
     [JsonProperty("sourceComponentId")]
-    public string SourceComponentId { get; set; }
+    public string BatchId { get; set; }
 
     /// <summary>
     ///     Non-mesh display items. Omitted from the JSON when empty so mesh-only batches stay
@@ -64,7 +79,7 @@ public class MeshMetadata
 
     /// <summary>
     ///     Index of this mesh in the GH input tree, before material grouping. Together with
-    ///     <see cref="DisplayBatch.SourceComponentId" />, uniquely identifies the GH source.
+    ///     <see cref="DisplayBatch.BatchId" />, uniquely identifies the GH source.
     /// </summary>
     [JsonProperty("originalIndex")]
     public int OriginalIndex { get; set; }
@@ -116,6 +131,35 @@ public class SerializableMaterial
             Opacity = material.Opacity,
             Transparent = material.Transparent,
             Map = string.IsNullOrEmpty(material.Map) ? null : material.Map
+        };
+    }
+
+    /// <summary>
+    ///     Back to the canvas-side type, so a decoded batch can be fed to
+    ///     <see cref="MeshBatchAssembler.CreateBatch" /> — which dedupes on
+    ///     <see cref="ThreeMaterial" />, not on this. An unparseable color falls back to white
+    ///     rather than throwing: a bad swatch should not fail a whole combine.
+    /// </summary>
+    public ThreeMaterial ToThreeMaterial()
+    {
+        Color color;
+        try
+        {
+            color = string.IsNullOrEmpty(Color) ? System.Drawing.Color.White : ColorTranslator.FromHtml(Color);
+        }
+        catch (System.Exception)
+        {
+            color = System.Drawing.Color.White;
+        }
+
+        return new ThreeMaterial
+        {
+            Color = color,
+            Metalness = Metalness,
+            Roughness = Roughness,
+            Opacity = Opacity,
+            Transparent = Transparent,
+            Map = Map
         };
     }
 }

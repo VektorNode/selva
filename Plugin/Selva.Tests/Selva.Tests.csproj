@@ -120,6 +120,12 @@
 		<!-- On-disk .slvm/.dmf container. Pure stream + JSON work, no Rhino. -->
 		<Compile Include="..\Selva.GH\Features\Display\Services\SlvmFile.cs"
 		         Link="Linked\SlvmFile.cs"/>
+		<!-- SLVM v2 chunked container. Pure byte work, no Rhino. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\SlvmDocument.cs"
+		         Link="Linked\SlvmDocument.cs"/>
+		<!-- Batch merge: decode + re-encode through the assembler, no Rhino geometry. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\DisplayBatchCombiner.cs"
+		         Link="Linked\DisplayBatchCombiner.cs"/>
 	</ItemGroup>
 
 	<ItemGroup>

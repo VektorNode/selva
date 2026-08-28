@@ -11,23 +11,18 @@ namespace Selva.GH.Features.Display.Services;
 ///     a part once, saving the finished blob, then reloading it cheaply (no re-mesh) when the same
 ///     part is reused many times in a scene.
 ///
-///     The file is self-contained at mesh-display fidelity: it stores the already-encoded SLVA/SLVZ
-///     geometry blob verbatim plus a JSON sidecar for everything else on the batch. It does NOT
-///     store the original Breps/NURBS — it's a display artifact, not a CAD-exchange format.
+///     A file IS an SLVM v2 container (see <see cref="SlvmDocument" /> for the byte spec) — the
+///     wire blob plus the item chunks (curves, points, their Rhino curve JSON). There is no
+///     separate on-disk wrapper. The geometry blob is copied verbatim, never re-encoded, so
+///     save/load adds no quantization or compression cost.
 ///
-///     Wire format (little-endian):
-///
-///     [4]  magic   = "DMF1" (0x44 0x4D 0x46 0x31)
-///     [4]  version = uint32 (currently 1)
-///     [4]  jsonLen = uint32 byte length of the UTF-8 sidecar JSON
-///     [N]  json    = sidecar: { materials, groups, items, sourceComponentId }
-///     [M]  blob    = raw SLVA/SLVZ bytes (DisplayBatch.CompressedData), to end of file
-///
-///     The blob is written verbatim and never re-encoded, so save/load adds no quantization or
-///     compression cost — it's a byte copy on each side.
+///     Files written before SLVM v2 use the DMF1 container (a JSON sidecar in front of the blob);
+///     the reader dispatches on the leading magic and accepts them forever. It does NOT store the
+///     original Breps/NURBS — it's a display artifact, not a CAD-exchange format.
 /// </summary>
 public static class SlvmFile
 {
+    /// <summary>Legacy DMF1 container magic. New files carry <see cref="SlvmDocument.Magic" />.</summary>
     public const uint Magic = 0x31464D44; // "DMF1" little-endian
     public const uint Version = 1;
 
@@ -39,18 +34,6 @@ public static class SlvmFile
     ///     the DMF1 magic either way — the magic never changes.
     /// </summary>
     public const string LegacyExtension = ".dmf";
-
-    /// <summary>
-    ///     The non-blob parts of a <see cref="DisplayBatch" />. Serialized as the file's JSON sidecar
-    ///     so the blob can stay raw bytes. Property names mirror the batch's own JSON shape.
-    /// </summary>
-    private sealed class Sidecar
-    {
-        [JsonProperty("materials")] public object Materials { get; set; }
-        [JsonProperty("groups")] public object Groups { get; set; }
-        [JsonProperty("items")] public object Items { get; set; }
-        [JsonProperty("sourceComponentId")] public string SourceComponentId { get; set; }
-    }
 
     public static void Write(Stream output, DisplayBatch batch)
     {
@@ -64,25 +47,19 @@ public static class SlvmFile
             throw new ArgumentNullException(nameof(batch));
         }
 
-        var sidecar = new Sidecar
+        // The wire blob is already an SLVM container without item chunks; the file is the same
+        // container with them. Rebuild from the batch so items, curve JSON and the id all land in
+        // their chunks; the geometry blob is copied verbatim, never re-encoded.
+        byte[] geometryBlob = null;
+        if (batch.CompressedData != null && batch.CompressedData.Length > 0)
         {
-            Materials = batch.Materials,
-            Groups = batch.Groups,
-            Items = batch.Items,
-            SourceComponentId = batch.SourceComponentId
-        };
-
-        var jsonBytes = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(sidecar));
-        var blob = batch.CompressedData ?? new byte[0];
-
-        using (var writer = new BinaryWriter(output, Encoding.UTF8, leaveOpen: true))
-        {
-            writer.Write(Magic);
-            writer.Write(Version);
-            writer.Write((uint)jsonBytes.Length);
-            writer.Write(jsonBytes);
-            writer.Write(blob);
+            geometryBlob = SlvmDocument.IsSlvm(batch.CompressedData)
+                ? SlvmDocument.Read(batch.CompressedData).GeometryBlob
+                : batch.CompressedData; // legacy SLVA/SLVZ blob from an old .gh — adopt as-is
         }
+
+        var fileBytes = SlvmDocument.Write(batch, geometryBlob, includeItems: true);
+        output.Write(fileBytes, 0, fileBytes.Length);
     }
 
     public static DisplayBatch Read(Stream input)
@@ -92,6 +69,28 @@ public static class SlvmFile
             throw new ArgumentNullException(nameof(input));
         }
 
+        using (var buffer = new MemoryStream())
+        {
+            input.CopyTo(buffer);
+            var bytes = buffer.ToArray();
+
+            if (SlvmDocument.IsSlvm(bytes))
+            {
+                var doc = SlvmDocument.Read(bytes);
+                // In-memory CompressedData is the wire shape: items travel as JSON alongside, so
+                // strip their chunks or a re-broadcast would carry them twice.
+                doc.Batch.CompressedData = SlvmDocument.StripItems(bytes, doc.Batch.BatchId);
+                return doc.Batch;
+            }
+
+            return ReadLegacy(bytes);
+        }
+    }
+
+    /// <summary>The DMF1 container (files written before SLVM v2). Read-only forever.</summary>
+    private static DisplayBatch ReadLegacy(byte[] bytes)
+    {
+        using (var input = new MemoryStream(bytes, false))
         using (var reader = new BinaryReader(input, Encoding.UTF8, leaveOpen: true))
         {
             var magic = reader.ReadUInt32();

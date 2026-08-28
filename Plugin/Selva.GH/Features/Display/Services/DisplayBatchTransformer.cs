@@ -79,9 +79,20 @@ public static class DisplayBatchTransformer
 
         // UVs and vertex colors are invariant under position transforms but must be threaded back
         // through the writer or they'd silently vanish.
-        var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
         using (var ms = new MemoryStream())
         {
+            if (SlvmDocument.IsSlvm(batch.CompressedData))
+            {
+                // v2: re-encode only the geometry blob and swap it into the container — every
+                // metadata chunk survives byte-exact.
+                BinaryGeometryWriter.Write(ms, "", decoded.Vertices, decoded.Indices,
+                    uvs: decoded.Uvs, colors: decoded.Colors);
+                var geometryBlob = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+                return SlvmDocument.ReplaceGeometry(batch.CompressedData, geometryBlob);
+            }
+
+            // Legacy SLVA/SLVZ blob (an old .gh still holding pre-v2 bytes): keep its shape.
+            var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
             BinaryGeometryWriter.Write(ms, metadataJson, decoded.Vertices, decoded.Indices,
                 uvs: decoded.Uvs, colors: decoded.Colors);
             return BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
@@ -188,7 +199,7 @@ public static class DisplayBatchTransformer
         {
             Materials = source.Materials,
             Groups = source.Groups,
-            SourceComponentId = source.SourceComponentId,
+            BatchId = source.BatchId,
             CompressedData = meshBlob,
             Items = items
         };

@@ -6,6 +6,58 @@ import type { CameraController } from '../camera-controller.js';
 import { computeContentBounds } from '../three-helpers.js';
 import type { ResolvedOptions } from './defaults.js';
 
+// Tuned against the brightest look (`showcase`, exposure 1.15 + sun 2.6): the highlight has to stay
+// obvious there without blowing out to a flat silhouette under the dimmest one.
+/** How far the base color moves toward the selection color. 1 would discard the texture underneath. */
+const SELECTION_COLOR_MIX = 0.75;
+/** Above ~2 the tint clips to pure red and the geometry's shading disappears with it. */
+const SELECTION_EMISSIVE_INTENSITY = 0.6;
+/** A metallic surface reflects the environment rather than showing its albedo tint. */
+const SELECTION_MAX_METALNESS = 0.2;
+/** Below this a highlight reads as a ghost, so the selection is forced opaque. */
+const SELECTION_MIN_OPACITY = 1;
+
+/**
+ * Recolors a material clone to mark it selected. Exported for tests: the highlight reads against
+ * whatever the active look does to lighting, and that coupling has broken it silently before.
+ *
+ * Meshes tint via `emissive` AND base color. Emissive alone is additive on top of what the surface
+ * already reflects, so on a bright white model under a key light it only shifts the surface slightly
+ * pink — the brighter the look, the weaker the highlight. Moving the albedo toward the selection
+ * color is what makes it hold at any exposure; the emissive on top keeps it reading as lit rather
+ * than as a flat sticker in shadowed areas. Lines/points have no emissive channel, so their `color`
+ * is replaced outright.
+ *
+ * Mutates `material` in place — pass a clone, never a material the scene still shares.
+ */
+export function tintForSelection(
+	material: THREE.Material,
+	selectionColor: THREE.Color,
+	isMesh: boolean
+): void {
+	if (isMesh && 'emissive' in material) {
+		const mesh = material as THREE.MeshStandardMaterial;
+		mesh.emissive = selectionColor.clone();
+		mesh.emissiveIntensity = SELECTION_EMISSIVE_INTENSITY;
+		// A textured surface keeps its map; tinting the base color under it still reads.
+		mesh.color.lerp(selectionColor, SELECTION_COLOR_MIX);
+		// Chrome-like input would reflect the environment instead of showing the tint.
+		mesh.metalness = Math.min(mesh.metalness, SELECTION_MAX_METALNESS);
+		// Under the x-ray look every mesh is near-transparent with depth writes off, which would
+		// leave the selection a faint ghost sorted behind its own neighbours. Selection is a UI
+		// affordance, so it opts out of the look and renders solid.
+		if (mesh.opacity < SELECTION_MIN_OPACITY) {
+			mesh.opacity = SELECTION_MIN_OPACITY;
+			mesh.transparent = false;
+			mesh.depthWrite = true;
+		}
+		return;
+	}
+	if ('color' in material) {
+		(material as THREE.LineBasicMaterial).color = selectionColor.clone();
+	}
+}
+
 export function setupEventHandlers(
 	canvas: HTMLCanvasElement,
 	scene: THREE.Scene,
@@ -81,21 +133,13 @@ export function setupEventHandlers(
 		selectedObjects.clear();
 	};
 
-	// Meshes tint via `emissive` (keeps base color); lines/points have no emissive channel, so
-	// `color` is recolored directly instead.
 	const applyHighlight = (object: THREE.Object3D): boolean => {
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
 		if (!(target.material instanceof THREE.Material)) return false;
 
 		originalMaterials.set(object, target.material);
 		const clone = target.material.clone();
-
-		if (object instanceof THREE.Mesh && 'emissive' in clone) {
-			(clone as THREE.MeshStandardMaterial).emissive = selectionColorObj.clone();
-		} else if ('color' in clone) {
-			(clone as THREE.LineBasicMaterial).color = selectionColorObj.clone();
-		}
-
+		tintForSelection(clone, selectionColorObj, object instanceof THREE.Mesh);
 		target.material = clone;
 		return true;
 	};
@@ -112,15 +156,38 @@ export function setupEventHandlers(
 		mouseDownPosition.set(event.clientX, event.clientY);
 	};
 
+	// `click` fires on the first press of a double-click too, so acting on it immediately would
+	// select the mesh and open its metadata before `dblclick` ever arrives. Hold the single-click
+	// action for one double-click interval; `handleDoubleClick` cancels it.
+	const DOUBLE_CLICK_MS = 250;
+	let pendingClick: ReturnType<typeof setTimeout> | null = null;
+
+	const cancelPendingClick = () => {
+		if (pendingClick === null) return;
+		clearTimeout(pendingClick);
+		pendingClick = null;
+	};
+
 	const handleCanvasClick = (event: MouseEvent) => {
 		const currentMousePosition = new THREE.Vector2(event.clientX, event.clientY);
 		if (mouseDownPosition.distanceTo(currentMousePosition) > 5) {
 			return;
 		}
 
+		// `event` is reused by the browser after this handler returns, so read what the deferred
+		// work needs now rather than closing over the event itself.
+		const { clientX, clientY } = event;
+		cancelPendingClick();
+		pendingClick = setTimeout(() => {
+			pendingClick = null;
+			resolveClick(clientX, clientY);
+		}, DOUBLE_CLICK_MS);
+	};
+
+	const resolveClick = (clientX: number, clientY: number) => {
 		const rect = canvas.getBoundingClientRect();
-		mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-		mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+		mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+		mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
 
 		updatePickThresholds();
 		raycaster.setFromCamera(mouse, getActiveCamera());
@@ -149,6 +216,8 @@ export function setupEventHandlers(
 	};
 
 	const handleDoubleClick = (event: MouseEvent) => {
+		cancelPendingClick();
+
 		const rect = canvas.getBoundingClientRect();
 		mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
 		mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -206,6 +275,7 @@ export function setupEventHandlers(
 	}
 
 	const dispose = () => {
+		cancelPendingClick();
 		canvas.removeEventListener('mousedown', handleMouseDown);
 		canvas.removeEventListener('click', handleCanvasClick);
 		canvas.removeEventListener('dblclick', handleDoubleClick);
