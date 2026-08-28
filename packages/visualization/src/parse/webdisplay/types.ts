@@ -78,6 +78,15 @@ export interface MeshBatchParsingOptions {
 	 * viewer's `setLook`.
 	 */
 	material?: MaterialAppearanceOptions;
+	/**
+	 * Identity namespace for this blob's meshes, overriding the id baked into it.
+	 *
+	 * A scene assembled from several blobs needs one: each blob numbers its meshes from 0, and
+	 * blobs emitted by one Grasshopper component all carry that component's id — so without a
+	 * per-blob namespace every blob's first mesh shares the key `gh:{id}:0`, and hiding one hides
+	 * them all. Callers that parse a sequence pass the blob's ordinal.
+	 */
+	identityNamespace?: string;
 }
 
 /** Single definition lives in `shared/types.ts`; re-exported here so the render layer can read a

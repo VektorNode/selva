@@ -33,34 +33,6 @@ describe('getStableKey', () => {
 		);
 	});
 
-	// A combined batch (DisplayBatchCombiner) gives every mesh the emitting component's id and
-	// `originalIndex` 0; the real ordinal only exists in metadata. Reading the plain fields made
-	// all of them share one key, so hiding any object hid the whole scene.
-	describe('combined batches', () => {
-		const combined = (index: number, layer: string) =>
-			obj({
-				sourceComponentId: 'f56fa3f0',
-				originalIndex: 0,
-				layer,
-				name: 'K80/80/4',
-				metadata: { 'gh:component': 'f56fa3f0', 'gh:originalIndex': String(index) }
-			});
-
-		it('distinguishes meshes that all report index 0', () => {
-			expect(getStableKey(combined(0, 'IfcColumn'))).not.toBe(
-				getStableKey(combined(1, 'IfcColumn'))
-			);
-		});
-
-		it('keeps objects on different layers distinct', () => {
-			expect(getStableKey(combined(4, 'IfcColumn'))).not.toBe(getStableKey(combined(9, 'IfcWall')));
-		});
-
-		it('prefers provenance over the batch-local fields', () => {
-			expect(getStableKey(combined(7, 'IfcColumn'))).toBe(meshKey('f56fa3f0', 7));
-		});
-	});
-
 	// Defaulting a missing index to 0 gave every indexless mesh of a component one key, so hiding
 	// any one of them hid all of them — across layers included.
 	it('does not collapse indexless meshes of one component onto a shared key', () => {

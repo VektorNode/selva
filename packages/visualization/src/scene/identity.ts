@@ -26,23 +26,6 @@ export function getStableKey(object: THREE.Object3D): string | null {
 
 	if (typeof data.id === 'string' && data.id) return data.id;
 
-	// Combined batches: `DisplayBatchCombiner` merges many single-mesh batches that all carry the
-	// emitting component's id and `originalIndex` 0, so those two fields identify nothing here. It
-	// writes the real per-mesh ordinal into metadata instead, and that is the only unique pair a
-	// combined batch has — so it must be checked before the plain fields below.
-	const attrs = data.metadata as Record<string, unknown> | undefined;
-	if (attrs) {
-		const component = attrs['gh:component'];
-		const index = attrs['gh:originalIndex'];
-		if (
-			typeof component === 'string' &&
-			component &&
-			(typeof index === 'string' || typeof index === 'number')
-		) {
-			return `gh${SEP}${component}${SEP}${index}`;
-		}
-	}
-
 	if (typeof data.sourceComponentId === 'string' && data.sourceComponentId) {
 		// A merged mesh covers several source meshes and its `originalIndex` is only the first
 		// member's, which collides with every other merge starting at the same index. Key on the
