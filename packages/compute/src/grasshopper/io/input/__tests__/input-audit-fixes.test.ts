@@ -245,6 +245,24 @@ describe('issue 75 — ValueList parsing cluster', () => {
 		expect((input as any).default).toBe('Alpha');
 	});
 
+	it('surfaces an out-of-range default through parseErrors while still succeeding', () => {
+		const { input, error, errors } = processInputWithError(
+			createInputSchema({
+				name: 'Pick',
+				paramType: 'ValueList',
+				values: { Alpha: '0', Beta: '1' },
+				default: 'Gamma'
+			})
+		);
+		// Pinned: the parse still succeeds and the default is kept verbatim —
+		// but the drop-worthy oddity must reach the client, not just the logger.
+		expect((input as any).default).toBe('Gamma');
+		expect(error).toBeUndefined();
+		expect(errors).toHaveLength(1);
+		expect(errors?.[0]).toMatchObject({ inputName: 'Pick', code: 'VALIDATION_ERROR' });
+		expect(errors?.[0].message).toContain('not in available values');
+	});
+
 	it('rejects a non-string-able (tree/array) default with a parse error, not "[object Object]"', () => {
 		const { input, error } = processInputWithError(
 			createInputSchema({

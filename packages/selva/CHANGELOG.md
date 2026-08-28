@@ -1,5 +1,51 @@
 # @selvajs/selva
 
+## 4.16.2
+
+### Patch Changes
+
+- f763878: Fail fast when a compute server is unreachable, instead of waiting out the retry budget.
+
+  A liveness probe now reports _why_ it failed, and callers stop retrying the failures that
+  cannot resolve themselves. Previously a powered-off compute VM and a booting one were
+  indistinguishable from a single probe, so both paid the full retry window.
+
+  - New `classifyProbeFailure()` in `@selvajs/compute/core` turns a `probeServer()` result into
+    a verdict (`refused`, `dns`, `timeout`, `unauthorized`, `http_error`, `unknown`) plus a
+    `retryable` flag and an operator-facing summary.
+  - `GrasshopperClient.create()` stops its retry ladder on a non-retryable verdict and bounds
+    each probe at 2s rather than 5s. A refused connection or a rejected API key now fails in
+    one probe instead of three; the thrown `ComputeError` carries `context.probeVerdict`.
+  - `@selvajs/solve`'s client cache remembers a failed build for 5s, so repeated solves against
+    a down server replay the original error instead of re-running the probe ladder each time.
+    `evict()` clears it, so correcting a server's URL or key takes effect immediately.
+  - `/api/admin/compute/status` returns `retryable`, `failureReason`, and `failureSummary`. The
+    admin panel's health pill stops polling a server that reported a terminal failure and shows
+    the reason ("Connection refused — …") instead of a bare "Offline" after 60s of spinning.
+
+## 4.16.1
+
+### Patch Changes
+
+- 484ca51: Fix solve failures that surfaced as a bare HTTP 500 with no diagnosis, and tighten error handling across the compute stack.
+
+  **Solve failures are now classified instead of collapsing to 500.** The solve pipeline only recognised a raw `AbortError` as a timeout or disconnect, but the scheduler rejects with `ComputeError` (`TIMEOUT_ERROR` / `ABORTED`) — so every real solve deadline and client disconnect fell through to a generic 500. The same mismatch hid an unreachable compute server: the route matched a raw `TypeError('fetch failed')`, which the transport wraps into `ComputeError` `NETWORK_ERROR` before it gets there. Deadlines now return 504, disconnects 499, and unreachable/rate-limited/rejected-credentials servers return 503 with a message naming which one it was. Only a genuine solve failure stays 500.
+
+  **Server logs carry the compute server's own error body.** `renderThrown` dropped `code` and `statusCode`; it now appends a `[code=… status=…]` tag, and the solve failure log includes the raw (bounded) compute response body — often the only diagnostic that survives when the compute server scrubs exception messages in production mode.
+
+  **The browser stopped discarding the server's explanation.** `createComputeFetchSolveFn` hard-coded "offline or unreachable" for any 503 without reading the body; it now shows the server's message on 503 and 504.
+
+  **Wire-casing fixes in `@selvajs/compute`.** Three error-handling decisions read `values`/`errors` case-sensitively while the rest of the package reads them case-insensitively, so a PascalCase response from a stock mcneel server was misjudged: a partial success was discarded as a hard failure, `client.solve()` passed an errored response through as clean success, and `cacheErroredSolves: false` cached errored solves anyway. All three now use `readField`.
+
+  **Other correctness and consistency fixes in `@selvajs/compute`:**
+
+  - `fetchCompute` guards `JSON.stringify` — a circular or BigInt payload threw a raw `TypeError` instead of the documented `ComputeError`.
+  - New `ComputeServerStats.probeServer()` reports probe status and connection error; `GrasshopperClient.create()` uses it so a 401/403 says the credentials were rejected rather than "server is not online".
+  - `monitor()` and `TreeBuilder.parsePathString` throw `ComputeError` instead of `RangeError` / plain `Error`, so `instanceof ComputeError` holds across the whole public surface.
+  - A ValueList default absent from its values map now reaches `parseErrors` instead of only the logger.
+  - HTTP 400 maps to `VALIDATION_ERROR` (was `UNKNOWN_ERROR`); the missing-base64-codec throws use `ENVIRONMENT_ERROR` (was `INVALID_STATE`); 502 is labelled "Bad gateway".
+  - Removed an unreachable catch in `extractFilesFromComputeResponse`, and corrected the `RATE_LIMIT` doc that claimed retries happen by default (`attempts` defaults to 0).
+
 ## 4.16.0
 
 ### Minor Changes

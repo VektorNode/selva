@@ -471,11 +471,16 @@ export class WebSocketState {
 
 			const validation = validateInboundMessage(message);
 			if (!validation.ok) {
+				// Shape only — `issues` carries the offending value in `input`, and
+				// `payload` is the whole message. Neither can reach stdout: erasure
+				// does not follow a log collector.
 				console.error(
 					`[WebSocket] Rejected malformed '${validation.type}' message:`,
-					validation.error.issues,
-					'\nPayload:',
-					validation.payload
+					validation.error.issues.map((i) => ({
+						path: i.path.join('.'),
+						code: i.code,
+						message: i.message
+					}))
 				);
 				if (import.meta.env.DEV) {
 					toast.error(`Malformed '${validation.type}' message — see console`);

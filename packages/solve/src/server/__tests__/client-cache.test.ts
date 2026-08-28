@@ -31,9 +31,16 @@ const disposedSchedulers: { disposed: boolean }[] = [];
 // for a server that cannot answer (stock McNeel build, network blip).
 let activeChildren: number | null = null;
 
+// When set, `create` rejects with this instead of returning a client — stands in
+// for an unreachable compute server failing the liveness preflight.
+let createFailure: Error | null = null;
+let createCalls = 0;
+
 vi.mock('@selvajs/compute/grasshopper', () => {
 	class GrasshopperClient {
 		static async create(config: Recorded) {
+			createCalls += 1;
+			if (createFailure) throw createFailure;
 			createdConfigs.push(config);
 			return new GrasshopperClient(config);
 		}
@@ -100,6 +107,8 @@ beforeEach(() => {
 	createdSchedulerOptions.length = 0;
 	disposedSchedulers.length = 0;
 	activeChildren = null;
+	createFailure = null;
+	createCalls = 0;
 });
 
 describe('createClientCache — concurrency vs. the server child count', () => {
@@ -475,5 +484,58 @@ describe('createClientCache — solveCacheStats', () => {
 describe('serverIdentity', () => {
 	it('derives identity from the id', () => {
 		expect(serverIdentity({ id: 'abc' })).toBe('abc');
+	});
+});
+
+describe('createClientCache — failed builds', () => {
+	it('replays a recent failure instead of re-running the probe ladder', async () => {
+		createFailure = new Error('Rhino Compute server is not available. Connection refused.');
+		const cache = createClientCache(baseConfig());
+
+		await expect(cache.getClient(server('a'))).rejects.toThrow('Connection refused');
+		// The second click must not pay for another handshake.
+		await expect(cache.getClient(server('a'))).rejects.toThrow('Connection refused');
+		expect(createCalls).toBe(1);
+	});
+
+	it('rethrows the original error so the caller still sees the real cause', async () => {
+		const original = new Error('rejected the liveness probe with HTTP 401');
+		createFailure = original;
+		const cache = createClientCache(baseConfig());
+
+		await expect(cache.getClient(server('a'))).rejects.toBe(original);
+		await expect(cache.getClient(server('a'))).rejects.toBe(original);
+	});
+
+	it("does not let one server's failure block another", async () => {
+		createFailure = new Error('down');
+		const cache = createClientCache(baseConfig());
+		await expect(cache.getClient(server('a'))).rejects.toThrow('down');
+
+		createFailure = null;
+		await expect(cache.getClient(server('b'))).resolves.toBeDefined();
+	});
+
+	it('evict clears the remembered failure so a config fix applies immediately', async () => {
+		createFailure = new Error('down');
+		const cache = createClientCache(baseConfig());
+		await expect(cache.getClient(server('a'))).rejects.toThrow('down');
+
+		// Operator corrected the URL/key: the reason for the last failure is gone.
+		cache.evict(serverIdentity({ id: 'a' }));
+		createFailure = null;
+		await expect(cache.getClient(server('a'))).resolves.toBeDefined();
+		expect(createCalls).toBe(2);
+	});
+
+	it('caches the failure without poisoning a later successful build', async () => {
+		createFailure = new Error('down');
+		const cache = createClientCache(baseConfig());
+		await expect(cache.getClient(server('a'))).rejects.toThrow('down');
+
+		createFailure = null;
+		// Still inside the TTL — the replay is expected here.
+		await expect(cache.getClient(server('a'))).rejects.toThrow('down');
+		expect(createCalls).toBe(1);
 	});
 });

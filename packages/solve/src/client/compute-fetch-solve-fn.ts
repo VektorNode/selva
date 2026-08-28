@@ -126,9 +126,6 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		}
 
 		if (!res.ok) {
-			if (res.status === 503) {
-				throw new Error('Compute server is offline or unreachable. Please try again later.');
-			}
 			const errorBody = await res.text().catch(() => '');
 			let d: { message?: string; retryAfter?: number } = {};
 			try {
@@ -140,6 +137,13 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 						errorBody.slice(0, 300)
 					);
 				}
+			}
+			if (res.status === 503 || res.status === 504) {
+				// The server names the failure class (unreachable, bad API key,
+				// rate-limited, timed out) — show it rather than a blanket "offline".
+				throw new Error(
+					d.message || 'Compute server is offline or unreachable. Please try again later.'
+				);
 			}
 			if (res.status === 429) {
 				const retryAfter = Number(res.headers.get('Retry-After')) || Number(d.retryAfter) || 5;

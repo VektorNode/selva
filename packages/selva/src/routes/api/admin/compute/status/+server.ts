@@ -5,6 +5,7 @@ import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
 import { ComputeServerStats } from '@selvajs/compute/grasshopper';
+import { classifyProbeFailure } from '@selvajs/compute/core';
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	requireManageCompute(locals);
@@ -23,11 +24,19 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	const stats = new ComputeServerStats(server.serverUrl, apiKey);
 	try {
 		// Probe liveness first; only fan out to version/plugins when reachable.
-		const reachable = await stats.isServerOnline();
-		if (!reachable) {
+		const probe = await stats.probeServer();
+		if (!probe.online) {
+			const failure = classifyProbeFailure(probe);
 			return json({
 				reachable: false,
 				ready: false,
+				// `retryable: false` is the client's cue to stop polling: a refused
+				// connection or a rejected key cannot resolve itself, and retrying it
+				// for the full window leaves the operator staring at a spinner that
+				// was never going to turn green.
+				retryable: failure?.retryable ?? true,
+				failureReason: failure?.verdict ?? null,
+				failureSummary: failure?.summary ?? null,
 				rhinoVersion: null,
 				computeVersion: null,
 				selvaInstalled: false,
@@ -66,6 +75,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			// `ready` gates the client's retry loop: once the inventory has loaded we
 			// trust `selvaInstalled` (true or false); until then we're still booting.
 			ready: inventoryLoaded,
+			// A reachable server is always worth another poll — it may still be
+			// enumerating add-ons, and `activeChildren` climbing is the feedback the
+			// operator is watching for.
+			retryable: true,
+			failureReason: null,
+			failureSummary: null,
 			rhinoVersion: version?.rhino ?? null,
 			computeVersion: version?.compute ?? null,
 			selvaInstalled: selvaVersion !== null,
@@ -78,6 +93,10 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		return json({
 			reachable: false,
 			ready: false,
+			// An unclassified throw is not evidence the server is permanently down.
+			retryable: true,
+			failureReason: null,
+			failureSummary: null,
 			rhinoVersion: null,
 			computeVersion: null,
 			selvaInstalled: false,

@@ -172,11 +172,18 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		result = await client.scheduler.solve(args.definitionSource, inputTree, { signal });
 	} catch (err) {
 		const durationMs = performance.now() - solveStart;
-		// AbortError with the request signal NOT aborted means the scheduler's own
-		// deadline timer fired, not a client disconnect.
-		const isAbort = err instanceof Error && err.name === 'AbortError';
-		if (isAbort) {
-			if (signal.aborted) return { kind: 'client_abort', durationMs };
+		// Abort with the request signal NOT aborted means the scheduler's own
+		// deadline timer fired, not a client disconnect. The scheduler normalizes
+		// aborts into ComputeError (code ABORTED / TIMEOUT_ERROR) — a raw
+		// AbortError only reaches here from a custom executor, so match both
+		// shapes or real disconnects and deadlines fall through to compute_error
+		// and read as 500s.
+		const isAbort =
+			(err instanceof Error && err.name === 'AbortError') ||
+			(err instanceof ComputeError && err.code === ErrorCodes.ABORTED);
+		const isDeadline = err instanceof ComputeError && err.code === ErrorCodes.TIMEOUT_ERROR;
+		if (isAbort || isDeadline) {
+			if (isAbort && signal.aborted) return { kind: 'client_abort', durationMs };
 			return {
 				kind: 'timeout',
 				durationMs,

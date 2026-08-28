@@ -157,6 +157,26 @@ const FALLBACK_CONCURRENCY = 1;
  */
 const CONCURRENCY_PROBE_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * How long a failed build is remembered before the next `getClient` retries the
+ * handshake. Without this, every solve against a down server pays the full probe
+ * ladder again, so a user clicking Solve twice waits twice.
+ *
+ * Short on purpose: this is a convenience for the rapid-retry case, not a
+ * circuit breaker. An operator who starts the compute VM should not have to wait
+ * out a long penalty window before the app notices.
+ */
+const FAILED_BUILD_TTL_MS = 5000;
+
+/**
+ * A build failure worth replaying to the next caller, with the time it happened
+ * so {@link FAILED_BUILD_TTL_MS} can expire it.
+ */
+interface FailedBuild {
+	error: unknown;
+	at: number;
+}
+
 export function createClientCache(config: ClientCacheConfig): ClientCache {
 	const maxWarmComputeServers = config.maxWarmComputeServers ?? DEFAULT_MAX_WARM_COMPUTE_SERVERS;
 	const cache = new Map<string, CachedClient>();
@@ -164,6 +184,9 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 	// same id must share ONE build: without this, both miss, both handshake, and
 	// the loser's entry is overwritten in the map without ever being disposed.
 	const pending = new Map<string, Promise<CachedClient>>();
+	// Recent build failures, keyed like `cache`. Cleared by `evict` so a config
+	// fix takes effect immediately rather than waiting out the TTL.
+	const failed = new Map<string, FailedBuild>();
 
 	if (config.debug === 'verbose') enableDebugLogging();
 
@@ -343,11 +366,31 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			const inFlight = pending.get(key);
 			if (inFlight) return inFlight;
 
+			// Replay a recent failure instead of re-running the probe ladder. The
+			// original error is rethrown verbatim so the caller still sees the real
+			// cause (refused / unauthorized / timeout), not a generic cache miss.
+			const recentFailure = failed.get(key);
+			if (recentFailure) {
+				if (Date.now() - recentFailure.at < FAILED_BUILD_TTL_MS) {
+					debugLog(
+						`[Compute/client-cache] server ${key} failed to build <${FAILED_BUILD_TTL_MS}ms ago — replaying error`
+					);
+					throw recentFailure.error;
+				}
+				failed.delete(key);
+			}
+
 			// A build is a Rhino.Compute handshake — expensive, and repeated builds for
 			// the same id mean churn (LRU thrash or config-rotation evictions).
 			debugLog(`[Compute/client-cache] miss — building warm client for server ${key}`);
 			const buildPromise = (async () => {
-				const entry = await build(server, opts?.definitionGuid);
+				let entry: CachedClient;
+				try {
+					entry = await build(server, opts?.definitionGuid);
+				} catch (err) {
+					failed.set(key, { error: err, at: Date.now() });
+					throw err;
+				}
 
 				if (cache.size >= maxWarmComputeServers) {
 					const oldestKey = cache.keys().next().value;
@@ -369,6 +412,9 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 		evict(id): void {
 			const key = id as string;
+			// Drop any remembered failure too: `evict` means the connection details
+			// changed, so the reason the last build failed no longer applies.
+			failed.delete(key);
 			const entry = cache.get(key);
 			if (entry) {
 				debugLog(`[Compute/client-cache] evicted warm client for server ${key} (config change)`);
@@ -406,6 +452,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			debugLog(`[Compute/client-cache] disposing all ${cache.size} warm client(s)`);
 			for (const entry of cache.values()) entry.scheduler.dispose();
 			cache.clear();
+			failed.clear();
 		}
 	};
 }

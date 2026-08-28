@@ -74,6 +74,13 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		return this.loading;
 	}
 
+	/**
+	 * Does not stop a prototype lookup: `definitions['__proto__']` returns
+	 * `Object.prototype`, whose `deletedAt` is undefined, so it passes as live
+	 * and the caller's `Object.assign` writes onto the prototype. Callers reach
+	 * this only behind `GuidSchema`, which rejects non-UUID keys — keep it that
+	 * way for any new entry point.
+	 */
 	private live(record: DefinitionRecord | undefined | null): record is DefinitionRecord {
 		return Boolean(record && record.deletedAt == null);
 	}

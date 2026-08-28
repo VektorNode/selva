@@ -78,6 +78,25 @@ describe('isServerOnline', () => {
 	});
 });
 
+describe('probeServer', () => {
+	it('reports the HTTP status when the server answers non-2xx (e.g. auth rejection)', async () => {
+		fetchMock.mockResolvedValue(res('unauthorized', { ok: false, status: 401 }));
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.probeServer()).resolves.toEqual({ online: false, status: 401 });
+		await stats.dispose();
+	});
+
+	it('reports the connection error when the network rejects', async () => {
+		fetchMock.mockRejectedValue(new TypeError('fetch failed'));
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.probeServer()).resolves.toEqual({
+			online: false,
+			error: 'TypeError: fetch failed'
+		});
+		await stats.dispose();
+	});
+});
+
 describe('getInstalledPlugins', () => {
 	it('returns the gh inventory by default', async () => {
 		route({
@@ -520,14 +539,21 @@ describe('monitor', () => {
 	afterEach(() => setLogger(null));
 
 	// Issue 113: 0/negative/NaN intervalMs previously produced a hot ~1 ms polling loop.
-	it('throws RangeError for zero, negative, sub-floor, NaN, and Infinity intervalMs', async () => {
+	it('throws INVALID_CONFIG for zero, negative, sub-floor, NaN, and Infinity intervalMs', async () => {
 		const stats = new ComputeServerStats(SERVER);
 		const cb = () => {};
-		expect(() => stats.monitor(cb, 0)).toThrow(RangeError);
-		expect(() => stats.monitor(cb, -5)).toThrow(RangeError);
-		expect(() => stats.monitor(cb, 50)).toThrow(RangeError);
-		expect(() => stats.monitor(cb, NaN)).toThrow(RangeError);
-		expect(() => stats.monitor(cb, Infinity)).toThrow(RangeError);
+		for (const interval of [0, -5, 50, NaN, Infinity]) {
+			let thrown: unknown;
+			try {
+				stats.monitor(cb, interval);
+			} catch (err) {
+				thrown = err;
+			}
+			expect(thrown, `monitor must reject intervalMs=${interval}`).toMatchObject({
+				name: 'ComputeError',
+				code: 'INVALID_CONFIG'
+			});
+		}
 		await stats.dispose();
 	});
 

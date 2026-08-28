@@ -549,7 +549,7 @@
 				{/if}
 			</div>
 			<div class="flex items-center gap-3">
-				<div class="flex items-center gap-1.5">
+				<div class="flex items-center gap-1.5" title={health?.failureSummary ?? undefined}>
 					<Circle class="h-2.5 w-2.5 shrink-0 fill-current {sc.color}" />
 					<span class="text-xs font-medium {sc.color}">{sc.label}</span>
 				</div>
@@ -624,6 +624,10 @@
 				</Button>
 			</div>
 		</div>
+
+		{#if health?.failureSummary && !health.reachable && !isRemoved}
+			<p class="text-muted-foreground text-xs">{health.failureSummary}</p>
+		{/if}
 
 		{#if health?.reachable && !isRemoved}
 			<div class="grid grid-cols-3 gap-2">

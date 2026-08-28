@@ -45,14 +45,19 @@ vi.mock('@selvajs/compute/core', () => {
 	}
 	return {
 		ComputeError: MockComputeError,
-		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' }
+		ErrorCodes: {
+			QUEUE_FULL: 'QUEUE_FULL',
+			QUEUE_TIMEOUT: 'QUEUE_TIMEOUT',
+			ABORTED: 'ABORTED',
+			TIMEOUT_ERROR: 'TIMEOUT_ERROR'
+		}
 	};
 });
 
 import { ComputeError as MockComputeError } from '@selvajs/compute/core';
 const makeShedError = (
 	message: string,
-	code: 'QUEUE_FULL' | 'QUEUE_TIMEOUT' | 'UNKNOWN_ERROR',
+	code: 'QUEUE_FULL' | 'QUEUE_TIMEOUT' | 'ABORTED' | 'TIMEOUT_ERROR' | 'UNKNOWN_ERROR',
 	options?: { statusCode?: number; context?: Record<string, unknown> }
 ) =>
 	new (
@@ -314,6 +319,38 @@ describe('runSolvePipeline — failure outcomes', () => {
 		if (outcome.kind !== 'timeout') return;
 		expect(outcome.message).toContain('42s');
 		expect(outcome.durationMs).toBeGreaterThanOrEqual(0);
+	});
+
+	it('classifies a ComputeError TIMEOUT_ERROR (the real transport deadline shape) as timeout', async () => {
+		// The scheduler normalizes its deadline into ComputeError TIMEOUT_ERROR,
+		// not a raw AbortError — this must not fall through to compute_error/500.
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				solveDeadlineMs: 42_000,
+				client: fakeClient(async () => {
+					throw makeShedError('Request timed out after 42000ms', 'TIMEOUT_ERROR');
+				})
+			})
+		);
+		expect(outcome.kind).toBe('timeout');
+		if (outcome.kind !== 'timeout') return;
+		expect(outcome.message).toContain('42s');
+	});
+
+	it('classifies a ComputeError ABORTED with the request signal aborted as client_abort', async () => {
+		// The scheduler normalizes caller aborts into ComputeError ABORTED — a
+		// client disconnect must read as client_abort, never compute_error/500.
+		const controller = new AbortController();
+		controller.abort();
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				signal: controller.signal,
+				client: fakeClient(async () => {
+					throw makeShedError('Request aborted by caller', 'ABORTED');
+				})
+			})
+		);
+		expect(outcome.kind).toBe('client_abort');
 	});
 
 	it('classifies AbortError with the request signal aborted as client_abort', async () => {

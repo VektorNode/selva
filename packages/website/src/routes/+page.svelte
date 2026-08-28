@@ -1,30 +1,7 @@
 <script lang="ts">
-	// Point this at the form endpoint (Formspree, Tally, Buttondown, ...).
-	// A plain form POST keeps the site on adapter-static: there is no server here.
-	const EARLY_ACCESS_ENDPOINT = 'https://formspree.io/f/xwlejnoa';
-
 	// Shared shell for the frosted panels so every card reads as the same glass.
 	const glass =
 		'rounded-3xl border border-white/10 bg-white/[0.045] shadow-[0_12px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl';
-
-	let email = $state('');
-	let status = $state<'idle' | 'sending' | 'sent' | 'error'>('idle');
-
-	async function requestAccess(event: SubmitEvent) {
-		event.preventDefault();
-		status = 'sending';
-
-		try {
-			const response = await fetch(EARLY_ACCESS_ENDPOINT, {
-				method: 'POST',
-				headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email })
-			});
-			status = response.ok ? 'sent' : 'error';
-		} catch {
-			status = 'error';
-		}
-	}
 </script>
 
 <svelte:head>
@@ -46,43 +23,6 @@
 				>
 					Your workflow,<br />everyone's tool
 				</h1>
-
-				{#if status === 'sent'}
-					<p class="mt-8 max-w-xl leading-relaxed text-white/85">
-						Thanks. We'll email your invitation link shortly.
-					</p>
-				{:else}
-					<p class="mt-6 max-w-xl leading-relaxed text-white/60">
-						Selva is in early access. Leave your email and we'll send you an invitation link.
-					</p>
-
-					<form onsubmit={requestAccess} class="mt-8 flex max-w-lg flex-wrap items-center gap-3">
-						<label for="early-access-email" class="sr-only">Email address</label>
-						<input
-							id="early-access-email"
-							name="email"
-							type="email"
-							required
-							bind:value={email}
-							disabled={status === 'sending'}
-							placeholder="you@studio.com"
-							class="focus:border-primary min-w-0 flex-1 rounded-full border border-white/15 bg-white/[0.04] px-5 py-3 text-white placeholder:text-white/35 focus:outline-none disabled:opacity-60"
-						/>
-						<button
-							type="submit"
-							disabled={status === 'sending'}
-							class="bg-primary rounded-full px-6 py-3 font-semibold text-[oklch(0.15_0.025_155)] transition hover:opacity-90 disabled:opacity-60"
-						>
-							{status === 'sending' ? 'Sending…' : 'Request access'}
-						</button>
-					</form>
-
-					{#if status === 'error'}
-						<p class="mt-4 text-sm text-white/70" role="alert">
-							That didn't go through. Try again, or email us directly.
-						</p>
-					{/if}
-				{/if}
 			</div>
 		</section>
 

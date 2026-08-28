@@ -194,13 +194,14 @@ export type ValidatedMessageType = keyof typeof schemasByType;
 export const validatedMessageTypes = Object.keys(schemasByType) as ValidatedMessageType[];
 
 export type ValidationResult =
-	{ ok: true; message: unknown } | { ok: false; type: string; error: z.ZodError; payload: unknown };
+	{ ok: true; message: unknown } | { ok: false; type: string; error: z.ZodError };
 
 /**
  * Validate an inbound message. Returns the (unchanged) message on success — the
  * dispatcher continues to pass the original object to handlers so that existing
  * TS narrowings remain accurate. On failure, returns the Zod error so the caller
- * can log it and drop the message.
+ * can report the shape of the mismatch and drop the message. The issues carry
+ * the offending value in `input`: log paths and codes, never `input` itself.
  *
  * Unknown message types pass through unvalidated to preserve forward
  * compatibility with server-side additions.
@@ -219,8 +220,7 @@ export function validateInboundMessage(message: unknown): ValidationResult {
 					path: [],
 					input: message
 				}
-			]),
-			payload: message
+			])
 		};
 	}
 
@@ -237,8 +237,7 @@ export function validateInboundMessage(message: unknown): ValidationResult {
 					path: ['type'],
 					input: type
 				}
-			]),
-			payload: message
+			])
 		};
 	}
 
@@ -249,5 +248,5 @@ export function validateInboundMessage(message: unknown): ValidationResult {
 
 	const result = schema.safeParse(message);
 	if (result.success) return { ok: true, message: result.data };
-	return { ok: false, type, error: result.error, payload: message };
+	return { ok: false, type, error: result.error };
 }

@@ -1,6 +1,7 @@
 import { ComputeError, ErrorCodes } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 import { getLogger } from '@/core/utils/logger';
+import { readField } from '@/core/utils/read-field';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 
 import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
@@ -331,6 +332,12 @@ export class SolveScheduler {
 	 * Responses served from the cache (and via `lastResult`) are shared objects,
 	 * not copies — treat them as immutable. Mutating one poisons every later
 	 * cache hit for that key.
+	 *
+	 * Partial-success contract: unlike `GrasshopperClient.solve()`, which throws
+	 * `COMPUTATION_ERROR` when the response carries solver errors, this RESOLVES
+	 * with the response as-is — check `response.errors` yourself if a partial
+	 * success must not be treated as a result (see `cacheErroredSolves` for the
+	 * caching side of the same distinction).
 	 */
 	solve(
 		definition: SolveDefinition,
@@ -858,7 +865,10 @@ export class SolveScheduler {
 
 	private writeCache(key: string, response: GrasshopperComputeResponse): void {
 		if (!this.cacheEnabled) return;
-		if (!this.cacheErroredSolves && response.errors && response.errors.length > 0) return;
+		// Case-insensitive read: stock mcneel servers serialize `Errors`, and a
+		// casing miss here would cache errored solves despite the opt-out.
+		const solveErrors = readField<unknown[]>(response, 'errors');
+		if (!this.cacheErroredSolves && Array.isArray(solveErrors) && solveErrors.length > 0) return;
 		// Prefer the wire-size hint recorded at the fetch boundary; a response
 		// that never crossed the fetch layer (custom executor, tests) pays a
 		// one-off stringify here — once per fresh solve, never per hit.

@@ -86,7 +86,7 @@ export function detectBase64Payload(str: string): string | null {
  *
  * @param base64File - Base64 encoded string
  * @returns Decoded binary data as Uint8Array
- * @throws {ComputeError} `ENCODING_ERROR` if invalid, or `INVALID_STATE` if decoder unavailable
+ * @throws {ComputeError} `ENCODING_ERROR` if invalid, or `ENVIRONMENT_ERROR` if the runtime has no decoder
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
 	// Forgiving-base64 normalization: strip ASCII whitespace (wrapped /
@@ -122,7 +122,7 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 
 	throw new ComputeError(
 		'Base64 decoding not supported in this environment.',
-		ErrorCodes.INVALID_STATE,
+		ErrorCodes.ENVIRONMENT_ERROR,
 		{ context: { environmentInfo: 'atob or Buffer not available' } }
 	);
 }
@@ -196,7 +196,7 @@ export function base64ByteArray(bytes: Uint8Array): string {
 	}
 	throw new ComputeError(
 		'Base64 encoding not supported in this environment.',
-		ErrorCodes.INVALID_STATE,
+		ErrorCodes.ENVIRONMENT_ERROR,
 		{ context: { environmentInfo: 'btoa or Buffer not available' } }
 	);
 }

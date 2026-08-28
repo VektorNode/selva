@@ -7,7 +7,7 @@ export const ErrorCodes = {
 	CORS_ERROR: 'CORS_ERROR',
 	/** HTTP 404 — the endpoint path does not exist on the server (usually a typo'd route or wrong server). Never retried. */
 	NOT_FOUND: 'NOT_FOUND',
-	/** HTTP 429 — the server is rate-limiting requests. Retried by default (honors `Retry-After`); see `RetryPolicy.retryOn429`. */
+	/** HTTP 429 — the server is rate-limiting requests. Retried (honoring `Retry-After`) once a retry policy sets `attempts > 0`; opt out via `RetryPolicy.retryOn429`. */
 	RATE_LIMIT: 'RATE_LIMIT',
 	/**
 	 * The server answered 2xx but the body is deterministically not JSON (the
@@ -21,6 +21,7 @@ export const ErrorCodes = {
 	INVALID_INPUT: 'INVALID_INPUT',
 	INVALID_CONFIG: 'INVALID_CONFIG',
 	BROWSER_ONLY: 'BROWSER_ONLY',
+	/** The runtime lacks a required capability (e.g. no base64 codec — neither `Buffer` nor `atob`/`btoa`). */
 	ENVIRONMENT_ERROR: 'ENVIRONMENT_ERROR',
 	ENCODING_ERROR: 'ENCODING_ERROR',
 	/** An input's `default` had a shape the normalizer didn't recognize (no innerTree key). */

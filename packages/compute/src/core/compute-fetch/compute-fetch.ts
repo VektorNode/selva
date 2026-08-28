@@ -311,7 +311,22 @@ export async function fetchCompute<R = unknown>(
 	config: ComputeConfig
 ): Promise<R> {
 	const requestId = generateRequestId();
-	const body = JSON.stringify(args);
+	// A circular or BigInt-containing payload makes JSON.stringify throw a raw
+	// TypeError; surface it as the INVALID_INPUT ComputeError this function's
+	// contract promises, before anything touches the network.
+	let body: string;
+	try {
+		body = JSON.stringify(args);
+	} catch (error) {
+		throw new ComputeError(
+			`Request body is not JSON-serializable: ${error instanceof Error ? error.message : String(error)}`,
+			ErrorCodes.INVALID_INPUT,
+			{
+				context: { endpoint, requestId },
+				originalError: error instanceof Error ? error : new Error(String(error))
+			}
+		);
+	}
 	// Wire size in UTF-8 bytes — `body.length` counts UTF-16 code units and
 	// undercounts non-ASCII payloads (matters for the 413 message and size logs).
 	const requestSize = utf8ByteLength(body);

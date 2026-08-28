@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// Load-bearing beyond format: the stores index plain objects by guid, so this
+// regex is what keeps `__proto__` and `constructor` out of a key position.
+// Relaxing it to a looser string re-opens prototype pollution in every store
+// that does `config.definitions[guid]`.
 export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
 // Intentionally omits `pending` (see `DefinitionStatus` in ./types.ts): it's a
