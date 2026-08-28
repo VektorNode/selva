@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { buildMeshBatch, encodeBatchPayload } from '@tests/helpers/mesh-batch-builder';
 import type { MeshBatchBuilderOptions } from '@tests/helpers/mesh-batch-builder';
 import { decodeBase64ToBinary } from '../../../shared/index.js';
+import { getTrackingKey } from '../../../scene/identity.js';
 
 import { parseMeshBatch, parseMeshBatchObject, parseMeshBatchBlob } from '../batch-parser';
 
@@ -600,6 +601,46 @@ describe('group metadata validation (issue 19)', () => {
 });
 
 describe('parseMeshBatchBlob (binary entry point)', () => {
+	// A scene built from several blobs: every blob numbers its meshes from 0 and carries its
+	// component's id, so without a per-blob namespace each blob's first mesh keys alike and
+	// hiding one hides them all.
+	it('namespaces identity per blob so meshes from different blobs stay distinct', async () => {
+		const { batch } = buildMeshBatch({
+			materialCount: 1,
+			meshCount: 2,
+			vertsPerMesh: 3,
+			layerCount: 1,
+			sourceComponentId: 'shared-component'
+		});
+		const blob = decodeBase64ToBinary(batch.compressedData);
+
+		const first = await parseMeshBatchBlob(blob, {
+			mergeByMaterial: false,
+			identityNamespace: 'ws:0'
+		});
+		const second = await parseMeshBatchBlob(blob, {
+			mergeByMaterial: false,
+			identityNamespace: 'ws:1'
+		});
+
+		expect(getTrackingKey(first[0]!)).not.toBe(getTrackingKey(second[0]!));
+	});
+
+	it('keeps the blob-embedded id when no namespace is given', async () => {
+		const { batch } = buildMeshBatch({
+			materialCount: 1,
+			meshCount: 2,
+			vertsPerMesh: 3,
+			layerCount: 1,
+			sourceComponentId: 'shared-component'
+		});
+		const blob = decodeBase64ToBinary(batch.compressedData);
+
+		const meshes = await parseMeshBatchBlob(blob, { mergeByMaterial: false });
+
+		expect(meshes[0]!.userData.sourceComponentId).toBe('shared-component');
+	});
+
 	// The blob entry point takes the raw SLVA bytes (a binary WebSocket frame) and
 	// reads materials/groups/sourceComponentId from the blob's embedded metadata
 	// rather than an outer JSON envelope.

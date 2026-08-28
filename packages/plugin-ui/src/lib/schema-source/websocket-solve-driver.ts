@@ -129,10 +129,16 @@ export function createWebSocketSolveDriver(
 					const blobs = await collectPendingBlobs(myToken, expected);
 					if (myToken === outputsToken) {
 						const all: THREE.Object3D[] = [];
-						for (const blob of blobs) {
+						// Each blob numbers its meshes from 0, and every blob a Display component
+						// emits carries that component's id — so one branch per item gives thousands
+						// of blobs whose first mesh all key alike. The frame ordinal makes each
+						// blob its own identity namespace; it is stable across solves because the
+						// plugin emits the frames in definition order.
+						for (const [ordinal, blob] of blobs.entries()) {
 							const parsed = await parseMeshBatchBlob(blob, {
 								mergeByMaterial: false,
-								debug: false
+								debug: false,
+								identityNamespace: `ws:${ordinal}`
 							});
 							all.push(...parsed);
 						}

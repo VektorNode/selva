@@ -139,15 +139,17 @@ export async function parseMeshBatchBlob(
 	blob: ArrayBuffer | Uint8Array,
 	options?: MeshBatchParsingOptions
 ): Promise<THREE.Mesh[]> {
-	const { mergeByMaterial = true, debug = false, material } = options ?? {};
+	const { mergeByMaterial = true, debug = false, material, identityNamespace } = options ?? {};
 
 	const perfStart = debug ? performance.now() : 0;
+	const fallback = identityNamespace ? { sourceComponentId: identityNamespace } : undefined;
 
 	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
 	const workerMeshes = await tryBuildViaWorker(blob, {
 		mergeByMaterial,
 		debug,
-		material
+		material,
+		fallback
 	});
 	if (workerMeshes) return workerMeshes;
 
@@ -164,7 +166,8 @@ export async function parseMeshBatchBlob(
 		parseTime: 0,
 		decodeTime,
 		perfStart,
-		blobBytes
+		blobBytes,
+		fallback
 	});
 }
 

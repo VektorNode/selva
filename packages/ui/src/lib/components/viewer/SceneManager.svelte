@@ -41,33 +41,6 @@
 	const toggleLayer = (objects: THREE.Object3D[]) => {
 		outliner.visibility.toggleLayer(objects);
 		onVisibilityChange?.();
-
-		// TEMPORARY DIAGNOSTIC — remove once the layer-eye bug is pinned down.
-		const all = outliner.objects();
-		const idx = new Set(all.map((o) => String(o.userData?.originalIndex)));
-		const src = new Set(all.map((o) => String(o.userData?.sourceComponentId)));
-		const prov = all.filter(
-			(o) => (o.userData?.metadata as Record<string, unknown>)?.['gh:originalIndex'] !== undefined
-		).length;
-		const keys = new Set(all.map((o) => getTrackingKey(o)));
-		console.log(
-			'[selva] objects=' +
-				all.length +
-				' distinctOriginalIndex=' +
-				idx.size +
-				' distinctSourceId=' +
-				src.size +
-				' withProvenance=' +
-				prov +
-				' distinctKeys=' +
-				keys.size +
-				' hiddenSet=' +
-				outliner.visibility.hidden.size
-		);
-		console.log(
-			'[selva] metadataKeys:',
-			Object.keys((all[0]?.userData?.metadata ?? {}) as object).slice(0, 12)
-		);
 	};
 
 	const toggleObject = (object: THREE.Object3D) => {
