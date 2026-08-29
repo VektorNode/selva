@@ -5,6 +5,7 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { buildLineGeometry, type EdgeGeometryEntry } from './edges/line-geometry.js';
 import { extractSegmentsAsync, extractSegmentsSync, triangleCountOf } from './edges/extraction.js';
 import {
+	EDGES_SKIPPED_OVERLAY_BUDGET,
 	EDGES_SKIPPED_TRIANGLE_CAP,
 	EDGE_USERDATA_KIND,
 	resolveOptions,
@@ -19,7 +20,7 @@ import { MaterialPool, buildEdgeOverlay } from './edges/overlay.js';
  * lines: see `EDGE_OFFSET_FACTOR`/`EDGE_OFFSET_UNITS` in `edges/options.ts`.
  */
 export type { EdgeOptions };
-export { EDGE_USERDATA_KIND, EDGES_SKIPPED_TRIANGLE_CAP };
+export { EDGE_USERDATA_KIND, EDGES_SKIPPED_TRIANGLE_CAP, EDGES_SKIPPED_OVERLAY_BUDGET };
 
 // ============================================================================
 // Public API — add / remove / query
@@ -30,27 +31,50 @@ export function isEdgeOverlay(object: THREE.Object3D): boolean {
 	return object.userData?.kind === EDGE_USERDATA_KIND;
 }
 
-/** Meshes under `root` that should get an overlay: content meshes without one, caps applied. */
-function collectTargets(root: THREE.Object3D, maxTriangles: number): THREE.Mesh[] {
-	const targets: THREE.Mesh[] = [];
+/**
+ * Meshes under `root` that should get an overlay: content meshes without one, caps applied.
+ *
+ * Two caps, and they fail in opposite directions. `maxTriangles` is per mesh and rejects the rare
+ * enormous one; `maxOverlays` is a budget over the whole set and rejects the far more common case
+ * of thousands of small ones, which no per-mesh test can see. Overlays already attached from an
+ * earlier apply are counted against the budget, so a re-apply can't creep past it.
+ */
+function collectTargets(root: THREE.Object3D, resolved: ResolvedOptions): THREE.Mesh[] {
+	const candidates: THREE.Mesh[] = [];
+	let existingOverlays = 0;
+
 	root.traverse((object) => {
 		if (!(object instanceof THREE.Mesh)) return;
 		if (object.userData.id === 'floor' || object.userData.id === 'grid') return;
 		if (object.userData.kind === EDGE_USERDATA_KIND) return;
-		if (object.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) return; // already done
+		if (object.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) {
+			existingOverlays++;
+			return; // already done
+		}
 		if (!object.geometry) return;
 
-		if (triangleCountOf(object.geometry) > maxTriangles) {
+		if (triangleCountOf(object.geometry) > resolved.maxTriangles) {
 			object.userData.edgesSkipped = EDGES_SKIPPED_TRIANGLE_CAP;
-			// eslint-disable-next-line no-console
-			console.debug(
-				`[edges] skipping mesh over triangle cap (${triangleCountOf(object.geometry)} > ${maxTriangles})`
-			);
 			return;
 		}
-		delete object.userData.edgesSkipped;
-		targets.push(object);
+		candidates.push(object);
 	});
+
+	const budget = Math.max(0, resolved.maxOverlays - existingOverlays);
+	const targets = candidates.slice(0, budget);
+	for (const mesh of targets) delete mesh.userData.edgesSkipped;
+	for (const mesh of candidates.slice(budget)) {
+		mesh.userData.edgesSkipped = EDGES_SKIPPED_OVERLAY_BUDGET;
+	}
+
+	if (candidates.length > budget) {
+		// eslint-disable-next-line no-console
+		console.debug(
+			`[edges] overlay budget reached: ${candidates.length} meshes want overlays, ` +
+				`${budget} allowed — the rest fall back to the screen-space edge pass.`
+		);
+	}
+
 	return targets;
 }
 
@@ -80,7 +104,7 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 	const materials = new MaterialPool(resolved);
 	const created: LineSegments2[] = [];
 
-	for (const mesh of collectTargets(root, resolved.maxTriangles)) {
+	for (const mesh of collectTargets(root, resolved)) {
 		// Extraction itself is cached by content (`extraction.ts`), which is where the savings are;
 		// the line geometry is per-overlay and owned by it.
 		const segments = extractSegmentsSync(mesh.geometry, resolved.thresholdAngle);
@@ -125,7 +149,7 @@ export async function addEdgesAsync(
 	const generation = generationOf(root);
 	const created: LineSegments2[] = [];
 
-	const attaches = collectTargets(root, resolved.maxTriangles).map(async (mesh) => {
+	const attaches = collectTargets(root, resolved).map(async (mesh) => {
 		const segments = await extractSegmentsAsync(mesh.geometry, resolved.thresholdAngle);
 		// Things may have moved on while extracting — attach only if this apply is still wanted.
 		if (generationOf(root) !== generation) return;

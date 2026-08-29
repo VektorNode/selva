@@ -5,9 +5,10 @@
  * A mesh file is a saved `DisplayBatch`: a small JSON sidecar header followed by the raw SLVA/SLVZ mesh
  * blob. This demo strips the header and runs the blob through the same two calls Selva's viewer makes:
  *
- *   1. Parse — `parseMeshBatchBlob(blob, { mergeByMaterial: false })`, the
- *      options from plugin-ui's `websocket-solve-driver`. No `material` appearance override: Selva
- *      applies the look at the initThree/setLook level, never at parse time.
+ *   1. Parse — `parseMeshBatchBlob(blob, { mergeByMaterial })`, seeded to `true` to match
+ *      plugin-ui's `websocket-solve-driver`, with a sidebar toggle to compare against un-merged. No
+ *      `material` appearance override: Selva applies the look at the initThree/setLook level, never
+ *      at parse time.
  *   2. Place — `updateScene(scene, meshes, camera, controls, initialPositionSet)`, the same call
  *      `Viewer.svelte` makes each solve. It clears prior content, adds the meshes, fits the camera
  *      frustum (near/far) to the part, and frames it — so a GH part sitting thousands of mm off the
@@ -27,6 +28,7 @@ import { LOOKS, updateScene, type ThreeInitializerOptions, type Look } from '@/r
 // Bundled sample mesh files, served by Vite via ?url.
 import sampleSmallUrl from '../fixtures/test_file.slvm?url';
 import sampleMeshUrl from '../fixtures/test_mesh.slvm?url';
+import sampleHouseUrl from '../fixtures/ifc_house.slvm?url';
 
 // ============================================================================
 // SELVA VIEWER CONFIG — copied verbatim from packages/ui Viewer.svelte onMount
@@ -77,6 +79,11 @@ let viewerInitialized = false;
 let edgesVisible = true;
 // Selva's render-style default; the Look select drives setLook the same way the Display submenu does.
 let renderStyle: Look = 'technical';
+// Experiment control, seeded to what plugin-ui's websocket-solve-driver sends. An IFC-scale batch
+// is thousands of tiny meshes, so this is the switch between ~6000 draw calls and ~30.
+let mergeByMaterial = true;
+// Kept so toggling merge can re-run the parse on the same input without a second file pick.
+let lastLoaded: { bytes: Uint8Array; name: string } | null = null;
 
 const hint =
 	'Load a mesh file (.slvm or legacy .dmf) to render it through the Selva pipeline.\n' +
@@ -94,7 +101,7 @@ function dmfBlob(bytes: Uint8Array): Uint8Array {
 	if (bytes.byteLength < DMF_HEADER_PREAMBLE) throw new Error('File too small to be a mesh file.');
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-	// An SLVM v2 file IS the blob (a chunked container the parser sniffs directly); only legacy
+	// An SLVM v3 file IS the blob (a chunked container the parser sniffs directly); only legacy
 	// DMF1 files carry a sidecar in front that has to be stripped.
 	if (view.getUint32(0, true) !== DMF_MAGIC) return bytes;
 
@@ -107,12 +114,13 @@ function dmfBlob(bytes: Uint8Array): Uint8Array {
 
 // ── Load through the Selva pipeline ──────────────────────────────────────────
 async function loadDmfBytes(bytes: Uint8Array, name: string) {
+	lastLoaded = { bytes, name };
 	pg.setStatus(`Loading ${name}…`);
 	try {
 		// Step 1 — parse. Selva's exact options (plugin-ui websocket-solve-driver): un-merged meshes so
 		// each part stays a distinct pickable object, transforms applied, no debug. No material override.
 		const meshes = await parseMeshBatchBlob(dmfBlob(bytes), {
-			mergeByMaterial: false,
+			mergeByMaterial,
 			debug: false
 		});
 		if (meshes.length === 0) {
@@ -175,6 +183,141 @@ function computeMeshesBounds(meshes: THREE.Object3D[]): THREE.Box3 {
 	return box;
 }
 
+// ── Scene analysis ────────────────────────────────────────────────────────────
+// `analyze()` in the console. Answers why a model is slow rather than just reporting that it is:
+// the triangle histogram is the tell. A batch whose median mesh holds ~20 triangles is draw-call
+// bound no matter how small its triangle total looks, and merging is the only thing that helps.
+function analyzeScene(): string {
+	const meshes: THREE.Mesh[] = [];
+	const overlays: THREE.Object3D[] = [];
+	viewer.scene.traverse((o) => {
+		if (o.userData?.kind === 'edge-overlay') overlays.push(o);
+		else if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh);
+	});
+
+	const tris = meshes
+		.map((m) => (m.geometry.getIndex()?.count ?? m.geometry.getAttribute('position')?.count ?? 0) / 3)
+		.sort((a, b) => a - b);
+	const total = tris.reduce((a, b) => a + b, 0);
+	const at = (q: number) => tris[Math.min(tris.length - 1, Math.floor(tris.length * q))] ?? 0;
+
+	// Buckets, not just quantiles: the shape of the distribution is what distinguishes "one heavy
+	// model" (fine) from "thousands of trivial ones" (the pathological case).
+	const buckets = [10, 100, 1_000, 10_000, Infinity];
+	const labels = ['<10', '10-99', '100-999', '1k-10k', '>10k'];
+	const histogram = buckets.map(
+		(hi, i) => tris.filter((t) => t < hi && t >= (i === 0 ? 0 : buckets[i - 1]!)).length
+	);
+
+	const materials = new Set<string>();
+	for (const m of meshes) {
+		const mat = m.material;
+		for (const one of Array.isArray(mat) ? mat : [mat]) materials.add(one.uuid);
+	}
+
+	const merged = meshes.filter((m) => Array.isArray(m.userData?.members)).length;
+	const sourceObjects = meshes.reduce(
+		(n, m) => n + (Array.isArray(m.userData?.members) ? m.userData.members.length : 1),
+		0
+	);
+
+	return [
+		`meshes            ${meshes.length}   (merged: ${merged})`,
+		`edge overlays     ${overlays.length}`,
+		`draw calls/frame  ~${meshes.length + overlays.length}`,
+		`source objects    ${sourceObjects}`,
+		`distinct materials ${materials.size}`,
+		`triangles         ${total}`,
+		`  min ${tris[0] ?? 0} · p50 ${at(0.5)} · p90 ${at(0.9)} · max ${tris[tris.length - 1] ?? 0}`,
+		`  ${labels.map((l, i) => `${l}: ${histogram[i]}`).join('  ')}`,
+		total > 0 ? `avg tris/draw     ${(total / Math.max(1, meshes.length)).toFixed(0)}` : ''
+	]
+		.filter(Boolean)
+		.join('\n');
+}
+
+(window as unknown as { analyze: () => string }).analyze = () => {
+	const report = analyzeScene();
+	pg.setStatus(report);
+	return report;
+};
+
+// ── Cost attribution ──────────────────────────────────────────────────────────
+// `bench()` in the console. Measures median frame cost with each suspected contributor switched
+// off, so the cost lands on a specific subsystem instead of being inferred from object counts.
+// Each configuration is timed by forcing real draws — the on-demand loop would otherwise skip them.
+async function benchConfigurations(): Promise<string> {
+	const FRAMES = 40;
+
+	// Drives the viewer's real animation loop rather than calling the renderer directly, so the
+	// measurement includes everything a real frame pays for (composer passes, grid, near-plane fit).
+	// `invalidate()` each frame is what stops the on-demand loop from skipping the draw.
+	// Reads the render cost the playground's HUD accumulates rather than timing rAF deltas: once a
+	// frame's work fits inside a vsync interval those deltas pin to the refresh rate (16.7 ms on a
+	// 60Hz display) and every configuration measures identical, which is a floor, not a result.
+	const frameCost = (window as unknown as { frameCost?: () => number }).frameCost;
+
+	const measure = async (): Promise<number> => {
+		// Drive real frames through the viewer's own loop so the cost includes everything a frame
+		// pays for (composer passes, grid, near-plane fit), then read what those frames actually cost.
+		for (let i = 0; i < FRAMES; i++) {
+			viewer.invalidate();
+			await new Promise((resolve) => requestAnimationFrame(resolve));
+		}
+		return frameCost?.() ?? 0;
+	};
+
+	// Counts alongside the timings: a configuration that didn't take effect (an un-awaited async
+	// apply, a budget that never triggered) otherwise looks like a change that simply didn't help.
+	const overlayCount = (): number => {
+		let n = 0;
+		viewer.scene.traverse((o) => {
+			if (o.userData?.kind === 'edge-overlay') n++;
+		});
+		return n;
+	};
+
+	const rows: string[] = [];
+	const baseline = await measure();
+	rows.push(`baseline            ${baseline.toFixed(1)} ms   (${overlayCount()} overlays)`);
+
+	viewer.clearEdges(viewer.scene);
+	const withoutEdges = await measure();
+	rows.push(
+		`without edges       ${withoutEdges.toFixed(1)} ms   (${pct(baseline, withoutEdges)} of frame, ` +
+			`${overlayCount()} overlays)`
+	);
+
+	viewer.setAmbientOcclusion(false);
+	const withoutEdgesOrAo = await measure();
+	rows.push(
+		`  and without AO    ${withoutEdgesOrAo.toFixed(1)} ms   (${pct(withoutEdges, withoutEdgesOrAo)} of frame)`
+	);
+
+	// Restore whatever the sidebar toggles say the viewer should look like. applyEdges attaches
+	// asynchronously, so give it a frame to land before the caller reads the scene back.
+	viewer.setAmbientOcclusion(true);
+	if (edgesVisible) {
+		viewer.applyEdges(viewer.scene);
+		await new Promise((resolve) => requestAnimationFrame(resolve));
+	}
+
+	return rows.join('\n');
+}
+
+/** Share of frame cost removed going from `before` to `after`. */
+function pct(before: number, after: number): string {
+	if (before <= 0) return '0%';
+	return `${Math.max(0, ((before - after) / before) * 100).toFixed(0)}% saved`;
+}
+
+(window as unknown as { bench: () => Promise<string> }).bench = async () => {
+	pg.setStatus('Benchmarking…');
+	const report = await benchConfigurations();
+	pg.setStatus(report);
+	return report;
+};
+
 // ── File picker ───────────────────────────────────────────────────────────────
 // The playground has no file-input helper, so wire a bare hidden <input> and forward its selection.
 const dmfInput = document.createElement('input');
@@ -194,6 +337,14 @@ pg.addButton('Load Mesh File…', () => dmfInput.click());
 // One-click samples straight from the repo fixtures — no file dialog needed.
 pg.addButton('Sample: test_file.slvm', () => void loadDmfUrl(sampleSmallUrl, 'test_file.slvm'));
 pg.addButton('Sample: test_mesh.slvm', () => void loadDmfUrl(sampleMeshUrl, 'test_mesh.slvm'));
+pg.addButton('Sample: ifc_house.slvm', () => void loadDmfUrl(sampleHouseUrl, 'ifc_house.slvm'));
+
+// ── Merge experiment ──────────────────────────────────────────────────────────
+// Re-parses the last input, so the two configurations can be compared on one file without a reload.
+pg.addToggle('Merge by material', mergeByMaterial, (on) => {
+	mergeByMaterial = on;
+	if (lastLoaded) void loadDmfBytes(lastLoaded.bytes, lastLoaded.name);
+});
 
 // ── Display (mirrors Selva's Display submenu) ────────────────────────────────
 // These are the two controls that shape the look. The look retunes lighting/material; edges overlay

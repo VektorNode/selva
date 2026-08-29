@@ -9,7 +9,7 @@ namespace Selva.Slva.Tests;
 /// <summary>
 ///     The <c>.slvm</c> mesh file is written to users' disks and read back by a later plugin build,
 ///     so a round-trip that quietly drops a field degrades a saved file rather than failing. Two
-///     contracts guard here: the SLVM v2 container round-trips every batch field, and files written
+///     contracts guard here: the SLVM v3 container round-trips every batch field, and files written
 ///     by the retired DMF1 writer stay readable forever.
 /// </summary>
 public class SlvmFileTests
@@ -167,7 +167,7 @@ public class SlvmFileTests
     [Fact]
     public void Read_StillAcceptsALegacyDmf1File()
     {
-        // Files written before SLVM v2 exist on users' disks; the reader dispatches on the DMF1
+        // Files written before SLVM exist on users' disks; the reader dispatches on the DMF1
         // magic and must accept them forever. The old writer is gone, so build its exact byte
         // shape by hand: header, JSON sidecar, then the raw blob to end-of-file.
         var sidecar = Newtonsoft.Json.JsonConvert.SerializeObject(new

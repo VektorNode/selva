@@ -130,10 +130,12 @@ export function createWebSocketSolveDriver(
 					if (myToken === outputsToken) {
 						const all: THREE.Object3D[] = [];
 						for (const blob of blobs) {
-							const parsed = await parseMeshBatchBlob(blob, {
-								mergeByMaterial: false,
-								debug: false
-							});
+							// Merged by material (the parser's default): an imported building model arrives
+							// as thousands of small meshes, and per-object render cost, not triangle
+							// count, is what makes it unusable. Per-object identity survives the merge
+							// via `userData.members` — the outliner keys hidden state on member keys and
+							// picking resolves a hit back to its member.
+							const parsed = await parseMeshBatchBlob(blob, { debug: false });
 							all.push(...parsed);
 						}
 						// Mesh parsing is unit-agnostic; scale to model units here, the same

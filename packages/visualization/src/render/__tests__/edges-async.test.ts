@@ -3,7 +3,13 @@ import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { describe, expect, it } from 'vitest';
 
-import { EDGES_SKIPPED_TRIANGLE_CAP, addEdges, addEdgesAsync, removeEdges } from '../edges';
+import {
+	EDGES_SKIPPED_OVERLAY_BUDGET,
+	EDGES_SKIPPED_TRIANGLE_CAP,
+	addEdges,
+	addEdgesAsync,
+	removeEdges
+} from '../edges';
 
 function meshWithBox(size = 1): THREE.Mesh {
 	return new THREE.Mesh(new THREE.BoxGeometry(size, size, size), new THREE.MeshStandardMaterial());
@@ -114,6 +120,63 @@ describe('caps', () => {
 		addEdges(root);
 		expect(mesh.userData.edgesSkipped).toBeUndefined();
 		expect(overlaysOf(mesh)).toHaveLength(1);
+	});
+
+	it('stops at the overlay budget and tags the rest', () => {
+		const root = new THREE.Group();
+		const meshes = [meshWithBox(), meshWithBox(), meshWithBox()];
+		root.add(...meshes);
+
+		const created = addEdges(root, { maxOverlays: 2 });
+
+		expect(created).toHaveLength(2);
+		expect(overlaysOf(meshes[0])).toHaveLength(1);
+		expect(overlaysOf(meshes[1])).toHaveLength(1);
+		expect(overlaysOf(meshes[2])).toHaveLength(0);
+		expect(meshes[2].userData.edgesSkipped).toBe(EDGES_SKIPPED_OVERLAY_BUDGET);
+	});
+
+	// The budget is over the whole scene, not per call — otherwise re-applying after each solve
+	// would walk the object count up past it a few overlays at a time.
+	it('counts overlays from an earlier apply against the budget', () => {
+		const root = new THREE.Group();
+		const first = meshWithBox();
+		root.add(first);
+		addEdges(root, { maxOverlays: 2 });
+
+		const second = meshWithBox();
+		const third = meshWithBox();
+		root.add(second, third);
+		const created = addEdges(root, { maxOverlays: 2 });
+
+		expect(created).toHaveLength(1); // one slot left, not two
+		expect(overlaysOf(third)).toHaveLength(0);
+		expect(third.userData.edgesSkipped).toBe(EDGES_SKIPPED_OVERLAY_BUDGET);
+	});
+
+	it('applies the budget on the async path too', async () => {
+		const root = new THREE.Group();
+		const meshes = [meshWithBox(), meshWithBox(), meshWithBox()];
+		root.add(...meshes);
+
+		const created = await addEdgesAsync(root, { maxOverlays: 1 });
+
+		expect(created).toHaveLength(1);
+		expect(meshes[2].userData.edgesSkipped).toBe(EDGES_SKIPPED_OVERLAY_BUDGET);
+	});
+
+	it('clears the budget skip tag once the mesh fits again', () => {
+		const root = new THREE.Group();
+		const meshes = [meshWithBox(), meshWithBox()];
+		root.add(...meshes);
+
+		addEdges(root, { maxOverlays: 1 });
+		expect(meshes[1].userData.edgesSkipped).toBe(EDGES_SKIPPED_OVERLAY_BUDGET);
+
+		removeEdges(root);
+		addEdges(root, { maxOverlays: 10 });
+		expect(meshes[1].userData.edgesSkipped).toBeUndefined();
+		expect(overlaysOf(meshes[1])).toHaveLength(1);
 	});
 
 	it('drops the distance fade (stays opaque) above the segment cap', () => {

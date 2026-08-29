@@ -1,12 +1,11 @@
 # `shared/` — the bottom layer
 
-What every layer above has in common. Depends on nothing else in this package, so anything placed
-here must stay free of scene, camera, renderer and controls concerns.
+**Internal.** There is no `@selvajs/visualization/shared` entrypoint. This is what `parse/`,
+`render/` and `scene/` have in common, and it depends on nothing else in the package — so anything
+put here must stay free of scene, camera, renderer and controls concerns.
 
-**This layer is internal.** Its barrel is the cross-layer import surface for `parse/`, `render/` and
-`scene/`; it is not a published entrypoint (there is no `@selvajs/visualization/shared`). The parts
-consumers need — `VisualizationError`/`ErrorCodes`, the logger seam, and the look vocabulary — are
-re-exported from `render/`, which is the barrel a viewer host already imports.
+The parts consumers actually need — `VisualizationError`/`ErrorCodes`, the logger, and the look
+vocabulary — are re-exported from `/render`, which a viewer host already imports.
 
 ## Contents
 
@@ -22,25 +21,24 @@ re-exported from `render/`, which is the barrel a viewer host already imports.
 | `gpu-dispose.ts`      | `disposeMaterial`, `disposeObjectTree` — the only traversal that should free scene content |
 | `gpu-capabilities.ts` | `publishMaxAnisotropy`, `observeMaxAnisotropy`                                             |
 
-## Why errors, logging and base64 live here rather than coming from `@selvajs/compute`
+## Why these live here
 
-None of the three is a compute concern, and that dependency was most of what stopped this package
-standing on its own — see the file headers in `errors.ts`, `logger.ts` and `encoding.ts` for the
-per-file rationale.
+**Errors, logging, base64.** None is a compute concern, and importing them from `@selvajs/compute`
+was most of what stopped this package standing on its own. Per-file rationale is in the file headers.
 
-## Why the geometry/color and GPU-ownership utilities live here
+**Geometry/colour helpers.** `parse/` needs colours, grounding and bounds, and must never import
+upward from `render/`.
 
-`parse/` needs `geometry.ts` (colors, grounding, bounds) and must never import upward from `render/`.
-`gpu-ownership.ts`/`gpu-dispose.ts`/`gpu-capabilities.ts` are the shared rules every disposal path
-in both `parse/` and `render/` obeys — see `gpu-ownership.ts`'s docblock for the ownership model.
+**GPU helpers.** Every disposal path in both `parse/` and `render/` obeys the same ownership rules;
+`gpu-ownership.ts`'s docblock has the model.
 
-## Extension points
+## Adding a look
 
-A new look: add an entry to `LOOKS` and a matching `LOOK_PRESETS` record — `Look` derives from
-`LOOKS`, so the type and the list can't drift. A look carries **only** lighting/material dials, never
-edges or grid (independent overlays).
+Add an entry to `LOOKS` and a matching record in `LOOK_PRESETS` — `Look` derives from `LOOKS`, so the
+type and the list can't drift. A look carries **only** lighting and material dials, never edges or
+grid: those are independent overlays.
 
-A look that also repaints the geometry (as `arctic` and `xray` do) sets `materialOverride`.
-`setLook` snapshots each material's parsed values before the first override and restores them when
-switching to a look without one, so the model's own colours survive the round trip. Hosts that
-re-solve must call `setLook` again afterwards: the new meshes arrive with the parser's materials.
+A look that repaints the geometry (as `arctic` and `xray` do) sets `materialOverride`. `setLook`
+snapshots each material's parsed values before the first override and restores them when switching
+back to a look without one, so the model's own colours survive the round trip. A host that re-solves
+must call `setLook` again: the new meshes arrive wearing the parser's materials.

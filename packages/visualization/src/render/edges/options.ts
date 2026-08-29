@@ -29,6 +29,19 @@ export interface EdgeOptions {
 	 * opaque instead — millions of blended fat-line quads are a fill-rate cliff; opaque ones aren't.
 	 */
 	maxSegments?: number;
+	/**
+	 * Attach at most this many overlays per apply (default 1500); past it every remaining mesh is
+	 * skipped and tagged `userData.edgesSkipped = 'overlay-budget'`, which switches on the
+	 * screen-space fallback.
+	 *
+	 * This is the count cap, and it catches what {@link maxTriangles} structurally cannot. That one
+	 * is per mesh, so it only ever sees one mesh at a time and a 20-triangle mesh always clears it —
+	 * yet an IFC model arrives as thousands of such meshes, and each overlay is a separate
+	 * `LineSegments2` with its own draw call and per-frame resolution uniform. Cost tracks the number
+	 * of overlays, not the triangles inside any one of them: measured on a 6043-mesh IFC house, the
+	 * overlays alone were 60% of a 99ms frame.
+	 */
+	maxOverlays?: number;
 }
 
 /** Tag on edge overlays so pick/fit/clear logic can recognize and skip or dispose them. */
@@ -37,12 +50,20 @@ export const EDGE_USERDATA_KIND = 'edge-overlay';
 /** `userData.edgesSkipped` value; see {@link EdgeOptions.maxTriangles}. */
 export const EDGES_SKIPPED_TRIANGLE_CAP = 'triangle-cap';
 
+/** `userData.edgesSkipped` value; see {@link EdgeOptions.maxOverlays}. */
+export const EDGES_SKIPPED_OVERLAY_BUDGET = 'overlay-budget';
+
 export const DEFAULT_EDGE_COLOR = 0x222222;
 const DEFAULT_EDGE_WIDTH = 1.5;
 const DEFAULT_THRESHOLD_ANGLE = 44;
 const DEFAULT_DARKEN = 0.75;
 const DEFAULT_MAX_TRIANGLES = 4_000_000;
 const DEFAULT_MAX_SEGMENTS = 2_000_000;
+// Sits above the few hundred objects a Grasshopper solve produces (which must keep real overlays)
+// and below the thousands an imported building model does. At the measured ~6µs per object per
+// frame under orbit, 1500 overlays is ~9ms — already most of a 60fps frame, and the point where
+// the constant-cost screen-space pass wins outright.
+const DEFAULT_MAX_OVERLAYS = 1_500;
 
 // Below this triangle count a worker round-trip would cost more than the extraction itself, so it
 // runs inline even on the async path.
@@ -76,6 +97,7 @@ export interface ResolvedOptions {
 	distanceFade: boolean;
 	maxTriangles: number;
 	maxSegments: number;
+	maxOverlays: number;
 }
 
 export function resolveOptions(options: EdgeOptions): ResolvedOptions {
@@ -86,6 +108,7 @@ export function resolveOptions(options: EdgeOptions): ResolvedOptions {
 		thresholdAngle: options.thresholdAngle ?? DEFAULT_THRESHOLD_ANGLE,
 		distanceFade: options.distanceFade ?? true,
 		maxTriangles: options.maxTriangles ?? DEFAULT_MAX_TRIANGLES,
-		maxSegments: options.maxSegments ?? DEFAULT_MAX_SEGMENTS
+		maxSegments: options.maxSegments ?? DEFAULT_MAX_SEGMENTS,
+		maxOverlays: options.maxOverlays ?? DEFAULT_MAX_OVERLAYS
 	};
 }

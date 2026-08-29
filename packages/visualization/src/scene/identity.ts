@@ -23,6 +23,10 @@ export interface MergedMember {
 	name: string;
 	layer: string;
 	metadata: Record<string, string>;
+	/** Start of this member's window into the merged index buffer; absent on older merges. */
+	indexStart?: number;
+	/** Length of that window, in indices. */
+	indexCount?: number;
 }
 
 /**

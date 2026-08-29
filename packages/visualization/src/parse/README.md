@@ -1,82 +1,72 @@
-# `parse/` — how payloads become objects
+# `parse/` — payload → THREE objects
 
-This folder turns a backend response into objects you can put in a Three.js scene.
-It depends only on `shared/` and does not import `render/` or `scene/`.
+Turns what the backend sent into meshes, curves and points you can add to a scene. It never touches
+the scene, the camera, or the DOM — that's `render/`.
 
-## What it handles
+## The one call you probably want
 
-| Kind                         | Entry point                          | What comes out             |
-| ---------------------------- | ------------------------------------ | -------------------------- |
-| Mesh batches + display items | `getThreeObjectsFromComputeResponse` | meshes, curves, and points |
-| Display items only           | `parseDisplayItems`                  | curves and points          |
+```ts
+import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
 
-## Simple flow
+const objects = await getThreeObjectsFromComputeResponse(response);
+```
+
+`response` is the Rhino.Compute response for your definition. Out comes a flat `THREE.Object3D[]` —
+meshes, curves and points mixed together, materials and colours already applied. Hand it straight to
+`updateScene`.
 
 ```mermaid
 flowchart LR
   A[Compute response] --> B[getThreeObjectsFromComputeResponse]
-  B --> C[Mesh objects]
-  B --> D[Curve objects]
-  B --> E[Point objects]
+  B --> C[Meshes]
+  B --> D[Curves]
+  B --> E[Points]
 ```
 
-The parser reads the response, pulls out the mesh batches, and then reads any display items that are
-already inside the same payload.
+## If you don't have a compute response
 
-## Common use
+Three smaller entry points, for hosts that get their geometry another way.
 
-Use the full-response helper when you already have a compute result:
+| You have                            | Call                                | You get            |
+| ----------------------------------- | ----------------------------------- | ------------------ |
+| A raw binary mesh blob (`SLVA`)     | `await parseMeshBatchBlob(blob)`    | `THREE.Mesh[]`     |
+| A `DisplayBatch` object             | `await parseMeshBatchObject(batch)` | `THREE.Mesh[]`     |
+| Just display items (curves, points) | `parseDisplayItems(items)`          | `THREE.Object3D[]` |
 
 ```ts
-const objects = await getThreeObjectsFromComputeResponse(response);
-updateScene(scene, objects, camera, controls, false);
+// A saved .slvm file, or a blob straight off a WebSocket:
+const meshes = await parseMeshBatchBlob(blob, { mergeByMaterial: false });
 ```
 
-Use the smaller helper when you already have just the display items:
+`mergeByMaterial` defaults to `true` (fewer draw calls). Turn it off when each source object needs to
+stay its own mesh — for example so the outliner can hide them one at a time.
+
+## Units
+
+Geometry is scaled from the Rhino model units named in the response. `SCALE_FACTORS` maps a unit name
+to metres if you need to do that conversion yourself:
 
 ```ts
-const objects = parseDisplayItems(batch.items);
+import { SCALE_FACTORS } from '@selvajs/visualization/parse';
+
+SCALE_FACTORS.Millimeters; // 0.001
 ```
 
-Use a custom unit scale when you need a specific conversion:
+An unrecognised unit logs a warning once and leaves geometry unscaled.
 
-```ts
-const scale = SCALE_FACTORS.Millimeters;
-```
+## What to expect
 
-## If you do not use Compute
+- Malformed data throws. A parse failure is a bug in the payload, not something to paper over.
+- Missing display items are fine — you just get fewer objects back.
+- The parser never rotates geometry. The viewer owns orientation.
 
-Not every host has a full `GrasshopperComputeResponse`. If you already have the mesh batch JSON
-from another source, use the smaller helpers directly:
+## Adding a new display item type
 
-```ts
-const batchJson = JSON.parse(textFromWire);
-const batch = parseMeshBatchObject(batchJson);
-const objects = parseDisplayItems(batch.items);
-```
+Three edits, all in `display-items/`: a type in `types.ts`, a builder in `items/`, a case in
+`display-items-parser.ts`.
 
-If the data is still a binary `SLVA` blob, decode that first with `parseMeshBatchBlob` and then
-pass the result to `parseMeshBatchObject`.
+## Not exported, on purpose
 
-## What happens inside
-
-- Mesh batches are decoded from the binary `SLVA` payload.
-- Curves are drawn from tessellated points sent by the backend.
-- Points are turned into `THREE.Points`.
-- Materials and colors are applied while parsing.
-
-## A few rules
-
-- A broken response should fail loudly when the data is malformed.
-- Missing display items are fine; the parser just returns fewer objects.
-- The parser does not rotate geometry. The viewer owns orientation.
-
-## Adding more
-
-- Add a new display item type in `display-items/types.ts`.
-- Add a builder in `display-items/items/`.
-- Add a case in `display-items-parser.ts`.
-
-## Why this folder stays small
-
-`parse/` only turns payloads into objects. It does not own the scene, the camera, or the UI.
+The SLVA binary wire format — magics, version gates, flag bits — is private to `parseMeshBatch*` so
+it can change without a major version bump. Format spec:
+[docs/contributing/slva-format.md](../../../../docs/contributing/slva-format.md).

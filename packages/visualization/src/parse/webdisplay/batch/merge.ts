@@ -109,6 +109,44 @@ export function createMergedMesh(
 	return finalizeMergedMesh(geometry, group, materials);
 }
 
+/**
+ * One source object inside a merged mesh, as stamped into `userData.members`.
+ *
+ * Deliberately declared here rather than imported from `scene/`: the two layers are siblings, so
+ * `parse` writing this shape and `scene` reading it back off `userData` is the only contract
+ * between them. `scene/identity.ts` has the mirror of this interface.
+ */
+interface MergedMember {
+	trackingKey?: string;
+	name: string;
+	layer: string;
+	metadata: Record<string, string>;
+	indexStart: number;
+	indexCount: number;
+}
+
+/**
+ * Per-member records for a merged mesh, each carrying its window into the merged index buffer.
+ * The windows are a prefix sum over `indexCount` because the merge concatenates members in this
+ * order — see the copy loop in {@link createMergedMesh}.
+ */
+function mergedMembers(group: MaterialGroup): MergedMember[] {
+	const members: MergedMember[] = [];
+	let indexStart = 0;
+	for (const mesh of group.meshes) {
+		members.push({
+			trackingKey: mesh.id,
+			name: mesh.name,
+			layer: mesh.layer,
+			metadata: mesh.metadata ?? {},
+			indexStart,
+			indexCount: mesh.indexCount
+		});
+		indexStart += mesh.indexCount;
+	}
+	return members;
+}
+
 export function finalizeMergedMesh(
 	geometry: THREE.BufferGeometry,
 	group: MaterialGroup,
@@ -129,12 +167,13 @@ export function finalizeMergedMesh(
 		// A merged mesh is several source objects in one THREE object, so identity lives per
 		// member: the scene layer keys hidden state on every member's key, and regrouping can
 		// never lose it.
-		members: group.meshes.map((m) => ({
-			trackingKey: m.id,
-			name: m.name,
-			layer: m.layer,
-			metadata: m.metadata ?? {}
-		}))
+		//
+		// `indexStart`/`indexCount` are the member's window into the merged index buffer, which is
+		// what maps a raycast hit back to the one source object under the cursor — without them a
+		// click could only ever identify the whole merged mesh. The merge writes members in this
+		// exact order (see the concatenation loop above), so the windows are a prefix sum over
+		// `indexCount` and are never stored on the wire.
+		members: mergedMembers(group)
 	};
 
 	return threeMesh;

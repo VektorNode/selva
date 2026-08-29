@@ -11,15 +11,15 @@ namespace Selva.Slva;
 ///     meshing/quantizing/compressing a part once, saving the finished blob, then reloading it
 ///     cheaply (no re-mesh) when the same part is reused many times in a scene.
 ///
-///     A file IS an SLVM v2 container (see <see cref="SlvmDocument" /> for the byte spec) — the
+///     A file IS an SLVM v3 container (see <see cref="SlvmDocument" /> for the byte spec) — the
 ///     wire blob plus the item chunks (curves, points, their Rhino curve JSON). There is no
 ///     separate on-disk wrapper. The geometry blob is copied verbatim, never re-encoded, so
 ///     save/load adds no quantization or compression cost. It does NOT store the original
 ///     Breps/NURBS — it's a display artifact, not a CAD-exchange format.
 ///
-///     Files written before SLVM v2 use the DMF1 container (a JSON sidecar in front of the blob);
+///     Files written before SLVM use the DMF1 container (a JSON sidecar in front of the blob);
 ///     the reader dispatches on the leading magic and accepts them forever. Nothing else knows
-///     DMF1 exists: the writer emits only SLVM v2.
+///     DMF1 exists: the writer emits only SLVM v3.
 /// </summary>
 public static class SlvmFile
 {
@@ -81,7 +81,7 @@ public static class SlvmFile
         }
     }
 
-    /// <summary>The DMF1 container (files written before SLVM v2). Read-only forever.</summary>
+    /// <summary>The DMF1 container (files written before SLVM). Read-only forever.</summary>
     private static DisplayBatch ReadLegacy(byte[] bytes)
     {
         using (var input = new MemoryStream(bytes, false))

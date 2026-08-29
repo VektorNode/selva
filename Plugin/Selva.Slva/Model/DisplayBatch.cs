@@ -19,7 +19,7 @@ public class DisplayBatch
     public List<MaterialGroup> Groups { get; set; }
 
     /// <summary>
-    ///     The batch's binary payload: an SLVM v2 container (<see cref="SlvmDocument" />) holding
+    ///     The batch's binary payload: an SLVM v3 container (<see cref="SlvmDocument" />) holding
     ///     the geometry blob plus the object table/materials as chunks. Old `.gh` files still hold
     ///     bare SLVA/SLVZ blobs here; readers dispatch on the leading magic. Travels as base64
     ///     inside the values JSON, or raw over the WebSocket's binary frames. Field name is

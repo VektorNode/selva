@@ -1,46 +1,65 @@
-# `client/` — inputs → solve → outputs
+# `client/` — app-side solve state
 
-The value and lifecycle state machine between a schema-driven UI and a solver. It owns the
-input/output `values` map, solve-gating (`instanceSolve`), the pending-changes /
-never-solved flags, compute errors/warnings, display meshes, and how all of these reset
-when the active definition changes.
+This folder keeps the state that sits between a UI and a solver. It tracks the current input values,
+whether a solve is running, the last result, and what should happen when the definition changes.
 
-**It knows only `SolveResult` from `shared/`** — inputs go out, outputs and meshes come back.
-That's what lets the same session drive a WebSocket (the Grasshopper plugin) or a
-Rhino.Compute HTTP call (the cloud app), and what lets a headless consumer solve without
-rendering. Must never import `../server/*`.
+It only knows about `SolveResult` from `shared/`. Inputs go out, results come back. That is what
+lets the same session work with a WebSocket app, an HTTP app, or a headless tool. It must never
+import `../server/*`.
 
-## Contents
+## Main pieces
 
-| File                          | Owns                                                             |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `solve-session.ts`            | `createSolveSession` — state ownership + the subscriber set      |
-| `solve-session-core.ts`       | the pure transition logic every decision goes through            |
-| `drivers/driver.ts`           | `SolveDriver` + `SolveReporter` — the transport seam             |
-| `drivers/request-response.ts` | `createRequestResponseDriver` (memo + throttle over a `SolveFn`) |
-| `compute-fetch-solve-fn.ts`   | `createComputeFetchSolveFn` — ready-made `SolveFn` over HTTP     |
-| `async-throttle.ts`           | single-in-flight, latest-wins dispatch pacing                    |
-| `solve-memo.ts`               | client-side LRU result cache (delegates mesh ownership)          |
-| `external-storage.ts`         | client-sourced input transit storage                             |
+| File                          | What it does                         |
+| ----------------------------- | ------------------------------------ |
+| `solve-session.ts`            | Creates the session                  |
+| `solve-session-core.ts`       | Holds the state changes              |
+| `drivers/driver.ts`           | Defines the transport boundary       |
+| `drivers/request-response.ts` | Request/response driver              |
+| `compute-fetch-solve-fn.ts`   | Ready-made HTTP solve function       |
+| `async-throttle.ts`           | Keeps only one solve in flight       |
+| `solve-memo.ts`               | Caches results on the client         |
+| `external-storage.ts`         | Stores inputs while they move around |
 
-## Reactivity: the `subscribe()` seam
+## Typical flow
 
-The session is framework-free: state is exposed as plain getters, and every mutation fires
-`subscribe()` listeners. Reading a getter without subscribing gives a correct value but
-nothing re-renders. A reactive host subscribes once and republishes into its own framework:
+1. The UI changes input values.
+2. The session sends those values to a driver.
+3. The driver gets a result back and reports it.
+4. The UI reads the latest state from the session.
+
+```ts
+const session = createSolveSession({ driver: createRequestResponseDriver() });
+session.solve({ width: 10, height: 20 });
+```
+
+```ts
+session.subscribe(() => {
+	updateStatus(session.isSolving);
+	updateResult(session.lastResult);
+});
+```
+
+## What a `values` map is
+
+`values` is the current input map for the active definition. In a real app it usually comes from the
+form state or from a Grasshopper input tree. If you need to build or edit that tree first, see
+[`packages/compute/src/grasshopper/README.md`](../../../compute/src/grasshopper/README.md#data-trees)
+and [`packages/compute/src/grasshopper/data-tree/README.md`](../../../compute/src/grasshopper/data-tree/README.md).
+
+## How the session updates the UI
+
+The session exposes plain getters. To make a UI update, subscribe once and then copy the state into
+your own framework.
 
 ```ts
 let version = $state(0);
 $effect(() => session.subscribe(() => (version += 1)));
-// then read `version` inside any getter that exposes session state
 ```
 
-`@selvajs/ui` ships exactly that as `useSolveSession` — use it instead of hand-rolling one
-in a Svelte app.
+`@selvajs/ui` already does that for Svelte apps as `useSolveSession`.
 
-**`isSolving` is the exception.** It forwards to the driver, which the session cannot
-observe. A driver that owns its own in-flight flag must call `session.notify()` on every
-transition, or the spinner never moves:
+`isSolving` comes from the driver. If the driver changes it, call `session.notify()` so the UI
+re-renders.
 
 ```ts
 const driver = createRequestResponseDriver(onSolve, () => session, {
@@ -48,63 +67,70 @@ const driver = createRequestResponseDriver(onSolve, () => session, {
 });
 ```
 
-## Extension point: writing a driver
+## Writing a driver
 
-A driver gives the session its transport: start and cancel a solve, report `isSolving`. It
-does **not** return outputs — results come back asynchronously via the reporter, which is
-what lets a push transport satisfy the same interface as a request/response call.
+A driver starts and cancels solves. It does not return results directly; the reporter sends results
+back later.
 
 ```ts
 const myDriver: SolveDriver = {
 	solve(values) {
-		/* send them */
+		/* send the values */
 	},
 	cancel() {
-		/* abort in-flight */
+		/* stop the current solve */
 	},
 	get isSolving() {
 		return inFlight;
-	},
-	clearCache() {} // optional: only if you memoize
+	}
 };
 ```
 
-Then feed results back with `getReporter().report({ outputs, meshes, errors, warnings })`,
-or `reportError(message)` on a transport failure.
+```ts
+getReporter().report({ outputs, meshes, errors, warnings });
+```
 
-**If your driver owns a request/response pair, stamp `values` on what you report.** The
-session retains the last reported result, and a host committing what is on screen relies on
-artifact and inputs being atomic. If your transport is push-based and cannot attribute an
-incoming frame to a request it made, leave `values` absent — do not attach the last set you
-sent. Frames that arrive unsolicited (a replay on connect, a recompute triggered outside the
-web UI) would be stamped with an unrelated input set, which is the exact mismatch the field
-exists to prevent. Absent is a documented answer; wrong is not.
+If the transport fails, call `reportError(message)`.
 
-Transport quirks — value preparation, mesh-blob streaming, remote-update guards — stay
-inside the driver; the session never learns them. `plugin-ui`'s WebSocket driver lives in
-that package rather than here for exactly this reason: it's transport-specific but satisfies
-this interface.
+## Real-world examples
 
-Reach for `createAsyncThrottle` if your transport needs single-in-flight latest-wins
-semantics, and `createSolveMemo` if repeated inputs should skip the round-trip — both are
-exported so a custom driver doesn't re-derive them.
+### WebSocket app
 
-## Mesh ownership is injected, not known here
+Use this when a plugin or local service pushes results back to the app.
 
-A viewer takes ownership of every mesh array it renders, disposing the previous content on
-the next scene update. A memo that stored those objects by reference would serve an
-already-disposed mesh on the next hit, and leak GPU buffers on eviction.
+```ts
+const session = createSolveSession({ driver: createRequestResponseDriver() });
+session.solve(values);
+```
 
-`solve-memo.ts` avoids that without knowing what a mesh is: `TMesh` is opaque, and the
-clone/release policy is a `MeshPolicy<TMesh>` the host passes in. The three.js
-implementation lives in `@selvajs/visualization/parse` (`meshPolicy`), beside the viewer
-whose disposal rule creates the requirement — that's what keeps `three` out of this package
-entirely.
+### HTTP app
+
+Use the HTTP solve helper when the server responds to a request.
+
+```ts
+const solve = createComputeFetchSolveFn({
+	endpoint: '/api/compute',
+	definitionUrl: () => '/definition.gh'
+});
+```
+
+### Headless tool
+
+Use the shared result type when you just need to pass solve results through your own code.
+
+```ts
+import type { SolveResult } from '@selvajs/solve/shared';
+```
+
+## Mesh ownership
+
+If your app renders meshes, it owns them. The session does not know what a mesh is, so the cache
+needs a policy from the host.
 
 ```ts
 import { meshPolicy } from '@selvajs/visualization/parse';
 const driver = createRequestResponseDriver(onSolve, () => session, { meshPolicy });
 ```
 
-Omit it and the memo stores meshes by reference — correct only when nothing disposes what it
-hands out.
+Without a policy, the memo stores meshes by reference. That only works when nothing else disposes
+them.

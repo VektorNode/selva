@@ -121,7 +121,9 @@ export type EdgesConfig = {
 	maxTriangles?: number;
 	/** Default 2M. */
 	maxSegments?: number;
-	/** Fall back to the screen-space edge-detection pass for meshes skipped by `maxTriangles`. Default true. */
+	/** Max overlays attached per apply, default 1500. Past it, meshes fall back to the edge pass. */
+	maxOverlays?: number;
+	/** Fall back to the screen-space edge-detection pass for meshes the overlay path skipped. Default true. */
 	screenSpaceFallback?: boolean;
 };
 

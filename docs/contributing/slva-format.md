@@ -59,7 +59,7 @@ The meshes are packed into a compact binary format:
 6. **The SLVM container.** The finished geometry blob is packed with everything else the batch carries into one chunked container — the bytes that travel as `CompressedData` and, with the item chunks added, sit on disk as a `.slvm` file:
 
    ```
-   [4] "SLVM" | [4] version = 2 | [4] chunkCount
+   [4] "SLVM" | [4] version = 3 | [4] chunkCount
    per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
    ```
 
@@ -77,7 +77,7 @@ The meshes are packed into a compact binary format:
 
    The wire container omits the item chunks (curves/points travel as JSON alongside, stage 3); the `.slvm` file includes them. Display From File restamps a loaded batch's identity by rewriting the tiny `EXTN` chunk — the geometry is never re-encoded.
 
-Version gates are additive within the geometry blob: each SLVA bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade. The frozen pre-v4 fixtures under `packages/schemas/fixtures/slva/v3/` pin this on both stacks — never regenerate them. Containers are gated separately: readers accept SLVM v2, the legacy `DMF1` file container, and bare SLVA/SLVZ blobs from old `.gh` files, dispatching on the leading magic; new bytes are always SLVM v2. The cross-stack container fixtures live under `packages/schemas/fixtures/slvm2/` (`UPDATE_SLVM_FIXTURES=1 dotnet test` regenerates).
+Version gates are additive within the geometry blob: each SLVA bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade. The frozen pre-v4 fixtures under `packages/schemas/fixtures/slva/v3/` pin this on both stacks — never regenerate them. Containers are gated separately: readers accept SLVM v3, the legacy `DMF1` file container, and bare SLVA/SLVZ blobs from old `.gh` files, dispatching on the leading magic; new bytes are always SLVM v3. Unlike the geometry blob, the container version is an exact match, not a floor — SLVM v2 was a pre-release layout that never shipped, so nothing on disk carries it and readers reject it outright. The cross-stack container fixtures live under `packages/schemas/fixtures/slvm3/` (`UPDATE_SLVM_FIXTURES=1 dotnet test` regenerates).
 
 > **The byte-level spec is normative and lives in code, in two places that must agree:** for the geometry blob, the remarks block at the top of [`SlvaWriter.cs`](../../Plugin/Selva.Slva/Geometry/SlvaWriter.cs) (encoder) and the constants in [`binary/header.ts`](../../packages/visualization/src/parse/webdisplay/binary/header.ts) (decoder); for the container, [`SlvmDocument.cs`](../../Plugin/Selva.Slva/Container/SlvmDocument.cs) (TABL layout in [`SlvmTable.cs`](../../Plugin/Selva.Slva/Container/SlvmTable.cs)) and [`binary/slvm.ts`](../../packages/visualization/src/parse/webdisplay/binary/slvm.ts). Change them together and bump the version.
 >
