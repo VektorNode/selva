@@ -1,39 +1,23 @@
 using System;
 using System.IO;
-using System.Text;
-using Newtonsoft.Json;
 
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     Reads and writes the Selva mesh file (<c>.slvm</c>; legacy <c>.dmf</c>) — a self-contained,
-///     on-disk copy of a <see cref="DisplayBatch" />. The point is preprocessing: meshing/quantizing/compressing
+///     Reads and writes the Selva mesh file (<c>.slvm</c>) — a self-contained, on-disk copy of a
+///     <see cref="DisplayBatch" />. The point is preprocessing: meshing/quantizing/compressing
 ///     a part once, saving the finished blob, then reloading it cheaply (no re-mesh) when the same
 ///     part is reused many times in a scene.
 ///
 ///     A file IS an SLVM v2 container (see <see cref="SlvmDocument" /> for the byte spec) — the
 ///     wire blob plus the item chunks (curves, points, their Rhino curve JSON). There is no
 ///     separate on-disk wrapper. The geometry blob is copied verbatim, never re-encoded, so
-///     save/load adds no quantization or compression cost.
-///
-///     Files written before SLVM v2 use the DMF1 container (a JSON sidecar in front of the blob);
-///     the reader dispatches on the leading magic and accepts them forever. It does NOT store the
-///     original Breps/NURBS — it's a display artifact, not a CAD-exchange format.
+///     save/load adds no quantization or compression cost. It does NOT store the original
+///     Breps/NURBS — it's a display artifact, not a CAD-exchange format.
 /// </summary>
 public static class SlvmFile
 {
-    /// <summary>Legacy DMF1 container magic. New files carry <see cref="SlvmDocument.Magic" />.</summary>
-    public const uint Magic = 0x31464D44; // "DMF1" little-endian
-    public const uint Version = 1;
-
     public const string Extension = ".slvm";
-
-    /// <summary>
-    ///     The extension the writer used before the slv* family unification. Files with it exist on
-    ///     users' disks, so readers accept it forever; only the writer default changed. Identity is
-    ///     the DMF1 magic either way — the magic never changes.
-    /// </summary>
-    public const string LegacyExtension = ".dmf";
 
     public static void Write(Stream output, DisplayBatch batch)
     {
@@ -74,61 +58,16 @@ public static class SlvmFile
             input.CopyTo(buffer);
             var bytes = buffer.ToArray();
 
-            if (SlvmDocument.IsSlvm(bytes))
+            if (!SlvmDocument.IsSlvm(bytes))
             {
-                var doc = SlvmDocument.Read(bytes);
-                // In-memory CompressedData is the wire shape: items travel as JSON alongside, so
-                // strip their chunks or a re-broadcast would carry them twice.
-                doc.Batch.CompressedData = SlvmDocument.StripItems(bytes, doc.Batch.BatchId);
-                return doc.Batch;
+                throw new InvalidDataException("Not an SLVM file (bad magic).");
             }
 
-            return ReadLegacy(bytes);
-        }
-    }
-
-    /// <summary>The DMF1 container (files written before SLVM v2). Read-only forever.</summary>
-    private static DisplayBatch ReadLegacy(byte[] bytes)
-    {
-        using (var input = new MemoryStream(bytes, false))
-        using (var reader = new BinaryReader(input, Encoding.UTF8, leaveOpen: true))
-        {
-            var magic = reader.ReadUInt32();
-            if (magic != Magic)
-            {
-                throw new InvalidDataException($"Not a DMF file (bad magic 0x{magic:X8}).");
-            }
-
-            var version = reader.ReadUInt32();
-            if (version != Version)
-            {
-                throw new InvalidDataException($"Unsupported DMF version {version} (expected {Version}).");
-            }
-
-            var jsonLen = reader.ReadUInt32();
-            var jsonBytes = reader.ReadBytes((int)jsonLen);
-            var json = Encoding.UTF8.GetString(jsonBytes);
-
-            // Deserialize straight into a DisplayBatch shape: the sidecar property names match, and
-            // the blob fills in CompressedData below. Reusing the batch's own JSON contract keeps the
-            // round-trip lossless without a second mapping layer.
-            var batch = JsonConvert.DeserializeObject<DisplayBatch>(json) ?? new DisplayBatch();
-
-            // Remaining bytes are the raw SLVA/SLVZ blob. Read through the BinaryReader (not the raw
-            // stream) so we don't lose any bytes the reader buffered ahead.
-            using (var ms = new MemoryStream())
-            {
-                var chunk = new byte[8192];
-                int read;
-                while ((read = reader.Read(chunk, 0, chunk.Length)) > 0)
-                {
-                    ms.Write(chunk, 0, read);
-                }
-
-                batch.CompressedData = ms.ToArray();
-            }
-
-            return batch;
+            var doc = SlvmDocument.Read(bytes);
+            // In-memory CompressedData is the wire shape: items travel as JSON alongside, so
+            // strip their chunks or a re-broadcast would carry them twice.
+            doc.Batch.CompressedData = SlvmDocument.StripItems(bytes, doc.Batch.BatchId);
+            return doc.Batch;
         }
     }
 }

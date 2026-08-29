@@ -19,7 +19,7 @@ public class GH_DisplayFromFile : GH_Component
 {
     public GH_DisplayFromFile()
         : base("Display From File", "DFF",
-            "Reloads a Web Display payload from a Selva mesh file (.slvm or legacy .dmf, no re-meshing).",
+            "Reloads a Web Display payload from a Selva mesh file (.slvm, no re-meshing).",
             "Selva", "Display")
     {
     }
@@ -30,7 +30,7 @@ public class GH_DisplayFromFile : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddTextParameter("Path", "P", "Absolute path to the mesh file (.slvm or legacy .dmf)",
+        pManager.AddTextParameter("Path", "P", "Absolute path to the mesh file (.slvm)",
             GH_ParamAccess.item);
         pManager.AddTextParameter("Id", "Id",
             "Optional source component id to stamp on the payload (for stable web pick identity). " +

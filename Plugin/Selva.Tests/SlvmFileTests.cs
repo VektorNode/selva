@@ -2,16 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using Newtonsoft.Json;
 using Selva.GH.Features.Display.Services;
 
 namespace Selva.Tests;
 
 /// <summary>
 ///     The <c>.slvm</c> mesh file is written to users' disks and read back by a later plugin build,
-///     so a round-trip that quietly drops a field degrades a saved file rather than failing. Two
-///     contracts guard here: the SLVM v2 container round-trips every batch field, and files written
-///     by the retired DMF1 writer stay readable forever.
+///     so a round-trip that quietly drops a field degrades a saved file rather than failing. The
+///     contract guarded here: the SLVM v2 container round-trips every batch field.
 /// </summary>
 public class SlvmFileTests
 {
@@ -168,68 +166,13 @@ public class SlvmFileTests
     }
 
     [Fact]
-    public void Read_StillAcceptsALegacyDmf1File()
-    {
-        // Files written before SLVM v2 exist on users' disks; the reader dispatches on the DMF1
-        // magic and must accept them forever. The old writer is gone, so build its exact byte
-        // shape by hand: header, JSON sidecar, then the raw blob to end-of-file.
-        var sidecar = JsonConvert.SerializeObject(new
-        {
-            materials = new[] { new { color = "#123456", metalness = 0.1, roughness = 0.9, opacity = 1.0, transparent = false } },
-            groups = new[]
-            {
-                new
-                {
-                    materialId = 0,
-                    meshes = new[]
-                    {
-                        new
-                        {
-                            name = "legacy", layer = "Old/Layer", originalIndex = 2,
-                            vertexCount = 4, indexCount = 6, vertexStart = 10, indexStart = 20,
-                            metadata = new Dictionary<string, string> { ["k"] = "v" }
-                        }
-                    }
-                }
-            },
-            // The DMF1 sidecar's own JSON key — the pre-rename spelling, frozen on users' disks.
-            sourceComponentId = "legacy-id"
-        });
-        var blob = new byte[] { 0x53, 0x4C, 0x56, 0x5A, 9, 8, 7 };
-
-        using var ms = new MemoryStream();
-        using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
-        {
-            w.Write(SlvmFile.Magic);
-            w.Write(SlvmFile.Version);
-            var jsonBytes = Encoding.UTF8.GetBytes(sidecar);
-            w.Write((uint)jsonBytes.Length);
-            w.Write(jsonBytes);
-            w.Write(blob);
-        }
-
-        ms.Position = 0;
-        var decoded = SlvmFile.Read(ms);
-
-        Assert.Equal("legacy-id", decoded.BatchId);
-        Assert.Equal("#123456", decoded.Materials[0].Color);
-        var mesh = decoded.Groups[0].Meshes[0];
-        Assert.Equal("legacy", mesh.Name);
-        Assert.Equal(2, mesh.OriginalIndex);
-        // DMF1 stored the windows explicitly; the legacy path must keep them verbatim.
-        Assert.Equal(10, mesh.VertexStart);
-        Assert.Equal(20, mesh.IndexStart);
-        Assert.Equal(blob, decoded.CompressedData);
-    }
-
-    [Fact]
-    public void Read_RejectsAFileThatIsNeitherSlvmNorDmf()
+    public void Read_RejectsAFileWithAForeignMagic()
     {
         using var ms = new MemoryStream();
         using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
         {
             w.Write(0xDEADBEEFu);
-            w.Write(SlvmFile.Version);
+            w.Write(1u);
             w.Write(0u);
         }
 

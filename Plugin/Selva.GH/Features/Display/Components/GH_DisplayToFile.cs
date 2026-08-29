@@ -30,7 +30,7 @@ public class GH_DisplayToFile : GH_Component
         pManager.AddParameter(new Param_WebDisplay("Web Display", "WD",
             "Web Display payload from the Display component", "Selva", "Display", GH_ParamAccess.item));
         pManager.AddTextParameter("Path", "P",
-            "Absolute path to write the mesh file to (.slvm is added when the path has neither .slvm nor .dmf)",
+            "Absolute path to write the mesh file to (.slvm is added when missing)",
             GH_ParamAccess.item);
         pManager.AddBooleanParameter("Write", "W", "Set to true to write the file", GH_ParamAccess.item, false);
     }
@@ -64,10 +64,7 @@ public class GH_DisplayToFile : GH_Component
             return;
         }
 
-        // A path already carrying the legacy extension is kept as-is — appending .slvm to
-        // "part.dmf" would silently fork the file the rest of the definition references.
-        if (!path.EndsWith(SlvmFile.Extension, StringComparison.OrdinalIgnoreCase)
-            && !path.EndsWith(SlvmFile.LegacyExtension, StringComparison.OrdinalIgnoreCase))
+        if (!path.EndsWith(SlvmFile.Extension, StringComparison.OrdinalIgnoreCase))
         {
             path += SlvmFile.Extension;
         }
