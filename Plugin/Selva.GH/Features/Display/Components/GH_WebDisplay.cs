@@ -321,7 +321,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public bool Skipped;
 
         // Mesh path. Vertex/face arrays are extracted here, on the parallel thread, so the serial
-        // assembly pass (MeshBatchProcessor.CreateBatch) doesn't re-walk every vertex on one thread.
+        // assembly pass (MeshBatchAssembler.CreateBatch) doesn't re-walk every vertex on one thread.
         // Mesh itself is kept for the main-thread viewport preview.
         public Mesh Mesh;
         public string MeshName;

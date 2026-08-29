@@ -109,7 +109,7 @@
 		         Link="Linked\ThreeMaterial.cs"/>
 		<Compile Include="..\Selva.GH\Features\Display\Services\ColorJsonConverter.cs"
 		         Link="Linked\ColorJsonConverter.cs"/>
-		<!-- Batch assembly, split out of MeshBatchProcessor so the offset arithmetic both
+		<!-- Batch assembly takes arrays, not Rhino meshes, so the offset arithmetic both
 		     decoders slice on is reachable without RhinoCommon. -->
 		<Compile Include="..\Selva.GH\Features\Display\Services\MeshBatchAssembler.cs"
 		         Link="Linked\MeshBatchAssembler.cs"/>

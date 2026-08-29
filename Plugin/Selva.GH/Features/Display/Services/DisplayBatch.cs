@@ -53,7 +53,7 @@ public class DisplayBatch
     /// <summary>
     ///     Non-mesh display items. Omitted from the JSON when empty so mesh-only batches stay
     ///     byte-for-byte as before. Unlike meshes these don't go through
-    ///     <see cref="MeshBatchProcessor" /> — the component sets this directly.
+    ///     <see cref="MeshBatchAssembler" /> — the component sets this directly.
     /// </summary>
     [JsonProperty("items", NullValueHandling = NullValueHandling.Ignore)]
     public List<DisplayItem> Items { get; set; }

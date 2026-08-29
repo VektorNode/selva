@@ -14,8 +14,7 @@ namespace Selva.GH.Features.Display.Services;
 ///     Deliberately takes arrays rather than Rhino meshes. Every offset it computes
 ///     (<c>VertexStart</c>, <c>IndexStart</c>, the index rebase) is what both decoders slice on,
 ///     and getting one wrong renders the wrong geometry rather than failing — so this half has to
-///     be testable without a Rhino host. <see cref="MeshBatchProcessor" /> keeps the mesh-taking
-///     entry point.
+///     be testable without a Rhino host.
 /// </summary>
 public static class MeshBatchAssembler
 {
