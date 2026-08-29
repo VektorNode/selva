@@ -16,6 +16,7 @@ using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
 
@@ -669,7 +670,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
             case Rhino.Geometry.Point pointGeom:
             {
-                item = DisplayItem.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
+                item = RhinoDisplayItems.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
                     colorHex, opacity);
                 previewPoint = pointGeom.Location;
                 return true;

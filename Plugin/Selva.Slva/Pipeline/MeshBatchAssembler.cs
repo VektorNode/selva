@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     Assembles a <see cref="DisplayBatch" /> from already-extracted vertex/face arrays: dedupes

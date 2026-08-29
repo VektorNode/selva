@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using Newtonsoft.Json;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     One Display component's payload, ready for Three.js rendering. Meshes travel as a binary

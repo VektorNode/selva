@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     Merges several <see cref="DisplayBatch" />es into one.

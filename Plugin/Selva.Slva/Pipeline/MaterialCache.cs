@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>Dedupes materials, assigning each unique one an ID.</summary>
 public class MaterialCache

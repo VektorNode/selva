@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     Reads and writes the SLVM v2 container — the chunked format that carries a whole

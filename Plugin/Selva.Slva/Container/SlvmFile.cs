@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     Reads and writes the Selva mesh file (<c>.slvm</c>) — a self-contained, on-disk copy of a

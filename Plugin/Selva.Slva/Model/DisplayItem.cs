@@ -1,9 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Newtonsoft.Json;
-using Rhino.Geometry;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     A non-mesh display item — a curve, a point, and later labels/icons. Rides as JSON in
@@ -62,8 +61,8 @@ public class DisplayItem
     ///     items.
     ///
     ///     Rhino-side only — the web ignores it and renders from <see cref="Points" />. Keep it:
-    ///     <see cref="WebDisplayPreview" /> rebuilds real curves from it for the viewport (points
-    ///     would draw a faceted polyline) and <see cref="DisplayBatchTransformer" /> needs the
+    ///     <c>WebDisplayPreview</c> rebuilds real curves from it for the viewport (points
+    ///     would draw a faceted polyline) and <c>DisplayBatchTransformer</c> needs the
     ///     NURBS so repeated transforms don't compound a tessellation error. It still serializes
     ///     because <c>WebDisplayGoo.Read</c> round-trips this class through a <c>.gh</c> archive,
     ///     where losing it would degrade a saved definition's preview to its tessellation.
@@ -107,13 +106,13 @@ public class DisplayItem
         };
     }
 
-    public static DisplayItem Point(Point3d position, string id, string name, string layer,
+    public static DisplayItem Point(DisplayPosition position, string id, string name, string layer,
         Dictionary<string, string> metadata, string color, double? opacity)
     {
         return new DisplayItem
         {
             Kind = "point",
-            Position = new DisplayPosition { X = position.X, Y = position.Y, Z = position.Z },
+            Position = position,
             Id = id,
             Name = name,
             Layer = layer,
@@ -126,7 +125,7 @@ public class DisplayItem
 
 /// <summary>
 ///     A world position serialized as {X,Y,Z}. A small explicit DTO instead of Rhino's
-///     <see cref="Point3d" /> struct, so Newtonsoft emits exactly three fields and stays
+///     <c>Point3d</c> struct, so Newtonsoft emits exactly three fields and stays
 ///     nullable when an item has no position.
 /// </summary>
 public class DisplayPosition

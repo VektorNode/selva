@@ -4,12 +4,12 @@ using System.IO.Compression;
 using System.Text;
 using Newtonsoft.Json;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     Decodes the SLVA/SLVZ mesh blob produced by <see cref="BinaryGeometryWriter" /> back into
 ///     world-space vertex and index arrays. This is the C# mirror of the web's <c>parseBinaryMeshBatch</c>,
-///     used to rebuild drawable <see cref="Rhino.Geometry.Mesh" />es for the param's viewport preview
+///     used to rebuild drawable <c>Rhino.Geometry.Mesh</c>es for the param's viewport preview
 ///     (the param holds only the encoded batch, not the original Rhino geometry).
 ///
 ///     Handles the optional <see cref="BlobCompressor" /> SLVZ wrapper transparently: a SLVZ blob is

@@ -3,7 +3,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using Selva.GH.Features.Display.Services;
+using Selva.Slva;
 using Xunit.Abstractions;
 
 namespace Selva.Tests;

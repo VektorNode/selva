@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>
 ///     Optional raw-DEFLATE wrapper around a SLVA mesh blob. The WebDisplay payload otherwise ships

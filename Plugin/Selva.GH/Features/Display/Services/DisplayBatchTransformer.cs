@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Rhino.Geometry;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -139,7 +140,7 @@ public static class DisplayBatchTransformer
             else if (item.Kind == "point" && item.Position != null)
             {
                 var moved = movePoint(new Point3d(item.Position.X, item.Position.Y, item.Position.Z));
-                result.Add(DisplayItem.Point(moved, item.Id, item.Name, item.Layer, item.Metadata,
+                result.Add(RhinoDisplayItems.Point(moved, item.Id, item.Name, item.Layer, item.Metadata,
                     item.Color, item.Opacity));
             }
             else

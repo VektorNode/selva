@@ -1,7 +1,7 @@
 ﻿using System.Drawing;
 using Newtonsoft.Json;
 
-namespace Selva.GH.Features.Display.Services;
+namespace Selva.Slva;
 
 /// <summary>Material properties for a Three.js-like display object.</summary>
 public class ThreeMaterial
