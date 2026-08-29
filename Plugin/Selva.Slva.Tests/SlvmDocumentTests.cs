@@ -359,6 +359,60 @@ public class SlvmDocumentTests
     }
 
     [Fact]
+    public void ForeignExtensions_RoundTripAsOpaquePayloads()
+    {
+        var batch = BatchWithMeshes((0, "a", "", 0, null));
+        var payload = new byte[] { 1, 2, 3, 250 };
+
+        var bytes = SlvmDocument.Write(batch, RealGeometryBlob(1), includeItems: false,
+            new Dictionary<string, byte[]> { ["myapp"] = payload });
+        var decoded = SlvmDocument.Read(bytes);
+
+        Assert.Equal(payload, decoded.Extensions!["myapp"]);
+        // The selva.gh extension is composed from the batch, never passed through.
+        Assert.Equal(batch.BatchId, decoded.Batch.BatchId);
+        Assert.DoesNotContain(SlvmDocument.SelvaGhNamespace, decoded.Extensions.Keys);
+    }
+
+    [Fact]
+    public void Restamp_KeepsForeignExtensions()
+    {
+        var batch = BatchWithMeshes((0, "a", "", 0, null));
+        var payload = new byte[] { 9, 8, 7 };
+        var bytes = SlvmDocument.Write(batch, RealGeometryBlob(1), includeItems: false,
+            new Dictionary<string, byte[]> { ["myapp"] = payload });
+
+        var restamped = SlvmDocument.Restamp(bytes, "new-id");
+
+        var decoded = SlvmDocument.Read(restamped);
+        Assert.Equal("new-id", decoded.Batch.BatchId);
+        Assert.Equal(payload, decoded.Extensions!["myapp"]);
+    }
+
+    [Fact]
+    public void StripItems_KeepsForeignExtensions()
+    {
+        var batch = BatchWithMeshes((0, "a", "", 0, null));
+        var payload = new byte[] { 4, 4, 4 };
+        var bytes = SlvmDocument.Write(batch, RealGeometryBlob(1), includeItems: false,
+            new Dictionary<string, byte[]> { ["myapp"] = payload });
+
+        var stripped = SlvmDocument.StripItems(bytes, batch.BatchId);
+
+        Assert.Equal(payload, SlvmDocument.Read(stripped).Extensions!["myapp"]);
+    }
+
+    [Fact]
+    public void Write_RejectsThePassThroughSelvaGhNamespace()
+    {
+        var batch = BatchWithMeshes((0, "a", "", 0, null));
+
+        Assert.Throws<ArgumentException>(() => SlvmDocument.Write(batch, RealGeometryBlob(1),
+            includeItems: false,
+            new Dictionary<string, byte[]> { [SlvmDocument.SelvaGhNamespace] = new byte[] { 1 } }));
+    }
+
+    [Fact]
     public void LegacyExtnKey_StillCarriesTheBatchId()
     {
         // v2's EXTN field was renamed from sourceComponentId to batchId. A container written before

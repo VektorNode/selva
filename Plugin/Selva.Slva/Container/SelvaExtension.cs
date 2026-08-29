@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using Newtonsoft.Json;
 
@@ -60,14 +59,7 @@ internal sealed class SelvaExtension
 
         var ext = new SelvaExtension { BatchId = batchId, Curves = curveJson };
         var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(ext));
-        var ns = Encoding.UTF8.GetBytes(SlvmDocument.SelvaGhNamespace);
-        using (var ms = new MemoryStream())
-        {
-            Varint.Write(ms, (uint)ns.Length);
-            ms.Write(ns, 0, ns.Length);
-            ms.Write(payload, 0, payload.Length);
-            return ms.ToArray();
-        }
+        return ExtensionChunk.Encode(SlvmDocument.SelvaGhNamespace, payload);
     }
 
     public static SelvaExtension Read(List<(uint type, byte[] payload)> chunks)
@@ -79,19 +71,21 @@ internal sealed class SelvaExtension
                 continue;
             }
 
-            var pos = 0;
-            var nsLen = (int)Varint.Read(payload, ref pos);
-            var ns = Encoding.UTF8.GetString(payload, pos, nsLen);
-            pos += nsLen;
+            var (ns, body) = ExtensionChunk.Decode(payload);
             if (ns != SlvmDocument.SelvaGhNamespace)
             {
                 continue;
             }
 
-            var json = Encoding.UTF8.GetString(payload, pos, payload.Length - pos);
-            return JsonConvert.DeserializeObject<SelvaExtension>(json);
+            return JsonConvert.DeserializeObject<SelvaExtension>(Encoding.UTF8.GetString(body));
         }
 
         return null;
+    }
+
+    /// <summary>True when this EXTN chunk payload carries the selva.gh namespace.</summary>
+    public static bool Owns(byte[] chunkPayload)
+    {
+        return ExtensionChunk.Decode(chunkPayload).ns == SlvmDocument.SelvaGhNamespace;
     }
 }

@@ -84,8 +84,11 @@ public static class SlvmDocument
     ///     Serializes a batch into an SLVM container. <paramref name="geometryBlob" /> is the
     ///     already-encoded SLVA/SLVZ mesh blob (empty metadata); pass the batch's item list through
     ///     <paramref name="includeItems" /> only for files — the wire sends items as JSON alongside.
+    ///     <paramref name="extensions" /> adds one EXTN chunk per entry (namespace → payload bytes)
+    ///     for hosts other than selva.gh, whose extension is composed from the batch itself.
     /// </summary>
-    public static byte[] Write(DisplayBatch batch, byte[] geometryBlob, bool includeItems)
+    public static byte[] Write(DisplayBatch batch, byte[] geometryBlob, bool includeItems,
+        IReadOnlyDictionary<string, byte[]> extensions = null)
     {
         if (batch == null)
         {
@@ -129,6 +132,21 @@ public static class SlvmDocument
             chunks.Add((ChunkExtn, ext));
         }
 
+        if (extensions != null)
+        {
+            foreach (var kv in extensions)
+            {
+                if (kv.Key == SelvaGhNamespace)
+                {
+                    throw new ArgumentException(
+                        $"The \"{SelvaGhNamespace}\" extension is composed from the batch itself.",
+                        nameof(extensions));
+                }
+
+                chunks.Add((ChunkExtn, ExtensionChunk.Encode(kv.Key, kv.Value ?? Array.Empty<byte>())));
+            }
+        }
+
         return SlvmChunks.Write(chunks);
     }
 
@@ -157,7 +175,7 @@ public static class SlvmDocument
         var doc = Read(slvm);
         doc.Batch.Items = null;
         doc.Batch.BatchId = batchId;
-        return Write(doc.Batch, doc.GeometryBlob, includeItems: false);
+        return Write(doc.Batch, doc.GeometryBlob, includeItems: false, doc.Extensions);
     }
 
     /// <summary>
@@ -169,7 +187,7 @@ public static class SlvmDocument
     {
         var chunks = SlvmChunks.Read(slvm);
         var curvesJson = SelvaExtension.Read(chunks)?.Curves;
-        chunks.RemoveAll(c => c.type == ChunkExtn);
+        chunks.RemoveAll(c => c.type == ChunkExtn && SelvaExtension.Owns(c.payload));
         var ext = SelvaExtension.Build(newSourceComponentId, curvesJson);
         if (ext != null)
         {
@@ -190,6 +208,12 @@ public static class SlvmDocument
 
         /// <summary>The GEOM payload: an SLVA/SLVZ blob with empty metadata.</summary>
         public byte[] GeometryBlob { get; set; }
+
+        /// <summary>
+        ///     EXTN payloads from hosts other than selva.gh, namespace → payload bytes. Null when
+        ///     none. Pass back into <see cref="Write" /> to survive a rebuild.
+        /// </summary>
+        public Dictionary<string, byte[]> Extensions { get; set; }
     }
 
     public static ReadResult Read(byte[] bytes)
@@ -202,6 +226,7 @@ public static class SlvmDocument
         byte[] tableBytes = null;
         string materialsJson = null;
         var textures = new List<byte[]>();
+        Dictionary<string, byte[]> extensions = null;
         foreach (var (type, payload) in chunks)
         {
             switch (type)
@@ -212,7 +237,16 @@ public static class SlvmDocument
                 case ChunkTabl: tableBytes = SlvzCompressor.MaybeDecompress(payload); break;
                 case ChunkMatl: materialsJson = Encoding.UTF8.GetString(payload); break;
                 case ChunkTexr: textures.Add(payload); break;
-                // Unknown chunks (and EXTN, handled below) are skipped: that's the extension model.
+                case ChunkExtn:
+                    // selva.gh is decoded below; foreign namespaces surface as opaque payloads.
+                    var (ns, body) = ExtensionChunk.Decode(payload);
+                    if (ns != SelvaGhNamespace)
+                    {
+                        (extensions ??= new Dictionary<string, byte[]>())[ns] = body;
+                    }
+
+                    break;
+                // Unknown chunks are skipped: that's the extension model.
             }
         }
 
@@ -236,7 +270,12 @@ public static class SlvmDocument
             batch.Items = BuildItems(table, crvsBlob, pntsBlob, ext, batch.BatchId);
         }
 
-        return new ReadResult { Batch = batch, GeometryBlob = geometryBlob ?? EmptyGeometryBlob() };
+        return new ReadResult
+        {
+            Batch = batch,
+            GeometryBlob = geometryBlob ?? EmptyGeometryBlob(),
+            Extensions = extensions
+        };
     }
 
     // ============================================================================
