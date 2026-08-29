@@ -5,30 +5,17 @@ using Newtonsoft.Json;
 namespace Selva.Slva;
 
 /// <summary>
-///     The "selva.gh" EXTN payload: JSON with the batch id and the Rhino NURBS JSON behind each
-///     curve. Everything Grasshopper-specific in the container lives here, so the core chunks
-///     stay meaningful to a foreign reader.
+///     The "selva.gh" EXTN payload: JSON carrying the Rhino NURBS JSON behind each curve —
+///     the one genuinely Grasshopper-specific thing in the container. Absent entirely for
+///     batches without curve geometry, so the core chunks stay meaningful to a foreign reader.
 /// </summary>
 internal sealed class SelvaExtension
 {
-    /// <summary>
-    ///     The batch's identity namespace — see <see cref="DisplayBatch.BatchId" />. v2 is new,
-    ///     so it uses the accurate name here; the legacy <c>sourceComponentId</c> spelling below
-    ///     is still read, because a batch decoded from a pre-v2 blob and rewritten as v2 would
-    ///     otherwise lose its identity (and with it every hidden/selected object in the viewer).
-    /// </summary>
-    [JsonProperty("batchId", NullValueHandling = NullValueHandling.Ignore)]
-    public string BatchId { get; set; }
-
-    /// <summary>Read-only alias for containers written before the field was renamed.</summary>
-    [JsonProperty("sourceComponentId", NullValueHandling = NullValueHandling.Ignore)]
-    public string LegacyBatchId { get; set; }
-
     /// <summary>Rhino NURBS JSON per curve, keyed by global object index (as a string).</summary>
     [JsonProperty("curves", NullValueHandling = NullValueHandling.Ignore)]
     public Dictionary<string, string> Curves { get; set; }
 
-    public static byte[] Build(string batchId, List<DisplayItem> curves, int meshCount)
+    public static byte[] Build(List<DisplayItem> curves, int meshCount)
     {
         Dictionary<string, string> curveJson = null;
         if (curves != null)
@@ -47,17 +34,12 @@ internal sealed class SelvaExtension
             }
         }
 
-        return Build(batchId, curveJson);
-    }
-
-    public static byte[] Build(string batchId, Dictionary<string, string> curveJson)
-    {
-        if (batchId == null && (curveJson == null || curveJson.Count == 0))
+        if (curveJson == null)
         {
             return null;
         }
 
-        var ext = new SelvaExtension { BatchId = batchId, Curves = curveJson };
+        var ext = new SelvaExtension { Curves = curveJson };
         var payload = Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(ext));
         return ExtensionChunk.Encode(SlvmDocument.SelvaGhNamespace, payload);
     }
@@ -81,11 +63,5 @@ internal sealed class SelvaExtension
         }
 
         return null;
-    }
-
-    /// <summary>True when this EXTN chunk payload carries the selva.gh namespace.</summary>
-    public static bool Owns(byte[] chunkPayload)
-    {
-        return ExtensionChunk.Decode(chunkPayload).ns == SlvmDocument.SelvaGhNamespace;
     }
 }

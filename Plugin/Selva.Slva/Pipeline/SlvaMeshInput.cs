@@ -8,6 +8,13 @@ namespace Selva.Slva;
 /// </summary>
 public sealed class SlvaMeshInput
 {
+    /// <summary>
+    ///     The mesh's identity — see <see cref="MeshMetadata.Id" />. Mint it from what is stable
+    ///     in your world (Selva: component GUID + branch path + slot index); pass it through
+    ///     unchanged when re-batching existing meshes.
+    /// </summary>
+    public string Id { get; set; }
+
     /// <summary>World-space x,y,z floats, 3 per vertex. Null marks an invalid slot: skipped.</summary>
     public float[] Vertices { get; set; }
 

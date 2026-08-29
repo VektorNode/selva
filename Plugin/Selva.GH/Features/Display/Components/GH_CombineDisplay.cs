@@ -82,14 +82,10 @@ public class GH_CombineDisplay : GH_Component
                 continue;
             }
 
-            // Each branch gets its own id: two branches sharing one would collide in the web's
-            // pick keys, which are {batchId}:{originalIndex}.
-            var branchId = $"{InstanceGuid}-{path}";
-
             DisplayBatchCombiner.Result combined;
             try
             {
-                combined = DisplayBatchCombiner.Combine(batches, branchId);
+                combined = DisplayBatchCombiner.Combine(batches);
             }
             catch (Exception ex)
             {

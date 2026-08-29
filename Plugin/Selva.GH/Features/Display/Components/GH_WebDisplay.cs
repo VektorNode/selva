@@ -298,7 +298,17 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     {
         public GeometryBase Geom;
         public int BranchIndex;
-        public int Ordinal;
+
+        /// <summary>
+        ///     The object's minted identity: {componentGuid}/{branchPath}/{slotIndex}. Permanent —
+        ///     downstream components (combine, file save/load) pass it through untouched, so the
+        ///     web's hidden/selection state survives re-solves and re-batching.
+        /// </summary>
+        public string Id;
+
+        /// <summary>Slot index within the branch — default display name only.</summary>
+        public int SlotIndex;
+
         public string Name;
         public string Layer;
         public Dictionary<string, string> Metadata;
@@ -342,12 +352,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         string componentId)
     {
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
-        // attributes, stable ordinal, and owning branch. Geometry extraction touches GH_Goo wrappers
-        // and must not race with the parallel pass, so it stays here; invalid geometry is skipped now.
+        // attributes, minted identity, and owning branch. Geometry extraction touches GH_Goo
+        // wrappers and must not race with the parallel pass, so it stays here; invalid geometry is
+        // skipped now — but its slot still counts toward the ids, so a failed mesh never shifts
+        // its neighbors' identity.
         var work = new List<WorkItem>();
         var branchPaths = new List<GH_Path>();
         var skipped = 0;
-        var ordinal = 0;
 
         foreach (var path in geoTree.Paths)
         {
@@ -375,7 +386,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 ? matItems[matItems.Count - 1]?.Value ?? ThreeMaterial.Default()
                 : ThreeMaterial.Default();
 
-            for (var i = 0; i < geoItems.Count; i++, ordinal++)
+            for (var i = 0; i < geoItems.Count; i++)
             {
                 var geom = TryExtractGeometry(geoItems[i]);
                 if (geom == null || !geom.IsValid)
@@ -388,7 +399,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 {
                     Geom = geom,
                     BranchIndex = branchIndex,
-                    Ordinal = ordinal,
+                    Id = $"{componentId}/{path}/{i}",
+                    SlotIndex = i,
                     Name = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName,
                     Layer = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer,
                     Metadata = ResolveMetadata(metaItems, geoItems.Count, i, lastMeta),
@@ -407,7 +419,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
             // Curves and points aren't meshable — they travel as JSON display items. Curves are
             // tessellated to a polyline here, so the web needs no rhino3dm.
-            if (TryBuildItem(w.Geom, componentId, w.Ordinal, w.Name, w.Layer, w.Metadata, w.Material,
+            if (TryBuildItem(w.Geom, w.Id, w.SlotIndex, w.Name, w.Layer, w.Metadata, w.Material,
                     out var item, out var previewCurve, out var previewPoint))
             {
                 var itemBounds = BoundingBox.Empty;
@@ -547,6 +559,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
             branch.Meshes.Add(new SlvaMeshInput
             {
+                Id = w.Id,
                 Vertices = r.MeshVertices,
                 Faces = r.MeshFaces,
                 Uvs = r.MeshUvs,
@@ -580,7 +593,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var batch = MeshBatchAssembler.CreateBatch(b.Meshes, componentId);
+            var batch = MeshBatchAssembler.CreateBatch(b.Meshes);
             if (b.Items.Count > 0)
             {
                 batch.Items = b.Items;
@@ -628,7 +641,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     ///     original Rhino geometry for viewport preview. Returns false for meshable geometry.
     /// </summary>
     private static bool TryBuildItem(
-        GeometryBase geom, string componentId, int ordinal,
+        GeometryBase geom, string id, int slotIndex,
         string name, string layer, Dictionary<string, string> metadata, ThreeMaterial mat,
         out DisplayItem item, out Curve previewCurve, out Point3d? previewPoint)
     {
@@ -636,8 +649,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         previewCurve = null;
         previewPoint = null;
 
-        var id = $"{componentId}:{ordinal}";
-        var displayName = !string.IsNullOrWhiteSpace(name) ? name : ordinal.ToString();
+        var displayName = !string.IsNullOrWhiteSpace(name) ? name : slotIndex.ToString();
         var colorHex = ColorTranslator.ToHtml(mat.Color);
         double? opacity = mat.Opacity < 1.0 ? mat.Opacity : (double?)null;
 

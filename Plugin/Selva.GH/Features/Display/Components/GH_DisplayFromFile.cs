@@ -13,9 +13,9 @@ namespace Selva.GH.Features.Display.Components;
 // Reads the finished blob straight back from a mesh file, skipping the mesh/quantize/compress path
 // — cheap to reuse a saved part many times.
 //
-// The web keys pick selection on batchId (+ per-item ids). Loading the same file into many
-// instances would collide on one shared id, so each loader stamps its own InstanceGuid by default;
-// an explicit Id input pins a stable identity instead.
+// Object identity travels inside the file (per-object ids in the container's table), so loading
+// needs no restamping. Two loaders of the same file share ids by design: they are the same
+// logical objects.
 public class GH_DisplayFromFile : GH_Component
 {
     public GH_DisplayFromFile()
@@ -33,11 +33,6 @@ public class GH_DisplayFromFile : GH_Component
     {
         pManager.AddTextParameter("Path", "P", "Absolute path to the mesh file (.slvm)",
             GH_ParamAccess.item);
-        pManager.AddTextParameter("Id", "Id",
-            "Optional source component id to stamp on the payload (for stable web pick identity). " +
-            "Leave empty to use this component's own id so each instance is distinct.",
-            GH_ParamAccess.item, "");
-        pManager[1].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -60,9 +55,6 @@ public class GH_DisplayFromFile : GH_Component
             return;
         }
 
-        var idOverride = "";
-        DA.GetData(1, ref idOverride);
-
         DisplayBatch batch;
         try
         {
@@ -77,42 +69,6 @@ public class GH_DisplayFromFile : GH_Component
             return;
         }
 
-        var newId = !string.IsNullOrWhiteSpace(idOverride) ? idOverride : InstanceGuid.ToString();
-        RestampSourceComponentId(batch, newId);
-
         DA.SetData(0, new WebDisplayGoo(batch));
-    }
-
-    // A v2 blob carries the id in its EXTN chunk, which binary WebSocket frames rely on (they have
-    // no JSON envelope to override it) — rewrite that chunk; the geometry is never re-encoded. A
-    // legacy blob keeps its baked-in id: there the web's envelope-wins precedence covers it.
-    private static void RestampSourceComponentId(DisplayBatch batch, string newId)
-    {
-        var oldId = batch.BatchId;
-        batch.BatchId = newId;
-
-        if (SlvmDocument.IsSlvm(batch.CompressedData))
-        {
-            batch.CompressedData = SlvmDocument.Restamp(batch.CompressedData, newId);
-        }
-
-        if (batch.Items == null)
-        {
-            return;
-        }
-
-        foreach (var item in batch.Items)
-        {
-            if (item?.Id == null)
-            {
-                continue;
-            }
-
-            // Item ids are "{oldId}:{ordinal}" — swap the prefix, leave non-matching ids alone.
-            if (oldId != null && item.Id.StartsWith(oldId + ":", StringComparison.Ordinal))
-            {
-                item.Id = newId + item.Id.Substring(oldId.Length);
-            }
-        }
     }
 }

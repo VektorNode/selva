@@ -197,7 +197,6 @@ public static class DisplayBatchTransformer
         {
             Materials = source.Materials,
             Groups = source.Groups,
-            BatchId = source.BatchId,
             CompressedData = meshBlob,
             Items = items
         };

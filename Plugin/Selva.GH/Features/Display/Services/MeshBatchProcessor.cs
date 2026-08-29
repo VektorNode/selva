@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Rhino.Geometry;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -19,23 +20,28 @@ public static class MeshBatchProcessor
     {
         // Serial conversion path. Callers that already extracted arrays in their own parallel pass
         // should call MeshBatchAssembler directly to skip this.
-        var vertexArrays = new List<float[]>(meshes.Count);
-        var faceArrays = new List<int[]>(meshes.Count);
-        foreach (var mesh in meshes)
+        var inputs = new List<SlvaMeshInput>(meshes.Count);
+        for (var i = 0; i < meshes.Count; i++)
         {
-            if (mesh == null || !mesh.IsValid)
-            {
-                vertexArrays.Add(null);
-                faceArrays.Add(null);
-                continue;
-            }
+            var mesh = meshes[i];
+            var valid = mesh != null && mesh.IsValid;
+            var (vertices, faces) = valid
+                ? GeoMeshProcessor.ConvertMeshToArrays(mesh)
+                : (null, null);
 
-            var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
-            vertexArrays.Add(vertices);
-            faceArrays.Add(faces);
+            inputs.Add(new SlvaMeshInput
+            {
+                // Flat slot mint: these OBSOLETE list-based components have no branch structure.
+                Id = batchId != null ? $"{batchId}/{i}" : null,
+                Vertices = vertices,
+                Faces = faces,
+                Name = names[i],
+                Layer = layers?[i],
+                Material = materials[i],
+                Metadata = metadataList?[i]
+            });
         }
 
-        return MeshBatchAssembler.CreateBatch(vertexArrays, faceArrays, names, materials, metadataList,
-            layers, batchId);
+        return MeshBatchAssembler.CreateBatch(inputs);
     }
 }

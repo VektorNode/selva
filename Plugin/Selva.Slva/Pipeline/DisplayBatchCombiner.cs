@@ -12,19 +12,12 @@ namespace Selva.Slva;
 ///     result with mixed quantization scales and a blob that deflates worse, so the combine pays a
 ///     decode + encode to emit one optimal batch.
 ///
-///     Provenance survives the merge. A combined batch has one <c>batchId</c> — the
-///     combiner's own, since web pick identity must be unique — so each mesh records where it came
-///     from in the <c>gh:*</c> attr columns instead. Those cost about a byte per mesh (the values
-///     pool), and answer "which component produced this mesh?" after the sources are gone.
+///     Identity passes through untouched: each object's <see cref="MeshMetadata.Id" /> already
+///     names its producer, so combined batches from many sources stay collision-free and hidden
+///     state in the viewer survives the combine.
 /// </summary>
 public static class DisplayBatchCombiner
 {
-    /// <summary>Attr key: the batchId of the batch a mesh came from.</summary>
-    public const string SourceComponentAttr = "gh:component";
-
-    /// <summary>Attr key: the mesh's originalIndex within its source batch.</summary>
-    public const string SourceIndexAttr = "gh:originalIndex";
-
     public sealed class Result
     {
         public DisplayBatch Batch { get; set; }
@@ -41,7 +34,7 @@ public static class DisplayBatchCombiner
     ///     Combines the batches into one. Returns null when nothing decodable was supplied.
     ///     Materials dedupe across inputs, so two batches sharing a material produce one group.
     /// </summary>
-    public static Result Combine(IReadOnlyList<DisplayBatch> batches, string batchId)
+    public static Result Combine(IReadOnlyList<DisplayBatch> batches)
     {
         if (batches == null)
         {
@@ -52,10 +45,6 @@ public static class DisplayBatchCombiner
 
         var meshInputs = new List<SlvaMeshInput>();
         var items = new List<DisplayItem>();
-
-        // Next provenance ordinal per source batch id, so the count continues across inputs that
-        // share one id instead of restarting at 0 for each.
-        var nextIndexBySource = new Dictionary<string, int>(StringComparer.Ordinal);
 
         for (var b = 0; b < batches.Count; b++)
         {
@@ -83,17 +72,6 @@ public static class DisplayBatchCombiner
                 continue;
             }
 
-            // Ordinal within everything this source id has contributed so far — NOT within this one
-            // input, and not meshMeta.OriginalIndex. One Display emitting a tree arrives here as
-            // thousands of single-mesh batches that all share its id and all say 0, so any counter
-            // that restarts per input leaves every mesh with the same (component, index) pair and
-            // identifies nothing. Counting per id keeps the pair unique however the inputs are split.
-            var sourceKey = batch.BatchId ?? "";
-            if (!nextIndexBySource.TryGetValue(sourceKey, out var indexInSource))
-            {
-                indexInSource = 0;
-            }
-
             foreach (var group in batch.Groups)
             {
                 if (group.Meshes == null)
@@ -104,8 +82,6 @@ public static class DisplayBatchCombiner
                 var material = MaterialAt(batch, group.MaterialId);
                 foreach (var meshMeta in group.Meshes)
                 {
-                    var sourceIndex = indexInSource++;
-
                     if (!TrySliceMesh(decoded, meshMeta, out var verts, out var faces, out var uvs, out var colors))
                     {
                         continue;
@@ -113,19 +89,18 @@ public static class DisplayBatchCombiner
 
                     meshInputs.Add(new SlvaMeshInput
                     {
+                        Id = meshMeta.Id,
                         Vertices = verts,
                         Faces = faces,
                         Name = meshMeta.Name ?? "",
                         Layer = meshMeta.Layer ?? "",
                         Material = material,
-                        Metadata = WithProvenance(meshMeta, batch.BatchId, sourceIndex),
+                        Metadata = meshMeta.Metadata,
                         Uvs = uvs,
                         Colors = colors
                     });
                 }
             }
-
-            nextIndexBySource[sourceKey] = indexInSource;
         }
 
         if (meshInputs.Count == 0 && items.Count == 0)
@@ -133,11 +108,10 @@ public static class DisplayBatchCombiner
             return null;
         }
 
-        var combined = MeshBatchAssembler.CreateBatch(meshInputs, batchId);
+        var combined = MeshBatchAssembler.CreateBatch(meshInputs);
 
         if (items.Count > 0)
         {
-            RestampItemIds(items, batchId);
             combined.Items = items;
         }
 
@@ -212,28 +186,6 @@ public static class DisplayBatchCombiner
     // METADATA
     // ============================================================================
 
-    private static Dictionary<string, string> WithProvenance(
-        MeshMetadata meta, string batchId, int indexInSource)
-    {
-        var attrs = meta.Metadata != null
-            ? new Dictionary<string, string>(meta.Metadata)
-            : new Dictionary<string, string>();
-
-        // Don't overwrite provenance from an earlier combine: the first source is the real one.
-        if (!attrs.ContainsKey(SourceComponentAttr) && !string.IsNullOrEmpty(batchId))
-        {
-            attrs[SourceComponentAttr] = batchId;
-        }
-
-        if (!attrs.ContainsKey(SourceIndexAttr))
-        {
-            attrs[SourceIndexAttr] =
-                indexInSource.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        return attrs.Count > 0 ? attrs : null;
-    }
-
     private static ThreeMaterial MaterialAt(DisplayBatch batch, int materialId)
     {
         if (batch.Materials != null && materialId >= 0 && materialId < batch.Materials.Count)
@@ -261,18 +213,6 @@ public static class DisplayBatchCombiner
             {
                 items.Add(item);
             }
-        }
-    }
-
-    /// <summary>
-    ///     Item ids are <c>{batchId}:{ordinal}</c> and must stay unique within the
-    ///     combined batch, so ordinals are reassigned across the merged list.
-    /// </summary>
-    private static void RestampItemIds(List<DisplayItem> items, string batchId)
-    {
-        for (var i = 0; i < items.Count; i++)
-        {
-            items[i].Id = $"{batchId}:{i}";
         }
     }
 }

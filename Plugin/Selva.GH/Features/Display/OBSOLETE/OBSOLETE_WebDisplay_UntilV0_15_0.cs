@@ -16,6 +16,7 @@ using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.OBSOLETE;
 
@@ -564,8 +565,22 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
                 return;
             }
 
-            var batch = MeshBatchAssembler.CreateBatch(
-                b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId);
+            var inputs = new List<SlvaMeshInput>(b.MeshVertices.Count);
+            for (var i = 0; i < b.MeshVertices.Count; i++)
+            {
+                inputs.Add(new SlvaMeshInput
+                {
+                    Id = $"{componentId}/{b.Path}/{i}",
+                    Vertices = b.MeshVertices[i],
+                    Faces = b.MeshFaces[i],
+                    Name = b.Names[i],
+                    Layer = b.Layers[i],
+                    Material = b.Materials[i],
+                    Metadata = b.Metadata[i]
+                });
+            }
+
+            var batch = MeshBatchAssembler.CreateBatch(inputs);
             if (b.Items.Count > 0)
             {
                 batch.Items = b.Items;
@@ -649,7 +664,7 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
             }
             case Rhino.Geometry.Point pointGeom:
             {
-                item = DisplayItem.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
+                item = RhinoDisplayItems.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
                     colorHex, opacity);
                 previewPoint = pointGeom.Location;
                 return true;

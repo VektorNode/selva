@@ -9,8 +9,8 @@ namespace Selva.Slva.Tests;
 /// <summary>
 ///     Combining batches is a full decode → re-encode, so the risks are all in what survives it:
 ///     geometry (positions must land where they started, despite a new quantization grid), material
-///     dedupe across inputs, and the provenance attrs that replace the source ids the merge
-///     necessarily discards.
+///     dedupe across inputs, and the object ids — which pass through untouched, since they already
+///     name their producer and are the viewer's identity keys.
 /// </summary>
 public class DisplayBatchCombinerTests
 {
@@ -23,7 +23,7 @@ public class DisplayBatchCombinerTests
 
     /// <summary>A unit quad at (dx, dy, 0), as its own single-mesh batch.</summary>
     private static DisplayBatch QuadBatch(
-        float dx, float dy, ThreeMaterial material, string name, string sourceId,
+        float dx, float dy, ThreeMaterial material, string name, string id,
         Dictionary<string, string> metadata = null, string layer = null)
     {
         var verts = new[]
@@ -36,6 +36,7 @@ public class DisplayBatchCombinerTests
             {
                 new SlvaMeshInput
                 {
+                    Id = id,
                     Vertices = verts,
                     Faces = new[] { 0, 1, 2, 0, 2, 3 },
                     Name = name,
@@ -43,8 +44,7 @@ public class DisplayBatchCombinerTests
                     Material = material,
                     Metadata = metadata
                 }
-            },
-            sourceId);
+            });
     }
 
     private static List<MeshMetadata> AllMeshes(DisplayBatch batch)
@@ -66,9 +66,9 @@ public class DisplayBatchCombinerTests
         var red = Material(Color.Red);
         var result = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, red, "a", "src-A"),
-            QuadBatch(10, 0, red, "b", "src-B")
-        }, "combined-1");
+            QuadBatch(0, 0, red, "a", "src-A/{0}/0"),
+            QuadBatch(10, 0, red, "b", "src-B/{0}/0")
+        });
 
         Assert.NotNull(result);
         Assert.Equal(2, result.MeshCount);
@@ -76,7 +76,6 @@ public class DisplayBatchCombinerTests
 
         var meshes = AllMeshes(result.Batch);
         Assert.Equal(new[] { "a", "b" }, meshes.Select(m => m.Name));
-        Assert.Equal("combined-1", result.Batch.BatchId);
     }
 
     [Fact]
@@ -86,9 +85,9 @@ public class DisplayBatchCombinerTests
         // the browser, and the whole point of combining rather than sending both payloads.
         var result = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, Material(Color.Red), "a", "src-A"),
-            QuadBatch(10, 0, Material(Color.Red), "b", "src-B")
-        }, "combined-1");
+            QuadBatch(0, 0, Material(Color.Red), "a", "src-A/{0}/0"),
+            QuadBatch(10, 0, Material(Color.Red), "b", "src-B/{0}/0")
+        });
 
         Assert.Single(result.Batch.Materials);
         Assert.Single(result.Batch.Groups);
@@ -100,9 +99,9 @@ public class DisplayBatchCombinerTests
     {
         var result = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, Material(Color.Red), "a", "src-A"),
-            QuadBatch(10, 0, Material(Color.Blue), "b", "src-B")
-        }, "combined-1");
+            QuadBatch(0, 0, Material(Color.Red), "a", "src-A/{0}/0"),
+            QuadBatch(10, 0, Material(Color.Blue), "b", "src-B/{0}/0")
+        });
 
         Assert.Equal(2, result.Batch.Materials.Count);
         Assert.Equal(2, result.Batch.Groups.Count);
@@ -117,9 +116,9 @@ public class DisplayBatchCombinerTests
         var red = Material(Color.Red);
         var result = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, red, "near", "src-A"),
-            QuadBatch(100, 50, red, "far", "src-B")
-        }, "combined-1");
+            QuadBatch(0, 0, red, "near", "src-A/{0}/0"),
+            QuadBatch(100, 50, red, "far", "src-B/{0}/0")
+        });
 
         var meshes = AllMeshes(result.Batch);
         var near = FirstVertex(result.Batch, meshes.Single(m => m.Name == "near"));
@@ -132,35 +131,25 @@ public class DisplayBatchCombinerTests
     }
 
     [Fact]
-    public void Combine_RecordsWhereEachMeshCameFrom()
+    public void Combine_PassesObjectIdsThroughUntouched()
     {
-        // The combined batch has one batchId, so "which Display produced this mesh?"
-        // can only be answered by the provenance attrs.
+        // The id already names its producer, so it IS the provenance — and the viewer's hidden
+        // state survives the combine only if the id comes out byte-identical.
         var red = Material(Color.Red);
         var result = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, red, "a", "src-A"),
-            QuadBatch(10, 0, red, "b", "src-B")
-        }, "combined-1");
+            QuadBatch(0, 0, red, "a", "src-A/{0;1}/0"),
+            QuadBatch(10, 0, red, "b", "src-B/{0}/7")
+        });
 
         var meshes = AllMeshes(result.Batch);
-        var a = meshes.Single(m => m.Name == "a");
-        var b = meshes.Single(m => m.Name == "b");
-
-        Assert.Equal("src-A", a.Metadata[DisplayBatchCombiner.SourceComponentAttr]);
-        Assert.Equal("src-B", b.Metadata[DisplayBatchCombiner.SourceComponentAttr]);
-        // Each came first within its own source batch, so both are 0 — the pair
-        // (component, index) is what identifies a source mesh, not the index alone.
-        Assert.Equal("0", a.Metadata[DisplayBatchCombiner.SourceIndexAttr]);
-        Assert.Equal("0", b.Metadata[DisplayBatchCombiner.SourceIndexAttr]);
+        Assert.Equal("src-A/{0;1}/0", meshes.Single(m => m.Name == "a").Id);
+        Assert.Equal("src-B/{0}/7", meshes.Single(m => m.Name == "b").Id);
     }
 
     [Fact]
-    public void Combine_NumbersMeshesByTheirPositionWithinTheSourceBatch()
+    public void Combine_KeepsIdsThroughTheMaterialSortReorder()
     {
-        // The index must count position inside the source batch, NOT read MeshMetadata.OriginalIndex
-        // — a multi-mesh batch that has been through the assembler's material sort carries
-        // OriginalIndex values in input order, which no longer matches table order.
         var red = Material(Color.Red);
         var blue = Material(Color.Blue);
         // Interleaved materials force the sort to reorder the table.
@@ -169,108 +158,85 @@ public class DisplayBatchCombinerTests
             {
                 new SlvaMeshInput
                 {
+                    Id = "src/{0}/0",
                     Vertices = new[] { 0f, 0f, 0f, 1f, 0f, 0f, 1f, 1f, 0f },
                     Faces = new[] { 0, 1, 2 }, Name = "first", Material = red
                 },
                 new SlvaMeshInput
                 {
+                    Id = "src/{0}/1",
                     Vertices = new[] { 5f, 0f, 0f, 6f, 0f, 0f, 6f, 1f, 0f },
                     Faces = new[] { 0, 1, 2 }, Name = "second", Material = blue
                 },
                 new SlvaMeshInput
                 {
+                    Id = "src/{0}/2",
                     Vertices = new[] { 10f, 0f, 0f, 11f, 0f, 0f, 11f, 1f, 0f },
                     Faces = new[] { 0, 1, 2 }, Name = "third", Material = red
                 }
-            },
-            "src-multi");
+            });
 
-        var result = DisplayBatchCombiner.Combine(new[] { multi }, "combined-1");
+        var result = DisplayBatchCombiner.Combine(new[] { multi });
 
-        var indices = AllMeshes(result.Batch)
-            .Select(m => int.Parse(m.Metadata[DisplayBatchCombiner.SourceIndexAttr]))
-            .OrderBy(i => i)
-            .ToList();
-
-        Assert.Equal(new[] { 0, 1, 2 }, indices);
+        var byName = AllMeshes(result.Batch).ToDictionary(m => m.Name);
+        Assert.Equal("src/{0}/0", byName["first"].Id);
+        Assert.Equal("src/{0}/1", byName["second"].Id);
+        Assert.Equal("src/{0}/2", byName["third"].Id);
     }
 
     [Fact]
-    public void Combine_KeepsProvenanceUniqueAcrossManyBatchesSharingOneSourceId()
-    {
-        // The real canvas shape: ONE Display emitting a tree arrives as many single-mesh batches
-        // that all carry that Display's id. A counter restarting per input would give every mesh
-        // the same (component, index) pair, which identifies nothing — the count has to continue
-        // across inputs sharing an id.
-        var red = Material(Color.Red);
-        var inputs = Enumerable.Range(0, 5)
-            .Select(i => QuadBatch(i * 5, 0, red, $"q{i}", "one-display"))
-            .ToList();
-
-        var result = DisplayBatchCombiner.Combine(inputs, "combined-1");
-
-        var pairs = AllMeshes(result.Batch)
-            .Select(m => m.Metadata[DisplayBatchCombiner.SourceComponentAttr] + ":" +
-                         m.Metadata[DisplayBatchCombiner.SourceIndexAttr])
-            .ToList();
-
-        Assert.Equal(5, pairs.Distinct().Count());
-    }
-
-    [Fact]
-    public void Combine_KeepsUserMetadataAlongsideProvenance()
+    public void Combine_KeepsUserMetadataAndLayer()
     {
         var result = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, Material(Color.Red), "a", "src-A",
+            QuadBatch(0, 0, Material(Color.Red), "a", "src-A/{0}/0",
                 metadata: new Dictionary<string, string> { ["fire"] = "REI60" },
                 layer: "Structure/Walls")
-        }, "combined-1");
+        });
 
         var mesh = AllMeshes(result.Batch).Single();
         Assert.Equal("REI60", mesh.Metadata["fire"]);
-        Assert.Equal("src-A", mesh.Metadata[DisplayBatchCombiner.SourceComponentAttr]);
+        Assert.Equal("src-A/{0}/0", mesh.Id);
         Assert.Equal("Structure/Walls", mesh.Layer);
     }
 
     [Fact]
-    public void Combine_DoesNotOverwriteProvenanceFromAnEarlierCombine()
+    public void Combine_SurvivesASecondCombineWithIdsIntact()
     {
-        // Combining a combined batch must keep the ORIGINAL source, not relabel every mesh with
-        // the intermediate combiner's id — otherwise provenance decays with each merge.
+        // Combining a combined batch must keep the ORIGINAL ids — otherwise identity (and the
+        // viewer state hanging off it) decays with each merge.
         var red = Material(Color.Red);
         var first = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, red, "a", "src-A")
-        }, "combined-1");
+            QuadBatch(0, 0, red, "a", "src-A/{0}/0")
+        });
 
-        var second = DisplayBatchCombiner.Combine(new[] { first.Batch }, "combined-2");
+        var second = DisplayBatchCombiner.Combine(new[] { first.Batch });
 
         var mesh = AllMeshes(second.Batch).Single();
-        Assert.Equal("src-A", mesh.Metadata[DisplayBatchCombiner.SourceComponentAttr]);
-        Assert.Equal("combined-2", second.Batch.BatchId);
+        Assert.Equal("src-A/{0}/0", mesh.Id);
     }
 
     [Fact]
-    public void Combine_CarriesItemsAndRenumbersTheirIds()
+    public void Combine_CarriesItemsWithTheirIds()
     {
-        // Item ids must stay unique inside the combined batch; two inputs each holding ":0" would
-        // otherwise collide and break web pick selection.
-        var batchA = QuadBatch(0, 0, Material(Color.Red), "a", "src-A");
+        // Items keep their minted ids too — uniqueness across inputs is the minters' guarantee,
+        // not the combiner's job.
+        var batchA = QuadBatch(0, 0, Material(Color.Red), "a", "src-A/{0}/0");
         batchA.Items = new List<DisplayItem>
         {
-            DisplayItem.Curve("{}", new double[] { 0, 0, 0, 1, 1, 1 }, "src-A:0", "curveA", "", null, null, null)
+            DisplayItem.Curve("{}", new double[] { 0, 0, 0, 1, 1, 1 }, "src-A/{0}/1", "curveA", "", null, null, null)
         };
-        var batchB = QuadBatch(10, 0, Material(Color.Red), "b", "src-B");
+        var batchB = QuadBatch(10, 0, Material(Color.Red), "b", "src-B/{0}/0");
         batchB.Items = new List<DisplayItem>
         {
-            DisplayItem.Curve("{}", new double[] { 5, 5, 0, 6, 6, 0 }, "src-B:0", "curveB", "", null, null, null)
+            DisplayItem.Curve("{}", new double[] { 5, 5, 0, 6, 6, 0 }, "src-B/{0}/1", "curveB", "", null, null, null)
         };
 
-        var result = DisplayBatchCombiner.Combine(new[] { batchA, batchB }, "combined-1");
+        var result = DisplayBatchCombiner.Combine(new[] { batchA, batchB });
 
         Assert.Equal(2, result.ItemCount);
-        Assert.Equal(new[] { "combined-1:0", "combined-1:1" }, result.Batch.Items.Select(i => i.Id));
+        Assert.Equal(new[] { "src-A/{0}/1", "src-B/{0}/1" }, result.Batch.Items.Select(i => i.Id));
         Assert.Equal(new[] { "curveA", "curveB" }, result.Batch.Items.Select(i => i.Name));
     }
 
@@ -278,11 +244,11 @@ public class DisplayBatchCombinerTests
     public void Combine_SkipsAnUnreadableInputAndReportsIt()
     {
         // One corrupt payload must not lose every other input's geometry.
-        var good = QuadBatch(0, 0, Material(Color.Red), "a", "src-A");
-        var broken = QuadBatch(10, 0, Material(Color.Red), "b", "src-B");
+        var good = QuadBatch(0, 0, Material(Color.Red), "a", "src-A/{0}/0");
+        var broken = QuadBatch(10, 0, Material(Color.Red), "b", "src-B/{0}/0");
         broken.CompressedData = new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 1, 2, 3, 4 };
 
-        var result = DisplayBatchCombiner.Combine(new[] { good, broken }, "combined-1");
+        var result = DisplayBatchCombiner.Combine(new[] { good, broken });
 
         Assert.Equal(1, result.MeshCount);
         Assert.Single(result.Failures);
@@ -291,8 +257,8 @@ public class DisplayBatchCombinerTests
     [Fact]
     public void Combine_ReturnsNullWhenThereIsNothingToCombine()
     {
-        Assert.Null(DisplayBatchCombiner.Combine(new DisplayBatch[] { null, null }, "combined-1"));
-        Assert.Null(DisplayBatchCombiner.Combine(Array.Empty<DisplayBatch>(), "combined-1"));
+        Assert.Null(DisplayBatchCombiner.Combine(new DisplayBatch[] { null, null }));
+        Assert.Null(DisplayBatchCombiner.Combine(Array.Empty<DisplayBatch>()));
     }
 
     [Fact]
@@ -300,11 +266,11 @@ public class DisplayBatchCombinerTests
     {
         // Tree-aware combining runs per branch, and a branch holding one payload is the common
         // case — it must survive the merge unchanged rather than pay for a needless re-encode bug.
-        var original = QuadBatch(0, 0, Material(Color.Red), "solo", "src-A",
+        var original = QuadBatch(0, 0, Material(Color.Red), "solo", "src-A/{0}/0",
             metadata: new Dictionary<string, string> { ["fire"] = "REI60" },
             layer: "Structure/Walls");
 
-        var result = DisplayBatchCombiner.Combine(new[] { original }, "combined-1");
+        var result = DisplayBatchCombiner.Combine(new[] { original });
 
         var mesh = Assert.Single(AllMeshes(result.Batch));
         Assert.Equal("solo", mesh.Name);
@@ -320,13 +286,14 @@ public class DisplayBatchCombinerTests
         var red = Material(Color.Red);
         var result = DisplayBatchCombiner.Combine(new[]
         {
-            QuadBatch(0, 0, red, "a", "src-A"),
-            QuadBatch(10, 0, red, "b", "src-B")
-        }, "combined-1");
+            QuadBatch(0, 0, red, "a", "src-A/{0}/0"),
+            QuadBatch(10, 0, red, "b", "src-B/{0}/0")
+        });
 
         Assert.True(SlvmDocument.IsSlvm(result.Batch.CompressedData));
         var reread = SlvmDocument.Read(result.Batch.CompressedData);
         Assert.Equal(2, AllMeshes(reread.Batch).Count);
-        Assert.Equal("combined-1", reread.Batch.BatchId);
+        Assert.Equal(new[] { "src-A/{0}/0", "src-B/{0}/0" },
+            AllMeshes(reread.Batch).Select(m => m.Id));
     }
 }

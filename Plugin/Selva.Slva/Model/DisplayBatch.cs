@@ -33,24 +33,6 @@ public class DisplayBatch
     public byte[] CompressedData { get; set; }
 
     /// <summary>
-    ///     The batch's identity namespace: one id per batch, which together with a mesh's
-    ///     <see cref="MeshMetadata.OriginalIndex" /> gives the web a key that survives a solve
-    ///     (hidden state, selection, per-object overrides all hang off it).
-    ///
-    ///     Usually the producing Display component's InstanceGuid — stable across solves, which is
-    ///     what makes the key stable. It is NOT always a component: a combined batch takes the
-    ///     combiner's own id, since the sources it merged can no longer own one key space between
-    ///     them. Which component actually produced a mesh is recorded per mesh instead, in the
-    ///     <c>gh:component</c> metadata attr.
-    ///
-    ///     The JSON name stays <c>batchId</c>: it is the wire contract with published
-    ///     `@selvajs/*` releases, and it is baked into every pre-v2 blob, `.gh` archive and
-    ///     `.slvm` file on disk.
-    /// </summary>
-    [JsonProperty("sourceComponentId")]
-    public string BatchId { get; set; }
-
-    /// <summary>
     ///     Non-mesh display items. Omitted from the JSON when empty so mesh-only batches stay
     ///     byte-for-byte as before. Unlike meshes these don't go through
     ///     <see cref="MeshBatchAssembler" /> — the component sets this directly.
@@ -71,18 +53,20 @@ public class MaterialGroup
 
 public class MeshMetadata
 {
+    /// <summary>
+    ///     The object's identity: an opaque writer-minted string, stable across solves and unique
+    ///     across batches (Selva mints <c>{componentGuid}/{branchPath}/{indexInBranch}</c>). The
+    ///     viewer keys hidden/selection state on it; readers never parse it. Travels in the TABL
+    ///     attr column under the reserved key <c>id</c>.
+    /// </summary>
+    [JsonProperty("id", NullValueHandling = NullValueHandling.Ignore)]
+    public string Id { get; set; }
+
     [JsonProperty("name")] public string Name { get; set; }
 
     /// <summary>Layer path for grouping in the scene manager (e.g. "Structure/Walls").</summary>
     [JsonProperty("layer")]
     public string Layer { get; set; }
-
-    /// <summary>
-    ///     Index of this mesh in the GH input tree, before material grouping. Together with
-    ///     <see cref="DisplayBatch.BatchId" />, uniquely identifies the GH source.
-    /// </summary>
-    [JsonProperty("originalIndex")]
-    public int OriginalIndex { get; set; }
 
     [JsonProperty("vertexCount")]
     public int VertexCount { get; set; }
