@@ -9,8 +9,6 @@
 //   - HeadlessGuard.IsHeadless is never exercised: it's reached only through
 //     ComponentStateManager's parameterless ctor, and tests use the internal
 //     one that injects the flag.
-//   - Logger.Log is a no-op sink. MeshBatchAssembler calls it once per batch
-//     for cache stats; the real one writes to RhinoApp.
 //   - Point3d/Vector3d ARE exercised, by CurveFlatnessTests. The operators
 //     must therefore mean what RhinoCommon's mean — note Vector3d * Vector3d
 //     is the dot product, not a component-wise multiply.
@@ -74,15 +72,5 @@ namespace Rhino.Geometry
 
         public static Vector3d operator -(Vector3d a, Vector3d b) =>
             new Vector3d(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
-    }
-}
-
-namespace Selva.GH.Utilities.Helpers
-{
-    /// <summary>No-op sink; the real Logger writes to RhinoApp, absent from the test host.</summary>
-    public static class Logger
-    {
-        public static void Log(string message) { }
-        public static void Error(string message, System.Exception ex = null) { }
     }
 }

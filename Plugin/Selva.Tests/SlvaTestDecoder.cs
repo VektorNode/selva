@@ -5,10 +5,10 @@ using Selva.GH.Features.Display.Services;
 namespace Selva.Tests;
 
 /// <summary>
-///     Test-local SLVA decoder, independent of both production decoders (the TS parser and
-///     <c>BinaryGeometryReader</c>, which can't be linked here — it drags DisplayBatch's
-///     Rhino-adjacent dependency chain). Decodes every format version through the flag-driven read
-///     path, so the same code checks current-writer output and the frozen v3 fixtures.
+///     Test-local SLVA decoder, deliberately independent of both production decoders (the TS
+///     parser and <c>BinaryGeometryReader</c>) so a shared decode bug can't hide from its own
+///     test. Decodes every format version through the flag-driven read path, so the same code
+///     checks current-writer output and the frozen v3 fixtures.
 /// </summary>
 internal static class SlvaTestDecoder
 {
