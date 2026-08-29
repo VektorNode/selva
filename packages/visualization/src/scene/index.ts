@@ -15,7 +15,9 @@ export type { SelectionState, SelectionModifiers } from './selection.js';
 export { getObjectLabel, getTypeLabel } from './objects.js';
 
 /**
- * Read the injected set in markup (`hidden.has(getTrackingKey(obj))`) rather than calling
- * `outliner.visibility.isHidden(obj)` — the latter is not reactive under Svelte runes.
+ * Read the injected set in markup (`getMemberKeys(obj).every((k) => hidden.has(k))`) rather than
+ * calling `outliner.visibility.isHidden(obj)` — the latter is not reactive under Svelte runes.
+ * `getMemberKeys` returns one key per source member for merged meshes, so hiding tracks members.
  */
-export { getTrackingKey } from './identity.js';
+export { getTrackingKey, getMemberKeys } from './identity.js';
+export type { MergedMember } from './identity.js';

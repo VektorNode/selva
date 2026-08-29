@@ -23,12 +23,13 @@ export interface SerializableMaterial {
  * vertex components are 2 bytes (int16 quantized) or 4 bytes (`FLAG_FLOAT32`).
  */
 export interface MeshMetadata {
+	/** The object's identity: an opaque writer-minted string, stable across solves and unique
+	 *  across batches. The viewer keys hidden/selection state on it; never parsed. Absent for
+	 *  foreign writers that mint none. */
+	id?: string;
 	name: string;
 	/** Layer path for grouping in the scene manager, e.g. 'Structure/Walls'. */
 	layer: string;
-	/** Index in the GH input tree before material grouping; combined with sourceComponentId
-	 *  uniquely identifies the GH source geometry. */
-	originalIndex: number;
 	vertexCount: number;
 	/** 3 per triangle. */
 	indexCount: number;
@@ -58,11 +59,6 @@ export interface DisplayBatch {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
 	compressedData: string;
-	/** The batch's identity namespace, combined with `MeshMetadata.originalIndex` to key a mesh
-	 *  across solves. Usually the producing GH component's InstanceGuid, but not always — a
-	 *  combined batch takes the combiner's id, and records each mesh's true origin in its
-	 *  `metadata['gh:component']`. The JSON name is the wire contract and cannot change. */
-	sourceComponentId?: string;
 	/** Non-mesh display items — see {@link DisplayItem}. Parsed by the separate `display-items`
 	 *  path, not the SLVA mesh parser. Omitted when there are none. */
 	items?: DisplayItem[];
@@ -78,15 +74,6 @@ export interface MeshBatchParsingOptions {
 	 * viewer's `setLook`.
 	 */
 	material?: MaterialAppearanceOptions;
-	/**
-	 * Identity namespace for this blob's meshes, overriding the id baked into it.
-	 *
-	 * A scene assembled from several blobs needs one: each blob numbers its meshes from 0, and
-	 * blobs emitted by one Grasshopper component all carry that component's id — so without a
-	 * per-blob namespace every blob's first mesh shares the key `gh:{id}:0`, and hiding one hides
-	 * them all. Callers that parse a sequence pass the blob's ordinal.
-	 */
-	identityNamespace?: string;
 }
 
 /** Single definition lives in `shared/types.ts`; re-exported here so the render layer can read a

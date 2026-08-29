@@ -73,9 +73,9 @@ function buildDisplayBatch(meshCount: number) {
 			materialId: i,
 			meshes: [
 				{
+					id: `e2e-fake-display/${i}`,
 					name: `e2e-mesh-${i}`,
 					layer: 'E2E',
-					originalIndex: i,
 					vertexCount: 3,
 					indexCount: 3,
 					vertexStart: i * 3,
@@ -85,10 +85,7 @@ function buildDisplayBatch(meshCount: number) {
 		});
 	}
 
-	const sourceComponentId = 'e2e-fake-display';
-	const metadataBytes = new TextEncoder().encode(
-		JSON.stringify({ materials, groups, sourceComponentId })
-	);
+	const metadataBytes = new TextEncoder().encode(JSON.stringify({ materials, groups }));
 
 	const byteLength =
 		12 + metadataBytes.byteLength + 4 + 48 + 4 + vertices.byteLength + 4 + indices.byteLength;
@@ -125,8 +122,7 @@ function buildDisplayBatch(meshCount: number) {
 	return {
 		materials,
 		groups,
-		compressedData: Buffer.from(buffer).toString('base64'),
-		sourceComponentId
+		compressedData: Buffer.from(buffer).toString('base64')
 	};
 }
 

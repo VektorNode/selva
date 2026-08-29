@@ -39,11 +39,12 @@ Each plan below links to its tracking issue at the top of the file.
 | [mountable-api](./features/mountable-api.md)                                    | **unfiled** — in flight, handoff is in the plan itself                                                                                                                                                                      |
 | [presolve-bundle](./features/presolve-bundle.md)                                | **unfiled** — parked on a storage decision                                                                                                                                                                                  |
 | [cloud-binary-transport](./features/cloud-binary-transport.md)                  | **unfiled** — deliberately deferred                                                                                                                                                                                         |
+| [slva-identity](./features/slva-identity.md)                                    | **unfiled** — in flight on `feat/mesh-compression`                                                                                                                                                                          |
 
-The three unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
+The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until
-something unblocks them. mountable-api is the opposite case — it is being worked through directly,
-so the handoff lives in the plan rather than in a tracker.
+something unblocks them. mountable-api and slva-identity are the opposite case — they are being
+worked through directly, so the handoff lives in the plan rather than in a tracker.
 
 ## Closed since the last index
 

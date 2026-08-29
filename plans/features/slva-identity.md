@@ -1,6 +1,6 @@
 # One id per object: the SLVA identity redesign
 
-Status: planned. Follow-up to [slva-extraction.md](./slva-extraction.md); supersedes its
+Status: planned. Follow-up to [slva-extraction.md](../archive/slva-extraction.md); supersedes its
 follow-up sketch with the results of a full consumer census (C# + TS, 2026-08-29).
 
 ## The verdict from the census

@@ -98,8 +98,7 @@ export async function parseMeshBatchObject(
 		material,
 		fallback: {
 			materials: batch.materials,
-			groups: batch.groups,
-			sourceComponentId: batch.sourceComponentId
+			groups: batch.groups
 		}
 	});
 	if (workerMeshes) return workerMeshes;
@@ -120,8 +119,7 @@ export async function parseMeshBatchObject(
 		blobBytes,
 		fallback: {
 			materials: batch.materials,
-			groups: batch.groups,
-			sourceComponentId: batch.sourceComponentId
+			groups: batch.groups
 		}
 	});
 }
@@ -130,8 +128,8 @@ export async function parseMeshBatchObject(
  * Parses a raw binary mesh batch blob (SLVA wire format) and creates Three.js meshes.
  *
  * Use this entry point when the blob arrives as a binary WebSocket frame rather than inside a JSON
- * envelope — the blob is self-describing, with materials, groups, and `sourceComponentId` coming
- * from its embedded metadata header.
+ * envelope — the blob is self-describing, with materials, groups, and per-object ids coming
+ * from the container's table.
  *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
@@ -139,17 +137,15 @@ export async function parseMeshBatchBlob(
 	blob: ArrayBuffer | Uint8Array,
 	options?: MeshBatchParsingOptions
 ): Promise<THREE.Mesh[]> {
-	const { mergeByMaterial = true, debug = false, material, identityNamespace } = options ?? {};
+	const { mergeByMaterial = true, debug = false, material } = options ?? {};
 
 	const perfStart = debug ? performance.now() : 0;
-	const fallback = identityNamespace ? { sourceComponentId: identityNamespace } : undefined;
 
 	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
 	const workerMeshes = await tryBuildViaWorker(blob, {
 		mergeByMaterial,
 		debug,
-		material,
-		fallback
+		material
 	});
 	if (workerMeshes) return workerMeshes;
 
@@ -166,8 +162,7 @@ export async function parseMeshBatchBlob(
 		parseTime: 0,
 		decodeTime,
 		perfStart,
-		blobBytes,
-		fallback
+		blobBytes
 	});
 }
 
@@ -183,7 +178,6 @@ interface BuildOptions {
 	fallback?: {
 		materials?: SerializableMaterial[];
 		groups?: MaterialGroup[];
-		sourceComponentId?: string;
 	};
 }
 
@@ -204,11 +198,6 @@ function buildMeshesFromParsed(
 
 	const materialsSrc = parsed.metadata.materials ?? fallback?.materials ?? [];
 	const groups = parsed.metadata.groups ?? fallback?.groups ?? [];
-	// Envelope sourceComponentId wins over the blob's embedded one: the blob bakes in the id at
-	// encode time, but a reloaded part (e.g. a .slvm mesh file instanced many times) re-stamps a fresh id on
-	// the envelope so web pick identity stays distinct per placement. The blob value only applies
-	// to the raw-blob transport, which has no envelope.
-	const sourceComponentId = fallback?.sourceComponentId ?? parsed.metadata.sourceComponentId;
 
 	const isFloat32 = (parsed.flags & FLAG_FLOAT32) !== 0;
 
@@ -268,10 +257,6 @@ function buildMeshesFromParsed(
 				parsed.uvs,
 				parsed.colors
 			);
-			// Left absent when unknown, never null: stable identity tests the field's type to decide
-			// whether it can key on the component, and a null would silently demote every mesh of
-			// this batch to the weaker name+layer key.
-			if (sourceComponentId) mergedMesh.userData.sourceComponentId = sourceComponentId;
 			meshes.push(mergedMesh);
 		} else {
 			const individualMeshes = createIndividualMeshes(
@@ -282,11 +267,6 @@ function buildMeshesFromParsed(
 				parsed.uvs,
 				parsed.colors
 			);
-			if (sourceComponentId) {
-				for (const mesh of individualMeshes) {
-					mesh.userData.sourceComponentId = sourceComponentId;
-				}
-			}
 			meshes.push(...individualMeshes);
 		}
 	}
@@ -342,7 +322,6 @@ async function tryBuildViaWorker(
 
 	const materialsSrc = raw.metadata.materials ?? opts.fallback?.materials ?? [];
 	const groups = raw.metadata.groups ?? opts.fallback?.groups ?? [];
-	const sourceComponentId = opts.fallback?.sourceComponentId ?? raw.metadata.sourceComponentId;
 	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, indexCount);
 
 	// Same job branching as buildMeshesFromParsed, with a parallel ref list to unwrap results by index.
@@ -428,7 +407,6 @@ async function tryBuildViaWorker(
 			ref.kind === 'merged'
 				? finalizeMergedMesh(geometry, ref.group, materials)
 				: finalizeSingleMesh(geometry, ref.meshMeta!, ref.group, materials);
-		if (sourceComponentId) mesh.userData.sourceComponentId = sourceComponentId;
 		meshes.push(mesh);
 	}
 
