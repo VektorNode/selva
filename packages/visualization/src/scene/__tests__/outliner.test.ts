@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { createSceneOutliner } from '../outliner.js';
+import { getTrackingKey } from '../identity.js';
+
+/** Selection is keyed by entry key (stable identity), not instance uuid. */
+const keyOf = (object: THREE.Object3D) => getTrackingKey(object);
 
 const CLICK = { shiftKey: false, toggleKey: false };
 const CTRL = { shiftKey: false, toggleKey: true };
@@ -89,7 +93,7 @@ describe('createSceneOutliner', () => {
 			);
 			const outliner = createSceneOutliner(scene);
 
-			expect(outliner.flatVisibleUuids()).toEqual([objects[0].uuid, objects[1].uuid]);
+			expect(outliner.flatVisibleUuids()).toEqual([keyOf(objects[0]), keyOf(objects[1])]);
 		});
 
 		it('omits collapsed layers', () => {
@@ -101,14 +105,14 @@ describe('createSceneOutliner', () => {
 
 			outliner.toggleCollapsed('Walls');
 
-			expect(outliner.flatVisibleUuids()).toEqual([objects[1].uuid]);
+			expect(outliner.flatVisibleUuids()).toEqual([keyOf(objects[1])]);
 		});
 
 		it('omits objects filtered out by the search', () => {
 			const { scene, objects } = sceneWith({ name: 'north' }, { name: 'ridge' });
 			const outliner = createSceneOutliner(scene);
 
-			expect(outliner.flatVisibleUuids('ridge')).toEqual([objects[1].uuid]);
+			expect(outliner.flatVisibleUuids('ridge')).toEqual([keyOf(objects[1])]);
 		});
 	});
 
@@ -153,7 +157,7 @@ describe('createSceneOutliner', () => {
 		it('ignores the selection when only one object is selected', () => {
 			const { scene, objects } = sceneWith({ name: 'a' }, { name: 'b' });
 			const outliner = createSceneOutliner(scene);
-			outliner.select(objects[0].uuid, CLICK);
+			outliner.select(keyOf(objects[0]), CLICK);
 
 			outliner.toggleObject(objects[1]);
 
@@ -170,8 +174,8 @@ describe('createSceneOutliner', () => {
 		);
 		const outliner = createSceneOutliner(scene);
 
-		outliner.select(objects[0].uuid, CLICK);
-		outliner.select(objects[2].uuid, SHIFT);
+		outliner.select(keyOf(objects[0]), CLICK);
+		outliner.select(keyOf(objects[2]), SHIFT);
 
 		expect(outliner.selection.selected.size).toBe(3);
 	});
@@ -184,10 +188,10 @@ describe('createSceneOutliner', () => {
 		);
 		const outliner = createSceneOutliner(scene);
 
-		outliner.select(objects[0].uuid, CLICK, 'keep');
-		outliner.select(objects[2].uuid, SHIFT, 'keep');
+		outliner.select(keyOf(objects[0]), CLICK, 'keep');
+		outliner.select(keyOf(objects[2]), SHIFT, 'keep');
 
-		expect([...outliner.selection.selected]).toEqual([objects[0].uuid, objects[2].uuid]);
+		expect([...outliner.selection.selected]).toEqual([keyOf(objects[0]), keyOf(objects[2])]);
 	});
 
 	it('reset drops hidden and selected state', () => {

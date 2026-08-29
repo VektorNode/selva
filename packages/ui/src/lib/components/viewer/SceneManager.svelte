@@ -1,5 +1,4 @@
 <script lang="ts">
-	import * as THREE from 'three';
 	import {
 		Eye,
 		EyeOff,
@@ -11,8 +10,8 @@
 	} from '@lucide/svelte';
 	import {
 		getMemberKeys,
-		getObjectLabel,
 		getTypeLabel,
+		type SceneEntry,
 		type SceneOutliner
 	} from '@selvajs/visualization/scene';
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
@@ -38,13 +37,17 @@
 
 	let { outliner, sceneVersion = 0, onVisibilityChange }: Props = $props();
 
-	const toggleLayer = (objects: THREE.Object3D[]) => {
-		outliner.visibility.toggleLayer(objects);
+	// A partially hidden layer hides the rest; only a fully hidden one comes back — the same rule
+	// `visibility.toggleLayer` applies to objects, restated over entries because a layer's rows are
+	// now members, not necessarily whole objects.
+	const toggleLayer = (entries: SceneEntry[]) => {
+		const show = entries.length > 0 && entries.every((entry) => isEntryHidden(entry));
+		for (const entry of entries) outliner.visibility.setEntryVisible(entry, show);
 		onVisibilityChange?.();
 	};
 
-	const toggleObject = (object: THREE.Object3D) => {
-		outliner.toggleObject(object);
+	const toggleEntry = (entry: SceneEntry) => {
+		outliner.toggleEntry(entry);
 		onVisibilityChange?.();
 	};
 
@@ -73,18 +76,21 @@
 		return outliner.objects();
 	});
 
+	// Entries, not objects: a merged mesh renders as one THREE object but lists as one row per
+	// source object, so an imported model shows its building elements instead of the handful of
+	// meshes they were merged into.
 	const layerGroups = $derived.by(() => {
 		void sceneVersion;
-		return outliner.layerGroups(searchQuery);
+		return outliner.entryGroups(searchQuery);
 	});
 
 	const collapseAll = () => {
-		for (const layerName of outliner.layerGroups().keys()) collapsed.add(layerName);
+		for (const layerName of outliner.entryGroups().keys()) collapsed.add(layerName);
 	};
 
 	$effect(() => {
 		void sceneVersion;
-		if (collapsedOnLoad || outliner.layerGroups().size === 0) return;
+		if (collapsedOnLoad || outliner.entryGroups().size === 0) return;
 		collapsedOnLoad = true;
 		collapseAll();
 	});
@@ -118,31 +124,31 @@
 				top: number;
 				height: number;
 				layerName: string;
-				objects: THREE.Object3D[];
+				entries: SceneEntry[];
 		  }
-		| { kind: 'object'; key: string; top: number; height: number; object: THREE.Object3D };
+		| { kind: 'object'; key: string; top: number; height: number; entry: SceneEntry };
 
 	const rows = $derived.by(() => {
 		const flat: Row[] = [];
 		let top = 0;
-		for (const [layerName, objects] of layerGroups) {
+		for (const [layerName, entries] of layerGroups) {
 			flat.push({
 				kind: 'layer',
 				key: `layer:${layerName}`,
 				top,
 				height: LAYER_ROW_HEIGHT,
 				layerName,
-				objects
+				entries
 			});
 			top += LAYER_ROW_HEIGHT;
 			if (collapsed.has(layerName)) continue;
-			for (const object of objects) {
+			for (const entry of entries) {
 				flat.push({
 					kind: 'object',
-					key: object.uuid,
+					key: entry.key,
 					top,
 					height: OBJECT_ROW_HEIGHT,
-					object
+					entry
 				});
 				top += OBJECT_ROW_HEIGHT;
 			}
@@ -182,12 +188,14 @@
 	// `SvelteSet.has()` is the reactive read, so go through the set rather than calling
 	// `visibility.isHidden` — that reaches the set through a plain reference inside the outliner
 	// and returns a correct value that never re-renders this row.
-	const isObjectHidden = (object: THREE.Object3D) =>
-		getMemberKeys(object).every((key) => hidden.has(key));
+	const isEntryHidden = (entry: SceneEntry) =>
+		entry.memberIndex === null
+			? getMemberKeys(entry.object).every((key) => hidden.has(key))
+			: hidden.has(entry.key);
 
-	// Same reason: count through the reactive set so the layer's tri-state eye tracks its objects.
-	const hiddenCount = (objects: THREE.Object3D[]) =>
-		objects.filter((object) => isObjectHidden(object)).length;
+	// Same reason: count through the reactive set so the layer's tri-state eye tracks its entries.
+	const hiddenCount = (entries: SceneEntry[]) =>
+		entries.filter((entry) => isEntryHidden(entry)).length;
 
 	// Reading `anchor` keeps the shift-range dependent on it; the outliner owns the value.
 	const selectObject = (uuid: string, event: MouseEvent) => {
@@ -250,10 +258,10 @@
 			{#each visibleRows as row (row.key)}
 				<div class="inset-x-0 absolute" style:top="{row.top}px" style:height="{row.height}px">
 					{#if row.kind === 'layer'}
-						{@const objects = row.objects}
-						{@const numHidden = hiddenCount(objects)}
-						{@const layerHidden = objects.length > 0 && numHidden === objects.length}
-						{@const layerPartial = numHidden > 0 && numHidden < objects.length}
+						{@const entries = row.entries}
+						{@const numHidden = hiddenCount(entries)}
+						{@const layerHidden = entries.length > 0 && numHidden === entries.length}
+						{@const layerPartial = numHidden > 0 && numHidden < entries.length}
 						{@const isCollapsed = collapsed.has(row.layerName)}
 
 						<div
@@ -273,7 +281,7 @@
 
 							<button
 								class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
-								onclick={() => toggleLayer(objects)}
+								onclick={() => toggleLayer(entries)}
 								title={layerHidden ? t.showLayer : t.hideLayer}
 								aria-label={layerHidden ? t.showLayer : t.hideLayer}
 							>
@@ -295,15 +303,15 @@
 							</span>
 
 							<span class="shrink-0 text-[10px] text-muted-foreground/50 tabular-nums">
-								{objects.length}
+								{entries.length}
 							</span>
 						</div>
 					{:else}
-						{@const object = row.object}
-						<!-- Visibility is keyed by Grasshopper identity (so it survives a solve), selection
-						     by uuid (so it does not) — hence the two different lookups. -->
-						{@const isHidden = isObjectHidden(object)}
-						{@const isSelected = selected.has(object.uuid)}
+						{@const entry = row.entry}
+						<!-- Both keyed by the entry's stable identity: a merged mesh holds many entries, so
+						     the object's uuid cannot tell its members apart. -->
+						{@const isHidden = isEntryHidden(entry)}
+						{@const isSelected = selected.has(entry.key)}
 						<div class="ml-3 h-full border-l border-border">
 							<div
 								role="option"
@@ -316,15 +324,15 @@
 									e.stopPropagation();
 									if (e.shiftKey) e.preventDefault();
 								}}
-								onclick={(e) => selectObject(object.uuid, e)}
+								onclick={(e) => selectObject(entry.key, e)}
 								onkeydown={(e) =>
-									e.key === 'Enter' && selectObject(object.uuid, e as unknown as MouseEvent)}
+									e.key === 'Enter' && selectObject(entry.key, e as unknown as MouseEvent)}
 							>
 								<button
 									class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
 									onclick={(e) => {
 										e.stopPropagation();
-										toggleObject(object);
+										toggleEntry(entry);
 									}}
 									title={isHidden ? t.showObject : t.hideObject}
 									aria-label={isHidden ? t.showObject : t.hideObject}
@@ -341,13 +349,13 @@
 										? 'text-muted-foreground line-through'
 										: 'text-foreground/80'}"
 								>
-									{getObjectLabel(object)}
+									{entry.label}
 								</span>
 
 								<span
 									class="rounded px-1 py-0.5 font-medium shrink-0 bg-muted text-[9px] text-muted-foreground/70"
 								>
-									{getTypeLabel(object)}
+									{getTypeLabel(entry.object)}
 								</span>
 							</div>
 						</div>

@@ -151,10 +151,13 @@ async function processDataBranch(
 	for (const item of branch) {
 		if (!isDisplayItemType(item.type)) continue;
 
-		const mergedParsingOptions = {
-			mergeByMaterial: true,
+		// Spread first, then re-apply the default for anything the caller left undefined: a caller
+		// passing `{ material }` would otherwise carry `mergeByMaterial: undefined` over the default
+		// and silently un-merge the batch.
+		const mergedParsingOptions: MeshBatchParsingOptions = {
 			debug: false,
-			...parsingOptions
+			...parsingOptions,
+			mergeByMaterial: parsingOptions.mergeByMaterial ?? true
 		};
 
 		// Parsed once and shared: item.data is a multi-MB base64 SLVA blob, so parsing it twice (once

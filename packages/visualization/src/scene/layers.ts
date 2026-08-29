@@ -4,6 +4,7 @@
 
 import type * as THREE from 'three';
 import { getObjectLabel } from './objects.js';
+import type { SceneEntry } from './entries.js';
 
 export const DEFAULT_LAYER = 'Default';
 
@@ -46,6 +47,37 @@ export function filterLayerGroups(
 		const matching = layerName.toLowerCase().includes(q)
 			? objects
 			: objects.filter((obj) => getObjectLabel(obj).toLowerCase().includes(q));
+		if (matching.length > 0) filtered.set(layerName, matching);
+	}
+	return filtered;
+}
+
+/** {@link groupByLayer}, over entries — each entry already carries the layer it belongs to. */
+export function groupEntriesByLayer(entries: SceneEntry[]): Map<string, SceneEntry[]> {
+	const groups = new Map<string, SceneEntry[]>();
+	for (const entry of entries) {
+		let bucket = groups.get(entry.layer);
+		if (!bucket) {
+			bucket = [];
+			groups.set(entry.layer, bucket);
+		}
+		bucket.push(entry);
+	}
+	return groups;
+}
+
+/** {@link filterLayerGroups}, over entries. */
+export function filterEntryGroups(
+	groups: Map<string, SceneEntry[]>,
+	query: string
+): Map<string, SceneEntry[]> {
+	if (!query.trim()) return groups;
+	const q = query.toLowerCase();
+	const filtered = new Map<string, SceneEntry[]>();
+	for (const [layerName, entries] of groups) {
+		const matching = layerName.toLowerCase().includes(q)
+			? entries
+			: entries.filter((entry) => entry.label.toLowerCase().includes(q));
 		if (matching.length > 0) filtered.set(layerName, matching);
 	}
 	return filtered;

@@ -41,11 +41,20 @@ you have sun shadows or the grid on.
 ## Changing how it looks
 
 ```ts
-viewer.setLook('showcase'); // technical, studio, showcase, arctic, xray
+viewer.setLook('showcase'); // technical, studio, showcase, arctic, xray, lineart, wireframe
 viewer.setAmbientOcclusion(true);
 viewer.setToneMappingExposure(1.2);
 viewer.fitToView();
 ```
+
+`lineart` reads as a line drawing and is the one look that needs the edge overlay: it sets
+`requiresEdges`, and a host that wants it to work must switch edges on itself (`@selvajs/ui`'s
+`Viewer.svelte` does). `wireframe` draws raw triangle edges instead — diagonals included — which
+makes it a tessellation-inspection tool rather than a presentation look.
+
+Neither is true hidden-line removal, which computes the occluded edges and emits lines only.
+`lineart` draws shaded white faces and lets the depth buffer hide the edges behind them — the same
+picture by a different mechanism, and with no line-only form to export.
 
 A look changes lighting and materials only — never the grid or edges, which are independent
 overlays. Import `LOOKS` for the full list.

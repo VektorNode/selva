@@ -181,6 +181,41 @@ interface BuildOptions {
 	};
 }
 
+// Past this many source meshes, one THREE object each is the difference between a viewer that
+// holds 60fps and one that does not: render cost tracks object count, not triangles, and every
+// object also pays for its own edge overlay. A batch this size is an imported building model, where
+// merging is the only thing that keeps it interactive.
+const UNMERGED_MESH_WARN_THRESHOLD = 1_000;
+
+let warnedUnmerged = false;
+
+/** @internal Test seam: the warn-once flag is module state and would leak between cases. */
+export function resetUnmergedWarning(): void {
+	warnedUnmerged = false;
+}
+
+/**
+ * Warns once when a caller opts out of merging on a batch large enough for it to hurt.
+ *
+ * Opting out is legitimate — it is what gives every source object its own THREE object — so this
+ * does not override the caller. It exists because the failure is silent: nothing errors, the model
+ * renders correctly, and the only symptom is a frame rate nobody traces back to a parse option.
+ */
+function warnIfUnmergedAtScale(mergeByMaterial: boolean, groups: MaterialGroup[]): void {
+	if (mergeByMaterial || warnedUnmerged) return;
+
+	let meshCount = 0;
+	for (const group of groups) meshCount += group.meshes.length;
+	if (meshCount < UNMERGED_MESH_WARN_THRESHOLD) return;
+
+	warnedUnmerged = true;
+	getLogger().warn(
+		`Parsing ${meshCount} meshes with mergeByMaterial: false — each becomes its own THREE ` +
+			`object, and render cost scales with object count. Drop the option to merge by material ` +
+			`(the default); per-object identity survives it via userData.members.`
+	);
+}
+
 function buildMeshesFromParsed(
 	parsed: ParsedBinaryMeshBatch,
 	opts: BuildOptions
@@ -231,6 +266,8 @@ function buildMeshesFromParsed(
 			`  Blob: ${(blobBytes / 1024 / 1024).toFixed(2)} MB | Geometry on wire: ${(wireBytes / 1024 / 1024).toFixed(2)} MB`
 		);
 	}
+
+	warnIfUnmergedAtScale(mergeByMaterial, groups);
 
 	const meshCreateStart = performance.now();
 	// Vertex colors are batch-wide when present — meshes without real colors carry a white fill,

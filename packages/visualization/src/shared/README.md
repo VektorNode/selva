@@ -36,9 +36,12 @@ upward from `render/`.
 
 Add an entry to `LOOKS` and a matching record in `LOOK_PRESETS` — `Look` derives from `LOOKS`, so the
 type and the list can't drift. A look carries **only** lighting and material dials, never edges or
-grid: those are independent overlays.
+grid: those are independent overlays. `lineart` is the one look that is incomplete without edges,
+and it says so with `requiresEdges` rather than reaching for the overlay — honouring that flag is
+the host's job.
 
-A look that repaints the geometry (as `arctic` and `xray` do) sets `materialOverride`. `setLook`
+A look that repaints the geometry (as `arctic`, `xray`, `lineart` and `wireframe` do) sets
+`materialOverride`. `setLook`
 snapshots each material's parsed values before the first override and restores them when switching
 back to a look without one, so the model's own colours survive the round trip. A host that re-solves
 must call `setLook` again: the new meshes arrive wearing the parser's materials.

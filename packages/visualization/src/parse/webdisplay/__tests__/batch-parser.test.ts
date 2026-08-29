@@ -3,10 +3,15 @@ import { describe, expect, it } from 'vitest';
 
 import { buildMeshBatch, encodeBatchPayload } from '@tests/helpers/mesh-batch-builder';
 import type { MeshBatchBuilderOptions } from '@tests/helpers/mesh-batch-builder';
-import { decodeBase64ToBinary } from '../../../shared/index.js';
+import { decodeBase64ToBinary, getLogger, setLogger } from '../../../shared/index.js';
 import { getTrackingKey } from '../../../scene/identity.js';
 
-import { parseMeshBatch, parseMeshBatchObject, parseMeshBatchBlob } from '../batch-parser';
+import {
+	parseMeshBatch,
+	parseMeshBatchObject,
+	parseMeshBatchBlob,
+	resetUnmergedWarning
+} from '../batch-parser';
 
 const COORD_TRANSFORM_TOLERANCE = 1e-5;
 
@@ -647,5 +652,46 @@ describe('parseMeshBatchBlob (binary entry point)', () => {
 		for (const mesh of meshes) {
 			expect(mesh.scale.x).toBe(1);
 		}
+	});
+});
+
+describe('unmerged-at-scale warning', () => {
+	const batchOf = (meshCount: number) =>
+		buildMeshBatch({ materialCount: 2, meshCount, vertsPerMesh: 4, layerCount: 1 }).batch;
+
+	function captureWarnings(): { warnings: string[]; restore: () => void } {
+		resetUnmergedWarning(); // warn-once flag is module state; don't inherit another case's
+		const warnings: string[] = [];
+		const previous = getLogger();
+		// Only `warn` is captured; the rest are inert so a real log can't reach the test output.
+		setLogger({
+			debug: () => {},
+			info: () => {},
+			error: () => {},
+			warn: (...args: unknown[]) => warnings.push(args.join(' '))
+		});
+		return { warnings, restore: () => setLogger(previous) };
+	}
+
+	it('warns when a large batch is parsed unmerged', async () => {
+		const { warnings, restore } = captureWarnings();
+		try {
+			await parseMeshBatchObject(batchOf(1200), { mergeByMaterial: false });
+		} finally {
+			restore();
+		}
+
+		expect(warnings.join('\n')).toContain('mergeByMaterial: false');
+	});
+
+	it('stays quiet when the same batch is merged', async () => {
+		const { warnings, restore } = captureWarnings();
+		try {
+			await parseMeshBatchObject(batchOf(1200), { mergeByMaterial: true });
+		} finally {
+			restore();
+		}
+
+		expect(warnings).toEqual([]);
 	});
 });

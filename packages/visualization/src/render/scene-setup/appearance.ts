@@ -18,6 +18,7 @@ type MaterialBaseline = {
 	opacity: number;
 	transparent: boolean;
 	depthWrite: boolean;
+	wireframe: boolean;
 };
 
 const BASELINE_KEY = '__selvaLookBaseline';
@@ -26,6 +27,7 @@ type OverridableMaterial = THREE.Material & {
 	color?: THREE.Color;
 	metalness?: number;
 	roughness?: number;
+	wireframe?: boolean;
 	[BASELINE_KEY]?: MaterialBaseline;
 };
 
@@ -49,6 +51,7 @@ function applyMaterialOverride(
 		target.opacity = baseline.opacity;
 		target.transparent = baseline.transparent;
 		target.depthWrite = baseline.depthWrite;
+		if (target.wireframe !== undefined) target.wireframe = baseline.wireframe;
 		delete target[BASELINE_KEY];
 		target.needsUpdate = true;
 		return;
@@ -61,7 +64,8 @@ function applyMaterialOverride(
 			roughness: target.roughness ?? 1,
 			opacity: target.opacity,
 			transparent: target.transparent,
-			depthWrite: target.depthWrite
+			depthWrite: target.depthWrite,
+			wireframe: target.wireframe ?? false
 		};
 	}
 
@@ -77,6 +81,9 @@ function applyMaterialOverride(
 		target.transparent = override.opacity < 1;
 	}
 	if (override.depthWrite !== undefined) target.depthWrite = override.depthWrite;
+	if (override.wireframe !== undefined && target.wireframe !== undefined) {
+		target.wireframe = override.wireframe;
+	}
 	target.needsUpdate = true;
 }
 

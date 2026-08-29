@@ -5,6 +5,7 @@
 		initThree,
 		updateScene,
 		LOOKS,
+		LOOK_PRESETS,
 		type Look,
 		type ThreeInitializerOptions,
 		type CameraController,
@@ -118,8 +119,8 @@
 	let cameraController: CameraController | null = null;
 	let measureTool: MeasureTool | null = null;
 	let grid: Grid | null = null;
-	let applyEdges: ((root: THREE.Object3D) => void) | null = null;
-	let clearEdges: ((root: THREE.Object3D) => void) | null = null;
+	let applyEdges: ThreeViewer['applyEdges'] | null = null;
+	let clearEdges: ThreeViewer['clearEdges'] | null = null;
 	let invalidate: (() => void) | null = null;
 	let captureImage: ThreeViewer['captureImage'] | null = null;
 	let setLook: ((look: Look) => void) | null = null;
@@ -148,7 +149,10 @@
 
 	// Derived from LOOKS so adding a look in @selvajs/visualization shows up here with no edit; the
 	// map only overrides the names that don't survive capitalisation ('xray' → 'X-Ray').
-	const LOOK_LABELS: Partial<Record<Look, string>> = { xray: 'X-Ray' };
+	const LOOK_LABELS: Partial<Record<Look, string>> = {
+		xray: 'X-Ray',
+		lineart: 'Line Art'
+	};
 	const STYLE_OPTIONS: { look: Look; label: string }[] = LOOKS.map((look) => ({
 		look,
 		label: LOOK_LABELS[look] ?? look.charAt(0).toUpperCase() + look.slice(1)
@@ -258,22 +262,84 @@
 		invalidate?.();
 	}
 
+	// Edges the lineart look switched on, so leaving it can put the user's own choice back rather
+	// than stranding them with overlays they never asked for.
+	let edgesBeforeLineDrawing: boolean | null = null;
+
 	function setRenderStyle(look: Look) {
 		if (!setLook || look === renderStyle) return;
+		const wasLineDrawing = LOOK_PRESETS[renderStyle].requiresEdges === true;
 		renderStyle = look;
 		setLook(look);
+
+		// A look never drives the overlay itself; honouring `requiresEdges` is the host's call. Without
+		// edges lineart is blank white shapes, so entering it forces them on.
+		if (LOOK_PRESETS[look].requiresEdges) {
+			if (!wasLineDrawing) edgesBeforeLineDrawing = edgesVisible;
+			if (!edgesVisible) {
+				edgesVisible = true;
+			} else if (!wasLineDrawing && scene) {
+				// Already-attached overlays carry the old fade setting, and addEdges skips a mesh that
+				// has one — so they have to go before the un-faded pass can replace them.
+				clearEdges?.(scene);
+			}
+			applyEdgeState();
+		} else if (wasLineDrawing && edgesBeforeLineDrawing !== null) {
+			edgesVisible = edgesBeforeLineDrawing;
+			// Rebuild either way: staying on means swapping the un-faded overlays back for faded ones.
+			if (edgesVisible && scene) clearEdges?.(scene);
+			applyEdgeState();
+			edgesBeforeLineDrawing = null;
+		} else if (edgesVisible && scene) {
+			// Neither look is a line drawing, but an overlay's colour is derived from its mesh's
+			// material — which `setLook` just repainted. addEdges skips meshes that already have an
+			// overlay, so without a rebuild the edges keep the previous look's colour.
+			clearEdges?.(scene);
+			applyEdgeState();
+		}
+	}
+
+	// Meshes past the overlay budget get the screen-space fallback instead, and that pass thresholds
+	// a depth/normal discontinuity to decide what is an edge — so a shallow crease sitting near the
+	// cutoff flips on and off as the camera turns a degree. Tolerable as a hint over a shaded model;
+	// in a line drawing it is the picture itself flickering. Raised far enough that a building model
+	// gets real overlays throughout: they cost draw calls, but they are stable under orbit.
+	const LINE_ART_MAX_OVERLAYS = 20_000;
+
+	// Edge colour is normally derived per mesh from that mesh's own material, darkened. lineart
+	// repaints every material near-white, so a derived edge lands at rgb(62,62,62) or lighter — and
+	// worse, `setLook` and `applyEdges` are independent, so whether the derivation sees the white
+	// override or the model's original colours depends on which ran last. That is the real source of
+	// the "edges look different every time" behaviour. Forcing a colour makes it deterministic.
+	const LINE_ART_EDGE_COLOR = 0x1a1d21;
+
+	// The density fade sets opacity per overlay, so a finely-detailed mesh fades as a whole and its
+	// long silhouette edges go with it — in a line drawing that erases the only thing on screen, and
+	// it recomputes per frame, so edges pop while orbiting. Shaded looks keep it: there it just
+	// softens outlines on a model you can still see.
+	function edgeOverrides() {
+		return LOOK_PRESETS[renderStyle].requiresEdges
+			? {
+					distanceFade: false,
+					maxOverlays: LINE_ART_MAX_OVERLAYS,
+					color: LINE_ART_EDGE_COLOR
+				}
+			: undefined;
 	}
 
 	// `applyEdges` is idempotent per mesh, so the repeated calls after each solve add no duplicate
 	// overlays; `clearEdges` is its inverse.
 	function applyEdgeState() {
 		if (!scene) return;
-		if (edgesVisible) applyEdges?.(scene);
+		if (edgesVisible) applyEdges?.(scene, edgeOverrides());
 		else clearEdges?.(scene);
 	}
 
 	function toggleEdges() {
 		edgesVisible = !edgesVisible;
+		// Toggling by hand inside lineart overrides what that look forced, so the pre-look value is
+		// stale — leaving the look must not undo the user's more recent explicit choice.
+		if (LOOK_PRESETS[renderStyle].requiresEdges) edgesBeforeLineDrawing = null;
 		applyEdgeState();
 	}
 
@@ -287,7 +353,7 @@
 				// (arctic, x-ray) has to be re-applied or the solve silently reverts to shaded.
 				setLook?.(renderStyle);
 				// updateScene discarded the previous solve's overlays along with its content.
-				if (edgesVisible) applyEdges?.(scene!);
+				if (edgesVisible) applyEdges?.(scene!, edgeOverrides());
 				// Rescale the grid so cells and fade match the new content's extent.
 				updateGridScale?.();
 				// The shadow frustum is sized to scene content, so it has to follow the new geometry —

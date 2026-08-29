@@ -6,6 +6,7 @@ import {
 	EDGES_SKIPPED_OVERLAY_BUDGET,
 	EDGES_SKIPPED_TRIANGLE_CAP,
 	addEdgesAsync,
+	type EdgeOptions,
 	removeEdges
 } from '../edges.js';
 import { createGrid } from '../grid.js';
@@ -188,7 +189,7 @@ export const initThree = function (
 	// Applies regardless of edges.enabled — an explicit call should never be silently ignored.
 	// Meshes the overlay path skipped — too large, or past the scene-wide overlay budget — switch the
 	// screen-space edge fallback on; a later solve without such meshes switches it back off.
-	const applyEdges = (root: THREE.Object3D) => {
+	const applyEdges = (root: THREE.Object3D, overrides?: Partial<EdgeOptions>) => {
 		void addEdgesAsync(root, {
 			color: config.edges.color,
 			darken: config.edges.darken,
@@ -197,7 +198,9 @@ export const initThree = function (
 			distanceFade: config.edges.distanceFade,
 			maxTriangles: config.edges.maxTriangles,
 			maxSegments: config.edges.maxSegments,
-			maxOverlays: config.edges.maxOverlays
+			maxOverlays: config.edges.maxOverlays,
+			// Last, so a caller's override actually wins over the configured value.
+			...overrides
 		}).then(() => {
 			updateEdgeFallback(root);
 			requestRender(); // async attach may land after the solve's own repaint
