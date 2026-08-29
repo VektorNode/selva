@@ -40,10 +40,22 @@ public class MeshBatchAssemblerTests
         List<string> names = null, List<string> layers = null,
         List<float[]> uvs = null, List<byte[]> colors = null)
     {
-        names ??= verts.ConvertAll(_ => "mesh");
-        return MeshBatchAssembler.CreateBatch(
-            verts, faces, names, materials, metadataList: null, layers: layers,
-            batchId: "component-1", uvArrays: uvs, colorArrays: colors);
+        var inputs = new List<SlvaMeshInput>(verts.Count);
+        for (var i = 0; i < verts.Count; i++)
+        {
+            inputs.Add(new SlvaMeshInput
+            {
+                Vertices = verts[i],
+                Faces = faces[i],
+                Name = names?[i] ?? "mesh",
+                Layer = layers?[i],
+                Material = materials[i],
+                Uvs = uvs?[i],
+                Colors = colors?[i]
+            });
+        }
+
+        return MeshBatchAssembler.CreateBatch(inputs, "component-1");
     }
 
     // ========================================================================
@@ -283,28 +295,12 @@ public class MeshBatchAssemblerTests
     {
         // A curves-only branch still needs a well-formed blob so neither decoder needs an
         // "is there geometry?" branch.
-        var batch = MeshBatchAssembler.CreateBatch(
-            new List<float[]>(), new List<int[]>(), new List<string>(),
-            new List<ThreeMaterial>(), batchId: "component-1");
+        var batch = MeshBatchAssembler.CreateBatch(new List<SlvaMeshInput>(), "component-1");
 
         Assert.NotNull(batch.CompressedData);
 
         var decoded = SlvaReader.Read(batch.CompressedData);
         Assert.Empty(decoded.Vertices);
         Assert.Empty(decoded.Indices);
-    }
-
-    [Fact]
-    public void CreateBatch_RejectsMismatchedParallelLists()
-    {
-        // The lists are positional; a length mismatch means a caller lost alignment and would
-        // otherwise attach the wrong name/material to every mesh past that point.
-        var (v0, f0) = Quad(0f);
-
-        Assert.Throws<System.ArgumentException>(() => MeshBatchAssembler.CreateBatch(
-            new List<float[]> { v0 },
-            new List<int[]> { f0 },
-            new List<string> { "a", "b" },
-            new List<ThreeMaterial> { Material(Color.Red) }));
     }
 }

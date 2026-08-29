@@ -50,16 +50,7 @@ public static class DisplayBatchCombiner
 
         var result = new Result();
 
-        var vertexArrays = new List<float[]>();
-        var faceArrays = new List<int[]>();
-        var names = new List<string>();
-        var materials = new List<ThreeMaterial>();
-        var metadata = new List<Dictionary<string, string>>();
-        var layers = new List<string>();
-        var uvArrays = new List<float[]>();
-        var colorArrays = new List<byte[]>();
-        var anyUvs = false;
-        var anyColors = false;
+        var meshInputs = new List<SlvaMeshInput>();
         var items = new List<DisplayItem>();
 
         // Next provenance ordinal per source batch id, so the count continues across inputs that
@@ -120,35 +111,29 @@ public static class DisplayBatchCombiner
                         continue;
                     }
 
-                    vertexArrays.Add(verts);
-                    faceArrays.Add(faces);
-                    names.Add(meshMeta.Name ?? "");
-                    layers.Add(meshMeta.Layer ?? "");
-                    materials.Add(material);
-                    metadata.Add(WithProvenance(meshMeta, batch.BatchId, sourceIndex));
-
-                    uvArrays.Add(uvs);
-                    colorArrays.Add(colors);
-                    anyUvs |= uvs != null;
-                    anyColors |= colors != null;
+                    meshInputs.Add(new SlvaMeshInput
+                    {
+                        Vertices = verts,
+                        Faces = faces,
+                        Name = meshMeta.Name ?? "",
+                        Layer = meshMeta.Layer ?? "",
+                        Material = material,
+                        Metadata = WithProvenance(meshMeta, batch.BatchId, sourceIndex),
+                        Uvs = uvs,
+                        Colors = colors
+                    });
                 }
             }
 
             nextIndexBySource[sourceKey] = indexInSource;
         }
 
-        if (vertexArrays.Count == 0 && items.Count == 0)
+        if (meshInputs.Count == 0 && items.Count == 0)
         {
             return null;
         }
 
-        var combined = MeshBatchAssembler.CreateBatch(
-            vertexArrays, faceArrays, names, materials,
-            metadataList: metadata,
-            layers: layers,
-            batchId: batchId,
-            uvArrays: anyUvs ? uvArrays : null,
-            colorArrays: anyColors ? colorArrays : null);
+        var combined = MeshBatchAssembler.CreateBatch(meshInputs, batchId);
 
         if (items.Count > 0)
         {
@@ -157,7 +142,7 @@ public static class DisplayBatchCombiner
         }
 
         result.Batch = combined;
-        result.MeshCount = vertexArrays.Count;
+        result.MeshCount = meshInputs.Count;
         result.MaterialCount = combined.Materials?.Count ?? 0;
         result.ItemCount = items.Count;
         return result;

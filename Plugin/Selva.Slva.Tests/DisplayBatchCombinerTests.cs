@@ -32,13 +32,19 @@ public class DisplayBatchCombinerTests
         };
 
         return MeshBatchAssembler.CreateBatch(
-            new List<float[]> { verts },
-            new List<int[]> { new[] { 0, 1, 2, 0, 2, 3 } },
-            new List<string> { name },
-            new List<ThreeMaterial> { material },
-            metadataList: metadata != null ? new List<Dictionary<string, string>> { metadata } : null,
-            layers: layer != null ? new List<string> { layer } : null,
-            batchId: sourceId);
+            new List<SlvaMeshInput>
+            {
+                new SlvaMeshInput
+                {
+                    Vertices = verts,
+                    Faces = new[] { 0, 1, 2, 0, 2, 3 },
+                    Name = name,
+                    Layer = layer,
+                    Material = material,
+                    Metadata = metadata
+                }
+            },
+            sourceId);
     }
 
     private static List<MeshMetadata> AllMeshes(DisplayBatch batch)
@@ -157,18 +163,27 @@ public class DisplayBatchCombinerTests
         // OriginalIndex values in input order, which no longer matches table order.
         var red = Material(Color.Red);
         var blue = Material(Color.Blue);
+        // Interleaved materials force the sort to reorder the table.
         var multi = MeshBatchAssembler.CreateBatch(
-            new List<float[]>
+            new List<SlvaMeshInput>
             {
-                new[] { 0f, 0f, 0f, 1f, 0f, 0f, 1f, 1f, 0f },
-                new[] { 5f, 0f, 0f, 6f, 0f, 0f, 6f, 1f, 0f },
-                new[] { 10f, 0f, 0f, 11f, 0f, 0f, 11f, 1f, 0f }
+                new SlvaMeshInput
+                {
+                    Vertices = new[] { 0f, 0f, 0f, 1f, 0f, 0f, 1f, 1f, 0f },
+                    Faces = new[] { 0, 1, 2 }, Name = "first", Material = red
+                },
+                new SlvaMeshInput
+                {
+                    Vertices = new[] { 5f, 0f, 0f, 6f, 0f, 0f, 6f, 1f, 0f },
+                    Faces = new[] { 0, 1, 2 }, Name = "second", Material = blue
+                },
+                new SlvaMeshInput
+                {
+                    Vertices = new[] { 10f, 0f, 0f, 11f, 0f, 0f, 11f, 1f, 0f },
+                    Faces = new[] { 0, 1, 2 }, Name = "third", Material = red
+                }
             },
-            new List<int[]> { new[] { 0, 1, 2 }, new[] { 0, 1, 2 }, new[] { 0, 1, 2 } },
-            new List<string> { "first", "second", "third" },
-            // Interleaved materials force the sort to reorder the table.
-            new List<ThreeMaterial> { red, blue, red },
-            batchId: "src-multi");
+            "src-multi");
 
         var result = DisplayBatchCombiner.Combine(new[] { multi }, "combined-1");
 

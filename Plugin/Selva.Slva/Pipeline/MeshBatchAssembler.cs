@@ -19,56 +19,21 @@ namespace Selva.Slva;
 public static class MeshBatchAssembler
 {
     /// <summary>
-    ///     Assembles a batch from vertex/face arrays already extracted from the meshes, so the
-    ///     component's parallel meshing pass does that extraction and this assembly pass stays free
-    ///     of per-vertex copying. A null entry marks an invalid mesh's slot and is skipped.
+    ///     Assembles a batch from per-mesh inputs whose vertex/face arrays are already extracted
+    ///     from the meshes, so the component's parallel meshing pass does that extraction and this
+    ///     assembly pass stays free of per-vertex copying. A null entry (or one with null
+    ///     vertices/faces) marks an invalid mesh's slot and is skipped; its position still counts
+    ///     for <see cref="MeshMetadata.OriginalIndex" />.
     ///
-    ///     <paramref name="uvArrays" /> / <paramref name="colorArrays" /> carry per-mesh UVs
-    ///     (vertexCount * 2 floats) and vertex colors (vertexCount * 3 bytes); null lists or
-    ///     entries mean "no channel". If ANY mesh has a channel, the whole batch carries it and
-    ///     meshes without it get neutral fill (UV 0,0 / color white) — renders identically to no
-    ///     channel and compresses to almost nothing. If NO mesh has it, nothing is written and the
-    ///     blob stays byte-identical to before this overload existed.
+    ///     If ANY mesh carries a UV or color channel, the whole batch carries it and meshes
+    ///     without it get neutral fill (UV 0,0 / color white) — renders identically to no channel
+    ///     and compresses to almost nothing. If NO mesh has it, nothing is written.
     /// </summary>
-    public static DisplayBatch CreateBatch(
-        List<float[]> vertexArrays,
-        List<int[]> faceArrays,
-        List<string> names,
-        List<ThreeMaterial> materials,
-        List<Dictionary<string, string>> metadataList = null,
-        List<string> layers = null,
-        string batchId = null,
-        List<float[]> uvArrays = null,
-        List<byte[]> colorArrays = null)
+    public static DisplayBatch CreateBatch(IReadOnlyList<SlvaMeshInput> meshes, string batchId = null)
     {
-        var count = vertexArrays.Count;
-
         // Zero meshes is valid: an items-only batch (curves/points, no meshable geometry) still
         // produces a well-formed batch with an empty blob (vertexCount = 0).
-        if (faceArrays.Count != count || count != names.Count || count != materials.Count)
-        {
-            throw new ArgumentException("Vertex, face, name, and material lists must have the same length");
-        }
-
-        if (metadataList != null && count != metadataList.Count)
-        {
-            throw new ArgumentException("Metadata list must have the same length as meshes if provided");
-        }
-
-        if (layers != null && count != layers.Count)
-        {
-            throw new ArgumentException("Layers list must have the same length as meshes if provided");
-        }
-
-        if (uvArrays != null && count != uvArrays.Count)
-        {
-            throw new ArgumentException("UV list must have the same length as meshes if provided");
-        }
-
-        if (colorArrays != null && count != colorArrays.Count)
-        {
-            throw new ArgumentException("Color list must have the same length as meshes if provided");
-        }
+        var count = meshes?.Count ?? 0;
 
         var materialCache = new MaterialCache();
 
@@ -81,34 +46,31 @@ public static class MeshBatchAssembler
         var anyColors = false;
         for (var i = 0; i < count; i++)
         {
-            var vertices = vertexArrays[i];
-            var faces = faceArrays[i];
-            if (vertices == null || faces == null)
+            var input = meshes[i];
+            if (input?.Vertices == null || input.Faces == null)
             {
                 continue;
             }
 
-            var materialId = materialCache.GetMaterialId(materials[i]);
+            var materialId = materialCache.GetMaterialId(input.Material);
 
-            totalComponentCount += vertices.Length;
-            totalIndexCount += faces.Length;
+            totalComponentCount += input.Vertices.Length;
+            totalIndexCount += input.Faces.Length;
 
-            var uvs = uvArrays?[i];
-            var colors = colorArrays?[i];
-            anyUvs |= uvs != null;
-            anyColors |= colors != null;
+            anyUvs |= input.Uvs != null;
+            anyColors |= input.Colors != null;
 
             processedMeshes.Add(new ProcessedMesh
             {
-                Name = names[i],
-                Layer = layers?[i] ?? "",
+                Name = input.Name,
+                Layer = input.Layer ?? "",
                 OriginalIndex = i,
-                Vertices = vertices,
-                Faces = faces,
-                Uvs = uvs,
-                Colors = colors,
+                Vertices = input.Vertices,
+                Faces = input.Faces,
+                Uvs = input.Uvs,
+                Colors = input.Colors,
                 MaterialId = materialId,
-                Metadata = metadataList?[i]
+                Metadata = input.Metadata
             });
         }
 

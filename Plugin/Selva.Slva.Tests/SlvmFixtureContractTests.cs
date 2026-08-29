@@ -53,40 +53,53 @@ public class SlvmFixtureContractTests
         // exercising the zero-cost table columns (sequential names, no pool, identity indices).
         var red = Material(Color.Red);
         yield return ("plain-sequential.slvm", MeshBatchAssembler.CreateBatch(
-            new List<float[]> { QuadAt(0, 0, 0), QuadAt(2, 0, 0) },
-            new List<int[]> { QuadFaces, QuadFaces },
-            new List<string> { "1", "2" },
-            new List<ThreeMaterial> { red, red },
-            batchId: "fixture-plain"));
+            new List<SlvaMeshInput>
+            {
+                new SlvaMeshInput { Vertices = QuadAt(0, 0, 0), Faces = QuadFaces, Name = "1", Material = red },
+                new SlvaMeshInput { Vertices = QuadAt(2, 0, 0), Faces = QuadFaces, Name = "2", Material = red }
+            },
+            "fixture-plain"));
 
         // Materials interleaved in input order (red, blue, red): the assembler's material sort
         // reorders the table, so the originalIndex column must be written and decoded. Names,
         // layers and per-mesh metadata exercise the pool and the sparse attr columns.
         var blue = Material(Color.Blue);
         yield return ("multi-material.slvm", MeshBatchAssembler.CreateBatch(
-            new List<float[]> { QuadAt(0, 0, 0), QuadAt(2, 0, 0), QuadAt(4, 0, 0) },
-            new List<int[]> { QuadFaces, QuadFaces, QuadFaces },
-            new List<string> { "wall", "window", "wall2" },
-            new List<ThreeMaterial> { red, blue, red },
-            metadataList: new List<Dictionary<string, string>>
+            new List<SlvaMeshInput>
             {
-                new Dictionary<string, string> { ["gh:branch"] = "{0;0}", ["fire"] = "REI60" },
-                null,
-                new Dictionary<string, string> { ["gh:branch"] = "{0;1}" }
+                new SlvaMeshInput
+                {
+                    Vertices = QuadAt(0, 0, 0), Faces = QuadFaces, Name = "wall",
+                    Layer = "Structure/Walls", Material = red,
+                    Metadata = new Dictionary<string, string> { ["gh:branch"] = "{0;0}", ["fire"] = "REI60" }
+                },
+                new SlvaMeshInput
+                {
+                    Vertices = QuadAt(2, 0, 0), Faces = QuadFaces, Name = "window",
+                    Layer = "Facade/Windows", Material = blue
+                },
+                new SlvaMeshInput
+                {
+                    Vertices = QuadAt(4, 0, 0), Faces = QuadFaces, Name = "wall2",
+                    Layer = "Structure/Walls", Material = red,
+                    Metadata = new Dictionary<string, string> { ["gh:branch"] = "{0;1}" }
+                }
             },
-            layers: new List<string> { "Structure/Walls", "Facade/Windows", "Structure/Walls" },
-            batchId: "fixture-multi"));
+            "fixture-multi"));
 
         // A data-URI texture: extracted into a TEXR chunk on write, reconstructed on read.
         var pngBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4 };
         var textured = Material(Color.White, "data:image/png;base64," + Convert.ToBase64String(pngBytes));
         yield return ("textured.slvm", MeshBatchAssembler.CreateBatch(
-            new List<float[]> { QuadAt(0, 0, 0) },
-            new List<int[]> { QuadFaces },
-            new List<string> { "1" },
-            new List<ThreeMaterial> { textured },
-            uvArrays: new List<float[]> { new float[] { 0, 0, 1, 0, 1, 1, 0, 1 } },
-            batchId: "fixture-textured"));
+            new List<SlvaMeshInput>
+            {
+                new SlvaMeshInput
+                {
+                    Vertices = QuadAt(0, 0, 0), Faces = QuadFaces, Name = "1", Material = textured,
+                    Uvs = new float[] { 0, 0, 1, 0, 1, 1, 0, 1 }
+                }
+            },
+            "fixture-textured"));
     }
 
     private static JObject Expected(DisplayBatch batch)
