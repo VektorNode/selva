@@ -118,5 +118,3 @@ export interface ParsedBinaryMeshBatch {
 	uvs: Float32Array | null;
 	colors: Uint8Array | null;
 }
-
-// ============================================================================
