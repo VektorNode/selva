@@ -1774,6 +1774,24 @@
 			]
 		},
 		{
+			"guid": "E65EBEE0-36E8-4E87-9239-479D632BFCDE",
+			"class": "GH_PrepareUIInputs",
+			"file": "Plugin/Selva.GH/Features/UIBuilder/Components/GH_PrepareUIInputs.cs",
+			"inputs": [],
+			"outputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Controls",
+					"access": "list"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Report",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "E7611CB2-9BAE-4A88-B47B-A94135394FA3",
 			"class": "GH_EvaluateSchema",
 			"file": "Plugin/Selva.GH/Features/UIBuilder/Components/GH_EvaluateSchema.cs",

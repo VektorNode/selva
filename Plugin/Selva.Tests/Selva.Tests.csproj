@@ -50,6 +50,11 @@
 		         Link="Linked\WebSocketHandshake.cs"/>
 		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\OptionPairParser.cs"
 		         Link="Linked\OptionPairParser.cs"/>
+		<!-- Rhino-free by design: the classification math for Prepare UI Inputs is split out
+		     specifically so it can be unit tested here without dragging Grasshopper into the
+		     net8 test host. See the file's own header comment. -->
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\PrepareUIInputInference.cs"
+		         Link="Linked\PrepareUIInputInference.cs"/>
 		<Compile Include="..\Selva.GH\Features\FileIO\Services\SafeUrlValidator.cs"
 		         Link="Linked\SafeUrlValidator.cs"/>
 		<Compile Include="..\Selva.GH\Features\FileIO\Services\ServerFilePath.cs"
