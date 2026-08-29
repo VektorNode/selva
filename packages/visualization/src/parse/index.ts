@@ -17,15 +17,9 @@ export { meshPolicy } from './mesh-policy.js';
 // ============================================================================
 
 export {
-	getThreeMeshesFromComputeResponse,
+	getThreeObjectsFromComputeResponse,
 	SCALE_FACTORS
 } from './webdisplay/webdisplay-parser.js';
-
-export type {
-	DisplayComputeResponse,
-	DisplayResponseValue,
-	DisplayDataItem
-} from './webdisplay/response-envelope.js';
 
 export { parseMeshBatchObject, parseMeshBatchBlob } from './webdisplay/batch-parser.js';
 
