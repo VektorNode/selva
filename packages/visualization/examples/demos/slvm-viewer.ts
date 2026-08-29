@@ -15,9 +15,14 @@
  *      origin lands and frames exactly as it does in Selva, with no demo-specific recenter/fit hack.
  *
  * The viewer itself is constructed with Selva's exact `initThree` options (see `SELVA_VIEWER_OPTIONS`
- * below, copied from `Viewer.svelte`): the 'technical' look, sun/shadows off (flat ambient + baseHDR
- * image-based lighting carry it), the #E6E6E6 background, and crease edges on by default. What you
- * see here is what Selva renders.
+ * below, copied from `Viewer.svelte`): the 'technical' look, the #E6E6E6 background, and crease
+ * edges on by default. What you see here is what Selva renders.
+ *
+ * Sun and shadows are LEFT ON, matching `Viewer.svelte`, which sets neither and so takes the
+ * library defaults (both `true`). This demo used to switch both off, which made it measurably
+ * faster than the app it claims to mirror: a shadow-casting sun costs a whole extra scene render
+ * per frame from the light's point of view, plus a blur pass for `VSMShadowMap`. The Sun/shadows
+ * toggle below exists to measure exactly that.
  */
 import * as THREE from 'three';
 
@@ -34,11 +39,11 @@ import sampleHouseUrl from '../fixtures/ifc_house.slvm?url';
 // SELVA VIEWER CONFIG — copied verbatim from packages/ui Viewer.svelte onMount
 // ============================================================================
 // Only options that differ from the library defaults, exactly as Selva sets them: seed the
-// 'technical' look, switch off the sun/shadows the technical look doesn't need (flat ambient + HDR
-// image-based lighting carry it), and paint Selva's #E6E6E6 background. Grid + measure are the tools
-// the Selva viewer builds. Keeping this in lockstep with Viewer.svelte is the whole point of the demo.
+// 'technical' look and paint Selva's #E6E6E6 background. Grid + measure are the tools the Selva
+// viewer builds. Keeping this in lockstep with Viewer.svelte is the whole point of the demo — so
+// anything Viewer.svelte leaves at its default is left alone here too, sun and shadows included.
 //
-// HDR / image-based lighting is what carries the technical look with the sun off — the look is
+// HDR / image-based lighting is a large part of what the technical look reads as — the look is
 // IBL-led (env map does the shading) with a little hemisphere fill and only a thin flat ambient. The
 // plugin-ui viewer (Viewer.svelte) relies on initThree's DEFAULTS here (enableEnvironmentLighting:
 // true, hdrPath: '/baseHDR.hdr') — it sets neither. Two gotchas we handle to match it exactly:
@@ -50,8 +55,6 @@ import sampleHouseUrl from '../fixtures/ifc_house.slvm?url';
 const SELVA_BACKGROUND = '#E6E6E6';
 const SELVA_VIEWER_OPTIONS: ThreeInitializerOptions = {
 	look: 'technical',
-	lighting: { enableSunlight: false },
-	render: { enableShadows: false },
 	environment: {
 		backgroundColor: SELVA_BACKGROUND,
 		enableEnvironmentLighting: true,
@@ -117,8 +120,8 @@ async function loadDmfBytes(bytes: Uint8Array, name: string) {
 	lastLoaded = { bytes, name };
 	pg.setStatus(`Loading ${name}…`);
 	try {
-		// Step 1 — parse. Selva's exact options (plugin-ui websocket-solve-driver): un-merged meshes so
-		// each part stays a distinct pickable object, transforms applied, no debug. No material override.
+		// Step 1 — parse. Selva's exact options (plugin-ui websocket-solve-driver): merged by material,
+		// no debug, no material override.
 		const meshes = await parseMeshBatchBlob(dmfBlob(bytes), {
 			mergeByMaterial,
 			debug: false
@@ -294,6 +297,19 @@ async function benchConfigurations(): Promise<string> {
 		`  and without AO    ${withoutEdgesOrAo.toFixed(1)} ms   (${pct(withoutEdges, withoutEdgesOrAo)} of frame)`
 	);
 
+	// Shadows are the one thing this demo used to switch off while claiming to mirror the app, so
+	// they get their own row: a shadow-casting sun is an extra scene render plus a VSM blur.
+	const sun = viewer.scene.getObjectByProperty('isDirectionalLight', true) as
+		| THREE.DirectionalLight
+		| undefined;
+	const shadowsWereOn = sun?.castShadow ?? false;
+	if (sun) sun.castShadow = false;
+	const withoutShadows = await measure();
+	rows.push(
+		`  and without shadow ${withoutShadows.toFixed(1)} ms   (${pct(withoutEdgesOrAo, withoutShadows)} of frame)`
+	);
+	if (sun) sun.castShadow = shadowsWereOn;
+
 	// Restore whatever the sidebar toggles say the viewer should look like. applyEdges attaches
 	// asynchronously, so give it a frame to land before the caller reads the scene back.
 	viewer.setAmbientOcclusion(true);
@@ -358,6 +374,15 @@ void lookSelect; // returned setter kept for symmetry; not driven programmatical
 // Toggling off goes through `clearEdges` (what Viewer.svelte calls), not a bare `removeEdges`:
 // above the triangle cap the viewer swaps the overlay for the screen-space edge pass, and only
 // `clearEdges` stands that pass down as well.
+// Sun shadows cost an extra scene render per frame (plus a VSM blur), and they are ON in the app.
+// This is the switch that explains a demo-vs-plugin frame-time gap.
+pg.addToggle('Sun shadows', true, (on) => {
+	viewer.scene.traverse((o) => {
+		const light = o as THREE.DirectionalLight;
+		if (light.isDirectionalLight) light.castShadow = on;
+	});
+	viewer.invalidate();
+});
 pg.addToggle('Edges', edgesVisible, (on) => {
 	edgesVisible = on;
 	if (on) viewer.applyEdges(viewer.scene);

@@ -31,33 +31,50 @@ type OverridableMaterial = THREE.Material & {
 	[BASELINE_KEY]?: MaterialBaseline;
 };
 
+function applyBaseline(target: OverridableMaterial, baseline: MaterialBaseline): void {
+	target.color?.setHex(baseline.color);
+	if (target.metalness !== undefined) target.metalness = baseline.metalness;
+	if (target.roughness !== undefined) target.roughness = baseline.roughness;
+	target.opacity = baseline.opacity;
+	target.transparent = baseline.transparent;
+	target.depthWrite = baseline.depthWrite;
+	if (target.wireframe !== undefined) target.wireframe = baseline.wireframe;
+}
+
+/** Restores the parsed values and forgets the baseline. No-op when nothing was overridden. */
+function restoreBaseline(target: OverridableMaterial): void {
+	const baseline = target[BASELINE_KEY];
+	if (!baseline) return;
+	applyBaseline(target, baseline);
+	delete target[BASELINE_KEY];
+}
+
 /**
  * Applies a look's material overrides, or restores the parsed values when the look has none.
  * `needsUpdate` is set because switching `transparent` changes the shader program, not just a
  * uniform.
+ *
+ * Exported for tests: the leak this guards against is invisible until two overriding looks are
+ * applied in sequence, which no single-look check catches.
+ *
+ * Every apply restores the baseline first, so an override only has to describe what *it* wants.
+ * Without that reset, switching between two looks that both override leaves behind whatever the
+ * previous one set and the new one is silent about — `wireframe` surviving out of the wireframe
+ * look, or `opacity`/`depthWrite` surviving out of xray, since no other look mentions them.
  */
-function applyMaterialOverride(
+export function applyMaterialOverride(
 	material: THREE.Material,
 	override: LookMaterialOverride | undefined
 ): void {
 	const target = material as OverridableMaterial;
-	const baseline = target[BASELINE_KEY];
 
 	if (!override) {
-		if (!baseline) return;
-		target.color?.setHex(baseline.color);
-		if (target.metalness !== undefined) target.metalness = baseline.metalness;
-		if (target.roughness !== undefined) target.roughness = baseline.roughness;
-		target.opacity = baseline.opacity;
-		target.transparent = baseline.transparent;
-		target.depthWrite = baseline.depthWrite;
-		if (target.wireframe !== undefined) target.wireframe = baseline.wireframe;
-		delete target[BASELINE_KEY];
+		restoreBaseline(target);
 		target.needsUpdate = true;
 		return;
 	}
 
-	if (!baseline) {
+	if (!target[BASELINE_KEY]) {
 		target[BASELINE_KEY] = {
 			color: target.color?.getHex() ?? 0xffffff,
 			metalness: target.metalness ?? 0,
@@ -67,6 +84,9 @@ function applyMaterialOverride(
 			depthWrite: target.depthWrite,
 			wireframe: target.wireframe ?? false
 		};
+	} else {
+		// Baseline captured by an earlier look — reset onto it so this override starts clean.
+		applyBaseline(target, target[BASELINE_KEY]);
 	}
 
 	if (override.color !== undefined) target.color?.setHex(override.color);
