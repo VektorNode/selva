@@ -40,7 +40,7 @@ describe('createVisibilityState', () => {
 	describe('keying', () => {
 		const identified = (index: number) => {
 			const mesh = new THREE.Mesh();
-			mesh.userData = { sourceComponentId: 'gh-1', originalIndex: index };
+			mesh.userData = { trackingKey: `gh-1/{0}/${index}` };
 			return mesh;
 		};
 
@@ -76,7 +76,7 @@ describe('createVisibilityState', () => {
 	describe('applyTo', () => {
 		const identified = (index: number) => {
 			const mesh = new THREE.Mesh();
-			mesh.userData = { sourceComponentId: 'gh-1', originalIndex: index };
+			mesh.userData = { trackingKey: `gh-1/{0}/${index}` };
 			return mesh;
 		};
 

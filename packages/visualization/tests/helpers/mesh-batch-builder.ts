@@ -21,7 +21,8 @@ export interface MeshBatchBuilderOptions {
 	materialCount: number;
 	meshCount: number;
 	vertsPerMesh: number;
-	sourceComponentId?: string;
+	/** When set, every mesh gets the minted id `${idPrefix}/${meshIndex}`. */
+	idPrefix?: string;
 	seed?: number;
 	/**
 	 * If true, encode vertices as float32 instead of int16-quantized. Useful for tests that
@@ -59,7 +60,7 @@ function mulberry32(seed: number): () => number {
  *
  * The geometry is encoded in the SLVA binary wire format (see `binary-parser.ts`) and
  * base64-encoded into `batch.compressedData`. The blob's embedded metadata mirrors the outer
- * `materials`/`groups`/`sourceComponentId` so the parser sees the same shape regardless of
+ * `materials`/`groups` so the parser sees the same shape regardless of
  * whether it pulls from the blob or the envelope.
  */
 export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch {
@@ -67,7 +68,7 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 		materialCount,
 		meshCount,
 		vertsPerMesh,
-		sourceComponentId,
+		idPrefix,
 		seed = 1,
 		forceFloat32 = false,
 		layerCount = 4
@@ -124,9 +125,9 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 		}
 
 		const meta: MeshMetadata = {
+			id: idPrefix ? `${idPrefix}/${m}` : undefined,
 			name: `mesh_${m}`,
 			layer: `Layer/${m % layerCount}`,
-			originalIndex: m,
 			vertexCount: vertsPerMesh,
 			indexCount: trianglesPerMesh * 3,
 			vertexStart: baseVertexIndex,
@@ -147,7 +148,6 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 	const compressedData = encodeBatchPayload(vertices, faces, {
 		materials,
 		groups,
-		sourceComponentId,
 		forceFloat32
 	});
 
@@ -155,8 +155,7 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 		batch: {
 			materials,
 			groups,
-			compressedData,
-			sourceComponentId
+			compressedData
 		},
 		rawVertices: vertices,
 		rawFaces: faces
@@ -166,7 +165,6 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 interface EncodeOptions {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
-	sourceComponentId?: string;
 	forceFloat32?: boolean;
 	/** Optional absolute u,v pairs per vertex (length = vertexCount * 2) → trailing UV chunk. */
 	uvs?: Float32Array | null;
@@ -185,18 +183,9 @@ export function encodeBatchPayload(
 	faces: Uint32Array,
 	encodeOptions: EncodeOptions
 ): string {
-	const {
-		materials,
-		groups,
-		sourceComponentId,
-		forceFloat32 = false,
-		uvs = null,
-		colors = null
-	} = encodeOptions;
+	const { materials, groups, forceFloat32 = false, uvs = null, colors = null } = encodeOptions;
 
-	const metadataObject = sourceComponentId
-		? { materials, groups, sourceComponentId }
-		: { materials, groups };
+	const metadataObject = { materials, groups };
 	const metadataJson = JSON.stringify(metadataObject);
 	const metadataBytes = utf8Encode(metadataJson);
 

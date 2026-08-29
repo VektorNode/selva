@@ -4,29 +4,30 @@ import type { BinaryMeshMetadata } from './header.js';
 import type { MaterialGroup, MeshMetadata, SerializableMaterial } from '../types.js';
 
 // ============================================================================
-// SLVM v2 CONTAINER
+// SLVM v3 CONTAINER
 // ============================================================================
 // The C# mirror and normative spec is `SlvmDocument.cs`. Layout:
 //
-//   [4] magic "SLVM" | [4] version = 2 | [4] chunkCount
+//   [4] magic "SLVM" | [4] version = 3 | [4] chunkCount
 //   per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
 //
 // Unknown chunk types are skipped by length — that's the format's extension mechanism. This
 // decoder consumes GEOM (a nested bare SLVA/SLVZ blob), TABL (the columnar object table), MATL
-// (materials JSON), TEXR (texture bytes) and the selva.gh EXTN; CRVS/PNTS (file-only item
-// geometry) are skipped because items reach the web as JSON alongside the blob.
+// (materials JSON) and TEXR (texture bytes); CRVS/PNTS (file-only item geometry) and EXTN
+// (host extensions — the selva.gh one carries only Rhino curve JSON) are skipped because
+// items reach the web as JSON alongside the blob.
 
 /** "SLVM" little-endian. */
 export const SLVM_MAGIC = 0x4d564c53;
-export const SLVM_VERSION = 2;
+export const SLVM_VERSION = 3;
 
 const CHUNK_GEOM = 0x4d4f4547; // "GEOM"
 const CHUNK_TABL = 0x4c424154; // "TABL"
 const CHUNK_MATL = 0x4c54414d; // "MATL"
 const CHUNK_TEXR = 0x52584554; // "TEXR"
-const CHUNK_EXTN = 0x4e545845; // "EXTN"
 
-const SELVA_GH_NAMESPACE = 'selva.gh';
+/** Reserved attr key carrying each object's identity — split out of the attr dict on read. */
+const ID_ATTR = 'id';
 
 /** Material `map` prefix that references a TEXR chunk by index. */
 const TEX_REF_PREFIX = 'slvm:tex:';
@@ -51,7 +52,7 @@ export interface SlvmContainer {
 }
 
 /**
- * Parses an SLVM v2 container down to its mesh geometry blob and the metadata the rest of the
+ * Parses an SLVM v3 container down to its mesh geometry blob and the metadata the rest of the
  * pipeline expects. Group vertex/index windows are rebuilt as prefix sums over the table — the
  * format mandates geometry is concatenated in table order, so starts are never stored.
  *
@@ -64,7 +65,6 @@ export function parseSlvmContainer(bytes: Uint8Array): SlvmContainer {
 	let tableBytes: Uint8Array | null = null;
 	let materialsJson: string | null = null;
 	const textures: Uint8Array[] = [];
-	let sourceComponentId: string | undefined;
 
 	for (const { type, payload } of chunks) {
 		switch (type) {
@@ -80,10 +80,7 @@ export function parseSlvmContainer(bytes: Uint8Array): SlvmContainer {
 			case CHUNK_TEXR:
 				textures.push(payload);
 				break;
-			case CHUNK_EXTN:
-				sourceComponentId = readSelvaExtension(payload) ?? sourceComponentId;
-				break;
-			// CRVS/PNTS and unknown chunks: skipped.
+			// CRVS/PNTS, EXTN and unknown chunks: skipped.
 		}
 	}
 
@@ -100,7 +97,7 @@ export function parseSlvmContainer(bytes: Uint8Array): SlvmContainer {
 
 	return {
 		geometryBlob,
-		metadata: { materials, groups, sourceComponentId }
+		metadata: { materials, groups }
 	};
 }
 
@@ -227,14 +224,6 @@ function parseTable(bytes: Uint8Array): { groups: MaterialGroup[] } {
 		runs.push({ materialId: readVarint(r), meshCount: readVarint(r) });
 	}
 
-	let originalIndices: number[] | null = null;
-	if (bytes[r.pos++] === 1) {
-		originalIndices = new Array<number>(objectCount);
-		for (let i = 0; i < objectCount; i++) {
-			originalIndices[i] = readVarint(r);
-		}
-	}
-
 	const names = readStringColumn(r, objectCount, pool);
 	const layers = readStringColumn(r, objectCount, pool);
 
@@ -267,15 +256,22 @@ function parseTable(bytes: Uint8Array): { groups: MaterialGroup[] } {
 	for (const run of effectiveRuns) {
 		const meshes: MeshMetadata[] = [];
 		for (let i = 0; i < run.meshCount && meshIndex < meshCount; i++, meshIndex++) {
+			// The identity rides the attr mechanism but is a first-class field to consumers.
+			const meshAttrs = attrs[meshIndex];
+			const id = meshAttrs?.[ID_ATTR];
+			if (meshAttrs !== undefined) {
+				delete meshAttrs[ID_ATTR];
+			}
+
 			meshes.push({
+				id,
 				name: names[meshIndex]!,
 				layer: layers[meshIndex]!,
-				originalIndex: originalIndices?.[meshIndex] ?? meshIndex,
 				vertexCount: vertexCounts[meshIndex]!,
 				indexCount: triCounts[meshIndex]! * 3,
 				vertexStart,
 				indexStart,
-				metadata: attrs[meshIndex] ?? {}
+				metadata: meshAttrs ?? {}
 			});
 			vertexStart += vertexCounts[meshIndex]!;
 			indexStart += triCounts[meshIndex]! * 3;
@@ -334,30 +330,4 @@ function textureToDataUri(payload: Uint8Array): string {
 	}
 
 	return `data:${mime};base64,${btoa(binary)}`;
-}
-
-// ============================================================================
-// EXTN
-// ============================================================================
-
-/**
- * Returns the selva.gh batch id, or undefined for foreign namespaces. `sourceComponentId` is the
- * pre-rename spelling and is still accepted: a container written before the rename would otherwise
- * lose its identity, taking every hidden and selected object in the viewer with it.
- */
-function readSelvaExtension(payload: Uint8Array): string | undefined {
-	const r: TableReader = { bytes: payload, pos: 0 };
-	const nsLen = readVarint(r);
-	const ns = decodeUtf8(payload.subarray(r.pos, r.pos + nsLen));
-	if (ns !== SELVA_GH_NAMESPACE) {
-		return undefined;
-	}
-
-	const json = decodeUtf8(payload.subarray(r.pos + nsLen));
-	try {
-		const ext = JSON.parse(json) as { batchId?: string; sourceComponentId?: string };
-		return ext.batchId ?? ext.sourceComponentId;
-	} catch {
-		return undefined;
-	}
 }

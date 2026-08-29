@@ -123,7 +123,11 @@ describe('SLVA golden fixtures (C#-written blobs)', () => {
 		});
 
 		it('parses the metadata envelope', () => {
-			expect(parsed.metadata.sourceComponentId).toBe(expected.sourceComponentId);
+			// The fixtures' embedded metadata JSON predates the id redesign; the legacy identity
+			// fields still decode as plain JSON and are simply unused.
+			expect((parsed.metadata as { sourceComponentId?: string }).sourceComponentId).toBe(
+				expected.sourceComponentId
+			);
 			expect(parsed.metadata.materials).toHaveLength(1);
 			expect(parsed.metadata.groups[0]?.meshes[0]?.vertexCount).toBe(expected.vertexCount);
 		});

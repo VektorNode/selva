@@ -125,16 +125,15 @@ export function finalizeMergedMesh(
 		source: 'compute',
 		name: threeMesh.name,
 		layer: firstMesh?.layer ?? '',
-		originalIndex: firstMesh?.originalIndex ?? 0,
-		// A merged mesh has no single source index, so `originalIndex` alone cannot identify it:
-		// two merges of one component both report their first member's index and collide, which
-		// makes hiding one hide the other. Identity keys on every member instead.
-		mergedIndices: group.meshes.map((m) => m.originalIndex).sort((a, b) => a - b),
 		metadata: firstMesh?.metadata ?? {},
-		mergedFrom: group.meshes.slice(1).map((m) => ({
+		// A merged mesh is several source objects in one THREE object, so identity lives per
+		// member: the scene layer keys hidden state on every member's key, and regrouping can
+		// never lose it.
+		members: group.meshes.map((m) => ({
+			trackingKey: m.id,
 			name: m.name,
 			layer: m.layer,
-			originalIndex: m.originalIndex
+			metadata: m.metadata ?? {}
 		}))
 	};
 
@@ -210,7 +209,9 @@ export function finalizeSingleMesh(
 		source: 'compute',
 		name: meshMeta.name,
 		layer: meshMeta.layer ?? '',
-		originalIndex: meshMeta.originalIndex,
+		// The writer-minted identity; absent for foreign writers, and the scene layer then
+		// falls back to name + layer.
+		trackingKey: meshMeta.id,
 		metadata: meshMeta.metadata ?? {}
 	};
 	mesh.castShadow = true;

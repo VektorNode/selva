@@ -322,8 +322,7 @@
 		const EXCLUDED_KEYS = new Set([
 			'name',
 			'layer',
-			'originalIndex',
-			'sourceComponentId',
+			'id',
 			'vertexCount',
 			'faceCount',
 			'vertexOffset',

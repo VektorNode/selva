@@ -10,8 +10,8 @@
 		X
 	} from '@lucide/svelte';
 	import {
+		getMemberKeys,
 		getObjectLabel,
-		getTrackingKey,
 		getTypeLabel,
 		type SceneOutliner
 	} from '@selvajs/visualization/scene';
@@ -182,7 +182,8 @@
 	// `SvelteSet.has()` is the reactive read, so go through the set rather than calling
 	// `visibility.isHidden` — that reaches the set through a plain reference inside the outliner
 	// and returns a correct value that never re-renders this row.
-	const isObjectHidden = (object: THREE.Object3D) => hidden.has(getTrackingKey(object));
+	const isObjectHidden = (object: THREE.Object3D) =>
+		getMemberKeys(object).every((key) => hidden.has(key));
 
 	// Same reason: count through the reactive set so the layer's tri-state eye tracks its objects.
 	const hiddenCount = (objects: THREE.Object3D[]) =>

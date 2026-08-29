@@ -71,7 +71,7 @@ describe('parseMeshBatchObject', () => {
 			}
 		});
 
-		it('populates userData with first-mesh metadata and mergedFrom for siblings', async () => {
+		it('populates userData with first-mesh metadata and per-member identity', async () => {
 			const { batch } = buildMeshBatch({
 				materialCount: 1,
 				meshCount: 4,
@@ -87,9 +87,8 @@ describe('parseMeshBatchObject', () => {
 			const mesh = meshes[0]!;
 			expect(mesh.userData.name).toBe('mesh_0');
 			expect(mesh.userData.layer).toBe('Layer/0');
-			expect(mesh.userData.originalIndex).toBe(0);
-			expect(mesh.userData.mergedFrom).toHaveLength(3);
-			expect(mesh.userData.mergedFrom[0].name).toBe('mesh_1');
+			expect(mesh.userData.members).toHaveLength(4);
+			expect(mesh.userData.members[1].name).toBe('mesh_1');
 		});
 
 		it('never merges across layers, so hiding one layer cannot hide another', async () => {
@@ -109,7 +108,7 @@ describe('parseMeshBatchObject', () => {
 			for (const mesh of meshes) {
 				const layers = [
 					mesh.userData.layer,
-					...(mesh.userData.mergedFrom ?? []).map((m: { layer: string }) => m.layer)
+					...(mesh.userData.members ?? []).map((m: { layer: string }) => m.layer)
 				];
 				expect(new Set(layers).size).toBe(1);
 			}
@@ -122,10 +121,10 @@ describe('parseMeshBatchObject', () => {
 				mergeByMaterial: true
 			});
 
-			// Single-mesh groups go through createIndividualMeshes; userData has no mergedFrom.
+			// Single-mesh groups go through createIndividualMeshes; userData has no member list.
 			expect(meshes).toHaveLength(4);
 			for (const mesh of meshes) {
-				expect(mesh.userData.mergedFrom).toBeUndefined();
+				expect(mesh.userData.members).toBeUndefined();
 			}
 		});
 	});
@@ -246,8 +245,7 @@ describe('parseMeshBatchObject', () => {
 			built.batch.materials[0]!.color = '#ff0000';
 			built.batch.compressedData = encodeBatchPayload(built.rawVertices, built.rawFaces, {
 				materials: built.batch.materials,
-				groups: built.batch.groups,
-				sourceComponentId: built.batch.sourceComponentId
+				groups: built.batch.groups
 			});
 
 			const meshes = await parseMeshBatchObject(built.batch, {
@@ -268,8 +266,7 @@ describe('parseMeshBatchObject', () => {
 			built.batch.materials[1]!.metalness = 0.1; // matte → no clearcoat
 			built.batch.compressedData = encodeBatchPayload(built.rawVertices, built.rawFaces, {
 				materials: built.batch.materials,
-				groups: built.batch.groups,
-				sourceComponentId: built.batch.sourceComponentId
+				groups: built.batch.groups
 			});
 
 			const meshes = await parseMeshBatchObject(built.batch, {
@@ -312,7 +309,6 @@ describe('parseMeshBatchObject', () => {
 			built.batch.compressedData = encodeBatchPayload(built.rawVertices, built.rawFaces, {
 				materials: built.batch.materials,
 				groups: built.batch.groups,
-				sourceComponentId: built.batch.sourceComponentId,
 				uvs,
 				colors
 			});
@@ -435,43 +431,46 @@ describe('parseMeshBatchObject', () => {
 			expect(meshes[0]!.scale.x).toBe(1);
 		});
 
-		it('propagates sourceComponentId to userData', async () => {
+		it('propagates the minted id to userData as the tracking key', async () => {
 			const { batch } = buildMeshBatch({
-				materialCount: 1,
+				materialCount: 2,
 				meshCount: 2,
 				vertsPerMesh: 3,
-				sourceComponentId: 'gh-component-xyz'
+				idPrefix: 'gh-component-xyz/{0}'
 			});
 
 			const meshes = await parseMeshBatchObject(batch, {
 				mergeByMaterial: true
 			});
 
-			expect(meshes[0]!.userData.sourceComponentId).toBe('gh-component-xyz');
+			expect(meshes.map((m) => m.userData.trackingKey).sort()).toEqual([
+				'gh-component-xyz/{0}/0',
+				'gh-component-xyz/{0}/1'
+			]);
 		});
 
-		// Stable identity type-checks the field to decide whether it can key on the component; a
-		// null passes `in` but fails that check, demoting every mesh to the weaker name+layer key.
-		it('omits sourceComponentId when the batch has none', async () => {
+		it('omits the tracking key when the writer minted no ids', async () => {
 			const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 
 			const meshes = await parseMeshBatchObject(batch, { mergeByMaterial: true });
 
-			expect(meshes[0]!.userData.sourceComponentId).toBeUndefined();
+			expect(meshes[0]!.userData.trackingKey).toBeUndefined();
 		});
 
-		it('gives merged meshes a member list distinct from their first index', async () => {
+		it('gives merged meshes a per-member identity list', async () => {
 			const { batch } = buildMeshBatch({
 				materialCount: 1,
 				meshCount: 3,
 				vertsPerMesh: 3,
 				layerCount: 1,
-				sourceComponentId: 'gh-component-xyz'
+				idPrefix: 'gh-component-xyz/{0}'
 			});
 
 			const meshes = await parseMeshBatchObject(batch, { mergeByMaterial: true });
 
-			expect(meshes[0]!.userData.mergedIndices).toEqual([0, 1, 2]);
+			expect(
+				meshes[0]!.userData.members.map((m: { trackingKey?: string }) => m.trackingKey)
+			).toEqual(['gh-component-xyz/{0}/0', 'gh-component-xyz/{0}/1', 'gh-component-xyz/{0}/2']);
 		});
 	});
 });
@@ -534,8 +533,7 @@ describe('group metadata validation (issue 19)', () => {
 	function reencode(built: ReturnType<typeof buildMeshBatch>): void {
 		built.batch.compressedData = encodeBatchPayload(built.rawVertices, built.rawFaces, {
 			materials: built.batch.materials,
-			groups: built.batch.groups,
-			sourceComponentId: built.batch.sourceComponentId
+			groups: built.batch.groups
 		});
 	}
 
@@ -601,48 +599,26 @@ describe('group metadata validation (issue 19)', () => {
 });
 
 describe('parseMeshBatchBlob (binary entry point)', () => {
-	// A scene built from several blobs: every blob numbers its meshes from 0 and carries its
-	// component's id, so without a per-blob namespace each blob's first mesh keys alike and
-	// hiding one hides them all.
-	it('namespaces identity per blob so meshes from different blobs stay distinct', async () => {
+	it('keeps the per-object ids minted into the blob', async () => {
 		const { batch } = buildMeshBatch({
 			materialCount: 1,
 			meshCount: 2,
 			vertsPerMesh: 3,
 			layerCount: 1,
-			sourceComponentId: 'shared-component'
-		});
-		const blob = decodeBase64ToBinary(batch.compressedData);
-
-		const first = await parseMeshBatchBlob(blob, {
-			mergeByMaterial: false,
-			identityNamespace: 'ws:0'
-		});
-		const second = await parseMeshBatchBlob(blob, {
-			mergeByMaterial: false,
-			identityNamespace: 'ws:1'
-		});
-
-		expect(getTrackingKey(first[0]!)).not.toBe(getTrackingKey(second[0]!));
-	});
-
-	it('keeps the blob-embedded id when no namespace is given', async () => {
-		const { batch } = buildMeshBatch({
-			materialCount: 1,
-			meshCount: 2,
-			vertsPerMesh: 3,
-			layerCount: 1,
-			sourceComponentId: 'shared-component'
+			idPrefix: 'shared-component/{0}'
 		});
 		const blob = decodeBase64ToBinary(batch.compressedData);
 
 		const meshes = await parseMeshBatchBlob(blob, { mergeByMaterial: false });
 
-		expect(meshes[0]!.userData.sourceComponentId).toBe('shared-component');
+		expect(meshes.map((m) => getTrackingKey(m)).sort()).toEqual([
+			'shared-component/{0}/0',
+			'shared-component/{0}/1'
+		]);
 	});
 
 	// The blob entry point takes the raw SLVA bytes (a binary WebSocket frame) and
-	// reads materials/groups/sourceComponentId from the blob's embedded metadata
+	// reads materials/groups/ids from the blob's embedded metadata
 	// rather than an outer JSON envelope.
 	it('parses raw blob bytes end-to-end, honoring the shared parsing options', async () => {
 		const { batch } = buildMeshBatch({
