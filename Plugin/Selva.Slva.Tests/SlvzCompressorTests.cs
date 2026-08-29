@@ -6,7 +6,7 @@ using Selva.Slva;
 
 namespace Selva.Slva.Tests;
 
-public class BlobCompressorTests
+public class SlvzCompressorTests
 {
     private const uint CompressedMagic = 0x5A564C53; // "SLVZ"
 
@@ -16,7 +16,7 @@ public class BlobCompressorTests
         var blob = new byte[100];
         new Random(1).NextBytes(blob);
 
-        var result = BlobCompressor.Compress(blob);
+        var result = SlvzCompressor.Compress(blob);
 
         Assert.Same(blob, result);
     }
@@ -31,7 +31,7 @@ public class BlobCompressorTests
             blob[i] = (byte)(i % 16);
         }
 
-        var result = BlobCompressor.Compress(blob);
+        var result = SlvzCompressor.Compress(blob);
 
         Assert.True(result.Length < blob.Length);
         Assert.Equal(CompressedMagic, BitConverter.ToUInt32(result, 0));
@@ -49,7 +49,7 @@ public class BlobCompressorTests
         var blob = new byte[64 * 1024];
         new Random(42).NextBytes(blob);
 
-        var result = BlobCompressor.Compress(blob);
+        var result = SlvzCompressor.Compress(blob);
 
         Assert.Same(blob, result);
     }

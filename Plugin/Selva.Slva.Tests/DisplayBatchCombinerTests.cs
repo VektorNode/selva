@@ -49,7 +49,7 @@ public class DisplayBatchCombinerTests
     /// <summary>World position of a mesh's first vertex, through the combined blob.</summary>
     private static (double x, double y) FirstVertex(DisplayBatch batch, MeshMetadata mesh)
     {
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
         var c = mesh.VertexStart * 3;
         return (decoded.Vertices[c], decoded.Vertices[c + 1]);
     }

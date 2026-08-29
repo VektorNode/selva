@@ -6,7 +6,7 @@ namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     Test-local SLVA decoder, deliberately independent of both production decoders (the TS
-///     parser and <c>BinaryGeometryReader</c>) so a shared decode bug can't hide from its own
+///     parser and <c>SlvaReader</c>) so a shared decode bug can't hide from its own
 ///     test. Decodes every format version through the flag-driven read path, so the same code
 ///     checks current-writer output and the frozen v3 fixtures.
 /// </summary>
@@ -27,13 +27,13 @@ internal static class SlvaTestDecoder
     }
 
     /// <summary>
-    ///     Undoes the SLVZ container (magic + uncompressedLen + raw DEFLATE). BlobCompressor only
+    ///     Undoes the SLVZ container (magic + uncompressedLen + raw DEFLATE). SlvzCompressor only
     ///     compresses — the production decoder is TS — so tests inflate locally. Non-SLVZ input
     ///     passes through, matching the decoder's magic-sniffing.
     /// </summary>
     internal static byte[] DecompressIfSlvz(byte[] bytes)
     {
-        if (bytes.Length < 8 || System.BitConverter.ToUInt32(bytes, 0) != BlobCompressor.CompressedMagic)
+        if (bytes.Length < 8 || System.BitConverter.ToUInt32(bytes, 0) != SlvzCompressor.CompressedMagic)
         {
             return bytes;
         }
@@ -52,16 +52,16 @@ internal static class SlvaTestDecoder
         using var ms = new MemoryStream(blob);
         using var br = new BinaryReader(ms);
 
-        Assert.Equal(BinaryGeometryWriter.Magic, br.ReadUInt32());
+        Assert.Equal(SlvaWriter.Magic, br.ReadUInt32());
         var version = br.ReadUInt32();
-        Assert.InRange(version, 1u, BinaryGeometryWriter.Version);
+        Assert.InRange(version, 1u, SlvaWriter.Version);
 
         var metadataLen = br.ReadUInt32();
         var metadataJson = Encoding.UTF8.GetString(br.ReadBytes((int)metadataLen));
 
         var flags = br.ReadUInt32();
-        var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
-        var planar = (flags & BinaryGeometryWriter.FlagPlanarByteSplit) != 0;
+        var deltaEncoded = (flags & SlvaWriter.FlagDeltaEncoded) != 0;
+        var planar = (flags & SlvaWriter.FlagPlanarByteSplit) != 0;
         var originX = br.ReadDouble();
         var originY = br.ReadDouble();
         var originZ = br.ReadDouble();
@@ -72,7 +72,7 @@ internal static class SlvaTestDecoder
         var vertexCount = (int)br.ReadUInt32();
         var verts = new float[vertexCount * 3];
 
-        if ((flags & BinaryGeometryWriter.FlagFloat32) != 0)
+        if ((flags & SlvaWriter.FlagFloat32) != 0)
         {
             for (var i = 0; i < verts.Length; i++)
             {
@@ -114,7 +114,7 @@ internal static class SlvaTestDecoder
 
         var indexCount = (int)br.ReadUInt32();
         var indices = new uint[indexCount];
-        var uint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
+        var uint16Indices = (flags & SlvaWriter.FlagUint16Indices) != 0;
         if (uint16Indices)
         {
             var block = planar ? br.ReadBytes(indexCount * 2) : null;
@@ -144,7 +144,7 @@ internal static class SlvaTestDecoder
         }
 
         float[]? uvs = null;
-        if ((flags & BinaryGeometryWriter.FlagHasUvs) != 0)
+        if ((flags & SlvaWriter.FlagHasUvs) != 0)
         {
             var uvFormat = br.ReadUInt32();
             var originU = br.ReadDouble();
@@ -153,7 +153,7 @@ internal static class SlvaTestDecoder
             var scaleV = br.ReadDouble();
 
             uvs = new float[vertexCount * 2];
-            if (uvFormat == BinaryGeometryWriter.UvFormatFloat32)
+            if (uvFormat == SlvaWriter.UvFormatFloat32)
             {
                 for (var i = 0; i < uvs.Length; i++)
                 {
@@ -191,7 +191,7 @@ internal static class SlvaTestDecoder
         }
 
         byte[]? colors = null;
-        if ((flags & BinaryGeometryWriter.FlagHasVertexColors) != 0)
+        if ((flags & SlvaWriter.FlagHasVertexColors) != 0)
         {
             colors = new byte[vertexCount * 3];
             byte r = 0, g = 0, b = 0;

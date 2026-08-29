@@ -8,13 +8,13 @@ using Xunit.Abstractions;
 
 namespace Selva.Slva.Tests;
 
-// Compares BinaryGeometryWriter output against the old gzip(float32 + int32) format on synthetic
+// Compares SlvaWriter output against the old gzip(float32 + int32) format on synthetic
 // meshes approximating real WebDisplay payloads. Run manually when validating performance changes.
-public class BinaryGeometryWriterBenchmarks
+public class SlvaWriterBenchmarks
 {
     private readonly ITestOutputHelper _output;
 
-    public BinaryGeometryWriterBenchmarks(ITestOutputHelper output)
+    public SlvaWriterBenchmarks(ITestOutputHelper output)
     {
         _output = output;
     }
@@ -48,10 +48,10 @@ public class BinaryGeometryWriterBenchmarks
 
         var newSw = Stopwatch.StartNew();
         byte[] newBytes;
-        BinaryGeometryWriter.WriteResult result;
+        SlvaWriter.WriteResult result;
         using (var ms = new MemoryStream())
         {
-            result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+            result = SlvaWriter.Write(ms, "{}", vertices, indices);
             newBytes = ms.ToArray();
         }
         newSw.Stop();
@@ -327,15 +327,15 @@ public class BinaryGeometryWriterBenchmarks
         {
             var (vertices, indices) = mesh;
             byte[] blob;
-            BinaryGeometryWriter.WriteResult result;
+            SlvaWriter.WriteResult result;
             using (var ms = new MemoryStream())
             {
-                result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+                result = SlvaWriter.Write(ms, "{}", vertices, indices);
                 blob = ms.ToArray();
             }
 
-            var chosen = BlobCompressor.Compress(blob).Length;
-            var alternative = BlobCompressor.Compress(SwapGeometryLayout(blob, result)).Length;
+            var chosen = SlvzCompressor.Compress(blob).Length;
+            var alternative = SlvzCompressor.Compress(SwapGeometryLayout(blob, result)).Length;
 
             _output.WriteLine(
                 $"{label,-16} chose {(result.UsedPlanarByteSplit ? "planar" : "interleaved"),-12} " +
@@ -351,7 +351,7 @@ public class BinaryGeometryWriterBenchmarks
     ///     values, same length, only byte order — yielding what the writer would have emitted had
     ///     the layout probe gone the other way.
     /// </summary>
-    private static byte[] SwapGeometryLayout(byte[] blob, BinaryGeometryWriter.WriteResult result)
+    private static byte[] SwapGeometryLayout(byte[] blob, SlvaWriter.WriteResult result)
     {
         var swapped = (byte[])blob.Clone();
         var metadataLen = BitConverter.ToUInt32(blob, 8);
@@ -410,15 +410,15 @@ public class BinaryGeometryWriterBenchmarks
         var (vertices, indices) = mesh;
 
         byte[] rawSlva;
-        BinaryGeometryWriter.WriteResult result;
+        SlvaWriter.WriteResult result;
         using (var ms = new MemoryStream())
         {
-            result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+            result = SlvaWriter.Write(ms, "{}", vertices, indices);
             rawSlva = ms.ToArray();
         }
 
         Assert.False(result.UsedFloat32, "coherent bench geometry must stay on the quantized path");
-        var compressed = BlobCompressor.Compress(rawSlva);
+        var compressed = SlvzCompressor.Compress(rawSlva);
 
         // Ratio baseline: the unfiltered quantized payload (int16 verts + native-width indices),
         // i.e. what the streams occupy before any filtering or DEFLATE.

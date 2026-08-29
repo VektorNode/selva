@@ -177,7 +177,7 @@ interface EncodeOptions {
 /**
  * Encodes vertex + index arrays into the SLVA binary wire format and returns it as base64.
  *
- * Mirrors the C# `BinaryGeometryWriter` exactly so tests exercise the same bytes the runtime
+ * Mirrors the C# `SlvaWriter` exactly so tests exercise the same bytes the runtime
  * pipeline produces. Picks int16 vs float32 with the same 5cm-per-unit threshold.
  */
 export function encodeBatchPayload(

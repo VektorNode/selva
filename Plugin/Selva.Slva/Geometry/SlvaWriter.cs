@@ -44,7 +44,7 @@ namespace Selva.Slva;
 ///     predictors), zigzag-mapped to unsigned; indices likewise as the wrapped difference from the
 ///     previous index, in their native width. This is a PNG-style pre-filter: welded meshes have
 ///     spatially-local vertices and locally-clustered indices, so deltas concentrate near zero and
-///     the downstream <see cref="BlobCompressor" /> DEFLATE pass compresses far better. Float32
+///     the downstream <see cref="SlvzCompressor" /> DEFLATE pass compresses far better. Float32
 ///     vertices are never filtered. Wrapping arithmetic keeps the filter lossless for any input;
 ///     the decoder reverses it with a running prefix sum.
 ///
@@ -87,7 +87,7 @@ namespace Selva.Slva;
 ///     Colors are delta+zigzag filtered per channel (wrapped 8-bit, independent r/g/b predictors)
 ///     iff <see cref="FlagDeltaEncoded" /> is set — analysis gradients concentrate near zero.
 /// </remarks>
-public static class BinaryGeometryWriter
+public static class SlvaWriter
 {
     public const uint Magic = 0x41564C53; // "SLVA" little-endian
     public const uint Version = 4;

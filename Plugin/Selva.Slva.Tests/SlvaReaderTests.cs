@@ -6,7 +6,7 @@ using Selva.Slva;
 namespace Selva.Slva.Tests;
 
 /// <summary>
-///     Writer → <see cref="BinaryGeometryReader" /> round-trips. This is the decoder behind the
+///     Writer → <see cref="SlvaReader" /> round-trips. This is the decoder behind the
 ///     Grasshopper viewport preview and <c>DisplayBatchTransformer</c>, and until these tests it was
 ///     the only one of the three SLVA decoders with no coverage: every other test in the suite runs
 ///     against <see cref="SlvaTestDecoder" />, a reimplementation, so a bug here reached the canvas
@@ -16,18 +16,18 @@ namespace Selva.Slva.Tests;
 ///     the same hand agree on the same mistakes, which is what the cross-stack TS fixture test
 ///     exists to catch and what this one adds on the C# side.
 /// </summary>
-public class BinaryGeometryReaderTests
+public class SlvaReaderTests
 {
     /// <summary>Writes through the production writer, then reads back through the production reader.</summary>
-    private static BinaryGeometryReader.Result RoundTrip(
+    private static SlvaReader.Result RoundTrip(
         float[] vertices, int[] indices, string metadataJson = "{}",
         bool forceFloat32 = false, float[] uvs = null, byte[] colors = null,
         bool compress = false)
     {
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, metadataJson, vertices, indices, forceFloat32, uvs, colors);
+        SlvaWriter.Write(ms, metadataJson, vertices, indices, forceFloat32, uvs, colors);
         var blob = ms.ToArray();
-        return BinaryGeometryReader.Read(compress ? BlobCompressor.Compress(blob) : blob);
+        return SlvaReader.Read(compress ? SlvzCompressor.Compress(blob) : blob);
     }
 
     private static void AssertVerticesMatch(float[] expected, float[] actual, float tolerance)
@@ -89,11 +89,11 @@ public class BinaryGeometryReaderTests
         var (vertices, indices) = CoherentGrid(64);
 
         using var ms = new MemoryStream();
-        var written = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var written = SlvaWriter.Write(ms, "{}", vertices, indices);
         Assert.True(written.UsedPlanarByteSplit, "expected the probe to pick planar for a welded grid");
         Assert.True(written.UsedUint16Indices);
 
-        var decoded = BinaryGeometryReader.Read(ms.ToArray());
+        var decoded = SlvaReader.Read(ms.ToArray());
 
         AssertVerticesMatch(vertices, decoded.Vertices, 0.001f);
         Assert.Equal(indices, decoded.Indices);
@@ -117,10 +117,10 @@ public class BinaryGeometryReaderTests
         indices[2] = 1;
 
         using var ms = new MemoryStream();
-        var written = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var written = SlvaWriter.Write(ms, "{}", vertices, indices);
         Assert.False(written.UsedUint16Indices);
 
-        var decoded = BinaryGeometryReader.Read(ms.ToArray());
+        var decoded = SlvaReader.Read(ms.ToArray());
 
         AssertVerticesMatch(vertices, decoded.Vertices, 0.001f);
         Assert.Equal(indices, decoded.Indices);
@@ -160,10 +160,10 @@ public class BinaryGeometryReaderTests
         }
 
         using var ms = new MemoryStream();
-        var written = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var written = SlvaWriter.Write(ms, "{}", vertices, indices);
         Assert.False(written.UsedPlanarByteSplit, "expected the probe to reject planar for repeated parts");
 
-        var decoded = BinaryGeometryReader.Read(ms.ToArray());
+        var decoded = SlvaReader.Read(ms.ToArray());
 
         AssertVerticesMatch(vertices, decoded.Vertices, 0.05f);
         Assert.Equal(indices, decoded.Indices);
@@ -228,10 +228,10 @@ public class BinaryGeometryReaderTests
         var uvs = new[] { 0f, 0f, 100f, 0f, 100f, 100f, 0f, 100f };
 
         using var ms = new MemoryStream();
-        var written = BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
+        var written = SlvaWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
         Assert.True(written.UsedFloat32Uvs);
 
-        var decoded = BinaryGeometryReader.Read(ms.ToArray());
+        var decoded = SlvaReader.Read(ms.ToArray());
 
         Assert.Equal(uvs, decoded.Uvs);
     }
@@ -300,13 +300,13 @@ public class BinaryGeometryReaderTests
         // WebDisplayPreview catches this to draw nothing rather than break the canvas, so it has to
         // be a throw and not a silently empty result.
         Assert.Throws<InvalidDataException>(() =>
-            BinaryGeometryReader.Read(new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0, 0, 0, 0, 0, 0, 0, 0 }));
+            SlvaReader.Read(new byte[] { 0xDE, 0xAD, 0xBE, 0xEF, 0, 0, 0, 0, 0, 0, 0, 0 }));
     }
 
     [Fact]
     public void Read_RejectsNullInput()
     {
-        Assert.Throws<ArgumentNullException>(() => BinaryGeometryReader.Read(null!));
+        Assert.Throws<ArgumentNullException>(() => SlvaReader.Read(null!));
     }
 
     [Fact]
@@ -349,18 +349,18 @@ public class BinaryGeometryReaderTests
         // vertexCount; nothing bounds it against the bytes that actually follow.
         using var ms = new MemoryStream();
         using var w = new BinaryWriter(ms);
-        w.Write(BinaryGeometryWriter.Magic);
-        w.Write(BinaryGeometryWriter.Version);
+        w.Write(SlvaWriter.Magic);
+        w.Write(SlvaWriter.Version);
         var meta = System.Text.Encoding.UTF8.GetBytes("{}");
         w.Write((uint)meta.Length);
         w.Write(meta);
-        w.Write(BinaryGeometryWriter.FlagDeltaEncoded | BinaryGeometryWriter.FlagUint16Indices);
+        w.Write(SlvaWriter.FlagDeltaEncoded | SlvaWriter.FlagUint16Indices);
         w.Write(0.0); w.Write(0.0); w.Write(0.0);
         w.Write(1.0); w.Write(1.0); w.Write(1.0);
         w.Write(1_000_000u); // declares a million vertices; no vertex data follows
         w.Flush();
 
-        Assert.ThrowsAny<Exception>(() => BinaryGeometryReader.Read(ms.ToArray()));
+        Assert.ThrowsAny<Exception>(() => SlvaReader.Read(ms.ToArray()));
     }
 
     [Fact]

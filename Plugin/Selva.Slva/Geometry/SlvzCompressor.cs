@@ -22,7 +22,7 @@ namespace Selva.Slva;
 ///     decoder distinguishes the two cases by the leading magic, so a caller can always feed the
 ///     result straight back to the parser.
 /// </summary>
-public static class BlobCompressor
+public static class SlvzCompressor
 {
     public const uint CompressedMagic = 0x5A564C53; // "SLVZ" little-endian
 

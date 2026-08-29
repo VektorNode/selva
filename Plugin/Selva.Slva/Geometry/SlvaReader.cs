@@ -7,15 +7,15 @@ using Newtonsoft.Json;
 namespace Selva.Slva;
 
 /// <summary>
-///     Decodes the SLVA/SLVZ mesh blob produced by <see cref="BinaryGeometryWriter" /> back into
+///     Decodes the SLVA/SLVZ mesh blob produced by <see cref="SlvaWriter" /> back into
 ///     world-space vertex and index arrays. This is the C# mirror of the web's <c>parseBinaryMeshBatch</c>,
 ///     used to rebuild drawable <c>Rhino.Geometry.Mesh</c>es for the param's viewport preview
 ///     (the param holds only the encoded batch, not the original Rhino geometry).
 ///
-///     Handles the optional <see cref="BlobCompressor" /> SLVZ wrapper transparently: a SLVZ blob is
+///     Handles the optional <see cref="SlvzCompressor" /> SLVZ wrapper transparently: a SLVZ blob is
 ///     inflated first, then parsed as SLVA.
 /// </summary>
-public static class BinaryGeometryReader
+public static class SlvaReader
 {
     /// <summary>Decoded geometry: the embedded metadata plus the combined world-space arrays.</summary>
     public sealed class Result
@@ -52,13 +52,13 @@ public static class BinaryGeometryReader
             return inner;
         }
 
-        var bytes = BlobCompressor.MaybeDecompress(blob);
+        var bytes = SlvzCompressor.MaybeDecompress(blob);
 
         using (var ms = new MemoryStream(bytes, false))
         using (var br = new BinaryReader(ms, Encoding.UTF8))
         {
             var magic = br.ReadUInt32();
-            if (magic != BinaryGeometryWriter.Magic)
+            if (magic != SlvaWriter.Magic)
             {
                 throw new InvalidDataException($"Not a SLVA blob (bad magic 0x{magic:X8}).");
             }
@@ -70,12 +70,12 @@ public static class BinaryGeometryReader
             var metadata = JsonConvert.DeserializeObject<DisplayBatch>(metadataJson) ?? new DisplayBatch();
 
             var flags = br.ReadUInt32();
-            var useFloat32 = (flags & BinaryGeometryWriter.FlagFloat32) != 0;
-            var useUint16Indices = (flags & BinaryGeometryWriter.FlagUint16Indices) != 0;
-            var deltaEncoded = (flags & BinaryGeometryWriter.FlagDeltaEncoded) != 0;
-            var planar = (flags & BinaryGeometryWriter.FlagPlanarByteSplit) != 0;
-            var hasUvs = (flags & BinaryGeometryWriter.FlagHasUvs) != 0;
-            var hasColors = (flags & BinaryGeometryWriter.FlagHasVertexColors) != 0;
+            var useFloat32 = (flags & SlvaWriter.FlagFloat32) != 0;
+            var useUint16Indices = (flags & SlvaWriter.FlagUint16Indices) != 0;
+            var deltaEncoded = (flags & SlvaWriter.FlagDeltaEncoded) != 0;
+            var planar = (flags & SlvaWriter.FlagPlanarByteSplit) != 0;
+            var hasUvs = (flags & SlvaWriter.FlagHasUvs) != 0;
+            var hasColors = (flags & SlvaWriter.FlagHasVertexColors) != 0;
 
             var originX = br.ReadDouble();
             var originY = br.ReadDouble();
@@ -223,7 +223,7 @@ public static class BinaryGeometryReader
         var scaleV = br.ReadDouble();
 
         var uvs = new float[vertexCount * 2];
-        if (uvFormat == BinaryGeometryWriter.UvFormatFloat32)
+        if (uvFormat == SlvaWriter.UvFormatFloat32)
         {
             for (var i = 0; i < uvs.Length; i++)
             {

@@ -23,7 +23,7 @@ const IO_FIXTURE = JSON.parse(
 	fs.readFileSync(new URL('../fixtures/bench-io.json', import.meta.url), 'utf8')
 );
 
-// SLVA wire constants — mirror binary-parser.ts / BinaryGeometryWriter.cs.
+// SLVA wire constants — mirror binary-parser.ts / SlvaWriter.cs.
 const BINARY_MESH_MAGIC = 0x41564c53; // "SLVA" little-endian
 const BINARY_MESH_VERSION = 3;
 const FLAG_FLOAT32 = 0x1;

@@ -207,13 +207,13 @@ public static class MeshBatchAssembler
         // message or a binary WebSocket frame; items ride the container only in .slvm files.
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, "", allVertices, allIndices,
+            SlvaWriter.Write(ms, "", allVertices, allIndices,
                 uvs: allUvs, colors: allColors);
             // Nothing gzips the blob in transit (no transport gzip on dynamic responses or the
             // local WS), so this applies an optional deflate pass; Compress returns the original
             // bytes unchanged when it doesn't help, and the decoder sniffs the leading magic
             // either way. GetBuffer + length avoids a full ToArray copy of the stream.
-            var geometryBlob = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+            var geometryBlob = SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
             batch.CompressedData = SlvmDocument.Write(batch, geometryBlob, includeItems: false);
         }
 

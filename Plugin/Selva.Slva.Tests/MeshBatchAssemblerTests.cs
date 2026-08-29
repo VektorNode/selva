@@ -64,7 +64,7 @@ public class MeshBatchAssemblerTests
             new List<int[]> { f0, f1 },
             new List<ThreeMaterial> { mat, mat });
 
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
 
         Assert.Equal(8, decoded.Vertices.Length / 3);
         Assert.Equal(new[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 }, decoded.Indices);
@@ -85,7 +85,7 @@ public class MeshBatchAssemblerTests
             new List<int[]> { f0, f1, f2 },
             new List<ThreeMaterial> { mat, mat, mat });
 
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
         var meshes = batch.Groups[0].Meshes;
         var expectedX = new[] { 0f, 10f, 20f };
 
@@ -121,7 +121,7 @@ public class MeshBatchAssemblerTests
             new List<ThreeMaterial> { mat, mat, mat },
             names: new List<string> { "a", "dropped", "c" });
 
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
         var meshes = batch.Groups[0].Meshes;
 
         Assert.Equal(2, meshes.Count);
@@ -219,7 +219,7 @@ public class MeshBatchAssemblerTests
                 null
             });
 
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
 
         Assert.NotNull(decoded.Colors);
         Assert.Equal(new byte[] { 10, 20, 30 }, decoded.Colors[..3]);
@@ -242,7 +242,7 @@ public class MeshBatchAssemblerTests
             new List<int[]> { f0 },
             new List<ThreeMaterial> { Material(Color.Red) });
 
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
 
         Assert.Null(decoded.Uvs);
         Assert.Null(decoded.Colors);
@@ -267,7 +267,7 @@ public class MeshBatchAssemblerTests
                 new[] { 1f, 1f, 1f, 1f, 1f, 1f, 1f, 1f }
             });
 
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
         var second = batch.Groups[0].Meshes[1];
 
         Assert.Equal(0f, decoded.Uvs[0], 3);
@@ -289,7 +289,7 @@ public class MeshBatchAssemblerTests
 
         Assert.NotNull(batch.CompressedData);
 
-        var decoded = BinaryGeometryReader.Read(batch.CompressedData);
+        var decoded = SlvaReader.Read(batch.CompressedData);
         Assert.Empty(decoded.Vertices);
         Assert.Empty(decoded.Indices);
     }

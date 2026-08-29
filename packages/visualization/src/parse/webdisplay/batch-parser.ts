@@ -36,7 +36,7 @@ interface ParseTelemetry {
 
 /**
  * Parses a batched mesh JSON and creates Three.js meshes. The geometry payload is the binary
- * "SLVA" blob produced by the C# `BinaryGeometryWriter`, base64-encoded into the outer JSON
+ * "SLVA" blob produced by the C# `SlvaWriter`, base64-encoded into the outer JSON
  * envelope — `JSON.parse`s the small envelope, then hands the blob to `parseBinaryMeshBatch`
  * without ever turning it into a string.
  *

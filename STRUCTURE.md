@@ -220,11 +220,11 @@ files already on users' disks: frozen forever. The **extension** is what writers
 it is cheap (readers detect by magic) but readers must accept retired extensions forever. The
 **human name** in UI and docs can change freely.
 
-| Format           | Extension            | Magic            | Spec                                                                  |
-| ---------------- | -------------------- | ---------------- | --------------------------------------------------------------------- |
-| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `BinaryGeometryWriter.cs` header / `docs/contributing/slva-format.md` |
-| Selva mesh file  | `.slvm` (was `.dmf`) | `DMF1`           | `SlvmFile.cs` header, JSON sidecar + SLVA/SLVZ blob                   |
-| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`                                 |
+| Format           | Extension            | Magic            | Spec                                                        |
+| ---------------- | -------------------- | ---------------- | ----------------------------------------------------------- |
+| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `SlvaWriter.cs` header / `docs/contributing/slva-format.md` |
+| Selva mesh file  | `.slvm` (was `.dmf`) | `DMF1`           | `SlvmFile.cs` header, JSON sidecar + SLVA/SLVZ blob         |
+| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`                       |
 
 \* `SLVZ` is `SLVA` in an optional DEFLATE container; decoders sniff which by the leading magic.
 

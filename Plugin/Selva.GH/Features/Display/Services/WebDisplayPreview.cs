@@ -44,10 +44,10 @@ public sealed class WebDisplayPreview
             return;
         }
 
-        BinaryGeometryReader.Result decoded;
+        SlvaReader.Result decoded;
         try
         {
-            decoded = BinaryGeometryReader.Read(batch.CompressedData);
+            decoded = SlvaReader.Read(batch.CompressedData);
         }
         catch
         {
@@ -97,10 +97,10 @@ public sealed class WebDisplayPreview
             return results;
         }
 
-        BinaryGeometryReader.Result decoded;
+        SlvaReader.Result decoded;
         try
         {
-            decoded = BinaryGeometryReader.Read(batch.CompressedData);
+            decoded = SlvaReader.Read(batch.CompressedData);
         }
         catch
         {

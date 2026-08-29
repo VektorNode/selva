@@ -29,7 +29,7 @@ namespace Selva.Slva;
 ///
 ///     Chunk types:
 ///
-///     GEOM  mesh geometry. Payload is a complete SLVA/SLVZ blob (see BinaryGeometryWriter) whose
+///     GEOM  mesh geometry. Payload is a complete SLVA/SLVZ blob (see SlvaWriter) whose
 ///           embedded metadata JSON is empty — the object table lives in TABL, not in the blob.
 ///     CRVS  polyline vertices for curve objects, concatenated in object order. Payload is again a
 ///           bare SLVA/SLVZ blob with indexCount = 0; per-curve point counts live in TABL.
@@ -117,7 +117,7 @@ public static class SlvmDocument
             chunks.Add((ChunkPnts, EncodePointBlob(points)));
         }
 
-        chunks.Add((ChunkTabl, BlobCompressor.Compress(WriteTable(batch, meshes, curves, points))));
+        chunks.Add((ChunkTabl, SlvzCompressor.Compress(WriteTable(batch, meshes, curves, points))));
 
         var (materialsJson, textures) = ExtractTextures(batch.Materials);
         chunks.Add((ChunkMatl, Encoding.UTF8.GetBytes(materialsJson)));
@@ -213,7 +213,7 @@ public static class SlvmDocument
                 case ChunkGeom: geometryBlob = payload; break;
                 case ChunkCrvs: crvsBlob = payload; break;
                 case ChunkPnts: pntsBlob = payload; break;
-                case ChunkTabl: tableBytes = BlobCompressor.MaybeDecompress(payload); break;
+                case ChunkTabl: tableBytes = SlvzCompressor.MaybeDecompress(payload); break;
                 case ChunkMatl: materialsJson = Encoding.UTF8.GetString(payload); break;
                 case ChunkTexr: textures.Add(payload); break;
                 // Unknown chunks (and EXTN, handled below) are skipped: that's the extension model.
@@ -704,8 +704,8 @@ public static class SlvmDocument
         Table t, byte[] crvsBlob, byte[] pntsBlob, SelvaExtension ext, string batchId)
     {
         var items = new List<DisplayItem>(t.CurveCount + t.PointCount);
-        var curveVerts = crvsBlob != null ? BinaryGeometryReader.Read(crvsBlob).Vertices : Array.Empty<float>();
-        var pointVerts = pntsBlob != null ? BinaryGeometryReader.Read(pntsBlob).Vertices : Array.Empty<float>();
+        var curveVerts = crvsBlob != null ? SlvaReader.Read(crvsBlob).Vertices : Array.Empty<float>();
+        var pointVerts = pntsBlob != null ? SlvaReader.Read(pntsBlob).Vertices : Array.Empty<float>();
 
         var component = 0;
         for (var c = 0; c < t.CurveCount; c++)
@@ -843,8 +843,8 @@ public static class SlvmDocument
     {
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, "", vertices, Array.Empty<int>());
-            return BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+            SlvaWriter.Write(ms, "", vertices, Array.Empty<int>());
+            return SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
     }
 
@@ -852,7 +852,7 @@ public static class SlvmDocument
     {
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, "", Array.Empty<float>(), Array.Empty<int>());
+            SlvaWriter.Write(ms, "", Array.Empty<float>(), Array.Empty<int>());
             return ms.ToArray();
         }
     }

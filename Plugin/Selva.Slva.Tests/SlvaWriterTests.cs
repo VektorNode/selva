@@ -5,7 +5,7 @@ using Selva.Slva;
 
 namespace Selva.Slva.Tests;
 
-public class BinaryGeometryWriterTests
+public class SlvaWriterTests
 {
     private const uint ExpectedMagic = 0x41564C53;
     private const uint ExpectedVersion = 4;
@@ -14,7 +14,7 @@ public class BinaryGeometryWriterTests
     public void Write_EmitsMagicAndVersion()
     {
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, "{}", new float[0], new int[0]);
+        SlvaWriter.Write(ms, "{}", new float[0], new int[0]);
         var bytes = ms.ToArray();
 
         using var br = new BinaryReader(new MemoryStream(bytes));
@@ -28,7 +28,7 @@ public class BinaryGeometryWriterTests
         const string metadata = "{\"materials\":[],\"groups\":[],\"sourceComponentId\":\"abc\"}";
 
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, metadata, new float[0], new int[0]);
+        SlvaWriter.Write(ms, metadata, new float[0], new int[0]);
 
         using var br = new BinaryReader(new MemoryStream(ms.ToArray()));
         br.ReadUInt32();
@@ -57,7 +57,7 @@ public class BinaryGeometryWriterTests
         var indices = new int[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
         Assert.False(result.UsedFloat32);
         Assert.True(result.UsedUint16Indices);
@@ -67,8 +67,8 @@ public class BinaryGeometryWriterTests
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
         // Below the layout-probe threshold the writer takes planar unconditionally.
         Assert.Equal(
-            BinaryGeometryWriter.FlagUint16Indices | BinaryGeometryWriter.FlagDeltaEncoded
-            | BinaryGeometryWriter.FlagPlanarByteSplit,
+            SlvaWriter.FlagUint16Indices | SlvaWriter.FlagDeltaEncoded
+            | SlvaWriter.FlagPlanarByteSplit,
             flags);
 
         for (var i = 0; i < vertices.Length; i++)
@@ -97,7 +97,7 @@ public class BinaryGeometryWriterTests
         var indices = new int[] { 0, 1, 2, 0, 2, 3 };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
         var (decodedVerts, _, _) = ReadGeometry(ms.ToArray());
         for (var i = 2; i < decodedVerts.Length; i += 3)
@@ -123,12 +123,12 @@ public class BinaryGeometryWriterTests
         var indices = new int[] { 0, 1, 2, 0, 2, 3 };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
         Assert.True(result.UsedFloat32);
 
         var (decoded, _, flags) = ReadGeometry(ms.ToArray());
-        Assert.Equal(BinaryGeometryWriter.FlagFloat32, flags & BinaryGeometryWriter.FlagFloat32);
+        Assert.Equal(SlvaWriter.FlagFloat32, flags & SlvaWriter.FlagFloat32);
 
         // Float32 path is exact for the supplied values (they fit in float32 exactly).
         for (var i = 0; i < vertices.Length; i++)
@@ -144,7 +144,7 @@ public class BinaryGeometryWriterTests
         var indices = new int[] { 0, 1 };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices, forceFloat32: true);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices, forceFloat32: true);
 
         Assert.True(result.UsedFloat32);
 
@@ -158,7 +158,7 @@ public class BinaryGeometryWriterTests
     {
         using var ms = new MemoryStream();
         Assert.Throws<ArgumentException>(() =>
-            BinaryGeometryWriter.Write(ms, "{}", new float[] { 1, 2 }, new int[0]));
+            SlvaWriter.Write(ms, "{}", new float[] { 1, 2 }, new int[0]));
     }
 
     [Fact]
@@ -166,13 +166,13 @@ public class BinaryGeometryWriterTests
     {
         using var ms = new MemoryStream();
         Assert.Throws<ArgumentNullException>(() =>
-            BinaryGeometryWriter.Write(null!, "{}", new float[0], new int[0]));
+            SlvaWriter.Write(null!, "{}", new float[0], new int[0]));
         Assert.Throws<ArgumentNullException>(() =>
-            BinaryGeometryWriter.Write(ms, null!, new float[0], new int[0]));
+            SlvaWriter.Write(ms, null!, new float[0], new int[0]));
         Assert.Throws<ArgumentNullException>(() =>
-            BinaryGeometryWriter.Write(ms, "{}", null!, new int[0]));
+            SlvaWriter.Write(ms, "{}", null!, new int[0]));
         Assert.Throws<ArgumentNullException>(() =>
-            BinaryGeometryWriter.Write(ms, "{}", new float[0], null!));
+            SlvaWriter.Write(ms, "{}", new float[0], null!));
     }
 
     [Fact]
@@ -189,12 +189,12 @@ public class BinaryGeometryWriterTests
         var indices = new[] { 0, 1, 65536 };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
         Assert.False(result.UsedUint16Indices);
 
         var (_, decodedIndices, flags) = ReadGeometry(ms.ToArray());
-        Assert.Equal(0u, flags & BinaryGeometryWriter.FlagUint16Indices);
+        Assert.Equal(0u, flags & SlvaWriter.FlagUint16Indices);
         Assert.Equal(new uint[] { 0, 1, 65536 }, decodedIndices);
     }
 
@@ -214,12 +214,12 @@ public class BinaryGeometryWriterTests
         var indices = new int[] { 0, 3, 1, 3, 0, 2 };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
         Assert.False(result.UsedFloat32);
 
         var (decodedVerts, decodedIndices, flags) = ReadGeometry(ms.ToArray());
-        Assert.Equal(BinaryGeometryWriter.FlagDeltaEncoded, flags & BinaryGeometryWriter.FlagDeltaEncoded);
+        Assert.Equal(SlvaWriter.FlagDeltaEncoded, flags & SlvaWriter.FlagDeltaEncoded);
 
         for (var i = 0; i < vertices.Length; i++)
         {
@@ -241,11 +241,11 @@ public class BinaryGeometryWriterTests
         var indices = new int[] { 0, 1, 2 };
 
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        SlvaWriter.Write(ms, "{}", vertices, indices);
 
         var decoded = ReadAll(ms.ToArray());
-        Assert.Equal(0u, decoded.Flags & BinaryGeometryWriter.FlagHasUvs);
-        Assert.Equal(0u, decoded.Flags & BinaryGeometryWriter.FlagHasVertexColors);
+        Assert.Equal(0u, decoded.Flags & SlvaWriter.FlagHasUvs);
+        Assert.Equal(0u, decoded.Flags & SlvaWriter.FlagHasVertexColors);
         Assert.Null(decoded.Uvs);
         Assert.Null(decoded.Colors);
         Assert.Equal(ms.Length, decoded.BytesConsumed);
@@ -259,12 +259,12 @@ public class BinaryGeometryWriterTests
         var uvs = new float[] { 0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
 
         Assert.False(result.UsedFloat32Uvs);
 
         var decoded = ReadAll(ms.ToArray());
-        Assert.Equal(BinaryGeometryWriter.FlagHasUvs, decoded.Flags & BinaryGeometryWriter.FlagHasUvs);
+        Assert.Equal(SlvaWriter.FlagHasUvs, decoded.Flags & SlvaWriter.FlagHasUvs);
         Assert.NotNull(decoded.Uvs);
         for (var i = 0; i < uvs.Length; i++)
         {
@@ -284,7 +284,7 @@ public class BinaryGeometryWriterTests
         var uvs = new float[] { 0.25f, 0.75f, 0.25f, 0.75f, 0.25f, 0.75f };
 
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
+        SlvaWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
 
         var decoded = ReadAll(ms.ToArray());
         for (var i = 0; i < uvs.Length; i++)
@@ -302,7 +302,7 @@ public class BinaryGeometryWriterTests
         var uvs = new float[] { 0f, 0f, 100f, 0f, 100f, 100f };
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices, uvs: uvs);
 
         Assert.True(result.UsedFloat32Uvs);
 
@@ -319,11 +319,11 @@ public class BinaryGeometryWriterTests
         var colors = new byte[] { 0, 255, 128, 255, 0, 1, 1, 254, 255 };
 
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, "{}", vertices, indices, colors: colors);
+        SlvaWriter.Write(ms, "{}", vertices, indices, colors: colors);
 
         var decoded = ReadAll(ms.ToArray());
-        Assert.Equal(BinaryGeometryWriter.FlagHasVertexColors,
-            decoded.Flags & BinaryGeometryWriter.FlagHasVertexColors);
+        Assert.Equal(SlvaWriter.FlagHasVertexColors,
+            decoded.Flags & SlvaWriter.FlagHasVertexColors);
         Assert.Equal(colors, decoded.Colors);
         Assert.Null(decoded.Uvs);
         Assert.Equal(ms.Length, decoded.BytesConsumed);
@@ -338,7 +338,7 @@ public class BinaryGeometryWriterTests
         var colors = new byte[] { 10, 20, 30, 40, 50, 60, 70, 80, 90 };
 
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: uvs, colors: colors);
+        SlvaWriter.Write(ms, "{}", vertices, indices, uvs: uvs, colors: colors);
 
         var decoded = ReadAll(ms.ToArray());
         Assert.NotNull(decoded.Uvs);
@@ -359,9 +359,9 @@ public class BinaryGeometryWriterTests
 
         using var ms = new MemoryStream();
         Assert.Throws<ArgumentException>(() =>
-            BinaryGeometryWriter.Write(ms, "{}", vertices, indices, uvs: new float[] { 0, 0 }));
+            SlvaWriter.Write(ms, "{}", vertices, indices, uvs: new float[] { 0, 0 }));
         Assert.Throws<ArgumentException>(() =>
-            BinaryGeometryWriter.Write(ms, "{}", vertices, indices, colors: new byte[] { 1, 2, 3, 4 }));
+            SlvaWriter.Write(ms, "{}", vertices, indices, colors: new byte[] { 1, 2, 3, 4 }));
     }
 
     // ========================================================================
@@ -475,13 +475,13 @@ public class BinaryGeometryWriterTests
         var (vertices, indices) = CoherentGrid(128);
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
         Assert.True(result.UsedPlanarByteSplit);
 
         var decoded = ReadAll(ms.ToArray());
-        Assert.Equal(BinaryGeometryWriter.FlagPlanarByteSplit,
-            decoded.Flags & BinaryGeometryWriter.FlagPlanarByteSplit);
+        Assert.Equal(SlvaWriter.FlagPlanarByteSplit,
+            decoded.Flags & SlvaWriter.FlagPlanarByteSplit);
         AssertRoundtrips(decoded, vertices, indices, tolerance: 0.001f);
     }
 
@@ -494,14 +494,14 @@ public class BinaryGeometryWriterTests
         var (vertices, indices) = RepeatedParts(2000);
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+        var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
         Assert.False(result.UsedPlanarByteSplit);
 
         var decoded = ReadAll(ms.ToArray());
-        Assert.Equal(0u, decoded.Flags & BinaryGeometryWriter.FlagPlanarByteSplit);
-        Assert.Equal(BinaryGeometryWriter.FlagDeltaEncoded,
-            decoded.Flags & BinaryGeometryWriter.FlagDeltaEncoded);
+        Assert.Equal(0u, decoded.Flags & SlvaWriter.FlagPlanarByteSplit);
+        Assert.Equal(SlvaWriter.FlagDeltaEncoded,
+            decoded.Flags & SlvaWriter.FlagDeltaEncoded);
         AssertRoundtrips(decoded, vertices, indices, tolerance: 0.05f);
     }
 
@@ -518,10 +518,10 @@ public class BinaryGeometryWriterTests
         {
             var (vertices, indices) = mesh;
             using var ms = new MemoryStream();
-            var result = BinaryGeometryWriter.Write(ms, "{}", vertices, indices);
+            var result = SlvaWriter.Write(ms, "{}", vertices, indices);
 
-            var chosen = BlobCompressor.Compress(ms.ToArray());
-            var alternative = BlobCompressor.Compress(
+            var chosen = SlvzCompressor.Compress(ms.ToArray());
+            var alternative = SlvzCompressor.Compress(
                 SwapGeometryLayout(ms.ToArray(), result));
 
             Assert.True(chosen.Length <= alternative.Length,
@@ -535,7 +535,7 @@ public class BinaryGeometryWriterTests
     ///     values and same length — only byte order moves — so the result is what the writer would
     ///     have emitted had the probe gone the other way.
     /// </summary>
-    private static byte[] SwapGeometryLayout(byte[] blob, BinaryGeometryWriter.WriteResult result)
+    private static byte[] SwapGeometryLayout(byte[] blob, SlvaWriter.WriteResult result)
     {
         var swapped = (byte[])blob.Clone();
         var metadataLen = BitConverter.ToUInt32(blob, 8);
@@ -647,7 +647,7 @@ public class BinaryGeometryWriterTests
 
         // The quantized path is where the bbox is observable: origin IS the bbox min.
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", large, new int[0]);
+        var result = SlvaWriter.Write(ms, "{}", large, new int[0]);
 
         Assert.False(result.UsedFloat32, "bbox extent pushed the writer onto the float32 path");
         Assert.Equal(90_000, result.VertexCount);
@@ -673,7 +673,7 @@ public class BinaryGeometryWriterTests
         verts[3 * 119_998 + 2] = 1300f; // z max, last partition
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", verts, new int[0]);
+        var result = SlvaWriter.Write(ms, "{}", verts, new int[0]);
 
         Assert.False(result.UsedFloat32, "bbox extent pushed the writer onto the float32 path");
         Assert.Equal(-1500.0, result.OriginX, 3);
@@ -695,13 +695,13 @@ public class BinaryGeometryWriterTests
         }
 
         using var first = new MemoryStream();
-        BinaryGeometryWriter.Write(first, "{}", verts, indices);
+        SlvaWriter.Write(first, "{}", verts, indices);
         var expected = first.ToArray();
 
         for (var run = 0; run < 5; run++)
         {
             using var next = new MemoryStream();
-            BinaryGeometryWriter.Write(next, "{}", verts, indices);
+            SlvaWriter.Write(next, "{}", verts, indices);
             Assert.Equal(expected, next.ToArray());
         }
     }
@@ -720,7 +720,7 @@ public class BinaryGeometryWriterTests
         }
 
         using var ms = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(ms, "{}", verts, new int[0]);
+        var result = SlvaWriter.Write(ms, "{}", verts, new int[0]);
 
         Assert.Equal(5.0, result.OriginX, 6);
         Assert.Equal(-3.0, result.OriginY, 6);

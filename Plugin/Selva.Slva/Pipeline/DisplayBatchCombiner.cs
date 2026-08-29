@@ -81,10 +81,10 @@ public static class DisplayBatchCombiner
                 continue;
             }
 
-            BinaryGeometryReader.Result decoded;
+            SlvaReader.Result decoded;
             try
             {
-                decoded = BinaryGeometryReader.Read(batch.CompressedData);
+                decoded = SlvaReader.Read(batch.CompressedData);
             }
             catch (Exception ex)
             {
@@ -173,7 +173,7 @@ public static class DisplayBatchCombiner
     ///     corrupt table shouldn't take the whole combine down with it.
     /// </summary>
     private static bool TrySliceMesh(
-        BinaryGeometryReader.Result decoded, MeshMetadata meta,
+        SlvaReader.Result decoded, MeshMetadata meta,
         out float[] vertices, out int[] faces, out float[] uvs, out byte[] colors)
     {
         vertices = null;

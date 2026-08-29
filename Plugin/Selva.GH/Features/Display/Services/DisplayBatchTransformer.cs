@@ -67,10 +67,10 @@ public static class DisplayBatchTransformer
             return batch.CompressedData;
         }
 
-        BinaryGeometryReader.Result decoded;
+        SlvaReader.Result decoded;
         try
         {
-            decoded = BinaryGeometryReader.Read(batch.CompressedData);
+            decoded = SlvaReader.Read(batch.CompressedData);
         }
         catch
         {
@@ -90,9 +90,9 @@ public static class DisplayBatchTransformer
         // it into the container — every metadata chunk survives byte-exact.
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, "", decoded.Vertices, decoded.Indices,
+            SlvaWriter.Write(ms, "", decoded.Vertices, decoded.Indices,
                 uvs: decoded.Uvs, colors: decoded.Colors);
-            var geometryBlob = BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+            var geometryBlob = SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
             return SlvmDocument.ReplaceGeometry(batch.CompressedData, geometryBlob);
         }
     }

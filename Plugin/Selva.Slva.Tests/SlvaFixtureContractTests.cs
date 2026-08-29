@@ -9,7 +9,7 @@ using Selva.Slva;
 namespace Selva.Slva.Tests;
 
 /// <summary>
-///     Cross-stack SLVA contract: golden blobs written by the real BinaryGeometryWriter, committed
+///     Cross-stack SLVA contract: golden blobs written by the real SlvaWriter, committed
 ///     under packages/schemas/fixtures/slva/ and decoded on the TS side by
 ///     packages/visualization/src/parse/webdisplay/__tests__/slva-fixtures.test.ts (reads the SAME
 ///     files). Each blob ships with a .expected.json carrying the writer's inputs and quantization
@@ -279,7 +279,7 @@ public class SlvaFixtureContractTests
     {
         var vertexCount = c.Vertices.Length / 3;
         using var stream = new MemoryStream();
-        var result = BinaryGeometryWriter.Write(
+        var result = SlvaWriter.Write(
             stream,
             MetadataJson(vertexCount, c.Indices.Length),
             c.Vertices,
@@ -289,7 +289,7 @@ public class SlvaFixtureContractTests
             c.Colors);
 
         var rawSlva = stream.ToArray();
-        var fileBytes = c.Compress ? BlobCompressor.Compress(rawSlva) : rawSlva;
+        var fileBytes = c.Compress ? SlvzCompressor.Compress(rawSlva) : rawSlva;
 
         // Half a quantization step is the writer's max rounding error; 0.75 adds slack for the
         // float64→float32 comparison on the TS side. Float32 payloads are exact.

@@ -37,8 +37,8 @@ public class SlvmDocumentTests
         }
 
         using var ms = new MemoryStream();
-        BinaryGeometryWriter.Write(ms, "", vertices, indices);
-        return BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+        SlvaWriter.Write(ms, "", vertices, indices);
+        return SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
     }
 
     private static DisplayBatch BatchWithMeshes(params (int materialId, string name, string layer, int originalIndex,

@@ -83,7 +83,7 @@ public class GH_DisplaySize : GH_Component
             return false;
         }
 
-        if (BitConverter.ToUInt32(blob, 0) == BlobCompressor.CompressedMagic)
+        if (BitConverter.ToUInt32(blob, 0) == SlvzCompressor.CompressedMagic)
         {
             return true;
         }
@@ -95,7 +95,7 @@ public class GH_DisplaySize : GH_Component
 
         var geometry = SlvmDocument.Read(blob).GeometryBlob;
         return geometry != null && geometry.Length >= 4 &&
-               BitConverter.ToUInt32(geometry, 0) == BlobCompressor.CompressedMagic;
+               BitConverter.ToUInt32(geometry, 0) == SlvzCompressor.CompressedMagic;
     }
 
     private static DisplayBatch ReadBatch(IGH_DataAccess DA)
