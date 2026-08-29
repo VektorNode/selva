@@ -234,7 +234,7 @@ internal static class PrepareUIInputInference
 {
     private const int SampleLength = 24;
     private const int MaxNickNameLength = 128;
-    private const int KeyGuidFragmentLength = 6;
+    private const int KeyGuidFragmentLength = 8;
 
     /// <summary>External Hops / Rhino.Compute contextual parameter.</summary>
     internal static readonly PrepareUIInputContextualType GetNumber = new(
