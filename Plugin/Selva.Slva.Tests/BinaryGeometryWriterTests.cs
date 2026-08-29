@@ -3,7 +3,7 @@ using System.IO;
 using System.Text;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 public class BinaryGeometryWriterTests
 {

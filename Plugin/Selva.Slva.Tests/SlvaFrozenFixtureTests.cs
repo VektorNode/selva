@@ -4,7 +4,7 @@ using System.Linq;
 using Newtonsoft.Json.Linq;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     Backward-compatibility contract: the frozen pre-v4 blobs under
@@ -101,18 +101,6 @@ public class SlvaFrozenFixtureTests
 
     private static string FixturesDir()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "pnpm-workspace.yaml")))
-        {
-            dir = dir.Parent;
-        }
-
-        if (dir == null)
-        {
-            throw new DirectoryNotFoundException(
-                "Could not locate repo root (pnpm-workspace.yaml) from " + AppContext.BaseDirectory);
-        }
-
-        return Path.Combine(dir.FullName, "packages", "schemas", "fixtures", "slva", "v3");
+        return FixtureLocator.Dir("slva", "v3");
     }
 }

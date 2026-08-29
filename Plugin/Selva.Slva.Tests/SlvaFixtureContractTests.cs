@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     Cross-stack SLVA contract: golden blobs written by the real BinaryGeometryWriter, committed
@@ -374,7 +374,7 @@ public class SlvaFixtureContractTests
     [Fact]
     public void Fixtures_MatchTheWriterOutput()
     {
-        var fixturesDir = Path.Combine(FindRepoRoot(), "packages", "schemas", "fixtures", "slva");
+        var fixturesDir = FixtureLocator.Dir("slva");
         var update = Environment.GetEnvironmentVariable("UPDATE_SLVA_FIXTURES") == "1";
         var failures = new List<string>();
 
@@ -426,15 +426,4 @@ public class SlvaFixtureContractTests
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "pnpm-workspace.yaml")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new DirectoryNotFoundException(
-            "Could not locate repo root (pnpm-workspace.yaml) from " + AppContext.BaseDirectory);
-    }
 }

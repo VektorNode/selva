@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     The offsets this pass computes are the ones both decoders slice on, and every one of its

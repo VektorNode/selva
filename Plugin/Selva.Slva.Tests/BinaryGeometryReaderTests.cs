@@ -3,7 +3,7 @@ using System.IO;
 using Newtonsoft.Json;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     Writer → <see cref="BinaryGeometryReader" /> round-trips. This is the decoder behind the

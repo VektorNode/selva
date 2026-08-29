@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     The SLVM v2 container mechanics: the columnar object table (prefix-sum windows, sequential

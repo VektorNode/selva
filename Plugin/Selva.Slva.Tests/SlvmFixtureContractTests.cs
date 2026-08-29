@@ -7,7 +7,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     Cross-stack SLVM v2 contract: golden containers written by the real production path
@@ -107,7 +107,7 @@ public class SlvmFixtureContractTests
     [Fact]
     public void Fixtures_MatchTheWriterOutput()
     {
-        var fixturesDir = Path.Combine(FindRepoRoot(), "packages", "schemas", "fixtures", "slvm2");
+        var fixturesDir = FixtureLocator.Dir("slvm2");
         var update = Environment.GetEnvironmentVariable("UPDATE_SLVM_FIXTURES") == "1";
         var failures = new List<string>();
 
@@ -165,15 +165,4 @@ public class SlvmFixtureContractTests
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "pnpm-workspace.yaml")))
-        {
-            dir = dir.Parent;
-        }
-
-        return dir?.FullName ?? throw new DirectoryNotFoundException(
-            "Could not locate repo root (pnpm-workspace.yaml) from " + AppContext.BaseDirectory);
-    }
 }

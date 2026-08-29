@@ -4,7 +4,7 @@ using System.IO;
 using System.Text;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     The <c>.slvm</c> mesh file is written to users' disks and read back by a later plugin build,

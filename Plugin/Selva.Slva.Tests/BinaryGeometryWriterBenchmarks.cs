@@ -6,7 +6,7 @@ using System.IO.Compression;
 using Selva.Slva;
 using Xunit.Abstractions;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 // Compares BinaryGeometryWriter output against the old gzip(float32 + int32) format on synthetic
 // meshes approximating real WebDisplay payloads. Run manually when validating performance changes.

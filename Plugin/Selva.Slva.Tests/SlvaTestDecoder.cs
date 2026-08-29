@@ -2,7 +2,7 @@ using System.IO;
 using System.Text;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     Test-local SLVA decoder, deliberately independent of both production decoders (the TS

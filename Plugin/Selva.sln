@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Rhino", "Selva.Rhino\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Slva", "Selva.Slva\Selva.Slva.csproj", "{759CA55F-D56D-453B-90C4-1F8C493365B7}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Selva.Slva.Tests", "Selva.Slva.Tests\Selva.Slva.Tests.csproj", "{EFAC0CC5-ECD4-482B-9C00-B58F72294427}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -111,6 +113,18 @@ Global
 		{759CA55F-D56D-453B-90C4-1F8C493365B7}.Release|x64.Build.0 = Release|Any CPU
 		{759CA55F-D56D-453B-90C4-1F8C493365B7}.Release|x86.ActiveCfg = Release|Any CPU
 		{759CA55F-D56D-453B-90C4-1F8C493365B7}.Release|x86.Build.0 = Release|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Debug|x64.Build.0 = Debug|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Debug|x86.Build.0 = Debug|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Release|x64.ActiveCfg = Release|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Release|x64.Build.0 = Release|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Release|x86.ActiveCfg = Release|Any CPU
+		{EFAC0CC5-ECD4-482B-9C00-B58F72294427}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

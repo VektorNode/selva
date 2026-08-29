@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Linq;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 /// <summary>
 ///     Combining batches is a full decode → re-encode, so the risks are all in what survives it:

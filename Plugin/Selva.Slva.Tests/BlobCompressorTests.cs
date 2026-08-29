@@ -4,7 +4,7 @@ using System.IO.Compression;
 using System.Linq;
 using Selva.Slva;
 
-namespace Selva.Tests;
+namespace Selva.Slva.Tests;
 
 public class BlobCompressorTests
 {
