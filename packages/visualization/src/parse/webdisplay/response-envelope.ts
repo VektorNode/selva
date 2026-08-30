@@ -1,8 +1,8 @@
 /**
  * Declared structurally rather than imported from `@selvajs/compute` — this package converts
  * meshes, it doesn't need a Rhino.Compute client dependency to describe the shape a caller hands
- * it. `@selvajs/compute`'s `GrasshopperComputeResponse` is a superset and stays assignable to
- * this, so {@link getThreeMeshesFromComputeResponse} keeps accepting one unchanged.
+ * it. Callers can pass their own `GrasshopperComputeResponse` shape here; the compute package's
+ * response type is a superset and stays assignable to this local contract.
  */
 
 export interface DisplayDataItem {
@@ -11,12 +11,12 @@ export interface DisplayDataItem {
 	data: string;
 }
 
-export interface DisplayResponseValue {
+export interface GrasshopperResponseValue {
 	InnerTree: { [branchPath: string]: DisplayDataItem[] };
 }
 
-export interface DisplayComputeResponse {
-	values: DisplayResponseValue[];
+export interface GrasshopperComputeResponse {
+	values: GrasshopperResponseValue[];
 	/** Rhino `UnitSystem` name driving unit scaling (see `SCALE_FACTORS`); unrecognized/absent scales 1. */
 	modelunits: string;
 }

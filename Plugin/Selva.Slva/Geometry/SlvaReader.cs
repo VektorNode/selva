@@ -42,7 +42,7 @@ public static class SlvaReader
             throw new ArgumentNullException(nameof(blob));
         }
 
-        // An SLVM v2 container carries its object table in TABL and its geometry as a nested
+        // An SLVM v3 container carries its object table in TABL and its geometry as a nested
         // bare blob — unwrap, decode the inner blob, and overlay the container's metadata.
         if (SlvmDocument.IsSlvm(blob))
         {

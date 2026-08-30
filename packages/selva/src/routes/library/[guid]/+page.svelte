@@ -33,13 +33,11 @@
 		definitionUrl: () => data.ghDefinition,
 		inputs: () => data.schema.inputs,
 		outputs: () => data.schema.outputs,
-		// An explicit version pick takes precedence over the channel pointer.
 		channel: () => (data.channel === 'draft' ? 'draft' : undefined),
 		versionId: () => data.versionId,
 		meshes: shouldShowViewer()
 			? { extract: (response, opts) => getThreeMeshesFromComputeResponse(response, opts) }
 			: undefined,
-		// Preserves the always-on [Compute] console telemetry (timing, cache verdicts).
 		debug: true
 	});
 </script>

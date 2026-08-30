@@ -60,7 +60,7 @@ public static class DisplayBatchTransformer
             return batch.CompressedData;
         }
 
-        // Writers have only ever shipped SLVM v2 containers; anything else is foreign bytes.
+        // Writers only ever ship SLVM v3 containers; anything else is foreign bytes.
         // Keep them untouched rather than guessing at a re-encode.
         if (!SlvmDocument.IsSlvm(batch.CompressedData))
         {
