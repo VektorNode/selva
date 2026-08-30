@@ -29,7 +29,7 @@ public static class MeshBatchAssembler
     ///     without it get neutral fill (UV 0,0 / color white) — renders identically to no channel
     ///     and compresses to almost nothing. If NO mesh has it, nothing is written.
     /// </summary>
-    public static DisplayBatch CreateBatch(IReadOnlyList<SlvaMeshInput> meshes, string batchId = null)
+    public static DisplayBatch CreateBatch(IReadOnlyList<SlvaMeshInput> meshes)
     {
         // Zero meshes is valid: an items-only batch (curves/points, no meshable geometry) still
         // produces a well-formed batch with an empty blob (vertexCount = 0).
@@ -62,9 +62,10 @@ public static class MeshBatchAssembler
 
             processedMeshes.Add(new ProcessedMesh
             {
+                Id = input.Id,
                 Name = input.Name,
                 Layer = input.Layer ?? "",
-                OriginalIndex = i,
+                InputIndex = i,
                 Vertices = input.Vertices,
                 Faces = input.Faces,
                 Uvs = input.Uvs,
@@ -74,12 +75,12 @@ public static class MeshBatchAssembler
             });
         }
 
-        // Order by material id for batching; List.Sort isn't stable, so break ties on OriginalIndex
+        // Order by material id for batching; List.Sort isn't stable, so break ties on input order
         // to keep a deterministic order within a material.
         processedMeshes.Sort((a, b) =>
         {
             var byMat = a.MaterialId.CompareTo(b.MaterialId);
-            return byMat != 0 ? byMat : a.OriginalIndex.CompareTo(b.OriginalIndex);
+            return byMat != 0 ? byMat : a.InputIndex.CompareTo(b.InputIndex);
         });
 
         var batch = new DisplayBatch
@@ -87,8 +88,7 @@ public static class MeshBatchAssembler
             Materials = materialCache.GetAllMaterials()
                 .Select(SerializableMaterial.FromThreeMaterial)
                 .ToList(),
-            Groups = new List<MaterialGroup>(),
-            BatchId = batchId
+            Groups = new List<MaterialGroup>()
         };
 
         var allVertices = new float[totalComponentCount];
@@ -135,9 +135,9 @@ public static class MeshBatchAssembler
 
             materialGroup.Meshes.Add(new MeshMetadata
             {
+                Id = mesh.Id,
                 Name = mesh.Name,
                 Layer = mesh.Layer,
-                OriginalIndex = mesh.OriginalIndex,
                 VertexCount = meshVertexCount,
                 IndexCount = meshIndexCount,
                 VertexStart = vertexBaseForIndices,
@@ -271,9 +271,13 @@ public static class MeshBatchAssembler
 
     private struct ProcessedMesh
     {
+        public string Id { get; set; }
         public string Name { get; set; }
         public string Layer { get; set; }
-        public int OriginalIndex { get; set; }
+
+        /// <summary>Position in the input list — sort tie-break only, never serialized.</summary>
+        public int InputIndex { get; set; }
+
         public float[] Vertices { get; set; }
         public int[] Faces { get; set; }
 

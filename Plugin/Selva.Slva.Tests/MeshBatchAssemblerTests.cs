@@ -45,6 +45,7 @@ public class MeshBatchAssemblerTests
         {
             inputs.Add(new SlvaMeshInput
             {
+                Id = $"component-1/{{0}}/{i}",
                 Vertices = verts[i],
                 Faces = faces[i],
                 Name = names?[i] ?? "mesh",
@@ -55,7 +56,7 @@ public class MeshBatchAssemblerTests
             });
         }
 
-        return MeshBatchAssembler.CreateBatch(inputs, "component-1");
+        return MeshBatchAssembler.CreateBatch(inputs);
     }
 
     // ========================================================================
@@ -152,7 +153,7 @@ public class MeshBatchAssemblerTests
     public void CreateBatch_GroupsByMaterialAndDedupesIdenticalOnes()
     {
         // Meshes arrive interleaved by material; grouping must gather them without losing the
-        // originalIndex that ties each back to its GH input slot.
+        // minted id that ties each back to its GH input slot.
         var red = Material(Color.Red);
         var blue = Material(Color.Blue);
         var redAgain = Material(Color.Red); // distinct instance, identical values
@@ -174,14 +175,16 @@ public class MeshBatchAssemblerTests
 
         var redGroup = batch.Groups.Find(g => g.MaterialId == 0);
         var blueGroup = batch.Groups.Find(g => g.MaterialId == 1);
-        Assert.Equal(new[] { 0, 2 }, redGroup.Meshes.ConvertAll(m => m.OriginalIndex).ToArray());
-        Assert.Equal(new[] { 1, 3 }, blueGroup.Meshes.ConvertAll(m => m.OriginalIndex).ToArray());
+        Assert.Equal(new[] { "component-1/{0}/0", "component-1/{0}/2" },
+            redGroup.Meshes.ConvertAll(m => m.Id).ToArray());
+        Assert.Equal(new[] { "component-1/{0}/1", "component-1/{0}/3" },
+            blueGroup.Meshes.ConvertAll(m => m.Id).ToArray());
     }
 
     [Fact]
     public void CreateBatch_OrdersMeshesDeterministicallyWithinAMaterial()
     {
-        // List.Sort is unstable, so the comparer breaks ties on OriginalIndex. Without that, two
+        // List.Sort is unstable, so the comparer breaks ties on input order. Without that, two
         // runs over identical input could emit different byte streams — which would also defeat
         // the blob cache.
         var mat = Material(Color.Red);
@@ -200,10 +203,10 @@ public class MeshBatchAssemblerTests
 
         Assert.Equal(first.CompressedData, second.CompressedData);
 
-        var order = first.Groups[0].Meshes.ConvertAll(m => m.OriginalIndex);
+        var order = first.Groups[0].Meshes.ConvertAll(m => m.Id);
         for (var i = 0; i < order.Count; i++)
         {
-            Assert.Equal(i, order[i]);
+            Assert.Equal($"component-1/{{0}}/{i}", order[i]);
         }
     }
 
@@ -295,7 +298,7 @@ public class MeshBatchAssemblerTests
     {
         // A curves-only branch still needs a well-formed blob so neither decoder needs an
         // "is there geometry?" branch.
-        var batch = MeshBatchAssembler.CreateBatch(new List<SlvaMeshInput>(), "component-1");
+        var batch = MeshBatchAssembler.CreateBatch(new List<SlvaMeshInput>());
 
         Assert.NotNull(batch.CompressedData);
 

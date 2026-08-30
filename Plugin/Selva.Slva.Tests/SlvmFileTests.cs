@@ -26,7 +26,6 @@ public class SlvmFileTests
     {
         return new DisplayBatch
         {
-            BatchId = "component-7",
             // Not an SLVA blob: Write adopts unknown geometry bytes verbatim, which is exactly
             // what the byte-exactness tests below want to observe.
             CompressedData = blob ?? new byte[] { 1, 2, 3, 4, 5 },
@@ -47,7 +46,8 @@ public class SlvmFileTests
                     {
                         new MeshMetadata
                         {
-                            Name = "wall", Layer = "Structure/Walls", OriginalIndex = 3,
+                            Id = "component-7/{0}/3",
+                            Name = "wall", Layer = "Structure/Walls",
                             VertexCount = 8, IndexCount = 12, VertexStart = 0, IndexStart = 0,
                             Metadata = new Dictionary<string, string> { ["fire"] = "REI60" }
                         }
@@ -68,8 +68,6 @@ public class SlvmFileTests
     {
         var decoded = RoundTrip(SampleBatch());
 
-        Assert.Equal("component-7", decoded.BatchId);
-
         var material = decoded.Materials[0];
         Assert.Equal("#ff8800", material.Color);
         Assert.Equal(0.25, material.Metalness);
@@ -79,12 +77,12 @@ public class SlvmFileTests
         Assert.Equal("https://example.test/t.png", material.Map);
 
         var mesh = decoded.Groups[0].Meshes[0];
+        Assert.Equal("component-7/{0}/3", mesh.Id);
         Assert.Equal("wall", mesh.Name);
         Assert.Equal("Structure/Walls", mesh.Layer);
-        Assert.Equal(3, mesh.OriginalIndex);
         Assert.Equal(8, mesh.VertexCount);
         Assert.Equal(12, mesh.IndexCount);
-        // v2 derives the offsets the parsers slice on from prefix sums over the table.
+        // The offsets the parsers slice on are derived as prefix sums over the table.
         Assert.Equal(0, mesh.VertexStart);
         Assert.Equal(0, mesh.IndexStart);
         Assert.Equal("REI60", mesh.Metadata["fire"]);
@@ -102,7 +100,7 @@ public class SlvmFileTests
             DisplayItem.Curve(
                 "{\"version\":10000,\"archive3dm\":70}",
                 new double[] { 0, 0, 0, 1, 1, 1 },
-                "component-7:0", "beam", "Structure/Beams",
+                "component-7/{0}/0", "beam", "Structure/Beams",
                 new Dictionary<string, string> { ["span"] = "6m" },
                 "#00ff00", 0.8)
         };
@@ -119,7 +117,7 @@ public class SlvmFileTests
             Assert.Equal(new double[] { 0, 0, 0, 1, 1, 1 }[i], item.Points[i], 3);
         }
 
-        Assert.Equal("component-7:0", item.Id);
+        Assert.Equal("component-7/{0}/0", item.Id);
         Assert.Equal("beam", item.Name);
         Assert.Equal("Structure/Beams", item.Layer);
         Assert.Equal("6m", item.Metadata["span"]);
@@ -210,12 +208,11 @@ public class SlvmFileTests
         ms.Position = 0;
         var decoded = SlvmFile.Read(ms);
 
-        Assert.Equal("legacy-id", decoded.BatchId);
+        // DMF1-era ids and sourceComponentId were index-derived and are dropped on read; the
+        // geometry, names and windows must survive verbatim.
         Assert.Equal("#123456", decoded.Materials[0].Color);
         var mesh = decoded.Groups[0].Meshes[0];
         Assert.Equal("legacy", mesh.Name);
-        Assert.Equal(2, mesh.OriginalIndex);
-        // DMF1 stored the windows explicitly; the legacy path must keep them verbatim.
         Assert.Equal(10, mesh.VertexStart);
         Assert.Equal(20, mesh.IndexStart);
         Assert.Equal(blob, decoded.CompressedData);

@@ -17,9 +17,6 @@ namespace Selva.Slva;
 ///     (points are one point per object — no counts)
 ///     material runs (meshes only, in table order): [varint runCount],
 ///                 per run [varint materialId][varint meshCount]
-///     originalIndex column: [u8 present]; if 1, [varint] per object.
-///                 Absent means identity — but the assembler sorts meshes by material, so any
-///                 multi-material batch needs the column.
 ///     names column:  [u8 mode] 0 = all empty, 1 = sequential "1".."n" over the global object
 ///                 index (the auto-numbering default), 2 = [varint poolRef] per object.
 ///     layers column: [u8 mode] 0 = all empty, 2 = [varint poolRef] per object.
@@ -28,7 +25,9 @@ namespace Selva.Slva;
 ///                 n × [varint valuePoolRef]
 ///
 ///     Attr keys are namespaced by convention ("gh:branch", "ifc:guid", "style:color"); the
-///     table mechanism itself knows nothing about any namespace.
+///     table mechanism itself knows nothing about any namespace. Two kinds of reserved key are
+///     split back out of the attr dict on read: "id" (object identity) and "style:*"
+///     (curve/point styling).
 /// </summary>
 internal static class SlvmTable
 {
@@ -42,7 +41,7 @@ internal static class SlvmTable
         public int MeshCount, CurveCount, PointCount;
         public int[] MeshVertexCounts, MeshTriCounts, CurvePointCounts;
         public List<(int materialId, int meshCount)> MaterialRuns;
-        public int[] OriginalIndices; // null = identity
+        public string[] Ids; // per object, null when the writer minted none
         public string[] Names, Layers;
         public Dictionary<string, string>[] Attrs; // per object, null when none
     }
@@ -50,10 +49,10 @@ internal static class SlvmTable
     public static byte[] Write(
         DisplayBatch batch, List<MeshMetadata> meshes, List<DisplayItem> curves, List<DisplayItem> points)
     {
-        var objects = new List<(string name, string layer, int originalIndex, Dictionary<string, string> attrs)>();
+        var objects = new List<(string name, string layer, Dictionary<string, string> attrs)>();
         foreach (var m in meshes)
         {
-            objects.Add((m.Name, m.Layer, m.OriginalIndex, m.Metadata));
+            objects.Add((m.Name, m.Layer, WithId(m.Metadata, m.Id)));
         }
 
         foreach (var item in curves.Concat(points))
@@ -61,6 +60,11 @@ internal static class SlvmTable
             var attrs = item.Metadata != null
                 ? new Dictionary<string, string>(item.Metadata)
                 : new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(item.Id))
+            {
+                attrs[SlvmDocument.IdKey] = item.Id;
+            }
+
             if (item.Color != null)
             {
                 attrs[SlvmDocument.StyleColorKey] = item.Color;
@@ -72,7 +76,7 @@ internal static class SlvmTable
                     item.Opacity.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
 
-            objects.Add((item.Name, item.Layer, ParseItemOrdinal(item.Id), attrs.Count > 0 ? attrs : null));
+            objects.Add((item.Name, item.Layer, attrs.Count > 0 ? attrs : null));
         }
 
         var pool = new StringPool();
@@ -95,7 +99,6 @@ internal static class SlvmTable
                 }
 
                 WriteMaterialRuns(cs, batch);
-                WriteOriginalIndexColumn(cs, objects);
                 WriteStringColumn(cs, objects.Select(o => o.name).ToList(), pool, allowSequential: true);
                 WriteStringColumn(cs, objects.Select(o => o.layer).ToList(), pool, allowSequential: false);
                 WriteAttrColumns(cs, objects, pool);
@@ -154,15 +157,6 @@ internal static class SlvmTable
             t.MaterialRuns.Add((id, n));
         }
 
-        if (bytes[pos++] == 1)
-        {
-            t.OriginalIndices = new int[objectCount];
-            for (var i = 0; i < objectCount; i++)
-            {
-                t.OriginalIndices[i] = (int)Varint.Read(bytes, ref pos);
-            }
-        }
-
         t.Names = ReadStringColumn(bytes, ref pos, objectCount, pool, sequentialAllowed: true);
         t.Layers = ReadStringColumn(bytes, ref pos, objectCount, pool, sequentialAllowed: false);
 
@@ -188,7 +182,38 @@ internal static class SlvmTable
             }
         }
 
+        // The identity rides the attr mechanism but is a first-class field to consumers.
+        t.Ids = new string[objectCount];
+        for (var i = 0; i < objectCount; i++)
+        {
+            var dict = t.Attrs[i];
+            if (dict != null && dict.TryGetValue(SlvmDocument.IdKey, out var id))
+            {
+                t.Ids[i] = id;
+                dict.Remove(SlvmDocument.IdKey);
+                if (dict.Count == 0)
+                {
+                    t.Attrs[i] = null;
+                }
+            }
+        }
+
         return t;
+    }
+
+    /// <summary>The object's attrs with its id folded in under the reserved key.</summary>
+    private static Dictionary<string, string> WithId(Dictionary<string, string> attrs, string id)
+    {
+        if (string.IsNullOrEmpty(id))
+        {
+            return attrs;
+        }
+
+        var merged = attrs != null
+            ? new Dictionary<string, string>(attrs)
+            : new Dictionary<string, string>();
+        merged[SlvmDocument.IdKey] = id;
+        return merged;
     }
 
     private static void WriteMaterialRuns(Stream s, DisplayBatch batch)
@@ -211,29 +236,6 @@ internal static class SlvmTable
         {
             Varint.Write(s, (uint)id);
             Varint.Write(s, (uint)count);
-        }
-    }
-
-    private static void WriteOriginalIndexColumn(
-        Stream s, List<(string name, string layer, int originalIndex, Dictionary<string, string> attrs)> objects)
-    {
-        var identity = true;
-        for (var i = 0; i < objects.Count; i++)
-        {
-            if (objects[i].originalIndex != i)
-            {
-                identity = false;
-                break;
-            }
-        }
-
-        s.WriteByte(identity ? (byte)0 : (byte)1);
-        if (!identity)
-        {
-            foreach (var o in objects)
-            {
-                Varint.Write(s, (uint)Math.Max(0, o.originalIndex));
-            }
         }
     }
 
@@ -308,7 +310,7 @@ internal static class SlvmTable
     }
 
     private static void WriteAttrColumns(
-        Stream s, List<(string name, string layer, int originalIndex, Dictionary<string, string> attrs)> objects,
+        Stream s, List<(string name, string layer, Dictionary<string, string> attrs)> objects,
         StringPool pool)
     {
         // Pivot per-object dicts into per-key sparse columns: the key is stored once, then only
@@ -355,13 +357,6 @@ internal static class SlvmTable
                 Varint.Write(s, (uint)pool.Intern(value));
             }
         }
-    }
-
-    /// <summary>Item ids are "{batchId}:{ordinal}"; the ordinal is the original index.</summary>
-    private static int ParseItemOrdinal(string id)
-    {
-        var colon = id?.LastIndexOf(':') ?? -1;
-        return colon >= 0 && int.TryParse(id.Substring(colon + 1), out var ordinal) ? ordinal : 0;
     }
 
     private sealed class StringPool

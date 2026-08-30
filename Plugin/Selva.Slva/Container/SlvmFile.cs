@@ -73,7 +73,7 @@ public static class SlvmFile
                 var doc = SlvmDocument.Read(bytes);
                 // In-memory CompressedData is the wire shape: items travel as JSON alongside, so
                 // strip their chunks or a re-broadcast would carry them twice.
-                doc.Batch.CompressedData = SlvmDocument.StripItems(bytes, doc.Batch.BatchId);
+                doc.Batch.CompressedData = SlvmDocument.StripItems(bytes);
                 return doc.Batch;
             }
 

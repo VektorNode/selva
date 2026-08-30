@@ -1,13 +1,11 @@
 {
-	"sourceComponentId": "fixture-textured",
 	"materials": [
 		{
-			"color": "White",
+			"color": "Red",
 			"metalness": 0.0,
 			"roughness": 0.5,
 			"opacity": 1.0,
-			"transparent": false,
-			"map": "data:image/png;base64,iVBORw0KGgoBAgME"
+			"transparent": false
 		}
 	],
 	"groups": [
@@ -17,17 +15,25 @@
 				{
 					"name": "1",
 					"layer": "",
-					"originalIndex": 0,
 					"vertexCount": 4,
 					"indexCount": 6,
 					"vertexStart": 0,
 					"indexStart": 0,
 					"metadata": null
+				},
+				{
+					"name": "2",
+					"layer": "",
+					"vertexCount": 4,
+					"indexCount": 6,
+					"vertexStart": 4,
+					"indexStart": 6,
+					"metadata": null
 				}
 			]
 		}
 	],
-	"totalVertexCount": 4,
-	"totalIndexCount": 6,
+	"totalVertexCount": 8,
+	"totalIndexCount": 12,
 	"positionTolerance": 0.001
 }

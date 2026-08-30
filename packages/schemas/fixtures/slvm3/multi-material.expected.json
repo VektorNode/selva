@@ -1,5 +1,4 @@
 {
-	"sourceComponentId": "fixture-multi",
 	"materials": [
 		{
 			"color": "Red",
@@ -21,29 +20,26 @@
 			"materialId": 0,
 			"meshes": [
 				{
+					"id": "fixture-multi/{0;0}/0",
 					"name": "wall",
 					"layer": "Structure/Walls",
-					"originalIndex": 0,
 					"vertexCount": 4,
 					"indexCount": 6,
 					"vertexStart": 0,
 					"indexStart": 0,
 					"metadata": {
-						"gh:branch": "{0;0}",
 						"fire": "REI60"
 					}
 				},
 				{
+					"id": "fixture-multi/{0;1}/0",
 					"name": "wall2",
 					"layer": "Structure/Walls",
-					"originalIndex": 2,
 					"vertexCount": 4,
 					"indexCount": 6,
 					"vertexStart": 4,
 					"indexStart": 6,
-					"metadata": {
-						"gh:branch": "{0;1}"
-					}
+					"metadata": null
 				}
 			]
 		},
@@ -51,9 +47,9 @@
 			"materialId": 1,
 			"meshes": [
 				{
+					"id": "fixture-multi/{0;0}/1",
 					"name": "window",
 					"layer": "Facade/Windows",
-					"originalIndex": 1,
 					"vertexCount": 4,
 					"indexCount": 6,
 					"vertexStart": 8,

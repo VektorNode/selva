@@ -65,7 +65,7 @@ Two mechanisms, both already part of the wire format:
 
 ## The contract with the TypeScript decoder
 
-`packages/schemas/fixtures/slva/` and `slvm2/` hold golden files this library's writer must
+`packages/schemas/fixtures/slva/` and `slvm3/` hold golden files this library's writer must
 reproduce byte-for-byte (`SlvaFixtureContractTests`, `SlvmFixtureContractTests`) and the TS
 parser must decode (`packages/visualization`'s fixture tests). Change the writer and the TS
 reader together and bump the format version; `fixtures/slva/v3/` is frozen forever and pins

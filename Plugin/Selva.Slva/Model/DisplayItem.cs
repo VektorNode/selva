@@ -27,8 +27,8 @@ public class DisplayItem
     // ── Identity (shared with meshes via the web's DisplayIdentity shape) ──────────────────────
 
     /// <summary>
-    ///     Stable pick key, <c>{batchId}:{originalIndex}</c> — matches how meshes
-    ///     identify, so selection/pick code treats meshes and items uniformly.
+    ///     The item's identity — same contract as <see cref="MeshMetadata.Id" />, so
+    ///     selection/pick code treats meshes and items uniformly.
     /// </summary>
     [JsonProperty("id")]
     public string Id { get; set; }

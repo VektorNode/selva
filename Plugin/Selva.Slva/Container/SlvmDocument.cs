@@ -8,7 +8,7 @@ using Newtonsoft.Json;
 namespace Selva.Slva;
 
 /// <summary>
-///     Reads and writes the SLVM v2 container — the chunked format that carries a whole
+///     Reads and writes the SLVM v3 container — the chunked format that carries a whole
 ///     <see cref="DisplayBatch" /> as one self-describing byte stream. The same bytes serve as the
 ///     wire blob (<see cref="DisplayBatch.CompressedData" />) and, with the item chunks added, as
 ///     the <c>.slvm</c> file; there is no separate on-disk container.
@@ -16,7 +16,8 @@ namespace Selva.Slva;
 ///     Wire format (little-endian):
 ///
 ///     [4]  magic      = "SLVM" (0x53 0x4C 0x56 0x4D)
-///     [4]  version    = uint32 (currently 2; v1 was the DMF1 container, retired)
+///     [4]  version    = uint32 (currently 3; v1 was the DMF1 container, v2 the pre-release
+///                       layout with an originalIndex table column — both retired)
 ///     [4]  chunkCount = uint32
 ///     then chunkCount chunks, each:
 ///     [4]  type       = fourcc
@@ -41,8 +42,8 @@ namespace Selva.Slva;
 ///     TEXR  one texture: [varint mimeLen][mime utf8][image bytes].
 ///     EXTN  host extension: [varint nsLen][namespace utf8][payload]. Foreign readers skip it.
 ///           Selva writes namespace "selva.gh" (see <see cref="SelvaExtension" />) with a JSON
-///           payload: {"batchId": "...", "curves": {"objIndex": "rhino nurbs json", ...}}.
-///           "sourceComponentId" is still accepted as a read-only alias for batchId.
+///           payload {"curves": {"objIndex": "rhino nurbs json", ...}} — only when the batch
+///           actually carries curves; a mesh-only container has no EXTN at all.
 ///
 ///     Object model: one global index space, meshes first, then curves, then points. TABL stores
 ///     per-object counts; vertex/index windows are the prefix sums of those counts in table order —
@@ -52,7 +53,7 @@ namespace Selva.Slva;
 public static class SlvmDocument
 {
     public const uint Magic = 0x4D564C53; // "SLVM" little-endian
-    public const uint Version = 2;
+    public const uint Version = 3;
 
     public const uint ChunkGeom = 0x4D4F4547; // "GEOM"
     public const uint ChunkCrvs = 0x53565243; // "CRVS"
@@ -66,6 +67,12 @@ public static class SlvmDocument
 
     /// <summary>Material "map" prefix that references a TEXR chunk by index.</summary>
     public const string TexRefPrefix = "slvm:tex:";
+
+    /// <summary>
+    ///     Reserved attr key carrying each object's identity (<see cref="MeshMetadata.Id" />) —
+    ///     same mechanism as user metadata, split back out on read.
+    /// </summary>
+    public const string IdKey = "id";
 
     /// <summary>Reserved attr keys for curve/point styling — same mechanism as user metadata.</summary>
     public const string StyleColorKey = "style:color";
@@ -125,8 +132,8 @@ public static class SlvmDocument
             chunks.Add((ChunkTexr, tex));
         }
 
-        // EXTN last by writer convention, so a restamp rewrites only the tail of the stream.
-        var ext = SelvaExtension.Build(batch.BatchId, curves, meshes.Count);
+        // EXTN chunks last by writer convention.
+        var ext = SelvaExtension.Build(curves, meshes.Count);
         if (ext != null)
         {
             chunks.Add((ChunkExtn, ext));
@@ -170,31 +177,11 @@ public static class SlvmDocument
     ///     Not chunk surgery — the table declares the item rows, so it must be rebuilt with them
     ///     gone or a reader would index geometry that isn't there. The mesh blob is untouched.
     /// </summary>
-    public static byte[] StripItems(byte[] slvm, string batchId)
+    public static byte[] StripItems(byte[] slvm)
     {
         var doc = Read(slvm);
         doc.Batch.Items = null;
-        doc.Batch.BatchId = batchId;
         return Write(doc.Batch, doc.GeometryBlob, includeItems: false, doc.Extensions);
-    }
-
-    /// <summary>
-    ///     Rewrites the selva.gh extension with a new source component id, leaving every other
-    ///     chunk untouched. This is how Display From File gives each loader instance its own web
-    ///     pick identity without re-encoding any geometry.
-    /// </summary>
-    public static byte[] Restamp(byte[] slvm, string newSourceComponentId)
-    {
-        var chunks = SlvmChunks.Read(slvm);
-        var curvesJson = SelvaExtension.Read(chunks)?.Curves;
-        chunks.RemoveAll(c => c.type == ChunkExtn && SelvaExtension.Owns(c.payload));
-        var ext = SelvaExtension.Build(newSourceComponentId, curvesJson);
-        if (ext != null)
-        {
-            chunks.Add((ChunkExtn, ext));
-        }
-
-        return SlvmChunks.Write(chunks);
     }
 
     // ============================================================================
@@ -261,13 +248,12 @@ public static class SlvmDocument
         var batch = new DisplayBatch
         {
             Materials = ParseMaterials(materialsJson, textures),
-            Groups = BuildGroups(table),
-            BatchId = ext?.BatchId ?? ext?.LegacyBatchId
+            Groups = BuildGroups(table)
         };
 
         if (table.CurveCount > 0 || table.PointCount > 0)
         {
-            batch.Items = BuildItems(table, crvsBlob, pntsBlob, ext, batch.BatchId);
+            batch.Items = BuildItems(table, crvsBlob, pntsBlob, ext);
         }
 
         return new ReadResult
@@ -302,9 +288,9 @@ public static class SlvmDocument
                 var attrs = t.Attrs[meshIndex];
                 group.Meshes.Add(new MeshMetadata
                 {
+                    Id = t.Ids[meshIndex],
                     Name = t.Names[meshIndex],
                     Layer = t.Layers[meshIndex],
-                    OriginalIndex = t.OriginalIndices?[meshIndex] ?? meshIndex,
                     VertexCount = t.MeshVertexCounts[meshIndex],
                     IndexCount = t.MeshTriCounts[meshIndex] * 3,
                     VertexStart = vertexStart,
@@ -322,7 +308,7 @@ public static class SlvmDocument
     }
 
     private static List<DisplayItem> BuildItems(
-        SlvmTable.Table t, byte[] crvsBlob, byte[] pntsBlob, SelvaExtension ext, string batchId)
+        SlvmTable.Table t, byte[] crvsBlob, byte[] pntsBlob, SelvaExtension ext)
     {
         var items = new List<DisplayItem>(t.CurveCount + t.PointCount);
         var curveVerts = crvsBlob != null ? SlvaReader.Read(crvsBlob).Vertices : Array.Empty<float>();
@@ -345,13 +331,12 @@ public static class SlvmDocument
             ext?.Curves?.TryGetValue(objIndex.ToString(System.Globalization.CultureInfo.InvariantCulture), out json);
 
             var (attrs, color, opacity) = SplitStyle(t.Attrs[objIndex]);
-            var ordinal = t.OriginalIndices?[objIndex] ?? objIndex;
             items.Add(new DisplayItem
             {
                 Kind = "curve",
                 Json = json,
                 Points = pts,
-                Id = batchId != null ? $"{batchId}:{ordinal}" : null,
+                Id = t.Ids[objIndex],
                 Name = t.Names[objIndex],
                 Layer = t.Layers[objIndex],
                 Metadata = attrs,
@@ -364,7 +349,6 @@ public static class SlvmDocument
         {
             var objIndex = t.MeshCount + t.CurveCount + p;
             var (attrs, color, opacity) = SplitStyle(t.Attrs[objIndex]);
-            var ordinal = t.OriginalIndices?[objIndex] ?? objIndex;
             items.Add(new DisplayItem
             {
                 Kind = "point",
@@ -374,7 +358,7 @@ public static class SlvmDocument
                     Y = pointVerts[p * 3 + 1],
                     Z = pointVerts[p * 3 + 2]
                 },
-                Id = batchId != null ? $"{batchId}:{ordinal}" : null,
+                Id = t.Ids[objIndex],
                 Name = t.Names[objIndex],
                 Layer = t.Layers[objIndex],
                 Metadata = attrs,
