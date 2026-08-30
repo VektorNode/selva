@@ -154,6 +154,9 @@ jobs:
       - name: Test Selva.Schema (migration, validation)
         run: dotnet test Plugin/Selva.Tests/Selva.Tests.csproj --nologo
 
+      - name: Test Selva.Slva (mesh codec + fixture contracts)
+        run: dotnet test Plugin/Selva.Slva.Tests/Selva.Slva.Tests.csproj --nologo
+
       # SVG snapshots are deterministic: glyph advances come from the bundled
       # font via FontMetrics, not the host's installed fonts.
       - name: Test Selva.Drawing (model + layout + SVG snapshots)

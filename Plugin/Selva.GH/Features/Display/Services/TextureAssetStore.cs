@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using Selva.GH.Features.UIBuilder.Services.Communication;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Services;
 

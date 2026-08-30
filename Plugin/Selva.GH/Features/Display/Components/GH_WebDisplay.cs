@@ -16,6 +16,7 @@ using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
 
@@ -29,19 +30,8 @@ public sealed class BranchResult
 
     public GH_Path Path { get; }
 
-    public List<float[]> MeshVertices { get; } = new List<float[]>();
-    public List<int[]> MeshFaces { get; } = new List<int[]>();
-
-    /// <summary>Per-mesh texture coordinates (u,v per vertex); null entries mean "mesh has none".</summary>
-    public List<float[]> MeshUvs { get; } = new List<float[]>();
-
-    /// <summary>Per-mesh vertex colors (r,g,b per vertex); null entries mean "mesh has none".</summary>
-    public List<byte[]> MeshColors { get; } = new List<byte[]>();
-
-    public List<string> Names { get; } = new List<string>();
-    public List<string> Layers { get; } = new List<string>();
-    public List<Dictionary<string, string>> Metadata { get; } = new List<Dictionary<string, string>>();
-    public List<ThreeMaterial> Materials { get; } = new List<ThreeMaterial>();
+    /// <summary>One entry per mesh in branch order; a null-array entry marks an invalid slot.</summary>
+    public List<SlvaMeshInput> Meshes { get; } = new List<SlvaMeshInput>();
 
     /// <summary>Non-mesh display items (curves, points) for this branch's batch.</summary>
     public List<DisplayItem> Items { get; } = new List<DisplayItem>();
@@ -49,7 +39,7 @@ public sealed class BranchResult
     /// <summary>Encoded batch (combined arrays, quantized + deflated); null when the branch is empty.</summary>
     public DisplayBatch Batch { get; set; }
 
-    public int Count => MeshVertices.Count + Items.Count;
+    public int Count => Meshes.Count + Items.Count;
 }
 
 /// <summary>
@@ -555,16 +545,19 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 continue;
             }
 
-            branch.MeshVertices.Add(r.MeshVertices);
-            branch.MeshFaces.Add(r.MeshFaces);
-            branch.MeshUvs.Add(r.MeshUvs);
-            branch.MeshColors.Add(r.MeshColors);
-            branch.Names.Add(!string.IsNullOrWhiteSpace(r.MeshName)
-                ? r.MeshName
-                : branch.MeshVertices.Count.ToString());
-            branch.Layers.Add(w.Layer ?? "");
-            branch.Metadata.Add(w.Metadata);
-            branch.Materials.Add(w.Material);
+            branch.Meshes.Add(new SlvaMeshInput
+            {
+                Vertices = r.MeshVertices,
+                Faces = r.MeshFaces,
+                Uvs = r.MeshUvs,
+                Colors = r.MeshColors,
+                Name = !string.IsNullOrWhiteSpace(r.MeshName)
+                    ? r.MeshName
+                    : (branch.Meshes.Count + 1).ToString(),
+                Layer = w.Layer ?? "",
+                Metadata = w.Metadata,
+                Material = w.Material
+            });
 
             previewMeshes.Add(r.Mesh);
             previewMaterials.Add(w.Material);
@@ -587,9 +580,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var batch = MeshBatchAssembler.CreateBatch(
-                b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId,
-                b.MeshUvs, b.MeshColors);
+            var batch = MeshBatchAssembler.CreateBatch(b.Meshes, componentId);
             if (b.Items.Count > 0)
             {
                 batch.Items = b.Items;
@@ -669,7 +660,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
             case Rhino.Geometry.Point pointGeom:
             {
-                item = DisplayItem.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
+                item = RhinoDisplayItems.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
                     colorHex, opacity);
                 previewPoint = pointGeom.Location;
                 return true;

@@ -3,6 +3,7 @@ using System.Drawing;
 using Grasshopper.Kernel;
 using Selva.GH.Features.Display.Goos;
 using Selva.GH.Properties;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Params;
 

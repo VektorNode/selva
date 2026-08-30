@@ -252,7 +252,7 @@ describe('parseBinaryMeshBatch', () => {
 	});
 
 	describe('compression (SLVZ container)', () => {
-		// Mirror the C# BlobCompressor: [4] SLVZ magic, [4] uncompressedLen, [N] raw-deflate(SLVA).
+		// Mirror the C# SlvzCompressor: [4] SLVZ magic, [4] uncompressedLen, [N] raw-deflate(SLVA).
 		const wrapSlvz = (slva: Uint8Array): Uint8Array => {
 			const deflated = deflateSync(slva);
 			const out = new Uint8Array(8 + deflated.length);

@@ -16,7 +16,7 @@ import {
 import type { ParsedBinaryMeshBatch } from '../binary-parser';
 
 /**
- * Cross-stack SLVA contract: decodes golden blobs written by the C# BinaryGeometryWriter
+ * Cross-stack SLVA contract: decodes golden blobs written by the C# SlvaWriter
  * (regenerated via `UPDATE_SLVA_FIXTURES=1 dotnet test --filter SlvaFixtureContractTests`) and
  * checks the result against the writer's own inputs from the sibling .expected.json. Unlike the
  * other parser tests, the bytes here were never touched by a TS encoder — this is the only test

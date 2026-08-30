@@ -7,6 +7,7 @@ using Rhino.Display;
 using Rhino.Geometry;
 using Selva.GH.Features.ComputeIO;
 using Selva.GH.Features.Display.Services;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Goos;
 
@@ -337,7 +338,7 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
     }
 
     // ISelvaSerializableGoo — Rhino.Compute returns this payload. DisplayBatch is a web-ready DTO
-    // (geometry already converted by BinaryGeometryWriter), so default settings match the Goo's
+    // (geometry already converted by SlvaWriter), so default settings match the Goo's
     // own serialization (Write/ScriptVariable).
     public string ToComputeJson()
     {
