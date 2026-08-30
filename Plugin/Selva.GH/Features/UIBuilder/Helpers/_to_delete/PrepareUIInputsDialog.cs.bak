@@ -14,38 +14,14 @@ namespace Selva.GH.Features.UIBuilder.Helpers;
 /// </summary>
 internal sealed class PrepareUIInputsDialog : Form
 {
-    // Row height shared by every header/cell so the independent per-column TableLayouts (see
-    // BuildColumnLayout) line up row-for-row; a mismatched control height in any one column is what
-    // desynchronizes the grid.
-    private const int RowHeight = 24;
-    private const int SelectionColumnWidth = 28;
-    private const int ControlKindColumnWidth = 260;
-
-    // Pixel step applied per wheel notch when Shift+MouseWheel is used to scroll the table
-    // horizontally; the native horizontal scrollbar thumb is too thin to grab reliably.
-    private const int HorizontalScrollStep = 40;
-
-    private static readonly Size DefaultWindowSize = new(1080, 500);
-
-    // Remembered across dialog instances (a new PrepareUIInputsDialog is constructed each time the
-    // preview is opened), so the window size and column widths survive close/reopen for the life of
-    // the Rhino session.
-    private static Size? _savedWindowSize;
-    private static int[] _savedColumnWidths;
-
     private readonly List<PrepareUIInputCandidate> _candidates;
     private readonly List<PreviewRow> _rows = new();
     private readonly Action<IReadOnlyList<PrepareUIInputCandidate>> _apply;
-    private readonly Action<IReadOnlyList<PrepareUIInputCandidate>> _remove;
     private readonly Action<PrepareUIInputCandidate> _reclassify;
     private readonly Func<IEnumerable<PrepareUIInputCandidate>> _refresh;
-    private readonly string _applyCaption;
-    private readonly string _reapplyCaption;
     private readonly Scrollable _scrollable;
-    private readonly Button _applyButton;
     private readonly Label _summary;
     private readonly Label _detail;
-    private CheckBox _selectAllCheckBox;
     private PreviewRow _activeRow;
     private bool _updating;
 
@@ -56,31 +32,21 @@ internal sealed class PrepareUIInputsDialog : Form
         IEnumerable<PrepareUIInputCandidate> candidates,
         Action<IReadOnlyList<PrepareUIInputCandidate>> apply,
         Action<PrepareUIInputCandidate> reclassify = null,
-        Func<IEnumerable<PrepareUIInputCandidate>> refresh = null,
-        string removeCaption = null,
-        Action<IReadOnlyList<PrepareUIInputCandidate>> remove = null,
-        string reapplyCaption = null)
+        Func<IEnumerable<PrepareUIInputCandidate>> refresh = null)
     {
         _candidates = (candidates ?? Enumerable.Empty<PrepareUIInputCandidate>()).ToList();
         _apply = apply;
-        _remove = remove;
         _reclassify = reclassify;
         _refresh = refresh;
-        _applyCaption = applyCaption;
-        _reapplyCaption = reapplyCaption;
 
         Title = "Prepare UI Inputs - " + title;
-        ClientSize = _savedWindowSize ?? DefaultWindowSize;
+        ClientSize = new Size(1080, 500);
         MinimumSize = new Size(820, 380);
         Resizable = true;
         Minimizable = false;
         Maximizable = false;
         ShowInTaskbar = false;
-
-        // Not Topmost: the dialog's Owner (set by the caller via RhinoEtoApp.MainWindowForDocument)
-        // already keeps it above the Rhino window it belongs to. Topmost pinned it above every other
-        // application on the desktop as well, which is not the intended behaviour.
-        SizeChanged += (sender, arguments) => _savedWindowSize = ClientSize;
+        Topmost = true;
 
         var description = new Label
         {
@@ -95,7 +61,6 @@ internal sealed class PrepareUIInputsDialog : Form
             ExpandContentWidth = false,
             ExpandContentHeight = false,
         };
-        _scrollable.MouseWheel += ScrollHorizontallyOnShiftWheel;
 
         _detail = new Label
         {
@@ -110,10 +75,10 @@ internal sealed class PrepareUIInputsDialog : Form
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        _applyButton = new Button { Text = applyCaption };
+        var applyButton = new Button { Text = applyCaption };
         var cancelButton = new Button { Text = "Cancel" };
         var refreshButton = new Button { Text = "Refresh", Enabled = _refresh != null };
-        _applyButton.Click += (sender, arguments) => ApplyChanges();
+        applyButton.Click += (sender, arguments) => ApplyAndClose();
         cancelButton.Click += (sender, arguments) => Close();
         refreshButton.Click += (sender, arguments) => RefreshCandidates();
 
@@ -122,19 +87,8 @@ internal sealed class PrepareUIInputsDialog : Form
             Orientation = Orientation.Horizontal,
             Spacing = 8,
             VerticalContentAlignment = VerticalAlignment.Center,
-            Items = { refreshButton, cancelButton },
+            Items = { refreshButton, cancelButton, applyButton },
         };
-        if (_remove != null)
-        {
-            // Both actions read the same selection and status the rows already carry - Remove
-            // reconnects and deletes whichever selected rows are already prepared, Apply inserts or
-            // repairs whichever selected rows are not, so one shared preview covers both.
-            var removeButton = new Button { Text = removeCaption ?? "Remove" };
-            removeButton.Click += (sender, arguments) => RemoveChanges();
-            buttons.Items.Add(removeButton);
-        }
-
-        buttons.Items.Add(_applyButton);
         var footer = new TableLayout
         {
             Spacing = new Size(12, 0),
@@ -167,6 +121,8 @@ internal sealed class PrepareUIInputsDialog : Form
 
     // Detail is deliberately left out of the column list in BuildColumnLayout: hidden for now,
     // its text still drives the bottom detail label for the active row.
+    private const int ControlKindColumnWidth = 260;
+
     private void RebuildRows()
     {
         _updating = true;
@@ -187,28 +143,6 @@ internal sealed class PrepareUIInputsDialog : Form
         {
             _updating = false;
         }
-
-        UpdateApplyCaption();
-    }
-
-    /// <summary>
-    ///     Switches the apply button between "place" and "update" wording depending on whether any
-    ///     row in the current batch is already prepared - the same button also repairs/re-adopts an
-    ///     already-prepared row (e.g. after its Contextual type is changed in the dropdown), so once
-    ///     anything is placed, "Apply preparation" reads as reapplying rather than placing for the
-    ///     first time. Re-evaluated on every RebuildRows() call, since Apply/Remove/Refresh can all
-    ///     change which rows are already prepared.
-    /// </summary>
-    private void UpdateApplyCaption()
-    {
-        if (_reapplyCaption == null)
-        {
-            return;
-        }
-
-        bool anyAlreadyPrepared = _candidates.Any(candidate => candidate.Status == PrepareUIInputStatus.AlreadyPrepared ||
-            candidate.Status == PrepareUIInputStatus.Replaceable);
-        _applyButton.Text = anyAlreadyPrepared ? _reapplyCaption : _applyCaption;
     }
 
     /// <summary>
@@ -219,141 +153,51 @@ internal sealed class PrepareUIInputsDialog : Form
     /// </summary>
     private Control BuildColumnLayout()
     {
-        (Control Header, int DefaultWidth, Func<PreviewRow, Control> Cell)[] columnDefs =
+        (Control Content, int Width)[] columns =
         {
-            (BuildSelectAllHeader(), SelectionColumnWidth, row => row.Selected),
-            (HeaderLabel("Source control"), 160, row => row.SourceControl),
-            (HeaderLabel("Contextual type"), 210, row => row.Type),
-            (HeaderLabel("Access"), 90, row => row.Access),
-            (HeaderLabel("Custom name"), 180, row => row.SharedName),
-            (HeaderLabel("Control kind"), ControlKindColumnWidth, row => row.ControlKind),
-            (HeaderLabel("Current data"), 220, row => row.CurrentData),
-            (HeaderLabel("Recip."), 65, row => row.Recipients),
-            (HeaderLabel("Status"), 130, row => row.Status),
+            Column(string.Empty, 28, row => row.Selected),
+            Column("Source control", 160, row => row.SourceControl),
+            Column("Control kind", ControlKindColumnWidth, row => row.ControlKind),
+            Column("Current data", 220, row => row.CurrentData),
+            Column("Contextual type", 210, row => row.Type),
+            Column("Access", 90, row => row.Access),
+            Column("Shared name", 180, row => row.SharedName),
+            Column("Recip.", 65, row => row.Recipients),
+            Column("Status", 130, row => row.Status),
         };
 
-        if (_savedColumnWidths == null || _savedColumnWidths.Length != columnDefs.Length)
+        Control chain = columns[columns.Length - 1].Content;
+        for (int index = columns.Length - 2; index >= 0; index--)
         {
-            _savedColumnWidths = columnDefs.Select(column => column.DefaultWidth).ToArray();
-        }
-
-        Control[] columnContents = columnDefs.Select(column => Column(column.Header, column.Cell)).ToArray();
-
-        Control chain = columnContents[columnContents.Length - 1];
-        for (int index = columnContents.Length - 2; index >= 0; index--)
-        {
-            int columnIndex = index;
-            var splitter = new Splitter
+            chain = new Splitter
             {
                 Orientation = Orientation.Horizontal,
                 FixedPanel = SplitterFixedPanel.Panel1,
-                Position = _savedColumnWidths[index],
-                Panel1 = columnContents[index],
+                Position = columns[index].Width,
+                Panel1 = columns[index].Content,
                 Panel2 = chain,
             };
-            splitter.PositionChanged += (sender, arguments) => _savedColumnWidths[columnIndex] = splitter.Position;
-            chain = splitter;
         }
 
         return chain;
     }
 
-    private Control Column(Control header, Func<PreviewRow, Control> cell)
+    private (Control Content, int Width) Column(string header, int width, Func<PreviewRow, Control> cell)
     {
         var stack = new TableLayout { Spacing = new Size(0, 3) };
-        stack.Rows.Add(new TableRow(header) { ScaleHeight = false });
+        stack.Rows.Add(new TableRow(HeaderLabel(header)) { ScaleHeight = false });
         foreach (PreviewRow row in _rows)
         {
             stack.Rows.Add(new TableRow(cell(row)) { ScaleHeight = false });
         }
 
         stack.Rows.Add(new TableRow());
-        return stack;
+        return (stack, width);
     }
 
     private static Label HeaderLabel(string text)
     {
-        return new Label { Text = text, Height = RowHeight, VerticalAlignment = VerticalAlignment.Center };
-    }
-
-    /// <summary>Header checkbox for the selection column: checks or unchecks every selectable row at once.</summary>
-    private Control BuildSelectAllHeader()
-    {
-        _selectAllCheckBox = new CheckBox
-        {
-            Height = RowHeight,
-            Checked = _rows.Count > 0 && _rows.All(row => row.Selected.Checked == true),
-        };
-        _selectAllCheckBox.CheckedChanged += (sender, arguments) =>
-        {
-            if (_updating)
-            {
-                return;
-            }
-
-            ToggleAllSelections(_selectAllCheckBox.Checked == true);
-        };
-        return _selectAllCheckBox;
-    }
-
-    private void ToggleAllSelections(bool select)
-    {
-        _updating = true;
-        try
-        {
-            foreach (PreviewRow row in _rows)
-            {
-                if (!IsSelectable(row.Candidate))
-                {
-                    continue;
-                }
-
-                row.Candidate.Selected = select;
-                row.Selected.Checked = select;
-            }
-        }
-        finally
-        {
-            _updating = false;
-        }
-
-        UpdateSummary();
-    }
-
-    private void SyncSelectAllHeader()
-    {
-        if (_selectAllCheckBox == null)
-        {
-            return;
-        }
-
-        _updating = true;
-        try
-        {
-            _selectAllCheckBox.Checked = _rows.Count > 0 && _rows.All(row => row.Selected.Checked == true);
-        }
-        finally
-        {
-            _updating = false;
-        }
-    }
-
-    private void ScrollHorizontallyOnShiftWheel(object sender, MouseEventArgs arguments)
-    {
-        if (!arguments.Modifiers.HasFlag(Keys.Shift))
-        {
-            return;
-        }
-
-        int notches = Math.Sign(arguments.Delta.Height);
-        if (notches == 0)
-        {
-            return;
-        }
-
-        Point position = _scrollable.ScrollPosition;
-        _scrollable.ScrollPosition = new Point(position.X - notches * HorizontalScrollStep, position.Y);
-        arguments.Handled = true;
+        return new Label { Text = text, Height = 24, VerticalAlignment = VerticalAlignment.Center };
     }
 
     private void WireRow(PreviewRow row)
@@ -362,11 +206,6 @@ internal sealed class PrepareUIInputsDialog : Form
         {
             control.MouseDown += (sender, arguments) => SetActiveRow(row);
             control.GotFocus += (sender, arguments) => SetActiveRow(row);
-
-            // Every cell is covered by a child control, so the Scrollable itself rarely gets a
-            // direct MouseWheel; wire the same shift-to-scroll-horizontally handler on each cell
-            // too, so Shift+wheel works no matter which control the pointer is over.
-            control.MouseWheel += ScrollHorizontallyOnShiftWheel;
         }
 
         row.Selected.CheckedChanged += (sender, arguments) =>
@@ -483,56 +322,16 @@ internal sealed class PrepareUIInputsDialog : Form
         }
     }
 
-    /// <summary>
-    ///     Commits every row's live edits before Apply/Remove reads _candidates.
-    ///
-    ///     The checkbox is captured *before* ApplyNameEdit runs, not read fresh afterwards:
-    ///     ApplyNameEdit reclassifies the candidate (needed so a renamed row's Status/Note are
-    ///     current before applying), and ClassifyCandidate resets Selected to its own recommended
-    ///     default as part of that - which silently dropped a manually-checked row (this is exactly
-    ///     why Remove Get inputs did nothing when a user checked an already-prepared row: the
-    ///     checkbox's own row still visually showed checked, but ApplyNameEdit's reclassify had
-    ///     already reset the checkbox back to unchecked and the underlying candidate.Selected to
-    ///     false, so ApplyRemoval saw nothing selected). The checkbox the user actually looked at is
-    ///     the real source of truth, so it is captured first and reasserted afterwards.
-    /// </summary>
     private void CommitRows()
     {
-        Dictionary<PreviewRow, bool> intendedSelection = _rows.ToDictionary(row => row, row => row.Selected.Checked == true);
-
-        foreach (PreviewRow row in _rows)
-        {
-            ApplyNameEdit(row);
-        }
-
-        // Restore the checkboxes to what the user actually set, without re-triggering
-        // CheckedChanged (guarded the same way SyncRow guards its own programmatic updates), then
-        // commit that restored state deterministically in a single pass below.
-        _updating = true;
-        try
-        {
-            foreach (PreviewRow row in _rows)
-            {
-                row.Selected.Checked = intendedSelection[row];
-            }
-        }
-        finally
-        {
-            _updating = false;
-        }
-
         foreach (PreviewRow row in _rows)
         {
             ApplySelectionEdit(row);
+            ApplyNameEdit(row);
         }
     }
 
-    /// <summary>
-    ///     Applies the batch and refreshes the candidate list in place instead of closing the
-    ///     window, so the user can keep reviewing or apply another batch without reopening the
-    ///     preview.
-    /// </summary>
-    private void ApplyChanges()
+    private void ApplyAndClose()
     {
         CommitRows();
         try
@@ -541,27 +340,7 @@ internal sealed class PrepareUIInputsDialog : Form
         }
         finally
         {
-            RefreshCandidates();
-        }
-    }
-
-    /// <summary>
-    ///     Removes the batch and refreshes the candidate list in place, mirroring ApplyChanges. The
-    ///     same selection and rows are shared with Apply - PrepareUIInputGraphService.ApplyRemoval
-    ///     already skips any selected row that is not an already-prepared, unambiguous link, so
-    ///     selecting a mix of not-yet-prepared and already-prepared rows and pressing either button
-    ///     only acts on the rows that button actually applies to.
-    /// </summary>
-    private void RemoveChanges()
-    {
-        CommitRows();
-        try
-        {
-            _remove?.Invoke(_candidates);
-        }
-        finally
-        {
-            RefreshCandidates();
+            Close();
         }
     }
 
@@ -588,10 +367,9 @@ internal sealed class PrepareUIInputsDialog : Form
         int renamed = _candidates.Count(candidate => candidate.NameChanged);
 
         string overriddenSuffix = overridden > 0 ? $"; {overridden} type override(s)" : string.Empty;
-        string renamedSuffix = renamed > 0 ? $"; {renamed} custom name edit(s)" : string.Empty;
+        string renamedSuffix = renamed > 0 ? $"; {renamed} shared name edit(s)" : string.Empty;
         string blockedSuffix = blocked > 0 ? $"; {blocked} left untouched for review." : ".";
         _summary.Text = $"{selected} of {_candidates.Count} row(s) selected{overriddenSuffix}{renamedSuffix}{blockedSuffix}";
-        SyncSelectAllHeader();
     }
 
     private void UpdateDetail()
@@ -617,12 +395,7 @@ internal sealed class PrepareUIInputsDialog : Form
         internal PreviewRow(PrepareUIInputCandidate candidate, bool editable)
         {
             Candidate = candidate;
-            Selected = new CheckBox
-            {
-                Checked = candidate.Selected,
-                Enabled = IsSelectable(candidate),
-                Height = RowHeight,
-            };
+            Selected = new CheckBox { Checked = candidate.Selected, Enabled = IsSelectable(candidate) };
             SourceControl = Text(candidate.OriginalControlNickName);
             ControlKind = Text(PrepareUIInputInference.Describe(candidate.Kind));
             CurrentData = Text(candidate.Profile?.Describe() ?? string.Empty);
@@ -673,7 +446,7 @@ internal sealed class PrepareUIInputsDialog : Form
 
         private static Label Text(string value)
         {
-            return new Label { Text = value ?? string.Empty, Height = RowHeight, VerticalAlignment = VerticalAlignment.Center };
+            return new Label { Text = value ?? string.Empty, Height = 24, VerticalAlignment = VerticalAlignment.Center };
         }
     }
 }
