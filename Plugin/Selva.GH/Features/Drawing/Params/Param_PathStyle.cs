@@ -9,7 +9,7 @@ public class Param_PathStyle : GH_Param<PathStyleGoo>
     public Param_PathStyle()
         : base("Param Path Style", "PPS",
             "Path style bundle (stroke + fill)",
-            "Selva", "Elements", GH_ParamAccess.item)
+            "Params", "Selva", GH_ParamAccess.item)
     { }
 
     public Param_PathStyle(GH_InstanceDescription tag) : base(tag) { }

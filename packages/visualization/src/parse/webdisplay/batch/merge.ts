@@ -5,6 +5,27 @@ import { indexOutOfWindow } from './metadata.js';
 import type { MaterialGroup, MeshMetadata } from '../types.js';
 
 /**
+ * Split a material group into one sub-group per layer, preserving mesh order.
+ *
+ * Merging is by material alone, but a merged mesh is one THREE object and so can sit on exactly
+ * one layer in the outliner. Without this split, two layers sharing a material collapse into a
+ * single object filed under the first one, and hiding either layer hides both.
+ */
+export function splitGroupByLayer(group: MaterialGroup): MaterialGroup[] {
+	const byLayer = new Map<string, MeshMetadata[]>();
+	for (const meshMeta of group.meshes) {
+		const layer = meshMeta.layer ?? '';
+		let bucket = byLayer.get(layer);
+		if (!bucket) {
+			bucket = [];
+			byLayer.set(layer, bucket);
+		}
+		bucket.push(meshMeta);
+	}
+	return [...byLayer.values()].map((meshes) => ({ materialId: group.materialId, meshes }));
+}
+
+/**
  * Merges a material group's meshes into one BufferGeometry. Parser indices already address the
  * combined vertex array (rebased by the C# pipeline during batch assembly), so this copies each
  * mesh's vertex/index slices into a fresh contiguous buffer and shifts indices to match.

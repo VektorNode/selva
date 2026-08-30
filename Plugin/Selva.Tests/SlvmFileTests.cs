@@ -1,16 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using Selva.GH.Features.Display.Services;
 
 namespace Selva.Tests;
 
 /// <summary>
 ///     The <c>.slvm</c> mesh file is written to users' disks and read back by a later plugin build,
-///     so a round-trip that quietly drops a field degrades a saved file rather than failing. Its
-///     one structural risk: <see cref="SlvmFile.Write" /> serializes a private Sidecar type but
-///     <see cref="SlvmFile.Read" /> deserializes into <see cref="DisplayBatch" />, so the two shapes
-///     agree only by matching JSON property names — nothing checks that at compile time.
+///     so a round-trip that quietly drops a field degrades a saved file rather than failing. The
+///     contract guarded here: the SLVM v2 container round-trips every batch field.
 /// </summary>
 public class SlvmFileTests
 {
@@ -26,7 +25,9 @@ public class SlvmFileTests
     {
         return new DisplayBatch
         {
-            SourceComponentId = "component-7",
+            BatchId = "component-7",
+            // Not an SLVA blob: Write adopts unknown geometry bytes verbatim, which is exactly
+            // what the byte-exactness tests below want to observe.
             CompressedData = blob ?? new byte[] { 1, 2, 3, 4, 5 },
             Materials = new List<SerializableMaterial>
             {
@@ -46,7 +47,7 @@ public class SlvmFileTests
                         new MeshMetadata
                         {
                             Name = "wall", Layer = "Structure/Walls", OriginalIndex = 3,
-                            VertexCount = 8, IndexCount = 12, VertexStart = 16, IndexStart = 24,
+                            VertexCount = 8, IndexCount = 12, VertexStart = 0, IndexStart = 0,
                             Metadata = new Dictionary<string, string> { ["fire"] = "REI60" }
                         }
                     }
@@ -55,14 +56,18 @@ public class SlvmFileTests
         };
     }
 
+    /// <summary>The GEOM payload of a batch's container — the bytes the file stores verbatim.</summary>
+    private static byte[] GeometryBlobOf(DisplayBatch batch)
+    {
+        return SlvmDocument.Read(batch.CompressedData).GeometryBlob;
+    }
+
     [Fact]
     public void RoundTrip_PreservesEveryEnvelopeField()
     {
-        // The Sidecar/DisplayBatch name-matching contract. A renamed JsonProperty on either side
-        // leaves the field silently null here rather than failing to compile.
         var decoded = RoundTrip(SampleBatch());
 
-        Assert.Equal("component-7", decoded.SourceComponentId);
+        Assert.Equal("component-7", decoded.BatchId);
 
         var material = decoded.Materials[0];
         Assert.Equal("#ff8800", material.Color);
@@ -78,17 +83,16 @@ public class SlvmFileTests
         Assert.Equal(3, mesh.OriginalIndex);
         Assert.Equal(8, mesh.VertexCount);
         Assert.Equal(12, mesh.IndexCount);
-        // The offsets the parsers slice on: a dropped VertexStart reads as 0 and renders the wrong
-        // vertices rather than erroring.
-        Assert.Equal(16, mesh.VertexStart);
-        Assert.Equal(24, mesh.IndexStart);
+        // v2 derives the offsets the parsers slice on from prefix sums over the table.
+        Assert.Equal(0, mesh.VertexStart);
+        Assert.Equal(0, mesh.IndexStart);
         Assert.Equal("REI60", mesh.Metadata["fire"]);
     }
 
     [Fact]
     public void RoundTrip_PreservesCurveItemsIncludingTheirRhinoJson()
     {
-        // Items are the half of the batch that isn't in the blob. DisplayItem.Json is the exact
+        // Items are the half of the batch that isn't mesh geometry. DisplayItem.Json is the exact
         // NURBS form: losing it downgrades a reloaded file's viewport preview to its tessellation,
         // and DisplayBatchTransformer to compounding tessellation error on repeated transforms.
         var batch = SampleBatch();
@@ -107,33 +111,36 @@ public class SlvmFileTests
         var item = Assert.Single(decoded.Items);
         Assert.Equal("curve", item.Kind);
         Assert.Equal("{\"version\":10000,\"archive3dm\":70}", item.Json);
-        Assert.Equal(new double[] { 0, 0, 0, 1, 1, 1 }, item.Points);
+        Assert.NotNull(item.Points);
+        // Polyline vertices are quantized into the item bbox, so equality is approximate.
+        for (var i = 0; i < 6; i++)
+        {
+            Assert.Equal(new double[] { 0, 0, 0, 1, 1, 1 }[i], item.Points[i], 3);
+        }
+
         Assert.Equal("component-7:0", item.Id);
         Assert.Equal("beam", item.Name);
         Assert.Equal("Structure/Beams", item.Layer);
         Assert.Equal("6m", item.Metadata["span"]);
         Assert.Equal("#00ff00", item.Color);
-        Assert.Equal(0.8, item.Opacity);
+        Assert.Equal(0.8, item.Opacity!.Value, 3);
     }
 
     [Fact]
-    public void RoundTrip_PreservesTheBlobBytesExactly()
+    public void RoundTrip_PreservesTheGeometryBlobBytesExactly()
     {
-        // The blob trails the JSON to end-of-file with no length prefix, so Read recovers it by
-        // draining the reader. An off-by-one there corrupts the SLVA header rather than truncating
-        // visibly. A byte that could be mistaken for EOF (0x00, 0x1A) is included deliberately.
+        // Save/load must never re-encode the geometry: the file adopts the blob as its GEOM
+        // payload byte-for-byte. Bytes that could be mistaken for EOF (0x00, 0x1A) included.
         var blob = new byte[] { 0x53, 0x4C, 0x56, 0x41, 0x00, 0x1A, 0xFF, 0x7F, 0x00 };
 
         var decoded = RoundTrip(SampleBatch(blob));
 
-        Assert.Equal(blob, decoded.CompressedData);
+        Assert.Equal(blob, GeometryBlobOf(decoded));
     }
 
     [Fact]
-    public void RoundTrip_SurvivesABlobLargerThanTheReadChunk()
+    public void RoundTrip_SurvivesABlobLargerThanOneReadChunk()
     {
-        // Read drains through an 8 KB buffer; a batch that fits in one chunk would never exercise
-        // the loop's continuation.
         var blob = new byte[20000];
         for (var i = 0; i < blob.Length; i++)
         {
@@ -142,30 +149,30 @@ public class SlvmFileTests
 
         var decoded = RoundTrip(SampleBatch(blob));
 
-        Assert.Equal(blob, decoded.CompressedData);
+        Assert.Equal(blob, GeometryBlobOf(decoded));
     }
 
     [Fact]
     public void Write_AcceptsABatchWithNoBlob()
     {
-        // An items-only batch (curves/points, no meshes) has no CompressedData; Write substitutes
-        // an empty array rather than throwing.
+        // An items-only batch (curves/points, no meshable geometry) has no CompressedData; Write
+        // substitutes a valid empty geometry blob rather than throwing.
         var batch = SampleBatch();
         batch.CompressedData = null;
 
         var decoded = RoundTrip(batch);
 
-        Assert.Empty(decoded.CompressedData);
+        Assert.True(SlvmDocument.IsSlvm(decoded.CompressedData));
     }
 
     [Fact]
-    public void Read_RejectsAFileThatIsNotDmf()
+    public void Read_RejectsAFileWithAForeignMagic()
     {
         using var ms = new MemoryStream();
-        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
         {
             w.Write(0xDEADBEEFu);
-            w.Write(SlvmFile.Version);
+            w.Write(1u);
             w.Write(0u);
         }
 
@@ -176,16 +183,15 @@ public class SlvmFileTests
     [Fact]
     public void Read_RejectsAFutureVersion()
     {
-        // Forward compatibility is deliberately NOT offered here (unlike SLVA, which is
-        // flag-additive): a newer sidecar shape can't be read by an older plugin, so it must say so
-        // rather than deserialize a partial batch.
+        // Forward compatibility is deliberately NOT offered for the container (unlike the geometry
+        // blob, which is flag-additive): a newer chunk set can't be read by an older plugin, so it
+        // must say so rather than deserialize a partial batch.
         using var ms = new MemoryStream();
-        using (var w = new BinaryWriter(ms, System.Text.Encoding.UTF8, leaveOpen: true))
+        using (var w = new BinaryWriter(ms, Encoding.UTF8, leaveOpen: true))
         {
-            w.Write(SlvmFile.Magic);
-            w.Write(SlvmFile.Version + 1);
-            w.Write(2u);
-            w.Write(System.Text.Encoding.UTF8.GetBytes("{}"));
+            w.Write(SlvmDocument.Magic);
+            w.Write(SlvmDocument.Version + 1);
+            w.Write(0u);
         }
 
         ms.Position = 0;
@@ -204,8 +210,6 @@ public class SlvmFileTests
     [Fact]
     public void Write_LeavesTheStreamOpenForTheCaller()
     {
-        // Both sides pass leaveOpen: true so a caller can embed the file in a larger stream. If a
-        // BinaryWriter ever closed it, this would throw on the following write.
         using var ms = new MemoryStream();
         SlvmFile.Write(ms, SampleBatch());
         ms.WriteByte(0xAB);

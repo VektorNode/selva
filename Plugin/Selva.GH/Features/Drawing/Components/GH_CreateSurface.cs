@@ -25,7 +25,7 @@ public class GH_CreateSurface : GH_Component
     }
 
     protected override Bitmap Icon => Resources.DrawSurface;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("29735748-B215-42FB-85D0-85549F26F28E");
 
     public override bool IsPreviewCapable => true;

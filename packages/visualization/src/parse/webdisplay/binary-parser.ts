@@ -32,6 +32,7 @@ import {
 	validateIndicesInRange
 } from './binary/geometry.js';
 import { parseColorChunk, parseUvChunk } from './binary/textures.js';
+import { isSlvmContainer, parseSlvmContainer } from './binary/slvm.js';
 
 import type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.js';
 
@@ -156,7 +157,19 @@ export function parseBinaryMeshBatchRaw(
 		);
 	}
 
-	const bytes = maybeDecompress(toUint8Array(input));
+	const rawInput = toUint8Array(input);
+
+	// An SLVM v2 container nests a bare SLVA/SLVZ blob as its GEOM chunk and carries the object
+	// table/materials as binary chunks — unwrap, decode the inner blob through the path below,
+	// and overlay the container's metadata (the inner blob's own metadata is empty).
+	if (isSlvmContainer(rawInput)) {
+		const container = parseSlvmContainer(rawInput);
+		const raw = parseBinaryMeshBatchRaw(container.geometryBlob);
+		raw.metadata = container.metadata;
+		return raw;
+	}
+
+	const bytes = maybeDecompress(rawInput);
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
 	if (bytes.byteLength < HEADER_PREAMBLE_BYTES) {
@@ -202,7 +215,12 @@ export function parseBinaryMeshBatchRaw(
 
 	let metadata: BinaryMeshMetadata;
 	try {
-		metadata = JSON.parse(decodeUtf8(metadataBytes)) as BinaryMeshMetadata;
+		// A blob nested inside an SLVM container carries no metadata of its own (metadataLen = 0);
+		// the container's TABL/MATL/EXTN chunks supply it after this parse returns.
+		metadata =
+			metadataLen === 0
+				? ({} as BinaryMeshMetadata)
+				: (JSON.parse(decodeUtf8(metadataBytes)) as BinaryMeshMetadata);
 	} catch (error) {
 		throw fail(
 			`Failed to parse metadata JSON: ${error instanceof Error ? error.message : String(error)}`,

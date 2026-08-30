@@ -147,6 +147,30 @@ public class ValueCollector
     }
 
     /// <summary>
+    ///     Every ContextBake in the document, in document order. These are the components whose
+    ///     volatile data <see cref="CollectDisplayData" /> reads, so expiring them is what
+    ///     regenerates display geometry after a cleared or expired solution.
+    /// </summary>
+    public static List<IGH_ActiveObject> FindContextBakes(GH_Document document)
+    {
+        var bakes = new List<IGH_ActiveObject>();
+        if (document == null)
+        {
+            return bakes;
+        }
+
+        foreach (var docObject in document.Objects)
+        {
+            if (docObject is IGH_Component component && IsContextBakeComponent(component))
+            {
+                bakes.Add(component);
+            }
+        }
+
+        return bakes;
+    }
+
+    /// <summary>
     ///     Collects display data from ContextBake inputs, mirroring Rhino.Compute's explicit baking.
     ///     When <paramref name="bakeIds" /> is given, only those components are visited instead of
     ///     scanning the whole document.

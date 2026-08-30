@@ -54,13 +54,32 @@ The meshes are packed into a compact binary format:
 
    Between roughly 16 and 64 vertices per part the two sit within a percent or two of each other. Nothing cheap infers part size from a flat vertex array — a batch arrives as one concatenated buffer with no part boundaries — hence the measurement. Colors stay interleaved unconditionally: planar loses on noisy per-channel data. Batches under 4096 vertices skip the probe and take planar; the wire difference there is a few hundred bytes, less than the two trial deflates cost.
 
-5. **Deflate.** The chosen stream is compressed, and the whole blob wrapped in an `SLVZ` container when that actually shrinks it. Decoders sniff `SLVA` vs `SLVZ` from the leading magic, so the result is self-describing.
+5. **Deflate.** The chosen stream is compressed, and the geometry blob wrapped in an `SLVZ` container when that actually shrinks it. Decoders sniff `SLVA` vs `SLVZ` from the leading magic, so the result is self-describing.
 
-Curves and points ride as JSON next to the blob.
+6. **The SLVM container.** The finished geometry blob is packed with everything else the batch carries into one chunked container — the bytes that travel as `CompressedData` and, with the item chunks added, sit on disk as a `.slvm` file:
 
-Version gates are additive: each bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade. The frozen pre-v4 fixtures under `packages/schemas/fixtures/slva/v3/` pin this on both stacks — never regenerate them.
+   ```
+   [4] "SLVM" | [4] version = 2 | [4] chunkCount
+   per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
+   ```
 
-> **The byte-level spec is normative and lives in code, in two places that must agree:** the remarks block at the top of [`BinaryGeometryWriter.cs`](../../Plugin/Selva.GH/Features/Display/Services/BinaryGeometryWriter.cs) (encoder) and the constants in [`binary/header.ts`](../../packages/visualization/src/parse/webdisplay/binary/header.ts) (decoder). Change them together and bump the version.
+   | chunk  | payload                                                                 |
+   | ------ | ----------------------------------------------------------------------- |
+   | `GEOM` | the SLVA/SLVZ geometry blob from steps 1–5, its embedded metadata empty |
+   | `TABL` | the columnar object table (below), optionally SLVZ-wrapped              |
+   | `MATL` | materials JSON; a `map` of `slvm:tex:N` references the Nth `TEXR` chunk |
+   | `TEXR` | one texture: mime string + raw image bytes (extracted from data URIs)   |
+   | `CRVS` | polyline vertices for curve items — another bare SLVA blob, no indices  |
+   | `PNTS` | point positions, same encoding                                          |
+   | `EXTN` | namespaced host extension; readers skip namespaces they don't know      |
+
+   Readers skip unknown chunk types by length — that is the format's extension mechanism. The `TABL` object table is columnar and pays only for what's present: per-mesh vertex/triangle counts (vertex/index **starts are never stored** — geometry is concatenated in table order, so windows are prefix sums and can't overlap by construction), material run-lengths, an `originalIndex` column only when the material sort reordered the table, names/layers as string-pool references (the auto-numbering default collapses to one mode byte), and sparse attr columns — the key stored once, then only the objects carrying it (`gh:branch`, `ifc:guid`, `style:color`, …). Selva's own host data (`sourceComponentId`, the Rhino NURBS JSON behind each curve) lives in `EXTN "selva.gh"`, so the core container stays free of Grasshopper concepts: a foreign reader gets every mesh, name, layer and material without knowing Selva exists.
+
+   The wire container omits the item chunks (curves/points travel as JSON alongside, stage 3); the `.slvm` file includes them. Display From File restamps a loaded batch's identity by rewriting the tiny `EXTN` chunk — the geometry is never re-encoded.
+
+Version gates are additive within the geometry blob: each SLVA bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade. The frozen pre-v4 fixtures under `packages/schemas/fixtures/slva/v3/` pin this on both stacks — never regenerate them. Containers are gated separately: readers accept SLVM v2, the legacy `DMF1` file container, and bare SLVA/SLVZ blobs from old `.gh` files, dispatching on the leading magic; new bytes are always SLVM v2. The cross-stack container fixtures live under `packages/schemas/fixtures/slvm2/` (`UPDATE_SLVM_FIXTURES=1 dotnet test` regenerates).
+
+> **The byte-level spec is normative and lives in code, in two places that must agree:** for the geometry blob, the remarks block at the top of [`BinaryGeometryWriter.cs`](../../Plugin/Selva.GH/Features/Display/Services/BinaryGeometryWriter.cs) (encoder) and the constants in [`binary/header.ts`](../../packages/visualization/src/parse/webdisplay/binary/header.ts) (decoder); for the container, [`SlvmDocument.cs`](../../Plugin/Selva.GH/Features/Display/Services/SlvmDocument.cs) and [`binary/slvm.ts`](../../packages/visualization/src/parse/webdisplay/binary/slvm.ts). Change them together and bump the version.
 >
 > The format is internal to the plugin and `@selvajs/visualization`. It is versioned and can change without a major bump; don't build against it directly.
 

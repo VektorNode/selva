@@ -42,7 +42,17 @@ public static class BinaryGeometryReader
             throw new ArgumentNullException(nameof(blob));
         }
 
-        var bytes = MaybeDecompress(blob);
+        // An SLVM v2 container carries its object table in TABL and its geometry as a nested
+        // bare blob — unwrap, decode the inner blob, and overlay the container's metadata.
+        if (SlvmDocument.IsSlvm(blob))
+        {
+            var doc = SlvmDocument.Read(blob);
+            var inner = Read(doc.GeometryBlob);
+            inner.Metadata = doc.Batch;
+            return inner;
+        }
+
+        var bytes = BlobCompressor.MaybeDecompress(blob);
 
         using (var ms = new MemoryStream(bytes, false))
         using (var br = new BinaryReader(ms, Encoding.UTF8))
@@ -306,24 +316,4 @@ public static class BinaryGeometryReader
         return (sbyte)((zz >> 1) ^ -(zz & 1));
     }
 
-    /// <summary>
-    ///     If the blob is a SLVZ container, inflate it back to the raw SLVA bytes; otherwise return
-    ///     the input unchanged. Mirrors the web decoder's detection by leading magic.
-    /// </summary>
-    private static byte[] MaybeDecompress(byte[] blob)
-    {
-        if (blob.Length < 8 || BitConverter.ToUInt32(blob, 0) != BlobCompressor.CompressedMagic)
-        {
-            return blob;
-        }
-
-        var uncompressedLen = (int)BitConverter.ToUInt32(blob, 4);
-        using (var input = new MemoryStream(blob, 8, blob.Length - 8))
-        using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
-        using (var ms = new MemoryStream(uncompressedLen))
-        {
-            deflate.CopyTo(ms);
-            return ms.ToArray();
-        }
-    }
 }

@@ -4,6 +4,7 @@ import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 
 import { parseMeshBatchObject } from '../batch-parser';
 import { parseBinaryMeshBatchRaw } from '../binary-parser';
+import { splitGroupByLayer } from '../batch/merge';
 import { assembleGeometries, meshAssemblyWorkerSource } from '../mesh-assembly';
 
 import type { AssemblyInput, AssemblyJob } from '../mesh-assembly';
@@ -14,7 +15,7 @@ function assemblyInputFor(batch: DisplayBatch, mergeByMaterial: boolean): Assemb
 	const raw = parseBinaryMeshBatchRaw(batch.compressedData!);
 	const groups = raw.metadata.groups ?? batch.groups ?? [];
 	const jobs: AssemblyJob[] = [];
-	for (const group of groups) {
+	for (const group of mergeByMaterial ? groups.flatMap(splitGroupByLayer) : groups) {
 		if (mergeByMaterial && group.meshes.length > 1) {
 			jobs.push({ kind: 'merged', windows: group.meshes.map((m) => ({ ...m })) });
 		} else {

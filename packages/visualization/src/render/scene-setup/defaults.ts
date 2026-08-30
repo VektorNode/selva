@@ -101,7 +101,7 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 		},
 		lighting: {
 			enableSunlight: options.lighting?.enableSunlight ?? true,
-			sunlightIntensity: options.lighting?.sunlightIntensity ?? 1,
+			sunlightIntensity: options.lighting?.sunlightIntensity ?? preset.sunlightIntensity,
 			// Expressed in the scene basis so the sun stays overhead in any up convention.
 			sunlightPosition:
 				options.lighting?.sunlightPosition ||

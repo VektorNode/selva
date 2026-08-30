@@ -24,7 +24,7 @@ public class GH_Table : GH_Component
     }
 
     protected override Bitmap Icon => Resources.Table;
-    public override GH_Exposure Exposure => GH_Exposure.quinary;
+    public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("2B7C8D3E-4F5A-4B6C-8D9E-1F2A3B4C5D62");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

@@ -135,6 +135,7 @@ export class WebSocketState {
 	private batchTimer: ReturnType<typeof setTimeout> | null = null;
 	private batchedValues: Record<string, unknown> = {};
 	private currentSessionId: string | null = null;
+	private _hasConnectedBefore = false;
 	private readonly BATCH_DELAY_MS = 50; // Batch updates within 50ms window
 
 	// Reactive state using Svelte 5 runes
@@ -231,6 +232,15 @@ export class WebSocketState {
 					this._serverDisconnected = false;
 					this.connected = true;
 					settle(true);
+
+					// Re-request state on every reconnect. The plugin pushes outputs and mesh
+					// frames only on solve-end, so a socket that drops and comes back (or a
+					// browser that was already open when the plugin started) would otherwise
+					// show a connected viewer with no geometry until the next solve.
+					if (this._hasConnectedBefore && this.currentSessionId) {
+						this.requestInitialData(this.currentSessionId);
+					}
+					this._hasConnectedBefore = true;
 				};
 
 				this.socket.onmessage = (event) => {
@@ -397,6 +407,7 @@ export class WebSocketState {
 	 * Request initial data (schema, available params, current values) from Grasshopper
 	 */
 	requestInitialData(sessionId: string) {
+		this.currentSessionId = sessionId;
 		this.send('requestInitialData', { sessionId });
 	}
 

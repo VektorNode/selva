@@ -25,7 +25,7 @@ public class GH_CreateText : GH_Component
     }
 
     protected override Bitmap Icon => Resources.DrawText;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("6B9D20CC-5566-47CF-9364-F65F9283396F");
 
     public override bool IsPreviewCapable => true;

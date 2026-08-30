@@ -33,7 +33,7 @@ namespace Selva.Tests;
 /// </summary>
 public class SlvaFixtureContractTests
 {
-    private const string SourceComponentId = "44444444-4444-4444-8444-444444444444";
+    private const string BatchId = "44444444-4444-4444-8444-444444444444";
 
     private sealed class FixtureCase
     {
@@ -272,7 +272,7 @@ public class SlvaFixtureContractTests
             "\"groups\":[{\"materialId\":0,\"meshes\":[{\"name\":\"fixture\",\"layer\":\"Fixtures\"," +
             $"\"originalIndex\":0,\"vertexStart\":0,\"vertexCount\":{vertexCount}," +
             $"\"indexStart\":0,\"indexCount\":{indexCount}}}]}}]," +
-            $"\"sourceComponentId\":\"{SourceComponentId}\"}}";
+            $"\"sourceComponentId\":\"{BatchId}\"}}";
     }
 
     private static (byte[] fileBytes, byte[] rawSlva, JObject expected) Produce(FixtureCase c)
@@ -323,7 +323,7 @@ public class SlvaFixtureContractTests
             ["scale"] = new JArray(result.ScaleX, result.ScaleY, result.ScaleZ),
             ["positionTolerance"] = positionTolerance,
             ["uvTolerance"] = uvTolerance,
-            ["sourceComponentId"] = SourceComponentId
+            ["sourceComponentId"] = BatchId
         };
 
         if (c.SampleOnly)

@@ -18,7 +18,7 @@ namespace Selva.GH.Features.Display.Services;
 ///     [4]  version          = uint32 (currently 4; v2 added uint16 indices, v3 the delta filter,
 ///                             v4 the planar byte-split layout)
 ///     [4]  metadataLen      = uint32 byte length of metadata JSON
-///     [N]  metadata         = UTF-8 JSON (materials, groups, sourceComponentId, ...)
+///     [N]  metadata         = UTF-8 JSON (materials, groups, batchId, ...)
 ///
 ///     -- geometry block --
 ///     [4]  flags            = uint32 (bit 0: 0 = int16 quantized, 1 = float32 raw;

@@ -37,6 +37,27 @@ public static class BlobCompressor
     ///     The result is self-describing: callers don't track whether it was compressed — the
     ///     decoder reads the leading magic.
     /// </summary>
+    /// <summary>
+    ///     If the blob is an SLVZ container, inflate it back to the raw bytes; otherwise return the
+    ///     input unchanged. Mirrors the web decoder's detection by leading magic.
+    /// </summary>
+    public static byte[] MaybeDecompress(byte[] blob)
+    {
+        if (blob == null || blob.Length < 8 || BitConverter.ToUInt32(blob, 0) != CompressedMagic)
+        {
+            return blob;
+        }
+
+        var uncompressedLen = (int)BitConverter.ToUInt32(blob, 4);
+        using (var input = new MemoryStream(blob, 8, blob.Length - 8))
+        using (var deflate = new DeflateStream(input, CompressionMode.Decompress))
+        using (var ms = new MemoryStream(uncompressedLen))
+        {
+            deflate.CopyTo(ms);
+            return ms.ToArray();
+        }
+    }
+
     public static byte[] Compress(byte[] slvaBlob)
     {
         if (slvaBlob == null)

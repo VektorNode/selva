@@ -11,8 +11,8 @@ export type Locale = 'en' | 'de';
 export interface ViewerMessages {
 	// Tools menu
 	toolsMenu: string;
-	switchTo2D: string;
-	switchTo3D: string;
+	switchToOrthographic: string;
+	switchToPerspective: string;
 	fitToView: string;
 	views: string;
 	measure: string;
@@ -38,6 +38,8 @@ export interface ViewerMessages {
 	clearSearch: string;
 	expandLayer: string;
 	collapseLayer: string;
+	expandAll: string;
+	collapseAll: string;
 	showLayer: string;
 	hideLayer: string;
 	showObject: string;
@@ -73,8 +75,8 @@ export interface ViewerMessages {
 
 const en: ViewerMessages = {
 	toolsMenu: 'Viewer tools',
-	switchTo2D: 'Switch to 2D',
-	switchTo3D: 'Switch to 3D',
+	switchToOrthographic: 'Orthographic camera',
+	switchToPerspective: 'Perspective camera',
 	fitToView: 'Fit to view',
 	views: 'Views',
 	measure: 'Measure',
@@ -98,6 +100,8 @@ const en: ViewerMessages = {
 	clearSearch: 'Clear search',
 	expandLayer: 'Expand layer',
 	collapseLayer: 'Collapse layer',
+	expandAll: 'Expand all',
+	collapseAll: 'Collapse all',
 	showLayer: 'Show layer',
 	hideLayer: 'Hide layer',
 	showObject: 'Show object',
@@ -128,8 +132,8 @@ const en: ViewerMessages = {
 
 const de: ViewerMessages = {
 	toolsMenu: 'Viewer-Werkzeuge',
-	switchTo2D: 'Zu 2D wechseln',
-	switchTo3D: 'Zu 3D wechseln',
+	switchToOrthographic: 'Orthografische Kamera',
+	switchToPerspective: 'Perspektivische Kamera',
 	fitToView: 'Ansicht anpassen',
 	views: 'Ansichten',
 	measure: 'Messen',
@@ -153,6 +157,8 @@ const de: ViewerMessages = {
 	clearSearch: 'Suche löschen',
 	expandLayer: 'Ebene aufklappen',
 	collapseLayer: 'Ebene zuklappen',
+	expandAll: 'Alle aufklappen',
+	collapseAll: 'Alle zuklappen',
 	showLayer: 'Ebene einblenden',
 	hideLayer: 'Ebene ausblenden',
 	showObject: 'Objekt einblenden',

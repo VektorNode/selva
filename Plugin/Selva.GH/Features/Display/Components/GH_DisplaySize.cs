@@ -23,7 +23,7 @@ public class GH_DisplaySize : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.WebDisplay;
+    protected override Bitmap Icon => Resources.DisplaySize;
     public override GH_Exposure Exposure => GH_Exposure.hidden;
     public override Guid ComponentGuid => new Guid("B2F6D3A1-7C84-4E29-9A5B-1D0E8C7F2A63");
 
@@ -62,8 +62,7 @@ public class GH_DisplaySize : GH_Component
 
         var (vertices, indices) = CountGeometry(batch);
 
-        var compressed = batch.CompressedData != null && batch.CompressedData.Length >= 4 &&
-                         BitConverter.ToUInt32(batch.CompressedData, 0) == BlobCompressor.CompressedMagic;
+        var compressed = IsGeometryDeflated(batch.CompressedData);
         var meshLabel = compressed ? $"{FormatBytes(blobBytes)} mesh, compressed" : $"{FormatBytes(blobBytes)} mesh";
         AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
             $"{FormatBytes(totalBytes)}  ({meshLabel}, {FormatBytes(itemBytes)} items)");
@@ -72,6 +71,30 @@ public class GH_DisplaySize : GH_Component
         DA.SetData(1, FormatBytes(totalBytes));
         DA.SetData(2, vertices);
         DA.SetData(3, indices / 3);
+    }
+
+    // "Compressed" means the geometry stream itself is deflated: SLVZ directly, or an SLVM
+    // container whose GEOM payload is SLVZ. Diagnostics-only, so parsing the container is fine.
+    private static bool IsGeometryDeflated(byte[] blob)
+    {
+        if (blob == null || blob.Length < 4)
+        {
+            return false;
+        }
+
+        if (BitConverter.ToUInt32(blob, 0) == BlobCompressor.CompressedMagic)
+        {
+            return true;
+        }
+
+        if (!SlvmDocument.IsSlvm(blob))
+        {
+            return false;
+        }
+
+        var geometry = SlvmDocument.Read(blob).GeometryBlob;
+        return geometry != null && geometry.Length >= 4 &&
+               BitConverter.ToUInt32(geometry, 0) == BlobCompressor.CompressedMagic;
     }
 
     private static DisplayBatch ReadBatch(IGH_DataAccess DA)

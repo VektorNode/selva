@@ -16,6 +16,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**`sourceComponentId` is now `batchId`**
+
+- The field was never "the component that made this mesh" — it is the batch's identity namespace, which with a mesh's `originalIndex` forms the key that survives a solve (hidden state, selection, per-object overrides). It is usually the producing Display's InstanceGuid, but a combined batch takes the combiner's id, and the old name actively misled there. "Which component produced this mesh" is the per-mesh `gh:component` attr instead.
+- Renamed in the C# API and in the SLVM v2 `EXTN` chunk, where v2's newness made it free. **The JSON wire name is unchanged** (`sourceComponentId` in the values envelope and on mesh `userData`): it is the contract with published `@selvajs/*` releases and is baked into every pre-v2 blob, `.gh` archive and `.slvm` file. Containers written with the old `EXTN` spelling are still read, on both stacks, pinned by a regression test each side.
+
+**SLVM v2 — one chunked container for wire and file**
+
+- The mesh payload is now an `SLVM` v2 chunked container (magic `SLVM`, fourcc chunks, unknown types skipped by length) — the same bytes on the wire, in `.gh` archives, and on disk as `.slvm`. It replaces three nested layers: the `DMF1` file sidecar, the JSON metadata embedded in the geometry blob, and the duplicate copy of that metadata the old file carried (a 12,679-mesh scene shrinks from 3.05 MB to 1.33 MB on disk).
+- The object table is columnar and pays only for what's present: vertex/index windows are prefix sums (never stored), auto-numbered names cost one byte total, layers/names dedupe through a string pool, and per-mesh metadata is stored as sparse attr columns — the key once, then only the objects carrying it. Namespaced keys (`gh:branch`, `ifc:guid`, …) give hosts and users a first-class slot for per-mesh provenance.
+- Grasshopper concepts left the core format: `sourceComponentId` and the Rhino NURBS JSON behind curves now live in a namespaced `EXTN "selva.gh"` chunk a foreign reader can skip. `Display From File` restamps identity by rewriting that one chunk instead of re-encoding anything.
+- Curves and points became core objects in the file: their polylines/positions are stored through the same quantize+delta codec as meshes (`CRVS`/`PNTS` chunks) instead of JSON double arrays. Data-URI textures are extracted into binary `TEXR` chunks and reconstructed on read.
+- Everything old still reads: `DMF1` files, bare SLVA/SLVZ blobs in saved `.gh` files, and every geometry blob back to v1 — readers dispatch on the leading magic. New bytes are always SLVM v2, so the web app must run a matching `@selvajs/visualization` release.
+
+**WebDisplay → Mesh cast: bulk join, honest validity**
+
+- Casting a Web Display into a Mesh param now appends the whole mesh sequence in one call instead of one `Append` per mesh — quadratic before, 27 s → 35 ms on a 12,679-mesh batch — and validates the joined mesh with `IsValid` instead of `Faces.Count > 0`, so a failed join fails the cast instead of leaking corrupt geometry downstream.
+- Degenerate faces produced by quantization (triangles thinner than one int16 step collapse to a line) are culled when meshes are rebuilt from a batch, so previews, casts and the new component below always hand Grasshopper valid meshes.
+
+### Added
+
+**Deconstruct Display component**
+
+- Unpacks a Web Display into one Rhino mesh per entry in its mesh table — with names, layers and material colours as parallel lists — instead of forcing the single-mesh join. The route that preserves per-mesh identity on large batches.
+
+**Combine Display component**
+
+- Collapses every branch of a Web Display tree into one payload on the same path: a branch holding five Displays becomes one. The tree structure survives, so a downstream **Display To File** writes one file per branch instead of one per item, and the viewer receives one payload per branch.
+- Merging is a real re-encode, not a concatenation. Materials dedupe across a branch, so Displays sharing a material collapse into one group — one draw call in the browser instead of several — and the geometry is re-quantized over the branch's union bounding box for a single optimal blob. Measured on two real scenes (6,043 + 12,679 meshes): 2.31 MB of separate payloads → 1.90 MB combined, in 0.7 s.
+- Each merged payload takes its own id (the component's, plus the branch path) for web pick identity, so every mesh records where it came from in the `gh:component` / `gh:originalIndex` metadata attrs — provenance survives the merge, and survives a second merge too. An unreadable input is skipped with a warning naming its branch instead of failing the whole combine.
+
 **WebDisplay: tree-structured output**
 
 - The `Web Display` output is now a tree that mirrors the geometry input tree: each input branch produces its own `Web Display` on the matching path, instead of every branch flattening into one merged item. Downstream tree operations (graft, merge, path-mapper) now behave the Grasshopper-native way. The previous flatten-everything component is preserved (hidden) with an auto-upgrader, so existing definitions migrate transparently.

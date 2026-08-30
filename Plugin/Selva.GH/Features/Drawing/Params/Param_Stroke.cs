@@ -9,7 +9,7 @@ public class Param_Stroke : GH_Param<StrokeGoo>
     public Param_Stroke()
         : base("Param Stroke", "PStr",
             "Stroke style (color, width, dash, caps)",
-            "Selva", "Elements", GH_ParamAccess.item)
+            "Params", "Selva", GH_ParamAccess.item)
     { }
 
     public Param_Stroke(GH_InstanceDescription tag) : base(tag) { }

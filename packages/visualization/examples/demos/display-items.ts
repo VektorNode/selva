@@ -10,6 +10,7 @@
 // parser reads. `@selvajs/compute`'s `GrasshopperComputeResponse` is a superset and stays assignable
 // to it, so a host app can pass its own response straight through.
 import { getThreeMeshesFromComputeResponse, type DisplayComputeResponse } from '@/parse/index.js';
+import { LOOKS, type Look } from '@/render/index.js';
 
 import { createPlayground } from '../shared/playground';
 import responseUrl from '../shared/samples/compute-response.json?url';
@@ -18,9 +19,7 @@ const pg = createPlayground({ title: 'Display Items' });
 
 pg.addSection('Display Items');
 pg.addButton('Reload sample', () => void load());
-pg.addSelect('Look', ['technical', 'studio', 'showcase'], 'technical', (v) =>
-	pg.viewer.setLook(v as 'studio' | 'technical' | 'showcase')
-);
+pg.addSelect('Look', [...LOOKS], 'technical', (v) => pg.viewer.setLook(v as Look));
 
 async function load() {
 	pg.setStatus('Loading response…');

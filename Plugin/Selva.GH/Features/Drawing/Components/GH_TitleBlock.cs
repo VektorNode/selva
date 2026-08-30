@@ -23,7 +23,7 @@ public class GH_TitleBlock : GH_Component
     }
 
     protected override Bitmap Icon => Resources.TitleBlock;
-    public override GH_Exposure Exposure => GH_Exposure.quarternary;
+    public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("A2501A92-E5D1-4646-A3D0-4368CE879BFC");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
