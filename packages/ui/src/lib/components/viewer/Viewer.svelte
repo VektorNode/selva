@@ -124,7 +124,6 @@
 	let captureImage: ThreeViewer['captureImage'] | null = null;
 	let setLook: ((look: Look) => void) | null = null;
 	let updateGridScale: (() => void) | null = null;
-	let updateShadowBounds: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
@@ -146,12 +145,10 @@
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
-	// Derived from LOOKS so adding a look in @selvajs/visualization shows up here with no edit; the
-	// map only overrides the names that don't survive capitalisation ('xray' → 'X-Ray').
-	const LOOK_LABELS: Partial<Record<Look, string>> = { xray: 'X-Ray' };
+	// Derived from LOOKS so adding a look in @selvajs/visualization shows up here with no edit.
 	const STYLE_OPTIONS: { look: Look; label: string }[] = LOOKS.map((look) => ({
 		look,
-		label: LOOK_LABELS[look] ?? look.charAt(0).toUpperCase() + look.slice(1)
+		label: look.charAt(0).toUpperCase() + look.slice(1)
 	}));
 
 	const VIEW_PRESETS: { preset: ViewPreset; label: () => string }[] = [
@@ -179,11 +176,12 @@
 	onMount(() => {
 		if (!canvas) return;
 
-		// Only what differs from the library defaults. Sunlight, shadows and AO are left ON (the
-		// library default) and their strength comes from the look — with IBL alone every face of a
-		// box lights nearly equally and the model reads as a flat white silhouette.
+		// Only what differs from the library defaults. The sun and shadows are off because the
+		// technical look doesn't need them — flat ambient plus the HDR environment carry it.
 		const opts: ThreeInitializerOptions = {
 			look: renderStyle,
+			lighting: { enableSunlight: false },
+			render: { enableShadows: false },
 			environment: { backgroundColor: config.backgroundColor },
 			grid: { enabled: config.showToolsMenu && config.showGridToggle },
 			measure: { enabled: config.showToolsMenu },
@@ -216,7 +214,6 @@
 		captureImage = init.captureImage;
 		setLook = init.setLook;
 		updateGridScale = init.updateGridScale;
-		updateShadowBounds = init.updateShadowBounds;
 		fitToView = init.fitToView;
 		projection = init.cameraController.getProjection();
 
@@ -283,16 +280,10 @@
 			// Untracked because toggleEdges() already handles the toggle directly — reading
 			// `edgesVisible` tracked here would re-trigger a full solve.
 			untrack(() => {
-				// The new meshes carry the materials the parser built, so a look that overrides them
-				// (arctic, x-ray) has to be re-applied or the solve silently reverts to shaded.
-				setLook?.(renderStyle);
 				// updateScene discarded the previous solve's overlays along with its content.
 				if (edgesVisible) applyEdges?.(scene!);
 				// Rescale the grid so cells and fade match the new content's extent.
 				updateGridScale?.();
-				// The shadow frustum is sized to scene content, so it has to follow the new geometry —
-				// left at the old extent, shadows go blocky or fall outside the map entirely.
-				updateShadowBounds?.();
 				// The rebuild un-hid everything; the outliner keys hidden state on Grasshopper
 				// identity, not on the instances just discarded, so it can re-hide it.
 				outliner?.applyTo();
@@ -428,10 +419,10 @@
 									<DropdownMenu.Item class={itemClass} onSelect={toggleProjection}>
 										{#if projection === 'perspective'}
 											<Square class="h-4 w-4" />
-											{t.switchToOrthographic}
+											{t.switchTo2D}
 										{:else}
 											<Box class="h-4 w-4" />
-											{t.switchToPerspective}
+											{t.switchTo3D}
 										{/if}
 									</DropdownMenu.Item>
 
