@@ -2,10 +2,83 @@ import * as THREE from 'three';
 
 import { LOOK_PRESETS, materialAppearanceForLook } from '../../shared/index.js';
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
-import type { Look, MaterialAppearanceOptions } from '../types.js';
+import type { Look, LookMaterialOverride, MaterialAppearanceOptions } from '../types.js';
 import { defaultUp, type ResolvedOptions } from './defaults.js';
 import type { PipelineController } from './pipeline-controller.js';
 import type { SceneLights } from './setup-lighting.js';
+
+/**
+ * What a look overwrote, stashed on the material itself so it survives a look switch without a
+ * side table keyed on materials the scene may dispose. Written once, on the first override.
+ */
+type MaterialBaseline = {
+	color: number;
+	metalness: number;
+	roughness: number;
+	opacity: number;
+	transparent: boolean;
+	depthWrite: boolean;
+};
+
+const BASELINE_KEY = '__selvaLookBaseline';
+
+type OverridableMaterial = THREE.Material & {
+	color?: THREE.Color;
+	metalness?: number;
+	roughness?: number;
+	[BASELINE_KEY]?: MaterialBaseline;
+};
+
+/**
+ * Applies a look's material overrides, or restores the parsed values when the look has none.
+ * `needsUpdate` is set because switching `transparent` changes the shader program, not just a
+ * uniform.
+ */
+function applyMaterialOverride(
+	material: THREE.Material,
+	override: LookMaterialOverride | undefined
+): void {
+	const target = material as OverridableMaterial;
+	const baseline = target[BASELINE_KEY];
+
+	if (!override) {
+		if (!baseline) return;
+		target.color?.setHex(baseline.color);
+		if (target.metalness !== undefined) target.metalness = baseline.metalness;
+		if (target.roughness !== undefined) target.roughness = baseline.roughness;
+		target.opacity = baseline.opacity;
+		target.transparent = baseline.transparent;
+		target.depthWrite = baseline.depthWrite;
+		delete target[BASELINE_KEY];
+		target.needsUpdate = true;
+		return;
+	}
+
+	if (!baseline) {
+		target[BASELINE_KEY] = {
+			color: target.color?.getHex() ?? 0xffffff,
+			metalness: target.metalness ?? 0,
+			roughness: target.roughness ?? 1,
+			opacity: target.opacity,
+			transparent: target.transparent,
+			depthWrite: target.depthWrite
+		};
+	}
+
+	if (override.color !== undefined) target.color?.setHex(override.color);
+	if (override.metalness !== undefined && target.metalness !== undefined) {
+		target.metalness = override.metalness;
+	}
+	if (override.roughness !== undefined && target.roughness !== undefined) {
+		target.roughness = override.roughness;
+	}
+	if (override.opacity !== undefined) {
+		target.opacity = override.opacity;
+		target.transparent = override.opacity < 1;
+	}
+	if (override.depthWrite !== undefined) target.depthWrite = override.depthWrite;
+	target.needsUpdate = true;
+}
 
 /** The runtime lighting/material dials — everything a host can retune without rebuilding the scene. */
 export interface AppearanceController {
@@ -98,6 +171,13 @@ export function createAppearanceController(params: {
 		});
 		setEnvironmentIntensity(preset.environmentIntensity);
 
+		// Null when the viewer was built with sunlight off; such a host has opted out of key lighting
+		// entirely, and a look switch is not the place to opt it back in.
+		if (lights.sun) {
+			lights.sun.intensity = preset.sunlightIntensity;
+			config.lighting.sunlightIntensity = preset.sunlightIntensity;
+		}
+
 		// Rebuild on top of setAmbientOcclusion so an already-live composer's OutputPass adopts the
 		// new tone mapping too.
 		const hadPipeline = pipeline.get() !== null;
@@ -119,6 +199,7 @@ export function createAppearanceController(params: {
 				if ('envMapIntensity' in material) {
 					(material as THREE.MeshStandardMaterial).envMapIntensity = preset.envMapIntensity;
 				}
+				applyMaterialOverride(material as THREE.Material, preset.materialOverride);
 			}
 		});
 		requestRender();

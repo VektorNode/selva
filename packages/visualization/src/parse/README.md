@@ -1,64 +1,82 @@
-# `parse/` — how a payload becomes meshes
+# `parse/` — how payloads become objects
 
-Turns a backend response into renderable Three.js objects. Depends only on `shared/`; never imports
-from `render/` or `scene/`.
+This folder turns a backend response into objects you can put in a Three.js scene.
+It depends only on `shared/` and does not import `render/` or `scene/`.
 
-## Two payload kinds
+## What it handles
 
-| Kind              | Entry point                         | Wire format                                           |
-| ----------------- | ----------------------------------- | ----------------------------------------------------- |
-| **Mesh batches**  | `getThreeMeshesFromComputeResponse` | binary `SLVA` blob (base64 or raw), `SLVZ` = deflated |
-| **Display items** | `parseDisplayItems`                 | plain JSON — tessellated polylines and raw positions  |
+| Kind                         | Entry point                          | What comes out             |
+| ---------------------------- | ------------------------------------ | -------------------------- |
+| Mesh batches + display items | `getThreeObjectsFromComputeResponse` | meshes, curves, and points |
+| Display items only           | `parseDisplayItems`                  | curves and points          |
 
-## Mesh batch pipeline
+## Simple flow
 
-```
-response envelope
-  └─ webdisplay/webdisplay-parser.ts     pick display data off the response, scale, ground, bound
-       └─ webdisplay/batch-parser.ts     entry points + off-thread worker path
-            ├─ webdisplay/binary-parser.ts        SLVA decode  ─┬─ webdisplay/binary/header.ts    magic/version/flags/types
-            │                                                   ├─ webdisplay/binary/geometry.ts  buffer reads, delta+zigzag, inflate
-            │                                                   └─ webdisplay/binary/textures.ts  trailing UV + vertex-color chunks
-            ├─ webdisplay/batch/metadata.ts       validate windows, dequantize
-            ├─ webdisplay/batch/materials.ts      SerializableMaterial → MeshPhysicalMaterial
-            ├─ webdisplay/batch/merge.ts          merged + individual mesh construction
-            ├─ webdisplay/mesh-assembly.ts        pure geometry assembly, shared by the main thread and the worker
-            └─ webdisplay/batch/assembly-worker.ts  worker plumbing (blob URL, request/response)
+```mermaid
+flowchart LR
+  A[Compute response] --> B[getThreeObjectsFromComputeResponse]
+  B --> C[Mesh objects]
+  B --> D[Curve objects]
+  B --> E[Point objects]
 ```
 
-`apply-texture.ts` loads a material's color map and assigns it once decoded. Nothing here caches
-across solves: every solve decodes its own geometry and textures, and the scene owns what it built.
+The parser reads the response, pulls out the mesh batches, and then reads any display items that are
+already inside the same payload.
 
-## Display item pipeline
+## Common use
 
+Use the full-response helper when you already have a compute result:
+
+```ts
+const objects = await getThreeObjectsFromComputeResponse(response);
+updateScene(scene, objects, camera, controls, false);
 ```
-display-items/display-items-parser.ts      dispatch per item kind
-  ├─ display-items/items/curves.ts         backend-tessellated points → fat Line2
-  ├─ display-items/items/points.ts         raw positions → one THREE.Points
-  └─ display-items/items/appearance.ts     shared color/opacity → material params
+
+Use the smaller helper when you already have just the display items:
+
+```ts
+const objects = parseDisplayItems(batch.items);
 ```
 
-Nothing here decodes geometry: the backend tessellates curves and sends `points`, so this package
-has no rhino3dm dependency at all. A curve arriving without `points` came from a Display component
-too old to render — `parseDisplayItems` **throws** rather than skipping it, because a scene quietly
-missing its curves looks identical to a definition that has none.
+Use a custom unit scale when you need a specific conversion:
 
-## Extension points
+```ts
+const scale = SCALE_FACTORS.Millimeters;
+```
 
-- **Custom materials** — pass `material: MaterialAppearanceOptions` to the batch parser
-  (`envMapIntensity`, `cullBackfaces`). Baked at parse time, not toggleable in place; runtime
-  restyling of a built scene is the viewer's `setLook`.
-- **Custom scale** — `SCALE_FACTORS` maps Rhino unit systems to the meter-normalized scene.
-- **New display item kind** — add a variant to the `DisplayItem` union in `display-items/types.ts`,
-  then a builder in `items/` and a case in the parser's dispatch.
+## If you do not use Compute
 
-## Invariants worth knowing
+Not every host has a full `GrasshopperComputeResponse`. If you already have the mesh batch JSON
+from another source, use the smaller helpers directly:
 
-- **One coordinate frame end to end.** The Three scene _is_ Rhino's Z-up frame, so vertices pass
-  through unrotated. Don't reintroduce a rotation here.
-- **Malformed metadata throws, absent data doesn't.** An unparseable envelope returns `[]` (genuinely
-  no data); a corrupt/truncated blob or out-of-range group window throws a `VALIDATION_ERROR` rather
-  than silently rendering an empty or corrupted scene.
-- **The scene owns every geometry and texture it holds.** Nothing outlives the scene that built it,
-  so `disposeObjectTree` frees them unconditionally. Only the module-singleton materials are spared
-  — see [the ownership rule](../shared/gpu-ownership.ts).
+```ts
+const batchJson = JSON.parse(textFromWire);
+const batch = parseMeshBatchObject(batchJson);
+const objects = parseDisplayItems(batch.items);
+```
+
+If the data is still a binary `SLVA` blob, decode that first with `parseMeshBatchBlob` and then
+pass the result to `parseMeshBatchObject`.
+
+## What happens inside
+
+- Mesh batches are decoded from the binary `SLVA` payload.
+- Curves are drawn from tessellated points sent by the backend.
+- Points are turned into `THREE.Points`.
+- Materials and colors are applied while parsing.
+
+## A few rules
+
+- A broken response should fail loudly when the data is malformed.
+- Missing display items are fine; the parser just returns fewer objects.
+- The parser does not rotate geometry. The viewer owns orientation.
+
+## Adding more
+
+- Add a new display item type in `display-items/types.ts`.
+- Add a builder in `display-items/items/`.
+- Add a case in `display-items-parser.ts`.
+
+## Why this folder stays small
+
+`parse/` only turns payloads into objects. It does not own the scene, the camera, or the UI.

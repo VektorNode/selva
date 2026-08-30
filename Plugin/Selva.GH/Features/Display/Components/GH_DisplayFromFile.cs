@@ -6,37 +6,33 @@ using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
 
 // Reads the finished blob straight back from a mesh file, skipping the mesh/quantize/compress path
 // — cheap to reuse a saved part many times.
 //
-// The web keys pick selection on sourceComponentId (+ per-item ids). Loading the same file into many
-// instances would collide on one shared id, so each loader stamps its own InstanceGuid by default;
-// an explicit Id input pins a stable identity instead.
+// Object identity travels inside the file (per-object ids in the container's table), so loading
+// needs no restamping. Two loaders of the same file share ids by design: they are the same
+// logical objects.
 public class GH_DisplayFromFile : GH_Component
 {
     public GH_DisplayFromFile()
         : base("Display From File", "DFF",
-            "Reloads a Web Display payload from a Selva mesh file (.slvm or legacy .dmf, no re-meshing).",
+            "Reloads a Web Display payload from a Selva mesh file (.slvm, no re-meshing).",
             "Selva", "Display")
     {
     }
 
-    protected override Bitmap Icon => Resources.WebDisplay;
+    protected override Bitmap Icon => Resources.DisplayFromFile;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
-    public override Guid ComponentGuid => new Guid("8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81");
+    public override Guid ComponentGuid => new Guid("B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        pManager.AddTextParameter("Path", "P", "Absolute path to the mesh file (.slvm or legacy .dmf)",
+        pManager.AddTextParameter("Path", "P", "Absolute path to the mesh file (.slvm)",
             GH_ParamAccess.item);
-        pManager.AddTextParameter("Id", "Id",
-            "Optional source component id to stamp on the payload (for stable web pick identity). " +
-            "Leave empty to use this component's own id so each instance is distinct.",
-            GH_ParamAccess.item, "");
-        pManager[1].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -59,9 +55,6 @@ public class GH_DisplayFromFile : GH_Component
             return;
         }
 
-        var idOverride = "";
-        DA.GetData(1, ref idOverride);
-
         DisplayBatch batch;
         try
         {
@@ -76,36 +69,6 @@ public class GH_DisplayFromFile : GH_Component
             return;
         }
 
-        var newId = !string.IsNullOrWhiteSpace(idOverride) ? idOverride : InstanceGuid.ToString();
-        RestampSourceComponentId(batch, newId);
-
         DA.SetData(0, new WebDisplayGoo(batch));
-    }
-
-    // The blob's embedded metadata still carries the old id, but the web prefers the outer batch's
-    // sourceComponentId over the blob's, so this restamps without touching (or re-encoding) the blob.
-    private static void RestampSourceComponentId(DisplayBatch batch, string newId)
-    {
-        var oldId = batch.SourceComponentId;
-        batch.SourceComponentId = newId;
-
-        if (batch.Items == null)
-        {
-            return;
-        }
-
-        foreach (var item in batch.Items)
-        {
-            if (item?.Id == null)
-            {
-                continue;
-            }
-
-            // Item ids are "{oldId}:{ordinal}" — swap the prefix, leave non-matching ids alone.
-            if (oldId != null && item.Id.StartsWith(oldId + ":", StringComparison.Ordinal))
-            {
-                item.Id = newId + item.Id.Substring(oldId.Length);
-            }
-        }
     }
 }

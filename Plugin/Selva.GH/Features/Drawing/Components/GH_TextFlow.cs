@@ -18,7 +18,7 @@ public class GH_TextFlow : GH_Component
     }
 
     protected override Bitmap Icon => Resources.TextFlow;
-    public override GH_Exposure Exposure => GH_Exposure.quinary;
+    public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("62C55B55-FE35-4D21-8B4E-821F117F406B");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

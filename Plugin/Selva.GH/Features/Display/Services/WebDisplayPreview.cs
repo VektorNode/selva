@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Drawing;
 using Rhino.Geometry;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -43,10 +44,10 @@ public sealed class WebDisplayPreview
             return;
         }
 
-        BinaryGeometryReader.Result decoded;
+        SlvaReader.Result decoded;
         try
         {
-            decoded = BinaryGeometryReader.Read(batch.CompressedData);
+            decoded = SlvaReader.Read(batch.CompressedData);
         }
         catch
         {
@@ -79,6 +80,54 @@ public sealed class WebDisplayPreview
         }
     }
 
+    /// <summary>
+    ///     Rebuilds one Rhino mesh per entry in the batch's mesh table, each paired with the table
+    ///     entry it came from. Unlike <see cref="Meshes" /> — which drops everything but colour
+    ///     because the preview only draws — this keeps the name, layer and metadata, so callers can
+    ///     hand the batch's meshes to the canvas as separate, identifiable objects.
+    ///
+    ///     Returns an empty list when the blob is absent or malformed, matching the preview: a bad
+    ///     blob yields no geometry rather than an exception.
+    /// </summary>
+    public static List<(Mesh mesh, MeshMetadata meta, Color color)> ExtractMeshes(DisplayBatch batch)
+    {
+        var results = new List<(Mesh, MeshMetadata, Color)>();
+        if (batch?.CompressedData == null || batch.CompressedData.Length == 0 || batch.Groups == null)
+        {
+            return results;
+        }
+
+        SlvaReader.Result decoded;
+        try
+        {
+            decoded = SlvaReader.Read(batch.CompressedData);
+        }
+        catch
+        {
+            return results;
+        }
+
+        foreach (var group in batch.Groups)
+        {
+            if (group.Meshes == null)
+            {
+                continue;
+            }
+
+            var color = MaterialColor(batch, group.MaterialId);
+            foreach (var meshMeta in group.Meshes)
+            {
+                var mesh = BuildMesh(decoded.Vertices, decoded.Indices, decoded.Colors, meshMeta);
+                if (mesh != null)
+                {
+                    results.Add((mesh, meshMeta, color));
+                }
+            }
+        }
+
+        return results;
+    }
+
     private static Mesh BuildMesh(float[] verts, int[] indices, byte[] colors, MeshMetadata meta)
     {
         var mesh = new Mesh();
@@ -109,6 +158,13 @@ public sealed class WebDisplayPreview
         {
             mesh.Faces.AddFace(indices[i] - vStart, indices[i + 1] - vStart, indices[i + 2] - vStart);
         }
+
+        // Quantization snaps vertices onto a grid — the Z step is the batch bbox height / 65534 —
+        // so triangles thinner than one step collapse to a line or a point. Rhino reports even one
+        // such face as "degenerate double precision vertex locations" and marks the whole mesh
+        // invalid, which then propagates into anything the mesh is appended to. Drop them here, at
+        // the only place that knows they came from the quantizer rather than from bad input.
+        mesh.Faces.CullDegenerateFaces();
 
         if (mesh.Faces.Count == 0)
         {

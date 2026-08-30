@@ -5,6 +5,7 @@ import {
 	FLAG_FLOAT32,
 	FLAG_HAS_UVS,
 	FLAG_HAS_VERTEX_COLORS,
+	FLAG_PLANAR_BYTESPLIT,
 	FLAG_UINT16_INDICES,
 	UV_FORMAT_FLOAT32,
 	UV_FORMAT_UINT16
@@ -20,13 +21,17 @@ export interface MeshBatchBuilderOptions {
 	materialCount: number;
 	meshCount: number;
 	vertsPerMesh: number;
-	sourceComponentId?: string;
+	/** When set, every mesh gets the minted id `${idPrefix}/${meshIndex}`. */
+	idPrefix?: string;
 	seed?: number;
 	/**
 	 * If true, encode vertices as float32 instead of int16-quantized. Useful for tests that
 	 * need exact roundtrips of arbitrary float values.
 	 */
 	forceFloat32?: boolean;
+	/** Meshes cycle over this many layers. 1 pins the batch to one layer, so merging by material
+	 *  is not additionally split by layer. */
+	layerCount?: number;
 }
 
 export interface BuiltMeshBatch {
@@ -55,7 +60,7 @@ function mulberry32(seed: number): () => number {
  *
  * The geometry is encoded in the SLVA binary wire format (see `binary-parser.ts`) and
  * base64-encoded into `batch.compressedData`. The blob's embedded metadata mirrors the outer
- * `materials`/`groups`/`sourceComponentId` so the parser sees the same shape regardless of
+ * `materials`/`groups` so the parser sees the same shape regardless of
  * whether it pulls from the blob or the envelope.
  */
 export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch {
@@ -63,9 +68,10 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 		materialCount,
 		meshCount,
 		vertsPerMesh,
-		sourceComponentId,
+		idPrefix,
 		seed = 1,
-		forceFloat32 = false
+		forceFloat32 = false,
+		layerCount = 4
 	} = options;
 
 	if (materialCount < 1) throw new Error('materialCount must be >= 1');
@@ -119,9 +125,9 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 		}
 
 		const meta: MeshMetadata = {
+			id: idPrefix ? `${idPrefix}/${m}` : undefined,
 			name: `mesh_${m}`,
-			layer: `Layer/${m % 4}`,
-			originalIndex: m,
+			layer: `Layer/${m % layerCount}`,
 			vertexCount: vertsPerMesh,
 			indexCount: trianglesPerMesh * 3,
 			vertexStart: baseVertexIndex,
@@ -142,7 +148,6 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 	const compressedData = encodeBatchPayload(vertices, faces, {
 		materials,
 		groups,
-		sourceComponentId,
 		forceFloat32
 	});
 
@@ -150,8 +155,7 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 		batch: {
 			materials,
 			groups,
-			compressedData,
-			sourceComponentId
+			compressedData
 		},
 		rawVertices: vertices,
 		rawFaces: faces
@@ -161,7 +165,6 @@ export function buildMeshBatch(options: MeshBatchBuilderOptions): BuiltMeshBatch
 interface EncodeOptions {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
-	sourceComponentId?: string;
 	forceFloat32?: boolean;
 	/** Optional absolute u,v pairs per vertex (length = vertexCount * 2) → trailing UV chunk. */
 	uvs?: Float32Array | null;
@@ -172,7 +175,7 @@ interface EncodeOptions {
 /**
  * Encodes vertex + index arrays into the SLVA binary wire format and returns it as base64.
  *
- * Mirrors the C# `BinaryGeometryWriter` exactly so tests exercise the same bytes the runtime
+ * Mirrors the C# `SlvaWriter` exactly so tests exercise the same bytes the runtime
  * pipeline produces. Picks int16 vs float32 with the same 5cm-per-unit threshold.
  */
 export function encodeBatchPayload(
@@ -180,18 +183,9 @@ export function encodeBatchPayload(
 	faces: Uint32Array,
 	encodeOptions: EncodeOptions
 ): string {
-	const {
-		materials,
-		groups,
-		sourceComponentId,
-		forceFloat32 = false,
-		uvs = null,
-		colors = null
-	} = encodeOptions;
+	const { materials, groups, forceFloat32 = false, uvs = null, colors = null } = encodeOptions;
 
-	const metadataObject = sourceComponentId
-		? { materials, groups, sourceComponentId }
-		: { materials, groups };
+	const metadataObject = { materials, groups };
 	const metadataJson = JSON.stringify(metadataObject);
 	const metadataBytes = utf8Encode(metadataJson);
 
@@ -248,7 +242,7 @@ export function encodeBatchPayload(
 	u8.set(metadataBytes, offset);
 	offset += metadataBytes.length;
 
-	let flags = FLAG_DELTA_ENCODED;
+	let flags = FLAG_DELTA_ENCODED | FLAG_PLANAR_BYTESPLIT;
 	if (useFloat32) flags |= FLAG_FLOAT32;
 	if (useUint16Indices) flags |= FLAG_UINT16_INDICES;
 	if (uvs) flags |= FLAG_HAS_UVS;
@@ -280,17 +274,24 @@ export function encodeBatchPayload(
 		}
 		offset += verticesByteLength;
 	} else {
-		// v3 delta filter: per-component wrapped difference from the previous vertex, zigzagged.
+		// Delta filter (v3) + planar byte-split placement (v4): zigzagged per-component deltas
+		// written as [Xlo][Ylo][Zlo][Xhi][Yhi][Zhi] byte planes, each vertexCount bytes.
 		let px = 0;
 		let py = 0;
 		let pz = 0;
-		for (let i = 0; i < vertices.length; i += 3) {
+		for (let i = 0, v = 0; i < vertices.length; i += 3, v++) {
 			const qx = quantize(vertices[i]!, originX, scaleX);
 			const qy = quantize(vertices[i + 1]!, originY, scaleY);
 			const qz = quantize(vertices[i + 2]!, originZ, scaleZ);
-			view.setUint16(offset + i * 2, zigzag16(wrap16(qx - px)), true);
-			view.setUint16(offset + (i + 1) * 2, zigzag16(wrap16(qy - py)), true);
-			view.setUint16(offset + (i + 2) * 2, zigzag16(wrap16(qz - pz)), true);
+			const zx = zigzag16(wrap16(qx - px));
+			const zy = zigzag16(wrap16(qy - py));
+			const zz = zigzag16(wrap16(qz - pz));
+			u8[offset + v] = zx & 0xff;
+			u8[offset + vertexCount + v] = zy & 0xff;
+			u8[offset + vertexCount * 2 + v] = zz & 0xff;
+			u8[offset + vertexCount * 3 + v] = zx >> 8;
+			u8[offset + vertexCount * 4 + v] = zy >> 8;
+			u8[offset + vertexCount * 5 + v] = zz >> 8;
 			px = qx;
 			py = qy;
 			pz = qz;
@@ -301,15 +302,23 @@ export function encodeBatchPayload(
 	view.setUint32(offset, faces.length, true);
 	offset += 4;
 	if (useUint16Indices) {
+		// v4 planes: [lo × N][hi × N].
 		let prev = 0;
 		for (let i = 0; i < faces.length; i++) {
-			view.setUint16(offset + i * 2, zigzag16(wrap16(faces[i]! - prev)), true);
+			const zz = zigzag16(wrap16(faces[i]! - prev));
+			u8[offset + i] = zz & 0xff;
+			u8[offset + faces.length + i] = zz >> 8;
 			prev = faces[i]!;
 		}
 	} else {
+		// v4 planes: [b0 × N][b1 × N][b2 × N][b3 × N].
 		let prev = 0;
 		for (let i = 0; i < faces.length; i++) {
-			view.setUint32(offset + i * 4, zigzag32(faces[i]! - prev), true);
+			const zz = zigzag32(faces[i]! - prev);
+			u8[offset + i] = zz & 0xff;
+			u8[offset + faces.length + i] = (zz >>> 8) & 0xff;
+			u8[offset + faces.length * 2 + i] = (zz >>> 16) & 0xff;
+			u8[offset + faces.length * 3 + i] = zz >>> 24;
 			prev = faces[i]!;
 		}
 	}
@@ -334,13 +343,19 @@ export function encodeBatchPayload(
 			}
 			offset += uvs.length * 4;
 		} else {
+			// v4 planes: [Ulo][Vlo][Uhi][Vhi], each vertexCount bytes.
+			const n = uvs.length / 2;
 			let pu = 0;
 			let pv = 0;
-			for (let i = 0; i < uvs.length; i += 2) {
+			for (let i = 0, v = 0; i < uvs.length; i += 2, v++) {
 				const qu = quantizeUv(uvs[i]!, uvFormat.originU, uvFormat.scaleU);
 				const qv = quantizeUv(uvs[i + 1]!, uvFormat.originV, uvFormat.scaleV);
-				view.setUint16(offset + i * 2, zigzag16(wrap16(qu - pu)), true);
-				view.setUint16(offset + (i + 1) * 2, zigzag16(wrap16(qv - pv)), true);
+				const zu = zigzag16(wrap16(qu - pu));
+				const zv = zigzag16(wrap16(qv - pv));
+				u8[offset + v] = zu & 0xff;
+				u8[offset + n + v] = zv & 0xff;
+				u8[offset + n * 2 + v] = zu >> 8;
+				u8[offset + n * 3 + v] = zv >> 8;
 				pu = qu;
 				pv = qv;
 			}

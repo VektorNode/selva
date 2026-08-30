@@ -16,11 +16,11 @@ public class Param_FileData : GH_PersistentParam<FileDataGoo>, ISelvaFileOutput
 {
     public Param_FileData()
         : base(
-            "File Data",
-            "FileData",
+            "Param File Data",
+            "PFD",
             "Holds file data for download via the Selva UI",
-            "Selva",
-            "IO")
+            "Params",
+            "Selva")
     {
     }
 

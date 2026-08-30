@@ -10,6 +10,7 @@ using Selva.GH.Config;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Utilities.Helpers;
+using Selva.Slva;
 
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
@@ -212,7 +213,7 @@ public class WebSocketTransport : IDisposable
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
 
         // DisplayBatch blobs travel as binary WebSocket frames instead of base64-in-JSON; the SLVA
-        // blob already embeds materials/groups/sourceComponentId, so no separate envelope is needed.
+        // blob already embeds materials/groups/batchId, so no separate envelope is needed.
         // Non-mesh items (curves, points) have no binary form and ride the JSON envelope as
         // `displayItems`, flattened across all batches. They arrive already tessellated, so the
         // client builds lines straight from them alongside the mesh frames.

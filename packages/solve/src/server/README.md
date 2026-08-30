@@ -1,68 +1,114 @@
-# `server/` — the solve core behind the wire
+# `server/` — the solve engine behind the wire
 
-Given a resolved solve context — the `.gh` bytes, the input params + user values, and a warm
-scheduler — this half runs a solve and returns a ready-to-send envelope:
+This folder takes the definition bytes, the input values, and a ready scheduler, runs the solve,
+and returns something the transport can send back.
 
+```text
+build input tree -> scheduler.solve -> serialize -> gzip -> Server-Timing
 ```
-input tree build → scheduler.solve → JSON serialize (size-guarded) → gzip → Server-Timing
+
+`runSolvePipeline` returns a `SolveOutcome`. `ok` carries the response, and the other cases name
+expected failures like timeout, client abort, too large, backpressure, or compute errors. Expected
+failures do not throw. The route decides how they become HTTP responses.
+
+## What is in here
+
+| File                           | What it does                                            |
+| ------------------------------ | ------------------------------------------------------- |
+| `solve-pipeline.ts`            | Runs the full solve pipeline                            |
+| `transform-input.ts`           | Turns one schema input and one value into an input tree |
+| `client-cache.ts`              | Keeps a warm Compute client and scheduler               |
+| `definition-byte-cache.ts`     | Caches `.gh` bytes by version                           |
+| `solve-cache-single-flight.ts` | Shares one solve when many requests are identical       |
+
+## Real-world flow
+
+This is what happens when a request comes in:
+
+1. The server builds the input tree.
+2. The scheduler solves the definition.
+3. The result is serialized and size-checked.
+4. The body is gzipped.
+5. Timing headers are added for the client.
+
+## Example route
+
+This is the shape a route usually has:
+
+```ts
+import { runSolvePipeline } from '@selvajs/solve/server';
+
+export async function POST(request: Request): Promise<Response> {
+	const body = await request.json();
+	const outcome = await runSolvePipeline({
+		definitionSource: body.definitionSource,
+		inputs: body.inputs,
+		values: body.values,
+		client,
+		responseMaxBytes: 10 * 1024 * 1024,
+		solveDeadlineMs: 30_000,
+		acceptEncoding: request.headers.get('accept-encoding') ?? '',
+		signal: request.signal,
+		loadStartMs: performance.now(),
+		defLoadMs: 0
+	});
+
+	if (outcome.kind === 'ok') {
+		return new Response(outcome.envelope.body, { headers: outcome.envelope.headers });
+	}
+
+	if (outcome.kind === 'timeout') return new Response(outcome.message, { status: 504 });
+	if (outcome.kind === 'client_abort') return new Response(null, { status: 499 });
+	if (outcome.kind === 'too_large') return new Response('Response too large', { status: 413 });
+	if (outcome.kind === 'shed') {
+		return new Response(outcome.message, {
+			status: 503,
+			headers: { 'Retry-After': String(outcome.retryAfterSeconds) }
+		});
+	}
+
+	return new Response('Solve failed', { status: 500 });
+}
 ```
 
-`runSolvePipeline` returns a discriminated `SolveOutcome`. `ok` carries the envelope (body, headers,
-phase metrics); `timeout`, `client_abort`, `too_large`, `shed` (rejected under backpressure) and
-`compute_error` each name a failure the transport maps to its own status code. **Nothing here
-throws for an expected failure**, and nothing here touches auth, the database, share tokens, rate
-limits or metric sinks — those stay app policy in the route.
+The important part is that the route decides HTTP status codes, while the pipeline decides what the
+solve result means.
 
-## Contents
+## Node only
 
-| File                           | Owns                                                                       |
-| ------------------------------ | -------------------------------------------------------------------------- |
-| `solve-pipeline.ts`            | `runSolvePipeline` — the whole chain above, plus the wire contract version |
-| `transform-input.ts`           | one schema input + user value → an `InputParam` the tree builder takes     |
-| `client-cache.ts`              | per-server warm Rhino.Compute client + scheduler, id-keyed LRU             |
-| `definition-byte-cache.ts`     | `.gh` bytes by immutable version id, total-byte-budget LRU                 |
-| `solve-cache-single-flight.ts` | dogpile protection: concurrent identical solves share one flight           |
+This code reads `node:zlib`, `node:crypto`, and `process.env`. It must never be reachable from
+`client/`.
 
-## Node-only, and that is load-bearing
+The boundary is enforced in three places:
 
-This half reads `node:zlib`, `node:crypto` and `process.env`, and its cache backends take platform
-providers. **It must never be reachable from `client/`.** Three guards, none of them ceremony:
+1. There is no root export.
+2. `src/client/**` may not import `../server/*`, `@selvajs/platform`, `@selvajs/server*`, or
+   `node:*`.
+3. A bundle test checks the shipped client build.
 
-1. **No root barrel.** The package exports `./client`, `./server`, `./shared` and nothing at `.`.
-2. **eslint `no-restricted-imports`** — `src/client/**` may not import `../server/*`,
-   `@selvajs/platform`, `@selvajs/server*` or `node:*`.
-3. **A bundle test** on the shipped `dist/client.js`
-   ([`../__tests__/client-bundle-boundary.test.ts`](../__tests__/client-bundle-boundary.test.ts)) —
-   the only check that sees through the bundler rather than reading source.
+Anything both halves need goes in `shared/`.
 
-Anything both halves need goes in `shared/`, and must stay runtime-neutral.
+## Cache layers
 
-## Cache tiers
+There are two caches, and they do different jobs:
 
-Two caches sit on this path; they are separate on purpose and fail independently.
+| Where                        | What it keys on                          | Scope           |
+| ---------------------------- | ---------------------------------------- | --------------- |
+| `client/solve-memo.ts`       | the raw input values                     | one browser tab |
+| `@selvajs/compute` scheduler | the definition plus the transformed tree | one process     |
 
-| Where                        | Keyed on                                        | Scope           |
-| ---------------------------- | ----------------------------------------------- | --------------- |
-| `client/solve-memo.ts`       | sorted-key JSON of raw input values             | one browser tab |
-| `@selvajs/compute` scheduler | 32-bit FNV of the definition + transformed tree | one process     |
+There is no durable cache here today. The old in-memory cache was removed because it duplicated
+the scheduler cache. If the app ever needs shared storage, the `ISolveResultCache` seam in
+`@selvajs/platform` is where that would plug in.
 
-There is no durable tier beyond these today. The in-memory backend that used to sit here was
-deleted as redundant with the scheduler's cache (same heap, consulted second); what survives is the
-`ISolveResultCache` seam in `@selvajs/platform`, where a shared backend (Redis) mounts if horizontal
-scaling ever demands one.
+Two requests that produce the same transformed tree share one solve.
 
-Single-flight coalesces on `version:server:` + the **transformed** input tree — the same identity
-the scheduler caches on — so two raw-different but transform-identical requests share one flight.
+## Server-Timing
 
-## The Server-Timing string is a wire contract
-
-`COMPUTE_CONTRACT_VERSION` + `COMPUTE_VERSION_HEADER` version the response shape (body + phases). It
-rides an additive header so a client can branch on it with no change to the body. Bump it — and
-document the change — whenever the envelope changes in a way a consumer could observe.
+`COMPUTE_CONTRACT_VERSION` and `COMPUTE_VERSION_HEADER` version the response shape. Bump them when
+the body or phases change in a way a client could notice.
 
 ## Relationship to `@selvajs/server/compute`
 
-That sub-path keeps only HTTP _request policy_ — rate limiting, the SSRF guard, env-derived
-limits, the remote-definition fetcher — with no re-export of anything here and no dependency on
-`@selvajs/solve`. The two packages are independent, and re-exporting solve-core from
-`@selvajs/server` would be a breaking change for its consumers.
+That subpath owns request policy only: rate limiting, SSRF guard, env-derived limits, and the
+remote-definition fetcher. It does not depend on `@selvajs/solve`.

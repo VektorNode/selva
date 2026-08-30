@@ -8,11 +8,13 @@
 // tri-state.
 //
 // The set is keyed by stable identity (see `identity.ts`), not `uuid`, so hiding survives a solve —
-// a solve regenerates uuids but not the Grasshopper source the key is derived from. Objects with no
-// identifying userData fall back to their uuid, so their hidden state lasts only until the next solve.
+// a solve regenerates uuids but not the minted ids the keys read. A merged mesh stores one key per
+// source member, so re-merging under a different material/layer grouping can't lose the state.
+// Objects with no identifying userData fall back to their uuid, so their hidden state lasts only
+// until the next solve.
 
 import type * as THREE from 'three';
-import { getTrackingKey as hiddenKey } from './identity.js';
+import { getMemberKeys } from './identity.js';
 
 // Backed by a caller-supplied `Set` so a reactive host can pass a framework-observable set
 // (Svelte's `SvelteSet`) and get re-renders for free.
@@ -30,19 +32,25 @@ export interface VisibilityState {
 }
 
 export function createVisibilityState(hidden: Set<string> = new Set()): VisibilityState {
+	// An object is hidden when EVERY member key is in the set — for a plain mesh that is its one
+	// key; for a merged mesh it means all source members are hidden.
+	const allHidden = (object: THREE.Object3D) =>
+		getMemberKeys(object).every((key) => hidden.has(key));
+
 	const state: VisibilityState = {
 		hidden,
 
-		isHidden: (object) => hidden.has(hiddenKey(object)),
+		isHidden: allHidden,
 
 		setVisible(object, visible) {
 			object.visible = visible;
 			object.traverse((child) => {
 				child.visible = visible;
 			});
-			const key = hiddenKey(object);
-			if (visible) hidden.delete(key);
-			else hidden.add(key);
+			for (const key of getMemberKeys(object)) {
+				if (visible) hidden.delete(key);
+				else hidden.add(key);
+			}
 		},
 
 		isLayerHidden: (objects) => objects.length > 0 && objects.every((obj) => state.isHidden(obj)),
@@ -63,7 +71,7 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 				// Only push objects down. Anything not in the set keeps whatever visibility the render
 				// layer gave it, so this never fights another feature that hid something for its own
 				// reasons (isolate mode, section-box culling).
-				if (!hidden.has(hiddenKey(object))) continue;
+				if (!allHidden(object)) continue;
 				object.visible = false;
 				object.traverse((child) => {
 					child.visible = false;

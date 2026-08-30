@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<!-- net48 (WindowsForms) and net9.0 Grasshopper (transitive WindowsForms) don't
@@ -47,6 +47,7 @@
 		<PackageReference Include="System.Resources.Extensions"/>
 		<PackageReference Include="System.Windows.Forms"/>
 		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
+		<ProjectReference Include="..\Selva.Slva\Selva.Slva.csproj"/>
 		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
 		<ProjectReference Include="..\Selva.Rhino\Selva.Rhino.csproj"/>
 	</ItemGroup>
@@ -108,6 +109,7 @@
 		<ItemGroup>
 			<_RepackToStage Include="$(_RepackOutDir)$(AssemblyName)$(TargetExt)" />
 			<_RepackToStage Include="$(_RepackOutDir)Selva.Schema.dll" />
+			<_RepackToStage Include="$(_RepackOutDir)Selva.Slva.dll" />
 			<_RepackToStage Include="$(PkgNewtonsoft_Json)\lib\$(_NewtonsoftLibDir)\Newtonsoft.Json.dll" />
 		</ItemGroup>
 
@@ -118,6 +120,7 @@
 		<ItemGroup>
 			<_RepackInputPrimary Include="$(_RepackStageDir)$(AssemblyName)$(TargetExt)" />
 			<_RepackInputMerge Include="$(_RepackStageDir)Selva.Schema.dll" />
+			<_RepackInputMerge Include="$(_RepackStageDir)Selva.Slva.dll" />
 			<_RepackInputMerge Include="$(_RepackStageDir)Newtonsoft.Json.dll" />
 			<!-- Stage dir first; fall back to bin/ for sibling reference assemblies (Grasshopper, RhinoCommon, …). -->
 			<_RepackSearchDirs Include="$(_RepackStageDir);$(_RepackOutDir)" />
@@ -132,7 +135,7 @@
 			OutputFile="$(_RepackOutput)" />
 
 		<!-- Merged in; leaving them beside the .gha would reintroduce the sibling load. -->
-		<Delete Files="$(_RepackOutDir)Selva.Schema.dll;$(_RepackOutDir)Newtonsoft.Json.dll" />
+		<Delete Files="$(_RepackOutDir)Selva.Schema.dll;$(_RepackOutDir)Selva.Slva.dll;$(_RepackOutDir)Newtonsoft.Json.dll" />
 	</Target>
 
 	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
@@ -173,6 +176,45 @@
 		</None>
 		<None Update="Resources\Icons\WebDisplay.png">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\ParamWebDisplay.png">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\ParamThreeMaterial.png">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DisplayToFile.png">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DisplayFromFile.png">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DeconstructDisplay.png">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DisplaySize.png">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\WebDisplay.svg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DisplayToFile.svg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DisplayFromFile.svg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DeconstructDisplay.svg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\DisplaySize.svg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\ParamWebDisplay.svg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
+		</None>
+		<None Update="Resources\Icons\ParamThreeMaterial.svg">
+			<CopyToOutputDirectory>Never</CopyToOutputDirectory>
 		</None>
 		<None Update="Resources\Icons\IconPluginF4R.png">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>

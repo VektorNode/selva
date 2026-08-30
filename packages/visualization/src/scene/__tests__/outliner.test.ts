@@ -47,6 +47,27 @@ describe('createSceneOutliner', () => {
 		expect([...outliner.layerGroups('ridge').keys()]).toEqual(['Roof']);
 	});
 
+	// Hiding one layer used to strike through every other layer in the panel, because meshes that
+	// carried a component id but no index all resolved to one hidden-set key.
+	it('hides only the toggled layer when meshes carry no original index', () => {
+		const { scene } = sceneWith(
+			{ trackingKey: 'gh-1/{0}/0', layer: 'IfcWall', name: 'w0' },
+			{ trackingKey: 'gh-1/{0}/1', layer: 'IfcWall', name: 'w1' },
+			{ trackingKey: 'gh-1/{0}/2', layer: 'IfcSlab', name: 's0' },
+			{ trackingKey: 'gh-1/{0}/3', layer: 'IfcDoor', name: 'd0' }
+		);
+		const outliner = createSceneOutliner(scene);
+		const groups = outliner.layerGroups();
+
+		outliner.visibility.toggleLayer(groups.get('IfcWall')!);
+
+		expect(outliner.visibility.isLayerHidden(groups.get('IfcWall')!)).toBe(true);
+		for (const other of ['IfcSlab', 'IfcDoor']) {
+			expect(outliner.visibility.isLayerHidden(groups.get(other)!)).toBe(false);
+			expect(outliner.visibility.isLayerPartial(groups.get(other)!)).toBe(false);
+		}
+	});
+
 	describe('collapse', () => {
 		it('toggles a layer open and shut', () => {
 			const { scene } = sceneWith({ layer: 'Walls' });
@@ -195,7 +216,7 @@ describe('createSceneOutliner', () => {
 		};
 
 		it('keeps an object hidden across a solve', () => {
-			const spec = { sourceComponentId: 'gh-1', originalIndex: 0, name: 'wall' };
+			const spec = { trackingKey: 'gh-1/{0}/0', name: 'wall' };
 			const { scene, objects } = sceneWith(spec);
 			const outliner = createSceneOutliner(scene);
 			outliner.toggleObject(objects[0]);
@@ -208,8 +229,8 @@ describe('createSceneOutliner', () => {
 		});
 
 		it('leaves everything else visible', () => {
-			const hiddenSpec = { sourceComponentId: 'gh-1', originalIndex: 0 };
-			const otherSpec = { sourceComponentId: 'gh-1', originalIndex: 1 };
+			const hiddenSpec = { trackingKey: 'gh-1/{0}/0' };
+			const otherSpec = { trackingKey: 'gh-1/{0}/1' };
 			const { scene, objects } = sceneWith(hiddenSpec, otherSpec);
 			const outliner = createSceneOutliner(scene);
 			outliner.toggleObject(objects[0]);
@@ -222,7 +243,7 @@ describe('createSceneOutliner', () => {
 		});
 
 		it('clears the selection, which refers to discarded instances', () => {
-			const spec = { sourceComponentId: 'gh-1', originalIndex: 0 };
+			const spec = { trackingKey: 'gh-1/{0}/0' };
 			const { scene, objects } = sceneWith(spec);
 			const outliner = createSceneOutliner(scene);
 			outliner.select(objects[0].uuid, CLICK);

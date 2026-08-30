@@ -7,28 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-**Prepare UI Inputs**
-
-- New `Selva > UI` component, `Prepare UI Inputs` (`Plugin/Selva.GH/Features/UIBuilder/Components/GH_PrepareUIInputs.cs`). Registers existing Number Sliders, Value Lists, Boolean Toggles, and Panels by instance GUID, previews the contextual parameter (`Get Number`, `Get Integer`, `Get Value List`, `Get Boolean`, `Get String`) each one infers from its live data, and inserts it between the control and the inputs it drives - or beside a disconnected control - as one undoable, previewed operation. Existing compatible `Get` parameters are recognized and can be adopted, renamed, or repaired. Removal reverses the insertion and never deletes a node the component did not create or explicitly adopt.
-- Ported from a WASPer plugin prototype (`Components/1.2_Studies/Sm06`) per `00_Plans/SELVA_PREPARE_UI_INPUTS_PLAN.md`; the classification and inference math live in `Services/PrepareUIInputInference.cs`, split out with no Grasshopper dependency so it is covered by unit tests in `Plugin/Selva.Tests`.
-
 ### Changed
 
-**WebDisplay: tree-structured output**
+**`sourceComponentId` is now `batchId`**
 
-- The `Web Display` output is now a tree that mirrors the geometry input tree: each input branch produces its own `Web Display` on the matching path, instead of every branch flattening into one merged item. Downstream tree operations (graft, merge, path-mapper) now behave the Grasshopper-native way. The previous flatten-everything component is preserved (hidden) with an auto-upgrader, so existing definitions migrate transparently.
+- The field was never "the component that made this mesh" — it is the batch's identity namespace, which with a mesh's `originalIndex` forms the key that survives a solve (hidden state, selection, per-object overrides). It is usually the producing Display's InstanceGuid, but a combined batch takes the combiner's id, and the old name actively misled there. "Which component produced this mesh" is the per-mesh `gh:component` attr instead.
+- Renamed in the C# API and in the SLVM `EXTN` chunk. **The JSON wire name is unchanged** (`sourceComponentId` in the values envelope and on mesh `userData`): it is the contract with published `@selvajs/*` releases and is baked into every pre-v3 blob, `.gh` archive and `.slvm` file. Containers written with the old `EXTN` spelling are still read, on both stacks, pinned by a regression test each side.
+
+**SLVM v3 — one chunked container for wire and file**
+
+- The mesh payload is now an `SLVM` v3 chunked container (magic `SLVM`, fourcc chunks, unknown types skipped by length) — the same bytes on the wire, in `.gh` archives, and on disk as `.slvm`. It replaces three nested layers: the `DMF1` file sidecar, the JSON metadata embedded in the geometry blob, and the duplicate copy of that metadata the old file carried (a 12,679-mesh scene shrinks from 3.05 MB to 1.33 MB on disk).
+- The object table is columnar and pays only for what's present: vertex/index windows are prefix sums (never stored), auto-numbered names cost one byte total, layers/names dedupe through a string pool, and per-mesh metadata is stored as sparse attr columns — the key once, then only the objects carrying it. Namespaced keys (`gh:branch`, `ifc:guid`, …) give hosts and users a first-class slot for per-mesh provenance.
+- Grasshopper concepts left the core format: `sourceComponentId` and the Rhino NURBS JSON behind curves now live in a namespaced `EXTN "selva.gh"` chunk a foreign reader can skip. Object identity now travels inside the container's own table, so `Display From File` no longer restamps it on load — its `Id` input is gone; see **Obsolete components** below.
+- Curves and points became core objects in the file: their polylines/positions are stored through the same quantize+delta codec as meshes (`CRVS`/`PNTS` chunks) instead of JSON double arrays. Data-URI textures are extracted into binary `TEXR` chunks and reconstructed on read.
+- Everything old still reads: `DMF1` files, bare SLVA/SLVZ blobs in saved `.gh` files, and every geometry blob back to v1 — readers dispatch on the leading magic. New bytes are always SLVM v3, so the web app must run a matching `@selvajs/visualization` release.
+- The codec (reader/writer, container, identity) moved into its own Rhino-free `Selva.Slva` project, so it builds and tests independently of `Selva.GH`. See [Selva.Slva/README.md](./Selva.Slva/README.md).
+
+**WebDisplay → Mesh cast: bulk join, honest validity**
+
+- Casting a Web Display into a Mesh param now appends the whole mesh sequence in one call instead of one `Append` per mesh — quadratic before, 27 s → 35 ms on a 12,679-mesh batch — and validates the joined mesh with `IsValid` instead of `Faces.Count > 0`, so a failed join fails the cast instead of leaking corrupt geometry downstream.
+- Degenerate faces produced by quantization (triangles thinner than one int16 step collapse to a line) are culled when meshes are rebuilt from a batch, so previews, casts and the new components below always hand Grasshopper valid meshes.
+
+### Added
+
+**Deconstruct Display component**
+
+- Unpacks a Web Display into one Rhino mesh per entry in its mesh table — with names, layers and material colours as parallel lists — instead of forcing the single-mesh join. The route that preserves per-mesh identity on large batches.
+
+**Combine Display component**
+
+- Collapses every branch of a Web Display tree into one payload on the same path: a branch holding five Displays becomes one. The tree structure survives, so a downstream **Display To File** writes one file per branch instead of one per item, and the viewer receives one payload per branch.
+- Merging is a real re-encode, not a concatenation. Materials dedupe across a branch, so Displays sharing a material collapse into one group — one draw call in the browser instead of several — and the geometry is re-quantized over the branch's union bounding box for a single optimal blob. Measured on two real scenes (6,043 + 12,679 meshes): 2.31 MB of separate payloads → 1.90 MB combined, in 0.7 s.
+- Each merged payload takes its own id (the component's, plus the branch path) for web pick identity, so every mesh records where it came from in the `gh:component` / `gh:originalIndex` metadata attrs — provenance survives the merge, and survives a second merge too. An unreadable input is skipped with a warning naming its branch instead of failing the whole combine.
 
 ### Performance
 
-**Geometry To File: task-capable, parallel .3dm export**
+**WebDisplay: SLVA v4 — 28–50% smaller mesh payloads**
 
-- `Geometry To File` is now a task-capable component: the export runs on a background task instead of blocking the Grasshopper UI thread, and each output file in a tree is written in parallel.
-- `.3dm` output no longer builds a headless `RhinoDoc` and round-trips through a temp file. It is written with an in-memory `File3dm` and `ToByteArray()`, which skips the document-table bookkeeping (undo records, events, display invalidation) and the disk write/read/delete per file. Exporting many parts is substantially faster; the written file is unchanged (still Rhino version 7).
-- Other file endings still go through `RhinoDoc.Export`, whose format plugins are not thread-safe, so that path stays serial and on the main thread — same behaviour as before.
+- The mesh wire format gained a fourth version. Its delta-filtered vertex, index and UV streams can now be stored as byte planes (all X deltas, then Y, then Z, low bytes before high) instead of interleaved values. Near-zero deltas turn the high planes into runs of zeros, so the DEFLATE pass compresses far better. Measured through the real writer: a welded 65k-vertex surface 144 KB → 104 KB (−28%), a 262k-vertex surface 636 KB → 409 KB (−36%), a 3000-part CAD scatter 116 KB → 58 KB (−50%). Cloud delivery multiplies each saving by 1.33×, since the payload is base64-encoded.
+- **The layout is chosen per blob, by measurement.** Neither layout wins everywhere: planar byte-split wins on locally-coherent geometry, but interleaved wins by up to 44% when a batch is mostly byte-identical repeated parts (an arrayed screw, an instanced facade panel), because it keeps each copy's bytes contiguous for DEFLATE's LZ77 window to match as one run. The crossover sits near 75–80% identical repeats — too close for a heuristic — so the writer trial-deflates both layouts and keeps the smaller, recording the choice in a flag bit. On every measured shape the emitted blob is now no larger than either fixed layout, and an instanced part-array is 3.5% of its quantized payload (was 4.6%).
+- The probe costs two extra `CompressionLevel.Fastest` DEFLATE passes over the vertex stream, and is skipped below 4,096 vertices. Encoding already runs on the component's background task, so this never blocks the solver thread. Decoding is unaffected — slightly faster, in fact, since there is less to inflate.
+- Blobs written by older plugin versions keep decoding unchanged: saved `.gh` files, `.slvm` mesh files and cached compute results. Frozen pre-v4 golden fixtures pin that on both the C# and TypeScript sides.
+- Quantization is untouched, so visual output is identical — this is a pure byte-layout change.
 
-- WebDisplay now extracts each mesh's vertex/face arrays inside the parallel meshing pass instead of in the serial batch-assembly step. Previously the per-vertex copy ran single-threaded for every mesh after meshing; it now scales with the meshing parallelism. `MeshBatchProcessor.CreateBatch` gains an array-taking overload for this (the mesh-taking overload is unchanged for other callers).
+### Obsolete components
+
+- **Display From File** (`8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81` → `B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241`): the `Id` input is gone now that SLVM v3 carries object identity in the container's own table, so loading no longer needs to restamp it. Old definitions upgrade automatically; the `Id` wire is dropped.
+
+### Upgraders
+
+- `GH_DisplayFromFileUpgrader_To_0_18`: `8B2E5C71` → `B9FCCDF3` (drops the `Id` input).
 
 ## [0.14.0-beta.2] - 2026-06-29
 

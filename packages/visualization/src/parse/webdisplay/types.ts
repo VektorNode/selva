@@ -23,12 +23,13 @@ export interface SerializableMaterial {
  * vertex components are 2 bytes (int16 quantized) or 4 bytes (`FLAG_FLOAT32`).
  */
 export interface MeshMetadata {
+	/** The object's identity: an opaque writer-minted string, stable across solves and unique
+	 *  across batches. The viewer keys hidden/selection state on it; never parsed. Absent for
+	 *  foreign writers that mint none. */
+	id?: string;
 	name: string;
 	/** Layer path for grouping in the scene manager, e.g. 'Structure/Walls'. */
 	layer: string;
-	/** Index in the GH input tree before material grouping; combined with sourceComponentId
-	 *  uniquely identifies the GH source geometry. */
-	originalIndex: number;
 	vertexCount: number;
 	/** 3 per triangle. */
 	indexCount: number;
@@ -58,9 +59,6 @@ export interface DisplayBatch {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
 	compressedData: string;
-	/** InstanceGuid of the WebDisplay GH component that produced this batch; combined with
-	 *  MeshMetadata.originalIndex to backtrack any mesh to its GH source. */
-	sourceComponentId?: string;
 	/** Non-mesh display items — see {@link DisplayItem}. Parsed by the separate `display-items`
 	 *  path, not the SLVA mesh parser. Omitted when there are none. */
 	items?: DisplayItem[];

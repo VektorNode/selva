@@ -22,7 +22,7 @@ public class GH_PathStyle : GH_Component
     }
 
     protected override Bitmap Icon => Resources.PathStlye;
-    public override GH_Exposure Exposure => GH_Exposure.senary;
+    public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("3F5C21A9-7D64-4E18-9B02-6C1A4D8E5F37");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

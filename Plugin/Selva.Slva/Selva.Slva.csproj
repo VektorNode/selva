@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<RootNamespace>Selva.Slva</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+			Release: this assembly is itself merged into Selva.dll (see the ILRepack target in
+			Selva.GH.csproj) together with Newtonsoft, because its public API hands Newtonsoft
+			types to Selva.GH (ColorJsonConverter subclasses JsonConverter). Both must end up
+			in one assembly or those calls bind across an internalized type boundary.
+			PrivateAssets keeps the sibling DLL out of the .gha output; the merge supplies
+			the types.
+		-->
+		<PackageReference Include="Newtonsoft.Json" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
+		<PackageReference Include="System.Drawing.Common"/>
+		<!-- Span/AsSpan and ArrayPool on netstandard2.0 (System.Memory pulls System.Buffers).
+		     Inbox on net7/net9; real sibling DLLs on net48, so they must flow to consumers
+		     in both configurations. -->
+		<PackageReference Include="System.Memory"/>
+	</ItemGroup>
+
+</Project>

@@ -4,6 +4,7 @@
 		"float32": true,
 		"uint16Indices": true,
 		"deltaEncoded": true,
+		"planarByteSplit": false,
 		"hasUvs": false,
 		"hasColors": false,
 		"float32Uvs": false

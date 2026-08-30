@@ -1,0 +1,32 @@
+{
+	"materials": [
+		{
+			"color": "White",
+			"metalness": 0.0,
+			"roughness": 0.5,
+			"opacity": 1.0,
+			"transparent": false,
+			"map": "data:image/png;base64,iVBORw0KGgoBAgME"
+		}
+	],
+	"groups": [
+		{
+			"materialId": 0,
+			"meshes": [
+				{
+					"id": "fixture-textured/{0}/0",
+					"name": "1",
+					"layer": "",
+					"vertexCount": 4,
+					"indexCount": 6,
+					"vertexStart": 0,
+					"indexStart": 0,
+					"metadata": null
+				}
+			]
+		}
+	],
+	"totalVertexCount": 4,
+	"totalIndexCount": 6,
+	"positionTolerance": 0.001
+}

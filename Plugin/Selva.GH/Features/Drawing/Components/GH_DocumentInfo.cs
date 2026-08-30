@@ -19,7 +19,7 @@ public class GH_DocumentInfo : GH_Component
     }
 
     protected override Bitmap Icon => Resources.SectionSettings;
-    public override GH_Exposure Exposure => GH_Exposure.secondary;
+    public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("7E4C1B92-2D6A-4F88-9C31-5A0E7B3F1C44");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

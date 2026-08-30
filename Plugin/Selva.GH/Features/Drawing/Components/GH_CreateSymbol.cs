@@ -26,7 +26,7 @@ public class GH_CreateSymbol : GH_Component
     }
 
     protected override Bitmap Icon => Resources.DrawSymbol;
-    public override GH_Exposure Exposure => GH_Exposure.quarternary;
+    public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("B62D8F14-95C7-4A03-8E1D-7F40C2B95E68");
 
     public override bool IsPreviewCapable => true;

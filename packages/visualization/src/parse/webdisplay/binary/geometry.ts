@@ -192,6 +192,56 @@ export function decodeDeltaVertices(zigzagged: Uint16Array): Int16Array {
 	return out;
 }
 
+/**
+ * Undoes the v4 planar byte-split vertex layout: six byte planes
+ * `[Xlo][Ylo][Zlo][Xhi][Yhi][Zhi]` (each `vertexCount` bytes) of the zigzag deltas — merge the
+ * planes, unzigzag, prefix-sum per component. Same delta semantics as {@link decodeDeltaVertices}.
+ */
+export function decodePlanarVertices(planes: Uint8Array, vertexCount: number): Int16Array {
+	const out = new Int16Array(vertexCount * 3);
+	const n = vertexCount;
+	let px = 0;
+	let py = 0;
+	let pz = 0;
+	for (let i = 0; i < n; i++) {
+		px = ((px + unzigzag(planes[i]! | (planes[n * 3 + i]! << 8))) << 16) >> 16;
+		py = ((py + unzigzag(planes[n + i]! | (planes[n * 4 + i]! << 8))) << 16) >> 16;
+		pz = ((pz + unzigzag(planes[n * 2 + i]! | (planes[n * 5 + i]! << 8))) << 16) >> 16;
+		out[i * 3] = px;
+		out[i * 3 + 1] = py;
+		out[i * 3 + 2] = pz;
+	}
+	return out;
+}
+
+/** Undoes the v4 planar byte-split uint16 index layout `[lo × N][hi × N]`. */
+export function decodePlanarIndices16(planes: Uint8Array, count: number): Uint16Array {
+	const out = new Uint16Array(count);
+	let prev = 0;
+	for (let i = 0; i < count; i++) {
+		prev = (prev + unzigzag(planes[i]! | (planes[count + i]! << 8))) & 0xffff;
+		out[i] = prev;
+	}
+	return out;
+}
+
+/** Undoes the v4 planar byte-split uint32 index layout `[b0 × N][b1 × N][b2 × N][b3 × N]`. */
+export function decodePlanarIndices32(planes: Uint8Array, count: number): Uint32Array {
+	const out = new Uint32Array(count);
+	let prev = 0;
+	for (let i = 0; i < count; i++) {
+		const zz =
+			(planes[i]! |
+				(planes[count + i]! << 8) |
+				(planes[count * 2 + i]! << 16) |
+				(planes[count * 3 + i]! << 24)) >>>
+			0;
+		prev = (prev + unzigzag(zz)) >>> 0;
+		out[i] = prev;
+	}
+	return out;
+}
+
 export function decodeDeltaIndices16(zigzagged: Uint16Array): Uint16Array {
 	const out = new Uint16Array(zigzagged.length);
 	let prev = 0;

@@ -13,7 +13,7 @@
 		isFullscreen?: boolean;
 	}
 
-	const EXCLUDED_KEYS = new Set(['name', 'layer', 'originalIndex', 'sourceComponentId']);
+	const EXCLUDED_KEYS = new Set(['name', 'layer', 'id']);
 
 	let {
 		open = $bindable(),

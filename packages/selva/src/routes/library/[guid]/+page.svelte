@@ -2,7 +2,7 @@
 	import type { PageProps } from './$types';
 	import { ComputeApp } from '@selvajs/ui';
 	import { createComputeFetchSolveFn } from '@selvajs/solve/client';
-	import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
+	import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
 	import MainNav from '$lib/components/MainNav.svelte';
@@ -33,13 +33,11 @@
 		definitionUrl: () => data.ghDefinition,
 		inputs: () => data.schema.inputs,
 		outputs: () => data.schema.outputs,
-		// An explicit version pick takes precedence over the channel pointer.
 		channel: () => (data.channel === 'draft' ? 'draft' : undefined),
 		versionId: () => data.versionId,
 		meshes: shouldShowViewer()
-			? { extract: (response, opts) => getThreeMeshesFromComputeResponse(response, opts) }
+			? { extract: (response, opts) => getThreeObjectsFromComputeResponse(response, opts) }
 			: undefined,
-		// Preserves the always-on [Compute] console telemetry (timing, cache verdicts).
 		debug: true
 	});
 </script>

@@ -25,14 +25,21 @@ export interface AssemblyJob {
 }
 
 export interface AssemblyInput {
-	/** Raw wire vertex components: zigzag deltas (Uint16) when delta-encoded, else absolute. */
-	vertexData: Uint16Array | Int16Array | Float32Array;
+	/**
+	 * Raw wire vertex components: byte planes (Uint8) when planar-byte-split, zigzag deltas
+	 * (Uint16) when delta-encoded, else absolute.
+	 */
+	vertexData: Uint8Array | Uint16Array | Int16Array | Float32Array;
 	isFloat32: boolean;
 	deltaEncoded: boolean;
+	/** v4 byte-plane layout on the delta-filtered streams — see FLAG_PLANAR_BYTESPLIT. */
+	planarByteSplit: boolean;
+	/** Wire index width; required because planar `indexData` is a bare byte stream. */
+	uint16Indices: boolean;
 	origin: [number, number, number];
 	scale: [number, number, number];
-	/** Raw wire indices: zigzag deltas when delta-encoded, else absolute. */
-	indexData: Uint16Array | Uint32Array;
+	/** Raw wire indices: byte planes when planar-byte-split, zigzag deltas when delta-encoded. */
+	indexData: Uint8Array | Uint16Array | Uint32Array;
 	/** Already-decoded absolute UV pairs / RGB bytes (small, decoded on the main thread). */
 	uvs: Float32Array | null;
 	colors: Uint8Array | null;
@@ -49,7 +56,17 @@ export interface AssembledGeometry {
 
 export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 	// NOTE: self-contained by design (worker stringification) — no outer references besides Math.
-	const { isFloat32, deltaEncoded, origin, scale, uvs, colors, jobs } = input;
+	const {
+		isFloat32,
+		deltaEncoded,
+		planarByteSplit,
+		uint16Indices,
+		origin,
+		scale,
+		uvs,
+		colors,
+		jobs
+	} = input;
 
 	const unzigzag = (zz: number): number => (zz >>> 1) ^ -(zz & 1);
 
@@ -59,7 +76,23 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 		worldVertices = input.vertexData as Float32Array;
 	} else {
 		let quantized: Int16Array;
-		if (deltaEncoded) {
+		if (planarByteSplit) {
+			// v4 layout: [Xlo][Ylo][Zlo][Xhi][Yhi][Zhi] byte planes of the zigzag deltas.
+			const planes = input.vertexData as Uint8Array;
+			const n = planes.length / 6;
+			quantized = new Int16Array(n * 3);
+			let px = 0;
+			let py = 0;
+			let pz = 0;
+			for (let i = 0; i < n; i++) {
+				px = ((px + unzigzag(planes[i] | (planes[n * 3 + i] << 8))) << 16) >> 16;
+				py = ((py + unzigzag(planes[n + i] | (planes[n * 4 + i] << 8))) << 16) >> 16;
+				pz = ((pz + unzigzag(planes[n * 2 + i] | (planes[n * 5 + i] << 8))) << 16) >> 16;
+				quantized[i * 3] = px;
+				quantized[i * 3 + 1] = py;
+				quantized[i * 3 + 2] = pz;
+			}
+		} else if (deltaEncoded) {
 			const zigzagged = input.vertexData as Uint16Array;
 			quantized = new Int16Array(zigzagged.length);
 			let px = 0;
@@ -92,8 +125,35 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 	}
 
 	let indices: Uint16Array | Uint32Array;
-	if (deltaEncoded) {
-		const zigzagged = input.indexData;
+	if (planarByteSplit) {
+		const planes = input.indexData as Uint8Array;
+		if (uint16Indices) {
+			const count = planes.length / 2;
+			const out = new Uint16Array(count);
+			let prev = 0;
+			for (let i = 0; i < count; i++) {
+				prev = (prev + unzigzag(planes[i] | (planes[count + i] << 8))) & 0xffff;
+				out[i] = prev;
+			}
+			indices = out;
+		} else {
+			const count = planes.length / 4;
+			const out = new Uint32Array(count);
+			let prev = 0;
+			for (let i = 0; i < count; i++) {
+				const zz =
+					(planes[i] |
+						(planes[count + i] << 8) |
+						(planes[count * 2 + i] << 16) |
+						(planes[count * 3 + i] << 24)) >>>
+					0;
+				prev = (prev + unzigzag(zz)) >>> 0;
+				out[i] = prev;
+			}
+			indices = out;
+		}
+	} else if (deltaEncoded) {
+		const zigzagged = input.indexData as Uint16Array | Uint32Array;
 		if (zigzagged instanceof Uint16Array) {
 			const out = new Uint16Array(zigzagged.length);
 			let prev = 0;
@@ -112,7 +172,7 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 			indices = out;
 		}
 	} else {
-		indices = input.indexData;
+		indices = input.indexData as Uint16Array | Uint32Array;
 	}
 
 	const totalVertexCount = worldVertices.length / 3;

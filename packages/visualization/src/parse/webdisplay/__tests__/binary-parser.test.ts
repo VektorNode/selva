@@ -151,9 +151,9 @@ describe('parseBinaryMeshBatch', () => {
 						materialId: 0,
 						meshes: [
 							{
+								id: 'gh-component-xyz/{0}/0',
 								name: 'cube',
 								layer: 'Walls',
-								originalIndex: 0,
 								vertexCount: 3,
 								indexCount: 3,
 								vertexStart: 0,
@@ -162,8 +162,7 @@ describe('parseBinaryMeshBatch', () => {
 							}
 						]
 					}
-				],
-				sourceComponentId: 'gh-component-xyz'
+				]
 			};
 
 			const vertices = new Float32Array([0, 0, 0, 1, 0, 0, 1, 1, 0]);
@@ -176,7 +175,6 @@ describe('parseBinaryMeshBatch', () => {
 			expect(parsed.metadata.materials[0]!.color).toBe('#ff0000');
 			expect(parsed.metadata.groups).toHaveLength(1);
 			expect(parsed.metadata.groups[0]!.meshes[0]!.name).toBe('cube');
-			expect(parsed.metadata.sourceComponentId).toBe('gh-component-xyz');
 		});
 	});
 
@@ -252,7 +250,7 @@ describe('parseBinaryMeshBatch', () => {
 	});
 
 	describe('compression (SLVZ container)', () => {
-		// Mirror the C# BlobCompressor: [4] SLVZ magic, [4] uncompressedLen, [N] raw-deflate(SLVA).
+		// Mirror the C# SlvzCompressor: [4] SLVZ magic, [4] uncompressedLen, [N] raw-deflate(SLVA).
 		const wrapSlvz = (slva: Uint8Array): Uint8Array => {
 			const deflated = deflateSync(slva);
 			const out = new Uint8Array(8 + deflated.length);

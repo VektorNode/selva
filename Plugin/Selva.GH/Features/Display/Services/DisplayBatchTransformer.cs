@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 using Rhino.Geometry;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Services;
 
@@ -59,10 +60,17 @@ public static class DisplayBatchTransformer
             return batch.CompressedData;
         }
 
-        BinaryGeometryReader.Result decoded;
+        // Writers only ever ship SLVM v3 containers; anything else is foreign bytes.
+        // Keep them untouched rather than guessing at a re-encode.
+        if (!SlvmDocument.IsSlvm(batch.CompressedData))
+        {
+            return batch.CompressedData;
+        }
+
+        SlvaReader.Result decoded;
         try
         {
-            decoded = BinaryGeometryReader.Read(batch.CompressedData);
+            decoded = SlvaReader.Read(batch.CompressedData);
         }
         catch
         {
@@ -78,13 +86,14 @@ public static class DisplayBatchTransformer
         moveVerts(decoded.Vertices);
 
         // UVs and vertex colors are invariant under position transforms but must be threaded back
-        // through the writer or they'd silently vanish.
-        var metadataJson = MeshBatchSerialization.SerializeMetadata(batch);
+        // through the writer or they'd silently vanish. Re-encode only the geometry blob and swap
+        // it into the container — every metadata chunk survives byte-exact.
         using (var ms = new MemoryStream())
         {
-            BinaryGeometryWriter.Write(ms, metadataJson, decoded.Vertices, decoded.Indices,
+            SlvaWriter.Write(ms, "", decoded.Vertices, decoded.Indices,
                 uvs: decoded.Uvs, colors: decoded.Colors);
-            return BlobCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+            var geometryBlob = SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
+            return SlvmDocument.ReplaceGeometry(batch.CompressedData, geometryBlob);
         }
     }
 
@@ -131,7 +140,7 @@ public static class DisplayBatchTransformer
             else if (item.Kind == "point" && item.Position != null)
             {
                 var moved = movePoint(new Point3d(item.Position.X, item.Position.Y, item.Position.Z));
-                result.Add(DisplayItem.Point(moved, item.Id, item.Name, item.Layer, item.Metadata,
+                result.Add(RhinoDisplayItems.Point(moved, item.Id, item.Name, item.Layer, item.Metadata,
                     item.Color, item.Opacity));
             }
             else
@@ -188,7 +197,6 @@ public static class DisplayBatchTransformer
         {
             Materials = source.Materials,
             Groups = source.Groups,
-            SourceComponentId = source.SourceComponentId,
             CompressedData = meshBlob,
             Items = items
         };

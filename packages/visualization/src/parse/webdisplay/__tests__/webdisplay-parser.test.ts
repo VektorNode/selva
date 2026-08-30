@@ -12,15 +12,15 @@ import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 import { setLogger } from '../../../shared/index.js';
 import { computeCombinedBoundingBox } from '../../../shared/index.js';
 
-import { SCALE_FACTORS, getThreeMeshesFromComputeResponse } from '../webdisplay-parser';
-import type { DisplayComputeResponse } from '../response-envelope.js';
+import { SCALE_FACTORS, getThreeObjectsFromComputeResponse } from '../webdisplay-parser';
+import type { GrasshopperComputeResponse } from '../response-envelope.js';
 
-function response(values: any[], modelunits = 'Meters'): DisplayComputeResponse {
-	return { values, modelunits } as unknown as DisplayComputeResponse;
+function response(values: any[], modelunits = 'Meters'): GrasshopperComputeResponse {
+	return { values, modelunits } as unknown as GrasshopperComputeResponse;
 }
 
 /** Wraps a built batch in the response envelope shape the server produces. */
-function displayResponse(modelunits: string, type = 'Display'): DisplayComputeResponse {
+function displayResponse(modelunits: string, type = 'Display'): GrasshopperComputeResponse {
 	const { batch } = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 3 });
 	return response(
 		[
@@ -62,10 +62,10 @@ describe('SCALE_FACTORS', () => {
 	});
 });
 
-describe('getThreeMeshesFromComputeResponse', () => {
+describe('getThreeObjectsFromComputeResponse', () => {
 	it('returns an empty array for a response with no values', async () => {
-		const meshes = await getThreeMeshesFromComputeResponse(response([]));
-		expect(meshes).toEqual([]);
+		const objects = await getThreeObjectsFromComputeResponse(response([]));
+		expect(objects).toEqual([]);
 	});
 
 	it('returns an empty array when no parameter carries a Display item', async () => {
@@ -74,8 +74,8 @@ describe('getThreeMeshesFromComputeResponse', () => {
 		const res = response([
 			{ ParamName: 'text', InnerTree: { '{0}': [{ type: 'System.String', data: '"hi"', id: '' }] } }
 		]);
-		const meshes = await getThreeMeshesFromComputeResponse(res);
-		expect(meshes).toEqual([]);
+		const objects = await getThreeObjectsFromComputeResponse(res);
+		expect(objects).toEqual([]);
 	});
 
 	it('JSON-parses each Display envelope exactly once', async () => {
@@ -90,7 +90,7 @@ describe('getThreeMeshesFromComputeResponse', () => {
 
 		const parseSpy = vi.spyOn(JSON, 'parse');
 		try {
-			const meshes = await getThreeMeshesFromComputeResponse(res);
+			const meshes = await getThreeObjectsFromComputeResponse(res);
 			// The single parse must still feed the mesh pipeline.
 			expect(meshes.length).toBeGreaterThan(0);
 			const envelopeParses = parseSpy.mock.calls.filter(([arg]) => arg === envelope).length;
@@ -101,7 +101,7 @@ describe('getThreeMeshesFromComputeResponse', () => {
 	});
 
 	it('does not throw when scaling and auto-position are disabled on an empty response', async () => {
-		const meshes = await getThreeMeshesFromComputeResponse(response([], 'Millimeters'), {
+		const meshes = await getThreeObjectsFromComputeResponse(response([], 'Millimeters'), {
 			allowScaling: false,
 			allowAutoPosition: false
 		});
@@ -112,13 +112,13 @@ describe('getThreeMeshesFromComputeResponse', () => {
 describe('Display-type dispatch (issue 34)', () => {
 	it('decodes the real namespaced wire type', async () => {
 		const res = displayResponse('Meters', 'Selva.GH.Features.Display.Services.DisplayBatch');
-		const meshes = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: false });
+		const meshes = await getThreeObjectsFromComputeResponse(res, { allowAutoPosition: false });
 		expect(meshes.length).toBeGreaterThan(0);
 	});
 
 	it('decodes the bare "Display" token', async () => {
 		const res = displayResponse('Meters', 'Display');
-		const meshes = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: false });
+		const meshes = await getThreeObjectsFromComputeResponse(res, { allowAutoPosition: false });
 		expect(meshes.length).toBeGreaterThan(0);
 	});
 
@@ -126,7 +126,7 @@ describe('Display-type dispatch (issue 34)', () => {
 		// The old substring dispatch would feed these to the SLVA parser.
 		for (const type of ['System.DisplayText', 'DisplayText', 'My.DisplayBatchLike']) {
 			const res = displayResponse('Meters', type);
-			const meshes = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: false });
+			const meshes = await getThreeObjectsFromComputeResponse(res, { allowAutoPosition: false });
 			expect(meshes).toEqual([]);
 		}
 	});
@@ -135,7 +135,7 @@ describe('Display-type dispatch (issue 34)', () => {
 describe('unit scaling (issue 33)', () => {
 	it('applies the metres-per-unit factor to every parsed object', async () => {
 		const res = displayResponse('Millimeters');
-		const meshes = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: false });
+		const meshes = await getThreeObjectsFromComputeResponse(res, { allowAutoPosition: false });
 
 		expect(meshes.length).toBeGreaterThan(0);
 		for (const mesh of meshes) {
@@ -147,7 +147,7 @@ describe('unit scaling (issue 33)', () => {
 
 	it('grounds geometry on the Z=0 plane when allowAutoPosition is enabled', async () => {
 		const res = displayResponse('Meters');
-		const meshes = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: true });
+		const meshes = await getThreeObjectsFromComputeResponse(res, { allowAutoPosition: true });
 
 		expect(meshes.length).toBeGreaterThan(0);
 		const box = computeCombinedBoundingBox(meshes);
@@ -159,10 +159,10 @@ describe('unit scaling (issue 33)', () => {
 	// coordinates; grounding is opt-in.
 	it('leaves geometry at its Rhino coordinates by default', async () => {
 		const res = displayResponse('Meters');
-		const grounded = await getThreeMeshesFromComputeResponse(res, { allowAutoPosition: true });
+		const grounded = await getThreeObjectsFromComputeResponse(res, { allowAutoPosition: true });
 		const groundedMin = computeCombinedBoundingBox(grounded).min.z;
 
-		const meshes = await getThreeMeshesFromComputeResponse(res);
+		const meshes = await getThreeObjectsFromComputeResponse(res);
 		expect(meshes.length).toBeGreaterThan(0);
 		const box = computeCombinedBoundingBox(meshes);
 
@@ -176,7 +176,7 @@ describe('unit scaling (issue 33)', () => {
 
 	it('leaves scale at identity when allowScaling is false', async () => {
 		const res = displayResponse('Millimeters');
-		const meshes = await getThreeMeshesFromComputeResponse(res, {
+		const meshes = await getThreeObjectsFromComputeResponse(res, {
 			allowScaling: false,
 			allowAutoPosition: false
 		});
@@ -191,7 +191,7 @@ describe('unit scaling (issue 33)', () => {
 		const warn = vi.fn();
 		setLogger({ ...noopLogger, warn });
 
-		const first = await getThreeMeshesFromComputeResponse(displayResponse('Parsecs'), {
+		const first = await getThreeObjectsFromComputeResponse(displayResponse('Parsecs'), {
 			allowAutoPosition: false
 		});
 		expect(first.length).toBeGreaterThan(0);
@@ -205,7 +205,7 @@ describe('unit scaling (issue 33)', () => {
 		expect(unitWarnings).toHaveLength(1);
 
 		// Same unknown unit again: no second warning (once per unit name, not per solve).
-		await getThreeMeshesFromComputeResponse(displayResponse('Parsecs'), {
+		await getThreeObjectsFromComputeResponse(displayResponse('Parsecs'), {
 			allowAutoPosition: false
 		});
 		const unitWarningsAfter = warn.mock.calls.filter(([msg]) =>
@@ -214,7 +214,7 @@ describe('unit scaling (issue 33)', () => {
 		expect(unitWarningsAfter).toHaveLength(1);
 
 		// A different unknown unit warns on its own.
-		await getThreeMeshesFromComputeResponse(displayResponse('LightYears'), {
+		await getThreeObjectsFromComputeResponse(displayResponse('LightYears'), {
 			allowAutoPosition: false
 		});
 		const otherUnitWarnings = warn.mock.calls.filter(([msg]) =>

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { LOOK_PRESETS, materialAppearanceForLook } from '../../../shared/index.js';
+import { LOOKS, LOOK_PRESETS, materialAppearanceForLook } from '../../../shared/index.js';
 import type { Look, LookPreset } from '../../types';
 import { applyDefaults } from '../defaults';
 
@@ -9,7 +9,7 @@ import { applyDefaults } from '../defaults';
 // applyDefaults, the default look, the lighting-vs-overlay decoupling, and preset shape.
 // (initThree's runtime setLook needs a real WebGL canvas, so it isn't exercised here.)
 
-const ALL_LOOKS: Look[] = ['studio', 'technical', 'showcase'];
+const ALL_LOOKS: Look[] = [...LOOKS];
 
 describe('LOOK_PRESETS', () => {
 	const requiredFields: (keyof LookPreset)[] = [
@@ -20,7 +20,8 @@ describe('LOOK_PRESETS', () => {
 		'hemisphereIntensity',
 		'ambientIntensity',
 		'cullBackfaces',
-		'ambientOcclusion'
+		'ambientOcclusion',
+		'sunlightIntensity'
 	];
 
 	it.each(ALL_LOOKS)('%s defines every LookPreset field', (look) => {
@@ -34,20 +35,53 @@ describe('LOOK_PRESETS', () => {
 		expect(LOOK_PRESETS.studio.toneMapping).toBe(THREE.ACESFilmicToneMapping);
 		expect(LOOK_PRESETS.studio.hemisphereIntensity).toBeGreaterThan(0);
 		expect(LOOK_PRESETS.studio.ambientIntensity).toBeLessThan(1);
+		// Fills shadows back in, so its sun sits below showcase's.
+		expect(LOOK_PRESETS.studio.sunlightIntensity).toBeLessThan(
+			LOOK_PRESETS.showcase.sunlightIntensity
+		);
 	});
 
-	it('technical is the clean shaded CAD look (neutral, IBL-led, low flat ambient + light fill)', () => {
+	it('technical is the clean shaded CAD look (neutral, sun-led, fill only lifts shadows off black)', () => {
 		expect(LOOK_PRESETS.technical.toneMapping).toBe(THREE.NeutralToneMapping);
-		// IBL-led: env carries the shading (near full), flat ambient is only a thin floor, and a little
-		// hemisphere fill lifts under-facing surfaces — no more form-killing full flat ambient.
-		expect(LOOK_PRESETS.technical.envMapIntensity).toBeGreaterThanOrEqual(0.8);
+		// Sun-led: the key light carries the shading and every other source is a thin floor under it.
+		// Fill was what made this look read as flat white paper.
+		expect(LOOK_PRESETS.technical.sunlightIntensity).toBeGreaterThan(1.5);
 		expect(LOOK_PRESETS.technical.hemisphereIntensity).toBeGreaterThan(0);
-		expect(LOOK_PRESETS.technical.ambientIntensity).toBeLessThan(0.5);
-		expect(LOOK_PRESETS.technical.environmentIntensity).toBe(1);
+		expect(LOOK_PRESETS.technical.ambientIntensity).toBeLessThan(0.25);
+		expect(LOOK_PRESETS.technical.environmentIntensity).toBeLessThan(1);
 	});
 
-	it.each(ALL_LOOKS)('%s ships with ambient occlusion off (heavy GTAO path is opt-in)', (look) => {
-		expect(LOOK_PRESETS[look].ambientOcclusion).toBe(false);
+	// The regression these guard: IBL plus flat fill alone lights every face of a box nearly
+	// equally, so the model renders as a white silhouette. A key light and contact shading are what
+	// make form readable, and every opaque look must carry both.
+	it.each(ALL_LOOKS.filter((look) => look !== 'xray'))(
+		'%s key-lights the scene and enables contact shading',
+		(look) => {
+			expect(LOOK_PRESETS[look].sunlightIntensity).toBeGreaterThan(1);
+			expect(LOOK_PRESETS[look].ambientOcclusion).toBe(true);
+		}
+	);
+
+	// Ambient and hemisphere light every face the same regardless of orientation, so stacking them
+	// above the key light is what flattens a model out. xray is exempt: it is deliberately fill-led,
+	// since a hard highlight on a transparent shell hides the geometry behind it.
+	it.each(ALL_LOOKS.filter((look) => look !== 'xray'))(
+		'%s keeps orientation-independent fill below the sun',
+		(look) => {
+			const preset = LOOK_PRESETS[look];
+			const flatFill = preset.ambientIntensity + preset.hemisphereIntensity;
+			expect(flatFill, `${look} flat fill`).toBeLessThan(preset.sunlightIntensity);
+		}
+	);
+
+	it('arctic and xray override materials; the lighting-only looks do not', () => {
+		expect(LOOK_PRESETS.arctic.materialOverride?.color).toBeDefined();
+		expect(LOOK_PRESETS.xray.materialOverride?.opacity).toBeLessThan(1);
+		// depthWrite off is what makes x-ray read through the model rather than look like glass.
+		expect(LOOK_PRESETS.xray.materialOverride?.depthWrite).toBe(false);
+		for (const look of ['technical', 'studio', 'showcase'] as const) {
+			expect(LOOK_PRESETS[look].materialOverride, look).toBeUndefined();
+		}
 	});
 });
 
@@ -106,9 +140,21 @@ describe('applyDefaults — explicit options beat the look preset', () => {
 		expect(config.environment.environmentIntensity).toBe(0.5);
 	});
 
-	it('explicit ambientOcclusion:true wins over a preset that leaves it off', () => {
-		const config = applyDefaults({ look: 'studio', render: { ambientOcclusion: true } });
-		expect(config.render.ambientOcclusion).toBe(true);
+	// GTAO is a full-screen pass; a host on a weak GPU must be able to decline it.
+	it('explicit ambientOcclusion:false wins over a preset that turns it on', () => {
+		const config = applyDefaults({ look: 'studio', render: { ambientOcclusion: false } });
+		expect(config.render.ambientOcclusion).toBe(false);
+	});
+
+	it('explicit sunlightIntensity wins over the preset', () => {
+		const config = applyDefaults({ look: 'technical', lighting: { sunlightIntensity: 0.3 } });
+		expect(config.lighting.sunlightIntensity).toBe(0.3);
+	});
+
+	it('the look seeds the sun when the host passes none', () => {
+		expect(applyDefaults({ look: 'showcase' }).lighting.sunlightIntensity).toBe(
+			LOOK_PRESETS.showcase.sunlightIntensity
+		);
 	});
 });
 
