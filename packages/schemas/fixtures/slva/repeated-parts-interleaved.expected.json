@@ -1,0 +1,56 @@
+{
+	"description": "1,000 identical translated boxes -> the layout probe picks interleaved over planar byte-split; pins the non-planar v4 read path",
+	"flags": {
+		"float32": false,
+		"uint16Indices": true,
+		"deltaEncoded": true,
+		"planarByteSplit": false,
+		"hasUvs": false,
+		"hasColors": false,
+		"float32Uvs": false
+	},
+	"vertexCount": 24000,
+	"indexCount": 36000,
+	"origin": [0.0, 0.0, 0.0],
+	"scale": [0.006057924130985443, 0.006050294503616443, 0.0007324442274239326],
+	"positionTolerance": 0.004543443098239082,
+	"uvTolerance": 0.0,
+	"sourceComponentId": "44444444-4444-4444-8444-444444444444",
+	"positionSamples": [
+		{
+			"index": 0,
+			"x": 55.0,
+			"y": 280.0,
+			"z": 40.0
+		},
+		{
+			"index": 4993,
+			"x": 312.0,
+			"y": 260.0,
+			"z": 5.0
+		},
+		{
+			"index": 9986,
+			"x": 332.0,
+			"y": 126.5,
+			"z": 15.0
+		},
+		{
+			"index": 14979,
+			"x": 25.0,
+			"y": 86.5,
+			"z": 5.0
+		},
+		{
+			"index": 19972,
+			"x": 125.0,
+			"y": 115.0,
+			"z": 13.0
+		}
+	],
+	"indexHead": [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11, 12, 13, 14, 12, 14, 15],
+	"indexTail": [
+		23984, 23985, 23986, 23984, 23986, 23987, 23988, 23989, 23990, 23988, 23990, 23991, 23992,
+		23993, 23994, 23992, 23994, 23995, 23996, 23997, 23998, 23996, 23998, 23999
+	]
+}

@@ -14,7 +14,8 @@ export function parseUvChunk(
 	view: DataView,
 	offset: number,
 	vertexCount: number,
-	deltaEncoded: boolean
+	deltaEncoded: boolean,
+	planarByteSplit = false
 ): { uvs: Float32Array; offset: number } {
 	if (offset + UV_CHUNK_HEADER_BYTES > bytes.byteLength) {
 		throw fail('Insufficient data to read UV chunk header.', {
@@ -53,6 +54,19 @@ export function parseUvChunk(
 	if (useFloat32) {
 		// Copy (not view) so the attribute owns its memory like the quantized path.
 		uvs = readFloat32Vertices(bytes.buffer, absoluteOffset, componentCount).slice();
+	} else if (planarByteSplit) {
+		// v4 layout: [Ulo][Vlo][Uhi][Vhi], each vertexCount bytes.
+		const planes = bytes.subarray(offset, offset + dataByteLength);
+		const n = vertexCount;
+		uvs = new Float32Array(componentCount);
+		let qu = 0;
+		let qv = 0;
+		for (let i = 0; i < n; i++) {
+			qu = (qu + unzigzag(planes[i]! | (planes[n * 2 + i]! << 8))) & 0xffff;
+			qv = (qv + unzigzag(planes[n + i]! | (planes[n * 3 + i]! << 8))) & 0xffff;
+			uvs[i * 2] = originU + qu * scaleU;
+			uvs[i * 2 + 1] = originV + qv * scaleV;
+		}
 	} else {
 		const raw = readUint16Array(bytes.buffer, absoluteOffset, componentCount);
 		uvs = new Float32Array(componentCount);

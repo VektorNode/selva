@@ -325,14 +325,18 @@ async function tryBuildViaWorker(
 	if (typeof Worker === 'undefined') return null;
 
 	const raw = parseBinaryMeshBatchRaw(input);
-	if (raw.indexData.length / 3 < ASSEMBLY_WORKER_MIN_TRIANGLES) return null;
+	// Planar (v4) indexData is a bare byte stream — divide by the element width for a count.
+	const indexCount = raw.planarByteSplit
+		? raw.indexData.length / (raw.uint16Indices ? 2 : 4)
+		: raw.indexData.length;
+	if (indexCount / 3 < ASSEMBLY_WORKER_MIN_TRIANGLES) return null;
 	const worker = getAssemblyWorker();
 	if (!worker) return null;
 
 	const materialsSrc = raw.metadata.materials ?? opts.fallback?.materials ?? [];
 	const groups = raw.metadata.groups ?? opts.fallback?.groups ?? [];
 	const sourceComponentId = opts.fallback?.sourceComponentId ?? raw.metadata.sourceComponentId;
-	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, raw.indexData.length);
+	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, indexCount);
 
 	// Same job branching as buildMeshesFromParsed, with a parallel ref list to unwrap results by index.
 	interface JobRef {
@@ -376,6 +380,8 @@ async function tryBuildViaWorker(
 				vertexData,
 				isFloat32: raw.isFloat32,
 				deltaEncoded: raw.deltaEncoded,
+				planarByteSplit: raw.planarByteSplit,
+				uint16Indices: raw.uint16Indices,
 				origin: raw.origin,
 				scale: raw.scale,
 				indexData,
@@ -419,7 +425,7 @@ async function tryBuildViaWorker(
 
 	if (opts.debug) {
 		getLogger().debug(
-			`Mesh batch assembled off-thread: ${meshes.length} meshes, ${raw.indexData.length / 3} triangles`
+			`Mesh batch assembled off-thread: ${meshes.length} meshes, ${indexCount / 3} triangles`
 		);
 	}
 	return meshes;

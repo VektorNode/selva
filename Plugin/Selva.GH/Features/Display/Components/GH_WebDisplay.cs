@@ -415,8 +415,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         {
             var w = work[idx];
 
-            // Curves and points aren't meshable — they travel as JSON display items, decoded and
-            // tessellated on the web (curves via rhino3dm, points as raw vertices).
+            // Curves and points aren't meshable — they travel as JSON display items. Curves are
+            // tessellated to a polyline here, so the web needs no rhino3dm.
             if (TryBuildItem(w.Geom, componentId, w.Ordinal, w.Name, w.Layer, w.Metadata, w.Material,
                     out var item, out var previewCurve, out var previewPoint))
             {
@@ -587,7 +587,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var batch = MeshBatchProcessor.CreateBatch(
+            var batch = MeshBatchAssembler.CreateBatch(
                 b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId,
                 b.MeshUvs, b.MeshColors);
             if (b.Items.Count > 0)

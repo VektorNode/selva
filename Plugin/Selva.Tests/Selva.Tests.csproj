@@ -104,6 +104,31 @@
 		     the stub in RhinoStubs.cs. -->
 		<Compile Include="..\Selva.GH\Features\Display\Services\DisplayItem.cs"
 		         Link="Linked\DisplayItem.cs"/>
+		<!-- The tessellator's flatness math, split out of CurveTessellator precisely so it
+		     carries no Curve evaluation and can be tested here. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\CurveFlatness.cs"
+		         Link="Linked\CurveFlatness.cs"/>
+		<!-- The C# decoder, plus the DisplayBatch envelope it deserializes into. Rhino reaches
+		     these only through DisplayItem's Point3d (stubbed) — the decode itself is byte math. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\BinaryGeometryReader.cs"
+		         Link="Linked\BinaryGeometryReader.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\DisplayBatch.cs"
+		         Link="Linked\DisplayBatch.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\ThreeMaterial.cs"
+		         Link="Linked\ThreeMaterial.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\ColorJsonConverter.cs"
+		         Link="Linked\ColorJsonConverter.cs"/>
+		<!-- Batch assembly, split out of MeshBatchProcessor so the offset arithmetic both
+		     decoders slice on is reachable without RhinoCommon. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\MeshBatchAssembler.cs"
+		         Link="Linked\MeshBatchAssembler.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\MaterialCache.cs"
+		         Link="Linked\MaterialCache.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\MeshBatchSerialization.cs"
+		         Link="Linked\MeshBatchSerialization.cs"/>
+		<!-- On-disk .slvm/.dmf container. Pure stream + JSON work, no Rhino. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\SlvmFile.cs"
+		         Link="Linked\SlvmFile.cs"/>
 	</ItemGroup>
 
 	<ItemGroup>

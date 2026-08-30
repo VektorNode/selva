@@ -8,6 +8,7 @@ import {
 	FLAG_FLOAT32,
 	FLAG_HAS_UVS,
 	FLAG_HAS_VERTEX_COLORS,
+	FLAG_PLANAR_BYTESPLIT,
 	FLAG_UINT16_INDICES,
 	parseBinaryMeshBatch
 } from '../binary-parser';
@@ -32,6 +33,8 @@ interface ExpectedFixture {
 		float32: boolean;
 		uint16Indices: boolean;
 		deltaEncoded: boolean;
+		/** Absent in frozen pre-v4 fixtures. */
+		planarByteSplit?: boolean;
 		hasUvs: boolean;
 		hasColors: boolean;
 		float32Uvs: boolean;
@@ -77,11 +80,27 @@ function worldPosition(parsed: ParsedBinaryMeshBatch, vertex: number): [number, 
 	return out;
 }
 
-const blobNames = readdirSync(FIXTURES_DIR).filter((f) => /\.slv[az]$/.test(f));
+// Current-version fixtures at the root, frozen pre-v4 blobs under v3/ (backward compat: persisted
+// blobs must decode forever — those files are never regenerated).
+const blobNames = [
+	...readdirSync(FIXTURES_DIR).filter((f) => /\.slv[az]$/.test(f)),
+	...readdirSync(FIXTURES_DIR + 'v3/')
+		.filter((f) => /\.slv[az]$/.test(f))
+		.map((f) => 'v3/' + f)
+];
 
 describe('SLVA golden fixtures (C#-written blobs)', () => {
 	it('covers every committed blob', () => {
-		expect(blobNames.length).toBeGreaterThanOrEqual(6);
+		expect(blobNames.length).toBeGreaterThanOrEqual(13);
+	});
+
+	it('covers both v4 byte layouts', () => {
+		// The writer picks planar or interleaved per blob, so the parser must be exercised on both.
+		const layouts = blobNames
+			.filter((n) => !n.startsWith('v3/'))
+			.map((n) => (loadFixture(n).parsed.flags & FLAG_PLANAR_BYTESPLIT) !== 0);
+		expect(layouts).toContain(true);
+		expect(layouts).toContain(false);
 	});
 
 	describe.each(blobNames)('%s', (blobName) => {
@@ -91,6 +110,9 @@ describe('SLVA golden fixtures (C#-written blobs)', () => {
 			expect((parsed.flags & FLAG_FLOAT32) !== 0).toBe(expected.flags.float32);
 			expect((parsed.flags & FLAG_UINT16_INDICES) !== 0).toBe(expected.flags.uint16Indices);
 			expect((parsed.flags & FLAG_DELTA_ENCODED) !== 0).toBe(expected.flags.deltaEncoded);
+			expect((parsed.flags & FLAG_PLANAR_BYTESPLIT) !== 0).toBe(
+				expected.flags.planarByteSplit ?? false
+			);
 			expect((parsed.flags & FLAG_HAS_UVS) !== 0).toBe(expected.flags.hasUvs);
 			expect((parsed.flags & FLAG_HAS_VERTEX_COLORS) !== 0).toBe(expected.flags.hasColors);
 

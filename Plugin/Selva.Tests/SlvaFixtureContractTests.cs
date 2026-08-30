@@ -25,6 +25,11 @@ namespace Selva.Tests;
 ///
 ///     The .slvz fixture is compared by decompressed content, not file bytes — DEFLATE output is
 ///     not guaranteed stable across .NET runtimes, the SLVA bytes inside are.
+///
+///     The v3/ subdirectory holds frozen pre-v4 blobs that regeneration must NOT touch: they pin
+///     backward compatibility (persisted .gh params, .slvm files, cached compute results decode
+///     forever). <see cref="SlvaFrozenFixtureTests" /> decodes them here; the TS fixtures test
+///     decodes the same files.
 /// </summary>
 public class SlvaFixtureContractTests
 {
@@ -62,6 +67,72 @@ public class SlvaFixtureContractTests
             0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6,
             1, 2, 6, 1, 6, 5, 3, 0, 4, 3, 4, 7
         };
+        return (vertices, indices);
+    }
+
+    /// <summary>
+    ///     The same 24-vertex box placed <paramref name="count" /> times at scattered lattice
+    ///     positions. Each copy's own bytes repeat exactly while the jumps between copies don't,
+    ///     which is the regime where the writer's layout probe picks interleaved over planar
+    ///     byte-split — this fixture pins that branch of the format across both stacks. (Placing
+    ///     the copies in lattice *order* instead would make the inter-part jumps repeat too, and
+    ///     planar would win again.)
+    /// </summary>
+    private static (float[] vertices, int[] indices) RepeatedBoxes(int count)
+    {
+        int[][] faces =
+        {
+            new[] { 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0 },
+            new[] { 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1 },
+            new[] { 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1 },
+            new[] { 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1, 1 },
+            new[] { 0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 1 },
+            new[] { 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1 }
+        };
+
+        var vertices = new float[count * 24 * 3];
+        var indices = new int[count * 12 * 3];
+        var vertexCursor = 0;
+        var indexCursor = 0;
+        var state = 4242u;
+
+        for (var b = 0; b < count; b++)
+        {
+            // xorshift32 over an integer lattice: positions are exact in float32 on every runtime
+            // (so the fixture bytes are stable), translation-only so each copy's quantized deltas
+            // match byte for byte, and scattered so the jumps between copies do not.
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            var cx = state % 80u * 5f;
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            var cy = state % 80u * 5f;
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            var cz = state % 10u * 5f;
+
+            foreach (var face in faces)
+            {
+                var baseIndex = vertexCursor / 3;
+                for (var c = 0; c < 4; c++)
+                {
+                    vertices[vertexCursor++] = cx + face[c * 3] * 2f;
+                    vertices[vertexCursor++] = cy + face[c * 3 + 1] * 1.5f;
+                    vertices[vertexCursor++] = cz + face[c * 3 + 2] * 3f;
+                }
+
+                indices[indexCursor++] = baseIndex;
+                indices[indexCursor++] = baseIndex + 1;
+                indices[indexCursor++] = baseIndex + 2;
+                indices[indexCursor++] = baseIndex;
+                indices[indexCursor++] = baseIndex + 2;
+                indices[indexCursor++] = baseIndex + 3;
+            }
+        }
+
         return (vertices, indices);
     }
 
@@ -129,6 +200,7 @@ public class SlvaFixtureContractTests
         var (tiledV, tiledI, tiledUv, _) = Grid(5, 5, 32f);
         // 257 * 257 = 66,049 vertices > 65,536 → uint32 indices.
         var (bigV, bigI, _, _) = Grid(257, 257, 1f);
+        var (repeatedV, repeatedI) = RepeatedBoxes(1000);
 
         return new Dictionary<string, FixtureCase>
         {
@@ -171,6 +243,16 @@ public class SlvaFixtureContractTests
                 Description = "66,049 vertices -> uint32 indices, SLVZ-compressed container",
                 Vertices = bigV,
                 Indices = bigI,
+                Compress = true,
+                SampleOnly = true
+            },
+            ["repeated-parts-interleaved.slvz"] = new FixtureCase
+            {
+                Description =
+                    "1,000 identical translated boxes -> the layout probe picks interleaved over " +
+                    "planar byte-split; pins the non-planar v4 read path",
+                Vertices = repeatedV,
+                Indices = repeatedI,
                 Compress = true,
                 SampleOnly = true
             }
@@ -230,6 +312,7 @@ public class SlvaFixtureContractTests
                 ["float32"] = result.UsedFloat32,
                 ["uint16Indices"] = result.UsedUint16Indices,
                 ["deltaEncoded"] = true,
+                ["planarByteSplit"] = result.UsedPlanarByteSplit,
                 ["hasUvs"] = c.Uvs != null,
                 ["hasColors"] = c.Colors != null,
                 ["float32Uvs"] = result.UsedFloat32Uvs
@@ -321,7 +404,7 @@ public class SlvaFixtureContractTests
             }
 
             var committed = File.ReadAllBytes(blobPath);
-            var committedRaw = DecompressIfSlvz(committed);
+            var committedRaw = SlvaTestDecoder.DecompressIfSlvz(committed);
             if (!committedRaw.SequenceEqual(rawSlva))
             {
                 failures.Add(
@@ -341,27 +424,6 @@ public class SlvaFixtureContractTests
         }
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));
-    }
-
-    /// <summary>
-    ///     Undoes the SLVZ container (magic + uncompressedLen + raw DEFLATE). BlobCompressor only
-    ///     compresses — the production decoder is TS — so the test inflates locally. Non-SLVZ input
-    ///     passes through, matching the decoder's magic-sniffing.
-    /// </summary>
-    private static byte[] DecompressIfSlvz(byte[] bytes)
-    {
-        if (bytes.Length < 8 || BitConverter.ToUInt32(bytes, 0) != BlobCompressor.CompressedMagic)
-        {
-            return bytes;
-        }
-
-        var uncompressedLen = BitConverter.ToUInt32(bytes, 4);
-        using var input = new MemoryStream(bytes, 8, bytes.Length - 8);
-        using var deflate = new System.IO.Compression.DeflateStream(
-            input, System.IO.Compression.CompressionMode.Decompress);
-        using var output = new MemoryStream((int)uncompressedLen);
-        deflate.CopyTo(output);
-        return output.ToArray();
     }
 
     private static string FindRepoRoot()

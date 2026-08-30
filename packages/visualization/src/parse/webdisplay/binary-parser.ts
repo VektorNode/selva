@@ -7,6 +7,7 @@ import {
 	FLAG_FLOAT32,
 	FLAG_HAS_UVS,
 	FLAG_HAS_VERTEX_COLORS,
+	FLAG_PLANAR_BYTESPLIT,
 	FLAG_UINT16_INDICES,
 	GEOMETRY_HEADER_BYTES,
 	HEADER_PREAMBLE_BYTES,
@@ -17,6 +18,9 @@ import {
 	decodeDeltaIndices16,
 	decodeDeltaIndices32,
 	decodeDeltaVertices,
+	decodePlanarIndices16,
+	decodePlanarIndices32,
+	decodePlanarVertices,
 	decodeUtf8,
 	fail,
 	maybeDecompress,
@@ -42,6 +46,7 @@ export {
 	FLAG_DELTA_ENCODED,
 	FLAG_HAS_UVS,
 	FLAG_HAS_VERTEX_COLORS,
+	FLAG_PLANAR_BYTESPLIT,
 	UV_FORMAT_UINT16,
 	UV_FORMAT_FLOAT32
 } from './binary/header.js';
@@ -52,34 +57,13 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
 // ============================================================================
 
 /**
- * Parses a binary mesh batch blob in the SLVA wire format.
+ * Parses a binary mesh batch blob in the SLVA wire format. The field layout and every flag bit are
+ * specified in `binary/header.ts`, next to the constants this reads.
  *
- * Blob layout:
- * ```
- *   [4]  magic        = "SLVA" (0x53 0x4C 0x56 0x41)
- *   [4]  version      = uint32 (currently 3)
- *   [4]  metadataLen  = uint32 byte length of UTF-8 metadata JSON
- *   [N]  metadata     = UTF-8 JSON (materials, groups, sourceComponentId, ...)
- *   [4]  flags        = uint32 (bit 0: 0 = int16 quantized, 1 = float32 raw;
- *                                bit 1: 0 = uint32 indices, 1 = uint16 indices;
- *                                bit 2: 1 = delta+zigzag filtered)
- *   [24] origin       = 3 x float64
- *   [24] scale        = 3 x float64 (step per int16 unit; identity for float32)
- *   [4]  vertexCount  = uint32 number of vertices (positions = vertexCount * 3 components)
- *   [V]  vertices     = int16[vertexCount*3] OR float32[vertexCount*3]
- *   [4]  indexCount   = uint32 number of indices
- *   [I]  indices      = uint32[indexCount] OR uint16[indexCount]
- * ```
- *
- * For int16 vertices: world position = `origin + (q + 32767) * scale`. This matches Three.js
- * `BufferAttribute(arr, 3, true)` (`normalized: true`) semantics when the per-mesh transform
- * encodes `origin + scale`.
- *
- * For float32: `origin = (0, 0, 0)`, `scale = (1, 1, 1)`, vertices are raw world positions.
- *
- * With FLAG_DELTA_ENCODED (v3), stored int16 vertex components and indices are wrapped
- * differences from their predecessor, zigzag-mapped — see the flag's doc in `binary/header.ts`.
- * This parser returns reconstructed absolute values; consumers never see the filter.
+ * Returns absolute values: quantized vertices stay int16 (dequantize with `origin + (q + 32767) *
+ * scale`, which is what Three.js `BufferAttribute(arr, 3, true)` expects when the per-mesh
+ * transform encodes origin and scale), but the delta filter and planar byte-split are both undone
+ * here — consumers never see either.
  *
  * @param input - The blob, as either an `ArrayBuffer`/`Uint8Array` (binary transport) or a
  *   base64-encoded string (JSON-envelope transport).
@@ -93,18 +77,27 @@ export function parseBinaryMeshBatch(
 	let vertices: Int16Array | Float32Array;
 	if (raw.isFloat32) {
 		vertices = raw.vertexData as Float32Array;
+	} else if (raw.planarByteSplit) {
+		vertices = decodePlanarVertices(raw.vertexData as Uint8Array, raw.vertexCount);
 	} else if (raw.deltaEncoded) {
 		vertices = decodeDeltaVertices(raw.vertexData as Uint16Array);
 	} else {
 		vertices = raw.vertexData as Int16Array;
 	}
 
-	let indices = raw.indexData;
-	if (raw.deltaEncoded) {
+	let indices: Uint16Array | Uint32Array;
+	if (raw.planarByteSplit) {
+		const planes = raw.indexData as Uint8Array;
+		indices = raw.uint16Indices
+			? decodePlanarIndices16(planes, planes.length / 2)
+			: decodePlanarIndices32(planes, planes.length / 4);
+	} else if (raw.deltaEncoded) {
 		indices =
-			indices instanceof Uint16Array
-				? decodeDeltaIndices16(indices)
-				: decodeDeltaIndices32(indices);
+			raw.indexData instanceof Uint16Array
+				? decodeDeltaIndices16(raw.indexData)
+				: decodeDeltaIndices32(raw.indexData as Uint32Array);
+	} else {
+		indices = raw.indexData as Uint16Array | Uint32Array;
 	}
 	validateIndicesInRange(indices, raw.vertexCount);
 
@@ -129,12 +122,22 @@ export function parseBinaryMeshBatch(
 export interface RawBinaryMeshBatch {
 	metadata: BinaryMeshMetadata;
 	flags: number;
-	/** Wire vertex components: zigzag deltas (Uint16) when `deltaEncoded` and not float32. */
-	vertexData: Uint16Array | Int16Array | Float32Array;
-	/** Wire indices: zigzag deltas when `deltaEncoded`. NOT validated against vertexCount. */
-	indexData: Uint16Array | Uint32Array;
+	/**
+	 * Wire vertex components: byte planes (Uint8) when `planarByteSplit`, zigzag deltas (Uint16)
+	 * when `deltaEncoded` and not float32.
+	 */
+	vertexData: Uint8Array | Uint16Array | Int16Array | Float32Array;
+	/**
+	 * Wire indices: byte planes (Uint8) when `planarByteSplit`, else zigzag deltas when
+	 * `deltaEncoded`. NOT validated against vertexCount.
+	 */
+	indexData: Uint8Array | Uint16Array | Uint32Array;
 	isFloat32: boolean;
 	deltaEncoded: boolean;
+	/** v4 byte-plane layout on the delta-filtered streams — see FLAG_PLANAR_BYTESPLIT. */
+	planarByteSplit: boolean;
+	/** Width of the wire indices (needed since planar `indexData` is a bare byte stream). */
+	uint16Indices: boolean;
 	vertexCount: number;
 	origin: [number, number, number];
 	scale: [number, number, number];
@@ -237,6 +240,7 @@ export function parseBinaryMeshBatchRaw(
 
 	const useFloat32 = (flags & FLAG_FLOAT32) !== 0;
 	const deltaEncoded = (flags & FLAG_DELTA_ENCODED) !== 0;
+	const planarByteSplit = (flags & FLAG_PLANAR_BYTESPLIT) !== 0;
 	const componentCount = vertexCount * 3;
 	const bytesPerComponent = useFloat32 ? 4 : 2;
 	const verticesByteLength = componentCount * bytesPerComponent;
@@ -257,9 +261,12 @@ export function parseBinaryMeshBatchRaw(
 	// `bytes.byteOffset + offset` respects that alignment in the underlying buffer, which a wrapper
 	// Uint8Array could violate; the readers fall back to a copy when it does.
 	const absoluteOffset = bytes.byteOffset + offset;
-	let vertexData: Uint16Array | Int16Array | Float32Array;
+	let vertexData: Uint8Array | Uint16Array | Int16Array | Float32Array;
 	if (useFloat32) {
 		vertexData = readFloat32Vertices(bytes.buffer, absoluteOffset, componentCount);
+	} else if (planarByteSplit) {
+		// v4 byte planes — no alignment requirement, view the bytes directly.
+		vertexData = bytes.subarray(offset, offset + verticesByteLength);
 	} else if (deltaEncoded) {
 		// Raw zigzag deltas — parseBinaryMeshBatch (or the assembly worker) prefix-sums them later.
 		vertexData = readUint16Array(bytes.buffer, absoluteOffset, componentCount);
@@ -291,16 +298,18 @@ export function parseBinaryMeshBatchRaw(
 		});
 	}
 
-	const indexData = useUint16Indices
-		? readUint16Array(bytes.buffer, bytes.byteOffset + offset, indexCount)
-		: readUint32Array(bytes.buffer, bytes.byteOffset + offset, indexCount);
+	const indexData = planarByteSplit
+		? bytes.subarray(offset, offset + indicesByteLength)
+		: useUint16Indices
+			? readUint16Array(bytes.buffer, bytes.byteOffset + offset, indexCount)
+			: readUint32Array(bytes.buffer, bytes.byteOffset + offset, indexCount);
 	offset += indicesByteLength;
 
 	// Optional trailing chunks: UV first, then colors. Pre-chunk-writer blobs simply end here —
 	// each read is gated by its flag, so nothing is consumed when a chunk is absent.
 	let uvs: Float32Array | null = null;
 	if ((flags & FLAG_HAS_UVS) !== 0) {
-		const parsed = parseUvChunk(bytes, view, offset, vertexCount, deltaEncoded);
+		const parsed = parseUvChunk(bytes, view, offset, vertexCount, deltaEncoded, planarByteSplit);
 		uvs = parsed.uvs;
 		offset = parsed.offset;
 	}
@@ -317,6 +326,8 @@ export function parseBinaryMeshBatchRaw(
 		indexData,
 		isFloat32: useFloat32,
 		deltaEncoded,
+		planarByteSplit,
+		uint16Indices: useUint16Indices,
 		vertexCount,
 		origin: [originX, originY, originZ],
 		scale: [scaleX, scaleY, scaleZ],

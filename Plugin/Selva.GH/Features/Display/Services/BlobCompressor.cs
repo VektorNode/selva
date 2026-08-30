@@ -5,7 +5,7 @@ using System.IO.Compression;
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     Optional gzip wrapper around a SLVA mesh blob. The WebDisplay payload otherwise ships
+///     Optional raw-DEFLATE wrapper around a SLVA mesh blob. The WebDisplay payload otherwise ships
 ///     uncompressed (the SvelteKit adapter only pre-compresses static assets, and the local-mode
 ///     WebSocket has no permessage-deflate), so for cloud delivery the quantized-int16 geometry
 ///     benefits from a generic entropy pass before base64.
@@ -33,7 +33,7 @@ public static class BlobCompressor
     private const int MinCompressBytes = 4 * 1024;
 
     /// <summary>
-    ///     Returns the gzip-wrapped blob when compression helps, otherwise the original bytes.
+    ///     Returns the SLVZ-wrapped blob when compression helps, otherwise the original bytes.
     ///     The result is self-describing: callers don't track whether it was compressed — the
     ///     decoder reads the leading magic.
     /// </summary>
