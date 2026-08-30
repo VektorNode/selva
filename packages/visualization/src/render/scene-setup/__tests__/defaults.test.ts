@@ -51,28 +51,67 @@ describe('LOOK_PRESETS', () => {
 		expect(LOOK_PRESETS.technical.environmentIntensity).toBeLessThan(1);
 	});
 
+	// Looks with no lit surface to shade: xray is transparent, wireframe draws lines, and lineart
+	// is deliberately unlit so nothing competes with the edge overlay for the eye.
+	const UNLIT_LOOKS: Look[] = ['xray', 'wireframe', 'lineart'];
+	const SHADED_LOOKS = ALL_LOOKS.filter((look) => !UNLIT_LOOKS.includes(look));
+
 	// The regression these guard: IBL plus flat fill alone lights every face of a box nearly
 	// equally, so the model renders as a white silhouette. A key light and contact shading are what
 	// make form readable, and every opaque look must carry both.
-	it.each(ALL_LOOKS.filter((look) => look !== 'xray'))(
-		'%s key-lights the scene and enables contact shading',
+	it.each(SHADED_LOOKS)('%s key-lights the scene and enables contact shading', (look) => {
+		expect(LOOK_PRESETS[look].sunlightIntensity).toBeGreaterThan(1);
+		expect(LOOK_PRESETS[look].ambientOcclusion).toBe(true);
+	});
+
+	// Ambient and hemisphere light every face the same regardless of orientation, so stacking them
+	// above the key light is what flattens a model out. xray is exempt because it is deliberately
+	// fill-led (a hard highlight on a transparent shell hides what is behind it), wireframe because
+	// a key light would render lines black wherever they run away from it.
+	it.each(SHADED_LOOKS)('%s keeps orientation-independent fill below the sun', (look) => {
+		const preset = LOOK_PRESETS[look];
+		const flatFill = preset.ambientIntensity + preset.hemisphereIntensity;
+		expect(flatFill, `${look} flat fill`).toBeLessThan(preset.sunlightIntensity);
+	});
+
+	// The distinction the two line looks exist to draw: lineart keeps opaque faces so near
+	// geometry occludes far, which is what makes a dense model readable; wireframe deliberately
+	// doesn't. Swapping either behaviour silently turns one into the other.
+	// The bug this pins: these looks kill the sun, and their meshes are MeshPhysicalMaterial, which
+	// takes brightness from lighting rather than from `color`. Zero every source and the model
+	// renders as a black silhouette no matter how white the override is. Hemisphere and ambient are
+	// the sources that survive with no HDR loaded, so at least one must stay lit.
+	it.each(UNLIT_LOOKS.filter((look) => look !== 'xray'))(
+		'%s still lights its unlit-looking materials',
 		(look) => {
-			expect(LOOK_PRESETS[look].sunlightIntensity).toBeGreaterThan(1);
-			expect(LOOK_PRESETS[look].ambientOcclusion).toBe(true);
+			const preset = LOOK_PRESETS[look];
+			expect(preset.sunlightIntensity).toBe(0);
+			expect(preset.hemisphereIntensity + preset.ambientIntensity).toBeGreaterThan(1);
 		}
 	);
 
-	// Ambient and hemisphere light every face the same regardless of orientation, so stacking them
-	// above the key light is what flattens a model out. xray is exempt: it is deliberately fill-led,
-	// since a hard highlight on a transparent shell hides the geometry behind it.
-	it.each(ALL_LOOKS.filter((look) => look !== 'xray'))(
-		'%s keeps orientation-independent fill below the sun',
-		(look) => {
-			const preset = LOOK_PRESETS[look];
-			const flatFill = preset.ambientIntensity + preset.hemisphereIntensity;
-			expect(flatFill, `${look} flat fill`).toBeLessThan(preset.sunlightIntensity);
+	it('lineart keeps faces opaque so near geometry occludes far', () => {
+		const override = LOOK_PRESETS.lineart.materialOverride;
+		expect(override?.wireframe).toBeUndefined();
+		expect(override?.opacity).toBeUndefined();
+		expect(override?.depthWrite).toBeUndefined();
+		expect(override?.color).toBeDefined();
+	});
+
+	it('lineart is the only look that requires the edge overlay', () => {
+		expect(LOOK_PRESETS.lineart.requiresEdges).toBe(true);
+		for (const look of ALL_LOOKS.filter((l) => l !== 'lineart')) {
+			expect(LOOK_PRESETS[look].requiresEdges, look).toBeUndefined();
 		}
-	);
+	});
+
+	it('wireframe draws lines with flat fill and no key light', () => {
+		const preset = LOOK_PRESETS.wireframe;
+		expect(preset.materialOverride?.wireframe).toBe(true);
+		expect(preset.sunlightIntensity).toBe(0);
+		expect(preset.ambientIntensity).toBeGreaterThan(0);
+		expect(preset.ambientOcclusion).toBe(false);
+	});
 
 	it('arctic and xray override materials; the lighting-only looks do not', () => {
 		expect(LOOK_PRESETS.arctic.materialOverride?.color).toBeDefined();

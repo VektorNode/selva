@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import type { CameraController } from '../camera-controller.js';
+import type { EdgeOptions } from '../edges.js';
 import type { Grid } from '../grid.js';
 import type { LabelLayer } from '../label-layer.js';
 import type { MeasureTool } from '../measure.js';
@@ -29,8 +30,11 @@ export interface ThreeViewer {
 	/**
 	 * No-op unless `edges.enabled`. Extraction runs off-thread for large meshes, so overlays can
 	 * attach a beat later; meshes over `edges.maxTriangles` fall back to the screen-space edge shader.
+	 *
+	 * `overrides` applies to this call only, leaving the viewer's configured edge options alone —
+	 * a line-drawing look wants `distanceFade: false` without changing what a later toggle does.
 	 */
-	applyEdges: (root: THREE.Object3D) => void;
+	applyEdges: (root: THREE.Object3D, overrides?: Partial<EdgeOptions>) => void;
 	/**
 	 * Prefer over `removeEdges` directly — also cancels in-flight async attaches and stands down the
 	 * screen-space edge fallback if active.

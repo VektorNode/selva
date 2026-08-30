@@ -3,7 +3,13 @@ import * as THREE from 'three';
 import { getLogger } from '../../shared/index.js';
 
 import type { CameraController } from '../camera-controller.js';
-import { computeContentBounds } from '../three-helpers.js';
+import { computeContentBounds, isViewerAid } from '../three-helpers.js';
+import {
+	highlightMemberRange,
+	memberBounds,
+	resolveHitMember,
+	type PickableMember
+} from './merged-picking.js';
 import type { ResolvedOptions } from './defaults.js';
 
 // Tuned against the brightest look (`showcase`, exposure 1.15 + sun 2.6): the highlight has to stay
@@ -70,6 +76,14 @@ export function setupEventHandlers(
 } {
 	const selectedObjects = new Set<THREE.Object3D>();
 	const originalMaterials = new Map<THREE.Object3D, THREE.Material | THREE.Material[]>();
+	// Set when the selection is one member inside a merged mesh: restores the geometry's groups and
+	// material array, which a plain material swap can't undo.
+	let restoreMemberHighlight: (() => void) | null = null;
+	/** Which member of a merged mesh is selected, so a click on a sibling isn't a no-op. */
+	let selectedMemberIndex: number | null = null;
+	// The highlight clone owned by a member highlight — disposed with it, since it never becomes
+	// the mesh's `material` and so isn't reached by the clone disposal below.
+	let memberHighlightMaterial: THREE.Material | null = null;
 	const raycaster = new THREE.Raycaster();
 	const mouse = new THREE.Vector2();
 	const mouseDownPosition = new THREE.Vector2();
@@ -107,6 +121,12 @@ export function setupEventHandlers(
 				: new THREE.Color('#ff0000');
 
 	const clearSelection = () => {
+		if (restoreMemberHighlight) {
+			restoreMemberHighlight();
+			restoreMemberHighlight = null;
+			memberHighlightMaterial?.dispose();
+			memberHighlightMaterial = null;
+		}
 		selectedObjects.forEach((obj) => {
 			const restorable = obj as THREE.Object3D & {
 				material?: THREE.Material | THREE.Material[];
@@ -131,41 +151,69 @@ export function setupEventHandlers(
 			}
 		});
 		selectedObjects.clear();
+		selectedMemberIndex = null;
 	};
 
-	const applyHighlight = (object: THREE.Object3D): boolean => {
+	/**
+	 * Tints the picked object. On a merged mesh only the hit member's index range is tinted, so
+	 * clicking one wall doesn't light up every wall sharing its material — see `merged-picking.ts`.
+	 */
+	const applyHighlight = (object: THREE.Object3D, member: PickableMember | null): boolean => {
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
 		if (!(target.material instanceof THREE.Material)) return false;
 
-		originalMaterials.set(object, target.material);
 		const clone = target.material.clone();
 		tintForSelection(clone, selectionColorObj, object instanceof THREE.Mesh);
+
+		if (member && object instanceof THREE.Mesh) {
+			memberHighlightMaterial = clone;
+			restoreMemberHighlight = highlightMemberRange(object, member, clone);
+			return true;
+		}
+
+		originalMaterials.set(object, target.material);
 		target.material = clone;
 		return true;
 	};
 
 	// Points picking tolerance, scaled to scene size so it holds at any zoom. Fat Line2 uses its own
 	// material linewidth instead, so no separate threshold is needed for lines.
+	//
+	// `computeContentBounds` traverses the whole scene, which is far too slow to redo on every
+	// click. The scene only changes wholesale between solves, so the diagonal is cached and
+	// recomputed when the child count changes.
+	let cachedDiagonal: number | null = null;
+	let cachedChildCount = -1;
 	const updatePickThresholds = () => {
-		const box = computeContentBounds(scene);
-		const diagonal = box.isEmpty() ? 1 : box.getSize(new THREE.Vector3()).length();
-		raycaster.params.Points.threshold = diagonal * 0.01;
+		if (cachedDiagonal === null || scene.children.length !== cachedChildCount) {
+			const box = computeContentBounds(scene);
+			cachedDiagonal = box.isEmpty() ? 1 : box.getSize(new THREE.Vector3()).length();
+			cachedChildCount = scene.children.length;
+		}
+		raycaster.params.Points.threshold = cachedDiagonal * 0.01;
+	};
+
+	/**
+	 * Nearest visible, pickable object under the pointer, or null. Viewer aids are excluded: the grid
+	 * is a huge camera-following plane, so double-clicking through a thin curve onto it would frame a
+	 * box the size of the fade radius and fling the camera out.
+	 */
+	const pickAt = (clientX: number, clientY: number): THREE.Intersection | null => {
+		const rect = canvas.getBoundingClientRect();
+		mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+		mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+		updatePickThresholds();
+		raycaster.setFromCamera(mouse, getActiveCamera());
+		// Sorted near-to-far, so the first visible hit is the nearest one.
+		for (const hit of raycaster.intersectObjects(scene.children, true)) {
+			if (isFullyVisible(hit.object) && !isViewerAid(hit.object)) return hit;
+		}
+		return null;
 	};
 
 	const handleMouseDown = (event: MouseEvent) => {
 		mouseDownPosition.set(event.clientX, event.clientY);
-	};
-
-	// `click` fires on the first press of a double-click too, so acting on it immediately would
-	// select the mesh and open its metadata before `dblclick` ever arrives. Hold the single-click
-	// action for one double-click interval; `handleDoubleClick` cancels it.
-	const DOUBLE_CLICK_MS = 250;
-	let pendingClick: ReturnType<typeof setTimeout> | null = null;
-
-	const cancelPendingClick = () => {
-		if (pendingClick === null) return;
-		clearTimeout(pendingClick);
-		pendingClick = null;
 	};
 
 	const handleCanvasClick = (event: MouseEvent) => {
@@ -174,70 +222,67 @@ export function setupEventHandlers(
 			return;
 		}
 
-		// `event` is reused by the browser after this handler returns, so read what the deferred
-		// work needs now rather than closing over the event itself.
-		const { clientX, clientY } = event;
-		cancelPendingClick();
-		pendingClick = setTimeout(() => {
-			pendingClick = null;
-			resolveClick(clientX, clientY);
-		}, DOUBLE_CLICK_MS);
-	};
+		// Acted on immediately, including the first press of a double-click: selecting and reporting
+		// metadata are idempotent, so the second press re-reports the same object. Deferring this to
+		// wait out a possible `dblclick` made every selection feel a quarter-second late.
+		const hit = pickAt(event.clientX, event.clientY);
 
-	const resolveClick = (clientX: number, clientY: number) => {
-		const rect = canvas.getBoundingClientRect();
-		mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
-		mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
-
-		updatePickThresholds();
-		raycaster.setFromCamera(mouse, getActiveCamera());
-		const intersects = raycaster
-			.intersectObjects(scene.children, true)
-			.filter((i) => isFullyVisible(i.object));
-
-		if (intersects.length > 0) {
-			const clickedObject = intersects[0].object;
-
-			if (!selectedObjects.has(clickedObject)) {
-				clearSelection();
-				selectedObjects.add(clickedObject);
-				applyHighlight(clickedObject);
-
-				config.events?.onObjectSelected?.(clickedObject);
-
-				if (clickedObject instanceof THREE.Mesh && Object.keys(clickedObject.userData).length > 0) {
-					config.events?.onMeshMetadataClicked?.(clickedObject.userData);
-				}
-			}
-		} else {
+		if (!hit) {
 			clearSelection();
 			config.events?.onBackgroundClicked?.({ x: mouse.x, y: mouse.y });
+			return;
+		}
+
+		const clickedObject = hit.object;
+		const resolved = resolveHitMember(hit);
+		const hitMemberIndex = resolved?.index ?? null;
+
+		// A merged mesh stays one object across clicks, so object identity alone would treat a click
+		// on a different member as re-clicking the current selection and do nothing.
+		if (selectedObjects.has(clickedObject) && hitMemberIndex === selectedMemberIndex) return;
+
+		clearSelection();
+		selectedObjects.add(clickedObject);
+		selectedMemberIndex = hitMemberIndex;
+		applyHighlight(clickedObject, resolved?.member ?? null);
+
+		config.events?.onObjectSelected?.(clickedObject);
+
+		// The member's own name/layer/metadata, so the panel describes the object under the cursor
+		// rather than the merged group's first member.
+		if (resolved) {
+			config.events?.onMeshMetadataClicked?.({
+				source: clickedObject.userData?.source,
+				name: resolved.member.name,
+				layer: resolved.member.layer,
+				trackingKey: resolved.member.trackingKey,
+				metadata: resolved.member.metadata
+			});
+		} else if (
+			clickedObject instanceof THREE.Mesh &&
+			Object.keys(clickedObject.userData).length > 0
+		) {
+			config.events?.onMeshMetadataClicked?.(clickedObject.userData);
 		}
 	};
 
 	const handleDoubleClick = (event: MouseEvent) => {
-		cancelPendingClick();
+		const hit = pickAt(event.clientX, event.clientY);
+		if (!hit) return;
+		const target = hit.object;
 
-		const rect = canvas.getBoundingClientRect();
-		mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-		mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-		updatePickThresholds();
-		raycaster.setFromCamera(mouse, getActiveCamera());
-		const intersects = raycaster
-			.intersectObjects(scene.children, true)
-			.filter((i) => isFullyVisible(i.object));
-
-		if (intersects.length === 0) return;
-
-		const target = intersects[0].object;
 		config.events?.onMeshDoubleClicked?.(target);
 
 		if (!config.events?.enableDoubleClickZoom) return;
 
-		const box = new THREE.Box3().setFromObject(target);
+		// On a merged mesh, framing the object would frame the whole material group; frame just the
+		// member under the cursor instead.
+		const resolved = resolveHitMember(hit);
+		const box =
+			resolved && target instanceof THREE.Mesh
+				? memberBounds(target, resolved.member)
+				: new THREE.Box3().setFromObject(target);
 		if (box.isEmpty()) return;
-
 		// Via the controller so the active camera moves (translating an ortho camera alone zooms
 		// nothing). The resulting tween is cancellable — a rapid second double-click replaces it
 		// rather than racing it.
@@ -275,7 +320,6 @@ export function setupEventHandlers(
 	}
 
 	const dispose = () => {
-		cancelPendingClick();
 		canvas.removeEventListener('mousedown', handleMouseDown);
 		canvas.removeEventListener('click', handleCanvasClick);
 		canvas.removeEventListener('dblclick', handleDoubleClick);

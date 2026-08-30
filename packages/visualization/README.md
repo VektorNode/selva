@@ -1,98 +1,98 @@
 # `@selvajs/visualization`
 
-A headless, extensible viewer core: no Svelte, no runes, `three` as a peer dep. Consumers build
-their own UI over it.
+Show Rhino/Grasshopper geometry in a browser, with Three.js.
 
-## Layers
+No Svelte, no React, no DOM widgets — you get a viewer and a parser, and you build your own UI on
+top. `three` is a peer dep: your app owns the copy.
 
-Layers depend **downward only** — nothing imports upward, so where a file belongs follows from what
-it depends on.
+## Install
 
-```
-scene/     SceneOutliner: reads a live THREE.Scene → content list, layers, visibility, selection
-render/    THREE scene setup + CAD viewer toolkit (camera, edges, grid, gizmo, measure…)
-parse/     backend payload → THREE meshes + metadata (webdisplay, display-items)
-   ↑ all three depend only on:
-shared/    coordinate frame, look presets, errors, logging, geometry/color, GPU ownership  [internal]
+```bash
+pnpm add @selvajs/visualization three
 ```
 
-The three upper layers are **siblings**, not a chain: `scene/` reads the scene graph but never
-imports `render/`, and `render/` never imports `parse/`. A host composes them — see [the
-render↔parse seam](./src/render/README.md#the-renderparse-seam) for the one place that needs care.
+## The whole thing in one example
 
-**The solve session lives in `@selvajs/solve/client`, not here.** What stays behind is the three.js
-mesh ownership policy solve's result memo needs but deliberately doesn't know: `meshPolicy` in
-[`parse/mesh-policy.ts`](./src/parse/mesh-policy.ts).
-
-**Each layer's barrel (`index.ts`) is the only cross-layer import surface.** Files inside a layer
-import siblings by relative path; other layers import the barrel.
-
-## Sub-path exports
-
-The three upper layers are published entrypoints, so consumers tree-shake:
+Two calls: build a viewer on a canvas, then put parsed geometry into it.
 
 ```ts
-import { getThreeMeshesFromComputeResponse, meshPolicy } from '@selvajs/visualization/parse';
-import { initThree, LOOKS, type ThreeViewer } from '@selvajs/visualization/render';
+import { initThree, updateScene } from '@selvajs/visualization/render';
+import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
+
+const viewer = initThree(canvas, {
+	look: 'technical',
+	grid: { enabled: true },
+	edges: { enabled: true }
+});
+
+// `response` is what Rhino.Compute returned for your definition.
+const objects = await getThreeObjectsFromComputeResponse(response);
+updateScene(viewer.scene, objects, viewer.camera, viewer.controls, false);
+viewer.applyEdges(viewer.scene);
+
+viewer.dispose(); // when the canvas goes away — frees the GL context, not just its objects
+```
+
+That is the full path: **compute response → THREE objects → scene**.
+
+## The three parts
+
+Each is its own import path, so a bundler can drop the ones you don't use.
+
+| Import                          | What it gives you                                                    |
+| ------------------------------- | -------------------------------------------------------------------- |
+| `@selvajs/visualization/parse`  | backend payload → THREE meshes, curves, points                       |
+| `@selvajs/visualization/render` | the viewer: camera, lights, grid, edges, gizmo, measure, render loop |
+| `@selvajs/visualization/scene`  | an object list over a live scene: layers, visibility, selection      |
+
+```ts
+import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
+import { initThree, type ThreeViewer } from '@selvajs/visualization/render';
 import { createSceneOutliner } from '@selvajs/visualization/scene';
 ```
 
-`shared/` is **internal** — it is the cross-layer import surface, not an entrypoint. The parts
-consumers need (`VisualizationError`, the logger seam, the look vocabulary) are re-exported from
-`/render`. The root `.` entrypoint re-exports nothing on purpose: importing from a layer keeps the
-layering enforced by the import graph rather than merely documented.
+There is no root (`.`) export on purpose — always import from one of the three.
 
-### The API is deliberately minimal
+Each folder has its own README: [parse](./src/parse/README.md), [render](./src/render/README.md),
+[scene](./src/scene/README.md).
 
-A published symbol is a compatibility promise, so don't re-export one just because it exists. Three
-consequences worth knowing before you go looking for a missing export:
+## How the parts relate
 
-- **`initThree` owns the render toolkit.** It builds the camera controller, grid, gizmo, measure
-  tool, render pipeline and near-plane fitter, and returns the live instances on
-  [`ThreeViewer`](./src/render/scene-setup/viewer.ts). Configure through `ThreeInitializerOptions`,
-  reach through the viewer (`viewer.grid`, `viewer.measureTool`, `viewer.applyEdges`, …). The
-  factories are internal; their handle _types_ are exported so hosts can annotate.
-- **`createSceneOutliner` composes the scene layer.** Content filtering, layer grouping, visibility
-  and selection are reachable via `outliner.visibility` / `.selection` / `.layerGroups()`.
-- **The SLVA wire format is private.** Magics, version gates and flag bits are implementation
-  details of `parseMeshBatch*` and change without a major bump.
+```
+scene/     reads a live scene    ─┐
+render/    owns the scene         ├─ siblings: none imports another
+parse/     builds the content    ─┘
+                 ↓ all three use
+shared/    errors, logging, looks, colour + GPU helpers   [internal, not published]
+```
 
-`scene/` gets its reactivity with no seam at all: its state is three sets, so a host injects its own
-(`SvelteSet` in a Svelte app) — see [`src/scene/README.md`](./src/scene/README.md).
+`render/` puts geometry in the scene; `parse/` makes that geometry; `scene/` only looks at what is
+there. A host app wires them together — that's the point.
 
-## Examples (`pnpm example`)
+`shared/` is internal. The bits you'd want from it (`VisualizationError`, `setLogger`, `LOOKS`) are
+re-exported from `/render`.
+
+## Run the demos
 
 ```bash
 pnpm example        # http://localhost:5173
 ```
 
-A Vite playground, and the only place the GPU-dependent parts (edge overlays, the screen-space edge
-pass, AO, the measure tool) can be checked at all — jsdom has no WebGL. Three demos: **Viewer**
-(every `initThree` control), **Mesh File** (a `.slvm` through the same parse + `updateScene` calls
-`Viewer.svelte` makes), **Display Items** (a GH compute response through
-`getThreeMeshesFromComputeResponse`).
+Five pages, ordered so you can work down them:
 
-Demos import from the public barrels on purpose: a demo that needs an unexported symbol is a gap in
-the published API, not a reason to deep-import. `pnpm type-check` covers them, so a rename that
-breaks a demo fails the build instead of rotting.
+1. **Getting Started** — the smallest real app, with no harness around it. Its source is the example
+   above, fleshed out; read it first.
+2. **Display Items** — what actually comes out of a GH compute response.
+3. **Outliner** — an object-list panel over a live scene: layers, search, hide/show, selection.
+4. **Viewer — Full API** — every `initThree` control on one panel.
+5. **Mesh File** — a `.slvm` through the exact calls the Selva app makes, for checking the look 1:1.
 
-## Dependencies
+This is also the only place the GPU parts — edge overlays, ambient occlusion, the measure tool — can
+be checked at all; the test suite runs in jsdom, which has no WebGL.
 
-**Nothing from Selva** — only `fflate`, plus `three` as a peer dep. Errors
-([`shared/errors.ts`](./src/shared/errors.ts)), logging
-([`shared/logger.ts`](./src/shared/logger.ts)) and base64 decoding
-([`shared/encoding.ts`](./src/shared/encoding.ts)) are owned here rather than imported from
-`@selvajs/compute`, so the viewer works for a consumer with neither Selva nor Rhino.Compute.
+## Logging
 
-Likewise the response shape `getThreeMeshesFromComputeResponse` accepts is declared structurally in
-[`parse/webdisplay/response-envelope.ts`](./src/parse/webdisplay/response-envelope.ts) as only the
-fields the parser reads. Compute's `GrasshopperComputeResponse` is a superset and stays assignable,
-so neither package depends on the other.
-
-**`three` (>=0.179.0) is a peer dep** — the host owns the single instance. A second copy breaks
-`instanceof` across the boundary.
-
-The package logs nothing by default. To share a sink with `@selvajs/compute`:
+Silent by default. To send its logs wherever your app's logs go:
 
 ```ts
 import { setLogger } from '@selvajs/visualization/render';
@@ -100,3 +100,20 @@ import { getLogger } from '@selvajs/compute/core';
 
 setLogger(getLogger());
 ```
+
+## Notes for contributors
+
+- **Layers depend downward only.** `parse/`, `render/` and `scene/` never import each other; all
+  three may import `shared/`. Where a file belongs follows from what it depends on.
+- **A layer's `index.ts` is its only cross-layer import surface.** Inside a layer, import siblings
+  by relative path.
+- **The API stays minimal.** A published symbol is a promise to keep it. `initThree` builds the
+  toolkit and hands back live instances on `viewer` (`viewer.grid`, `viewer.measureTool`, …), so
+  those factories stay unexported. The SLVA binary format is private to `parseMeshBatch*`.
+- **No Selva dependencies.** Only `fflate`, plus `three` as a peer dep. Errors, logging and base64
+  live in `shared/` rather than coming from `@selvajs/compute`, so the viewer works for someone with
+  neither Selva nor Rhino.Compute. The compute response shape is declared structurally in
+  [`parse/webdisplay/response-envelope.ts`](./src/parse/webdisplay/response-envelope.ts).
+- **The solve session is not here** — it lives in `@selvajs/solve/client`. What stayed behind is the
+  mesh-ownership policy that solve's result memo needs but doesn't want to know about:
+  [`parse/mesh-policy.ts`](./src/parse/mesh-policy.ts).

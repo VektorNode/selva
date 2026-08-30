@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { setupEventHandlers } from '../scene-setup/setup-events';
 
@@ -57,9 +57,6 @@ function stubCameraController(): CameraController {
 }
 
 describe('setupEventHandlers click vs double-click', () => {
-	beforeEach(() => vi.useFakeTimers());
-	afterEach(() => vi.useRealTimers());
-
 	function setup() {
 		const { canvas, fire } = fakeCanvas();
 		const onMeshMetadataClicked = vi.fn();
@@ -83,37 +80,69 @@ describe('setupEventHandlers click vs double-click', () => {
 		return { click, fire, handlers, onMeshMetadataClicked, onMeshDoubleClicked };
 	}
 
-	it('opens the metadata panel on a lone single click', () => {
+	it('selects and opens the metadata panel synchronously on a single click', () => {
 		const { click, handlers, onMeshMetadataClicked } = setup();
 
 		click();
-		vi.runAllTimers();
 
+		// No timers advanced: selection must not wait out a double-click window.
 		expect(onMeshMetadataClicked).toHaveBeenCalledTimes(1);
 		handlers.dispose();
 	});
 
-	it('does not open the metadata panel when the click is part of a double-click', () => {
+	it('reports the double-click without re-reporting the already-selected object', () => {
 		const { click, fire, handlers, onMeshMetadataClicked, onMeshDoubleClicked } = setup();
 
-		// A real double-click: two clicks then dblclick, all inside the pending-click window.
 		click();
 		click();
 		fire('dblclick', CENTRE);
-		vi.runAllTimers();
 
 		expect(onMeshDoubleClicked).toHaveBeenCalledTimes(1);
-		expect(onMeshMetadataClicked).not.toHaveBeenCalled();
+		// The second press lands on the object the first already selected.
+		expect(onMeshMetadataClicked).toHaveBeenCalledTimes(1);
 		handlers.dispose();
 	});
 
-	it('drops a pending click on dispose', () => {
-		const { click, handlers, onMeshMetadataClicked } = setup();
+	it('ignores a click that was really a drag', () => {
+		const { fire, handlers, onMeshMetadataClicked } = setup();
 
-		click();
-		handlers.dispose();
-		vi.runAllTimers();
+		fire('mousedown', CENTRE);
+		fire('click', { clientX: CENTRE.clientX + 40, clientY: CENTRE.clientY });
 
 		expect(onMeshMetadataClicked).not.toHaveBeenCalled();
+		handlers.dispose();
+	});
+});
+
+describe('setupEventHandlers viewer aids', () => {
+	it('never picks the grid, whose camera-sized box would fling the camera out', () => {
+		const { canvas, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		// As sized in grid.ts: a plane scaled to the fade radius, in front of the content.
+		const grid = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshBasicMaterial());
+		grid.userData.id = 'grid';
+		grid.position.set(0, 0, 5);
+		grid.updateMatrixWorld(true);
+		scene.add(grid);
+
+		const controller = stubCameraController();
+		const onMeshDoubleClicked = vi.fn();
+		const config = {
+			events: {
+				enableClickToFocus: true,
+				enableDoubleClickZoom: true,
+				selectionColor: '#ff0000',
+				onMeshDoubleClicked
+			}
+		} as unknown as ResolvedOptions;
+
+		const handlers = setupEventHandlers(canvas, scene, controller, config);
+		fire('dblclick', CENTRE);
+
+		// The cube behind the grid is what gets framed, not the grid.
+		expect(onMeshDoubleClicked).toHaveBeenCalledWith(scene.children[0]);
+		const box = vi.mocked(controller.frameBounds).mock.calls[0][0];
+		expect(box.getSize(new THREE.Vector3()).x).toBe(2);
+		handlers.dispose();
 	});
 });

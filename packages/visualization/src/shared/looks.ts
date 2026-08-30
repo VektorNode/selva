@@ -94,6 +94,65 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			opacity: 0.28,
 			depthWrite: false
 		}
+	},
+	// The architectural line drawing: feature edges over flat white faces. The faces are the whole
+	// point even though you never really see them — they still write depth, so a near member hides
+	// the ones behind it. True wireframe can't do that, and on a dense frame (thousands of members,
+	// every edge of every one drawn at once) it collapses into a black mass.
+	//
+	// Unlit on purpose: any directional shading would compete with the lines for the eye. Ambient
+	// alone lands every face on the same flat white, so the only contrast in the image is the edges.
+	// AO is off for the same reason — a grey contact smear under a line drawing just muddies it.
+	lineart: {
+		toneMapping: THREE.NeutralToneMapping,
+		toneMappingExposure: 1,
+		// The faces are MeshPhysicalMaterial, so they take their brightness from lighting, not from
+		// `color`: zero out the lights and they render black however white the override is. Hemisphere
+		// and ambient carry it rather than IBL, because `scene.environment` only exists if the host
+		// loaded an HDR — leaning on IBL would render this look black in any viewer without one. Both
+		// are orientation-independent, so every face lands on the same flat white and the edges stay
+		// the only contrast in the image. Ambient is weighted over hemisphere because hemisphere's
+		// ground colour is a warm brown by default: leaning on it tints every downward face grey and
+		// the drawing stops reading as one flat white.
+		envMapIntensity: 1.0,
+		environmentIntensity: 1.0,
+		hemisphereIntensity: 0.6,
+		ambientIntensity: 3.2,
+		cullBackfaces: false,
+		ambientOcclusion: false,
+		sunlightIntensity: 0,
+		requiresEdges: true,
+		materialOverride: {
+			color: 0xf7f8fa,
+			metalness: 0,
+			roughness: 1
+		}
+	},
+	// Triangle edges only — the tessellation itself, diagonals and all. That makes it a mesh-
+	// inspection tool, not a drawing: for a readable line drawing use `lineart`, which draws
+	// feature edges and lets near faces occlude far ones. Nothing here is a lit surface:
+	// the sun is off and fill carries the image, because a directional light on a line renders it
+	// black wherever the line runs away from the key. AO is off for the same reason — a full-screen
+	// contact pass has no contacts to find between wires, and it only costs frames.
+	wireframe: {
+		toneMapping: THREE.NeutralToneMapping,
+		toneMappingExposure: 1,
+		// Lit for the same reason as lineart (see there): PBR lines are black unlit, and hemisphere
+		// plus ambient work with no HDR loaded. Dimmer than lineart because these lines are dark
+		// on white, not white on dark.
+		envMapIntensity: 1.0,
+		environmentIntensity: 1.0,
+		hemisphereIntensity: 0.4,
+		ambientIntensity: 2.0,
+		cullBackfaces: false,
+		ambientOcclusion: false,
+		sunlightIntensity: 0,
+		materialOverride: {
+			color: 0x2b3138,
+			metalness: 0,
+			roughness: 1,
+			wireframe: true
+		}
 	}
 };
 

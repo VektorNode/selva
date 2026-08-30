@@ -20,4 +20,5 @@ export { getObjectLabel, getTypeLabel } from './objects.js';
  * `getMemberKeys` returns one key per source member for merged meshes, so hiding tracks members.
  */
 export { getTrackingKey, getMemberKeys } from './identity.js';
+export type { SceneEntry } from './entries.js';
 export type { MergedMember } from './identity.js';

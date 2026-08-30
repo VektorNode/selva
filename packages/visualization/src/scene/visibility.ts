@@ -15,6 +15,14 @@
 
 import type * as THREE from 'three';
 import { getMemberKeys } from './identity.js';
+import { applyEntryVisibility } from './member-visibility.js';
+
+/** The parts of a `SceneEntry` visibility needs; kept structural so entries.ts stays optional. */
+export interface EntryRef {
+	object: THREE.Object3D;
+	memberIndex: number | null;
+	key: string;
+}
 
 // Backed by a caller-supplied `Set` so a reactive host can pass a framework-observable set
 // (Svelte's `SvelteSet`) and get re-renders for free.
@@ -26,6 +34,15 @@ export interface VisibilityState {
 	/** Drives the tri-state eye icon. */
 	isLayerPartial(objects: THREE.Object3D[]): boolean;
 	toggleLayer(objects: THREE.Object3D[]): void;
+	/**
+	 * Hide or show one entry — a whole object, or a single member inside a merged mesh.
+	 *
+	 * A merged mesh renders as one THREE object, so a member cannot be hidden by flipping
+	 * `.visible`. Its key goes in the hidden-set and the mesh's drawn index ranges are rebuilt to
+	 * skip it, which is what {@link applyEntryVisibility} does.
+	 */
+	setEntryVisible(entry: EntryRef, visible: boolean): void;
+	isEntryHidden(entry: EntryRef): boolean;
 	/** Restores `.visible` on everything the user had hidden before the solve. Call after each solve. */
 	applyTo(objects: THREE.Object3D[]): void;
 	reset(): void;
@@ -53,6 +70,19 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 			}
 		},
 
+		isEntryHidden: (entry) =>
+			entry.memberIndex === null ? allHidden(entry.object) : hidden.has(entry.key),
+
+		setEntryVisible(entry, visible) {
+			if (entry.memberIndex === null) {
+				state.setVisible(entry.object, visible);
+				return;
+			}
+			if (visible) hidden.delete(entry.key);
+			else hidden.add(entry.key);
+			applyEntryVisibility(entry.object, hidden);
+		},
+
 		isLayerHidden: (objects) => objects.length > 0 && objects.every((obj) => state.isHidden(obj)),
 
 		isLayerPartial(objects) {
@@ -68,6 +98,9 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 
 		applyTo(objects) {
 			for (const object of objects) {
+				// A merged mesh can be partly hidden, which `.visible` cannot express — rebuild its
+				// drawn ranges before the whole-object rule below considers it.
+				applyEntryVisibility(object, hidden);
 				// Only push objects down. Anything not in the set keeps whatever visibility the render
 				// layer gave it, so this never fights another feature that hid something for its own
 				// reasons (isolate mode, section-box culling).

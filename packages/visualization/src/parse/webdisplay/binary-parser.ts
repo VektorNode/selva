@@ -159,7 +159,7 @@ export function parseBinaryMeshBatchRaw(
 
 	const rawInput = toUint8Array(input);
 
-	// An SLVM v2 container nests a bare SLVA/SLVZ blob as its GEOM chunk and carries the object
+	// An SLVM v3 container nests a bare SLVA/SLVZ blob as its GEOM chunk and carries the object
 	// table/materials as binary chunks — unwrap, decode the inner blob through the path below,
 	// and overlay the container's metadata (the inner blob's own metadata is empty).
 	if (isSlvmContainer(rawInput)) {

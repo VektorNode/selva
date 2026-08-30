@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Getting Started — Example</title>
+		<link rel="stylesheet" href="../shared/playground.css" />
+	</head>
+	<body>
+		<div id="sidebar">
+			<h2>Getting Started</h2>
+			<a class="back-link" href="../index.html">← All examples</a>
+			<p class="sidebar-note">
+				The smallest real app: <code>initThree</code> →
+				<code>getThreeObjectsFromComputeResponse</code> → <code>updateScene</code>. No harness —
+				read <code>getting-started.ts</code> top to bottom.
+			</p>
+			<div class="section-title">Actions</div>
+			<button id="reload">Reload response</button>
+			<button id="fit">Fit to view</button>
+			<div class="section-title">Status</div>
+			<div id="status-panel">
+				<span id="status"
+					>Nothing loaded? Serve this with <code>pnpm example</code> — a static file server cannot
+					transpile the TypeScript modules.</span
+				>
+			</div>
+		</div>
+		<div id="canvas-container">
+			<canvas id="viewer-canvas"></canvas>
+			<div id="hud">click — select &nbsp;|&nbsp; drag — orbit &nbsp;|&nbsp; scroll — zoom</div>
+		</div>
+		<script type="module" src="./getting-started.ts"></script>
+	</body>
+</html>

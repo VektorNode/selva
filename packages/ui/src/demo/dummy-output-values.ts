@@ -27,10 +27,7 @@ export async function getParsedMeshes() {
 	// JSON imports widen `kind` to `string`; the batch's runtime shape matches DisplayBatch.
 	const batch = meshData as unknown as DisplayBatch;
 
-	const objects: THREE.Object3D[] = await parseMeshBatchObject(batch, {
-		mergeByMaterial: false,
-		debug: false
-	});
+	const objects: THREE.Object3D[] = await parseMeshBatchObject(batch, { debug: false });
 
 	const items = batch.items;
 	if (items?.length) {
