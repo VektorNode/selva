@@ -940,30 +940,6 @@
 			"outputs": []
 		},
 		{
-			"guid": "8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81",
-			"class": "GH_DisplayFromFile",
-			"file": "Plugin/Selva.GH/Features/Display/Components/GH_DisplayFromFile.cs",
-			"inputs": [
-				{
-					"kind": "AddTextParameter",
-					"name": "Path",
-					"access": "item"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Id",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddParameter:Param_WebDisplay",
-					"name": "Web Display",
-					"access": "item"
-				}
-			]
-		},
-		{
 			"guid": "8E4B17D3-2A96-4C50-B71E-5D30F9A6C284",
 			"class": "GH_CreateLeader",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_CreateLeader.cs",
@@ -1508,8 +1484,8 @@
 			"outputs": [
 				{
 					"kind": "AddParameter:Param_ThreeMaterial",
-					"name": null,
-					"access": null
+					"name": "Material",
+					"access": "item"
 				}
 			]
 		},
@@ -1543,6 +1519,25 @@
 				{
 					"kind": "AddGenericParameter",
 					"name": "Drawing",
+					"access": "item"
+				}
+			]
+		},
+		{
+			"guid": "B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241",
+			"class": "GH_DisplayFromFile",
+			"file": "Plugin/Selva.GH/Features/Display/Components/GH_DisplayFromFile.cs",
+			"inputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Path",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_WebDisplay",
+					"name": "Web Display",
 					"access": "item"
 				}
 			]
@@ -1730,6 +1725,25 @@
 			"outputs": []
 		},
 		{
+			"guid": "E2BA3FC1-3930-4E34-8034-7E096F419FD3",
+			"class": "GH_CombineDisplay",
+			"file": "Plugin/Selva.GH/Features/Display/Components/GH_CombineDisplay.cs",
+			"inputs": [
+				{
+					"kind": "AddParameter:Param_WebDisplay",
+					"name": "Web Display",
+					"access": "tree"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_WebDisplay",
+					"name": "Web Display",
+					"access": "tree"
+				}
+			]
+		},
+		{
 			"guid": "E4111712-6F0A-4F1B-950F-777EECAEBE01",
 			"class": "BranchResult",
 			"file": "Plugin/Selva.GH/Features/Display/Components/GH_WebDisplay.cs",
@@ -1770,6 +1784,40 @@
 					"kind": "AddParameter:Param_WebDisplay",
 					"name": "Web Display",
 					"access": "tree"
+				}
+			]
+		},
+		{
+			"guid": "E63C2334-7FA5-4D62-B5AB-622A726D9AAF",
+			"class": "GH_DeconstructDisplay",
+			"file": "Plugin/Selva.GH/Features/Display/Components/GH_DeconstructDisplay.cs",
+			"inputs": [
+				{
+					"kind": "AddParameter:Param_WebDisplay",
+					"name": "Web Display",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddMeshParameter",
+					"name": "Meshes",
+					"access": "list"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Names",
+					"access": "list"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Layers",
+					"access": "list"
+				},
+				{
+					"kind": "AddColourParameter",
+					"name": "Colors",
+					"access": "list"
 				}
 			]
 		},

@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The mesh payload is now an `SLVM` v3 chunked container (magic `SLVM`, fourcc chunks, unknown types skipped by length) — the same bytes on the wire, in `.gh` archives, and on disk as `.slvm`. It replaces three nested layers: the `DMF1` file sidecar, the JSON metadata embedded in the geometry blob, and the duplicate copy of that metadata the old file carried (a 12,679-mesh scene shrinks from 3.05 MB to 1.33 MB on disk).
 - The object table is columnar and pays only for what's present: vertex/index windows are prefix sums (never stored), auto-numbered names cost one byte total, layers/names dedupe through a string pool, and per-mesh metadata is stored as sparse attr columns — the key once, then only the objects carrying it. Namespaced keys (`gh:branch`, `ifc:guid`, …) give hosts and users a first-class slot for per-mesh provenance.
-- Grasshopper concepts left the core format: `sourceComponentId` and the Rhino NURBS JSON behind curves now live in a namespaced `EXTN "selva.gh"` chunk a foreign reader can skip. `Display From File` restamps identity by rewriting that one chunk instead of re-encoding anything.
+- Grasshopper concepts left the core format: `sourceComponentId` and the Rhino NURBS JSON behind curves now live in a namespaced `EXTN "selva.gh"` chunk a foreign reader can skip. Object identity now travels inside the container's own table, so `Display From File` no longer restamps it on load — its `Id` input is gone; see **Obsolete components** below.
 - Curves and points became core objects in the file: their polylines/positions are stored through the same quantize+delta codec as meshes (`CRVS`/`PNTS` chunks) instead of JSON double arrays. Data-URI textures are extracted into binary `TEXR` chunks and reconstructed on read.
 - Everything old still reads: `DMF1` files, bare SLVA/SLVZ blobs in saved `.gh` files, and every geometry blob back to v1 — readers dispatch on the leading magic. New bytes are always SLVM v3, so the web app must run a matching `@selvajs/visualization` release.
 
@@ -67,6 +67,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Other file endings still go through `RhinoDoc.Export`, whose format plugins are not thread-safe, so that path stays serial and on the main thread — same behaviour as before.
 
 - WebDisplay now extracts each mesh's vertex/face arrays inside the parallel meshing pass instead of in the serial batch-assembly step. Previously the per-vertex copy ran single-threaded for every mesh after meshing; it now scales with the meshing parallelism. `MeshBatchProcessor.CreateBatch` gains an array-taking overload for this (the mesh-taking overload is unchanged for other callers).
+
+### Obsolete components
+
+- **Display From File** (`8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81` → `B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241`): the `Id` input is gone now that SLVM v3 carries object identity in the container's own table, so loading no longer needs to restamp it. Old definitions upgrade automatically; the `Id` wire is dropped.
+
+### Upgraders
+
+- `GH_DisplayFromFileUpgrader_To_0_18`: `8B2E5C71` → `B9FCCDF3` (drops the `Id` input).
 
 ## [0.14.0-beta.2] - 2026-06-29
 
