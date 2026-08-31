@@ -39,7 +39,7 @@
 		"@selvajs/visualization": "workspace:^",
 		"bits-ui": "catalog:",
 		"mode-watcher": "catalog:",
-		"svelte-dnd-action": "^0.9.78",
+		"svelte-dnd-action": "^0.9.79",
 		"tailwind-variants": "catalog:",
 		"three": "catalog:",
 		"zod": "catalog:"

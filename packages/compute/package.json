@@ -106,7 +106,7 @@
 	},
 	"dependencies": {
 		"fflate": "^0.8.2",
-		"rhino3dm": "8.32.1"
+		"rhino3dm": "8.32.2"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -114,9 +114,9 @@
 		"@types/node": "catalog:",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
-		"eslint-plugin-svelte": "^3.22.0",
+		"eslint-plugin-svelte": "^3.23.0",
 		"globals": "^17.11.0",
-		"lint-staged": "^17.3.0",
+		"lint-staged": "^17.4.1",
 		"prettier": "catalog:",
 		"prettier-plugin-svelte": "^4.1.1",
 		"prettier-plugin-tailwindcss": "^0.8.1",
@@ -126,7 +126,7 @@
 		"typedoc-plugin-extras": "^4.0.1",
 		"typedoc-plugin-missing-exports": "^4.1.2",
 		"typescript": "catalog:",
-		"typescript-eslint": "^8.66.0",
+		"typescript-eslint": "^8.68.0",
 		"vite": "catalog:",
 		"vitest": "catalog:"
 	}

@@ -27,7 +27,7 @@
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@tailwindcss/typography": "^0.5.20",
 		"@tailwindcss/vite": "catalog:",
-		"firebase-tools": "^15.27.0",
+		"firebase-tools": "^15.28.2",
 		"hast-util-to-html": "^9.0.5",
 		"mdsvex": "^0.12.8",
 		"playwright": "^1.62.1",

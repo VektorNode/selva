@@ -48,12 +48,12 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@supabase/supabase-js": "^2.112.2",
+		"@supabase/supabase-js": "^2.112.4",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
-		"nodemailer": "^9.0.5",
+		"nodemailer": "^9.0.6",
 		"pino": "^10.3.1",
 		"sharp": "catalog:",
 		"tailwind-merge": "catalog:",
@@ -62,7 +62,7 @@
 		"zod": "catalog:"
 	},
 	"optionalDependencies": {
-		"@sentry/node": "^10.70.0"
+		"@sentry/node": "^10.71.0"
 	},
 	"devDependencies": {
 		"@playwright/test": "catalog:",
