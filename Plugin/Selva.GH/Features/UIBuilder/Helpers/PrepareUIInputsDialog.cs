@@ -338,9 +338,25 @@ internal sealed class PrepareUIInputsDialog : Form
             Math.Min(1f, Math.Max(0f, color.B + amount)));
     }
 
+    /// <summary>
+    ///     Wraps a cell in a fixed <see cref="RowHeight" /> slot and centres it vertically. Labels and
+    ///     checkboxes honour an explicit Height, but a WinForms DropDown or TextBox keeps its own native
+    ///     height regardless - without this slot those two columns drift a few pixels per row and end up
+    ///     a whole row out of step with the rest of the grid.
+    /// </summary>
     private static Control CellPadding(Control cell)
     {
-        return new Panel { Padding = new Padding(6, 0), Content = cell };
+        return new TableLayout
+        {
+            Height = RowHeight,
+            Padding = new Padding(6, 0),
+            Rows =
+            {
+                new TableRow { ScaleHeight = true },
+                new TableRow(new TableCell(cell, true)) { ScaleHeight = false },
+                new TableRow { ScaleHeight = true },
+            },
+        };
     }
 
     private static Label HeaderLabel(string text)
@@ -701,7 +717,6 @@ internal sealed class PrepareUIInputsDialog : Form
             {
                 Checked = candidate.Selected,
                 Enabled = IsSelectable(candidate),
-                Height = RowHeight,
             };
             SourceControl = Text(candidate.OriginalControlNickName);
             ControlKind = Text(PrepareUIInputInference.Describe(candidate.Kind));
@@ -756,7 +771,6 @@ internal sealed class PrepareUIInputsDialog : Form
             return new Label
             {
                 Text = value ?? string.Empty,
-                Height = RowHeight,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextAlignment = TextAlignment.Left,
             };
