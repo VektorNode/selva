@@ -41,6 +41,7 @@ internal enum PrepareUIInputStatus
     Ready,
     AlreadyPrepared,
     Repairable,
+    Replaceable,
     Ambiguous,
     MissingDependency,
     Unused,
@@ -555,12 +556,18 @@ internal static class PrepareUIInputInference
         {
             if (existingContextualTypeGuid != selectedType.TypeGuid)
             {
+                // The node itself cannot change type in place, but the relationship can still be
+                // updated: PrepareUIInputGraphService.ReplaceContextualParameter removes the
+                // existing node and places a new one of the chosen type, reconnecting whatever the
+                // old node fed. Selected defaults to true, same as Repairable, since this only
+                // happens after the author deliberately picked a different type (or the existing
+                // node's type was not recognized) and Update Get inputs is how they act on it.
                 return new PrepareUIInputDecision(
-                    PrepareUIInputStatus.Ambiguous,
-                    $"An existing '{existingContextualName}' reads this control, but the chosen type " +
-                        $"is '{selectedType.DisplayName}'. Existing wiring is never rewritten to change " +
-                        $"a type - delete that node first, or choose '{existingContextualName}' here.",
-                    false);
+                    PrepareUIInputStatus.Replaceable,
+                    $"An existing '{existingContextualName}' reads this control. Updating will remove " +
+                        $"it and place a new '{selectedType.DisplayName}' in its place, reconnecting its " +
+                        "downstream recipients.",
+                    true);
             }
 
             if (directRecipientCount > 0 || nickNameDrifted || controlNameChanged || accessChanged)
