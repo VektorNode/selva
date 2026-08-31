@@ -322,6 +322,9 @@ internal static class PrepareUIInputGraphService
                     case PrepareUIInputStatus.Repairable:
                         mutated |= RepairContextualParameter(record, control, candidate, report, expired, managedLinks);
                         break;
+                    case PrepareUIInputStatus.Replaceable:
+                        mutated |= ReplaceContextualParameter(document, record, control, candidate, report, expired, managedLinks);
+                        break;
                     case PrepareUIInputStatus.AlreadyPrepared when candidate.ExistingContextualParameter != null:
                         // Bookkeeping-only adoption of a correct, unmanaged node.
                         AdoptLink(control, candidate, candidate.ExistingContextualParameter, managedLinks, adopted: false);
@@ -464,6 +467,104 @@ internal static class PrepareUIInputGraphService
         }
 
         return changed;
+    }
+
+    /// <summary>
+    ///     Swaps an existing contextual parameter for a different type. A Grasshopper node cannot
+    ///     change type in place, so this creates the replacement first and only removes the old
+    ///     node once the new one is confirmed in the document - the same create-before-destroy
+    ///     order InsertContextualParameter uses. The old node's downstream recipients are rewired
+    ///     onto the new node before it is removed, mirroring how ApplyRemoval reconnects a control's
+    ///     recipients before deleting a node. Used for PrepareUIInputStatus.Replaceable rows, where
+    ///     PrepareUIInputInference.DecideStatus has already confirmed the control still feeds
+    ///     exactly one contextual parameter and only its type disagrees with what is selected.
+    /// </summary>
+    private static bool ReplaceContextualParameter(
+        GH_Document document,
+        GH_UndoRecord record,
+        IGH_Param control,
+        PrepareUIInputCandidate candidate,
+        PrepareUIInputReport report,
+        List<IGH_Param> expired,
+        List<PrepareUIInputManagedLink> managedLinks)
+    {
+        IGH_Param oldContextual = candidate.ExistingContextualParameter;
+        if (oldContextual == null)
+        {
+            report.Failed++;
+            report.Messages.Add($"{candidate.ControlNickName}: the existing contextual parameter could not be resolved.");
+            return false;
+        }
+
+        IGH_Param newContextual = PrepareUIInputTypeResolver.Emit(candidate.SelectedType);
+        if (newContextual == null)
+        {
+            report.Failed++;
+            report.Messages.Add($"{candidate.ControlNickName}: '{candidate.SelectedType.DisplayName}' could " +
+                $"not be created ({candidate.SelectedType.ProviderName} not installed).");
+            return false;
+        }
+
+        // Snapshot the old node's downstream recipients and the removal action before anything
+        // changes, same as ApplyRemoval does for a plain removal.
+        List<IGH_Param> recipients = oldContextual.Recipients?.ToList() ?? new List<IGH_Param>();
+        var wireActions = recipients.Select(recipient => new GH_WireAction(recipient)).ToList();
+        var removeAction = new GH_RemoveObjectAction(oldContextual);
+
+        newContextual.NickName = candidate.ControlNickName;
+        TryApplyAccess(newContextual, candidate.Access);
+        document.AddObject(newContextual, false);
+
+        // The replacement is validated in the document before the old node is touched, same as a
+        // fresh insertion.
+        if (document.FindObject(newContextual.InstanceGuid, true) == null)
+        {
+            report.Failed++;
+            report.Messages.Add($"{candidate.ControlNickName}: the replacement contextual parameter " +
+                "could not be added to the document; nothing was changed.");
+            return false;
+        }
+
+        // Take over the old node's spot on the canvas instead of running batch placement: this is
+        // a like-for-like swap, not a fresh insertion next to the control.
+        if (newContextual.Attributes == null)
+        {
+            newContextual.CreateAttributes();
+        }
+
+        if (newContextual.Attributes != null && oldContextual.Attributes != null)
+        {
+            newContextual.Attributes.Pivot = oldContextual.Attributes.Pivot;
+            newContextual.Attributes.ExpireLayout();
+            newContextual.Attributes.PerformLayout();
+        }
+
+        RenameControl(record, control, candidate.ControlNickName);
+        newContextual.AddSource(control);
+        foreach (IGH_Param recipient in recipients)
+        {
+            recipient.ReplaceSource(oldContextual, newContextual);
+            expired.Add(recipient);
+        }
+
+        // RemoveObject detaches the old parameter's own wires; the control is never itself removed.
+        document.RemoveObject(oldContextual, false);
+
+        foreach (GH_WireAction wireAction in wireActions)
+        {
+            record.AddAction(wireAction);
+        }
+
+        // Removal recorded next so its undo (re-adding the old node) runs before the wire actions'
+        // undo restores each recipient's source to it, and the new node's own creation is recorded
+        // last so its undo (removing it) runs first: undoing a replace unwinds newest to oldest -
+        // drop the new node, bring back the old one, then reattach its recipients to it.
+        record.AddAction(removeAction);
+        record.AddAction(new GH_AddObjectAction(newContextual));
+
+        AdoptLink(control, candidate, newContextual, managedLinks, adopted: false, recipients);
+        report.Replaced++;
+        return true;
     }
 
     /// <summary>

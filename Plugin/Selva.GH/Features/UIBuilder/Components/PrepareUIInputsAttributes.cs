@@ -10,10 +10,12 @@ using Grasshopper.Kernel.Attributes;
 namespace Selva.GH.Features.UIBuilder.Components;
 
 /// <summary>
-///     Three capsule buttons under the component: register, prepare, remove. While the component is
-///     selected, registered controls and the contextual parameters it manages are outlined on the
-///     canvas and linked back to it, so what the component owns is visible before any button is
-///     pressed.
+///     Two capsule buttons under the component: register and prepare. Removal now happens from
+///     inside the "Prepare inputs" preview (its Remove Get inputs button acts on whichever
+///     already-prepared rows are selected there), so there is no separate on-canvas remove button.
+///     While the component is selected, registered controls and the contextual parameters it
+///     manages are outlined on the canvas and linked back to it, so what the component owns is
+///     visible before any button is pressed.
 /// </summary>
 internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
 {
@@ -27,7 +29,6 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
 
     private RectangleF _linkButton;
     private RectangleF _prepareButton;
-    private RectangleF _removeButton;
     private int _pressed = -1;
 
     internal PrepareUIInputsAttributes(GH_PrepareUIInputs owner)
@@ -46,9 +47,8 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
 
         _linkButton = new RectangleF(bounds.X + 3, top, width, ButtonHeight);
         _prepareButton = new RectangleF(bounds.X + 3, top + ButtonHeight + ButtonSpacing, width, ButtonHeight);
-        _removeButton = new RectangleF(bounds.X + 3, top + ((ButtonHeight + ButtonSpacing) * 2f), width, ButtonHeight);
 
-        bounds.Height += (int)Math.Ceiling((ButtonHeight * 3f) + (ButtonSpacing * 2f) + 3f);
+        bounds.Height += (int)Math.Ceiling((ButtonHeight * 2f) + ButtonSpacing + 3f);
         Bounds = bounds;
     }
 
@@ -77,11 +77,6 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
             ? "Prepare inputs"
             : $"Prepare inputs ({Component.RegisteredCount})";
         DrawButton(graphics, _prepareButton, prepareCaption, disabled || Component == null || Component.RegisteredCount == 0, 1);
-
-        string removeCaption = Component == null || Component.ManagedCount == 0
-            ? "Remove Get inputs"
-            : $"Remove Get inputs ({Component.ManagedCount})";
-        DrawButton(graphics, _removeButton, removeCaption, disabled || Component == null || Component.ManagedCount == 0, 2);
     }
 
     private void DrawButton(Graphics graphics, RectangleF area, string caption, bool disabled, int index)
@@ -225,9 +220,6 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
             case 1:
                 Component.ShowPreparationPreview();
                 break;
-            case 2:
-                Component.ShowRemovalPreview();
-                break;
         }
 
         return GH_ObjectResponse.Release;
@@ -243,11 +235,6 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
         if (_prepareButton.Contains(location))
         {
             return 1;
-        }
-
-        if (_removeButton.Contains(location))
-        {
-            return 2;
         }
 
         return -1;

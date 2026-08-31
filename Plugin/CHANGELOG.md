@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Prepare UI Inputs**
+
+- New `Selva > UI` component, `Prepare UI Inputs` (`Plugin/Selva.GH/Features/UIBuilder/Components/GH_PrepareUIInputs.cs`). Registers existing Number Sliders, Value Lists, Boolean Toggles, and Panels by instance GUID, previews the contextual parameter (`Get Number`, `Get Integer`, `Get Value List`, `Get Boolean`, `Get String`) each one infers from its live data, and inserts it between the control and the inputs it drives - or beside a disconnected control - as one undoable, previewed operation. Existing compatible `Get` parameters are recognized and can be adopted, renamed, or repaired. Removal reverses the insertion and never deletes a node the component did not create or explicitly adopt.
+- Ported from a WASPer plugin prototype (`Components/1.2_Studies/Sm06`) per `00_Plans/SELVA_PREPARE_UI_INPUTS_PLAN.md`; the classification and inference math live in `Services/PrepareUIInputInference.cs`, split out with no Grasshopper dependency so it is covered by unit tests in `Plugin/Selva.Tests`.
+
 ### Changed
 
 **`sourceComponentId` is now `batchId`**
