@@ -17,13 +17,23 @@ internal sealed class PrepareUIInputsDialog : Form
     // Row height shared by every header/cell so the independent per-column TableLayouts (see
     // BuildColumnLayout) line up row-for-row; a mismatched control height in any one column is what
     // desynchronizes the grid.
-    private const int RowHeight = 24;
+    private const int RowHeight = 30;
+
+    // Vertical gap between rows within a column (see Column()); InitialWindowSize uses the same
+    // value to keep its estimate of the table's height in sync.
+    private const int RowSpacing = 4;
+
     private const int SelectionColumnWidth = 28;
     private const int ControlKindColumnWidth = 260;
 
     // Pixel step applied per wheel notch when Shift+MouseWheel is used to scroll the table
     // horizontally; the native horizontal scrollbar thumb is too thin to grab reliably.
     private const int HorizontalScrollStep = 40;
+
+    // Row count above which the window opens at its default (tall) height. Below this, the window
+    // opens just tall enough for the header plus the rows, so a 1- or 2-row batch doesn't open
+    // behind a mostly-empty table - the user can still resize taller or shorter afterwards.
+    private const int MaxRowsForShrunkWindow = 8;
 
     private static readonly Size DefaultWindowSize = new(1080, 500);
 
@@ -70,7 +80,7 @@ internal sealed class PrepareUIInputsDialog : Form
         _reapplyCaption = reapplyCaption;
 
         Title = "Prepare UI Inputs - " + title;
-        ClientSize = _savedWindowSize ?? DefaultWindowSize;
+        ClientSize = _savedWindowSize ?? InitialWindowSize(_candidates.Count);
         MinimumSize = new Size(820, 380);
         Resizable = true;
         Minimizable = false;
@@ -87,13 +97,14 @@ internal sealed class PrepareUIInputsDialog : Form
             Text = explanation,
             Wrap = WrapMode.Word,
             VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Left,
         };
 
         _scrollable = new Scrollable
         {
             Border = BorderType.Bezel,
             ExpandContentWidth = false,
-            ExpandContentHeight = false,
+            ExpandContentHeight = true,
         };
         _scrollable.MouseWheel += ScrollHorizontallyOnShiftWheel;
 
@@ -103,11 +114,13 @@ internal sealed class PrepareUIInputsDialog : Form
             TextColor = SystemColors.DisabledText,
             Height = 42,
             VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Left,
         };
         _summary = new Label
         {
             Wrap = WrapMode.Word,
             VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Left,
         };
 
         _applyButton = new Button { Text = applyCaption };
@@ -163,6 +176,20 @@ internal sealed class PrepareUIInputsDialog : Form
         RebuildRows();
         UpdateSummary();
         UpdateDetail();
+    }
+
+    /// <summary>
+    ///     Picks the window's first-open height: at MaxRowsForShrunkWindow rows or more this is just
+    ///     DefaultWindowSize, but a smaller batch opens just tall enough for the header and its rows
+    ///     instead of always reserving room for a full table.
+    /// </summary>
+    private static Size InitialWindowSize(int rowCount)
+    {
+        int shownRows = Math.Max(1, Math.Min(rowCount, MaxRowsForShrunkWindow));
+        int tableHeight = (shownRows + 1) * (RowHeight + RowSpacing) + 4;
+        int maxTableHeight = (MaxRowsForShrunkWindow + 1) * (RowHeight + RowSpacing) + 4;
+        int chromeHeight = DefaultWindowSize.Height - maxTableHeight;
+        return new Size(DefaultWindowSize.Width, chromeHeight + tableHeight);
     }
 
     // Detail is deliberately left out of the column list in BuildColumnLayout: hidden for now,
@@ -255,25 +282,52 @@ internal sealed class PrepareUIInputsDialog : Form
             chain = splitter;
         }
 
-        return chain;
+        // Pins the table to the top of the Scrollable's viewport.
+        return new TableLayout
+        {
+            Rows = { new TableRow(new TableCell(chain, false)) { ScaleHeight = false }, new TableRow() },
+        };
     }
 
     private Control Column(Control header, Func<PreviewRow, Control> cell)
     {
-        var stack = new TableLayout { Spacing = new Size(0, 3) };
-        stack.Rows.Add(new TableRow(header) { ScaleHeight = false });
+        var stack = new TableLayout { Spacing = new Size(0, RowSpacing) };
+        stack.Rows.Add(new TableRow(new TableCell(HeaderCell(header), true)) { ScaleHeight = false });
         foreach (PreviewRow row in _rows)
         {
-            stack.Rows.Add(new TableRow(cell(row)) { ScaleHeight = false });
+            stack.Rows.Add(new TableRow(new TableCell(CellPadding(cell(row)), true)) { ScaleHeight = false });
         }
 
         stack.Rows.Add(new TableRow());
         return stack;
     }
 
+    /// <summary>Shaded background band that marks the header row as distinct from the data rows below it.</summary>
+    private static Panel HeaderCell(Control header)
+    {
+        return new Panel
+        {
+            BackgroundColor = SystemColors.Control,
+            Padding = new Padding(6, 0),
+            Content = header,
+        };
+    }
+
+    private static Control CellPadding(Control cell)
+    {
+        return new Panel { Padding = new Padding(6, 0), Content = cell };
+    }
+
     private static Label HeaderLabel(string text)
     {
-        return new Label { Text = text, Height = RowHeight, VerticalAlignment = VerticalAlignment.Center };
+        return new Label
+        {
+            Text = text,
+            Height = RowHeight,
+            VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Left,
+            Font = SystemFonts.Bold(),
+        };
     }
 
     /// <summary>Header checkbox for the selection column: checks or unchecks every selectable row at once.</summary>
@@ -673,7 +727,13 @@ internal sealed class PrepareUIInputsDialog : Form
 
         private static Label Text(string value)
         {
-            return new Label { Text = value ?? string.Empty, Height = RowHeight, VerticalAlignment = VerticalAlignment.Center };
+            return new Label
+            {
+                Text = value ?? string.Empty,
+                Height = RowHeight,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = TextAlignment.Left,
+            };
         }
     }
 }
