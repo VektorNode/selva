@@ -60,7 +60,7 @@
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
-		"json-schema-to-typescript": "^15.0.4",
+		"json-schema-to-typescript": "^16.0.0",
 		"prettier": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
