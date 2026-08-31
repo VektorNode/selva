@@ -65,7 +65,7 @@ The JSON schemas themselves are published and importable: `@selvajs/schemas/ui-s
 UPDATE_WIRE_FIXTURES=1 dotnet test --filter WireFixtureContractTests
 ```
 
-`fixtures/slva/` carries golden binary mesh blobs, one per SLVA format variant (quantized, float32, UV/color chunks, uint32 indices, SLVZ container). The C# `BinaryGeometryWriter` produces them (`SlvaFixtureContractTests` byte-compares against the committed files) and `@selvajs/visualization`'s `slva-fixtures.test.ts` decodes them against the writer inputs recorded in each `.expected.json`. This is the only place the real C# encoder meets the real TS decoder — the other parser tests consume TS-built bytes. After an intentional format change:
+`fixtures/slva/` carries golden binary mesh blobs, one per SLVA format variant (quantized, float32, UV/color chunks, uint32 indices, SLVZ container). The C# `SlvaWriter` produces them (`SlvaFixtureContractTests` byte-compares against the committed files) and `@selvajs/visualization`'s `slva-fixtures.test.ts` decodes them against the writer inputs recorded in each `.expected.json`. This is the only place the real C# encoder meets the real TS decoder — the other parser tests consume TS-built bytes. After an intentional format change:
 
 ```bash
 UPDATE_SLVA_FIXTURES=1 dotnet test --filter SlvaFixtureContractTests

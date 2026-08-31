@@ -134,7 +134,9 @@ Pluggable provider interfaces (auth, data stores, storage, permissions, access r
 which ContextBake carries what, which GUID is an output's identity, why `paramType` case matters.
 Read it before editing a `.ghx` or touching schema sync; every rule in it fails silently.
 Component authoring is covered by video, not prose. For the display wire format, see
-[docs/contributing/slva-format.md](./docs/contributing/slva-format.md).
+[docs/contributing/slva-format.md](./docs/contributing/slva-format.md); its C# codec lives in
+the Rhino-free `Plugin/Selva.Slva/` library ([README](./Plugin/Selva.Slva/README.md)), not in
+`Selva.GH`.
 
 `Plugin/Selva.GH/Features/`:
 

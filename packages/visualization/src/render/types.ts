@@ -90,13 +90,19 @@ import type { Look } from '../shared/index.js';
 
 /**
  * A named bundle of lighting/material defaults, independent of CAD overlays (edges, grid). 'technical'
- * (default) is matte CAD-shaded; 'studio' and 'showcase' add ACES tone mapping and hemisphere fill.
+ * (default) is matte CAD-shaded; 'studio' and 'showcase' add ACES tone mapping and hemisphere fill;
+ * 'arctic' (white clay) and 'xray' (see-through) also override each mesh's own material.
  *
  * Defined in `shared/` (both `render/` and `parse/` need it) and re-exported here so
  * `ThreeInitializerOptions` stays self-contained.
  */
 export { LOOKS } from '../shared/index.js';
-export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';
+export type {
+	Look,
+	LookMaterialOverride,
+	LookPreset,
+	MaterialAppearanceOptions
+} from '../shared/index.js';
 
 /** Crisp boundary/crease edge overlays on meshes. Field rationale: see `EdgeOptions` in `edges/options.ts`. */
 export type EdgesConfig = {
@@ -115,7 +121,9 @@ export type EdgesConfig = {
 	maxTriangles?: number;
 	/** Default 2M. */
 	maxSegments?: number;
-	/** Fall back to the screen-space edge-detection pass for meshes skipped by `maxTriangles`. Default true. */
+	/** Max overlays attached per apply, default 1500. Past it, meshes fall back to the edge pass. */
+	maxOverlays?: number;
+	/** Fall back to the screen-space edge-detection pass for meshes the overlay path skipped. Default true. */
 	screenSpaceFallback?: boolean;
 };
 

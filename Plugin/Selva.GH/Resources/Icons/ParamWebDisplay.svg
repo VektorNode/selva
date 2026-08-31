@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" shape-rendering="geometricPrecision">
+  <defs>
+    <clipPath id="cut">
+      <path d="M0 0h24v24H0z M 13 16.8 L 10 21.9962 L 4 21.9962 L 1 16.8 L 4 11.6038 L 10 11.6038 z" clip-rule="evenodd"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#cut)">
+  <rect x="11" y="2" width="11" height="11" rx="2" fill="#c9da7a"/>
+  <rect x="6" y="6" width="12" height="12" rx="2" fill="#749845"/>
+  <rect x="2" y="11" width="11" height="11" rx="2" fill="#2e4229"/>
+
+  </g>
+  <polygon points="11.8,16.8 9.4,20.9569 4.6,20.9569 2.2,16.8 4.6,12.6431 9.4,12.6431" fill="#2e4229"/>
+  <polygon points="9.4,16.8 8.2,18.8785 5.8,18.8785 4.6,16.8 5.8,14.7215 8.2,14.7215" fill="#c9da7a"/>
+</svg>

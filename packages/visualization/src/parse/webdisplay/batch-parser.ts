@@ -14,7 +14,8 @@ import {
 	createIndividualMeshes,
 	createMergedMesh,
 	finalizeMergedMesh,
-	finalizeSingleMesh
+	finalizeSingleMesh,
+	splitGroupByLayer
 } from './batch/merge.js';
 import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
 
@@ -35,7 +36,7 @@ interface ParseTelemetry {
 
 /**
  * Parses a batched mesh JSON and creates Three.js meshes. The geometry payload is the binary
- * "SLVA" blob produced by the C# `BinaryGeometryWriter`, base64-encoded into the outer JSON
+ * "SLVA" blob produced by the C# `SlvaWriter`, base64-encoded into the outer JSON
  * envelope — `JSON.parse`s the small envelope, then hands the blob to `parseBinaryMeshBatch`
  * without ever turning it into a string.
  *
@@ -97,8 +98,7 @@ export async function parseMeshBatchObject(
 		material,
 		fallback: {
 			materials: batch.materials,
-			groups: batch.groups,
-			sourceComponentId: batch.sourceComponentId
+			groups: batch.groups
 		}
 	});
 	if (workerMeshes) return workerMeshes;
@@ -119,8 +119,7 @@ export async function parseMeshBatchObject(
 		blobBytes,
 		fallback: {
 			materials: batch.materials,
-			groups: batch.groups,
-			sourceComponentId: batch.sourceComponentId
+			groups: batch.groups
 		}
 	});
 }
@@ -129,8 +128,8 @@ export async function parseMeshBatchObject(
  * Parses a raw binary mesh batch blob (SLVA wire format) and creates Three.js meshes.
  *
  * Use this entry point when the blob arrives as a binary WebSocket frame rather than inside a JSON
- * envelope — the blob is self-describing, with materials, groups, and `sourceComponentId` coming
- * from its embedded metadata header.
+ * envelope — the blob is self-describing, with materials, groups, and per-object ids coming
+ * from the container's table.
  *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
  */
@@ -179,8 +178,42 @@ interface BuildOptions {
 	fallback?: {
 		materials?: SerializableMaterial[];
 		groups?: MaterialGroup[];
-		sourceComponentId?: string;
 	};
+}
+
+// Past this many source meshes, one THREE object each is the difference between a viewer that
+// holds 60fps and one that does not: render cost tracks object count, not triangles, and every
+// object also pays for its own edge overlay. A batch this size is an imported building model, where
+// merging is the only thing that keeps it interactive.
+const UNMERGED_MESH_WARN_THRESHOLD = 1_000;
+
+let warnedUnmerged = false;
+
+/** @internal Test seam: the warn-once flag is module state and would leak between cases. */
+export function resetUnmergedWarning(): void {
+	warnedUnmerged = false;
+}
+
+/**
+ * Warns once when a caller opts out of merging on a batch large enough for it to hurt.
+ *
+ * Opting out is legitimate — it is what gives every source object its own THREE object — so this
+ * does not override the caller. It exists because the failure is silent: nothing errors, the model
+ * renders correctly, and the only symptom is a frame rate nobody traces back to a parse option.
+ */
+function warnIfUnmergedAtScale(mergeByMaterial: boolean, groups: MaterialGroup[]): void {
+	if (mergeByMaterial || warnedUnmerged) return;
+
+	let meshCount = 0;
+	for (const group of groups) meshCount += group.meshes.length;
+	if (meshCount < UNMERGED_MESH_WARN_THRESHOLD) return;
+
+	warnedUnmerged = true;
+	getLogger().warn(
+		`Parsing ${meshCount} meshes with mergeByMaterial: false — each becomes its own THREE ` +
+			`object, and render cost scales with object count. Drop the option to merge by material ` +
+			`(the default); per-object identity survives it via userData.members.`
+	);
 }
 
 function buildMeshesFromParsed(
@@ -200,11 +233,6 @@ function buildMeshesFromParsed(
 
 	const materialsSrc = parsed.metadata.materials ?? fallback?.materials ?? [];
 	const groups = parsed.metadata.groups ?? fallback?.groups ?? [];
-	// Envelope sourceComponentId wins over the blob's embedded one: the blob bakes in the id at
-	// encode time, but a reloaded part (e.g. a .slvm mesh file instanced many times) re-stamps a fresh id on
-	// the envelope so web pick identity stays distinct per placement. The blob value only applies
-	// to the raw-blob transport, which has no envelope.
-	const sourceComponentId = fallback?.sourceComponentId ?? parsed.metadata.sourceComponentId;
 
 	const isFloat32 = (parsed.flags & FLAG_FLOAT32) !== 0;
 
@@ -239,6 +267,8 @@ function buildMeshesFromParsed(
 		);
 	}
 
+	warnIfUnmergedAtScale(mergeByMaterial, groups);
+
 	const meshCreateStart = performance.now();
 	// Vertex colors are batch-wide when present — meshes without real colors carry a white fill,
 	// which multiplies to identity — so the material enables vertexColors unconditionally.
@@ -251,7 +281,10 @@ function buildMeshesFromParsed(
 
 	const meshes: THREE.Mesh[] = [];
 
-	for (const group of groups) {
+	// Merge within a layer, never across one: see `splitGroupByLayer`.
+	const mergeGroups = mergeByMaterial ? groups.flatMap(splitGroupByLayer) : groups;
+
+	for (const group of mergeGroups) {
 		if (mergeByMaterial && group.meshes.length > 1) {
 			const mergedMesh = createMergedMesh(
 				group,
@@ -261,10 +294,6 @@ function buildMeshesFromParsed(
 				parsed.uvs,
 				parsed.colors
 			);
-			// Left absent when unknown, never null: stable identity tests the field's type to decide
-			// whether it can key on the component, and a null would silently demote every mesh of
-			// this batch to the weaker name+layer key.
-			if (sourceComponentId) mergedMesh.userData.sourceComponentId = sourceComponentId;
 			meshes.push(mergedMesh);
 		} else {
 			const individualMeshes = createIndividualMeshes(
@@ -275,11 +304,6 @@ function buildMeshesFromParsed(
 				parsed.uvs,
 				parsed.colors
 			);
-			if (sourceComponentId) {
-				for (const mesh of individualMeshes) {
-					mesh.userData.sourceComponentId = sourceComponentId;
-				}
-			}
 			meshes.push(...individualMeshes);
 		}
 	}
@@ -325,14 +349,17 @@ async function tryBuildViaWorker(
 	if (typeof Worker === 'undefined') return null;
 
 	const raw = parseBinaryMeshBatchRaw(input);
-	if (raw.indexData.length / 3 < ASSEMBLY_WORKER_MIN_TRIANGLES) return null;
+	// Planar (v4) indexData is a bare byte stream — divide by the element width for a count.
+	const indexCount = raw.planarByteSplit
+		? raw.indexData.length / (raw.uint16Indices ? 2 : 4)
+		: raw.indexData.length;
+	if (indexCount / 3 < ASSEMBLY_WORKER_MIN_TRIANGLES) return null;
 	const worker = getAssemblyWorker();
 	if (!worker) return null;
 
 	const materialsSrc = raw.metadata.materials ?? opts.fallback?.materials ?? [];
 	const groups = raw.metadata.groups ?? opts.fallback?.groups ?? [];
-	const sourceComponentId = opts.fallback?.sourceComponentId ?? raw.metadata.sourceComponentId;
-	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, raw.indexData.length);
+	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, indexCount);
 
 	// Same job branching as buildMeshesFromParsed, with a parallel ref list to unwrap results by index.
 	interface JobRef {
@@ -348,7 +375,9 @@ async function tryBuildViaWorker(
 	});
 	const jobs: AssemblyJob[] = [];
 	const jobRefs: JobRef[] = [];
-	for (const group of groups) {
+	// Same layer-aware merge grouping as the synchronous path.
+	const mergeGroups = opts.mergeByMaterial ? groups.flatMap(splitGroupByLayer) : groups;
+	for (const group of mergeGroups) {
 		if (opts.mergeByMaterial && group.meshes.length > 1) {
 			jobs.push({ kind: 'merged', windows: group.meshes.map(windowOf) });
 			jobRefs.push({ kind: 'merged', group });
@@ -376,6 +405,8 @@ async function tryBuildViaWorker(
 				vertexData,
 				isFloat32: raw.isFloat32,
 				deltaEncoded: raw.deltaEncoded,
+				planarByteSplit: raw.planarByteSplit,
+				uint16Indices: raw.uint16Indices,
 				origin: raw.origin,
 				scale: raw.scale,
 				indexData,
@@ -413,13 +444,12 @@ async function tryBuildViaWorker(
 			ref.kind === 'merged'
 				? finalizeMergedMesh(geometry, ref.group, materials)
 				: finalizeSingleMesh(geometry, ref.meshMeta!, ref.group, materials);
-		if (sourceComponentId) mesh.userData.sourceComponentId = sourceComponentId;
 		meshes.push(mesh);
 	}
 
 	if (opts.debug) {
 		getLogger().debug(
-			`Mesh batch assembled off-thread: ${meshes.length} meshes, ${raw.indexData.length / 3} triangles`
+			`Mesh batch assembled off-thread: ${meshes.length} meshes, ${indexCount / 3} triangles`
 		);
 	}
 	return meshes;

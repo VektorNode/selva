@@ -9,6 +9,7 @@ using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities.Guards;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
 
@@ -46,7 +47,9 @@ public class GH_ThreeMaterial : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddParameter(new Param_ThreeMaterial());
+        pManager.AddParameter(new Param_ThreeMaterial("Material", "M",
+            "The material, for a Display component's Material input", "Selva", "Display",
+            GH_ParamAccess.item));
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)

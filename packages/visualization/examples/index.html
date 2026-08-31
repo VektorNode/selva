@@ -10,33 +10,54 @@
 		<div class="index-wrap">
 			<h1>@selvajs/visualization — Examples</h1>
 			<p class="lead">
-				Interactive playgrounds for the visualization pipeline. Run with
-				<code>pnpm example</code> (Vite transpiles the TypeScript imports — a static file server
-				will not work). Pick a demo:
+				Start at the top and work down — the first demo is the whole library in 80 lines, the rest
+				go deeper. Run with <code>pnpm example</code> (Vite transpiles the TypeScript imports; a
+				static file server will not work).
 			</p>
 
 			<div class="demo-grid">
-				<a class="demo-card" href="./demos/display-items.html">
-					<h3>Display Items</h3>
+				<a class="demo-card" href="./demos/getting-started.html">
+					<h3>1 · Getting Started</h3>
 					<p>
-						Render a GH compute response through <code>getThreeMeshesFromComputeResponse</code> —
-						mesh blob + curves + points.
+						<strong>Read this one first.</strong> The smallest real app: <code>initThree</code> →
+						<code>getThreeObjectsFromComputeResponse</code> → <code>updateScene</code> →
+						<code>dispose</code>. No harness — the source is what you would paste into your own
+						project.
+					</p>
+				</a>
+
+				<a class="demo-card" href="./demos/display-items.html">
+					<h3>2 · Display Items</h3>
+					<p>
+						What comes out of a real GH compute response:
+						<code>getThreeObjectsFromComputeResponse</code> decoding the mesh blob plus curves and
+						points, counted by kind.
+					</p>
+				</a>
+
+				<a class="demo-card" href="./demos/outliner.html">
+					<h3>3 · Outliner</h3>
+					<p>
+						An object-list panel over a live scene with <code>createSceneOutliner</code>: layer
+						groups, search, hide/show, click and shift-range selection — and
+						<code>applyTo()</code> keeping hidden state across a re-solve.
 					</p>
 				</a>
 
 				<a class="demo-card" href="./demos/viewer.html">
-					<h3>Viewer — Full API</h3>
+					<h3>4 · Viewer — Full API</h3>
 					<p>
-						Every <code>initThree</code> control: 2D/3D + preset views, grid, nav cube, mesh edges,
-						ambient occlusion, and measurement.
+						Every <code>initThree</code> control in one panel: 2D/3D and preset views, grid, nav
+						cube, mesh edges, ambient occlusion, looks, lighting dials, and measurement.
 					</p>
 				</a>
 
 				<a class="demo-card" href="./demos/slvm-viewer.html">
-					<h3>Mesh File — Selva Pipeline</h3>
+					<h3>5 · Mesh File — Selva Pipeline</h3>
 					<p>
-						Load a <code>.slvm</code> mesh file through Selva's exact parse + <code>updateScene</code> pipeline
-						(technical look, edges on) to verify and debug the look.
+						A <code>.slvm</code> file through Selva's exact parse + <code>updateScene</code> calls,
+						with the app's viewer options copied verbatim — for verifying the look 1:1 with
+						production.
 					</p>
 				</a>
 			</div>

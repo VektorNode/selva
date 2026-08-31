@@ -7,6 +7,7 @@ using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
 
@@ -21,7 +22,7 @@ public class GH_DisplayToFile : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.WebDisplay;
+    protected override Bitmap Icon => Resources.DisplayToFile;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("3C9A7E1F-4D62-4B8A-8F05-6E1D2C3B4A50");
 
@@ -30,7 +31,7 @@ public class GH_DisplayToFile : GH_Component
         pManager.AddParameter(new Param_WebDisplay("Web Display", "WD",
             "Web Display payload from the Display component", "Selva", "Display", GH_ParamAccess.item));
         pManager.AddTextParameter("Path", "P",
-            "Absolute path to write the mesh file to (.slvm is added when the path has neither .slvm nor .dmf)",
+            "Absolute path to write the mesh file to (.slvm is added when missing)",
             GH_ParamAccess.item);
         pManager.AddBooleanParameter("Write", "W", "Set to true to write the file", GH_ParamAccess.item, false);
     }
@@ -64,10 +65,7 @@ public class GH_DisplayToFile : GH_Component
             return;
         }
 
-        // A path already carrying the legacy extension is kept as-is — appending .slvm to
-        // "part.dmf" would silently fork the file the rest of the definition references.
-        if (!path.EndsWith(SlvmFile.Extension, StringComparison.OrdinalIgnoreCase)
-            && !path.EndsWith(SlvmFile.LegacyExtension, StringComparison.OrdinalIgnoreCase))
+        if (!path.EndsWith(SlvmFile.Extension, StringComparison.OrdinalIgnoreCase))
         {
             path += SlvmFile.Extension;
         }

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { getStableKey } from '../identity.js';
+import { getMemberKeys, getStableKey } from '../identity.js';
 
-/** Mirrors the unit separator the keys are built with. */
+/** Mirrors the unit separator the fallback keys are built with. */
 const S = String.fromCharCode(31);
-const meshKey = (componentId: string, index: number) => ['gh', componentId, index].join(S);
 const nameKey = (layer: string, name: string) => ['name', layer, name].join(S);
 
 const obj = (data: Record<string, unknown>, threeName = '') => {
@@ -15,69 +14,30 @@ const obj = (data: Record<string, unknown>, threeName = '') => {
 };
 
 describe('getStableKey', () => {
-	it('prefers a display item id', () => {
-		expect(getStableKey(obj({ id: 'item-4', sourceComponentId: 'other', name: 'x' }))).toBe(
-			'item-4'
+	it('reads the minted tracking key verbatim', () => {
+		expect(getStableKey(obj({ trackingKey: 'gh-1/{0;1}/3', name: 'x', layer: 'L' }))).toBe(
+			'gh-1/{0;1}/3'
 		);
 	});
 
-	it('builds a mesh key from source component and original index', () => {
-		expect(getStableKey(obj({ sourceComponentId: 'gh-1', originalIndex: 7 }))).toBe(
-			meshKey('gh-1', 7)
-		);
+	it('reads a display item id', () => {
+		expect(getStableKey(obj({ id: 'item-4', name: 'x' }))).toBe('item-4');
 	});
 
-	it('keeps index 0 rather than treating it as missing', () => {
-		expect(getStableKey(obj({ sourceComponentId: 'gh-1', originalIndex: 0 }))).toBe(
-			meshKey('gh-1', 0)
-		);
+	it('prefers the tracking key over the item id', () => {
+		expect(getStableKey(obj({ trackingKey: 'k', id: 'item-4' }))).toBe('k');
 	});
 
-	it('defaults a missing index to 0', () => {
-		expect(getStableKey(obj({ sourceComponentId: 'gh-1' }))).toBe(meshKey('gh-1', 0));
+	it('is stable across rebuilt instances of the same geometry', () => {
+		// What a solve does: same Grasshopper source, brand-new THREE object (and uuid).
+		const before = obj({ trackingKey: 'gh-1/{0}/3' });
+		const after = obj({ trackingKey: 'gh-1/{0}/3' });
+
+		expect(after.uuid).not.toBe(before.uuid);
+		expect(getStableKey(after)).toBe(getStableKey(before));
 	});
 
-	it('distinguishes objects from the same component', () => {
-		const a = getStableKey(obj({ sourceComponentId: 'gh-1', originalIndex: 0 }));
-		const b = getStableKey(obj({ sourceComponentId: 'gh-1', originalIndex: 1 }));
-		expect(a).not.toBe(b);
-	});
-
-	describe('merged meshes', () => {
-		// Both merges report member 0 as their `originalIndex`, so keying on that alone made hiding
-		// one hide the other.
-		it('distinguishes two merges that start at the same index', () => {
-			const a = getStableKey(
-				obj({ sourceComponentId: 'gh-1', originalIndex: 0, mergedIndices: [0, 1] })
-			);
-			const b = getStableKey(
-				obj({ sourceComponentId: 'gh-1', originalIndex: 0, mergedIndices: [0, 2] })
-			);
-			expect(a).not.toBe(b);
-		});
-
-		it('does not collide with an unmerged mesh at the same index', () => {
-			const merged = getStableKey(
-				obj({ sourceComponentId: 'gh-1', originalIndex: 4, mergedIndices: [4, 5] })
-			);
-			expect(merged).not.toBe(meshKey('gh-1', 4));
-		});
-
-		// Material grouping decides member order, and it is not stable across solves.
-		it('is independent of member order', () => {
-			const a = getStableKey(obj({ sourceComponentId: 'gh-1', mergedIndices: [2, 0, 1] }));
-			const b = getStableKey(obj({ sourceComponentId: 'gh-1', mergedIndices: [0, 1, 2] }));
-			expect(a).toBe(b);
-		});
-
-		it('ignores an empty member list rather than keying on it', () => {
-			expect(
-				getStableKey(obj({ sourceComponentId: 'gh-1', originalIndex: 3, mergedIndices: [] }))
-			).toBe(meshKey('gh-1', 3));
-		});
-	});
-
-	it('falls back to name and layer when there is no component id', () => {
+	it('falls back to name and layer when the writer minted no id', () => {
 		expect(getStableKey(obj({ name: 'north wall', layer: 'Walls' }))).toBe(
 			nameKey('Walls', 'north wall')
 		);
@@ -114,18 +74,44 @@ describe('getStableKey', () => {
 		expect(getStableKey(mesh)).toBeNull();
 	});
 
-	it('ignores empty-string ids rather than keying on them', () => {
-		expect(getStableKey(obj({ id: '', sourceComponentId: 'gh-1', originalIndex: 2 }))).toBe(
-			meshKey('gh-1', 2)
+	it('ignores empty-string keys rather than keying on them', () => {
+		expect(getStableKey(obj({ trackingKey: '', id: '', name: 'wall', layer: 'A' }))).toBe(
+			nameKey('A', 'wall')
 		);
 	});
+});
 
-	it('is stable across rebuilt instances of the same geometry', () => {
-		// What a solve does: same Grasshopper source, brand-new THREE object (and uuid).
-		const before = obj({ sourceComponentId: 'gh-1', originalIndex: 3 });
-		const after = obj({ sourceComponentId: 'gh-1', originalIndex: 3 });
+describe('getMemberKeys', () => {
+	it('returns each member key of a merged mesh', () => {
+		const merged = obj({
+			members: [
+				{ trackingKey: 'gh-1/{0}/0', name: 'a', layer: 'L', metadata: {} },
+				{ trackingKey: 'gh-1/{0}/2', name: 'b', layer: 'L', metadata: {} }
+			]
+		});
+		expect(getMemberKeys(merged)).toEqual(['gh-1/{0}/0', 'gh-1/{0}/2']);
+	});
 
-		expect(after.uuid).not.toBe(before.uuid);
-		expect(getStableKey(after)).toBe(getStableKey(before));
+	it('falls back to a member name+layer key when a member has no minted id', () => {
+		const merged = obj({
+			members: [{ name: 'wall', layer: 'Walls', metadata: {} }]
+		});
+		expect(getMemberKeys(merged)).toEqual([nameKey('Walls', 'wall')]);
+	});
+
+	it('degrades an unidentifiable member to a per-instance key', () => {
+		const merged = obj({
+			members: [{ name: '', layer: '', metadata: {} }]
+		});
+		expect(getMemberKeys(merged)).toEqual([`${merged.uuid}${S}0`]);
+	});
+
+	it('returns the object own key when there are no members', () => {
+		expect(getMemberKeys(obj({ trackingKey: 'gh-1/{0}/7' }))).toEqual(['gh-1/{0}/7']);
+	});
+
+	it('falls back to the uuid for an identity-less unmerged object', () => {
+		const plain = obj({});
+		expect(getMemberKeys(plain)).toEqual([plain.uuid]);
 	});
 });

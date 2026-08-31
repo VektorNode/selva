@@ -5,6 +5,7 @@ using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.OBSOLETE;
 
@@ -38,7 +39,10 @@ public class OBSOLETE_ThreeMaterial_UntilV0_15_0 : GH_Component
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
-        pManager.AddParameter(new Param_ThreeMaterial());
+        // Pinned to the name this released component shipped with; the param's
+        // own default name has since changed.
+        pManager.AddParameter(new Param_ThreeMaterial("Material", "M",
+            "A Three.js-compatible material", "Selva", "Display", GH_ParamAccess.item));
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)

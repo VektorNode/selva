@@ -233,7 +233,10 @@ public class BridgeOrchestrator : IDisposable
 
             _ = _webSocketTransport.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 
-            if (validatedSchema.Outputs?.Count > 0)
+            // Also broadcast when the schema declares no outputs but the 3D viewer is on: the
+            // meshes come from ContextBakes, not from declared outputs, so gating on Outputs
+            // alone leaves a display-only definition with an empty viewer.
+            if (validatedSchema.Outputs?.Count > 0 || (validatedSchema.ViewerOptions?.EnableLocal ?? false))
             {
                 ScheduleOutputBroadcast(validatedSchema);
             }
@@ -484,7 +487,46 @@ public class BridgeOrchestrator : IDisposable
         {
             await Task.Delay(InitialOutputBroadcastDelayMs).ConfigureAwait(false);
             RhinoApp.InvokeOnUiThread(new Action(() =>
-                _eventManager.CollectAndBroadcastOutputs(schema)));
+            {
+                if (!_eventManager.CollectAndBroadcastOutputs(schema))
+                {
+                    RegenerateDisplayData(schema);
+                }
+            }));
+        });
+    }
+
+    /// <summary>
+    ///     Nothing to replay: the ContextBakes' volatile data is gone (cleared or expired solution),
+    ///     which is what a browser that connects before the definition has solved sees. Expiring the
+    ///     ContextBakes re-solves them and everything upstream that feeds them, and the resulting
+    ///     SolutionEnd broadcasts the display data — the same effect as rewiring the bake by hand.
+    /// </summary>
+    private void RegenerateDisplayData(UISchema schema)
+    {
+        if (!(schema?.ViewerOptions?.EnableLocal ?? false))
+        {
+            return;
+        }
+
+        var document = _component.OnPingDocument();
+        if (!DocumentGuards.IsValid(document, out _))
+        {
+            return;
+        }
+
+        var bakes = ValueCollector.FindContextBakes(document);
+        if (bakes.Count == 0)
+        {
+            return;
+        }
+
+        document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+        {
+            foreach (var bake in bakes)
+            {
+                bake.ExpireSolution(false);
+            }
         });
     }
 

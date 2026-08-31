@@ -2,7 +2,7 @@
 
 What happens between a Brep on the Grasshopper canvas and a lit, selectable mesh in the browser.
 
-This is the reference for the **SLVA wire format** that `batch-parser.ts` and `binary-parser.ts` decode. The encoder lives on the C# side, in the plugin's Display component. Both ends have to agree, so treat the format section below as the specification: change it only alongside the encoder, and bump the version in the header.
+The C# Display component encodes; `batch-parser.ts` and `binary-parser.ts` decode. Both ends have to agree — see the normative-spec note in stage 2 before changing either.
 
 ## The short version
 
@@ -38,24 +38,48 @@ Alongside the geometry it reads four parallel trees:
 Two things worth knowing here:
 
 - **Meshing is the expensive part.** It runs on a background task, not the solver thread, so Grasshopper stays responsive. But on a slow definition it still dominates. If your geometry doesn't change between solves, mesh once and cache it with **Display To File** / **Display From File**.
-- **Non-mesh geometry rides along as JSON.** Curves and points are not meshed; they travel as _display items_ alongside the binary blob, and are tessellated in the browser.
+- **Non-mesh geometry rides along as JSON.** Curves and points are not meshed; they travel as _display items_ alongside the binary blob. Curves are tessellated to a polyline here, on the plugin side, which is why the browser needs no `rhino3dm`.
 
 ## Stage 2: Encoding (Grasshopper)
 
-The meshes are then packed into a compact binary format, in four steps:
+The meshes are packed into a compact binary format:
 
 1. **Group by material.** Every unique material becomes one group; all meshes using it are concatenated into one vertex/index stream. Fewer groups means fewer draw calls in the browser.
-2. **Quantize.** Vertex positions are snapped to a signed 16-bit grid spanning the geometry's bounding box: a 2× size reduction over float32, with error far below anything visible. If the resulting step would exceed 5 cm per int16 unit (a very large model), the whole block falls back to raw float32 rather than degrade the preview. UVs quantize to unsigned 16 bits the same way, with their own fallback when a step exceeds 1/4096 (heavily tiled UVs). Vertex colours are 8-bit per channel and never fall back.
-3. **Delta filter.** Each vertex component is stored as the difference from the previous vertex, zigzag-mapped so small differences become small unsigned numbers. Welded meshes have spatially-local vertices, so the deltas cluster near zero. This is a PNG-style pre-filter and it exists purely to make the next step work better.
-4. **Deflate.** The filtered stream is compressed.
+2. **Quantize.** Vertex positions snap to a signed 16-bit grid spanning the geometry's bounding box: half the size of float32, with error far below anything visible. If the resulting step would exceed 5 cm per int16 unit (a very large model), the block falls back to raw float32 rather than degrade the preview. UVs quantize to unsigned 16 bits the same way, with their own fallback past 1/4096 (heavily tiled UVs). Vertex colours are 8-bit per channel and never fall back.
+3. **Delta filter.** Each vertex component is stored as the difference from the previous vertex, zigzag-mapped so small differences become small unsigned numbers. Welded meshes have spatially-local vertices, so the deltas cluster near zero. This is a PNG-style pre-filter: it exists purely to make the last step work better. A side effect worth knowing: it makes a part's vertex stream translation-invariant, so repeated parts (the same screw placed 500 times) become repeated byte runs that DEFLATE dedupes — instancing-like savings with no instancing in the format.
+4. **Byte layout, chosen per blob.** The filtered streams are written either interleaved (x,y,z per vertex) or planar byte-split (all X deltas, then Y, then Z, low bytes before high). Neither wins everywhere, so the writer deflates both and keeps the smaller, recording the choice in a flag bit:
+   Which one wins turns on the vertex count of the individual repeated part, not on how many copies the batch holds:
+   - **Planar** wins on welded surfaces and on scatters of substantial parts, where near-zero deltas turn the high planes into runs of zeros. This needs each plane's run to be long enough to matter, which holds once a part carries more than roughly 64 vertices — from there the margin grows fast (measured 21% at 64 vertices per part, 75% at 1024).
+   - **Interleaved** wins on batches of very small repeated parts. Below roughly 16 vertices per part a copy's delta stream is only tens of bytes, too short to form useful LZ77 matches once planar scatters it across six distant planes. Measured 6–13% on thousands of boxes — the shape an assembly of bolts, posts or panel clips takes.
 
-The result is a **SLVA** blob: magic `SLVA`, a uint32 version (currently 3), a UTF-8 JSON metadata envelope (materials, groups, `sourceComponentId`), then the geometry block: flags, quantization origin and scale, vertices, indices, and optional trailing UV and vertex-colour chunks. Little-endian throughout. When DEFLATE shrinks it, the whole blob is wrapped in an `SLVZ` container (`magic | uncompressedLen | raw-deflate stream`); decoders sniff which by the leading magic. Curves and points ride as JSON next to it.
+   Between roughly 16 and 64 vertices per part the two sit within a percent or two of each other. Nothing cheap infers part size from a flat vertex array — a batch arrives as one concatenated buffer with no part boundaries — hence the measurement. Colors stay interleaved unconditionally: planar loses on noisy per-channel data. Batches under 4096 vertices skip the probe and take planar; the wire difference there is a few hundred bytes, less than the two trial deflates cost.
 
-Version gates are additive: each bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade.
+5. **Deflate.** The chosen stream is compressed, and the geometry blob wrapped in an `SLVZ` container when that actually shrinks it. Decoders sniff `SLVA` vs `SLVZ` from the leading magic, so the result is self-describing.
 
-The blob is self-describing and transport-agnostic: the browser decoder never branches on how it arrived.
+6. **The SLVM container.** The finished geometry blob is packed with everything else the batch carries into one chunked container — the bytes that travel as `CompressedData` and, with the item chunks added, sit on disk as a `.slvm` file:
 
-> **The byte-level spec is normative and lives in code, in two places that must agree:** the remarks block at the top of [`BinaryGeometryWriter.cs`](../../Plugin/Selva.GH/Features/Display/Services/BinaryGeometryWriter.cs) (encoder) and the constants in [`binary/header.ts`](../../packages/visualization/src/parse/webdisplay/binary/header.ts) plus the layout comment in [`binary-parser.ts`](../../packages/visualization/src/parse/webdisplay/binary-parser.ts) (decoder). Change them together and bump the version.
+   ```
+   [4] "SLVM" | [4] version = 3 | [4] chunkCount
+   per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
+   ```
+
+   | chunk  | payload                                                                 |
+   | ------ | ----------------------------------------------------------------------- |
+   | `GEOM` | the SLVA/SLVZ geometry blob from steps 1–5, its embedded metadata empty |
+   | `TABL` | the columnar object table (below), optionally SLVZ-wrapped              |
+   | `MATL` | materials JSON; a `map` of `slvm:tex:N` references the Nth `TEXR` chunk |
+   | `TEXR` | one texture: mime string + raw image bytes (extracted from data URIs)   |
+   | `CRVS` | polyline vertices for curve items — another bare SLVA blob, no indices  |
+   | `PNTS` | point positions, same encoding                                          |
+   | `EXTN` | namespaced host extension; readers skip namespaces they don't know      |
+
+   Readers skip unknown chunk types by length — that is the format's extension mechanism. The `TABL` object table is columnar and pays only for what's present: per-mesh vertex/triangle counts (vertex/index **starts are never stored** — geometry is concatenated in table order, so windows are prefix sums and can't overlap by construction), material run-lengths, an `originalIndex` column only when the material sort reordered the table, names/layers as string-pool references (the auto-numbering default collapses to one mode byte), and sparse attr columns — the key stored once, then only the objects carrying it (`gh:branch`, `ifc:guid`, `style:color`, …). Selva's own host data (`sourceComponentId`, the Rhino NURBS JSON behind each curve) lives in `EXTN "selva.gh"`, so the core container stays free of Grasshopper concepts: a foreign reader gets every mesh, name, layer and material without knowing Selva exists.
+
+   The wire container omits the item chunks (curves/points travel as JSON alongside, stage 3); the `.slvm` file includes them. Display From File restamps a loaded batch's identity by rewriting the tiny `EXTN` chunk — the geometry is never re-encoded.
+
+Version gates are additive within the geometry blob: each SLVA bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade. The frozen pre-v4 fixtures under `packages/schemas/fixtures/slva/v3/` pin this on both stacks — never regenerate them. Containers are gated separately: readers accept SLVM v3, the legacy `DMF1` file container, and bare SLVA/SLVZ blobs from old `.gh` files, dispatching on the leading magic; new bytes are always SLVM v3. Unlike the geometry blob, the container version is an exact match, not a floor — SLVM v2 was a pre-release layout that never shipped, so nothing on disk carries it and readers reject it outright. The cross-stack container fixtures live under `packages/schemas/fixtures/slvm3/` (`UPDATE_SLVM_FIXTURES=1 dotnet test` regenerates).
+
+> **The byte-level spec is normative and lives in code, in two places that must agree:** for the geometry blob, the remarks block at the top of [`SlvaWriter.cs`](../../Plugin/Selva.Slva/Geometry/SlvaWriter.cs) (encoder) and the constants in [`binary/header.ts`](../../packages/visualization/src/parse/webdisplay/binary/header.ts) (decoder); for the container, [`SlvmDocument.cs`](../../Plugin/Selva.Slva/Container/SlvmDocument.cs) (TABL layout in [`SlvmTable.cs`](../../Plugin/Selva.Slva/Container/SlvmTable.cs)) and [`binary/slvm.ts`](../../packages/visualization/src/parse/webdisplay/binary/slvm.ts). Change them together and bump the version.
 >
 > The format is internal to the plugin and `@selvajs/visualization`. It is versioned and can change without a major bump; don't build against it directly.
 

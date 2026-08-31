@@ -101,7 +101,7 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 		},
 		lighting: {
 			enableSunlight: options.lighting?.enableSunlight ?? true,
-			sunlightIntensity: options.lighting?.sunlightIntensity ?? 1,
+			sunlightIntensity: options.lighting?.sunlightIntensity ?? preset.sunlightIntensity,
 			// Expressed in the scene basis so the sun stays overhead in any up convention.
 			sunlightPosition:
 				options.lighting?.sunlightPosition ||
@@ -186,9 +186,10 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			distanceFade: options.edges?.distanceFade ?? true,
 			// Passed through undefined on purpose: the caps' canonical defaults live in
 			// `edges/options.ts` (resolveOptions), and applyEdges forwards these straight to it.
-			// Restating 4M/2M here would be a second copy free to drift from the real one.
+			// Restating them here would be a second copy free to drift from the real one.
 			maxTriangles: options.edges?.maxTriangles,
 			maxSegments: options.edges?.maxSegments,
+			maxOverlays: options.edges?.maxOverlays,
 			// Read by init-three's updateEdgeFallback, which only checks for an explicit `false`.
 			screenSpaceFallback: options.edges?.screenSpaceFallback
 		},

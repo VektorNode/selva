@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { createSceneOutliner } from '../outliner.js';
+import { getTrackingKey } from '../identity.js';
+
+/** Selection is keyed by entry key (stable identity), not instance uuid. */
+const keyOf = (object: THREE.Object3D) => getTrackingKey(object);
 
 const CLICK = { shiftKey: false, toggleKey: false };
 const CTRL = { shiftKey: false, toggleKey: true };
@@ -47,6 +51,27 @@ describe('createSceneOutliner', () => {
 		expect([...outliner.layerGroups('ridge').keys()]).toEqual(['Roof']);
 	});
 
+	// Hiding one layer used to strike through every other layer in the panel, because meshes that
+	// carried a component id but no index all resolved to one hidden-set key.
+	it('hides only the toggled layer when meshes carry no original index', () => {
+		const { scene } = sceneWith(
+			{ trackingKey: 'gh-1/{0}/0', layer: 'IfcWall', name: 'w0' },
+			{ trackingKey: 'gh-1/{0}/1', layer: 'IfcWall', name: 'w1' },
+			{ trackingKey: 'gh-1/{0}/2', layer: 'IfcSlab', name: 's0' },
+			{ trackingKey: 'gh-1/{0}/3', layer: 'IfcDoor', name: 'd0' }
+		);
+		const outliner = createSceneOutliner(scene);
+		const groups = outliner.layerGroups();
+
+		outliner.visibility.toggleLayer(groups.get('IfcWall')!);
+
+		expect(outliner.visibility.isLayerHidden(groups.get('IfcWall')!)).toBe(true);
+		for (const other of ['IfcSlab', 'IfcDoor']) {
+			expect(outliner.visibility.isLayerHidden(groups.get(other)!)).toBe(false);
+			expect(outliner.visibility.isLayerPartial(groups.get(other)!)).toBe(false);
+		}
+	});
+
 	describe('collapse', () => {
 		it('toggles a layer open and shut', () => {
 			const { scene } = sceneWith({ layer: 'Walls' });
@@ -68,7 +93,7 @@ describe('createSceneOutliner', () => {
 			);
 			const outliner = createSceneOutliner(scene);
 
-			expect(outliner.flatVisibleUuids()).toEqual([objects[0].uuid, objects[1].uuid]);
+			expect(outliner.flatVisibleUuids()).toEqual([keyOf(objects[0]), keyOf(objects[1])]);
 		});
 
 		it('omits collapsed layers', () => {
@@ -80,14 +105,14 @@ describe('createSceneOutliner', () => {
 
 			outliner.toggleCollapsed('Walls');
 
-			expect(outliner.flatVisibleUuids()).toEqual([objects[1].uuid]);
+			expect(outliner.flatVisibleUuids()).toEqual([keyOf(objects[1])]);
 		});
 
 		it('omits objects filtered out by the search', () => {
 			const { scene, objects } = sceneWith({ name: 'north' }, { name: 'ridge' });
 			const outliner = createSceneOutliner(scene);
 
-			expect(outliner.flatVisibleUuids('ridge')).toEqual([objects[1].uuid]);
+			expect(outliner.flatVisibleUuids('ridge')).toEqual([keyOf(objects[1])]);
 		});
 	});
 
@@ -132,7 +157,7 @@ describe('createSceneOutliner', () => {
 		it('ignores the selection when only one object is selected', () => {
 			const { scene, objects } = sceneWith({ name: 'a' }, { name: 'b' });
 			const outliner = createSceneOutliner(scene);
-			outliner.select(objects[0].uuid, CLICK);
+			outliner.select(keyOf(objects[0]), CLICK);
 
 			outliner.toggleObject(objects[1]);
 
@@ -149,8 +174,8 @@ describe('createSceneOutliner', () => {
 		);
 		const outliner = createSceneOutliner(scene);
 
-		outliner.select(objects[0].uuid, CLICK);
-		outliner.select(objects[2].uuid, SHIFT);
+		outliner.select(keyOf(objects[0]), CLICK);
+		outliner.select(keyOf(objects[2]), SHIFT);
 
 		expect(outliner.selection.selected.size).toBe(3);
 	});
@@ -163,10 +188,10 @@ describe('createSceneOutliner', () => {
 		);
 		const outliner = createSceneOutliner(scene);
 
-		outliner.select(objects[0].uuid, CLICK, 'keep');
-		outliner.select(objects[2].uuid, SHIFT, 'keep');
+		outliner.select(keyOf(objects[0]), CLICK, 'keep');
+		outliner.select(keyOf(objects[2]), SHIFT, 'keep');
 
-		expect([...outliner.selection.selected]).toEqual([objects[0].uuid, objects[2].uuid]);
+		expect([...outliner.selection.selected]).toEqual([keyOf(objects[0]), keyOf(objects[2])]);
 	});
 
 	it('reset drops hidden and selected state', () => {
@@ -195,7 +220,7 @@ describe('createSceneOutliner', () => {
 		};
 
 		it('keeps an object hidden across a solve', () => {
-			const spec = { sourceComponentId: 'gh-1', originalIndex: 0, name: 'wall' };
+			const spec = { trackingKey: 'gh-1/{0}/0', name: 'wall' };
 			const { scene, objects } = sceneWith(spec);
 			const outliner = createSceneOutliner(scene);
 			outliner.toggleObject(objects[0]);
@@ -208,8 +233,8 @@ describe('createSceneOutliner', () => {
 		});
 
 		it('leaves everything else visible', () => {
-			const hiddenSpec = { sourceComponentId: 'gh-1', originalIndex: 0 };
-			const otherSpec = { sourceComponentId: 'gh-1', originalIndex: 1 };
+			const hiddenSpec = { trackingKey: 'gh-1/{0}/0' };
+			const otherSpec = { trackingKey: 'gh-1/{0}/1' };
 			const { scene, objects } = sceneWith(hiddenSpec, otherSpec);
 			const outliner = createSceneOutliner(scene);
 			outliner.toggleObject(objects[0]);
@@ -222,7 +247,7 @@ describe('createSceneOutliner', () => {
 		});
 
 		it('clears the selection, which refers to discarded instances', () => {
-			const spec = { sourceComponentId: 'gh-1', originalIndex: 0 };
+			const spec = { trackingKey: 'gh-1/{0}/0' };
 			const { scene, objects } = sceneWith(spec);
 			const outliner = createSceneOutliner(scene);
 			outliner.select(objects[0].uuid, CLICK);

@@ -2,7 +2,7 @@
 // mesh blob. Discriminated on `kind` — the parser's `never` check forces new kinds to be handled there.
 
 export interface DisplayIdentity {
-	/** Stable pick key: `${sourceComponentId}:${originalIndex}`. Distinct from `name` so renaming doesn't change identity. */
+	/** The item's identity — the writer-minted opaque id, same contract as mesh ids. Distinct from `name` so renaming doesn't change identity. */
 	id: string;
 	name: string;
 	layer: string;

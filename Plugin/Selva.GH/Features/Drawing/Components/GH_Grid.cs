@@ -31,7 +31,7 @@ public class GH_Grid : GH_Component
     }
 
     protected override Bitmap Icon => Resources.Grid;
-    public override GH_Exposure Exposure => GH_Exposure.quinary;
+    public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("1A6B7C2D-3E4F-4A5B-9C8D-7E6F5A4B3C21");
 
     public override bool IsPreviewCapable => true;

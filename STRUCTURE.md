@@ -8,11 +8,13 @@ Where code lives and how it's named. Every refactor and new file conforms to the
 selva/
 ├── Plugin/                         # .NET / Grasshopper plugin
 │   ├── Selva.Schema/               # Schema models, validation, migration (no Rhino/GH deps)
+│   ├── Selva.Slva/                 # SLVA/SLVM mesh codec + batch model/pipeline (no Rhino/GH deps)
 │   ├── Selva.Drawing/              # Document-model drawing library + SVG/PDF renderers (no Rhino/GH deps)
 │   ├── Selva.Rhino/                # Rhino interop layer for Selva.Drawing (Rhino/GH deps, no Goos)
-│   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Drawing)
+│   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Slva + Selva.Drawing)
 │   ├── Selva.PluginVerifier/       # Post-merge smoke test that loads the built .gha
 │   ├── Selva.Tests/                # xUnit tests for Selva.GH + Selva.Schema
+│   ├── Selva.Slva.Tests/           # xUnit tests for Selva.Slva (incl. cross-stack fixture contracts)
 │   ├── Selva.Drawing.Tests/        # xUnit tests for Selva.Drawing
 │   └── Releases/                   # Local build output only, NOT tracked; releases ship via plugin-release.yml
 │
@@ -51,11 +53,13 @@ selva/
 | Project                | Target            | Rhino/GH deps | Purpose                                                          |
 | ---------------------- | ----------------- | ------------- | ---------------------------------------------------------------- |
 | `Selva.Schema`         | `netstandard2.0`  | none          | Generated schema, validation, migration, shared constants        |
+| `Selva.Slva`           | `netstandard2.0`  | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
 | `Selva.Drawing`        | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                               |
 | `Selva.Rhino`          | `net48/net7/net9` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
 | `Selva.GH`             | `net48/net7/net9` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
 | `Selva.PluginVerifier` | `net48/net7/net9` | yes           | Loads the merged `.gha` after a Release build; Windows-only      |
 | `Selva.Tests`          | `net8.0` (xUnit)  | none          | Tests for `Selva.GH` + `Selva.Schema`                            |
+| `Selva.Slva.Tests`     | `net8.0` (xUnit)  | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
 | `Selva.Drawing.Tests`  | `net8.0` (xUnit)  | none          | Tests for `Selva.Drawing`                                        |
 
 Rhino 8 loads `net48` + `net7.0`; Rhino 9 loads `net9.0`. Rhino 7 is not supported.
@@ -220,13 +224,14 @@ files already on users' disks: frozen forever. The **extension** is what writers
 it is cheap (readers detect by magic) but readers must accept retired extensions forever. The
 **human name** in UI and docs can change freely.
 
-| Format           | Extension            | Magic            | Spec                                                                  |
-| ---------------- | -------------------- | ---------------- | --------------------------------------------------------------------- |
-| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `BinaryGeometryWriter.cs` header / `docs/contributing/slva-format.md` |
-| Selva mesh file  | `.slvm` (was `.dmf`) | `DMF1`           | `SlvmFile.cs` header, JSON sidecar + SLVA/SLVZ blob                   |
-| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`                                 |
+| Format           | Extension            | Magic            | Spec                                                        |
+| ---------------- | -------------------- | ---------------- | ----------------------------------------------------------- |
+| Mesh batch blob  | wire-only            | `SLVA` / `SLVZ`* | `SlvaWriter.cs` header / `docs/contributing/slva-format.md` |
+| Selva mesh file  | `.slvm` (was `.dmf`) | `SLVM` / `DMF1`* | `SlvmDocument.cs` header, chunked container (GEOM/TABL/...) |
+| Parameter preset | `.slvp` (was `.sps`) | none (JSON)      | `packages/schemas/preset-schema.json`                       |
 
-\* `SLVZ` is `SLVA` in an optional DEFLATE container; decoders sniff which by the leading magic.
+\* `SLVZ` is `SLVA` in an optional DEFLATE container; `DMF1` is the retired pre-SLVM file
+container, read-only forever. Decoders sniff by the leading magic.
 
 Naming rule for new formats: human name **"Selva _thing_ file"**, extension **`slv` + one
 mnemonic letter**, magic four ASCII bytes. Retired extensions (`.dmf`, `.sps`) stay accepted on
@@ -249,8 +254,8 @@ consumers share:
 - **Several suites in one package** → `tests/fixtures/` (data) or
   `tests/helpers/` (code that builds test data).
 - **Both stacks (TS + C#)** → `packages/schemas/fixtures/`. This is the only
-  cross-stack location: `Selva.Tests` resolves it from the repo root, so it
-  must stay outside `src/`. These are contract artifacts with an update
+  cross-stack location: `Selva.Tests` and `Selva.Slva.Tests` resolve it from
+  the repo root, so it must stay outside `src/`. These are contract artifacts with an update
   procedure (see the schemas README), not test-private data.
 - **Playwright** → `packages/selva/e2e/fixtures/`. Binary `.gh` files there
   need the `.gitignore` negation, since the blanket `*.gh` rule swallows them

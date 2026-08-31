@@ -79,4 +79,9 @@ export { getLogger, setLogger, enableDebugLogging } from '../shared/index.js';
 export type { Logger } from '../shared/index.js';
 
 export { LOOKS, LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from '../shared/index.js';
-export type { Look, LookPreset, MaterialAppearanceOptions } from '../shared/index.js';
+export type {
+	Look,
+	LookMaterialOverride,
+	LookPreset,
+	MaterialAppearanceOptions
+} from '../shared/index.js';

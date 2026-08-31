@@ -80,7 +80,8 @@ export function updateScene(
 // of the geometry.
 const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
 
-function isViewerAid(object: THREE.Object3D): boolean {
+/** True if `object` or any ancestor is a viewer aid (grid/floor/labels/measure). */
+export function isViewerAid(object: THREE.Object3D): boolean {
 	let current: THREE.Object3D | null = object;
 	while (current) {
 		if (typeof current.userData.id === 'string' && VIEWER_AID_IDS.has(current.userData.id)) {

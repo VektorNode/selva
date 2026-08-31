@@ -19,7 +19,7 @@ public class GH_AngularDimension : GH_Component
     }
 
     protected override Bitmap Icon => Resources.AngularDimension;
-    public override GH_Exposure Exposure => GH_Exposure.quarternary;
+    public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("A90C4D76-9482-4501-A905-F9221656B6C8");
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)

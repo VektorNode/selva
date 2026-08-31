@@ -1,107 +1,216 @@
-# `render/` — the CAD viewer toolkit
+# `render/` — the viewer
 
-A configured THREE scene (camera, lighting, environment, controls, render loop) plus the overlays
-that make it read as CAD: edges, grid, nav gizmo, HTML labels, measurement, ambient occlusion.
+Everything you see on screen: camera, lights, orbit controls, grid, edges, labels, measurement, and
+the render loop. It depends only on `shared/` — it doesn't know what a compute response is. That's
+`parse/`.
 
-Depends downward on `shared/` only. It deliberately does **not** import `parse/` — the renderer knows
-nothing about wire formats, and a host that does both wires them together (see
-[The render↔parse seam](#the-renderparse-seam)).
+## One call builds it
 
-**`initThree` owns this toolkit.** It constructs the camera controller, grid, gizmo, measure tool,
-render pipeline and near-plane fitter from `ThreeInitializerOptions` and returns the live instances
-on `ThreeViewer`. The factories are therefore internal — the barrel exports their handle _types_ so
-hosts can annotate, not their constructors. The tables below map the layer's internals, not a list
-of public exports.
+```ts
+import { initThree } from '@selvajs/visualization/render';
 
-## Contents
-
-| Path                                                       | Owns                                                                                                                                                               |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `scene-setup/`                                             | `initThree` and everything it composes — see below                                                                                                                 |
-| `edges.ts`                                                 | `addEdges`/`addEdgesAsync`/`removeEdges`; targeting and attachment. Reached via `viewer.applyEdges`/`clearEdges`                                                   |
-| `edges/`                                                   | `options` (defaults/constants), `extraction` (worker + content cache), `line-geometry` (builds the renderable line geometry), `overlay` (materials + density fade) |
-| `camera-controller.ts`                                     | Perspective↔ortho swap, view presets, framing tweens                                                                                                               |
-| `render-pipeline.ts`                                       | Postprocessing composer (GTAO, screen-space edges, output pass)                                                                                                    |
-| `edge-detection-pass.ts` / `edge-extract.ts`               | The screen-space edge pass; the fast worker-portable extractor                                                                                                     |
-| `grid.ts`, `view-gizmo.ts`, `label-layer.ts`, `measure.ts` | Independent viewer overlays                                                                                                                                        |
-| `near-plane.ts`                                            | Per-frame near-plane fitting (depth precision when zoomed out)                                                                                                     |
-| `three-helpers.ts`                                         | `updateScene`, `clearScene`, `computeContentBounds`                                                                                                                |
-| `three-materials.ts`                                       | The shared material singletons (`SHARED_MATERIALS` is what `clearScene` spares)                                                                                    |
-| `up-axis.ts`                                               | The scene-up basis every orientation default derives from                                                                                                          |
-| `types.ts`                                                 | The `ThreeInitializerOptions` surface                                                                                                                              |
-
-### `scene-setup/`
-
-`init-three.ts` orchestrates one file per construction step — `create-scene`, `create-camera`,
-`setup-renderer`, `setup-lighting` (plus the shadow-frustum fit), `setup-environment` (HDR/PMREM +
-floor), `setup-controls`, `setup-events` (picking, selection, keyboard), `animation-loop`, `defaults`
-(the option-precedence resolver), and `dispose` (teardown sweeps). Each takes the resolved config and
-returns its object; the orchestrator owns only the wiring and the returned viewer handle.
-
-Two more controllers live here and back part of the `ThreeViewer` API: `appearance.ts`
-(`viewer.setLook`, `setFillLights`, `setEnvironmentIntensity`, `setToneMappingExposure`,
-`setAoIntensity`) and `pipeline-controller.ts` (wraps `render-pipeline.ts`'s composer, backs
-`viewer.setAmbientOcclusion`).
-
-## Quick start
-
-```typescript
-import { initThree, updateScene } from '@selvajs/visualization/render';
-import { getThreeMeshesFromComputeResponse } from '@selvajs/visualization/parse';
-
-const { scene, camera, controls, applyEdges, dispose } = initThree(canvas, {
+const viewer = initThree(canvas, {
 	look: 'technical',
-	edges: { enabled: true },
-	grid: { enabled: true }
+	grid: { enabled: true },
+	edges: { enabled: true }
 });
-
-const meshes = await getThreeMeshesFromComputeResponse(response);
-updateScene(scene, meshes, camera, controls, false);
-applyEdges(scene);
-
-dispose(); // frees the GL context, not just its objects
 ```
 
-## Host apps
+`initThree` builds every piece and hands back the live instances on `viewer`. There are no separate
+constructors to call — `viewer.grid`, `viewer.measureTool`, `viewer.cameraController` are already
+there, configured from the options you passed.
 
-An app can own scene content and pointer input inside a viewer it doesn't otherwise control —
-drawing on top of solve results rather than in a stage before them. Three runtime seams:
-`addUserGeometry` (content that survives solves), `viewer.tools` (clicks ahead of selection), and
-`labelLayer` (annotations). This package ships no tools of its own beyond measure and the gizmo;
-apps bring their own.
+## Show some geometry
 
-**[docs/contributing/viewer-apps.md](../../../../docs/contributing/viewer-apps.md) is the guide** — the seams, the traps, and a checklist.
+```ts
+import { updateScene } from '@selvajs/visualization/render';
+import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
+
+const objects = await getThreeObjectsFromComputeResponse(response);
+updateScene(viewer.scene, objects, viewer.camera, viewer.controls, false);
+viewer.applyEdges(viewer.scene);
+```
+
+`updateScene` clears the previous content, adds the new objects, fits the camera clip planes to the
+model and frames it. The last argument is `initialPositionSet` — pass `false` the first time so the
+camera frames the model, `true` afterwards to leave the user's view alone.
+
+After replacing geometry, also call `viewer.updateShadowBounds()` and `viewer.updateGridScale()` if
+you have sun shadows or the grid on.
+
+## Changing how it looks
+
+```ts
+viewer.setLook('showcase'); // technical, studio, showcase, arctic, xray, lineart, wireframe
+viewer.setAmbientOcclusion(true);
+viewer.setToneMappingExposure(1.2);
+viewer.fitToView();
+```
+
+`lineart` reads as a line drawing and is the one look that needs the edge overlay: it sets
+`requiresEdges`, and a host that wants it to work must switch edges on itself (`@selvajs/ui`'s
+`Viewer.svelte` does). `wireframe` draws raw triangle edges instead — diagonals included — which
+makes it a tessellation-inspection tool rather than a presentation look.
+
+Neither is true hidden-line removal, which computes the occluded edges and emits lines only.
+`lineart` draws shaded white faces and lets the depth buffer hide the edges behind them — the same
+picture by a different mechanism, and with no line-only form to export.
+
+A look changes lighting and materials only — never the grid or edges, which are independent
+overlays. Import `LOOKS` for the full list.
+
+## Cleaning up
+
+```ts
+viewer.dispose();
+```
+
+Frees the WebGL context, not just the objects in it. Call it when the canvas is removed.
+
+## Useful bits of `viewer`
+
+| Property                                  | What it's for                                           |
+| ----------------------------------------- | ------------------------------------------------------- |
+| `scene`, `camera`, `controls`, `renderer` | the raw Three.js objects, if you need them              |
+| `cameraController`                        | view presets, framing, perspective ↔ ortho              |
+| `grid`, `gizmo`, `measureTool`            | overlays (`null` when not enabled)                      |
+| `applyEdges` / `clearEdges`               | edge overlays on a subtree                              |
+| `captureImage()`                          | PNG of the current view — use this, not `canvas.toBlob` |
+| `invalidate()`                            | request a repaint after mutating the scene yourself     |
+| `tools`                                   | pointer tools competing for clicks (see below)          |
+
+## Adding your own content
+
+Geometry you add with `scene.add()` gets wiped by the next `updateScene`. Use this instead when
+reference geometry, annotations, or app-specific objects should survive a solve:
+
+```ts
+viewer.addUserGeometry(myHelperMesh, 'my-app');
+viewer.clearUserGeometry('my-app');
+```
+
+## Reacting to clicks and keys
+
+**For "tell me what the user clicked", use the event callbacks.** No tool registration needed:
+
+```ts
+const viewer = initThree(canvas, {
+	events: {
+		onObjectSelected: (object) => showPanelFor(object),
+		onMeshDoubleClicked: (object) => zoomTo(object),
+		onBackgroundClicked: () => closePanel(),
+		// Built-in keys: F or Space fits the view, Escape clears the selection.
+		enableKeyboardControls: true
+	}
+});
+```
+
+The canvas needs focus for keys to arrive, and the built-ins are the only three. **For your own
+shortcuts, add a listener** — there is no key-binding API:
+
+```ts
+canvas.addEventListener('keydown', (event) => {
+	if (event.key === 'm') viewer.measureTool?.setEnabled(true);
+	if (event.key === 'g') viewer.grid?.setVisible(false);
+});
+```
+
+**Register a pointer tool when a click must _not_ also select the object under it** — placing a
+point, drawing a dimension, picking a face. That is the whole reason the registry exists: returning
+`true` from `handleClick` consumes the event, so no other tool sees it and selection never runs.
+
+```ts
+import { pointerToNdc, pickThreshold } from '@selvajs/visualization/render';
+import * as THREE from 'three';
+
+const raycaster = new THREE.Raycaster();
+// `pointerToNdc` returns a plain `{ x, y }`; `setFromCamera` wants a Vector2, so keep one around
+// rather than allocating per click.
+const pointer = new THREE.Vector2();
+let enabled = false;
+
+const unregister = viewer.tools.register({
+	id: 'place-point',
+	priority: 10, // above measure (0) and the nav gizmo (-100)
+	tool: {
+		setEnabled: (on) => (enabled = on),
+		isEnabled: () => enabled,
+
+		handleClick(event) {
+			if (!enabled) return false; // let the click fall through to selection
+
+			raycaster.setFromCamera(pointer.copy(pointerToNdc(event, canvas)), viewer.camera);
+			const [hit] = raycaster.intersectObjects(viewer.scene.children, true);
+			if (!hit) return false;
+
+			dropMarkerAt(hit.point);
+			return true; // consumed — the mesh under the cursor stays unselected
+		},
+
+		// Preview only. Never consumes, so orbit and pan keep working while you hover.
+		handleMove(event) {
+			if (enabled) moveGhostMarker(pointerToNdc(event, canvas));
+		},
+
+		clear: () => removeAllMarkers(),
+		dispose: () => removeAllMarkers()
+	}
+});
+
+viewer.tools.setActive('place-point'); // enables this one, disables every other tool
+```
+
+Three things worth knowing:
+
+- **`setActive` is exclusive.** It enables one tool and calls `setEnabled(false)` on all the others,
+  so turning yours on switches the measure tool off. Pass `null` to disable everything. A tool
+  without `setEnabled` is always live and is not affected.
+- **Higher `priority` runs first**; ties break by registration order. The built-ins sit at `0`
+  (measure) and `-100` (gizmo).
+- **`register` returns an unregister function**, which does not dispose the tool — you still own it.
+
+Picking lines and points needs `pickThreshold(camera, target)` on `raycaster.params.Line.threshold`
+and `.Points.threshold`; three's default is nearly unclickable, and this keeps the grab band constant
+on screen as you zoom. `snapToVertex` snaps a hit to the nearest vertex within a pixel radius, so a
+host tool feels like the built-in measure tool.
+
+**[docs/contributing/viewer-apps.md](../../../../docs/contributing/viewer-apps.md) is the full
+guide** — the seams, the traps, and a checklist.
+
+## Where the code lives
+
+| Path                                                       | What it does                                                  |
+| ---------------------------------------------------------- | ------------------------------------------------------------- |
+| `scene-setup/`                                             | `initThree` and one file per construction step                |
+| `camera-controller.ts`                                     | view presets, framing, perspective/ortho                      |
+| `edges.ts`, `edges/`                                       | edge overlays: settings, extraction, line building            |
+| `edge-detection-pass.ts`, `edge-extract.ts`                | screen-space edge detection (the fallback for skipped meshes) |
+| `render-pipeline.ts`                                       | the post-processing chain                                     |
+| `grid.ts`, `view-gizmo.ts`, `label-layer.ts`, `measure.ts` | overlays                                                      |
+| `near-plane.ts`                                            | keeps the near clip plane sane when zoomed out                |
+| `three-helpers.ts`                                         | `updateScene`, `clearScene`, bounds                           |
+| `three-materials.ts`                                       | shared material instances                                     |
+| `tool-registry.ts`, `scene-ownership.ts`                   | host-app pointer tools and geometry ownership tagging         |
+| `types.ts`                                                 | `ThreeInitializerOptions` and friends                         |
+
+Inside `scene-setup/`, `init-three.ts` only wires things up: `create-scene`, `create-camera`,
+`setup-renderer`, `setup-lighting`, `setup-environment`, `setup-controls`, `setup-events`,
+`animation-loop`, `defaults` (option precedence) and `dispose` each own one step. `appearance.ts` and
+`pipeline-controller.ts` back the `setLook` / `setAmbientOcclusion` half of the viewer API.
 
 ## Extension points
 
-These require editing this package, unlike the host-app seams above.
+- **A new look** — add a preset in `shared/looks.ts`.
+- **A new edge style** — `edges/`.
+- **A different up direction** — `environment.sceneUp`.
+- **A custom render pass** — `render-pipeline.ts`.
 
-- **A new look** — add to `LOOKS` + `LOOK_PRESETS` in `shared/`. A look carries only
-  lighting/material dials; edges and grid are independent overlays and a look never toggles them.
-- **A new edge strategy** — everything lives under `edges/`. `extraction.ts` owns how segments are
-  produced (fast path, content cache, worker), `overlay.ts` how they are drawn (material pooling,
-  density fade). The public entry only targets meshes and attaches.
-- **A different up axis** — set `environment.sceneUp`. Every orientation default (iso camera, sun,
-  grid plane, floor normal, hemisphere light, environment rotation) derives from it via `up-axis.ts`.
-  Note this reorients the _viewer_; it does not rotate incoming geometry.
-- **A custom render pass** — `render-pipeline.ts` builds the composer; `initThree` toggles it via
-  `setAmbientOcclusion` and the edge fallback.
+## Two rules for contributors
 
-## The render↔parse seam
+**`render/` never imports `parse/`.** One value crosses that line and needs no wiring: `initThree`
+publishes the GPU's max anisotropy at startup, and `parse/webdisplay/apply-texture.ts` subscribes at
+module load. The subscriber fires immediately, so load order doesn't matter. The `onMaxAnisotropy`
+option exists only for hosts doing their own texture work.
 
-`render/` never imports `parse/`. One thing nonetheless crosses that line, and it needs **no host
-wiring**:
-
-**GPU capabilities (anisotropy).** `initThree` calls `publishMaxAnisotropy` at init;
-`parse/webdisplay/apply-texture.ts` subscribes via `observeMaxAnisotropy` at module load. The
-observer fires immediately on subscribe, so load order doesn't matter. The `onMaxAnisotropy` option
-on `ThreeInitializerOptions` remains for hosts doing their own texture work, but is **not needed to
-get sharp textures**.
-
-## GPU ownership: ask, don't remember
-
-Every GPU resource has exactly one owner — a module singleton, or the scene. The rule lives in
-`shared/gpu-ownership.ts`, and **`shared/gpu-dispose.ts`'s `disposeObjectTree` is the only traversal
-that should dispose scene content.** Separate walkers previously each carried a different subset of
-the ownership guards, and the gaps between them were exactly where leaks lived. If you need a new
-teardown path, call `disposeObjectTree` — do not write a fourth `traverse` that calls `.dispose()`.
+**Every GPU resource has one owner.** Free scene content through `disposeObjectTree` in
+`shared/gpu-dispose.ts` — never a hand-rolled `traverse` + `.dispose()` loop.

@@ -352,11 +352,15 @@ public class DocumentEventManager : IDisposable
         }
     }
 
-    public void CollectAndBroadcastOutputs(UISchema schema)
+    /// <summary>
+    ///     Returns true when a payload actually went out. A false means the ContextBakes held no
+    ///     volatile data — the caller may need to expire them to regenerate it.
+    /// </summary>
+    public bool CollectAndBroadcastOutputs(UISchema schema)
     {
         if (_currentDocument == null || !_webSocketTransport.IsRunning || schema == null)
         {
-            return;
+            return false;
         }
 
         var includeDisplayData = schema.ViewerOptions?.EnableLocal ?? false;
@@ -375,11 +379,14 @@ public class DocumentEventManager : IDisposable
             ? _valueCollector.CollectDisplayData(_currentDocument)
             : new List<object>();
 
-        if (outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0)
+        if (outputValues.Count == 0 && fileOutputs.Count == 0 && displayData.Count == 0)
         {
-            var _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
-                includeDisplayData);
+            return false;
         }
+
+        var _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
+            includeDisplayData);
+        return true;
     }
 }
 

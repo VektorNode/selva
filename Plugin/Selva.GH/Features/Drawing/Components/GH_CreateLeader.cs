@@ -25,7 +25,7 @@ public class GH_CreateLeader : GH_Component
     }
 
     protected override Bitmap Icon => Resources.DrawLeader;
-    public override GH_Exposure Exposure => GH_Exposure.quarternary;
+    public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("8E4B17D3-2A96-4C50-B71E-5D30F9A6C284");
 
     public override bool IsPreviewCapable => true;

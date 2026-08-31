@@ -8,11 +8,21 @@
 // tri-state.
 //
 // The set is keyed by stable identity (see `identity.ts`), not `uuid`, so hiding survives a solve —
-// a solve regenerates uuids but not the Grasshopper source the key is derived from. Objects with no
-// identifying userData fall back to their uuid, so their hidden state lasts only until the next solve.
+// a solve regenerates uuids but not the minted ids the keys read. A merged mesh stores one key per
+// source member, so re-merging under a different material/layer grouping can't lose the state.
+// Objects with no identifying userData fall back to their uuid, so their hidden state lasts only
+// until the next solve.
 
 import type * as THREE from 'three';
-import { getTrackingKey as hiddenKey } from './identity.js';
+import { getMemberKeys } from './identity.js';
+import { applyEntryVisibility } from './member-visibility.js';
+
+/** The parts of a `SceneEntry` visibility needs; kept structural so entries.ts stays optional. */
+export interface EntryRef {
+	object: THREE.Object3D;
+	memberIndex: number | null;
+	key: string;
+}
 
 // Backed by a caller-supplied `Set` so a reactive host can pass a framework-observable set
 // (Svelte's `SvelteSet`) and get re-renders for free.
@@ -24,25 +34,53 @@ export interface VisibilityState {
 	/** Drives the tri-state eye icon. */
 	isLayerPartial(objects: THREE.Object3D[]): boolean;
 	toggleLayer(objects: THREE.Object3D[]): void;
+	/**
+	 * Hide or show one entry — a whole object, or a single member inside a merged mesh.
+	 *
+	 * A merged mesh renders as one THREE object, so a member cannot be hidden by flipping
+	 * `.visible`. Its key goes in the hidden-set and the mesh's drawn index ranges are rebuilt to
+	 * skip it, which is what {@link applyEntryVisibility} does.
+	 */
+	setEntryVisible(entry: EntryRef, visible: boolean): void;
+	isEntryHidden(entry: EntryRef): boolean;
 	/** Restores `.visible` on everything the user had hidden before the solve. Call after each solve. */
 	applyTo(objects: THREE.Object3D[]): void;
 	reset(): void;
 }
 
 export function createVisibilityState(hidden: Set<string> = new Set()): VisibilityState {
+	// An object is hidden when EVERY member key is in the set — for a plain mesh that is its one
+	// key; for a merged mesh it means all source members are hidden.
+	const allHidden = (object: THREE.Object3D) =>
+		getMemberKeys(object).every((key) => hidden.has(key));
+
 	const state: VisibilityState = {
 		hidden,
 
-		isHidden: (object) => hidden.has(hiddenKey(object)),
+		isHidden: allHidden,
 
 		setVisible(object, visible) {
 			object.visible = visible;
 			object.traverse((child) => {
 				child.visible = visible;
 			});
-			const key = hiddenKey(object);
-			if (visible) hidden.delete(key);
-			else hidden.add(key);
+			for (const key of getMemberKeys(object)) {
+				if (visible) hidden.delete(key);
+				else hidden.add(key);
+			}
+		},
+
+		isEntryHidden: (entry) =>
+			entry.memberIndex === null ? allHidden(entry.object) : hidden.has(entry.key),
+
+		setEntryVisible(entry, visible) {
+			if (entry.memberIndex === null) {
+				state.setVisible(entry.object, visible);
+				return;
+			}
+			if (visible) hidden.delete(entry.key);
+			else hidden.add(entry.key);
+			applyEntryVisibility(entry.object, hidden);
 		},
 
 		isLayerHidden: (objects) => objects.length > 0 && objects.every((obj) => state.isHidden(obj)),
@@ -60,10 +98,13 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 
 		applyTo(objects) {
 			for (const object of objects) {
+				// A merged mesh can be partly hidden, which `.visible` cannot express — rebuild its
+				// drawn ranges before the whole-object rule below considers it.
+				applyEntryVisibility(object, hidden);
 				// Only push objects down. Anything not in the set keeps whatever visibility the render
 				// layer gave it, so this never fights another feature that hid something for its own
 				// reasons (isolate mode, section-box culling).
-				if (!hidden.has(hiddenKey(object))) continue;
+				if (!allHidden(object)) continue;
 				object.visible = false;
 				object.traverse((child) => {
 					child.visible = false;

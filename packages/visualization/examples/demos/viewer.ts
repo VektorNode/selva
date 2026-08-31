@@ -13,7 +13,7 @@
 import * as THREE from 'three';
 
 import { createPlayground } from '../shared/playground';
-import type { ViewPreset } from '@/render/index.js';
+import { LOOKS, type Look, type ViewPreset } from '@/render/index.js';
 
 const pg = createPlayground({
 	title: 'Viewer — Full API',
@@ -206,13 +206,12 @@ pg.addToggle('Ambient Occlusion', false, (on) => viewer.setAmbientOcclusion(on))
 // ── Look presets ──────────────────────────────────────────────────────────────
 // A `look` is a ready-to-go lighting preset. The viewer defaults to 'technical' (flat CAD shading) —
 // this demo passed no `look` option. 'studio' is the polished product-shot look (ACES + hemisphere
-// fill + lifted HDR); 'showcase' is punchier. Switching look retunes ONLY lighting/material; it never
+// fill + lifted HDR); 'showcase' is punchier. 'arctic' and 'xray' also override each mesh's material —
+// one white clay, or see-through. Switching look retunes ONLY lighting/material; it never
 // touches the grid, edges, or gizmo above. The Lighting sliders below let you tweak individual dials
 // on top — note that switching look re-applies the preset and overrides those tweaks.
 pg.addSection('Look');
-pg.addSelect('Look', ['technical', 'studio', 'showcase'], 'technical', (v) =>
-	viewer.setLook(v as 'studio' | 'technical' | 'showcase')
-);
+pg.addSelect('Look', [...LOOKS], 'technical', (v) => viewer.setLook(v as Look));
 
 // ── Lighting (granular overrides) ─────────────────────────────────────────────
 // This demo's HDR has a bright sky and a near-black floor, so mesh undersides fall into deep shadow

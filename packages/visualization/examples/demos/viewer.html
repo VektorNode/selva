@@ -7,7 +7,14 @@
 		<link rel="stylesheet" href="../shared/playground.css" />
 	</head>
 	<body>
-		<div id="sidebar"></div>
+		<div id="sidebar">
+			<div class="needs-vite">
+				<strong>Nothing loaded?</strong> These demos must be served by Vite — run
+				<code>pnpm example</code> and open <code>localhost:5173</code>. A static file server (Live
+				Server, <code>file://</code>) cannot transpile the TypeScript modules, so the page stays
+				blank.
+			</div>
+		</div>
 		<div id="canvas-container">
 			<canvas id="viewer-canvas"></canvas>
 			<div id="hud">

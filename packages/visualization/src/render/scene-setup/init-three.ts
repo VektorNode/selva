@@ -2,7 +2,13 @@ import * as THREE from 'three';
 
 import { publishMaxAnisotropy } from '../../shared/index.js';
 import { createCameraController } from '../camera-controller.js';
-import { EDGES_SKIPPED_TRIANGLE_CAP, addEdgesAsync, removeEdges } from '../edges.js';
+import {
+	EDGES_SKIPPED_OVERLAY_BUDGET,
+	EDGES_SKIPPED_TRIANGLE_CAP,
+	addEdgesAsync,
+	type EdgeOptions,
+	removeEdges
+} from '../edges.js';
 import { createGrid } from '../grid.js';
 import { createLabelLayer, type LabelLayer } from '../label-layer.js';
 import { createMeasureTool, type MeasureTool } from '../measure.js';
@@ -181,9 +187,9 @@ export const initThree = function (
 	let requestRender: () => void = () => {};
 
 	// Applies regardless of edges.enabled — an explicit call should never be silently ignored.
-	// Meshes over the triangle cap switch the screen-space edge fallback on; a later solve without
-	// such meshes switches it back off.
-	const applyEdges = (root: THREE.Object3D) => {
+	// Meshes the overlay path skipped — too large, or past the scene-wide overlay budget — switch the
+	// screen-space edge fallback on; a later solve without such meshes switches it back off.
+	const applyEdges = (root: THREE.Object3D, overrides?: Partial<EdgeOptions>) => {
 		void addEdgesAsync(root, {
 			color: config.edges.color,
 			darken: config.edges.darken,
@@ -191,7 +197,10 @@ export const initThree = function (
 			thresholdAngle: config.edges.thresholdAngle,
 			distanceFade: config.edges.distanceFade,
 			maxTriangles: config.edges.maxTriangles,
-			maxSegments: config.edges.maxSegments
+			maxSegments: config.edges.maxSegments,
+			maxOverlays: config.edges.maxOverlays,
+			// Last, so a caller's override actually wins over the configured value.
+			...overrides
 		}).then(() => {
 			updateEdgeFallback(root);
 			requestRender(); // async attach may land after the solve's own repaint
@@ -202,7 +211,10 @@ export const initThree = function (
 		if (config.edges.screenSpaceFallback === false) return;
 		let hasSkippedMeshes = false;
 		root.traverse((object) => {
-			if (object.userData?.edgesSkipped === EDGES_SKIPPED_TRIANGLE_CAP) hasSkippedMeshes = true;
+			const skipped = object.userData?.edgesSkipped;
+			if (skipped === EDGES_SKIPPED_TRIANGLE_CAP || skipped === EDGES_SKIPPED_OVERLAY_BUDGET) {
+				hasSkippedMeshes = true;
+			}
 		});
 		pipeline.setEdgeFallback(hasSkippedMeshes);
 	};

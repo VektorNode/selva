@@ -156,6 +156,78 @@ namespace Selva.GH.Properties
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
+        internal static System.Drawing.Bitmap ParamWebDisplay
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("ParamWebDisplay", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap ParamThreeMaterial
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("ParamThreeMaterial", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DisplayToFile
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DisplayToFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DisplayFromFile
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DisplayFromFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DeconstructDisplay
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DeconstructDisplay", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DisplaySize
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DisplaySize", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
         internal static System.Drawing.Bitmap Icon
         {
             get

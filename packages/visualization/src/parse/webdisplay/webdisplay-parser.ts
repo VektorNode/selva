@@ -6,7 +6,7 @@ import { parseDisplayItems } from '../display-items/display-items-parser.js';
 
 import { parseMeshBatchObject } from './batch-parser.js';
 
-import type { DisplayDataItem, DisplayComputeResponse } from './response-envelope.js';
+import type { DisplayDataItem, GrasshopperComputeResponse } from './response-envelope.js';
 import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } from './types.js';
 
 // Constants
@@ -66,8 +66,8 @@ const warnedUnknownUnits = new Set<string>();
  *
  * @throws Rethrows unexpected errors after attempting to dispose any created meshes.
  */
-export async function getThreeMeshesFromComputeResponse(
-	data: DisplayComputeResponse,
+export async function getThreeObjectsFromComputeResponse(
+	data: GrasshopperComputeResponse,
 	options?: MeshExtractionOptions
 ): Promise<THREE.Object3D[]> {
 	const startTime = performance.now();
@@ -122,7 +122,7 @@ function getScaleFactor(modelUnits: string): number {
 }
 
 async function extractDisplayFromData(
-	data: DisplayComputeResponse,
+	data: GrasshopperComputeResponse,
 	objects: THREE.Object3D[],
 	scaleFactor: number,
 	parsingOptions: MeshBatchParsingOptions,
@@ -151,10 +151,13 @@ async function processDataBranch(
 	for (const item of branch) {
 		if (!isDisplayItemType(item.type)) continue;
 
-		const mergedParsingOptions = {
-			mergeByMaterial: true,
+		// Spread first, then re-apply the default for anything the caller left undefined: a caller
+		// passing `{ material }` would otherwise carry `mergeByMaterial: undefined` over the default
+		// and silently un-merge the batch.
+		const mergedParsingOptions: MeshBatchParsingOptions = {
 			debug: false,
-			...parsingOptions
+			...parsingOptions,
+			mergeByMaterial: parsingOptions.mergeByMaterial ?? true
 		};
 
 		// Parsed once and shared: item.data is a multi-MB base64 SLVA blob, so parsing it twice (once

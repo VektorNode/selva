@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" shape-rendering="geometricPrecision">
+  <defs>
+    <clipPath id="cut">
+      <path d="M0 0h24v24H0z M 13 16.8 L 10 21.9962 L 4 21.9962 L 1 16.8 L 4 11.6038 L 10 11.6038 z" clip-rule="evenodd"/>
+    </clipPath>
+  </defs>
+  <image clip-path="url(#cut)" x="0" y="0" width="24" height="24" image-rendering="pixelated" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAACXBIWXMAAAsSAAALEgHS3X78AAAD5UlEQVRIibWW24tVVRzHP7/fWnuvfTn3sTnjcbKemixRiYIehBEqKKiU6q2XLhD0EPQQRBjof5CDD+GLIUIPESQm9JIwphCMRA5RIZKMSTCmyMwpz5k5l7162GeGGeciRq2nvWCt72f/vr/L3uK95/9cej+Hp64crExdOVi5nzuyWQRTVw4+DLwP7Dt+/JfdJ7+6hAe894wOFdsjw6XLW+ul97449s2FjTTsJuKHgUNL+9adLqqCiqAqzM7fiW/+1drz89Ub58df2Xtp+4PVAycnvr52zwgGFkwCu+8+/Pqbp7k13wYgDAwC9DIPeOrVQvvJXdt2nJg4swqyXg7WFQd49aXHiZ3BhQZVATyxM0TOMt9aiH+6PPvrWx+8/NCGgIEt64oDjD1SRQSsVcJQCQJDEBisVQKr3JprxbOzzVPrAgYJPXS36KrDRiikDhcoSWQpFUJcqIMoDM4Zrv5xe887H+3fu14Eb2wmDjBzrUkYKoVCiIgAEEeWNAkQESqlkMAqc3Oto0t3VlbRgXsBzp77jcAqmYc0sTiXJ7rTzahVHUaFMDQs9rpjawDXZv7effGHGzz37HbK5WCN+KfHfmSx2yWKcs+NFQKbRyELggiIgLOKmF68dG+5TEef2uEXun221lJefP5RGo0UVfj9epPvL15nodMldIZ+L6NQtKgIoVOCIId0OxneQ6ls6HQ8Xx49L6siaC12UVVuNtt8fmo6rxSrhIGiqgSBIgKVaoixgjFCkgwAHjJvKKRClkGwwvjlR1HBmvxtjMnFI5fb4SIDCMWixRohThTnlCyDNFXswKp+3yOyunGXASO1Qvt2sxVbKwggIogIxigKhJFiVEgLhigWosgQhNDteIyFQkFR8YiAUabXAEZHylO3m+1xESEMcmtEwBghdAaAIBSMzRutWMptKm8TfAbWQpoKva4n6zG5pLvcByP1wsfGyGAEgPd5FEZzSBybHBYqoROcEyrVvHrqDSEtCkEoDG0RXOSPrAGc+OTMhScea5xb2geBkib5zLFWiJxQrRqKRWXLkOAcGIVKVej34IFhz9aRHqJ+4t0D386sAQCc/uzsvtHhYtuo0OtlgJAkhsBCFOdJdQ585vEe4hjS1DNUyygV+yRRf7peWzy8UnPNNN21c2RHo15sR5HBBoJqPoOWfBbviWOlVoUkAWugmPZR8dOB6e97Zud3cyv1Nvyivf3hC5Ozf86NR5EhLSiiUCoZkkRoNPJOrg15yqUMF/mJwPQPj4+tFt8UAHBo4rW9c8320X7WHev2O3G1Omi2ijBcZ7pS9pOqcmT/02dnNtLYFPBfrPv6q/g36x/LvSFbvzdEXwAAAABJRU5ErkJggg=="/>
+  <polygon points="11.8,16.8 9.4,20.9569 4.6,20.9569 2.2,16.8 4.6,12.6431 9.4,12.6431" fill="#2e4229"/>
+  <polygon points="9.4,16.8 8.2,18.8785 5.8,18.8785 4.6,16.8 5.8,14.7215 8.2,14.7215" fill="#c9da7a"/>
+</svg>

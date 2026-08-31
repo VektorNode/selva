@@ -16,6 +16,7 @@ using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
+using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
 
@@ -29,19 +30,8 @@ public sealed class BranchResult
 
     public GH_Path Path { get; }
 
-    public List<float[]> MeshVertices { get; } = new List<float[]>();
-    public List<int[]> MeshFaces { get; } = new List<int[]>();
-
-    /// <summary>Per-mesh texture coordinates (u,v per vertex); null entries mean "mesh has none".</summary>
-    public List<float[]> MeshUvs { get; } = new List<float[]>();
-
-    /// <summary>Per-mesh vertex colors (r,g,b per vertex); null entries mean "mesh has none".</summary>
-    public List<byte[]> MeshColors { get; } = new List<byte[]>();
-
-    public List<string> Names { get; } = new List<string>();
-    public List<string> Layers { get; } = new List<string>();
-    public List<Dictionary<string, string>> Metadata { get; } = new List<Dictionary<string, string>>();
-    public List<ThreeMaterial> Materials { get; } = new List<ThreeMaterial>();
+    /// <summary>One entry per mesh in branch order; a null-array entry marks an invalid slot.</summary>
+    public List<SlvaMeshInput> Meshes { get; } = new List<SlvaMeshInput>();
 
     /// <summary>Non-mesh display items (curves, points) for this branch's batch.</summary>
     public List<DisplayItem> Items { get; } = new List<DisplayItem>();
@@ -49,7 +39,7 @@ public sealed class BranchResult
     /// <summary>Encoded batch (combined arrays, quantized + deflated); null when the branch is empty.</summary>
     public DisplayBatch Batch { get; set; }
 
-    public int Count => MeshVertices.Count + Items.Count;
+    public int Count => Meshes.Count + Items.Count;
 }
 
 /// <summary>
@@ -308,7 +298,17 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     {
         public GeometryBase Geom;
         public int BranchIndex;
-        public int Ordinal;
+
+        /// <summary>
+        ///     The object's minted identity: {componentGuid}/{branchPath}/{slotIndex}. Permanent —
+        ///     downstream components (combine, file save/load) pass it through untouched, so the
+        ///     web's hidden/selection state survives re-solves and re-batching.
+        /// </summary>
+        public string Id;
+
+        /// <summary>Slot index within the branch — default display name only.</summary>
+        public int SlotIndex;
+
         public string Name;
         public string Layer;
         public Dictionary<string, string> Metadata;
@@ -321,7 +321,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public bool Skipped;
 
         // Mesh path. Vertex/face arrays are extracted here, on the parallel thread, so the serial
-        // assembly pass (MeshBatchProcessor.CreateBatch) doesn't re-walk every vertex on one thread.
+        // assembly pass (MeshBatchAssembler.CreateBatch) doesn't re-walk every vertex on one thread.
         // Mesh itself is kept for the main-thread viewport preview.
         public Mesh Mesh;
         public string MeshName;
@@ -352,12 +352,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         string componentId)
     {
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
-        // attributes, stable ordinal, and owning branch. Geometry extraction touches GH_Goo wrappers
-        // and must not race with the parallel pass, so it stays here; invalid geometry is skipped now.
+        // attributes, minted identity, and owning branch. Geometry extraction touches GH_Goo
+        // wrappers and must not race with the parallel pass, so it stays here; invalid geometry is
+        // skipped now — but its slot still counts toward the ids, so a failed mesh never shifts
+        // its neighbors' identity.
         var work = new List<WorkItem>();
         var branchPaths = new List<GH_Path>();
         var skipped = 0;
-        var ordinal = 0;
 
         foreach (var path in geoTree.Paths)
         {
@@ -385,7 +386,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 ? matItems[matItems.Count - 1]?.Value ?? ThreeMaterial.Default()
                 : ThreeMaterial.Default();
 
-            for (var i = 0; i < geoItems.Count; i++, ordinal++)
+            for (var i = 0; i < geoItems.Count; i++)
             {
                 var geom = TryExtractGeometry(geoItems[i]);
                 if (geom == null || !geom.IsValid)
@@ -398,7 +399,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 {
                     Geom = geom,
                     BranchIndex = branchIndex,
-                    Ordinal = ordinal,
+                    Id = $"{componentId}/{path}/{i}",
+                    SlotIndex = i,
                     Name = i < nameItems.Count ? nameItems[i]?.Value ?? lastName : lastName,
                     Layer = i < layerItems.Count ? layerItems[i]?.Value ?? lastLayer : lastLayer,
                     Metadata = ResolveMetadata(metaItems, geoItems.Count, i, lastMeta),
@@ -415,9 +417,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         {
             var w = work[idx];
 
-            // Curves and points aren't meshable — they travel as JSON display items, decoded and
-            // tessellated on the web (curves via rhino3dm, points as raw vertices).
-            if (TryBuildItem(w.Geom, componentId, w.Ordinal, w.Name, w.Layer, w.Metadata, w.Material,
+            // Curves and points aren't meshable — they travel as JSON display items. Curves are
+            // tessellated to a polyline here, so the web needs no rhino3dm.
+            if (TryBuildItem(w.Geom, w.Id, w.SlotIndex, w.Name, w.Layer, w.Metadata, w.Material,
                     out var item, out var previewCurve, out var previewPoint))
             {
                 var itemBounds = BoundingBox.Empty;
@@ -555,16 +557,20 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 continue;
             }
 
-            branch.MeshVertices.Add(r.MeshVertices);
-            branch.MeshFaces.Add(r.MeshFaces);
-            branch.MeshUvs.Add(r.MeshUvs);
-            branch.MeshColors.Add(r.MeshColors);
-            branch.Names.Add(!string.IsNullOrWhiteSpace(r.MeshName)
-                ? r.MeshName
-                : branch.MeshVertices.Count.ToString());
-            branch.Layers.Add(w.Layer ?? "");
-            branch.Metadata.Add(w.Metadata);
-            branch.Materials.Add(w.Material);
+            branch.Meshes.Add(new SlvaMeshInput
+            {
+                Id = w.Id,
+                Vertices = r.MeshVertices,
+                Faces = r.MeshFaces,
+                Uvs = r.MeshUvs,
+                Colors = r.MeshColors,
+                Name = !string.IsNullOrWhiteSpace(r.MeshName)
+                    ? r.MeshName
+                    : (branch.Meshes.Count + 1).ToString(),
+                Layer = w.Layer ?? "",
+                Metadata = w.Metadata,
+                Material = w.Material
+            });
 
             previewMeshes.Add(r.Mesh);
             previewMaterials.Add(w.Material);
@@ -587,9 +593,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var batch = MeshBatchProcessor.CreateBatch(
-                b.MeshVertices, b.MeshFaces, b.Names, b.Materials, b.Metadata, b.Layers, componentId,
-                b.MeshUvs, b.MeshColors);
+            var batch = MeshBatchAssembler.CreateBatch(b.Meshes);
             if (b.Items.Count > 0)
             {
                 batch.Items = b.Items;
@@ -637,7 +641,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     ///     original Rhino geometry for viewport preview. Returns false for meshable geometry.
     /// </summary>
     private static bool TryBuildItem(
-        GeometryBase geom, string componentId, int ordinal,
+        GeometryBase geom, string id, int slotIndex,
         string name, string layer, Dictionary<string, string> metadata, ThreeMaterial mat,
         out DisplayItem item, out Curve previewCurve, out Point3d? previewPoint)
     {
@@ -645,8 +649,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         previewCurve = null;
         previewPoint = null;
 
-        var id = $"{componentId}:{ordinal}";
-        var displayName = !string.IsNullOrWhiteSpace(name) ? name : ordinal.ToString();
+        var displayName = !string.IsNullOrWhiteSpace(name) ? name : slotIndex.ToString();
         var colorHex = ColorTranslator.ToHtml(mat.Color);
         double? opacity = mat.Opacity < 1.0 ? mat.Opacity : (double?)null;
 
@@ -669,7 +672,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
             case Rhino.Geometry.Point pointGeom:
             {
-                item = DisplayItem.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
+                item = RhinoDisplayItems.Point(pointGeom.Location, id, displayName, layer ?? "", metadata,
                     colorHex, opacity);
                 previewPoint = pointGeom.Location;
                 return true;

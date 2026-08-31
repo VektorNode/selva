@@ -23,7 +23,7 @@ const IO_FIXTURE = JSON.parse(
 	fs.readFileSync(new URL('../fixtures/bench-io.json', import.meta.url), 'utf8')
 );
 
-// SLVA wire constants — mirror binary-parser.ts / BinaryGeometryWriter.cs.
+// SLVA wire constants — mirror binary-parser.ts / SlvaWriter.cs.
 const BINARY_MESH_MAGIC = 0x41564c53; // "SLVA" little-endian
 const BINARY_MESH_VERSION = 3;
 const FLAG_FLOAT32 = 0x1;
@@ -73,9 +73,9 @@ function buildDisplayBatch(meshCount: number) {
 			materialId: i,
 			meshes: [
 				{
+					id: `e2e-fake-display/${i}`,
 					name: `e2e-mesh-${i}`,
 					layer: 'E2E',
-					originalIndex: i,
 					vertexCount: 3,
 					indexCount: 3,
 					vertexStart: i * 3,
@@ -85,10 +85,7 @@ function buildDisplayBatch(meshCount: number) {
 		});
 	}
 
-	const sourceComponentId = 'e2e-fake-display';
-	const metadataBytes = new TextEncoder().encode(
-		JSON.stringify({ materials, groups, sourceComponentId })
-	);
+	const metadataBytes = new TextEncoder().encode(JSON.stringify({ materials, groups }));
 
 	const byteLength =
 		12 + metadataBytes.byteLength + 4 + 48 + 4 + vertices.byteLength + 4 + indices.byteLength;
@@ -125,8 +122,7 @@ function buildDisplayBatch(meshCount: number) {
 	return {
 		materials,
 		groups,
-		compressedData: Buffer.from(buffer).toString('base64'),
-		sourceComponentId
+		compressedData: Buffer.from(buffer).toString('base64')
 	};
 }
 

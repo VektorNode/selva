@@ -22,7 +22,7 @@ public class Param_WebDisplay : GH_PersistentGeometryParam<WebDisplayGoo>, IGH_P
         : base(new GH_InstanceDescription(
             "Param Web Display", "PWD",
             "Geometry data for web display (meshes, curves, points) produced by the Display component",
-            "Selva", "Display"))
+            "Params", "Selva"))
     {
     }
 
@@ -39,8 +39,8 @@ public class Param_WebDisplay : GH_PersistentGeometryParam<WebDisplayGoo>, IGH_P
         Access = access;
     }
 
-    protected override Bitmap Icon => Properties.Resources.WebDisplay;
-    public override GH_Exposure Exposure => GH_Exposure.tertiary;
+    protected override Bitmap Icon => Properties.Resources.ParamWebDisplay;
+    public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("D5E8F1A3-6B7C-4D2E-9F01-2A3B4C5D6E7F");
 
     // IGH_PreviewObject — the GH_PersistentGeometryParam base supplies the preview behaviour; we

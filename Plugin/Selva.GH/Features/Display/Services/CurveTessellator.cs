@@ -116,7 +116,8 @@ public static class CurveTessellator
         var tm = (ta + tb) / 2;
         var pm = curve.PointAt(tm);
 
-        if (DistanceToSegment(pm, pa, pb) <= tolerance && TurnAngle(pa, pm, pb) <= MaxTurnRadians)
+        if (CurveFlatness.DistanceToSegment(pm, pa, pb) <= tolerance
+            && CurveFlatness.TurnAngle(pa, pm, pb) <= MaxTurnRadians)
         {
             return;
         }
@@ -131,36 +132,5 @@ public static class CurveTessellator
         var box = curve.GetBoundingBox(false);
         var diagonal = box.IsValid ? box.Diagonal.Length : 0.0;
         return Math.Max(diagonal * ChordToleranceRatio, 1e-6);
-    }
-
-    /// <summary>Turn angle (radians) at <paramref name="b" /> along a→b→c; 0 = straight, π = reversal.</summary>
-    private static double TurnAngle(Point3d a, Point3d b, Point3d c)
-    {
-        var ab = b - a;
-        var bc = c - b;
-        var lenAb = ab.Length;
-        var lenBc = bc.Length;
-        if (lenAb == 0 || lenBc == 0)
-        {
-            return 0;
-        }
-
-        var cos = Math.Max(-1, Math.Min(1, (ab * bc) / (lenAb * lenBc)));
-        return Math.Acos(cos);
-    }
-
-    /// <summary>Perpendicular distance from <paramref name="p" /> to segment a→b, clamped to endpoints.</summary>
-    private static double DistanceToSegment(Point3d p, Point3d a, Point3d b)
-    {
-        var ab = b - a;
-        var lengthSq = ab.SquareLength;
-        if (lengthSq == 0)
-        {
-            return p.DistanceTo(a);
-        }
-
-        var ap = p - a;
-        var t = Math.Max(0, Math.Min(1, (ap * ab) / lengthSq));
-        return (ap - ab * t).Length;
     }
 }
