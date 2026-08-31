@@ -69,7 +69,8 @@ internal sealed class PrepareUIInputCandidate
     /// <summary>Preview rows default to selected only when acting on them is safe.</summary>
     internal bool Selected { get; set; }
 
-    internal bool IsActionable => Status == PrepareUIInputStatus.Ready || Status == PrepareUIInputStatus.Repairable;
+    internal bool IsActionable => Status == PrepareUIInputStatus.Ready || Status == PrepareUIInputStatus.Repairable ||
+        Status == PrepareUIInputStatus.Replaceable;
 
     internal string TypeName => SelectedType?.DisplayName ?? "-";
 
@@ -89,6 +90,8 @@ internal sealed class PrepareUIInputCandidate
                     return "Already prepared";
                 case PrepareUIInputStatus.Repairable:
                     return "Repairable";
+                case PrepareUIInputStatus.Replaceable:
+                    return "Type change pending";
                 case PrepareUIInputStatus.Ambiguous:
                     return "Ambiguous";
                 case PrepareUIInputStatus.MissingDependency:
@@ -111,6 +114,8 @@ internal sealed class PrepareUIInputReport
 
     internal int Repaired { get; set; }
 
+    internal int Replaced { get; set; }
+
     internal int Removed { get; set; }
 
     internal int Skipped { get; set; }
@@ -122,7 +127,7 @@ internal sealed class PrepareUIInputReport
     internal string Summarize(string operation)
     {
         return $"{operation}: {Created} created, {Reused} reused, {Repaired} repaired, " +
-            $"{Removed} removed, {Skipped} skipped, {Failed} failed.";
+            $"{Replaced} replaced, {Removed} removed, {Skipped} skipped, {Failed} failed.";
     }
 }
 
