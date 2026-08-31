@@ -307,10 +307,35 @@ internal sealed class PrepareUIInputsDialog : Form
     {
         return new Panel
         {
-            BackgroundColor = SystemColors.Control,
+            BackgroundColor = HeaderBackground,
             Padding = new Padding(6, 0),
             Content = header,
         };
+    }
+
+    // SystemColors.Control and the default label foreground come from different backends here
+    // (Eto/WinForms on Windows, Cocoa on Mac); under Rhino's dark theme Windows returns a dark
+    // band with near-black text on it, so the header reads as blank. Derive both from the window
+    // background instead, so the contrast holds on either platform and in either theme.
+    private static bool IsDarkTheme => Luminance(SystemColors.WindowBackground) < 0.5f;
+
+    private static Color HeaderBackground =>
+        IsDarkTheme ? Shift(SystemColors.WindowBackground, 0.10f) : Shift(SystemColors.WindowBackground, -0.07f);
+
+    private static Color HeaderForeground => IsDarkTheme ? Colors.White : Colors.Black;
+
+    private static float Luminance(Color color)
+    {
+        return (0.299f * color.R) + (0.587f * color.G) + (0.114f * color.B);
+    }
+
+    /// <summary>Lightens (positive amount) or darkens (negative) a colour, clamped to the 0-1 range.</summary>
+    private static Color Shift(Color color, float amount)
+    {
+        return new Color(
+            Math.Min(1f, Math.Max(0f, color.R + amount)),
+            Math.Min(1f, Math.Max(0f, color.G + amount)),
+            Math.Min(1f, Math.Max(0f, color.B + amount)));
     }
 
     private static Control CellPadding(Control cell)
@@ -327,6 +352,7 @@ internal sealed class PrepareUIInputsDialog : Form
             VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Left,
             Font = SystemFonts.Bold(),
+            TextColor = HeaderForeground,
         };
     }
 
