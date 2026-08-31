@@ -1,5 +1,11 @@
 # @selvajs/compute
 
+## 4.1.1
+
+### Patch Changes
+
+- 87f2c6a: chore(deps): bump the npm group across 1 directory with 24 updates
+
 ## 4.1.0
 
 ### Minor Changes

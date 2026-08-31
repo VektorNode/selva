@@ -1,5 +1,15 @@
 # @selvajs/server
 
+## 1.3.2
+
+### Patch Changes
+
+- 87f2c6a: chore(deps): bump the npm group across 1 directory with 24 updates
+- Updated dependencies [87f2c6a]
+- Updated dependencies [f9c4c99]
+  - @selvajs/compute@4.1.1
+  - @selvajs/schemas@5.0.2
+
 ## 1.3.1
 
 ### Patch Changes
