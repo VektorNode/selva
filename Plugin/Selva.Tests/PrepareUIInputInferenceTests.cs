@@ -216,7 +216,7 @@ public class PrepareUIInputInferenceTests
     }
 
     [Fact]
-    public void DecideStatus_ExistingReaderOfWrongType_IsAmbiguous()
+    public void DecideStatus_ExistingReaderOfWrongType_IsReplaceable()
     {
         var decision = PrepareUIInputInference.DecideStatus(
             PrepareUIInputInference.GetNumber, selectedTypeAvailable: true, controlKindDescription: "Number Slider",
@@ -225,7 +225,11 @@ public class PrepareUIInputInferenceTests
             existingContextualTypeGuid: PrepareUIInputInference.GetString.TypeGuid, existingContextualName: "Get String",
             nickNameDrifted: false, controlNameChanged: false, accessChanged: false, alreadyManaged: false);
 
-        Assert.Equal(PrepareUIInputStatus.Ambiguous, decision.Status);
+        // The node itself cannot change type in place, so a type mismatch is something this
+        // component can act on (ReplaceContextualParameter), not a dead end - it must stay
+        // selectable rather than falling into the same bucket as a genuinely unsafe row.
+        Assert.Equal(PrepareUIInputStatus.Replaceable, decision.Status);
+        Assert.True(decision.Selected);
         Assert.Contains("Get String", decision.Note);
     }
 

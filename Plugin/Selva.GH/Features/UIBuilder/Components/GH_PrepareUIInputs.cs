@@ -7,6 +7,8 @@ using GH_IO.Serialization;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Newtonsoft.Json;
+using Rhino;
+using Rhino.UI;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Properties;
@@ -38,6 +40,7 @@ public sealed class GH_PrepareUIInputs : GH_Component
             "Prepare Inputs",
             "Registers Number Sliders, Value Lists, Boolean Toggles, and Panels, then inserts the " +
                 "matching Get parameter so a client-facing web interface can drive them remotely." +
+                "\n\nTo use this component, select one or more controls on the canvas (sliders, lists, toggles, panels) and click the 'Link selected controls' button." +
                 "\n\nComponent contributed by: Juan Diego Vargas",
             "Selva",
             "UI")
@@ -53,6 +56,12 @@ public sealed class GH_PrepareUIInputs : GH_Component
     public override void CreateAttributes()
     {
         m_attributes = new PrepareUIInputsAttributes(this);
+    }
+
+    public override void RemovedFromDocument(GH_Document document)
+    {
+        ClosePreviewWindow();
+        base.RemovedFromDocument(document);
     }
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
@@ -232,7 +241,13 @@ public sealed class GH_PrepareUIInputs : GH_Component
         SetStatus("All registrations cleared. Nothing on the canvas was changed.");
     }
 
-    /// <summary>Preview then, on confirmation, apply the insertion batch.</summary>
+    /// <summary>
+    ///     Preview every registered control - ready to prepare or already prepared - in one list,
+    ///     then apply insertions/repairs or removals from it. The same candidates and selection
+    ///     serve both actions: ApplyPreparation and ApplyRemoval each only act on the selected rows
+    ///     they recognize as theirs and silently skip the rest, so one preview replaces what used to
+    ///     be two separate dialogs.
+    /// </summary>
     internal void ShowPreparationPreview()
     {
         List<PrepareUIInputCandidate> candidates = BuildPreparationCandidates();
@@ -247,36 +262,18 @@ public sealed class GH_PrepareUIInputs : GH_Component
             "Insert a contextual parameter between each registered control and the inputs it " +
                 "drives, or beside a disconnected control for later wiring. The type is inferred " +
                 "from the control and from the data it currently holds and can be edited before " +
-                "applying; item/list access is inferred from the live data. Only Ready and " +
-                "Repairable rows can be applied.",
-            "Apply preparation",
+                "applying; item/list access is inferred from the live data. Select Ready or " +
+                "Repairable rows and click Place Get inputs, or select already-prepared rows and " +
+                "click Remove Get inputs to reconnect and delete them, or Update Get inputs to " +
+                "re-apply them - for example after changing a Contextual type.",
+            "Place Get inputs",
             candidates,
             ApplyPreparationFromPreview,
             PrepareUIInputGraphService.ClassifyCandidate,
-            RefreshPreparationCandidates);
-        ShowPreviewWindow(dialog);
-    }
-
-    /// <summary>Preview then, on confirmation, apply the removal batch.</summary>
-    internal void ShowRemovalPreview()
-    {
-        List<PrepareUIInputCandidate> candidates = PrepareUIInputGraphService.BuildRemovalCandidates(ActiveDocument(), _managedLinks);
-        if (candidates.Count == 0)
-        {
-            SetStatus("This component has not inserted or adopted any contextual parameters.");
-            return;
-        }
-
-        var dialog = new PrepareUIInputsDialog(
-            "Remove managed interface inputs",
-            "Reconnect each control directly to its recipients and delete the contextual " +
-                "parameter this component manages. The controls themselves are never removed and " +
-                "stay registered, so they can be prepared again later.",
+            RefreshPreparationCandidates,
             "Remove Get inputs",
-            candidates,
             ApplyRemovalFromPreview,
-            reclassify: null,
-            refresh: () => PrepareUIInputGraphService.BuildRemovalCandidates(ActiveDocument(), _managedLinks));
+            "Update Get inputs");
         ShowPreviewWindow(dialog);
     }
 
@@ -302,12 +299,12 @@ public sealed class GH_PrepareUIInputs : GH_Component
         if (_previewWindow != null && !_previewWindow.IsDisposed)
         {
             dialog.Dispose();
-            _previewWindow.Activate();
+            _previewWindow.BringToFront();
             return;
         }
 
         _previewWindow = dialog;
-        dialog.FormClosed += (sender, arguments) =>
+        dialog.Closed += (sender, arguments) =>
         {
             if (ReferenceEquals(_previewWindow, sender))
             {
@@ -315,14 +312,31 @@ public sealed class GH_PrepareUIInputs : GH_Component
             }
         };
 
-        if (Instances.DocumentEditor != null)
+        // Own the dialog to the Grasshopper canvas itself so it stays above the canvas while the
+        // user drags or clicks on it - the main Rhino window (used below as a fallback) is a
+        // different top-level window from a floating Grasshopper editor, so owning the dialog to
+        // it alone was not enough to keep the dialog above canvas interactions. Topmost was tried
+        // instead and rejected: it also pinned the dialog above every other application, not just
+        // Rhino/Grasshopper.
+        RhinoDoc document = ActiveDocument()?.RhinoDocument ?? RhinoDoc.ActiveDoc;
+        dialog.Owner = Instances.EtoDocumentEditor
+            ?? (document != null ? RhinoEtoApp.MainWindowForDocument(document) : null);
+
+        dialog.UseRhinoStyle();
+        dialog.Show();
+    }
+
+    private void ClosePreviewWindow()
+    {
+        PrepareUIInputsDialog dialog = _previewWindow;
+        _previewWindow = null;
+        if (dialog == null || dialog.IsDisposed)
         {
-            dialog.Show(Instances.DocumentEditor);
+            return;
         }
-        else
-        {
-            dialog.Show();
-        }
+
+        dialog.Close();
+        dialog.Dispose();
     }
 
     /// <summary>
@@ -414,8 +428,6 @@ public sealed class GH_PrepareUIInputs : GH_Component
 
     internal int RegisteredCount => _linkedControlIds.Count;
 
-    internal int ManagedCount => _managedLinks.Count;
-
     private GH_Document ActiveDocument()
     {
         return OnPingDocument() ?? Instances.ActiveCanvas?.Document;
@@ -434,7 +446,6 @@ public sealed class GH_PrepareUIInputs : GH_Component
         Menu_AppendItem(menu, "Clear all registrations", (sender, arguments) => ClearRegistrations());
         Menu_AppendSeparator(menu);
         Menu_AppendItem(menu, "Preview interface inputs...", (sender, arguments) => ShowPreparationPreview());
-        Menu_AppendItem(menu, "Preview removal...", (sender, arguments) => ShowRemovalPreview(), _managedLinks.Count > 0);
     }
 
     public override bool Write(GH_IWriter writer)
