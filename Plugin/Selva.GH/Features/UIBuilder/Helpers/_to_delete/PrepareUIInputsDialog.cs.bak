@@ -1,0 +1,452 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Eto.Drawing;
+using Eto.Forms;
+using Selva.GH.Features.UIBuilder.Services;
+
+namespace Selva.GH.Features.UIBuilder.Helpers;
+
+/// <summary>
+///     Modeless Eto preview shown before preparing or removing contextual parameters. The rows use
+///     ordinary Eto controls inside a Scrollable instead of GridView, whose native renderer crashes
+///     Rhino 8 on Windows for this mixed editable table.
+/// </summary>
+internal sealed class PrepareUIInputsDialog : Form
+{
+    private readonly List<PrepareUIInputCandidate> _candidates;
+    private readonly List<PreviewRow> _rows = new();
+    private readonly Action<IReadOnlyList<PrepareUIInputCandidate>> _apply;
+    private readonly Action<PrepareUIInputCandidate> _reclassify;
+    private readonly Func<IEnumerable<PrepareUIInputCandidate>> _refresh;
+    private readonly Scrollable _scrollable;
+    private readonly Label _summary;
+    private readonly Label _detail;
+    private PreviewRow _activeRow;
+    private bool _updating;
+
+    internal PrepareUIInputsDialog(
+        string title,
+        string explanation,
+        string applyCaption,
+        IEnumerable<PrepareUIInputCandidate> candidates,
+        Action<IReadOnlyList<PrepareUIInputCandidate>> apply,
+        Action<PrepareUIInputCandidate> reclassify = null,
+        Func<IEnumerable<PrepareUIInputCandidate>> refresh = null)
+    {
+        _candidates = (candidates ?? Enumerable.Empty<PrepareUIInputCandidate>()).ToList();
+        _apply = apply;
+        _reclassify = reclassify;
+        _refresh = refresh;
+
+        Title = "Prepare UI Inputs - " + title;
+        ClientSize = new Size(1080, 500);
+        MinimumSize = new Size(820, 380);
+        Resizable = true;
+        Minimizable = false;
+        Maximizable = false;
+        ShowInTaskbar = false;
+        Topmost = true;
+
+        var description = new Label
+        {
+            Text = explanation,
+            Wrap = WrapMode.Word,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        _scrollable = new Scrollable
+        {
+            Border = BorderType.Bezel,
+            ExpandContentWidth = false,
+            ExpandContentHeight = false,
+        };
+
+        _detail = new Label
+        {
+            Wrap = WrapMode.Word,
+            TextColor = SystemColors.DisabledText,
+            Height = 42,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        _summary = new Label
+        {
+            Wrap = WrapMode.Word,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var applyButton = new Button { Text = applyCaption };
+        var cancelButton = new Button { Text = "Cancel" };
+        var refreshButton = new Button { Text = "Refresh", Enabled = _refresh != null };
+        applyButton.Click += (sender, arguments) => ApplyAndClose();
+        cancelButton.Click += (sender, arguments) => Close();
+        refreshButton.Click += (sender, arguments) => RefreshCandidates();
+
+        var buttons = new StackLayout
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Items = { refreshButton, cancelButton, applyButton },
+        };
+        var footer = new TableLayout
+        {
+            Spacing = new Size(12, 0),
+            Rows =
+            {
+                new TableRow(new TableCell(_summary, true), new TableCell(buttons, false))
+                {
+                    ScaleHeight = false,
+                },
+            },
+        };
+
+        Content = new TableLayout
+        {
+            Padding = new Padding(12, 10, 12, 14),
+            Spacing = new Size(0, 8),
+            Rows =
+            {
+                new TableRow(new TableCell(description, true)) { ScaleHeight = false },
+                new TableRow(new TableCell(_scrollable, true)) { ScaleHeight = true },
+                new TableRow(new TableCell(_detail, true)) { ScaleHeight = false },
+                new TableRow(new TableCell(footer, true)) { ScaleHeight = false },
+            },
+        };
+
+        RebuildRows();
+        UpdateSummary();
+        UpdateDetail();
+    }
+
+    // Detail is deliberately left out of the column list in BuildColumnLayout: hidden for now,
+    // its text still drives the bottom detail label for the active row.
+    private const int ControlKindColumnWidth = 260;
+
+    private void RebuildRows()
+    {
+        _updating = true;
+        try
+        {
+            _rows.Clear();
+            foreach (PrepareUIInputCandidate candidate in _candidates)
+            {
+                var row = new PreviewRow(candidate, _reclassify != null);
+                _rows.Add(row);
+                WireRow(row);
+            }
+
+            _scrollable.Content = BuildColumnLayout();
+            _activeRow = _rows.FirstOrDefault();
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    /// <summary>
+    ///     Columns, not rows: each column is its own vertical strip - a header over one cell per
+    ///     row - chained left to right with Eto Splitters so every boundary between columns can be
+    ///     dragged. A row-major table has no per-column drag handle in Eto; a column-major chain of
+    ///     two-pane splitters does.
+    /// </summary>
+    private Control BuildColumnLayout()
+    {
+        (Control Content, int Width)[] columns =
+        {
+            Column(string.Empty, 28, row => row.Selected),
+            Column("Source control", 160, row => row.SourceControl),
+            Column("Control kind", ControlKindColumnWidth, row => row.ControlKind),
+            Column("Current data", 220, row => row.CurrentData),
+            Column("Contextual type", 210, row => row.Type),
+            Column("Access", 90, row => row.Access),
+            Column("Shared name", 180, row => row.SharedName),
+            Column("Recip.", 65, row => row.Recipients),
+            Column("Status", 130, row => row.Status),
+        };
+
+        Control chain = columns[columns.Length - 1].Content;
+        for (int index = columns.Length - 2; index >= 0; index--)
+        {
+            chain = new Splitter
+            {
+                Orientation = Orientation.Horizontal,
+                FixedPanel = SplitterFixedPanel.Panel1,
+                Position = columns[index].Width,
+                Panel1 = columns[index].Content,
+                Panel2 = chain,
+            };
+        }
+
+        return chain;
+    }
+
+    private (Control Content, int Width) Column(string header, int width, Func<PreviewRow, Control> cell)
+    {
+        var stack = new TableLayout { Spacing = new Size(0, 3) };
+        stack.Rows.Add(new TableRow(HeaderLabel(header)) { ScaleHeight = false });
+        foreach (PreviewRow row in _rows)
+        {
+            stack.Rows.Add(new TableRow(cell(row)) { ScaleHeight = false });
+        }
+
+        stack.Rows.Add(new TableRow());
+        return (stack, width);
+    }
+
+    private static Label HeaderLabel(string text)
+    {
+        return new Label { Text = text, Height = 24, VerticalAlignment = VerticalAlignment.Center };
+    }
+
+    private void WireRow(PreviewRow row)
+    {
+        foreach (Control control in row.VisibleControls)
+        {
+            control.MouseDown += (sender, arguments) => SetActiveRow(row);
+            control.GotFocus += (sender, arguments) => SetActiveRow(row);
+        }
+
+        row.Selected.CheckedChanged += (sender, arguments) =>
+        {
+            if (_updating)
+            {
+                return;
+            }
+
+            SetActiveRow(row);
+            ApplySelectionEdit(row);
+            UpdateSummary();
+        };
+        row.Type.SelectedIndexChanged += (sender, arguments) =>
+        {
+            if (_updating)
+            {
+                return;
+            }
+
+            SetActiveRow(row);
+            ApplyTypeEdit(row);
+        };
+        row.SharedName.LostFocus += (sender, arguments) =>
+        {
+            if (!_updating)
+            {
+                ApplyNameEdit(row);
+            }
+        };
+    }
+
+    private void SetActiveRow(PreviewRow row)
+    {
+        _activeRow = row;
+        UpdateDetail();
+    }
+
+    private static bool IsSelectable(PrepareUIInputCandidate candidate)
+    {
+        return candidate.IsActionable || candidate.Status == PrepareUIInputStatus.AlreadyPrepared;
+    }
+
+    private void ApplySelectionEdit(PreviewRow row)
+    {
+        row.Candidate.Selected = row.Selected.Checked == true && IsSelectable(row.Candidate);
+        SyncRow(row);
+    }
+
+    private void ApplyTypeEdit(PreviewRow row)
+    {
+        if (_reclassify == null || row.Type.SelectedIndex < 0)
+        {
+            return;
+        }
+
+        List<PrepareUIInputTypeOption> options = row.Candidate.Options ?? new List<PrepareUIInputTypeOption>();
+        if (row.Type.SelectedIndex >= options.Count)
+        {
+            return;
+        }
+
+        row.Candidate.SelectedType = options[row.Type.SelectedIndex].Type;
+        _reclassify(row.Candidate);
+        SyncRow(row);
+        UpdateSummary();
+        UpdateDetail();
+    }
+
+    private void ApplyNameEdit(PreviewRow row)
+    {
+        if (_reclassify == null)
+        {
+            return;
+        }
+
+        row.Candidate.ControlNickName = PrepareUIInputInference.CleanNickName(
+            row.SharedName.Text,
+            row.Candidate.OriginalControlNickName);
+        _reclassify(row.Candidate);
+        SyncRow(row);
+        UpdateSummary();
+        UpdateDetail();
+    }
+
+    private void SyncRow(PreviewRow row)
+    {
+        _updating = true;
+        try
+        {
+            PrepareUIInputCandidate candidate = row.Candidate;
+            row.Selected.Enabled = IsSelectable(candidate);
+            row.Selected.Checked = candidate.Selected;
+            row.SourceControl.Text = candidate.OriginalControlNickName;
+            row.ControlKind.Text = PrepareUIInputInference.Describe(candidate.Kind);
+            row.CurrentData.Text = candidate.Profile?.Describe() ?? string.Empty;
+            row.Access.Text = candidate.AccessName;
+            row.SharedName.Text = candidate.ControlNickName;
+            row.Recipients.Text = candidate.RecipientCount.ToString();
+            row.Status.Text = candidate.StatusText;
+            row.Note.Text = candidate.Note;
+
+            List<PrepareUIInputTypeOption> options = candidate.Options ?? new List<PrepareUIInputTypeOption>();
+            row.Type.DataStore = options.Count == 0
+                ? new[] { candidate.TypeName }
+                : options.Select(option => option.Label).ToArray();
+            int selectedIndex = options.FindIndex(option => option.Type == candidate.SelectedType);
+            row.Type.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+            row.Type.Enabled = _reclassify != null && options.Count > 0;
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    private void CommitRows()
+    {
+        foreach (PreviewRow row in _rows)
+        {
+            ApplySelectionEdit(row);
+            ApplyNameEdit(row);
+        }
+    }
+
+    private void ApplyAndClose()
+    {
+        CommitRows();
+        try
+        {
+            _apply?.Invoke(_candidates);
+        }
+        finally
+        {
+            Close();
+        }
+    }
+
+    private void RefreshCandidates()
+    {
+        if (_refresh == null)
+        {
+            return;
+        }
+
+        _candidates.Clear();
+        _candidates.AddRange(_refresh() ?? Enumerable.Empty<PrepareUIInputCandidate>());
+        RebuildRows();
+        UpdateSummary();
+        UpdateDetail();
+    }
+
+    private void UpdateSummary()
+    {
+        int selected = _candidates.Count(candidate => candidate.Selected);
+        int blocked = _candidates.Count(candidate => candidate.Status is PrepareUIInputStatus.Ambiguous
+            or PrepareUIInputStatus.MissingDependency or PrepareUIInputStatus.ControlMissing);
+        int overridden = _candidates.Count(candidate => candidate.TypeOverridden);
+        int renamed = _candidates.Count(candidate => candidate.NameChanged);
+
+        string overriddenSuffix = overridden > 0 ? $"; {overridden} type override(s)" : string.Empty;
+        string renamedSuffix = renamed > 0 ? $"; {renamed} shared name edit(s)" : string.Empty;
+        string blockedSuffix = blocked > 0 ? $"; {blocked} left untouched for review." : ".";
+        _summary.Text = $"{selected} of {_candidates.Count} row(s) selected{overriddenSuffix}{renamedSuffix}{blockedSuffix}";
+    }
+
+    private void UpdateDetail()
+    {
+        PrepareUIInputCandidate candidate = _activeRow?.Candidate;
+        if (candidate == null)
+        {
+            _detail.Text = string.Empty;
+            return;
+        }
+
+        PrepareUIInputTypeOption option = (candidate.Options ?? new List<PrepareUIInputTypeOption>())
+            .FirstOrDefault(entry => entry.Type == candidate.SelectedType);
+        string consequence = string.IsNullOrEmpty(option?.Note) ? string.Empty : $"  {candidate.TypeName}: {option.Note}.";
+        string detected = candidate.RecommendedType == null || !candidate.TypeOverridden
+            ? string.Empty
+            : $"  Detected type was {candidate.RecommendedType.DisplayName}.";
+        _detail.Text = $"{candidate.ControlNickName} - {candidate.Profile?.Describe() ?? "no data"}.{consequence}{detected}";
+    }
+
+    private sealed class PreviewRow
+    {
+        internal PreviewRow(PrepareUIInputCandidate candidate, bool editable)
+        {
+            Candidate = candidate;
+            Selected = new CheckBox { Checked = candidate.Selected, Enabled = IsSelectable(candidate) };
+            SourceControl = Text(candidate.OriginalControlNickName);
+            ControlKind = Text(PrepareUIInputInference.Describe(candidate.Kind));
+            CurrentData = Text(candidate.Profile?.Describe() ?? string.Empty);
+            Type = new DropDown { Enabled = editable };
+            Access = Text(candidate.AccessName);
+            SharedName = new TextBox { Text = candidate.ControlNickName, ReadOnly = !editable };
+            Recipients = Text(candidate.RecipientCount.ToString());
+            Status = Text(candidate.StatusText);
+            Note = Text(candidate.Note);
+
+            List<PrepareUIInputTypeOption> options = candidate.Options ?? new List<PrepareUIInputTypeOption>();
+            Type.DataStore = options.Count == 0
+                ? new[] { candidate.TypeName }
+                : options.Select(option => option.Label).ToArray();
+            int selectedIndex = options.FindIndex(option => option.Type == candidate.SelectedType);
+            Type.SelectedIndex = selectedIndex >= 0 ? selectedIndex : 0;
+            Type.Enabled = editable && options.Count > 0;
+        }
+
+        internal PrepareUIInputCandidate Candidate { get; }
+        internal CheckBox Selected { get; }
+        internal Label SourceControl { get; }
+        internal Label ControlKind { get; }
+        internal Label CurrentData { get; }
+        internal DropDown Type { get; }
+        internal Label Access { get; }
+        internal TextBox SharedName { get; }
+        internal Label Recipients { get; }
+        internal Label Status { get; }
+        internal Label Note { get; }
+
+        /// <summary>Every cell actually placed in the grid. Note is excluded: it is not shown.</summary>
+        internal IEnumerable<Control> VisibleControls
+        {
+            get
+            {
+                yield return Selected;
+                yield return SourceControl;
+                yield return ControlKind;
+                yield return CurrentData;
+                yield return Type;
+                yield return Access;
+                yield return SharedName;
+                yield return Recipients;
+                yield return Status;
+            }
+        }
+
+        private static Label Text(string value)
+        {
+            return new Label { Text = value ?? string.Empty, Height = 24, VerticalAlignment = VerticalAlignment.Center };
+        }
+    }
+}

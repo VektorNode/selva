@@ -27,6 +27,20 @@ Requirements, commands, and environment variables are in the
 - TypeScript: prefer `undefined` over `any`; keep functions focused and composable.
 - C#: explicit block syntax; `if (x) return y;` on one line is out.
 
+### Cross-platform plugin UI
+
+Selva supports Rhino on Windows and macOS. Build plugin-owned windows, dialogs, tables, and controls
+with `Eto.Forms`; do not introduce `System.Windows.Forms.Form`, `DataGridView`, or other WinForms UI
+for Selva-owned experiences. Set an Eto window's owner with
+`RhinoEtoApp.MainWindowForDocument(...)`, apply `UseRhinoStyle()`, and give modeless windows an
+explicit lifecycle that prevents duplicate instances and closes them when their owning component is
+removed.
+
+Some Grasshopper extension points still require WinForms types in their public signatures, such as
+`AppendAdditionalComponentMenuItems(ToolStripDropDown)` and canvas mouse events that expose
+`MouseButtons`. Keep those host-boundary types; they do not justify using WinForms for the window or
+dialog opened by the component.
+
 ### Schema changes
 
 Never edit generated files. Change `packages/schemas/ui-schema.json`, then run `pnpm generate` at the repo root. That regenerates `packages/schemas/src/generated/schema.ts` and `Plugin/Selva.Schema/Models/UISchema.Generated.cs`.
