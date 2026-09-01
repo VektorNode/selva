@@ -80,7 +80,7 @@ internal sealed class TrueTypeFont
 		if (sfntVersion != 0x00010000u && sfntVersion != 0x4F54544Fu /* OTTO */ && sfntVersion != 0x74727565u /* true */)
 			throw new InvalidDataException($"Unsupported sfnt version 0x{sfntVersion:X8}.");
 		var numTables = r.ReadUInt16();
-		r.Skip(6); // searchRange, entrySelector, rangeShift
+		r.Skip(6); // searchRange, entrySelector, rangeShift (unused)
 
 		var tables = new Dictionary<string, (int Offset, int Length)>(numTables);
 		for (var i = 0; i < numTables; i++)
@@ -119,7 +119,7 @@ internal sealed class TrueTypeFont
 		for (var i = 0; i < numberOfHMetrics; i++)
 		{
 			lastAdvance = r.ReadUInt16();
-			r.ReadInt16(); // lsb (left side bearing) — unused
+			r.ReadInt16(); // lsb, unused
 			advances[i] = lastAdvance;
 		}
 		// Glyphs past numberOfHMetrics share the last entry's advance (per spec).
@@ -127,7 +127,7 @@ internal sealed class TrueTypeFont
 			advances[i] = lastAdvance;
 		var missingGlyphAdvance = advances.Length > 0 ? advances[0] : 0;
 
-		// OS/2 — capHeight/xHeight if version ≥ 2.
+		// OS/2: capHeight/xHeight if version >= 2.
 		var capHeight = 0;
 		var xHeight = 0;
 		if (tables.TryGetValue("OS/2", out var os2) && os2.Length >= 90)

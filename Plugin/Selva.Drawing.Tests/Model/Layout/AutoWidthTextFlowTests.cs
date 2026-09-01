@@ -19,7 +19,7 @@ public class AutoWidthTextFlowTests
 	{
 		var flow = new TextFlow { Text = LongText, Style = new TextStyle { FontSize = 3.0 } };
 		var resolved = (GroupElement)flow.Resolve(new LayoutContext(BoundingBox.Empty));
-		Assert.Single(resolved.Children); // no parent constraint → no wrap
+		Assert.Single(resolved.Children); // no parent constraint means no wrap
 	}
 
 	[Fact]
@@ -78,7 +78,7 @@ public class AutoWidthTextFlowTests
 			},
 		};
 		var resolved = (GroupElement)grid.Resolve(new LayoutContext(new BoundingBox(0, 0, 70, 100)));
-		// Find the multi-line group — the long-text cell, not the "L" cell.
+		// Find the multi-line group: the long-text cell, not the "L" cell.
 		var multiLineGroup = FindAllTextGroups(resolved).OrderByDescending(g => g.Children.Count).First();
 		Assert.True(multiLineGroup.Children.Count > 1,
 			"expected wrapping inside a star column whose width was resolved by the grid");
@@ -107,7 +107,7 @@ public class AutoWidthTextFlowTests
 	{
 		// Under Stretch, the long TextFlow should wrap to the parent's 60mm cross-axis,
 		// not the natural width of the shorter sibling. Asserted via line count rather than
-		// measured width — a wrapped line never fills the full wrap width exactly.
+		// measured width: a wrapped line never fills the full wrap width exactly.
 		var stack = new Stack
 		{
 			Orientation = StackOrientation.Vertical,

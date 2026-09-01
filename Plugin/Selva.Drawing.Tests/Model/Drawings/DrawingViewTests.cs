@@ -32,7 +32,7 @@ public class DrawingViewTests
 			Padding = Margins.Uniform(5),
 		};
 		var b = view.ComputeBounds();
-		// 100×50 path, scaled 0.5 = 50×25, +10×10 padding = 60×35 (rounded — stroke half-width adds ±0.125).
+		// 100×50 path, scaled 0.5 = 50×25, +10×10 padding = 60×35 (rounded: stroke half-width adds ±0.125).
 		Assert.Equal(60, b.Width, 1);
 		Assert.Equal(35, b.Height, 1);
 	}
@@ -149,7 +149,7 @@ public class DrawingViewTests
 	[Fact]
 	public void Length_pins_longest_geometry_side()
 	{
-		// 200×50 landscape geometry, Length=80: long side → 80mm, short side → 80*(50/200)=20mm.
+		// 200x50 landscape geometry, Length=80: long side -> 80mm, short side -> 80*(50/200)=20mm.
 		var geometry = new PathElement
 		{
 			Path = new Path.Builder().MoveTo(0, 0).LineTo(200, 50).Build(),

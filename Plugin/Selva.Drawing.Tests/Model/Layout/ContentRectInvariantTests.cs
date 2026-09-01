@@ -12,7 +12,7 @@ namespace Selva.Drawing.Tests.Model.Layout;
 
 // The invariant: RESOLVED CONTENT NEVER EXCEEDS THE CONTENT RECT IT WAS GIVEN.
 //
-// Past bugs were each a specific breach of this rule — a budget divided by the wrong
+// Past bugs were each a specific breach of this rule: a budget divided by the wrong
 // denominator, a zero read as "unbounded", a cost added after the fit, a measurement taken
 // against the wrong box. Pinning the individual shapes that failed doesn't stop the next
 // container inheriting the same class of bug, so this asserts the rule across a cross-product
@@ -20,7 +20,7 @@ namespace Selva.Drawing.Tests.Model.Layout;
 //
 // A failure means some container reported a box larger than the room it was handed. Read the
 // theory data in the failure message to see which combination broke, then reproduce that case
-// directly — the matrix locates the breach, it doesn't explain it.
+// directly; the matrix locates the breach, it doesn't explain it.
 public class ContentRectInvariantTests
 {
 	// A4 portrait content rect at 10mm margins, i.e. what a page actually offers.
@@ -28,11 +28,11 @@ public class ContentRectInvariantTests
 	private const double RectHeight = 277;
 
 	// Scales here are the ones where the container owns the sizing decision: auto-fit (1.0 here
-	// means "no explicit scale — fit me"), and reductions, which is what a drawing on a sheet
+	// means "no explicit scale, fit me"), and reductions, which is what a drawing on a sheet
 	// actually uses.
 	//
 	// Deliberately NOT included: explicit enlargements like 20:1. A user who pins Scale = 20 on
-	// 120 mm of geometry is asking for 2400 mm and must get it — the same reason an Absolute
+	// 120 mm of geometry is asking for 2400 mm and must get it, the same reason an Absolute
 	// grid track is not clamped to the page. Overriding that would be a worse bug than the ones
 	// this file guards against, so "content exceeds the rect" is only an invariant where the
 	// layout, not the author, chose the size. Enlargement views are covered instead by
@@ -41,7 +41,7 @@ public class ContentRectInvariantTests
 	{
 		// "grid-absolute" is excluded for the same reason as enlargement scales: two Absolute
 		// tracks that sum past the page are the author's arithmetic, and clamping them would
-		// silently discard a declared size. Absolute tracks beside a flexible one ARE covered —
+		// silently discard a declared size. Absolute tracks beside a flexible one ARE covered:
 		// every grid case below puts an Absolute(150) column next to the parameterised track,
 		// the shape where a ceiling that ignored committed tracks let the flexible neighbour
 		// measure against room already spent.
@@ -77,16 +77,15 @@ public class ContentRectInvariantTests
 			$"height {bounds.Height:F3} exceeds the {RectHeight}mm content rect");
 	}
 
-	// Same cross-product, but through pagination: a document that fits must not be split, and
-	// no emitted page may exceed the rect. TrySplit and Resolve are two loops over the same
-	// budget and must agree.
+	// Same cross-product, through pagination: a document that fits must not be split, and no
+	// emitted page may exceed the rect. TrySplit and Resolve are two loops over the same budget
+	// and must agree.
 	[Theory]
 	[MemberData(nameof(Cases))]
 	public void Paginated_pages_never_exceed_the_content_rect(
 		string container, int depth, double viewScale, bool captioned)
 	{
 		var content = Nest(Build(container, viewScale, captioned), depth);
-
 		var section = PaginationPass.PaginateBody(
 			content, PaperSize.A4, Margins.Uniform(10), BandConfig.ContentMode(0, 0));
 
@@ -127,13 +126,12 @@ public class ContentRectInvariantTests
 		// Every case carries a DrawingView, because the view is what auto-fits and therefore
 		// what most often overran its budget.
 		var view = View(viewScale, captioned);
-
 		switch (container)
 		{
 			case "stack-vertical":
 				// Empty siblings are load-bearing here, not filler: they are what the budget
 				// divisor used to count, and they are invisible in the output, so a breach shows
-				// up only as everything else being mysteriously too small — or, once the divisor
+				// up only as everything else being mysteriously too small, or, once the divisor
 				// balloons, as a stack past the page.
 				return new Stack
 				{
@@ -202,7 +200,7 @@ public class ContentRectInvariantTests
 		for (var i = 0; i < 60; i++) yield return $"word{i}";
 	}
 
-	// One track of the parameterised kind beside a wide Absolute one — a ceiling that ignores
+	// One track of the parameterised kind beside a wide Absolute one: a ceiling that ignores
 	// committed tracks lets its neighbour measure against room already spent, which is how
 	// [Absolute(150), Auto] produced a 245mm grid on a 190mm sheet.
 	private static Grid Grid2x2(GridLength track, double viewScale, bool captioned) => new Grid
@@ -231,7 +229,7 @@ public class ContentRectInvariantTests
 		AutoScaleCaption = captioned,
 	};
 
-	// A shape with extent on both axes, some fill, and annotation — so counter-scaling, hatch
+	// A shape with extent on both axes, some fill, and annotation, so counter-scaling, hatch
 	// spacing and dimension styles all participate rather than being trivially absent.
 	private static DrawElement Geometry() => new GroupElement
 	{

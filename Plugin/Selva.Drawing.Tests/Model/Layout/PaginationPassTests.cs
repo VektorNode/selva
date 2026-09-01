@@ -31,7 +31,7 @@ public class PaginationPassTests
 	public void Oversize_primitive_still_emits_one_page_for_forward_progress()
 	{
 		// 20mm tall primitive on a 10mm-tall page can't split, but pagination must
-		// terminate — the element gets force-placed on a single page.
+		// terminate: the element gets force-placed on a single page.
 		var pages = PaginationPass.Paginate(Rect(5, 20), TenByTen, NoMargin);
 		Assert.Single(pages);
 	}
@@ -53,7 +53,7 @@ public class PaginationPassTests
 	[Fact]
 	public void Vertical_stack_with_spacing_accounts_for_inter_child_gaps()
 	{
-		// Four 3mm rects + 3×1mm spacing = 15mm total on a 10mm page. Only 2 rects fit
+		// Four 3mm rects + 3x1mm spacing = 15mm total on a 10mm page. Only 2 rects fit
 		// (3+1+3=7mm); a third would push to 11mm > 10. The remaining 2 spill to page 2.
 		var stack = new Stack
 		{
@@ -68,7 +68,7 @@ public class PaginationPassTests
 	[Fact]
 	public void First_page_content_is_anchored_top_left_of_content_rect()
 	{
-		// 20×20mm paper, 5mm margin → content rect (5,5)-(15,15). A 4mm-tall rect should
+		// 20x20mm paper, 5mm margin gives content rect (5,5)-(15,15). A 4mm-tall rect should
 		// sit with its top at y=15, left at x=5.
 		var paper = new PaperSize(20, 20, "T20");
 		var margins = Margins.Uniform(5);

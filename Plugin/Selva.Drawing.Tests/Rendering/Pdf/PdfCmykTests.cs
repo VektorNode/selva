@@ -15,7 +15,7 @@ using PdfColorMode = Selva.Drawing.Rendering.Pdf.PdfColorMode;
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
 // CMYK colours must flow through to the rendered PDF as device-CMYK ink values without
-// an RGB round-trip — /DeviceRGB output causes preflight warnings in Acrobat for print work.
+// an RGB round-trip: /DeviceRGB output causes preflight warnings in Acrobat for print work.
 public class PdfCmykTests
 {
 	[Fact]

@@ -72,7 +72,7 @@ public sealed class NotesBlock : LayoutElement
 		}
 
 		// Notes nest in their own stack so NoteSpacing (between notes) and TitleSpacing
-		// (title to notes) stay independent — a spacer child would apply the outer
+		// (title to notes) stay independent: a spacer child would apply the outer
 		// spacing on both sides and inflate the title gap.
 		var notesStack = new Stack
 		{

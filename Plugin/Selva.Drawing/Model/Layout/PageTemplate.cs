@@ -9,7 +9,7 @@ namespace Selva.Drawing.Model.Layout;
 //
 // HeaderHeight / FooterHeight are explicit reservations; when null, the pass measures
 // ComputeBounds().Height on the resolved subtree instead. Set them explicitly for headers
-// whose content varies per page — token expansion can change line widths but not heights.
+// whose content varies per page: token expansion can change line widths but not heights.
 public sealed class PageTemplate
 {
 	public string Title { get; init; }
@@ -49,7 +49,7 @@ public enum HorizontalAlign
 //   fills the full content rect, unaffected by the band's height. Default.
 // - Content: reserves space inside the content rect, shrinking the body accordingly. Use
 //   when the body needs to flow above/below the chrome instead of overlapping margin space.
-// - Edge: anchored a fixed distance from the paper edge, ignoring margins — pair with
+// - Edge: anchored a fixed distance from the paper edge, ignoring margins. Pair with
 //   HeaderEdgeOffset / FooterEdgeOffset (mm from paper edge to the band's outer side).
 public enum ChromePlacement
 {

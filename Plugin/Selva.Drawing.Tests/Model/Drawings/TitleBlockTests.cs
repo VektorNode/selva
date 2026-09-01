@@ -119,7 +119,7 @@ public class TitleBlockTests
 	[Fact]
 	public void Auto_width_stretches_to_a_wide_band_up_to_the_cap()
 	{
-		// Below the cap, width tracks the band exactly — no snap back to the fixed Size.
+		// Below the cap, width tracks the band exactly; no snap back to the fixed Size.
 		var block = new TitleBlock
 		{
 			Size = new BoundingBox(0, 0, 180, 40),
@@ -133,7 +133,7 @@ public class TitleBlockTests
 	[Fact]
 	public void Auto_width_is_capped_on_very_wide_bands()
 	{
-		// Band far past the cap → clamps to MaxAutoWidth, not the full band width.
+		// Band far past the cap: clamps to MaxAutoWidth, not the full band width.
 		var block = new TitleBlock
 		{
 			Size = new BoundingBox(0, 0, 180, 40),
@@ -176,7 +176,7 @@ public class TitleBlockTests
 		var resolved = (GroupElement)block.Resolve(new LayoutContext(BoundingBox.Empty));
 		var placed = FindImage(resolved);
 		Assert.NotNull(placed);
-		// 4 rows over 40mm → 10mm row; logo fitted into (10 − 3) = 7mm tall, aspect 2:1 → 14mm wide.
+		// 4 rows over 40mm gives a 10mm row; logo fitted into (10 - 3) = 7mm tall, aspect 2:1 gives 14mm wide.
 		Assert.Equal(7, placed.Height, 6);
 		Assert.Equal(14, placed.Width, 6);
 		Assert.True(placed.Position.X >= 0 && placed.Position.X < 5); // near left edge
@@ -197,7 +197,7 @@ public class TitleBlockTests
 		};
 		var placed = FindImage(block.Resolve(new LayoutContext(BoundingBox.Empty)));
 		Assert.NotNull(placed);
-		// Logo cell = 0.2 × 180 = 36mm, minus inset (2 × 1.5) = 33mm box.
+		// Logo cell = 0.2 x 180 = 36mm, minus inset (2 x 1.5) = 33mm box.
 		Assert.True(placed.Width <= 33 + 1e-6, $"expected width <= 33, got {placed.Width}");
 		Assert.Equal(placed.Width / 10.0, placed.Height, 6); // aspect preserved
 	}

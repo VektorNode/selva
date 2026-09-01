@@ -6,9 +6,9 @@ using Selva.Drawing.Model.Geometry;
 namespace Selva.Drawing.Model.Layout;
 
 // A CSS-grid-style track. Each track is one of:
-//   Absolute(mm)   — fixed width/height
-//   Auto           — sized to the largest natural size of its content
-//   Star(weight)   — distributes remaining space proportionally (like CSS `1fr`)
+//   Absolute(mm): fixed width/height
+//   Auto: sized to the largest natural size of its content
+//   Star(weight): distributes remaining space proportionally (like CSS `1fr`)
 public readonly struct GridLength
 {
 	public enum Kind { Absolute, Auto, Star }
@@ -38,7 +38,7 @@ public sealed class GridCell
 }
 
 // Reported by Grid.ComputeOverflows when a cell's natural content exceeds its allocated
-// track space. Components surface these as runtime warnings — actionable feedback at
+// track space. Components surface these as runtime warnings: actionable feedback at
 // graph-eval time rather than waiting for the final render to look wrong.
 public sealed class GridOverflow
 {
@@ -85,8 +85,8 @@ public sealed class Grid : LayoutElement
 		var children = new List<DrawElement>(layout.ResolvedCells.Length);
 		PlaceCells(layout, total.Width, children);
 
-		// Authoring guides: a dotted box per track intersection, visible in the Rhino viewport
-		// wherever the grid is nested. Tagged PreviewOnly so SVG/PDF export skips them.
+		// Dotted box per track intersection, visible in the Rhino viewport wherever the grid
+		// is nested. Tagged PreviewOnly so SVG/PDF export skips them.
 		AppendCellGuides(layout, children);
 
 		// Stack/Frame/Table consumers measure resolved-child bounds and need the grid's full
@@ -97,9 +97,9 @@ public sealed class Grid : LayoutElement
 
 		// The track total is a floor, not a ceiling: content taller/wider than its cell is drawn,
 		// not clipped (deliberately, for Absolute tracks where sizing is the user's choice), but
-		// the reported box must still cover what was drawn — otherwise a Table with RowHeight=5
-		// reports h=5 while wrapped text hangs below its own bottom edge, and every downstream
-		// container lays out around a box that's already overrun.
+		// the reported box must still cover what was drawn, or a Table with RowHeight=5 reports
+		// h=5 while wrapped text hangs below its own bottom edge, and every downstream container
+		// lays out around a box that's already overrun.
 		//
 		// Uses placed-cell bounds, not the pre-placement CellBounds, which are in the grid's own
 		// coordinate space.
@@ -145,7 +145,7 @@ public sealed class Grid : LayoutElement
 	}
 
 	// Returns one entry per cell whose resolved content exceeds its allocated cell rect. In
-	// standalone evaluation (no parent context), pass `new LayoutContext(BoundingBox.Empty)` —
+	// standalone evaluation (no parent context), pass `new LayoutContext(BoundingBox.Empty)`:
 	// only Absolute-track overflows are detected then, since Auto tracks always grow to fit and
 	// Star tracks fall back to natural sizes when available is infinite.
 	public IReadOnlyList<GridOverflow> ComputeOverflows(LayoutContext context)
@@ -189,10 +189,9 @@ public sealed class Grid : LayoutElement
 		// tracks are known.
 		//
 		// Measuring with an empty context instead would let a self-sizing child (an auto-fit
-		// DrawingView) report an unbounded natural size that becomes the Auto track's size — a
-		// tall view in a 2x2 grid sized the grid to 808 mm on a 227 mm content rect and ran off
-		// the page. Auto tracks grow to fit their content, so an overlarge measurement here is
-		// never clamped later.
+		// DrawingView) report an unbounded natural size that becomes the Auto track's size,
+		// running the grid off the page. Auto tracks grow to fit their content, so an overlarge
+		// measurement here is never clamped later.
 		var measureContext = MeasureContext(context);
 		for (var i = 0; i < Cells.Count; i++)
 		{
@@ -232,7 +231,7 @@ public sealed class Grid : LayoutElement
 		// principle keep a budget that assumed a shorter Auto neighbour. An audit reported a
 		// 190x54 grid pinning h=80.14 (grown Auto 43.56 + stale Star 36.58) with `[Auto,Star,Auto]`
 		// driving ink to y=-16.1mm, but two later reproduction attempts, including one with the
-		// original probe's parameters, both resolved to exactly 54.000 with minY=0.000 — the
+		// original probe's parameters, both resolved to exactly 54.000 with minY=0.000: the
 		// overflow could not be demonstrated and no fix was applied. The asymmetry is real;
 		// whether it can actually overflow is not established. Reproduce before changing this.
 		for (var r = 0; r < Rows.Count; r++)
@@ -275,7 +274,7 @@ public sealed class Grid : LayoutElement
 	//
 	// Absolute tracks are subtracted rather than counted in the divisor: they consume that space
 	// regardless of measurement, so counting them let an Auto neighbour measure against room
-	// that was never available — [Absolute(150), Auto] produced a 245 mm grid on a 190 mm sheet.
+	// that was never available, e.g. [Absolute(150), Auto] produced a 245 mm grid on a 190 mm sheet.
 	// Star tracks stay in the divisor since their size is genuinely unknown here.
 	//
 	// Dividing the whole remainder among each unknown track independently (rather than by

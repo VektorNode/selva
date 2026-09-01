@@ -42,7 +42,7 @@ internal static class SvgPathDataParser
             }
             else if (command == '\0')
             {
-                // Numbers before any command — malformed; stop.
+                // Numbers before any command: malformed, stop.
                 break;
             }
 
@@ -152,7 +152,7 @@ internal static class SvgPathDataParser
                     break;
                 }
                 default:
-                    // Unknown command — bail rather than loop forever.
+                    // Unknown command: bail rather than loop forever.
                     return builder.Build();
             }
 
@@ -179,7 +179,7 @@ internal static class SvgPathDataParser
 
     // Whitespace and commas separate tokens; command letters and numbers (signs, decimals,
     // exponents) are tokens. Arc flags (0/1) can run into the next number with no separator
-    // ("...0125,25") — ReadFlag handles that.
+    // ("...0125,25"); ReadFlag handles that.
     private sealed class PathTokenizer
     {
         private readonly string _s;

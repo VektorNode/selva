@@ -30,6 +30,29 @@ public class ElementTests
 	}
 
 	[Fact]
+	public void TextElement_rotates_bounds_about_position()
+	{
+		// A 90° run swaps the box's extents: renderers rotate the glyphs about Position, so
+		// bounds that stayed axis-aligned would let layout fit against ink that isn't there.
+		var upright = new TextElement { Text = "ABC", Position = new Point2D(0, 0) };
+		var rotated = new TextElement { Text = "ABC", Position = new Point2D(0, 0), RotationDegrees = 90 };
+
+		var u = upright.ComputeBounds();
+		var r = rotated.ComputeBounds();
+
+		Assert.Equal(u.Width, r.Height, 6);
+		Assert.Equal(u.Height, r.Width, 6);
+	}
+
+	[Fact]
+	public void TextElement_leaves_bounds_alone_when_unrotated()
+	{
+		var e = new TextElement { Text = "ABC", Position = new Point2D(5, 5) };
+		var b = e.ComputeBounds();
+		Assert.True(b.Width > 0 && b.Height > 0);
+	}
+
+	[Fact]
 	public void TextElement_uses_real_font_metrics_for_bundled_family()
 	{
 		// Inter is bundled, so bounds come from real glyph advance, not the 0.55×charCount
