@@ -139,9 +139,8 @@ internal sealed class PrepareUIInputsDialog : Form
         };
         if (_remove != null)
         {
-            // Both actions read the same selection and status the rows already carry - Remove
-            // reconnects and deletes whichever selected rows are already prepared, Apply inserts or
-            // repairs whichever selected rows are not, so one shared preview covers both.
+            // Remove deletes whichever selected rows are already prepared; Apply inserts or repairs
+            // whichever selected rows are not. Both read the same selection, so one preview covers both.
             var removeButton = new Button { Text = removeCaption ?? "Remove" };
             removeButton.Click += (sender, arguments) => RemoveChanges();
             buttons.Items.Add(removeButton);
@@ -219,12 +218,11 @@ internal sealed class PrepareUIInputsDialog : Form
     }
 
     /// <summary>
-    ///     Switches the apply button between "place" and "update" wording depending on whether any
-    ///     row in the current batch is already prepared - the same button also repairs/re-adopts an
-    ///     already-prepared row (e.g. after its Contextual type is changed in the dropdown), so once
-    ///     anything is placed, "Apply preparation" reads as reapplying rather than placing for the
-    ///     first time. Re-evaluated on every RebuildRows() call, since Apply/Remove/Refresh can all
-    ///     change which rows are already prepared.
+    ///     Switches the apply button between "place" and "update" wording. The same button also
+    ///     repairs/re-adopts an already-prepared row (e.g. after its Contextual type changes in the
+    ///     dropdown), so once anything is placed, "Apply preparation" reads as reapplying rather than
+    ///     placing for the first time. Re-evaluated on every RebuildRows() call, since Apply/Remove/
+    ///     Refresh can all change which rows are already prepared.
     /// </summary>
     private void UpdateApplyCaption()
     {
@@ -239,10 +237,10 @@ internal sealed class PrepareUIInputsDialog : Form
     }
 
     /// <summary>
-    ///     Columns, not rows: each column is its own vertical strip - a header over one cell per
-    ///     row - chained left to right with Eto Splitters so every boundary between columns can be
-    ///     dragged. A row-major table has no per-column drag handle in Eto; a column-major chain of
-    ///     two-pane splitters does.
+    ///     Columns, not rows: each column is its own vertical strip (a header over one cell per row),
+    ///     chained left to right with Eto Splitters so every boundary between columns can be dragged.
+    ///     A row-major table has no per-column drag handle in Eto; a column-major chain of two-pane
+    ///     splitters does.
     /// </summary>
     private Control BuildColumnLayout()
     {
@@ -582,15 +580,11 @@ internal sealed class PrepareUIInputsDialog : Form
     /// <summary>
     ///     Commits every row's live edits before Apply/Remove reads _candidates.
     ///
-    ///     The checkbox is captured *before* ApplyNameEdit runs, not read fresh afterwards:
-    ///     ApplyNameEdit reclassifies the candidate (needed so a renamed row's Status/Note are
-    ///     current before applying), and ClassifyCandidate resets Selected to its own recommended
-    ///     default as part of that - which silently dropped a manually-checked row (this is exactly
-    ///     why Remove Get inputs did nothing when a user checked an already-prepared row: the
-    ///     checkbox's own row still visually showed checked, but ApplyNameEdit's reclassify had
-    ///     already reset the checkbox back to unchecked and the underlying candidate.Selected to
-    ///     false, so ApplyRemoval saw nothing selected). The checkbox the user actually looked at is
-    ///     the real source of truth, so it is captured first and reasserted afterwards.
+    ///     The checkbox is captured before ApplyNameEdit runs, not read fresh afterwards: ApplyNameEdit
+    ///     reclassifies the candidate (needed so a renamed row's Status/Note are current before
+    ///     applying), and ClassifyCandidate resets Selected to its own recommended default as part of
+    ///     that, silently dropping a manually-checked row otherwise. The checkbox the user actually
+    ///     looked at is the real source of truth, so it is captured first and reasserted afterwards.
     /// </summary>
     private void CommitRows()
     {
@@ -601,9 +595,9 @@ internal sealed class PrepareUIInputsDialog : Form
             ApplyNameEdit(row);
         }
 
-        // Restore the checkboxes to what the user actually set, without re-triggering
-        // CheckedChanged (guarded the same way SyncRow guards its own programmatic updates), then
-        // commit that restored state deterministically in a single pass below.
+        // Restore the checkboxes to what the user actually set, without re-triggering CheckedChanged
+        // (guarded the same way SyncRow guards its own programmatic updates), then commit that
+        // restored state deterministically in a single pass below.
         _updating = true;
         try
         {
@@ -642,11 +636,10 @@ internal sealed class PrepareUIInputsDialog : Form
     }
 
     /// <summary>
-    ///     Removes the batch and refreshes the candidate list in place, mirroring ApplyChanges. The
-    ///     same selection and rows are shared with Apply - PrepareUIInputGraphService.ApplyRemoval
-    ///     already skips any selected row that is not an already-prepared, unambiguous link, so
-    ///     selecting a mix of not-yet-prepared and already-prepared rows and pressing either button
-    ///     only acts on the rows that button actually applies to.
+    ///     Removes the batch and refreshes the candidate list in place, mirroring ApplyChanges.
+    ///     PrepareUIInputGraphService.ApplyRemoval already skips any selected row that isn't an
+    ///     already-prepared, unambiguous link, so a mixed selection only acts on rows the pressed
+    ///     button actually applies to.
     /// </summary>
     private void RemoveChanges()
     {

@@ -327,16 +327,15 @@ public class ValueCollector
             return ExtractValueListValue(valueListParam);
         }
 
-        // The param's own volatile data is populated after solve for both wired and
-        // persistent-data-backed params — the most reliable source, so try it first.
+        // Populated after solve for both wired and persistent-data-backed params: try it first.
         var fromOwnVolatile = ExtractDataFromVolatileData(ghParam.VolatileData);
         if (fromOwnVolatile != null)
         {
             return fromOwnVolatile;
         }
 
-        // Falls back to the wired source (e.g. a Boolean Toggle upstream) when this
-        // param's own volatile data is empty — pre-solve, or non-collecting context params.
+        // Own data is empty pre-solve, or for non-collecting context params: fall back to
+        // the wired source (e.g. a Boolean Toggle upstream).
         if (ghParam.SourceCount == 1)
         {
             var fromSource = ExtractDataFromVolatileData(ghParam.Sources[0].VolatileData);
@@ -345,8 +344,8 @@ public class ValueCollector
                 return fromSource;
             }
 
-            // Boolean Toggle exposes its state via a "Value" property, not VolatileData
-            // when the doc hasn't solved yet. Read it directly so booleans default correctly.
+            // Before the first solve, Boolean Toggle exposes state via a "Value" property,
+            // not VolatileData.
             if (TryGetBoolProperty(ghParam.Sources[0], "Value", out var toggleValue))
             {
                 return toggleValue;
@@ -399,8 +398,8 @@ public class ValueCollector
             }
         }
 
-        // VolatileData only fills in during a solve, so it's empty right after document
-        // load — but the connected value list's selection is available immediately.
+        // VolatileData is empty right after document load (fills in during a solve), but
+        // the connected value list's selection is available immediately.
         var selected = valueListParam.SelectedItems;
         if (selected.Count > 1)
         {
@@ -435,8 +434,8 @@ public class ValueCollector
     /// <summary>
     ///     Walks the first input's volatile data, projects each goo into a Rhino-free <see cref="GooView" />,
     ///     and asks <see cref="OutputPayloadBuilder" /> to classify and build the payload. All ContextBake-wired
-    ///     output types (dynamicValueList / chart / file) go through here, so the wire shape for each is
-    ///     decided in one unit-tested place instead of three.
+    ///     output types (dynamicValueList / chart / file) share this, so the wire shape is decided in one
+    ///     unit-tested place instead of three.
     /// </summary>
     private object BuildFirstInputPayload(IGH_Component component)
     {
@@ -447,7 +446,7 @@ public class ValueCollector
             return null;
         }
 
-        // Logged so a null payload says why (empty / unknown type) instead of silently vanishing.
+        // Logs the outcome so a null payload says why (empty / unknown type) instead of silently vanishing.
         var views = inputParam.VolatileData.AllData(true).Select(ProjectGoo);
         var outcome = OutputPayloadBuilder.Classify(views);
 
@@ -467,7 +466,7 @@ public class ValueCollector
             return null;
         }
 
-        // Custom goo arrives wrapped in GH_ObjectWrapper on a generic ContextBake input — unwrap
+        // Custom goo arrives wrapped in GH_ObjectWrapper on a generic ContextBake input: unwrap
         // before the type checks below, or the match silently fails.
         var inner = goo is GH_ObjectWrapper wrapper ? wrapper.Value as IGH_Goo ?? goo : goo;
 
@@ -672,9 +671,8 @@ public class ValueCollector
                 }
 
                 // subFolder is normalized here rather than on the client so both output paths
-                // agree on what "ROOT::Panels" means. metadata rides along: FileData carries it
-                // and the client reads it, but this hand-built payload used to drop it, so it
-                // reached cloud consumers and never local ones.
+                // agree on what "ROOT::Panels" means. metadata rides along too: this hand-built
+                // payload used to drop it, so it reached cloud consumers and never local ones.
                 return new
                 {
                     fileName = fileData.FileName ?? "",

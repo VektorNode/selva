@@ -25,7 +25,7 @@ public class SchemaSynchronizer
 
     /// <summary>
     ///     Drops layout tombstones for parameters the incoming layout does not place. A save from
-    ///     the editor is authoritative, so a widget the user deliberately removed must not spring
+    ///     the editor is authoritative: a widget the user deliberately removed must not spring
     ///     back the next time its parameter is rediscovered.
     /// </summary>
     public void AcceptLayoutAsAuthoritative(UISchema schema)
@@ -80,7 +80,7 @@ public class SchemaSynchronizer
         { "Geometry", "geometry" }
     };
 
-    // Not thread-safe — fine while GH processes documents on one thread.
+    // Not thread-safe: fine while GH processes documents on one thread.
     private static readonly Dictionary<Type, string> TypeNameCache = new Dictionary<Type, string>();
 
     #endregion
@@ -171,7 +171,7 @@ public class SchemaSynchronizer
 
     /// <summary>
     ///     Determines which context components are "in scope" for the given owner.
-    ///     Null when no owner is specified — everything is in scope.
+    ///     Null when no owner is specified: everything is in scope.
     /// </summary>
     private static HashSet<Guid> BuildScopeFilter(GH_Document document, GH_Component ownerComponent)
     {
@@ -362,8 +362,8 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Seeds the accepted-format allowlist per parameter kind (image extensions for Get Image,
-    ///     geometry for Get File) instead of one hardcoded list for both.
+    ///     Seeds the accepted-format allowlist per parameter kind: image extensions for Get Image,
+    ///     geometry for Get File.
     /// </summary>
     private static void PopulateAcceptedFormats(IGH_ContextualParameter param, DiscoveredInput input)
     {
@@ -396,7 +396,7 @@ public class SchemaSynchronizer
         var raw = ExtractFirstScriptVariable(ghParam);
 
         // GH_Colour.ScriptVariable() returns System.Drawing.Color, which Newtonsoft can't
-        // serialize on Mono/macOS (throws ArgumentNullException 'key'). Emit hex instead —
+        // serialize on Mono/macOS (throws ArgumentNullException 'key'). Emit hex instead:
         // GetColorParameter parses hex the same way on the way in.
         input.Default = raw is Color color ? ColorTranslator.ToHtml(color) : raw;
     }
@@ -470,7 +470,7 @@ public class SchemaSynchronizer
         }
         catch
         {
-            // Non-fatal — caller treats null as "no default".
+            // Non-fatal: caller treats null as "no default".
         }
 
         return null;
@@ -523,7 +523,7 @@ public class SchemaSynchronizer
                 input.Options = options;
             }
 
-            // VolatileData is empty right after document load (only populated by a solve) —
+            // VolatileData is empty right after document load (only populated by a solve):
             // fall back to the connected value list's live selection.
             var selectedValue = ghParam?.VolatileData.AllData(true).FirstOrDefault()?.ScriptVariable();
             var selectedString = selectedValue?.ToString() ?? valueList.GetDefaultValue();
@@ -611,7 +611,7 @@ public class SchemaSynchronizer
 
                 case OutputDynamicValueListLayoutItem dvl when dvl.Config != null:
                     {
-                        // ParamId is the ContextBake's GUID (the output identity) — walk up to the
+                        // ParamId is the ContextBake's GUID (the output identity): walk up to the
                         // GH_DynamicValueListOutput feeding it to write the picked target back.
                         if (document.FindObject(dvl.ParamId, false) is GH_Component bake &&
                             ParameterTypeHelper.FindUpstreamDynamicValueListOutput(bake) is { } output &&
@@ -619,7 +619,7 @@ public class SchemaSynchronizer
                         {
                             output.TargetInputId = dvl.Config.TargetInputId;
                             // Not downstream of the UIBuilder, so the post-save expire won't reach
-                            // it — expire directly so the stale "no target" remark clears.
+                            // it: expire directly so the stale "no target" remark clears.
                             output.ExpireSolution(false);
                         }
 
@@ -643,7 +643,7 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Reconciles schema nicknames against the current document — used on startup/enable to fix
+    ///     Reconciles schema nicknames against the current document: used on startup/enable to fix
     ///     drift from while Rhino was closed. Unlike DetectMetadataChanges, this bypasses the
     ///     snapshot cache and always reads current GH state. Returns true if anything changed.
     /// </summary>
@@ -729,7 +729,7 @@ public class SchemaSynchronizer
         RestoreTombstonedLayout(schema);
 
         // dynamicValueList layout items must mirror into schema.Outputs so every consumer reads
-        // one canonical place — this is the funnel every save/connect passes through.
+        // one canonical place: this is the funnel every save/connect passes through.
         SchemaOutputCanonicalizer.CanonicalizeDynamicValueListOutputs(schema);
     }
 
@@ -784,7 +784,7 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Re-places layout items for parameters that came back — an undone deletion. Runs after
+    ///     Re-places layout items for parameters that came back: an undone deletion. Runs after
     ///     the merge steps, which re-add the parameter itself but know nothing about layout.
     /// </summary>
     private void RestoreTombstonedLayout(UISchema schema)
@@ -871,7 +871,7 @@ public class SchemaSynchronizer
         }
 
         // Route through ClassifyBakeOutputType (the same qualifying set: file/chart/dynamicValueList)
-        // rather than a separate check here — otherwise a DynVL bake gets stripped every solve,
+        // rather than a separate check here: otherwise a DynVL bake gets stripped every solve,
         // fighting the canonicalizer and producing spurious "1 parameter removed" churn.
         var toRemove = schema.Outputs
             .Where(o => bakeComponents.TryGetValue(o.Id, out var c)
@@ -926,7 +926,7 @@ public class SchemaSynchronizer
 
     /// <summary>
     ///     Auto-merges ContextPrint components into schema.Outputs (mirrors MergeDiscoveredInputs).
-    ///     ContextBake is excluded — it needs a solve to know what it's connected to.
+    ///     ContextBake is excluded: it needs a solve to know what it's connected to.
     /// </summary>
     private static void MergeDiscoveredPrintOutputs(UISchema schema, GH_Document document)
     {
@@ -1117,7 +1117,7 @@ public class SchemaSynchronizer
 
     /// <summary>
     ///     Applies detected metadata changes to the schema: layout item configs (min/max/stepSize,
-    ///     dropdown options). Does NOT update layout displayNames — those are user-controlled.
+    ///     dropdown options). Does NOT update layout displayNames: those are user-controlled.
     /// </summary>
     public void ApplyMetadataChangesToSchema(UISchema schema, DiscoveredParameters changes)
     {
@@ -1437,7 +1437,7 @@ public class SchemaSynchronizer
     }
 
     /// <summary>
-    ///     Forwards to the Rhino-free <see cref="SchemaOutputCanonicalizer.GetAllLayoutItems" /> —
+    ///     Forwards to the Rhino-free <see cref="SchemaOutputCanonicalizer.GetAllLayoutItems" />:
     ///     the single implementation for flattening tabbed or flat layouts.
     /// </summary>
     public static IEnumerable<LayoutItemBase> GetAllLayoutItems(LayoutConfigBase layout)

@@ -216,8 +216,8 @@ public class DocumentEventManager : IDisposable
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
         if (_webSocketTransport.IsRunning)
-            // Fire-and-forget: informational only.
         {
+            // Fire-and-forget: informational only.
             _ = _webSocketTransport.BroadcastSolvingState(true);
         }
     }
@@ -367,14 +367,13 @@ public class DocumentEventManager : IDisposable
 
         var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
         var fileOutputs = _valueCollector.CollectFileOutputs(_currentDocument, schema);
-        // Only scan display data when the 3D viewer is enabled — otherwise wasted work.
+        // Only scan display data when the 3D viewer is enabled; otherwise wasted work.
         //
-        // This re-scans the whole document for ContextBakes instead of trusting _watchedIds:
-        // that set misses ContextBakes added while the WS server was down (OnObjectsAdded
-        // early-returns on !IsRunning), or restored by undo/redo/paste without a reliable
-        // ObjectsAdded event. Skipping the full scan would silently drop those components'
-        // meshes from the frontend. A full scan is O(objects) once per solve-end and catches
-        // all of them.
+        // Re-scans the whole document for ContextBakes instead of trusting _watchedIds: that set
+        // misses ContextBakes added while the WS server was down (OnObjectsAdded early-returns on
+        // !IsRunning), or restored by undo/redo/paste without a reliable ObjectsAdded event.
+        // Skipping the full scan would silently drop those components' meshes from the frontend.
+        // A full scan is O(objects) once per solve-end and catches all of them.
         var displayData = includeDisplayData
             ? _valueCollector.CollectDisplayData(_currentDocument)
             : new List<object>();

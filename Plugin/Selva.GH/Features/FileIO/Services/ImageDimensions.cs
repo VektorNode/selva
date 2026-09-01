@@ -7,7 +7,7 @@ namespace Selva.GH.Features.FileIO.Services;
 
 // ============================================================================
 // Reads intrinsic pixel (or, for SVG, user-unit) dimensions straight from image
-// file headers — no full decode, no System.Drawing / ImageSharp dependency, so
+// file headers: no full decode, no System.Drawing / ImageSharp dependency, so
 // it stays cross-platform (Compute on Linux). Used to auto-size or aspect-fit
 // images in Draw Image. Returns false when the header can't be parsed; callers
 // then require explicit Width + Height.

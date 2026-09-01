@@ -117,7 +117,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
     }
 
     /// <summary>
-    ///     Assigns contextual data as a tree — called by Rhino.Compute via reflection, which sends
+    ///     Assigns contextual data as a tree: called by Rhino.Compute via reflection, which sends
     ///     DataTree of GH_String.
     /// </summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
@@ -355,7 +355,7 @@ public class GetFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParame
         }
         catch (JsonException)
         {
-            // Not JSON — treat as a path.
+            // Not JSON: treat as a path.
         }
         catch (Exception)
         {

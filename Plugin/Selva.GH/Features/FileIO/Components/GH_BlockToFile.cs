@@ -194,7 +194,7 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         blockName = modelIdef.Name;
         CopyBlockRecursive(modelIdef, targetDoc);
 
-        // No index means the definition had no exportable geometry — typically a linked/embedded
+        // No index means the definition had no exportable geometry: typically a linked/embedded
         // definition whose objects live in an external file, or an empty definition.
         if (!_copiedBlockIndices.TryGetValue(blockName, out var idefIndex))
         {
@@ -250,7 +250,7 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         var geometries = new List<GeometryBase>();
 
         // Objects is null (not just empty) for linked/embedded definitions whose objects aren't
-        // materialized — foreach would NRE on the null before the per-item guard runs.
+        // materialized, so foreach would NRE on the null before the per-item guard runs.
         var objects = modelIdef.Objects;
         if (objects == null)
         {
@@ -295,7 +295,7 @@ public class GH_BlockToFile : GH_Component, ISelvaFileOutput
         if (_copiedBlockIndices.TryGetValue(nestedModelIdef.Name, out var nestedIdefIndex) &&
             nestedInstanceRef.Value != null)
         {
-            // Null means a stale/invalid index — guard before accessing .Id.
+            // Null means a stale/invalid index: guard before accessing .Id.
             var nestedIdef = targetDoc.InstanceDefinitions[nestedIdefIndex];
             if (nestedIdef == null)
             {

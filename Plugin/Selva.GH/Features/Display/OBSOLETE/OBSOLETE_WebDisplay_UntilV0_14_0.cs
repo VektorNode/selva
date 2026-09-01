@@ -20,7 +20,6 @@ using Selva.Slva;
 
 namespace Selva.GH.Features.Display.OBSOLETE;
 
-// Result of the single background task: all items batched together.
 public sealed class SolveResult_V0_14_0
 {
     public SolveResult_V0_14_0(List<Mesh> meshes, List<string> names, List<string> layers,
@@ -45,13 +44,10 @@ public sealed class SolveResult_V0_14_0
     public List<Dictionary<string, string>> Metadata { get; }
     public List<ThreeMaterial> Materials { get; }
 
-    /// <summary>Non-mesh display items (curves, points) ready to attach to the batch.</summary>
     public List<DisplayItem> Items { get; }
 
-    /// <summary>Original Rhino curves kept for viewport preview (the JSON in Items isn't drawable).</summary>
+    // Original Rhino geometry kept for viewport preview: the JSON in Items isn't drawable.
     public List<Curve> PreviewCurves { get; }
-
-    /// <summary>Original Rhino points kept for viewport preview.</summary>
     public List<Point3d> PreviewPoints { get; }
 
     public int Skipped { get; }
@@ -59,11 +55,9 @@ public sealed class SolveResult_V0_14_0
     public int Count => Meshes.Count + Items.Count;
 }
 
-/// <summary>
-///     Obsolete WebDisplay component (until v0.14.0). Replaced by the version that maps each
-///     Grasshopper branch to its own scene-manager group when no explicit Layer is provided.
-///     This version flattened every branch into a single group ("Default" when no layer set).
-/// </summary>
+// Obsolete WebDisplay component (until v0.14.0). The replacement maps each Grasshopper branch
+// to its own scene-manager group when no explicit Layer is set; this version flattened every
+// branch into a single group ("Default").
 public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveResult_V0_14_0>
 {
     private BoundingBox _previewBB;
@@ -165,8 +159,7 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
                 $"{result.Skipped} item(s) could not be displayed and were skipped");
         }
 
-        // Meshes go through the binary blob path; curves/points ride as JSON items. CreateBatch
-        // always emits a valid (possibly empty) blob, so an items-only batch is well-formed.
+        // Meshes go through the binary blob path; curves/points ride as JSON items.
         var batch = MeshBatchProcessor.CreateBatch(
             result.Meshes, result.Names, result.Materials, result.Metadata,
             result.Layers, componentId);
@@ -211,8 +204,6 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
             _previewBB.Union(mesh.GetBoundingBox(false));
         }
 
-        // Curve / point preview: the JSON in the batch isn't drawable, so we keep the original Rhino
-        // geometry (with its item color) and draw it as wires in DrawViewportWires.
         _previewCurves = new List<(Curve, Color)>(result.PreviewCurves.Count);
         for (var i = 0; i < result.PreviewCurves.Count; i++)
         {
@@ -230,10 +221,6 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
         }
     }
 
-    /// <summary>
-    ///     Pulls the preview color for the <paramref name="ordinal" />-th item of a given kind from the
-    ///     built items list (which carries the resolved color hex). Falls back to white.
-    /// </summary>
     private static Color ColorOf(List<DisplayItem> items, string kind, int ordinal)
     {
         var seen = 0;
@@ -262,17 +249,16 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
             return new List<T>();
         }
 
-        // Exact path match first.
         var branch = tree.get_Branch(path)?.Cast<T>().ToList();
         if (branch != null && branch.Count > 0)
         {
             return branch;
         }
 
-        // Single-branch tree: apply it to every geometry path regardless of its actual path. This is
-        // the common case where an aux input (materials/names/…) is a flat list but lands on a deeper
-        // path than the geometry (e.g. geo on {0}, materials on {0;0;0}) — matching by exact path or
-        // {0} alone would miss it and silently fall back to defaults.
+        // Single-branch tree: apply it to every geometry path regardless of its actual path. Common
+        // case: an aux input (materials/names/...) is a flat list landing on a deeper path than the
+        // geometry (geo on {0}, materials on {0;0;0}). Matching by exact path or {0} alone would
+        // miss it and silently fall back to defaults.
         if (tree.PathCount == 1)
         {
             var only = tree.get_Branch(tree.Paths[0])?.Cast<T>().ToList();
@@ -286,11 +272,8 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
         return fallback ?? new List<T>();
     }
 
-    /// <summary>
-    ///     One geometry to process, with its already-resolved per-item attributes and stable ordinal.
-    ///     The cheap flatten pass produces these in tree order; the expensive meshing then runs over
-    ///     them in parallel.
-    /// </summary>
+    // One geometry to process, with its already-resolved per-item attributes and stable ordinal.
+    // The cheap flatten pass produces these in tree order; meshing then runs over them in parallel.
     private struct WorkItem
     {
         public GeometryBase Geom;
@@ -301,7 +284,7 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
         public ThreeMaterial Material;
     }
 
-    /// <summary>Per-slot output of the parallel pass; gathered back in tree order.</summary>
+    // Per-slot output of the parallel pass, gathered back in tree order.
     private struct WorkResult
     {
         public bool Skipped;
@@ -327,7 +310,7 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
     {
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
         // attributes and stable ordinal. Geometry extraction touches GH_Goo wrappers and must not
-        // race with the parallel pass, so it stays here. Invalid geometry counts as skipped now.
+        // race with the parallel pass, so it stays here.
         var work = new List<WorkItem>();
         var skipped = 0;
         var ordinal = 0;
@@ -403,12 +386,10 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
             }
 
             // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
-            // vertices it needs. We weld coincident vertices to shrink the payload, but RESPECTING
-            // normals (ignoreNormals: false): both the web and the C# preview recompute smooth normals
-            // via computeVertexNormals, which averages across every shared vertex. Welding across hard
-            // edges would therefore smear them. Computing normals first lets the weld keep hard-edge
-            // vertices split (different normals) while merging smooth-surface interiors (matching
-            // normals) — preserving the original shading while still cutting most of the duplication.
+            // vertices it needs. Computing normals before welding keeps hard-edge vertices split
+            // (differing normals) while merging smooth-surface interiors (matching normals): both
+            // the web and the C# preview recompute smooth normals by averaging across shared
+            // vertices, so welding across hard edges first would smear them.
             mesh.Normals.ComputeNormals();
             mesh.Vertices.CombineIdentical(false, true);
             mesh.Compact();
@@ -420,8 +401,7 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
             };
         });
 
-        // Pass 3 (cheap, sequential): gather in tree order so output ordering is deterministic and
-        // matches the pre-parallel behaviour.
+        // Pass 3 (cheap, sequential): gather in tree order so output ordering is deterministic.
         var meshes = new List<Mesh>();
         var names = new List<string>();
         var layers = new List<string>();
@@ -471,11 +451,8 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
             : null;
     }
 
-    /// <summary>
-    ///     Resolves the metadata dictionary for the <paramref name="i" />-th geometry in a branch.
-    ///     When a branch has more metadata strings than geometry, all extras merge into the item
-    ///     (one geometry, many metadata strings).
-    /// </summary>
+    // Resolves the metadata dictionary for the i-th geometry in a branch. When a branch has more
+    // metadata strings than geometry, all extras merge into the item (one geometry, many strings).
     private static Dictionary<string, string> ResolveMetadata(
         List<GH_String> metaItems, int geoCount, int i, string lastMeta)
     {
@@ -502,11 +479,9 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
         return ParseMetadataString(metaStr);
     }
 
-    /// <summary>
-    ///     If the geometry is a curve or a point, builds the corresponding <see cref="DisplayItem" />
-    ///     and surfaces the original Rhino geometry for viewport preview. Returns false for meshable
-    ///     geometry (which the caller routes through the mesh path instead).
-    /// </summary>
+    // If the geometry is a curve or a point, builds the corresponding DisplayItem and surfaces the
+    // original Rhino geometry for viewport preview. Returns false for meshable geometry (routed
+    // through the mesh path instead).
     private static bool TryBuildItem(
         GeometryBase geom, string componentId, int ordinal,
         string name, string layer, Dictionary<string, string> metadata, ThreeMaterial mat,
@@ -532,8 +507,8 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
                 }
 
                 var json = nurbs.ToJSON(new Rhino.FileIO.SerializationOptions());
-                // Tessellates like the live component: what's frozen here is the param list and GUID,
-                // not the payload. A snapshot emitting untessellated curves would fail in the viewer.
+                // What's frozen here is the param list and GUID, not the payload, so this still
+                // tessellates like the live component.
                 var points = CurveTessellator.Tessellate(curve);
                 item = DisplayItem.Curve(json, points, id, displayName, layer ?? "", metadata,
                     colorHex, opacity);
@@ -630,10 +605,10 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
             return g;
         }
 
-        // Several GH curve/point primitives expose their value as a *struct* (Line, Arc, Circle,
-        // Point3d, …), which is NOT a GeometryBase — so `ScriptVariable() is GeometryBase` above
-        // misses them and they would fall through to null and be skipped. Convert each to its
-        // GeometryBase form here so the item path can route it to a curve/point display item.
+        // Several GH curve/point primitives expose their value as a struct (Line, Arc, Circle,
+        // Point3d, ...), which is NOT a GeometryBase: `ScriptVariable() is GeometryBase` above
+        // misses them and they'd be skipped. Convert each to its GeometryBase form here so the
+        // item path can route it to a curve/point display item.
         return goo switch
         {
             GH_GeometricGoo<GeometryBase> x => x.Value,
@@ -646,7 +621,7 @@ public class OBSOLETE_WebDisplay_UntilV0_14_0 : GH_TaskCapableComponent<SolveRes
             GH_Circle x when x.Value.IsValid => new ArcCurve(x.Value),
             GH_Rectangle x when x.Value.IsValid => x.Value.ToNurbsCurve(),
             // GH_Point's ScriptVariable is a Point3d struct (not GeometryBase), so wrap it as a
-            // Point GeometryBase here — the item path then routes it to a DisplayPoint.
+            // Point GeometryBase here: the item path then routes it to a DisplayPoint.
             GH_Point x => new Rhino.Geometry.Point(x.Value),
             GH_Box x when x.Value.IsValid => x.Value.ToBrep(),
             _ => null

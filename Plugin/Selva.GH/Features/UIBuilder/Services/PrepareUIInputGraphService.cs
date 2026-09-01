@@ -12,10 +12,10 @@ namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
 ///     Graph planning and the two mutating operations for Prepare UI Inputs: insertion and removal.
-///     Every mutation here is an intentional document edit triggered by a canvas button; nothing in
-///     this class is reachable from SolveInstance. Wires are re-routed with IGH_Param.ReplaceSource,
-///     which preserves wire order and every other source a recipient already had, and each batch is
-///     one GH_UndoRecord plus one scheduled solution.
+///     Every mutation here is a document edit triggered by a canvas button; nothing in this class is
+///     reachable from SolveInstance. Wires are re-routed with IGH_Param.ReplaceSource, which preserves
+///     wire order and every other source a recipient already had, and each batch is one GH_UndoRecord
+///     plus one scheduled solution.
 /// </summary>
 internal static class PrepareUIInputGraphService
 {
@@ -64,14 +64,14 @@ internal static class PrepareUIInputGraphService
             candidate.ControlNickName = candidate.OriginalControlNickName;
             candidate.Kind = PrepareUIInputTypeResolver.Classify(control);
 
-            // What the control is actually carrying decides the recommendation for the kinds that
-            // can hold more than one shape of value - a Panel above all.
+            // What the control is actually carrying decides the recommendation for kinds that can
+            // hold more than one shape of value: a Panel above all.
             candidate.Profile = PrepareUIInputTypeResolver.Inspect(control);
             candidate.Options = PrepareUIInputTypeResolver.Options(candidate.Kind, candidate.Profile);
             candidate.RecommendedType = PrepareUIInputTypeResolver.Recommend(candidate.Kind, candidate.Profile);
 
-            // A previous run's deliberate override wins over the fresh inference, so reopening the
-            // preview does not quietly reset a choice the author already made.
+            // A previous run's deliberate override wins over fresh inference, so reopening the
+            // preview doesn't quietly reset a choice the author already made.
             PrepareUIInputContextualType stored = candidate.ExistingLink == null
                 ? null
                 : PrepareUIInputInference.FromGuid(candidate.ExistingLink.ContextualTypeGuid);
@@ -82,16 +82,16 @@ internal static class PrepareUIInputGraphService
                 ? GH_ParamAccess.list
                 : GH_ParamAccess.item;
 
-            // Recipients are split before anything else: a contextual parameter downstream of the
-            // control is a candidate for reuse, everything else is a wire to re-route.
+            // A contextual parameter downstream of the control is a candidate for reuse; everything
+            // else is a wire to re-route.
             List<IGH_Param> recipients = control.Recipients?.ToList() ?? new List<IGH_Param>();
             candidate.ContextualRecipients.AddRange(recipients.Where(recipient => recipient is IGH_ContextualParameter));
             candidate.DirectRecipients.AddRange(recipients.Except(candidate.ContextualRecipients));
 
             // A single existing contextual parameter is the strongest evidence of the author's
-            // intent. Preserve its compatible type as the preview default, even when today's source
-            // data would infer a different recommendation; the recommendation is retained separately
-            // so the override stays visible.
+            // intent: preserve its compatible type as the preview default even when today's source
+            // data would infer a different recommendation. The recommendation is kept separately so
+            // the override stays visible.
             if (candidate.ContextualRecipients.Count == 1)
             {
                 IGH_Param existing = candidate.ContextualRecipients[0];
@@ -115,7 +115,7 @@ internal static class PrepareUIInputGraphService
     ///     out of the planning loop so the preview dialog can call it again whenever the author
     ///     changes the type or access in the drop-down: a different type can turn an "Already
     ///     prepared" row into "Ambiguous", and the author needs to see that before applying. The
-    ///     actual decision table is PrepareUIInputInference.DecideStatus; this method only gathers
+    ///     decision table itself is PrepareUIInputInference.DecideStatus; this method only gathers
     ///     the primitives it needs from the live candidate.
     /// </summary>
     internal static void ClassifyCandidate(PrepareUIInputCandidate candidate)
@@ -470,14 +470,14 @@ internal static class PrepareUIInputGraphService
     }
 
     /// <summary>
-    ///     Swaps an existing contextual parameter for a different type. A Grasshopper node cannot
-    ///     change type in place, so this creates the replacement first and only removes the old
-    ///     node once the new one is confirmed in the document - the same create-before-destroy
-    ///     order InsertContextualParameter uses. The old node's downstream recipients are rewired
-    ///     onto the new node before it is removed, mirroring how ApplyRemoval reconnects a control's
-    ///     recipients before deleting a node. Used for PrepareUIInputStatus.Replaceable rows, where
-    ///     PrepareUIInputInference.DecideStatus has already confirmed the control still feeds
-    ///     exactly one contextual parameter and only its type disagrees with what is selected.
+    ///     Swaps an existing contextual parameter for a different type. A Grasshopper node can't
+    ///     change type in place, so this creates the replacement first and only removes the old node
+    ///     once the new one is confirmed in the document: the same create-before-destroy order
+    ///     InsertContextualParameter uses. The old node's recipients are rewired onto the new node
+    ///     before it is removed, mirroring how ApplyRemoval reconnects a control's recipients before
+    ///     deleting a node. Used for PrepareUIInputStatus.Replaceable rows, where
+    ///     PrepareUIInputInference.DecideStatus has already confirmed the control still feeds exactly
+    ///     one contextual parameter and only its type disagrees with what's selected.
     /// </summary>
     private static bool ReplaceContextualParameter(
         GH_Document document,
@@ -557,8 +557,8 @@ internal static class PrepareUIInputGraphService
 
         // Removal recorded next so its undo (re-adding the old node) runs before the wire actions'
         // undo restores each recipient's source to it, and the new node's own creation is recorded
-        // last so its undo (removing it) runs first: undoing a replace unwinds newest to oldest -
-        // drop the new node, bring back the old one, then reattach its recipients to it.
+        // last so its undo (removing it) runs first: undoing a replace unwinds newest to oldest,
+        // dropping the new node, bringing back the old one, then reattaching its recipients to it.
         record.AddAction(removeAction);
         record.AddAction(new GH_AddObjectAction(newContextual));
 
@@ -791,13 +791,13 @@ internal static class PrepareUIInputGraphService
 
     /// <summary>
     ///     Default position: the batch's shared column edge (or this control's own edge, if that
-    ///     happens to reach further right), with the control vertically center-aligned to its own
-    ///     row. When the control already feeds a downstream recipient, the column is pulled back so
-    ///     the new parameter always lands in the gap before that recipient rather than colliding
-    ///     with it - a wide processing cluster a few controls down the batch would otherwise sit on
-    ///     top of every parameter's first placement attempt and push them all into the same cramped
-    ///     stack. A simple downward collision pass covers whatever this clearing still misses.
-    ///     Existing objects are never moved.
+    ///     reaches further right), with the control vertically center-aligned to its own row. When
+    ///     the control already feeds a downstream recipient, the column is pulled back so the new
+    ///     parameter lands in the gap before that recipient instead of colliding with it: a wide
+    ///     processing cluster a few controls down the batch would otherwise sit on top of every
+    ///     parameter's first placement attempt and push them all into the same cramped stack. A
+    ///     downward collision pass covers whatever this clearing still misses. Existing objects are
+    ///     never moved.
     /// </summary>
     private static void PlaceContextualParameter(
         GH_Document document,

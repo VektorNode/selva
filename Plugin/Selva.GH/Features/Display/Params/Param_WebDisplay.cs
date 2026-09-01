@@ -9,7 +9,7 @@ namespace Selva.GH.Features.Display.Params;
 /// <summary>
 ///     Dedicated Grasshopper parameter for <see cref="WebDisplayGoo" />. Beyond a typed wire, it is:
 ///     - persistent (<see cref="GH_PersistentGeometryParam{T}" />), so a Web Display can be
-///       internalized into the .gh file via the right-click "Internalise data" menu — a third way to
+///       internalized into the .gh file via the right-click "Internalise data" menu: a third way to
 ///       persist a display alongside cloud solving and the .slvm mesh file;
 ///     - preview-capable: it computes its clipping box and draws directly from its own data,
 ///       dispatching to each held <see cref="WebDisplayGoo" />'s <c>IGH_PreviewData</c> methods.
@@ -43,7 +43,7 @@ public class Param_WebDisplay : GH_PersistentGeometryParam<WebDisplayGoo>, IGH_P
     public override GH_Exposure Exposure => GH_Exposure.primary;
     public override Guid ComponentGuid => new Guid("D5E8F1A3-6B7C-4D2E-9F01-2A3B4C5D6E7F");
 
-    // IGH_PreviewObject — the GH_PersistentGeometryParam base supplies the preview behaviour; we
+    // IGH_PreviewObject: the GH_PersistentGeometryParam base supplies the preview behaviour; we
     // expose the hidden flag so the per-object preview toggle works.
     public bool Hidden
     {
@@ -77,7 +77,7 @@ public class Param_WebDisplay : GH_PersistentGeometryParam<WebDisplayGoo>, IGH_P
         }
 
         // When selected, hand the goo GH's green selection shade material so it overrides the batch
-        // colors — matching how every other geometry param highlights on selection.
+        // colors, matching how every other geometry param highlights on selection.
         var selected = Attributes.Selected;
         var meshArgs = new GH_PreviewMeshArgs(args.Viewport, args.Display,
             selected ? args.ShadeMaterial_Selected : args.ShadeMaterial, args.MeshingParameters);

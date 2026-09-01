@@ -35,14 +35,14 @@ public static class SchemaSaveGuard
         // Nothing to protect: first save on a fresh component.
         if (current == null) return SchemaSaveVerdict.Accept;
 
-        // A save that would erase real content is refused even when the base hash matches. The
-        // browser is shown a fabricated empty schema whenever the wired Context Bake holds no
+        // A save that would erase real content is refused even when the base hash matches: the
+        // browser shows a fabricated empty schema whenever the wired Context Bake holds no
         // volatile data (cleared or not-yet-run solve), and saving that must not wipe the
         // definition the component still holds.
         if (IsEmpty(incoming) && !IsEmpty(current)) return SchemaSaveVerdict.RejectEmptyOverwrite;
 
         // No base hash means staleness is unknowable. Treating that as "fine" made the guard
-        // fail open — the frontend nulls its canonical hash after a metadata update, so this is
+        // fail open: the frontend nulls its canonical hash after a metadata update, so this is
         // reachable without anything going wrong on the wire.
         if (string.IsNullOrEmpty(baseSchemaHash)) return SchemaSaveVerdict.RejectMissingBase;
 

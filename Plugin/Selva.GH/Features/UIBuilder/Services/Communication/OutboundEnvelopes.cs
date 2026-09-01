@@ -8,16 +8,15 @@ using Selva.Slva;
 namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
-///     Builds the outbound WebSocket message envelopes — the JSON shapes the web UI reads. Pure:
+///     Builds the outbound WebSocket message envelopes: the JSON shapes the web UI reads. Pure:
 ///     given a session id and a payload, returns the object to serialize. No sockets, no Rhino, no
 ///     transport state (solving-state dedup, binary frames, the live <see cref="WebSocketServer" />
-///     all stay in <see cref="WebSocketTransport" />).
+///     stay in <see cref="WebSocketTransport" />).
 ///
-///     Two envelopes are FLAT rather than wrapped, matching what their TS message types read at
-///     the top level instead of under `data:` — wrapping either broke the UI silently in the past:
-///     <see cref="ParametersAdded" />'s `availableParams`, and <see cref="MetadataUpdated" />'s
-///     `changedParams` (a flat array keyed by parameter id, inputs and outputs mixed — the UI calls
-///     `.forEach` on it, which throws on the nested <see cref="DiscoveredParameters" /> shape).
+///     <see cref="ParametersAdded" /> and <see cref="MetadataUpdated" /> are FLAT rather than
+///     wrapped, matching what their TS message types read at the top level instead of under
+///     `data:`. Wrapping either broke the UI silently in the past: the UI calls `.forEach` on
+///     `changedParams`, which throws on the nested <see cref="DiscoveredParameters" /> shape.
 ///     The generic <see cref="Wrapped" /> envelope (`{ type, sessionId, data }`) is for the rest,
 ///     whose TS type reads `msg.data.&lt;field&gt;`.
 /// </summary>
@@ -97,7 +96,7 @@ public static class OutboundEnvelopes
     ///     The `outputs` JSON envelope; binary mesh frames follow separately from the transport.
     ///     `binaryBatchCount` tells the client how many to collect. `displayItems` carries non-mesh
     ///     items (curves, points) as JSON, since they have no binary form; null when there are none,
-    ///     so a mesh-only solve stays byte-for-byte identical to before displayItems existed.
+    ///     so a mesh-only solve stays byte-for-byte identical to before `displayItems` existed.
     /// </summary>
     public static object Outputs(string sessionId, Dictionary<string, object> outputs,
         Dictionary<string, object> fileOutputs, int binaryBatchCount, string modelUnits,

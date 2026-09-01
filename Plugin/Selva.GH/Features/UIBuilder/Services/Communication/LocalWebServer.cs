@@ -18,7 +18,7 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 ///
 ///     Built on raw <see cref="TcpListener" /> rather than <c>HttpListener</c>: HttpListener
 ///     depends on the Windows-only Http.sys driver and throws PlatformNotSupportedException on
-///     macOS and Linux. Only GET and HEAD are implemented — the embedded UI never needs anything else.
+///     macOS and Linux. Only GET and HEAD are implemented: the embedded UI never needs anything else.
 /// </summary>
 public class LocalWebServer : IDisposable
 {
@@ -331,7 +331,7 @@ public class LocalWebServer : IDisposable
         }
         catch (Exception ex) when (IsClientDisconnect(ex))
         {
-            // Browser closed the socket mid-response (reload/navigation/prefetch cancel) — routine, not a fault.
+            // Browser closed the socket mid-response (reload/navigation/prefetch cancel): routine, not a fault.
             Logger.Log($"Client disconnected during HTTP request: {ex.Message}");
         }
         catch (Exception ex)
@@ -431,7 +431,7 @@ public class LocalWebServer : IDisposable
     }
 
     /// <summary>
-    ///     Binds to port 0 so the OS assigns a free port — avoids a check-then-bind race.
+    ///     Binds to port 0 so the OS assigns a free port: avoids a check-then-bind race.
     /// </summary>
     private static int FindAvailablePort()
     {

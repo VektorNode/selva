@@ -45,9 +45,6 @@ public class OBSOLETE_WebDisplay_UntilV0_2_0 : GH_TaskCapableComponent<WebDispla
         pManager[3].Optional = true;
     }
 
-    /// <summary>
-    ///     Creates custom component attributes
-    /// </summary>
     public override void CreateAttributes()
     {
         m_attributes = new GH_ContextBakeOutputAttributes(this);
@@ -111,7 +108,6 @@ public class OBSOLETE_WebDisplay_UntilV0_2_0 : GH_TaskCapableComponent<WebDispla
         {
             var stopwatch = Stopwatch.StartNew();
 
-            // Extract geometries
             var geometries = ExtractGeometries(geoGoos);
 
             if (geometries.Count == 0)
@@ -121,7 +117,6 @@ public class OBSOLETE_WebDisplay_UntilV0_2_0 : GH_TaskCapableComponent<WebDispla
                 return null;
             }
 
-            // Convert to meshes
             var meshes = ConvertToMeshesParallel(geometries, meshSettings);
 
             if (meshes.Count == 0)
@@ -138,13 +133,10 @@ public class OBSOLETE_WebDisplay_UntilV0_2_0 : GH_TaskCapableComponent<WebDispla
                     $"Successfully meshed {meshes.Count} of {geometries.Count} geometries ({skipped} skipped)");
             }
 
-            // Prepare names and materials
             var names = PrepareNames(meshes.Count, nameGoos);
             var materials = PrepareMaterials(meshes.Count, materialGoos);
 
-            // Create batch
             var batch = MeshBatchProcessor.CreateBatch(meshes, names, materials);
-
 
             return new WebDisplayGoo(batch);
         }

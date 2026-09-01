@@ -31,7 +31,7 @@ public static class FileImporter
         }
 
         string tempPath = null;
-        // Only delete files we created ourselves (base64/url temp files) — never the
+        // Only delete files we created ourselves (base64/url temp files), never the
         // user's own file when Type is "path" or unspecified.
         var deleteAfterImport = false;
         try
@@ -223,8 +223,8 @@ public static class FileImporter
         {
             // SSRF guard: resolve the host and reject any non-public address (loopback,
             // link-local incl. cloud metadata, private ranges). On net7+ the returned IPs
-            // are used to pin the connection (see CreatePinnedClient) so a rebind between
-            // this check and the fetch can't redirect us to an internal host.
+            // pin the connection (see CreatePinnedClient) so a rebind between this check
+            // and the fetch can't redirect us to an internal host.
             if (!SafeUrlValidator.TryValidate(url, out var resolvedAddresses, out var urlError))
             {
                 return (false, null, urlError);
@@ -282,7 +282,7 @@ public static class FileImporter
                 }
 
                 var result = (true, tempPath, "");
-                tempPath = null; // success — caller owns the file now
+                tempPath = null; // success: caller owns the file now
                 return result;
             }
             finally

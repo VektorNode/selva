@@ -22,7 +22,7 @@ namespace Selva.GH.Features.Display.Components;
 // branch's union bounding box. Names, layers and metadata ride along per mesh.
 //
 // A merged payload takes this component's own id for web pick identity, so each mesh records where
-// it came from in its gh:component / gh:originalIndex metadata — provenance survives the merge.
+// it came from in its gh:component / gh:originalIndex metadata: provenance survives the merge.
 public class GH_CombineDisplay : GH_Component
 {
     public GH_CombineDisplay()
@@ -133,7 +133,7 @@ public class GH_CombineDisplay : GH_Component
             return wd.Value;
         }
 
-        // Fall back to a JSON cast — e.g. the value arrived as a string via compute/file IO.
+        // Fall back to a JSON cast: e.g. the value arrived as a string via compute/file IO.
         var batchGoo = new WebDisplayGoo();
         return batchGoo.CastFrom(goo) ? batchGoo.Value : null;
     }

@@ -105,7 +105,7 @@ public class BridgeOrchestrator : IDisposable
         {
             // A solve is running or scheduled-but-not-started: coalesce (latest wins) instead of
             // dropping. Dropping lost the final slider value when an update landed in the ~1 RTT
-            // window before the client's solving mirror caught up. Drained in DrainPendingValues
+            // window before the client's solving mirror caught up. DrainPendingValues applies it
             // on a fresh UI tick once the in-flight solve ends.
             if (_stateManager.IsBusy)
             {
@@ -124,10 +124,10 @@ public class BridgeOrchestrator : IDisposable
     }
 
     /// <summary>
-    ///     Apply a set of values to the live document and schedule a solve. Marks the solve as scheduled
-    ///     (synchronously, before ScheduleSolution's ~10ms defer elapses) so a value update arriving in
-    ///     the schedule→start gap coalesces instead of scheduling a competing solve. Re-reads the current
-    ///     schema each call — it may have changed via a save mid-drag.
+    ///     Applies a set of values to the live document and schedules a solve. Marks the solve as
+    ///     scheduled synchronously, before ScheduleSolution's ~10ms defer elapses, so a value update
+    ///     arriving in the schedule-start gap coalesces instead of scheduling a competing solve.
+    ///     Re-reads the current schema each call: it may have changed via a save mid-drag.
     /// </summary>
     private void ApplyValuesAndSchedule(Dictionary<string, object> values)
     {
@@ -151,8 +151,8 @@ public class BridgeOrchestrator : IDisposable
             }
         });
 
-        // A non-zero count means a solution was scheduled (ApplyValuesAndSchedule schedules iff at
-        // least one parameter expired). Close the schedule→start window before it opens.
+        // Non-zero means a solution was scheduled: ApplyValuesAndSchedule schedules only when at
+        // least one parameter expired. Close the schedule-start window before it opens.
         if (updateCount > 0)
         {
             _stateManager.MarkSolveScheduled();
@@ -160,10 +160,10 @@ public class BridgeOrchestrator : IDisposable
     }
 
     /// <summary>
-    ///     Apply any values that coalesced while a solve was in flight. Called on a fresh UI tick after
-    ///     SolutionEnd — never inline in the end handler, which is reentrant (it broadcasts outputs,
-    ///     merges bake outputs, etc.). The buffer is taken-and-cleared first so a value changed during
-    ///     the drain solve is captured for the next cycle, not lost.
+    ///     Applies any values that coalesced while a solve was in flight. Called on a fresh UI tick
+    ///     after SolutionEnd, never inline in the end handler, which is reentrant (it broadcasts
+    ///     outputs, merges bake outputs, etc.). The buffer is taken and cleared first so a value
+    ///     changed during the drain solve is captured for the next cycle, not lost.
     /// </summary>
     public void DrainPendingValues()
     {
@@ -216,7 +216,7 @@ public class BridgeOrchestrator : IDisposable
 
                 // The Context Bake only holds a schema while a solve's volatile data is alive.
                 // After a cleared or expired solve it is empty even though the component still
-                // holds the real schema — fall back to that before inventing a blank one, or the
+                // holds the real schema: fall back to that before inventing a blank one, or the
                 // editor opens on an empty canvas over a definition that still exists.
                 schema = _getSchema() ?? CreateDefaultSchema(document);
             }
@@ -233,9 +233,9 @@ public class BridgeOrchestrator : IDisposable
 
             _ = _webSocketTransport.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 
-            // Also broadcast when the schema declares no outputs but the 3D viewer is on: the
-            // meshes come from ContextBakes, not from declared outputs, so gating on Outputs
-            // alone leaves a display-only definition with an empty viewer.
+            // Also broadcast when the schema declares no outputs but the 3D viewer is on: meshes
+            // come from ContextBakes, not declared outputs, so gating on Outputs alone leaves a
+            // display-only definition with an empty viewer.
             if (validatedSchema.Outputs?.Count > 0 || (validatedSchema.ViewerOptions?.EnableLocal ?? false))
             {
                 ScheduleOutputBroadcast(validatedSchema);
@@ -275,8 +275,8 @@ public class BridgeOrchestrator : IDisposable
                 return;
             }
 
-            // The UI sends the hash of the canonical it forked from. A mismatch means its draft
-            // is stale; reply with the fresh canonical instead of overwriting GH-side changes.
+            // The UI sends the hash of the canonical it forked from. A mismatch means its draft is
+            // stale: reply with the fresh canonical instead of overwriting GH-side changes.
             var currentSchema = _getSchema();
             var verdict = SchemaSaveGuard.Evaluate(currentSchema, schema, request.BaseSchemaHash);
             if (verdict != SchemaSaveVerdict.Accept)
@@ -318,7 +318,7 @@ public class BridgeOrchestrator : IDisposable
             _schemaSynchronizer.ClearMetadataCache();
             document.Modified();
 
-            // Suppress the re-solve the component expire below triggers, or the frontend
+            // Suppress the re-solve the component-expire call below triggers, or the frontend
             // sees a spurious solving-state flash.
             _webSocketTransport.SuppressSolvingCycles(1);
 
@@ -335,7 +335,7 @@ public class BridgeOrchestrator : IDisposable
         }
         catch (Exception ex)
         {
-            _webSocketTransport.SuppressSolvingCycles(0); // clear suppression, or the next solve stays hidden
+            _webSocketTransport.SuppressSolvingCycles(0); // clear the suppression, or the next solve stays hidden
             _ = _webSocketTransport.BroadcastSchemaSaved(false, ex.Message);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
         }
@@ -430,7 +430,7 @@ public class BridgeOrchestrator : IDisposable
     }
 
     // -------------------------------------------------------------------------
-    // ContextBake helpers — single traversal, used by both connect and save
+    // ContextBake helpers: single traversal, used by both connect and save
     // -------------------------------------------------------------------------
 
     private GH_Component FindWiredContextBake()
@@ -498,9 +498,9 @@ public class BridgeOrchestrator : IDisposable
 
     /// <summary>
     ///     Nothing to replay: the ContextBakes' volatile data is gone (cleared or expired solution),
-    ///     which is what a browser that connects before the definition has solved sees. Expiring the
-    ///     ContextBakes re-solves them and everything upstream that feeds them, and the resulting
-    ///     SolutionEnd broadcasts the display data — the same effect as rewiring the bake by hand.
+    ///     which is what a browser sees when it connects before the definition has solved. Expiring
+    ///     the ContextBakes re-solves them and everything upstream that feeds them, and the resulting
+    ///     SolutionEnd broadcasts the display data, the same effect as rewiring the bake by hand.
     /// </summary>
     private void RegenerateDisplayData(UISchema schema)
     {

@@ -53,7 +53,7 @@ public static class ParameterTypeHelper
         return false;
     }
 
-    /// <summary>A ContextBake fed by an ISelvaFileOutput component — a file download output.</summary>
+    /// <summary>A ContextBake fed by an ISelvaFileOutput component: a file download output.</summary>
     public static bool IsFileOutputBakeComponent(GH_Component component)
     {
         if (component == null || !IsContextBakeComponent(component))
@@ -209,7 +209,7 @@ public static class ParameterTypeHelper
             }
 
             // A bare param (relay/generic) just forwards data, so keep walking up through it.
-            // A param owned by a real (non-T) component stops the search on this branch — we
+            // A param owned by a real (non-T) component stops the search on this branch: we
             // don't tunnel through arbitrary components, only wire-forwarding params.
             if (owner == null || ReferenceEquals(owner, source))
             {
@@ -526,7 +526,7 @@ public static class ParameterTypeHelper
         }
 
         var method = type.GetMethod(name);
-        cache[type] = method; // cache nulls too — avoids repeated misses
+        cache[type] = method; // cache nulls too: avoids repeated misses
         return method;
     }
 

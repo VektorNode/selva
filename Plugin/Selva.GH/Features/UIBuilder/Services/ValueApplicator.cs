@@ -290,7 +290,7 @@ public class ValueApplicator
                 return ApplyToValueList(contextParam, value, addMessage, pendingExpirations);
             }
 
-            // File params go through ApplyToFileParameter — AssignContextualDataTree can't carry a FileInputGoo.
+            // File params go through ApplyToFileParameter: AssignContextualDataTree can't carry a FileInputGoo.
             if (paramTypeName == "file")
             {
                 return ApplyToFileParameter(contextParam, value, addMessage, pendingExpirations);
@@ -342,7 +342,7 @@ public class ValueApplicator
     {
         try
         {
-            // Multi-select (checklist) values arrive as arrays — dispatch to SelectItemsByName.
+            // Multi-select (checklist) values arrive as arrays: dispatch to SelectItemsByName.
             var multiValues = ExtractMultiValues(value);
             if (multiValues != null)
             {
@@ -366,7 +366,7 @@ public class ValueApplicator
             if (string.IsNullOrEmpty(selectedKey))
             {
                 // Empty is a valid state, not an error: an unchecked checklist, or a dynamic value
-                // list before its first solve has produced options. Nothing to apply — no-op.
+                // list before its first solve has produced options. Nothing to apply: no-op.
                 return true;
             }
 

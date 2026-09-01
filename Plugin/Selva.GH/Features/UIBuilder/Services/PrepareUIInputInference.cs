@@ -65,7 +65,6 @@ internal sealed class PrepareUIInputContextualType
 
     internal Guid TypeGuid { get; }
 
-    /// <summary>Name as it appears on the Grasshopper ribbon, e.g. "Get Number".</summary>
     internal string DisplayName { get; }
 
     /// <summary>Plug-in that must be installed for this type to resolve, for diagnostics.</summary>
@@ -237,23 +236,18 @@ internal static class PrepareUIInputInference
     private const int MaxNickNameLength = 128;
     private const int KeyGuidFragmentLength = 8;
 
-    /// <summary>External Hops / Rhino.Compute contextual parameter.</summary>
     internal static readonly PrepareUIInputContextualType GetNumber = new(
         new Guid("7b36b876-9451-46f5-8220-a200d969cc66"), "Get Number", "Hops / Rhino.Compute");
 
-    /// <summary>External Hops / Rhino.Compute contextual parameter.</summary>
     internal static readonly PrepareUIInputContextualType GetInteger = new(
         new Guid("b228887e-0852-4d9f-bd46-2591646e0d7c"), "Get Integer", "Hops / Rhino.Compute");
 
-    /// <summary>External Hops / Rhino.Compute contextual parameter.</summary>
     internal static readonly PrepareUIInputContextualType GetBoolean = new(
         new Guid("51ef601d-f86e-4ee4-bcf2-3d459d3e95e9"), "Get Boolean", "Hops / Rhino.Compute");
 
-    /// <summary>External Hops / Rhino.Compute contextual parameter.</summary>
     internal static readonly PrepareUIInputContextualType GetString = new(
         new Guid("fed87bdd-8327-49cd-949c-09d70f3c345c"), "Get String", "Hops / Rhino.Compute");
 
-    /// <summary>Selva's own contextual parameter (GetValueListParameter).</summary>
     internal static readonly PrepareUIInputContextualType GetValueList = new(
         new Guid("0CC81276-5DB7-4306-9968-086524EC0C6E"), "Get Value List", "Selva");
 
@@ -485,12 +479,9 @@ internal static class PrepareUIInputInference
     }
 
     /// <summary>
-    ///     Decides a candidate's status from its currently selected type and the live wiring,
-    ///     expressed entirely in primitives so it can be unit tested without a Grasshopper document.
-    ///     Mirrors the branches PrepareUIInputGraphService.ClassifyCandidate gathers from the live
-    ///     graph: no compatible type, a disconnected control, a missing provider, more than one
-    ///     existing contextual reader, a type mismatch against an existing reader, a repairable
-    ///     drift (name/access/stray wires), an already-correct reader, or a fresh insertion.
+    ///     Decides a candidate's status from its selected type and the live wiring, expressed
+    ///     entirely in primitives so it can be unit tested without a Grasshopper document. Mirrors
+    ///     the branches PrepareUIInputGraphService.ClassifyCandidate gathers from the live graph.
     /// </summary>
     internal static PrepareUIInputDecision DecideStatus(
         PrepareUIInputContextualType selectedType,
@@ -556,12 +547,12 @@ internal static class PrepareUIInputInference
         {
             if (existingContextualTypeGuid != selectedType.TypeGuid)
             {
-                // The node itself cannot change type in place, but the relationship can still be
-                // updated: PrepareUIInputGraphService.ReplaceContextualParameter removes the
-                // existing node and places a new one of the chosen type, reconnecting whatever the
-                // old node fed. Selected defaults to true, same as Repairable, since this only
-                // happens after the author deliberately picked a different type (or the existing
-                // node's type was not recognized) and Update Get inputs is how they act on it.
+                // The node can't change type in place, so PrepareUIInputGraphService.
+                // ReplaceContextualParameter removes it and places a new one of the chosen type,
+                // reconnecting whatever the old node fed. Selected defaults to true (like
+                // Repairable): this only fires after the author deliberately picked a different
+                // type (or the existing node's type wasn't recognized), and Update Get inputs is
+                // how they act on it.
                 return new PrepareUIInputDecision(
                     PrepareUIInputStatus.Replaceable,
                     $"An existing '{existingContextualName}' reads this control. Updating will remove " +

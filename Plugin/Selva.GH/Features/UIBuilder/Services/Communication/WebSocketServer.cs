@@ -156,7 +156,7 @@ public class WebSocketServer : IDisposable
     public void Stop()
     {
         // Under the lock: flip IsRunning and detach the client collections. The actual socket
-        // closes happen OUTSIDE the lock — CloseAsync().Wait() blocks up to ClientCloseTimeoutMs
+        // closes happen OUTSIDE the lock: CloseAsync().Wait() blocks up to ClientCloseTimeoutMs
         // per client, and holding _clientsLock across that stalls every broadcast snapshot
         // (taken synchronously on the Rhino UI thread at solve end) for the whole duration.
         List<WebSocket> clientsToClose;
@@ -650,7 +650,7 @@ public class WebSocketServer : IDisposable
 
                 if (result.MessageType == WebSocketMessageType.Text)
                 {
-                    // Decode directly from the buffer — no extra ToArray() copy.
+                    // Decode directly from the buffer: no extra ToArray() copy.
                     var message = Encoding.UTF8.GetString(
                         messageBuffer.GetBuffer(), 0, (int)messageBuffer.Length);
 
@@ -775,7 +775,7 @@ public class WebSocketServer : IDisposable
     ///     WebSocket.SendAsync must never be called concurrently on the same socket.
     ///
     ///     Deliberately NOT IDisposable: the semaphore was previously disposed on client removal,
-    ///     which raced in-flight SendToClientAsync tasks — WaitAsync/Release on a disposed
+    ///     which raced in-flight SendToClientAsync tasks: WaitAsync/Release on a disposed
     ///     SemaphoreSlim throws ObjectDisposedException and faulted whole broadcasts whenever a
     ///     client disconnected mid-send. A SemaphoreSlim whose AvailableWaitHandle is never touched
     ///     holds no unmanaged resources, so dropping the reference and letting GC collect it is safe.

@@ -19,7 +19,7 @@ namespace Selva.GH.Features.ComputeIO.Components;
 
 /// <summary>
 ///     A contextual parameter that supplies an image (PNG/JPEG/WEBP/SVG) from the web UI as a
-///     FileInputGoo (path, URL, or base64). Unlike Get File this does no Rhino import — it
+///     FileInputGoo (path, URL, or base64). Unlike Get File this does no Rhino import: it
 ///     carries the raw image payload downstream, where Draw Image turns it into an ImageElement.
 /// </summary>
 public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
@@ -112,7 +112,7 @@ public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
     }
 
     /// <summary>
-    ///     Assigns contextual data as a tree — called by Rhino.Compute via reflection.
+    ///     Assigns contextual data as a tree: called by Rhino.Compute via reflection.
     /// </summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
     {
@@ -293,7 +293,7 @@ public class GetImageParameter : GH_Param<FileInputGoo>, IGH_ContextualParameter
         }
         catch (JsonException)
         {
-            // Not JSON — treat as a path.
+            // Not JSON: treat as a path.
         }
         catch (Exception)
         {
