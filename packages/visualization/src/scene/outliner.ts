@@ -2,8 +2,8 @@
 // SceneOutliner: the object-list state machine over a live THREE.Scene
 // ============================================================================
 //
-// Everything an outliner panel needs — content filtering, layer grouping, search, collapse,
-// visibility and selection — with no DOM and no framework. A host renders `layerGroups()` and
+// Everything an outliner panel needs (content filtering, layer grouping, search, collapse,
+// visibility and selection) with no DOM and no framework. A host renders `layerGroups()` and
 // forwards clicks; see `SceneManager.svelte` in `@selvajs/ui` for the Svelte binding.
 
 import type * as THREE from 'three';
@@ -36,7 +36,7 @@ export interface SceneOutliner {
 	readonly selection: SelectionState;
 	readonly collapsed: Set<string>;
 
-	/** Not memoized — recomputes from the scene on every call. */
+	/** Not memoized: recomputes from the scene on every call. */
 	objects(): THREE.Object3D[];
 	/**
 	 * One entry per source object, which is what a panel lists. Merged meshes expand into their
@@ -49,7 +49,7 @@ export interface SceneOutliner {
 	/**
 	 * Content grouped by layer, filtered by `searchQuery` (free text over layer and object
 	 * names). The query is a parameter rather than outliner state so a host can derive this
-	 * without writing back — mutating the outliner from a `$derived` is a Svelte error.
+	 * without writing back: mutating the outliner from a `$derived` is a Svelte error.
 	 */
 	layerGroups(searchQuery?: string): Map<string, THREE.Object3D[]>;
 
@@ -58,18 +58,18 @@ export interface SceneOutliner {
 
 	/**
 	 * Toggle one object's visibility. When the object is part of a multi-selection, the whole
-	 * selection follows it — hiding one of five selected meshes hides all five.
+	 * selection follows it: hiding one of five selected meshes hides all five.
 	 */
 	toggleObject(object: THREE.Object3D): void;
 
-	/** {@link toggleObject}, for one entry — a whole object or a single merged member. */
+	/** {@link toggleObject}, for one entry (a whole object or a single merged member). */
 	toggleEntry(entry: SceneEntry): void;
 
 	/**
-	 * Select by entry key (see {@link SceneEntry}) — a merged member is selectable on its own, so
+	 * Select by entry key (see {@link SceneEntry}): a merged member is selectable on its own, so
 	 * uuid would not distinguish siblings inside one mesh.
 	 *
-	 * Shift-ranges resolve against `flatVisibleUuids()`, not scene-graph order — so pass the
+	 * Shift-ranges resolve against `flatVisibleUuids()`, not scene-graph order, so pass the
 	 * same `searchQuery` the panel is displaying, or a range will span filtered-out objects.
 	 */
 	select(key: string, modifiers: SelectionModifiers, searchQuery?: string): void;

@@ -20,7 +20,7 @@ export interface ThreeViewer {
 	gizmo: ViewGizmo | null;
 	/** Null unless `measure.enabled`. */
 	measureTool: MeasureTool | null;
-	/** CSS2D annotation overlay. Always present — labels render above the canvas and don't take input. */
+	/** CSS2D annotation overlay. Always present: labels render above the canvas and don't take input. */
 	labelLayer: LabelLayer;
 	/**
 	 * Pointer tools competing for canvas clicks, ahead of object selection. Built-ins are already
@@ -31,29 +31,30 @@ export interface ThreeViewer {
 	 * No-op unless `edges.enabled`. Extraction runs off-thread for large meshes, so overlays can
 	 * attach a beat later; meshes over `edges.maxTriangles` fall back to the screen-space edge shader.
 	 *
-	 * `overrides` applies to this call only, leaving the viewer's configured edge options alone —
+	 * `overrides` applies to this call only, leaving the viewer's configured edge options alone:
 	 * a line-drawing look wants `distanceFade: false` without changing what a later toggle does.
 	 */
 	applyEdges: (root: THREE.Object3D, overrides?: Partial<EdgeOptions>) => void;
 	/**
-	 * Prefer over `removeEdges` directly — also cancels in-flight async attaches and stands down the
+	 * Prefer over `removeEdges` directly: also cancels in-flight async attaches and stands down the
 	 * screen-space edge fallback if active.
 	 */
 	clearEdges: (root: THREE.Object3D) => void;
 	/**
-	 * Request a repaint from the on-demand render loop. Built-in setters and input invalidate
-	 * automatically; call this after mutating the scene externally. No-op when `render.onDemand` is false.
+	 * Requests a repaint from the on-demand render loop. Built-in setters and input invalidate
+	 * automatically; call this after mutating the scene externally. Irrelevant when `render.onDemand`
+	 * is false: the loop renders every frame regardless.
 	 */
 	invalidate: () => void;
 	/**
-	 * PNG (or `type`) snapshot of the current view. Use this rather than reading the canvas directly —
+	 * PNG (or `type`) snapshot of the current view. Use this rather than reading the canvas directly:
 	 * it forces a synchronous draw first, which a plain `toBlob` on a `preserveDrawingBuffer: false`
 	 * context cannot do, and would hand back a blank image.
 	 */
 	captureImage: (type?: string, quality?: number) => Promise<Blob | null>;
 	setAmbientOcclusion: (enabled: boolean) => void;
 	/**
-	 * Retunes lighting/material (tone mapping, fill, IBL, AO) only — never edges/grid. Overwrites
+	 * Retunes lighting/material (tone mapping, fill, IBL, AO) only, never edges/grid. Overwrites
 	 * any granular lighting dials set earlier with the preset's values.
 	 */
 	setLook: (look: Look) => void;
@@ -90,10 +91,10 @@ export interface ThreeViewer {
 	 * Pass `appId` to scope it to one app (`userData.source = 'app:<id>'`) so `clearUserGeometry`
 	 * can clear that app alone; without one it's tagged `'user'` and only a global clear removes it.
 	 *
-	 * Not restyled by `setLook` — the caller owns these materials.
+	 * Not restyled by `setLook`: the caller owns these materials.
 	 */
 	addUserGeometry: (object: THREE.Object3D, appId?: string) => void;
 	removeUserGeometry: (object: THREE.Object3D) => void;
-	/** Removes and disposes geometry added via `addUserGeometry` — one app's, or all of it. */
+	/** Removes and disposes geometry added via `addUserGeometry`: one app's, or all of it. */
 	clearUserGeometry: (appId?: string) => void;
 }

@@ -4,10 +4,10 @@ import { DEFAULT_LOOK, LOOK_PRESETS } from '../../shared/index.js';
 import type { ThreeInitializerOptions } from '../types.js';
 import { isoOffset, sunOffset, upToAxis } from '../up-axis.js';
 
-/** Rhino's convention, and the frame all geometry arrives in — Selva is Z-up end to end. */
+/** Rhino's convention, and the frame all geometry arrives in: Selva is Z-up end to end. */
 export const defaultUp = new THREE.Vector3(0, 0, 1);
 
-// onMaxAnisotropy stays optional — a caller-supplied hook, not a config value with a default.
+// onMaxAnisotropy stays optional: a caller-supplied hook, not a config value with a default.
 export type ResolvedOptions = Required<Omit<ThreeInitializerOptions, 'onMaxAnisotropy'>> &
 	Pick<ThreeInitializerOptions, 'onMaxAnisotropy'>;
 
@@ -147,7 +147,7 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			preserveDrawingBuffer: options.render?.preserveDrawingBuffer ?? false,
 			ambientOcclusion: options.render?.ambientOcclusion ?? preset.ambientOcclusion,
 			aoIntensity: options.render?.aoIntensity ?? 1,
-			// Default caps AO buffers at 1x — biggest lever on GTAO cost at high DPI.
+			// Default caps AO buffers at 1x: the biggest lever on GTAO cost at high DPI.
 			aoPixelRatio: options.render?.aoPixelRatio ?? 1,
 			onDemand: options.render?.onDemand ?? true
 		},

@@ -1,5 +1,5 @@
 /**
- * `parse/` — backend payload → THREE meshes + metadata. Depends only on `shared/`; never imports
+ * `parse/`: backend payload → THREE meshes + metadata. Depends only on `shared/`; never imports
  * from `render/` or `scene/`.
  *
  * The SLVA binary wire format (magics, version gates, flag bits, `parseBinaryMeshBatch`) is an
@@ -23,7 +23,7 @@ export {
 
 export { parseMeshBatchObject, parseMeshBatchBlob } from './webdisplay/batch-parser.js';
 
-// apply-texture.ts self-subscribes via shared's observeMaxAnisotropy — render/ never imports this layer.
+// apply-texture.ts self-subscribes via shared's observeMaxAnisotropy: render/ never imports this layer.
 export { setTextureAnisotropy } from './webdisplay/apply-texture.js';
 
 export type {

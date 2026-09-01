@@ -1,7 +1,7 @@
 // Mesh ownership policy for `@selvajs/solve`'s result memo: `SolveResult<TMesh>` is opaque to the
 // memo, so clone/release are injected here instead. The viewer disposes whatever it last rendered
 // (`clearScene`), so a memo handing out live references would serve a disposed object on the next
-// hit — `clone` copies geometry explicitly (`Object3D.clone()` shares it by reference) but leaves
+// hit. `clone` copies geometry explicitly (`Object3D.clone()` shares it by reference) but leaves
 // materials shared, since `clearScene` already spares `SHARED_MATERIALS` singletons and recompiling
 // per-mesh materials as shaders is expensive.
 
@@ -25,12 +25,12 @@ export function cloneSceneObjects(meshes: THREE.Object3D[]): THREE.Object3D[] {
 	});
 }
 
-/** Skips materials — the memo never owns those; see the file header. */
+/** Skips materials: the memo never owns those. See the file header. */
 export function releaseSceneObjects(meshes: THREE.Object3D[]): void {
 	meshes.forEach((root) => disposeObjectTree(root, { materials: false }));
 }
 
-/** Structurally, not nominally, typed as `@selvajs/solve/client`'s `MeshPolicy<THREE.Object3D>` — avoids a dependency on solve. */
+/** Structurally, not nominally, typed as `@selvajs/solve/client`'s `MeshPolicy<THREE.Object3D>`; avoids a dependency on solve. */
 export const meshPolicy: {
 	clone(meshes: THREE.Object3D[]): THREE.Object3D[];
 	release(meshes: THREE.Object3D[]): void;

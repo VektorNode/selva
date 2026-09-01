@@ -8,7 +8,7 @@ import type { NearPlaneFitter } from '../near-plane.js';
 import type { RenderPipeline } from '../render-pipeline.js';
 import type { ViewGizmo } from '../view-gizmo.js';
 
-// Resize applied before render so buffer clear and draw happen in the same frame — avoids a
+// Resize applies before render so buffer clear and draw happen in the same frame: avoids a
 // visible blank frame on resize.
 export function createAnimationLoop(
 	renderer: THREE.WebGLRenderer,
@@ -31,7 +31,7 @@ export function createAnimationLoop(
 	let animationId: number | null = null;
 	let lastTime = performance.now();
 
-	// The loop always *ticks* (cheap); it only *renders* when invalidate() was called, the active
+	// The loop always ticks (cheap); it only renders when invalidate() was called, the active
 	// camera moved (matrix compare catches damping/presets/gizmo/near-plane), or the idle-repaint
 	// interval elapsed as a safety net for any mutation that forgot to invalidate.
 	let renderRequested = true; // first frame always renders
@@ -45,7 +45,7 @@ export function createAnimationLoop(
 	};
 
 	const cameraMoved = (activeCamera: THREE.Camera): boolean => {
-		// renderer.render normally refreshes matrixWorld, but we're deciding whether to call it — so
+		// renderer.render normally refreshes matrixWorld, but this decides whether to call render, so
 		// refresh here first (cheap: a camera has no deep subtree).
 		activeCamera.updateMatrixWorld();
 		const moved =
@@ -73,7 +73,7 @@ export function createAnimationLoop(
 		const { width, height } = getCanvasSize();
 		if (width === 0 || height === 0) return;
 
-		// Must floor (not round) to match renderer.setSize's own flooring — otherwise the size
+		// Must floor, not round, to match renderer.setSize's own flooring: otherwise the size
 		// comparison below never settles and the resize branch runs every frame.
 		const newW = Math.floor(width * pixelRatio);
 		const newH = Math.floor(height * pixelRatio);
@@ -93,7 +93,7 @@ export function createAnimationLoop(
 	const drawFrame = (activeCamera: THREE.Camera, delta: number) => {
 		const renderPipeline = getRenderPipeline?.();
 		if (renderPipeline) {
-			renderPipeline.setCamera(activeCamera); // retarget in case 2D/3D swapped
+			renderPipeline.setCamera(activeCamera); // retarget: 2D/3D may have swapped
 			renderPipeline.render(delta);
 		} else {
 			renderer.render(scene, activeCamera);
@@ -105,8 +105,8 @@ export function createAnimationLoop(
 		if (gizmo) gizmo.render(renderer);
 	};
 
-	// Without preserveDrawingBuffer the colour buffer is cleared once the browser composites, so a
-	// canvas read (toBlob/toDataURL) only sees pixels if it happens in the same task as a draw.
+	// Without preserveDrawingBuffer the color buffer clears once the browser composites, so a
+	// canvas read (toBlob/toDataURL) only sees pixels if it runs in the same task as a draw.
 	const renderNow = () => {
 		drawFrame(getActiveCamera(), 0);
 	};

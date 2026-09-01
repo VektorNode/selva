@@ -2,7 +2,7 @@
 // Scene content: which objects are user content, and how they are labelled
 // ============================================================================
 //
-// A live THREE.Scene holds more than the solve's output — the renderer also adds a camera, lights,
+// A live THREE.Scene holds more than the solve's output: the renderer also adds a camera, lights,
 // and viewer aids (grid, floor, measurement overlay, CSS2D label layer). Anything presenting the
 // scene to a user has to filter those out the same way.
 
@@ -25,7 +25,7 @@ export function getSceneObjects(scene: THREE.Scene): THREE.Object3D[] {
 	return scene.children.filter(isSceneContent);
 }
 
-// `Line2`/`LineSegments2` are how curves are rendered — an implementation detail no user should
+// `Line2`/`LineSegments2` are how curves are rendered, an implementation detail no user should
 // have to decode.
 export function prettyType(type: string): string {
 	return (

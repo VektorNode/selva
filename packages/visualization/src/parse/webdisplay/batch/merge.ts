@@ -128,7 +128,7 @@ interface MergedMember {
 /**
  * Per-member records for a merged mesh, each carrying its window into the merged index buffer.
  * The windows are a prefix sum over `indexCount` because the merge concatenates members in this
- * order — see the copy loop in {@link createMergedMesh}.
+ * order: see the copy loop in {@link createMergedMesh}.
  */
 function mergedMembers(group: MaterialGroup): MergedMember[] {
 	const members: MergedMember[] = [];
@@ -169,7 +169,7 @@ export function finalizeMergedMesh(
 		// never lose it.
 		//
 		// `indexStart`/`indexCount` are the member's window into the merged index buffer, which is
-		// what maps a raycast hit back to the one source object under the cursor — without them a
+		// what maps a raycast hit back to the one source object under the cursor: without them a
 		// click could only ever identify the whole merged mesh. The merge writes members in this
 		// exact order (see the concatenation loop above), so the windows are a prefix sum over
 		// `indexCount` and are never stored on the wire.
