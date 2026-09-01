@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/schemas",
-	"version": "5.0.1",
+	"version": "5.0.2",
 	"description": "Schema definitions, generated TypeScript types, and code generators for Selva",
 	"license": "MIT",
 	"author": "VektorNode",

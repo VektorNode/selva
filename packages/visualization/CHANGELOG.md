@@ -1,5 +1,65 @@
 # @selvajs/visualization
 
+## 1.2.0
+
+### Minor Changes
+
+- f24ae8d: Add merged-mesh picking, lineart/wireframe looks, and fix material state leaking between looks
+
+  Merging by material collapses thousands of source objects into a handful of `THREE.Mesh`
+  instances, which is what keeps an IFC-scale model renderable — the cost was that a raycast could
+  only ever name the merged mesh, not the individual wall or panel under the cursor. Each merged
+  mesh now carries its members' index-buffer windows in `userData.members`, so a raycast hit
+  resolves face → index range → member: selection and the metadata panel report the one object
+  clicked, even though rendering is still per-material-group.
+
+  Two new look presets, lineart (edges only) and wireframe (mesh-as-wireframe, no shading), join
+  the existing shaded/hidden-line/x-ray set. The outliner gains layers and per-member visibility as
+  first-class entry kinds, so a scene's structure survives past top-level objects.
+
+  Switching looks used to mutate material properties in place, so a look's changes bled into
+  whatever look came next — a red x-ray highlight could survive a switch back to shaded. Applying a
+  look now snapshots and restores each material's original properties first.
+
+- 4e24b20: Decode SLVA v4 mesh blobs, which shrink display payloads 28–50% on typical geometry
+
+  The plugin's mesh writer gained a fourth wire-format version that stores its delta-filtered
+  vertex, index and UV streams as byte planes (all X deltas, then Y, then Z, low bytes before
+  high) instead of interleaving them. Near-zero deltas turn the high planes into runs of zeros,
+  so the DEFLATE pass that follows compresses far better: measured on blobs produced by the real
+  writer, a welded 65k-vertex surface drops from 144 KB to 104 KB (−28%), a 262k-vertex surface
+  from 636 KB to 409 KB (−36%), and a 3000-part CAD scatter from 116 KB to 58 KB (−50%). Cloud
+  delivery multiplies each saving by 1.33× because the payload is base64-encoded.
+
+  The layout is chosen per blob and flagged in the header — the plugin measures both and keeps the
+  smaller, since batches made mostly of byte-identical repeated parts compress better interleaved.
+  So this parser now handles both v4 layouts plus every earlier version; blobs persisted by older
+  plugins (saved `.gh` files, `.slvm` mesh files, cached compute results) decode unchanged, pinned
+  by frozen pre-v4 golden fixtures on both stacks.
+
+  Decoding is slightly faster than before, despite the extra plane merge, because there is less to
+  inflate. `parseBinaryMeshBatchRaw` gains `planarByteSplit` and `uint16Indices` on its result, and
+  `AssemblyInput` requires them — both are internal wire-level surfaces.
+
+- 4e24b20: Move the mesh container to SLVM v3 and rework object identity to a single tracking key
+
+  The mesh payload is now an `SLVM` v3 chunked container — the same bytes on the wire, in `.gh`
+  archives, and on disk as `.slvm`. It replaces three nested layers: the `DMF1` file sidecar, the
+  JSON metadata embedded in the geometry blob, and a duplicate copy of that metadata the old file
+  carried (a 12,679-mesh scene shrinks from 3.05 MB to 1.33 MB on disk). The object table is
+  columnar and pays only for what's present: vertex/index windows are prefix sums, auto-numbered
+  names cost one byte total, and namespaced attr keys (`gh:branch`, `ifc:guid`, …) give hosts a
+  first-class slot for per-mesh provenance. Everything old still reads — `DMF1` files, bare
+  SLVA/SLVZ blobs in saved `.gh` files, every geometry blob back to v1 — but new bytes are always
+  SLVM v3, so decoding a fresh batch needs this release.
+
+  Object identity moved from `sourceComponentId` + `originalIndex` to a single minted
+  `userData.trackingKey`. The old pair couldn't tell two merges apart when both started at member
+  index 0, so hiding one hid the other; a merged mesh now carries one tracking key per member in
+  `userData.members`, and hidden state, selection, and per-object overrides all key on it directly.
+  `getStableKey`/`getTrackingKey` read the new field; callers that read `sourceComponentId` or
+  `originalIndex` off `userData` directly need to switch to `trackingKey`.
+
 ## 1.1.0
 
 ### Minor Changes

@@ -1,5 +1,14 @@
 # @selvajs/solve
 
+## 1.0.8
+
+### Patch Changes
+
+- Updated dependencies [87f2c6a]
+- Updated dependencies [f9c4c99]
+  - @selvajs/compute@4.1.1
+  - @selvajs/schemas@5.0.2
+
 ## 1.0.7
 
 ### Patch Changes
