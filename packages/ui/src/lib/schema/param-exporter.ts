@@ -136,7 +136,6 @@ export interface PresetLoadResult {
 	canLoad: boolean;
 }
 
-/** Validates and computes the loadable values in one pass, so callers thread one object. */
 export function loadPreset(savedState: ParameterPreset, currentSchema: UISchema): PresetLoadResult {
 	const validation = validateSavedState(savedState, currentSchema);
 	return {

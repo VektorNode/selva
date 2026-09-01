@@ -33,7 +33,6 @@
 
 	const showTabBar = $derived(visibleTabs.length > 1);
 
-	// Computed value list options keyed by the target input id, derived from solved outputs.
 	const dynamicOptions = $derived(buildDynamicValueListOptions(schema, values));
 
 	$effect(() => {

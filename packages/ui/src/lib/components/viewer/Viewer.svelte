@@ -107,7 +107,6 @@
 	// Read the host's locale before overriding it for our subtree.
 	const hostLocale = getLocaleContext();
 
-	// A getter, not a value: it is re-read reactively, so changing `lang` updates the chrome live.
 	setLocaleContext(() => lang ?? hostLocale.locale);
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);

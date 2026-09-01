@@ -19,11 +19,7 @@ export interface LocaleContext {
 	readonly messages: ViewerMessages;
 }
 
-/**
- * Provide the locale to descendants. Pass a getter, not a value: it is re-read on every
- * consumer render, so a reactive source (a `$state`, the app's Paraglide locale) switches
- * the language live.
- */
+/** Provide the locale to descendants. Re-read on every consumer render, so a reactive source switches the language live. */
 export function setLocaleContext(getLocale: () => Locale | undefined): void {
 	const ctx: LocaleContext = {
 		get locale() {

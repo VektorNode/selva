@@ -126,8 +126,7 @@
 	// svelte-ignore state_referenced_locally
 	setClientSlot(clientSlot);
 
-	// Resolution: explicit `lang` → host-provided locale → English. Passed as a getter so
-	// switching `lang` updates the chrome live.
+	// Read the host's locale before overriding it for our subtree.
 	const hostLocale = getLocaleContext();
 	setLocaleContext(() => lang ?? hostLocale.locale);
 	const t = $derived(getLocaleContext().messages);

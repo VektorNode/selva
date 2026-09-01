@@ -102,9 +102,8 @@ function collectDynamicValueListSources(schema: UISchema): DynamicValueListSourc
 }
 
 /**
- * Builds a map of inputId -> computed options from the solved output values, routing each
- * source's options to its target input. The payload's own `targetInputId` wins; the
- * schema-side one is the fallback when the payload omits it.
+ * The payload's own `targetInputId` wins; the schema-side one is the fallback when the
+ * payload omits it.
  */
 export function buildDynamicValueListOptions(
 	schema: UISchema,
