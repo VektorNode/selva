@@ -56,7 +56,7 @@
 		if (Object.keys(initial).length > 0) Object.assign(collapsedGroups, initial);
 	});
 
-	// A hidden or disabled input still solves, so reset it to its default — otherwise the
+	// A hidden or disabled input still solves, so reset it to its default: otherwise the
 	// value the user last set while it was visible keeps feeding the definition.
 	$effect(() => {
 		if (schema.layout.type !== 'tabbed') return;

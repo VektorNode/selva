@@ -27,19 +27,19 @@ a result is later _reported_ back to it.
 
 The adapter that gives a Solve Session its transport. A driver knows how to _start_ a
 solve for a set of values and how to _cancel_ an in-flight one, and reports its
-`isSolving` state. It does not return outputs — those come back asynchronously via the
+`isSolving` state. It does not return outputs: those come back asynchronously via the
 session's `report()`, because some transports (WebSocket) push results on their own
 schedule.
 
 Two adapters define this seam:
 
-- **Request/response driver** — wraps `createAsyncThrottle` + a `SolveFn` (`onSolve`).
+- **Request/response driver**: wraps `createAsyncThrottle` + a `SolveFn` (`onSolve`).
   Calls `session.report()` when the solve promise resolves. Lives beside the session in
   `@selvajs/solve/client`; used by `ComputeApp`.
-- **WebSocket driver** — sends values over the socket; reports when output frames
+- **WebSocket driver**: sends values over the socket; reports when output frames
   arrive. Lives in `plugin-ui` (`lib/schema-source/websocket-solve-driver.ts`) because it
   is transport-specific. Transport quirks (value preparation, mesh-blob streaming,
-  remote-update guards) stay inside this adapter — the session never learns them.
+  remote-update guards) stay inside this adapter; the session never learns them.
 
 ## report
 
@@ -61,4 +61,4 @@ driver. Omitting it is silently wrong, not a type error: the memo then retains t
 objects it hands the viewer, so the next hit serves geometry the viewer already disposed.
 `lib/compute/__tests__/mesh-policy-wiring.test.ts` pins it, negative control included.
 
-Anyone building a driver here — or in a host app — carries the same obligation.
+Anyone building a driver here, or in a host app, carries the same obligation.

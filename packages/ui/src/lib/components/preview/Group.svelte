@@ -47,8 +47,8 @@
 	// One visibility evaluation per item per render; columnStarts and gridItem both read it.
 	const visibilityMap = $derived(buildVisibilityMap(items, values));
 
-	// Hidden items must not consume a slot here, because gridItem skips them entirely —
-	// counting them would offset every following item's column.
+	// Hidden items must not consume a slot here, because gridItem skips them entirely.
+	// Counting them would offset every following item's column.
 	const columnStarts = $derived.by(() => {
 		const positions: number[] = [];
 		let col = 0;

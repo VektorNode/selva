@@ -84,15 +84,15 @@ export function evaluateVisibility(
 	return actionFn(met, defaultValue);
 }
 
-/** Must stay identical to the key the renderers use in their `{#each}` blocks. */
+/** Keep identical to the key the renderers use in their `{#each}` blocks. */
 export function itemKey(item: LayoutItem): string {
 	return item.type === 'linebreak' ? item.id : item.paramId;
 }
 
 /**
  * Evaluates each item once per render. Callers that touch the same item several times
- * (column layout, then cell render, then the default-value sweep) read this map instead of
- * re-evaluating, so they can't disagree about what's visible mid-render.
+ * (column layout, then cell render, then the default-value sweep) read this map instead
+ * of re-evaluating, so they can't disagree about what's visible mid-render.
  */
 export function buildVisibilityMap(
 	items: LayoutItem[],

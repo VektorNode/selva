@@ -87,8 +87,8 @@
 		showExportDialog = false;
 	}
 
-	// Shared by every load path: applies clean presets directly, routes any errors or
-	// warnings through the validation dialog.
+	// Shared by every load path: applies clean presets directly, routes errors
+	// or warnings through the validation dialog.
 	function tryLoad(preset: ParameterPreset) {
 		const result = loadPreset(preset, schema);
 		if (result.isValid) {
@@ -188,7 +188,6 @@
 	class="hidden"
 />
 
-<!-- Save Dialog -->
 <Dialog.Root bind:open={showExportDialog}>
 	<Dialog.Content>
 		<Dialog.Header>
@@ -230,7 +229,6 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Load Dialog -->
 <Dialog.Root bind:open={showLoadDialog}>
 	<Dialog.Content>
 		<Dialog.Header>
@@ -281,7 +279,6 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<!-- Validation Dialog -->
 <Dialog.Root bind:open={showValidationDialog}>
 	<Dialog.Content class="max-w-2xl max-h-[80vh] overflow-y-auto">
 		<Dialog.Header>

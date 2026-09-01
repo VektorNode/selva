@@ -47,7 +47,7 @@
 		/** Fully overrides the footer copyright line. `{name}` and `{year}` are substituted. */
 		footerText?: string;
 		/**
-		 * How long one solve may take before the client aborts it (ms). Pass the same value the
+		 * Max time one solve may take before the client aborts it (ms). Pass the same value the
 		 * server enforces (`COMPUTE_SOLVE_DEADLINE_MS`), or the client aborts solves that would
 		 * have finished.
 		 */
@@ -56,10 +56,10 @@
 		footerComponentProps?: () => Record<string, unknown>;
 		footerItemId?: string;
 		footerItemPriority?: number;
-		// `onReady` fires once, so the result and session are getters rather than snapshots.
+		// Fires once, so the result and session are getters, not snapshots.
 		onReady?: (api: {
 			loadValues: (values: Record<string, unknown>) => void;
-			/** What the viewer is showing — carries `source`/`values` even on a memo hit. Null before the first solve. */
+			/** What the viewer is showing: carries `source`/`values` even on a memo hit. Null before the first solve. */
 			getLastResult: () => RetainedSolveResult | null;
 			/**
 			 * For hosts driving solves from their own state. Values written here go through the
@@ -78,7 +78,7 @@
 		brandName?: string;
 		// Replaces the built-in header; takes precedence over `headerRight`.
 		header?: Snippet;
-		// Scopes sessionStorage for external-input values; falls back to definitionKey then schema.id.
+		// Scopes sessionStorage for external-input values.
 		externalScopeKey?: string;
 		// Renders client-sourced inputs with presentation === 'slot'.
 		clientSlot?: ClientSlot;
@@ -139,12 +139,9 @@
 	// svelte-ignore state_referenced_locally
 	const driver = createRequestResponseDriver(onSolve, () => session, {
 		solveDeadlineMs,
-		// The driver's memo caches whole solve results, meshes included, and the viewer disposes
-		// what it renders on the next scene update. `@selvajs/solve` keeps meshes opaque, so the
-		// three.js clone/dispose rules come from the renderer that owns them. Without this, a memo
-		// hit serves an already-disposed mesh.
+		// Required: without it, a memo hit serves a mesh the viewer already disposed. See CONTEXT.md.
 		meshPolicy,
-		// `isSolving` lives on the driver, which the session can't observe — republish so the
+		// `isSolving` lives on the driver, which the session can't observe. Republish so the
 		// spinner and disabled states track it.
 		onChange: () => session.notify()
 	});
@@ -197,7 +194,7 @@
 	}
 
 	// Registration is fixed at mount, so the static props are untracked. `footerComponentProps`
-	// stays live — the renderer calls it every render to keep the footer in sync.
+	// stays live: the renderer calls it every render to keep the footer in sync.
 	useFooterItem({
 		id: untrack(() => footerItemId),
 		component: untrack(() => footerComponent),

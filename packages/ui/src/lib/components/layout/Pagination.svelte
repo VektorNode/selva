@@ -22,7 +22,7 @@
 
 	const pageCount = $derived(Math.max(1, Math.ceil(total / perPage)));
 
-	// A filter can shrink `total` under the current page — clamp on read so the
+	// A filter can shrink `total` under the current page. Clamp on read so the
 	// list never renders an empty slice while the control still says "page 4".
 	$effect(() => {
 		if (page > pageCount) page = pageCount;
