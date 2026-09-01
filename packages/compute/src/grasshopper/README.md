@@ -1,4 +1,4 @@
-# `grasshopper/` — solving definitions through Rhino Compute
+# `grasshopper/`: solving definitions through Rhino Compute
 
 ## Quick start
 
@@ -9,7 +9,6 @@ import {
 	GrasshopperResponseProcessor
 } from '@selvajs/compute/grasshopper';
 
-// The constructor is private — create() validates the server is reachable first.
 const client = await GrasshopperClient.create({
 	serverUrl: 'http://localhost:5000',
 	apiKey: 'YOUR_API_KEY'
@@ -49,11 +48,11 @@ grasshopper/
 │   └── output/    response processing, Rhino decoders, extractFileData
 ├── data-tree/     TreeBuilder + branch-path parsing
 ├── scheduler/     SolveScheduler (latest-wins / queue / parallel)
-├── server/        ComputeServerStats — rhino.compute's control plane
+├── server/        ComputeServerStats: rhino.compute's control plane
 └── types/         inputs, outputs, request/response schemas
 ```
 
-Generic file zip/base64/download utilities live in [`core/files/`](../core/files/) — not
+Generic file zip/base64/download utilities live in [`core/files/`](../core/files/), not
 Grasshopper-specific. Only `extractFileData`, which reads a Grasshopper response, stays in
 `io/output/`.
 
@@ -74,7 +73,7 @@ TreeBuilder.replaceTreeValue(inputTree, 'points', [
 const count = TreeBuilder.getTreeValue(inputTree, 'count');
 ```
 
-`fromInputParams` flattens geometry and file data-trees into one leaf — to set a value on those,
+`fromInputParams` flattens geometry and file data-trees into one leaf: to set a value on those,
 use `replaceTreeValue`. See [`data-tree/README.md`](data-tree/README.md) for branch paths and
 multi-branch trees.
 
@@ -107,7 +106,7 @@ try {
 
 ## GrasshopperClient
 
-The constructor is private — `create()` validates the server is reachable first.
+The constructor is private: `create()` validates the server is reachable first.
 
 ```typescript
 const client = await GrasshopperClient.create(config); // GrasshopperComputeConfig
@@ -125,7 +124,7 @@ Grasshopper-specific `cachesolve`, `absolutetolerance`, `angletolerance`, `model
 
 ## More
 
-- [`io/input/README.md`](io/input/README.md) — adding a param type (the `InputTypeParser` registry)
-- [`data-tree/README.md`](data-tree/README.md) — branch paths and multi-branch trees
-- [`io/output/response-processors.ts`](io/output/response-processors.ts) — how output parsing works
-- [`core/compute-fetch/`](../core/compute-fetch/) — the low-level HTTP layer
+- [`io/input/README.md`](io/input/README.md): adding a param type (the `InputTypeParser` registry)
+- [`data-tree/README.md`](data-tree/README.md): branch paths and multi-branch trees
+- [`io/output/response-processors.ts`](io/output/response-processors.ts): how output parsing works
+- [`core/compute-fetch/`](../core/compute-fetch/): the low-level HTTP layer

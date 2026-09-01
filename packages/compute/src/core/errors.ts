@@ -56,9 +56,7 @@ export const ErrorCodes = {
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
 /**
- * Simplified error for Rhino Compute operations
- *
- * @public Use this for error handling with error codes and context.
+ * @public Error class for Compute operations, carrying an {@link ErrorCode} and context.
  */
 export class ComputeError extends Error {
 	public readonly code: ErrorCode;
@@ -82,9 +80,6 @@ export class ComputeError extends Error {
 		}
 	}
 
-	/**
-	 * Create an error for missing/empty values
-	 */
 	static missingValues(
 		inputName: string,
 		expectedType?: string,
@@ -97,9 +92,6 @@ export class ComputeError extends Error {
 		);
 	}
 
-	/**
-	 * Create an error for unknown parameter type
-	 */
 	static unknownParamType(
 		paramType: string,
 		paramName?: string,

@@ -1,10 +1,10 @@
 import { getLogger } from './logger';
 
-/** Functions that already warned — the exposure risk doesn't change per call, so once is enough. */
+/** Functions that already warned: the exposure risk doesn't change per call, so once is enough. */
 const warnedFunctions = new Set<string>();
 
 /**
- * True only in a GENUINE browser/worker context — the case where an API key in
+ * True only in a GENUINE browser/worker context: the case where an API key in
  * the config is actually exposed to end users. `typeof window !== 'undefined'`
  * alone is not enough: jsdom test environments define `window` too, and every
  * unsuppressed vitest/jest run would warn noisily (issue 110).
@@ -40,7 +40,7 @@ export function warnIfClientSide(functionName: string, suppress?: boolean): void
 	}
 }
 
-/** @internal Reset the once-per-function dedupe — for tests only. */
+/** @internal Reset the once-per-function dedupe, for tests only. */
 export function resetClientSideWarnings(): void {
 	warnedFunctions.clear();
 }

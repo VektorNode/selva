@@ -19,7 +19,7 @@ export function isLocalhost(serverUrl: string): boolean {
 	}
 }
 
-/** Server URLs already warned about missing auth — warn once per server, not per request. */
+/** Server URLs already warned about missing auth: warn once per server, not per request. */
 const warnedNoAuth = new Set<string>();
 
 /** Header name rhino.compute reads the API key from. Override via `ComputeConfig.apiKeyHeader`. */
@@ -27,7 +27,7 @@ export const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
 
 export function buildHeaders(requestId: string, config: ComputeConfig): HeadersInit {
 	const headers: HeadersInit = {
-		// Caller headers first so the transport's own headers below OVERWRITE them —
+		// Caller headers first so the transport's own headers below OVERWRITE them:
 		// a caller can never clobber the request id, content type, or auth.
 		...config.headers,
 		'X-Request-ID': requestId,

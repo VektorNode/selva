@@ -7,37 +7,36 @@ import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } f
 import type { SolveDefinition } from '@/core/definition-ref';
 
 /**
- * Scheduling mode — controls how concurrent `solve()` calls interact.
+ * Scheduling mode: controls how concurrent `solve()` calls interact.
  *
  * - `latest-wins`: One in flight at a time. New calls supersede any pending
  *   call (in-flight one is aborted). Optimal for slider scrubs / live UIs.
  * - `queue`: FIFO queue. Each solve runs to completion. Concurrency capped
  *   by `maxConcurrent`. Use for "submit job" flows where every request matters.
- * - `parallel`: No scheduling — calls run concurrently up to `maxConcurrent`.
+ * - `parallel`: No scheduling; calls run concurrently up to `maxConcurrent`.
  *   Closest to plain `client.solve()` but with shared cancel/state.
  */
 export type SchedulerMode = 'latest-wins' | 'queue' | 'parallel';
 
 export interface CacheOptions {
 	/**
-	 * Total byte budget for retained responses, evicted LRU. The only size bound
-	 * there is: responses range KB→100s of MB, so memory is the constraint that
-	 * matters and an entry count would only obscure it.
+	 * Total byte budget for retained responses, evicted LRU. Byte-based (not an
+	 * entry count) because responses range from KB to 100s of MB.
 	 *
 	 * Sizing uses the response's wire size (JSON text length, recorded at the
-	 * fetch boundary — no re-serialization); a response without that hint
+	 * fetch boundary, no re-serialization); a response without that hint
 	 * (custom executor) is sized by a one-off `JSON.stringify`. A single
 	 * response larger than the whole budget is served but never retained.
 	 *
-	 * Required and must be > 0 — to disable caching, pass `cache: false`.
+	 * Required and must be > 0: to disable caching, pass `cache: false`.
 	 */
 	maxBytes: number;
 	/**
-	 * Time-to-live in ms. Set to `0` for no expiry (default, and the right
-	 * choice for a solve keyed by immutable definition+inputs — expiry there
-	 * only buys a paid re-solve of an identical answer). Meaningful only when a
-	 * definition reaches outside its inputs (external data source, clock), where
-	 * a stale result is genuinely wrong rather than merely old.
+	 * Time-to-live in ms. `0` (default) means no expiry: right for a solve keyed
+	 * by immutable definition+inputs, where expiry would only force a paid
+	 * re-solve of an identical answer. Set a TTL when the definition reaches
+	 * outside its inputs (external data source, clock), where a stale result is
+	 * genuinely wrong rather than merely old.
 	 *
 	 * Expiry is evaluated lazily on read: an expired entry keeps its bytes
 	 * counted against `maxBytes` until that exact key is next consulted.
@@ -45,7 +44,7 @@ export interface CacheOptions {
 	ttlMs?: number;
 	/**
 	 * Cache responses that carry Grasshopper `errors`. Default `true`: an
-	 * errored solve is a valid, deterministic result — definitions raise GH
+	 * errored solve is a valid, deterministic result, since definitions raise GH
 	 * errors by design (guarded components, validation branches), so replaying
 	 * one from cache is correct. Set `false` for parity with Rhino's opt-in
 	 * `cacheerroredsolves` server flag, e.g. when a definition's errors are
@@ -58,20 +57,18 @@ export interface SolveSchedulerOptions {
 	mode?: SchedulerMode;
 	maxConcurrent?: number;
 	/**
-	 * Backpressure — cap on how many calls may wait in the FIFO queue (i.e.
-	 * excluding the ones already in flight). When the queue is full, a new
-	 * `solve()` is rejected immediately with `code: QUEUE_FULL` (retryable, meant to
-	 * map to HTTP 503 + Retry-After) instead of piling up unbounded. Bounds the
-	 * miss path under load. Only applies to `queue` / `parallel` modes —
+	 * Backpressure: cap on how many calls may wait in the FIFO queue (excluding
+	 * ones already in flight). When full, a new `solve()` is rejected immediately
+	 * with `code: QUEUE_FULL` (retryable, meant to map to HTTP 503 + Retry-After)
+	 * instead of piling up unbounded. Only applies to `queue` / `parallel` modes;
 	 * `latest-wins` has an intrinsic depth of 1. Default: unbounded.
 	 */
 	maxQueueDepth?: number;
 	/**
-	 * Backpressure — max time (ms) a call may sit queued before it starts
-	 * executing. If it's still waiting after this long it's rejected with
-	 * `code: QUEUE_TIMEOUT` rather than burning compute on a stale request.
-	 * Bounds tail latency. Only applies to `queue` / `parallel` modes. Default:
-	 * no deadline.
+	 * Backpressure: max time (ms) a call may sit queued before it starts
+	 * executing. If still waiting after this long, it's rejected with
+	 * `code: QUEUE_TIMEOUT` rather than burning compute on a stale request. Only
+	 * applies to `queue` / `parallel` modes. Default: no deadline.
 	 */
 	queueWaitMs?: number;
 	timeoutMs?: number;
@@ -84,17 +81,17 @@ export interface SolveSchedulerOptions {
 	cache?: false | CacheOptions;
 	/**
 	 * Reuse the server's definition cache key so a large (base64/binary)
-	 * definition is uploaded once and subsequent solves reference it by
-	 * `pointer` instead of re-sending the full payload. Hugely cheaper for
-	 * multi-MB definitions on a live UI (slider scrubs, etc.).
+	 * definition uploads once and later solves reference it by `pointer` instead
+	 * of resending the full payload. Much cheaper for multi-MB definitions on a
+	 * live UI (slider scrubs, etc.).
 	 *
-	 * Requires a `cacheKeyExecutor` to be supplied (the client wires one). Has no
-	 * effect for URL-pointer definitions (already a reference). On a server-side
-	 * cache miss the executor transparently falls back to a full upload, so this
-	 * is safe to leave on. Default: `true` when a `cacheKeyExecutor` is present.
+	 * Requires a `cacheKeyExecutor` (the client wires one). No effect for
+	 * URL-pointer definitions (already a reference). On a server-side cache miss
+	 * the executor falls back to a full upload transparently, so this is safe to
+	 * leave on. Default: `true` when a `cacheKeyExecutor` is present.
 	 */
 	reuseServerDefinitionCache?: boolean;
-	/** Lifecycle hooks — fired in order. Errors thrown by hooks are logged, not rethrown. */
+	/** Lifecycle hooks, fired in order. Errors thrown by hooks are logged, not rethrown. */
 	onStart?: (ctx: SolveContext) => void;
 	onSettle?: (ctx: SolveContext, result: SolveResult) => void;
 	onSuperseded?: (ctx: SolveContext) => void;
@@ -117,9 +114,9 @@ export type SolveResult =
 			fromCache: boolean;
 			/**
 			 * Definition-cache telemetry for a real compute call (not a Selva-cache
-			 * `fromCache` hit). `false` → the server reused its cached definition via
-			 * the pointer (no upload); `true` → the pointer was cold/stale so the full
-			 * definition was re-uploaded. `undefined` when the server-definition-cache
+			 * `fromCache` hit). `false`: the server reused its cached definition via
+			 * the pointer (no upload). `true`: the pointer was cold/stale so the full
+			 * definition was re-uploaded. `undefined`: the server-definition-cache
 			 * fast path didn't run (reuse disabled, or a non-reusable definition such
 			 * as a remote URL).
 			 */
@@ -139,11 +136,11 @@ export type SolveExecutor = (
  * reference (`pointer: cacheKey`) and falls back to a full upload on a server
  * cache miss. Always reports the (possibly refreshed) `cacheKey` so the
  * scheduler can update its definition→key map, plus whether the fast path
- * `missed` (for telemetry). When `cacheKey` is null it's a first solve — upload
+ * `missed` (for telemetry). When `cacheKey` is null it's a first solve: upload
  * fully and capture the key the server assigns.
  *
- * Supplied by the client (which owns the solve primitives); the scheduler stays
- * decoupled from the transport.
+ * Supplied by the client, which owns the solve primitives, so the scheduler
+ * stays decoupled from the transport.
  */
 export type CacheKeyExecutor = (
 	definition: SolveDefinition,

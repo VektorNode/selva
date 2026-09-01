@@ -1,12 +1,9 @@
-# DataTree Utilities
+# Data trees
 
-Utilities for working with Grasshopper's hierarchical data tree structure.
+Grasshopper organizes data in a tree with branch paths like `{0}`, `{0;1}`, `{1;2;3}`. `TreeBuilder`
+is the fluent API for building, reading, and converting these trees for Rhino Compute.
 
-## Overview
-
-Grasshopper uses a tree structure to organize data with branch paths like `{0}`, `{0;1}`, `{1;2;3}`. `TreeBuilder` provides a fluent API to create, manipulate, and convert data trees for use with Rhino Compute.
-
-## Basic Usage
+## Basic usage
 
 ```typescript
 import { TreeBuilder } from '@selvajs/compute/grasshopper';
@@ -22,11 +19,11 @@ const complexTree = new TreeBuilder('Points')
 	.toComputeFormat();
 ```
 
-## Common Use Cases
+## Common use cases
 
-### Convert InputParams to DataTrees
+### Convert input params to data trees
 
-The most common pattern—convert definition inputs to trees for solving:
+The most common pattern: convert definition inputs to trees for solving.
 
 ```typescript
 // Get inputs from a definition
@@ -39,7 +36,7 @@ const trees = TreeBuilder.fromInputParams(inputs);
 const result = await client.solve(definitionUrl, trees);
 ```
 
-### Build Custom Trees
+### Build custom trees
 
 ```typescript
 const tree = new TreeBuilder('Values').fromDataTreeDefault({
@@ -54,7 +51,7 @@ const values = tree.getPath([0, 0]); // [4, 5]
 const allValues = tree.flatten(); // [1, 2, 3, 4, 5, 6, 7, 8]
 ```
 
-### Modify Inputs Before Solving
+### Modify inputs before solving
 
 ```typescript
 const { inputs } = await client.getIO('definition.gh');
@@ -71,8 +68,8 @@ const trees = TreeBuilder.fromInputParams(modifiedInputs);
 const result = await client.solve('definition.gh', trees);
 ```
 
-## Best Practices
+## Notes
 
-- **Use `TreeBuilder.fromInputParams()`** for most cases—it handles constraints, tree access, and formatting automatically.
-- **Call `toComputeFormat()` before sending** to ensure compatibility with Rhino Compute.
-- **Use the fluent API** for custom tree building when needed.
+- `TreeBuilder.fromInputParams()` handles constraints, tree access, and formatting for you: use it
+  for most cases.
+- Call `toComputeFormat()` before sending a tree to Rhino Compute.

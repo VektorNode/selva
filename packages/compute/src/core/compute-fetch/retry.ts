@@ -13,7 +13,7 @@ export const RETRYABLE_STATUS = new Set([502, 503, 504]);
  * Absolute ceiling for a server-supplied `Retry-After` wait. The server's
  * stated window wins over `retryPolicy.maxDelayMs` (retrying earlier all but
  * guarantees another 429), but a bad/hostile header must not park the client
- * for minutes — anything above this cap is clamped.
+ * for minutes; anything above this cap is clamped.
  */
 export const RETRY_AFTER_CAP_MS = 60_000;
 

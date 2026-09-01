@@ -13,13 +13,12 @@ import { normalizeInputSchema, normalizeOutputSchema } from './normalize-schema'
  * Fetches raw input/output schemas from a Grasshopper definition.
  *
  * "Raw" means no per-type parsing (no default coercion, no discriminated-union
- * typing) — but NOT byte-for-byte wire data. The response IS normalized:
- * per-param field KEYS are canonicalized to camelCase across server branches
- * ({@link normalizeInputSchema} / {@link normalizeOutputSchema}, with honest
- * fallbacks for missing required fields), missing/non-array `inputs`/`outputs`
- * coerce to `[]`, and server load diagnostics surface as
- * `loadWarnings`/`loadErrors` (coerced to strings). Field VALUES — notably
- * `default` and the `values` dropdown-label map — pass through verbatim.
+ * typing): but NOT byte-for-byte wire data. Per-param field KEYS are
+ * canonicalized to camelCase across server branches ({@link normalizeInputSchema} /
+ * {@link normalizeOutputSchema}), missing/non-array `inputs`/`outputs` coerce to
+ * `[]`, and server load diagnostics surface as `loadWarnings`/`loadErrors`. Field
+ * VALUES: notably `default` and the `values` dropdown-label map: pass through
+ * verbatim.
  *
  * @param definition - The Grasshopper definition (URL, base64 string, or Uint8Array)
  * @param config - Compute configuration (server URL, API key, etc.)
@@ -57,33 +56,22 @@ export async function fetchDefinitionIO(
 		});
 	}
 
-	// The `/io` response is only partially camelCased, and how much depends on the
-	// server branch. Upstream-tracking branches (mcneel 8.x/9.x, `8.x.selva`) keep
-	// the C# classes close to source — they carry few/no `[JsonProperty]`, so the
-	// top-level wrapper is PascalCase `Inputs` / `Outputs` and per-param fields are
-	// `ParamType` / `Minimum` / … The VektorNode Compute8 fork camelCases every
-	// field. So we read every field we depend on case-insensitively via `readField`
-	// rather than straight-through. A deep `camelcaseKeys` pass is NOT an option: it
-	// mangled user-authored value-list label keys ("Option A" → "optionA") and item
-	// `data` JSON — which is why per-field reads exist instead (per-input field
-	// normalization lives in normalize-schema.ts; the nested `default` DataTree is
-	// handled by normalize-default.ts).
+	// The `/io` response casing varies by server branch (see readField's doc), so every
+	// field we depend on goes through `readField` rather than straight property access.
+	// Per-input field normalization lives in normalize-schema.ts; the nested `default`
+	// DataTree in normalize-default.ts.
 	//
-	// The server also reports definition-LOAD diagnostics on the IO response
-	// (`errors`/`warnings` — e.g. a missing plugin that left inputs unresolved).
-	// Surface them so a degraded input list comes with an explanation instead of
-	// silently looking empty. Only attach when non-empty to keep the common
-	// happy-path result clean.
+	// The server also reports definition-LOAD diagnostics here (`errors`/`warnings`, e.g.
+	// a missing plugin that left inputs unresolved). Surface them so a degraded input list
+	// comes with an explanation instead of silently looking empty.
 	const loadWarnings = nonEmptyStrings(readField(response, 'warnings'));
 	const loadErrors = nonEmptyStrings(readField(response, 'errors'));
 
-	// Read the top-level Inputs/Outputs case-insensitively, then guard to arrays.
-	// A server fault can also return a 200 whose body omits these (e.g. a load
-	// failure surfacing as malformed-success), and the downstream `for...of` in
-	// processInputsWithErrors throws "inputs is not iterable". Array.isArray (not
-	// `?? []`) is deliberate: the symptom is non-iterability, so a non-array truthy
-	// value (`{}`, a string) must coerce to `[]` too. The loadErrors/loadWarnings
-	// surfaced above explain *why* a list came back empty.
+	// A server fault can return a 200 whose body omits inputs/outputs (a load failure
+	// surfacing as malformed-success); the downstream `for...of` in
+	// processInputsWithErrors would throw "inputs is not iterable". Array.isArray (not
+	// `?? []`) coerces any non-array truthy value (`{}`, a string) to `[]` too, since the
+	// symptom is non-iterability, not just nullishness.
 	const rawInputs = readField(response, 'inputs');
 	const rawOutputs = readField(response, 'outputs');
 	return {
@@ -95,15 +83,14 @@ export async function fetchDefinitionIO(
 }
 
 /**
- * Coerce a server `errors`/`warnings` array (typed `any[]`) into a clean
- * `string[]`, or `undefined` when there's nothing to report.
+ * Coerce a server `errors`/`warnings` array into a clean `string[]`, or
+ * `undefined` when there's nothing to report.
  *
- * Non-string diagnostics are KEPT, not dropped: a server fork reporting errors
- * as `{ message }` objects must not yield a mysteriously empty inputs list with
- * zero explanation (the exact failure this surfacing exists to prevent).
- * Objects coerce to their `message` field when it's a non-blank string, else
- * to JSON; other primitives via `String(...)`. Only `null`/`undefined` and
- * blank entries are discarded.
+ * Non-string diagnostics are KEPT, not dropped: a server reporting errors as
+ * `{ message }` objects must not yield a mysteriously empty inputs list with no
+ * explanation. Objects coerce to their `message` field when non-blank, else to
+ * JSON; other primitives via `String(...)`. Only `null`/`undefined` and blank
+ * entries are discarded.
  */
 function nonEmptyStrings(value: unknown): string[] | undefined {
 	if (!Array.isArray(value)) return undefined;

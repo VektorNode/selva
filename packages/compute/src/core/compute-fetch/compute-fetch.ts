@@ -66,7 +66,7 @@ async function attemptFetch(
 
 		if (isRetryableStatus && attempt < totalAttempts - 1) {
 			const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'));
-			// The server's stated Retry-After window wins over maxDelayMs — retrying
+			// The server's stated Retry-After window wins over maxDelayMs: retrying
 			// before it all but guarantees another 429 and burns an attempt. It is
 			// only clamped by the absolute RETRY_AFTER_CAP_MS safety cap (or by a
 			// caller-configured maxDelayMs that is even larger), so a bad header
@@ -76,7 +76,7 @@ async function attemptFetch(
 					? Math.min(retryAfterMs, Math.max(retryPolicy.maxDelayMs, RETRY_AFTER_CAP_MS))
 					: backoffDelay(attempt, retryPolicy);
 			// Drain the body so the connection can be reused on the next attempt.
-			// On the *final* attempt we deliberately fall through — handleResponse
+			// On the *final* attempt we deliberately fall through: handleResponse
 			// reads the body itself to surface the error context.
 			await response.text().catch(() => {});
 			return {
@@ -109,7 +109,7 @@ async function attemptFetch(
 			const callerAborted = ctx.config.signal?.aborted === true;
 
 			if (callerAborted) {
-				// Caller cancellation is never retried — propagate immediately
+				// Caller cancellation is never retried: propagate immediately
 				return {
 					ok: false,
 					retry: false,
@@ -124,11 +124,11 @@ async function attemptFetch(
 				};
 			}
 
-			// Only claim a timeout when we actually armed one (issue 88). Without a
-			// configured timeoutMs, a non-caller abort came from the runtime itself
-			// (e.g. an undici socket teardown) — as transient as any network drop, so
-			// it stays retryable, but it is NOT a timeout: report it truthfully
-			// instead of "timed out after undefinedms" / TIMEOUT_ERROR.
+			// Only claim a timeout when we actually armed one. Without a configured
+			// timeoutMs, a non-caller abort came from the runtime itself (e.g. an
+			// undici socket teardown), as transient as any network drop, so it stays
+			// retryable, but it is NOT a timeout. Report it truthfully instead of
+			// "timed out after undefinedms" / TIMEOUT_ERROR.
 			const timeoutArmed = typeof ctx.config.timeoutMs === 'number' && ctx.config.timeoutMs > 0;
 			const fatal = timeoutArmed
 				? new ComputeError(
@@ -171,7 +171,7 @@ async function attemptFetch(
 			return { ok: false, retry: false, cause: fatal };
 		}
 
-		// Network error (TypeError) — retryable (issue 90).
+		// Network error (TypeError): retryable.
 		//
 		// Duplicate-POST caveat: a connection reset can strike after the body was
 		// sent, in which case the server may already have executed this POST and a
@@ -214,14 +214,14 @@ async function attemptFetch(
 			}
 			return { ok: false, retry: false, cause: fatal };
 		}
-		// ComputeError thrown from handleResponse — already has full context.
+		// ComputeError thrown from handleResponse: already has full context.
 		// Retryable only if it carries a retryable status code.
 		if (error instanceof ComputeError) {
 			const status = error.statusCode;
 			// A 2xx whose body failed to parse UNDER A JSON CONTENT-TYPE
-			// (NETWORK_ERROR from handleResponse) means the stream was cut mid-body —
+			// (NETWORK_ERROR from handleResponse) means the stream was cut mid-body,
 			// as transient as any network error. A 2xx that declared a non-JSON body
-			// arrives here as INVALID_RESPONSE (deterministic — captive portal /
+			// arrives here as INVALID_RESPONSE (deterministic: captive portal /
 			// login page) and deliberately does NOT match: it is never retried.
 			const isTruncatedSuccess =
 				error.code === ErrorCodes.NETWORK_ERROR &&
@@ -243,7 +243,7 @@ async function attemptFetch(
 			return { ok: false, retry: false, cause: error };
 		}
 
-		// Unknown — wrap and don't retry
+		// Unknown: wrap and don't retry
 		return {
 			ok: false,
 			retry: false,
@@ -262,10 +262,9 @@ async function attemptFetch(
 }
 
 /**
- * Generic Rhino Compute fetch function.
  * Sends a POST request to any Compute endpoint with pre-prepared arguments.
  *
- * Use this for advanced, low-level control over compute requests. For most use cases, prefer higher-level APIs.
+ * For advanced, low-level control over compute requests. Prefer the higher-level APIs for most use cases.
  *
  * The transport is response-type-agnostic: it does not know which response a
  * given endpoint returns. Callers supply the response type via `R` (defaulting
@@ -275,7 +274,7 @@ async function attemptFetch(
  * every retry. With `retry: { attempts: N }` the worst-case wall clock is
  * `(N + 1) × timeoutMs` plus backoff sleeps (and a server `Retry-After` can
  * stretch a single sleep up to 60s). For a hard overall deadline, pass
- * `config.signal` (e.g. `AbortSignal.timeout(totalMs)`) — a caller abort wins
+ * `config.signal` (e.g. `AbortSignal.timeout(totalMs)`): a caller abort wins
  * immediately, including during backoff.
  *
  * Retry caveats: requests are POSTs, so a retry after a mid-flight connection
@@ -327,7 +326,7 @@ export async function fetchCompute<R = unknown>(
 			}
 		);
 	}
-	// Wire size in UTF-8 bytes — `body.length` counts UTF-16 code units and
+	// Wire size in UTF-8 bytes: `body.length` counts UTF-16 code units and
 	// undercounts non-ASCII payloads (matters for the 413 message and size logs).
 	const requestSize = utf8ByteLength(body);
 	const fullUrl = buildUrl(endpoint, config.serverUrl);
@@ -351,10 +350,10 @@ export async function fetchCompute<R = unknown>(
 		config
 	};
 
-	// Every iteration ends in `return` or `throw` (issue 105): attemptFetch never
-	// asks to retry on the final attempt (all its retry branches are gated on
+	// Every iteration ends in `return` or `throw`: attemptFetch never asks to
+	// retry on the final attempt (all its retry branches are gated on
 	// `attempt < totalAttempts - 1`), so the exhausted-retries error is the final
-	// attempt's own `result.cause` — there is no post-loop fallback to reach.
+	// attempt's own `result.cause`. There is no post-loop fallback to reach.
 	for (let attempt = 0; ; attempt++) {
 		const result = await attemptFetch(ctx, retryPolicy, attempt, totalAttempts);
 

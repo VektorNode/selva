@@ -4,16 +4,15 @@ import { getLogger } from '@/core';
 
 /**
  * Coerce one raw default value to `T`, or return `null` when it can't be
- * coerced. Transformers never throw — the caller decides whether a `null`
+ * coerced. Transformers never throw: the caller decides whether a `null`
  * is filtered (array items) or surfaced as a parse error (scalars).
  */
 export type ValueTransformer<T> = (value: unknown) => T | null;
 
 /**
- * Coerce a schema's `default` through a transformer, mirroring the old
- * `processInputValue`: arrays map+filter (empty → undefined), scalars
- * transform-or-(undefined|preserve). Returns the new default value rather than
- * mutating.
+ * Coerce a schema's `default` through a transformer: arrays map+filter (empty
+ * → undefined), scalars transform-or-(undefined|preserve). Returns the new
+ * default value rather than mutating.
  */
 export function coerceDefault<T>(
 	value: unknown,
@@ -38,18 +37,17 @@ export function coerceDefault<T>(
 
 /**
  * @internal Shared with `normalize-default.ts` so tree-access items are parsed
- * with the exact same rules as scalar/array defaults (issue: the tree path used
- * to hand-roll `Number(data)`, turning a blank double into `0`).
+ * with the exact same rules as scalar/array defaults.
  */
 export const numericTransformer: ValueTransformer<number> = (value) => {
 	if (typeof value === 'number') return Number.isFinite(value) ? value : null;
 	if (typeof value === 'string') {
 		const trimmed = value.trim();
-		// `Number('')` is 0, so reject empty/whitespace before coercing — an empty
+		// `Number('')` is 0, so reject empty/whitespace before coercing: an empty
 		// default should drop to null, not silently become 0.
 		if (trimmed === '') return null;
 		// `Number()` also accepts hex/binary/octal literals ('0x10' → 16) and
-		// 'Infinity' — neither is a value a Grasshopper numeric default can
+		// 'Infinity': neither is a value a Grasshopper numeric default can
 		// legitimately hold (Infinity even survives applyRounding). Only decimal
 		// and exponent notation are accepted.
 		if (/^[+-]?0[xbo]/i.test(trimmed)) return null;
@@ -62,7 +60,7 @@ export const numericTransformer: ValueTransformer<number> = (value) => {
 /**
  * @internal Shared with `normalize-default.ts` (see {@link numericTransformer}).
  * Trims like the numeric transformer and follows the {@link ValueTransformer}
- * contract: `null` on a bad value, never a throw — bad array items are filtered
+ * contract: `null` on a bad value, never a throw: bad array items are filtered
  * like non-string junk, and the boolean parser surfaces bad scalars itself.
  */
 export const booleanTransformer: ValueTransformer<boolean> = (value) => {

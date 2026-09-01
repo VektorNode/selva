@@ -41,12 +41,12 @@ export { setLogger, enableDebugLogging, getLogger } from './utils/logger';
 
 // Wire-payload field reader. Server branches disagree on casing (mcneel serializes
 // the IO schema PascalCase, the VektorNode fork camelCase), so read the specific
-// fields you need case-insensitively rather than rewriting every key — a blanket
+// fields you need case-insensitively rather than rewriting every key: a blanket
 // rewrite corrupts user-authored keys like value-list labels.
 export { readField, hasField } from './utils/read-field';
 
 // Encoding utilities. `@selvajs/visualization` keeps its own copy of this logic rather than
-// importing it — it raises `VisualizationError`, and importing would couple it to the Compute
+// importing it: it raises `VisualizationError`, and importing would couple it to the Compute
 // client for ~20 lines. If the forgiving-base64 normalization or the Node pool-slab copy changes
 // here, `packages/visualization/src/shared/encoding.ts` must change with it.
 export { decodeBase64ToBinary } from './utils/encoding';

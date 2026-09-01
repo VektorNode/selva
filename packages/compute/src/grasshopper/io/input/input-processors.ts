@@ -36,17 +36,15 @@ export function processInput(rawInput: InputParamSchema): InputParam {
  * On success: `{ input, error: undefined }`.
  * On a recoverable validation failure: `{ input: <safe default>, error: {...} }`.
  *
- * A single input can report several entries — a malformed default
- * (normalization warning), warnings the type parser recovered from (e.g. a
- * ValueList default not in its values map), and a parser error. `errors`
- * carries every one; `error` remains the primary one (the parser error when
- * present, else the default warning) for convenience.
+ * A single input can report several entries: a malformed-default warning,
+ * warnings the type parser recovered from (e.g. a ValueList default not in its
+ * values map), and a parser error. `errors` carries every one; `error` is the
+ * primary one (the parser error when present, else the default warning).
  *
- * Error entries report the RAW declared `paramType` per the
- * {@link InputParseError} docs — not the canonicalized casing — so clients can
- * match on the casing they sent.
+ * Error entries report the RAW declared `paramType`, not the canonicalized
+ * casing, so clients can match on the casing they sent.
  *
- * Unexpected (non-ComputeError) failures still throw — they indicate a
+ * Unexpected (non-ComputeError) failures still throw: they indicate a
  * programming bug, not bad user input.
  *
  * @internal Used by {@link processInputsWithErrors} / {@link fetchParsedDefinitionIO}.
@@ -61,21 +59,20 @@ export function processInputWithError(rawInput: InputParamSchema): {
 		name: rawInput.name,
 		nickname: rawInput.nickname,
 		treeAccess: rawInput.treeAccess,
-		// `null`/absent means "no group" — keep it absent instead of collapsing it
+		// `null`/absent means "no group": keep it absent instead of collapsing it
 		// to '' and erasing the absent-vs-empty distinction.
 		groupName: rawInput.groupName ?? undefined,
 		id: rawInput.id
 	};
 
-	// Normalize paramType to its canonical casing so callers can send any case
-	// (e.g. Selva schemas emit lowercase "valueList" while the plugin reports
-	// "ValueList"). The registry is keyed by canonical type.
+	// Callers can send any case (e.g. Selva schemas emit lowercase "valueList"
+	// while the plugin reports "ValueList"); the registry is keyed by canonical type.
 	const paramType = canonicalizeParamType(rawInput.paramType);
 
-	// Shared, type-independent step: flatten the raw innerTree default into the
-	// shape the per-type parsers expect (pure — does not mutate rawInput). An
-	// unrecognized default shape nulls the value AND returns a warning so the
-	// drop is surfaced to the client via parseErrors instead of vanishing.
+	// Flatten the raw innerTree default into the shape the per-type parsers expect
+	// (pure: does not mutate rawInput). An unrecognized shape nulls the value and
+	// returns a warning so the drop reaches the client via parseErrors instead of
+	// vanishing.
 	let schema: InputParamSchema = { ...rawInput, paramType };
 	let defaultWarningError: InputParseError | undefined;
 	try {
@@ -89,8 +86,8 @@ export function processInputWithError(rawInput: InputParamSchema): {
 			code: warning.code
 		};
 	} catch (error) {
-		// A default too malformed for the normalizer to even walk is bad server/user data, not a
-		// programming bug — null it and report per-input rather than aborting the whole
+		// A default too malformed for the normalizer to walk is bad server/user data, not a
+		// programming bug: null it and report per-input rather than aborting the whole
 		// definition-IO fetch over one input.
 		schema = { ...schema, default: null };
 		defaultWarningError = {
@@ -105,7 +102,7 @@ export function processInputWithError(rawInput: InputParamSchema): {
 	const parser = INPUT_TYPE_PARSERS.get(paramType);
 
 	// Recoverable oddities a parser reports while still succeeding (e.g. a
-	// ValueList default not in its values map) — surfaced like default warnings.
+	// ValueList default not in its values map): surfaced like default warnings.
 	const parserWarnings: InputParseError[] = [];
 	const warn = (warning: { code: string; message: string }) =>
 		parserWarnings.push({
@@ -140,9 +137,9 @@ export function processInputWithError(rawInput: InputParamSchema): {
 				code: error.code
 			};
 			// The parser owns its own fallback; an unknown type falls back to the
-			// geometry-shaped safe default (matching the old behavior). EVERY
-			// failure is reported when the default warning, parser warnings, and
-			// the parser error occurred on the same input — none may be shadowed.
+			// geometry-shaped safe default. EVERY failure is reported when the default
+			// warning, parser warnings, and the parser error occurred on the same
+			// input: none may be shadowed.
 			return {
 				input: (parser ?? UNKNOWN_TYPE_FALLBACK).fallback(schema, baseInput),
 				error: parserError,
@@ -154,7 +151,6 @@ export function processInputWithError(rawInput: InputParamSchema): {
 			};
 		}
 
-		// Unexpected failure — surface it.
 		throw new ComputeError(
 			error instanceof Error ? error.message : String(error),
 			'VALIDATION_ERROR',
