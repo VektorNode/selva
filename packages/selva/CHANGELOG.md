@@ -1,5 +1,16 @@
 # @selvajs/selva
 
+## 4.16.3
+
+### Patch Changes
+
+- 87f2c6a: chore(deps): bump the npm group across 1 directory with 24 updates
+- 4e24b20: Follow the mesh identity rename and @selvajs/visualization's parse-layer rename
+
+  `packages/selva/e2e/helpers/fake-compute.ts` and the library viewer route now use `id` instead of
+  `sourceComponentId`/`originalIndex`, and call the renamed `getThreeObjectsFromComputeResponse`. No
+  behavior change.
+
 ## 4.16.2
 
 ### Patch Changes

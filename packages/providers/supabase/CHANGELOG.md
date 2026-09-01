@@ -1,5 +1,11 @@
 # @selvajs/supabase-provider
 
+## 0.19.4
+
+### Patch Changes
+
+- 87f2c6a: chore(deps): bump the npm group across 1 directory with 24 updates
+
 ## 0.19.3
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # Schema Changelog
 
+## 5.0.2
+
+### Patch Changes
+
+- f9c4c99: chore(deps-dev): bump json-schema-to-typescript from 15.0.4 to 16.0.0 in the npm-major group across 1 directory
+
 ## 5.0.1
 
 ### Patch Changes
