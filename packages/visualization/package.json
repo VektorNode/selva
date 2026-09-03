@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/visualization",
-	"version": "1.2.0",
+	"version": "1.3.0",
 	"description": "Headless, extensible viewer core for Selva — parse, render and scene layers over Three.js",
 	"author": "VektorNode",
 	"license": "MIT",
