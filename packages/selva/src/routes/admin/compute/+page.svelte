@@ -352,6 +352,39 @@
 			busyAction[server.id] = null;
 		}
 	}
+
+	type LocalCacheAction = 'clear-solve-cache' | 'clear-definition-cache';
+
+	let busyLocalCache = $state<LocalCacheAction | null>(null);
+	let confirmingLocalCache = $state<{ action: LocalCacheAction; label: string } | null>(null);
+	let showLocalCacheConfirm = $state(false);
+
+	async function clearLocalCache(action: LocalCacheAction, label: string) {
+		busyLocalCache = action;
+		try {
+			const res = await fetch('/api/admin/compute/actions', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ action })
+			});
+			const data = await res.json().catch(() => ({}));
+			if (!res.ok) {
+				toast.error(data.message || data.error || `Clear failed (${res.status})`);
+				return;
+			}
+			const { entries = 0, bytes = 0 } = data;
+			toast.success(
+				`Cleared ${label} — ${entries.toLocaleString()} ${entries === 1 ? 'entry' : 'entries'}, ${formatCacheBytes(bytes)}`
+			);
+			showLocalCacheConfirm = false;
+			// Counters just changed — reload so the panel doesn't show stale entries.
+			await invalidateAll();
+		} catch {
+			toast.error(`Failed to clear ${label}`);
+		} finally {
+			busyLocalCache = null;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -363,7 +396,8 @@
 	holds: string,
 	envVar: string,
 	c: CacheCounters,
-	note: string | null
+	note: string | null,
+	clearAction: LocalCacheAction
 )}
 	{@const rate = hitRate(c)}
 	<div class="space-y-2 rounded-lg border p-4">
@@ -410,6 +444,21 @@
 		{#if note}
 			<p class="text-muted-foreground text-xs">{note}</p>
 		{/if}
+
+		<div class="flex justify-end">
+			<Button
+				variant="outline"
+				size="sm"
+				disabled={busyLocalCache !== null || c.entries === 0}
+				onclick={() => {
+					confirmingLocalCache = { action: clearAction, label: label.toLowerCase() };
+					showLocalCacheConfirm = true;
+				}}
+			>
+				<Eraser class="mr-1 h-3.5 w-3.5" />
+				{busyLocalCache === clearAction ? 'Clearing…' : 'Clear'}
+			</Button>
+		</div>
 	</div>
 {/snippet}
 
@@ -832,7 +881,7 @@
 
 	<SectionHeader
 		title="Caching"
-		description="Whether solves are actually being served from memory. Counters are for this Selva instance and reset when it restarts; behind a load balancer each instance keeps its own."
+		description="Whether solves are actually being served from memory. Counters are for this Selva instance and reset when it restarts; behind a load balancer each instance keeps its own, so Clear empties only this one."
 	/>
 
 	<Card.Root>
@@ -842,14 +891,16 @@
 				'Results, so identical inputs skip Rhino entirely',
 				'COMPUTE_SOLVE_CACHE_MB',
 				data.caches.solve,
-				`Budget is per compute server — ${data.caches.solve.warmClients} warm, so up to ${formatCacheBytes(data.caches.solve.budgetTotalBytes)} total right now.`
+				`Budget is per compute server — ${data.caches.solve.warmClients} warm, so up to ${formatCacheBytes(data.caches.solve.budgetTotalBytes)} total right now.`,
+				'clear-solve-cache'
 			)}
 			{@render cachePanel(
 				'Definition cache',
 				'.gh bytes, so a solve skips the storage read',
 				'COMPUTE_DEFINITION_CACHE_MB',
 				data.caches.definition,
-				null
+				null,
+				'clear-definition-cache'
 			)}
 		</Card.Content>
 	</Card.Root>
@@ -879,6 +930,20 @@
 	pendingLabel="Purging…"
 	onConfirm={async () => {
 		if (confirmingPurge) await runAction(confirmingPurge, 'purge');
+	}}
+/>
+
+<ConfirmDialog
+	bind:open={showLocalCacheConfirm}
+	title="Clear this cache?"
+	description={confirmingLocalCache?.action === 'clear-solve-cache'
+		? 'Drop every cached solve result held by this Selva instance. The next solve of each definition runs on Rhino.Compute again. Other instances behind a load balancer keep theirs.'
+		: 'Drop the .gh bytes this Selva instance is holding. Costs a storage re-read on the next solve, nothing more.'}
+	confirmLabel="Clear"
+	pendingLabel="Clearing…"
+	onConfirm={async () => {
+		if (confirmingLocalCache)
+			await clearLocalCache(confirmingLocalCache.action, confirmingLocalCache.label);
 	}}
 />
 

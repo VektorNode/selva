@@ -47,7 +47,7 @@ identical solves arriving at once share a single run. Both are described in
 
 ---
 
-## Why there is no "clear cache" button
+## Why you rarely need to clear a cache
 
 Most caches here key on something whose meaning can never change, so nothing has to be actively
 thrown away:
@@ -67,8 +67,21 @@ Two situations leave entries lingering, neither of which causes wrong output:
 1. **You delete a definition.** Its definition-cache entries sit in memory until they age out under
    the byte budget. Nothing can reach them.
 2. **You upgrade Rhino in place on an existing compute server.** The solve cache lives per warm
-   compute client and is dropped when that client is evicted or the process restarts, so restart Selva
-   to be certain nothing solved by the old Rhino survives.
+   compute client, so results solved by the old Rhino survive the upgrade.
+
+### Clearing one anyway
+
+`/admin/compute` has a **Clear** button on both the solve-cache and definition-cache panels. Each
+empties that cache for **the Selva instance serving the request** — behind a load balancer the other
+instances keep theirs, so a fleet-wide clear still means a restart.
+
+Reach for them in the two cases above, or when a definition reaches outside its inputs (see the solve
+cache's ⚠️ below) and you need the next solve to be fresh. Neither is destructive: clearing costs a
+re-solve or a storage re-read, never correctness.
+
+**Both are separate from the per-server Purge button**, which clears Rhino.Compute's own `cachesolve`
+on that server's children. Selva's solve cache sits in front of it, so purging alone won't produce a
+fresh solve.
 
 ---
 
