@@ -5,19 +5,35 @@ import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
 import { ComputeServerStats } from '@selvajs/compute/grasshopper';
+import {
+	clearSolveResultCache,
+	clearDefinitionCache,
+	solveCacheStats,
+	definitionByteCacheStats
+} from '$lib/server/compute/engine.server';
 
 /**
  * Admin compute actions — `manage_compute` only. Operator-initiated, mutating
- * fleet controls that the read-only `/status` route deliberately omits:
+ * cache/fleet controls that the read-only `/status` route deliberately omits.
+ *
+ * Targeting a single platform server by `serverId`:
  *
  *   action: 'purge'    → best-effort fleet-wide cache purge (purgeAllChildren)
  *   action: 'shutdown' → graceful shutdown of all child processes (shutdownChildren)
  *
- * Both target a single platform server by `serverId`. They are POST (not GET) so
- * they can't be triggered by a stray prefetch — these wake/drain real processes.
+ * Process-wide, no `serverId` — these clear Selva's own in-memory caches, the
+ * layer in front of Rhino.Compute that `purge` never reaches:
+ *
+ *   action: 'clear-solve-cache'      → cached solve results on every warm client
+ *   action: 'clear-definition-cache' → retained `.gh` bytes
+ *
+ * All are POST (not GET) so they can't be triggered by a stray prefetch — they
+ * wake/drain real processes or throw away work already paid for.
  */
 
-type Action = 'purge' | 'shutdown';
+type Action = 'purge' | 'shutdown' | 'clear-solve-cache' | 'clear-definition-cache';
+
+const ACTIONS: Action[] = ['purge', 'shutdown', 'clear-solve-cache', 'clear-definition-cache'];
 
 interface ActionBody {
 	serverId?: string;
@@ -32,9 +48,24 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Invalid request body');
 
 	const { serverId, action } = body;
+	if (!action || !ACTIONS.includes(action))
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, `action must be one of: ${ACTIONS.join(', ')}`);
+
+	// Selva's own in-memory caches — process-wide, so no server to target. Report
+	// what was dropped by reading the counters before clearing.
+	if (action === 'clear-solve-cache') {
+		const { entries, bytes } = solveCacheStats();
+		clearSolveResultCache();
+		return json({ action, entries, bytes });
+	}
+
+	if (action === 'clear-definition-cache') {
+		const { entries, bytes } = definitionByteCacheStats();
+		clearDefinitionCache();
+		return json({ action, entries, bytes });
+	}
+
 	if (!serverId) apiError(400, ApiErrorCode.VALIDATION_FAILED, 'serverId required');
-	if (action !== 'purge' && action !== 'shutdown')
-		apiError(400, ApiErrorCode.VALIDATION_FAILED, "action must be 'purge' or 'shutdown'");
 
 	// Admin route — read the full config; admin can act on any server. Only the
 	// targeted server's key is decrypted.
