@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/solve",
-	"version": "1.0.8",
+	"version": "1.1.0",
 	"description": "One owner for the Selva solve flow — input change to solve result, on both sides of the wire, with no transport and no UI",
 	"author": "VektorNode",
 	"license": "MIT",
