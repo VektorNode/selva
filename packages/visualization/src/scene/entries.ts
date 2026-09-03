@@ -23,10 +23,17 @@ export interface SceneEntry {
 	/** The member's index within `object.userData.members`, or null for a whole object. */
 	memberIndex: number | null;
 	/**
-	 * Stable identity, and the row key. Matches the key visibility stores, so a row's eye toggles
-	 * exactly the thing the row names.
+	 * Stable identity. Matches the key visibility stores, so a row's eye toggles exactly the thing
+	 * the row names. Deliberately not unique: two identity-less objects sharing a name and layer
+	 * collide here, and that collision means "these hide together". Key a list on
+	 * {@link rowKey} instead.
 	 */
 	key: string;
+	/**
+	 * {@link key}, made unique across the returned entries by suffixing repeats. Keying a list on
+	 * `key` throws on the collisions identity deliberately tolerates.
+	 */
+	rowKey: string;
 	label: string;
 	layer: string;
 }
@@ -47,14 +54,23 @@ const layerOf = (object: THREE.Object3D, fallback: string): string =>
  */
 export function getSceneEntries(scene: THREE.Scene, defaultLayer: string): SceneEntry[] {
 	const entries: SceneEntry[] = [];
+	// Occurrences of each identity key so far, so the nth repeat of one key becomes `key#n`.
+	const seen = new Map<string, number>();
+	const rowKeyFor = (key: string): string => {
+		const n = seen.get(key) ?? 0;
+		seen.set(key, n + 1);
+		return n === 0 ? key : `${key}#${n}`;
+	};
 
 	for (const object of getSceneObjects(scene)) {
 		const members = membersOf(object);
 		if (!members) {
+			const key = getTrackingKey(object);
 			entries.push({
 				object,
 				memberIndex: null,
-				key: getTrackingKey(object),
+				key,
+				rowKey: rowKeyFor(key),
 				label: getObjectLabel(object),
 				layer: layerOf(object, defaultLayer)
 			});
@@ -63,10 +79,12 @@ export function getSceneEntries(scene: THREE.Scene, defaultLayer: string): Scene
 
 		const keys = getMemberKeys(object);
 		members.forEach((member, i) => {
+			const key = keys[i] ?? `${object.uuid}:${i}`;
 			entries.push({
 				object,
 				memberIndex: i,
-				key: keys[i] ?? `${object.uuid}:${i}`,
+				key,
+				rowKey: rowKeyFor(key),
 				label: member.name || prettyType(object.type),
 				// A merge never spans layers (`splitGroupByLayer`), so the member's layer and its
 				// mesh's agree; the member's is used anyway, since it is the one being listed.

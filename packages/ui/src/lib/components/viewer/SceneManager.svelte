@@ -134,6 +134,8 @@
 		for (const [layerName, entries] of layerGroups) {
 			flat.push({
 				kind: 'layer',
+				// Prefixed, like the object rows below: a layer row must never share a key with
+				// an object row whose identity happens to read like a layer name.
 				key: `layer:${layerName}`,
 				top,
 				height: LAYER_ROW_HEIGHT,
@@ -145,7 +147,7 @@
 			for (const entry of entries) {
 				flat.push({
 					kind: 'object',
-					key: entry.key,
+					key: `obj:${entry.rowKey}`,
 					top,
 					height: OBJECT_ROW_HEIGHT,
 					entry

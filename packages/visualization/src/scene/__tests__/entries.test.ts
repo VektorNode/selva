@@ -129,3 +129,41 @@ describe('member visibility', () => {
 		]);
 	});
 });
+
+// A collision in `key` is meaningful — the colliding things hide together — but a keyed list
+// throws on it (`each_key_duplicate`), which took down the whole scene panel. `rowKey` is the
+// unique one.
+describe('row keys', () => {
+	it('distinguishes identity-less objects that share a name and layer', () => {
+		const scene = new THREE.Scene();
+		for (let i = 0; i < 3; i++) {
+			const mesh = new THREE.Mesh();
+			mesh.userData = { name: 'beam', layer: 'Steel' };
+			scene.add(mesh);
+		}
+
+		const entries = createSceneOutliner(scene).entries();
+
+		expect(new Set(entries.map((e) => e.key)).size).toBe(1);
+		expect(new Set(entries.map((e) => e.rowKey)).size).toBe(3);
+	});
+
+	it('distinguishes merged members that repeat a tracking key', () => {
+		const scene = new THREE.Scene();
+		scene.add(mergedMesh());
+		scene.add(mergedMesh('Roof'));
+
+		const entries = createSceneOutliner(scene).entries();
+
+		expect(entries).toHaveLength(6);
+		expect(new Set(entries.map((e) => e.rowKey)).size).toBe(6);
+	});
+
+	it('leaves the first occurrence of a key untouched', () => {
+		const { scene } = sceneWithMerged();
+
+		const entries = createSceneOutliner(scene).entries();
+
+		expect(entries.map((e) => e.rowKey)).toEqual(entries.map((e) => e.key));
+	});
+});
