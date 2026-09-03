@@ -8,7 +8,7 @@
 // happened to be first, and the building elements the user actually works with would be
 // unreachable.
 //
-// An entry is one *listable* thing — a plain object, or one member inside a merged mesh. Rendering
+// An entry is one *listable* thing: a plain object, or one member inside a merged mesh. Rendering
 // stays merged (that is what keeps the model fast); only the listing is expanded. Entries carry the
 // identity key visibility already uses, so hiding a row works the same either way.
 
@@ -18,7 +18,7 @@ import { getMemberKeys, getTrackingKey, type MergedMember } from './identity.js'
 import { getObjectLabel, getSceneObjects, prettyType } from './objects.js';
 
 export interface SceneEntry {
-	/** The THREE object that renders this entry — the merged mesh when `member` is set. */
+	/** The THREE object that renders this entry (the merged mesh when `member` is set). */
 	object: THREE.Object3D;
 	/** The member's index within `object.userData.members`, or null for a whole object. */
 	memberIndex: number | null;

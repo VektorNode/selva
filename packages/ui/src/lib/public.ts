@@ -14,11 +14,11 @@ export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
 // driven directly with a `meshes` array and an optional `viewerConfig`.
 export { default as Viewer, type ViewerConfig } from './components/viewer/Viewer.svelte';
 
-// Viewer app seam. `onViewerReady` (on <Viewer> and <ComputeApp>) hands over the
-// live three.js viewer, so a host can draw its own content into the same scene as
-// the solve results and register pointer tools that claim clicks ahead of object
-// selection. Re-exported from @selvajs/visualization/render so hosts can annotate
-// without depending on it directly; `three` stays a peer dep of that package either way.
+// `onViewerReady` (on <Viewer> and <ComputeApp>) hands over the live three.js
+// viewer, so a host can draw into the same scene as the solve results and
+// register pointer tools that claim clicks ahead of object selection.
+// Re-exported from @selvajs/visualization/render so hosts can annotate without
+// depending on it directly; `three` stays a peer dep of that package either way.
 export type {
 	ThreeViewer,
 	PointerTool,

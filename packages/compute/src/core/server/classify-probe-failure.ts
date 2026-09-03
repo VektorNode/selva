@@ -7,7 +7,7 @@
  * its full retry window on a machine that is simply off.
  */
 export type ProbeVerdict =
-	/** Nothing is listening on the port — the host answered, and said no. */
+	/** Nothing is listening on the port: the host answered, and said no. */
 	| 'refused'
 	/** The hostname does not resolve. */
 	| 'dns'

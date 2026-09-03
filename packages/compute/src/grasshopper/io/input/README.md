@@ -2,7 +2,7 @@
 
 One raw Grasshopper parameter schema in, one typed `InputParam` out. Rhino Compute reports
 parameter metadata with inconsistent casing and loose types; a parser is where all the knowledge
-about one param type lives — coercion, type-specific fields, and its own safe fallback.
+about one param type lives: coercion, type-specific fields, and its own safe fallback.
 
 ## Pipeline
 
@@ -20,18 +20,18 @@ Raw API Response (PascalCase, inconsistent types)
 
 ### The parts
 
-- **`input-processors.ts`** — orchestrator. Builds the common `base` fields,
+- **`input-processors.ts`**: orchestrator. Builds the common `base` fields,
   canonicalizes the `paramType`, runs the shared `normalizeDefault` step, looks
-  up one parser in the registry, and calls `parse` (catching failures →
-  `fallback`). It owns **nothing type-specific** — no per-type switch.
-- **`normalize-default.ts`** — the shared, type-independent step that flattens a
+  up one parser in the registry, and calls `parse` (catching failures into
+  `fallback`). It owns nothing type-specific: no per-type switch.
+- **`normalize-default.ts`**: the shared, type-independent step that flattens a
   raw Grasshopper `innerTree` default into the scalar/array/tree shape parsers
   expect. Runs before type dispatch. Pure.
-- **`input-type-parsers.ts`** — the **input-type parser** seam: one
+- **`input-type-parsers.ts`**: the input-type parser seam. One
   `InputTypeParser` adapter per param type, plus the `INPUT_TYPE_PARSERS`
   registry. Each parser owns its coercion, type-specific fields, typed-param
   construction, and its own safe `fallback`.
-- **Discriminated union** — `InputParam` ties the parsers' outputs together for
+- **Discriminated union**: `InputParam` ties the parsers' outputs together for
   type safety.
 
 A parser that throws is caught at the registry boundary and paired with its own `fallback`. An
@@ -62,7 +62,7 @@ for (const input of processInputs(rawApiResponse)) {
 
 ## Adding a parser
 
-One new adapter plus a registry entry — no edits to `input-processors.ts`.
+One new adapter plus a registry entry, no edits to `input-processors.ts`.
 
 ### 1. Define the type and add it to the union
 
@@ -84,9 +84,9 @@ export type InputParam =
 ### 2. Write the parser adapter
 
 A parser implements `InputTypeParser`: it declares the canonical `types` it
-owns, a `parse` (happy path — throws a `ComputeError` on recoverable bad
+owns, a `parse` (happy path, throws a `ComputeError` on recoverable bad
 input), and a `fallback` (this type's safe default when `parse` throws). It
-reads from an already-`normalizeDefault`'d schema and is **pure** — it returns a
+reads from an already-`normalizeDefault`'d schema and is pure: it returns a
 typed param and never mutates the schema.
 
 ```typescript
@@ -115,7 +115,7 @@ const customParser: InputTypeParser<CustomInputType> = {
 ```
 
 If the default needs flattening that differs by `treeAccess` / `atMost`, that
-belongs in the shared `normalize-default.ts`, not here — parsers receive an
+belongs in the shared `normalize-default.ts`, not here: parsers receive an
 already-flattened default.
 
 ### 3. Register it
@@ -133,8 +133,8 @@ const ALL_PARSERS: InputTypeParser[] = [
 
 ## Testing
 
-Test the parser directly through its `parse` interface — the typed param it
-returns is the test surface:
+Test the parser directly through its `parse` interface: the typed param it
+returns is the test surface.
 
 ```typescript
 import { INPUT_TYPE_PARSERS } from '@/grasshopper/io/input/input-type-parsers';
@@ -159,6 +159,6 @@ pipeline behavior (including your fallback on bad input) is pinned.
 
 - **Pure.** Read the schema, return a typed param, never mutate.
 - **Own your fallback.** It is this type's safe default; don't push it into the orchestrator.
-- **Throw `ComputeError` for recoverable bad input** — the registry pairs it with your fallback.
+- **Throw `ComputeError` for recoverable bad input.** The registry pairs it with your fallback.
 - **Leave tree-flattening to `normalizeDefault`.** It is shared and type-independent.
 - **Expect missing fields.** API responses drop them.

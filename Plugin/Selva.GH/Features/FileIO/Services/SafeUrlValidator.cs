@@ -11,7 +11,7 @@ namespace Selva.GH.Features.FileIO.Services;
 //
 // User-provided URLs (image / file inputs, both in the local plugin and on the
 // Compute server) are an SSRF vector: a crafted URL can make the host fetch
-// internal resources — cloud metadata endpoints (169.254.169.254), loopback
+// internal resources, e.g. cloud metadata endpoints (169.254.169.254), loopback
 // services, or private-network hosts. This validator resolves the host to its
 // real IPs and rejects any that are not publicly routable.
 //
@@ -78,7 +78,7 @@ public static class SafeUrlValidator
 
         if (address.AddressFamily == AddressFamily.InterNetworkV6)
         {
-            // IPv4-mapped IPv6 (::ffff:a.b.c.d) — unwrap and check the embedded v4.
+            // IPv4-mapped IPv6 (::ffff:a.b.c.d): unwrap and check the embedded v4.
             if (address.IsIPv4MappedToIPv6)
             {
                 return IsPublicV4(address.MapToIPv4().GetAddressBytes());

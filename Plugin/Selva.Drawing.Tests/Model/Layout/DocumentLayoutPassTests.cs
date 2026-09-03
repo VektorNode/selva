@@ -28,9 +28,9 @@ public class DocumentLayoutPassTests
 	[Fact]
 	public void Page_numbering_is_global_across_sections()
 	{
-		// Section A: 2 × 5mm rects on a 10mm page → 2 pages.
-		// Section B: 3 × 4mm rects on a 10mm page (no spacing) → 2 pages (rects 1-2 fit = 8mm,
-		// rect 3 spills onto a second page). Total = 4 pages.
+		// Section A: 2 x 5mm rects on a 10mm page, 2 pages.
+		// Section B: 3 x 4mm rects on a 10mm page (no spacing), 2 pages (rects 1-2 fit at 8mm,
+		// rect 3 spills onto a second page). Total: 4 pages.
 		var sectionA = new Section
 		{
 			Content = new Stack
@@ -158,7 +158,7 @@ public class DocumentLayoutPassTests
 	[Fact]
 	public void Section_with_keep_together_emits_one_page_even_when_content_overflows()
 	{
-		// Five 3mm rects = 15mm; page is 10mm. Without keep-together → 2 pages. With → 1 page.
+		// Five 3mm rects = 15mm; page is 10mm. Without keep-together: 2 pages. With: 1 page.
 		var content = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -235,7 +235,7 @@ public class DocumentLayoutPassTests
 	[Fact]
 	public void Scale_token_auto_fills_from_a_single_views_inferred_scale()
 	{
-		// 100mm geometry pinned to 20mm → 1:5.
+		// 100mm geometry pinned to 20mm gives 1:5.
 		var view = new Selva.Drawing.Model.Drawings.DrawingView
 		{
 			Geometry = Rect(100, 50),
@@ -298,7 +298,7 @@ public class DocumentLayoutPassTests
 	[Fact]
 	public void Unfilled_scale_token_renders_blank_not_the_literal_token()
 	{
-		// No DrawingView on the page and no doc-level {scale} → {scale} resolves to empty.
+		// No DrawingView on the page and no doc-level {scale}, so {scale} resolves to empty.
 		var layout = new DocumentLayout
 		{
 			Sections = new[] { new Section { Content = Rect(2, 5) } },

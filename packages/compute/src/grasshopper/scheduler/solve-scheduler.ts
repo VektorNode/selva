@@ -49,7 +49,7 @@ interface PendingItem {
 	 */
 	definitionHash: string;
 	ctx: SolveContext;
-	/** Monotonic solve() ordinal — used to keep older items' late settles from overwriting newer state. */
+	/** Monotonic solve() ordinal; used to keep older items' late settles from overwriting newer state. */
 	seq: number;
 	resolve: (response: GrasshopperComputeResponse) => void;
 	reject: (error: ComputeError) => void;
@@ -75,17 +75,12 @@ interface InFlightItem extends PendingItem {
 }
 
 /**
- * Adapter for the underlying solve function. Lets the scheduler be tested
- * without a real Compute server, and decouples it from the client class.
- */
-
-/**
  * Whether a definition is worth solving by server cache key. Binary and
  * base64/plain-string definitions are uploaded in full, so referencing them by
- * key on later solves saves the (potentially huge) payload — and a
+ * key on later solves saves the (potentially huge) payload, and a
  * `DefinitionRef` additionally saves the `load()` itself on a pointer hit. An
- * `http(s)://` URL is already a reference — the server keys it by URL and
- * there's nothing to re-upload — so the fast path adds no value there.
+ * `http(s)://` URL is already a reference (the server keys it by URL, nothing
+ * to re-upload), so the fast path adds no value there.
  */
 function isReusableDefinition(definition: SolveDefinition): boolean {
 	if (typeof definition !== 'string') return true;
@@ -95,9 +90,9 @@ function isReusableDefinition(definition: SolveDefinition): boolean {
 /**
  * Fallback sizing for a response that never crossed the fetch boundary (custom
  * executor, hand-built test responses) and so carries no wire-size hint. A full
- * stringify — linear, once per cache write, never on the hit path. Responses
- * are JSON-derived, but guard anyway: an unserializable one is sized 0 (cached
- * under the count bound only) rather than failing the solve.
+ * stringify, linear, once per cache write, never on the hit path. Responses
+ * are JSON-derived, but guard anyway: an unserializable one is sized 0 rather
+ * than failing the solve.
  */
 function estimateResponseSize(response: GrasshopperComputeResponse): number {
 	try {
@@ -119,7 +114,7 @@ function estimateResponseSize(response: GrasshopperComputeResponse): number {
  * - Lifecycle hooks for UI indicators (start / settle / superseded)
  * - State observability via subscribe()
  *
- * Multiple schedulers can share a single GrasshopperClient — typically one
+ * Multiple schedulers can share a single GrasshopperClient, typically one
  * per UI surface (e.g. one for slider scrubs, one for long-running submits).
  *
  * @example
@@ -164,7 +159,7 @@ export class SolveScheduler {
 	private cacheBytes = 0;
 	/**
 	 * Cumulative hit/miss/eviction counters for {@link cacheStats}. Deliberately
-	 * NOT reset by `clearCache()` — they measure this scheduler's whole lifetime,
+	 * NOT reset by `clearCache()`: they measure this scheduler's whole lifetime,
 	 * so a hit rate stays comparable across a session rather than restarting at
 	 * every clear.
 	 */
@@ -194,7 +189,7 @@ export class SolveScheduler {
 
 	/** Ordinal handed to each solve() call. */
 	private solveSeq = 0;
-	/** seq of the solve that last wrote _lastResult/_lastError — see writeLastState. */
+	/** seq of the solve that last wrote _lastResult/_lastError; see writeLastState. */
 	private lastStateSeq = 0;
 
 	private disposed = false;
@@ -210,7 +205,7 @@ export class SolveScheduler {
 		this.baseConfig = baseConfig;
 		this.mode = options.mode ?? 'latest-wins';
 		this.maxConcurrent = Math.max(1, options.maxConcurrent ?? (this.mode === 'parallel' ? 4 : 1));
-		// Backpressure bounds — only meaningful for queue/parallel (latest-wins has
+		// Backpressure bounds only meaningful for queue/parallel (latest-wins has
 		// depth 1). A non-positive maxQueueDepth is treated as unbounded rather than
 		// "reject everything", which would silently break the scheduler.
 		this.maxQueueDepth =
@@ -233,7 +228,7 @@ export class SolveScheduler {
 		this.cacheTtl = cacheConfig?.ttlMs ?? 0;
 		this.cacheErroredSolves = cacheConfig?.cacheErroredSolves ?? true;
 
-		// On by default when the client wired a cache-key executor — it's a pure
+		// On by default when the client wired a cache-key executor: it's a pure
 		// win for reusable definitions and falls back safely on a miss.
 		this.reuseServerDefinitionCache =
 			!!cacheKeyExecutor && (options.reuseServerDefinitionCache ?? true);
@@ -276,7 +271,7 @@ export class SolveScheduler {
 	 * pool changes size after this scheduler was built.
 	 *
 	 * Raising it drains queued work immediately. Lowering it never interrupts work
-	 * already in flight — those finish above the new limit, and the cap applies from
+	 * already in flight: those finish above the new limit, and the cap applies from
 	 * the next dispatch. Values below 1 are clamped, since 0 would wedge the queue.
 	 */
 	setMaxConcurrent(value: number): void {
@@ -287,7 +282,7 @@ export class SolveScheduler {
 		if (raised) this.drainNext();
 	}
 
-	/** Current concurrency cap — reflects any {@link setMaxConcurrent} adjustment. */
+	/** Current concurrency cap, reflecting any {@link setMaxConcurrent} adjustment. */
 	getMaxConcurrent(): number {
 		return this.maxConcurrent;
 	}
@@ -321,21 +316,21 @@ export class SolveScheduler {
 	 * - Rejects with `code: ErrorCodes.QUEUE_TIMEOUT` when `queueWaitMs` is set and
 	 *   the call sat queued longer than that before starting (`statusCode: 503`).
 	 *
-	 * Caller-supplied `signal` cancels just this call (rejects with `ABORTED`) —
+	 * Caller-supplied `signal` cancels just this call (rejects with `ABORTED`),
 	 * including while the call is still queued, before execution starts.
 	 *
 	 * A {@link DefinitionRef} definition is keyed by its `key` (result cache and
-	 * server-pointer map alike) without materializing bytes — `load()` runs only
+	 * server-pointer map alike) without materializing bytes: `load()` runs only
 	 * when an upload is unavoidable. Its immutability contract is trusted here:
 	 * a reused key serves the other content's cached solve.
 	 *
 	 * Responses served from the cache (and via `lastResult`) are shared objects,
-	 * not copies — treat them as immutable. Mutating one poisons every later
+	 * not copies. Treat them as immutable: mutating one poisons every later
 	 * cache hit for that key.
 	 *
 	 * Partial-success contract: unlike `GrasshopperClient.solve()`, which throws
 	 * `COMPUTATION_ERROR` when the response carries solver errors, this RESOLVES
-	 * with the response as-is — check `response.errors` yourself if a partial
+	 * with the response as-is. Check `response.errors` yourself if a partial
 	 * success must not be treated as a result (see `cacheErroredSolves` for the
 	 * caching side of the same distinction).
 	 */
@@ -365,18 +360,18 @@ export class SolveScheduler {
 			startedAt: null
 		};
 
-		// An already-aborted signal rejects before anything else — including the
+		// An already-aborted signal rejects before anything else, including the
 		// cache: the documented contract is ABORTED, not a result.
 		if (options?.signal?.aborted) {
 			return Promise.reject(this.makeAbortError(ctx));
 		}
 
-		// Cache hit — return synchronously-resolved promise
+		// Cache hit: return synchronously-resolved promise
 		if (this.cacheEnabled) {
 			const cached = this.readCache(key);
 			if (cached) {
 				// This call is now the newest result. In latest-wins mode that means
-				// any older in-flight/pending solve is stale — supersede it, or its
+				// any older in-flight/pending solve is stale: supersede it, or its
 				// later completion would overwrite this hit and snap the UI back.
 				if (this.mode === 'latest-wins') {
 					this.supersedeCurrent();
@@ -408,7 +403,7 @@ export class SolveScheduler {
 			};
 
 			// A signal firing while the item waits in a queue must settle it as
-			// ABORTED and drop it — not leave it to run a full solve anyway. The
+			// ABORTED and drop it, not leave it to run a full solve anyway. The
 			// listener is removed when execution starts or the item settles.
 			if (item.externalSignal) {
 				item.queuedAbortHandler = () => this.abortQueuedItem(item);
@@ -420,7 +415,7 @@ export class SolveScheduler {
 	}
 
 	/**
-	 * Record last-result state, but only if no newer solve has written since —
+	 * Record last-result state, but only if no newer solve has written since:
 	 * a slow solve settling late must not overwrite the state a newer solve
 	 * (or cache hit) already published.
 	 */
@@ -535,7 +530,6 @@ export class SolveScheduler {
 			case 'latest-wins': {
 				// Reject any pending / abort any in-flight one as superseded
 				this.supersedeCurrent();
-				// Run immediately if no slot is taken
 				if (this.inFlight.size === 0) {
 					this.execute(item);
 				} else {
@@ -546,7 +540,7 @@ export class SolveScheduler {
 
 			case 'queue':
 			case 'parallel': {
-				// Same dispatch logic — the modes differ only in `maxConcurrent`'s
+				// Same dispatch logic: the modes differ only in `maxConcurrent`'s
 				// default (1 for queue, 4 for parallel), set in the constructor.
 				if (this.inFlight.size < this.maxConcurrent) {
 					this.execute(item);
@@ -571,7 +565,7 @@ export class SolveScheduler {
 	private async execute(item: PendingItem): Promise<void> {
 		const controller = new AbortController();
 		// Attach the controller to the SAME object (not a spread copy) so every
-		// settle path — supersede, cancelAll, executor success/error — shares one
+		// settle path (supersede, cancelAll, executor success/error) shares one
 		// `settled` slot. A copy would split that state and fire onSettle twice.
 		const inflight = item as InFlightItem;
 		inflight.controller = controller;
@@ -608,7 +602,7 @@ export class SolveScheduler {
 
 			if (this.cacheEnabled) this.writeCache(item.ctx.key, response);
 
-			// Already superseded mid-flight — drop the late success silently.
+			// Already superseded mid-flight: drop the late success silently.
 			if (!this.settleSuccess(item, response)) return;
 
 			this.writeLastState(item.seq, { result: response, durationMs });
@@ -624,7 +618,7 @@ export class SolveScheduler {
 			const durationMs = performance.now() - startTime;
 			// Resolve the error against the (possibly already-settled) item *before*
 			// settling: if this was superseded mid-flight, normalizeExecutionError
-			// returns the original cause, and _lastError should reflect it — unless
+			// returns the original cause, and _lastError should reflect it, unless
 			// a newer solve already published state, which this late settle must
 			// not clobber (writeLastState's seq guard).
 			const err = this.normalizeExecutionError(error, inflight);
@@ -648,7 +642,7 @@ export class SolveScheduler {
 	 * server cache key from the result so later solves can reference it.
 	 *
 	 * `definitionHash` is the {@link hashDefinition} result already computed at
-	 * `solve()` entry — threaded through rather than recomputed, so each solve
+	 * `solve()` entry, threaded through rather than recomputed, so each solve
 	 * pays exactly one linear pass over the definition (issue 57).
 	 */
 	private async runExecutor(
@@ -726,8 +720,8 @@ export class SolveScheduler {
 	/**
 	 * Settle a pending/in-flight item exactly once with an error.
 	 *
-	 * A solve promise can be settled from four concurrent sources — the executor
-	 * resolving, the executor rejecting, `supersede`, and `cancelAll` — and a JS
+	 * A solve promise can be settled from four concurrent sources (the executor
+	 * resolving, the executor rejecting, `supersede`, and `cancelAll`), and a JS
 	 * promise silently ignores a second settle. This guard is the single place the
 	 * settle-once invariant lives: it makes the *first* settle win and reports
 	 * whether this call was that winner, so callers fire their own hook only when
@@ -802,9 +796,8 @@ export class SolveScheduler {
 	// Cancellation
 	// --------------------------------------------------------------------------
 
-	/** Cancel everything — in-flight and pending. */
+	/** Cancel everything: in-flight and pending. */
 	cancelAll(): void {
-		// Reject pending
 		if (this.pendingForLatestWins) {
 			this.rejectAsAborted(this.pendingForLatestWins);
 			this.pendingForLatestWins = null;
@@ -813,14 +806,14 @@ export class SolveScheduler {
 			const item = this.fifoQueue.shift()!;
 			this.rejectAsAborted(item);
 		}
-		// Abort in-flight — their finally blocks will reject their promises
+		// Abort in-flight; their finally blocks will reject their promises.
 		for (const inflight of this.inFlight) {
 			const err = this.makeAbortError(inflight.ctx);
 			if (this.settleError(inflight, err)) {
 				this.runHook(this.onSettle, inflight.ctx, {
 					status: 'error',
 					error: err,
-					// startedAt is a Date.now() timestamp — measure with the same clock.
+					// startedAt is a Date.now() timestamp: measure with the same clock.
 					durationMs: inflight.ctx.startedAt ? Date.now() - inflight.ctx.startedAt : 0
 				});
 			}
@@ -851,7 +844,7 @@ export class SolveScheduler {
 		}
 		if (this.cacheTtl > 0 && Date.now() - entry.insertedAt > this.cacheTtl) {
 			this.dropCacheEntry(key);
-			// An expired entry is a miss, not a separate outcome — the solve runs
+			// An expired entry is a miss, not a separate outcome: the solve runs
 			// either way, which is what a hit rate is measuring.
 			this.cacheMisses += 1;
 			return null;
@@ -871,10 +864,10 @@ export class SolveScheduler {
 		if (!this.cacheErroredSolves && Array.isArray(solveErrors) && solveErrors.length > 0) return;
 		// Prefer the wire-size hint recorded at the fetch boundary; a response
 		// that never crossed the fetch layer (custom executor, tests) pays a
-		// one-off stringify here — once per fresh solve, never per hit.
+		// one-off stringify here, once per fresh solve, never per hit.
 		const sizeBytes = getResponseWireSize(response) ?? estimateResponseSize(response);
 		// An entry larger than the whole byte budget would evict everything
-		// (including itself) — serve it through, retain nothing.
+		// (including itself): serve it through, retain nothing.
 		if (sizeBytes > this.cacheMaxBytes) return;
 		this.dropCacheEntry(key); // replace-in-place: release the old copy's bytes
 		this.cache.set(key, { response, insertedAt: Date.now(), sizeBytes });
@@ -906,7 +899,7 @@ export class SolveScheduler {
 	 *
 	 * `hits`/`misses` count cache CONSULTATIONS, so `hits / (hits + misses)` is the
 	 * hit rate. A TTL-expired entry counts as a miss (the solve runs either way).
-	 * `evictions` counts only entries dropped under size/byte pressure — not
+	 * `evictions` counts only entries dropped under size/byte pressure, not
 	 * replace-in-place writes or TTL expiry, which are not capacity signals.
 	 * Counters are cumulative and survive `clearCache()`.
 	 */

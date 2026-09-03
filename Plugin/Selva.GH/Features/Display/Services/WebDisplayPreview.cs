@@ -18,9 +18,9 @@ public sealed class WebDisplayPreview
     public List<(Curve curve, Color color)> Curves { get; } = new List<(Curve, Color)>();
     public List<(Point3d point, Color color)> Points { get; } = new List<(Point3d, Color)>();
 
-    // BoundingBox is a struct: accumulate into a field and union explicitly. (Calling .Union on an
-    // auto-property getter would mutate a discarded copy, leaving the box Empty — which previously
-    // gave the preview an empty clipping box and made Grasshopper skip drawing the param entirely.)
+    // BoundingBox is a struct: accumulate into a field and union explicitly. Calling .Union on an
+    // auto-property getter would mutate a discarded copy, leaving the box Empty, which previously
+    // gave the preview an empty clipping box and made Grasshopper skip drawing the param entirely.
     private BoundingBox _boundingBox = BoundingBox.Empty;
     public BoundingBox BoundingBox => _boundingBox;
 
@@ -82,12 +82,12 @@ public sealed class WebDisplayPreview
 
     /// <summary>
     ///     Rebuilds one Rhino mesh per entry in the batch's mesh table, each paired with the table
-    ///     entry it came from. Unlike <see cref="Meshes" /> — which drops everything but colour
-    ///     because the preview only draws — this keeps the name, layer and metadata, so callers can
+    ///     entry it came from. Unlike <see cref="Meshes" />, which drops everything but colour
+    ///     because the preview only draws, this keeps the name, layer and metadata, so callers can
     ///     hand the batch's meshes to the canvas as separate, identifiable objects.
     ///
-    ///     Returns an empty list when the blob is absent or malformed, matching the preview: a bad
-    ///     blob yields no geometry rather than an exception.
+    ///     Returns an empty list when the blob is absent or malformed: a bad blob yields no
+    ///     geometry rather than an exception, matching the preview.
     /// </summary>
     public static List<(Mesh mesh, MeshMetadata meta, Color color)> ExtractMeshes(DisplayBatch batch)
     {
@@ -159,7 +159,7 @@ public sealed class WebDisplayPreview
             mesh.Faces.AddFace(indices[i] - vStart, indices[i + 1] - vStart, indices[i + 2] - vStart);
         }
 
-        // Quantization snaps vertices onto a grid — the Z step is the batch bbox height / 65534 —
+        // Quantization snaps vertices onto a grid (the Z step is the batch bbox height / 65534),
         // so triangles thinner than one step collapse to a line or a point. Rhino reports even one
         // such face as "degenerate double precision vertex locations" and marks the whole mesh
         // invalid, which then propagates into anything the mesh is appended to. Drop them here, at
@@ -203,7 +203,7 @@ public sealed class WebDisplayPreview
             else if (item.Kind == "curve" && item.Points != null)
             {
                 // Faceted next to the NURBS the Json branch rebuilds, but a visible preview beats
-                // none — this is the shape a transformed batch carries.
+                // none: this is the shape a transformed batch carries.
                 var polyline = ToPolyline(item.Points);
                 if (polyline != null)
                 {

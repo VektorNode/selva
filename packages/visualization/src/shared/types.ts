@@ -4,7 +4,7 @@ import type * as THREE from 'three';
 // LOOKS
 // ============================================================================
 
-/** Source of truth for {@link Look} — lets consumers (e.g. a style picker) iterate instead of hardcoding names. */
+/** Source of truth for {@link Look}: lets consumers (e.g. a style picker) iterate instead of hardcoding names. */
 export const LOOKS = [
 	'technical',
 	'studio',
@@ -33,14 +33,14 @@ export type LookMaterialOverride = {
 	/** Forces `transparent: true` when below 1. */
 	opacity?: number;
 	/**
-	 * Skip the depth buffer so far faces aren't hidden by near ones — what makes an x-ray read
+	 * Skip the depth buffer so far faces aren't hidden by near ones: what makes an x-ray read
 	 * through the model instead of just looking like tinted glass. Costs correct sort order, which
 	 * is the intended trade.
 	 */
 	depthWrite?: boolean;
 	/**
 	 * Draw each triangle as its three edges instead of a filled face. Shows the tessellation, not the
-	 * design edges the `edges` overlay extracts — a curved surface reads as a dense triangle mesh.
+	 * design edges the `edges` overlay extracts: a curved surface reads as a dense triangle mesh.
 	 * Lighting still applies but has almost nothing to shade, so a wireframe look wants flat fill
 	 * rather than a key light.
 	 */
@@ -64,7 +64,7 @@ export type LookPreset = {
 	ambientOcclusion: boolean;
 	/**
 	 * A key light casting a shadow. IBL alone lights every face of a box almost equally, so without
-	 * this a model reads as a flat white silhouette — the directional falloff is what separates the
+	 * this a model reads as a flat white silhouette: the directional falloff is what separates the
 	 * three faces meeting at a corner.
 	 */
 	sunlightIntensity: number;
@@ -72,7 +72,7 @@ export type LookPreset = {
 	materialOverride?: LookMaterialOverride;
 	/**
 	 * This look is a line drawing: without the edge overlay it renders as blank white shapes. Set
-	 * only by `lineart`. A declaration, not an action — `setLook` still touches no overlay, so a
+	 * only by `lineart`. A declaration, not an action: `setLook` still touches no overlay, so a
 	 * host that ignores this gets a look that doesn't work rather than a broken invariant.
 	 *
 	 * A host honouring this must also turn `edges.distanceFade` off. The fade sets opacity per
@@ -83,12 +83,12 @@ export type LookPreset = {
 	requiresEdges?: boolean;
 };
 
-/** How compute meshes read visually — the parse-time material choices baked from a {@link Look}. */
+/** How compute meshes read visually: the parse-time material choices baked from a {@link Look}. */
 export interface MaterialAppearanceOptions {
 	/** Default 1 (three.js's own material default) when omitted. */
 	envMapIntensity?: number;
 	/**
-	 * `THREE.FrontSide` instead of `THREE.DoubleSide` — crisper silhouette on closed solids, but open
+	 * `THREE.FrontSide` instead of `THREE.DoubleSide`: crisper silhouette on closed solids, but open
 	 * surfaces (which Rhino also emits) vanish when viewed from behind. Default false (DoubleSide) to
 	 * stay safe for surface geometry.
 	 */

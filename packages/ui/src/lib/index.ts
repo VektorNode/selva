@@ -20,8 +20,8 @@ export * from './schema/dynamic-value-list';
 export * from './schema/traversal';
 export * from './compute/solving.svelte';
 
-// Solve Session seam. Re-exported so transports outside this package — e.g.
-// plugin-ui's WebSocket driver — can satisfy SolveDriver and drive a session.
+// Solve Session seam. Re-exported so transports outside this package (e.g.
+// plugin-ui's WebSocket driver) can satisfy SolveDriver and drive a session.
 // See CONTEXT.md.
 export { useSolveSession } from './compute/useSolveSession.svelte';
 export {

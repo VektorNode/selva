@@ -14,7 +14,7 @@ public class ComponentStateManager
 
     // The headless check is reached only through this lambda, never a direct HeadlessGuard reference in
     // a method body. That defers loading Rhino.dll (which HeadlessGuard pulls in) to *invocation* rather
-    // than type load — so this otherwise Rhino-free class can be linked into the net8 test host, where
+    // than type load, so this otherwise Rhino-free class can be linked into the net8 test host, where
     // Rhino.dll isn't present, as long as the tests don't call the enable path.
     private readonly Func<bool> _isHeadless;
 
@@ -31,21 +31,22 @@ public class ComponentStateManager
     // A SolutionStart was seen (possibly debounced) since the last SolutionEnd. The start-debounce
     // only suppresses redundant solving=true *indicator* broadcasts; it must NOT make the matching
     // end look like a no-op, or a real solve's outputs would never be collected/broadcast. This
-    // flag lets SetSolving(false) report "a solve actually ran" even when its start was debounced —
+    // flag lets SetSolving(false) report "a solve actually ran" even when its start was debounced:
     // the case that froze dynamic-value-list reconcile solves (they fire <100ms after the prior solve).
     private bool _solveStartedSinceLastEnd;
 
     // A solve was scheduled (via document.ScheduleSolution) but its SolutionStart hasn't fired yet.
-    // ScheduleSolution defers ~10ms, during which IsSolving is still false — so a second value update
+    // ScheduleSolution defers ~10ms, during which IsSolving is still false, so a second value update
     // arriving in that gap would otherwise schedule a *second* solve. This flag, set synchronously the
-    // moment we schedule, makes IsBusy true across the whole schedule→start→end cycle so the second
-    // update coalesces (see _pendingValues) instead of double-scheduling. Cleared when a real solve ends.
+    // moment we schedule, makes IsBusy true across the whole schedule to start to end cycle so the
+    // second update coalesces (see _pendingValues) instead of double-scheduling. Cleared when a real
+    // solve ends.
     private bool _solveScheduled;
 
     // Latest-wins coalesce buffer. When a value update arrives while IsBusy, we merge it here instead
     // of dropping it (the old behavior silently lost the final slider value when the update landed in
     // the ~1 RTT window before the client's solving mirror caught up). Drained on a fresh UI tick after
-    // the in-flight solve ends — never inline in the SolutionEnd handler, which is reentrant. Null when
+    // the in-flight solve ends: never inline in the SolutionEnd handler, which is reentrant. Null when
     // empty; the `?` annotation is a no-op in the plugin (nullable disabled) but silences the warning in
     // the nullable-enabled test build that links this file.
     private Dictionary<string, object>? _pendingValues;
@@ -80,7 +81,7 @@ public class ComponentStateManager
     public bool SetSolving(bool isSolving)
     {
         // A solve ended: report whether a real solve ran since the last end so callers can collect
-        // outputs. True when we were tracking IsSolving OR a start was debounced in between — the
+        // outputs. True when we were tracking IsSolving OR a start was debounced in between: the
         // latter keeps a fast follow-up solve (e.g. dynamic-list reconcile) from being silently
         // dropped. Resets the per-cycle flag.
         if (!isSolving)
@@ -108,7 +109,7 @@ public class ComponentStateManager
             var now = DateTime.UtcNow;
             var timeSinceLastChange = (now - _lastStateChangeTime).TotalMilliseconds;
 
-            // Debounce only the solving=true indicator broadcast — rapid back-to-back solve starts
+            // Debounce only the solving=true indicator broadcast: rapid back-to-back solve starts
             // shouldn't spam the UI. The end still collects outputs via _solveStartedSinceLastEnd.
             if (timeSinceLastChange < STATE_CHANGE_DEBOUNCE_MS)
             {

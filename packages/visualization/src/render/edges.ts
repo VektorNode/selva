@@ -49,7 +49,7 @@ function collectTargets(root: THREE.Object3D, resolved: ResolvedOptions): THREE.
 		if (object.userData.kind === EDGE_USERDATA_KIND) return;
 		if (object.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) {
 			existingOverlays++;
-			return; // already done
+			return;
 		}
 		if (!object.geometry) return;
 

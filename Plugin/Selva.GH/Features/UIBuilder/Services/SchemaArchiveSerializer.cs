@@ -93,7 +93,7 @@ public class SchemaArchiveSerializer
                     var needsBackup = string.IsNullOrEmpty(originalVersion) ||
                                       Version.Parse(originalVersion ?? "1.0.0") < SchemaVersion.CURRENT;
 
-                    // Skip backup writes when running under Rhino.Compute — the
+                    // Skip backup writes when running under Rhino.Compute: the
                     // .gh file isn't being mutated there, and concurrent compute
                     // workers race on the second-precision backup filename.
                     if (needsBackup && HeadlessGuard.IsHeadless)

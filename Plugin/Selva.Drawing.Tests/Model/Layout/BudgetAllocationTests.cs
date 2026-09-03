@@ -11,13 +11,13 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 namespace Selva.Drawing.Tests.Model.Layout;
 
 // How Stack and Grid divide a budget between children/tracks. Both had the same shape of
-// bug — a measurement pass that guessed at each child's share up front, using a divisor that
-// counted things which would go on to take no space at all — so unrelated content changed
+// bug: a measurement pass that guessed at each child's share up front, using a divisor that
+// counted things which would go on to take no space at all, so unrelated content changed
 // the size of a drawing.
 public class BudgetAllocationTests
 {
 	// ========================================================================================
-	// C1 — empty children must not consume budget
+	// Empty children must not consume budget
 	// ========================================================================================
 
 	[Theory]
@@ -27,7 +27,7 @@ public class BudgetAllocationTests
 	[InlineData(5)]
 	public void Empty_siblings_do_not_shrink_the_view_beside_them(int emptyCount)
 	{
-		// ShareOf divided the budget by the number of children still to be measured, counting
+		// The per-child budget divided by the number of children still to be measured, counting
 		// ones that occupy nothing. A conditionally-empty branch (an empty nested Stack, a
 		// blank TextFlow) silently rescaled every view on the sheet: 100mm alone, 16.7mm
 		// beside five.
@@ -43,7 +43,7 @@ public class BudgetAllocationTests
 	[Fact]
 	public void Empty_siblings_cost_nothing_even_with_no_spacing()
 	{
-		// Isolates the ShareOf divisor from the spacing reserve: with Spacing=0 the spacing
+		// Isolates the per-child divisor from the spacing reserve: with Spacing=0 the spacing
 		// reserve can't be responsible, and the defect still showed 100/6.
 		var children = new List<DrawElement> { new DrawingView { Geometry = Geometry(100, 100) } };
 		for (var i = 0; i < 5; i++) children.Add(EmptyStack());
@@ -55,7 +55,7 @@ public class BudgetAllocationTests
 	}
 
 	// ========================================================================================
-	// U1 — sibling count must not set the drawing scale
+	// Sibling count must not set the drawing scale
 	// ========================================================================================
 
 	[Fact]
@@ -81,7 +81,7 @@ public class BudgetAllocationTests
 	}
 
 	// ========================================================================================
-	// C3 — a nested TrySplit must not size against the whole page
+	// A nested TrySplit must not size against the whole page
 	// ========================================================================================
 
 	[Theory]
@@ -91,7 +91,7 @@ public class BudgetAllocationTests
 	{
 		// The context was built once from the whole available height and never narrowed, so a
 		// nested stack sized against the entire page while the parent had only `remaining`
-		// left — and the parent accepted the returned FitsHeight unchecked. TrySplit(30) came
+		// left, and the parent accepted the returned FitsHeight unchecked. TrySplit(30) came
 		// back claiming FitsHeight=100.
 		var stack = new Stack
 		{
@@ -105,7 +105,7 @@ public class BudgetAllocationTests
 	}
 
 	// ========================================================================================
-	// C4 — a track ceiling must account for tracks already committed
+	// A track ceiling must account for tracks already committed
 	// ========================================================================================
 
 	[Fact]
@@ -152,7 +152,7 @@ public class BudgetAllocationTests
 	}
 
 	// ========================================================================================
-	// C5 / C6 — Auto must hug its content, not inflate to the budget
+	// Auto must hug its content, not inflate to the budget
 	// ========================================================================================
 
 	[Theory]

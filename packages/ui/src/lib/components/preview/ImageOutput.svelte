@@ -21,11 +21,10 @@
 	const ext = $derived(file ? (file.fileType ?? '').toLowerCase() : '');
 	const isSupported = $derived(SUPPORTED_EXTS.has(ext));
 
-	// Binary formats (PNG/JPG/WEBP/GIF) arrive base64; SVG arrives as plain UTF-8 XML
-	// and must be percent-encoded into the data URL.
-	// Rendering through <img src> rather than inlining the SVG is a security choice:
-	// browsers disable scripting in image-context SVGs, so untrusted SVG cannot
-	// execute against the host. Don't switch to {@html} or an inline <svg>.
+	// Binary formats (PNG/JPG/WEBP/GIF) arrive base64; SVG arrives as plain UTF-8 XML and
+	// needs percent-encoding into the data URL.
+	// Rendering through <img src> instead of {@html} or an inline <svg> is deliberate:
+	// browsers disable scripting in image-context SVGs, so untrusted SVG can't execute.
 	const dataUrl = $derived.by(() => {
 		if (!file || !isSupported) return null;
 		const mime = MIME_BY_EXT[ext] ?? 'application/octet-stream';

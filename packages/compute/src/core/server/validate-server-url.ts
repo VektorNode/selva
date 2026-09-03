@@ -1,17 +1,17 @@
 import { ComputeError, ErrorCodes } from '@/core/errors';
 
 /**
- * The public McNeel endpoint's host — the default blocked host; users must point at
+ * The public McNeel endpoint's host, the default blocked host; users must point at
  * their own server. Compared against the parsed hostname lowercased and with any
  * trailing dot stripped, so the FQDN form (`compute.rhino3d.com.`) can't bypass it.
- * Known limitation: the endpoint's raw IP is not blocked — it sits behind a load
+ * Known limitation: the endpoint's raw IP is not blocked. It sits behind a load
  * balancer with no single stable, verifiable address to pin.
  */
 export const DEFAULT_BLOCKED_HOST = 'compute.rhino3d.com';
 
 export interface ValidateServerUrlOptions {
 	/**
-	 * Hostnames rejected as a `serverUrl` — a backend's shared public endpoint,
+	 * Hostnames rejected as a `serverUrl`: a backend's shared public endpoint,
 	 * which callers must not point at. Defaults to `[DEFAULT_BLOCKED_HOST]`; pass
 	 * `[]` to block nothing. Compared lowercased with any trailing dot stripped.
 	 */
@@ -21,21 +21,21 @@ export interface ValidateServerUrlOptions {
 /**
  * Validate and normalize a compute `serverUrl`.
  *
- * This is the single source of truth for "is this a usable server URL?" — both
+ * This is the single source of truth for "is this a usable server URL?": both
  * `GrasshopperClient` (via `normalizeComputeConfig`) and the standalone-exported
  * `ComputeServerStats` constructor delegate here, so a given URL is accepted or
  * rejected identically no matter which entry point a caller uses.
  *
- * Rules (all enforced, on the *trimmed* input — the trimmed form is what's
- * returned, so no stray whitespace survives into later `fetch` calls):
+ * Rules (all enforced, on the *trimmed* input, which is also what's returned,
+ * so no stray whitespace survives into later `fetch` calls):
  * - non-empty (after trim)
  * - `http://` or `https://` scheme (case-insensitive, per RFC 3986)
  * - parseable by `new URL()`
- * - no embedded credentials (`http://user:pass@host`) — `fetch`/`new Request`
+ * - no embedded credentials (`http://user:pass@host`): `fetch`/`new Request`
  *   reject credentialed URLs at runtime, so they must fail here instead
- * - no query string or fragment — endpoint paths are appended to this URL
+ * - no query string or fragment: endpoint paths are appended to this URL
  *   (`${serverUrl}/version`), which a `?…` or `#…` suffix would corrupt
- * - not a blocked host (by default the public McNeel endpoint) — compared by
+ * - not a blocked host (by default the public McNeel endpoint), compared by
  *   parsed hostname (lowercased, trailing dot stripped), so scheme, casing, port,
  *   path, trailing-slash, or FQDN-dot variants can't slip past the block
  *

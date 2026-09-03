@@ -279,7 +279,7 @@
   - `pickThreshold` and `snapToVertex` are public, so a host tool's grab band and vertex snapping
     match the built-in tools instead of drifting from them.
 
-  No new tools ship here — apps bring their own. See `src/render/VIEWER-APPS.md`.
+  No new tools ship here — apps bring their own. See `src/render/README.md`.
 
 - 4512068: Extract parsing and rendering into a new `@selvajs/visualization` package.
 
@@ -501,7 +501,7 @@
   - `pickThreshold` and `snapToVertex` are public, so a host tool's grab band and vertex snapping
     match the built-in tools instead of drifting from them.
 
-  No new tools ship here — apps bring their own. See `src/render/VIEWER-APPS.md`.
+  No new tools ship here — apps bring their own. See `src/render/README.md`.
 
 ## 1.0.0-beta.2
 

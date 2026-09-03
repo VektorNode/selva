@@ -64,7 +64,7 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
  * Returns absolute values: quantized vertices stay int16 (dequantize with `origin + (q + 32767) *
  * scale`, which is what Three.js `BufferAttribute(arr, 3, true)` expects when the per-mesh
  * transform encodes origin and scale), but the delta filter and planar byte-split are both undone
- * here — consumers never see either.
+ * here: consumers never see either.
  *
  * @param input - The blob, as either an `ArrayBuffer`/`Uint8Array` (binary transport) or a
  *   base64-encoded string (JSON-envelope transport).
@@ -115,8 +115,8 @@ export function parseBinaryMeshBatch(
 }
 
 /**
- * Raw wire-value view of a blob: geometry arrays are exactly as stored — zigzag-mapped deltas when
- * the blob carries the delta filter — while metadata, UVs, and colors are fully decoded (they're
+ * Raw wire-value view of a blob: geometry arrays are exactly as stored (zigzag-mapped deltas when
+ * the blob carries the delta filter), while metadata, UVs, and colors are fully decoded (they're
  * small). For consumers handing the heavy decoding to a worker (`mesh-assembly.ts`); everyone else
  * wants {@link parseBinaryMeshBatch}, which returns reconstructed absolute values.
  */
@@ -135,7 +135,7 @@ export interface RawBinaryMeshBatch {
 	indexData: Uint8Array | Uint16Array | Uint32Array;
 	isFloat32: boolean;
 	deltaEncoded: boolean;
-	/** v4 byte-plane layout on the delta-filtered streams — see FLAG_PLANAR_BYTESPLIT. */
+	/** v4 byte-plane layout on the delta-filtered streams: see FLAG_PLANAR_BYTESPLIT. */
 	planarByteSplit: boolean;
 	/** Width of the wire indices (needed since planar `indexData` is a bare byte stream). */
 	uint16Indices: boolean;
@@ -160,7 +160,7 @@ export function parseBinaryMeshBatchRaw(
 	const rawInput = toUint8Array(input);
 
 	// An SLVM v3 container nests a bare SLVA/SLVZ blob as its GEOM chunk and carries the object
-	// table/materials as binary chunks — unwrap, decode the inner blob through the path below,
+	// table/materials as binary chunks. Unwrap, decode the inner blob through the path below,
 	// and overlay the container's metadata (the inner blob's own metadata is empty).
 	if (isSlvmContainer(rawInput)) {
 		const container = parseSlvmContainer(rawInput);
@@ -274,7 +274,7 @@ export function parseBinaryMeshBatchRaw(
 	}
 
 	// Typed-array views need alignment to the element size. The header lays out the geometry block
-	// so the vertex byte offset is always 4-aligned (preamble 12 + metadataLen + 4 + 48 + 4) —
+	// so the vertex byte offset is always 4-aligned (preamble 12 + metadataLen + 4 + 48 + 4):
 	// satisfies both float32 (4-byte) and int16 (2-byte). A zero-copy view is only valid if
 	// `bytes.byteOffset + offset` respects that alignment in the underlying buffer, which a wrapper
 	// Uint8Array could violate; the readers fall back to a copy when it does.
@@ -283,10 +283,10 @@ export function parseBinaryMeshBatchRaw(
 	if (useFloat32) {
 		vertexData = readFloat32Vertices(bytes.buffer, absoluteOffset, componentCount);
 	} else if (planarByteSplit) {
-		// v4 byte planes — no alignment requirement, view the bytes directly.
+		// v4 byte planes: no alignment requirement, view the bytes directly.
 		vertexData = bytes.subarray(offset, offset + verticesByteLength);
 	} else if (deltaEncoded) {
-		// Raw zigzag deltas — parseBinaryMeshBatch (or the assembly worker) prefix-sums them later.
+		// Raw zigzag deltas: parseBinaryMeshBatch (or the assembly worker) prefix-sums them later.
 		vertexData = readUint16Array(bytes.buffer, absoluteOffset, componentCount);
 	} else {
 		vertexData = readInt16Vertices(bytes.buffer, absoluteOffset, componentCount);
@@ -323,7 +323,7 @@ export function parseBinaryMeshBatchRaw(
 			: readUint32Array(bytes.buffer, bytes.byteOffset + offset, indexCount);
 	offset += indicesByteLength;
 
-	// Optional trailing chunks: UV first, then colors. Pre-chunk-writer blobs simply end here —
+	// Optional trailing chunks: UV first, then colors. Pre-chunk-writer blobs simply end here;
 	// each read is gated by its flag, so nothing is consumed when a chunk is absent.
 	let uvs: Float32Array | null = null;
 	if ((flags & FLAG_HAS_UVS) !== 0) {

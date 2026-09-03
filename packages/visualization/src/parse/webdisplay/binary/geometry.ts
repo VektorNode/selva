@@ -32,7 +32,7 @@ export function maybeDecompress(bytes: Uint8Array): Uint8Array {
 	const uncompressedLen = view.getUint32(4, true);
 	const deflated = bytes.subarray(8);
 
-	// Bound the wire-supplied length before allocating — a corrupt header could request ~4 GB.
+	// Bound the wire-supplied length before allocating: a corrupt header could request ~4 GB.
 	// DEFLATE won't expand past ~1000x.
 	const maxPlausibleLen = Math.max(deflated.byteLength * 1032 + 1024, 1 << 20);
 	if (uncompressedLen > maxPlausibleLen) {
@@ -46,7 +46,7 @@ export function maybeDecompress(bytes: Uint8Array): Uint8Array {
 	let out: Uint8Array;
 	try {
 		// One byte of slack past the declared length: fflate trims its output to bytes actually
-		// written, so a mismatched header lands off `uncompressedLen` either way — caught below
+		// written, so a mismatched header lands off `uncompressedLen` either way, caught below
 		// instead of silently decoding a zero-padded/truncated tail as geometry.
 		out = inflateSync(deflated, { out: new Uint8Array(uncompressedLen + 1) });
 	} catch (error) {
@@ -95,7 +95,7 @@ export function readInt16Vertices(
 	if (byteOffset % 2 === 0) {
 		return new Int16Array(buffer, byteOffset, count);
 	}
-	// Misaligned (rare — would require a wrapper Uint8Array with odd byteOffset).
+	// Misaligned (rare: would require a wrapper Uint8Array with odd byteOffset).
 	const copy = new Uint8Array(count * 2);
 	copy.set(new Uint8Array(buffer, byteOffset, count * 2));
 	return new Int16Array(copy.buffer);
@@ -194,7 +194,7 @@ export function decodeDeltaVertices(zigzagged: Uint16Array): Int16Array {
 
 /**
  * Undoes the v4 planar byte-split vertex layout: six byte planes
- * `[Xlo][Ylo][Zlo][Xhi][Yhi][Zhi]` (each `vertexCount` bytes) of the zigzag deltas — merge the
+ * `[Xlo][Ylo][Zlo][Xhi][Yhi][Zhi]` (each `vertexCount` bytes) of the zigzag deltas: merge the
  * planes, unzigzag, prefix-sum per component. Same delta semantics as {@link decodeDeltaVertices}.
  */
 export function decodePlanarVertices(planes: Uint8Array, vertexCount: number): Int16Array {

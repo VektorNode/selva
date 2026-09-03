@@ -33,7 +33,6 @@
 
 	const showTabBar = $derived(visibleTabs.length > 1);
 
-	// Computed value list options keyed by the target input id, derived from solved outputs.
 	const dynamicOptions = $derived(buildDynamicValueListOptions(schema, values));
 
 	$effect(() => {
@@ -56,7 +55,7 @@
 		if (Object.keys(initial).length > 0) Object.assign(collapsedGroups, initial);
 	});
 
-	// A hidden or disabled input still solves, so reset it to its default — otherwise the
+	// A hidden or disabled input still solves, so reset it to its default: otherwise the
 	// value the user last set while it was visible keeps feeding the definition.
 	$effect(() => {
 		if (schema.layout.type !== 'tabbed') return;

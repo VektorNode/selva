@@ -10,7 +10,7 @@ export const DEFAULT_LOOK: Look = 'technical';
  * can't drift.
  *
  * Every shaded look pairs a key light with contact shading (GTAO), because image-based lighting on
- * its own lights all faces of a box nearly equally — the result is a white silhouette with no
+ * its own lights all faces of a box nearly equally: the result is a white silhouette with no
  * readable form. GTAO is a full-screen pass and does cost frames; `xray` skips it since there are no
  * opaque contacts left to shade.
  */
@@ -42,7 +42,7 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 		ambientOcclusion: true,
 		sunlightIntensity: 2.2
 	},
-	// Fill pulled furthest DOWN and the sun pushed hardest, so light-to-shadow falloff is steepest —
+	// Fill pulled furthest DOWN and the sun pushed hardest, so light-to-shadow falloff is steepest:
 	// a dramatic hero shot, unlike `studio` which fills shadows back in.
 	showcase: {
 		toneMapping: THREE.ACESFilmicToneMapping,
@@ -57,7 +57,7 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 	},
 	// Every mesh forced to one near-white clay, so form and shadow carry the image instead of the
 	// model's own colours. AO on: with all albedo differences gone, contact shading is the only thing
-	// left separating touching parts — without it the model reads as one white blob.
+	// left separating touching parts: without it the model reads as one white blob.
 	arctic: {
 		toneMapping: THREE.NeutralToneMapping,
 		toneMappingExposure: 1.05,
@@ -96,20 +96,20 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 		}
 	},
 	// The architectural line drawing: feature edges over flat white faces. The faces are the whole
-	// point even though you never really see them — they still write depth, so a near member hides
+	// point even though you never really see them: they still write depth, so a near member hides
 	// the ones behind it. True wireframe can't do that, and on a dense frame (thousands of members,
 	// every edge of every one drawn at once) it collapses into a black mass.
 	//
 	// Unlit on purpose: any directional shading would compete with the lines for the eye. Ambient
 	// alone lands every face on the same flat white, so the only contrast in the image is the edges.
-	// AO is off for the same reason — a grey contact smear under a line drawing just muddies it.
+	// AO is off for the same reason: a grey contact smear under a line drawing just muddies it.
 	lineart: {
 		toneMapping: THREE.NeutralToneMapping,
 		toneMappingExposure: 1,
 		// The faces are MeshPhysicalMaterial, so they take their brightness from lighting, not from
 		// `color`: zero out the lights and they render black however white the override is. Hemisphere
 		// and ambient carry it rather than IBL, because `scene.environment` only exists if the host
-		// loaded an HDR — leaning on IBL would render this look black in any viewer without one. Both
+		// loaded an HDR: leaning on IBL would render this look black in any viewer without one. Both
 		// are orientation-independent, so every face lands on the same flat white and the edges stay
 		// the only contrast in the image. Ambient is weighted over hemisphere because hemisphere's
 		// ground colour is a warm brown by default: leaning on it tints every downward face grey and
@@ -128,11 +128,11 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			roughness: 1
 		}
 	},
-	// Triangle edges only — the tessellation itself, diagonals and all. That makes it a mesh-
+	// Triangle edges only: the tessellation itself, diagonals and all. That makes it a mesh-
 	// inspection tool, not a drawing: for a readable line drawing use `lineart`, which draws
-	// feature edges and lets near faces occlude far ones. Nothing here is a lit surface:
+	// feature edges and lets near faces occlude far ones. Nothing here is a lit surface;
 	// the sun is off and fill carries the image, because a directional light on a line renders it
-	// black wherever the line runs away from the key. AO is off for the same reason — a full-screen
+	// black wherever the line runs away from the key. AO is off for the same reason: a full-screen
 	// contact pass has no contacts to find between wires, and it only costs frames.
 	wireframe: {
 		toneMapping: THREE.NeutralToneMapping,

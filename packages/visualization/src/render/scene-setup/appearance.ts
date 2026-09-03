@@ -51,16 +51,15 @@ function restoreBaseline(target: OverridableMaterial): void {
 
 /**
  * Applies a look's material overrides, or restores the parsed values when the look has none.
- * `needsUpdate` is set because switching `transparent` changes the shader program, not just a
- * uniform.
+ * `needsUpdate` is set because switching `transparent` changes the shader program, not just a uniform.
  *
- * Exported for tests: the leak this guards against is invisible until two overriding looks are
+ * Exported for tests: the leak this guards against only shows up after two overriding looks are
  * applied in sequence, which no single-look check catches.
  *
- * Every apply restores the baseline first, so an override only has to describe what *it* wants.
+ * Every apply restores the baseline first, so an override only has to describe what it wants.
  * Without that reset, switching between two looks that both override leaves behind whatever the
- * previous one set and the new one is silent about — `wireframe` surviving out of the wireframe
- * look, or `opacity`/`depthWrite` surviving out of xray, since no other look mentions them.
+ * previous one set: `wireframe` surviving out of the wireframe look, or `opacity`/`depthWrite`
+ * surviving out of xray, since no other look mentions them.
  */
 export function applyMaterialOverride(
 	material: THREE.Material,
@@ -85,7 +84,7 @@ export function applyMaterialOverride(
 			wireframe: target.wireframe ?? false
 		};
 	} else {
-		// Baseline captured by an earlier look — reset onto it so this override starts clean.
+		// Baseline captured by an earlier look: reset onto it so this override starts clean.
 		applyBaseline(target, target[BASELINE_KEY]);
 	}
 
@@ -107,7 +106,7 @@ export function applyMaterialOverride(
 	target.needsUpdate = true;
 }
 
-/** The runtime lighting/material dials — everything a host can retune without rebuilding the scene. */
+/** The runtime lighting/material dials: everything a host can retune without rebuilding the scene. */
 export interface AppearanceController {
 	setFillLights(opts: {
 		hemisphereIntensity?: number;
@@ -145,7 +144,7 @@ export function createAppearanceController(params: {
 			!lights.hemisphere &&
 			opts.hemisphereIntensity > 0
 		) {
-			// Lazily created so hosts can enable fill at runtime even if the scene was built without one.
+			// Lazily created so hosts can enable fill at runtime even if the scene started without one.
 			lights.hemisphere = new THREE.HemisphereLight(
 				opts.hemisphereSkyColor ?? config.lighting.hemisphereSkyColor,
 				opts.hemisphereGroundColor ?? config.lighting.hemisphereGroundColor,
@@ -198,8 +197,8 @@ export function createAppearanceController(params: {
 		});
 		setEnvironmentIntensity(preset.environmentIntensity);
 
-		// Null when the viewer was built with sunlight off; such a host has opted out of key lighting
-		// entirely, and a look switch is not the place to opt it back in.
+		// Null when the viewer was built with sunlight off. That host opted out of key lighting
+		// entirely; a look switch is not the place to opt it back in.
 		if (lights.sun) {
 			lights.sun.intensity = preset.sunlightIntensity;
 			config.lighting.sunlightIntensity = preset.sunlightIntensity;
@@ -211,7 +210,7 @@ export function createAppearanceController(params: {
 		pipeline.setAmbientOcclusion(preset.ambientOcclusion);
 		if (hadPipeline) pipeline.rebuild();
 
-		// Solve output only. Host-added geometry (`user`/`app:` scopes) owns its own materials —
+		// Solve output only. Host-added geometry (`user`/`app:` scopes) owns its own materials:
 		// a point cloud or draft line has a deliberate look that a render-style switch must not
 		// overwrite. Hosts that do want to follow the look read `getMaterialAppearance()`.
 		scene.traverse((object) => {

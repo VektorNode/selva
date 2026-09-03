@@ -34,13 +34,12 @@
 		value?: SupportedTypes;
 		displayName?: string;
 		/**
-		 * `forceSolve` solves even in manual-solve mode. Used for system-initiated changes
-		 * (e.g. pruning a vanished dynamic-list selection), where leaving the previous output
-		 * on screen would misrepresent the input that now sits above it.
+		 * `forceSolve` solves even in manual-solve mode: for system-initiated changes (e.g.
+		 * pruning a vanished dynamic-list selection), leaving the prior output on screen would
+		 * misrepresent the input that now sits above it.
 		 */
 		onChange: (paramId: string, value: SupportedTypes, forceSolve?: boolean) => void;
 		disabled?: boolean;
-		/** Runtime-computed options for a dynamic value list input (name -> value). */
 		dynamicOptions?: Record<string, string>;
 	}
 
@@ -56,8 +55,8 @@
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
 
-	// The 'hidden' presentation never reaches here — visible:false filters it out
-	// upstream — so a client-sourced input here always means presentation === 'slot'.
+	// The 'hidden' presentation never reaches here. visible:false filters it out
+	// upstream, so a client-sourced input here always means presentation === 'slot'.
 	const isClientSlot = $derived.by(() => {
 		const source = (item as { source?: { kind?: string; client?: { presentation?: string } } })
 			.source;
@@ -65,7 +64,7 @@
 	});
 	const clientSlot = getClientSlot();
 
-	// Min/max hint rendered next to the label. `hideRange` lets the author suppress it.
+	// `hideRange` lets the author suppress this hint.
 	const numberRangeHint = $derived.by(() => {
 		if (!isNumberWidget(item)) return null;
 		const cfg = item.config;
@@ -110,7 +109,7 @@
 
 	// When a dynamic value list recomputes, the selected value may no longer be an option.
 	// Prune it so the control shows a valid option instead of rendering the orphaned raw
-	// value as its own label. The user didn't pick this, so force a solve — otherwise a
+	// value as its own label. The user didn't pick this, so force a solve. Otherwise a
 	// manual-solve schema keeps the prior output on screen, making it look like the
 	// auto-picked option produced it.
 	//
@@ -120,8 +119,8 @@
 	// There is always at least one option, so every terminal state below resolves to one;
 	// there is deliberately no "user cleared it, stay empty" path.
 	//
-	// LOOP BREAKER: a definition whose computed options DEPEND on the selection can oscillate
-	// — auto-pick A → solve → new options exclude A → auto-pick B → solve → … Each cycle
+	// LOOP BREAKER: a definition whose computed options DEPEND on the selection can oscillate.
+	// Auto-pick A → solve → new options exclude A → auto-pick B → solve → … Each cycle
 	// force-solves and re-parses the (possibly multi-MB) options, freezing the tab: every
 	// solve result blocks the main thread and the loop never yields. Bound consecutive
 	// system-initiated picks; any real user commit resets the budget.
@@ -136,7 +135,7 @@
 			? value.length > 0 && value.every((v) => typeof v === 'string' && validValues.has(v))
 			: typeof value === 'string' && value !== '' && validValues.has(value);
 		if (isValid) {
-			// Settled on a valid option — refill the budget.
+			// Settled on a valid option. Refill the budget.
 			autoPickCount = 0;
 			return;
 		}
@@ -150,14 +149,14 @@
 		}
 		if (Array.isArray(value)) {
 			const pruned = value.filter((v) => typeof v === 'string' && validValues.has(v));
-			// Empty — never selected or fully pruned — falls back to the first option: a
+			// Empty (never selected or fully pruned) falls back to the first option. A
 			// checklist that solves empty produces the same null cascade as a single value.
 			if (pruned.length !== value.length || value.length === 0) {
 				autoPickCount++;
 				onChange(item.paramId, pruned.length > 0 ? pruned : [firstOption], true);
 			}
 		} else if (typeof value !== 'string' || value === '' || !validValues.has(value)) {
-			// Same fallback for a single value: never-selected and stale both resolve, never clear.
+			// Same fallback for a single value: never-selected and stale both resolve; never clear.
 			autoPickCount++;
 			onChange(item.paramId, firstOption, true);
 		}

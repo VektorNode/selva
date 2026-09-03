@@ -36,8 +36,8 @@ interface ParseTelemetry {
 
 /**
  * Parses a batched mesh JSON and creates Three.js meshes. The geometry payload is the binary
- * "SLVA" blob produced by the C# `SlvaWriter`, base64-encoded into the outer JSON
- * envelope — `JSON.parse`s the small envelope, then hands the blob to `parseBinaryMeshBatch`
+ * "SLVA" blob produced by the C# `SlvaWriter`, base64-encoded into the outer JSON envelope.
+ * `JSON.parse`s the small envelope, then hands the blob to `parseBinaryMeshBatch`
  * without ever turning it into a string.
  *
  * An invalid JSON envelope logs and returns `[]` (genuinely absent data). A corrupt, truncated, or
@@ -54,7 +54,7 @@ export async function parseMeshBatch(
 	const perfStart = debug ? performance.now() : 0;
 
 	// Narrow catch: only the envelope JSON.parse is allowed to degrade to []. Blob parse errors
-	// from parseMeshBatchObject propagate — see that entry point's contract.
+	// from parseMeshBatchObject propagate; see that entry point's contract.
 	let batch: DisplayBatch;
 	const parseStart = performance.now();
 	try {
@@ -71,7 +71,7 @@ export async function parseMeshBatch(
 /**
  * Parses a DisplayBatch object and creates Three.js meshes from its mesh blob.
  *
- * Synchronous internally — `parseBinaryMeshBatch` does no IO, just typed-array views over the
+ * Synchronous internally: `parseBinaryMeshBatch` does no IO, just typed-array views over the
  * blob. Stays `async` so callers don't need to change shape if parsing moves into a worker later.
  *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
@@ -79,14 +79,14 @@ export async function parseMeshBatch(
 export async function parseMeshBatchObject(
 	batch: DisplayBatch,
 	options?: MeshBatchParsingOptions,
-	/** @internal Timings threaded from an outer entry point — not a caller option. */
+	/** @internal Timings threaded from an outer entry point, not a caller option. */
 	telemetry?: ParseTelemetry
 ): Promise<THREE.Mesh[]> {
 	const { mergeByMaterial = true, debug = false, material } = options ?? {};
 	const { parseTime = 0, perfStart = debug ? performance.now() : 0 } = telemetry ?? {};
 
 	if (!batch.compressedData) {
-		// Items-only or empty batch — the one entry-point path that legitimately yields [] rather
+		// Items-only or empty batch: the one entry-point path that legitimately yields [] rather
 		// than throwing.
 		return [];
 	}
@@ -128,7 +128,7 @@ export async function parseMeshBatchObject(
  * Parses a raw binary mesh batch blob (SLVA wire format) and creates Three.js meshes.
  *
  * Use this entry point when the blob arrives as a binary WebSocket frame rather than inside a JSON
- * envelope — the blob is self-describing, with materials, groups, and per-object ids coming
+ * envelope. The blob is self-describing: materials, groups, and per-object ids come
  * from the container's table.
  *
  * @throws {VisualizationError} On a corrupt/truncated/unsupported mesh blob or malformed group metadata.
@@ -197,7 +197,7 @@ export function resetUnmergedWarning(): void {
 /**
  * Warns once when a caller opts out of merging on a batch large enough for it to hurt.
  *
- * Opting out is legitimate — it is what gives every source object its own THREE object — so this
+ * Opting out is legitimate: it's what gives every source object its own THREE object, so this
  * does not override the caller. It exists because the failure is silent: nothing errors, the model
  * renders correctly, and the only symptom is a frame rate nobody traces back to a parse option.
  */
@@ -210,7 +210,7 @@ function warnIfUnmergedAtScale(mergeByMaterial: boolean, groups: MaterialGroup[]
 
 	warnedUnmerged = true;
 	getLogger().warn(
-		`Parsing ${meshCount} meshes with mergeByMaterial: false — each becomes its own THREE ` +
+		`Parsing ${meshCount} meshes with mergeByMaterial: false: each becomes its own THREE ` +
 			`object, and render cost scales with object count. Drop the option to merge by material ` +
 			`(the default); per-object identity survives it via userData.members.`
 	);
@@ -236,7 +236,7 @@ function buildMeshesFromParsed(
 
 	const isFloat32 = (parsed.flags & FLAG_FLOAT32) !== 0;
 
-	// Group metadata is used arithmetically below — unchecked, a bad vertexStart/indexStart wraps
+	// Group metadata is used arithmetically below. Unchecked, a bad vertexStart/indexStart wraps
 	// rebased indices into a Uint32Array, `subarray` silently clamps, and an out-of-range
 	// materialId feeds `undefined` into `new THREE.Mesh`. Fail the parse instead of corrupting
 	// the render silently.
@@ -247,7 +247,7 @@ function buildMeshesFromParsed(
 		parsed.indices.length
 	);
 
-	// Dequantize once up front into a single Float32Array — downstream code (per-group merging,
+	// Dequantize once up front into a single Float32Array: downstream code (per-group merging,
 	// computeVertexNormals, ground-offset) expects world-unit floats, and one linear pass over the
 	// int16 buffer beats doing it per group.
 	const worldVertices = isFloat32
@@ -270,8 +270,8 @@ function buildMeshesFromParsed(
 	warnIfUnmergedAtScale(mergeByMaterial, groups);
 
 	const meshCreateStart = performance.now();
-	// Vertex colors are batch-wide when present — meshes without real colors carry a white fill,
-	// which multiplies to identity — so the material enables vertexColors unconditionally.
+	// Vertex colors are batch-wide when present. Meshes without real colors carry a white fill,
+	// which multiplies to identity, so the material enables vertexColors unconditionally.
 	const materials = materialsSrc.map((m) =>
 		createMaterial(m, {
 			vertexColors: parsed.colors != null,
@@ -335,7 +335,7 @@ interface WorkerPathOptions {
 
 /**
  * Attempts the off-thread build. Returns the finished meshes, or `null` when the worker path
- * doesn't apply (no Worker, small batch, worker crashed) — the caller then runs the synchronous
+ * doesn't apply (no Worker, small batch, worker crashed); the caller then runs the synchronous
  * path. Malformed-blob/metadata errors throw either way, matching the entry points' contract.
  *
  * The worker always assembles and fingerprints every geometry, even when the main thread ends up
@@ -349,7 +349,7 @@ async function tryBuildViaWorker(
 	if (typeof Worker === 'undefined') return null;
 
 	const raw = parseBinaryMeshBatchRaw(input);
-	// Planar (v4) indexData is a bare byte stream — divide by the element width for a count.
+	// Planar (v4) indexData is a bare byte stream: divide by the element width for a count.
 	const indexCount = raw.planarByteSplit
 		? raw.indexData.length / (raw.uint16Indices ? 2 : 4)
 		: raw.indexData.length;
@@ -389,7 +389,7 @@ async function tryBuildViaWorker(
 		}
 	}
 
-	// vertexData/indexData alias the caller's blob buffer — copy before transferring so the
+	// vertexData/indexData alias the caller's blob buffer: copy before transferring so the
 	// transfer can't detach it. UV/color arrays are already fresh copies and transfer directly.
 	const vertexData = raw.vertexData.slice();
 	const indexData = raw.indexData.slice();

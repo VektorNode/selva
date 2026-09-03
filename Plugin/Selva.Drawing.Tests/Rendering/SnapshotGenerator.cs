@@ -211,7 +211,7 @@ internal static class SvgScenes
 
 	public static string SymbolDedupe()
 	{
-		// One SymbolDefinition, three instances — pins that the renderer emits a single
+		// One SymbolDefinition, three instances: pins that the renderer emits a single
 		// <symbol> and three <use> refs instead of three inline copies.
 		var triangle = new Path.Builder()
 			.MoveTo(0, 0).LineTo(5, 0).LineTo(2.5, 4).Close().Build();

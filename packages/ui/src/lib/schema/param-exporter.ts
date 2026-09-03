@@ -109,7 +109,7 @@ export function validateSavedState(
 /**
  * Params the current schema no longer has are dropped. That's the same condition
  * `validateSavedState` flags as an error, but the rule is re-derived from the schema here
- * rather than read back off the issue list — nothing couples to how sentinel ids are encoded.
+ * rather than read back off the issue list: nothing couples to how sentinel ids are encoded.
  */
 export function extractLoadableValues(
 	savedState: ParameterPreset,
@@ -126,17 +126,16 @@ export function extractLoadableValues(
 }
 
 export interface PresetLoadResult {
-	/** Safe to apply now — the params that still exist in the schema. */
+	/** Safe to apply now: the params that still exist in the schema. */
 	values: Record<string, unknown>;
 	/** Errors and warnings both, for the load dialog. */
 	issues: ValidationIssueMessage[];
-	/** No issues at all — load silently. */
+	/** No issues at all: load silently. */
 	isValid: boolean;
-	/** No errors — warnings alone still allow the load. */
+	/** No errors: warnings alone still allow the load. */
 	canLoad: boolean;
 }
 
-/** Validates and computes the loadable values in one pass, so callers thread one object. */
 export function loadPreset(savedState: ParameterPreset, currentSchema: UISchema): PresetLoadResult {
 	const validation = validateSavedState(savedState, currentSchema);
 	return {
@@ -154,7 +153,7 @@ export function exportStateAsJson(savedState: ParameterPreset): void {
 
 	const link = document.createElement('a');
 	link.href = URL.createObjectURL(blob);
-	// .slvp = Selva parameter preset. Import still accepts the pre-rename .sps — same JSON,
+	// .slvp = Selva parameter preset. Import still accepts the pre-rename .sps: same JSON,
 	// only the writer's extension changed.
 	link.download = `${safeName}_${date}.slvp`;
 	link.click();

@@ -11,10 +11,10 @@ import type { MaterialGroup, MeshMetadata, SerializableMaterial } from '../types
 //   [4] magic "SLVM" | [4] version = 3 | [4] chunkCount
 //   per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
 //
-// Unknown chunk types are skipped by length — that's the format's extension mechanism. This
+// Unknown chunk types are skipped by length: that's the format's extension mechanism. This
 // decoder consumes GEOM (a nested bare SLVA/SLVZ blob), TABL (the columnar object table), MATL
 // (materials JSON) and TEXR (texture bytes); CRVS/PNTS (file-only item geometry) and EXTN
-// (host extensions — the selva.gh one carries only Rhino curve JSON) are skipped because
+// (host extensions, the selva.gh one carries only Rhino curve JSON) are skipped because
 // items reach the web as JSON alongside the blob.
 
 /** "SLVM" little-endian. */
@@ -26,7 +26,7 @@ const CHUNK_TABL = 0x4c424154; // "TABL"
 const CHUNK_MATL = 0x4c54414d; // "MATL"
 const CHUNK_TEXR = 0x52584554; // "TEXR"
 
-/** Reserved attr key carrying each object's identity — split out of the attr dict on read. */
+/** Reserved attr key carrying each object's identity: split out of the attr dict on read. */
 const ID_ATTR = 'id';
 
 /** Material `map` prefix that references a TEXR chunk by index. */
@@ -53,7 +53,7 @@ export interface SlvmContainer {
 
 /**
  * Parses an SLVM v3 container down to its mesh geometry blob and the metadata the rest of the
- * pipeline expects. Group vertex/index windows are rebuilt as prefix sums over the table — the
+ * pipeline expects. Group vertex/index windows are rebuilt as prefix sums over the table: the
  * format mandates geometry is concatenated in table order, so starts are never stored.
  *
  * @throws {VisualizationError} On bad magic, unknown version, or a truncated/malformed container.
@@ -215,7 +215,7 @@ function parseTable(bytes: Uint8Array): { groups: MaterialGroup[] } {
 	}
 
 	for (let i = 0; i < curveCount; i++) {
-		readVarint(r); // curve point counts — items don't reach this decoder
+		readVarint(r); // curve point counts: items don't reach this decoder
 	}
 
 	const runCount = readVarint(r);

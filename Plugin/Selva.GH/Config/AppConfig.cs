@@ -11,14 +11,14 @@ public static class AppConfig
     {
         public const int DefaultPort = 8765;
         public const int MaxMessageSizeBytes = ValueLimits.MaxBase64StringLength;
-        public const int BufferSizeBytes = 1024 * 1024; // 1 MB — faster large-message reads
+        public const int BufferSizeBytes = 1024 * 1024; // 1 MB: faster large-message reads
         public const int MaxConcurrentClients = 10;
         public const int HeartbeatIntervalMs = 30_000; // 30 s
-        public const int BroadcastTimeoutMs = 30_000; // 30 s — covers large file uploads
+        public const int BroadcastTimeoutMs = 30_000; // 30 s: covers large file uploads
         public const int ClientCloseTimeoutMs = 1_000; //  1 s
         public const int PingTimeoutMs = 5_000; //  5 s
         public const int ServerStartupTimeoutMs = 5_000; //  5 s
-        public const int ReceiveTimeoutMs = 120_000; // 2 min — covers large file uploads
+        public const int ReceiveTimeoutMs = 120_000; // 2 min: covers large file uploads
     }
 
     // -------------------------------------------------------------------------
@@ -26,7 +26,7 @@ public static class AppConfig
     // -------------------------------------------------------------------------
     public static class HttpServer
     {
-        public const int BufferSizeBytes = 64 * 1024; // 64 KB — file transfers
+        public const int BufferSizeBytes = 64 * 1024; // 64 KB: file transfers
         public const string EmbeddedResourcePrefix = "Selva.EmbeddedAssets.web.";
     }
 
@@ -79,7 +79,7 @@ public static class AppConfig
     {
         public const int FileCopyBufferSizeBytes = 1024 * 1024; // 1 MB
 
-        // Evaluated once at startup — Path.GetTempPath() is stable for the process lifetime.
+        // Evaluated once at startup: Path.GetTempPath() is stable for the process lifetime.
         public static readonly string TempDirectory =
             Path.Combine(Path.GetTempPath(), "Selva");
     }

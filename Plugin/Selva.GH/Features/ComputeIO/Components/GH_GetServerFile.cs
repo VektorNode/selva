@@ -25,14 +25,14 @@ namespace Selva.GH.Features.ComputeIO.Components;
 ///     server's data directory.
 ///
 ///     The relative path (e.g. "geometry/bracket.3dm") is authored once on the definition;
-///     the absolute base directory is supplied per server at solve time via contextual data,
-///     so the same definition works against any server regardless of where its data lives.
+///     the absolute base directory arrives per server at solve time via contextual data, so
+///     the same definition works against any server regardless of where its data lives.
 ///
-///     The .gh is shared across a company, so it only ever stores the relative path —
-///     absolute paths would break on a colleague's machine. To test before deploying, a
-///     right-click "Pick local file…" menu item points the component at a real file on this
-///     machine. That absolute path is a per-machine override, never persisted to the .gh, and
-///     Selva-injected context always wins over it once present.
+///     The .gh is shared across a company, so it only ever stores the relative path: absolute
+///     paths would break on a colleague's machine. To test before deploying, a right-click
+///     "Pick local file…" menu item points the component at a real file on this machine. That
+///     path is a per-machine override, never persisted to the .gh; Selva-injected context
+///     always wins over it once present.
 /// </summary>
 public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
 {
@@ -89,7 +89,7 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
 
     /// <summary>
     ///     Receives the server data path from the web UI. Only the base directory arrives
-    ///     here — the relative path is part of the definition.
+    ///     here: the relative path is part of the definition.
     /// </summary>
     public void AssignContextualData(IEnumerable data)
     {
@@ -134,7 +134,7 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     }
 
     /// <summary>
-    ///     Assigns the server data path as a tree — called by Rhino.Compute via reflection.
+    ///     Assigns the server data path as a tree, called by Rhino.Compute via reflection.
     /// </summary>
     public void AssignContextualDataTree(DataTree<GH_String> data)
     {

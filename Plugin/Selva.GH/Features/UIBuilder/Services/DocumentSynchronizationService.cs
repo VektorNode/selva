@@ -87,7 +87,7 @@ public class DocumentSynchronizationService : IDisposable
 
             if (schema == null)
             {
-                // No schema yet — broadcast available params as a hint so the UI can show them
+                // No schema yet: broadcast available params as a hint so the UI can show them
                 var available = GetCurrentAvailableParameters(e.Document);
                 if (available.Inputs.Count > 0 || available.Outputs.Count > 0)
                 {
@@ -174,7 +174,7 @@ public class DocumentSynchronizationService : IDisposable
             _currentDocument ??= document;
             document.Modified();
 
-            // Schema already updated in memory — full expire so this component and downstream
+            // Schema already updated in memory: full expire so this component and downstream
             // ones (GH_EvaluateSchema etc.) re-solve with it.
             GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
 #if DEBUG

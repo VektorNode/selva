@@ -9,7 +9,7 @@ namespace Selva.Drawing.Model.Layout;
 // paper/margins. Layout elements that override TrySplit can break across pages (e.g. a tall
 // vertical Stack splits between children); everything else is atomic.
 //
-// PaginateBody returns raw page contents with no chrome or token resolution — used by
+// PaginateBody returns raw page contents with no chrome or token resolution: used by
 // DocumentLayoutPass to paginate sections independently before resolving tokens with
 // document-wide page counts. Paginate is the single-section convenience overload that
 // resolves chrome and tokens itself.
@@ -25,10 +25,10 @@ public static class PaginationPass
 		var bandWidth = BandWidth(paper, margins);
 		var now = DateTime.Now;
 
-		// Band height must be measured from the substituted text — measuring "{title}" reserved
-		// 5.8 mm for a value that needed 17.4 mm. But {page}/{pages} need the page count, which
+		// Band height must be measured from the substituted text: measuring "{title}" instead of
+		// the real value under-reserves the band. But {page}/{pages} need the page count, which
 		// needs the band heights: a cycle. Break it with a provisional resolver, paginate, then
-		// re-measure against the real page count and re-paginate only if the reserve grew — a
+		// re-measure against the real page count and re-paginate only if the reserve grew: a
 		// band that only grows can't oscillate, so one correction is enough.
 		var probe = new TokenResolver(1, 1, template.Title, null, template.Tokens, now);
 		var bands = MeasureBands(template, bandWidth, probe);
@@ -71,9 +71,9 @@ public static class PaginationPass
 		return pages;
 	}
 
-	// Splits content into raw per-page contents using the given paper / margins / reserved
-	// chrome bands. Caller resolves tokens and composes chrome. Returns the rectangles where
-	// chrome and content should be anchored on each page.
+	// Splits content into raw per-page contents using the given paper/margins/reserved chrome
+	// bands. Caller resolves tokens and composes chrome. Returns the rectangles where chrome and
+	// content should be anchored on each page.
 	//
 	// This overload places bands in Content mode; use the BandConfig overload for Margin or
 	// Edge placement.
@@ -95,14 +95,14 @@ public static class PaginationPass
 		// Content: band sits at the content rect edge, body shrinks by band height.
 		// Edge: band sits at EdgeOffset from the paper edge, body shrinks by EdgeOffset + BandHeight
 		//       from that edge (so the body never flows behind the band).
-		// Margin: band floats in the margin gap outside the content rect — body is unaffected.
+		// Margin: band floats in the margin gap outside the content rect, body is unaffected.
 		var contentTopReserve = ContentReserve(bands.HeaderPlacement, bands.HeaderHeight, bands.HeaderEdgeOffset, margins.Top);
 		var contentBottomReserve = ContentReserve(bands.FooterPlacement, bands.FooterHeight, bands.FooterEdgeOffset, margins.Bottom);
 		var contentRect = ShrinkVertical(pageRect, contentTopReserve, contentBottomReserve);
 		// An empty content rect means the bands have eaten the whole body, i.e. there is no room
-		// at all — not "unlimited room". Reading it as +Infinity made everything report a fit,
-		// so a page whose chrome overflowed silently emitted one oversized page with content
-		// running off the sheet instead of paginating. Zero makes ForcePlace drive progress.
+		// at all, not "unlimited room". Reading it as +Infinity made everything report a fit, so
+		// a page whose chrome overflowed silently emitted one oversized page with content running
+		// off the sheet instead of paginating. Zero makes ForcePlace drive progress.
 		var availableHeight = availableHeightOverride
 			?? (contentRect.IsEmpty ? 0.0 : contentRect.Height);
 
@@ -134,7 +134,7 @@ public static class PaginationPass
 				else if (split.Overflow != null)
 				{
 					// Nothing fits even on a fresh page. Force-place only the smallest leading
-					// fragment (oversize) and keep paginating — dumping the whole remainder here
+					// fragment (oversize) and keep paginating: dumping the whole remainder here
 					// would cram every later element onto this page and silently stop.
 					var forced = ForcePlaceElement(remaining, availableHeight, ctx);
 					rawContents.Add(forced.Fits);
@@ -167,11 +167,9 @@ public static class PaginationPass
 	//             from the content rect. Clamped to zero so a large margin that already covers
 	//             the band doesn't produce a negative shrink.
 	//   Margin  → the part of the band that doesn't fit in the margin gap. A band shorter than
-	//             the margin is free — that's the point of Margin placement. A taller one eats
+	//             the margin is free: that's the point of Margin placement. A taller one eats
 	//             into the body because it's drawn flush against the paper edge and neither
-	//             renderer clips it. Returning a flat 0 here let a 40 mm auto-measured header
-	//             overprint 30 mm of body on the default config (Margin + auto height); this is
-	//             Edge with offset 0, so it shares that arm.
+	//             renderer clips it. This is Edge with offset 0, so it shares that arm.
 	private static double ContentReserve(ChromePlacement placement, double bandHeight, double edgeOffset, double margin)
 	{
 		switch (placement)
@@ -206,7 +204,7 @@ public static class PaginationPass
 		return new BoundingBox(pageRect.MinX, bottomY, pageRect.MaxX, topY);
 	}
 
-	// Footer band sits at the bottom of the page. Mirrors the header rules:
+	// Footer band sits at the bottom of the page, mirroring the header rules:
 	//   Content → bottom of the page rect (just inside the bottom margin).
 	//   Margin  → flush against the bottom of the paper, hanging into the margin space.
 	//   Edge    → footerEdgeOffset mm from the bottom of the paper.
@@ -238,7 +236,7 @@ public static class PaginationPass
 		if (element is LayoutElement layout)
 			return layout.TrySplit(availableHeight, context);
 
-		// A GroupElement is a primitive, but it can still *contain* layout elements — a Page
+		// A GroupElement is a primitive, but it can still *contain* layout elements: a Page
 		// branch holding several DrawingViews arrives exactly like this, since composing a
 		// single branch wraps it in a Group rather than a Stack. Measuring the group without
 		// resolving it first would size those views against no context at all, so they keep
@@ -269,10 +267,9 @@ public static class PaginationPass
 	{
 		if (paper.WidthMm <= 0 || paper.HeightMm <= 0) return BoundingBox.Empty;
 
-		// Clamp margins at zero. A negative margin is not a bleed instruction — nothing
-		// downstream crops to the paper, so it just moved the content rect (and both chrome
-		// bands with it) off the sheet: -10 mm on A4 produced a page rect of -10..307 on a
-		// 297 mm sheet, with the header sitting entirely past the paper edge.
+		// Clamp margins at zero. A negative margin is not a bleed instruction: nothing downstream
+		// crops to the paper, so it just moves the content rect (and both chrome bands with it)
+		// off the sheet, with the header potentially landing entirely past the paper edge.
 		var left = Math.Max(0, margins.Left);
 		var bottom = Math.Max(0, margins.Bottom);
 		var minX = left;
@@ -292,7 +289,7 @@ public static class PaginationPass
 	}
 
 	// Fully resolve any LayoutElement subtree to primitives so ComputeBounds returns a real
-	// height for band measurement. Walks GroupElements too — a GroupElement wrapping a Stack
+	// height for band measurement. Walks GroupElements too: a GroupElement wrapping a Stack
 	// would otherwise be returned untouched and its measured bounds would miss the Stack's
 	// post-layout extent, which silently zeroes out the chrome band reservation.
 	public static DrawElement ResolveLayout(DrawElement element)
@@ -300,8 +297,8 @@ public static class PaginationPass
 
 	// Band-width-aware variant for band-height measurement: the per-page chrome resolve wraps
 	// text to the band width (ResolveChromeForPage), so the measurement must wrap to the same
-	// width — an unconstrained measure sees one long line and reserves a band that's too short,
-	// letting the wrapped header spill over the body.
+	// width, or an unconstrained measure sees one long line and reserves a band that's too
+	// short, letting the wrapped header spill over the body.
 	public static DrawElement ResolveLayout(DrawElement element, double bandWidth)
 	{
 		var ctx = bandWidth > 0 && !double.IsPositiveInfinity(bandWidth)
@@ -311,8 +308,8 @@ public static class PaginationPass
 	}
 
 	// Measure both chrome bands with this page's tokens already substituted, wrapped to the band
-	// width. Explicit HeaderHeight/FooterHeight still win — ResolveBandHeight short-circuits on
-	// them — so the measurement only costs anything on the auto-measure path.
+	// width. Explicit HeaderHeight/FooterHeight still win (ResolveBandHeight short-circuits on
+	// them), so the measurement only costs anything on the auto-measure path.
 	private static BandConfig MeasureBands(PageTemplate template, double bandWidth, TokenResolver resolver)
 	{
 		var header = ResolveLayout(resolver.ResolveTree(template.Header), bandWidth);
@@ -341,9 +338,8 @@ public static class PaginationPass
 	//
 	// Order matters and used to be the other way round. Layout is what performs line breaking
 	// and measurement, so substituting afterwards meant a TextFlow wrapped the literal
-	// "{title}" and the real value — however much longer — was never re-broken or re-measured.
-	// A title token advanced 562 mm on a 210 mm sheet with no overflow reported, because the
-	// bounds still described the stale wrap box.
+	// "{title}", and the real value, however much longer, was never re-broken or re-measured:
+	// the bounds still described the stale wrap box.
 	internal static DrawElement ResolveChromeForPage(DrawElement template, BoundingBox bandRect, TokenResolver resolver)
 	{
 		if (template == null) return null;
@@ -389,10 +385,9 @@ public static class PaginationPass
 				break;
 		}
 
-		// A footer pins its BOTTOM edge to the bottom of its band. Top-anchoring it meant an
-		// oversize footer grew downward past the paper edge — an 8 mm reserve holding 30 mm of
-		// content was placed 12 mm below the sheet and simply lost. Headers keep the top anchor
-		// for the mirror-image reason.
+		// A footer pins its BOTTOM edge to the bottom of its band. Top-anchoring it lets an
+		// oversize footer grow downward past the paper edge and get lost off the sheet. Headers
+		// keep the top anchor for the mirror-image reason.
 		var ty = vertical == VerticalAnchor.Bottom
 			? available.MinY - b.MinY
 			: available.MaxY - b.MaxY;

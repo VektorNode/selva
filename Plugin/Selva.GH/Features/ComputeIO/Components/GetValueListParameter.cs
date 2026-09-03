@@ -18,7 +18,7 @@ using Selva.GH.Properties;
 namespace Selva.GH.Features.ComputeIO.Components;
 
 // Captures value list data (options + selected default) as a contextual parameter. The connected
-// GH_ValueList is the single source of truth — data is read directly from it, never cached.
+// GH_ValueList is the single source of truth: data is read directly from it, never cached.
 public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_ContextualParameter
 {
     private Guid _connectedValueListGuid = Guid.Empty;
@@ -258,7 +258,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
     }
 
     // Matches by name (e.g. "Cylinder") or by expression (e.g. "1", for Rhino.Compute
-    // compatibility). Does not call ExpireSolution — the caller triggers the solution.
+    // compatibility). Does not call ExpireSolution: the caller triggers the solution.
     public bool SelectItemByName(string value)
     {
         var vl = ConnectedValueList;

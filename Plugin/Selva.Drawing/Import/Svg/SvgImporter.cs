@@ -14,7 +14,7 @@ namespace Selva.Drawing.Import.Svg;
 // ============================================================================
 // Translates an SVG document into the DrawElement model so it renders losslessly
 // to both SVG and PDF through the existing pipeline (no rasterisation). Vector
-// line-art — paths, basic shapes, groups, transforms, solid fills/strokes — maps
+// line-art (paths, basic shapes, groups, transforms, solid fills/strokes) maps
 // cleanly. Unsupported features (gradients, filters, clip-paths, text, embedded
 // images) are skipped and reported via Warnings so the caller can surface them.
 // ============================================================================
@@ -76,7 +76,7 @@ public sealed class SvgImporter
         switch (name)
         {
             case "g":
-            case "svg": // nested <svg> — treat as a group
+            case "svg": // nested <svg>, treat as a group
             {
                 var kids = new List<DrawElement>();
                 foreach (var c in el.Elements())
@@ -114,7 +114,7 @@ public sealed class SvgImporter
             case "desc":
             case "metadata":
             case "style":
-                // Structural / non-rendered — silently ignore.
+                // Structural, not rendered: ignore silently.
                 return null;
 
             default:

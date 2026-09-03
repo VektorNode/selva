@@ -2,8 +2,8 @@
 
 Show Rhino/Grasshopper geometry in a browser, with Three.js.
 
-No Svelte, no React, no DOM widgets — you get a viewer and a parser, and you build your own UI on
-top. `three` is a peer dep: your app owns the copy.
+No Svelte, no React, no DOM widgets: you get a viewer and a parser, and you build your own UI on
+top. `three` is a peer dep, so your app owns the copy.
 
 ## Install
 
@@ -30,7 +30,7 @@ const objects = await getThreeObjectsFromComputeResponse(response);
 updateScene(viewer.scene, objects, viewer.camera, viewer.controls, false);
 viewer.applyEdges(viewer.scene);
 
-viewer.dispose(); // when the canvas goes away — frees the GL context, not just its objects
+viewer.dispose(); // when the canvas goes away: frees the GL context, not just its objects
 ```
 
 That is the full path: **compute response → THREE objects → scene**.
@@ -51,7 +51,7 @@ import { initThree, type ThreeViewer } from '@selvajs/visualization/render';
 import { createSceneOutliner } from '@selvajs/visualization/scene';
 ```
 
-There is no root (`.`) export on purpose — always import from one of the three.
+There is no root (`.`) export on purpose: always import from one of the three.
 
 Each folder has its own README: [parse](./src/parse/README.md), [render](./src/render/README.md),
 [scene](./src/scene/README.md).
@@ -67,7 +67,7 @@ shared/    errors, logging, looks, colour + GPU helpers   [internal, not publish
 ```
 
 `render/` puts geometry in the scene; `parse/` makes that geometry; `scene/` only looks at what is
-there. A host app wires them together — that's the point.
+there. A host app wires them together, and that's the point.
 
 `shared/` is internal. The bits you'd want from it (`VisualizationError`, `setLogger`, `LOOKS`) are
 re-exported from `/render`.
@@ -80,14 +80,14 @@ pnpm example        # http://localhost:5173
 
 Five pages, ordered so you can work down them:
 
-1. **Getting Started** — the smallest real app, with no harness around it. Its source is the example
+1. **Getting Started**: the smallest real app, with no harness around it. Its source is the example
    above, fleshed out; read it first.
-2. **Display Items** — what actually comes out of a GH compute response.
-3. **Outliner** — an object-list panel over a live scene: layers, search, hide/show, selection.
-4. **Viewer — Full API** — every `initThree` control on one panel.
-5. **Mesh File** — a `.slvm` through the exact calls the Selva app makes, for checking the look 1:1.
+2. **Display Items**: what actually comes out of a GH compute response.
+3. **Outliner**: an object-list panel over a live scene: layers, search, hide/show, selection.
+4. **Viewer — Full API**: every `initThree` control on one panel.
+5. **Mesh File**: a `.slvm` through the exact calls the Selva app makes, for checking the look 1:1.
 
-This is also the only place the GPU parts — edge overlays, ambient occlusion, the measure tool — can
+This is also the only place the GPU parts (edge overlays, ambient occlusion, the measure tool) can
 be checked at all; the test suite runs in jsdom, which has no WebGL.
 
 ## Logging
@@ -114,6 +114,6 @@ setLogger(getLogger());
   live in `shared/` rather than coming from `@selvajs/compute`, so the viewer works for someone with
   neither Selva nor Rhino.Compute. The compute response shape is declared structurally in
   [`parse/webdisplay/response-envelope.ts`](./src/parse/webdisplay/response-envelope.ts).
-- **The solve session is not here** — it lives in `@selvajs/solve/client`. What stayed behind is the
+- **The solve session is not here**: it lives in `@selvajs/solve/client`. What stayed behind is the
   mesh-ownership policy that solve's result memo needs but doesn't want to know about:
   [`parse/mesh-policy.ts`](./src/parse/mesh-policy.ts).

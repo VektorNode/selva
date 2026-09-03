@@ -8,7 +8,7 @@ import { type Locale, type ViewerMessages, messagesFor, DEFAULT_LOCALE } from '.
 //   explicit `lang` prop  →  nearest locale context  →  English default
 //
 // Two ways to provide it:
-//   - Standalone: <Viewer lang="de" /> — Viewer provides the context itself.
+//   - Standalone: <Viewer lang="de" />. Viewer provides the context itself.
 //   - In an app: call setLocaleContext(() => app.locale) once at the root; the
 //     viewer (and anything else) reads it.
 
@@ -19,11 +19,7 @@ export interface LocaleContext {
 	readonly messages: ViewerMessages;
 }
 
-/**
- * Provide the locale to descendants. Pass a getter, not a value: it is re-read on every
- * consumer render, so a reactive source (a `$state`, the app's Paraglide locale) switches
- * the language live.
- */
+/** Provide the locale to descendants. Re-read on every consumer render, so a reactive source switches the language live. */
 export function setLocaleContext(getLocale: () => Locale | undefined): void {
 	const ctx: LocaleContext = {
 		get locale() {

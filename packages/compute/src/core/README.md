@@ -1,20 +1,14 @@
-# Core Module
+# Core module
 
-Foundational utilities and low-level clients that power the `@selvajs/compute` library. This module handles the "plumbing" of communicating with Rhino Compute.
-
-## Key Responsibilities
-
-- **Compute Communication**: Type-safe HTTP wrappers for the Rhino Compute API.
-- **Error Handling**: Specialized `ComputeError` classes for precise debugging of API and network failures.
-- **Server URL Validation**: Normalizing and guarding a configured Compute endpoint.
-- **Data Processing**: Base64 encoding/decoding and case-insensitive field reads (`readField`/`hasField`) over API responses.
+Backend-agnostic plumbing for talking to a Rhino Compute server: HTTP transport, error types,
+server URL validation, and base64/field-read utilities.
 
 ## Structure
 
 ```text
 src/core/
 ├── compute-fetch/    # Low-level HTTP client logic
-├── errors/           # Custom error types and factory
+├── errors.ts         # Custom error types and factory
 ├── files/            # File-output helpers
 ├── server/           # Server URL validation
 ├── utils/            # Encoding, logging, field reads
@@ -24,9 +18,7 @@ src/core/
 
 ## Usage
 
-The `core` module provides the building blocks for the rest of the library. Below are the two most common ways to use it.
-
-### 1. Low-level API Requests
+### 1. Low-level API requests
 
 Use `fetchCompute` for type-safe requests to arbitrary Rhino Compute endpoints.
 
@@ -48,7 +40,7 @@ async function performCustomJob(config) {
 
 ### 2. Definition forms
 
-A solve takes bytes directly, or a `DefinitionRef` — a stable key plus a lazy
+A solve takes bytes directly, or a `DefinitionRef`: a stable key plus a lazy
 `load()`, so a caller that already knows a definition's identity (e.g. a stored
 version's UUID) can schedule solves without materializing multi-MB bytes.
 
@@ -61,14 +53,9 @@ different byte contents sharing a key poisons every cache built on it.
 
 ### 3. Backend configuration
 
-`core/` knows nothing about Rhino. Three knobs carry what a backend needs:
+`core/` knows nothing about Rhino. See [`CONTEXT.md`](../../CONTEXT.md#core-concepts) for the three
+seams a backend uses to plug in (`apiKeyHeader`, `serverErrorCodes`, `validateServerUrl`), and why
+`ComputeServerStats` ships from `@selvajs/compute/grasshopper` instead of here.
 
-- `ComputeConfig.apiKeyHeader` — header name for `apiKey` (default `RhinoComputeKey`)
-- `ComputeConfig.serverErrorCodes` — this backend's wire codes → our `ErrorCodes`
-- `validateServerUrl(url, { blockedHosts })` — the shared public endpoint to reject
-
-`ComputeServerStats` used to live here. It probes rhino.compute's control plane
-(`/activechildren`, `/plugins/gh/installed`, `/idlespan`), so it now ships from
-`@selvajs/compute/grasshopper`.
-
-> **Note:** Higher-level features like the `GrasshopperClient` use these modules internally. Direct use is recommended for custom low-level API calls or dedicated monitoring services.
+`GrasshopperClient` and other higher-level features use these modules internally; use them directly
+for custom low-level calls or your own monitoring.

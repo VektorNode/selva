@@ -7,12 +7,12 @@ namespace Selva.Drawing.Model.Style;
 public enum StrokeCap { Butt, Round, Square }
 public enum StrokeJoin { Miter, Round, Bevel }
 
-// Width, DashArray entries, and DashOffset are paper-space millimetres — DrawingView
+// Width, DashArray entries, and DashOffset are paper-space millimetres. DrawingView
 // counter-scales them so a 0.25 mm stroke renders at 0.25 mm regardless of view scale.
 // DashArray null or empty means solid; otherwise the on/off pattern repeats from each
 // segment's origin.
 //
-// Width = 0 means "no stroke" — lets authors turn off an outline without nulling the whole
+// Width = 0 means "no stroke": lets authors turn off an outline without nulling the whole
 // Stroke (which also carries Color, dash, cap). PDF's `0 w` operator means "thinnest line
 // the device can render", so it renders as a different-weight hairline on every machine;
 // renderers must check IsVisible and skip the stroke rather than ever emit `0 w`.
@@ -23,11 +23,11 @@ public sealed class Stroke : IEquatable<Stroke>
 	public const double MinVisibleWidthMm = 0.01;
 
 	// Width for a path with neither stroke nor fill. Must be explicit on both renderers:
-	// PDF requires a width, SVG would otherwise fall back to its spec default of 1.0 mm —
-	// leaving it implicit on either side reintroduces a 4x mismatch between them.
+	// PDF requires a width, SVG would otherwise fall back to its spec default of 1.0 mm.
+	// Leaving it implicit on either side reintroduces a 4x mismatch between them.
 	public const double UnstyledPathWidthMm = LineWeight.Fine;
 
-	// Default hatch/pattern linework weight — lighter than body weight so it reads as texture.
+	// Default hatch/pattern linework weight: lighter than body weight so it reads as texture.
 	public const double HatchWidthMm = LineWeight.ExtraFine;
 
 	// Line width inside a generated hatch tile, before Fill.PatternScale. Heavier than

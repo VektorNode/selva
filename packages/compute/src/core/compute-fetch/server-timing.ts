@@ -36,7 +36,7 @@ export function parseServerTiming(headerValue: string | null): ServerTiming | nu
  * Surface the server's per-request timing breakdown (if it sent one and a
  * caller is listening). Best-effort: a throwing callback must not fail the
  * request. Called on the success path AND the 500-with-values partial-success
- * path — solves that completed with Grasshopper errors carry real timings too.
+ * path. Solves that completed with Grasshopper errors carry real timings too.
  */
 export function fireServerTiming(
 	response: Response,

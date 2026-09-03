@@ -7,7 +7,7 @@
  *
  * Like `edge-extract.ts`, it's a single self-contained function with zero outer captures (only
  * `Math` and its arguments) so `Function.prototype.toString` yields code that runs unchanged
- * inside a blob-URL Worker ({@link meshAssemblyWorkerSource}) — bundler-agnostic by construction.
+ * inside a blob-URL Worker ({@link meshAssemblyWorkerSource}), bundler-agnostic by construction.
  * That forces duplicating small helpers from `binary-parser.ts` (unzigzag/delta decode);
  * equivalence with the synchronous path is pinned by tests.
  */
@@ -32,7 +32,7 @@ export interface AssemblyInput {
 	vertexData: Uint8Array | Uint16Array | Int16Array | Float32Array;
 	isFloat32: boolean;
 	deltaEncoded: boolean;
-	/** v4 byte-plane layout on the delta-filtered streams — see FLAG_PLANAR_BYTESPLIT. */
+	/** v4 byte-plane layout on the delta-filtered streams. See FLAG_PLANAR_BYTESPLIT. */
 	planarByteSplit: boolean;
 	/** Wire index width; required because planar `indexData` is a bare byte stream. */
 	uint16Indices: boolean;
@@ -55,7 +55,7 @@ export interface AssembledGeometry {
 }
 
 export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
-	// NOTE: self-contained by design (worker stringification) — no outer references besides Math.
+	// NOTE: self-contained by design (worker stringification). No outer references besides Math.
 	const {
 		isFloat32,
 		deltaEncoded,

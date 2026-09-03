@@ -13,7 +13,7 @@ export const DEFAULT_LAYER = 'Default';
  *
  * `userData.layer` wins over `userData.category`; objects with neither land in {@link DEFAULT_LAYER}.
  * Insertion order is preserved, so the grouping follows scene-graph order rather than sorting
- * alphabetically — the order geometry was baked in is meaningful to the author.
+ * alphabetically: the order geometry was baked in is meaningful to the author.
  */
 export function groupByLayer(objects: THREE.Object3D[]): Map<string, THREE.Object3D[]> {
 	const groups = new Map<string, THREE.Object3D[]>();
@@ -32,7 +32,7 @@ export function groupByLayer(objects: THREE.Object3D[]): Map<string, THREE.Objec
 /**
  * Filter grouped layers by a free-text query.
  *
- * A layer whose *name* matches keeps all its objects — searching for a layer means wanting to see
+ * A layer whose *name* matches keeps all its objects: searching for a layer means wanting to see
  * what's on it. Otherwise the layer keeps only the objects whose labels match, and drops out
  * entirely when none do. An empty query returns the input untouched.
  */
@@ -52,7 +52,7 @@ export function filterLayerGroups(
 	return filtered;
 }
 
-/** {@link groupByLayer}, over entries — each entry already carries the layer it belongs to. */
+/** {@link groupByLayer}, over entries (each entry already carries the layer it belongs to). */
 export function groupEntriesByLayer(entries: SceneEntry[]): Map<string, SceneEntry[]> {
 	const groups = new Map<string, SceneEntry[]>();
 	for (const entry of entries) {

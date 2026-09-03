@@ -21,25 +21,25 @@
 
 	interface Props {
 		/**
-		 * Owned by `Viewer.svelte`, never built here: this panel unmounts when it closes, and hidden
-		 * objects must stay hidden — and be re-hidden after each solve — while it is. Backed by
-		 * SvelteSets, so mutating one re-renders this list.
+		 * Owned by `Viewer.svelte`, never built here: this panel unmounts when closed, so hiding
+		 * must survive that and be re-applied after each solve. Backed by SvelteSets, so mutating
+		 * one re-renders this list.
 		 */
 		outliner: SceneOutliner;
 		sceneVersion?: number;
 		/**
-		 * Request a viewer repaint. Toggling `.visible` mutates three objects directly, and the
-		 * render loop is on-demand — without this the canvas only catches up on its ~500ms idle
-		 * repaint, so the row updates instantly and the geometry lags behind.
+		 * Requests a viewer repaint. Toggling `.visible` mutates three.js objects directly, and the
+		 * render loop is on-demand, so without this the row updates immediately but the geometry
+		 * lags until the next idle repaint.
 		 */
 		onVisibilityChange?: () => void;
 	}
 
 	let { outliner, sceneVersion = 0, onVisibilityChange }: Props = $props();
 
-	// A partially hidden layer hides the rest; only a fully hidden one comes back — the same rule
-	// `visibility.toggleLayer` applies to objects, restated over entries because a layer's rows are
-	// now members, not necessarily whole objects.
+	// A partially hidden layer hides the rest; only a fully hidden layer shows everything again.
+	// same rule as `visibility.toggleLayer`, restated over entries since a layer's rows are members,
+	// not necessarily whole objects.
 	const toggleLayer = (entries: SceneEntry[]) => {
 		const show = entries.length > 0 && entries.every((entry) => isEntryHidden(entry));
 		for (const entry of entries) outliner.visibility.setEntryVisible(entry, show);
@@ -51,32 +51,32 @@
 		onVisibilityChange?.();
 	};
 
-	// Derived, not destructured: the prop is reassignable, and these must follow it.
+	// Derived, not destructured: the prop is reassignable, and these must track it.
 	const hidden = $derived(outliner.visibility.hidden);
 	const selected = $derived(outliner.selection.selected);
 	const collapsed = $derived(outliner.collapsed);
 
-	// Panel state, so reopening clears it — unlike hiding and collapse, which the outliner outlives.
-	// Owned here rather than on the outliner: writing it back from the derived below is what the
-	// Svelte 5 `state_unsafe_mutation` rule forbids.
+	// Panel-local state that clears on reopen, unlike hiding and collapse which the outliner
+	// outlives. Kept here rather than on the outliner: writing it back from the derived below would
+	// hit Svelte 5's `state_unsafe_mutation` rule.
 	let searchQuery = $state('');
 	let anchor = $state<string | null>(null);
 
 	// Layers start collapsed: a solve can produce dozens, and an all-expanded list buries the
-	// layer names it exists to show. Only for the first batch of content — after that the user's
-	// collapse state is theirs, and re-collapsing on every solve would fight them.
+	// layer names it exists to show. Applies only to the first batch of content; after that the
+	// user's collapse state is theirs, and re-collapsing on every solve would fight them.
 	let collapsedOnLoad = false;
 
 	$effect(() => outliner.onAnchorChange((next) => (anchor = next)));
 
-	// `scene.children` is a plain array the render layer mutates in place, so a solve bumping
-	// `sceneVersion` is the only signal that content changed — hence the `void` reads below.
+	// `scene.children` is a plain array the render layer mutates in place, so `sceneVersion`
+	// bumping on solve is the only reactive signal content changed: hence the `void` reads below.
 	const sceneObjects = $derived.by(() => {
 		void sceneVersion;
 		return outliner.objects();
 	});
 
-	// Entries, not objects: a merged mesh renders as one THREE object but lists as one row per
+	// Entries, not objects: a merged mesh renders as one three.js object but lists as one row per
 	// source object, so an imported model shows its building elements instead of the handful of
 	// meshes they were merged into.
 	const layerGroups = $derived.by(() => {
@@ -110,8 +110,9 @@
 	// overlapping the viewport are rendered and the rest are replaced by spacer height.
 	//
 	// The two row types have different heights, so the flat model records each row's height and a
-	// running offset rather than assuming a single row size. Keep these in sync with the markup:
-	// a header is `py-1` around a 3.5-unit icon, an object row `py-0.5` around a 3-unit one.
+	// running offset rather than assuming a single row size. Keep these two constants in sync with
+	// the markup: a header is `py-1` around a 3.5-unit icon, an object row `py-0.5` around a
+	// 3-unit one.
 	const LAYER_ROW_HEIGHT = 30;
 	const OBJECT_ROW_HEIGHT = 24;
 	// Rows rendered beyond each edge of the viewport, so a fast scroll doesn't show blank space.
@@ -163,7 +164,7 @@
 	let scrollTop = $state(0);
 	let viewportHeight = $state(0);
 
-	/** First row index whose bottom edge is at or past `offset`. Rows are ordered by `top`. */
+	// Binary search assumes rows are ordered by `top`, which the derivation above guarantees.
 	const findRowAt = (offset: number) => {
 		let low = 0;
 		let high = rows.length - 1;
@@ -177,27 +178,27 @@
 
 	const visibleRows = $derived.by(() => {
 		if (rows.length === 0) return [];
-		// Before the first measurement `viewportHeight` is 0; render a screenful so the list is
-		// never briefly empty.
+		// `viewportHeight` is 0 before the first measurement; render a screenful so the list isn't
+		// briefly empty.
 		const height = viewportHeight || 600;
 		const start = Math.max(0, findRowAt(scrollTop) - OVERSCAN);
 		const end = Math.min(rows.length, findRowAt(scrollTop + height) + 1 + OVERSCAN);
 		return rows.slice(start, end);
 	});
 
-	// `SvelteSet.has()` is the reactive read, so go through the set rather than calling
-	// `visibility.isHidden` — that reaches the set through a plain reference inside the outliner
-	// and returns a correct value that never re-renders this row.
+	// `SvelteSet.has()` is the reactive read, so go through `hidden` rather than calling
+	// `visibility.isHidden`: that reaches the set through a plain reference inside the outliner and
+	// returns a correct value that never triggers a re-render.
 	const isEntryHidden = (entry: SceneEntry) =>
 		entry.memberIndex === null
 			? getMemberKeys(entry.object).every((key) => hidden.has(key))
 			: hidden.has(entry.key);
 
-	// Same reason: count through the reactive set so the layer's tri-state eye tracks its entries.
+	// Same reason: go through the reactive set so the layer's tri-state eye tracks its entries.
 	const hiddenCount = (entries: SceneEntry[]) =>
 		entries.filter((entry) => isEntryHidden(entry)).length;
 
-	// Reading `anchor` keeps the shift-range dependent on it; the outliner owns the value.
+	// Reads `anchor` so shift-range selection stays reactive to it; the outliner owns the value.
 	const selectObject = (uuid: string, event: MouseEvent) => {
 		void anchor;
 		outliner.select(
@@ -251,9 +252,9 @@
 		bind:clientHeight={viewportHeight}
 		onscroll={(e) => (scrollTop = e.currentTarget.scrollTop)}
 	>
-		<!-- Spacer sized to the full list; windowed rows are placed into it by offset. The listbox
-		     sits here rather than per layer: windowing renders one flat row list, so every option
-		     shares a single owner. -->
+		<!-- Spacer sized to the full list; windowed rows are absolutely positioned into it by offset.
+		     The listbox role sits here rather than per layer, since windowing renders one flat row
+		     list and every option shares a single owner. -->
 		<div role="listbox" aria-multiselectable="true" class="relative" style:height="{totalHeight}px">
 			{#each visibleRows as row (row.key)}
 				<div class="inset-x-0 absolute" style:top="{row.top}px" style:height="{row.height}px">
@@ -308,8 +309,8 @@
 						</div>
 					{:else}
 						{@const entry = row.entry}
-						<!-- Both keyed by the entry's stable identity: a merged mesh holds many entries, so
-						     the object's uuid cannot tell its members apart. -->
+						<!-- Keyed by the entry's stable identity, not the object's uuid: a merged mesh holds
+						     many entries, and the uuid alone can't tell its members apart. -->
 						{@const isHidden = isEntryHidden(entry)}
 						{@const isSelected = selected.has(entry.key)}
 						<div class="ml-3 h-full border-l border-border">

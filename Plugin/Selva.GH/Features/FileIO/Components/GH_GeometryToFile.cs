@@ -50,7 +50,7 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
 
     protected override Bitmap Icon => Resources.GeometryToFile;
 
-    /// <summary>Do not change this GUID after release — it's the component's wire identity.</summary>
+    /// <summary>Do not change this GUID after release: it's the component's wire identity.</summary>
     public override Guid ComponentGuid => new Guid("4B2646E6-A8B0-48B6-A566-FE5EC2376C82");
 
     public override void CreateAttributes()
@@ -151,7 +151,7 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
 
         if (InPreSolve)
         {
-            // Only .3dm is safe to run off the UI thread — see Export. Other formats skip the
+            // Only .3dm is safe to run off the UI thread: see Export. Other formats skip the
             // task and get computed inline on the main thread in the second pass below.
             if (IsRhinoFile(fileEnding))
             {
@@ -224,7 +224,7 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
     /// <summary>
     ///     Builds every output file. .3dm is written with <see cref="File3dm" />, an in-memory model
     ///     that touches neither the document table nor the disk, so files are written concurrently.
-    ///     Every other format needs RhinoDoc.Export, which drives Rhino's file-format plugins — those
+    ///     Every other format needs RhinoDoc.Export, which drives Rhino's file-format plugins; those
     ///     are not thread-safe, so that path stays serial (and on the main thread, see SolveInstance).
     /// </summary>
     private static ExportResult Export(
@@ -570,7 +570,7 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
                 return null;
             }
 
-            // Echo the caller's spelling of the extension rather than a normalized ".3dm" — the
+            // Echo the caller's spelling of the extension rather than a normalized ".3dm": the
             // client builds the download name as FileName + FileType.
             return BuildFileData(job.FileName, Convert.ToBase64String(bytes), fileEnding, subFolder, metadata);
         }
@@ -581,7 +581,7 @@ public class GH_GeometryToFile : GH_TaskCapableComponent<GH_GeometryToFile.Expor
         }
     }
 
-    /// <summary>Writes one job through a headless RhinoDoc and Rhino's exporters — see <see cref="Export" />.</summary>
+    /// <summary>Writes one job through a headless RhinoDoc and Rhino's exporters: see <see cref="Export" />.</summary>
     private static FileDataGoo ExportViaHeadlessDoc(
         FileJob job,
         string fileEnding,

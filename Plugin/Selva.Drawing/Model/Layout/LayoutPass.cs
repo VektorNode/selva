@@ -32,7 +32,7 @@ public static class LayoutPass
 		if (page.Content == null) return page;
 
 		// Page rect minus margins, Y-up world coords, origin (0,0). Zero margins are valid
-		// (full-bleed page) — only a zero-size paper means "no page bounds".
+		// (full-bleed page); only a zero-size paper means "no page bounds".
 		var available = PaperIsZero(page.Size)
 			? BoundingBox.Empty
 			: new BoundingBox(

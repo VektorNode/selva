@@ -5,7 +5,7 @@ using Rhino.Geometry;
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     Turns a Rhino curve into a flat world-space polyline the web renders directly — the reason
+///     Turns a Rhino curve into a flat world-space polyline the web renders directly: the reason
 ///     no browser needs rhino3dm.
 ///
 ///     Exact vertices for anything already a polyline, otherwise adaptive subdivision from a

@@ -17,9 +17,9 @@ namespace Selva.GH.Features.Drawing.Components;
 
 // Places an image (from a Get Image input, or a path/url/base64 string) into the drawing,
 // sized in document units, and flows into Render PDF / Render SVG like any other DrawElement.
-// PNG/JPEG/WEBP embed as a raster ImageElement (both targets). SVG is translated into native
-// drawing geometry (paths/shapes/groups) so it renders losslessly to both PDF and SVG —
-// unsupported SVG features (gradients, filters, text) are skipped with a warning.
+// PNG/JPEG/WEBP embed as a raster ImageElement. SVG is translated into native drawing geometry
+// (paths/shapes/groups) so it renders losslessly to both targets: unsupported SVG features
+// (gradients, filters, text) are skipped with a warning.
 public class GH_CreateImage : GH_Component
 {
     private readonly ElementPreviewBuffer _preview = new ElementPreviewBuffer();
@@ -73,7 +73,6 @@ public class GH_CreateImage : GH_Component
         double height = 0;
 
         if (!DA.GetData(0, ref imageGoo) || imageGoo == null) return;
-        // Position is optional and defaults to the origin; an unset point also maps to origin.
         DA.GetData(1, ref position);
         if (position == Point3d.Unset) position = Point3d.Origin;
         var hasWidth = DA.GetData(2, ref width);
@@ -105,8 +104,6 @@ public class GH_CreateImage : GH_Component
             return;
         }
 
-        // SVG translates into real drawing geometry so it renders losslessly to BOTH SVG and
-        // PDF (no rasterisation). Raster formats embed as an ImageElement.
         DrawElement element = resolved.Format == ImageFormat.Svg
             ? BuildSvgElement(resolved.Data, position, hasWidth, hasHeight, width, height)
             : BuildRasterElement(resolved.Data, resolved.Format, position, hasWidth, hasHeight, width, height);
@@ -193,7 +190,6 @@ public class GH_CreateImage : GH_Component
         else if (hasHeight) { scaleX = scaleY = height / srcH; }
         else { scaleX = scaleY = 1.0; } // intrinsic SVG units → document units 1:1
 
-        // Compose: move source min to origin, scale, then move to Position.
         var t = DrawTransform.Translate(position.X, position.Y)
             .Multiply(DrawTransform.Scale(scaleX, scaleY))
             .Multiply(DrawTransform.Translate(-bounds.MinX, -bounds.MinY));
@@ -201,10 +197,9 @@ public class GH_CreateImage : GH_Component
         return new GroupElement { Transform = t, Children = new[] { imported } };
     }
 
-    // CSS reference: 96 device pixels per inch, 25.4 mm per inch. Used to turn a raster
-    // image's intrinsic pixel size into document millimetres when no size is given, so a
-    // 1920px photo lands at ~508mm rather than 1920mm. Layout containers (Frame/Stack/Grid)
-    // then size around that box; set Width/Height to override.
+    // CSS reference: 96 device pixels per inch, 25.4 mm per inch. Turns a raster image's
+    // intrinsic pixel size into document millimetres when no size is given, so a 1920px
+    // photo lands at ~508mm rather than 1920mm.
     private const double MmPerPixelAt96Dpi = 25.4 / 96.0;
 
     /// <summary>
@@ -263,7 +258,7 @@ public class GH_CreateImage : GH_Component
     {
         if (string.IsNullOrEmpty(str)) return null;
 
-        // A Get Image input serializes FileInputData as JSON; a bare string is a path.
+        // A Get Image input serializes FileInputData as JSON; a bare path string isn't.
         try
         {
             var settings = new JsonSerializerSettings { TypeNameHandling = TypeNameHandling.None, MaxDepth = 8 };
@@ -272,7 +267,7 @@ public class GH_CreateImage : GH_Component
         }
         catch (JsonException)
         {
-            // Not JSON — treat as a path below.
+            // Not JSON: treat as a path below.
         }
 
         return FileInputData.FromPath(str);

@@ -9,7 +9,7 @@ import type { ServerErrorCodeMap, ServerTiming } from '../types';
 /** Upper bound for the raw server body stored on error `context.responseBody`. */
 const MAX_CONTEXT_BODY_CHARS = 4096;
 
-/** Truncate a server body for storage on error context — bounded, with an honest marker. */
+/** Truncate a server body for storage on error context: bounded, with an honest marker. */
 function truncateBody(body: string): string {
 	if (body.length <= MAX_CONTEXT_BODY_CHARS) return body;
 	return `${body.slice(0, MAX_CONTEXT_BODY_CHARS)}… [truncated ${body.length - MAX_CONTEXT_BODY_CHARS} chars]`;
@@ -39,7 +39,7 @@ export function throwHttpError(
 	// context.responseBody holds the RAW server body (what actually came over the
 	// wire), bounded to MAX_CONTEXT_BODY_CHARS so a huge body isn't pinned for the
 	// error's lifetime. `errorBody` may have been rewritten into a synthesized
-	// message (500 exception shape) — that goes in the message, not the context.
+	// message (500 exception shape): that goes in the message, not the context.
 	const storedBody = rawBody ?? errorBody;
 	const context = {
 		url: fullUrl,
@@ -99,7 +99,7 @@ export function throwHttpError(
  * code so the caller falls back to its status-based mapping.
  *
  * Which wire codes exist is backend-specific, so the table comes from the caller
- * ({@link ComputeConfig.serverErrorCodes}) — core does not know any of them.
+ * ({@link ComputeConfig.serverErrorCodes}); core does not know any of them.
  */
 export function mapServerErrorCode(
 	serverCode?: string,
@@ -155,7 +155,7 @@ export async function handleResponse(
 			const parsedForCode = JSON.parse(errorBody);
 			if (typeof parsedForCode?.code === 'string') serverCode = parsedForCode.code;
 		} catch {
-			// Non-JSON body — nothing to extract.
+			// Non-JSON body: nothing to extract.
 		}
 
 		// Check if it's a valid compute response with errors/warnings
@@ -164,7 +164,7 @@ export async function handleResponse(
 				const parsed = JSON.parse(errorBody);
 				// If it has values, it's a partial success with errors. Read the fields
 				// case-insensitively: `values`/`errors`/`warnings` arrive PascalCase from
-				// stock mcneel servers — a casing miss here would throw the partial
+				// stock mcneel servers: a casing miss here would throw the partial
 				// values away as a hard failure.
 				const values = readField(parsed, 'values');
 				const solveErrors = readField<unknown[]>(parsed, 'errors');
@@ -191,7 +191,7 @@ export async function handleResponse(
 				// (compute.geometry Startup.cs) emits:
 				//   { error: "Internal Server Error", message: "<category>: <detail>",
 				//     stackTrace?: string[] }   // stackTrace only when Config.Debug
-				// The actionable part is `message` — surface it, with the optional
+				// The actionable part is `message`: surface it, with the optional
 				// stack appended for debugging. We prefer `message`/`error` (current
 				// server) and keep `Message`/`ExceptionType`/`StackTrace` (old
 				// PascalCase .NET shape) as a back-compat fallback so an older server
@@ -241,19 +241,19 @@ export async function handleResponse(
 
 	try {
 		// text-then-parse (what `response.json()` does internally) so the body's
-		// wire size rides along with the parsed object — downstream byte-budgeted
+		// wire size rides along with the parsed object, so downstream byte-budgeted
 		// caches read it instead of re-serializing a potentially huge tree.
 		const rawBody = await response.text();
 		const parsed = JSON.parse(rawBody);
 		setResponseWireSize(parsed, rawBody.length);
 		return parsed;
 	} catch (error) {
-		// Classify by the declared Content-Type (issue 87). A 2xx that DECLARES a
-		// non-JSON body (HTML from a captive portal, a reverse-proxy login page, a
-		// misconfigured endpoint) is deterministic — refetching returns the same
-		// page — so fail immediately with INVALID_RESPONSE (never retried). A body
+		// Classify by the declared Content-Type. A 2xx that DECLARES a non-JSON
+		// body (HTML from a captive portal, a reverse-proxy login page, a
+		// misconfigured endpoint) is deterministic: refetching returns the same
+		// page, so fail immediately with INVALID_RESPONSE (never retried). A body
 		// that fails to parse under a JSON (or absent) Content-Type means the
-		// stream was likely cut mid-body — as transient as any network error — and
+		// stream was likely cut mid-body, as transient as any network error, so it
 		// keeps the retryable NETWORK_ERROR classification.
 		const contentType = (response.headers.get('Content-Type') ?? '').toLowerCase();
 		const declaredNonJson = contentType !== '' && !contentType.includes('json');

@@ -6,15 +6,8 @@ import {
 } from '../src/grasshopper';
 
 /**
- * Simple example demonstrating how to use GrasshopperClient
- *
- * This example shows the basic workflow:
- * 1. Create a client connected to a Rhino Compute server
- * 2. Inspect definition inputs/outputs using getIO()
- * 3. Build input data using TreeBuilder
- * 4. Run computation with solve()
- * 5. Process results using GrasshopperResponseProcessor
- * 6. Clean up resources
+ * Basic GrasshopperClient workflow: connect, inspect a definition's IO, build
+ * inputs, solve, process results, dispose.
  *
  * Prerequisites:
  * - An active Rhino Compute instance running (default: http://localhost:5000)
@@ -45,7 +38,6 @@ async function main() {
 	let client: GrasshopperClient | null = null;
 
 	try {
-		// Step 1: Create and initialize the client
 		console.error('Creating GrasshopperClient...');
 		try {
 			client = await GrasshopperClient.create(config);
@@ -57,7 +49,6 @@ async function main() {
 			throw error;
 		}
 
-		// Step 2: Get definition inputs and outputs
 		console.error('Fetching definition metadata...');
 		let io;
 		try {
@@ -70,17 +61,13 @@ async function main() {
 			throw error;
 		}
 
-		// Step 3: Build input data tree from definition parameters
 		console.error('Building input tree...');
 		const inputTree = TreeBuilder.fromInputParams(io.inputs);
 
-		// Log available inputs
 		if (io.inputs.length > 0) {
 			console.error('Available inputs:', io.inputs.map((input) => input.name).join(', '));
 		}
 
-		// Example: Modify input values if needed
-		// Check if the input exists before modifying
 		const inputToModify = 'number_input_2';
 		const inputExists = io.inputs.some((input) => input.name === inputToModify);
 		if (inputExists) {
@@ -90,7 +77,6 @@ async function main() {
 			console.error(`⚠ Input "${inputToModify}" not found in definition`);
 		}
 
-		// Step 4: Run the computation
 		console.error('Running computation...');
 		let result;
 		try {
@@ -102,13 +88,11 @@ async function main() {
 			throw error;
 		}
 
-		// Step 5: Process and display results
 		console.error('Processing results...');
 		const processor = new GrasshopperResponseProcessor(result);
 		const { values } = processor.getValues();
 		console.error('✓ Results processed');
 
-		// Display results in a structured format
 		if (values && Object.keys(values).length > 0) {
 			console.error('Output values:');
 			Object.entries(values).forEach(([key, value]) => {
@@ -122,7 +106,6 @@ async function main() {
 		console.error('\n✗ Example failed:', message);
 		process.exit(1);
 	} finally {
-		// Step 6: Clean up resources
 		if (client) {
 			try {
 				await client.dispose();

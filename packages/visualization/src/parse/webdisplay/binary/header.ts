@@ -4,10 +4,10 @@ import type { MaterialGroup, SerializableMaterial } from '../types.js';
 // WIRE FORMAT CONSTANTS
 // ============================================================================
 
-/** "SLVA" little-endian — an uncompressed mesh blob. */
+/** "SLVA" little-endian: an uncompressed mesh blob. */
 export const BINARY_MESH_MAGIC = 0x41564c53;
 /**
- * "SLVZ" little-endian — an optional raw-DEFLATE container around a SLVA blob (applied by the
+ * "SLVZ" little-endian: an optional raw-DEFLATE container around a SLVA blob (applied by the
  * plugin when it shrinks the payload). Layout: `[4] magic=SLVZ | [4] uncompressedLen(u32) |
  * [N] raw-deflate stream of the SLVA blob`.
  */
@@ -19,7 +19,7 @@ export const COMPRESSED_MESH_MAGIC = 0x5a564c53;
 export const BINARY_MESH_VERSION = 4;
 /**
  * Oldest wire version this parser still decodes. Each version only added a flag bit, so the
- * flag-driven read path handles every older blob unchanged — needed since persisted/cached blobs
+ * flag-driven read path handles every older blob unchanged: needed since persisted/cached blobs
  * (saved `.gh` files, `.slvm`/`.dmf` mesh files, cached compute results) must stay decodable after upgrade.
  */
 export const MIN_SUPPORTED_VERSION = 1;
@@ -50,7 +50,7 @@ export const FLAG_HAS_UVS = 0x8;
 export const FLAG_HAS_VERTEX_COLORS = 0x10;
 
 /**
- * Bit 5 (v4): every delta+zigzag-filtered stream (quantized vertices, indices, quantized UVs —
+ * Bit 5 (v4): every delta+zigzag-filtered stream (quantized vertices, indices, quantized UVs,
  * never float32 data, never colors) is stored as byte planes over its element count N instead of
  * interleaved LE values:
  *
@@ -61,9 +61,9 @@ export const FLAG_HAS_VERTEX_COLORS = 0x10;
  * uvs             [U-lo × N][V-lo × N][U-hi × N][V-hi × N]                       N = vertexCount
  * ```
  *
- * Byte lengths and delta/zigzag semantics are identical to the interleaved v3 layout — only byte
+ * Byte lengths and delta/zigzag semantics are identical to the interleaved v3 layout: only byte
  * order within each block changes. Near-zero deltas make the hi planes runs of zeros, so the SLVZ
- * DEFLATE pass compresses 28–50% smaller than interleaved. Colors keep the v3 interleaved layout
+ * DEFLATE pass compresses 28-50% smaller than interleaved. Colors keep the v3 interleaved layout
  * (planar loses on noisy per-channel data, measured).
  */
 export const FLAG_PLANAR_BYTESPLIT = 0x20;
@@ -90,7 +90,7 @@ export const HOST_IS_LITTLE_ENDIAN = new Uint16Array(new Uint8Array([1, 0]).buff
 // PARSED TYPES
 // ============================================================================
 
-/** Mesh-blob subset of `DisplayBatch` minus `compressedData` (circular — the blob can't embed itself). */
+/** Mesh-blob subset of `DisplayBatch` minus `compressedData` (circular: the blob can't embed itself). */
 export interface BinaryMeshMetadata {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
@@ -100,11 +100,11 @@ export interface BinaryMeshMetadata {
  * Result of parsing a binary mesh blob.
  *
  * `vertices`/`indices` hold absolute (unfiltered) values. For pre-v3 blobs they're zero-copy
- * typed-array views over the original `ArrayBuffer` — don't mutate the buffer, or call `.slice()`
+ * typed-array views over the original `ArrayBuffer`: don't mutate the buffer, or call `.slice()`
  * to detach. Delta-encoded blobs (FLAG_DELTA_ENCODED) decode into freshly allocated arrays instead.
  *
  * `uvs`/`colors` are the optional trailing chunks (FLAG_HAS_UVS / FLAG_HAS_VERTEX_COLORS), null
- * when absent. UVs are dequantized to absolute Float32 (u,v per vertex) — ready for
+ * when absent. UVs are dequantized to absolute Float32 (u,v per vertex), ready for
  * `BufferAttribute(uvs, 2)`. Colors are raw r,g,b bytes per vertex, for a normalized
  * `BufferAttribute(colors, 3, true)`.
  */

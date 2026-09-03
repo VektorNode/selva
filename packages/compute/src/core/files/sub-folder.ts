@@ -16,7 +16,7 @@ import type { FileData } from './types';
  * Split a `Sub Folder` value into folder segments; `/`, `\` and `::` all separate.
  *
  * Exported because anything rendering a folder tree has to agree with the archive on where the
- * boundaries are — splitting on `/` alone leaves `Main::Panels` as one literal segment and shows
+ * boundaries are: splitting on `/` alone leaves `Main::Panels` as one literal segment and shows
  * a folder named after the separator.
  */
 export const subFolderSegments = (subFolder: string | undefined): string[] =>
@@ -41,7 +41,7 @@ export const pathBelowRoot = (file: Pick<FileData, 'subFolder'>): string =>
 /**
  * Group files by their `Sub Folder` root, preserving encounter order.
  *
- * Rootless files group under `''` — a caller naming archives supplies its own fallback for that
+ * Rootless files group under `''`: a caller naming archives supplies its own fallback for that
  * bucket. Useful beyond downloading: a consumer writing to disk gets the same grouping without
  * touching the DOM.
  */

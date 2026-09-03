@@ -3,9 +3,7 @@ import { getLogger } from '@/core/utils/logger';
 import { validateServerUrl } from '@/core/server/validate-server-url';
 
 /**
- * ComputeServerStats provides methods to query Rhino Compute server statistics.
- *
- * @public Use this for server health monitoring and statistics.
+ * Query Rhino Compute server health and statistics.
  *
  * @example
  * ```typescript
@@ -33,10 +31,10 @@ export default class ComputeServerStats {
 	/** Timeout (ms) for the fast read/monitoring endpoints. */
 	private static readonly DEFAULT_TIMEOUT_MS = 5000;
 
-	/** Timeout (ms) for child-lifecycle POSTs — a cold Windows child can take ~30s to spawn. */
+	/** Timeout (ms) for child-lifecycle POSTs: a cold Windows child can take ~30s to spawn. */
 	private static readonly LIFECYCLE_TIMEOUT_MS = 60_000;
 
-	/** Floor for `monitor()`'s `intervalMs` — anything lower hot-loops the server. */
+	/** Floor for `monitor()`'s `intervalMs`: anything lower hot-loops the server. */
 	private static readonly MIN_MONITOR_INTERVAL_MS = 100;
 
 	/**
@@ -48,9 +46,6 @@ export default class ComputeServerStats {
 		this.apiKey = apiKey;
 	}
 
-	/**
-	 * Build request headers with optional API key.
-	 */
 	private buildHeaders(): Record<string, string> {
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json'
@@ -75,7 +70,7 @@ export default class ComputeServerStats {
 		// Merge caller headers OVER the defaults instead of `{ headers: …, ...init }`,
 		// where any `init.headers` would silently replace the whole set (dropping
 		// the API key). BOTH sides go through `new Headers()` so every key is
-		// normalized (lowercased) identically — a caller's `Content-Type` replaces
+		// normalized (lowercased) identically: a caller's `Content-Type` replaces
 		// the default instead of coexisting as a differently-cased duplicate that
 		// the runtime would combine into "application/json, text/plain".
 		const merged = new Headers(this.buildHeaders());
@@ -96,12 +91,10 @@ export default class ComputeServerStats {
 	}
 
 	/**
-	 * Check if the server is online.
-	 *
 	 * This is a single-sample probe: it returns `true` only on a 2xx from the
 	 * proxy liveness root `/`, and `false` for every other outcome (non-2xx,
 	 * network error, or timeout). A cold or briefly-busy-but-up server can therefore
-	 * read as offline — callers that gate on this (e.g. client construction)
+	 * read as offline: callers that gate on this (e.g. client construction)
 	 * should retry rather than treat a single `false` as authoritative.
 	 *
 	 * @param timeoutMs - Abort the probe after this many ms (default: 5000).
@@ -116,7 +109,7 @@ export default class ComputeServerStats {
 	 * Detailed liveness probe backing {@link isServerOnline}.
 	 *
 	 * Reports what the probe actually saw so callers can distinguish "connection
-	 * failed" (`error` set) from "server answered non-2xx" (`status` set) — e.g.
+	 * failed" (`error` set) from "server answered non-2xx" (`status` set): e.g.
 	 * a 401 from a proxy that requires an API key is a misconfiguration, not an
 	 * offline server. Same single-sample caveat as {@link isServerOnline}.
 	 *
@@ -153,7 +146,7 @@ export default class ComputeServerStats {
 	 * Get the number of active child processes on the server.
 	 *
 	 * By default the proxy's `/activechildren` endpoint will *spawn* children up
-	 * to the configured count if none are running, then report the count — which
+	 * to the configured count if none are running, then report the count, which
 	 * wakes (and bills) an idle server. Pass `{ initialize: false }` for a passive
 	 * read that reports the current count without spawning; use this for
 	 * monitoring or before a purge/probe where you must not wake the server.
@@ -170,7 +163,7 @@ export default class ComputeServerStats {
 			? `${this.serverUrl}/activechildren`
 			: `${this.serverUrl}/activechildren?initialize=false`;
 
-		// `initialize` mode may spawn children before answering — give it the
+		// `initialize` mode may spawn children before answering: give it the
 		// lifecycle budget; the passive read stays on the short default.
 		const timeoutMs = initialize
 			? ComputeServerStats.LIFECYCLE_TIMEOUT_MS
@@ -198,11 +191,6 @@ export default class ComputeServerStats {
 		}
 	}
 
-	/**
-	 * Get the server version information.
-	 *
-	 * @returns Version object with rhino, compute, and git_sha, or null if unavailable
-	 */
 	public async getVersion(): Promise<{
 		rhino: string;
 		compute: string;
@@ -218,7 +206,7 @@ export default class ComputeServerStats {
 				return null;
 			}
 
-			// Read body as text first, then try JSON.parse — avoids the
+			// Read body as text first, then try JSON.parse: avoids the
 			// "Body has already been read" error if response.json() fails.
 			const text = await response.text();
 			try {
@@ -238,17 +226,10 @@ export default class ComputeServerStats {
 	}
 
 	/**
-	 * Get the plugins installed on the server.
-	 *
-	 * Returns a `name → version` map of non-core plugins the server has loaded,
-	 * or `null` if the request failed. Pass `kind` to choose which inventory:
-	 * `'gh'` (default) lists Grasshopper add-on assemblies via
-	 * `/plugins/gh/installed`; `'rhino'` lists Rhino plugins via
-	 * `/plugins/rhino/installed`. Plugins that ship with Rhino / are core
-	 * libraries are excluded by the server.
-	 *
-	 * @param kind - `'gh'` for Grasshopper add-ons (default) or `'rhino'` for Rhino plugins.
-	 * @returns Map of plugin name to version, or `null` on failure.
+	 * `name → version` map of non-core plugins the server has loaded. `'gh'`
+	 * (default) lists Grasshopper add-ons via `/plugins/gh/installed`; `'rhino'`
+	 * lists Rhino plugins via `/plugins/rhino/installed`. Plugins that ship with
+	 * Rhino or are core libraries are excluded by the server.
 	 *
 	 * @example
 	 * ```ts
@@ -283,12 +264,7 @@ export default class ComputeServerStats {
 		}
 	}
 
-	/**
-	 * Get comprehensive server statistics.
-	 * Fetches all available server information in parallel.
-	 *
-	 * @returns Object containing server status and available stats
-	 */
+	/** Fetches all available server information in parallel. */
 	public async getServerStats(): Promise<{
 		isOnline: boolean;
 		version?: { rhino: string; compute: string; git_sha: string | null };
@@ -302,7 +278,7 @@ export default class ComputeServerStats {
 			return { isOnline: false };
 		}
 
-		// Passive child count — never spawn from a stats read, or merely viewing
+		// Passive child count: never spawn from a stats read, or merely viewing
 		// server health would wake (and bill) an idle server.
 		const [version, activeChildren] = await Promise.all([
 			this.getVersion(),
@@ -377,7 +353,7 @@ export default class ComputeServerStats {
 	 * **This is best-effort, not a guarantee.** Round-robin can revisit one child
 	 * and skip another; under concurrent traffic the rotation drifts. The result's
 	 * `confident` flag is `true` only when the server reports a single child (where
-	 * one purge is exact) — surface it so callers don't over-promise. For a hard
+	 * one purge is exact): surface it so callers don't over-promise. For a hard
 	 * fleet-wide guarantee, run the deployment at `--childcount 1` or add a
 	 * server-side fan-out endpoint.
 	 *
@@ -402,7 +378,7 @@ export default class ComputeServerStats {
 	} | null> {
 		this.ensureNotDisposed();
 
-		// Passive read — must not spawn children just to purge them.
+		// Passive read: must not spawn children just to purge them.
 		const children = await this.getActiveChildren({ initialize: false });
 		if (children === null) {
 			getLogger().warn('[ComputeServerStats] purgeAllChildren: could not read child count');
@@ -428,8 +404,6 @@ export default class ComputeServerStats {
 	}
 
 	/**
-	 * Get the server's current UTC clock.
-	 *
 	 * GETs `/servertime`, which the server emits as a JSON-encoded ISO-8601
 	 * timestamp (e.g. `"2026-06-18T08:30:00Z"`). Useful for detecting clock skew
 	 * between caller and server. Returns `null` if the request failed or the body
@@ -458,8 +432,6 @@ export default class ComputeServerStats {
 	}
 
 	/**
-	 * Get how long the rhino.compute proxy has been idle.
-	 *
 	 * GETs `/idlespan` on the proxy, which returns the seconds elapsed since the
 	 * last request was forwarded to a compute child. This is a proxy-level metric
 	 * (not proxied to a child) used by autoscalers to decide when a node can be
@@ -488,8 +460,8 @@ export default class ComputeServerStats {
 	 * Fill the compute child pool up to the server's configured baseline.
 	 *
 	 * POSTs `/launch-children`. No-op when the pool is already at or above the
-	 * configured `--childcount`. Returns `{ spawned, active }` — how many children
-	 * were started and the resulting child count — or `null` on failure.
+	 * configured `--childcount`. Returns `{ spawned, active }`: how many children
+	 * were started and the resulting child count, or `null` on failure.
 	 *
 	 * To raise capacity above the baseline use {@link launchChild}; the baseline
 	 * itself can only be changed by restarting rhino.compute.
@@ -523,7 +495,7 @@ export default class ComputeServerStats {
 	 * POSTs `/shutdown-children`. With no `port` it shuts down every child; with
 	 * `port` it targets just that one. Children do not respawn, but the next
 	 * `/grasshopper` request auto-spawns the pool back to the baseline. Returns
-	 * `{ shutdown, active }` — how many were stopped and the remaining count — or
+	 * `{ shutdown, active }`: how many were stopped and the remaining count, or
 	 * `null` on failure.
 	 *
 	 * @param port - Optional port to target; omit to shut down all children.
@@ -588,11 +560,9 @@ export default class ComputeServerStats {
 	}
 
 	/**
-	 * Continuously monitor server stats at specified interval.
-	 *
 	 * @param callback - Function called with stats on each interval
 	 * @param intervalMs - Milliseconds between checks (default: 5000). Must be a
-	 *   finite number of at least 100 ms — lower values would hot-loop the server.
+	 *   finite number of at least 100 ms: lower values would hot-loop the server.
 	 * @returns Function to stop monitoring
 	 * @throws {ComputeError} `INVALID_CONFIG` if `intervalMs` is not a finite number >= 100.
 	 *
@@ -629,7 +599,6 @@ export default class ComputeServerStats {
 		getLogger().info(`🔄 Starting server stats monitoring every ${intervalMs}ms`);
 
 		const check = async () => {
-			// Clear current timeout from tracking since it has fired
 			if (currentTimeoutId !== null) {
 				this.activeTimeouts.delete(currentTimeoutId);
 				currentTimeoutId = null;
@@ -640,7 +609,7 @@ export default class ComputeServerStats {
 			try {
 				const _stats = await this.getServerStats();
 
-				// Check again after async operation to prevent race condition
+				// Re-check: dispose()/stop() may have fired while awaiting.
 				if (!active || this.disposed) return;
 
 				try {
@@ -651,7 +620,7 @@ export default class ComputeServerStats {
 			} catch (err) {
 				if (!active || this.disposed) {
 					// dispose()/stop racing an in-flight poll is normal shutdown, not an
-					// error — the nested ensureNotDisposed() throw is expected here.
+					// error: the nested ensureNotDisposed() throw is expected here.
 					getLogger().debug('[ComputeServerStats] Monitor poll cancelled during shutdown:', err);
 				} else {
 					getLogger().error('[ComputeServerStats] Failed to fetch stats during monitor:', err);
@@ -667,7 +636,6 @@ export default class ComputeServerStats {
 		const stopMonitoring = () => {
 			active = false;
 
-			// Clear any pending timeout
 			if (currentTimeoutId !== null) {
 				clearTimeout(currentTimeoutId);
 				this.activeTimeouts.delete(currentTimeoutId);
@@ -679,37 +647,28 @@ export default class ComputeServerStats {
 
 		this.activeMonitors.add(stopMonitoring);
 
-		// Explicitly mark as fire-and-forget since we don't need to await the initial call
 		void check();
 
 		return stopMonitoring;
 	}
 
-	/**
-	 * Disposes of all resources and stops all active monitors.
-	 * Call this when you're done using the stats instance.
-	 */
 	public async dispose(): Promise<void> {
 		if (this.disposed) return;
 
 		this.disposed = true;
 
-		// Stop all active monitors (this will also clear their timeouts)
 		for (const stopMonitor of this.activeMonitors) {
 			stopMonitor();
 		}
 		this.activeMonitors.clear();
 
-		// Clear any remaining timeouts (defensive cleanup)
+		// Defensive: a monitor's own timeout should already be gone via stopMonitor().
 		for (const timeoutId of this.activeTimeouts) {
 			clearTimeout(timeoutId);
 		}
 		this.activeTimeouts.clear();
 	}
 
-	/**
-	 * Ensures the instance hasn't been disposed.
-	 */
 	private ensureNotDisposed(): void {
 		if (this.disposed) {
 			throw new ComputeError(

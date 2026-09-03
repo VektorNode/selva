@@ -76,7 +76,7 @@ public class TableSplitTests
 	[Fact]
 	public void Pagination_force_places_table_when_header_taller_than_page()
 	{
-		// Header alone is taller than the page. The forward-progress guarantee force-places
+		// Header alone is taller than the page: the forward-progress guarantee force-places
 		// header + one oversized row per page instead of dumping everything on one page.
 		var table = MakeTable(header: 15.0, rowHeights: new[] { 4.0, 4.0 });
 		var paper = new PaperSize(20, 10, "T20x10");

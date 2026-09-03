@@ -10,13 +10,13 @@ namespace Selva.GH.Features.Display.Services;
 ///     Process-wide content-addressed registry for material texture bytes, served over HTTP at
 ///     <c>/assets/{hash}</c> by <see cref="LocalWebServer" />.
 ///
-///     <c>GH_ThreeMaterial</c> registers bytes and gets back a hash-keyed URL for <see cref="ThreeMaterial.Map" />;
-///     since the URL is derived from content, the browser caches it forever and re-solves only ship
+///     <c>GH_ThreeMaterial</c> registers bytes and gets back a hash-keyed URL for <see cref="ThreeMaterial.Map" />:
+///     since the URL is derived from content, the browser caches it forever, and re-solves only ship
 ///     the URL string, never the image bytes again.
 ///
 ///     Static so any <see cref="LocalWebServer" /> in the process can serve it. The UIBuilder's
 ///     embedded server is production-only and per-component, so a dedicated server starts lazily on
-///     first registration — in dev mode that's the only HTTP server in the plugin.
+///     first registration: in dev mode that's the only HTTP server in the plugin.
 /// </summary>
 public static class TextureAssetStore
 {

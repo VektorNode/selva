@@ -14,7 +14,7 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
 // PdfSharpCore stamps dates and a trailer ID into every produced file, so byte-level
-// snapshotting is impractical; these tests check structural validity instead — header
+// snapshotting is impractical; these tests check structural validity instead: header
 // magic, parseable through PdfReader, expected pages/sizes, metadata round-trips.
 public class PdfRendererTests
 {
@@ -190,7 +190,7 @@ public class PdfRendererTests
 	[Fact]
 	public void Auto_fit_sets_page_size_to_content_plus_padding()
 	{
-		// Content spans 0..100 × 0..50 mm; default padding is 10 → page should be 120 × 70 mm.
+		// Content spans 0..100 x 0..50 mm; default padding is 10, so the page should be 120 x 70 mm.
 		var path = new Path.Builder()
 			.MoveTo(0, 0).LineTo(100, 0).LineTo(100, 50).LineTo(0, 50).Close().Build();
 		var bytes = RenderScene(new PathElement { Path = path });

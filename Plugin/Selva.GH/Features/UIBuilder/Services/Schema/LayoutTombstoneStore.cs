@@ -20,7 +20,7 @@ public sealed class LayoutTombstone
 
     /// <summary>
     ///     Position in schema.Inputs/Outputs before the purge. The merge steps append, so without
-    ///     this an undone deletion reorders the list — which changes SchemaHash and invalidates
+    ///     this an undone deletion reorders the list: that changes SchemaHash and invalidates
     ///     every open editor's save base for a round trip that should be a no-op.
     /// </summary>
     public int ParamIndex { get; set; } = -1;
@@ -32,7 +32,7 @@ public sealed class LayoutTombstone
 ///
 ///     Deleting a getter used to drop its layout item and cascade away any group and tab it
 ///     emptied. Undo re-adds the parameter (MergeDiscoveredInputs) but knows nothing about layout,
-///     so the widget, its display name and its placement were gone for good — and the loss
+///     so the widget, its display name and its placement were gone for good, and the loss
 ///     persisted to disk.
 ///
 ///     Keyed on the parameter's InstanceGuid, which Grasshopper preserves across delete/undo.
@@ -41,7 +41,7 @@ public sealed class LayoutTombstone
 ///
 ///     Deliberately not part of UISchema: this is recovery state for a live editing session, not
 ///     document content. Keeping it out means no ui-schema.json regen and no SchemaHash
-///     perturbation, at the cost of tombstones not surviving a reload — which still covers the
+///     perturbation, at the cost of tombstones not surviving a reload, which still covers the
 ///     delete-then-undo window this exists for.
 /// </summary>
 public class LayoutTombstoneStore

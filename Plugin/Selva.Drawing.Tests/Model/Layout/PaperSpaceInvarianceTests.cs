@@ -23,7 +23,7 @@ public class PaperSpaceInvarianceTests
 	[Fact]
 	public void Horizontal_stack_of_auto_fit_views_stays_inside_the_content_rect()
 	{
-		// A horizontal Stack is atomic to pagination — nothing downstream rescues an overflow.
+		// A horizontal Stack is atomic to pagination: nothing downstream rescues an overflow.
 		// The second view used to see a spent (0) main axis, read it as "unconstrained", and fit
 		// to width with no height limit, producing a 3789mm-wide page.
 		var stack = new Stack
@@ -80,7 +80,7 @@ public class PaperSpaceInvarianceTests
 	{
 		// Only a LayoutElement at the ROOT of Geometry was pre-resolved. One level down, inside
 		// a GroupElement, it survived counter-scaling untouched and expanded later in LayoutPass
-		// — after the styles it carried should have been scaled. Error is 1/Scale, unbounded.
+		// after the styles it carried should have been scaled. Error is 1/Scale, unbounded.
 		var nested = new DrawingView
 		{
 			Geometry = new GroupElement { Children = new DrawElement[] { BorderedFrame() } },
@@ -119,7 +119,7 @@ public class PaperSpaceInvarianceTests
 	{
 		// MinVisibleWidthMm is a threshold about the printed sheet, but it is tested against the
 		// counter-scaled local width. At 50:1 every standard weight fell under it and both
-		// renderers skipped the stroke — a detail view exported as a blank page.
+		// renderers skipped the stroke: a detail view exported as a blank page.
 		foreach (var scale in new[] { 20.0, 25.0, 50.0 })
 		{
 			var view = new DrawingView
@@ -216,7 +216,7 @@ public class PaperSpaceInvarianceTests
 	public void A_token_that_expands_is_wrapped_like_the_literal_it_becomes()
 	{
 		// LayoutPass ran before substitution, so a header TextFlow wrapped the literal "{title}"
-		// and the real value was never line-broken or re-measured — one run advancing 562mm on a
+		// and the real value was never line-broken or re-measured: one run advancing 562mm on a
 		// 210mm sheet, with bounds still reporting the stale wrap box so no overflow check saw it.
 		const string title = "A VERY LONG DRAWING TITLE THAT WILL NOT FIT IN THE MEASURED BAND AT ALL";
 
@@ -254,7 +254,7 @@ public class PaperSpaceInvarianceTests
 	[Fact]
 	public void Page_number_tokens_still_substitute_after_the_reorder()
 	{
-		// Substituting before layout must not break the tokens that need the page count — those
+		// Substituting before layout must not break the tokens that need the page count: those
 		// are resolved per page, after pagination has settled.
 		var pages = DocumentLayoutPass.Paginate(new DocumentLayout
 		{

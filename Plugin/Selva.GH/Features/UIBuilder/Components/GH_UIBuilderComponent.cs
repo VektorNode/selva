@@ -22,16 +22,16 @@ namespace Selva.GH.Features.UIBuilder.Components;
 
 /// <summary>
 ///     DO NOT RENAME THIS CLASS. Rhino.Compute identifies it by literal type name
-///     ("GH_UIBuilderComponent") in GrasshopperValidationHelper.cs — it cannot reference Selva.GH,
-///     so there is no `is` check and no compile-time link. A rename compiles clean here and breaks
-///     /grasshopper/schema for EVERY definition at once, blaming the user's Context Bake wiring.
-///     Nothing in either repo catches this: the boundary has no test. If you must rename, update
-///     the compute fork in the same change.
+///     ("GH_UIBuilderComponent") in GrasshopperValidationHelper.cs: it can't reference Selva.GH,
+///     so there's no `is` check and no compile-time link. A rename compiles clean here but breaks
+///     /grasshopper/schema for every definition at once, and the error blames the user's Context
+///     Bake wiring instead. Nothing in either repo catches this. If you rename, update the compute
+///     fork in the same change.
 ///
-///     Same applies to OBSOLETE_* snapshots: they must keep subclassing this component. Compute
+///     OBSOLETE_* snapshots must keep subclassing this component for the same reason: Compute
 ///     walks the base chain to accept them (a pre-upgrade .gh deserializes into the subclass, and
-///     the IGH_UpgradeObject only runs on an interactive right-click → Upgrade, never headlessly).
-///     A standalone copy-pasted snapshot is not a GH_UIBuilderComponent and will be rejected.
+///     the IGH_UpgradeObject only runs on an interactive right-click Upgrade, never headlessly). A
+///     standalone copy-pasted snapshot isn't a GH_UIBuilderComponent and gets rejected.
 /// </summary>
 public class GH_UIBuilderComponent : GH_Component, IDisposable
 {
@@ -42,7 +42,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     // DO NOT RENAME. Rhino.Compute reads this field by literal name via reflection
     // (GrasshopperValidationHelper.GetEmbeddedSchema) to serve /grasshopper/schema without
-    // solving. A rename compiles clean and makes every definition report "no embedded schema".
+    // solving. A rename compiles clean, but every definition then reports "no embedded schema".
     private UISchema _embeddedSchema;
     private Dictionary<string, object> _embeddedValues;
     private EventHandler _onDocumentModified;
@@ -64,7 +64,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     /// <summary>
     ///     Normally authored through the designer and restored by <see cref="Read" />; this setter
-    ///     exists so a definition can be built without one — scripted fixture generation, tests.
+    ///     exists so a definition can be built without one: scripted fixture generation, tests.
     ///     Setting expires the solution so the Schema output republishes.
     /// </summary>
     public UISchema Schema
@@ -81,14 +81,14 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     /// <summary>
     ///     Locking tears down document subscriptions without a falling edge, so the solve after
-    ///     unlock sees EnableRising == false. SolveInstance also keys the rebind on
-    ///     EventManager.IsRegistered — don't narrow that condition back to edges only.
+    ///     unlock sees EnableRising == false. SolveInstance keys the rebind on
+    ///     EventManager.IsRegistered too: don't narrow that condition back to edges only.
     ///
-    ///     Lock only tears down what InitializeDependencies wires per-document (servers +
-    ///     DocumentEventManager document-side subscriptions). It does NOT detach the component-side
-    ///     handlers (_onSolutionStarted/_onSolutionEnded/_onDocumentModified) — those are bound once
-    ///     in InitializeDependencies and stay attached for the component's lifetime; Cleanup()/
-    ///     Dispose() detach them.
+    ///     Lock only tears down what InitializeDependencies wires per document (servers plus
+    ///     DocumentEventManager's document-side subscriptions). It does not detach the
+    ///     component-side handlers (_onSolutionStarted/_onSolutionEnded/_onDocumentModified): those
+    ///     are bound once in InitializeDependencies and stay attached for the component's lifetime;
+    ///     Cleanup()/Dispose() detach them.
     ///
     ///     If UnregisterEvents ever starts clearing EventManager's SolutionStarted/SolutionEnded/
     ///     DocumentModified subscriber lists too, this contract breaks and solving-state tracking
@@ -179,10 +179,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             HandleDisablingState(document);
         }
 
-        // Rebind is needed on the rising edge (off→on), when the document changed under us, or when
-        // subscriptions were torn down without a falling edge: right-click lock → unlock never solves
-        // with enable=false, so EnableRising alone would skip the rebind and leave SolutionStart/End
-        // dead, wedging IsBusy after the first value update.
+        // Rebind is needed on the rising edge (off to on), when the document changed under us, or
+        // when subscriptions were torn down without a falling edge: right-click lock/unlock never
+        // solves with enable=false, so EnableRising alone would skip the rebind and leave
+        // SolutionStart/End dead, wedging IsBusy after the first value update.
         var rebind = enable && (transition.EnableRising
                                 || _currentDocument != document
                                 || !_service.EventManager.IsRegistered);
@@ -282,7 +282,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             ClearAllContextualParameters();
 
             // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
-            // a solve from inside the end of this one — under a slider drag that's a non-draining
+            // a solve from inside the end of this one: under a slider drag that's a non-draining
             // loop. By the time the posted callback runs, IsBusy is false and the drain is safe.
             if (_service.StateManager.HasPendingValues)
             {
@@ -307,9 +307,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         var wasRunning = _service.ServerManager.IsRunning;
 
-        // Also route through StartServersAsync on a rebind even if servers look up already:
-        // it records the "should be running" intent, so a stop still in flight from a fast
-        // disable→enable is skipped instead of landing after this solve and stranding dead servers.
+        // Route through StartServersAsync on a rebind even if servers already look up: it records
+        // the "should be running" intent, so a stop still in flight from a fast disable/enable is
+        // skipped instead of landing after this solve and stranding dead servers.
         if (!wasRunning || rebind)
         {
             _ = Task.Run(async () =>
@@ -380,7 +380,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         return $"{baseUrl}/?session={_sessionId}&wsPort={wsPort}";
     }
 
-    /// <summary>Skipped when absent — the obsolete subclass registers only the Schema output.</summary>
+    /// <summary>Skipped when absent: the obsolete subclass registers only the Schema output.</summary>
     private void SetUrlOutput(IGH_DataAccess DA)
     {
         if (Params.Output.Count > 1)
@@ -478,9 +478,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     /// <summary>
     ///     Set while an upgrader swaps an old component for a new one. GH_UpgradeUtil adds the
-    ///     replacement to the document (firing <see cref="AddedToDocument" />) BEFORE migrating the
+    ///     replacement to the document (firing <see cref="AddedToDocument" />) before migrating the
     ///     old component's sources and recipients onto it, so at that moment the new instance looks
-    ///     like a fresh drop — zero sources, zero recipients — and would auto-wire a second toggle
+    ///     like a fresh drop, zero sources and zero recipients, and would auto-wire a second toggle
     ///     next to the one already connected to Enable. Upgraders wrap the swap in
     ///     <see cref="SuppressAutoWire" /> to skip auto-wiring for that window.
     /// </summary>
@@ -488,18 +488,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     /// <summary>
     ///     Set when this component was dropped onto a canvas that already had a UI Bridge. Each one
-    ///     runs its own WebSocket server, session and schema, so a second is usually a mistake —
-    ///     but a legitimate one, so it warns rather than refuses. Deliberately not persisted: it
+    ///     runs its own WebSocket server, session and schema, so a second is usually a mistake, but
+    ///     a legitimate one, so it warns rather than refuses. Deliberately not persisted: it
     ///     describes the placement, and on reload every bridge is equally "already there".
     /// </summary>
     private bool _isRedundantPlacement;
 
     /// <summary>
-    ///     Also how a scripted build places a bare UI Bridge — without it, placement adds a Boolean
+    ///     Also how a scripted build places a bare UI Bridge: without it, placement adds a Boolean
     ///     Toggle and a Context Bake alongside.
     ///
     ///     <see cref="ThreadStaticAttribute" />: the scope only covers placements on the calling
-    ///     thread — add the component inside the using block, on the Grasshopper thread.
+    ///     thread. Add the component inside the using block, on the Grasshopper thread.
     /// </summary>
     public static IDisposable SuppressAutoWire()
     {
@@ -531,7 +531,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        // Only the bridge just dropped on the canvas carries the warning — the one already running
+        // Only the bridge just dropped on the canvas carries the warning: the one already running
         // is working fine and shouldn't start complaining because a second appeared.
         _isRedundantPlacement = HasOtherBridge(document);
 
@@ -717,7 +717,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     public override bool Write(GH_IWriter writer)
     {
-        // Don't depend on _service being initialized — under headless hosts (or before the first
+        // Don't depend on _service being initialized: under headless hosts (or before the first
         // solve) it is null, and skipping serialization there would silently drop the saved schema.
         try
         {

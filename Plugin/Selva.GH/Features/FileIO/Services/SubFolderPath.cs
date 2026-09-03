@@ -9,12 +9,12 @@ namespace Selva.GH.Features.FileIO.Services;
 ///
 ///     <c>::</c> nests, matching Rhino's layer separator: <c>ROOT::Panels</c> is two levels. Plain
 ///     values stay single-level, so <c>Panels</c> means what it always did. <c>/</c> and <c>\</c>
-///     are accepted as separators too — people type them out of habit, and before this they
+///     are accepted as separators too: people type them out of habit, and before this they
 ///     produced a real folder on one output path and a broken name on the other.
 ///
 ///     Segments are also the zip-slip defense for the disk path: <c>.</c>, <c>..</c> and
 ///     drive-letter segments are dropped so a file can never be written outside the export root.
-///     (The web path re-sanitizes on arrival — the client can't trust a server-supplied path
+///     (The web path re-sanitizes on arrival: the client can't trust a server-supplied path
 ///     regardless of what wrote it.)
 /// </summary>
 public static class SubFolderPath

@@ -13,7 +13,7 @@ internal sealed class PdfFontEmbedder : IFontResolver
 {
 	private const string ResourcePrefix = "Selva.Drawing.Fonts.Resources.";
 	private const string DefaultFamily = "Inter";
-	// Simple identifiers, no path characters — those confuse PdfSharp's font dictionary
+	// Simple identifiers, no path characters: those confuse PdfSharp's font dictionary
 	// key handling and trip up downstream subsetting.
 	private const string RegularFace = "Inter-Regular";
 	private const string BoldFace = "Inter-Bold";
@@ -37,7 +37,7 @@ internal sealed class PdfFontEmbedder : IFontResolver
 
 	// Safe to call from every PdfRenderer.Render(). Without the wrap in the constructor,
 	// a host resolver (Rhino installs one) would intercept "Inter" first and substitute a
-	// fallback (observed: AcadEref.ttf) — every character then renders as glyph 0 / .notdef.
+	// fallback (observed: AcadEref.ttf): every character then renders as glyph 0 / .notdef.
 	public static void EnsureInstalled()
 	{
 		if (_installed != null) return;
@@ -68,7 +68,7 @@ internal sealed class PdfFontEmbedder : IFontResolver
 
 	public FontResolverInfo ResolveTypeface(string familyName, bool isBold, bool isItalic)
 	{
-		// Inter is bundled — always handle it here regardless of what the wrapped resolver says.
+		// Inter is bundled: always handle it here regardless of what the wrapped resolver says.
 		if (!string.IsNullOrEmpty(familyName) && MatchesInter(familyName))
 		{
 			return new FontResolverInfo(
@@ -100,7 +100,7 @@ internal sealed class PdfFontEmbedder : IFontResolver
 		return bytes;
 	}
 
-	// Accepts "Inter", "Inter, sans-serif", "'Inter', Helvetica" — the same comma stack
+	// Accepts "Inter", "Inter, sans-serif", "'Inter', Helvetica": the same comma stack
 	// FontMetrics tolerates.
 	private static bool MatchesInter(string familyName)
 	{

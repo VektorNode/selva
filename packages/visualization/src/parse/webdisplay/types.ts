@@ -17,7 +17,7 @@ export interface SerializableMaterial {
 
 /**
  * `vertexStart`/`vertexCount` and `indexStart`/`indexCount` are in **element units** of the
- * decoded typed arrays, not bytes — vertex component offset is `vertexStart * 3` (component count
+ * decoded typed arrays, not bytes. Vertex component offset is `vertexStart * 3` (component count
  * `vertexCount * 3`); index element offset is `indexStart` (count `indexCount`). For byte offsets,
  * multiply by element size: indices are 2 bytes (`FLAG_UINT16_INDICES`) or 4 bytes (uint32);
  * vertex components are 2 bytes (int16 quantized) or 4 bytes (`FLAG_FLOAT32`).
@@ -52,14 +52,14 @@ export interface MaterialGroup {
  * without changing this shape.
  *
  * Named `DisplayBatch` rather than `MeshBatch` because it's the seam non-mesh display items
- * (curves, points, later labels/icons) also travel through — those ride as JSON alongside the mesh
+ * (curves, points, later labels/icons) also travel through: those ride as JSON alongside the mesh
  * blob (`items`), not inside it.
  */
 export interface DisplayBatch {
 	materials: SerializableMaterial[];
 	groups: MaterialGroup[];
 	compressedData: string;
-	/** Non-mesh display items — see {@link DisplayItem}. Parsed by the separate `display-items`
+	/** Non-mesh display items. See {@link DisplayItem}. Parsed by the separate `display-items`
 	 *  path, not the SLVA mesh parser. Omitted when there are none. */
 	items?: DisplayItem[];
 }
@@ -69,7 +69,7 @@ export interface MeshBatchParsingOptions {
 	mergeByMaterial?: boolean;
 	debug?: boolean;
 	/**
-	 * Appearance dials applied to every material built from this batch — set once at parse time
+	 * Appearance dials applied to every material built from this batch, set once at parse time
 	 * (materials are rebuilt per solve). Runtime restyling of an already-built scene lives in the
 	 * viewer's `setLook`.
 	 */
@@ -85,13 +85,13 @@ export interface MeshExtractionOptions {
 	/** Scale geometry to model units. Defaults to true. */
 	allowScaling?: boolean;
 	/**
-	 * Drop geometry so its lowest point sits on the ground plane. **Defaults to `false`** — content
+	 * Drop geometry so its lowest point sits on the ground plane. **Defaults to `false`**: content
 	 * renders at its true Rhino coordinates, matching the Grasshopper definition. Setting `true`
 	 * shifts objects, so anything read back out of the scene (bounds, measured/picked positions) no
 	 * longer corresponds to Rhino coordinates.
 	 */
 	allowAutoPosition?: boolean;
-	/** Up axis for `allowAutoPosition` grounding. Defaults to `'z'` (Rhino's frame) — only set this
+	/** Up axis for `allowAutoPosition` grounding. Defaults to `'z'` (Rhino's frame). Only set this
 	 *  if the viewer is configured with a non-default `sceneUp`. */
 	groundAxis?: 'x' | 'y' | 'z';
 	debug?: boolean;
