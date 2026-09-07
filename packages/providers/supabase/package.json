@@ -82,7 +82,7 @@
 	},
 	"dependencies": {
 		"@selvajs/platform": "workspace:^",
-		"@supabase/supabase-js": "^2.112.4",
+		"@supabase/supabase-js": "^2.115.0",
 		"sharp": "catalog:"
 	},
 	"devDependencies": {

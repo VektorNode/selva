@@ -99,7 +99,7 @@
 		"tw-animate-css": "catalog:"
 	},
 	"devDependencies": {
-		"@internationalized/date": "^3.12.3",
+		"@internationalized/date": "^3.12.4",
 		"@selvajs/compute": "workspace:*",
 		"@selvajs/config": "workspace:*",
 		"@selvajs/schemas": "workspace:*",
