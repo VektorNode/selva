@@ -17,6 +17,7 @@ using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using Point = Rhino.Geometry.Point;
+using Selva.FileIO;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 

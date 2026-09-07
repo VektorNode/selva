@@ -7,6 +7,7 @@ using Grasshopper.Kernel.Special;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.FileIO;
+using Selva.FileIO;
 
 namespace Selva.GH.Features.UIBuilder.Helpers;
 

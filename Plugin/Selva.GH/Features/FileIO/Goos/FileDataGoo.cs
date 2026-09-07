@@ -3,6 +3,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Selva.GH.Features.ComputeIO;
 using Selva.GH.Features.FileIO.Services;
+using Selva.FileIO;
 
 namespace Selva.GH.Features.FileIO.Goos;
 

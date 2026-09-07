@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.FileIO;
 
 /// <summary>
 ///     Parses "key=value" text lines into a metadata dictionary attached to <see cref="FileData" />.

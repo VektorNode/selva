@@ -49,6 +49,9 @@
 		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
 		<ProjectReference Include="..\Selva.Slva\Selva.Slva.csproj"/>
 		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
+		<!-- Deliberately absent from the ILRepack merge below: consumers outside the plugin
+		     reference FileData, and Internalize would hide it from them. -->
+		<ProjectReference Include="..\Selva.FileIO\Selva.FileIO.csproj"/>
 		<ProjectReference Include="..\Selva.Rhino\Selva.Rhino.csproj"/>
 	</ItemGroup>
 

@@ -10,6 +10,7 @@ using Rhino.FileIO;
 using Rhino.Geometry;
 using Selva.Schema.Models;
 using Selva.GH.Config;
+using Selva.FileIO;
 
 namespace Selva.GH.Features.FileIO.Services;
 
