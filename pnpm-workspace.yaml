@@ -37,7 +37,7 @@ catalogs:
     # the matching ignore in .github/dependabot.yml.
     typescript: ~6.0.3
     vite: ^8.2.2
-    vitest: ^4.1.11
+    vitest: ^5.0.0
     ws: ^8.21.3
     '@types/ws': ^8.5.13
     zod: ^4.3.6
