@@ -48,7 +48,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@supabase/supabase-js": "^2.112.4",
+		"@supabase/supabase-js": "^2.115.0",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "catalog:",
 		"clsx": "catalog:",
@@ -62,7 +62,7 @@
 		"zod": "catalog:"
 	},
 	"optionalDependencies": {
-		"@sentry/node": "^10.71.0"
+		"@sentry/node": "^10.73.0"
 	},
 	"devDependencies": {
 		"@playwright/test": "catalog:",
