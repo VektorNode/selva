@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using Selva.Drawing.Model.Elements;
 using Selva.GH.Config;
+using Selva.FileIO;
 
 namespace Selva.GH.Features.FileIO.Services;
 

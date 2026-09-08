@@ -10,8 +10,9 @@ selva/
 │   ├── Selva.Schema/               # Schema models, validation, migration (no Rhino/GH deps)
 │   ├── Selva.Slva/                 # SLVA/SLVM mesh codec + batch model/pipeline (no Rhino/GH deps)
 │   ├── Selva.Drawing/              # Document-model drawing library + SVG/PDF renderers (no Rhino/GH deps)
+│   ├── Selva.FileIO/               # File in/out contract: FileData, FileInputData, path + URL rules (no Rhino/GH deps)
 │   ├── Selva.Rhino/                # Rhino interop layer for Selva.Drawing (Rhino/GH deps, no Goos)
-│   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Slva + Selva.Drawing)
+│   ├── Selva.GH/                   # Grasshopper plugin (depends on Selva.Schema + Selva.Slva + Selva.Drawing + Selva.FileIO)
 │   ├── Selva.PluginVerifier/       # Post-merge smoke test that loads the built .gha
 │   ├── Selva.Tests/                # xUnit tests for Selva.GH + Selva.Schema
 │   ├── Selva.Slva.Tests/           # xUnit tests for Selva.Slva (incl. cross-stack fixture contracts)
@@ -55,6 +56,7 @@ selva/
 | `Selva.Schema`         | `netstandard2.0`  | none          | Generated schema, validation, migration, shared constants        |
 | `Selva.Slva`           | `netstandard2.0`  | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
 | `Selva.Drawing`        | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                               |
+| `Selva.FileIO`         | `netstandard2.0`  | none          | File in/out contract + its rules; referenced by other repos      |
 | `Selva.Rhino`          | `net48/net7/net9` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
 | `Selva.GH`             | `net48/net7/net9` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
 | `Selva.PluginVerifier` | `net48/net7/net9` | yes           | Loads the merged `.gha` after a Release build; Windows-only      |

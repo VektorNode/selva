@@ -3,7 +3,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.FileIO;
 
 // ============================================================================
 // SSRF protection for user-supplied download URLs
