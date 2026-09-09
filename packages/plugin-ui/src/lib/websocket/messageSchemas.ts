@@ -99,6 +99,14 @@ const parametersAddedSchema = baseEnvelope.extend({
 	availableParams: z.unknown().nullish()
 });
 
+/** A runtime message raised during the solve. `level` stays open like `runtimeMessage`'s. */
+const solveDiagnosticSchema = z.object({
+	level: z.string(),
+	message: z.string(),
+	source: z.string().nullish(),
+	isGate: z.boolean().nullish()
+});
+
 const outputsSchema = baseEnvelope.extend({
 	type: z.literal('outputs'),
 	outputs: z.record(z.string(), z.unknown()).nullish(),
@@ -107,7 +115,12 @@ const outputsSchema = baseEnvelope.extend({
 	modelUnits: z.string().nullish(),
 	// Non-mesh display items (curves/points) ride the envelope as JSON; shape is validated by the
 	// compute parser, so here we only assert it's an array when present.
-	displayItems: z.array(z.unknown()).nullish()
+	displayItems: z.array(z.unknown()).nullish(),
+	// Runtime messages ride the outputs envelope rather than a channel of their own, so a solve's
+	// messages and the outputs they describe can never interleave wrongly.
+	diagnostics: z.array(solveDiagnosticSchema).nullish(),
+	/** A Message component refused this solve: the outputs are empty by intent, not by failure. */
+	blocked: z.boolean().nullish()
 });
 
 // outputUpdate is currently subscribed by usePreviewState but not broadcast by the

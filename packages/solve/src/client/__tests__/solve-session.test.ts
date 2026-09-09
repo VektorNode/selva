@@ -357,3 +357,62 @@ describe('createSolveSession.subscribe', () => {
 		expect(dispatched.a).toBe('y');
 	});
 });
+
+describe('createSolveSession — holding a result behind its messages', () => {
+	function heldSession() {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({
+			outputs: { out: 'clean' },
+			meshes: [{ id: 'clean' }]
+		});
+		session.report({
+			outputs: { out: 'flagged' },
+			warnings: ['check this'],
+			meshes: [{ id: 'flagged' }]
+		});
+		return session;
+	}
+
+	it('withholds the flagged result while surfacing its messages', () => {
+		const session = heldSession();
+		expect(session.awaitingAck).toBe(true);
+		expect(session.computeWarnings).toEqual(['check this']);
+		expect(session.values.out).toBe('clean');
+		expect(session.meshes).toEqual([{ id: 'clean' }]);
+	});
+
+	it('acknowledge() applies the held result without re-solving', () => {
+		const session = heldSession();
+		session.acknowledge();
+		expect(session.awaitingAck).toBe(false);
+		expect(session.values.out).toBe('flagged');
+		expect(session.meshes).toEqual([{ id: 'flagged' }]);
+	});
+
+	it('discard() drops it, leaving the last accepted result on screen', () => {
+		const session = heldSession();
+		session.discard();
+		expect(session.awaitingAck).toBe(false);
+		expect(session.values.out).toBe('clean');
+		expect(session.meshes).toEqual([{ id: 'clean' }]);
+		// The reason stays visible in the footer even though nothing was applied.
+		expect(session.computeWarnings).toEqual(['check this']);
+	});
+
+	it('both are no-ops when nothing is held', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({ outputs: { out: 'clean' } });
+		session.acknowledge();
+		session.discard();
+		expect(session.values.out).toBe('clean');
+		expect(session.awaitingAck).toBe(false);
+	});
+});

@@ -210,3 +210,46 @@ describe('createComputeFetchSolveFn — debug telemetry', () => {
 		logSpy.mockRestore();
 	});
 });
+
+describe('createComputeFetchSolveFn — blocked solves', () => {
+	it('flags blocked and strips the marker from the message shown', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({
+				values: [],
+				errors: ['1. Solution exception:[Selva:blocked] Wall too thin'],
+				warnings: []
+			})
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.blocked).toBe(true);
+		expect(result.errors).toEqual(['1. Solution exception: Wall too thin']);
+	});
+
+	it('leaves an ordinary solve error unblocked and untouched', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({
+				values: [],
+				errors: ['1. Solution exception: division by zero'],
+				warnings: []
+			})
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.blocked).toBe(false);
+		expect(result.errors).toEqual(['1. Solution exception: division by zero']);
+	});
+
+	it('a warning-level Message never blocks: the marker rides only on errors', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({ values: [], errors: [], warnings: ['1. Wall is thin'] })
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.blocked).toBe(false);
+		expect(result.warnings).toEqual(['1. Wall is thin']);
+	});
+});

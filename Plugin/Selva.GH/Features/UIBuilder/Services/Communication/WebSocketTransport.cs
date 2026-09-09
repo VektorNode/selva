@@ -207,7 +207,8 @@ public class WebSocketTransport : IDisposable
         Dictionary<string, object> outputs,
         Dictionary<string, object> fileOutputs,
         List<object> displayData,
-        bool includeDisplayData = true)
+        bool includeDisplayData = true,
+        SolveDiagnostics diagnostics = null)
     {
         var doc = RhinoDoc.ActiveDoc;
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
@@ -260,10 +261,16 @@ public class WebSocketTransport : IDisposable
                 "(Grasshopper → Solution → Upgrade obsolete components) and re-save.");
         }
 
+        // A blocked solve still ships its outputs. Withholding them here would mean a later
+        // "show me anyway" needed a whole new round trip; the client holds them behind the
+        // confirmation instead, and `blocked` tells it to.
+        //
         // `displayItems` is null when empty so mesh-only solves stay unchanged on the wire.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
             _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
-            displayItems.Count > 0 ? displayItems : null));
+            displayItems.Count > 0 ? displayItems : null,
+            diagnostics != null && diagnostics.HasAny ? diagnostics.Messages : null,
+            diagnostics?.Blocked ?? false));
 
         // WebSocket preserves order, so these binary frames always arrive after the JSON envelope.
         // Capture the server field once: Stop() can null it from another thread mid-loop.
@@ -371,6 +378,41 @@ public class WebSocketTransport : IDisposable
     {
         return BroadcastAsync(OutboundEnvelopes.RuntimeMessage(
             _sessionId, level, messageText, DateTime.UtcNow));
+    }
+
+    /// <summary>
+    ///     Reports a solve the definition refused, with no outputs.
+    /// </summary>
+    /// <remarks>
+    ///     Sent from inside <c>SolveInstance</c> by an aborting Message component, because the
+    ///     abort means <c>SolutionEnd</c> never runs and the normal collection never happens. It
+    ///     is deliberately the same <c>outputs</c> envelope: the client opens its dialog on
+    ///     `blocked`, which only this envelope carries.
+    /// </remarks>
+    public async Task BroadcastBlockedSolve(SolveDiagnostics diagnostics)
+    {
+        if (diagnostics == null)
+        {
+            return;
+        }
+
+        var doc = RhinoDoc.ActiveDoc;
+        var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
+
+        await BroadcastAsync(OutboundEnvelopes.Outputs(
+            _sessionId,
+            new Dictionary<string, object>(),
+            new Dictionary<string, object>(),
+            binaryBatchCount: 0,
+            modelUnits: modelUnits,
+            displayItems: null,
+            diagnostics: diagnostics.Messages,
+            blocked: true));
+
+        // solvingState=false normally rides SolutionEnd, which an aborted solution may never
+        // reach — leaving the UI spinning forever. BroadcastSolvingState deduplicates, so
+        // sending it here is harmless when the event does fire.
+        await BroadcastSolvingState(false);
     }
 
     public Task BroadcastSyncPreview(SyncDiff syncDiff)

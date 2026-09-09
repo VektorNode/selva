@@ -7,6 +7,7 @@
 		StateDisplay,
 		Button,
 		AppLayout,
+		SolveMessageDialog,
 		createSolvingIndicator,
 		useFooterItem,
 		getExternalInputs,
@@ -77,7 +78,14 @@
 	});
 </script>
 
-<AppShell {homeUrl} title={preview.state.schema?.name ?? null} mode="fixed" showFooter>
+<AppShell
+	{homeUrl}
+	title={preview.state.schema?.name ?? null}
+	mode="fixed"
+	showFooter
+	errors={preview.computeErrors}
+	warnings={preview.computeWarnings}
+>
 	{#snippet navItems()}
 		<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>Schema Builder</Button>
 		<Button variant="default" size="sm">Interactive Preview</Button>
@@ -139,6 +147,15 @@
 		</div>
 	{/if}
 </AppShell>
+
+<SolveMessageDialog
+	open={preview.awaitingAck}
+	errors={preview.computeErrors}
+	warnings={preview.computeWarnings}
+	blocked={preview.blocked}
+	onconfirm={() => preview.acknowledge()}
+	ondiscard={() => preview.discard()}
+/>
 
 <style>
 	@keyframes slideInRight {

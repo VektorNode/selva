@@ -6,4 +6,5 @@
 // each other.
 
 export type { SolveFn, SolveResult } from './solve-fn.js';
+export { SOLVE_BLOCKED_MARKER } from './solve-fn.js';
 export type { SolveInput } from './solve-input.js';

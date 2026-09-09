@@ -54,6 +54,13 @@ export interface ViewerMessages {
 
 	// App layout / compute shell
 	loadingSchema: string;
+	solveBlocked: string;
+	solveBlockedTitle: string;
+	solveMessagesTitle: string;
+	solveMessagesDescription: string;
+	solveMessagesConfirm: string;
+	solveMessagesAbort: string;
+	solveMessagesDismiss: string;
 	parametersTab: string;
 	moreTab: string;
 	expandPanel: string;
@@ -113,6 +120,13 @@ const en: ViewerMessages = {
 	noMetadata: 'No metadata',
 
 	loadingSchema: 'Loading schema...',
+	solveBlocked: 'The definition stopped this solve. No results were produced.',
+	solveBlockedTitle: 'Solve stopped',
+	solveMessagesTitle: 'Solve messages',
+	solveMessagesDescription: 'This solve reported the following.',
+	solveMessagesConfirm: 'Continue',
+	solveMessagesAbort: 'Abort',
+	solveMessagesDismiss: 'Dismiss',
 	parametersTab: 'Parameters',
 	moreTab: 'More',
 	expandPanel: 'Expand panel',
@@ -170,6 +184,14 @@ const de: ViewerMessages = {
 	noMetadata: 'Keine Metadaten',
 
 	loadingSchema: 'Schema wird geladen...',
+	solveBlocked: 'Die Definition hat diese Berechnung gestoppt. Es wurden keine Ergebnisse erzeugt.',
+	solveBlockedTitle: 'Berechnung gestoppt',
+	solveMessagesTitle: 'Meldungen zur Berechnung',
+	solveMessagesDescription:
+		'Diese Berechnung hat Folgendes gemeldet. Weiter, um das Ergebnis zu sehen.',
+	solveMessagesConfirm: 'Weiter',
+	solveMessagesAbort: 'Abbrechen',
+	solveMessagesDismiss: 'Schliessen',
 	parametersTab: 'Parameter',
 	moreTab: 'Mehr',
 	expandPanel: 'Bereich aufklappen',

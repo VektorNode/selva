@@ -17,6 +17,7 @@
 	import AppLayout from './AppLayout.svelte';
 	import { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
+	import SolveMessageDialog from './SolveMessageDialog.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 	import type { Locale } from '../../i18n/messages';
 	import { setLocaleContext, getLocaleContext } from '../../i18n/localeContext.svelte';
@@ -268,3 +269,21 @@
 		{/if}
 	</AppShell>
 </div>
+
+<SolveMessageDialog
+	open={session.awaitingAck}
+	errors={session.computeErrors}
+	warnings={session.computeWarnings}
+	blocked={session.blocked}
+	onconfirm={() => session.acknowledge()}
+	ondiscard={() => session.discard()}
+	labels={{
+		blockedTitle: t.solveBlockedTitle,
+		messagesTitle: t.solveMessagesTitle,
+		blockedDescription: t.solveBlocked,
+		messagesDescription: t.solveMessagesDescription,
+		confirm: t.solveMessagesConfirm,
+		abort: t.solveMessagesAbort,
+		dismiss: t.solveMessagesDismiss
+	}}
+/>

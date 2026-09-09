@@ -177,9 +177,25 @@ export function createWebSocketSolveDriver(
 		// our token was superseded mid-parse, skip the report so we don't apply stale display.
 		if (myToken !== outputsToken) return;
 
+		// Split the solve's diagnostics into the two arrays SolveResult already carries, so
+		// Grasshopper messages land in the same footer badge and dialog the Compute path uses.
+		// Remarks ride along as warnings: the session has no third bucket, and dropping them
+		// would make a remark the one level that vanishes in local mode.
+		const diagnostics = message.diagnostics ?? [];
+		const errors: string[] = [];
+		const warnings: string[] = [];
+		for (const d of diagnostics) {
+			const text = d.source ? `${d.source}: ${d.message}` : d.message;
+			if (d.level === 'error') errors.push(text);
+			else warnings.push(text);
+		}
+
 		getReporter().report({
 			outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
-			...(sceneObjects !== undefined ? { meshes: sceneObjects } : {})
+			...(sceneObjects !== undefined ? { meshes: sceneObjects } : {}),
+			errors,
+			warnings,
+			blocked: message.blocked ?? false
 		});
 	}
 

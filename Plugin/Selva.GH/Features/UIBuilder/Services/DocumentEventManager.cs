@@ -379,14 +379,25 @@ public class DocumentEventManager : IDisposable
             ? _valueCollector.CollectDisplayData(_currentDocument)
             : new List<object>();
 
-        if (outputValues.Count == 0 && fileOutputs.Count == 0 && displayData.Count == 0)
+        var diagnostics = SolveDiagnosticsCollector.Collect(_currentDocument);
+        var hasPayload = outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0;
+
+        // Diagnostics keep the broadcast alive when there's nothing else to send: a blocked solve
+        // has no outputs by definition, and a solve whose only news is a warning still needs to
+        // reach the UI.
+        if (!hasPayload && !diagnostics.HasAny)
         {
             return false;
         }
 
         var _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
-            includeDisplayData);
-        return true;
+            includeDisplayData, diagnostics);
+
+        // Reports whether OUTPUTS went out, not whether anything did: ScheduleOutputBroadcast
+        // regenerates display data on a false, and a diagnostics-only broadcast must not pass for
+        // a payload — that would leave a freshly-connected browser with no geometry. A blocked
+        // solve is the exception: its emptiness is intended, so re-solving would just block again.
+        return hasPayload || diagnostics.Blocked;
     }
 }
 

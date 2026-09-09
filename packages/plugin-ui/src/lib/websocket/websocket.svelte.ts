@@ -45,6 +45,23 @@ export interface WsOutputsMessage extends WsSessionMessage {
 	 * mesh-only solves.
 	 */
 	displayItems?: import('@selvajs/visualization/parse').DisplayItem[];
+	/** Runtime messages raised during the solve. Absent on a clean solve. */
+	diagnostics?: WsSolveDiagnostic[];
+	/**
+	 * A Message component raised an error and refused the result: `outputs` is empty by intent.
+	 * Without this the UI cannot tell a blocked solve from one that produced nothing.
+	 */
+	blocked?: boolean;
+}
+
+/** One runtime message from the solve. `level` is open, matching `runtimeMessage`'s. */
+export interface WsSolveDiagnostic {
+	level: string;
+	message: string;
+	/** Nickname of the component that raised it. */
+	source?: string;
+	/** Raised by a Selva Message component — the only kind that blocks a solve. */
+	isGate?: boolean;
 }
 
 export interface WsSchemaUpdatedMessage extends WsSessionMessage {

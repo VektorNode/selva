@@ -7,5 +7,7 @@
 	"fileOutputs": {},
 	"binaryBatchCount": 2,
 	"modelUnits": "Meters",
-	"displayItems": null
+	"displayItems": null,
+	"diagnostics": null,
+	"blocked": false
 }

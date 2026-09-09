@@ -6,6 +6,7 @@ export * from './components/layout';
 
 export { default as AppLayout } from './components/compute/AppLayout.svelte';
 export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
+export { default as SolveMessageDialog } from './components/compute/SolveMessageDialog.svelte';
 
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 

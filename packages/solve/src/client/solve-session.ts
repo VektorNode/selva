@@ -16,6 +16,7 @@ import {
 	makeInitialFlags,
 	applyValueChange,
 	applySolveResult,
+	commitSolveResult,
 	pickInputValues,
 	type SolveSessionState,
 	type RetainedSolveResult
@@ -26,6 +27,27 @@ export interface SolveSession {
 	readonly error: string;
 	readonly computeErrors: string[];
 	readonly computeWarnings: string[];
+	/**
+	 * The definition refused the last solve. Read alongside `computeErrors`, which holds the
+	 * reason — a host should show those instead of presenting the empty outputs as a result.
+	 */
+	readonly blocked: boolean;
+	/**
+	 * The last solve raised messages awaiting the user's confirmation, and its result is held
+	 * back until then. A host shows the messages and calls `acknowledge()` to release them.
+	 */
+	readonly awaitingAck: boolean;
+	/**
+	 * Releases a held result into the session. No-op when nothing is held. The solve already
+	 * ran — this applies what it produced, it does not re-solve.
+	 */
+	acknowledge(): void;
+	/**
+	 * Drops a held result instead of applying it. The viewer keeps what it was showing. No-op
+	 * when nothing is held, and never re-solves — like `acknowledge()`, it only decides the
+	 * fate of a result that already exists.
+	 */
+	discard(): void;
 	readonly meshes: unknown[];
 	/**
 	 * The last reported result without its meshes — what the viewer is currently showing,
@@ -66,6 +88,9 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		error: '',
 		computeErrors: [],
 		computeWarnings: [],
+		blocked: false,
+		awaitingAck: false,
+		heldResult: null,
 		meshes: [],
 		pendingValues: {},
 		hasPendingChanges: flags.hasPendingChanges,
@@ -95,6 +120,31 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 		get computeWarnings() {
 			return state.computeWarnings;
+		},
+		get blocked() {
+			return state.blocked;
+		},
+		get awaitingAck() {
+			return state.awaitingAck;
+		},
+
+		acknowledge() {
+			if (!state.awaitingAck) return;
+			const held = state.heldResult;
+			state.awaitingAck = false;
+			state.heldResult = null;
+			if (held) commitSolveResult(state, held);
+			emit();
+		},
+
+		discard() {
+			if (!state.awaitingAck) return;
+			state.awaitingAck = false;
+			state.heldResult = null;
+			// `values`, `meshes` and `lastResult` are untouched: the viewer keeps showing the last
+			// result the user accepted. The messages stay on `computeErrors`/`computeWarnings` so
+			// the footer still explains why nothing changed.
+			emit();
 		},
 		get meshes() {
 			return state.meshes;
@@ -150,6 +200,10 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			state.error = '';
 			state.computeErrors = [];
 			state.computeWarnings = [];
+			state.blocked = false;
+			state.awaitingAck = false;
+			// Belongs to the previous definition, same as lastResult.
+			state.heldResult = null;
 			state.pendingValues = {};
 			state.values = buildInitialValues(schema, scopeKey, readExternalValue);
 			const f = makeInitialFlags(schema?.instanceSolve);

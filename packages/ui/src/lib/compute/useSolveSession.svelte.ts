@@ -46,6 +46,12 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		get computeWarnings() {
 			return track(() => session.computeWarnings);
 		},
+		get blocked() {
+			return track(() => session.blocked);
+		},
+		get awaitingAck() {
+			return track(() => session.awaitingAck);
+		},
 		get meshes() {
 			return track(() => session.meshes);
 		},
@@ -61,6 +67,8 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		get isSolving() {
 			return track(() => session.isSolving);
 		},
+		acknowledge: () => session.acknowledge(),
+		discard: () => session.discard(),
 		setValue: (id, value, forceSolve) => session.setValue(id, value, forceSolve),
 		solve: () => session.solve(),
 		loadValues: (incoming) => session.loadValues(incoming),

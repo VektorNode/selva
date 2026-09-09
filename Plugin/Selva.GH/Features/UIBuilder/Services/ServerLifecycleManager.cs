@@ -104,6 +104,14 @@ public class ServerLifecycleManager : IDisposable
                 return false;
             }
 
+            // Lets a Message component report its own blocked result before it aborts the
+            // solution — an abort skips SolutionEnd, so nothing else would send it.
+            // Discarded deliberately: this runs on the solver's thread and must never wait on the
+            // socket. Ordering still holds — the send is queued before the abort tears the
+            // solution down, and WebSocket preserves frame order.
+            SolveMessageBroadcaster.SetSender(diagnostics =>
+                _ = _webSocketTransport.BroadcastBlockedSolve(diagnostics));
+
             Logger.Log(
                 $"[ServerLifecycleManager] WebSocket server started on port {_webSocketTransport.WebSocketPort}");
             return true;
@@ -172,6 +180,10 @@ public class ServerLifecycleManager : IDisposable
     /// <summary>Stops both servers. Callers must hold <see cref="_transitionGate" />, except Dispose and the in-flight-start rollback above.</summary>
     private void StopCore()
     {
+        // Before the socket closes: a message raised after this point has nowhere to go, and the
+        // definition must keep solving in plain Grasshopper.
+        SolveMessageBroadcaster.SetSender(null);
+
         try
         {
             if (_webSocketTransport.IsRunning)

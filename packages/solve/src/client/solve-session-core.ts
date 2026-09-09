@@ -28,6 +28,24 @@ export interface SolveSessionState {
 	error: string;
 	computeErrors: string[];
 	computeWarnings: string[];
+	/**
+	 * The last solve was refused by a guard in the definition. Separate from `computeErrors`
+	 * being non-empty: a solve can report errors and still return usable outputs, and the UI
+	 * needs to tell "solved, with complaints" from "would not solve".
+	 */
+	blocked: boolean;
+	/**
+	 * The last solve raised messages the user has not acknowledged yet. While true the result
+	 * is withheld: `meshes` and the solve's outputs stay at their previous values until
+	 * `acknowledge()` releases them.
+	 */
+	awaitingAck: boolean;
+	/**
+	 * The withheld result, kept whole so `acknowledge()` can apply it without a re-solve.
+	 * Null whenever `awaitingAck` is false. A newer solve replaces it: the user is always
+	 * confirming the most recent result, never a stale one.
+	 */
+	heldResult: SolveResult | null;
 	meshes: unknown[];
 	/** Values changed since the last solve, in manual (instanceSolve === false) mode. */
 	pendingValues: Record<string, unknown>;
@@ -118,6 +136,31 @@ export function applySolveResult(state: SolveSessionState, result: SolveResult):
 	state.error = '';
 	state.computeErrors = result.errors ?? [];
 	state.computeWarnings = result.warnings ?? [];
+	state.blocked = result.blocked ?? false;
+
+	// The solve is finished either way — Grasshopper cannot be paused mid-solution — so what is
+	// held back here is the *result*, not the computation. Everything the solve produced is kept
+	// intact in `heldResult` and released verbatim by `acknowledge()`.
+	if (needsAcknowledgement(state.computeErrors, state.computeWarnings)) {
+		state.awaitingAck = true;
+		state.heldResult = result;
+		// The input set stays dirty-free regardless: the values were sent and solved, and
+		// leaving them pending would re-solve them on the next tick.
+		state.pendingValues = {};
+		state.hasPendingChanges = false;
+		return state;
+	}
+
+	state.awaitingAck = false;
+	state.heldResult = null;
+	return commitSolveResult(state, result);
+}
+
+/** Writes a result into the state. Shared by the clean path and by `acknowledge()`. */
+export function commitSolveResult(
+	state: SolveSessionState,
+	result: SolveResult
+): SolveSessionState {
 	state.meshes = result.meshes ?? [];
 	const { meshes: _meshes, ...retained } = result;
 	state.lastResult = retained;
@@ -126,4 +169,15 @@ export function applySolveResult(state: SolveSessionState, result: SolveResult):
 	state.hasPendingChanges = false;
 	state.hasNeverSolved = false;
 	return state;
+}
+
+/**
+ * Whether this solve's messages still need the user's acknowledgement.
+ *
+ * Every solve that raises a message asks again, by design — an acknowledgement covers the solve
+ * in front of the user, never a future one. Under `instanceSolve` with a live warning that means
+ * a dialog per solve, which is the intended checkpoint, not an oversight.
+ */
+export function needsAcknowledgement(errors: string[], warnings: string[]): boolean {
+	return errors.length > 0 || warnings.length > 0;
 }

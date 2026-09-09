@@ -17,6 +17,7 @@ import {
 	type GrasshopperComputeResponse
 } from '@selvajs/compute/grasshopper';
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
+import { SOLVE_BLOCKED_MARKER } from '../shared/solve-fn.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
@@ -213,11 +214,26 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			}
 		}
 
+		const rawErrors = solved.errors ?? [];
+		// Compute flattens every runtime message to a string, so a guard's error is only
+		// recognizable by the marker the Message component writes into its text. Substring, not
+		// prefix: the server numbers each entry ("1. Solution exception: ..."). Strip it before
+		// display — it is wire plumbing, not something the author wrote.
+		const blocked = rawErrors.some((e) => e.includes(SOLVE_BLOCKED_MARKER));
+
 		return {
 			outputs: resultOutputs,
 			meshes,
-			errors: solved.errors ?? [],
+			errors: blocked
+				? rawErrors.map((e) =>
+						e
+							.replace(SOLVE_BLOCKED_MARKER, '')
+							.replace(/\s{2,}/g, ' ')
+							.trim()
+					)
+				: rawErrors,
 			warnings: solved.warnings ?? [],
+			blocked,
 			source: solved
 		};
 	};

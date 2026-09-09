@@ -26,6 +26,9 @@ import {
 
 const EMPTY_VALUES: Record<string, unknown> = {};
 const EMPTY_MESHES: unknown[] = [];
+// Shared instance: a fresh [] each read would be a new identity every time, retriggering
+// every $derived that reads it.
+const EMPTY_MESSAGES: string[] = [];
 
 /**
  * @param source Defaults to the Grasshopper WebSocket source bound to the URL's wsPort.
@@ -192,6 +195,34 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		get hasPendingChanges() {
 			void sessionVersion;
 			return session?.hasPendingChanges ?? false;
+		},
+		/** Error-level runtime messages from the last solve. */
+		get computeErrors() {
+			void sessionVersion;
+			return session?.computeErrors ?? EMPTY_MESSAGES;
+		},
+		/** Warning- and remark-level runtime messages from the last solve. */
+		get computeWarnings() {
+			void sessionVersion;
+			return session?.computeWarnings ?? EMPTY_MESSAGES;
+		},
+		/** A Message component refused the last solve: its outputs were withheld on purpose. */
+		get blocked() {
+			void sessionVersion;
+			return session?.blocked ?? false;
+		},
+		/** The last solve's messages are waiting on the user; its result is held until then. */
+		get awaitingAck() {
+			void sessionVersion;
+			return session?.awaitingAck ?? false;
+		},
+		/** Releases the held result. No-op when nothing is held. */
+		acknowledge() {
+			session?.acknowledge();
+		},
+		/** Drops the held result, keeping what the viewer shows. No-op when nothing is held. */
+		discard() {
+			session?.discard();
 		},
 		get connected() {
 			return schemaSource.connected;
