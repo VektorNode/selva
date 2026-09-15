@@ -106,13 +106,24 @@ export function buildVisibilityMap(
 }
 
 export function evaluateGroupVisibility(
-	group: { visibilityCondition?: GroupVisibilityCondition },
+	group: { visibilityCondition?: GroupVisibilityCondition; items?: LayoutItem[] },
 	values: Record<string, unknown>
 ): boolean {
+	if (group.items && !hasVisibleItems(group.items, values)) return false;
 	if (!group.visibilityCondition?.rules) return true;
 
 	const { action = 'show' } = group.visibilityCondition;
 	const met = evaluateCondition(group.visibilityCondition, values);
 
 	return action === 'hide' ? !met : met;
+}
+
+/**
+ * A linebreak is always "visible" but renders as a divider only, so a group left with
+ * nothing but separators counts as empty.
+ */
+export function hasVisibleItems(items: LayoutItem[], values: Record<string, unknown>): boolean {
+	return items.some(
+		(item) => item.type !== 'linebreak' && evaluateVisibility(item, values).visible
+	);
 }
