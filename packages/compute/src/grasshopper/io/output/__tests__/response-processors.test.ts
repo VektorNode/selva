@@ -292,6 +292,57 @@ describe('extractFileData', () => {
 		const res = response(param('n', [item('System.Int32', '1')]));
 		expect(extractFileData(res)).toEqual([]);
 	});
+
+	/**
+	 * Regression: mcneel-branch servers serialize these PascalCase, and the
+	 * `Selva.FileIO.FileData` payload carries `Id`/`Metadata` alongside. The
+	 * strict camelCase guard dropped every file here — before the tolerant
+	 * decoder in handle-files.ts saw it — so `getAndDownloadFiles` produced a
+	 * silently empty archive (issue 95).
+	 */
+	it('extracts PascalCase FileData and normalizes it to camelCase', () => {
+		const pascal = {
+			Id: 'abc',
+			FileName: 'out',
+			FileType: '.txt',
+			Data: 'aGk=',
+			IsBase64Encoded: true,
+			SubFolder: 'results',
+			Metadata: { author: 'gh' }
+		};
+		const res = response(param('Files', [item('Selva.FileIO.FileData', JSON.stringify(pascal))]));
+
+		expect(extractFileData(res)).toEqual([
+			{
+				fileName: 'out',
+				fileType: '.txt',
+				data: 'aGk=',
+				isBase64Encoded: true,
+				subFolder: 'results',
+				metadata: { author: 'gh' }
+			}
+		]);
+	});
+
+	it('accepts a string-serialized isBase64Encoded flag', () => {
+		const stringFlag = {
+			FileName: 'out',
+			FileType: '.txt',
+			Data: 'aGk=',
+			IsBase64Encoded: 'True',
+			SubFolder: ''
+		};
+		const res = response(
+			param('Files', [item('Selva.FileIO.FileData', JSON.stringify(stringFlag))])
+		);
+
+		expect(extractFileData(res)[0]?.isBase64Encoded).toBe(true);
+	});
+
+	it('omits metadata when the payload carries none', () => {
+		const res = response(param('Files', [item('FileData', JSON.stringify(validFile))]));
+		expect(extractFileData(res)[0]).not.toHaveProperty('metadata');
+	});
 });
 
 // --- WASM disposal (issue 48) --------------------------------------------------
