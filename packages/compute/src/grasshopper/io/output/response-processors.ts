@@ -126,6 +126,10 @@ function extractItemValue(item: DataItem, type: string, parseValues: boolean, rh
 	if (typeof item.data !== 'string') return item.data;
 
 	const raw = parseValues ? decodeItemJSON(item) : item.data;
+	if (parseValues && type.includes(FILE_DATA_TYPE)) {
+		return asFileData(raw) ?? raw;
+	}
+
 	return decodeBySystemType(raw, type, rhino);
 }
 
