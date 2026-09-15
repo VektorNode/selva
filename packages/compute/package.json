@@ -115,8 +115,8 @@
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.23.0",
-		"globals": "^17.11.0",
-		"lint-staged": "^17.4.1",
+		"globals": "^17.12.0",
+		"lint-staged": "^17.5.1",
 		"prettier": "catalog:",
 		"prettier-plugin-svelte": "^4.1.1",
 		"prettier-plugin-tailwindcss": "^0.8.1",
@@ -126,7 +126,7 @@
 		"typedoc-plugin-extras": "^4.0.1",
 		"typedoc-plugin-missing-exports": "^4.1.2",
 		"typescript": "catalog:",
-		"typescript-eslint": "^8.68.0",
+		"typescript-eslint": "^8.70.0",
 		"vite": "catalog:",
 		"vitest": "catalog:"
 	}
