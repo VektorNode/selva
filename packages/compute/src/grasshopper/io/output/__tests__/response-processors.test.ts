@@ -343,6 +343,34 @@ describe('extractFileData', () => {
 		const res = response(param('Files', [item('FileData', JSON.stringify(validFile))]));
 		expect(extractFileData(res)[0]).not.toHaveProperty('metadata');
 	});
+
+	/**
+	 * Regression: the issue-95 normalization reached only `extractFileData` (the
+	 * download path). `getValue` — how output *widgets* read their value — left
+	 * the record verbatim, so a PascalCase file failed the camelCase `isFileData`
+	 * guard in @selvajs/ui and rendered an empty placeholder ("Waiting for
+	 * image...") though the bytes had arrived. Both paths must agree.
+	 */
+	it('normalizes PascalCase FileData read through getValue', () => {
+		const pascal = {
+			Id: 'abc',
+			FileName: 'PREVIEW',
+			FileType: '.svg',
+			Data: '<svg />',
+			IsBase64Encoded: false,
+			SubFolder: ''
+		};
+		const res = response(
+			param('Preview_Image', [item('Selva.FileIO.FileData', JSON.stringify(pascal))])
+		);
+
+		expect(getValue(res, { byName: 'Preview_Image' })).toMatchObject({
+			fileName: 'PREVIEW',
+			fileType: '.svg',
+			data: '<svg />',
+			isBase64Encoded: false
+		});
+	});
 });
 
 // --- WASM disposal (issue 48) --------------------------------------------------
