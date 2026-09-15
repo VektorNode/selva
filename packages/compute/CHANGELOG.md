@@ -1,5 +1,19 @@
 # @selvajs/compute
 
+## 4.1.3
+
+### Patch Changes
+
+- cf41e54: chore(deps): bump the npm group across 1 directory with 26 updates
+- ae5bcb6: Normalize `FileData` item values to camelCase when parsing solve responses
+
+  `FileData` items carry no System/Rhino type, so `decodeBySystemType` passed the
+  parsed record through verbatim, leaving the PascalCase wire shape. Consumers
+  reading `fileName`/`data`/`isBase64Encoded` directly (the `isFileData` guards in
+  `@selvajs/ui`) saw nothing and rendered an empty widget although the bytes had
+  arrived intact. `extractItemValue` now runs the same `asFileData` normalization
+  `extractFileData` already applies on the download path, so both paths agree.
+
 ## 4.1.2
 
 ### Patch Changes

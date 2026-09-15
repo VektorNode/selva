@@ -1,5 +1,14 @@
 # @selvajs/solve
 
+## 1.1.1
+
+### Patch Changes
+
+- cf41e54: chore(deps): bump the npm group across 1 directory with 26 updates
+- Updated dependencies [cf41e54]
+- Updated dependencies [ae5bcb6]
+  - @selvajs/compute@4.1.3
+
 ## 1.1.0
 
 ### Minor Changes
