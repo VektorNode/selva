@@ -1,7 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<!--
+			net7.0 exists so the .NET Core legs of Selva.gha get a build whose
+			ColorTranslator reference points at System.Drawing.Primitives, where the type
+			lives from .NET 7 on. The netstandard2.0 build binds it through
+			System.Drawing.Common instead, and Rhino 8 on macOS ships its own
+			re-implementation of that assembly (RhCore.framework/.../Resources/, identity
+			7.0.0.0) without the ColorTranslator type-forward Microsoft's build carries.
+			Every solve that touches a material colour then fails with "Could not load
+			type 'System.Drawing.ColorTranslator'". Windows never shows it: there Rhino
+			runs Microsoft's System.Drawing.Common, forward included.
+
+			net48 keeps using the netstandard2.0 build; .NET Framework's System.Drawing
+			has always owned ColorTranslator, so that leg was never affected.
+		-->
+		<TargetFrameworks>netstandard2.0;net7.0</TargetFrameworks>
 		<RootNamespace>Selva.Slva</RootNamespace>
 	</PropertyGroup>
 
@@ -16,7 +30,11 @@
 		-->
 		<PackageReference Include="Newtonsoft.Json" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
 		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
-		<PackageReference Include="System.Drawing.Common"/>
+		<!-- netstandard2.0 only: it needs the package for ColorTranslator. On net7.0 both
+		     Color and ColorTranslator are inbox in System.Drawing.Primitives, and leaving
+		     the package referenced would put a second definition of every System.Drawing
+		     type on the compile path. -->
+		<PackageReference Include="System.Drawing.Common" Condition="'$(TargetFramework)' == 'netstandard2.0'"/>
 		<!-- Span/AsSpan and ArrayPool on netstandard2.0 (System.Memory pulls System.Buffers).
 		     Inbox on net7/net9; real sibling DLLs on net48, so they must flow to consumers
 		     in both configurations. -->
