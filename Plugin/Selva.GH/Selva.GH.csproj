@@ -42,7 +42,15 @@
 		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
 		<!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
 		<PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
-		<PackageReference Include="System.Drawing.Common" Condition="'$(TargetFramework)' != 'net48'"/>
+		<!--
+			ExcludeAssets="runtime": compile against it, never ship it beside the .gha.
+			On net7.0+ this package is a facade whose types forward to the framework's
+			System.Drawing.Primitives. A sibling copy wins the bind for identity
+			System.Drawing.Common/7.0.0.0, and if Rhino's load context can't satisfy the
+			forward, every ColorTranslator call dies with "Could not load type
+			'System.Drawing.ColorTranslator'" — at solve time, in the yak build only.
+		-->
+		<PackageReference Include="System.Drawing.Common" Condition="'$(TargetFramework)' != 'net48'" ExcludeAssets="runtime"/>
 		<PackageReference Include="System.Net.Http" Condition="'$(TargetFramework)' == 'net48'"/>
 		<PackageReference Include="System.Resources.Extensions"/>
 		<PackageReference Include="System.Windows.Forms"/>
