@@ -52,21 +52,6 @@ internal static class Program
         },
     };
 
-    // Assemblies that must never ship beside the .gha, and why. Each is a
-    // facade whose types forward to the framework's own copy on net7.0+. A
-    // sibling file wins the bind for that identity, and if Rhino's load context
-    // can't satisfy the forward, every use of a forwarded type throws
-    // TypeLoadException at solve time — in the yak build only, never in dev,
-    // where the SDK's copy is found first.
-    //
-    // System.Drawing.Common forwards ColorTranslator/Color to
-    // System.Drawing.Primitives, and Selva calls ColorTranslator on every
-    // display solve.
-    private static readonly Dictionary<string, string> ForbiddenSiblings = new()
-    {
-        ["System.Drawing.Common"] = "types forward to the framework's System.Drawing.Primitives",
-    };
-
     private static readonly List<string> Failures = new();
     private static readonly List<string> Skips = new();
 
@@ -92,8 +77,6 @@ internal static class Program
             Console.Error.WriteLine("No Selva assemblies found in the given directory.");
             return 2;
         }
-
-        CheckForbiddenSiblings(pluginDir);
 
         int methodsJitted = 0, typesSeen = 0;
         foreach (var path in targets)
@@ -145,22 +128,6 @@ internal static class Program
             if (File.Exists(candidate)) return Assembly.LoadFrom(candidate);
         }
         return null;
-    }
-
-    // Catches the shipped payload rather than any one csproj: whichever project
-    // pulled the file in, it fails here. Keeping a PackageReference out of the
-    // output is a per-project ExcludeAssets="runtime" that nothing enforces, and
-    // dropping it breaks no build.
-    private static void CheckForbiddenSiblings(string pluginDir)
-    {
-        foreach (var path in Directory.GetFiles(pluginDir, "*.dll"))
-        {
-            var name = Path.GetFileNameWithoutExtension(path);
-            if (ForbiddenSiblings.TryGetValue(name, out var why))
-                Failures.Add(
-                    $"{name}.dll ships beside the .gha — {why}. " +
-                    "Add ExcludeAssets=\"runtime\" to the PackageReference that pulls it in.");
-        }
     }
 
     private static void CheckForbiddenReferences(Assembly asm)

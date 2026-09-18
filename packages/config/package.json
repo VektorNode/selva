@@ -10,11 +10,11 @@
 		"./prettier": "./prettier.config.js"
 	},
 	"peerDependencies": {
-		"eslint": "^9.0.0 || ^10.0.0",
-		"vite": "^6.0.0 || ^7.0.0 || ^8.0.0",
-		"vitest": "^4.1.11",
-		"svelte": "^5.0.0",
-		"prettier": "^3.0.0"
+		"eslint": "catalog:",
+		"vite": "catalog:",
+		"vitest": "catalog:",
+		"svelte": "catalog:",
+		"prettier": "catalog:"
 	},
 	"peerDependenciesMeta": {
 		"vitest": {
