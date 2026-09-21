@@ -62,7 +62,7 @@
 		"zod": "catalog:"
 	},
 	"optionalDependencies": {
-		"@sentry/node": "^10.74.0"
+		"@sentry/node": "^10.75.0"
 	},
 	"devDependencies": {
 		"@playwright/test": "catalog:",
