@@ -1,5 +1,13 @@
 # @selvajs/server
 
+## 1.3.4
+
+### Patch Changes
+
+- 08f32a3: chore(deps): bump the npm-major group across 1 directory with 2 updates
+- Updated dependencies [b6f5796]
+  - @selvajs/compute@4.1.4
+
 ## 1.3.3
 
 ### Patch Changes

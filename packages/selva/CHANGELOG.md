@@ -1,5 +1,12 @@
 # @selvajs/selva
 
+## 4.17.2
+
+### Patch Changes
+
+- b6f5796: chore(deps): bump the npm group with 11 updates
+- 08f32a3: chore(deps): bump the npm-major group across 1 directory with 2 updates
+
 ## 4.17.1
 
 ### Patch Changes
