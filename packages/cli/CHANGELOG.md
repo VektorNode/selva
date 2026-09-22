@@ -1,5 +1,11 @@
 # @selvajs/cli
 
+## 4.17.2
+
+### Patch Changes
+
+- b6f5796: chore(deps): bump the npm group with 11 updates
+
 ## 4.17.1
 
 ### Patch Changes
