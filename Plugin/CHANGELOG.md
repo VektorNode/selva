@@ -57,6 +57,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Blobs written by older plugin versions keep decoding unchanged: saved `.gh` files, `.slvm` mesh files and cached compute results. Frozen pre-v4 golden fixtures pin that on both the C# and TypeScript sides.
 - Quantization is untouched, so visual output is identical — this is a pure byte-layout change.
 
+### Fixed
+
+**A blocked solve no longer freezes the UI's inputs**
+
+- After a **Message** component raised an error, the definition stopped responding to anything changed in the web UI: sliders moved, nothing re-solved, and no error was shown. The block aborts the solution, an aborted solution never reaches `SolutionEnd`, and the bridge was waiting on that event both to clear its "busy" state and to apply the values that queued up while busy — so the first block wedged it until the component was toggled off and on. The block now clears that state as it reports, and the queued values are kept and applied by the next solve.
+
+**Definitions containing clusters report one solve, not one per cluster**
+
+- Grasshopper raises a solution start/end pair for every nesting level, and a cluster solves its contents as its own nested solution. Each inner pair was flipping the solving indicator and triggering a full output collection against the cluster's document rather than the one the schema describes — so one change to a definition with clusters produced a flickering spinner and repeated output broadcasts. Nested solutions are now ignored.
+
+**Applying sync changes no longer re-enters a running solution**
+
+- Accepting changes from the web UI while a solve was in flight called `NewSolution` directly from the WebSocket handler, re-entering the solver. It now schedules the refresh the same way the rest of the plugin does, so it lands after the current solution instead of inside it.
+
 ### Obsolete components
 
 - **Display From File** (`8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81` → `B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241`): the `Id` input is gone now that SLVM v3 carries object identity in the container's own table, so loading no longer needs to restamp it. Old definitions upgrade automatically; the `Id` wire is dropped.

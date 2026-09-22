@@ -29,6 +29,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public static class SolveMessageBroadcaster
 {
     private static Action<SolveDiagnostics> _send;
+    private static Action _onAborted;
 
     /// <summary>
     ///     Points the broadcaster at a live transport. The bridge sets this when its servers start
@@ -38,11 +39,34 @@ public static class SolveMessageBroadcaster
     public static void SetSender(Action<SolveDiagnostics> send) => _send = send;
 
     /// <summary>
+    ///     Points the broadcaster at the bridge's solve-state reset. Set and cleared alongside
+    ///     <see cref="SetSender" />.
+    /// </summary>
+    /// <remarks>
+    ///     The abort that follows a blocked solve skips SolutionEnd, so the bridge's
+    ///     <c>SetSolving(false)</c> never runs and its busy flag stays set. Every later value update
+    ///     then coalesces into a pending buffer that only SolutionEnd drains, so the definition stops
+    ///     responding to input until the component is re-enabled. Reporting the block is the one
+    ///     moment we know an abort is coming, so the reset rides with it.
+    /// </remarks>
+    public static void SetAbortedSolveReset(Action reset) => _onAborted = reset;
+
+    /// <summary>
     ///     Reports a blocked solve: the message, and no outputs. Fire-and-forget — never throws
     ///     into a solve, never waits on the browser.
     /// </summary>
     public static void SendBlocked(string message, string source)
     {
+        // Before the sender check: the busy flag wedges whether or not a browser is listening.
+        try
+        {
+            _onAborted?.Invoke();
+        }
+        catch (Exception)
+        {
+            // Same contract as the send below — never throw into a solve.
+        }
+
         var send = _send;
         if (send == null)
         {

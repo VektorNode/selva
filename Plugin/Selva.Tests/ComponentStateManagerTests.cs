@@ -197,4 +197,59 @@ public class ComponentStateManagerTests
         Assert.False(sm.IsSolving);
         Assert.False(sm.HasPendingValues);
     }
+
+    // -------------------------------------------------------------------------
+    // ClearIfIdle (aborted-solve recovery)
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void ClearIfIdle_ClearsBusy_WhenSolveAbortedWithoutSolutionEnd()
+    {
+        var sm = NewManager();
+        sm.MarkSolveScheduled();
+        sm.SetSolving(true);
+
+        Assert.True(sm.ClearIfIdle(true));
+        Assert.False(sm.IsBusy);
+    }
+
+    [Fact]
+    public void ClearIfIdle_KeepsPendingValues_ForTheNextSolve()
+    {
+        var sm = NewManager();
+        sm.SetSolving(true);
+        sm.MergePendingValues(Values(("a", 1)));
+
+        sm.ClearIfIdle(true);
+
+        Assert.True(sm.HasPendingValues);
+    }
+
+    [Fact]
+    public void ClearIfIdle_DoesNothing_WhenDocumentStillBusy()
+    {
+        var sm = NewManager();
+        sm.SetSolving(true);
+
+        Assert.False(sm.ClearIfIdle(false));
+        Assert.True(sm.IsBusy);
+    }
+
+    [Fact]
+    public void ClearIfIdle_DoesNothing_WhenAlreadyIdle()
+    {
+        Assert.False(NewManager().ClearIfIdle(true));
+    }
+
+    [Fact]
+    public void ClearIfIdle_LetsTheNextSolveReportItActuallySolved()
+    {
+        var sm = NewManager();
+        sm.SetSolving(true);
+        sm.ClearIfIdle(true);
+
+        sm.SetSolving(true);
+
+        Assert.True(sm.SetSolving(false));
+    }
 }

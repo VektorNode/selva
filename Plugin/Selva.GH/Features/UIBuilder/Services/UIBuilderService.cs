@@ -71,5 +71,9 @@ public class UIBuilderService : IDisposable
             WebSocketTransport,
             CleanupService
         );
+
+        // A blocked solve aborts, and an abort skips SolutionEnd — so SetSolving(false) never runs
+        // and the busy flag strands. See ComponentStateManager.ClearIfIdle.
+        SolveMessageBroadcaster.SetAbortedSolveReset(() => StateManager.ClearIfIdle(true));
     }
 }

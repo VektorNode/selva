@@ -33,7 +33,10 @@ public static class GHDocumentMutator
                 obj?.ExpirePreview(true);
             }
 
-            document.NewSolution(false);
+            // Schedule rather than NewSolution: callers reach here from the WebSocket handler, which
+            // can land mid-solve, and NewSolution re-enters the solver. Scheduling defers to the gap
+            // after the current solution instead of dropping the refresh.
+            document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs);
         });
     }
 }

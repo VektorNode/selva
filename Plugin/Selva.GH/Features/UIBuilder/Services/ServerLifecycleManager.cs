@@ -183,6 +183,7 @@ public class ServerLifecycleManager : IDisposable
         // Before the socket closes: a message raised after this point has nowhere to go, and the
         // definition must keep solving in plain Grasshopper.
         SolveMessageBroadcaster.SetSender(null);
+        SolveMessageBroadcaster.SetAbortedSolveReset(null);
 
         try
         {

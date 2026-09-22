@@ -58,6 +58,35 @@ public class ComponentStateManager
     /// </summary>
     public bool IsBusy => IsSolving || _solveScheduled;
 
+    /// <summary>
+    ///     Clears the busy flags when the document says nothing is running or scheduled.
+    /// </summary>
+    /// <remarks>
+    ///     An aborted solution never raises SolutionEnd, so <see cref="SetSolving" />(false) never runs
+    ///     and IsBusy stays true forever: every later value update coalesces into the pending buffer
+    ///     and the drain — which also only fires on SolutionEnd — never comes. The Message component
+    ///     aborts on error, so a single blocked solve wedges input handling until the component is
+    ///     re-enabled. WebSocketTransport already patches the browser's side of the same abort by
+    ///     broadcasting solvingState=false directly; this is the state-manager side of it.
+    ///
+    ///     Caller must supply the document's live state from the Grasshopper UI thread — this class
+    ///     stays Rhino-free so it can be linked into the test host, and the flags are otherwise only
+    ///     ever mutated from the solve event handlers.
+    /// </remarks>
+    public bool ClearIfIdle(bool documentIsIdle)
+    {
+        if (!documentIsIdle || !IsBusy)
+        {
+            return false;
+        }
+
+        Debug.WriteLine("[ComponentStateManager] Clearing stale busy state (document idle, no SolutionEnd seen)");
+        IsSolving = false;
+        _solveScheduled = false;
+        _solveStartedSinceLastEnd = false;
+        return true;
+    }
+
     public bool IsHeadlessMode => _isHeadless();
 
     public StateTransition ProcessEnableInput(bool enable)

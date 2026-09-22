@@ -211,8 +211,30 @@ public class DocumentEventManager : IDisposable
         }
     }
 
+    /// <summary>
+    ///     True when the event belongs to a cluster solving its own contents rather than to the
+    ///     definition the browser is watching.
+    /// </summary>
+    /// <remarks>
+    ///     Grasshopper raises SolutionStart/End once per nesting level, so one user action on a
+    ///     definition containing clusters reports several solves: each inner pair flips the solving
+    ///     indicator and drives a full output collection against a document that is not the one the
+    ///     schema describes.
+    ///
+    ///     Keyed on the event's own document, not on SolutionDepth: a cluster solves a separate
+    ///     GH_Document, and the depth counter's value during the *end* handler depends on whether
+    ///     Grasshopper has already unwound the level. Identity does not.
+    /// </remarks>
+    private bool IsForeignSolution(GH_SolutionEventArgs e) =>
+        e?.Document != null && _currentDocument != null && !ReferenceEquals(e.Document, _currentDocument);
+
     private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
     {
+        if (IsForeignSolution(e))
+        {
+            return;
+        }
+
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
         if (_webSocketTransport.IsRunning)
@@ -224,6 +246,11 @@ public class DocumentEventManager : IDisposable
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
+        if (IsForeignSolution(e))
+        {
+            return;
+        }
+
         SolutionEnded?.Invoke(this, EventArgs.Empty);
 
         if (!_webSocketTransport.IsRunning)
