@@ -40,6 +40,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [presolve-bundle](./features/presolve-bundle.md)                                | **unfiled** — parked on a storage decision                                                                                                                                                                                  |
 | [cloud-binary-transport](./features/cloud-binary-transport.md)                  | **unfiled** — deliberately deferred                                                                                                                                                                                         |
 | [slva-identity](./features/slva-identity.md)                                    | **unfiled** — in flight on `feat/mesh-compression`                                                                                                                                                                          |
+| [live-solve-channel](./features/live-solve-channel.md)                          | **unfiled** — design only; builds on solve-diagnostics                                                                                                                                                                      |
 
 The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until
