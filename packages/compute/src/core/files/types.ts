@@ -6,15 +6,15 @@
 export type FileData = {
 	/** Base filename without extension (e.g., "model") */
 	fileName: string;
-	/** File content, base64-encoded or plain string depending on isBase64Encoded flag */
+	/** File content, base64-encoded or plain string depending on `isBase64Encoded` */
 	data: string;
-	/** File extension including the dot (e.g., ".3dm", ".json"). Appended to fileName to create the full filename */
+	/** File extension including the dot (e.g., ".3dm", ".json"), appended to `fileName` */
 	fileType: string;
-	/** Whether data is base64-encoded. If true, must be decoded to binary before use */
+	/** Whether `data` is base64-encoded and must be decoded to binary before use */
 	isBase64Encoded: boolean;
-	/** Directory path for archive organization (e.g., "subfolder/nested"). Empty string for root-level files */
+	/** Directory path for archive organization (e.g., "subfolder/nested"); empty for root-level files */
 	subFolder: string;
-	/** Arbitrary metadata attached in Grasshopper. Not interpreted by compute; passed through for downstream consumers. May be absent on older payloads */
+	/** Arbitrary metadata attached in Grasshopper, passed through uninterpreted; may be absent on older payloads */
 	metadata?: Record<string, string>;
 };
 
@@ -25,7 +25,7 @@ export type FileData = {
 export type ProcessedFile = {
 	/** Full filename including extension (e.g., "model.3dm") */
 	fileName: string;
-	/** File content as binary data (Uint8Array for decoded base64 or fetched binary) or text */
+	/** Decoded base64/fetched binary as `Uint8Array`, or plain text */
 	content: Uint8Array | string;
 	/** File path for archive organization (e.g., "subfolder/model.3dm") */
 	path: string;
@@ -33,7 +33,7 @@ export type ProcessedFile = {
 	 * The sanitized `subFolder` this file came from, separately from `path`.
 	 *
 	 * `path` fuses folder and name for the archive, and a consumer that stores files
-	 * itself (rather than zipping them) otherwise has to re-split it — which is
+	 * itself (rather than zipping them) otherwise has to re-split it, which is
 	 * ambiguous once a duplicate path has been renamed. `''` means archive root;
 	 * absent means the producer did not record one (hand-built `ProcessedFile`s).
 	 */
@@ -54,8 +54,8 @@ export type ProcessedFile = {
 export type FileBaseInfo = {
 	/** Destination filename for the file in the archive or result set (e.g., "additional-data.json") */
 	fileName: string;
-	/** URL to fetch the file from. Must be accessible from the runtime environment */
+	/** URL to fetch the file from; must be reachable from the runtime environment */
 	filePath: string;
-	/** Optional directory path for archive organization (e.g., "extras/docs"). When omitted, file lands at archive root */
+	/** Optional directory path for archive organization (e.g., "extras/docs"); omitted means archive root */
 	subFolder?: string;
 };

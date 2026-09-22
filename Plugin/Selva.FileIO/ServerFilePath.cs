@@ -34,7 +34,7 @@ public static class ServerFilePath
         var normalizedRelative = NormalizeSeparators(relativePath.Trim());
 
         // Reject absolute/rooted relative paths (e.g. "/etc/passwd", "C:\secrets",
-        // "\\server\share") — the whole point is that the base directory is the root.
+        // "\\server\share"): the whole point is that the base directory is the root.
         if (Path.IsPathRooted(normalizedRelative))
         {
             throw new ArgumentException(

@@ -149,8 +149,8 @@ public sealed class Table : LayoutElement
 			Origin.X + totalRect.Width, Origin.Y + totalRect.Height);
 
 		// RowHeight is an Absolute track, and content taller than its row draws past it rather
-		// than clipping — union in the grid's own ink so the reported bounds cover any overhang
-		// (else downstream containers lay out around a box the table already overran).
+		// than clipping, so union in the grid's own ink to make the reported bounds cover any
+		// overhang (else downstream containers lay out around a box the table already overran).
 		var cellInk = resolvedGrid?.ComputeBounds() ?? BoundingBox.Empty;
 		if (!cellInk.IsEmpty) pinned = pinned.Union(cellInk);
 
@@ -224,7 +224,7 @@ public sealed class Table : LayoutElement
 		var overflowRows = new List<IReadOnlyList<TableCell>>(Rows.Count - fitsRowCount);
 		for (var i = fitsRowCount; i < Rows.Count; i++) overflowRows.Add(Rows[i]);
 
-		// Pin the whole table's resolved column widths onto both fragments — otherwise each
+		// Pin the whole table's resolved column widths onto both fragments: otherwise each
 		// fragment re-derives Auto widths from its own row subset, and the column edges jump
 		// at the page break whenever the widest cell lands in the other half.
 		var pinnedWidths = ResolvePinnedColumnWidths(context);
@@ -431,8 +431,8 @@ public sealed class Table : LayoutElement
 			}
 		}
 
-		// Column alignment overrides HorizontalAnchor only when the cell has no Style of its
-		// own — an explicit cell.Style shouldn't be silently overridden by the column default.
+		// Column alignment overrides HorizontalAnchor only when the cell has no Style of its own:
+		// an explicit cell.Style shouldn't be silently overridden by the column default.
 		if (cell.Style == null
 			&& ColumnAlignments != null
 			&& columnIndex >= 0 && columnIndex < ColumnAlignments.Count
@@ -442,7 +442,7 @@ public sealed class Table : LayoutElement
 		}
 
 		// Width left null: TextFlow inherits its wrap width from the Frame (cell padding),
-		// which inherits from the Grid cell rect — works for Absolute, Auto, and Star alike.
+		// which inherits from the Grid cell rect, working for Absolute, Auto, and Star alike.
 		var flow = new TextFlow
 		{
 			Text = cell.Text ?? string.Empty,

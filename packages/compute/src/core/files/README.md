@@ -1,4 +1,4 @@
-# `core/files/` — file export
+# `core/files/`: file export
 
 Zip, base64 and download helpers for files a definition emits. Generic: nothing here reads a
 Grasshopper response (that's `extractFileData` in `grasshopper/io/output/`).
@@ -27,5 +27,5 @@ components writing `ROOT::Panels` and `OTHERROOT::Panels` into the same Context 
 `ROOT.zip` and `OTHERROOT.zip`. Files with no root fall back to the name the caller passes.
 
 `downloadFileDataByRoot` applies all of this. `groupFilesByRoot` exposes just the grouping, for
-consumers that write files themselves rather than zipping them — it needs no DOM, so it works in
+consumers that write files themselves rather than zipping them: it needs no DOM, so it works in
 Node.

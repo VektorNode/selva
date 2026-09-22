@@ -11,7 +11,7 @@ namespace Selva.Drawing.Model.Layout;
 // so the stroke sits centred on the edge.
 //
 // With Size set explicitly, the frame uses that size and centres the child inside the padded
-// inner rect — for fixed-size title-block cells where the content may be smaller than the cell.
+// inner rect: for fixed-size title-block cells where the content may be smaller than the cell.
 public sealed class Frame : LayoutElement
 {
 	public DrawElement Child { get; init; }

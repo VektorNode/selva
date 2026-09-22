@@ -13,8 +13,8 @@ namespace Selva.Drawing.Model.Drawings;
 // fits it to the viewport, and scales it, so the geometry's bounds land inside the requested
 // viewport. Overflow is never clipped.
 //
-// Sizing, resolved in order: Length (pin longest side to N mm, aspect ratio follows) → Size
-// (occupy that rect, Scale <= 0 means fit-to-rect) → context auto-fit (drop-on-a-Page path) →
+// Sizing, resolved in order: Length (pin longest side to N mm, aspect ratio follows), Size
+// (occupy that rect, Scale <= 0 means fit-to-rect), context auto-fit (drop-on-a-Page path),
 // natural size at Scale (default 1.0).
 public sealed class DrawingView : LayoutElement
 {
@@ -53,11 +53,11 @@ public sealed class DrawingView : LayoutElement
 		// Flatten the whole geometry subtree, not just a LayoutElement sitting at its root.
 		// Counter-scaling below rewrites primitives; an unresolved Frame/Stack/Grid one level
 		// down (inside a GroupElement) would fall through its `default:` arm untouched and only
-		// expand later in LayoutPass — after the styles it contains were supposed to be scaled.
+		// expand later in LayoutPass, after the styles it contains were supposed to be scaled.
 		// The error is 1/Scale and unbounded: a 0.7 mm border printed at 0.07 mm at 1:10.
 		//
 		// Resolving here also settles the second half of the problem: the subtree is laid out
-		// against its own unconstrained context rather than the outer page's, which is correct —
+		// against its own unconstrained context rather than the outer page's, which is correct:
 		// view geometry is model space, and the page rect is not its budget.
 		var resolvedGeometry = LayoutPass.Resolve(Geometry, new LayoutContext(BoundingBox.Empty));
 
@@ -69,7 +69,7 @@ public sealed class DrawingView : LayoutElement
 		var geomBounds = GeometryExtent(resolvedGeometry);
 
 		// The caption hangs below the frame and is part of what the view occupies, so its cost
-		// has to come out of the budget BEFORE the geometry is fitted — not be stapled on after.
+		// has to come out of the budget before the geometry is fitted, not stapled on after.
 		// Adding it afterwards pushed an auto-fit view 4.5 mm past the content rect and straight
 		// into the footer, and made an explicit `Size` of 60x40 resolve to 60x44.5.
 		var captionReserve = CaptionReserve();
@@ -99,7 +99,7 @@ public sealed class DrawingView : LayoutElement
 			// only one axis (a vertical Stack gives width but unbounded height), so fit to
 			// whichever axes are real rather than inventing a budget for the rest.
 			//
-			// A spent axis (budget 0) is still constrained, not free to size — collapsing both
+			// A spent axis (budget 0) is still constrained, not free to size: collapsing both
 			// to 0 dropped a spent axis out of the fit and let the view scale off the sheet (a
 			// horizontal Stack once produced a 3789 mm page). Only genuinely unconstrained axes
 			// are excluded from the fit.
@@ -189,7 +189,7 @@ public sealed class DrawingView : LayoutElement
 		if (resolvedGeometry != null && !geomBounds.IsEmpty && innerWidth > 0 && innerHeight > 0)
 		{
 			// One rule: geometry coordinates scale, styles do not. Stroke widths, dash
-			// patterns, font sizes, and text background padding are all paper-space mm —
+			// patterns, font sizes, and text background padding are all paper-space mm:
 			// what the user authors is what shows up on paper. The group transform below
 			// uniformly scales every coordinate, so we pre-multiply every paper-space style
 			// length by 1/effectiveScale to cancel it out.
@@ -288,9 +288,8 @@ public sealed class DrawingView : LayoutElement
 					BackgroundCornerRadius = text.BackgroundCornerRadius * styleScale,
 					MeasuredBounds = null,
 				};
-			// Matches a path with either a stroke or a patterned fill: both carry paper-space
-			// measurements. A hatched surface often has no stroke at all, so gating this on
-			// Stroke alone left its pattern to ride the view transform unscaled.
+			// A hatched surface often has no stroke at all, so gating this on Stroke alone left
+			// its pattern to ride the view transform unscaled.
 			case PathElement path when path.Stroke != null || NeedsPatternScaling(path.Fill):
 				return new PathElement
 				{
@@ -322,7 +321,7 @@ public sealed class DrawingView : LayoutElement
 				// TextSize, StrokeWidth, ArrowSize, Offset, and the *Factor fields all live in
 				// paper-space mm (or as multiples of TextSize). Counter-scale the absolute
 				// fields so labels, extension lines, arrows, and the dimension line's standoff
-				// stay constant on paper regardless of the view's scale — a dimension is an
+				// stay constant on paper regardless of the view's scale: a dimension is an
 				// annotation, so it is sized for the reader's eye, not for the model. Only the
 				// measured points (A, B, Vertex) are world coords that ride the group
 				// transform; the value the dimension reports still comes from those.
@@ -330,7 +329,7 @@ public sealed class DrawingView : LayoutElement
 				// Offset must be counter-scaled with the rest: the renderer derives the
 				// extension-line gap and overshoot from TextSize and then subtracts them from
 				// Offset, so leaving Offset in world units puts the two sides of that
-				// subtraction 1/Scale apart — at 1:50 a 5 mm offset landed 0.1 mm off the
+				// subtraction 1/Scale apart: at 1:50 a 5 mm offset landed 0.1 mm off the
 				// geometry and the extension lines clamped away entirely.
 				return new DimensionElement
 				{
@@ -361,7 +360,7 @@ public sealed class DrawingView : LayoutElement
 			case TextBlockElement textBlock:
 				// Style is paper-space like every other text style; Box is world geometry and
 				// rides the transform. Not reachable from Grasshopper today (TokenResolver is
-				// the only construction site) — handled so the invariant holds by element type
+				// the only construction site), handled so the invariant holds by element type
 				// rather than by which elements happen to be constructible.
 				return new TextBlockElement
 				{
@@ -380,7 +379,7 @@ public sealed class DrawingView : LayoutElement
 				//
 				// The Definition.Id must be qualified by the scale. Both renderers dedupe
 				// definitions by Id (SVG <symbol>/<use>, PDF Form XObject), and the PDF
-				// collector throws outright when one Id maps to two different definitions —
+				// collector throws outright when one Id maps to two different definitions,
 				// which is precisely what two views of the same symbol at different scales
 				// would produce once the children differ.
 				var scaledChildren = new List<DrawElement>(symbol.Definition.Children.Count);
@@ -433,7 +432,7 @@ public sealed class DrawingView : LayoutElement
 
 	// Symbol definitions are deduped by Id across a whole page, so a definition whose children
 	// have been counter-scaled for one view must not answer to the same Id as the unscaled
-	// original or another view's differently-scaled copy. Null/empty Ids are left alone — both
+	// original or another view's differently-scaled copy. Null/empty Ids are left alone: both
 	// renderers treat those as "inline me, don't cache me".
 	private static string ScaleQualifiedId(string id, double styleScale)
 	{
@@ -447,7 +446,7 @@ public sealed class DrawingView : LayoutElement
 	// A hatch tile is a paper-space measurement in the same sense as text height: drafting
 	// standards specify poché spacing on the printed sheet, and a pattern that rides the view
 	// transform collapses into a solid smear as the scale drops (at 1:50 the 4 mm tile landed
-	// at 0.08 mm — tighter than the line weight drawing it).
+	// at 0.08 mm, tighter than the line weight drawing it).
 	private static Fill ScaleFill(Fill fill, double styleScale)
 	{
 		if (!NeedsPatternScaling(fill)) return fill;
@@ -460,7 +459,7 @@ public sealed class DrawingView : LayoutElement
 			PatternScale = fill.PatternScale * styleScale,
 			PatternAngle = fill.PatternAngle,
 			PatternSpacingMm = fill.PatternSpacingMm * styleScale,
-			// Same visibility floor as ScaleStrokeWidth — a hatch tile's linework disappears on
+			// Same visibility floor as ScaleStrokeWidth: a hatch tile's linework disappears on
 			// an enlargement view for exactly the same reason a path's outline does.
 			PatternLineWidthMm = ScaleStrokeWidth(fill.PatternLineWidthMm, styleScale),
 		};
@@ -474,7 +473,7 @@ public sealed class DrawingView : LayoutElement
 	// under the threshold and both renderers skip the stroke: at 50:1 every standard weight
 	// (0.13 / 0.25 / 0.5 mm) vanished and a detail view exported as a blank page.
 	//
-	// The renderers can't judge this — they never see the view scale — so the decision belongs
+	// The renderers can't judge this: they never see the view scale, so the decision belongs
 	// here, where the authored width is still known. A stroke the author made visible stays
 	// visible; a stroke authored at or below the threshold (including the deliberate 0 = "no
 	// stroke") is left to scale to nothing as before.
@@ -547,9 +546,9 @@ public sealed class DrawingView : LayoutElement
 		};
 	}
 
-	// Bounds of the geometry itself, with PathElement's stroke inflation unwound. PathElement is
-	// the only element that pads its bounds by the drawn line width; DimensionElement and
-	// LeaderElement also inflate, but they pad for arrowheads and label text, which are real
+	// Bounds of the geometry itself, with PathElement's stroke inflation unwound. PathElement
+	// is the only element that pads its bounds by the drawn line width; DimensionElement and
+	// LeaderElement also inflate, but they pad for arrowheads and label text, which is real
 	// extent the view has to make room for.
 	private static BoundingBox GeometryExtent(DrawElement element)
 	{
@@ -585,7 +584,7 @@ public sealed class DrawingView : LayoutElement
 		return result;
 	}
 
-	// Vertical room the caption will need, including its gap — reserved out of the budget before
+	// Vertical room the caption will need, including its gap, reserved out of the budget before
 	// the geometry is fitted. Depends only on CaptionStyle and whether a caption will exist at
 	// all, both of which are known before the scale is resolved. The AutoScaleCaption case can't
 	// know the label's *text* yet, but every label is one line at the same style, so the height
@@ -623,7 +622,7 @@ public sealed class DrawingView : LayoutElement
 	// Fit geometry into an available box. A geometry that is flat on one axis (a horizontal
 	// line, a collapsed path) has no ratio to satisfy on that axis, so it is excluded from the
 	// Math.Min rather than contributing a division by zero. When both axes are flat there is
-	// no meaningful scale at all and we fall back to 1:1 — the alternative is +Infinity, which
+	// no meaningful scale at all and we fall back to 1:1: the alternative is +Infinity, which
 	// propagates into the group transform as NaN and emits `NaN NaN NaN NaN NaN NaN cm` into
 	// the PDF content stream.
 	private static double FitScale(double availableWidth, double availableHeight, BoundingBox geomBounds)
@@ -637,7 +636,7 @@ public sealed class DrawingView : LayoutElement
 		Usable(extent > 0 ? available / extent : double.PositiveInfinity);
 
 	// A non-finite ratio means the axis had no extent to divide by, so there was never a real
-	// constraint — fall back to 1:1. A finite zero is different: the container genuinely has no
+	// constraint: fall back to 1:1. A finite zero is different: the container genuinely has no
 	// room, and honouring it is what keeps an exhausted budget from scaling the view off the
 	// sheet. Clamped at zero so a negative budget can't mirror the geometry.
 	private static double Usable(double scale) =>

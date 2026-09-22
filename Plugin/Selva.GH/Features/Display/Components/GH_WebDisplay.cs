@@ -66,8 +66,7 @@ public sealed class SolveResult
 
     public List<BranchResult> Branches { get; }
 
-    // Preview spans every branch (one component draws all its geometry), so these are flat lists
-    // aligned 1:1 within each kind.
+    // Preview spans every branch (one component draws all its geometry): flat lists, aligned 1:1 within each kind.
     public List<Mesh> PreviewMeshes { get; }
     public List<ThreeMaterial> PreviewMaterials { get; }
     public List<Curve> PreviewCurves { get; }
@@ -184,7 +183,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             return;
         }
 
-        // Input had branches but none produced displayable geometry — warn, then still emit the
+        // Input had branches but none produced displayable geometry: warn, then still emit the
         // mirrored (all-empty) tree so downstream components keep the paths.
         if (result.Count == 0)
         {
@@ -197,8 +196,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         // Batches are already encoded (merge, quantize, deflate) from the background task; this loop
-        // only assembles the tree. Empty input branches still get an EnsurePath'd empty branch rather
-        // than vanishing.
+        // only assembles the tree. Empty input branches get an EnsurePath'd empty branch rather than vanishing.
         var output = new GH_Structure<WebDisplayGoo>();
         foreach (var b in result.Branches)
         {
@@ -214,7 +212,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         DA.SetDataTree(0, output);
 
-        // Build preview items on the main thread (Rhino display API requirement); clipping box was
+        // Build preview items on the main thread: Rhino's display API requires it. Clipping box was
         // already unioned in the background pass.
         _previewItems = new List<GH_CustomPreviewItem>(result.PreviewMeshes.Count);
         _previewBB = result.PreviewBounds;
@@ -226,7 +224,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             var mat = result.PreviewMaterials[i];
 
             // MaterialBestGuess goes through Rhino's render-content system and is expensive; cache by
-            // color+opacity (what actually distinguishes preview shading) instead of running it per mesh.
+            // color+opacity, the only things that distinguish preview shading, instead of running it per mesh.
             var key = (mat.Color.ToArgb(), mat.Opacity);
             if (!matCache.TryGetValue(key, out var dispMat))
             {
@@ -277,8 +275,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         // Single-branch tree: apply it to every geometry path regardless of its actual path. Common
-        // case: an aux input (materials/names/…) is a flat list landing on a shallower path than the
-        // geometry (e.g. geo on {0;0;0}, materials on {0}) — exact-path or {0}-only matching would
+        // case: an aux input (materials/names/...) is a flat list landing on a shallower path than the
+        // geometry (e.g. geo on {0;0;0}, materials on {0}); exact-path or {0}-only matching would
         // miss it and silently fall back to defaults.
         if (tree.PathCount == 1)
         {
@@ -300,13 +298,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public int BranchIndex;
 
         /// <summary>
-        ///     The object's minted identity: {componentGuid}/{branchPath}/{slotIndex}. Permanent —
+        ///     The object's minted identity: {componentGuid}/{branchPath}/{slotIndex}. Permanent:
         ///     downstream components (combine, file save/load) pass it through untouched, so the
         ///     web's hidden/selection state survives re-solves and re-batching.
         /// </summary>
         public string Id;
 
-        /// <summary>Slot index within the branch — default display name only.</summary>
+        /// <summary>Slot index within the branch: default display name only.</summary>
         public int SlotIndex;
 
         public string Name;
@@ -320,7 +318,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     {
         public bool Skipped;
 
-        // Mesh path. Vertex/face arrays are extracted here, on the parallel thread, so the serial
+        // Mesh path: vertex/face arrays are extracted here, on the parallel thread, so the serial
         // assembly pass (MeshBatchAssembler.CreateBatch) doesn't re-walk every vertex on one thread.
         // Mesh itself is kept for the main-thread viewport preview.
         public Mesh Mesh;
@@ -353,8 +351,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
     {
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
         // attributes, minted identity, and owning branch. Geometry extraction touches GH_Goo
-        // wrappers and must not race with the parallel pass, so it stays here; invalid geometry is
-        // skipped now — but its slot still counts toward the ids, so a failed mesh never shifts
+        // wrappers and must not race with the parallel pass, so it stays here. Invalid geometry is
+        // skipped now, but its slot still counts toward the ids, so a failed mesh never shifts
         // its neighbors' identity.
         var work = new List<WorkItem>();
         var branchPaths = new List<GH_Path>();
@@ -362,7 +360,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         foreach (var path in geoTree.Paths)
         {
-            // Every input path becomes an output branch, even empty ones — an empty input branch gets
+            // Every input path becomes an output branch, even empty ones: an empty input branch gets
             // a BranchResult but no work items, and falls through to an EnsurePath'd empty branch
             // when the tree is assembled.
             var branchIndex = branchPaths.Count;
@@ -417,7 +415,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         {
             var w = work[idx];
 
-            // Curves and points aren't meshable — they travel as JSON display items. Curves are
+            // Curves and points aren't meshable: they travel as JSON display items. Curves are
             // tessellated to a polyline here, so the web needs no rhino3dm.
             if (TryBuildItem(w.Geom, w.Id, w.SlotIndex, w.Name, w.Layer, w.Metadata, w.Material,
                     out var item, out var previewCurve, out var previewPoint))
@@ -450,7 +448,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            // UVs are only worth carrying when the material actually maps a texture — brep meshing
+            // UVs are only worth carrying when the material actually maps a texture: brep meshing
             // auto-fills TextureCoordinates with surface params, and emitting those for every plain
             // mesh would inflate the payload for nothing. Vertex colors only exist when something
             // explicitly set them, so presence alone is the gate.
@@ -462,14 +460,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
             // vertices it needs. Weld coincident vertices to shrink the payload, but respect normals
             // (ignoreNormals: false): both the web and the C# preview recompute smooth normals via
-            // computeVertexNormals, which averages across every shared vertex, so welding across hard
-            // edges would smear them. Computing normals first lets the weld keep hard-edge vertices
-            // split (different normals) while merging smooth-surface interiors — preserving shading
-            // while still cutting most duplication.
+            // computeVertexNormals, averaging across every shared vertex, so welding across hard edges
+            // would smear them. Computing normals first lets the weld keep hard-edge vertices split
+            // (different normals) while merging smooth-surface interiors.
             //
             // The weld must also respect any exported channel (ignoreAdditional: false), or vertices
-            // with different UVs/colors would merge and smear texture seams / color boundaries.
-            // Channels NOT being exported are cleared first so stale auto-generated data (brep TCs,
+            // with different UVs/colors would merge and smear texture seams or color boundaries.
+            // Channels not being exported are cleared first so stale auto-generated data (brep TCs,
             // partial color sets) can't block the weld.
             mesh.Normals.ComputeNormals();
             if (wantUvs || wantColors)
@@ -493,7 +490,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
             mesh.Compact();
 
-            // Extract the arrays now, off the main thread — the per-vertex copy CreateBatch would
+            // Extract the arrays now, off the main thread: the per-vertex copy CreateBatch would
             // otherwise do serially for every mesh in the batch.
             var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
 
@@ -576,15 +573,15 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             previewMaterials.Add(w.Material);
         }
 
-        // No input paths at all → nothing to mirror. When there ARE paths but none carry geometry,
+        // No input paths at all: nothing to mirror. When there are paths but none carry geometry,
         // still return a result so the output mirrors the input's empty-branch structure.
         if (branches.Count == 0)
         {
             return null;
         }
 
-        // Pass 4 (expensive, parallel across branches): encode each branch's batch — combined-array
-        // merge, quantization, deflate — still inside the background task, so the solver thread never
+        // Pass 4 (expensive, parallel across branches): encode each branch's batch (combined-array
+        // merge, quantization, deflate) still inside the background task, so the solver thread never
         // pays for the encode.
         Parallel.ForEach(branches, b =>
         {
@@ -761,8 +758,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         // GH_Line/Arc/Circle/Point etc. expose their value as a struct, not a GeometryBase, so
-        // `ScriptVariable() is GeometryBase` above misses them. Convert each to its GeometryBase form
-        // here so the item path can route it to a curve/point display item.
+        // `ScriptVariable() is GeometryBase` above misses them. Convert each to its GeometryBase
+        // form so the item path can route it to a curve/point display item.
         return goo switch
         {
             GH_GeometricGoo<GeometryBase> x => x.Value,

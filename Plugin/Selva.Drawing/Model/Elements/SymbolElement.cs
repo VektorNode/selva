@@ -15,7 +15,7 @@ public sealed class SymbolDefinition
 }
 
 // Instance of a SymbolDefinition. Renderers may expand it inline or dedupe on
-// Definition.Id — both are valid until dedupe is wired in.
+// Definition.Id, both are valid until dedupe is wired in.
 public sealed class SymbolElement : DrawElement
 {
 	public SymbolDefinition Definition { get; init; }
@@ -35,7 +35,7 @@ public sealed class SymbolElement : DrawElement
 		var local = Definition.ViewBox ?? UnionChildren(Definition.Children);
 		if (local.IsEmpty) return local;
 
-		// Translate to position then apply local transform — same convention as GroupElement.
+		// Translate to position then apply local transform, same convention as GroupElement.
 		var translated = new Geometry.BoundingBox(
 			local.MinX + Position.X, local.MinY + Position.Y,
 			local.MaxX + Position.X, local.MaxY + Position.Y);

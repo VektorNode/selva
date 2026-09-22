@@ -5,25 +5,25 @@ import { getLogger, observeMaxAnisotropy } from '../../shared/index.js';
 /**
  * Anisotropic-filtering samples applied to color maps, keeping textures sharp at grazing angles
  * instead of blurring. Ceiling is hardware-defined (`renderer.capabilities.getMaxAnisotropy()`,
- * typically 16). Defaults to three's default (1 — no anisotropy) until a renderer reports in.
+ * typically 16). Defaults to three's default (1, no anisotropy) until a renderer reports in.
  */
 let maxAnisotropy = 1;
 
 /**
  * Subscribed to the renderer's own report below, so no host wiring is needed; still exported for a
  * host embedding a foreign renderer that wants to set it directly. Applies to textures loaded from
- * here on — textures already decoded keep the value they were given.
+ * here on: textures already decoded keep the value they were given.
  */
 export function setTextureAnisotropy(value: number): void {
 	maxAnisotropy = Math.max(1, value);
 }
 
 // Take the value straight from whichever renderer initializes, rather than depending on the host to
-// forward it. `render/` publishes, this layer subscribes — neither imports the other.
+// forward it. `render/` publishes, this layer subscribes: neither imports the other.
 observeMaxAnisotropy(setTextureAnisotropy);
 
 /**
- * Assigns a texture to `material.map` once fetched and decoded — the mesh renders untextured for
+ * Assigns a texture to `material.map` once fetched and decoded; the mesh renders untextured for
  * the first frames. Load failures log a warning and leave the material untextured rather than
  * breaking the batch.
  *

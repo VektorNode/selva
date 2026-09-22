@@ -13,7 +13,7 @@
  *
  * So a single response can mix casings, and which casing a given field uses
  * depends on the server branch. Rather than deep-camelCasing the whole payload
- * (the old `camelcaseKeys` approach — which corrupted user-authored value-list
+ * (the old `camelcaseKeys` approach, which corrupted user-authored value-list
  * label keys and item `data` JSON), read the specific fields we care about
  * case-insensitively and leave everything else verbatim.
  *
@@ -39,7 +39,7 @@ const hasOwn = (record: object, key: string): boolean =>
 
 /**
  * True when `obj` has a key matching `name` (case-insensitively). Distinguishes
- * "field present but value is null/undefined" from "field absent" — needed where
+ * "field present but value is null/undefined" from "field absent": needed where
  * presence itself carries meaning (e.g. an `innerTree` that exists but is empty).
  */
 export function hasField(obj: unknown, name: string): boolean {

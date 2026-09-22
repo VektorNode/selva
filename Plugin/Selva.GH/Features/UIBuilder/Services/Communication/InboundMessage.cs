@@ -10,7 +10,7 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
 ///     Classification of a parsed inbound WebSocket message. Parsing/classifying is pure and testable
-///     (<see cref="InboundMessageParser" />); dispatch — event raising and thread marshalling — lives
+///     (<see cref="InboundMessageParser" />); dispatch (event raising and thread marshalling) lives
 ///     in <see cref="WebSocketTransport" />. Failure paths that used to be swallowed warnings (session
 ///     mismatch, malformed envelope, unknown type, missing required field) are named outcomes here.
 /// </summary>
@@ -19,10 +19,10 @@ public enum InboundKind
     /// <summary>`valueUpdate` with a non-null `values` map.</summary>
     ValueUpdate,
 
-    /// <summary>`requestCurrentValues` — no payload.</summary>
+    /// <summary>`requestCurrentValues`: no payload.</summary>
     RequestCurrentValues,
 
-    /// <summary>`requestInitialData` — establishes the session; exempt from the session-id check.</summary>
+    /// <summary>`requestInitialData`: establishes the session; exempt from the session-id check.</summary>
     RequestInitialData,
 
     /// <summary>`saveSchema` with a non-null schema.</summary>
@@ -49,7 +49,7 @@ public enum InboundKind
 
 /// <summary>
 ///     A parsed, classified inbound message. Payload fields are populated only for the kind that
-///     carries them; the rest are null. Rhino/GH-free POCO — links into the test project.
+///     carries them; the rest are null. Rhino/GH-free POCO, links into the test project.
 /// </summary>
 public sealed class InboundMessage
 {
@@ -62,7 +62,7 @@ public sealed class InboundMessage
 
     public UISchema Schema { get; init; }
 
-    /// <summary>`saveSchema` base hash; may be null/empty — the conflict check tolerates that.</summary>
+    /// <summary>`saveSchema` base hash; may be null/empty, the conflict check tolerates that.</summary>
     public string BaseSchemaHash { get; init; }
 
     public List<SyncChange> Changes { get; init; }

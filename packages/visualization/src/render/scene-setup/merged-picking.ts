@@ -6,7 +6,7 @@ import * as THREE from 'three';
 //
 // Merging by material collapses thousands of source objects into a handful of THREE.Mesh objects,
 // which is what keeps an IFC-scale model renderable. The cost is that a raycast can only name the
-// merged mesh, not the wall the user actually clicked — so selection and the metadata panel would
+// merged mesh, not the wall the user actually clicked, so selection and the metadata panel would
 // both address the whole group.
 //
 // `userData.members` carries each source object's window into the merged index buffer
@@ -40,7 +40,7 @@ export function membersOf(object: THREE.Object3D): PickableMember[] | null {
  * carries no face (points/lines, or a member written without an index window).
  *
  * Members are laid out in ascending, contiguous index order, so this is a binary search rather
- * than a scan — a merged group can hold thousands of members and picking runs per click.
+ * than a scan: a merged group can hold thousands of members and picking runs per click.
  */
 export function resolveHitMember(hit: THREE.Intersection): ResolvedMember | null {
 	const members = membersOf(hit.object);
@@ -87,7 +87,7 @@ export function memberBounds(mesh: THREE.Mesh, member: PickableMember): THREE.Bo
  * highlight material can be applied to just that range.
  *
  * Returns a restore function; call it before applying a different highlight. Both the groups and
- * the material array are reset outright rather than diffed — a merged mesh has no other use for
+ * the material array are reset outright rather than diffed: a merged mesh has no other use for
  * either, and rebuilding them is cheaper than tracking partial state.
  */
 export function highlightMemberRange(
@@ -103,7 +103,7 @@ export function highlightMemberRange(
 
 	mesh.geometry.clearGroups();
 	// Three renders groups in order and skips zero-length ones, so the before/after slices can be
-	// added unconditionally — a member at either end simply contributes an empty group.
+	// added unconditionally: a member at either end simply contributes an empty group.
 	mesh.geometry.addGroup(0, member.indexStart, 0);
 	mesh.geometry.addGroup(member.indexStart, member.indexCount, 1);
 	const tailStart = member.indexStart + member.indexCount;

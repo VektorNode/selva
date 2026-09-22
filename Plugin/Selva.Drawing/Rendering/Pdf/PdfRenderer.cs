@@ -22,7 +22,7 @@ namespace Selva.Drawing.Rendering.Pdf;
 // Coordinate system: model is Y-up in millimetres, origin bottom-left of the page.
 // PdfSharpCore's XGraphics is Y-down with origin top-left. We apply one root transform
 // (translate(0, pageHeight) then scale(1,-1)) so model coordinates flow naturally; every
-// element below sees Y-up model space. Text is the one exception — glyphs would render
+// element below sees Y-up model space. Text is the one exception: glyphs would render
 // upside-down under that flip, so each text run counter-flips locally with scale(1,-1)
 // around the anchor point, mirroring the SvgRenderer's pattern.
 public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
@@ -42,7 +42,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	// Accumulated group transforms during the visitor pass, mirroring _gfx's matrix stack.
 	// Hyperlink rects are recorded in element-local coordinates but the /Link annotation
-	// wants page space — without this, links inside any transformed group (page tiles,
+	// wants page space: without this, links inside any transformed group (page tiles,
 	// scaled drawing views) land at the wrong spot.
 	private Transform _modelTransform = Transform.Identity;
 
@@ -67,7 +67,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		// Local-space bounds; translates the DrawImage call so the form's bottom-left
 		// lands at the right world position.
 		public BoundingBox Bounds { get; }
-		// Form's actual extent in mm (>= 1mm in each dimension — PdfSharpCore rejects zero).
+		// Form's actual extent in mm (>= 1mm in each dimension: PdfSharpCore rejects zero).
 		public double WidthMm { get; }
 		public double HeightMm { get; }
 	}
@@ -84,7 +84,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		PdfFontEmbedder.EnsureInstalled();
 
 		using var pdf = new PdfDocument();
-		// PdfSharpCore has no per-page colour-mode override — every content stream writes
+		// PdfSharpCore has no per-page colour-mode override: every content stream writes
 		// operators in this mode, converting input colours as needed.
 		pdf.Options.ColorMode = _options.ColorMode == PdfColorMode.Cmyk
 			? PdfSharpColorMode.Cmyk
@@ -134,7 +134,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			pageWidthMm = contentBounds.Width + _options.Padding * 2;
 			pageHeightMm = contentBounds.Height + _options.Padding * 2;
 			// Places the content bbox's (MinX, MinY) at (Padding, Padding) in PDF world space
-			// (still Y-up here — the flip happens at the XGraphics level below).
+			// (still Y-up here: the flip happens at the XGraphics level below).
 			translateX = _options.Padding - contentBounds.MinX;
 			translateY = _options.Padding - contentBounds.MinY;
 		}
@@ -268,9 +268,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 	}
 
-	// Same approach as SvgRenderer.MeasureForViewBox — raw geometry bounds, dimensions
-	// expanded to their measured extents. Renderer-side measurement avoids the conservative
-	// padding ComputeBounds adds for layout safety.
+	// Same approach as SvgRenderer.MeasureForViewBox: raw geometry bounds, not the
+	// conservative padding ComputeBounds adds for layout safety.
 	private static BoundingBox MeasureForViewBox(DrawElement element)
 	{
 		var b = BoundingBox.Empty;
@@ -348,8 +347,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		{
 			var def = kvp.Value;
 
-			// Bounds in the symbol's own coord space — viewBox if provided, else union of
-			// children's natural bounds. Empty defs are skipped (no useful form to build).
+			// Bounds in the symbol's own coord space: viewBox if provided, else union of
+			// children's natural bounds. Empty defs are skipped.
 			var bounds = def.ViewBox.HasValue && !def.ViewBox.Value.IsEmpty
 				? def.ViewBox.Value
 				: UnionChildBounds(def.Children);
@@ -443,7 +442,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		{
 			state = _gfx.Save();
 			_gfx.MultiplyTransform(ToXMatrix(element.Transform), XMatrixOrder.Prepend);
-			// Mirror the graphics transform on the model side — hyperlink rects are captured
+			// Mirror the graphics transform on the model side: hyperlink rects are captured
 			// in element-local coords and must be mapped to page space when annotated.
 			_modelTransform = element.Transform.Then(_modelTransform);
 		}
@@ -569,7 +568,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		// The page graphics root is Y-up (flipped once at page setup). A raster XImage has
 		// a fixed top-down orientation, so drawn directly it would appear mirrored. Counter-
-		// flip locally — same trick the symbol-form builder and Visit(TextElement) use:
+		// flip locally: same trick the symbol-form builder and Visit(TextElement) use,
 		// translate to the image's top edge in world space, flip Y, then draw the box at
 		// the local origin.
 		var topY = element.Position.Y + element.Height;
@@ -585,7 +584,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 		catch
 		{
-			// Undecodable / corrupt image data — skip rather than abort the whole render.
+			// Undecodable / corrupt image data: skip rather than abort the whole render.
 		}
 		finally
 		{
@@ -649,14 +648,13 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		var xpath = PdfPathBuilder.Build(element.Boundary);
 
-		// Optional opaque background behind the pattern lines.
 		if (element.BackgroundColor.A > 0)
 		{
 			var bgBrush = new XSolidBrush(ToXColor(element.BackgroundColor, 1f));
 			_gfx.DrawPath(bgBrush, xpath);
 		}
 
-		// Pattern stroking — clipped to the boundary so lines don't leak outside.
+		// Pattern stroking, clipped to the boundary so lines don't leak outside.
 		var line = element.LineStyle ?? new Stroke { Width = Stroke.HatchWidthMm };
 		var pen = CreatePen(line);
 
@@ -698,7 +696,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (element?.Definition == null) return;
 
 		// When the definition has an Id and a cached Form XObject, draw the shared form
-		// instead of re-emitting children — PdfSharpCore reuses the underlying PDF resource
+		// instead of re-emitting children: PdfSharpCore reuses the underlying PDF resource
 		// across DrawImage calls. Anonymous definitions (no Id) always inline-expand.
 		var def = element.Definition;
 		if (!string.IsNullOrEmpty(def.Id)
@@ -726,7 +724,6 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			return;
 		}
 
-		// Inline-expand anonymous definitions.
 		var hasOffsetInline = element.Position.X != 0 || element.Position.Y != 0;
 		var hasTransformInline = !element.Transform.IsIdentity;
 
@@ -806,7 +803,6 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var pen = CreatePen(new Stroke { Color = style.Color, Width = style.StrokeWidth });
 		if (pen != null)
 		{
-			// Extension lines.
 			_gfx.DrawLine(pen, extStartA.X, extStartA.Y, extEndA.X, extEndA.Y);
 			_gfx.DrawLine(pen, extStartB.X, extStartB.Y, extEndB.X, extEndB.Y);
 
@@ -918,7 +914,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		if (pen == null)
 		{
-			// No linework to draw — fall through to the label below.
+			// No linework to draw: fall through to the label below.
 		}
 		else if (style.TickKind == DimensionTickKind.Arrow && !flipArrows)
 		{
@@ -1012,8 +1008,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		var ux = dx / len;
 		var uy = dy / len;
-		// The SVG marker is a filled triangle from the line into the tip — half-width ~ size/2.5
-		// to roughly match the marker geometry "0,0 → 10,5 → 0,10".
+		// The SVG marker is a filled triangle from the line into the tip: half-width ~ size/2.5
+		// to roughly match the marker geometry "0,0 -> 10,5 -> 0,10".
 		var halfW = size * 0.4;
 		var baseX = tip.X - ux * size;
 		var baseY = tip.Y - uy * size;
@@ -1120,14 +1116,14 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var font = ResolveFont(style);
 
 		// Place text in world space. The XGraphics root has Y-flipped, so a naive DrawString
-		// would render mirrored glyphs; counter-flip locally around the anchor — matches
+		// would render mirrored glyphs; counter-flip locally around the anchor, matching
 		// SvgRenderer's `translate(...) scale(1 -1) rotate(...)` pattern.
 		var state = _gfx.Save();
 		_gfx.TranslateTransform(position.X, position.Y);
 		_gfx.ScaleTransform(1, -1);
 		if (rotationDegrees != 0) _gfx.RotateTransform(-rotationDegrees);
 
-		// Measure for anchor offsets — use FontMetrics so behaviour matches the SVG renderer.
+		// Measure for anchor offsets via FontMetrics so behaviour matches the SVG renderer.
 		var measured = FontMetrics.Measure(text, style.FontFamily, style.FontSize, style.Weight, style.Style);
 
 		double xOffset = 0;
@@ -1162,7 +1158,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var family = ExtractFirstFamily(style.FontFamily) ?? _options.FontFamily ?? "Inter";
 		// Force Unicode encoding explicitly. PdfSharpCore's default-constructor path picks
 		// up GlobalFontSettings, which leaves the encoding undefined and trips the cmap
-		// lookup for our bundled Inter — every char would otherwise resolve to .notdef
+		// lookup for our bundled Inter: every char would otherwise resolve to .notdef
 		// (the "white text" bug).
 		return new XFont(family, style.FontSize, pdfStyle, XPdfFontOptions.UnicodeDefault);
 	}
@@ -1193,7 +1189,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var color = ToXColor(fill.Color, (float)fill.Opacity);
 		// Build the pattern pen through CreatePen rather than newing an XPen directly, so hatch
 		// linework can never emit the device-dependent `0 w`. This width is generated rather
-		// than authored, so a tiny PatternScale must not silently erase the pattern — floor it
+		// than authored, so a tiny PatternScale must not silently erase the pattern: floor it
 		// at the visibility threshold instead, which keeps a dense hatch drawn.
 		var lineWidth = fill.PatternLineWidthMm > 0
 			? fill.PatternLineWidthMm
@@ -1321,7 +1317,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			_gfx.RotateAtTransform(angleDegrees, new XPoint(cx, cy));
 		}
 
-		// Horizontal courses every brickH/2 (every half-tile) — SVG's pattern emits both
+		// Horizontal courses every brickH/2 (every half-tile): SVG's pattern emits both
 		// y=0 and y=brickH/2 within a brickH-tall tile, so the period on screen is brickH/2.
 		var hStart = Math.Floor(ryMin / (brickH / 2.0)) * (brickH / 2.0);
 		for (var y = hStart; y <= ryMax + 1e-9; y += brickH / 2.0)
@@ -1363,7 +1359,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var brush = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
 		// HatchElement dots size is implicit; pick something proportional to spacing so
 		// dense spacings don't render as overlapping disks. Half the line width is a sensible
-		// default — matches the visual weight of HatchPatternKind.Lines at the same stroke.
+		// default, matching the visual weight of HatchPatternKind.Lines at the same stroke.
 		var radius = Math.Max(line.Width * 0.5, 0.15);
 		var state = _gfx.Save();
 		_gfx.IntersectClip(xpath);
@@ -1377,7 +1373,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	// Returns null when the stroke is not visible, so callers skip the draw entirely. Never
 	// emit a zero-width pen: it reaches the content stream as `0 w`, which PDF defines as the
-	// thinnest line the *device* can render — a sliver on screen, one dot on a laser printer,
+	// thinnest line the *device* can render: a sliver on screen, one dot on a laser printer,
 	// near-invisible on an imagesetter. That operator is why the same file used to print at a
 	// different weight on every machine.
 	private XPen CreatePen(Stroke stroke)
@@ -1440,7 +1436,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 	}
 
-	// Minimal CSS-named-color parsing — the model's Color.Named is mostly used for
+	// Minimal CSS-named-color parsing: the model's Color.Named is mostly used for
 	// "currentColor" and a handful of standard names. Unknown names fall back to black.
 	private static readonly Dictionary<string, (byte R, byte G, byte B)> NamedColors =
 		new Dictionary<string, (byte, byte, byte)>(StringComparer.OrdinalIgnoreCase)

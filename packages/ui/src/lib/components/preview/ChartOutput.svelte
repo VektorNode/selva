@@ -37,11 +37,11 @@
 	let mounted = false;
 
 	async function loadPlotly(): Promise<any> {
-		// @ts-expect-error — Plotly is loaded dynamically onto window
+		// @ts-expect-error Plotly is loaded dynamically onto window
 		if (window.Plotly) return window.Plotly;
 
 		await loadScript('https://cdn.plot.ly/plotly-3.4.0.min.js', { crossOrigin: 'anonymous' });
-		// @ts-expect-error — Plotly is loaded dynamically onto window
+		// @ts-expect-error Plotly is loaded dynamically onto window
 		return window.Plotly;
 	}
 
@@ -62,9 +62,9 @@
 		function onFullscreenChange() {
 			isFullscreen = !!document.fullscreenElement;
 			Promise.resolve().then(() => {
-				// @ts-expect-error — Plotly is loaded dynamically onto window
+				// @ts-expect-error Plotly is loaded dynamically onto window
 				if (containerEl && window.Plotly) {
-					// @ts-expect-error — Plotly is loaded dynamically onto window
+					// @ts-expect-error Plotly is loaded dynamically onto window
 					window.Plotly.Plots.resize(containerEl);
 				}
 			});
@@ -142,9 +142,9 @@
 		const ro = new ResizeObserver(() => {
 			if (resizeTimer) clearTimeout(resizeTimer);
 			resizeTimer = setTimeout(() => {
-				// @ts-expect-error — Plotly is loaded dynamically onto window
+				// @ts-expect-error Plotly is loaded dynamically onto window
 				if (containerEl && window.Plotly) {
-					// @ts-expect-error — Plotly is loaded dynamically onto window
+					// @ts-expect-error Plotly is loaded dynamically onto window
 					window.Plotly.Plots.resize(containerEl);
 				}
 				resizeTimer = null;
@@ -155,7 +155,7 @@
 		return () => {
 			ro.disconnect();
 			if (resizeTimer) clearTimeout(resizeTimer);
-			// @ts-expect-error — Plotly is loaded dynamically onto window
+			// @ts-expect-error Plotly is loaded dynamically onto window
 			if (containerEl && window.Plotly) window.Plotly.purge(containerEl);
 		};
 	});

@@ -60,13 +60,12 @@
 					urlInput = parsed.file;
 				}
 			} catch {
-				// Not JSON, ignore
+				// Not JSON: leave the display state as-is.
 			}
 		}
 	});
 
 	function getFileExtension(filename: string): string {
-		// Strip query strings before extracting extension
 		const cleanPath = filename.split('?')[0];
 		const ext = cleanPath.includes('.') ? '.' + cleanPath.split('.').pop() : '.tmp';
 		return ext.toLowerCase();
@@ -78,7 +77,7 @@
 	}
 
 	function isCorsError(error: unknown): boolean {
-		// The browser blocks the response entirely, so this is all we get — no status code.
+		// The browser blocks the response entirely: no status code, just this opaque TypeError.
 		if (error instanceof TypeError && error.message === 'Failed to fetch') return true;
 		return false;
 	}
@@ -157,7 +156,7 @@
 					}
 				})();
 				// The opaque TypeError hides CORS blocks and plain network failures (404, DNS)
-				// alike, so the message has to cover both.
+				// alike, so the message covers both.
 				let hint =
 					'Check that the URL is correct and the file is publicly accessible. If the server requires login, download the file and use the Upload option instead.';
 				if (host.includes('sharepoint.com') || host.includes('onedrive.com')) {
@@ -200,8 +199,8 @@
 
 		// The file is base64-embedded into the compute request body, so without a
 		// client-side cap an oversize file comes back as an opaque 413. This cap is
-		// currently LOOSER than the server's COMPUTE_REQUEST_MAX_BYTES (see the TEMP
-		// note in constants.ts) — some files pass here and still 413. The URL import
+		// currently looser than the server's COMPUTE_REQUEST_MAX_BYTES (see the TEMP
+		// note in constants.ts): some files pass here and still 413. The URL import
 		// path applies the same cap.
 		if (file.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
 			toast.error(

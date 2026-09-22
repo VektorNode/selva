@@ -25,7 +25,6 @@ async function load() {
 	type ComputeResponse = Parameters<typeof getThreeObjectsFromComputeResponse>[0];
 	const response = await fetch(responseUrl).then((r) => r.json() as Promise<ComputeResponse>);
 
-	// Same call a host app makes.
 	const objects = await getThreeObjectsFromComputeResponse(response);
 	pg.addObjects(objects);
 
@@ -39,7 +38,6 @@ async function load() {
 		.join(', ');
 	pg.setStatus(`Decoded ${objects.length} objects\n→ ${summary || 'none'}`);
 
-	// Fit on the next frame so the canvas has its real size before framing.
 	requestAnimationFrame(() => pg.viewer.fitToView());
 }
 

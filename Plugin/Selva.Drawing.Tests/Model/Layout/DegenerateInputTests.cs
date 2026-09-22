@@ -23,7 +23,7 @@ public class DegenerateInputTests
 	[Fact]
 	public void TextFlow_split_with_infinite_budget_fits_everything()
 	{
-		// (int)Math.Floor(+Infinity / lineHeight) is int.MinValue, read as "nothing fits" — that
+		// (int)Math.Floor(+Infinity / lineHeight) is int.MinValue, read as "nothing fits", and that
 		// made a KeepTogether section emit one line per page.
 		var flow = LongFlow(40);
 		var context = new LayoutContext(new BoundingBox(0, 0, 100, 100));
@@ -162,7 +162,7 @@ public class DegenerateInputTests
 	[InlineData(20.0)]
 	public void Symbol_children_are_counter_scaled_like_every_other_annotation(double scale)
 	{
-		// Symbols are north arrows and section marks — fixed size on the sheet. Their children
+		// Symbols are north arrows and section marks: fixed size on the sheet. Their children
 		// rode the view transform raw, so a 0.7mm stroke printed at 0.07mm at 1:10.
 		var view = new DrawingView { Geometry = GeometryWithSymbol(), Scale = scale };
 
@@ -177,7 +177,7 @@ public class DegenerateInputTests
 	public void Symbol_definition_id_is_qualified_by_scale()
 	{
 		// Both renderers dedupe definitions by Id, and the PDF collector throws when one Id maps
-		// to two different definitions — which two views at different scales would produce.
+		// to two different definitions, which two views at different scales would produce.
 		var geometry = GeometryWithSymbol();
 		var a = new DrawingView { Geometry = geometry, Scale = 0.1 }.Resolve(new LayoutContext(BoundingBox.Empty));
 		var b = new DrawingView { Geometry = geometry, Scale = 0.02 }.Resolve(new LayoutContext(BoundingBox.Empty));
@@ -191,7 +191,7 @@ public class DegenerateInputTests
 	[Fact]
 	public void Symbol_at_unit_scale_keeps_its_original_definition_id()
 	{
-		// No counter-scaling happens at 1:1, so the Id must survive untouched — otherwise every
+		// No counter-scaling happens at 1:1, so the Id must survive untouched, otherwise every
 		// unscaled symbol gets a spurious suffix and existing renderer caches miss.
 		var view = new DrawingView { Geometry = GeometryWithSymbol(), Scale = 1.0 };
 

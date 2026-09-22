@@ -21,12 +21,12 @@
 		 */
 		header?: Snippet;
 
-		// 'fixed'  — viewport-locked, no page scroll; body owns its own scroll. For app-like
-		//            pages (builder, preview, library/[guid]).
-		// 'scroll' — normal page flow, footer sticks to the bottom. For dashboard-style pages.
+		// 'fixed': viewport-locked, no page scroll, body owns its own scroll. App-like pages
+		// (builder, preview, library/[guid]). 'scroll': normal page flow, footer sticks to
+		// the bottom. Dashboard-style pages.
 		mode?: 'fixed' | 'scroll';
 
-		// When present, body becomes a flex row: sidenav | main.
+		/** When present, the body becomes a flex row: sidenav | main. */
 		sidenav?: Snippet;
 
 		showFooter?: boolean;
@@ -82,9 +82,9 @@
 
 	const bodyShellStyle = '';
 
-	// In scroll mode the page itself scrolls, so the sidenav has to be pinned below the
-	// header or it scrolls away with the content. Fixed mode already gives the row its own
-	// height and the aside its own scroll — sticky there would only shrink it to content.
+	// In scroll mode the page itself scrolls, so the sidenav must be pinned below the header
+	// or it scrolls away with the content. Fixed mode already gives the row its own height
+	// and the aside its own scroll: sticky there would only shrink it to content.
 	const sidenavWrapClass = $derived(
 		_mode === 'fixed'
 			? 'flex shrink-0'
@@ -92,7 +92,7 @@
 	);
 
 	// The sticky wrapper is only as tall as its content, so in scroll mode the divider comes
-	// from the main column's left edge — that one spans the full body height.
+	// from the main column's left edge: that one spans the full body height.
 	const mainClass = $derived(
 		_mode === 'fixed' ? 'flex-1 overflow-y-auto' : 'flex-1 overflow-y-auto border-l border-border'
 	);

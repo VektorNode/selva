@@ -50,8 +50,6 @@ public class WebSocketTransport : IDisposable
     // Guards all mutable state touched from multiple threads.
     private readonly object _stateLock = new object();
 
-    // Inbound messages run off the receive loop but chained strictly in arrival order —
-    // otherwise two rapid valueUpdates can race and the older value wins.
     private readonly object _dispatchLock = new object();
     private Task _dispatchChain = Task.CompletedTask;
 
@@ -148,7 +146,7 @@ public class WebSocketTransport : IDisposable
 
         try
         {
-            // Dispose calls Stop internally — no need to call both.
+            // Dispose calls Stop internally: no need to call both.
             _webSocketServer.Dispose();
         }
         catch (Exception ex)
@@ -190,7 +188,7 @@ public class WebSocketTransport : IDisposable
     /// <summary>
     ///     Generic envelope: `{ type, sessionId, data: &lt;payload&gt; }`; the UI reads it via
     ///     `msg.data.&lt;field&gt;`. Don't use this for messages whose TS type expects fields at the
-    ///     top level (e.g. `availableParams` on `parametersAdded`) — use a flat broadcaster instead.
+    ///     top level (e.g. `availableParams` on `parametersAdded`): use a flat broadcaster instead.
     /// </summary>
     public Task BroadcastMessage(string messageType, object data)
     {
@@ -240,9 +238,9 @@ public class WebSocketTransport : IDisposable
 
         // The web renders curves only from `Points`. Anything still lacking them came from a Display
         // component too old to tessellate, and would throw in the viewer with no hint of which
-        // definition to fix — so name it here, where the log sits next to the canvas.
+        // definition to fix: name it here, where the log sits next to the canvas.
         //
-        // TRANSITIONAL — goes with WebDisplayGoo.BackfillCurvePoints; see the removal note there.
+        // TRANSITIONAL: goes with WebDisplayGoo.BackfillCurvePoints; see the removal note there.
         var untessellated = 0;
         foreach (var item in displayItems)
         {
@@ -394,7 +392,7 @@ public class WebSocketTransport : IDisposable
 
     private Task BroadcastAsync(object payload)
     {
-        // Capture once — Stop() can null the field from another thread between check and use.
+        // Capture once: Stop() can null the field from another thread between check and use.
         var server = _webSocketServer;
         if (server == null || !server.IsRunning)
         {
@@ -415,7 +413,8 @@ public class WebSocketTransport : IDisposable
     private void HandleMessageReceived(object sender, string message)
     {
         // Process on a thread-pool thread so we never block the receive loop, but chain
-        // messages so they are handled strictly in arrival order.
+        // messages so they are handled strictly in arrival order: otherwise two rapid
+        // valueUpdates can race and the older value wins.
         lock (_dispatchLock)
         {
             _dispatchChain = _dispatchChain.ContinueWith(
@@ -443,7 +442,7 @@ public class WebSocketTransport : IDisposable
                     break;
 
                 case InboundKind.RequestInitialData:
-                    // Guard against concurrent invocations — if the flag is already 1, bail out.
+                    // Guard against concurrent invocations: if the flag is already 1, bail out.
                     if (Interlocked.CompareExchange(ref _initialDataInFlight, 1, 0) != 0)
                     {
                         return;
@@ -504,7 +503,7 @@ public class WebSocketTransport : IDisposable
         }
     }
 
-    // RhinoApp.InvokeOnUiThread is always safe to call — no thread-ID check needed.
+    // RhinoApp.InvokeOnUiThread is always safe to call: no thread-ID check needed.
     private static void MarshalToMainThread(Action callback)
     {
         try

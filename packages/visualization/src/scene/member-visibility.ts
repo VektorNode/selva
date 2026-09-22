@@ -7,7 +7,7 @@
 // ranges whose members are still visible: three draws each group as its own range, so an omitted
 // member simply isn't drawn.
 //
-// Adjacent visible members are coalesced into one group, so the common cases cost nothing — an
+// Adjacent visible members are coalesced into one group, so the common cases cost nothing: an
 // untouched mesh is a single group, and hiding one member leaves two.
 
 import type * as THREE from 'three';

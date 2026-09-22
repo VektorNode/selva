@@ -21,7 +21,7 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 /// </summary>
 internal static class WebSocketHandshake
 {
-    // RFC 6455 §1.3 — magic GUID concatenated with the client key before SHA1.
+    // RFC 6455 §1.3: magic GUID concatenated with the client key before SHA1.
     private const string AcceptMagicGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
     /// <summary>

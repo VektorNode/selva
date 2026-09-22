@@ -114,7 +114,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			_sb.Append("<rect width='100%' height='100%' fill='")
 				.Append(Escape(_options.BackgroundColor)).Append("' />\n");
 
-		// Single root Y-flip — everything else uses Rhino-world coordinates. font-family
+		// Single root Y-flip: everything else uses Rhino-world coordinates. font-family
 		// is set here so all <text> descendants inherit it; a "Quoted Name" in the stack
 		// is encoded as &quot; so the single-quoted attr stays valid.
 		_sb.Append("<g transform='matrix(1 0 0 -1 0 0)' font-family='")
@@ -143,7 +143,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	// Raw geometry bounds for paths/text, precise endpoint+midpoint sampling for dimensions.
 	// Distinct from DrawElement.ComputeBounds, which conservatively inflates by stroke and
-	// approximates dim arrows via padding — the right answer for layout, but a wider viewBox
+	// approximates dim arrows via padding: the right answer for layout, but a wider viewBox
 	// than we want here.
 	private static BoundingBox MeasureForViewBox(DrawElement element)
 	{
@@ -365,7 +365,6 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			switch (fill.Pattern)
 			{
 				case HatchPattern.Lines:
-					// Parallel diagonal lines at 45°.
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
 					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
@@ -374,7 +373,6 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					break;
 
 				case HatchPattern.CrossHatch:
-					// Two sets of crossing diagonal lines.
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
 					_sb.Append($"    <line x1='0' y1='0' x2='{F(tileSize)}' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append($"    <line x1='{F(-tileSize)}' y1='0' x2='0' y2='{F(tileSize)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
@@ -386,9 +384,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					break;
 
 				case HatchPattern.Dots:
-					// Small dots on a regular grid.
-					// Proportional to the tile so explicit spacing scales the dots with it —
-					// same ratio PdfRenderer.DrawHatchedFill uses.
+					// Radius proportional to the tile, same ratio PdfRenderer.DrawHatchedFill uses.
 					var dotR = tileSize * 0.1;
 					var half = tileSize / 2;
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(tileSize)}' height='{F(tileSize)}' patternUnits='userSpaceOnUse'{transform}>\n");
@@ -397,14 +393,12 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					break;
 
 				case HatchPattern.Brick:
-					// Staggered horizontal lines mimicking a brick coursing pattern.
 					var brickH = tileSize;
 					var brickW = tileSize * 2;
 					_sb.Append($"  <pattern id='{id}' x='0' y='0' width='{F(brickW)}' height='{F(brickH)}' patternUnits='userSpaceOnUse'{transform}>\n");
-					// Full-width horizontal course lines
 					_sb.Append($"    <line x1='0' y1='0' x2='{F(brickW)}' y2='0' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append($"    <line x1='0' y1='{F(brickH / 2)}' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
-					// Vertical head joints — offset by half a brick width on alternating rows
+					// Vertical head joints, offset by half a brick width on alternating rows
 					_sb.Append($"    <line x1='0' y1='0' x2='0' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append($"    <line x1='{F(brickW)}' y1='0' x2='{F(brickW)}' y2='{F(brickH / 2)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
 					_sb.Append($"    <line x1='{F(brickW / 2)}' y1='{F(brickH / 2)}' x2='{F(brickW / 2)}' y2='{F(brickH)}' stroke='{color}' stroke-width='{patternWidth}' />\n");
@@ -437,7 +431,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	internal static string HatchPatternId(Fill fill)
 	{
-		// Stable, attribute-safe id — no spaces, no special chars.
+		// Stable, attribute-safe id: no spaces, no special chars.
 		var colorHex = fill.Color.Space == ColorSpace.Rgb
 			? $"{(int)(fill.Color.R * 255):x2}{(int)(fill.Color.G * 255):x2}{(int)(fill.Color.B * 255):x2}"
 			: fill.Color.GetHashCode().ToString("x8");
@@ -452,7 +446,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	}
 
 	// Walks the page once and returns every reachable SymbolDefinition keyed by Id.
-	// Definitions with null/empty Id are skipped — those fall back to inline expansion
+	// Definitions with null/empty Id are skipped: those fall back to inline expansion
 	// in Visit(SymbolElement). Throws on Id collision with non-equal definitions, since
 	// that's a user bug we'd rather surface loudly than silently dedupe wrong.
 	private static Dictionary<string, SymbolDefinition> CollectSymbolDefinitions(DrawElement element)
@@ -577,7 +571,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	}
 
 	// Baseline y-offset in the text's local (post-counter-flip, y-down) frame for the
-	// style's vertical anchor. Matches PdfRenderer.DrawText — FontMetrics.Descent is
+	// style's vertical anchor. Matches PdfRenderer.DrawText: FontMetrics.Descent is
 	// negative, so Middle resolves to (ascent − |descent|) / 2 below the anchor point.
 	private static double BaselineShift(TextStyle style)
 	{
@@ -594,7 +588,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 
 	// Per-text font attributes, emitted only when they differ from the inherited root
 	// font-family (weight/style are never set on the root). Without these every text
-	// rendered in the root stack while the PDF honoured the style — bold and custom
+	// rendered in the root stack while the PDF honoured the style: bold and custom
 	// families silently disappeared from SVG output.
 	private void AppendFontAttributes(TextStyle style)
 	{
@@ -698,8 +692,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			.Append("' height='").Append(F(element.Height)).Append('\'');
 		_sb.Append(" transform='").Append(transform).Append('\'');
 		_sb.Append(" preserveAspectRatio='none'");
-		// Emit both xlink:href (SVG 1.1 — required by strict consumers like librsvg/PDF
-		// rasterisers) and href (SVG 2 — modern browsers). The data URI is identical.
+		// Emit both xlink:href (SVG 1.1, required by strict consumers like librsvg/PDF
+		// rasterisers) and href (SVG 2, modern browsers). The data URI is identical.
 		var dataUri = "data:" + MimeType(element.Format) + ";base64," + Convert.ToBase64String(element.Data);
 		_sb.Append(" xlink:href='").Append(dataUri).Append('\'');
 		_sb.Append(" href='").Append(dataUri).Append('\'');
@@ -736,7 +730,6 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	public void Visit(LeaderElement element)
 	{
 		if (element == null || element.Points.Count < 2) return;
-		// Pointer polyline.
 		_sb.Append("  <path");
 		AppendIdClass(element.Id, element.CssClass);
 		_sb.Append(" d='M ").Append(F(element.Points[0].X)).Append(' ').Append(F(element.Points[0].Y));
@@ -800,7 +793,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			_sb.Append("  <g clip-path='url(#").Append(clipId).Append(")'>\n");
 			switch (element.Pattern)
 			{
-				// Line patterns are stroked, so a zero-width LineStyle suppresses them —
+				// Line patterns are stroked, so a zero-width LineStyle suppresses them,
 				// matching PdfRenderer.Visit(HatchElement).
 				case HatchPatternKind.Lines:
 					if (line.IsVisible) AppendHatchLines(bounds, element.AngleDegrees, spacing, line);
@@ -813,7 +806,6 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 					}
 					break;
 				case HatchPatternKind.Dots:
-					// Dots are filled circles sized from the line width, not stroked.
 					AppendHatchDots(bounds, spacing, line);
 					break;
 			}
@@ -931,7 +923,6 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 			return;
 		}
 
-		// Inline-expand anonymous definitions.
 		var hasOffset = element.Position.X != 0 || element.Position.Y != 0;
 		var hasTransform = !element.Transform.IsIdentity;
 
@@ -1023,8 +1014,8 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		// No vector-effect='non-scaling-stroke' here: DimensionStyle.StrokeWidth has ALREADY been
 		// counter-scaled by DrawingView (dimension linework is paper-space, like its text), so the
 		// attribute would cancel the view transform a second time and the two compensations stack.
-		// At 1:50 that emitted 12.5 mm bars where the PDF renderer — which has no equivalent and
-		// simply lets the counter-scaled width ride the transform — correctly drew 0.25 mm.
+		// At 1:50 that emitted 12.5 mm bars where the PDF renderer, which has no equivalent and
+		// simply lets the counter-scaled width ride the transform, correctly drew 0.25 mm.
 		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none'";
 		var arrowMarkerId = DimArrowMarkerId(style);
 
@@ -1129,7 +1120,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		}
 		bisX /= bisLen; bisY /= bisLen;
 
-		// No vector-effect='non-scaling-stroke' here — same reason as AppendLinearDimensionBody.
+		// No vector-effect='non-scaling-stroke' here: same reason as AppendLinearDimensionBody.
 		var strokeAttr = $"stroke='{ColorValue(style.Color)}' stroke-width='{F(style.StrokeWidth)}' fill='none'";
 		var arrowMarkerId = DimArrowMarkerId(style);
 
@@ -1300,7 +1291,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 		else if (stroke == null && defaultFillNone && fill == null)
 		{
 			// Both null: an unstyled path still needs a visible stroke, so default to black.
-			// Width must be explicit — omitting it inherits SVG's 1.0mm default, 4x heavier
+			// Width must be explicit: omitting it inherits SVG's 1.0mm default, 4x heavier
 			// than the same curve drawn by the PDF renderer.
 			_sb.Append(" stroke='black'");
 			_sb.Append(" stroke-width='").Append(F(Stroke.UnstyledPathWidthMm)).Append('\'');

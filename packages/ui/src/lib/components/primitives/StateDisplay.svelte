@@ -39,7 +39,6 @@
 		}
 	};
 
-	/* Fully semantic, contrast-safe mappings */
 	const typeClasses = {
 		loading: {
 			icon: 'text-primary',

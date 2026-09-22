@@ -29,12 +29,12 @@ const SELECTION_MIN_OPACITY = 1;
  *
  * Meshes tint via `emissive` AND base color. Emissive alone is additive on top of what the surface
  * already reflects, so on a bright white model under a key light it only shifts the surface slightly
- * pink — the brighter the look, the weaker the highlight. Moving the albedo toward the selection
+ * pink: the brighter the look, the weaker the highlight. Moving the albedo toward the selection
  * color is what makes it hold at any exposure; the emissive on top keeps it reading as lit rather
  * than as a flat sticker in shadowed areas. Lines/points have no emissive channel, so their `color`
  * is replaced outright.
  *
- * Mutates `material` in place — pass a clone, never a material the scene still shares.
+ * Mutates `material` in place: pass a clone, never a material the scene still shares.
  */
 export function tintForSelection(
 	material: THREE.Material,
@@ -81,7 +81,7 @@ export function setupEventHandlers(
 	let restoreMemberHighlight: (() => void) | null = null;
 	/** Which member of a merged mesh is selected, so a click on a sibling isn't a no-op. */
 	let selectedMemberIndex: number | null = null;
-	// The highlight clone owned by a member highlight — disposed with it, since it never becomes
+	// The highlight clone owned by a member highlight, disposed with it, since it never becomes
 	// the mesh's `material` and so isn't reached by the clone disposal below.
 	let memberHighlightMaterial: THREE.Material | null = null;
 	const raycaster = new THREE.Raycaster();
@@ -140,7 +140,7 @@ export function setupEventHandlers(
 				originalMaterials.delete(obj);
 
 				// If the object left the scene while selected, no traversal can reach the original
-				// material we just restored — dispose it here. Compute content is cleared wholesale
+				// material we just restored: dispose it here. Compute content is cleared wholesale
 				// per solve, so a detached object's material has no surviving sharers.
 				let root: THREE.Object3D = obj;
 				while (root.parent) root = root.parent;
@@ -156,7 +156,7 @@ export function setupEventHandlers(
 
 	/**
 	 * Tints the picked object. On a merged mesh only the hit member's index range is tinted, so
-	 * clicking one wall doesn't light up every wall sharing its material — see `merged-picking.ts`.
+	 * clicking one wall doesn't light up every wall sharing its material. See `merged-picking.ts`.
 	 */
 	const applyHighlight = (object: THREE.Object3D, member: PickableMember | null): boolean => {
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
@@ -284,7 +284,7 @@ export function setupEventHandlers(
 				: new THREE.Box3().setFromObject(target);
 		if (box.isEmpty()) return;
 		// Via the controller so the active camera moves (translating an ortho camera alone zooms
-		// nothing). The resulting tween is cancellable — a rapid second double-click replaces it
+		// nothing). The resulting tween is cancellable: a rapid second double-click replaces it
 		// rather than racing it.
 		cameraController.frameBounds(box, true);
 	};

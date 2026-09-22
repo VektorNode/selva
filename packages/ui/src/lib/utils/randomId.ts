@@ -1,5 +1,5 @@
 // Falls back through crypto.randomUUID → crypto.getRandomValues → Math.random so
-// plain-HTTP deployments don't crash. Math.random IDs are non-cryptographic —
+// plain-HTTP deployments don't crash. Math.random IDs are non-cryptographic:
 // fine for collision-resistant UI keys, not for tokens or secrets.
 export function randomId(): string {
 	const c = typeof crypto !== 'undefined' ? crypto : undefined;

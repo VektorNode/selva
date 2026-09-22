@@ -6,9 +6,8 @@ using Selva.Drawing.Model.Geometry;
 namespace Selva.Drawing.Rendering.Pdf;
 
 // Converts a typed model Path into a PdfSharpCore XGraphicsPath, mirroring SvgPathBuilder.
-// ArcTo is flattened to cubics via the W3C SVG arc-to-cubic algorithm because
-// XGraphicsPath.AddArc takes a different (centre/start/sweep) parameterisation than our
-// SVG-style ArcTo (radii/large-arc/sweep flags).
+// ArcTo is flattened to cubics via the W3C SVG arc-to-cubic algorithm: XGraphicsPath.AddArc
+// takes a centre/start/sweep parameterisation, not our SVG-style radii/large-arc/sweep flags.
 public static class PdfPathBuilder
 {
 	public static XGraphicsPath Build(Path path)
@@ -69,9 +68,9 @@ public static class PdfPathBuilder
 
 	// Splits a Path into one XGraphicsPath per subpath (per MoveTo). A single XGraphicsPath
 	// with multiple StartFigure() boundaries lets PdfSharpCore/GDI silently merge disjoint
-	// figures into one connected polyline — shows up as diagonal lines crossing through
-	// cells when rendering tables with grid dividers. Stroke-only paths use this; fills
-	// still need a single path for correct hole semantics.
+	// figures into one connected polyline: diagonal lines crossing through cells when
+	// rendering tables with grid dividers. Stroke-only paths use this; fills still need a
+	// single path for correct hole semantics.
 	public static IReadOnlyList<XGraphicsPath> BuildSubpaths(Path path)
 	{
 		var result = new List<XGraphicsPath>();

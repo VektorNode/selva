@@ -53,7 +53,7 @@ export async function downloadFiles(
 			return;
 		}
 
-		// A lone file is saved as itself rather than zipped — the one case that needs the DOM
+		// A lone file is saved as itself rather than zipped: the one case that needs the DOM
 		// directly. Everything else, including the per-root archive split, belongs to compute.
 		if (filesArray.length === 1) {
 			saveSingleFile(filesArray[0]);

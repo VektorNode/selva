@@ -32,7 +32,7 @@ const DEFINITION_LOAD_FAILED = 'Unable to load grasshopper definition';
 
 /**
  * Wire codes rhino.compute tags onto its error bodies. Passed to the transport
- * on every Grasshopper request — `core/` deliberately knows no backend's codes.
+ * on every Grasshopper request: `core/` deliberately knows no backend's codes.
  */
 export const GRASSHOPPER_SERVER_ERROR_CODES: ServerErrorCodeMap = {
 	definition_not_cached: ErrorCodes.DEFINITION_NOT_CACHED
@@ -57,7 +57,7 @@ function isDefinitionLoadMiss(error: unknown): boolean {
 
 /**
  * Debug aid: a solve can return successfully yet hand back outputs whose
- * `InnerTree` is empty (`{}`), meaning that parameter produced nothing — often a
+ * `InnerTree` is empty (`{}`), meaning that parameter produced nothing, often a
  * sign the definition didn't actually compute (wrong/missing inputs, a guarded
  * branch). The names tell you exactly which output was empty so you can trace it
  * back to the responsible branch.
@@ -96,13 +96,13 @@ export function warnOnEmptyInnerTrees(response: GrasshopperComputeResponse, debu
  * Result of a solve that also reports the definition's server-side cache key.
  *
  * `cacheKey` is the `md5_…` identifier the server assigned to the (base64)
- * definition — stable for identical content. A caller that holds it can solve
+ * definition, stable for identical content. A caller that holds it can solve
  * the same definition again by reference (`pointer: cacheKey`) instead of
  * re-uploading the full base64, which matters a lot for large (multi-MB)
  * definitions on a live UI. For a URL-pointer solve the server echoes the
  * request schema back, so `cacheKey` is the definition URL itself (already a
- * reference — nothing gained by re-pointing at it). `null` only when the
- * server's response carried no `pointer` at all — do NOT use `null` to detect
+ * reference, nothing gained by re-pointing at it). `null` only when the
+ * server's response carried no `pointer` at all: do NOT use `null` to detect
  * URL-pointer solves.
  */
 export interface SolveWithCacheKey {
@@ -115,26 +115,9 @@ export interface SolveWithCacheKey {
  *
  * @public Use this for direct compute control. For high-level API, use `GrasshopperClient.solve()`.
  *
- * @param dataTree - An array of `DataTree` objects representing the input data for the compute job.
- * @param definition - The Grasshopper definition, which can be:
- *   - A URL string (e.g., 'https://example.com/definition.gh')
- *   - A base64-encoded string of the .gh file
- *   - A plain string (will be base64-encoded)
- *   - A Uint8Array of the .gh file (will be base64-encoded)
- *   - A `DefinitionRef` (bytes are loaded via `ref.load()` for the upload)
- * @param config - Compute configuration (server URL, API key, etc. along with optional timeout, units, etc.)
- * @returns An object containing the compute result and extracted file data.
- *
- * @example
- * // Using a URL
- * await solveGrasshopperDefinition(trees, 'https://example.com/definition.gh', config);
- *
- * // Using a base64 string
- * await solveGrasshopperDefinition(trees, 'UEsDBBQAAAAIAL...', config);
- *
- * // Using binary data
- * const fileData = new Uint8Array([...]);
- * await solveGrasshopperDefinition(trees, fileData, config);
+ * @param definition - A URL string, a base64-encoded or plain `.gh` string, a
+ *   `.gh` `Uint8Array`, or a `DefinitionRef` (bytes loaded via `ref.load()` for
+ *   the upload).
  */
 export async function solveGrasshopperDefinition(
 	dataTree: DataTree[],
@@ -174,10 +157,10 @@ export async function solveGrasshopperDefinitionWithCacheKey(
 /**
  * Solve a definition by its server-side cache key (`pointer: cacheKey`),
  * skipping the (potentially multi-MB) base64 upload. If the key has been evicted
- * from the server's definition cache — `DEFINITION_LOAD_FAILED` — transparently
+ * from the server's definition cache (`DEFINITION_LOAD_FAILED`), transparently
  * retry once with the full `definition` and report the fresh cache key so the
  * caller can update its mapping. A `DefinitionRef` definition is only
- * materialized (`ref.load()`) inside that miss branch — a pointer hit never
+ * materialized (`ref.load()`) inside that miss branch: a pointer hit never
  * touches the bytes.
  *
  * @returns The solve result plus the (possibly refreshed) cache key, and whether
@@ -199,7 +182,7 @@ export async function solveByCacheKey(
 		return { ...fast, missed: false };
 	} catch (error) {
 		if (!isDefinitionLoadMiss(error)) throw error;
-		// Cache miss — fall back to the full upload and capture the fresh key.
+		// Cache miss: fall back to the full upload and capture the fresh key.
 		const bytes = await materializeDefinition(definition);
 		const full = await runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
 		return { ...full, missed: true };
@@ -229,8 +212,8 @@ async function materializeDefinition(definition: SolveDefinition): Promise<strin
 
 /**
  * Shared solve body: apply optional settings, POST, and split the server's
- * `pointer` (its cache key) off the response. `algo` — the request's full
- * base64 definition echoed back on every solve — is stripped too: keeping it
+ * `pointer` (its cache key) off the response. `algo`, the request's full
+ * base64 definition echoed back on every solve, is stripped too: keeping it
  * pins a multi-MB copy per response, which would consume the scheduler cache's
  * byte budget many times over. Stripping via shallow copy rather than `delete`
  * keeps any already-observed response object unmutated.
@@ -254,7 +237,7 @@ async function runSolve(
 	} = result as GrasshopperComputeResponse & { pointer?: unknown; algo?: unknown };
 	const response = rest as GrasshopperComputeResponse;
 	// The wire-size hint follows object identity, so the stripped copy must
-	// re-register it — minus the echoed `algo`, which is no longer retained (it
+	// re-register it, minus the echoed `algo`, which is no longer retained (it
 	// can dwarf the actual outputs for a large definition).
 	const wireSize = getResponseWireSize(result);
 	if (wireSize !== undefined) {
@@ -272,14 +255,7 @@ async function runSolve(
 // Grasshopper Arguments
 // ============================================================================
 
-/**
- * Prepares Grasshopper arguments from a definition and data tree.
- * Automatically detects the definition format and converts it appropriately.
- *
- * @param definition - Can be a URL, base64 string, plain string, or Uint8Array
- * @param dataTree - Array of DataTree objects for compute inputs
- * @internal
- */
+/** @internal */
 export function prepareGrasshopperArgs(
 	definition: string | Uint8Array,
 	dataTree: DataTree[]
@@ -291,14 +267,12 @@ export function prepareGrasshopperArgs(
 	};
 
 	if (definition instanceof Uint8Array) {
-		// Binary data → convert to base64
 		args.algo = base64ByteArray(definition);
 	} else if (/^https?:\/\//i.test(definition)) {
-		// URL → use as pointer reference
 		args.pointer = definition;
 	} else {
 		// Base64 detection is a heuristic (see detectBase64Payload): only long
-		// (≥64 data chars), canonical base64 is passed through — normalized, so
+		// (≥64 data chars), canonical base64 is passed through, normalized, so
 		// newline-wrapped/unpadded definitions reach the server decodable instead
 		// of double-encoded. Everything else (incl. short base64-shaped strings
 		// like "test") is treated as a plain string and encoded. Pass a
@@ -309,9 +283,7 @@ export function prepareGrasshopperArgs(
 	return args;
 }
 
-/**
- * @internal
- */
+/** @internal */
 export function applyOptionalComputeSettings(
 	arglist: GrasshopperRequestSchema,
 	options: GrasshopperComputeConfig

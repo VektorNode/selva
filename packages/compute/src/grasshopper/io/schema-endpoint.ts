@@ -13,20 +13,19 @@ export interface SchemaEndpointResult<TSchema = unknown> {
  * uploaded file, or a bare object for a single file.
  *
  * Use this rather than unwrapping the body by hand. The wrapper's casing varies
- * by server branch — mcneel serializes `FileName`/`Schemas`, the VektorNode fork
- * `fileName`/`schemas` — so a fixed-key read silently yields `undefined` against
+ * by server branch: mcneel serializes `FileName`/`Schemas`, the VektorNode fork
+ * `fileName`/`schemas`. A fixed-key read silently yields `undefined` against
  * half the servers, and the endpoint answers 200 either way. The failure looks
  * like "this definition has no schemas", which sends you debugging the wrong
  * thing entirely.
  *
- * A blanket key-rewrite (the old `camelcaseKeys` approach) is NOT the fix: it
- * reaches inside the schemas and mangles user-authored names — `"Display3d"` →
+ * A blanket key-rewrite (the old `camelcaseKeys` approach) is not the fix: it
+ * reaches inside the schemas and mangles user-authored names, `"Display3d"` →
  * `"display3d"`, value-list labels like `"Option A"` → `"optionA"`. Only the two
- * wrapper keys are read here; schema CONTENTS pass through untouched, which is
+ * wrapper keys are read here; schema contents pass through untouched, which is
  * why `TSchema` is a pass-through type parameter this module never inspects.
  *
  * @typeParam TSchema - Your schema type (e.g. `UISchema`). Not inspected.
- * @param raw - The parsed JSON body.
  */
 export function readSchemaResults<TSchema = unknown>(
 	raw: unknown

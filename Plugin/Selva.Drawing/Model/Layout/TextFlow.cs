@@ -215,13 +215,13 @@ public sealed class TextFlow : LayoutElement
 	}
 
 	// The width this flow actually occupies, as opposed to the width it was allowed to wrap
-	// within — conflating the two made every width-filling container treat the wrap budget as
+	// within: conflating the two made every width-filling container treat the wrap budget as
 	// a measurement (an Auto column holding "Qty" sized itself to the full page width).
 	//
 	// Capped at effectiveWidth because an unbreakable word can overrun the wrap box, and
 	// reporting more than the budget would push that overflow back onto the container.
 	//
-	// Not used by the Center/Right anchor math in Resolve — that still centers within the box
+	// Not used by the Center/Right anchor math in Resolve: that still centers within the box
 	// the caller asked to wrap in, not within the glyphs' own extent.
 	private static double InkWidth(IReadOnlyList<string> lines, TextStyle style, double effectiveWidth)
 	{

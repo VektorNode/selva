@@ -1,8 +1,8 @@
 /**
  * Stable hashing for solve deduplication and caching.
  *
- * The public keying surface here — {@link stableStringify}, {@link hashDefinition},
- * {@link hashSolveInput} — is exported from the package barrel so a durable
+ * The public keying surface here: {@link stableStringify}, {@link hashDefinition},
+ * {@link hashSolveInput}. Exported from the package barrel so a durable
  * (app-layer) cache or a pre-solved bundle viewer can reproduce the *exact*
  * canonicalize-and-hash path the scheduler's in-process cache uses. Key parity
  * across the two layers is a correctness requirement: a durable-cache key that
@@ -38,7 +38,7 @@ export function stableStringify(value: unknown): string {
 		// Unquoted `n` suffix keeps 1n distinct from the string "1".
 		if (typeof v === 'bigint') return `${v}n`;
 		if (v instanceof Uint8Array) {
-			// Full-content hash in one linear pass — sampling head/tail let two
+			// Full-content hash in one linear pass: sampling head/tail would let two
 			// buffers differing only in the middle share a cache key.
 			return `{"__u8":${v.length},"hash":"${fnv1aBytes(v)}"}`;
 		}
@@ -96,7 +96,7 @@ function fnv1aCore(length: number, codeAt: (i: number) => number): string {
 }
 
 /**
- * 32-bit FNV-1a— fast, no dependencies. Returns unsigned hex string.
+ * 32-bit FNV-1a: fast, no dependencies. Returns unsigned hex string.
  * @internal
  */
 export function fnv1a(input: string): string {
@@ -115,11 +115,11 @@ export function fnv1aBytes(bytes: Uint8Array): string {
  * Hash definition and data tree into a stable cache key.
  *
  * The definition is the *identity* of what we solve, so a binary definition is
- * hashed over its full content (`fnv1aBytes`) — a length-only or sampled key
+ * hashed over its full content (`fnv1aBytes`): a length-only or sampled key
  * would let two different `.gh` files collide and serve one's cached solve for
  * the other. `.gh` files are small enough that a single linear pass is
- * negligible. A {@link DefinitionRef} is keyed by its `key` alone — the
- * caller-declared identity of immutable bytes — so no bytes are materialized
+ * negligible. A {@link DefinitionRef} is keyed by its `key` alone, the
+ * caller-declared identity of immutable bytes, so no bytes are materialized
  * or hashed at all.
  *
  * The key keeps the definition and tree hashes as separate parts rather than
@@ -140,7 +140,7 @@ export function hashSolveInput(definition: SolveDefinition, dataTree: unknown): 
  * multi-MB base64 definition per solve.
  *
  * Invariant: `hashSolveInputForDefinition(hashDefinition(d), t)` produces the
- * exact same key as `hashSolveInput(d, t)` — cache-key semantics are unchanged.
+ * exact same key as `hashSolveInput(d, t)`; cache-key semantics are unchanged.
  *
  * @internal
  */
@@ -150,12 +150,12 @@ export function hashSolveInputForDefinition(definitionHash: string, dataTree: un
 }
 
 /**
- * Stable identity of a definition alone (no inputs) — used to key the
+ * Stable identity of a definition alone (no inputs), used to key the
  * server-cache-key map so the same definition reuses its `pointer` across solves
  * with different inputs. Same full-content hashing as {@link hashSolveInput}: a
  * binary definition is hashed over all its bytes so two distinct `.gh` files of
  * equal length can't share a cache key. A {@link DefinitionRef} is keyed by its
- * `key` verbatim (refs are short identities like UUIDs, safe as Map keys) —
+ * `key` verbatim (refs are short identities like UUIDs, safe as Map keys);
  * its immutability contract makes the key equivalent to a content hash.
  */
 export function hashDefinition(definition: SolveDefinition): string {

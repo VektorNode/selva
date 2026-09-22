@@ -23,7 +23,7 @@ namespace Selva.GH.Features.Drawing.Components;
 // and flows branches centred down the page. Grid packs branches into a fit-to-page grid.
 // Manual keeps raw Rhino world coordinates; overlap/outside-margin warnings apply only here.
 //
-// Preview tiles this section's own pages, so {page}/{pages} reflect section-local counts —
+// Preview tiles this section's own pages, so {page}/{pages} reflect section-local counts:
 // the real document-wide page count isn't known until GH_Document runs.
 public class GH_Page : GH_Component
 {
@@ -152,7 +152,7 @@ public class GH_Page : GH_Component
         }
 
         // When the section feeds a Document, the Document previews the real pages (global
-        // numbering, document chrome) at the same world origin — drawing both superimposes
+        // numbering, document chrome) at the same world origin: drawing both superimposes
         // two conflicting previews. Only preview dangling Page components.
         if (Params.Output[0].Recipients.Count == 0)
             BuildPreview(section);
@@ -298,7 +298,7 @@ public class GH_Page : GH_Component
     }
 
     // Multiple elements wired directly into Page become one Group at their raw world
-    // coordinates, which pagination treats as an atomic block — overlaps or margin overruns
+    // coordinates, which pagination treats as an atomic block: overlaps or margin overruns
     // fail silently otherwise, so warn instead.
     private void WarnOnDirectMultiElementLayout(List<DrawElement> children, PaperSize paper, Margins margins, bool paperKnown)
     {
@@ -360,7 +360,7 @@ public class GH_Page : GH_Component
         inner.MinY >= outer.MinY && inner.MaxY <= outer.MaxY;
 
     // Paginates this section alone, with no document chrome, for a quick preview of the page
-    // split — real header/footer and global page counts come from GH_Document.
+    // split; real header/footer and global page counts come from GH_Document.
     private void BuildPreview(Section section)
     {
         var paper = section.PaperSize ?? PaperSize.A4;
@@ -449,7 +449,7 @@ public class GH_Page : GH_Component
         }
     }
 
-    // Everything (wires, text, shaded fills) is drawn in the wires pass — repeating it in
+    // Everything (wires, text, shaded fills) is drawn in the wires pass; repeating it in
     // the mesh pass doubled preview cost and composited transparent fills twice.
     public override void DrawViewportMeshes(IGH_PreviewArgs args) { }
 

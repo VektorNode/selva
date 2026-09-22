@@ -6,7 +6,7 @@ using System.Linq;
 namespace Selva.Drawing.Model.Geometry;
 
 // Immutable typed path. Construct via Builder for ergonomic chaining, or pass an explicit
-// list of segments. Empty paths are legal — they just produce no draw output and an empty
+// list of segments. Empty paths are legal: they just produce no draw output and an empty
 // bounding box.
 public sealed class Path : IReadOnlyList<PathSegment>, IEquatable<Path>
 {
@@ -123,8 +123,8 @@ public sealed class Path : IReadOnlyList<PathSegment>, IEquatable<Path>
 	private static BoundingBox ArcBoundsConservative(Point2D from, PathSegment.ArcTo a)
 	{
 		// Conservative bound: endpoints plus a box centred on each endpoint expanded by the
-		// radii. Always contains the true ellipse arc, possibly with slack — fine for
-		// viewBox padding and layout decisions which already pad themselves.
+		// radii. Always contains the true ellipse arc, possibly with slack: fine for viewBox
+		// padding and layout decisions, which already pad themselves.
 		var rx = Math.Abs(a.RadiusX);
 		var ry = Math.Abs(a.RadiusY);
 		var b = BoundingBox.FromPoint(from).Union(a.To);

@@ -11,7 +11,7 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 /// <summary>
 ///     Minimal HTTP/1.1 request reader for the embedded servers. Reads the request line and
 ///     headers, leaves the body on the stream for the caller. No keep-alive, chunked transfer,
-///     or multipart — only simple GET/HEAD/WebSocket-upgrade requests from the local UI.
+///     or multipart: only simple GET/HEAD/WebSocket-upgrade requests from the local UI.
 /// </summary>
 internal sealed class HttpRequest
 {
@@ -94,7 +94,7 @@ internal static class HttpRequestParser
 
     internal static (string method, string target, string version) ParseRequestLine(string line)
     {
-        // METHOD SP TARGET SP HTTP-VERSION — exactly two spaces, no leading/trailing whitespace.
+        // METHOD SP TARGET SP HTTP-VERSION: exactly two spaces, no leading/trailing whitespace.
         var firstSp = line.IndexOf(' ');
         var lastSp = line.LastIndexOf(' ');
         if (firstSp <= 0 || lastSp <= firstSp)

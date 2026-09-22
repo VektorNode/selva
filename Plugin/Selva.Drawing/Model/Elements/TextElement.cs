@@ -43,7 +43,7 @@ public sealed class TextElement : DrawElement
 
 		var measured = FontMetrics.Measure(Text ?? string.Empty, style);
 		var width = measured.Width;
-		// Ascent/descent, not a fixed box, so cap height and descenders come out correctly.
+		// Ascent/descent, not a fixed box: cap height and descenders come out correctly.
 		var ascent = measured.Ascent;
 		var descent = Math.Abs(measured.Descent);
 		// LineHeight scales total height like CSS line-height, for looser layout.
@@ -73,6 +73,31 @@ public sealed class TextElement : DrawElement
 		{
 			var p = BackgroundPadding;
 			minX -= p; maxX += p; minY -= p; maxY += p;
+		}
+
+
+		if (RotationDegrees != 0)
+		{
+			// Renderers rotate the run about Position (translate → scale(1,-1) → rotate(-deg),
+			// which in this Y-up space is +deg counter-clockwise). Bounds must follow, or a
+			// rotated run's box stays axis-aligned and layout fits against ink that isn't there.
+			var rad = RotationDegrees * Math.PI / 180.0;
+			var cos = Math.Cos(rad);
+			var sin = Math.Sin(rad);
+			var rotated = BoundingBox.Empty;
+			foreach (var corner in new[]
+			{
+				new Point2D(minX, minY), new Point2D(maxX, minY),
+				new Point2D(maxX, maxY), new Point2D(minX, maxY)
+			})
+			{
+				var dx = corner.X - Position.X;
+				var dy = corner.Y - Position.Y;
+				rotated = rotated.Union(new Point2D(
+					Position.X + dx * cos - dy * sin,
+					Position.Y + dx * sin + dy * cos));
+			}
+			return rotated;
 		}
 
 		return new BoundingBox(minX, minY, maxX, maxY);

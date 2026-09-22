@@ -14,9 +14,9 @@ namespace Selva.GH.Features.Display.Goos;
 /// <summary>
 ///     Grasshopper Goo wrapper for a <see cref="DisplayBatch" />.
 ///
-///     Derives from <see cref="GH_GeometricGoo{T}" /> (not plain <see cref="GH_Goo{T}" />) so the
+///     Derives from <see cref="GH_GeometricGoo{T}" />, not plain <see cref="GH_Goo{T}" />, so the
 ///     dedicated <c>Param_WebDisplay</c> can derive from <c>GH_PersistentGeometryParam</c> and get
-///     Grasshopper's native param preview — a plain persistent param's IGH_PreviewObject draw methods
+///     Grasshopper's native param preview: a plain persistent param's IGH_PreviewObject draw methods
 ///     are never invoked by GH. Implements <see cref="IGH_PreviewData" /> to draw; the drawable
 ///     geometry is reconstructed from the encoded batch and cached on first draw.
 /// </summary>
@@ -37,11 +37,11 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     /// <summary>
     ///     Joins every decoded mesh in the batch into a single mesh for a single-item cast. Returns
-    ///     false when the batch has no meshes (e.g. a curves/points-only batch) or when the join
-    ///     produced an invalid mesh.
+    ///     false when the batch has no meshes (a curves/points-only batch) or the join produced an
+    ///     invalid mesh.
     ///
     ///     Appends the whole sequence in one call: appending mesh-by-mesh regrows the vertex and
-    ///     face lists on every iteration, which is quadratic over a batch of thousands of meshes.
+    ///     face lists on every iteration, quadratic over a batch of thousands of meshes.
     /// </summary>
     private bool TryJoinMeshes(out Mesh joined)
     {
@@ -66,7 +66,7 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
         return joined.Faces.Count > 0;
     }
 
-    // ── IGH_GeometricGoo ────────────────────────────────────────────────────────────────────────
+    // -- IGH_GeometricGoo --------------------------------------------------------------------------
 
     public override string TypeName => "WebDisplay";
 
@@ -95,8 +95,8 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     // A Web Display holds baked geometry (quantized mesh blob + curve/point JSON), not live Rhino
     // geometry, but Move/Rotate/Scale/Orient should still relocate it like any other geometric goo.
-    // The transformer decodes, moves, and re-encodes a fresh batch; the new goo rebuilds its preview
-    // lazily (its _preview starts null).
+    // The transformer decodes, moves, and re-encodes a fresh batch; the new goo's preview rebuilds
+    // lazily since its _preview starts null.
     public override IGH_GeometricGoo Transform(Transform xform)
     {
         return IsValid ? new WebDisplayGoo(DisplayBatchTransformer.Transform(Value, xform)) : this;
@@ -107,7 +107,7 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
         return IsValid ? new WebDisplayGoo(DisplayBatchTransformer.Morph(Value, xmorph)) : this;
     }
 
-    // ── IGH_PreviewData ─────────────────────────────────────────────────────────────────────────
+    // -- IGH_PreviewData -----------------------------------------------------------------------------
 
     public BoundingBox ClippingBox => IsValid ? Preview.BoundingBox : BoundingBox.Empty;
 
@@ -118,8 +118,8 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     /// <summary>
     ///     Draws the batch meshes. When <paramref name="selected" /> is true, the GH selection shade
-    ///     material from <c>args.Material</c> overrides each mesh's own batch color so a selected Web
-    ///     Display turns green like any other geometry; otherwise each mesh draws in its own color.
+    ///     material from <c>args.Material</c> overrides each mesh's own batch color, so a selected
+    ///     Web Display turns green like any other geometry; otherwise each mesh draws in its own color.
     /// </summary>
     public void DrawViewportMeshes(GH_PreviewMeshArgs args, bool selected)
     {
@@ -206,11 +206,11 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     /// <summary>
     ///     Tessellates curve items saved before the plugin did it server-side. Those carry NURBS
-    ///     <c>Json</c> but no <c>Points</c>, and the web renders only from <c>Points</c> — without
+    ///     <c>Json</c> but no <c>Points</c>, and the web renders only from <c>Points</c>: without
     ///     this, reopening such a definition solves fine in Rhino and then fails in the viewer.
-    ///     Rebuilding here is free: the NURBS is already in hand.
+    ///     Rebuilding here is free since the NURBS is already in hand.
     ///
-    ///     TRANSITIONAL — delete once no definition in circulation predates tessellated curves.
+    ///     TRANSITIONAL: delete once no definition in circulation predates tessellated curves.
     ///     Re-saving a definition through any current plugin build makes its batch self-sufficient,
     ///     so this only serves <c>.gh</c> files not opened since the upgrade. Removing it early is
     ///     not silent: such a file starts failing in the viewer with an upgrade message instead.
@@ -272,8 +272,8 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
         }
 
         // Decode the baked batch back to Rhino geometry so a Web Display can be wired straight into a
-        // Mesh/Curve/Point param. A batch can hold many meshes; a single-item cast joins them into one
-        // (standard GH single-cast behaviour). Curve/point casts take the first item of that kind.
+        // Mesh/Curve/Point param. A batch can hold many meshes; a single-item cast joins them into
+        // one, standard GH single-cast behaviour. Curve/point casts take the first item of that kind.
         if (IsValid)
         {
             if (typeof(Q).IsAssignableFrom(typeof(GH_Mesh)) && TryJoinMeshes(out var joined))
@@ -332,14 +332,14 @@ public class WebDisplayGoo : GH_GeometricGoo<DisplayBatch>, ISelvaSerializableGo
 
     public override object ScriptVariable()
     {
-        // Returns the JSON string directly, not a re-wrapped object — otherwise GHPython/file I/O
+        // Returns the JSON string directly, not a re-wrapped object: otherwise GHPython/file I/O
         // would serialize it a second time on top.
         return JsonConvert.SerializeObject(Value);
     }
 
-    // ISelvaSerializableGoo — Rhino.Compute returns this payload. DisplayBatch is a web-ready DTO
-    // (geometry already converted by SlvaWriter), so default settings match the Goo's
-    // own serialization (Write/ScriptVariable).
+    // ISelvaSerializableGoo: Rhino.Compute returns this payload. DisplayBatch is a web-ready DTO,
+    // geometry already converted by SlvaWriter, so default settings match the Goo's own
+    // serialization (Write/ScriptVariable).
     public string ToComputeJson()
     {
         return JsonConvert.SerializeObject(Value);

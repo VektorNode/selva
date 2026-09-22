@@ -7,7 +7,7 @@
 // records the fact in a hidden-set so the UI can render an eye-off state and compute per-layer
 // tri-state.
 //
-// The set is keyed by stable identity (see `identity.ts`), not `uuid`, so hiding survives a solve —
+// The set is keyed by stable identity (see `identity.ts`), not `uuid`, so hiding survives a solve:
 // a solve regenerates uuids but not the minted ids the keys read. A merged mesh stores one key per
 // source member, so re-merging under a different material/layer grouping can't lose the state.
 // Objects with no identifying userData fall back to their uuid, so their hidden state lasts only
@@ -35,7 +35,7 @@ export interface VisibilityState {
 	isLayerPartial(objects: THREE.Object3D[]): boolean;
 	toggleLayer(objects: THREE.Object3D[]): void;
 	/**
-	 * Hide or show one entry — a whole object, or a single member inside a merged mesh.
+	 * Hide or show one entry: a whole object, or a single member inside a merged mesh.
 	 *
 	 * A merged mesh renders as one THREE object, so a member cannot be hidden by flipping
 	 * `.visible`. Its key goes in the hidden-set and the mesh's drawn index ranges are rebuilt to
@@ -49,7 +49,7 @@ export interface VisibilityState {
 }
 
 export function createVisibilityState(hidden: Set<string> = new Set()): VisibilityState {
-	// An object is hidden when EVERY member key is in the set — for a plain mesh that is its one
+	// An object is hidden when EVERY member key is in the set: for a plain mesh that is its one
 	// key; for a merged mesh it means all source members are hidden.
 	const allHidden = (object: THREE.Object3D) =>
 		getMemberKeys(object).every((key) => hidden.has(key));
@@ -91,14 +91,14 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 		},
 
 		toggleLayer(objects) {
-			// A partially hidden layer hides the rest — only a fully hidden layer comes back.
+			// A partially hidden layer hides the rest: only a fully hidden layer comes back.
 			const show = state.isLayerHidden(objects);
 			for (const obj of objects) state.setVisible(obj, show);
 		},
 
 		applyTo(objects) {
 			for (const object of objects) {
-				// A merged mesh can be partly hidden, which `.visible` cannot express — rebuild its
+				// A merged mesh can be partly hidden, which `.visible` cannot express: rebuild its
 				// drawn ranges before the whole-object rule below considers it.
 				applyEntryVisibility(object, hidden);
 				// Only push objects down. Anything not in the set keeps whatever visibility the render

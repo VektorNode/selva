@@ -53,14 +53,14 @@ public class PaginationTemplateTests
 		};
 
 		// Content placement makes the header reserve space, forcing the rects onto separate
-		// pages — default Margin placement would let all three fit on one page.
+		// pages; default Margin placement would let all three fit on one page. 8mm content rect
+		// (10mm page - 2mm header) fits one 5mm rect per page.
 		var template = new PageTemplate
 		{
 			Header = header,
 			HeaderHeight = 2,
 			HeaderPlacement = ChromePlacement.Content,
 		};
-		// 8mm content rect (10mm page - 2mm header). Three 5mm rects → only one per page.
 		var stack = new Stack
 		{
 			Orientation = StackOrientation.Vertical,
@@ -120,8 +120,8 @@ public class PaginationTemplateTests
 		var pages = PaginationPass.Paginate(Rect(4, 4), paper, margins, template);
 		Assert.Single(pages);
 
+		// Footer bottom sits at the paper edge (y=0); the body's top stays at the page rect (y=15).
 		var pageBounds = pages[0].Content.ComputeBounds();
-		// Footer bottom is at y=0 (paper edge); body's top is at y=15 (page rect top).
 		Assert.Equal(0, pageBounds.MinY, 6);
 		Assert.Equal(15, pageBounds.MaxY, 6);
 	}
@@ -175,7 +175,7 @@ public class PaginationTemplateTests
 			FooterEdgeOffset = 2,
 		};
 
-		// reserve = max(0, 2+4-3) = 3 → content rect bottom at 3+3 = 6
+		// reserve = max(0, 2+4-3) = 3, so the content rect bottom lands at 3+3 = 6.
 		var body = PaginationPass.PaginateBody(Rect(4, 4), paper, margins, new BandConfig
 		{
 			FooterHeight = 4,
@@ -184,7 +184,7 @@ public class PaginationTemplateTests
 		});
 		Assert.Equal(6, body.ContentRect.MinY, 6);
 
-		// Band within margin (offset=1, height=2, margin=3 → reserve=0) → body unaffected.
+		// Band within the margin (offset=1, height=2, margin=3, reserve=0) leaves the body unaffected.
 		var bodyNoShrink = PaginationPass.PaginateBody(Rect(4, 4), paper, margins, new BandConfig
 		{
 			FooterHeight = 2,
@@ -197,14 +197,14 @@ public class PaginationTemplateTests
 	[Fact]
 	public void Header_without_explicit_height_is_measured_from_bounds()
 	{
-		// Header is 4mm tall with no explicit HeaderHeight, so it's measured. Content rect is
-		// 6mm (10mm page - 4mm header); two 3mm rects fit on page 1, rest spill.
+		// Header is 4mm tall with no explicit HeaderHeight, so it's measured. Content placement
+		// makes the auto-measured height shrink the content rect to 6mm (10mm page - 4mm header),
+		// so two 3mm rects fit on page 1 and the rest spill.
 		var header = new GroupElement
 		{
 			Children = new DrawElement[] { Rect(2, 4) },
 			BoundsOverride = new BoundingBox(0, 0, 2, 4),
 		};
-		// Content placement so the auto-measured header height shrinks the content rect.
 		var template = new PageTemplate
 		{
 			Header = header,
@@ -240,7 +240,7 @@ public class PaginationTemplateTests
 	public void Wrapping_header_reserves_its_full_wrapped_height()
 	{
 		// A header TextFlow longer than the band width wraps to multiple lines. The reserved
-		// band must be measured at that same width — an unconstrained measure would see a
+		// band must be measured at that same width: an unconstrained measure would see a
 		// single line and let the header's extra lines overlap the body on every page.
 		var paper = new PaperSize(100, 100, "T100");
 		var margins = Margins.Uniform(10); // band width 80

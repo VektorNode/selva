@@ -107,7 +107,7 @@ export const initThree = function (
 		: null;
 
 	// Only VISIBLE ground aids feed the near-plane fitter's clamp: the grid is commonly built hidden
-	// so hosts can toggle it, and the clamp is the camera's height above the plane — a hidden grid
+	// so hosts can toggle it, and the clamp is the camera's height above the plane. A hidden grid
 	// would still drive near→0 at grazing views and crater depth precision, punching hidden edges
 	// through geometry.
 	const gridPlane = config.grid.plane ?? upToAxis(sceneUp);
@@ -153,7 +153,7 @@ export const initThree = function (
 			: { dispose: () => {}, fitToView: () => {}, clearSelection: () => {} };
 
 	// Built-ins register at the priorities documented on ToolRegistration, so a host tool can slot
-	// above or below them. Listeners are attached unconditionally — a tool can register at any time.
+	// above or below them. Listeners are attached unconditionally: a tool can register at any time.
 	const tools = createToolRegistry();
 	if (measureTool) tools.register({ id: 'measure', tool: measureTool, priority: 0 });
 	if (gizmo) tools.register({ id: 'gizmo', tool: gizmo, priority: -100 });
@@ -186,9 +186,9 @@ export const initThree = function (
 	// Rebound to the animation loop's real invalidate once it's created below.
 	let requestRender: () => void = () => {};
 
-	// Applies regardless of edges.enabled — an explicit call should never be silently ignored.
-	// Meshes the overlay path skipped — too large, or past the scene-wide overlay budget — switch the
-	// screen-space edge fallback on; a later solve without such meshes switches it back off.
+	// Applies regardless of edges.enabled: an explicit call should never be silently ignored.
+	// Meshes the overlay path skipped (too large, or past the scene-wide overlay budget) switch
+	// the screen-space edge fallback on; a later solve without such meshes switches it back off.
 	const applyEdges = (root: THREE.Object3D, overrides?: Partial<EdgeOptions>) => {
 		void addEdgesAsync(root, {
 			color: config.edges.color,
@@ -219,7 +219,7 @@ export const initThree = function (
 		pipeline.setEdgeFallback(hasSkippedMeshes);
 	};
 
-	// Also stands down the screen-space fallback — bare removeEdges alone would keep drawing lines
+	// Also stands down the screen-space fallback: bare removeEdges alone would keep drawing lines
 	// for capped meshes.
 	const clearEdges = (root: THREE.Object3D) => {
 		removeEdges(root);
@@ -329,7 +329,7 @@ export const initThree = function (
 		gizmo?.dispose();
 		grid?.dispose();
 		pipeline.dispose();
-		// Stops any in-flight camera tween — its rAF ticks would otherwise keep touching the
+		// Stops any in-flight camera tween: its rAF ticks would otherwise keep touching the
 		// disposed controls after teardown.
 		cameraController.dispose();
 		controls.dispose();
@@ -340,7 +340,7 @@ export const initThree = function (
 
 		disposeSceneResources(scene);
 
-		// Cross-solve caches (parse/'s, reached via a registry rather than an import — layer rule)
+		// Cross-solve caches (parse/'s, reached via a registry rather than an import per the layer rule)
 		// outlive any single scene but not the GL context just destroyed. Refcounted: only the last
 		// live viewer actually frees, and this must run after the scene sweep above.
 	};

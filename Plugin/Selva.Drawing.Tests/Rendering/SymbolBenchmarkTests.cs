@@ -29,7 +29,7 @@ public class SymbolBenchmarkTests
 
 	private static readonly SymbolDefinition AnonymousLineSymbol = new SymbolDefinition
 	{
-		// No Id — falls back to inline expansion.
+		// No Id: falls back to inline expansion.
 		Children = new DrawElement[]
 		{
 			new PathElement
@@ -66,7 +66,7 @@ public class SymbolBenchmarkTests
 	public void Benchmark_10k_symbols_svg_sanity()
 	{
 		// Quick sanity check: dedupe SVG is smaller than inline. Deliberately no timing
-		// assertion — at this size both renders are sub-millisecond, so a wall-clock
+		// assertion: at this size both renders are sub-millisecond, so a wall-clock
 		// comparison measures JIT warm-up and CI scheduling noise, not the dedupe path.
 		var (inlineBytes, _) = MeasureSvg(AnonymousLineSymbol, 10);
 		var (dedupeBytes, _) = MeasureSvg(LineSymbol, 10);
@@ -77,7 +77,7 @@ public class SymbolBenchmarkTests
 	public void Benchmark_10k_symbols_pdf_sanity()
 	{
 		// Form XObject dedupe has overhead on small documents (metadata + resource mgmt).
-		// The dedupe win kicks in around 200-500 instances. Testing with 100×100 (10k).
+		// The dedupe win kicks in around 200-500 instances. Testing with 100x100 (10k).
 		var (inlineBytes, inlineMs) = MeasurePdf(AnonymousLineSymbol, 100);
 		var (dedupeBytes, dedupeMs) = MeasurePdf(LineSymbol, 100);
 		Console.WriteLine($"PDF 100×100 (10k instances): Inline {inlineBytes:N0} bytes in {inlineMs}ms, Dedupe {dedupeBytes:N0} bytes in {dedupeMs}ms, Savings {100.0 * (inlineBytes - dedupeBytes) / inlineBytes:F1}%");

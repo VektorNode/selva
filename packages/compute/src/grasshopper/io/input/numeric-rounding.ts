@@ -55,7 +55,7 @@ export function getInputStepSize(value: number, roundingTolerance: number): numb
 
 /**
  * A server-authored `stepSize` (read off the wire by `normalizeInputSchema`),
- * or `undefined` when absent/unusable — callers fall back to the heuristic.
+ * or `undefined` when absent/unusable: callers fall back to the heuristic.
  */
 export function serverStepSize(schema: InputParamSchema): number | undefined {
 	return typeof schema.stepSize === 'number' &&
@@ -64,10 +64,3 @@ export function serverStepSize(schema: InputParamSchema): number | undefined {
 		? schema.stepSize
 		: undefined;
 }
-
-/**
- * Computes the coerced default + stepSize for a Number/Integer input.
- * Mirrors the old `processNumericInput`, plus: a server-provided
- * `schema.stepSize` is honored verbatim; the default/min/max heuristic is
- * only the fallback when the server didn't author one.
- */

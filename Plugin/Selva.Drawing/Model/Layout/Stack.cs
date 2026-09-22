@@ -7,16 +7,16 @@ namespace Selva.Drawing.Model.Layout;
 
 public enum StackOrientation { Vertical, Horizontal }
 
-// How children are aligned along the cross axis (perpendicular to the stack direction).
+// Alignment along the cross axis (perpendicular to the stack direction).
 public enum CrossAlign { Start, Center, End, Stretch }
 
 // Vertical or horizontal sequence of children with uniform spacing and a single cross-axis
 // alignment. Natural size is the sum of child sizes along the main axis plus
 // (Children.Count - 1) x Spacing, by the max child cross size.
 //
-// By default the stack's bottom-left sits at world origin (0,0); wrap in a GroupElement with
-// a Transform to reposition. Vertical orientation grows downwards from the anchor (Y-up world
-// coords: the first child's top aligns with the stack's top). Horizontal grows rightwards.
+// The stack's bottom-left sits at world origin (0,0) by default; wrap in a GroupElement with
+// a Transform to reposition. Vertical orientation grows downward from the anchor (Y-up world
+// coords: the first child's top aligns with the stack's top). Horizontal grows rightward.
 public sealed class Stack : LayoutElement
 {
 	public IReadOnlyList<DrawElement> Children { get; init; } = Array.Empty<DrawElement>();
@@ -24,8 +24,7 @@ public sealed class Stack : LayoutElement
 	public double Spacing { get; init; } = 0.0;
 	public CrossAlign CrossAlign { get; init; } = CrossAlign.Start;
 
-	// Origin of the stack in world coords (anchor of the bottom-left corner of the bounding
-	// box). Defaults to (0,0).
+	// Anchor of the bounding box's bottom-left corner, in world coords.
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
 	public override DrawElement Resolve(LayoutContext context)
@@ -34,12 +33,12 @@ public sealed class Stack : LayoutElement
 			return new GroupElement { Id = Id, CssClass = CssClass, Metadata = Metadata };
 
 		// Forward the cross-axis size so flexible children (auto-width TextFlow, star Grids) can
-		// fill it, plus the main-axis room still unclaimed — the ceiling that stops an auto-fit
+		// fill it, plus the main-axis room still unclaimed: the ceiling that stops an auto-fit
 		// child (DrawingView) sizing itself against an unbounded axis and running past the page.
 		var remainingMain = PerChildMainBudget(context);
 
-		// First pass: ask each child for its natural bounds (recursing into LayoutElements
-		// with the cross-axis context — they'll hand back a sized primitive).
+		// First pass: ask each child for its natural bounds, recursing into LayoutElements
+		// with the cross-axis context.
 		var resolvedChildren = new DrawElement[Children.Count];
 		var bounds = new BoundingBox[Children.Count];
 		var maxCross = 0.0;
@@ -47,14 +46,13 @@ public sealed class Stack : LayoutElement
 		var nonEmptyCount = 0;
 		for (var i = 0; i < Children.Count; i++)
 		{
-			// Each child is measured against everything still unclaimed, as a ceiling — a child
+			// Each child is measured against everything still unclaimed, as a ceiling: a child
 			// that needs less hands the surplus to those after it. This deliberately does NOT
 			// pre-divide by the number of children left: that divisor counted every remaining
 			// child, including ones that turn out empty (a nested Stack, a blank TextFlow), so a
-			// conditionally-empty branch rescaled every view on the sheet — one view alone filled
-			// its 100 mm budget, the same view beside five empty siblings got 16.7 mm. It also let
-			// sibling COUNT set the drawing scale: adding a caption under a view shrank it from
-			// 190 mm to 143 mm and left 48% of the sheet blank.
+			// conditionally-empty branch rescaled every view on the sheet, and let sibling COUNT
+			// set the drawing scale, e.g. adding a caption under a view shrank it and left the
+			// rest of the sheet blank.
 			//
 			// Over-claiming by an early greedy child is corrected below, once every child's
 			// actual size is known.
@@ -83,7 +81,7 @@ public sealed class Stack : LayoutElement
 				if (b.Height > maxCross) maxCross = b.Height;
 			}
 		}
-		// Spacing only between children that occupy space — the placement loop below skips
+		// Spacing only between children that occupy space: the placement loop below skips
 		// empty children entirely, so counting them here would shift content off the anchor.
 		totalMain += Spacing * Math.Max(0, nonEmptyCount - 1);
 
@@ -91,14 +89,12 @@ public sealed class Stack : LayoutElement
 		// claim room a later sibling also needs, so the run totals more than the budget. Now that
 		// every child's appetite is known, scale the flexible (layout) children down by the
 		// factor that brings the total back inside budget; primitives can't be resized, so they're
-		// left alone. Children that turned out empty take no share, so an empty sibling costs the
-		// others nothing.
+		// left alone. Empty children take no share, so an empty sibling costs the others nothing.
 		//
-		// A child asked for N mm rarely returns exactly N — padding, borders, and stroke inflation
-		// are fixed costs that don't shrink with the geometry — so one proportional pass can still
+		// A child asked for N mm rarely returns exactly N: padding, borders, and stroke inflation
+		// are fixed costs that don't shrink with the geometry, so one proportional pass can still
 		// land marginally over. Repeat until it fits; each round shrinks the request, so this
-		// converges fast. The cap is a backstop against a child that ignores its budget entirely
-		// (a fixed-size primitive misreported as flexible).
+		// converges fast. The cap is a backstop against a child that ignores its budget entirely.
 		var mainBudget = PerChildMainBudget(context);
 		var spacingMain = Spacing * Math.Max(0, nonEmptyCount - 1);
 		for (var attempt = 0; attempt < 4; attempt++)
@@ -158,9 +154,8 @@ public sealed class Stack : LayoutElement
 				maxCross = parentCross;
 		}
 
-		// Vertical stack pins child i so its top edge is `cursor` mm below the stack's top,
-		// which sits at (Origin.Y + totalMain) in world Y. Cross-axis position uses CrossAlign
-		// against maxCross.
+		// Vertical stack pins child i so its top edge is `cursor` mm below the stack's top, which
+		// sits at (Origin.Y + totalMain). Cross-axis position uses CrossAlign against maxCross.
 		var laidOut = new List<DrawElement>(Children.Count);
 		var cursor = 0.0;
 		for (var i = 0; i < resolvedChildren.Length; i++)
@@ -177,21 +172,17 @@ public sealed class Stack : LayoutElement
 			double tx, ty;
 			if (Orientation == StackOrientation.Vertical)
 			{
-				// Cross is X. Child's natural left = b.MinX; we want it positioned at
-				// (Origin.X + crossOffset). Main is Y, growing downward from top.
+				// Cross is X, main is Y growing downward from the top.
 				var crossOffset = ResolveCrossOffset(b.Width, maxCross);
 				tx = Origin.X + crossOffset - b.MinX;
-				// Top of stack = Origin.Y + totalMain. Top of this child = top - cursor.
-				// child.b.MaxY should land at (top - cursor), so ty shifts by (top - cursor) - b.MaxY.
 				ty = Origin.Y + totalMain - cursor - b.MaxY;
 				cursor += b.Height + Spacing;
 			}
 			else
 			{
-				// Cross is Y. Main is X, growing rightward from left.
+				// Cross is Y, main is X growing rightward from the left.
 				var crossOffset = ResolveCrossOffset(b.Height, maxCross);
 				ty = Origin.Y + crossOffset - b.MinY;
-				// Left edge of child lands at (Origin.X + cursor). child.b.MinX → that.
 				tx = Origin.X + cursor - b.MinX;
 				cursor += b.Width + Spacing;
 			}
@@ -214,12 +205,10 @@ public sealed class Stack : LayoutElement
 	// default (whole-stack-or-nothing).
 	//
 	// This loop and Resolve are two independent walks over the same budget and must agree on
-	// every child's size — this one measures greedily against `availableHeight - consumed`
-	// while Resolve allocates a share. A 2026-07-27 audit suspected divergence for auto-fit
-	// children (1 page / view h=49.9 unpaginated vs. 2 pages / view h=99.6 through PaginateBody)
-	// but couldn't reproduce it across multiple geometry sizes. ContentRectInvariantTests
-	// paginates the same cross-product it resolves as a standing check — that's where a real
-	// divergence would show up first.
+	// every child's size: this one measures greedily against `availableHeight - consumed` while
+	// Resolve allocates a share. A divergence for auto-fit children was suspected once but never
+	// reproduced; ContentRectInvariantTests paginates the same cross-product it resolves as a
+	// standing check, so a real divergence would show up there first.
 	public override SplitResult TrySplit(double availableHeight, LayoutContext context)
 	{
 		if (Orientation != StackOrientation.Vertical)
@@ -227,9 +216,7 @@ public sealed class Stack : LayoutElement
 
 		// availableHeight is the real remaining budget and outranks whatever the caller's context
 		// says, so narrow the context to match before anything is measured against it. Without
-		// this, every `Resolve(context)` below sizes against room the caller has already spent:
-		// asked to fit 30 mm while holding a full-page context, this returned a resolved stack
-		// 100 mm tall and reported it as fitting.
+		// this, every `Resolve(context)` below sizes against room the caller has already spent.
 		if (!double.IsPositiveInfinity(availableHeight) && availableHeight < context.AvailableHeight)
 			context = BuildSelfContext(context, availableHeight);
 
@@ -237,8 +224,8 @@ public sealed class Stack : LayoutElement
 			return SplitResult.AllFits(Resolve(context), 0);
 
 		// The children's main-axis ceiling, so an auto-fit DrawingView cannot size itself past
-		// the bottom of the content rect. `consumed` below tracks what earlier children took, so
-		// each measurement sees the room that is actually left rather than the whole page.
+		// the bottom of the content rect. `consumed` tracks what earlier children took, so each
+		// measurement sees the room that is actually left rather than the whole page.
 		var childContext = BuildChildContext(context, availableHeight);
 
 		var fitsChildren = new List<DrawElement>();
@@ -264,7 +251,7 @@ public sealed class Stack : LayoutElement
 				: child;
 			var b = resolvedForMeasure?.ComputeBounds() ?? BoundingBox.Empty;
 			var h = b.IsEmpty ? 0 : b.Height;
-			// Mirror Resolve's accounting: spacing applies only between non-empty children.
+			// Mirrors Resolve's accounting: spacing applies only between non-empty children.
 			var spacingBefore = placedNonEmpty && !b.IsEmpty ? Spacing : 0;
 
 			if (consumed + spacingBefore + h <= availableHeight + 1e-6)
@@ -275,29 +262,27 @@ public sealed class Stack : LayoutElement
 				continue;
 			}
 
-			// Doesn't fit whole — split it if it's a layout element with remaining budget after
+			// Doesn't fit whole: split it if it's a layout element with remaining budget after
 			// spacing. A child marked keep-together is treated atomically instead (pushed whole
 			// to overflow), so a "title + first paragraph" group stays on one page.
 			var remaining = availableHeight - consumed - spacingBefore;
 			if (remaining > 0 && child is LayoutElement layoutChild && !IsKeepTogether(child))
 			{
-				// Pass the cross-axis-constrained context, not the parent context. Otherwise a
+				// Pass the cross-axis-constrained context, not the parent context: otherwise a
 				// child like TextFlow re-wraps to the parent's full width inside TrySplit while
-				// Resolve uses the stack's narrower cross-axis — line counts diverge and the
-				// next sibling lands at the wrong Y, often overlapping the text on the next page.
+				// Resolve uses the stack's narrower cross-axis, so line counts diverge and the
+				// next sibling lands at the wrong Y.
 				//
-				// The main axis must be `remaining`, not the whole page. A nested Stack resolves
-				// against its context to decide what fits, so handing it the full-page budget let
-				// it size against room the parent had already spent — and the parent then accepted
-				// the returned FitsHeight unchecked. TrySplit(30) with a full-page context came
-				// back claiming FitsHeight=100.
+				// The main axis must be `remaining`, not the whole page: a nested Stack resolves
+				// against its context to decide what fits, so handing it the full-page budget
+				// lets it size against room the parent already spent.
 				var splitContext = BuildChildContext(context, remaining);
 				var childSplit = layoutChild.TrySplit(remaining, splitContext);
 				if (childSplit.Fits != null)
 				{
 					// Trust the geometry the child actually produced over the height it reports:
-					// a child that resolved against a stale budget can claim a FitsHeight larger
-					// than `remaining`, and accepting it silently pushes the stack past the page.
+					// a child resolved against a stale budget can claim a FitsHeight larger than
+					// `remaining`, and accepting it silently pushes the stack past the page.
 					var splitFitsBounds = childSplit.Fits.ComputeBounds();
 					var actualHeight = splitFitsBounds.IsEmpty ? childSplit.FitsHeight : splitFitsBounds.Height;
 
@@ -324,12 +309,11 @@ public sealed class Stack : LayoutElement
 		// "Nothing fits" must be judged on occupied extent, not on the number of children kept.
 		// An empty leading child (an empty nested Stack, a blank TextFlow) counts towards
 		// fitsChildren while occupying nothing, so a stack whose first real child overflowed
-		// reported a successful partial split and emitted a page containing only the empty
-		// child — a blank page 0, with the actual content pushed to page 1.
+		// could otherwise report a successful partial split and emit a blank page.
 		//
 		// `placedNonEmpty` is the loop's own record of whether any child with real extent was
-		// kept, so it answers this directly; re-measuring `fitsChildren` here would not, because
-		// those are the unresolved originals.
+		// kept; re-measuring `fitsChildren` here would not answer this, since those are the
+		// unresolved originals.
 		if (!placedNonEmpty)
 			return SplitResult.NothingFits(this);
 
@@ -359,8 +343,8 @@ public sealed class Stack : LayoutElement
 		return SplitResult.Partial(fitsResolved, overflowStack, fitsHeight);
 	}
 
-	// Nothing fits on a fresh page: shed only the head child (letting a splittable head —
-	// a tall TextFlow, a Table — shed its own leading fragment first) so the oversize page
+	// Nothing fits on a fresh page: shed only the head child (letting a splittable head,
+	// e.g. a tall TextFlow or Table, shed its own leading fragment first) so the oversize page
 	// carries as little as possible and pagination continues with the rest.
 	public override SplitResult ForcePlace(double availableHeight, LayoutContext context)
 	{
@@ -370,10 +354,9 @@ public sealed class Stack : LayoutElement
 		var childContext = BuildChildContext(context);
 
 		// Advance past any leading children that occupy no space. Forcing an empty child out as
-		// "the head" produced an entirely blank page and deferred the real content to the next
-		// one — a leading empty nested Stack or blank TextFlow turned a 1-page document into 2,
-		// the first of which drew nothing. Empty children still travel with the forced page (they
-		// render nothing either way); they just cannot be what the page is built around.
+		// "the head" produces an entirely blank page and defers the real content to the next one.
+		// Empty children still travel with the forced page (they render nothing either way); they
+		// just cannot be what the page is built around.
 		var headIndex = 0;
 		while (headIndex < Children.Count - 1 && IsZeroExtent(Children[headIndex], childContext))
 			headIndex++;
@@ -424,7 +407,7 @@ public sealed class Stack : LayoutElement
 		return SplitResult.Partial(fitsResolved, overflowStack, fitsHeight);
 	}
 
-	// Per-child context with an unbounded main axis — see the mainBudget overload for why.
+	// Per-child context with an unbounded main axis: see the mainBudget overload for why.
 	// Children that split read their height budget from TrySplit, never from this context.
 	private LayoutContext BuildChildContext(LayoutContext parent)
 		=> BuildChildContext(parent, double.PositiveInfinity);
@@ -440,7 +423,7 @@ public sealed class Stack : LayoutElement
 	}
 
 	// The stack's OWN context with the vertical axis clamped to a smaller budget. Unlike
-	// BuildChildContext this never swaps axes by orientation — TrySplit's budget is always a
+	// BuildChildContext this never swaps axes by orientation: TrySplit's budget is always a
 	// height, because pagination only ever breaks vertically.
 	private static LayoutContext BuildSelfContext(LayoutContext parent, double availableHeight)
 	{
@@ -451,8 +434,8 @@ public sealed class Stack : LayoutElement
 	}
 
 	// The main-axis extent a single child may claim: the whole budget, less the spacing that
-	// must fit between children. This is a *ceiling* that stops one child sizing past the page
-	// — not an allocation. Dividing it by the child count instead would cap every child at an
+	// must fit between children. This is a *ceiling* that stops one child sizing past the page,
+	// not an allocation. Dividing it by the child count instead would cap every child at an
 	// equal share even when its siblings need far less, which squeezes a long flat view into a
 	// fraction of the sheet and leaves the rest blank.
 	//
@@ -473,17 +456,17 @@ public sealed class Stack : LayoutElement
 
 	// mainBudget is the real remaining extent along the stacking axis, or +infinity when the
 	// caller genuinely doesn't know it. Passing it through keeps an auto-fitting child
-	// (DrawingView) inside the page — with an infinite main axis it fits only the cross axis,
+	// (DrawingView) inside the page: with an infinite main axis it fits only the cross axis,
 	// so tall geometry in a vertical stack (or a row of views in a horizontal one) sizes past
 	// the content rect and runs through the footer.
 	//
 	// Never substitute a fake finite value here: an earlier version used cross x cross, which
 	// scaled auto-fit children against a fictitious square viewport. Infinity is correct when no
-	// budget is known — it keeps the child at its natural size instead of one derived from an
+	// budget is known: it keeps the child at its natural size instead of one derived from an
 	// unrelated axis.
 	private LayoutContext BuildChildContext(LayoutContext parent, double mainBudget)
 	{
-		// A budget of exactly 0 means "the siblings used it all", not "unbounded" — flipping it
+		// A budget of exactly 0 means "the siblings used it all", not "unbounded": flipping it
 		// to infinity here would hand the next child a free axis and let it size past the page.
 		// Only a negative or non-finite budget means "no budget known".
 		var main = mainBudget >= 0 && !double.IsNaN(mainBudget) ? mainBudget : double.PositiveInfinity;
@@ -492,7 +475,7 @@ public sealed class Stack : LayoutElement
 			var w = parent.AvailableWidth;
 			if (double.IsInfinity(w) || w <= 0)
 			{
-				// No cross-axis budget. A main-axis budget alone is still worth forwarding —
+				// No cross-axis budget. A main-axis budget alone is still worth forwarding:
 				// it bounds the axis the stack grows along.
 				return double.IsInfinity(main)
 					? new LayoutContext(BoundingBox.Empty)

@@ -2,15 +2,15 @@ import { getContext, setContext, type Component } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 
 /**
- * Generic over the component's props `P` so registration is type-checked at the call site.
  * The store holds a heterogeneous mix of items, so its map widens `P` to
- * `Record<string, unknown>` at the boundary.
+ * `Record<string, unknown>` at the boundary; `register` stays generic over `P` so
+ * call sites keep type-checked props.
  */
 export interface FooterItem<P extends Record<string, unknown> = Record<string, unknown>> {
 	id: string;
 	component: Component<P>;
 	/**
-	 * Re-invoked on every render. Return reactive state — `() => ({ status: s.status })` —
+	 * Re-invoked on every render. Return reactive state (`() => ({ status: s.status })`)
 	 * or the footer never updates.
 	 */
 	getProps: () => P;
@@ -21,7 +21,7 @@ export interface FooterItem<P extends Record<string, unknown> = Record<string, u
 
 export interface FooterStore {
 	items: SvelteMap<string, FooterItem>;
-	/** Register (or replace) a footer item. `position`/`priority` default to 'left'/0. */
+	/** `position` defaults to `'left'`, `priority` to `0`. */
 	register<P extends Record<string, unknown>>(
 		item: Omit<FooterItem<P>, 'position' | 'priority'> &
 			Partial<Pick<FooterItem<P>, 'position' | 'priority'>>

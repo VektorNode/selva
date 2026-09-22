@@ -11,7 +11,7 @@ export interface NormalizeDefaultWarning {
 
 /**
  * Read an item's `data` / `type` case-insensitively. Items are lowercase
- * (`data`/`type`) on every known server branch — they carry `[JsonProperty]` —
+ * (`data`/`type`) on every known server branch, since they carry `[JsonProperty]`,
  * but reading them defensively costs nothing and guards against future drift.
  */
 function itemData(item: unknown): unknown {
@@ -22,10 +22,8 @@ function itemType(item: unknown): string | undefined {
 }
 
 /**
- * Wire item types parsed as numbers in a tree-access default. Matches the
- * numeric CLR types Grasshopper serializes — the old code only handled
- * `Double`/`Int32`, leaving `Single`/`Int64`/`Decimal` items as strings inside
- * a `DefaultValue<number>` tree.
+ * Wire item types parsed as numbers in a tree-access default: every numeric
+ * CLR type Grasshopper serializes, not just `Double`/`Int32`.
  */
 const NUMERIC_ITEM_TYPES = new Set([
 	'System.Double',
@@ -35,7 +33,7 @@ const NUMERIC_ITEM_TYPES = new Set([
 	'System.Int64'
 ]);
 
-/** Integral wire item types — rounded like the scalar Integer path. */
+/** Integral wire item types: rounded like the scalar Integer path. */
 const INTEGER_ITEM_TYPES = new Set(['System.Int32', 'System.Int64']);
 
 /**
@@ -52,7 +50,7 @@ export function normalizeDefaultWithWarning(input: InputParamSchema): {
 	}
 
 	// An array default is already in the shape the per-type parsers expect
-	// (coerceDefault maps arrays) — `processInputs` is public and documents this
+	// (coerceDefault maps arrays): `processInputs` is public and documents this
 	// shape. It must NOT fall into the malformed branch below just because
 	// `typeof [] === 'object'`.
 	if (Array.isArray(input.default)) {
@@ -70,17 +68,13 @@ export function normalizeDefaultWithWarning(input: InputParamSchema): {
 
 	const innerTree = readField<Record<string, unknown>>(input.default, 'innerTree') ?? {};
 
-	// If innerTree is empty, set default to undefined
 	if (Object.keys(innerTree).length === 0) {
 		return { schema: { ...input, default: undefined } };
 	}
 
-	// If treeAccess is true or atMost > 1, preserve the tree structure
 	if (input.treeAccess || (input.atMost && input.atMost > 1)) {
-		// Convert each branch to an array of parsed data. Items are parsed with the
-		// SAME transformers as scalar defaults (issue: this path used to hand-roll
-		// `Number(data)` / `data === 'true'`, so a blank double became 0 and any
-		// junk boolean silently became false).
+		// Items are parsed with the SAME transformers as scalar defaults, so a blank
+		// double doesn't become 0 and a junk boolean doesn't silently become false.
 		const tree: Record<string, any[]> = {};
 		const invalidItems: string[] = [];
 		for (const [branch, items] of Object.entries(innerTree)) {
@@ -99,7 +93,7 @@ export function normalizeDefaultWithWarning(input: InputParamSchema): {
 				const data = itemData(item);
 				const type = itemType(item);
 				if (type && NUMERIC_ITEM_TYPES.has(type)) {
-					// Blank means "no value" — drop it silently, mirroring the scalar
+					// Blank means "no value": drop it silently, mirroring the scalar
 					// path where a blank string default becomes `undefined`, never 0.
 					if (typeof data === 'string' && data.trim() === '') continue;
 					const num = numericTransformer(data);
@@ -111,7 +105,7 @@ export function normalizeDefaultWithWarning(input: InputParamSchema): {
 					continue;
 				}
 				if (type === 'System.Boolean') {
-					// Strict true/false parsing — 'maybe'/'1'/'' are dropped and
+					// Strict true/false parsing: 'maybe'/'1'/'' are dropped and
 					// surfaced, not silently coerced to false.
 					const bool = booleanTransformer(data);
 					if (bool === null) {
@@ -151,7 +145,6 @@ export function normalizeDefaultWithWarning(input: InputParamSchema): {
 		return { schema: { ...input, default: tree }, ...(warning && { warning }) };
 	}
 
-	// Otherwise, flatten all values as before
 	const allValues: any[] = [];
 	for (const items of Object.values(innerTree)) {
 		if (Array.isArray(items)) {

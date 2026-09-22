@@ -34,7 +34,7 @@ internal static class PdfXmpMetadata
 	{
 		var sb = new StringBuilder();
 		// "W5M0MpCehiHzreSzNTczkc9d" is the fixed XMP sentinel UUID readers scan for to
-		// locate the packet — don't change it.
+		// locate the packet: don't change it.
 		sb.Append("<?xpacket begin=\"﻿\" id=\"W5M0MpCehiHzreSzNTczkc9d\"?>\n");
 		sb.Append("<x:xmpmeta xmlns:x=\"adobe:ns:meta/\" x:xmptk=\"Selva.Drawing\">\n");
 		sb.Append("<rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">\n");

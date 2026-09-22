@@ -17,7 +17,7 @@ export function setupLighting(scene: THREE.Scene, config: ResolvedOptions): Scen
 	);
 	scene.add(ambient);
 
-	// HemisphereLight defaults to +Y up, which is wrong for a Z-up scene — align to scene up instead.
+	// HemisphereLight defaults to +Y up, which is wrong for a Z-up scene: align to scene up instead.
 	let hemisphere: THREE.HemisphereLight | null = null;
 	if (config.lighting.enableHemisphereLight) {
 		hemisphere = new THREE.HemisphereLight(
@@ -48,7 +48,7 @@ export function setupLighting(scene: THREE.Scene, config: ResolvedOptions): Scen
 
 	sunlight.castShadow = true;
 
-	// Frustum bounds are not set here — fitShadowToContent sizes them to scene content instead.
+	// Frustum bounds are not set here: fitShadowToContent sizes them to scene content instead.
 	sunlight.shadow.mapSize.width = config.render.shadowMapSize || 2048;
 	sunlight.shadow.mapSize.height = config.render.shadowMapSize || 2048;
 
@@ -64,7 +64,7 @@ export function setupLighting(scene: THREE.Scene, config: ResolvedOptions): Scen
 }
 
 /**
- * Sizes a directional light's orthographic shadow frustum to the scene content's bounding sphere —
+ * Sizes a directional light's orthographic shadow frustum to the scene content's bounding sphere,
  * the dominant lever on shadow crispness. No-op on an empty box (would collapse the frustum to a point).
  */
 export function fitShadowToContent(light: THREE.DirectionalLight, bounds: THREE.Box3): void {

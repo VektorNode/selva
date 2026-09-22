@@ -23,13 +23,13 @@ import type {
  * param types plug in by adding an entry to {@link INPUT_TYPE_PARSERS}.
  *
  * Parsers are pure: they read from a (already-`normalizeDefault`'d) schema and
- * return a typed param. They do not mutate the schema. `parse` throws a
- * {@link ComputeError} on recoverable bad input; the registry boundary
- * catches it and pairs it with `fallback`.
+ * return a typed param, without mutating it. `parse` throws a {@link ComputeError}
+ * on recoverable bad input; the registry boundary catches it and pairs it with
+ * `fallback`.
  */
 /**
  * A recoverable oddity a parser found while still succeeding (e.g. a ValueList
- * default not present in its values map). Reported through the optional `warn`
+ * default not present in its values map), reported through the optional `warn`
  * callback and surfaced to clients on the same `parseErrors` channel as
  * MALFORMED_DEFAULT warnings.
  */
@@ -74,8 +74,8 @@ function computeNumeric(
 	// through untouched (numeric constraints are applied later by TreeBuilder).
 	// Without this guard the scalar numericTransformer mangles the tree object to
 	// `undefined`, silently dropping a tree-access slider's default. Sharing
-	// `isDataTreeDefault` with TreeBuilder guarantees we pass through exactly the
-	// values it will treat as trees — no looser, no stricter.
+	// `isDataTreeDefault` with TreeBuilder guarantees this passes through exactly
+	// the values TreeBuilder will treat as trees, no looser, no stricter.
 	if (isDataTreeDefault(schema.default)) {
 		return {
 			default: schema.default as NumericInputType['default'],
@@ -84,7 +84,7 @@ function computeNumeric(
 	}
 
 	// A scalar string default that isn't blank and doesn't parse (locale comma
-	// '1,5', 'Infinity', hex, plain junk) is bad input — surface it as a parse
+	// '1,5', 'Infinity', hex, plain junk) is bad input: surface it as a parse
 	// error instead of silently collapsing the default to `undefined`. Blank
 	// strings still mean "no default" (deliberate, see numericTransformer);
 	// array items keep the filter semantics.
@@ -170,7 +170,7 @@ function computeNumeric(
 }
 
 // ============================================================================
-// Parsers — one per type
+// Parsers: one per type
 // ============================================================================
 
 const numericParser: InputTypeParser<NumericInputType> = {
@@ -203,7 +203,7 @@ const numericParser: InputTypeParser<NumericInputType> = {
 			maximum: schema.maximum,
 			atLeast: schema.atLeast,
 			atMost: schema.atMost,
-			// The parse path always sets a stepSize — the fallback param must too.
+			// The parse path always sets a stepSize: the fallback param must too.
 			stepSize: serverStepSize(schema) ?? (schema.paramType === 'Integer' ? 1 : 0.1),
 			default: isList ? [safeValue] : safeValue
 		};
@@ -224,7 +224,7 @@ const booleanParser: InputTypeParser<BooleanInputType> = {
 		}
 		const value = coerceDefault(schema.default, booleanTransformer, false);
 		// The transformer follows the ValueTransformer contract (null on bad input,
-		// never a throw), so bad ARRAY items are filtered like non-string junk —
+		// never a throw), so bad ARRAY items are filtered like non-string junk:
 		// one 'maybe' in ['true','maybe'] no longer aborts the whole array. A bad
 		// SCALAR survives coercion verbatim (setUndefinedOnEmpty=false); surface it
 		// as a parse error instead of shipping a non-boolean default.
@@ -273,7 +273,7 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 
 		let defaultValue = schema.default as string | undefined;
 		if (schema.default !== undefined && schema.default !== null) {
-			// A tree/array-shaped default can't index the values map — `String()`
+			// A tree/array-shaped default can't index the values map: `String()`
 			// would silently turn it into '[object Object]'. Reject it properly.
 			if (typeof schema.default === 'object') {
 				throw new ComputeError(
@@ -284,12 +284,12 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			}
 			const defaultLower = String(schema.default).toLowerCase();
 			// Membership is case-insensitive, but downstream lookups (`values[default]`)
-			// are not — return the canonical-cased key on a match.
+			// are not: return the canonical-cased key on a match.
 			const match = Object.keys(schema.values).find((key) => key.toLowerCase() === defaultLower);
 			if (match !== undefined) {
 				defaultValue = match;
 			} else {
-				// Out-of-range default only warns — it still succeeds (pinned
+				// Out-of-range default only warns: it still succeeds (pinned
 				// behavior). Reported through `warn` too, so it reaches the client's
 				// parseErrors instead of living only in the logger.
 				const message = `ValueList input "${schema.nickname || 'unnamed'}" default value "${schema.default}" is not in available values`;
@@ -307,7 +307,7 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 	},
 	fallback(schema, base) {
 		// A ValueList only falls back when its values map is missing/empty or its
-		// default couldn't be interpreted — either way the default can't be
+		// default couldn't be interpreted: either way the default can't be
 		// validated against the map, so drop it (never fabricate `[undefined]` or
 		// keep a value provably absent from an empty map).
 		return {
@@ -391,8 +391,5 @@ export const INPUT_TYPE_PARSERS: ReadonlyMap<string, InputTypeParser> = new Map(
 	ALL_PARSERS.flatMap((parser) => parser.types.map((type) => [type, parser] as const))
 );
 
-/**
- * The Geometry parser is the registry's fallback for an unknown paramType,
- * matching the old `createSafeDefault` default branch (geometry-shaped null).
- */
+/** The Geometry parser is the registry's fallback for an unknown paramType (geometry-shaped null). */
 export const UNKNOWN_TYPE_FALLBACK: InputTypeParser = geometryParser;

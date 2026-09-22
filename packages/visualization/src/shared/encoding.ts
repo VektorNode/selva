@@ -25,7 +25,7 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 	// Prefer Buffer in Node: faster, and avoids the atob + charCodeAt latin-1 detour.
 	const Buffer = getNodeBuffer();
 	if (Buffer) {
-		// Copy out of the Buffer — small Buffer.from results are views over Node's shared 8 KiB pool
+		// Copy out of the Buffer: small Buffer.from results are views over Node's shared 8 KiB pool
 		// slab, so returning one would retain the whole slab and leak unrelated pooled bytes to any
 		// consumer touching `.buffer` (structuredClone, postMessage transfer, etc).
 		return new Uint8Array(Buffer.from(data, 'base64'));

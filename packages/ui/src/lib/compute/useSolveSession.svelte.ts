@@ -10,13 +10,12 @@ import { createSolveSession } from '@selvajs/solve/client';
  * a component, never `createSolveSession` directly: the raw session's getters return correct
  * values but never re-render.
  *
- * Must be called during component initialization — the subscription is managed by `$effect`,
+ * Must be called during component initialization. The subscription is managed by `$effect`,
  * so teardown follows the owning component's lifecycle.
  */
 export function useSolveSession(args: SolveSessionArgs): SolveSession {
 	const session = createSolveSession(args);
 
-	// Reading this inside a getter is what registers the dependency; the value never matters.
 	let version = $state(0);
 
 	$effect(() => {
@@ -27,8 +26,9 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		});
 	});
 
-	/** Registers the reactive dependency, then returns the live value. */
 	function track<T>(read: () => T): T {
+		// Reading `version` here is what registers the reactive dependency; don't simplify
+		// this to `return read()`, the getters would stop re-rendering.
 		void version;
 		return read();
 	}

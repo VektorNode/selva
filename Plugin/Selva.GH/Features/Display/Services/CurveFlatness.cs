@@ -12,7 +12,7 @@ public static class CurveFlatness
 {
     /// <summary>
     ///     Turn angle (radians) at <paramref name="b" /> along a→b→c; 0 = straight, π = reversal.
-    ///     Returns 0 when either leg has zero length — a repeated point is not a corner.
+    ///     Returns 0 when either leg has zero length: a repeated point is not a corner.
     /// </summary>
     public static double TurnAngle(Point3d a, Point3d b, Point3d c)
     {

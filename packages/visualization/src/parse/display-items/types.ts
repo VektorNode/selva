@@ -1,8 +1,8 @@
 // Non-mesh display items (curves, points) ride as JSON inside DisplayBatch alongside the binary
-// mesh blob. Discriminated on `kind` — the parser's `never` check forces new kinds to be handled there.
+// mesh blob. Discriminated on `kind`: the parser's `never` check forces new kinds to be handled there.
 
 export interface DisplayIdentity {
-	/** The item's identity — the writer-minted opaque id, same contract as mesh ids. Distinct from `name` so renaming doesn't change identity. */
+	/** The item's identity: the writer-minted opaque id, same contract as mesh ids. Distinct from `name` so renaming doesn't change identity. */
 	id: string;
 	name: string;
 	layer: string;
@@ -24,7 +24,7 @@ export interface DisplayPosition {
 	Z: number;
 }
 
-/** Rendered as a fat `Line2` straight from `points` — nothing decodes geometry in the browser. */
+/** Rendered as a fat `Line2` straight from `points`: nothing decodes geometry in the browser. */
 export interface DisplayCurve extends DisplayItemBase {
 	kind: 'curve';
 	/**

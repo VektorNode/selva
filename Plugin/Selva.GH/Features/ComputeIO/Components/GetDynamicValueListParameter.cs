@@ -26,12 +26,12 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     private DataTree<GH_ValueListDataGoo> _contextualDataTree;
 
     // Raw value strings as applied by the UI. Kept separately from _contextual so the selection
-    // re-resolves against the option set at emit time, not at apply time — if a wired
+    // re-resolves against the option set at emit time, not at apply time: if a wired
     // initial-options source populates _storedItems on the same solve, the apply can run before
     // those options are read, so resolving eagerly would freeze the unmatched value. See EmitData.
     private List<string> _selectedValues;
 
-    // Name -> expression, from the last LoadItems call. Persisted so a saved document round-trips
+    // Name -> expression from the last LoadItems call. Persisted so a saved document round-trips
     // its last-known options for Rhino.Compute.
     private List<(string Name, string Expression)> _storedItems = new List<(string Name, string Expression)>();
 
@@ -63,9 +63,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
     public int AtMost { get; set; } = 1;
     public bool Immediate { get; set; } = true;
 
-    /// <summary>
-    ///     Enable list/multi-select mode (driven by the schema's `displayAs: 'checklist'`).
-    /// </summary>
+    // Enable list/multi-select mode (driven by the schema's `displayAs: 'checklist'`).
     public void SetListAccess(bool listAccess)
     {
         Access = listAccess ? GH_ParamAccess.list : GH_ParamAccess.item;
@@ -106,22 +104,20 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         return _contextual != null && _contextual.Length > 0;
     }
 
-    /// <summary>
-    ///     Assigns contextual data as a tree — called by Rhino.Compute via reflection.
-    /// </summary>
+    // Assigns contextual data as a tree. Called by Rhino.Compute via reflection.
     public void AssignContextualDataTree(DataTree<GH_ValueListDataGoo> data)
     {
         _contextualDataTree = data;
         ExpireSolution(false);
     }
 
-    /// <summary>Sets a single string value directly — for use from Rhino.Compute via reflection.</summary>
+    // Sets a single string value directly. Called from Rhino.Compute via reflection.
     public void SetValue(string value)
     {
         SetValues(new[] { value });
     }
 
-    /// <summary>Sets one or more string values directly — for use from Rhino.Compute via reflection.</summary>
+    // Sets one or more string values directly. Called from Rhino.Compute via reflection.
     public void SetValues(IEnumerable<string> values)
     {
         // The goos are (re)built lazily in EmitData, against whatever options are current then —
@@ -132,21 +128,17 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         ExpireSolution(false);
     }
 
-    /// <summary>
-    ///     Wraps a selected value in a goo, mapping it to a known option's expression when one
-    ///     matches, otherwise passing it through verbatim.
-    /// </summary>
+    // Wraps a selected value in a goo, mapping it to a known option's expression when one
+    // matches, otherwise passing it through verbatim.
     private GH_ValueListDataGoo ToGoo(string value)
     {
         var (expression, matchIndex) = DynamicValueListLogic.ResolveExpression(_storedItems, value);
         return new GH_ValueListDataGoo(expression, _storedItems, matchIndex);
     }
 
-    /// <summary>
-    ///     Records the selected value so it flows downstream on the next solve. Unlike the static
-    ///     value list, options here are computed each solve, so there's no authoritative list to
-    ///     validate against: any non-empty value is accepted as-is. Returns true if recorded.
-    /// </summary>
+    // Records the selected value so it flows downstream on the next solve. Unlike the static
+    // value list, options here are computed each solve, so there's no authoritative list to
+    // validate against: any non-empty value is accepted as-is.
     public bool SelectItemByName(string value)
     {
         if (string.IsNullOrEmpty(value))
@@ -158,10 +150,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         return true;
     }
 
-    /// <summary>
-    ///     Records multiple selected values (checklist mode). Returns true if any non-empty value
-    ///     was recorded.
-    /// </summary>
+    // Records multiple selected values (checklist mode).
     public bool SelectItemsByName(IEnumerable<string> values)
     {
         var valueList = DynamicValueListLogic.FilterSelectableValues(values);
@@ -174,10 +163,8 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         return true;
     }
 
-    /// <summary>
-    ///     Populates known options from a name -> expression dictionary. Called by the web UI
-    ///     before applying a selection, so the selection can be matched against current options.
-    /// </summary>
+    // Populates known options from a name -> expression dictionary. Called by the web UI
+    // before applying a selection, so the selection can be matched against current options.
     public void LoadItems(Dictionary<string, string> options)
     {
         if (options == null)
@@ -195,7 +182,7 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         _selectedValues = null;
     }
 
-    /// <summary>Returns the currently-selected value, or the first known option, or empty.</summary>
+    // Returns the currently-selected value, or the first known option, or empty.
     public string GetDefaultValue()
     {
         var selected = _contextual?.Select(goo => goo.Value).ToList();
@@ -214,11 +201,9 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         EmitData();
     }
 
-    /// <summary>
-    ///     Populates volatile data. Precedence: a UI selection (contextual data / tree), then a
-    ///     wired initial value list (emits its first item as default), then a single empty string
-    ///     so the output is never "no data" — replaced once a computed value arrives from the UI.
-    /// </summary>
+    // Populates volatile data. Precedence: a UI selection (contextual data / tree), then a
+    // wired initial value list (emits its first item as default), then a single empty string
+    // so the output is never "no data": replaced once a computed value arrives from the UI.
     private void EmitData()
     {
         m_data.Clear();
@@ -261,10 +246,8 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         m_data.Append(new GH_ValueListDataGoo(string.Empty, _storedItems, -1, allowEmpty: true), new GH_Path(0));
     }
 
-    /// <summary>
-    ///     Reads "key" = value pair strings from wired sources into an ordered (Name, Expression)
-    ///     list — lets the author wire a Panel of pairs to seed options before the web UI computes any.
-    /// </summary>
+    // Reads "key" = value pair strings from wired sources into an ordered (Name, Expression)
+    // list: lets the author wire a Panel of pairs to seed options before the web UI computes any.
     private List<(string Name, string Expression)> ReadInitialOptionsFromSources()
     {
         var options = new List<(string Name, string Expression)>();
@@ -330,8 +313,8 @@ public class GetDynamicValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_C
         writer.SetString("StoredItems", itemsJson.ToString());
 
         // Persist the raw applied strings (not resolved expressions) so the selection re-resolves
-        // against the option set on the next solve, same as a live apply. Without this the
-        // selection is lost on load and the param emits an empty placeholder until re-applied.
+        // against the option set on the next solve, same as a live apply. Without this it's lost
+        // on load and the param emits an empty placeholder until re-applied.
         if (_selectedValues != null)
         {
             var selectedJson = new JArray();

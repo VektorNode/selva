@@ -30,10 +30,9 @@ export function useFooterItem<P extends Record<string, unknown>>(config: FooterI
 			const store = getContext<FooterStore | undefined>(FOOTER_CONTEXT_KEY);
 			store?.unregister(config.id);
 		} catch {
-			// Context may not exist during SSR cleanup — safe to ignore.
+			// Context may not exist during SSR cleanup: safe to ignore.
 		}
 	});
 }
 
-// Re-export for callers that type their component prop explicitly.
 export type { Component };

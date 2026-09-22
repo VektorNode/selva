@@ -29,7 +29,7 @@ public class GH_DynamicValueListOutput : GH_Component
     public override GH_Exposure Exposure => GH_Exposure.quinary;
     public override Guid ComponentGuid => new Guid("1D8E3F62-7B4A-4C9E-A0F1-5C2D8E7B3A41");
 
-    // A real component (not a contextual input param), so it uses the plain icon — no purple
+    // A real component (not a contextual input param), so it uses the plain icon: no purple
     // ContextualiseIcon overlay, which is reserved for the "Get …" contextual params.
     protected override Bitmap Icon => Resources.GetValueList;
 
@@ -66,7 +66,7 @@ public class GH_DynamicValueListOutput : GH_Component
         var duplicateNames = new List<string>();
         foreach (var entry in OptionPairParser.Parse(pairs))
         {
-            // Option names must be unique — they are the value list's keys. A duplicate would
+            // Option names must be unique: they are the value list's keys. A duplicate would
             // silently shadow an earlier entry, so fail loudly and let the author fix the source.
             if (Options.ContainsKey(entry.Key))
             {

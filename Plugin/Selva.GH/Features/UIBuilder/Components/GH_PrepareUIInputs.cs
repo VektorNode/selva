@@ -18,10 +18,10 @@ namespace Selva.GH.Features.UIBuilder.Components;
 /// <summary>
 ///     Registers existing canvas controls (Number Sliders, Value Lists, Boolean Toggles, Panels) by
 ///     GUID, previews the contextual parameter each one infers, and inserts those parameters
-///     between a control and the inputs it drives - or beside a disconnected control - so an
+///     between a control and the inputs it drives, or beside a disconnected control, so an
 ///     external publisher can drive them. Removes only the nodes it created or explicitly adopted.
 ///
-///     Every mutation is an explicit button press. Nothing here runs during an ordinary solve, a
+///     Every mutation is an explicit button press: nothing here runs during an ordinary solve, a
 ///     study run, a file open, or a schema export.
 /// </summary>
 public sealed class GH_PrepareUIInputs : GH_Component
@@ -66,7 +66,6 @@ public sealed class GH_PrepareUIInputs : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        // No input parameters unless a functional need is established during implementation.
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -242,7 +241,7 @@ public sealed class GH_PrepareUIInputs : GH_Component
     }
 
     /// <summary>
-    ///     Preview every registered control - ready to prepare or already prepared - in one list,
+    ///     Preview every registered control (ready to prepare or already prepared) in one list,
     ///     then apply insertions/repairs or removals from it. The same candidates and selection
     ///     serve both actions: ApplyPreparation and ApplyRemoval each only act on the selected rows
     ///     they recognize as theirs and silently skip the rest, so one preview replaces what used to
@@ -312,12 +311,9 @@ public sealed class GH_PrepareUIInputs : GH_Component
             }
         };
 
-        // Own the dialog to the Grasshopper canvas itself so it stays above the canvas while the
-        // user drags or clicks on it - the main Rhino window (used below as a fallback) is a
-        // different top-level window from a floating Grasshopper editor, so owning the dialog to
-        // it alone was not enough to keep the dialog above canvas interactions. Topmost was tried
-        // instead and rejected: it also pinned the dialog above every other application, not just
-        // Rhino/Grasshopper.
+        // Owned to the Grasshopper editor (not the main Rhino window, used only as a fallback) so
+        // it stays above canvas interactions with a floating editor. Topmost was tried and
+        // rejected: it pinned the dialog above every other application, not just Rhino.
         RhinoDoc document = ActiveDocument()?.RhinoDocument ?? RhinoDoc.ActiveDoc;
         dialog.Owner = Instances.EtoDocumentEditor
             ?? (document != null ? RhinoEtoApp.MainWindowForDocument(document) : null);

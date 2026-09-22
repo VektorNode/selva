@@ -41,7 +41,7 @@ public sealed class TokenResolver
 		_section = section ?? string.Empty;
 		_userTokens = userTokens;
 		_now = now ?? DateTime.Now;
-		// Drives localized {date} month/day names (e.g. de-DE → "Juni", "Dienstag"); numeric
+		// Drives localized {date} month/day names (e.g. de-DE gives "Juni", "Dienstag"); numeric
 		// formats like dd.MM.yyyy don't vary by culture.
 		_culture = culture ?? CultureInfo.InvariantCulture;
 	}
@@ -95,7 +95,7 @@ public sealed class TokenResolver
 			case TextFlow f:
 				{
 					// TextFlow carries text before line-breaking, so tokens must substitute
-					// here — before layout — so the substituted value is what gets wrapped
+					// here, before layout, so the substituted value is what gets wrapped
 					// and measured, not just the TextElements it eventually produces.
 					var resolved = Resolve(f.Text);
 					if (ReferenceEquals(resolved, f.Text)) return f;

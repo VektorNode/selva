@@ -58,14 +58,13 @@ async function loadAndShow() {
 	type ComputeResponse = Parameters<typeof getThreeObjectsFromComputeResponse>[0];
 	const response: ComputeResponse = await fetch(responseUrl).then((r) => r.json());
 
-	// Meshes, curves and points in one flat array, with materials and colours already applied.
 	const objects = await getThreeObjectsFromComputeResponse(response);
 
 	// Clears the previous content, adds the new objects, fits the clip planes, frames the model.
 	updateScene(viewer.scene, objects, viewer.camera, viewer.controls, cameraPlaced);
 	cameraPlaced = true;
 
-	// updateScene replaced the content, so anything attached to the old objects needs re-attaching.
+	// updateScene replaces scene content, so anything attached to the old objects needs re-attaching.
 	viewer.applyEdges(viewer.scene);
 	viewer.updateGridScale();
 

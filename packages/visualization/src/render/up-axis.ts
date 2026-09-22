@@ -1,15 +1,13 @@
 import * as THREE from 'three';
 
 /**
- * Single source of truth for "which way is up, and what do front/right mean" — camera framing, sun
+ * Single source of truth for "which way is up, and what do front/right mean". Camera framing, sun
  * position, ground offset, and view presets all derive from {@link buildUpBasis} rather than
  * hardcoding an axis, so a Y-up scene gets a correct horizon and sun instead of the below-horizon
  * result a hardcoded Z-up vector would give.
  *
- * `forward` is the camera's look direction (camera → model); a view preset's camera position is the
- * reverse (target → camera), see `camera-controller.ts`. `right` is `seed x up`, not `up x seed`, to
- * match Rhino's handedness: for Z-up this makes the Front-view camera look along +Y and the
- * Right-view camera look along -X (it sits at `right` = +X, facing back toward the origin).
+ * `forward` is the camera's look direction (camera to model); a view preset's camera position is
+ * the reverse (target to camera), see `camera-controller.ts`.
  */
 
 /** Orthonormal frame derived from a scene up axis. All vectors are unit length. */
@@ -28,6 +26,9 @@ export function buildUpBasis(up: THREE.Vector3): UpBasis {
 	const worldY = new THREE.Vector3(0, 1, 0);
 	const seed = Math.abs(u.dot(worldZ)) > 0.9 ? worldY : worldZ;
 
+	// seed x up, not up x seed, to match Rhino's handedness: for Z-up this makes the Front-view
+	// camera look along +Y and the Right-view camera look along -X (sitting at right = +X, facing
+	// back toward the origin).
 	const right = new THREE.Vector3().crossVectors(seed, u).normalize();
 	const forward = new THREE.Vector3().crossVectors(u, right).normalize();
 

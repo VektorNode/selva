@@ -23,8 +23,8 @@ export interface GridOptions {
 	fadeDistance?: number;
 	/**
 	 * Axis the grid is laid perpendicular to, i.e. the scene's up axis. Standalone default is `'y'`,
-	 * but `initThree` always passes a plane derived from the configured `sceneUp`, so a
-	 * viewer-created grid defaults to `'z'` (Rhino's ground plane).
+	 * but `initThree` passes a plane derived from the configured `sceneUp`, so a viewer-created grid
+	 * defaults to `'z'` (Rhino's ground plane).
 	 */
 	plane?: 'x' | 'y' | 'z';
 }

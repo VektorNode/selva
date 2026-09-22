@@ -9,7 +9,7 @@ import type { DisplayCurve } from '../types';
 
 const DEFAULT_LINE_WIDTH = 2;
 
-/** Two vertices — the shortest renderable polyline. */
+/** Two vertices: the shortest renderable polyline. */
 const MIN_POSITIONS = 6;
 
 /**
@@ -20,7 +20,7 @@ const MIN_POSITIONS = 6;
  * every major GPU backend, so `item.width` would go unhonoured. `Line2.onBeforeRender` sets
  * `LineMaterial`'s required `resolution`, so no renderer reference is needed here.
  *
- * @throws VisualizationError when the item has no `points` — see {@link curvePositions}.
+ * @throws VisualizationError when the item has no `points`. See {@link curvePositions}.
  */
 export function buildCurveLine(item: DisplayCurve): Line2 | null {
 	const positions = curvePositions(item);
@@ -55,7 +55,7 @@ export function buildCurveLine(item: DisplayCurve): Line2 | null {
 }
 
 /**
- * Flat `[x,y,z, …]`, or null for a degenerate curve — one of those can't abort the batch.
+ * Flat `[x,y,z, …]`, or null for a degenerate curve: one of those can't abort the batch.
  *
  * A curve with no `points` **throws** instead. It means the definition was solved by a Display
  * component predating backend tessellation, which is a stale definition rather than one bad curve:
@@ -66,7 +66,7 @@ function curvePositions(item: DisplayCurve): number[] | null {
 	if (!item.points) {
 		throw new VisualizationError(
 			`Curve display item '${item.id}' has no tessellated points. It was produced by an ` +
-				'outdated Display component — upgrade it in Grasshopper (Solution → Upgrade obsolete ' +
+				'outdated Display component. Upgrade it in Grasshopper (Solution → Upgrade obsolete ' +
 				'components) and re-save the definition.',
 			ErrorCodes.INVALID_CONFIG,
 			{ context: { itemId: item.id, kind: item.kind } }

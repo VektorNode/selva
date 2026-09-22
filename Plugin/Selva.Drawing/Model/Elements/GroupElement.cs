@@ -7,13 +7,12 @@ using Selva.Drawing.Model.Geometry;
 namespace Selva.Drawing.Model.Elements;
 
 // Children + an optional transform. SVG <g> / PDF q...Q. Group bounds are the union of
-// transformed child bounds — but a child's transform is local, so we compute the child
-// bound first and then apply this group's transform to its corners.
+// transformed child bounds, computed per child before applying this group's transform to
+// its corners (a child's transform is local).
 //
 // BoundsOverride lets a layout primitive (Grid, Frame, Table) pin the resolved group's
-// outer extent to a known rectangle instead of the union-of-children. This matters when
-// a track or cell is wider than its content — the layout primitive knows the full extent;
-// the children alone don't carry it.
+// outer extent to a known rectangle instead of the union-of-children: needed when a track
+// or cell is wider than its content, since the children alone don't carry that extent.
 public sealed class GroupElement : DrawElement, IEnumerable<DrawElement>
 {
 	public IReadOnlyList<DrawElement> Children { get; init; } = Array.Empty<DrawElement>();
@@ -50,7 +49,7 @@ public sealed class GroupElement : DrawElement, IEnumerable<DrawElement>
 	private static BoundingBox TransformBox(BoundingBox b, Transform t)
 	{
 		if (t.IsIdentity) return b;
-		// Transform all four corners — for a rotated affine, axis-aligned bounds shift.
+		// Transform all four corners: for a rotated affine, axis-aligned bounds shift.
 		var p1 = t.Apply(new Point2D(b.MinX, b.MinY));
 		var p2 = t.Apply(new Point2D(b.MaxX, b.MinY));
 		var p3 = t.Apply(new Point2D(b.MaxX, b.MaxY));

@@ -21,7 +21,7 @@ using Selva.Slva;
 namespace Selva.GH.Features.Display.OBSOLETE;
 
 /// <summary>
-///     One input branch's worth of display data for the frozen v0.15.0 component — see
+///     One input branch's worth of display data for the frozen v0.15.0 component: see
 ///     <see cref="OBSOLETE_WebDisplay_UntilV0_15_0" />.
 /// </summary>
 public sealed class BranchResult_V0_15_0
@@ -198,8 +198,8 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
             return;
         }
 
-        // No displayable geometry, but the input still had branches — warn, then fall through to
-        // emit the mirrored (all-empty) tree structure so downstream components keep the paths.
+        // Warn, then fall through: the mirrored (all-empty) tree still needs to reach downstream
+        // components so they keep their paths.
         if (result.Count == 0)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
@@ -210,10 +210,9 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
                 $"{result.Skipped} item(s) could not be displayed and were skipped");
         }
 
-        // Emit each branch's batch onto its matching output path, so the output tree mirrors the
-        // input tree — including empty input branches, which produce an empty branch at the same
-        // path (EnsurePath) rather than vanishing. The batches were already encoded (merge,
-        // quantize, deflate) inside the background task; this loop only assembles the tree.
+        // Batches were already encoded (merge, quantize, deflate) inside the background task; this
+        // loop only assembles the tree, using EnsurePath so empty input branches survive as empty
+        // output branches instead of vanishing.
         var output = new GH_Structure<WebDisplayGoo>();
         foreach (var b in result.Branches)
         {
@@ -229,9 +228,8 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
 
         DA.SetDataTree(0, output);
 
-        // Build preview items on main thread (Rhino display API requirement). Preview spans every
-        // branch — it's one component drawing all of its geometry, regardless of tree structure.
-        // The clipping box was already unioned in the background pass.
+        // Rhino's display API requires preview items built on the main thread. Preview spans every
+        // branch: it's one component drawing all of its geometry regardless of tree structure.
         _previewItems = new List<GH_CustomPreviewItem>(result.PreviewMeshes.Count);
         _previewBB = result.PreviewBounds;
         var matCache = new Dictionary<(int argb, double opacity), DisplayMaterial>();
@@ -265,8 +263,8 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
             });
         }
 
-        // Curve / point preview: the JSON in the batch isn't drawable, so we keep the original Rhino
-        // geometry (with its item color) and draw it as wires in DrawViewportWires.
+        // The JSON in the batch isn't drawable, so curves/points keep the original Rhino geometry
+        // (with item color) and draw as wires in DrawViewportWires.
         _previewCurves = new List<(Curve, Color)>(result.PreviewCurves.Count);
         for (var i = 0; i < result.PreviewCurves.Count; i++)
         {
@@ -287,17 +285,15 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
             return new List<T>();
         }
 
-        // Exact path match first.
         var branch = tree.get_Branch(path)?.Cast<T>().ToList();
         if (branch != null && branch.Count > 0)
         {
             return branch;
         }
 
-        // Single-branch tree: apply it to every geometry path regardless of its actual path. This is
-        // the common case where an aux input (materials/names/…) is a flat list but lands on a deeper
-        // path than the geometry (e.g. geo on {0}, materials on {0;0;0}) — matching by exact path or
-        // {0} alone would miss it and silently fall back to defaults.
+        // A single-branch aux tree (materials/names/...) commonly lands on a deeper path than the
+        // geometry (e.g. geo on {0}, materials on {0;0;0}): apply it to every geometry path rather
+        // than matching by exact path or {0} alone, which would miss it and silently fall to defaults.
         if (tree.PathCount == 1)
         {
             var only = tree.get_Branch(tree.Paths[0])?.Cast<T>().ToList();
@@ -312,9 +308,9 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
     }
 
     /// <summary>
-    ///     One geometry to process, with its already-resolved per-item attributes, stable ordinal, and
-    ///     the index of the branch it belongs to. The cheap flatten pass produces these in tree order;
-    ///     the expensive meshing then runs over them in parallel.
+    ///     One geometry to process, with its resolved per-item attributes, stable ordinal, and owning
+    ///     branch index. The cheap flatten pass produces these in tree order; meshing then runs over
+    ///     them in parallel.
     /// </summary>
     private struct WorkItem
     {
@@ -332,23 +328,20 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
     {
         public bool Skipped;
 
-        // Mesh path. The vertex/face arrays are extracted here, on the parallel thread, so the serial
-        // assembly pass (MeshBatchProcessor.CreateBatch) doesn't re-walk every vertex on one thread.
-        // Mesh itself is kept for the main-thread viewport preview.
+        // Vertex/face arrays are extracted here, on the parallel thread, so CreateBatch's serial
+        // assembly pass doesn't re-walk every vertex. Mesh itself is kept for viewport preview.
         public Mesh Mesh;
         public string MeshName;
         public float[] MeshVertices;
         public int[] MeshFaces;
 
-        // Item path (curve / point). PreviewColor is resolved here so the gather pass doesn't re-scan
-        // the items list to recover each curve/point's color.
+        // PreviewColor is resolved here so the gather pass doesn't re-scan items to recover it.
         public DisplayItem Item;
         public Curve PreviewCurve;
         public Point3d? PreviewPoint;
         public Color PreviewColor;
 
-        // Preview bounding box for this slot (mesh, curve or point), computed on the parallel
-        // thread so the main thread doesn't re-walk every preview geometry for the clipping box.
+        // Computed here so the main thread doesn't re-walk every preview geometry for the clipping box.
         public BoundingBox Bounds;
     }
 
@@ -364,8 +357,7 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
         // attributes, stable ordinal, and owning branch. Geometry extraction touches GH_Goo wrappers
         // and must not race with the parallel pass, so it stays here. Invalid geometry counts as
-        // skipped now. Each non-empty geometry branch is recorded as its own output branch — the
-        // output tree mirrors the input tree.
+        // skipped now.
         var work = new List<WorkItem>();
         var branchPaths = new List<GH_Path>();
         var skipped = 0;
@@ -373,10 +365,9 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
 
         foreach (var path in geoTree.Paths)
         {
-            // Record every input path as an output branch, even empty ones, so the output tree
-            // mirrors the input tree exactly (an empty input branch → an empty output branch at the
-            // same path). Empty branches get a BranchResult but no work items, so they fall through
-            // to an EnsurePath'd empty branch when the tree is assembled.
+            // Empty branches get a BranchResult but no work items, so they fall through to an
+            // EnsurePath'd empty branch when the tree is assembled: the output mirrors every input
+            // path, including empty ones.
             var branchIndex = branchPaths.Count;
             branchPaths.Add(path);
 
@@ -428,8 +419,8 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
         {
             var w = work[idx];
 
-            // Curves and points are not meshable — they travel as JSON display items, decoded
-            // and tessellated on the web (curves via rhino3dm, points as raw vertices).
+            // Curves and points aren't meshable: they travel as JSON display items, decoded and
+            // tessellated on the web (curves via rhino3dm, points as raw vertices).
             if (TryBuildItem(w.Geom, componentId, w.Ordinal, w.Name, w.Layer, w.Metadata, w.Material,
                     out var item, out var previewCurve, out var previewPoint))
             {
@@ -461,19 +452,18 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
                 return;
             }
 
-            // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
-            // vertices it needs. We weld coincident vertices to shrink the payload, but RESPECTING
-            // normals (ignoreNormals: false): both the web and the C# preview recompute smooth normals
-            // via computeVertexNormals, which averages across every shared vertex. Welding across hard
-            // edges would therefore smear them. Computing normals first lets the weld keep hard-edge
-            // vertices split (different normals) while merging smooth-surface interiors (matching
-            // normals) — preserving the original shading while still cutting most of the duplication.
+            // Brep meshing emits one vertex per face-corner, so a clean box arrives with about 3x the
+            // vertices it needs. Computing normals before welding (ignoreNormals: false) keeps
+            // hard-edge vertices split (differing normals) while merging smooth-surface interiors
+            // (matching normals): both the web and the C# preview recompute smooth normals via
+            // computeVertexNormals, which averages across every shared vertex, so welding across a
+            // hard edge first would smear it.
             mesh.Normals.ComputeNormals();
             mesh.Vertices.CombineIdentical(false, true);
             mesh.Compact();
 
-            // Extract the vertex/face arrays now, while we're already off the main thread. This is the
-            // per-vertex copy that CreateBatch would otherwise do serially for every mesh in the batch.
+            // Extracted here, off the main thread, so CreateBatch doesn't do this per-vertex copy
+            // serially for every mesh in the batch.
             var (vertices, faces) = GeoMeshProcessor.ConvertMeshToArrays(mesh);
 
             results[idx] = new WorkResult
@@ -547,15 +537,15 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
             previewMaterials.Add(w.Material);
         }
 
-        // No input paths at all → nothing to mirror. (When there ARE paths but none carry geometry,
-        // we still return a result so the output tree mirrors the input's empty-branch structure.)
+        // No input paths at all: nothing to mirror. When there are paths but none carry geometry, a
+        // result is still returned so the output mirrors the input's empty-branch structure.
         if (branches.Count == 0)
         {
             return null;
         }
 
-        // Pass 4 (expensive, parallel across branches): encode each branch's batch — combined-array
-        // merge, quantization, deflate. This runs here, still inside the background task, so the
+        // Pass 4 (expensive, parallel across branches): encode each branch's batch (combined-array
+        // merge, quantization, deflate). This runs here, still inside the background task, so the
         // solver thread never pays for the encode; it only assembles the output tree from the
         // ready-made batches.
         Parallel.ForEach(branches, b =>
@@ -752,10 +742,10 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
             return g;
         }
 
-        // Several GH curve/point primitives expose their value as a *struct* (Line, Arc, Circle,
-        // Point3d, …), which is NOT a GeometryBase — so `ScriptVariable() is GeometryBase` above
-        // misses them and they would fall through to null and be skipped. Convert each to its
-        // GeometryBase form here so the item path can route it to a curve/point display item.
+        // Several GH curve/point primitives expose their value as a struct (Line, Arc, Circle,
+        // Point3d, ...), not a GeometryBase, so `ScriptVariable() is GeometryBase` above misses
+        // them and they'd fall through to null and get skipped. Convert each to its GeometryBase
+        // form here so the item path can route it to a curve/point display item.
         return goo switch
         {
             GH_GeometricGoo<GeometryBase> x => x.Value,
@@ -768,7 +758,7 @@ public class OBSOLETE_WebDisplay_UntilV0_15_0 : GH_TaskCapableComponent<SolveRes
             GH_Circle x when x.Value.IsValid => new ArcCurve(x.Value),
             GH_Rectangle x when x.Value.IsValid => x.Value.ToNurbsCurve(),
             // GH_Point's ScriptVariable is a Point3d struct (not GeometryBase), so wrap it as a
-            // Point GeometryBase here — the item path then routes it to a DisplayPoint.
+            // Point GeometryBase here: the item path then routes it to a DisplayPoint.
             GH_Point x => new Rhino.Geometry.Point(x.Value),
             GH_Box x when x.Value.IsValid => x.Value.ToBrep(),
             _ => null

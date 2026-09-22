@@ -1,7 +1,7 @@
 import type * as THREE from 'three';
 
 // ============================================================================
-// GPU resource ownership — the single rule every disposal path obeys
+// GPU resource ownership: the single rule every disposal path obeys
 // ============================================================================
 
 /**
@@ -10,7 +10,7 @@ import type * as THREE from 'three';
  * only if true. Geometries and textures are always scene-owned, so they have no claim to check.
  */
 
-// Module-scope singletons from `render/three-materials.ts`, shared across meshes and solves —
+// Module-scope singletons from `render/three-materials.ts`, shared across meshes and solves:
 // disposing one would free textures still in use and force a recompile. Held here (not imported
 // there) to avoid an import cycle.
 const protectedMaterials = new Set<THREE.Material>();

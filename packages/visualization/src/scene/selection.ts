@@ -3,12 +3,12 @@
 // ============================================================================
 //
 // Standard file-explorer selection semantics. Range selection needs the *flattened, currently
-// visible* order — what the user actually sees after search filtering and layer collapse — which
+// visible* order: what the user actually sees after search filtering and layer collapse, which
 // only the caller knows, so it is passed in per click rather than derived here.
 
 export interface SelectionModifiers {
 	shiftKey: boolean;
-	/** Ctrl (Windows/Linux) or Meta (macOS) — the caller normalizes the platform difference. */
+	/** Ctrl (Windows/Linux) or Meta (macOS): the caller normalizes the platform difference. */
 	toggleKey: boolean;
 }
 
@@ -20,13 +20,13 @@ export interface SelectionState {
 	/**
 	 * Apply a click.
 	 *
-	 * @param flatOrder The uuids currently visible, in display order — the span a shift-range walks.
+	 * @param flatOrder The uuids currently visible, in display order: the span a shift-range walks.
 	 */
 	select(uuid: string, modifiers: SelectionModifiers, flatOrder: () => string[]): void;
 	clear(): void;
 	/**
 	 * Observe anchor moves. The anchor is a scalar, so unlike `selected` it cannot be watched by
-	 * handing in an observable set — a host that renders it mirrors it through this instead.
+	 * handing in an observable set: a host that renders it mirrors it through this instead.
 	 *
 	 * @returns An unsubscribe function.
 	 */

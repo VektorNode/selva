@@ -43,8 +43,8 @@ function findDecoder(rhinoType: string): RhinoDecoder | undefined {
 
 /**
  * Whether the parsed item looks like a rhino3dm serialization envelope
- * (`{version, archive3dm, opennurbs, data: "<base64>"}`). `CommonObject.decode` expects the WHOLE
- * envelope — unwrapping `.data` first hands it the bare base64 string, which throws or decodes to
+ * (`{version, archive3dm, opennurbs, data: "<base64>"}`). `CommonObject.decode` expects the whole
+ * envelope: unwrapping `.data` first hands it the bare base64 string, which throws or decodes to
  * garbage (see the correct usage in display-items-parser.ts).
  */
 function isDecodableEnvelope(parsedData: unknown): parsedData is object {
@@ -65,9 +65,7 @@ function isDecodableEnvelope(parsedData: unknown): parsedData is object {
  */
 export interface RhinoDecodeError {
 	__decodeError: true;
-	/** The Rhino type name the failed decode was attempted for. */
 	type: string;
-	/** The original (undecoded) payload. */
 	raw: unknown;
 }
 
@@ -87,22 +85,22 @@ function makeDecodeError(rhinoType: string, raw: unknown): RhinoDecodeError {
 /**
  * Decode one typed payload from a solve response into a rhino3dm object.
  *
- * Failure signaling is a single coherent scheme (issue 85) — every call yields
+ * Failure signaling is a single coherent scheme (issue 85): every call yields
  * exactly one of three outcomes:
  *
- * 1. **Decoded value** — a registered decoder recognized the shape, or the
+ * 1. **Decoded value**: a registered decoder recognized the shape, or the
  *    payload was a rhino3dm serialization envelope and `CommonObject.decode`
  *    succeeded.
- * 2. **Raw passthrough** (`=== parsedData`) — no decode path *applied*: no
+ * 2. **Raw passthrough** (`=== parsedData`): no decode path applied. No
  *    decoder matched the type (or the matched decoder returned `null`, meaning
  *    "not my shape") and the payload is not a decodable envelope. Not an error;
  *    the caller keeps the parsed JSON as-is.
- * 3. **{@link RhinoDecodeError} sentinel** — a decode was *attempted and threw*
+ * 3. **{@link RhinoDecodeError} sentinel**: a decode was attempted and threw
  *    (a registered decoder threw and no envelope fallback could recover, or
  *    `CommonObject.decode` threw). Detect with {@link isRhinoDecodeError}.
  *
  * A decoder returning `null` is a soft miss, never an error: it falls through
- * to the envelope fallback. This matters for prefix collisions — e.g.
+ * to the envelope fallback. This matters for prefix collisions, e.g.
  * `Rhino.Geometry.LineCurve` matches the `Rhino.Geometry.Line` decoder but is
  * a CommonObject envelope, not a `{From, To}` pair, and must reach
  * `CommonObject.decode`.
@@ -113,9 +111,9 @@ export function decodeRhinoGeometry(
 	rhino: RhinoModule
 ): unknown {
 	const decoder = findDecoder(rhinoType);
-	// A throwing decoder is a hard failure (unlike a null return, which is a
-	// soft "not my shape" miss) — remember it so that when no envelope fallback
-	// can recover we return the error sentinel instead of silently passing the
+	// A throwing decoder is a hard failure (unlike a null return, a soft
+	// "not my shape" miss): remember it so that when no envelope fallback can
+	// recover we return the error sentinel instead of silently passing the
 	// raw payload through as if no decode had ever been attempted.
 	let decoderThrew = false;
 	if (decoder) {
@@ -128,7 +126,7 @@ export function decodeRhinoGeometry(
 		}
 	}
 
-	// Fallback using CommonObject.decode — fed the full envelope, not the unwrapped payload.
+	// Fallback using CommonObject.decode: fed the full envelope, not the unwrapped payload.
 	try {
 		if (isDecodableEnvelope(parsedData)) return rhino.CommonObject.decode(parsedData);
 	} catch (error) {
@@ -146,7 +144,7 @@ export function decodeRhinoGeometry(
 /**
  * Free every rhino3dm WASM object reachable from `value`.
  *
- * rhino3dm objects are emscripten bindings — JS GC never reclaims their WASM
+ * rhino3dm objects are emscripten bindings: JS GC never reclaims their WASM
  * heap allocation, so everything decoded from a solve response (`getValues`,
  * `getValue`, `decodeRhinoObject`) must be deleted explicitly or the heap
  * grows monotonically across solves (e.g. a UI decoding per slider tick).
@@ -156,8 +154,7 @@ export function decodeRhinoGeometry(
  * Safe to call more than once and on values containing no WASM objects.
  */
 export function disposeRhinoObjects(value: unknown): void {
-	// Aliased references (the same decoded object aggregated under two keys)
-	// must only be deleted once.
+	// Aliased references (same decoded object aggregated under two keys) must only be deleted once.
 	const seen = new WeakSet<object>();
 
 	const walk = (v: unknown): void => {
@@ -178,7 +175,7 @@ export function disposeRhinoObjects(value: unknown): void {
 			for (const item of v) walk(item);
 			return;
 		}
-		// Only walk plain containers — class instances other than WASM bindings
+		// Only walk plain containers: class instances other than WASM bindings
 		// (Dates, typed arrays, ...) hold nothing decodable.
 		const proto = Object.getPrototypeOf(v);
 		if (proto === Object.prototype || proto === null) {
@@ -199,6 +196,10 @@ export interface DecodeRhinoOptions {
 	deep?: boolean;
 }
 
+/**
+ * Decodes typed geometry fields in place. `keys`/`skipKeys` restrict which
+ * fields are considered; with `deep`, recurses into nested objects and arrays.
+ */
 export function decodeRhinoObject<T extends Record<string, unknown>>(
 	obj: T,
 	rhino: RhinoModule,

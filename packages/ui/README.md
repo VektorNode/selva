@@ -5,7 +5,7 @@ everything an external host app needs to embed a Grasshopper-driven app, drive s
 pre-step producers.
 
 The design system (`Button`, `Card`, `Dialog`, `AppShell`, …) lives here too, but is **internal to
-the monorepo** — reachable from the full barrel via the `selva-source` export condition, and never
+the monorepo**: reachable from the full barrel via the `selva-source` export condition, and never
 published. [`src/lib/public.ts`](./src/lib/public.ts) is the authoritative list of what a published
 consumer can import.
 
@@ -16,7 +16,7 @@ pnpm add @selvajs/ui
 ```
 
 Peer dependencies: `svelte ^5`, `@sveltejs/kit ^2`, `bits-ui ^2`, `tailwind-variants ^3`, plus the
-Selva cores this package wraps — `@selvajs/compute`, `@selvajs/schemas`, `@selvajs/solve`, and
+Selva cores this package wraps: `@selvajs/compute`, `@selvajs/schemas`, `@selvajs/solve`, and
 `@selvajs/visualization`.
 
 `three` is an **optional** peer: install it only if you use `Viewer`, the part that wraps
@@ -46,7 +46,7 @@ To drive a solve session yourself rather than letting `ComputeApp` own it:
 import { useSolveSession } from '@selvajs/ui';
 ```
 
-Inside a Svelte component always use `useSolveSession` — the raw `createSolveSession` factory
+Inside a Svelte component always use `useSolveSession`: the raw `createSolveSession` factory
 returns correct values that never re-render. See [CONTEXT.md](./CONTEXT.md).
 
 ## Styles
@@ -57,7 +57,7 @@ In your `app.css`:
 @import '@selvajs/ui/styles/base.css';
 ```
 
-Themes are available under `@selvajs/ui/styles/themes/*` — `selva`, `neutral`, `ocean`, and
+Themes are available under `@selvajs/ui/styles/themes/*`: `selva`, `neutral`, `ocean`, and
 `cyberpunk`.
 
 ## Schema types

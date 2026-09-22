@@ -15,7 +15,7 @@
 
 	function handleWheel(e: WheelEvent) {
 		if (!viewportRef) return;
-		// Trackpad horizontal swipes already produce deltaX — let those pass through.
+		// Trackpad horizontal swipes already produce deltaX: let those pass through.
 		if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
 		const canScroll = viewportRef.scrollWidth > viewportRef.clientWidth;
 		if (!canScroll) return;

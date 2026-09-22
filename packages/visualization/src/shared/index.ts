@@ -1,5 +1,5 @@
 /**
- * `shared/` — the bottom layer. Depends on nothing else in this package, and on nothing outside it
+ * `shared/`: the bottom layer. Depends on nothing else in this package, and on nothing outside it
  * but `three`.
  *
  * **Internal.** This barrel is the cross-layer import surface for `parse/`, `render/` and `scene/`;

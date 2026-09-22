@@ -3,8 +3,8 @@
 // ============================================================================
 //
 // A solve discards all content and rebuilds it, so `THREE.Object3D.uuid` (assigned per instance)
-// cannot answer "is this the same wall I hid a minute ago". Anything that must outlive a solve —
-// hidden state, selection, per-object overrides — keys on the writer-minted object id instead,
+// cannot answer "is this the same wall I hid a minute ago". Anything that must outlive a solve
+// (hidden state, selection, per-object overrides) keys on the writer-minted object id instead,
 // stamped by the parse layer as `userData.trackingKey` (Selva mints
 // `{componentGuid}/{branchPath}/{slotIndex}`; the viewer never parses it).
 //
@@ -17,7 +17,7 @@ import type * as THREE from 'three';
 // type, and 'a' + ':' + 'b:c' must not collide with 'a:b' + ':' + 'c'.
 const SEP = String.fromCharCode(31);
 
-/** One source object inside a merged mesh — see `finalizeMergedMesh`. */
+/** One source object inside a merged mesh, see `finalizeMergedMesh`. */
 export interface MergedMember {
 	trackingKey?: string;
 	name: string;
@@ -32,7 +32,7 @@ export interface MergedMember {
 /**
  * The minted `userData.trackingKey` when the writer supplied one; `userData.id` for display
  * items (their pre-baked pick key); `name` + `layer` as a weaker fallback for foreign writers
- * that mint no ids — two unnamed meshes on one layer collide under it.
+ * that mint no ids (two unnamed meshes on one layer collide under it).
  */
 export function getStableKey(object: THREE.Object3D): string | null {
 	const data = object.userData;

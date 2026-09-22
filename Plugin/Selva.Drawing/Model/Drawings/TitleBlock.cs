@@ -9,7 +9,7 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 namespace Selva.Drawing.Model.Drawings;
 
 // Drawing title block: a bordered grid of named fields, each cell a label (small caps)
-// above a value (larger). Rows of TitleBlockField drive placement — fields in a row share
+// above a value (larger). Rows of TitleBlockField drive placement: fields in a row share
 // its height; column widths come from Span (fraction of row width) or split evenly at
 // Span = 0.
 // Localizable caption set. English is the ISO drafting-convention default; German supplies
@@ -75,10 +75,10 @@ public sealed class TitleBlock : LayoutElement
 
 	public bool AutoWidth { get; init; }
 
-	// 420mm ≈ A3's long edge — beyond it the block stops growing.
+	// 420mm ≈ A3's long edge, beyond it the block stops growing.
 	public const double MaxAutoWidth = 420.0;
 
-	// ~20% of a 180mm block ≈ 36mm — enough for a logo strip while leaving most of the
+	// ~20% of a 180mm block ≈ 36mm: enough for a logo strip while leaving most of the
 	// row for the owner / project names.
 	public const double LogoColumnSpan = 0.2;
 
@@ -119,7 +119,7 @@ public sealed class TitleBlock : LayoutElement
 		var colTracks = new List<GridLength>();
 
 		// Grid takes one shared column track for all rows, but title-block rows need
-		// independent column counts — so each row gets its own Grid, stacked vertically.
+		// independent column counts, so each row gets its own Grid, stacked vertically.
 		var rowElements = new List<DrawElement>(Rows.Count);
 		for (var rIndex = 0; rIndex < Rows.Count; rIndex++)
 		{
@@ -318,7 +318,7 @@ public sealed class TitleBlock : LayoutElement
 		}
 
 		// Spans summing to <= 1 are fractions of total width; above that they're treated as
-		// proportional weights instead. Auto fields split whatever's left.
+		// proportional weights. Auto fields split whatever's left.
 		double explicitWidthTotal;
 		if (explicitTotal > 0 && explicitTotal <= 1.0)
 		{

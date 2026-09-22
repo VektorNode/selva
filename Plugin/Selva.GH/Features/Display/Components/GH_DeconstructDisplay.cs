@@ -16,8 +16,8 @@ namespace Selva.GH.Features.Display.Components;
 // and colour each entry carried.
 //
 // A batch is a collection, but a Mesh param holds one mesh, so casting a Web Display straight into
-// one joins every mesh into a single result. That join has a ceiling — a batch of thousands of
-// meshes overruns what one Mesh can address — and it discards per-mesh identity either way. This
+// one joins every mesh into a single result. That join has a ceiling: a batch of thousands of
+// meshes overruns what one Mesh can address, and it discards per-mesh identity either way. This
 // component is the route that keeps both.
 public class GH_DeconstructDisplay : GH_Component
 {
@@ -118,7 +118,7 @@ public class GH_DeconstructDisplay : GH_Component
             return wd.Value;
         }
 
-        // Fall back to a JSON cast — e.g. the value arrived as a string via compute/file IO.
+        // Fall back to a JSON cast: e.g. the value arrived as a string via compute/file IO.
         var batchGoo = new WebDisplayGoo();
         return batchGoo.CastFrom(goo) ? batchGoo.Value : null;
     }

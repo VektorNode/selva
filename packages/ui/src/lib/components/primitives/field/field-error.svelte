@@ -19,7 +19,7 @@
 
 		if (!errors || errors.length === 0) return false;
 
-		// A lone error with no message renders an empty alert box — suppress it.
+		// A lone error with no message renders an empty alert box: suppress it.
 		if (errors.length === 1 && !errors[0]?.message) {
 			return false;
 		}

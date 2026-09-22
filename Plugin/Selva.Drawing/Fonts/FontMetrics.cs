@@ -98,7 +98,7 @@ public static class FontMetrics
 			if (string.Equals(family, primary, StringComparison.OrdinalIgnoreCase) && w == weight && s == style)
 				return Cache.GetOrAdd(resource, LoadFromResource);
 		}
-		// Same family, no matching weight/style — fall back to its regular face.
+		// Same family, no matching weight/style: fall back to its regular face.
 		foreach (var (family, w, s, resource) in _bundled)
 		{
 			if (string.Equals(family, primary, StringComparison.OrdinalIgnoreCase)

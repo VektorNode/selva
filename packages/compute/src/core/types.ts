@@ -9,7 +9,7 @@ import type { ErrorCode } from './errors';
 export type ServerErrorCodeMap = Record<string, ErrorCode>;
 
 // Retry policy: exponential backoff, respects Retry-After header (up to 60s safety cap).
-// WHY: Duplicate-POST risk — network errors after send but before response may have
+// WHY: Duplicate-POST risk: network errors after send but before response may have
 // already executed the request on the server. Compute is idempotent, but non-idempotent
 // endpoints should set `attempts: 0`.
 export interface RetryPolicy {
@@ -19,7 +19,7 @@ export interface RetryPolicy {
 	baseDelayMs?: number;
 	/** Upper bound for backoff delay (default: 30_000). */
 	maxDelayMs?: number;
-	/** Whether to retry on 429 responses (default: true — honors Retry-After). */
+	/** Whether to retry on 429 responses (default: true, honors Retry-After). */
 	retryOn429?: boolean;
 }
 
@@ -30,7 +30,7 @@ export interface ComputeConfig {
 	/** Optional API key for authenticating with the server. Sent as {@link apiKeyHeader}. */
 	apiKey?: string;
 	/**
-	 * Header name carrying `apiKey`. Defaults to `'RhinoComputeKey'` — the name
+	 * Header name carrying `apiKey`. Defaults to `'RhinoComputeKey'`, the name
 	 * rhino.compute expects. A different backend sets its own.
 	 */
 	apiKeyHeader?: string;
@@ -52,7 +52,7 @@ export interface ComputeConfig {
 	 */
 	retry?: RetryPolicy;
 	/**
-	 * Optional caller-supplied AbortSignal. Composes with the internal timeout —
+	 * Optional caller-supplied AbortSignal. Composes with the internal timeout:
 	 * whichever fires first wins. Lets callers cancel in-flight requests
 	 * (e.g. on component unmount or when superseding a stale solve).
 	 */
@@ -60,7 +60,7 @@ export interface ComputeConfig {
 	/**
 	 * Machine-readable error codes this backend tags onto its error bodies, mapped
 	 * to our {@link ErrorCodes}. A code here outranks the status-based mapping.
-	 * Core knows no backend's codes — the client supplies its own table.
+	 * Core knows no backend's codes: the client supplies its own table.
 	 */
 	serverErrorCodes?: ServerErrorCodeMap;
 	// WHY: telemetry side-channel. Fires once per request (before return), including

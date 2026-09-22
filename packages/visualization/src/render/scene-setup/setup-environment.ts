@@ -47,7 +47,7 @@ export function setupEnvironment(
 				if (config.environment.showEnvironment) {
 					// Background wants the full-res equirect, not the low-res prefiltered probe.
 					scene.background = envMap;
-					// Separate property from environmentRotation — drifts apart if only one is set.
+					// Separate property from environmentRotation: drifts apart if only one is set.
 					scene.backgroundRotation.copy(envRotation);
 				} else {
 					// Raw equirect was only PMREM input; the prefiltered probe has superseded it.

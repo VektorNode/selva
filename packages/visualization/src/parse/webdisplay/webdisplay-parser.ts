@@ -14,7 +14,7 @@ import type { DisplayBatch, MeshExtractionOptions, MeshBatchParsingOptions } fro
 /**
  * Metres per model unit, keyed by Rhino `UnitSystem` name (the `modelunits` string on the compute
  * response). Imperial factors are the exact international definitions. Units missing from this
- * table scale by 1 and log a one-time warning — see {@link getScaleFactor}.
+ * table scale by 1 and log a one-time warning. See {@link getScaleFactor}.
  */
 export const SCALE_FACTORS: Record<string, number> = {
 	// Metric
@@ -46,7 +46,7 @@ const DISPLAY_BATCH_TYPE = 'DisplayBatch';
 /**
  * True when a wire `type` denotes a Display payload: one of its dot-separated tokens is exactly
  * `Display` or `DisplayBatch`. Matches the bare `Display` used by older servers and the namespaced
- * `Selva.GH.Features.Display.Services.DisplayBatch`, but not e.g. `System.DisplayText` — matching
+ * `Selva.GH.Features.Display.Services.DisplayBatch`, but not e.g. `System.DisplayText`. Matching
  * on tokens rather than substring avoids misrouting an unrelated type that merely contains "Display".
  */
 function isDisplayItemType(type: string): boolean {
@@ -104,7 +104,7 @@ export async function getThreeObjectsFromComputeResponse(
 
 /**
  * Gets the metres-per-unit scale factor for a Rhino unit name. Unknown units fall back to 1 (no
- * scaling) with a one-time warning — a kilometers model rendering 1000x off should at least say why.
+ * scaling) with a one-time warning: a kilometers model rendering 1000x off should at least say why.
  */
 function getScaleFactor(modelUnits: string): number {
 	const factor = SCALE_FACTORS[modelUnits];
@@ -114,7 +114,7 @@ function getScaleFactor(modelUnits: string): number {
 	if (!warnedUnknownUnits.has(modelUnits)) {
 		warnedUnknownUnits.add(modelUnits);
 		getLogger().warn(
-			`Unknown Rhino model unit "${modelUnits}" — geometry will not be scaled (factor 1). ` +
+			`Unknown Rhino model unit "${modelUnits}": geometry will not be scaled (factor 1). ` +
 				`Known units: ${Object.keys(SCALE_FACTORS).join(', ')}.`
 		);
 	}

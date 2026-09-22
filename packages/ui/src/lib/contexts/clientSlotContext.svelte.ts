@@ -6,9 +6,9 @@ import type { SupportedTypes } from '@selvajs/schemas';
 // prop through every layout layer.
 //
 // An input with source.kind === 'client' and source.client.presentation === 'slot'
-// reserves its cell but renders nothing itself. Selva invokes this snippet instead
-// so the host can render its own element (an "Edit JSON" button, a custom picker)
-// and never interprets what comes back.
+// reserves its cell but renders nothing itself. Selva invokes this snippet instead so
+// the host can render its own element (an "Edit JSON" button, a custom picker) and
+// never interprets what comes back.
 
 export interface ClientSlotArgs {
 	/** Grasshopper parameter instance GUID (LayoutItem.paramId / SchemaInput.id). */
@@ -16,7 +16,7 @@ export interface ClientSlotArgs {
 	displayName: string;
 	value: unknown;
 	/**
-	 * Commit a value for this input — the same channel a built-in widget's change uses, so a
+	 * Commit a value for this input: the same channel a built-in widget's change uses, so a
 	 * slot can be an interactive control rather than just a display cell. `forceSolve`
 	 * requests a solve even in manual-solve mode.
 	 */

@@ -56,7 +56,7 @@ public class TextFlowSplitTests
 		Assert.Equal(flow.Width, overflow.Width);
 		Assert.Equal(flow.Style, overflow.Style);
 
-		// Can't compare strings directly — the wrapper may collapse empty paragraphs — so
+		// Can't compare strings directly (the wrapper may collapse empty paragraphs), so
 		// re-resolve both halves and check the line count adds back up to 5.
 		var fitsResolved = (GroupElement)new TextFlow { Text = ExtractText(split.Fits), Width = flow.Width, Style = flow.Style }
 			.Resolve(new LayoutContext(BoundingBox.Empty));
@@ -67,7 +67,7 @@ public class TextFlowSplitTests
 	[Fact]
 	public void Pagination_emits_one_page_per_line_chunk_for_long_TextFlow()
 	{
-		// 10mm-tall page, 0 margins → 10mm content rect; FontSize 3.0 fits 2 lines per page,
+		// 10mm-tall page, 0 margins gives a 10mm content rect; FontSize 3.0 fits 2 lines per page,
 		// so 5 lines should spread across 3 pages.
 		var flow = new TextFlow
 		{

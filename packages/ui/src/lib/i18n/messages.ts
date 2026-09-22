@@ -3,7 +3,7 @@
 // ============================================================================
 //
 // Only the strings @selvajs/ui renders itself. Names coming from a Grasshopper
-// definition — meshes, layers, metadata keys — live in the user's .gh file and
+// definition (meshes, layers, metadata keys) live in the user's .gh file and
 // cannot be translated here.
 
 export type Locale = 'en' | 'de';
@@ -191,7 +191,6 @@ export const VIEWER_MESSAGES: Record<Locale, ViewerMessages> = { en, de };
 
 export const DEFAULT_LOCALE: Locale = 'en';
 
-/** Resolve a catalog for a locale, falling back to English for unknown locales. */
 export function messagesFor(locale: Locale | undefined): ViewerMessages {
 	return VIEWER_MESSAGES[locale ?? DEFAULT_LOCALE] ?? VIEWER_MESSAGES[DEFAULT_LOCALE];
 }

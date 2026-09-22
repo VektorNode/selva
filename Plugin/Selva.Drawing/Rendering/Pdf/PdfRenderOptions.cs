@@ -1,11 +1,11 @@
 namespace Selva.Drawing.Rendering.Pdf;
 
 // PdfSharpCore picks the colour operator per content stream (`rg/RG` for RGB, `k/K` for
-// CMYK) from this mode, set once for the whole document — no per-page override. Choose
+// CMYK) from this mode, set once for the whole document: no per-page override. Choose
 // `Cmyk` for print-shop output, `Rgb` (default) for screen/digital.
 public enum PdfColorMode { Rgb, Cmyk }
 
-// Configures PdfRenderer. PDF has no "background color" option because pages are paper —
+// Configures PdfRenderer. PDF has no "background color" option because pages are paper;
 // callers can add a filled rect as the first page element if they want one.
 public sealed class PdfRenderOptions
 {

@@ -67,7 +67,7 @@
 		/**
 		 * Hands the live three.js viewer to the host once the canvas is up, for apps drawing their
 		 * own content. Return a cleanup function to tear down what you added; it runs before the
-		 * viewer disposes. Anything added outside a solve needs `viewer.invalidate()` to repaint —
+		 * viewer disposes. Anything added outside a solve needs `viewer.invalidate()` to repaint:
 		 * the render loop is on-demand.
 		 */
 		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
@@ -107,7 +107,6 @@
 	// Read the host's locale before overriding it for our subtree.
 	const hostLocale = getLocaleContext();
 
-	// A getter, not a value: it is re-read reactively, so changing `lang` updates the chrome live.
 	setLocaleContext(() => lang ?? hostLocale.locale);
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -133,7 +132,7 @@
 	let sceneManagerOpen = $state(false);
 
 	// The outliner lives here, not in <SceneManager>: that component mounts only while its panel is
-	// open, and hidden objects must stay hidden — and be re-hidden after each solve — while it is closed.
+	// open, and hidden objects must stay hidden through each solve cycle while it is closed.
 	const hiddenObjects = new SvelteSet<string>();
 	const selectedObjects = new SvelteSet<string>();
 	const collapsedLayers = new SvelteSet<string>();
@@ -168,8 +167,9 @@
 		{ preset: 'iso', label: () => t.viewIso }
 	];
 
-	// Hide button instantly when expanding, show after animation when collapsing
 	$effect(() => {
+		// Hide the button instantly when the drawer opens, but only show it again once the
+		// closing animation finishes: fading it back in mid-animation would flash it under the drawer.
 		if (drawerOpen) {
 			hideButton = true;
 		} else {
@@ -184,7 +184,7 @@
 		if (!canvas) return;
 
 		// Only what differs from the library defaults. Sunlight, shadows and AO are left ON (the
-		// library default) and their strength comes from the look — with IBL alone every face of a
+		// library default) and their strength comes from the look. With IBL alone every face of a
 		// box lights nearly equally and the model reads as a flat white silhouette.
 		const opts: ThreeInitializerOptions = {
 			look: renderStyle,
@@ -280,7 +280,7 @@
 				edgesVisible = true;
 			} else if (!wasLineDrawing && scene) {
 				// Already-attached overlays carry the old fade setting, and addEdges skips a mesh that
-				// has one — so they have to go before the un-faded pass can replace them.
+				// has one: they have to go before the un-faded pass can replace them.
 				clearEdges?.(scene);
 			}
 			applyEdgeState();
@@ -292,7 +292,7 @@
 			edgesBeforeLineDrawing = null;
 		} else if (edgesVisible && scene) {
 			// Neither look is a line drawing, but an overlay's colour is derived from its mesh's
-			// material — which `setLook` just repainted. addEdges skips meshes that already have an
+			// material: `setLook` just repainted it. addEdges skips meshes that already have an
 			// overlay, so without a rebuild the edges keep the previous look's colour.
 			clearEdges?.(scene);
 			applyEdgeState();
@@ -300,21 +300,21 @@
 	}
 
 	// Meshes past the overlay budget get the screen-space fallback instead, and that pass thresholds
-	// a depth/normal discontinuity to decide what is an edge — so a shallow crease sitting near the
+	// a depth/normal discontinuity to decide what is an edge. A shallow crease sitting near the
 	// cutoff flips on and off as the camera turns a degree. Tolerable as a hint over a shaded model;
 	// in a line drawing it is the picture itself flickering. Raised far enough that a building model
 	// gets real overlays throughout: they cost draw calls, but they are stable under orbit.
 	const LINE_ART_MAX_OVERLAYS = 20_000;
 
 	// Edge colour is normally derived per mesh from that mesh's own material, darkened. lineart
-	// repaints every material near-white, so a derived edge lands at rgb(62,62,62) or lighter — and
+	// repaints every material near-white, so a derived edge lands at rgb(62,62,62) or lighter. And
 	// worse, `setLook` and `applyEdges` are independent, so whether the derivation sees the white
 	// override or the model's original colours depends on which ran last. That is the real source of
 	// the "edges look different every time" behaviour. Forcing a colour makes it deterministic.
 	const LINE_ART_EDGE_COLOR = 0x1a1d21;
 
 	// The density fade sets opacity per overlay, so a finely-detailed mesh fades as a whole and its
-	// long silhouette edges go with it — in a line drawing that erases the only thing on screen, and
+	// long silhouette edges go with it. In a line drawing that erases the only thing on screen, and
 	// it recomputes per frame, so edges pop while orbiting. Shaded looks keep it: there it just
 	// softens outlines on a model you can still see.
 	function edgeOverrides() {
@@ -338,7 +338,7 @@
 	function toggleEdges() {
 		edgesVisible = !edgesVisible;
 		// Toggling by hand inside lineart overrides what that look forced, so the pre-look value is
-		// stale — leaving the look must not undo the user's more recent explicit choice.
+		// stale. Leaving the look must not undo the user's more recent explicit choice.
 		if (LOOK_PRESETS[renderStyle].requiresEdges) edgesBeforeLineDrawing = null;
 		applyEdgeState();
 	}
@@ -346,7 +346,7 @@
 	$effect(() => {
 		if (scene && camera && controls) {
 			updateScene(scene, meshes, camera, controls, viewerInitialized);
-			// Untracked because toggleEdges() already handles the toggle directly — reading
+			// Untracked because toggleEdges() already handles the toggle directly. Reading
 			// `edgesVisible` tracked here would re-trigger a full solve.
 			untrack(() => {
 				// The new meshes carry the materials the parser built, so a look that overrides them
@@ -356,7 +356,7 @@
 				if (edgesVisible) applyEdges?.(scene!, edgeOverrides());
 				// Rescale the grid so cells and fade match the new content's extent.
 				updateGridScale?.();
-				// The shadow frustum is sized to scene content, so it has to follow the new geometry —
+				// The shadow frustum is sized to scene content, so it has to follow the new geometry:
 				// left at the old extent, shadows go blocky or fall outside the map entirely.
 				updateShadowBounds?.();
 				// The rebuild un-hid everything; the outliner keys hidden state on Grasshopper
@@ -422,7 +422,7 @@
 	<Resizable.PaneGroup direction="horizontal" class="h-full w-full">
 		<!-- `defaultSize` must sum to 100 across the live panes. Panes register a frame before the
 		     group recomputes its layout, so a sum of 115 renders one frame at the raw flex-grow ratio
-		     and is then renormalized — and if the recompute short-circuits on an equal layout, the
+		     and is then renormalized. If the recompute short-circuits on an equal layout, the
 		     scene pane keeps a sliver of its intended width. Hence 85 + 15, and the explicit id/order
 		     so a conditionally-rendered pane keeps its slot. -->
 		<Resizable.Pane id="viewport" order={1} defaultSize={sceneManagerOpen ? 85 : 100} minSize={40}>

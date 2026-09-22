@@ -10,8 +10,8 @@
 
 // namespace Selva.GH.Features.Drawing.Components;
 
-// // Phase 8 composite component: bordered, headered revision-history table. Inputs are four
-// // parallel lists (Revision / Date / Description / By); each index is one row of the table.
+// // Bordered, headered revision-history table. Inputs are four parallel lists
+// // (Revision / Date / Description / By); each index is one row of the table.
 // public class GH_RevisionTable : GH_Component
 // {
 //     public GH_RevisionTable()

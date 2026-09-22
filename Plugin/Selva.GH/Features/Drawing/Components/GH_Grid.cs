@@ -18,7 +18,7 @@ namespace Selva.GH.Features.Drawing.Components;
 // 0 = auto (fit content), <0 = star track (weight = abs). Track sizes come from Column Widths
 // + Row Heights; cell placement comes from the parallel At Row + At Column lists. Leave both
 // placement lists empty and drawings auto-flow left-to-right, top-to-bottom across the column
-// count — no index wiring needed for the common case.
+// count: no index wiring needed for the common case.
 public class GH_Grid : GH_Component
 {
     private readonly ElementPreviewBuffer _preview = new ElementPreviewBuffer();
@@ -115,7 +115,7 @@ public class GH_Grid : GH_Component
 
         if (rows.Count == 0 && cols.Count == 0)
         {
-            // Column count: explicit Columns input > Column Widths list length > roughly-square fallback.
+            // Column count: explicit Columns input, then Column Widths list length, then a roughly-square fallback.
             var autoCols = autoColumns > 0
                 ? autoColumns
                 : columnSizes.Count > 0
@@ -147,7 +147,7 @@ public class GH_Grid : GH_Component
             }
         }
 
-        // Empty list -> auto-derive `auto` tracks from cell indices, so users can skip sizing
+        // Empty list: auto-derive `auto` tracks from cell indices, so users can skip sizing
         // and just place children at (row, col) positions.
         var columnTracks = columnSizes.Count == 0
             ? AutoTracks(cols.Max() + 1)
@@ -190,7 +190,7 @@ public class GH_Grid : GH_Component
             RowSpacing = Math.Max(0, rowSpacing),
         };
 
-        // Only absolute-track overflows can be reported here — star/auto overflow depends on
+        // Only absolute-track overflows can be reported here: star/auto overflow depends on
         // the parent layout context (page width, etc.), which isn't known yet.
         foreach (var ov in grid.ComputeOverflows(new LayoutContext(BoundingBox.Empty)))
         {
@@ -206,7 +206,7 @@ public class GH_Grid : GH_Component
         // Grid.Resolve embeds PreviewOnly cell-divider boxes in the resolved tree, so previewing
         // it shows both content and grid lines (and the guides carry through to Page/Document).
         // Resolve once with an empty context to get the grid's natural extent, then resolve again
-        // with that extent as the available context — an infinite context would collapse star
+        // with that extent as the available context: an infinite context would collapse star
         // tracks onto their content, putting the dividers in the wrong place.
         var natural = grid.ComputeBounds();
         var ctx = natural.IsEmpty

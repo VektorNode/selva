@@ -24,7 +24,7 @@ export function encodeStringToBase64(str: string): string {
 
 /**
  * Checks if a string is syntactically valid base64 (strict form: length a multiple of 4).
- * Note: this is validity checking, not detection — `"test"` is valid base64 here.
+ * Note: this is validity checking, not detection: `"test"` is valid base64 here.
  * To detect whether an untyped string should be treated as base64 content, use {@link detectBase64Payload}.
  *
  * @internal
@@ -40,7 +40,7 @@ export function isBase64(str: string): boolean {
 
 /**
  * Minimum base64 length to treat bare strings as base64 content (excludes padding).
- * 64 chars ≈ 48 decoded bytes — high enough to avoid false positives on human strings.
+ * 64 chars ≈ 48 decoded bytes, high enough to avoid false positives on human strings.
  *
  * @internal
  */
@@ -52,7 +52,7 @@ const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
 /**
  * Detects whether an untyped string is base64-encoded content.
  * Uses normalization, length checks, and canonical round-trip validation.
- * Perfect detection is impossible — pass `Uint8Array` instead if exact detection is required.
+ * Perfect detection is impossible: pass `Uint8Array` instead if exact detection is required.
  *
  * @internal
  * @param str - String to inspect
@@ -100,7 +100,7 @@ export function decodeBase64ToBinary(base64File: string): Uint8Array {
 		});
 	}
 
-	// Prefer Buffer in Node — it's faster and avoids the latin-1 string detour
+	// Prefer Buffer in Node: it's faster and avoids the latin-1 string detour
 	// that atob + charCodeAt requires.
 	const Buffer = getNodeBuffer();
 	if (Buffer) {
@@ -177,7 +177,7 @@ export function base64ByteArray(bytes: Uint8Array): string {
 		// Encode chunk-by-chunk and join the base64 pieces, instead of building
 		// one full-input latin-1 string and btoa-ing it (which peaked at ~3×
 		// input memory). The chunk size MUST be a multiple of 3 bytes so every
-		// non-final chunk encodes to whole base64 quanta with no padding —
+		// non-final chunk encodes to whole base64 quanta with no padding,
 		// concatenating the pieces is then byte-for-byte identical to encoding
 		// the whole input at once. 32766 = 3 × 10922, and stays well under the
 		// fromCharCode.apply argument-count limit.
@@ -185,7 +185,7 @@ export function base64ByteArray(bytes: Uint8Array): string {
 		const parts: string[] = [];
 		for (let i = 0; i < bytes.length; i += CHUNK) {
 			// A Uint8Array subarray is array-like, so pass it straight to
-			// fromCharCode.apply — no need to copy it into a plain Array first.
+			// fromCharCode.apply: no need to copy it into a plain Array first.
 			parts.push(
 				globalThis.btoa(
 					String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK) as unknown as number[])

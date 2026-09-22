@@ -77,7 +77,7 @@
 	const hasLeftPanel = $derived(leftTabs.length > 0);
 	const hasRightPanel = $derived(rightTabs.length > 0);
 	const hasSidebar = $derived(hasViewer || hasRightPanel);
-	// Left + right, no viewer — both panes grow to fill the full width.
+	// Left + right, no viewer: both panes grow to fill the full width.
 	const isTwoPanelMode = $derived(!hasViewer && hasLeftPanel && hasRightPanel);
 
 	let isMobile = $state(false);
@@ -421,7 +421,7 @@
 	}
 
 	/* When the adjacent pane is collapsed, override paneforge's inline
-	   ew-resize cursor — there's nothing to drag from in this state. */
+	   ew-resize cursor: there's nothing to drag from in this state. */
 	:global([data-pane-resizer][data-collapsed='true']) {
 		cursor: pointer !important;
 	}

@@ -67,7 +67,7 @@ export function getLogger(): Logger {
  *
  * @param logger - Custom logger implementation or null to disable logging
  * @throws {ComputeError} `INVALID_CONFIG` if the logger is missing any of
- *   the four required methods — failing here beats a confusing
+ *   the four required methods: failing here beats a confusing
  *   "getLogger().debug is not a function" at some later, unrelated call site.
  *
  * @example

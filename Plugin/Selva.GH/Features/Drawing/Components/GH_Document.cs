@@ -22,7 +22,7 @@ public class GH_Document : GH_Component
     private BoundingBox _clippingBox = BoundingBox.Empty;
 
     // Stamped once per instance so identical inputs produce identical Documents across
-    // recomputes — DateTime.UtcNow per solve made every recompute a "new" file.
+    // recomputes: DateTime.UtcNow per solve made every recompute a "new" file.
     private readonly DateTime _createdAt = DateTime.UtcNow;
 
     private const double TileGapMm = 20.0;
@@ -171,7 +171,7 @@ public class GH_Document : GH_Component
 
     private void BuildPreview(IReadOnlyList<Page> pages)
     {
-        // Accumulate rather than assign — assignment would leave only the last document's
+        // Accumulate rather than assign: assignment would leave only the last document's
         // pages visible.
         _previewPages ??= new List<Page>();
         _previewContents ??= new List<DrawElement>();

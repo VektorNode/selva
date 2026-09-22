@@ -24,13 +24,9 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     private const string DefaultFileEnding = ".3dm";
     private static readonly Color DefaultLayerColor = Color.Black;
 
-    // Singleton converter instance (reused across all solve instances)
     private static RhinoDocumentConverter _converter;
     private static readonly object _converterLock = new object();
 
-    /// <summary>
-    ///     Initializes a new instance of the OBSOLETE_DataToFile_UntilV0_6_2 class.
-    /// </summary>
     public OBSOLETE_DataToFile_UntilV0_6_2()
         : base("Geometry To File", "GTF",
             "Exports geometry to file format(s) with layer organization. Supports both single file (list input) and multiple files (tree input).",
@@ -41,27 +37,17 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
 
     public override GH_Exposure Exposure => GH_Exposure.hidden;
 
-    /// <summary>
-    ///     Provides an Icon for the component.
-    /// </summary>
     protected override Bitmap Icon => Resources.GeometryToFile;
 
-    /// <summary>
-    ///     Gets the unique ID for this component. Do not change this ID after release.
-    /// </summary>
+    // Do not change this ID: an upgrader elsewhere targets it by value, and Grasshopper resolves
+    // saved definitions by GUID, not by file or class name.
     public override Guid ComponentGuid => new Guid("A51C8F6A-D422-4387-8170-F9F34D8E5351");
 
-    /// <summary>
-    ///     Creates custom component attributes
-    /// </summary>
     public override void CreateAttributes()
     {
         m_attributes = new GH_ContextBakeOutputAttributes(this);
     }
 
-    /// <summary>
-    ///     Ensures the converter is initialized (singleton pattern)
-    /// </summary>
     private void EnsureConverterInitialized()
     {
         if (_converter == null)
@@ -70,18 +56,13 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
             {
                 if (_converter == null)
                 {
-                    // Configure options for Grasshopper usage
                     var options = new RhinoConverterOptions();
-
                     _converter = new RhinoDocumentConverter(options);
                 }
             }
         }
     }
 
-    /// <summary>
-    ///     Registers all the input parameters for this component.
-    /// </summary>
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddGeometryParameter("Geometry", "G",
@@ -105,9 +86,6 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         pManager[4].Optional = true;
     }
 
-    /// <summary>
-    ///     Registers all the output parameters for this component.
-    /// </summary>
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
     {
         pManager.AddGenericParameter("File", "F",
@@ -115,12 +93,8 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
             GH_ParamAccess.list);
     }
 
-    /// <summary>
-    ///     This is the method that actually does the work.
-    /// </summary>
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        // Get trees for all parameters
         if (!DA.GetDataTree(0, out GH_Structure<IGH_GeometricGoo> geometryTree))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry provided");
@@ -139,7 +113,6 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         var fileEnding = DefaultFileEnding;
         DA.GetData(4, ref fileEnding);
 
-        // Validate file ending
         if (string.IsNullOrWhiteSpace(fileEnding) || !fileEnding.StartsWith("."))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -151,14 +124,11 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         {
             List<FileDataGoo> results;
 
-            // Determine if we're in single file mode (simple list) or multiple file mode (tree structure)
             if (IsSingleFileMode(geometryTree))
-                // Single file mode - all geometry in one file
             {
                 results = ProcessSingleFile(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree, fileEnding);
             }
             else
-                // Multiple files mode - one file per branch
             {
                 results = ProcessMultipleFiles(geometryTree, layerNamesTree, layerColorsTree, fileNamesTree,
                     fileEnding);
@@ -178,18 +148,12 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         }
     }
 
-    /// <summary>
-    ///     Determines if the component should operate in single file mode based on tree structure.
-    /// </summary>
     private bool IsSingleFileMode(GH_Structure<IGH_GeometricGoo> geometryTree)
     {
         return geometryTree.PathCount == 1 ||
                (geometryTree.PathCount > 1 && geometryTree.Branches.Skip(1).All(b => b.Count == 0));
     }
 
-    /// <summary>
-    ///     Processes all geometry into a single file.
-    /// </summary>
     private List<FileDataGoo> ProcessSingleFile(
         GH_Structure<IGH_GeometricGoo> geometryTree,
         GH_Structure<GH_String> layerNamesTree,
@@ -199,7 +163,6 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
     {
         var results = new List<FileDataGoo>();
 
-        // Flatten all data
         var allGeometry = geometryTree.AllData(true).OfType<IGH_GeometricGoo>().ToList();
         var allLayerNames = layerNamesTree?.AllData(true)
             .Select(s => (s as GH_String)?.Value)
@@ -266,9 +229,6 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         return results;
     }
 
-    /// <summary>
-    ///     Processes geometry into multiple files, one per branch.
-    /// </summary>
     private List<FileDataGoo> ProcessMultipleFiles(
         GH_Structure<IGH_GeometricGoo> geometryTree,
         GH_Structure<GH_String> layerNamesTree,
@@ -367,9 +327,6 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         return results;
     }
 
-    /// <summary>
-    ///     Extracts valid GeometryBase objects from IGH_GeometricGoo list with detailed error handling.
-    /// </summary>
     private List<(GeometryBase Geometry, int OriginalIndex)> ExtractValidGeometries(List<IGH_GeometricGoo> gooList)
     {
         var validGeometries = new List<(GeometryBase, int)>();
@@ -444,15 +401,11 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         return validGeometries;
     }
 
-    /// <summary>
-    ///     Adds geometries to the Rhino document with proper layer management.
-    /// </summary>
     private void AddGeometriesToDocument(RhinoDoc doc,
         List<(GeometryBase Geometry, int OriginalIndex)> geometries,
         List<string> layerNames,
         List<Color> layerColors)
     {
-        // Create a dictionary to track layers and avoid duplicates
         var layerCache = new Dictionary<string, int>();
 
         foreach (var (geometry, originalIndex) in geometries)
@@ -511,9 +464,6 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         }
     }
 
-    /// <summary>
-    ///     Gets the layer name for a specific index with fallback to default.
-    /// </summary>
     private string GetLayerName(List<string> layerNames, int index)
     {
         if (layerNames == null || layerNames.Count == 0)
@@ -530,9 +480,6 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         return lastName ?? DefaultLayerName;
     }
 
-    /// <summary>
-    ///     Gets the layer color for a specific index with fallback to default.
-    /// </summary>
     private Color GetLayerColor(List<Color> layerColors, int index)
     {
         if (layerColors == null || layerColors.Count == 0)
@@ -548,19 +495,16 @@ public class OBSOLETE_DataToFile_UntilV0_6_2 : GH_Component, ISelvaFileOutput
         return layerColors.Count > 0 ? layerColors[layerColors.Count - 1] : DefaultLayerColor;
     }
 
-    /// <summary>
-    ///     Exports the document to the specified file format using the new converter.
-    /// </summary>
     private string ExportDocument(RhinoDoc doc, string fileEnding)
     {
         try
         {
             if (fileEnding == ".3dm")
             {
-                return _converter.DocToRhinoFile(doc); // Synchronous!
+                return _converter.DocToRhinoFile(doc);
             }
 
-            return _converter.DocToBase64(doc, fileEnding); // Synchronous!
+            return _converter.DocToBase64(doc, fileEnding);
         }
         catch (Exception ex)
         {

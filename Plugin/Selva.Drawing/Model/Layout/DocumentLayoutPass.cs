@@ -27,7 +27,7 @@ public static class DocumentLayoutPass
 			var paper = section.PaperSize ?? layout.PaperSize;
 			var margins = section.Margins ?? layout.Margins;
 
-			// Measure the SUBSTITUTED template, not the raw "{title}" — substitution changes text
+			// Measure the substituted template, not the raw "{title}": substitution changes text
 			// length and layout wraps on that length. True {page}/{pages} aren't known yet at this
 			// point (cross-section numbering), but a provisional resolver carrying the real title
 			// and section name gets the length-dominant tokens right; page numbers vary by at most
@@ -59,7 +59,7 @@ public static class DocumentLayoutPass
 				FooterEdgeOffset = section.FooterEdgeOffset ?? layout.FooterEdgeOffset,
 			};
 
-			// KeepTogether: paginate with infinite vertical budget so TrySplit always reports
+			// KeepTogether paginates with infinite vertical budget so TrySplit always reports
 			// AllFits, forcing the whole section onto one page even if it overflows.
 			var body = section.KeepTogether
 				? PaginationPass.PaginateBody(section.Content, paper, margins, bands, double.PositiveInfinity)

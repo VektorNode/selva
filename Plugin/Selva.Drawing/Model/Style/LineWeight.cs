@@ -1,8 +1,8 @@
 namespace Selva.Drawing.Model.Style;
 
 // The drawing system's lineweights, in paper-space millimetres. Every default and fallback in
-// the model and both renderers resolves to one of these named values instead of a bare literal
-// — PDF and SVG used to drift because the same conceptual weight was written as an independent
+// the model and both renderers resolves to one of these named values instead of a bare literal:
+// PDF and SVG used to drift because the same conceptual weight was written as an independent
 // number in each renderer (an unstyled path was 0.25 mm in PDF, 1.0 mm in SVG).
 //
 // The ladder is ISO 128 / ISO 3098: each step is ~sqrt(2) times the previous, so weights stay
@@ -10,7 +10,7 @@ namespace Selva.Drawing.Model.Style;
 // in between.
 public static class LineWeight
 {
-	// Thinnest ISO step — the usual CAD "hairline". Visible on a 300 dpi office printer
+	// Thinnest ISO step, the usual CAD "hairline". Visible on a 300 dpi office printer
 	// (~1.5 device pixels); anything thinner drops below the dot pitch and renders
 	// inconsistently across devices.
 	public const double Thin = 0.13;

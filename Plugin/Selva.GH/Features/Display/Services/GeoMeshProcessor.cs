@@ -15,7 +15,7 @@ public static class GeoMeshProcessor
     /// <summary>
     ///     Same as <see cref="ConvertMeshToArrays(Mesh)" /> but optionally extracts UVs and vertex
     ///     colors. A channel comes back non-null only when requested AND the mesh has a full set
-    ///     (count == vertex count) — partial or absent channels return null so callers can treat
+    ///     (count == vertex count): partial or absent channels return null so callers can treat
     ///     null as "this mesh contributes nothing here".
     /// </summary>
     public static (float[] vertices, int[] faces, float[] uvs, byte[] colors) ConvertMeshToArrays(
@@ -28,7 +28,7 @@ public static class GeoMeshProcessor
         var vertexCount = meshVertices.Count;
         var faceCount = meshFaces.Count;
 
-        // Indexed access, not foreach — MeshVertexList boxes each Point3f in a foreach.
+        // Indexed access, not foreach: MeshVertexList boxes each Point3f in a foreach.
         var vertices = new float[vertexCount * componentsPerVertex];
         var vertexIndex = 0;
         for (var i = 0; i < vertexCount; i++)

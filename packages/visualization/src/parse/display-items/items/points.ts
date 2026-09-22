@@ -6,7 +6,7 @@ import { materialParams } from './appearance.js';
 import type { DisplayPoint } from '../types';
 
 export function buildPoint(item: DisplayPoint): THREE.Points | null {
-	// `position` comes off the wire — don't trust the declared type without validating.
+	// `position` comes off the wire: don't trust the declared type without validating.
 	const { position } = item as { position?: { X?: unknown; Y?: unknown; Z?: unknown } };
 	if (
 		!position ||

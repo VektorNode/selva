@@ -29,7 +29,7 @@ export function composeSignal(
 		return { signal: ctrl.signal, cleanup: () => clearTimeout(id) };
 	}
 
-	// Caller signal + timeout: composed manually rather than with AbortSignal.any — `any` offers no
+	// Caller signal + timeout: composed manually rather than with AbortSignal.any. `any` offers no
 	// way to unregister its dependent link on the caller's signal, so an app reusing one long-lived
 	// signal across many solves accumulates a registration per attempt for the full timeoutMs after
 	// each response (and forever on Node versions with the known AbortSignal.any leak).

@@ -9,7 +9,7 @@ namespace Selva.GH.Features.UIBuilder.Services.Communication;
 
 /// <summary>
 ///     Parses and classifies a raw inbound WebSocket message into an <see cref="InboundMessage" />.
-///     Pure logic over a JSON string — no sockets, no Rhino, no thread marshalling. The transport
+///     Pure logic over a JSON string: no sockets, no Rhino, no thread marshalling. The transport
 ///     (<see cref="WebSocketTransport" />) owns the socket and the UI-thread hop; this owns
 ///     interpreting the bytes, unit-tested instead of only checkable on a live canvas.
 /// </summary>
@@ -27,7 +27,7 @@ public sealed class InboundMessageParser
     }
 
     /// <summary>
-    ///     Never throws on bad input — malformed JSON, a missing `type`, a session mismatch, or a
+    ///     Never throws on bad input: malformed JSON, a missing `type`, a session mismatch, or a
     ///     missing required field each map to a named <see cref="InboundKind" />.
     /// </summary>
     /// <param name="message">The raw text frame.</param>
@@ -52,7 +52,7 @@ public sealed class InboundMessageParser
 
         var sid = jObj["sessionId"]?.ToString();
 
-        // requestInitialData establishes the session — exempt from the session check.
+        // requestInitialData establishes the session: exempt from the session check.
         if (msgType != "requestInitialData" && sid != expectedSessionId)
         {
             return InboundMessage.Of(InboundKind.SessionMismatch, msgType);
@@ -140,7 +140,7 @@ public sealed class InboundMessageParser
         catch (JsonException)
         {
             // A payload that's present but doesn't bind to its target type (wrong shape) is a
-            // contract violation, not a crash — surface it as a missing/invalid field.
+            // contract violation, not a crash: surface it as a missing/invalid field.
             return InboundMessage.Of(InboundKind.MissingField, msgType);
         }
     }

@@ -14,9 +14,8 @@ public static class SvgFontResolver
 
 	private static readonly Dictionary<string, string> KnownFonts = new()
 	{
-		// SVG @font-face needs (family, weight, style) tuples. Both bundled fonts share
-		// the Inter family; weight is the only distinguishing axis at Phase 2.
-		// (family, weight, style) — both bundled fonts are Inter, weight is the only axis.
+		// SVG @font-face needs (family, weight, style) tuples. Both bundled fonts are Inter;
+		// weight is the only distinguishing axis.
 		[$"{ResourcePrefix}Inter-Regular.ttf"] = "Inter|400|normal",
 		[$"{ResourcePrefix}Inter-Bold.ttf"] = "Inter|700|normal",
 	};

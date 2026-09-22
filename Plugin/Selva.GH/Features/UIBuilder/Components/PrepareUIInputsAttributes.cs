@@ -105,7 +105,7 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
         graphics.DrawPath(outline, path);
     }
 
-    /// <summary>Registered controls: dashed outline in the icon's mid-green.</summary>
+    // Registered controls: dashed outline in the icon's mid-green.
     private void RenderRegisteredControlLinks(Graphics graphics)
     {
         var bounds = Component?.LinkedControlBounds();
@@ -127,7 +127,7 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
         }
     }
 
-    /// <summary>Contextual parameters this component owns: dash-dot outline in the icon's dark green.</summary>
+    // Contextual parameters this component owns: dash-dot outline in the icon's dark green.
     private void RenderManagedParameterLinks(Graphics graphics)
     {
         var bounds = Component?.ManagedContextualBounds();
@@ -149,11 +149,8 @@ internal sealed class PrepareUIInputsAttributes : GH_ComponentAttributes
         }
     }
 
-    /// <summary>
-    ///     Dashed outline around a linked object, matching the arrow that connects it back to the
-    ///     component. A rectangle is a closed figure, so the pen's arrow cap is ignored here and the
-    ///     same Pen can be reused for both.
-    /// </summary>
+    // A rectangle is a closed figure, so the pen's arrow cap is ignored here and the same Pen
+    // can be reused for both the box and the arrow.
     private static void DrawLinkBox(Graphics graphics, Pen pen, RectangleF bounds)
     {
         RectangleF box = RectangleF.Inflate(bounds, 4f, 4f);

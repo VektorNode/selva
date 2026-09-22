@@ -28,13 +28,13 @@ public sealed class GooView
 }
 
 /// <summary>
-///     Outcome of a goo-walk over one ContextBake input — replaces three previously-silent null paths
+///     Outcome of a goo-walk over one ContextBake input: replaces three previously-silent null paths
 ///     with named, testable, loggable results:
 ///     <list type="bullet">
-///         <item><see cref="Empty" /> — the bake's first input had no data (wiring / solve-order).</item>
-///         <item><see cref="UnknownType" /> — a goo was present but matched no Selva output type
+///         <item><see cref="Empty" />: the bake's first input had no data (wiring / solve-order).</item>
+///         <item><see cref="UnknownType" />: a goo was present but matched no Selva output type
 ///               (unwrap miss, or an upstream TypeName rename).</item>
-///         <item><see cref="Matched" /> — a Selva output goo was recognized and a payload produced.</item>
+///         <item><see cref="Matched" />: a Selva output goo was recognized and a payload produced.</item>
 ///     </list>
 /// </summary>
 public enum BuildOutcomeKind
@@ -75,7 +75,7 @@ public sealed class BuildOutcome
 }
 
 /// <summary>
-///     Maps a ContextBake-wired goo to the value the WebSocket collector broadcasts — one branch per
+///     Maps a ContextBake-wired goo to the value the WebSocket collector broadcasts: one branch per
 ///     Selva output type. Adding an output type means adding a branch here plus a row in the golden
 ///     contract test; no other collection code changes.
 ///

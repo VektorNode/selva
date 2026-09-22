@@ -8,8 +8,8 @@
 
 // namespace Selva.GH.Features.Drawing.Components;
 
-// // Phase 8 composite component: numbered notes block. Each note becomes a wrapped paragraph
-// // preceded by an auto-generated "1." marker (or a custom marker from the parallel input).
+// // Numbered notes block. Each note becomes a wrapped paragraph preceded by an
+// // auto-generated "1." marker, or a custom marker from the parallel input.
 // public class GH_NotesBlock : GH_Component
 // {
 //     public GH_NotesBlock()

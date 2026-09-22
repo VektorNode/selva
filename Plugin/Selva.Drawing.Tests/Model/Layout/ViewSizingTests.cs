@@ -39,7 +39,7 @@ public class ViewSizingTests
 	[Fact]
 	public void A_captioned_auto_fit_view_stays_inside_a_height_bound_container()
 	{
-		// Used to auto-fit into a 277mm rect at 281.5mm — 4.5mm into the footer.
+		// Used to auto-fit into a 277mm rect at 281.5mm: 4.5mm into the footer.
 		var view = new DrawingView { Geometry = Rect(100, 400), Caption = "PLAN VIEW" };
 
 		var bounds = view.Resolve(new LayoutContext(new BoundingBox(0, 0, 190, 277))).ComputeBounds();
@@ -82,7 +82,7 @@ public class ViewSizingTests
 	}
 
 	// ========================================================================================
-	// Line weight is a style, not a dimension — it must not move the drawing scale
+	// Line weight is a style, not a dimension: it must not move the drawing scale
 	// ========================================================================================
 
 	[Theory]
@@ -92,7 +92,7 @@ public class ViewSizingTests
 	public void Stroke_weight_does_not_change_the_view_scale(double strokeWidth)
 	{
 		// Scale used to derive from stroke-inflated bounds: a 20mm square with Length=20 resolved
-		// to 1:0.952 at a 1.0mm weight, because the "20mm" edge measured 19.05mm — two views of
+		// to 1:0.952 at a 1.0mm weight, because the "20mm" edge measured 19.05mm. Two views of
 		// the same geometry at different weights would not align.
 		var view = new DrawingView
 		{
@@ -135,7 +135,7 @@ public class ViewSizingTests
 	public void Negative_margins_do_not_push_the_page_rect_off_the_paper()
 	{
 		// Nothing downstream crops to the paper: a negative margin used to simply move the content
-		// rect and both bands off the sheet — -10mm on A4 gave a page rect of -10..307.
+		// rect and both bands off the sheet. -10mm on A4 gave a page rect of -10..307.
 		var section = PaginationPass.PaginateBody(
 			Rect(100, 100), PaperSize.A4, new Margins(-10, -10, -10, -10), BandConfig.ContentMode(10, 10));
 
@@ -188,7 +188,7 @@ public class ViewSizingTests
 	public void Declared_column_widths_survive_a_count_mismatch()
 	{
 		// A short ColumnWidths list used to discard every declared width and fall back to
-		// all-Star — reading as "ColumnWidths does nothing" instead of "one width is missing".
+		// all-Star, reading as "ColumnWidths does nothing" instead of "one width is missing".
 		var table = new Table
 		{
 			ColumnWidths = new List<GridLength> { GridLength.Absolute(20), GridLength.Absolute(20) },

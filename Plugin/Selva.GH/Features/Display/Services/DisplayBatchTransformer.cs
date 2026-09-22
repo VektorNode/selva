@@ -10,11 +10,11 @@ namespace Selva.GH.Features.Display.Services;
 ///     Applies a Rhino <see cref="Transform" /> (or <see cref="SpaceMorph" />) to a baked
 ///     <see cref="DisplayBatch" />, producing a new batch with relocated geometry.
 ///
-///     A WebDisplay holds no live Rhino geometry — meshes live as a quantized binary blob and
+///     A WebDisplay holds no live Rhino geometry: meshes live as a quantized binary blob and
 ///     curves/points as JSON items. To honour Move/Rotate/Scale/Orient on the param, this decodes
 ///     the blob to world-space vertices, transforms them, and re-encodes a fresh blob; curve/point
 ///     items are transformed in their own native forms. The batch envelope (materials, groups,
-///     layout, ids) stays unchanged — only positions move.
+///     layout, ids) stays unchanged; only positions move.
 ///
 ///     Mesh indices, group layout, and per-mesh vertex ranges are identity-preserving under any
 ///     affine transform, so only the vertex array needs to move before re-running the writer. A
@@ -70,7 +70,7 @@ public static class DisplayBatchTransformer
         }
         catch
         {
-            // Unreadable blob — keep it as-is rather than dropping the geometry.
+            // Unreadable blob: keep it as-is rather than dropping the geometry.
             return batch.CompressedData;
         }
 
@@ -138,7 +138,7 @@ public static class DisplayBatchTransformer
             }
             else if (item.Kind == "curve" && item.Points != null)
             {
-                // No NURBS to move — transform the tessellation itself. Exact for affine transforms;
+                // No NURBS to move: transform the tessellation itself. Exact for affine transforms;
                 // a morph bends between samples, but the alternative is dropping the curve.
                 result.Add(DisplayItem.Curve(null, MovePoints(item.Points, movePoint), item.Id,
                     item.Name, item.Layer, item.Metadata, item.Color, item.Opacity));

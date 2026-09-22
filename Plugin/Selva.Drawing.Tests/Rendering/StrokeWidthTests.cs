@@ -60,7 +60,6 @@ public class StrokeWidthTests
 		return widths;
 	}
 
-	// `S` (stroke) and `B` (fill+stroke) both put ink down along the path.
 	private static bool HasStrokeOperator(string content) =>
 		Regex.IsMatch(content, @"(^|\s)(S|s|B|B\*|b|b\*)(\s|$)");
 
@@ -93,7 +92,6 @@ public class StrokeWidthTests
 		Assert.DoesNotContain("stroke-width=", svg);
 	}
 
-	// The whole point of suppressing rather than clamping: `0 w` is device-dependent.
 	[Fact]
 	public void Zero_width_never_emits_the_device_dependent_operator()
 	{
@@ -103,7 +101,6 @@ public class StrokeWidthTests
 		Assert.DoesNotMatch(@"(^|\s)0(\.0+)?\s+w\b", content);
 	}
 
-	// A zero-width stroke on a filled path must suppress only the outline, not the fill.
 	[Fact]
 	public void Zero_width_keeps_the_fill()
 	{
@@ -115,7 +112,7 @@ public class StrokeWidthTests
 		}));
 
 		Assert.Empty(LineWidths(content));
-		// f/f* (even-odd vs nonzero) both fill; the default fill rule emits f*.
+		// f/f* both fill (nonzero vs even-odd); the default fill rule emits f*.
 		Assert.Matches(@"(^|\s)f\*?(\s|$)", content);
 		Assert.False(HasStrokeOperator(content), "outline was drawn despite Width = 0");
 	}
@@ -133,9 +130,9 @@ public class StrokeWidthTests
 		Assert.True(HasStrokeOperator(content));
 	}
 
-	// Regression: the unstyled fallback keys off Stroke being absent, not off the pen being
-	// null. Keying it off the pen would hand a suppressed outline back the default weight —
-	// exactly the outline the caller asked to remove.
+	// The unstyled fallback keys off Stroke being absent, not off the pen being null: keying
+	// it off the pen would hand a suppressed outline back the default weight, exactly the
+	// outline the caller asked to remove.
 	[Fact]
 	public void Zero_width_does_not_fall_back_to_the_default_line()
 	{
@@ -198,8 +195,9 @@ public class StrokeWidthTests
 			precision: 6);
 	}
 
-	// An unstyled path used to render 0.25mm in PDF but 1.0mm in SVG: only the PDF renderer
-	// named a width, so SVG omitted the attribute and inherited the spec default of 1.0mm.
+	// Regression: an unstyled path used to render 0.25mm in PDF but 1.0mm in SVG, because
+	// only the PDF renderer named a width; SVG omitted the attribute and inherited its spec
+	// default of 1.0mm.
 	[Fact]
 	public void Unstyled_path_has_the_same_width_in_both_renderers()
 	{
@@ -240,7 +238,7 @@ public class StrokeWidthTests
 	}
 
 	// Hatch widths are generated from PatternScale rather than authored, so a tiny scale must
-	// not silently erase the pattern — nor emit `0 w`.
+	// not silently erase the pattern, nor emit `0 w`.
 	[Fact]
 	public void Tiny_pattern_scale_still_draws_a_visible_pattern()
 	{
@@ -255,7 +253,6 @@ public class StrokeWidthTests
 		Assert.All(widths, w => Assert.True(Stroke.IsVisibleWidth(w), $"emitted '{w} w'"));
 	}
 
-	// A dimension with suppressed linework is still a legible annotation, so the label stays.
 	[Fact]
 	public void Zero_width_dimension_keeps_its_label()
 	{

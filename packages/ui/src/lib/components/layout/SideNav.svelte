@@ -20,7 +20,7 @@
 		header?: Snippet;
 		footer?: Snippet;
 		/**
-		 * Off when the divider is drawn by the surrounding layout instead — a sticky sidenav
+		 * Off when the divider is drawn by the surrounding layout instead. A sticky sidenav
 		 * only reaches as far as its own content, so its border would stop mid-page.
 		 */
 		border?: boolean;

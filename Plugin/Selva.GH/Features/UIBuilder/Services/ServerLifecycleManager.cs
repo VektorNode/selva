@@ -12,7 +12,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 ///     Manages LocalWebServer and WebSocketServer startup/shutdown, serializing concurrent access.
 ///
 ///     Concurrency model: <see cref="_transitionGate" /> serializes start/stop transitions;
-///     <see cref="_desiredRunning" /> records the latest caller intent. Both are needed — the gate alone
+///     <see cref="_desiredRunning" /> records the latest caller intent. Both are needed: the gate alone
 ///     can't order a delayed stop (disconnect-notify grace period) against a newer start, and a plain
 ///     "if (IsRunning) Stop()" check-then-act lets a stop overlapping a start no-op entirely, orphaning
 ///     servers on a disabled component.
@@ -25,7 +25,7 @@ public class ServerLifecycleManager : IDisposable
     private bool _disposed;
 
     // Latest intent: set true at the top of StartServersAsync, false at the top of the stop
-    // entry points — before either takes the gate. Transitions re-check it under the gate so the
+    // entry points, before either takes the gate. Transitions re-check it under the gate so the
     // most recent request wins regardless of execution order.
     private volatile bool _desiredRunning;
 
@@ -51,7 +51,7 @@ public class ServerLifecycleManager : IDisposable
         _disposed = true;
         _desiredRunning = false;
 
-        // Synchronous best-effort cleanup — no async/.Wait() (deadlocks on the main thread) and no
+        // Synchronous best-effort cleanup: no async/.Wait() (deadlocks on the main thread) and no
         // gate wait (Dispose must not block). An in-flight start observes _desiredRunning == false
         // after binding and tears itself down.
         StopCore();
@@ -71,7 +71,7 @@ public class ServerLifecycleManager : IDisposable
         {
             if (!_desiredRunning)
             {
-                // A stop was requested after this start queued — the newer intent wins.
+                // A stop was requested after this start queued: the newer intent wins.
                 return false;
             }
 
@@ -98,7 +98,7 @@ public class ServerLifecycleManager : IDisposable
 
             if (!_desiredRunning)
             {
-                // Disabled while binding — tear down what we just built instead of leaving
+                // Disabled while binding: tear down what we just built instead of leaving
                 // servers accepting clients on a disabled component.
                 StopCore();
                 return false;
@@ -112,7 +112,7 @@ public class ServerLifecycleManager : IDisposable
         {
             Logger.Error("[ServerLifecycleManager] Failed to start servers", ex);
 
-            // Cleanup on failure. Direct StopCore — StopServersAsync would deadlock on the gate.
+            // Cleanup on failure. Direct StopCore: StopServersAsync would deadlock on the gate.
             StopCore();
             return false;
         }
@@ -131,12 +131,12 @@ public class ServerLifecycleManager : IDisposable
         {
             if (_desiredRunning)
             {
-                // Re-enabled while this stop was queued or delayed (fast disable→enable) —
+                // Re-enabled while this stop was queued or delayed (fast disable→enable):
                 // leave the servers up rather than stranding an enabled component.
                 return;
             }
 
-            // Socket closes block up to ClientCloseTimeoutMs per client — keep them off the
+            // Socket closes block up to ClientCloseTimeoutMs per client: keep them off the
             // calling thread (this is reached from UI-thread continuations).
             await Task.Run(StopCore).ConfigureAwait(false);
         }

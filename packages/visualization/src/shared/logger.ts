@@ -43,7 +43,7 @@ class ConsoleLogger implements Logger {
 // its own logging. Opt in with setLogger or enableDebugLogging.
 let internalLogger: Logger = new NoOpLogger();
 
-// Call per-use rather than caching — the sink is settable at any time.
+// Call per-use rather than caching: the sink is settable at any time.
 export function getLogger(): Logger {
 	return internalLogger;
 }

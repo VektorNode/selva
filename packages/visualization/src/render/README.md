@@ -179,19 +179,19 @@ guide** — the seams, the traps, and a checklist.
 
 ## Where the code lives
 
-| Path                                                       | What it does                                                  |
-| ---------------------------------------------------------- | ------------------------------------------------------------- |
-| `scene-setup/`                                             | `initThree` and one file per construction step                |
-| `camera-controller.ts`                                     | view presets, framing, perspective/ortho                      |
-| `edges.ts`, `edges/`                                       | edge overlays: settings, extraction, line building            |
-| `edge-detection-pass.ts`, `edge-extract.ts`                | screen-space edge detection (the fallback for skipped meshes) |
-| `render-pipeline.ts`                                       | the post-processing chain                                     |
-| `grid.ts`, `view-gizmo.ts`, `label-layer.ts`, `measure.ts` | overlays                                                      |
-| `near-plane.ts`                                            | keeps the near clip plane sane when zoomed out                |
-| `three-helpers.ts`                                         | `updateScene`, `clearScene`, bounds                           |
-| `three-materials.ts`                                       | shared material instances                                     |
-| `tool-registry.ts`, `scene-ownership.ts`                   | host-app pointer tools and geometry ownership tagging         |
-| `types.ts`                                                 | `ThreeInitializerOptions` and friends                         |
+| Path                                                       | What it does                                                       |
+| ---------------------------------------------------------- | ------------------------------------------------------------------ |
+| `scene-setup/`                                             | `initThree` and one file per construction step                     |
+| `camera-controller.ts`                                     | view presets, framing, perspective/ortho                           |
+| `edges.ts`, `edges/`, `edge-extract.ts`                    | edge overlays: settings, crease/boundary extraction, line building |
+| `edge-detection-pass.ts`                                   | screen-space edge detection (the fallback for skipped meshes)      |
+| `render-pipeline.ts`                                       | the post-processing chain                                          |
+| `grid.ts`, `view-gizmo.ts`, `label-layer.ts`, `measure.ts` | overlays                                                           |
+| `near-plane.ts`                                            | keeps the near clip plane sane when zoomed out                     |
+| `three-helpers.ts`                                         | `updateScene`, `clearScene`, bounds                                |
+| `three-materials.ts`                                       | shared material instances                                          |
+| `tool-registry.ts`, `scene-ownership.ts`                   | host-app pointer tools and geometry ownership tagging              |
+| `types.ts`                                                 | `ThreeInitializerOptions` and friends                              |
 
 Inside `scene-setup/`, `init-three.ts` only wires things up: `create-scene`, `create-camera`,
 `setup-renderer`, `setup-lighting`, `setup-environment`, `setup-controls`, `setup-events`,
