@@ -13,6 +13,7 @@ using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.FileIO.Goos;
 using Selva.GH.Features.FileIO.Services;
+using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Utilities.Helpers;
 using Selva.FileIO;
 
@@ -310,16 +311,8 @@ public class ValueCollector
         return displayBatches.Count == 1 ? displayBatches[0] : displayBatches;
     }
 
-    private static bool IsContextBakeComponent(IGH_Component component)
-    {
-        if (component == null)
-        {
-            return false;
-        }
-
-        var typeName = component.GetType()?.Name;
-        return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
-    }
+    private static bool IsContextBakeComponent(IGH_Component component) =>
+        ParameterTypeHelper.IsContextBakeComponent(component);
 
     private object ExtractParameterValue(IGH_Param ghParam, SchemaInput input)
     {

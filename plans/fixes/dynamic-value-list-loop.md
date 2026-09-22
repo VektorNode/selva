@@ -103,6 +103,52 @@ Consequence of no wire identity, written down so it isn't rediscovered: **every 
 Phase 1: the budget/gate live in the session (package-owned), and `@selvajs/ui` exports the wired
 DVL reconciler as one named factory so hosts import it rather than hand-roll it.
 
+## Unexplored alternative — close the loop in the GH document
+
+The design above closes Set→Get **through the browser**: the plugin emits options, the client picks,
+the client pushes a value back down. That is why the convergent case is correct only with a UI
+attached, and why headless hosts (compute mode, CLI, MCP) emit a value outside the option set with
+nothing to repair it. `plans/fixes` records that as a consequence; it is not inevitable.
+
+`GH_Document` exposes enough to close the loop in-process, without a wire between the Set and Get
+objects:
+
+| API                                         | Use                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `FindObject(targetInputId, true)`           | The Set component resolves its Get param directly — no `targetInputId` round-trip                                             |
+| `ScheduleSolution(delay, callback)`         | Push options into the Get param, then re-solve once. The callback form, not the bare 10 ms call `ValueApplicator.cs:147` uses |
+| `SolutionDepth` / `SolutionState`           | A **document-scoped** iteration count — the budget Phase 1 puts in the session                                                |
+| `SolutionHistory`                           | Last 1000 solution timespans; oscillation is visible here without extra bookkeeping                                           |
+| `RequestAbortSolution()` / `AbortRequested` | Sanctioned bail-out when the fixpoint doesn't converge                                                                        |
+| `UndoServer.PushUndoRecord`                 | The value-list path mutates `GH_ValueList.ListMode` and `item.Selected` mid-solve with no undo record today                   |
+| `FindObjectT<T>(Guid, bool)`                | Replaces the reflection into the private `ConnectedValueList` at `ValueApplicator.cs:443`                                     |
+
+What the API does **not** offer is a way to mutate a component's params mid-solve. That absence is
+the design signal: `SolutionDepth` existing at all means GH expects a cascade to be _another
+scheduled solution_, not patched state inside one. So this alternative is still a fixpoint loop
+across solves — it just runs in the plugin instead of the browser.
+[`PrepareUIInputGraphService.cs`](../../Plugin/Selva.GH/Features/UIBuilder/Services/PrepareUIInputGraphService.cs)
+is the existing template for this shape: one `GH_UndoRecord` and one `ScheduleSolution` per batch,
+with a class comment stating nothing in it is reachable from `SolveInstance`.
+
+**What it would buy.** The four compensation layers in the table above collapse to one, and
+`_storedItems` stops being a stale cache because the Set component refreshes it on solve — which
+is the root cause behind both the convergent staleness and the oscillate stall. Headless works for
+the same reason.
+
+**Blocker to unpick first.** `ClearContextualData()` wipes `_selectedValues`
+([GetDynamicValueListParameter.cs:191-196](../../Plugin/Selva.GH/Features/ComputeIO/Components/GetDynamicValueListParameter.cs#L191-L196)),
+and the compute fork's `ClearAllContextualParameters` calls it at every solve-end. An in-process
+loop needs the selection to survive a solve. The fixture build already works around this
+("re-apply the selections immediately before writing the archive"); an in-process loop cannot.
+
+**Tension with Phase 1, unresolved.** Phase 1 puts the budget and the content gate in
+`@selvajs/solve`; this puts them in the plugin. They are not additive — two independent budgets over
+one cascade is the per-instance-counter bug again at a larger scale. If this alternative is taken,
+Phase 1 shrinks to the echo-suppression and stale-report guard, and the reconciler hook is dropped.
+Decide before Phase 1 starts. Not yet costed: it is C#-side work in the released param components,
+so it carries the OBSOLETE + upgrader procedure if the param lists change.
+
 ## Phases
 
 ### Phase 0 — extract the selection logic pure
