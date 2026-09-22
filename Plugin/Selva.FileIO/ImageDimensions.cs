@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Text;
 using Selva.Drawing.Model.Elements;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.FileIO;
 
 // ============================================================================
 // Reads intrinsic pixel (or, for SVG, user-unit) dimensions straight from image

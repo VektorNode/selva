@@ -42,6 +42,10 @@
 		dynamicOptions = {}
 	}: Props = $props();
 
+	const visibleGroups = $derived(
+		tab.groups.filter((group) => evaluateGroupVisibility(group, values))
+	);
+
 	function getInputById(paramId: string): SchemaInput | undefined {
 		return inputs.find((i) => i.id === paramId);
 	}
@@ -82,25 +86,23 @@
 <Tabs.Content value={tab.id} class="min-h-0 p-0 flex-1">
 	<ScrollArea class="h-full" orientation="vertical">
 		<div class="p-4 tab-content-container">
-			{#if tab.groups.length === 0}
+			{#if visibleGroups.length === 0}
 				<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
 			{:else}
 				<div class="gap-8 flex flex-col">
-					{#each tab.groups as group (group.id)}
-						{#if evaluateGroupVisibility(group, values)}
-							<Group
-								label={group.label}
-								description={group.description}
-								items={group.items}
-								columns={group.columns ?? 1}
-								collapsed={collapsedGroups[group.id] ?? false}
-								{values}
-								onToggle={() => onToggleGroup(group.id)}
-								inputSnippet={renderInput}
-								outputSnippet={renderOutput}
-								flat={tab.groups.length === 1}
-							/>
-						{/if}
+					{#each visibleGroups as group (group.id)}
+						<Group
+							label={group.label}
+							description={group.description}
+							items={group.items}
+							columns={group.columns ?? 1}
+							collapsed={collapsedGroups[group.id] ?? false}
+							{values}
+							onToggle={() => onToggleGroup(group.id)}
+							inputSnippet={renderInput}
+							outputSnippet={renderOutput}
+							flat={visibleGroups.length === 1}
+						/>
 					{/each}
 				</div>
 			{/if}

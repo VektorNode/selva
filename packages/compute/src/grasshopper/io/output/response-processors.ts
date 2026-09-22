@@ -1,5 +1,5 @@
 import { FileData } from '@/core/files/types';
-import { readField } from '@/core/utils/read-field';
+import { hasField, readField } from '@/core/utils/read-field';
 import { GrasshopperComputeResponse, DataItem } from '../../types';
 import { decodeRhinoGeometry, disposeRhinoObjects } from './rhino-decoder';
 
@@ -122,20 +122,64 @@ function extractItemValue(item: DataItem, type: string, parseValues: boolean, rh
 	if (typeof item.data !== 'string') return item.data;
 
 	const raw = parseValues ? decodeItemJSON(item) : item.data;
+	if (parseValues && type.includes(FILE_DATA_TYPE)) {
+		return asFileData(raw) ?? raw;
+	}
+
 	return decodeBySystemType(raw, type, rhino);
 }
 
-/** Type guard for {@link FileData}: the Compute server emits these as JSON blobs inside `FileData`-typed values. */
-function isFileData(value: unknown): value is FileData {
-	if (!value || typeof value !== 'object') return false;
-	const v = value as Record<string, unknown>;
-	return (
-		typeof v.fileName === 'string' &&
-		typeof v.fileType === 'string' &&
-		'data' in v &&
-		typeof v.isBase64Encoded === 'boolean' &&
-		typeof v.subFolder === 'string'
-	);
+/**
+ * Lenient read of the `isBase64Encoded` wire flag: some server branches
+ * serialize booleans as strings (`"true"`/`"True"`), which must still count as
+ * base64 rather than silently dropping the file (issue 95). Mirrors the check
+ * in `handle-files.ts` — the two must agree, or a file accepted here decodes
+ * wrongly there.
+ */
+const isBase64Flag = (flag: unknown): boolean =>
+	flag === true || (typeof flag === 'string' && flag.trim().toLowerCase() === 'true');
+
+/**
+ * Normalizing type guard for {@link FileData}. The Compute server emits these
+ * as JSON blobs inside `FileData`-typed values; this checks that the parsed
+ * shape has every required field before we trust it, then returns it in the
+ * camelCase shape {@link FileData} documents.
+ *
+ * Fields are read case-insensitively via {@link readField}: mcneel-branch
+ * servers serialize PascalCase (`FileName`, `Data`, `IsBase64Encoded`, …)
+ * while the VektorNode fork uses camelCase — both must survive (issue 95).
+ * Reading them strictly here dropped every file from a PascalCase response
+ * *before* the tolerant decoder in `handle-files.ts` ever saw it, so downloads
+ * silently produced an empty archive.
+ *
+ * @returns The normalized file, or `null` when the shape is not a `FileData`.
+ */
+function asFileData(value: unknown): FileData | null {
+	if (!value || typeof value !== 'object') return null;
+
+	const fileName = readField<unknown>(value, 'fileName');
+	const fileType = readField<unknown>(value, 'fileType');
+	const subFolder = readField<unknown>(value, 'subFolder');
+	const flag = readField<unknown>(value, 'isBase64Encoded');
+
+	if (typeof fileName !== 'string' || typeof fileType !== 'string') return null;
+	if (typeof subFolder !== 'string') return null;
+	// Presence, not type: `data` may legitimately be '' and is validated downstream.
+	if (!hasField(value, 'data')) return null;
+	// Reject a flag that is neither a boolean nor a boolean-ish string, rather
+	// than coercing arbitrary values to `false` and mis-decoding the payload.
+	if (typeof flag !== 'boolean' && typeof flag !== 'string') return null;
+
+	const metadata = readField<Record<string, string>>(value, 'metadata');
+
+	return {
+		fileName,
+		fileType,
+		data: readField<string>(value, 'data') as string,
+		isBase64Encoded: isBase64Flag(flag),
+		subFolder,
+		...(metadata ? { metadata } : {})
+	};
 }
 
 // Traversal helpers
@@ -234,9 +278,9 @@ export function extractFileData(response: GrasshopperComputeResponse): FileData[
 		forEachTreeItem(readField(param, 'innerTree'), (item) => {
 			if (!itemType(item).includes(FILE_DATA_TYPE)) return;
 
-			const parsed = decodeItemJSON(item);
-			if (isFileData(parsed)) {
-				output.push(parsed);
+			const file = asFileData(decodeItemJSON(item));
+			if (file) {
+				output.push(file);
 			}
 		});
 	}

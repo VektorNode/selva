@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.FileIO;
 
 public class FileData
 {

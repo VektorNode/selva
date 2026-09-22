@@ -1,5 +1,40 @@
 # @selvajs/selva
 
+## 4.17.1
+
+### Patch Changes
+
+- cf41e54: chore(deps): bump the npm group across 1 directory with 26 updates
+- 23cf1fb: Bump nodemailer to ^9.1.1 to clear four security advisories
+
+  9.0.6 is affected by a high-severity quadratic-time DoS in `addressparser`
+  (GHSA-2x7j-588g-ccc2) plus three moderate recipient-validation issues: an
+  IDN/Punycode allow-list bypass (GHSA-wmmp-3585-3rmp), RFC 5322 comment
+  mis-parsing (GHSA-cc9r-2j5m-2m83), and `resolveContent()` bypassing
+  `disableFileAccess`/`disableUrlAccess` on the legacy signature
+  (GHSA-8m3c-c648-2xjj). All four are fixed by 9.1.1; no API changes.
+
+## 4.17.0
+
+### Minor Changes
+
+- ff73858: Add Clear buttons for Selva's own solve and definition caches in `/admin/compute`
+
+  The per-server **Purge** button POSTs to Rhino.Compute's `cache/purge`, which clears that server's
+  `cachesolve` and nothing else. Selva's in-process solve cache sits in front of it, so a purge alone
+  never produced a fresh solve — the only way to drop those results was to restart the process.
+
+  Both cache panels under **Caching** now have a **Clear** button, behind a confirm dialog, reporting
+  the entries and bytes dropped. They clear only the instance serving the request: behind a load
+  balancer the others keep theirs, so a fleet-wide clear still means a restart.
+
+  Neither is destructive. Clearing the solve cache costs a re-solve, clearing the definition cache
+  costs a storage re-read; version ids are immutable, so no cached entry can go stale on its own.
+  Reach for them when a definition reads a live URL, a database, or the clock, or after upgrading
+  Rhino in place on an existing compute server.
+
+  `SolveEngine` gains `clearDefinitionCache()`, alongside the existing `clearSolveCaches()`.
+
 ## 4.16.3
 
 ### Patch Changes

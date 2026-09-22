@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/selva",
-	"version": "4.16.3",
+	"version": "4.17.1",
 	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -48,12 +48,12 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@supabase/supabase-js": "^2.112.4",
+		"@supabase/supabase-js": "^2.116.0",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
-		"nodemailer": "^9.0.6",
+		"nodemailer": "^9.1.1",
 		"pino": "^10.3.1",
 		"sharp": "catalog:",
 		"tailwind-merge": "catalog:",
@@ -62,7 +62,7 @@
 		"zod": "catalog:"
 	},
 	"optionalDependencies": {
-		"@sentry/node": "^10.71.0"
+		"@sentry/node": "^10.75.0"
 	},
 	"devDependencies": {
 		"@playwright/test": "catalog:",

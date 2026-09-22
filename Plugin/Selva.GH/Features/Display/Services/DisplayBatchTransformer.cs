@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using Newtonsoft.Json;
 using Rhino.Geometry;
 using Selva.Slva;
 
@@ -60,12 +61,7 @@ public static class DisplayBatchTransformer
             return batch.CompressedData;
         }
 
-        // Writers only ever ship SLVM v3 containers; anything else is foreign bytes.
-        // Keep them untouched rather than guessing at a re-encode.
-        if (!SlvmDocument.IsSlvm(batch.CompressedData))
-        {
-            return batch.CompressedData;
-        }
+        var isSlvm = SlvmDocument.IsSlvm(batch.CompressedData);
 
         SlvaReader.Result decoded;
         try
@@ -86,14 +82,24 @@ public static class DisplayBatchTransformer
         moveVerts(decoded.Vertices);
 
         // UVs and vertex colors are invariant under position transforms but must be threaded back
-        // through the writer or they'd silently vanish. Re-encode only the geometry blob and swap
-        // it into the container — every metadata chunk survives byte-exact.
+        // through the writer or they'd silently vanish.
+        //
+        // A bare SLVA/SLVZ blob (saved .gh files and .dmf mesh files from before the SLVM
+        // container) re-encodes bare, carrying its embedded metadata back through the writer.
+        // It must NOT be promoted to SLVM: SLVM stores no per-mesh starts and recomputes them as
+        // a prefix sum over the table, so a legacy batch whose VertexStart/IndexStart aren't
+        // gapless in group order would have every mesh silently slice the wrong window.
+        var metadataJson = isSlvm ? "" : JsonConvert.SerializeObject(decoded.Metadata);
         using (var ms = new MemoryStream())
         {
-            SlvaWriter.Write(ms, "", decoded.Vertices, decoded.Indices,
+            SlvaWriter.Write(ms, metadataJson, decoded.Vertices, decoded.Indices,
                 uvs: decoded.Uvs, colors: decoded.Colors);
             var geometryBlob = SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
-            return SlvmDocument.ReplaceGeometry(batch.CompressedData, geometryBlob);
+
+            // SLVM keeps its metadata in chunks, so only the geometry payload is swapped.
+            return isSlvm
+                ? SlvmDocument.ReplaceGeometry(batch.CompressedData, geometryBlob)
+                : geometryBlob;
         }
     }
 

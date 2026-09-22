@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.FileIO;
 
 /// <summary>
 ///     Resolves a file authored as a path relative to a server's data directory into an

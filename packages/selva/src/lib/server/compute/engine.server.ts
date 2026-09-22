@@ -73,6 +73,20 @@ export function evictComputeClient(id: string): void {
 	engine.evictServer(id);
 }
 
+/**
+ * Drop cached solve results held by this Selva process (every warm client's
+ * scheduler). Separate from the compute server's own `cache/purge`: that one
+ * clears Rhino's `cachesolve`, this one clears the layer in front of it.
+ */
+export function clearSolveResultCache(): void {
+	engine.clearSolveCaches();
+}
+
+/** Drop the `.gh` bytes this Selva process is holding. Costs a storage re-read, nothing more. */
+export function clearDefinitionCache(): void {
+	engine.clearDefinitionCache();
+}
+
 /** Solve-cache counters for the admin panel's hit rate. */
 export function solveCacheStats() {
 	return engine.stats().client;

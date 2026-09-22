@@ -18,10 +18,10 @@
 
 	<PropertyGroup>
 		<!-- Specifies information for Assembly and Yak -->
-		<Version>0.19.0</Version>
-		<AssemblyVersion>0.19.0.0</AssemblyVersion>
-		<FileVersion>0.19.0.0</FileVersion>
-		<InformationalVersion>0.19.0</InformationalVersion>
+		<Version>0.20.3</Version>
+		<AssemblyVersion>0.20.3.0</AssemblyVersion>
+		<FileVersion>0.20.3.0</FileVersion>
+		<InformationalVersion>0.20.3</InformationalVersion>
 		<Title>Selva</Title>
 		<Description>Web-based UI builder for Grasshopper with real-time parameter interaction</Description>
 	</PropertyGroup>
@@ -49,6 +49,9 @@
 		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
 		<ProjectReference Include="..\Selva.Slva\Selva.Slva.csproj"/>
 		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
+		<!-- Deliberately absent from the ILRepack merge below: consumers outside the plugin
+		     reference FileData, and Internalize would hide it from them. -->
+		<ProjectReference Include="..\Selva.FileIO\Selva.FileIO.csproj"/>
 		<ProjectReference Include="..\Selva.Rhino\Selva.Rhino.csproj"/>
 	</ItemGroup>
 

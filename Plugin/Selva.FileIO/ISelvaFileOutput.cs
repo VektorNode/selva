@@ -1,4 +1,4 @@
-namespace Selva.GH.Features.FileIO;
+namespace Selva.FileIO;
 
 /// <summary>
 ///     Marks a component whose output wire carries FileData, so SchemaSynchronizer

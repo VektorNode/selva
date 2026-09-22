@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.FileIO;
 
 /// <summary>
 ///     File input from the web UI or a local source: a local path, a URL, or base64-encoded data.

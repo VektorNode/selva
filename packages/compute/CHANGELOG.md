@@ -1,5 +1,37 @@
 # @selvajs/compute
 
+## 4.1.3
+
+### Patch Changes
+
+- cf41e54: chore(deps): bump the npm group across 1 directory with 26 updates
+- ae5bcb6: Normalize `FileData` item values to camelCase when parsing solve responses
+
+  `FileData` items carry no System/Rhino type, so `decodeBySystemType` passed the
+  parsed record through verbatim, leaving the PascalCase wire shape. Consumers
+  reading `fileName`/`data`/`isBase64Encoded` directly (the `isFileData` guards in
+  `@selvajs/ui`) saw nothing and rendered an empty widget although the bytes had
+  arrived intact. `extractItemValue` now runs the same `asFileData` normalization
+  `extractFileData` already applies on the download path, so both paths agree.
+
+## 4.1.2
+
+### Patch Changes
+
+- dbfa847: Fix `extractFileData` dropping every file from a PascalCase compute response
+
+  `isFileData` guarded on camelCase keys and a strictly-boolean `isBase64Encoded`,
+  so files from an mcneel-branch server (`FileName`, `Data`, `IsBase64Encoded`)
+  failed the shape check and were discarded — silently, with no warning. Because
+  this runs _before_ the case-insensitive decoder in `handle-files.ts`, the
+  tolerance added there for the same issue never got a chance to apply, and
+  `getAndDownloadFiles` produced an empty ZIP while reporting success.
+
+  Fields are now read case-insensitively via `readField`, and a string-serialized
+  flag (`"true"`/`"True"`) is accepted, matching `decodeResponseFiles`. Extracted
+  items are normalized to the camelCase `FileData` shape, so consumers are
+  unaffected; genuinely malformed payloads are still rejected.
+
 ## 4.1.1
 
 ### Patch Changes

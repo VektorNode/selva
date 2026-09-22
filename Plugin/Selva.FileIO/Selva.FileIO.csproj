@@ -1,0 +1,88 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<RootNamespace>Selva.FileIO</RootNamespace>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+			Release: Newtonsoft is merged INTO this assembly and internalized (target below), the
+			same arrangement Selva.Drawing uses for PdfSharpCore. PrivateAssets keeps the sibling
+			DLL out of the .gha; the merge supplies the types.
+
+			This assembly must carry its own copy rather than borrowing one, because Selva.GH's
+			merge DELETES Newtonsoft.Json.dll from the output after folding it into Selva.dll —
+			an unmerged Selva.FileIO.dll beside the .gha would then have no Newtonsoft to bind to.
+		-->
+		<PackageReference Include="Newtonsoft.Json" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
+
+		<!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
+		<PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- ImageDimensions reports its result as Selva.Drawing's ImageFormat: the dimensions are
+		     read so the drawing model can place the image, so the enum belongs to the consumer
+		     rather than being duplicated here. Both are netstandard2.0 and Rhino-free. -->
+		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
+	</ItemGroup>
+
+	<!--
+		WHAT BELONGS HERE: the file contract and the rules that decide what a file IS and where it
+		may go — FileData/FileInputData, subfolder and server-path resolution, URL safety, image
+		dimensions. Descriptions and decisions, testable with no runtime around them.
+
+		WHAT DOES NOT: orchestration. FileImporter, ImageInputResolver and RhinoDocumentConverter
+		stay in Selva.GH even where they would compile here, because they DO the work rather than
+		describe it — they download, convert, and enforce AppConfig limits whose other five call
+		sites are Rhino-side. Moving one of them would leave a job split across two assemblies with
+		the lower calling back up into the higher.
+
+		This assembly is deliberately NOT in Selva.GH's _RepackToStage list, unlike Selva.Schema
+		and Selva.Slva: it exists to be referenced from OUTSIDE the plugin (vektor-fab emits
+		FileData for the same file pipeline), and ILRepack's Internalize makes merged types
+		invisible to other assemblies. Adding it there would compile and build clean, then fail at
+		load time with the type resolving to a different identity.
+
+		That is also why its public surface must stay Newtonsoft-free: string/bool/Guid/
+		Dictionary only. [JsonProperty] is property metadata and does not cross the boundary, but
+		a JObject or JsonSerializerSettings in a signature would bind against the internalized
+		copy — exactly the failure Selva.GH's merge comment describes for SchemaMigrator.
+	-->
+	<Target Name="ILRepackMergeNewtonsoft"
+	        AfterTargets="Build"
+	        Condition="'$(Configuration)' == 'Release'">
+		<PropertyGroup>
+			<_RepackOutDir>$([System.IO.Path]::GetFullPath('$(OutputPath)'))</_RepackOutDir>
+			<_RepackStageDir>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ilrepack-stage'))\</_RepackStageDir>
+			<_RepackOutput>$(_RepackOutDir)$(AssemblyName).dll</_RepackOutput>
+		</PropertyGroup>
+
+		<ItemGroup>
+			<_RepackToStage Include="$(_RepackOutDir)$(AssemblyName).dll" />
+			<_RepackToStage Include="$(PkgNewtonsoft_Json)\lib\netstandard2.0\Newtonsoft.Json.dll" />
+		</ItemGroup>
+
+		<RemoveDir Directories="$(_RepackStageDir)" />
+		<MakeDir Directories="$(_RepackStageDir)" />
+		<Copy SourceFiles="@(_RepackToStage)" DestinationFolder="$(_RepackStageDir)" />
+
+		<ItemGroup>
+			<_RepackInputPrimary Include="$(_RepackStageDir)$(AssemblyName).dll" />
+			<_RepackInputMerge Include="$(_RepackStageDir)Newtonsoft.Json.dll" />
+			<!-- Search the stage dir first; fall back to the main bin/ for sibling reference assemblies. -->
+			<_RepackSearchDirs Include="$(_RepackStageDir);$(_RepackOutDir)" />
+		</ItemGroup>
+
+		<ILRepack
+			Parallel="true"
+			Internalize="true"
+			InputAssemblies="@(_RepackInputPrimary);@(_RepackInputMerge)"
+			LibraryPath="@(_RepackSearchDirs)"
+			TargetKind="Dll"
+			OutputFile="$(_RepackOutput)" />
+	</Target>
+
+</Project>

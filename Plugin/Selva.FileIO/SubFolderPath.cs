@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Selva.GH.Features.FileIO.Services;
+namespace Selva.FileIO;
 
 /// <summary>
 ///     Splits a <c>Sub Folder</c> value into folder segments.

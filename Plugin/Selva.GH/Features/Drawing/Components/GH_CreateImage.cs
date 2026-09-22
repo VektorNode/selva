@@ -12,6 +12,7 @@ using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
 using DrawPoint = Selva.Drawing.Model.Geometry.Point2D;
 using DrawTransform = Selva.Drawing.Model.Geometry.Transform;
+using Selva.FileIO;
 
 namespace Selva.GH.Features.Drawing.Components;
 

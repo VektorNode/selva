@@ -190,6 +190,14 @@ export class SolveEngine {
 		this.clientCache.clearSolveCaches();
 	}
 
+	/**
+	 * Drop every retained `.gh` byte entry. Safe at any time: entries key on an
+	 * immutable version id, so clearing costs a storage re-read and nothing else.
+	 */
+	clearDefinitionCache(): void {
+		this.byteCache.clear();
+	}
+
 	stats(): SolveEngineStats {
 		return {
 			client: this.clientCache.solveCacheStats(),

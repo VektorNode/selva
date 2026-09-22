@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/solve",
-	"version": "1.0.8",
+	"version": "1.1.1",
 	"description": "One owner for the Selva solve flow — input change to solve result, on both sides of the wire, with no transport and no UI",
 	"author": "VektorNode",
 	"license": "MIT",
@@ -84,7 +84,7 @@
 		"esbuild": "^0.28.2",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
-		"globals": "^17.11.0",
+		"globals": "^17.12.0",
 		"prettier": "catalog:",
 		"tsdown": "catalog:",
 		"typescript": "catalog:",
