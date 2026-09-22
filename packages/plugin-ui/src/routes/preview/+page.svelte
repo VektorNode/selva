@@ -7,8 +7,7 @@
 		StateDisplay,
 		Button,
 		AppLayout,
-		SolveMessageDialog,
-		SolveLiveBanner,
+		SolveMessages,
 		createSolvingIndicator,
 		useFooterItem,
 		getExternalInputs,
@@ -86,6 +85,7 @@
 	showFooter
 	errors={preview.computeErrors}
 	warnings={preview.computeWarnings}
+	diagnostics={preview.diagnostics}
 >
 	{#snippet navItems()}
 		<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>Schema Builder</Button>
@@ -149,21 +149,15 @@
 	{/if}
 </AppShell>
 
-<SolveMessageDialog
-	open={preview.awaitingAck}
-	errors={preview.computeErrors}
-	warnings={preview.computeWarnings}
-	blocked={preview.blocked}
-	onconfirm={() => preview.acknowledge()}
-	ondiscard={() => preview.discard()}
-/>
-
-<SolveLiveBanner
+<SolveMessages
 	events={preview.liveEvents}
 	solving={preview.isSolving}
-	dialogOpen={preview.awaitingAck}
+	diagnostics={preview.diagnostics}
+	blocked={preview.blocked}
+	awaitingAck={preview.awaitingAck}
 	onabort={() => preview.abort()}
-	abortLabel="Abort"
+	onconfirm={() => preview.acknowledge()}
+	ondiscard={() => preview.discard()}
 />
 
 <style>

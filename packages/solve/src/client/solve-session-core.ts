@@ -9,7 +9,7 @@
 import type { UISchema } from '@selvajs/schemas';
 import { getDefaultValue } from '@selvajs/schemas';
 import { getExternalInputs, type ExternalValueRef } from './external-storage.js';
-import type { SolveResult } from '../shared/solve-fn.js';
+import type { SolveDiagnostic, SolveResult } from '../shared/solve-fn.js';
 
 /**
  * The slice of a reported result the session keeps addressable, so a host can commit exactly
@@ -28,6 +28,11 @@ export interface SolveSessionState {
 	error: string;
 	computeErrors: string[];
 	computeWarnings: string[];
+	/**
+	 * The same messages with their level, source and `isGate`. What decides whether a solve
+	 * interrupts the user; the two string arrays above stay the plain display lists.
+	 */
+	diagnostics: SolveDiagnostic[];
 	/**
 	 * The last solve was refused by a guard in the definition. Separate from `computeErrors`
 	 * being non-empty: a solve can report errors and still return usable outputs, and the UI
@@ -136,12 +141,22 @@ export function applySolveResult(state: SolveSessionState, result: SolveResult):
 	state.error = '';
 	state.computeErrors = result.errors ?? [];
 	state.computeWarnings = result.warnings ?? [];
+	state.diagnostics = result.diagnostics ?? [];
 	state.blocked = result.blocked ?? false;
+
+	// A blocked solve is applied at once: there is no result to weigh, and the previous one must
+	// not stay on screen looking like the answer to the current inputs. The caller blanks the
+	// outputs (see `blankOutputs`); the empty mesh list clears the viewer.
+	if (state.blocked) {
+		state.awaitingAck = false;
+		state.heldResult = null;
+		return commitSolveResult(state, result);
+	}
 
 	// The solve is finished either way — Grasshopper cannot be paused mid-solution — so what is
 	// held back here is the *result*, not the computation. Everything the solve produced is kept
 	// intact in `heldResult` and released verbatim by `acknowledge()`.
-	if (needsAcknowledgement(state.computeErrors, state.computeWarnings)) {
+	if (needsAcknowledgement(state.diagnostics)) {
 		state.awaitingAck = true;
 		state.heldResult = result;
 		// The input set stays dirty-free regardless: the values were sent and solved, and
@@ -154,6 +169,16 @@ export function applySolveResult(state: SolveSessionState, result: SolveResult):
 	state.awaitingAck = false;
 	state.heldResult = null;
 	return commitSolveResult(state, result);
+}
+
+/**
+ * Every schema output set to null. A blocked solve reports `outputs: {}`, and merging that into
+ * `values` would leave the previous solve's outputs behind.
+ */
+export function blankOutputs(schema: UISchema | undefined): Record<string, null> {
+	const blank: Record<string, null> = {};
+	for (const output of schema?.outputs ?? []) blank[output.id] = null;
+	return blank;
 }
 
 /** Writes a result into the state. Shared by the clean path and by `acknowledge()`. */
@@ -174,10 +199,18 @@ export function commitSolveResult(
 /**
  * Whether this solve's messages still need the user's acknowledgement.
  *
- * Every solve that raises a message asks again, by design — an acknowledgement covers the solve
- * in front of the user, never a future one. Under `instanceSolve` with a live warning that means
- * a dialog per solve, which is the intended checkpoint, not an oversight.
+ * Only a Selva Message component gates. Grasshopper raises warnings constantly for reasons that
+ * concern whoever is editing the definition, not whoever is using the app — a component
+ * complaining about its own inputs is not something an end user can act on, and interrupting
+ * them for it trains them to dismiss the one message that mattered.
+ *
+ * Every solve that gates asks again, by design — an acknowledgement covers the solve in front of
+ * the user, never a future one. Under `instanceSolve` with a live warning that means a dialog
+ * per solve, which is the intended checkpoint, not an oversight.
+ *
+ * Without `diagnostics` (a transport that reports no structure) nothing gates: the messages are
+ * still shown, just without interrupting.
  */
-export function needsAcknowledgement(errors: string[], warnings: string[]): boolean {
-	return errors.length > 0 || warnings.length > 0;
+export function needsAcknowledgement(diagnostics: SolveDiagnostic[] | undefined): boolean {
+	return (diagnostics ?? []).some((d) => d.isGate && d.level !== 'remark');
 }

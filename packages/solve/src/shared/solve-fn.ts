@@ -24,11 +24,50 @@
  */
 export const SOLVE_BLOCKED_MARKER = '[Selva:blocked]';
 
+/**
+ * Marker the Message component prepends to a remark or warning — the non-blocking levels.
+ *
+ * Same reason as `SOLVE_BLOCKED_MARKER`: on Rhino.Compute nothing structural survives, and the
+ * UI has to tell a message the author chose to write from an incidental Grasshopper warning.
+ * Definitions saved before this existed lack it, so the reader falls back to the component name.
+ */
+export const SOLVE_AUTHORED_MARKER = '[Selva:msg]';
+
+/**
+ * Marker for an authored message whose author chose Notify = Log.
+ *
+ * Still theirs — it keeps its attribution and its place in the message list — but it does not
+ * interrupt. Errors never carry it: their result is withheld, so they always interrupt.
+ */
+export const SOLVE_LOG_ONLY_MARKER = '[Selva:log]';
+
+/**
+ * One message a solve raised, with what the UI needs to decide how loudly to show it.
+ *
+ * `errors`/`warnings` carry the same text as flat strings and stay the display list; this adds
+ * the two things a string cannot: who raised it, and whether it was deliberate. Both transports
+ * populate it — the WebSocket natively, the Compute path by parsing its flattened strings.
+ */
+export interface SolveDiagnostic {
+	level: 'error' | 'warning' | 'remark';
+	/** What the author wrote, with any transport decoration stripped. */
+	message: string;
+	/** Nickname of the component that raised it, when the transport reports one. */
+	source?: string;
+	/**
+	 * Raised by a Selva Message component: the author chose to say this. Only these interrupt
+	 * the user; everything else is incidental Grasshopper noise and belongs in the log.
+	 */
+	isGate?: boolean;
+}
+
 export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	outputs: Record<string, unknown>;
 	meshes?: TMesh[];
 	errors?: string[];
 	warnings?: string[];
+	/** Structured form of `errors`/`warnings`, including remarks. Absent from transports that report neither. */
+	diagnostics?: SolveDiagnostic[];
 	/**
 	 * The definition refused this solve — a guard in the definition raised an error and its
 	 * outputs were withheld deliberately. Distinct from an errored solve that still returned

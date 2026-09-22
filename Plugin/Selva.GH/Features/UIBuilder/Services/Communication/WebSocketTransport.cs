@@ -392,25 +392,24 @@ public class WebSocketTransport : IDisposable
     }
 
     /// <summary>
-    ///     Reports a solve the definition refused, with no outputs.
+    ///     Reports a solve that produced no result: refused by a Message component, or aborted.
     /// </summary>
     /// <remarks>
-    ///     Sent from inside <c>SolveInstance</c> by an aborting Message component, because the
-    ///     abort means <c>SolutionEnd</c> never runs and the normal collection never happens. It
-    ///     is deliberately the same <c>outputs</c> envelope: the client opens its dialog on
-    ///     `blocked`, which only this envelope carries.
+    ///     Deliberately the same <c>outputs</c> envelope with empty outputs and
+    ///     <c>binaryBatchCount: 0</c>: the client clears what it was showing, so the previous
+    ///     result cannot pass for the answer to the current inputs.
     /// </remarks>
-    public async Task BroadcastBlockedSolve(SolveDiagnostics diagnostics)
+    public Task BroadcastBlockedSolve(SolveDiagnostics diagnostics)
     {
         if (diagnostics == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var doc = RhinoDoc.ActiveDoc;
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
 
-        await BroadcastAsync(OutboundEnvelopes.Outputs(
+        return BroadcastAsync(OutboundEnvelopes.Outputs(
             _sessionId,
             new Dictionary<string, object>(),
             new Dictionary<string, object>(),
@@ -419,11 +418,6 @@ public class WebSocketTransport : IDisposable
             displayItems: null,
             diagnostics: diagnostics.Messages,
             blocked: true));
-
-        // solvingState=false normally rides SolutionEnd, which an aborted solution may never
-        // reach — leaving the UI spinning forever. BroadcastSolvingState deduplicates, so
-        // sending it here is harmless when the event does fire.
-        await BroadcastSolvingState(false);
     }
 
     public Task BroadcastSyncPreview(SyncDiff syncDiff)

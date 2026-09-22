@@ -59,8 +59,10 @@ export interface ViewerMessages {
 	solveMessagesTitle: string;
 	solveMessagesDescription: string;
 	solveMessagesConfirm: string;
+	solveMessagesDiscard: string;
 	solveMessagesAbort: string;
 	solveMessagesDismiss: string;
+	solveSolving: string;
 	parametersTab: string;
 	moreTab: string;
 	expandPanel: string;
@@ -123,10 +125,12 @@ const en: ViewerMessages = {
 	solveBlocked: 'The definition stopped this solve. No results were produced.',
 	solveBlockedTitle: 'Solve stopped',
 	solveMessagesTitle: 'Solve messages',
-	solveMessagesDescription: 'This solve reported the following.',
+	solveMessagesDescription: 'This solve reported the following. Continue to see the result.',
 	solveMessagesConfirm: 'Continue',
+	solveMessagesDiscard: 'Discard',
 	solveMessagesAbort: 'Abort',
 	solveMessagesDismiss: 'Dismiss',
+	solveSolving: 'Solving…',
 	parametersTab: 'Parameters',
 	moreTab: 'More',
 	expandPanel: 'Expand panel',
@@ -190,8 +194,10 @@ const de: ViewerMessages = {
 	solveMessagesDescription:
 		'Diese Berechnung hat Folgendes gemeldet. Weiter, um das Ergebnis zu sehen.',
 	solveMessagesConfirm: 'Weiter',
+	solveMessagesDiscard: 'Verwerfen',
 	solveMessagesAbort: 'Abbrechen',
 	solveMessagesDismiss: 'Schliessen',
+	solveSolving: 'Berechnung läuft…',
 	parametersTab: 'Parameter',
 	moreTab: 'Mehr',
 	expandPanel: 'Bereich aufklappen',

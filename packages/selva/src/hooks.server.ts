@@ -147,11 +147,15 @@ const routeClassifier = createRouteClassifier({
 	// Self-gating routes authorize each request themselves; the hook must not
 	// deny them up front. `/api/files/[...path]` classifies each path against
 	// the asset-class registry (public branding serves to anyone, org/project
-	// assets 401 without a session). `/api/v1/solve-events/` holds the SSE
-	// stream (requires a session, checked in the route) and the Compute callback
-	// (no session by nature — a per-solve bearer instead). Nothing else under
+	// assets 401 without a session). `/api/v1/solve-events` holds the SSE stream
+	// (requires a session, checked in the route) and the Compute callback (no
+	// session by nature — a per-solve bearer instead). Nothing else under
 	// `/api/*` carries its own authorization.
-	selfGatingPrefixes: ['/api/files/', '/api/v1/solve-events/'],
+	//
+	// No trailing slash on solve-events: the SSE route IS that path, with the
+	// stream in a query param, so a trailing slash would deny the stream while
+	// letting the callback (which has a solveId segment) through.
+	selfGatingPrefixes: ['/api/files/', '/api/v1/solve-events'],
 	// Static-asset paths SvelteKit/adapter-node serves directly.
 	staticPrefixes: ['/_app/', '/favicon/'],
 	staticPaths: ['/favicon.svg', '/robots.txt']

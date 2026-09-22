@@ -8,7 +8,7 @@
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { createRequestResponseDriver } from '@selvajs/solve/client';
 	import type { RetainedSolveResult, SolveEventSource, SolveSession } from '@selvajs/solve/client';
-	import SolveLiveBanner from './SolveLiveBanner.svelte';
+	import SolveMessages from './SolveMessages.svelte';
 	import { meshPolicy } from '@selvajs/visualization/parse';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import { useSolveSession } from '../../compute/useSolveSession.svelte';
@@ -18,7 +18,6 @@
 	import AppLayout from './AppLayout.svelte';
 	import { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
-	import SolveMessageDialog from './SolveMessageDialog.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
 	import type { Locale } from '../../i18n/messages';
 	import { setLocaleContext, getLocaleContext } from '../../i18n/localeContext.svelte';
@@ -241,6 +240,7 @@
 		rightContent={headerRight}
 		errors={session.computeErrors}
 		warnings={session.computeWarnings}
+		diagnostics={session.diagnostics}
 	>
 		{#if session.error}
 			<div class="min-h-100 p-8 flex items-center justify-center">
@@ -279,28 +279,24 @@
 	</AppShell>
 </div>
 
-<SolveMessageDialog
-	open={session.awaitingAck}
-	errors={session.computeErrors}
-	warnings={session.computeWarnings}
+<SolveMessages
+	events={session.liveEvents}
+	solving={session.isSolving}
+	diagnostics={session.diagnostics}
 	blocked={session.blocked}
+	awaitingAck={session.awaitingAck}
+	onabort={() => session.abort()}
 	onconfirm={() => session.acknowledge()}
 	ondiscard={() => session.discard()}
 	labels={{
+		solving: t.solveSolving,
 		blockedTitle: t.solveBlockedTitle,
 		messagesTitle: t.solveMessagesTitle,
 		blockedDescription: t.solveBlocked,
 		messagesDescription: t.solveMessagesDescription,
 		confirm: t.solveMessagesConfirm,
+		discard: t.solveMessagesDiscard,
 		abort: t.solveMessagesAbort,
 		dismiss: t.solveMessagesDismiss
 	}}
-/>
-
-<SolveLiveBanner
-	events={session.liveEvents}
-	solving={session.isSolving}
-	dialogOpen={session.awaitingAck}
-	onabort={() => session.abort()}
-	abortLabel={t.solveMessagesAbort}
 />

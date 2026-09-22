@@ -46,6 +46,9 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		get computeWarnings() {
 			return track(() => session.computeWarnings);
 		},
+		get diagnostics() {
+			return track(() => session.diagnostics);
+		},
 		get blocked() {
 			return track(() => session.blocked);
 		},

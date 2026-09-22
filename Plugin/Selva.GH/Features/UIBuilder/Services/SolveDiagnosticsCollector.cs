@@ -80,17 +80,24 @@ public static class SolveDiagnosticsCollector
                 continue;
             }
 
-            // The marker exists for Rhino.Compute, which has no structural way to tell a block
-            // from any other error. Locally `isGate` carries that, so strip it rather than show
-            // the user a wire detail.
-            var text = message.Replace(SolveDiagnostics.BlockedMarker, string.Empty).Trim();
+            // The markers exist for Rhino.Compute, which has no structural way to carry the block
+            // flag, "an author wrote this", or the author's Notify choice. Locally the marker is
+            // still what records that choice, since only the component knows it — so read it
+            // here, then strip it rather than show the user a wire detail.
+            var logOnly = message.IndexOf(SolveDiagnostics.LogOnlyMarker, StringComparison.Ordinal) >= 0;
+            var text = message
+                .Replace(SolveDiagnostics.BlockedMarker, string.Empty)
+                .Replace(SolveDiagnostics.AuthoredMarker, string.Empty)
+                .Replace(SolveDiagnostics.LogOnlyMarker, string.Empty)
+                .Trim();
 
             diagnostics.Messages.Add(new SolveDiagnostic
             {
                 Level = wireLevel,
                 Message = text.Length > 0 ? text : message,
                 Source = nickname,
-                IsGate = isGate
+                // Notify = Log keeps the message in the list without interrupting.
+                IsGate = isGate && !logOnly
             });
 
             if (isGate && level == GH_RuntimeMessageLevel.Error)

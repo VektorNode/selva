@@ -14,11 +14,12 @@ namespace Selva.GH.Features.UIBuilder.Services;
 /// </summary>
 /// <remarks>
 ///     Never blocks the solver thread and never throws into a solve. Locally the send is
-///     background socket I/O; on Compute it is an enqueue. Both transports keep the same rule
-///     <c>SolveMessageBroadcaster</c> established: nothing here may ever wait on the browser.
+///     background socket I/O; on Compute it is an enqueue. Nothing here may ever wait on the
+///     browser: inbound frames are dispatched on the UI thread the solver occupies, so a wait
+///     would deadlock Rhino.
 ///
-///     Static for the same reason as the broadcaster: components are created by Grasshopper,
-///     which cannot inject a bridge, and one process serves one session.
+///     Static because components are created by Grasshopper, which cannot inject a bridge, and
+///     one process serves one session.
 /// </remarks>
 public static class SolveEventSink
 {

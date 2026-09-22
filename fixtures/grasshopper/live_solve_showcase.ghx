@@ -358,7 +358,7 @@
                     <item name="InstanceGuid" type_name="gh_guid" type_code="9">81e71d7f-2bfc-43cd-8948-2749a9fc73aa</item>
                     <item name="Name" type_name="gh_string" type_code="10">UI Bridge</item>
                     <item name="NickName" type_name="gh_string" type_code="10">UI Bridge</item>
-                    <item name="Schema" type_name="gh_string" type_code="10">{"id":"2c593302-56db-43bf-b1ce-9139d1bc9155","name":"Live Solve Showcase","description":"Spheres or Voronoi cells from random points. Exercises remark / warning / error messages, a dynamic value list, a slow branch, and abort.","projectFileName":"State_Example.gh","documentId":"e122c3f9-f787-44b7-bd4b-03f725d47640","pluginVersion":"0.19.1.0","tags":["test","live-events"],"schemaVersion":"2.15.0","created":"2026-09-22T11:22:49.7140573Z","lastModified":"2026-09-22T11:43:01.2945763Z","viewerOptions":{"enableLocal":true,"enableRemote":true,"backgroundColor":"#f3f3f3"},"instanceSolve":true,"inputs":[{"id":"03398815-8e1e-40eb-9f6e-f773c9296a65","nickname":"Get Integer","paramType":"integer","description":"How many random points (10-250). &lt;40 warns, &gt;60 remarks, &gt;200 blocks.","default":60,"inputStructure":"item"},{"id":"b727a278-8586-4e3e-a57f-8fd189003cea","nickname":"Radius Scale","paramType":"number","description":"Multiplies every sphere radius. Above 2 warns about overlap.","default":1,"inputStructure":"item"},{"id":"be715bd1-c593-4954-9a1b-529d4056d0df","nickname":"Mode","paramType":"valueList","description":"Spheres solve in ~100 ms; Voronoi cells take ~2 s and raise a remark.","default":"Spheres","inputStructure":"item"},{"id":"7830acd3-605c-4c43-8f2e-5653d701fe68","nickname":"Palette","paramType":"dynamicValueList","description":"Options come from the solve: Rainbow appears above 100 points.","default":"warm","inputStructure":"item"}],"outputs":[{"id":"c34a160f-812d-4008-80ca-525fa77eba40","nickname":"Palette options","description":"","type":"dynamicValueList","targetInputId":"7830acd3-605c-4c43-8f2e-5653d701fe68"}],"layout":{"type":"tabbed","tabs":[{"id":"tab-design","label":"Design","icon":"","order":0,"groups":[{"id":"grp-geometry","label":"Geometry","description":"","order":0,"collapsed":false,"columns":1,"items":[{"type":"input","widgetType":"number","config":{"minimum":10.0,"maximum":250.0,"stepSize":1.0,"renderAsSlider":true},"id":"it-count","paramId":"03398815-8e1e-40eb-9f6e-f773c9296a65","displayName":"Sphere count","description":"","order":0,"span":1,"visible":true},{"type":"input","widgetType":"number","config":{"minimum":0.2,"maximum":3.0,"stepSize":0.05,"renderAsSlider":true},"id":"it-scale","paramId":"b727a278-8586-4e3e-a57f-8fd189003cea","displayName":"Radius scale","description":"","order":1,"span":1,"visible":true},{"type":"input","widgetType":"dropdown","config":{"options":{"Spheres":"Spheres","Voronoi cells":"Voronoi cells"},"displayAs":"dropdown"},"id":"it-mode","paramId":"be715bd1-c593-4954-9a1b-529d4056d0df","displayName":"Mode","description":"","order":2,"span":1,"visible":true},{"type":"input","widgetType":"dynamicValueList","config":{"defaultOptions":{"Warm":"warm","Cool":"cool","Mono":"mono"},"emptyBehavior":"show-empty","displayAs":"dropdown"},"id":"it-palette","paramId":"7830acd3-605c-4c43-8f2e-5653d701fe68","displayName":"Palette","description":"","order":3,"span":1,"visible":true}]},{"id":"grp-results","label":"Results","description":"","order":1,"collapsed":false,"columns":1,"items":[{"type":"output","widgetType":"number","id":"it-out-count","paramId":"2ecbfdab-a4c5-4359-a80c-c86f58a1e7a0","displayName":"Sphere count","description":"","order":0,"span":1,"visible":true},{"type":"output","widgetType":"text","id":"it-out-mode","paramId":"3b409052-1835-40a2-a91f-fa38e75f5066","displayName":"Mode","description":"","order":1,"span":1,"visible":true},{"type":"output","widgetType":"dynamicValueList","config":{"targetInputId":"7830acd3-605c-4c43-8f2e-5653d701fe68"},"id":"it-out-palette","paramId":"c34a160f-812d-4008-80ca-525fa77eba40","displayName":"Palette options","description":"","order":2,"span":1,"visible":true}]}],"position":"center"}],"gap":16}}</item>
+                    <item name="Schema" type_name="gh_string" type_code="10">{"id":"2c593302-56db-43bf-b1ce-9139d1bc9155","name":"Live Solve Showcase","description":"Spheres or Voronoi cells from random points. Exercises remark / warning / error messages, a dynamic value list, a slow branch, and abort.","projectFileName":"State_Example.gh","documentId":"e122c3f9-f787-44b7-bd4b-03f725d47640","pluginVersion":"0.19.1.0","tags":["test","live-events"],"schemaVersion":"2.15.0","created":"2026-09-22T11:22:49.7140573Z","lastModified":"2026-09-22T11:43:47.7542286Z","viewerOptions":{"enableLocal":true,"enableRemote":true,"backgroundColor":"#f3f3f3"},"instanceSolve":true,"inputs":[{"id":"03398815-8e1e-40eb-9f6e-f773c9296a65","nickname":"Get Integer","paramType":"integer","description":"How many random points (10-250). &lt;40 warns, &gt;60 remarks, &gt;200 blocks.","default":60,"inputStructure":"item"},{"id":"b727a278-8586-4e3e-a57f-8fd189003cea","nickname":"Radius Scale","paramType":"number","description":"Multiplies every sphere radius. Above 2 warns about overlap.","default":1,"inputStructure":"item"},{"id":"be715bd1-c593-4954-9a1b-529d4056d0df","nickname":"Mode","paramType":"valueList","description":"Spheres solve in ~100 ms; Voronoi cells take ~2 s and raise a remark.","default":"Spheres","inputStructure":"item"},{"id":"7830acd3-605c-4c43-8f2e-5653d701fe68","nickname":"Palette","paramType":"dynamicValueList","description":"Options come from the solve: Rainbow appears above 100 points.","default":"warm","inputStructure":"item"}],"outputs":[{"id":"0fd6ae9d-8c74-4a4d-8a39-7b4d2233c806","nickname":"Sphere count","description":"","type":"number"},{"id":"639c0bf3-56e6-47fd-8714-a13d2246f8f3","nickname":"Mode","description":"","type":"text"},{"id":"c34a160f-812d-4008-80ca-525fa77eba40","nickname":"Palette options","description":"","type":"dynamicValueList","targetInputId":"7830acd3-605c-4c43-8f2e-5653d701fe68"}],"layout":{"type":"tabbed","tabs":[{"id":"tab-design","label":"Design","icon":"","order":0,"groups":[{"id":"grp-geometry","label":"Geometry","description":"","order":0,"collapsed":false,"columns":1,"items":[{"type":"input","widgetType":"number","config":{"minimum":10.0,"maximum":250.0,"stepSize":1.0,"renderAsSlider":true},"id":"it-count","paramId":"03398815-8e1e-40eb-9f6e-f773c9296a65","displayName":"Sphere count","description":"","order":0,"span":1,"visible":true},{"type":"input","widgetType":"number","config":{"minimum":0.2,"maximum":3.0,"stepSize":0.05,"renderAsSlider":true},"id":"it-scale","paramId":"b727a278-8586-4e3e-a57f-8fd189003cea","displayName":"Radius scale","description":"","order":1,"span":1,"visible":true},{"type":"input","widgetType":"dropdown","config":{"options":{"Spheres":"Spheres","Voronoi cells":"Voronoi cells"},"displayAs":"dropdown"},"id":"it-mode","paramId":"be715bd1-c593-4954-9a1b-529d4056d0df","displayName":"Mode","description":"","order":2,"span":1,"visible":true},{"type":"input","widgetType":"dynamicValueList","config":{"defaultOptions":{"Warm":"warm","Cool":"cool","Mono":"mono"},"emptyBehavior":"show-empty","displayAs":"dropdown"},"id":"it-palette","paramId":"7830acd3-605c-4c43-8f2e-5653d701fe68","displayName":"Palette","description":"","order":3,"span":1,"visible":true}]},{"id":"grp-results","label":"Results","description":"","order":1,"collapsed":false,"columns":1,"items":[{"type":"output","widgetType":"number","id":"it-out-count","paramId":"0fd6ae9d-8c74-4a4d-8a39-7b4d2233c806","displayName":"Sphere count","description":"","order":0,"span":1,"visible":true},{"type":"output","widgetType":"text","id":"it-out-mode","paramId":"639c0bf3-56e6-47fd-8714-a13d2246f8f3","displayName":"Mode","description":"","order":1,"span":1,"visible":true},{"type":"output","widgetType":"dynamicValueList","config":{"targetInputId":"7830acd3-605c-4c43-8f2e-5653d701fe68"},"id":"it-out-palette","paramId":"c34a160f-812d-4008-80ca-525fa77eba40","displayName":"Palette options","description":"","order":2,"span":1,"visible":true}]}],"position":"center"}],"gap":16}}</item>
                     <item name="Values" type_name="gh_string" type_code="10">{"03398815-8e1e-40eb-9f6e-f773c9296a65":250}</item>
                   </items>
                   <chunks count="4">
@@ -7096,126 +7096,6 @@ rainbow</item>
             </chunk>
             <chunk name="Object" index="62">
               <items count="2">
-                <item name="GUID" type_name="gh_guid" type_code="9">ae2531b4-bab2-4bb1-b5bf-f2143d10c132</item>
-                <item name="Name" type_name="gh_string" type_code="10">Context Bake</item>
-              </items>
-              <chunks count="1">
-                <chunk name="Container">
-                  <items count="4">
-                    <item name="Description" type_name="gh_string" type_code="10">Content for baking at the end of the GrasshopperPlayer command or with Hops and Rhino.Compute.</item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">2ecbfdab-a4c5-4359-a80c-c86f58a1e7a0</item>
-                    <item name="Name" type_name="gh_string" type_code="10">Context Bake</item>
-                    <item name="NickName" type_name="gh_string" type_code="10">Sphere count</item>
-                  </items>
-                  <chunks count="2">
-                    <chunk name="Attributes">
-                      <items count="2">
-                        <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
-                          <X>1492</X>
-                          <Y>386</Y>
-                          <W>77</W>
-                          <H>28</H>
-                        </item>
-                        <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
-                          <X>1555</X>
-                          <Y>400</Y>
-                        </item>
-                      </items>
-                    </chunk>
-                    <chunk name="param_input" index="0">
-                      <items count="8">
-                        <item name="Access" type_name="gh_int32" type_code="3">2</item>
-                        <item name="Description" type_name="gh_string" type_code="10">Content to collect for baking</item>
-                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">8c020ca1-d5f5-4b96-be4e-2bb6aeb19335</item>
-                        <item name="Name" type_name="gh_string" type_code="10">Content</item>
-                        <item name="NickName" type_name="gh_string" type_code="10">Content</item>
-                        <item name="Optional" type_name="gh_bool" type_code="1">false</item>
-                        <item name="Source" index="0" type_name="gh_guid" type_code="9">caed6394-a163-4b7d-ad02-7aedfe616cc5</item>
-                        <item name="SourceCount" type_name="gh_int32" type_code="3">1</item>
-                      </items>
-                      <chunks count="1">
-                        <chunk name="Attributes">
-                          <items count="2">
-                            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
-                              <X>1494</X>
-                              <Y>388</Y>
-                              <W>46</W>
-                              <H>24</H>
-                            </item>
-                            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
-                              <X>1518.5</X>
-                              <Y>400</Y>
-                            </item>
-                          </items>
-                        </chunk>
-                      </chunks>
-                    </chunk>
-                  </chunks>
-                </chunk>
-              </chunks>
-            </chunk>
-            <chunk name="Object" index="63">
-              <items count="2">
-                <item name="GUID" type_name="gh_guid" type_code="9">ae2531b4-bab2-4bb1-b5bf-f2143d10c132</item>
-                <item name="Name" type_name="gh_string" type_code="10">Context Bake</item>
-              </items>
-              <chunks count="1">
-                <chunk name="Container">
-                  <items count="4">
-                    <item name="Description" type_name="gh_string" type_code="10">Content for baking at the end of the GrasshopperPlayer command or with Hops and Rhino.Compute.</item>
-                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">3b409052-1835-40a2-a91f-fa38e75f5066</item>
-                    <item name="Name" type_name="gh_string" type_code="10">Context Bake</item>
-                    <item name="NickName" type_name="gh_string" type_code="10">Mode</item>
-                  </items>
-                  <chunks count="2">
-                    <chunk name="Attributes">
-                      <items count="2">
-                        <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
-                          <X>637</X>
-                          <Y>1106</Y>
-                          <W>77</W>
-                          <H>28</H>
-                        </item>
-                        <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
-                          <X>700</X>
-                          <Y>1120</Y>
-                        </item>
-                      </items>
-                    </chunk>
-                    <chunk name="param_input" index="0">
-                      <items count="8">
-                        <item name="Access" type_name="gh_int32" type_code="3">2</item>
-                        <item name="Description" type_name="gh_string" type_code="10">Content to collect for baking</item>
-                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">fbd9d387-53ad-494e-b877-b9ac0f309cbb</item>
-                        <item name="Name" type_name="gh_string" type_code="10">Content</item>
-                        <item name="NickName" type_name="gh_string" type_code="10">Content</item>
-                        <item name="Optional" type_name="gh_bool" type_code="1">false</item>
-                        <item name="Source" index="0" type_name="gh_guid" type_code="9">be715bd1-c593-4954-9a1b-529d4056d0df</item>
-                        <item name="SourceCount" type_name="gh_int32" type_code="3">1</item>
-                      </items>
-                      <chunks count="1">
-                        <chunk name="Attributes">
-                          <items count="2">
-                            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
-                              <X>639</X>
-                              <Y>1108</Y>
-                              <W>46</W>
-                              <H>24</H>
-                            </item>
-                            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
-                              <X>663.5</X>
-                              <Y>1120</Y>
-                            </item>
-                          </items>
-                        </chunk>
-                      </chunks>
-                    </chunk>
-                  </chunks>
-                </chunk>
-              </chunks>
-            </chunk>
-            <chunk name="Object" index="64">
-              <items count="2">
                 <item name="GUID" type_name="gh_guid" type_code="9">3ede854e-c753-40eb-84cb-b48008f14fd4</item>
                 <item name="Name" type_name="gh_string" type_code="10">Text</item>
               </items>
@@ -7249,7 +7129,7 @@ rainbow</item>
                 </chunk>
               </chunks>
             </chunk>
-            <chunk name="Object" index="65">
+            <chunk name="Object" index="63">
               <items count="2">
                 <item name="GUID" type_name="gh_guid" type_code="9">3ede854e-c753-40eb-84cb-b48008f14fd4</item>
                 <item name="Name" type_name="gh_string" type_code="10">Text</item>
@@ -7284,7 +7164,7 @@ rainbow</item>
                 </chunk>
               </chunks>
             </chunk>
-            <chunk name="Object" index="66">
+            <chunk name="Object" index="64">
               <items count="2">
                 <item name="GUID" type_name="gh_guid" type_code="9">28061aae-04fb-4cb5-ac45-16f3b66bc0a4</item>
                 <item name="Name" type_name="gh_string" type_code="10">Center Box</item>
@@ -7527,6 +7407,126 @@ rainbow</item>
                             <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
                               <X>1083</X>
                               <Y>1010</Y>
+                            </item>
+                          </items>
+                        </chunk>
+                      </chunks>
+                    </chunk>
+                  </chunks>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="Object" index="65">
+              <items count="2">
+                <item name="GUID" type_name="gh_guid" type_code="9">73215ec5-0eb5-4f85-9e07-b09c4590ce2b</item>
+                <item name="Name" type_name="gh_string" type_code="10">Context Print</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Container">
+                  <items count="4">
+                    <item name="Description" type_name="gh_string" type_code="10">Textual data to print at the end of the GrasshopperPlayer command.</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">0fd6ae9d-8c74-4a4d-8a39-7b4d2233c806</item>
+                    <item name="Name" type_name="gh_string" type_code="10">Context Print</item>
+                    <item name="NickName" type_name="gh_string" type_code="10">Sphere count</item>
+                  </items>
+                  <chunks count="2">
+                    <chunk name="Attributes">
+                      <items count="2">
+                        <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                          <X>1466</X>
+                          <Y>386</Y>
+                          <W>103</W>
+                          <H>28</H>
+                        </item>
+                        <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                          <X>1555</X>
+                          <Y>400</Y>
+                        </item>
+                      </items>
+                    </chunk>
+                    <chunk name="param_input" index="0">
+                      <items count="8">
+                        <item name="Access" type_name="gh_int32" type_code="3">2</item>
+                        <item name="Description" type_name="gh_string" type_code="10">Text for printing.</item>
+                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">57465d4e-11c1-4eb3-9c82-372d2f785838</item>
+                        <item name="Name" type_name="gh_string" type_code="10">Text</item>
+                        <item name="NickName" type_name="gh_string" type_code="10">Sphere count</item>
+                        <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                        <item name="Source" index="0" type_name="gh_guid" type_code="9">caed6394-a163-4b7d-ad02-7aedfe616cc5</item>
+                        <item name="SourceCount" type_name="gh_int32" type_code="3">1</item>
+                      </items>
+                      <chunks count="1">
+                        <chunk name="Attributes">
+                          <items count="2">
+                            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                              <X>1468</X>
+                              <Y>388</Y>
+                              <W>72</W>
+                              <H>24</H>
+                            </item>
+                            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                              <X>1505.5</X>
+                              <Y>400</Y>
+                            </item>
+                          </items>
+                        </chunk>
+                      </chunks>
+                    </chunk>
+                  </chunks>
+                </chunk>
+              </chunks>
+            </chunk>
+            <chunk name="Object" index="66">
+              <items count="2">
+                <item name="GUID" type_name="gh_guid" type_code="9">73215ec5-0eb5-4f85-9e07-b09c4590ce2b</item>
+                <item name="Name" type_name="gh_string" type_code="10">Context Print</item>
+              </items>
+              <chunks count="1">
+                <chunk name="Container">
+                  <items count="4">
+                    <item name="Description" type_name="gh_string" type_code="10">Textual data to print at the end of the GrasshopperPlayer command.</item>
+                    <item name="InstanceGuid" type_name="gh_guid" type_code="9">639c0bf3-56e6-47fd-8714-a13d2246f8f3</item>
+                    <item name="Name" type_name="gh_string" type_code="10">Context Print</item>
+                    <item name="NickName" type_name="gh_string" type_code="10">Mode</item>
+                  </items>
+                  <chunks count="2">
+                    <chunk name="Attributes">
+                      <items count="2">
+                        <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                          <X>647</X>
+                          <Y>1106</Y>
+                          <W>67</W>
+                          <H>28</H>
+                        </item>
+                        <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                          <X>700</X>
+                          <Y>1120</Y>
+                        </item>
+                      </items>
+                    </chunk>
+                    <chunk name="param_input" index="0">
+                      <items count="8">
+                        <item name="Access" type_name="gh_int32" type_code="3">2</item>
+                        <item name="Description" type_name="gh_string" type_code="10">Text for printing.</item>
+                        <item name="InstanceGuid" type_name="gh_guid" type_code="9">ae25c9be-7349-4642-ab45-b911c5914012</item>
+                        <item name="Name" type_name="gh_string" type_code="10">Text</item>
+                        <item name="NickName" type_name="gh_string" type_code="10">Mode</item>
+                        <item name="Optional" type_name="gh_bool" type_code="1">false</item>
+                        <item name="Source" index="0" type_name="gh_guid" type_code="9">be715bd1-c593-4954-9a1b-529d4056d0df</item>
+                        <item name="SourceCount" type_name="gh_int32" type_code="3">1</item>
+                      </items>
+                      <chunks count="1">
+                        <chunk name="Attributes">
+                          <items count="2">
+                            <item name="Bounds" type_name="gh_drawing_rectanglef" type_code="35">
+                              <X>649</X>
+                              <Y>1108</Y>
+                              <W>36</W>
+                              <H>24</H>
+                            </item>
+                            <item name="Pivot" type_name="gh_drawing_pointf" type_code="31">
+                              <X>668.5</X>
+                              <Y>1120</Y>
                             </item>
                           </items>
                         </chunk>

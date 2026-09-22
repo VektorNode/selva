@@ -93,6 +93,7 @@ function state(overrides: Partial<SolveSessionState> = {}): SolveSessionState {
 		error: '',
 		computeErrors: [],
 		computeWarnings: [],
+		diagnostics: [],
 		blocked: false,
 		awaitingAck: false,
 		heldResult: null,
@@ -158,9 +159,10 @@ describe('applySolveResult', () => {
 			outputs: { out: 42 },
 			errors: ['e'],
 			warnings: ['w'],
+			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
 			meshes: [{ id: 'm' }]
 		});
-		// Messages surface immediately — the dialog needs them to render.
+		// Messages surface immediately — the panel needs them to render.
 		expect(out.computeErrors).toEqual(['e']);
 		expect(out.computeWarnings).toEqual(['w']);
 		expect(out.awaitingAck).toBe(true);
@@ -181,7 +183,7 @@ describe('applySolveResult', () => {
 		expect(out.blocked).toBe(false);
 	});
 
-	it('carries blocked through and holds its result', () => {
+	it('applies a blocked solve at once, clearing the previous meshes instead of holding', () => {
 		const out = applySolveResult(state({ meshes: [{ id: 'stale' }] }), {
 			outputs: {},
 			errors: ['Wall too thin'],
@@ -189,7 +191,9 @@ describe('applySolveResult', () => {
 		});
 		expect(out.blocked).toBe(true);
 		expect(out.computeErrors).toEqual(['Wall too thin']);
-		expect(out.awaitingAck).toBe(true);
+		expect(out.awaitingAck).toBe(false);
+		expect(out.heldResult).toBe(null);
+		expect(out.meshes).toEqual([]);
 	});
 
 	it('clears blocked once a later clean solve arrives', () => {
@@ -208,11 +212,13 @@ describe('applySolveResult', () => {
 		const first = applySolveResult(state(), {
 			outputs: { out: 1 },
 			warnings: ['w'],
+			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
 			meshes: [{ id: 'first' }]
 		});
 		const second = applySolveResult(first, {
 			outputs: { out: 2 },
 			warnings: ['w'],
+			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
 			meshes: [{ id: 'second' }]
 		});
 		expect(second.heldResult?.outputs).toEqual({ out: 2 });
@@ -224,6 +230,7 @@ describe('commitSolveResult', () => {
 		const held = applySolveResult(state({ values: { out: null } }), {
 			outputs: { out: 42 },
 			warnings: ['w'],
+			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
 			meshes: [{ id: 'm' }]
 		});
 		const out = commitSolveResult(held, held.heldResult!);
@@ -234,12 +241,34 @@ describe('commitSolveResult', () => {
 });
 
 describe('needsAcknowledgement', () => {
+	const gate = { level: 'warning' as const, message: 'check this', isGate: true };
+
 	it('is false for a clean solve', () => {
-		expect(needsAcknowledgement([], [])).toBe(false);
+		expect(needsAcknowledgement([])).toBe(false);
+		expect(needsAcknowledgement(undefined)).toBe(false);
+	});
+
+	it('gates on a Message component', () => {
+		expect(needsAcknowledgement([gate])).toBe(true);
+	});
+
+	it('does not gate on incidental Grasshopper warnings', () => {
+		// The case that made every solve pop a dialog: a component complaining about its own
+		// inputs is for whoever edits the definition, not whoever uses the app.
+		expect(
+			needsAcknowledgement([
+				{ level: 'warning', message: 'Parameter failed to collect data', source: 'Voronoi' },
+				{ level: 'error', message: '1. Solution exception: index out of range' }
+			])
+		).toBe(false);
+	});
+
+	it('does not gate on a remark, even an authored one', () => {
+		expect(needsAcknowledgement([{ level: 'remark', message: 'fyi', isGate: true }])).toBe(false);
 	});
 
 	it('asks again for a repeated message: every solve is its own checkpoint', () => {
-		expect(needsAcknowledgement([], ['same'])).toBe(true);
-		expect(needsAcknowledgement([], ['same'])).toBe(true);
+		expect(needsAcknowledgement([gate])).toBe(true);
+		expect(needsAcknowledgement([gate])).toBe(true);
 	});
 });

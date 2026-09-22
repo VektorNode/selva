@@ -56,4 +56,4 @@ export {
 } from './external-storage.js';
 export type { ExternalValueRef, ExternalInput } from './external-storage.js';
 
-export type { SolveFn, SolveResult } from '../shared/solve-fn.js';
+export type { SolveFn, SolveResult, SolveDiagnostic } from '../shared/solve-fn.js';

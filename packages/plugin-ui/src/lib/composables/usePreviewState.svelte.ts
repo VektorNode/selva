@@ -6,7 +6,12 @@
 
 import type { SolveEvent, SupportedTypes } from '@selvajs/schemas';
 import type { WsOutputsMessage } from '$lib/websocket/websocket.svelte';
-import { createSolveSession, type SolveSession, type SolveReporter } from '@selvajs/ui';
+import {
+	createSolveSession,
+	type SolveSession,
+	type SolveReporter,
+	type SolveDiagnostic
+} from '@selvajs/ui';
 import { getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
 import type { SchemaSource, PreviewSolveDriver } from '$lib/schema-source/schema-source';
@@ -30,6 +35,7 @@ const EMPTY_MESHES: unknown[] = [];
 // every $derived that reads it.
 const EMPTY_MESSAGES: string[] = [];
 const EMPTY_EVENTS: SolveEvent[] = [];
+const EMPTY_DIAGNOSTICS: SolveDiagnostic[] = [];
 
 /**
  * @param source Defaults to the Grasshopper WebSocket source bound to the URL's wsPort.
@@ -206,6 +212,11 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		get computeWarnings() {
 			void sessionVersion;
 			return session?.computeWarnings ?? EMPTY_MESSAGES;
+		},
+		/** The last solve's messages with level, source and `isGate`. */
+		get diagnostics() {
+			void sessionVersion;
+			return session?.diagnostics ?? EMPTY_DIAGNOSTICS;
 		},
 		/** A Message component refused the last solve: its outputs were withheld on purpose. */
 		get blocked() {

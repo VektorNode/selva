@@ -9,13 +9,14 @@
 
 import type { SolveEvent, UISchema } from '@selvajs/schemas';
 import { readExternalValue } from './external-storage.js';
-import type { SolveResult } from '../shared/solve-fn.js';
+import type { SolveDiagnostic, SolveResult } from '../shared/solve-fn.js';
 import type { SolveDriver } from './drivers/driver.js';
 import {
 	buildInitialValues,
 	makeInitialFlags,
 	applyValueChange,
 	applySolveResult,
+	blankOutputs,
 	commitSolveResult,
 	pickInputValues,
 	type SolveSessionState,
@@ -28,13 +29,20 @@ export interface SolveSession {
 	readonly computeErrors: string[];
 	readonly computeWarnings: string[];
 	/**
-	 * The definition refused the last solve. Read alongside `computeErrors`, which holds the
-	 * reason — a host should show those instead of presenting the empty outputs as a result.
+	 * The last solve's messages with their level, source and `isGate`. Richer than the two
+	 * string arrays above and the list a message UI should render; they remain for hosts that
+	 * only want the text. Empty from a transport that reports no structure.
+	 */
+	readonly diagnostics: SolveDiagnostic[];
+	/**
+	 * The definition refused the last solve, or it was aborted. Applied at once, not held: the
+	 * outputs are blanked and the viewer cleared, and `computeErrors` holds the reason.
 	 */
 	readonly blocked: boolean;
 	/**
 	 * The last solve raised messages awaiting the user's confirmation, and its result is held
 	 * back until then. A host shows the messages and calls `acknowledge()` to release them.
+	 * Never true for a blocked solve.
 	 */
 	readonly awaitingAck: boolean;
 	/**
@@ -100,6 +108,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		error: '',
 		computeErrors: [],
 		computeWarnings: [],
+		diagnostics: [],
 		blocked: false,
 		awaitingAck: false,
 		heldResult: null,
@@ -145,6 +154,9 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 		get computeWarnings() {
 			return state.computeWarnings;
+		},
+		get diagnostics() {
+			return state.diagnostics;
 		},
 		get blocked() {
 			return state.blocked;
@@ -231,6 +243,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			state.error = '';
 			state.computeErrors = [];
 			state.computeWarnings = [];
+			state.diagnostics = [];
 			state.blocked = false;
 			state.awaitingAck = false;
 			// Belongs to the previous definition, same as lastResult.
@@ -248,7 +261,12 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		report(result) {
-			applySolveResult(state, result);
+			// Blocked is "no result" whatever the transport sent along: outputs blanked, viewer
+			// cleared. The session decides this, not the driver, so no transport can leak one.
+			applySolveResult(
+				state,
+				result.blocked ? { ...result, outputs: blankOutputs(currentSchema), meshes: [] } : result
+			);
 			emit();
 		},
 

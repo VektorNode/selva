@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Parameters;
 using Selva.GH.Features.UIBuilder.Services;
 
 namespace Selva.GH.Features.ComputeIO.Components;
@@ -11,9 +12,11 @@ namespace Selva.GH.Features.ComputeIO.Components;
 ///     geometry it cannot trust.
 /// </summary>
 /// <remarks>
-///     Grasshopper cannot abort a running solution, so an error does not halt computation —
-///     everything downstream still solves. To actually skip expensive downstream work, wire
-///     <c>Passed</c> into a Stream Gate or Cull so the failing branch carries no data.
+///     An error does not abort the solution. <c>RequestAbortSolution()</c> makes Grasshopper wipe
+///     the aborting component's own runtime messages before <c>SolutionEnd</c>, which would erase
+///     the very error that marks the block on both transports (verified on Rhino 8.35). So the
+///     solve runs to completion and everything downstream still computes; to skip expensive work
+///     on the failing branch, wire <c>Passed</c> into a Stream Gate or Cull.
 ///     Both transports key off <see cref="GH_Component.AddRuntimeMessage" />: locally the bridge
 ///     scans for it after the solution ends, and on Rhino.Compute an Error runtime message is
 ///     what populates the response's `errors` array.
@@ -42,8 +45,43 @@ public class GH_Message : GH_Component
             "Text shown on the canvas and in the web UI when the condition is false.",
             GH_ParamAccess.item, "Condition failed");
         pManager.AddIntegerParameter("Level", "L",
-            "0 = Remark, 1 = Warning, 2 = Error. Only Error blocks the outputs.",
+            "Remark, Warning, or Error. Only Error blocks the outputs. Right-click the input to "
+            + "pick by name.",
             GH_ParamAccess.item, LevelError);
+        pManager.AddIntegerParameter("Notify", "N",
+            "How the message reaches the user: Popup interrupts with a dialog, Log adds it to "
+            + "the message list without interrupting. Errors always interrupt. Right-click the "
+            + "input to pick by name.",
+            GH_ParamAccess.item, NotifyPopup);
+
+        // Named values give each input a right-click list of readable options, so an author picks
+        // "Warning" instead of remembering that 1 means warning.
+        AddNamedValues(pManager[2] as Param_Integer,
+            ("Remark", LevelRemark), ("Warning", LevelWarning), ("Error", LevelError));
+        AddNamedValues(pManager[3] as Param_Integer,
+            ("Popup", NotifyPopup), ("Log", NotifyLog));
+
+        // Every input has a default, so none is required. Without this Grasshopper refuses to
+        // run SolveInstance and raises its own "Parameter failed to collect data" warning the
+        // moment an upstream branch is empty — a warning about this component's wiring, shown
+        // to the end user as if the definition had reported it.
+        for (var i = 0; i < Params.Input.Count; i++)
+        {
+            Params.Input[i].Optional = true;
+        }
+    }
+
+    private static void AddNamedValues(Param_Integer param, params (string Name, int Value)[] values)
+    {
+        if (param == null)
+        {
+            return;
+        }
+
+        foreach (var (name, value) in values)
+        {
+            param.AddNamedValue(name, value);
+        }
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager pManager)
@@ -58,10 +96,15 @@ public class GH_Message : GH_Component
         var condition = true;
         var message = "Condition failed";
         var level = LevelError;
+        var notify = NotifyPopup;
 
-        if (!DA.GetData(0, ref condition)) return;
+        // Inputs are optional, so a false return means "nothing wired" and the initializer above
+        // stands. Returning early instead would leave `Passed` empty and break the gate
+        // downstream of it.
+        DA.GetData(0, ref condition);
         DA.GetData(1, ref message);
         DA.GetData(2, ref level);
+        DA.GetData(3, ref notify);
 
         DA.SetData(0, condition);
 
@@ -74,48 +117,67 @@ public class GH_Message : GH_Component
 
         var runtimeLevel = ToRuntimeLevel(level);
         var aborts = runtimeLevel == GH_RuntimeMessageLevel.Error;
+        // An error withholds the result, so it interrupts whatever Notify says: an empty viewer
+        // with the explanation buried in a log is worse than the interruption.
+        var logOnly = !aborts && notify == NotifyLog;
         var source = string.IsNullOrWhiteSpace(NickName) ? Name : NickName;
 
-        // Rhino.Compute flattens runtime messages to bare strings with no component attribution,
-        // so a deployed solve can only recognise a deliberate block by this marker in the text.
-        // The local bridge strips it before the message reaches the UI.
+        // Rhino.Compute flattens runtime messages to bare strings, losing the block flag, "an
+        // author wrote this", and the author's Notify choice. All three travel as a marker in the
+        // text instead; the reader strips them before the message reaches the UI.
         AddRuntimeMessage(runtimeLevel,
-            aborts ? SolveDiagnostics.BlockedMarker + " " + message : message);
+            (aborts
+                ? SolveDiagnostics.BlockedMarker
+                : logOnly
+                    ? SolveDiagnostics.LogOnlyMarker
+                    : SolveDiagnostics.AuthoredMarker)
+            + " " + message);
 
         // The live channel carries the structured message while the solve is still running, on
-        // both transports. The post-solve collection still reports it; the browser dedupes by
-        // solve id and sequence.
+        // both transports. The post-solve collection reports it again once the solve ends; the
+        // UI shows the result's list after that, not the live one.
         SolveEventSink.Emit(OnPingDocument(), "diagnostic", SolveEventSink.DiagnosticPayload(
             new SolveDiagnostic
             {
                 Level = aborts ? "error" : runtimeLevel == GH_RuntimeMessageLevel.Warning ? "warning" : "remark",
                 Message = message,
                 Source = source,
-                IsGate = true
+                // False under Notify = Log: the message is still the author's and still listed,
+                // it just does not interrupt.
+                IsGate = !logOnly
             }));
+    }
 
-        if (!aborts)
+    /// <summary>
+    ///     Re-applies <c>Optional</c> after a load. Grasshopper serializes the flag per param, so
+    ///     a definition saved before it was set keeps `Optional=false` and goes on raising
+    ///     "Parameter failed to collect data" on an empty branch no matter what
+    ///     <see cref="RegisterInputParams" /> says. Every input has a default, so this is always
+    ///     safe, and it repairs already-published definitions without an upgrader — the param
+    ///     list is unchanged, so wire indices are untouched.
+    /// </summary>
+    public override bool Read(GH_IO.Serialization.GH_IReader reader)
+    {
+        if (!base.Read(reader))
         {
-            return;
+            return false;
         }
 
-        // Report BEFORE aborting. The abort skips SolutionEnd, so the bridge's usual post-solve
-        // collection never runs and this is the only report the UI will get. Safe from inside a
-        // solve: the broadcast is background socket I/O and never waits on the browser.
-        SolveMessageBroadcaster.SendBlocked(message, source);
+        foreach (var param in Params.Input)
+        {
+            param.Optional = true;
+        }
 
-        // Cooperative: Grasshopper stops at the next component boundary rather than instantly, so
-        // downstream components are skipped instead of computing a result nobody will see. It
-        // tears the solution down rather than pausing it — there is no partial result to keep.
-        // No-op on Rhino.Compute, which solves headless in one request; there the error still
-        // reaches the client through the response's `errors` array.
-        OnPingDocument()?.RequestAbortSolution();
+        return true;
     }
 
     // Mirrors GH_RuntimeMessageLevel's ordering so the input reads the same as the enum.
     private const int LevelRemark = 0;
     private const int LevelWarning = 1;
     private const int LevelError = 2;
+
+    private const int NotifyPopup = 0;
+    private const int NotifyLog = 1;
 
     /// <summary>Out-of-range values fall back to Error: a mis-wired level must not silently
     /// downgrade a block into a remark nobody reads.</summary>

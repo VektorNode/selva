@@ -224,7 +224,36 @@ describe('createComputeFetchSolveFn — blocked solves', () => {
 		const result = await solve({}, new AbortController().signal);
 
 		expect(result.blocked).toBe(true);
-		expect(result.errors).toEqual(['1. Solution exception: Wall too thin']);
+		// Both the marker and Compute's numbered-exception wrapper are wire plumbing, not
+		// something the author wrote, so the user sees only their own sentence.
+		expect(result.errors).toEqual(['Wall too thin']);
+		expect(result.diagnostics).toEqual([
+			{ level: 'error', message: 'Wall too thin', isGate: true }
+		]);
+	});
+
+	it('drops the outputs and skips mesh extraction on a blocked solve', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({
+				values: [
+					{ ParamName: 'out', InnerTree: { '{0}': [{ type: 'System.Double', data: '1' }] } }
+				],
+				errors: ['[Selva:blocked] refused'],
+				warnings: []
+			})
+		);
+		const extract = vi.fn(async () => [{ id: 'mesh' }]);
+		const solve = createComputeFetchSolveFn(
+			baseOpts({
+				outputs: () => [{ id: 'out', nickname: 'out' }],
+				meshes: { extract }
+			} as never)
+		);
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.outputs).toEqual({});
+		expect(result.meshes).toEqual([]);
+		expect(extract).not.toHaveBeenCalled();
 	});
 
 	it('leaves an ordinary solve error unblocked and untouched', async () => {

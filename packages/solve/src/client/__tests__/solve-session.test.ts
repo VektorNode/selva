@@ -372,6 +372,8 @@ describe('createSolveSession — holding a result behind its messages', () => {
 		session.report({
 			outputs: { out: 'flagged' },
 			warnings: ['check this'],
+			// Only an authored message holds a result; a bare warning no longer gates.
+			diagnostics: [{ level: 'warning', message: 'check this', isGate: true }],
 			meshes: [{ id: 'flagged' }]
 		});
 		return session;
@@ -401,6 +403,21 @@ describe('createSolveSession — holding a result behind its messages', () => {
 		expect(session.meshes).toEqual([{ id: 'clean' }]);
 		// The reason stays visible in the footer even though nothing was applied.
 		expect(session.computeWarnings).toEqual(['check this']);
+	});
+
+	it('a blocked solve replaces the result on screen with nothing', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({ outputs: { out: 'clean' }, meshes: [{ id: 'clean' }] });
+		session.report({ outputs: {}, errors: ['refused'], blocked: true });
+		expect(session.blocked).toBe(true);
+		expect(session.awaitingAck).toBe(false);
+		expect(session.values.out).toBe(null);
+		expect(session.meshes).toEqual([]);
+		expect(session.computeErrors).toEqual(['refused']);
 	});
 
 	it('both are no-ops when nothing is held', () => {

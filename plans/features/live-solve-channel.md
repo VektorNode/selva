@@ -350,14 +350,40 @@ The tracer slice follows the design above with these deviations, each deliberate
   route-level change (resolve the token, use `share:<linkId>` as the owner key), not a design one.
 - **Schema version bumped to 2.15.0** with a no-op migration: the codegen guard versions every
   definition in `ui-schema.json`, and `SolveEvent` had to live there for the cross-stack rule.
-- **`SolveMessageBroadcaster` stays.** The blocked-outputs envelope is a different thing from a
-  live event (it is what opens the dialog), so `GH_Message` now does both: emits a `diagnostic`
-  event on the live channel and, on error, the blocked envelope as before.
+- **`SolveMessageBroadcaster` is gone and `GH_Message` no longer aborts.** Grasshopper wipes the
+  aborting component's own runtime messages before `SolutionEnd` (see below), so the abort erased
+  the error that marks the block and the post-solve collection overwrote the blocked envelope with
+  a clean one. Now there is one reporting path: `GH_Message` raises the runtime message plus the
+  live `diagnostic`, and the SolutionEnd collection sends the blocked envelope when it finds a
+  gate error or `AbortRequested`. A blocked envelope carries no outputs; the client blanks the
+  outputs and clears the viewer rather than holding the previous result behind a dialog.
 - **The local cancel is a `cancelSolve` WS frame**, handled on the socket's dispatch thread and
   never marshalled; the compute cancel is the callback reply. Both reach
   `GH_Document.RequestAbortSolution()`.
-- **UI surface is minimal:** `SolveLiveBanner` shows diagnostics from the running solve with an
-  Abort button, only while solving. Everything else reads `session.liveEvents`.
+- **One UI surface, `SolveMessages`:** a bottom-centre panel that is the only place a solve talks
+  to the user. While solving it lists live diagnostics and offers Abort; when the result arrives
+  it switches to review (warnings: Discard / Continue, result held) or blocked (error: Dismiss),
+  and remarks alone linger for a few seconds and fade. The modal dialog and the separate live
+  banner were folded into it.
+
+- **Only an authored message interrupts.** Grasshopper raises warnings constantly about the
+  definition rather than the result, and gating on all of them meant a dialog on every solve —
+  which trains people to dismiss the one that mattered. `needsAcknowledgement` now reads
+  `isGate`, so only a Selva Message component holds a result. Everything else goes to the footer
+  message centre (`ComputeMessagesDialog`), grouped by level with repeats collapsed.
+
+- **`SolveResult.diagnostics` carries the structure both surfaces need.** `errors`/`warnings`
+  stay as flat text for hosts that only want it. On Compute the structure has to be recovered
+  from strings (`compute-diagnostics.ts`): the server appends `: component "X" (guid)` to every
+  message, and `isGate` has no field to travel in. The Message component writes a second marker,
+  `[Selva:msg]`, alongside the existing `[Selva:blocked]`, so a non-blocking authored message is
+  recognisable too; definitions saved before it fall back to matching the component's type name,
+  which is `obj.Name` and so survives a rename on the canvas.
+
+- **`Notify` decides popup vs log, per message.** A third marker, `[Selva:log]`, carries the
+  choice over Compute the same way. An error never carries it: its result is withheld, so it
+  interrupts whatever the author picked. `Level` and `Notify` use `Param_Integer.AddNamedValue`,
+  giving each a right-click list of names rather than numbers to remember.
 
 Not verified live yet: an end-to-end run against a Compute with `RHINO_COMPUTE_EVENT_SINK_HOSTS`
 set (the fork targets .NET 10 and could not be compiled on the authoring machine), and the local
@@ -370,6 +396,16 @@ overwrites an existing key in place, an empty-string value round-trips, and the 
 `NewSolution` and `ExpireSolution` + `NewSolution`. A component reads
 `OnPingDocument().ConstantServer["SelvaSolveId"]._String` during `SolveInstance` with no further
 plumbing. The Compute leg rests on this and it holds.
+
+`RequestAbortSolution()` from inside `SolveInstance`: `SolutionEnd` still fires (the code and
+comments assumed it did not), `SolutionState` reads `PostProcess`, `AbortRequested` stays true
+through `SolutionEnd` and resets on the next `NewSolution`. Objects computed before the stop keep
+`Computed` and their messages; objects after it stay `Blank`. The aborting component itself ends
+`Computed` with its runtime messages cleared — a Level 1 message survives, the same message at
+Level 2 (which aborted) is gone. And "before" means document order, not dependency order: with
+the Message component late in the object list, a 2 s Voronoi branch computed in full before the
+abort landed. Any component that wants to abort must therefore put what it has to say on the live
+channel, not in a runtime message; the probe-mode value list above is the case to remember.
 
 Not yet verified, and worth the same treatment before anyone builds on it: whether
 `SolutionProgress` can be read from the sender thread while the solver mutates the document, and

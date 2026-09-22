@@ -14,7 +14,7 @@ import type {
 	WsSolveEventMessage
 } from '$lib/websocket/websocket.svelte';
 import type { SolveEvent } from '@selvajs/schemas';
-import type { SolveReporter } from '@selvajs/ui';
+import type { SolveDiagnostic, SolveReporter } from '@selvajs/ui';
 import type { PreviewSolveDriver } from './schema-source';
 import { parseDisplayItems, parseMeshBatchBlob, SCALE_FACTORS } from '@selvajs/visualization/parse';
 import type { DisplayItem } from '@selvajs/visualization/parse';
@@ -182,24 +182,23 @@ export function createWebSocketSolveDriver(
 		// our token was superseded mid-parse, skip the report so we don't apply stale display.
 		if (myToken !== outputsToken) return;
 
-		// Split the solve's diagnostics into the two arrays SolveResult already carries, so
-		// Grasshopper messages land in the same footer badge and dialog the Compute path uses.
-		// Remarks are informational and never gate a result: they reach the UI as live
-		// `diagnostic` events instead, so they are left out here rather than dressed as warnings.
-		const diagnostics = message.diagnostics ?? [];
-		const errors: string[] = [];
-		const warnings: string[] = [];
-		for (const d of diagnostics) {
-			const text = d.source ? `${d.source}: ${d.message}` : d.message;
-			if (d.level === 'error') errors.push(text);
-			else if (d.level === 'warning') warnings.push(text);
-		}
+		// The plugin already sends structure, so this path only narrows the level to the union
+		// `SolveDiagnostic` declares. The two string arrays are derived for hosts that read them;
+		// the message UI reads `diagnostics`. Attribution stays a field rather than being spliced
+		// into the text, so it can be rendered as a label.
+		const diagnostics: SolveDiagnostic[] = (message.diagnostics ?? []).map((d) => ({
+			level: d.level === 'error' || d.level === 'warning' ? d.level : 'remark',
+			message: d.message,
+			...(d.source ? { source: d.source } : {}),
+			...(d.isGate ? { isGate: true } : {})
+		}));
 
 		getReporter().report({
 			outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
 			...(sceneObjects !== undefined ? { meshes: sceneObjects } : {}),
-			errors,
-			warnings,
+			errors: diagnostics.filter((d) => d.level === 'error').map((d) => d.message),
+			warnings: diagnostics.filter((d) => d.level === 'warning').map((d) => d.message),
+			diagnostics,
 			blocked: message.blocked ?? false
 		});
 	}

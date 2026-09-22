@@ -1490,6 +1490,40 @@
 			]
 		},
 		{
+			"guid": "B7E4C2A1-3D9F-4E58-A6C0-8F1D5B2E7A93",
+			"class": "GH_Message",
+			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_Message.cs",
+			"inputs": [
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Condition",
+					"access": "item"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Message",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Level",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Notify",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Passed",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "B85A48FD-46DC-4A94-AD44-64B048237DBE",
 			"class": "GH_Frame",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_Frame.cs",

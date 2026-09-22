@@ -18,6 +18,7 @@ import {
 } from '@selvajs/compute/grasshopper';
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
 import { SOLVE_BLOCKED_MARKER } from '../shared/solve-fn.js';
+import { parseComputeDiagnostics } from './compute-diagnostics.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
@@ -182,10 +183,22 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		}
 		const processor = new GrasshopperResponseProcessor(solved, false);
 
-		const meshes = opts.meshes ? await opts.meshes.extract(processor.response, { debug }) : [];
+		const rawErrors = solved.errors ?? [];
+		const rawWarnings = solved.warnings ?? [];
+		// Compute flattens every runtime message to a string, so a guard's error is only
+		// recognizable by the marker the Message component writes into its text. Substring, not
+		// prefix: the server numbers each entry ("1. Solution exception: ..."). Strip it before
+		// display — it is wire plumbing, not something the author wrote.
+		const blocked = rawErrors.some((e) => e.includes(SOLVE_BLOCKED_MARKER));
+
+		// A blocked solve still ran to completion on Compute (Grasshopper cannot stop it), so the
+		// response carries outputs and geometry the author has declared invalid. Drop them here,
+		// unparsed: the result is "no result", the same as the local bridge sends.
+		const meshes =
+			opts.meshes && !blocked ? await opts.meshes.extract(processor.response, { debug }) : [];
 
 		const resultOutputs: Record<string, unknown> = {};
-		for (const o of outputs) {
+		for (const o of blocked ? [] : outputs) {
 			const byId = processor.getValue({ byId: o.id }, { parseValues: true });
 			resultOutputs[o.id] =
 				byId ??
@@ -218,25 +231,17 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			}
 		}
 
-		const rawErrors = solved.errors ?? [];
-		// Compute flattens every runtime message to a string, so a guard's error is only
-		// recognizable by the marker the Message component writes into its text. Substring, not
-		// prefix: the server numbers each entry ("1. Solution exception: ..."). Strip it before
-		// display — it is wire plumbing, not something the author wrote.
-		const blocked = rawErrors.some((e) => e.includes(SOLVE_BLOCKED_MARKER));
+		// Parsed rather than passed through: Compute appends `: component "X" (guid)` to every
+		// message, which is wire plumbing the author did not write. The structured list keeps the
+		// attribution as a field, so the UI can show it as a label instead of inside the sentence.
+		const diagnostics = parseComputeDiagnostics(rawErrors, rawWarnings);
 
 		return {
 			outputs: resultOutputs,
 			meshes,
-			errors: blocked
-				? rawErrors.map((e) =>
-						e
-							.replace(SOLVE_BLOCKED_MARKER, '')
-							.replace(/\s{2,}/g, ' ')
-							.trim()
-					)
-				: rawErrors,
-			warnings: solved.warnings ?? [],
+			errors: diagnostics.filter((d) => d.level === 'error').map((d) => d.message),
+			warnings: diagnostics.filter((d) => d.level === 'warning').map((d) => d.message),
+			diagnostics,
 			blocked,
 			source: solved
 		};
