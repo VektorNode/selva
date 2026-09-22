@@ -128,6 +128,22 @@ public class WireFixtureContractTests
             ["runtime-message.json"] = ("RuntimeMessage",
                 OutboundEnvelopes.RuntimeMessage(Session, "warning", "Something happened", FixedTime)),
 
+            ["solve-event.json"] = ("SolveEvent",
+                OutboundEnvelopes.SolveEvent(Session, new SolveEvent
+                {
+                    SolveId = "solve-fixture",
+                    Seq = 1,
+                    At = "2026-01-15T12:00:00Z",
+                    Type = "diagnostic",
+                    Payload = new Dictionary<string, object>
+                    {
+                        ["level"] = "warning",
+                        ["message"] = "Something happened",
+                        ["source"] = "Msg",
+                        ["isGate"] = true
+                    }
+                })),
+
             ["sync-preview.json"] = ("SyncPreview",
                 OutboundEnvelopes.SyncPreview(Session, new SyncDiff
                 {

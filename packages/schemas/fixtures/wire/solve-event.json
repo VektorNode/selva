@@ -1,0 +1,16 @@
+{
+	"type": "solveEvent",
+	"sessionId": "session-fixture",
+	"event": {
+		"solveId": "solve-fixture",
+		"seq": 1,
+		"at": "2026-01-15T12:00:00Z",
+		"type": "diagnostic",
+		"payload": {
+			"level": "warning",
+			"message": "Something happened",
+			"source": "Msg",
+			"isGate": true
+		}
+	}
+}

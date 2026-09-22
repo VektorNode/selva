@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PageProps } from './$types';
 	import { ComputeApp } from '@selvajs/ui';
-	import { createComputeFetchSolveFn } from '@selvajs/solve/client';
+	import { createComputeFetchSolveFn, createSolveEventStream } from '@selvajs/solve/client';
 	import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
 	import ServerFooter from '$lib/components/ServerFooter.svelte';
 	import UserChip from '$lib/components/UserChip.svelte';
@@ -28,6 +28,14 @@
 		);
 	}
 
+	// One SSE stream per tab; the solve fn names it so the server routes each solve's events here.
+	// Anonymous share-token viewers get no stream (the route needs a session) and solve as before.
+	const liveEvents = createSolveEventStream({
+		endpoint: '/api/v1/solve-events',
+		cancelEndpoint: (solveId) => `/api/v1/solve/${solveId}/cancel`
+	});
+	$effect(() => () => liveEvents.close());
+
 	const onSolve = createComputeFetchSolveFn({
 		endpoint: '/api/v1/compute',
 		definitionUrl: () => data.ghDefinition,
@@ -35,6 +43,7 @@
 		outputs: () => data.schema.outputs,
 		channel: () => (data.channel === 'draft' ? 'draft' : undefined),
 		versionId: () => data.versionId,
+		streamId: () => (isAuthed ? liveEvents.streamId : null),
 		meshes: shouldShowViewer()
 			? { extract: (response, opts) => getThreeObjectsFromComputeResponse(response, opts) }
 			: undefined,
@@ -52,6 +61,7 @@
 	brandName={pageData.branding?.name}
 	homeUrl="/"
 	solveDeadlineMs={data.solveDeadlineMs}
+	events={isAuthed ? liveEvents : undefined}
 	footerComponent={ServerFooter}
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >

@@ -562,6 +562,24 @@ export interface RuntimeValues {
 	};
 	[k: string]: unknown | undefined;
 }
+export interface SolveEvent {
+	solveId: string;
+	/**
+	 * Per-solve, monotonic from 1. Lets a consumer drop late or duplicate delivery.
+	 */
+	seq: number;
+	/**
+	 * ISO-8601 UTC timestamp
+	 */
+	at: string;
+	/**
+	 * Event kind: solveStarted, solveEnded, diagnostic, progress, valueListUpdated, ...
+	 */
+	type: string;
+	payload?: {
+		[k: string]: unknown | undefined;
+	};
+}
 export interface ValidationIssueMessage {
 	paramId: string;
 	/**
@@ -591,7 +609,7 @@ export const ACCEPTED_FILE_FORMATS = [
 ] as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.14.0';
+export const UI_SCHEMA_VERSION = '2.15.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

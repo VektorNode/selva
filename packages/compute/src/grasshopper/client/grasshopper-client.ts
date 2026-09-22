@@ -8,7 +8,12 @@ import { ComputeConfig, RetryPolicy } from '@/core/types';
 
 import { fetchDefinitionIO, fetchParsedDefinitionIO, solveGrasshopperDefinition } from '..';
 import { solveByCacheKey, solveGrasshopperDefinitionWithCacheKey } from '../solve';
-import { GrasshopperComputeConfig, GrasshopperComputeResponse, DataTree } from '../types';
+import {
+	GrasshopperComputeConfig,
+	GrasshopperComputeResponse,
+	DataTree,
+	SelvaEventTarget
+} from '../types';
 import { isDefinitionRef, type SolveDefinition } from '@/core/definition-ref';
 import {
 	SolveScheduler,
@@ -28,6 +33,8 @@ export interface SolveOptions {
 	signal?: AbortSignal;
 	timeoutMs?: number;
 	retry?: RetryPolicy;
+	/** Per-solve live-event callback, forwarded onto the request body. */
+	selvaevents?: SelvaEventTarget;
 }
 
 /** Compact description of a definition for error context — never the full payload. */
@@ -251,7 +258,8 @@ export default class GrasshopperClient {
 				...this.config,
 				...(options?.signal !== undefined && { signal: options.signal }),
 				...(options?.timeoutMs !== undefined && { timeoutMs: options.timeoutMs }),
-				...(options?.retry !== undefined && { retry: options.retry })
+				...(options?.retry !== undefined && { retry: options.retry }),
+				...(options?.selvaevents !== undefined && { selvaevents: options.selvaevents })
 			};
 
 			// Skip the redundant pre-flight healthcheck — fetchCompute already surfaces

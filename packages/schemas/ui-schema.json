@@ -843,7 +843,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.14.0",
+					"default": "2.15.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -906,6 +906,25 @@
 				}
 			},
 			"required": ["timestamp", "values"]
+		},
+		"SolveEvent": {
+			"type": "object",
+			"description": "One live event from a running solve. The header is fixed; `payload` is shaped by `type`. `type` is an open string so a new event kind is additive on every transport (unknown kinds pass through).",
+			"properties": {
+				"solveId": { "type": "string" },
+				"seq": {
+					"type": "integer",
+					"description": "Per-solve, monotonic from 1. Lets a consumer drop late or duplicate delivery."
+				},
+				"at": { "type": "string", "description": "ISO-8601 UTC timestamp" },
+				"type": {
+					"type": "string",
+					"description": "Event kind: solveStarted, solveEnded, diagnostic, progress, valueListUpdated, ..."
+				},
+				"payload": { "type": "object", "additionalProperties": {} }
+			},
+			"required": ["solveId", "seq", "at", "type"],
+			"additionalProperties": false
 		},
 		"ValidationIssueMessage": {
 			"type": "object",

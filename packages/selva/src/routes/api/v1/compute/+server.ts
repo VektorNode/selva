@@ -17,6 +17,8 @@ interface ComputeRequest {
 	 * instead of the channel pointer; editor-only, never share-token accessible.
 	 */
 	versionId?: string;
+	/** The caller's open live-event stream; see `SolveParams.streamId`. */
+	streamId?: string;
 }
 
 // The URL-addressed solve: takes an arbitrary `definitionUrl`, and is the only
@@ -101,7 +103,8 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			request,
 			locals,
 			loadStart,
-			prepMarks
+			prepMarks,
+			streamId: typeof body.streamId === 'string' ? body.streamId : null
 		});
 	} catch (err) {
 		mapSolveError(err, locals);

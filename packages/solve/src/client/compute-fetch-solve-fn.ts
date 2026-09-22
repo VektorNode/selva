@@ -30,6 +30,8 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	outputs: () => Array<{ id: string; nickname?: string }>;
 	channel?: () => 'live' | 'draft' | undefined;
 	versionId?: () => string | null | undefined;
+	/** The tab's live-event stream id (`createSolveEventStream().streamId`), so the server routes this solve's events to it. */
+	streamId?: () => string | null | undefined;
 	/** Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`. */
 	meshes?: {
 		extract: (
@@ -89,12 +91,14 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		const outputs = opts.outputs();
 		const channel = opts.channel?.();
 		const versionId = opts.versionId?.();
+		const streamId = opts.streamId?.();
 
 		const payload = JSON.stringify({
 			inputs,
 			values,
 			definitionUrl: opts.definitionUrl(),
-			...(versionId ? { versionId } : channel === 'draft' ? { channel: 'draft' } : {})
+			...(versionId ? { versionId } : channel === 'draft' ? { channel: 'draft' } : {}),
+			...(streamId ? { streamId } : {})
 		});
 
 		let res: Response;

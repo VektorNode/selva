@@ -47,6 +47,17 @@ export interface GrasshopperBaseSchema {
 }
 
 /**
+ * Where a Selva-family plugin running inside the solve may POST live events, and
+ * the bearer it presents. The VektorNode fork hands these to the document as
+ * constants; a stock server ignores the block. Never echoed in the response.
+ */
+export interface SelvaEventTarget {
+	url: string;
+	solveId: string;
+	token: string;
+}
+
+/**
  * Definition source (used in args and response)
  */
 export interface GrasshopperDefinitionSource {
@@ -82,6 +93,8 @@ export interface GrasshopperComputeConfig extends ComputeConfig {
 	 * `cachesolve`.
 	 */
 	cacheerroredsolves?: boolean | null;
+	/** Per-solve live-event callback; see {@link SelvaEventTarget}. */
+	selvaevents?: SelvaEventTarget | null;
 }
 
 /**
@@ -116,6 +129,8 @@ export interface GrasshopperRequestSchema
 	extends GrasshopperBaseSchema, GrasshopperDefinitionSource {
 	/** Input values organized by parameter */
 	values?: DataTree[];
+	/** Per-solve live-event callback; see {@link SelvaEventTarget}. */
+	selvaevents?: SelvaEventTarget | null;
 }
 
 /**

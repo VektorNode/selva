@@ -111,6 +111,8 @@ public class ServerLifecycleManager : IDisposable
             // solution down, and WebSocket preserves frame order.
             SolveMessageBroadcaster.SetSender(diagnostics =>
                 _ = _webSocketTransport.BroadcastBlockedSolve(diagnostics));
+            SolveEventSink.SetLocalSender(solveEvent =>
+                _ = _webSocketTransport.BroadcastSolveEvent(solveEvent));
 
             Logger.Log(
                 $"[ServerLifecycleManager] WebSocket server started on port {_webSocketTransport.WebSocketPort}");
@@ -183,6 +185,7 @@ public class ServerLifecycleManager : IDisposable
         // Before the socket closes: a message raised after this point has nowhere to go, and the
         // definition must keep solving in plain Grasshopper.
         SolveMessageBroadcaster.SetSender(null);
+        SolveEventSink.SetLocalSender(null);
 
         try
         {

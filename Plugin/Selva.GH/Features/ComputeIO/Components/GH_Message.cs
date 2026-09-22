@@ -74,12 +74,25 @@ public class GH_Message : GH_Component
 
         var runtimeLevel = ToRuntimeLevel(level);
         var aborts = runtimeLevel == GH_RuntimeMessageLevel.Error;
+        var source = string.IsNullOrWhiteSpace(NickName) ? Name : NickName;
 
         // Rhino.Compute flattens runtime messages to bare strings with no component attribution,
         // so a deployed solve can only recognise a deliberate block by this marker in the text.
         // The local bridge strips it before the message reaches the UI.
         AddRuntimeMessage(runtimeLevel,
             aborts ? SolveDiagnostics.BlockedMarker + " " + message : message);
+
+        // The live channel carries the structured message while the solve is still running, on
+        // both transports. The post-solve collection still reports it; the browser dedupes by
+        // solve id and sequence.
+        SolveEventSink.Emit(OnPingDocument(), "diagnostic", SolveEventSink.DiagnosticPayload(
+            new SolveDiagnostic
+            {
+                Level = aborts ? "error" : runtimeLevel == GH_RuntimeMessageLevel.Warning ? "warning" : "remark",
+                Message = message,
+                Source = source,
+                IsGate = true
+            }));
 
         if (!aborts)
         {
@@ -89,8 +102,7 @@ public class GH_Message : GH_Component
         // Report BEFORE aborting. The abort skips SolutionEnd, so the bridge's usual post-solve
         // collection never runs and this is the only report the UI will get. Safe from inside a
         // solve: the broadcast is background socket I/O and never waits on the browser.
-        SolveMessageBroadcaster.SendBlocked(message,
-            string.IsNullOrWhiteSpace(NickName) ? Name : NickName);
+        SolveMessageBroadcaster.SendBlocked(message, source);
 
         // Cooperative: Grasshopper stops at the next component boundary rather than instantly, so
         // downstream components are skipped instead of computing a result nobody will see. It

@@ -72,6 +72,7 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnSchemaSaveRequested -= HandleSchemaSave;
         _webSocketTransport.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply -= HandleApplySyncChanges;
+        _webSocketTransport.OnCancelSolveRequested -= HandleCancelSolve;
     }
 
     // -------------------------------------------------------------------------
@@ -93,11 +94,27 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnSchemaSaveRequested += HandleSchemaSave;
         _webSocketTransport.OnSyncPreviewRequested += HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply += HandleApplySyncChanges;
+        _webSocketTransport.OnCancelSolveRequested += HandleCancelSolve;
     }
 
     // -------------------------------------------------------------------------
     // WebSocket event handlers
     // -------------------------------------------------------------------------
+
+    // Runs on the socket's dispatch thread on purpose: the solver holds the UI thread, and a
+    // marshalled cancel would wait for the solve it is meant to stop. RequestAbortSolution only
+    // sets a flag the solver polls between components, so it is safe from here.
+    private void HandleCancelSolve(object sender, EventArgs e)
+    {
+        try
+        {
+            _eventManager.CurrentDocument?.RequestAbortSolution();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[BridgeOrchestrator] Cancel solve failed: {ex.Message}");
+        }
+    }
 
     private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
     {

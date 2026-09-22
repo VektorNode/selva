@@ -31,7 +31,8 @@ public static class SchemaMigrator
             { new Version(2, 11, 0), MigrateTo_2_11_0 },
             { new Version(2, 12, 0), MigrateTo_2_12_0 },
             { new Version(2, 13, 0), MigrateTo_2_13_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_14_0 }
+            { new Version(2, 14, 0), MigrateTo_2_14_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_15_0 }
         };
 
     /// <summary>
@@ -329,12 +330,23 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_14_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.14.0";
 
         // GUID-valued string properties now declare `format: "guid"` in the JSON
         // schema instead of being inferred from description text. Codegen-only:
         // the C# properties were already System.Guid, and the wire format is
         // unchanged (GUIDs serialize as strings either way).
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_15_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // Adds the SolveEvent wire type (live solve channel). Not part of the persisted
+        // UISchema at all; the bump exists because the codegen guard versions every
+        // definition in ui-schema.json. Nothing to migrate.
 
         return schema;
     }

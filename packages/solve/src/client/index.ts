@@ -17,7 +17,10 @@ export type { SolveSession, SolveSessionArgs } from './solve-session.js';
 
 export { createRequestResponseDriver } from './drivers/request-response.js';
 export type { RequestResponseDriverOptions } from './drivers/request-response.js';
-export type { SolveDriver, SolveReporter } from './drivers/driver.js';
+export type { SolveDriver, SolveReporter, SolveEventSource } from './drivers/driver.js';
+
+export { createSolveEventStream } from './solve-event-stream.js';
+export type { SolveEventStream, SolveEventStreamOptions } from './solve-event-stream.js';
 
 // Exported (not just used internally) because an alternative framework's host shell
 // reimplements only state ownership around these transitions, never the decisions themselves.

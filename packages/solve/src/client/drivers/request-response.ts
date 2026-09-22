@@ -1,7 +1,7 @@
 import { createAsyncThrottle } from '../async-throttle.js';
 import { createSolveMemo, type MeshPolicy } from '../solve-memo.js';
 import type { SolveFn } from '../../shared/solve-fn.js';
-import type { SolveDriver, SolveReporter } from './driver.js';
+import type { SolveDriver, SolveEventSource, SolveReporter } from './driver.js';
 
 export interface RequestResponseDriverOptions<TMesh> {
 	/** How long one solve may take before the client aborts it (ms). Pass the server's `COMPUTE_SOLVE_DEADLINE_MS` so the two agree. */
@@ -9,6 +9,8 @@ export interface RequestResponseDriverOptions<TMesh> {
 	onChange?: () => void;
 	/** Mesh ownership policy for the result memo — see `MeshPolicy` (solve-memo.ts). */
 	meshPolicy?: MeshPolicy<TMesh>;
+	/** Live events for the solves this driver runs; without it the session never sees any. */
+	events?: SolveEventSource;
 }
 
 /**
@@ -20,7 +22,7 @@ export function createRequestResponseDriver<TMesh = unknown>(
 	getReporter: () => SolveReporter<TMesh>,
 	options: RequestResponseDriverOptions<TMesh>
 ): SolveDriver {
-	const { meshPolicy, solveDeadlineMs, onChange } = options;
+	const { meshPolicy, solveDeadlineMs, onChange, events } = options;
 
 	// Checked inside the throttled run, not before triggering it, so a hit only serves
 	// after the throttle's latest-wins ordering has picked these values to run.
@@ -65,13 +67,17 @@ export function createRequestResponseDriver<TMesh = unknown>(
 			throttle.trigger(values);
 		},
 		cancel() {
+			// Both halves: drop the client-side wait, and tell the server to stop the compute
+			// call it is holding. Without the second, the child keeps solving for nobody.
 			throttle.cancel();
+			events?.cancelCurrent?.();
 		},
 		get isSolving() {
 			return throttle.isRunning;
 		},
 		clearCache() {
 			memo.clear();
-		}
-	};
+		},
+		...(events ? { onEvent: (listener) => events.subscribe(listener) } : {})
+	} satisfies SolveDriver;
 }

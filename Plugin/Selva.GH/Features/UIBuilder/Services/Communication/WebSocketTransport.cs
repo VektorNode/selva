@@ -92,6 +92,12 @@ public class WebSocketTransport : IDisposable
     public event EventHandler<UISchema> OnSyncPreviewRequested;
     public event EventHandler<List<SyncChange>> OnSyncChangesApply;
 
+    /// <summary>
+    ///     Raised on the socket's dispatch thread, never marshalled to the UI thread (the solver
+    ///     holds it). Handlers may only flip the document's abort flag.
+    /// </summary>
+    public event EventHandler OnCancelSolveRequested;
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
@@ -195,6 +201,11 @@ public class WebSocketTransport : IDisposable
     public Task BroadcastMessage(string messageType, object data)
     {
         return BroadcastAsync(OutboundEnvelopes.Wrapped(_sessionId, messageType, data));
+    }
+
+    public Task BroadcastSolveEvent(SolveEvent solveEvent)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SolveEvent(_sessionId, solveEvent));
     }
 
     // Flat envelope: availableParams sits at the top level, matching TS WsParametersAddedMessage.
@@ -521,6 +532,13 @@ public class WebSocketTransport : IDisposable
 
                 case InboundKind.ApplySyncChanges:
                     MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, inbound.Changes));
+                    break;
+
+                case InboundKind.CancelSolve:
+                    // Deliberately NOT marshalled: the solver occupies the UI thread, so a
+                    // marshalled cancel would queue behind the very solve it is meant to stop.
+                    // The handler only flips the document's abort flag, which is safe here.
+                    OnCancelSolveRequested?.Invoke(this, EventArgs.Empty);
                     break;
 
                 case InboundKind.SessionMismatch:

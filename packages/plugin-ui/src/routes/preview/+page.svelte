@@ -8,6 +8,7 @@
 		Button,
 		AppLayout,
 		SolveMessageDialog,
+		SolveLiveBanner,
 		createSolvingIndicator,
 		useFooterItem,
 		getExternalInputs,
@@ -155,6 +156,14 @@
 	blocked={preview.blocked}
 	onconfirm={() => preview.acknowledge()}
 	ondiscard={() => preview.discard()}
+/>
+
+<SolveLiveBanner
+	events={preview.liveEvents}
+	solving={preview.isSolving}
+	dialogOpen={preview.awaitingAck}
+	onabort={() => preview.abort()}
+	abortLabel="Abort"
 />
 
 <style>

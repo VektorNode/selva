@@ -34,6 +34,9 @@ public enum InboundKind
     /// <summary>`applySyncChanges` with a non-null changes list.</summary>
     ApplySyncChanges,
 
+    /// <summary>`cancelSolve` — no payload. Handled off the UI thread, which the solver holds.</summary>
+    CancelSolve,
+
     /// <summary>A known type whose `sessionId` didn't match (and isn't `requestInitialData`).</summary>
     SessionMismatch,
 

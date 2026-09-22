@@ -331,6 +331,38 @@ acknowledgement dialog at the end. "Continue" is the absence of an abort, so not
 - Multi-instance fan-out: second `SolveEventBus` implementation.
 - Transport swap on the callback hop: second `Send` delegate in the sink.
 
+## As built (2026-09-22, branch `felix/state-machine` + fork branch `feat/selva-live-events`)
+
+The tracer slice follows the design above with these deviations, each deliberate:
+
+- **End-of-solve flush, not discard.** `SolveEventCallbackSender` posts whatever is still queued
+  at `SolutionEnd` if the queue is non-empty. A 5 ms solve that emitted nothing still produces no
+  traffic; one that raised a warning sends one POST after the fact. Cheaper to reason about than
+  "which events did the response already cover".
+- **`seq` is re-stamped by the server.** The plugin numbers its own batch, but the bus assigns the
+  per-solve sequence on publish so server-originated `solveStarted`/`solveEnded` and plugin events
+  share one monotonic run. SSE `id:` is a separate stream-level counter for `Last-Event-ID`.
+- **The tab mints `streamId`**, not the server, so a solve request can name it before the stream
+  has connected. The server accepts any 16–64 char URL-safe id and binds it to the session's
+  owner key.
+- **Share-token viewers get no stream.** The SSE and cancel routes require a session; anonymous
+  public-link solves run exactly as before, without live events. Adding share-token support is a
+  route-level change (resolve the token, use `share:<linkId>` as the owner key), not a design one.
+- **Schema version bumped to 2.15.0** with a no-op migration: the codegen guard versions every
+  definition in `ui-schema.json`, and `SolveEvent` had to live there for the cross-stack rule.
+- **`SolveMessageBroadcaster` stays.** The blocked-outputs envelope is a different thing from a
+  live event (it is what opens the dialog), so `GH_Message` now does both: emits a `diagnostic`
+  event on the live channel and, on error, the blocked envelope as before.
+- **The local cancel is a `cancelSolve` WS frame**, handled on the socket's dispatch thread and
+  never marshalled; the compute cancel is the callback reply. Both reach
+  `GH_Document.RequestAbortSolution()`.
+- **UI surface is minimal:** `SolveLiveBanner` shows diagnostics from the running solve with an
+  Abort button, only while solving. Everything else reads `session.liveEvents`.
+
+Not verified live yet: an end-to-end run against a Compute with `RHINO_COMPUTE_EVENT_SINK_HOSTS`
+set (the fork targets .NET 10 and could not be compiled on the authoring machine), and the local
+abort path in Rhino.
+
 ## Verified against Rhino 8.35 (2026-09-22)
 
 `GH_Document.ConstantServer` is a public `SortedDictionary<string, GH_Variant>`. `DefineConstant`

@@ -39,6 +39,9 @@ public class DocumentEventManager : IDisposable
     /// </summary>
     public bool IsRegistered => _eventsRegistered;
 
+    /// <summary>The document events are attached to; null while unregistered.</summary>
+    public GH_Document CurrentDocument => _currentDocument;
+
     private Timer _documentModifiedTimer;
     private bool _eventsRegistered;
 
@@ -213,6 +216,7 @@ public class DocumentEventManager : IDisposable
 
     private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
     {
+        SolveEventSink.BeginLocalSolve();
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
         if (_webSocketTransport.IsRunning)

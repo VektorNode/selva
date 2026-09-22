@@ -34,6 +34,12 @@ import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/a
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ShareLink } from '@selvajs/platform';
+import { randomUUID } from 'node:crypto';
+import { env } from '$env/dynamic/private';
+import type { SelvaEventTarget } from '@selvajs/compute/grasshopper';
+import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
+import { getSolveEventBus } from '$lib/server/solveEvents/bus.server';
+import { mintSolveToken } from '$lib/server/solveEvents/token.server';
 
 export type SolveChannel = 'live' | 'draft';
 
@@ -64,6 +70,12 @@ export interface SolveParams {
 	/** Prep sub-phase timings recorded before this call (body parse, token). */
 	prepMarks: [string, number][];
 	/**
+	 * The caller's live-event stream (`GET /api/v1/solve-events?streamId=`). When it is open
+	 * and theirs, this solve is bound to it: the server emits start/end, and the compute
+	 * request carries a callback so the definition can emit mid-solve. Ignored otherwise.
+	 */
+	streamId?: string | null;
+	/**
 	 * Report an access refusal as 404 instead of 403.
 	 *
 	 * The definition-addressed route needs this: a guid is guessable, so
@@ -93,7 +105,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		locals,
 		loadStart,
 		prepMarks,
-		concealAccessFailure = false
+		concealAccessFailure = false,
+		streamId = null
 	} = params;
 	const storage = getStorageProvider();
 	const sharedAccess = access.kind === 'share' ? access : null;
@@ -314,19 +327,54 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// per-caller Accept-Encoding re-keying. Remote-URL solves have no version
 	// id, so the URL stands in as coalesce-key identity (`definitionKey`);
 	// local solves already carry that identity on `localDefinitionRef.key`.
-	const outcome = await engine.solve({
-		server: serverConfig,
-		definitionSource,
-		definitionKey: isLocal ? undefined : definitionUrl,
-		inputs,
-		values,
-		signal: request.signal,
-		acceptEncoding: request.headers.get('accept-encoding') ?? '',
-		definitionGuid: guid ?? undefined,
-		loadStartMs: loadStart,
-		defLoadMs,
-		prepMarks
-	});
+	// Live channel: bind this solve to the caller's stream when they opened one that
+	// is theirs. `rateLimitKey` doubles as the owner key because it already names
+	// the caller the same way on both routes.
+	const bus = getSolveEventBus();
+	const liveStreamId = streamId && bus.ownsStream(streamId, access.rateLimitKey) ? streamId : null;
+	const solveId = randomUUID();
+	let selvaEvents: SelvaEventTarget | undefined;
+	if (liveStreamId) {
+		bus.openSolve(solveId, liveStreamId, access.rateLimitKey);
+		bus.publish(solveId, [{ type: 'solveStarted', at: new Date().toISOString(), payload: {} }]);
+		const origin = (env.SELVA_EVENT_CALLBACK_ORIGIN || new URL(request.url).origin).replace(
+			/\/$/,
+			''
+		);
+		selvaEvents = {
+			url: `${origin}/api/v1/solve-events/${solveId}`,
+			solveId,
+			// Outlives the deadline by a margin so a callback racing the response is not refused.
+			token: mintSolveToken(solveId, SOLVE_DEADLINE_MS + 60_000)
+		};
+	}
+
+	let outcome: Awaited<ReturnType<typeof engine.solve>>;
+	let endedKind = 'error';
+	try {
+		outcome = await engine.solve({
+			server: serverConfig,
+			definitionSource,
+			definitionKey: isLocal ? undefined : definitionUrl,
+			inputs,
+			values,
+			signal: request.signal,
+			acceptEncoding: request.headers.get('accept-encoding') ?? '',
+			definitionGuid: guid ?? undefined,
+			loadStartMs: loadStart,
+			defLoadMs,
+			prepMarks,
+			selvaEvents
+		});
+		endedKind = outcome.kind;
+	} finally {
+		if (liveStreamId) {
+			bus.publish(solveId, [
+				{ type: 'solveEnded', at: new Date().toISOString(), payload: { kind: endedKind } }
+			]);
+			bus.closeSolve(solveId);
+		}
+	}
 	mark('solve');
 
 	// Metric recording is app policy — the engine only maps outcome to HTTP.

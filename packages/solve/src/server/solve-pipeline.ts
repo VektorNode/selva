@@ -11,7 +11,8 @@ import {
 	TreeBuilder,
 	type DataTree,
 	type GrasshopperComputeResponse,
-	type InputParam
+	type InputParam,
+	type SelvaEventTarget
 } from '@selvajs/compute/grasshopper';
 import type { SchemaInput } from '@selvajs/schemas';
 import { gzip, gunzipSync } from 'node:zlib';
@@ -69,6 +70,8 @@ export interface SolvePipelineArgs {
 	solveDeadlineMs: number;
 	/** Client's `Accept-Encoding`; gzip is applied only when it advertises `gzip`. */
 	acceptEncoding: string;
+	/** Per-solve live-event callback the compute server hands to the definition; absent when the caller opened no stream. */
+	selvaEvents?: SelvaEventTarget;
 	/**
 	 * Forwarded to the scheduler so a client disconnect cancels the upstream
 	 * compute call. Its `aborted` flag also distinguishes a client disconnect
@@ -169,7 +172,10 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	let result: GrasshopperComputeResponse;
 	const solveStart = performance.now();
 	try {
-		result = await client.scheduler.solve(args.definitionSource, inputTree, { signal });
+		result = await client.scheduler.solve(args.definitionSource, inputTree, {
+			signal,
+			selvaevents: args.selvaEvents
+		});
 	} catch (err) {
 		const durationMs = performance.now() - solveStart;
 		// Abort with the request signal NOT aborted means the scheduler's own

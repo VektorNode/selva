@@ -52,6 +52,10 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		get awaitingAck() {
 			return track(() => session.awaitingAck);
 		},
+		get liveEvents() {
+			return track(() => session.liveEvents);
+		},
+		abort: () => session.abort(),
 		get meshes() {
 			return track(() => session.meshes);
 		},

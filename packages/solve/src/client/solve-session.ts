@@ -7,7 +7,7 @@
 // republishes these getters as $state. Reading a getter without subscribing gives a
 // correct value but will not re-render.
 
-import type { UISchema } from '@selvajs/schemas';
+import type { SolveEvent, UISchema } from '@selvajs/schemas';
 import { readExternalValue } from './external-storage.js';
 import type { SolveResult } from '../shared/solve-fn.js';
 import type { SolveDriver } from './drivers/driver.js';
@@ -48,6 +48,18 @@ export interface SolveSession {
 	 * fate of a result that already exists.
 	 */
 	discard(): void;
+	/**
+	 * Events the running (or most recent) solve has emitted so far, oldest first. Reset when a
+	 * solve with a new id starts, so a host renders "what this solve has said", never a tail of
+	 * the previous one. Empty when the driver has no live channel.
+	 */
+	readonly liveEvents: SolveEvent[];
+	/**
+	 * Asks the transport to stop the solve in flight. Cooperative on both paths — Grasshopper
+	 * stops at the next component boundary — so the result is a `solveEnded` (or nothing, if it
+	 * finished first), never an instant halt.
+	 */
+	abort(): void;
 	readonly meshes: unknown[];
 	/**
 	 * The last reported result without its meshes — what the viewer is currently showing,
@@ -101,6 +113,19 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 	const listeners = new Set<() => void>();
 	const emit = () => listeners.forEach((l) => l());
 
+	let liveEvents: SolveEvent[] = [];
+	let liveSolveId: string | null = null;
+	// A driver with no live channel never calls this; nothing else in the session depends on it.
+	args.driver.onEvent?.((event) => {
+		if (event.solveId !== liveSolveId) {
+			liveSolveId = event.solveId;
+			liveEvents = [];
+		}
+		// A new array each time so a host comparing by reference re-renders.
+		liveEvents = [...liveEvents, event];
+		emit();
+	});
+
 	function dispatch() {
 		// Copy: state.values is the live map, and a driver may hold the payload across an
 		// async solve — a later setValue must not mutate what's already in flight.
@@ -145,6 +170,12 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			// result the user accepted. The messages stay on `computeErrors`/`computeWarnings` so
 			// the footer still explains why nothing changed.
 			emit();
+		},
+		get liveEvents() {
+			return liveEvents;
+		},
+		abort() {
+			args.driver.cancel();
 		},
 		get meshes() {
 			return state.meshes;

@@ -7,7 +7,8 @@
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { createRequestResponseDriver } from '@selvajs/solve/client';
-	import type { RetainedSolveResult, SolveSession } from '@selvajs/solve/client';
+	import type { RetainedSolveResult, SolveEventSource, SolveSession } from '@selvajs/solve/client';
+	import SolveLiveBanner from './SolveLiveBanner.svelte';
 	import { meshPolicy } from '@selvajs/visualization/parse';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import { useSolveSession } from '../../compute/useSolveSession.svelte';
@@ -53,6 +54,12 @@
 		 * have finished.
 		 */
 		solveDeadlineMs: number;
+		/**
+		 * Live events for the solves this app runs (`createSolveEventStream`). Pair it with
+		 * `streamId` on the `createComputeFetchSolveFn` that backs `onSolve`, or the server has
+		 * no stream to route to. Without it the app works as before, just with no mid-solve news.
+		 */
+		events?: SolveEventSource;
 		footerComponent?: any;
 		footerComponentProps?: () => Record<string, unknown>;
 		footerItemId?: string;
@@ -106,6 +113,7 @@
 		copyrightName,
 		footerText,
 		solveDeadlineMs,
+		events,
 		footerComponent,
 		footerComponentProps,
 		footerItemId = 'footer-item',
@@ -147,7 +155,8 @@
 		meshPolicy,
 		// `isSolving` lives on the driver, which the session can't observe — republish so the
 		// spinner and disabled states track it.
-		onChange: () => session.notify()
+		onChange: () => session.notify(),
+		events
 	});
 	// svelte-ignore state_referenced_locally
 	const session = useSolveSession({
@@ -286,4 +295,12 @@
 		abort: t.solveMessagesAbort,
 		dismiss: t.solveMessagesDismiss
 	}}
+/>
+
+<SolveLiveBanner
+	events={session.liveEvents}
+	solving={session.isSolving}
+	dialogOpen={session.awaitingAck}
+	onabort={() => session.abort()}
+	abortLabel={t.solveMessagesAbort}
 />

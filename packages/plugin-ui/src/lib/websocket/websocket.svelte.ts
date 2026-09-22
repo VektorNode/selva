@@ -54,6 +54,11 @@ export interface WsOutputsMessage extends WsSessionMessage {
 	blocked?: boolean;
 }
 
+/** One live event from a running solve, nested under `event` because the envelope's `type` is taken. */
+export interface WsSolveEventMessage extends WsSessionMessage {
+	event: import('@selvajs/schemas').SolveEvent;
+}
+
 /** One runtime message from the solve. `level` is open, matching `runtimeMessage`'s. */
 export interface WsSolveDiagnostic {
 	level: string;
@@ -354,6 +359,14 @@ export class WebSocketState {
 		} else {
 			console.warn('[WebSocket] Cannot send message - not connected');
 		}
+	}
+
+	/**
+	 * Asks the plugin to abort the running solution. Handled on the plugin's socket thread, so it
+	 * lands even while the solver holds the UI thread.
+	 */
+	sendCancelSolve(sessionId: string) {
+		this.send('cancelSolve', { sessionId });
 	}
 
 	/**

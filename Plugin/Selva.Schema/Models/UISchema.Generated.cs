@@ -678,6 +678,34 @@ namespace Selva.Schema.Models
         public Dictionary<string, object> Values { get; set; }
     }
 
+    public class SolveEvent
+    {
+
+        [JsonProperty("solveId")]
+        public string SolveId { get; set; }
+
+/// <summary>
+/// Per-solve, monotonic from 1. Lets a consumer drop late or duplicate delivery.
+/// </summary>
+        [JsonProperty("seq")]
+        public int Seq { get; set; }
+
+/// <summary>
+/// ISO-8601 UTC timestamp
+/// </summary>
+        [JsonProperty("at")]
+        public string At { get; set; }
+
+/// <summary>
+/// Event kind: solveStarted, solveEnded, diagnostic, progress, valueListUpdated, ...
+/// </summary>
+        [JsonProperty("type")]
+        public string Type { get; set; }
+
+        [JsonProperty("payload")]
+        public Dictionary<string, object> Payload { get; set; }
+    }
+
     public class ValidationIssueMessage
     {
 

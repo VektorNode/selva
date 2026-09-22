@@ -171,6 +171,19 @@ const runtimeMessageSchema = baseEnvelope.extend({
 	timestamp: z.string().nullish()
 });
 
+// One live event from a running solve. `event.type` is open on purpose: a new event kind is
+// additive on every transport, and the session ignores kinds it doesn't know.
+const solveEventSchema = baseEnvelope.extend({
+	type: z.literal('solveEvent'),
+	event: z.object({
+		solveId: z.string(),
+		seq: z.number(),
+		at: z.string(),
+		type: z.string(),
+		payload: z.record(z.string(), z.unknown()).nullish()
+	})
+});
+
 // `disconnecting` uses the generic `BroadcastMessage` envelope — payload nested
 // under `data` — and is handled inline in `handleMessage` before validation kicks
 // in. No schema needed.
@@ -198,7 +211,8 @@ const schemasByType = {
 	syncPreview: syncPreviewSchema,
 	syncApplied: syncAppliedSchema,
 	solvingState: solvingStateSchema,
-	runtimeMessage: runtimeMessageSchema
+	runtimeMessage: runtimeMessageSchema,
+	solveEvent: solveEventSchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

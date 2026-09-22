@@ -30,6 +30,14 @@ public static class OutboundEnvelopes
     public static object Wrapped(string sessionId, string messageType, object data) =>
         new { type = messageType, sessionId, data };
 
+    /// <summary>
+    ///     One live event from a running solve, nested under `event` because the envelope's own
+    ///     `type` is taken. Same <see cref="Selva.Schema.Models.SolveEvent" /> the Compute path
+    ///     posts to the Selva server, so the browser reads one shape on both transports.
+    /// </summary>
+    public static object SolveEvent(string sessionId, SolveEvent @event) =>
+        new { type = "solveEvent", sessionId, @event };
+
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };
 

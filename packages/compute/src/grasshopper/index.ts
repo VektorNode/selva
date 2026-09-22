@@ -94,6 +94,7 @@ export type {
 	InputParam,
 	GrasshopperComputeConfig,
 	GrasshopperRequestSchema,
+	SelvaEventTarget,
 	GrasshopperComputeResponse,
 	InputParamSchema,
 	OutputParamSchema,
