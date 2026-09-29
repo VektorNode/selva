@@ -1,5 +1,11 @@
 # @selvajs/visualization
 
+## 1.3.1
+
+### Patch Changes
+
+- cf41e54: chore(deps): bump the npm group across 1 directory with 26 updates
+
 ## 1.3.0
 
 ### Minor Changes

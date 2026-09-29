@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
-import { bench, describe } from 'vitest';
+import { describe, test } from 'vitest';
 
 import { boxField, planarGrid, smoothSphere, triangleCount } from '@tests/helpers/bench-geometry';
 
@@ -29,8 +29,13 @@ const THRESHOLD_ANGLE = 44; // addEdges' default crease angle — keep in sync w
 const HEAVY = !!process.env.BENCH_HEAVY;
 
 // Big fixtures make single iterations expensive (~seconds); cap counts explicitly instead of
-// letting tinybench run on a time budget.
-const FEW = { time: 0, warmupTime: 0, warmupIterations: 1, iterations: 3 } as const;
+// letting the benchmark runner run on a time budget. Passed as the trailing run options of
+// `bench.compare()`: it applies to the whole group.
+const FEW = { time: 0, warmupTime: 0, warmupIterations: 1, iterations: 3 };
+
+// A bench group is an ordinary test in vitest 5, so the 60s default testTimeout applies to it.
+// The 1M-triangle groups run for minutes; without this they fail instead of reporting.
+const BENCH_TIMEOUT = 15 * 60 * 1000;
 
 interface Fixture {
 	label: string;
@@ -68,49 +73,54 @@ console.log(
 );
 
 describe('EdgesGeometry extraction @44° (three baseline)', () => {
-	for (const fixture of [...fixtures, soup]) {
-		bench(
-			fixture.label,
-			() => {
-				new THREE.EdgesGeometry(fixture.geometry, THRESHOLD_ANGLE).dispose();
-			},
+	test('extract', { timeout: BENCH_TIMEOUT }, async ({ bench }) => {
+		await bench.compare(
+			...[...fixtures, soup].map((fixture) =>
+				bench(fixture.label, () => {
+					new THREE.EdgesGeometry(fixture.geometry, THRESHOLD_ANGLE).dispose();
+				})
+			),
 			FEW
 		);
-	}
+	});
 });
 
 describe('extractEdgeSegments @44° (edge-extract replacement)', () => {
-	for (const fixture of [...fixtures, soup]) {
-		const positions = fixture.geometry.attributes.position.array as Float32Array;
-		const index = fixture.geometry.index
-			? (fixture.geometry.index.array as Uint32Array | Uint16Array)
-			: null;
-		bench(
-			fixture.label,
-			() => {
-				extractEdgeSegments(positions, index, THRESHOLD_ANGLE);
-			},
+	test('extract', { timeout: BENCH_TIMEOUT }, async ({ bench }) => {
+		await bench.compare(
+			...[...fixtures, soup].map((fixture) => {
+				const positions = fixture.geometry.attributes.position.array as Float32Array;
+				const index = fixture.geometry.index
+					? (fixture.geometry.index.array as Uint32Array | Uint16Array)
+					: null;
+				return bench(fixture.label, () => {
+					extractEdgeSegments(positions, index, THRESHOLD_ANGLE);
+				});
+			}),
 			FEW
 		);
-	}
+	});
 });
 
 describe('LineSegmentsGeometry.setPositions (fat-line buffer build)', () => {
-	// boxField keeps every crease — the only shape producing enough segments to matter.
-	for (const fixture of fixtures.filter((f) => f.label.startsWith('boxField'))) {
-		const edges = new THREE.EdgesGeometry(fixture.geometry, THRESHOLD_ANGLE);
-		const positions = edges.attributes.position.array as Float32Array;
-		edges.dispose();
-		bench(
-			`${fixture.label} → ${fixture.segments} segments`,
-			() => {
-				const lineGeometry = new LineSegmentsGeometry();
-				lineGeometry.setPositions(positions);
-				lineGeometry.dispose();
-			},
+	test('setPositions', { timeout: BENCH_TIMEOUT }, async ({ bench }) => {
+		// boxField keeps every crease — the only shape producing enough segments to matter.
+		await bench.compare(
+			...fixtures
+				.filter((f) => f.label.startsWith('boxField'))
+				.map((fixture) => {
+					const edges = new THREE.EdgesGeometry(fixture.geometry, THRESHOLD_ANGLE);
+					const positions = edges.attributes.position.array as Float32Array;
+					edges.dispose();
+					return bench(`${fixture.label} → ${fixture.segments} segments`, () => {
+						const lineGeometry = new LineSegmentsGeometry();
+						lineGeometry.setPositions(positions);
+						lineGeometry.dispose();
+					});
+				}),
 			FEW
 		);
-	}
+	});
 });
 
 describe('addEdges/removeEdges toggle cycle (user-facing path)', () => {
@@ -125,25 +135,22 @@ describe('addEdges/removeEdges toggle cycle (user-facing path)', () => {
 	}
 
 	const MESH_COUNT = 100;
-	const uniqueScene = sceneOf(Array.from({ length: MESH_COUNT }, () => boxField(5_000)));
-	const sharedGeometry = boxField(5_000);
-	const sharedScene = sceneOf(Array.from({ length: MESH_COUNT }, () => sharedGeometry));
 
-	bench(
-		`${MESH_COUNT} meshes × 5k tri, unique geometries (500k tri total)`,
-		() => {
-			addEdges(uniqueScene);
-			removeEdges(uniqueScene);
-		},
-		FEW
-	);
+	test('toggle', { timeout: BENCH_TIMEOUT }, async ({ bench }) => {
+		const uniqueScene = sceneOf(Array.from({ length: MESH_COUNT }, () => boxField(5_000)));
+		const sharedGeometry = boxField(5_000);
+		const sharedScene = sceneOf(Array.from({ length: MESH_COUNT }, () => sharedGeometry));
 
-	bench(
-		`${MESH_COUNT} meshes × 5k tri, one shared geometry (cache hit path)`,
-		() => {
-			addEdges(sharedScene);
-			removeEdges(sharedScene);
-		},
-		FEW
-	);
+		await bench.compare(
+			bench(`${MESH_COUNT} meshes × 5k tri, unique geometries (500k tri total)`, () => {
+				addEdges(uniqueScene);
+				removeEdges(uniqueScene);
+			}),
+			bench(`${MESH_COUNT} meshes × 5k tri, one shared geometry (cache hit path)`, () => {
+				addEdges(sharedScene);
+				removeEdges(sharedScene);
+			}),
+			FEW
+		);
+	});
 });

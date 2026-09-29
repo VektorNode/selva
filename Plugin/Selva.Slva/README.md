@@ -1,6 +1,7 @@
 # Selva.Slva
 
-The SLVA mesh format, as a Rhino-free `netstandard2.0` library: encode meshes (plus curves,
+The SLVA mesh format, as a Rhino-free library (`netstandard2.0`, plus a `net7.0` build for
+the .NET Core legs of the plugin; the csproj says why): encode meshes (plus curves,
 points, materials, and per-object attributes) into one compact self-describing byte stream,
 and read it back. The same bytes travel over Selva's WebSocket, sit inside `.gh` archives,
 and are the `.slvm` file — and a foreign host can write or read them without knowing

@@ -120,11 +120,13 @@ create trigger trg_auth_user_created
 
 alter table selva.user_profiles enable row level security;
 
+drop policy if exists "user_profiles: any authenticated can read" on selva.user_profiles;
 create policy "user_profiles: any authenticated can read"
 on selva.user_profiles for select
 to authenticated
 using (true);
 
+drop policy if exists "user_profiles: users can update own" on selva.user_profiles;
 create policy "user_profiles: users can update own"
 on selva.user_profiles for update
 to authenticated
@@ -216,12 +218,16 @@ create index if not exists idx_project_members_user
 -- 4. updated_at triggers
 -- ============================================================================
 
+drop trigger if exists trg_orgs_updated_at on selva.orgs;
 create trigger trg_orgs_updated_at before update on selva.orgs
 	for each row execute function selva.set_updated_at();
+drop trigger if exists trg_projects_updated_at on selva.projects;
 create trigger trg_projects_updated_at before update on selva.projects
 	for each row execute function selva.set_updated_at();
+drop trigger if exists trg_org_members_updated_at on selva.org_members;
 create trigger trg_org_members_updated_at before update on selva.org_members
 	for each row execute function selva.set_updated_at();
+drop trigger if exists trg_project_members_updated_at on selva.project_members;
 create trigger trg_project_members_updated_at before update on selva.project_members
 	for each row execute function selva.set_updated_at();
 
@@ -328,22 +334,26 @@ alter table selva.orgs enable row level security;
 -- triggers a PostgREST re-read against the SELECT policy, which then filters
 -- out the just-tombstoned row and surfaces as "new row violates RLS". Same
 -- trap for `revoked_at` on share_links below.
+drop policy if exists "orgs: members and instance admins can read" on selva.orgs;
 create policy "orgs: members and instance admins can read"
 on selva.orgs for select
 to authenticated
 using (selva.is_instance_admin() or selva.is_org_member(id));
 
+drop policy if exists "orgs: authenticated can create their own" on selva.orgs;
 create policy "orgs: authenticated can create their own"
 on selva.orgs for insert
 to authenticated
 with check (selva.is_instance_admin() or owner_id = auth.uid());
 
+drop policy if exists "orgs: owners and instance admins can update" on selva.orgs;
 create policy "orgs: owners and instance admins can update"
 on selva.orgs for update
 to authenticated
 using (selva.is_instance_admin() or selva.is_org_owner(id))
 with check (selva.is_instance_admin() or selva.is_org_owner(id));
 
+drop policy if exists "orgs: owners and instance admins can delete" on selva.orgs;
 create policy "orgs: owners and instance admins can delete"
 on selva.orgs for delete
 to authenticated
@@ -351,22 +361,26 @@ using (selva.is_instance_admin() or selva.is_org_owner(id));
 
 alter table selva.org_members enable row level security;
 
+drop policy if exists "org_members: org members can read roster" on selva.org_members;
 create policy "org_members: org members can read roster"
 on selva.org_members for select
 to authenticated
 using (selva.is_instance_admin() or selva.is_org_member(org_id));
 
+drop policy if exists "org_members: admins can insert" on selva.org_members;
 create policy "org_members: admins can insert"
 on selva.org_members for insert
 to authenticated
 with check (selva.is_instance_admin() or selva.is_org_admin(org_id));
 
+drop policy if exists "org_members: admins can update" on selva.org_members;
 create policy "org_members: admins can update"
 on selva.org_members for update
 to authenticated
 using (selva.is_instance_admin() or selva.is_org_admin(org_id))
 with check (selva.is_instance_admin() or selva.is_org_admin(org_id));
 
+drop policy if exists "org_members: admins can delete" on selva.org_members;
 create policy "org_members: admins can delete"
 on selva.org_members for delete
 to authenticated
@@ -374,23 +388,27 @@ using (selva.is_instance_admin() or selva.is_org_admin(org_id));
 
 alter table selva.projects enable row level security;
 
+drop policy if exists "projects: visible to members" on selva.projects;
 create policy "projects: visible to members"
 on selva.projects for select
 to authenticated
 using (selva.visible_project(id));
 
+drop policy if exists "projects: manage_projects can create" on selva.projects;
 create policy "projects: manage_projects can create"
 on selva.projects for insert
 to authenticated
 with check (selva.has_org_permission(org_id, 'manage_projects'));
 
 -- Project settings (name, slug, description, visibility, flags) are owner-only.
+drop policy if exists "projects: owners can update" on selva.projects;
 create policy "projects: owners can update"
 on selva.projects for update
 to authenticated
 using (selva.is_instance_admin() or owner_id = auth.uid())
 with check (selva.is_instance_admin() or owner_id = auth.uid());
 
+drop policy if exists "projects: owners can delete" on selva.projects;
 create policy "projects: owners can delete"
 on selva.projects for delete
 to authenticated
@@ -398,6 +416,7 @@ using (selva.is_instance_admin() or owner_id = auth.uid());
 
 alter table selva.project_members enable row level security;
 
+drop policy if exists "project_members: visible to project members" on selva.project_members;
 create policy "project_members: visible to project members"
 on selva.project_members for select
 to authenticated
@@ -405,6 +424,7 @@ using (selva.is_instance_admin() or selva.visible_project(project_id));
 
 -- canManage (§5) collapses to owner-only; org admins no longer silently
 -- manage project members.
+drop policy if exists "project_members: managers can insert" on selva.project_members;
 create policy "project_members: managers can insert"
 on selva.project_members for insert
 to authenticated
@@ -416,6 +436,7 @@ with check (
 	)
 );
 
+drop policy if exists "project_members: managers can update" on selva.project_members;
 create policy "project_members: managers can update"
 on selva.project_members for update
 to authenticated
@@ -434,6 +455,7 @@ with check (
 	)
 );
 
+drop policy if exists "project_members: managers can delete" on selva.project_members;
 create policy "project_members: managers can delete"
 on selva.project_members for delete
 to authenticated
@@ -488,6 +510,7 @@ create index if not exists idx_definitions_pending_updated
 	on selva.definitions(updated_at)
 	where status = 'pending' and deleted_at is null;
 
+drop trigger if exists trg_definitions_updated_at on selva.definitions;
 create trigger trg_definitions_updated_at before update on selva.definitions
 	for each row execute function selva.set_updated_at();
 
@@ -509,9 +532,15 @@ create index if not exists idx_definition_versions_def
 -- Spec §6 deletion protection: cannot delete a version while it's serving
 -- either channel. Postgres raises 23503; the store maps that to 409.
 alter table selva.definitions
+	drop constraint if exists fk_definitions_live_version;
+
+alter table selva.definitions
 	add constraint fk_definitions_live_version
 	foreign key (live_version_id) references selva.definition_versions(id)
 	on delete restrict;
+
+alter table selva.definitions
+	drop constraint if exists fk_definitions_draft_version;
 
 alter table selva.definitions
 	add constraint fk_definitions_draft_version
@@ -532,11 +561,13 @@ grant execute on function selva.increment_run_count(uuid) to authenticated, serv
 
 alter table selva.definitions enable row level security;
 
+drop policy if exists "definitions: visible via project" on selva.definitions;
 create policy "definitions: visible via project"
 on selva.definitions for select
 to authenticated
 using (selva.visible_project(project_id));
 
+drop policy if exists "definitions: editors can insert" on selva.definitions;
 create policy "definitions: editors can insert"
 on selva.definitions for insert
 to authenticated
@@ -562,6 +593,7 @@ with check (
 	)
 );
 
+drop policy if exists "definitions: editors can update" on selva.definitions;
 create policy "definitions: editors can update"
 on selva.definitions for update
 to authenticated
@@ -600,6 +632,7 @@ with check (
 	)
 );
 
+drop policy if exists "definitions: editors can delete" on selva.definitions;
 create policy "definitions: editors can delete"
 on selva.definitions for delete
 to authenticated
@@ -625,6 +658,7 @@ alter table selva.definition_versions enable row level security;
 
 -- Versions inherit visibility from the parent definition (which inherits
 -- from the parent project). Versions are immutable — no UPDATE policy.
+drop policy if exists "definition_versions: visible via parent" on selva.definition_versions;
 create policy "definition_versions: visible via parent"
 on selva.definition_versions for select
 to authenticated
@@ -637,6 +671,7 @@ using (
 	)
 );
 
+drop policy if exists "definition_versions: editors can insert" on selva.definition_versions;
 create policy "definition_versions: editors can insert"
 on selva.definition_versions for insert
 to authenticated
@@ -670,6 +705,7 @@ with check (
 -- returns success without removing anything, and the FK ON DELETE RESTRICT on
 -- `definitions.live_version_id` / `draft_version_id` never gets a chance to
 -- raise the 23503 the store maps to a 409. Same authority as INSERT.
+drop policy if exists "definition_versions: editors can delete" on selva.definition_versions;
 create policy "definition_versions: editors can delete"
 on selva.definition_versions for delete
 to authenticated
@@ -702,6 +738,7 @@ using (
 -- (which caches the compute-extracted UI schema, migration 0002) returns
 -- success without persisting anything for a user-scoped caller. Same authority
 -- as INSERT/DELETE: project owner/editor, or instance admin.
+drop policy if exists "definition_versions: editors can update" on selva.definition_versions;
 create policy "definition_versions: editors can update"
 on selva.definition_versions for update
 to authenticated
@@ -764,22 +801,26 @@ create index if not exists idx_invites_org on selva.invites(org_id, created_at d
 
 alter table selva.invites enable row level security;
 
+drop policy if exists "invites: manage_org_members can read org invites" on selva.invites;
 create policy "invites: manage_org_members can read org invites"
 on selva.invites for select
 to authenticated
 using (selva.has_org_permission(org_id, 'manage_org_members'));
 
+drop policy if exists "invites: manage_org_members can insert" on selva.invites;
 create policy "invites: manage_org_members can insert"
 on selva.invites for insert
 to authenticated
 with check (selva.has_org_permission(org_id, 'manage_org_members'));
 
+drop policy if exists "invites: manage_org_members can update" on selva.invites;
 create policy "invites: manage_org_members can update"
 on selva.invites for update
 to authenticated
 using (selva.has_org_permission(org_id, 'manage_org_members'))
 with check (selva.has_org_permission(org_id, 'manage_org_members'));
 
+drop policy if exists "invites: manage_org_members can delete" on selva.invites;
 create policy "invites: manage_org_members can delete"
 on selva.invites for delete
 to authenticated
@@ -894,6 +935,7 @@ alter table selva.compute_server_platform_default enable row level security;
 --     user belongs to → that user
 --   * platform server that is the current global default → all (floor)
 --   * org server → only members of owner_org_id
+drop policy if exists "compute_servers: visibility-scoped read" on selva.compute_servers;
 create policy "compute_servers: visibility-scoped read"
 on selva.compute_servers for select
 to authenticated
@@ -913,6 +955,7 @@ using (
 -- Writes:
 --   * scope = 'platform' → instance_admin only.
 --   * scope = 'org'      → manage_org_compute on owner_org_id.
+drop policy if exists "compute_servers: scoped write" on selva.compute_servers;
 create policy "compute_servers: scoped write"
 on selva.compute_servers for all
 to authenticated
@@ -927,33 +970,39 @@ with check (
 		and selva.has_org_permission(owner_org_id, 'manage_org_compute'))
 );
 
+drop policy if exists "compute_server_shares: read" on selva.compute_server_shares;
 create policy "compute_server_shares: read"
 on selva.compute_server_shares for select
 to authenticated
 using (selva.is_instance_admin() or selva.is_org_member(org_id));
 
+drop policy if exists "compute_server_shares: admin write" on selva.compute_server_shares;
 create policy "compute_server_shares: admin write"
 on selva.compute_server_shares for all
 to authenticated
 using (selva.is_instance_admin())
 with check (selva.is_instance_admin());
 
+drop policy if exists "compute_server_org_defaults: members can read" on selva.compute_server_org_defaults;
 create policy "compute_server_org_defaults: members can read"
 on selva.compute_server_org_defaults for select
 to authenticated
 using (selva.is_instance_admin() or selva.is_org_member(org_id));
 
+drop policy if exists "compute_server_org_defaults: manage_org_compute can write" on selva.compute_server_org_defaults;
 create policy "compute_server_org_defaults: manage_org_compute can write"
 on selva.compute_server_org_defaults for all
 to authenticated
 using (selva.is_instance_admin() or selva.has_org_permission(org_id, 'manage_org_compute'))
 with check (selva.is_instance_admin() or selva.has_org_permission(org_id, 'manage_org_compute'));
 
+drop policy if exists "compute_server_platform_default: read all" on selva.compute_server_platform_default;
 create policy "compute_server_platform_default: read all"
 on selva.compute_server_platform_default for select
 to authenticated
 using (true);
 
+drop policy if exists "compute_server_platform_default: admin write" on selva.compute_server_platform_default;
 create policy "compute_server_platform_default: admin write"
 on selva.compute_server_platform_default for all
 to authenticated
@@ -1013,6 +1062,7 @@ alter table selva.share_links enable row level security;
 -- uses the SECURITY DEFINER RPC + service-role and bypasses RLS — the token
 -- IS the credential there.
 
+drop policy if exists "share_links: editors can read" on selva.share_links;
 create policy "share_links: editors can read"
 on selva.share_links for select
 to authenticated
@@ -1040,6 +1090,7 @@ using (
 	)
 );
 
+drop policy if exists "share_links: editors can insert" on selva.share_links;
 create policy "share_links: editors can insert"
 on selva.share_links for insert
 to authenticated
@@ -1068,6 +1119,7 @@ with check (
 );
 
 -- UPDATE policy covers `revoke` (set revoked_at). Same authority as insert.
+drop policy if exists "share_links: editors can revoke" on selva.share_links;
 create policy "share_links: editors can revoke"
 on selva.share_links for update
 to authenticated

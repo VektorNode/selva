@@ -1,5 +1,11 @@
 # @selvajs/cli
 
+## 4.17.1
+
+### Patch Changes
+
+- cf41e54: chore(deps): bump the npm group across 1 directory with 26 updates
+
 ## 4.17.0
 
 ## 4.16.3

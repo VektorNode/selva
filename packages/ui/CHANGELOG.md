@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 6.3.2
+
+### Patch Changes
+
+- cf41e54: chore(deps): bump the npm group across 1 directory with 26 updates
+
 ## 6.3.1
 
 ### Patch Changes

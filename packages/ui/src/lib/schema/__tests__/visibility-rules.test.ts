@@ -4,6 +4,7 @@ import {
 	evaluateVisibility,
 	evaluateGroupVisibility,
 	buildVisibilityMap,
+	hasVisibleItems,
 	itemKey
 } from '../visibility-rules';
 import type { GroupVisibilityCondition, LayoutItem, VisibilityRule } from '@selvajs/schemas';
@@ -168,5 +169,43 @@ describe('evaluateGroupVisibility', () => {
 		expect(evaluateGroupVisibility(cond('show'), { show: true })).toBe(true);
 		expect(evaluateGroupVisibility(cond(), { show: true })).toBe(true);
 		expect(evaluateGroupVisibility({}, {})).toBe(true);
+	});
+
+	it('hides a group whose every item is hidden, even when its own condition passes', () => {
+		const items = [
+			{
+				type: 'input',
+				paramId: 'a',
+				visibilityCondition: {
+					action: 'show',
+					mode: 'all',
+					rules: [{ operator: 'equals', paramId: 'mode', value: 'advanced' }]
+				}
+			},
+			{ type: 'input', paramId: 'b', visible: false }
+		] as unknown as LayoutItem[];
+
+		expect(evaluateGroupVisibility({ items }, { mode: 'basic' })).toBe(false);
+		expect(evaluateGroupVisibility({ items }, { mode: 'advanced' })).toBe(true);
+	});
+
+	it('a group of linebreaks only is empty', () => {
+		const items = [{ type: 'linebreak', id: 'lb' }] as unknown as LayoutItem[];
+		expect(evaluateGroupVisibility({ items }, {})).toBe(false);
+	});
+
+	it('an empty items array hides the group', () => {
+		expect(evaluateGroupVisibility({ items: [] }, {})).toBe(false);
+	});
+});
+
+describe('hasVisibleItems', () => {
+	it('ignores linebreaks and respects per-item conditions', () => {
+		const visible = [{ type: 'output', paramId: 'o' }] as unknown as LayoutItem[];
+		const separators = [{ type: 'linebreak', id: 'lb' }] as unknown as LayoutItem[];
+
+		expect(hasVisibleItems(visible, {})).toBe(true);
+		expect(hasVisibleItems([...separators, ...visible], {})).toBe(true);
+		expect(hasVisibleItems(separators, {})).toBe(false);
 	});
 });
