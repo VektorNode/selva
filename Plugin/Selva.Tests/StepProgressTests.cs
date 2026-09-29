@@ -48,7 +48,7 @@ public class StepProgressTests
     }
 
     [Fact]
-    public void SecondSolve_WeighsStepsByLastDuration()
+    public void SecondSolve_WeighsStepsHalfByLastDuration()
     {
         var p = new StepProgress();
         p.Begin(new[] { A, B });
@@ -59,9 +59,28 @@ public class StepProgressTests
         p.Begin(new[] { A, B });
         p.Step(A, "a", false, 2000);
         var atB = p.Step(B, "b", false, 2900)!.Value;
-        Assert.Equal(0.9, atB.Fraction, 6);
+        // A took 90% of the time: half of 0.9 plus half of an equal 0.5.
+        Assert.Equal(0.7, atB.Fraction, 6);
         Assert.Equal(1, atB.NextFraction, 6);
         Assert.Equal(100, atB.StepMs);
+    }
+
+    [Fact]
+    public void StaleTimings_StillMoveTheBarEveryStep()
+    {
+        var p = new StepProgress();
+        p.Begin(new[] { A, B, C });
+        p.Step(A, "a", false, 0);
+        p.Step(B, "b", false, 1);
+        p.Step(C, "c", false, 2);
+        p.End(1000);
+
+        // A and B were near-instant last time; now they are slow. Each still moves the bar by at
+        // least half an equal share.
+        p.Begin(new[] { A, B, C });
+        p.Step(A, "a", false, 0);
+        var atB = p.Step(B, "b", false, 2000)!.Value;
+        Assert.True(atB.Fraction >= 0.5 / 3, $"fraction {atB.Fraction}");
     }
 
     [Fact]

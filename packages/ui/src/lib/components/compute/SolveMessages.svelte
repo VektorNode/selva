@@ -13,7 +13,7 @@
 	// anything, so it appears on its own after the solve and fades.
 
 	import { untrack } from 'svelte';
-	import { CircleAlert, TriangleAlert, Info, LoaderCircle, Square } from '@lucide/svelte';
+	import { CircleAlert, TriangleAlert, Info, LoaderCircle } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import type { LiveSolveState, SolvePhase } from '@selvajs/solve/client';
 	import { Button } from '$lib/components/primitives/button';
@@ -132,12 +132,6 @@
 				: sessionPhase
 	);
 
-	// While solving, the live channel is all there is. Once the result lands it is authoritative
-	// — it carries remarks too — so the live list is dropped entirely and nothing is shown twice.
-	const rows = $derived<SolveDiagnostic[]>(
-		phase === 'live' ? [...live.diagnostics] : phase === 'idle' ? authoredRemarks : authoredGating
-	);
-
 	// Remarks gate nothing, so after the solve they show briefly and fade.
 	//
 	// Keyed on the diagnostics array's identity, which every report renews, rather than on a
@@ -159,22 +153,77 @@
 	});
 
 	// A solve that finishes quickly never shows the live panel: flashing it for 50 ms reads as a
-	// glitch, not as progress.
+	// glitch, not as progress. Once shown, it stays long enough to read and ends on a full bar
+	// ("finishing"), so a solve just past the reveal does not blink the panel away mid-bar. A
+	// result that needs an answer (review, blocked) replaces it at once instead.
 	const LIVE_REVEAL_MS = 300;
+	const LIVE_MIN_VISIBLE_MS = 400;
+	const FINISH_MS = 200;
 	let revealed = $state(false);
+	let finishing = $state(false);
+	let revealedAt = 0;
 	$effect(() => {
-		if (phase !== 'live') {
+		if (phase === 'live') {
+			finishing = false;
+			const timer = setTimeout(() => {
+				revealed = true;
+				revealedAt = performance.now();
+			}, LIVE_REVEAL_MS);
+			return () => clearTimeout(timer);
+		}
+		if (!untrack(() => revealed) || phase !== 'idle') {
 			revealed = false;
+			finishing = false;
 			return;
 		}
-		const timer = setTimeout(() => (revealed = true), LIVE_REVEAL_MS);
+		finishing = true;
+		const hold = Math.max(FINISH_MS, LIVE_MIN_VISIBLE_MS - (performance.now() - revealedAt));
+		const timer = setTimeout(() => {
+			revealed = false;
+			finishing = false;
+		}, hold);
+		return () => clearTimeout(timer);
+	});
+
+	// What the panel is showing, which lags the session while a finished solve's panel winds down.
+	const view = $derived<Phase>(finishing ? 'live' : phase);
+
+	// While solving, the live channel is all there is. Once the result lands it is authoritative
+	// — it carries remarks too — so the live list is dropped entirely and nothing is shown twice.
+	const rows = $derived<SolveDiagnostic[]>(
+		view === 'live' ? [...live.diagnostics] : view === 'idle' ? authoredRemarks : authoredGating
+	);
+
+	// Steps a few milliseconds long would swap the headline faster than it can be read. Each one
+	// stays up for at least this long; steps that end sooner are skipped in the label but still
+	// count in the bar. The label and its step count move together so they never disagree.
+	const HEADLINE_MIN_MS = 200;
+	let headline = $state.raw<(typeof progress)[number] | undefined>(undefined);
+	let headlineAt = 0;
+	$effect(() => {
+		const next = progress[0];
+		const shown = untrack(() => headline);
+		if (next?.label === shown?.label && next?.done === shown?.done) {
+			headline = next;
+			return;
+		}
+		const show = () => {
+			headline = next;
+			headlineAt = performance.now();
+		};
+		const wait = HEADLINE_MIN_MS - (performance.now() - headlineAt);
+		if (!shown || wait <= 0) {
+			show();
+			return;
+		}
+		const timer = setTimeout(show, wait);
 		return () => clearTimeout(timer);
 	});
 
 	const visible = $derived(
-		phase === 'review' || phase === 'blocked'
+		view === 'review' || view === 'blocked'
 			? true
-			: phase === 'live'
+			: view === 'live'
 				? revealed && (rows.length > 0 || progress.length > 0)
 				: rows.length > 0 && lingering
 	);
@@ -196,18 +245,18 @@
 
 {#if visible}
 	<div
-		class="bottom-4 p-3 shadow-lg fixed left-1/2 z-50 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border bg-background {phase ===
+		class="bottom-4 p-3 shadow-lg fixed left-1/2 z-50 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border bg-background {view ===
 		'blocked'
 			? 'border-destructive/50'
 			: ''}"
-		role={phase === 'live' || phase === 'idle' ? 'status' : 'alert'}
+		role={view === 'live' || view === 'idle' ? 'status' : 'alert'}
 		data-testid="solve-messages"
-		data-phase={phase}
+		data-view={view}
 	>
-		{#if phase === 'live'}
-			{@const head = progress[0]}
-			<div class="gap-3 flex items-center">
-				<div class="min-w-0 flex-1">
+		{#if view === 'live'}
+			{@const head = headline ?? progress[0]}
+			<div>
+				<div>
 					<div class="gap-2 flex items-center">
 						<LoaderCircle class="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
 						<span class="min-w-0 text-sm flex-1 truncate">{head?.label ?? labels.solving}</span>
@@ -216,6 +265,15 @@
 								{head.done} / {head.total}
 							</span>
 						{/if}
+						<Button
+							variant="secondary"
+							size="sm"
+							class="-my-1 h-7 px-3 text-xs shrink-0"
+							disabled={finishing}
+							onclick={onabort}
+						>
+							{labels.abort}
+						</Button>
 					</div>
 					{#each progress as p, i (p.source ?? '')}
 						<div class="mt-2" data-testid="solve-progress">
@@ -237,7 +295,9 @@
 								aria-valuenow={p.fraction !== undefined ? Math.round(p.fraction * 100) : undefined}
 							>
 								{#if p.fraction !== undefined}
-									{@const bar = bars[p.source ?? ''] ?? { width: p.fraction, ms: 150 }}
+									{@const bar = finishing
+										? { width: 1, ms: FINISH_MS }
+										: (bars[p.source ?? ''] ?? { width: p.fraction, ms: 150 })}
 									<div
 										class="h-full rounded-full bg-primary transition-[width] ease-linear"
 										style="width: {bar.width * 100}%; transition-duration: {bar.ms}ms"
@@ -249,15 +309,11 @@
 						</div>
 					{/each}
 				</div>
-				<Button variant="outline" size="sm" class="shrink-0" onclick={onabort}>
-					<Square class="h-3 w-3 fill-current" />
-					{labels.abort}
-				</Button>
 			</div>
-		{:else if phase === 'review' || phase === 'blocked'}
+		{:else if view === 'review' || view === 'blocked'}
 			<div class="mb-2">
 				<div class="gap-2 text-sm font-medium flex items-center">
-					{#if phase === 'blocked'}
+					{#if view === 'blocked'}
 						<CircleAlert class="h-4 w-4 shrink-0 text-destructive" />
 						{labels.blockedTitle}
 					{:else}
@@ -266,14 +322,14 @@
 					{/if}
 				</div>
 				<p class="text-xs text-muted-foreground">
-					{phase === 'blocked' ? labels.blockedDescription : labels.messagesDescription}
+					{view === 'blocked' ? labels.blockedDescription : labels.messagesDescription}
 				</p>
 			</div>
 		{/if}
 
 		{#if rows.length > 0}
 			<ul
-				class="max-h-40 space-y-2 text-sm overflow-y-auto {phase === 'live'
+				class="max-h-40 space-y-2 text-sm overflow-y-auto {view === 'live'
 					? 'mt-3 pt-3 border-t'
 					: ''}"
 			>
@@ -297,9 +353,9 @@
 			</ul>
 		{/if}
 
-		{#if phase === 'review' || phase === 'blocked'}
+		{#if view === 'review' || view === 'blocked'}
 			<div class="mt-3 gap-2 flex justify-end">
-				{#if phase === 'blocked'}
+				{#if view === 'blocked'}
 					<Button variant="outline" size="sm" onclick={dismiss}>{labels.dismiss}</Button>
 				{:else}
 					<Button variant="outline" size="sm" onclick={ondiscard}>{labels.discard}</Button>

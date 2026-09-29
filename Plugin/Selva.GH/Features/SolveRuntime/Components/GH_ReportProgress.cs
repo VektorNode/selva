@@ -31,6 +31,8 @@ public class GH_ReportProgress : GH_Component
 
     public override Guid ComponentGuid => new Guid("C8B23E4E-8093-406C-B859-3EBA38A2BCD6");
 
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
+
     protected override Bitmap Icon => null;
 
     // It passes geometry through, so by default Grasshopper would preview it a second time, and

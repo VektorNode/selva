@@ -14,8 +14,11 @@ namespace Selva.GH.Features.SolveRuntime.Services;
 ///     reporter that fires closes the step before it, and the fraction is the finished share. Any
 ///     order gives the same bar, and it only moves forward.
 ///
-///     Each step is weighted by how long it took last time (from its report to the next report or
-///     the solution's end), so after one solve the bar tracks time rather than step count.
+///     Each step's weight is half its share of last solution's time (from its report to the next
+///     report or the solution's end) and half an equal share. Time alone is fragile: timings go
+///     stale the moment an input changes how long a step takes (a delay from 0 to 2 s), and a step
+///     measured at 1 ms would then hold the bar still for its whole real run. The equal half
+///     guarantees every step visibly moves it.
 /// </remarks>
 public sealed class StepProgress
 {
@@ -27,6 +30,8 @@ public sealed class StepProgress
     // could move it backwards.
     private readonly Dictionary<Guid, double> _weights = new Dictionary<Guid, double>();
     private double _fallbackWeight = 1;
+
+    private const double TimeShare = 0.5;
 
     private Guid? _current;
     private long _currentStartMs;
@@ -74,14 +79,27 @@ public sealed class StepProgress
         _weights.Clear();
         foreach (var id in expected) _expected.Add(id);
 
-        // A step never timed weighs the mean of those that were, so one new reporter neither
-        // dominates the bar nor vanishes from it. Before any timing, every step weighs 1.
+        if (_expected.Count == 0)
+        {
+            _fallbackWeight = 1;
+            return;
+        }
+
+        // A step never timed takes the mean of those that were, so one new reporter neither
+        // dominates the bar nor vanishes from it. Before any timing, every step is equal.
         var known = _expected.Where(_learnedMs.ContainsKey).Select(id => _learnedMs[id]).ToList();
-        _fallbackWeight = known.Count > 0 ? Math.Max(1, known.Average()) : 1;
+        var unknownMs = known.Count > 0 ? Math.Max(1, known.Average()) : 1;
+        var timeMs = _expected.ToDictionary(id => id,
+            id => _learnedMs.TryGetValue(id, out var ms) ? Math.Max(1, ms) : unknownMs);
+        var totalMs = timeMs.Values.Sum();
+        var equal = 1.0 / _expected.Count;
         foreach (var id in _expected)
         {
-            _weights[id] = _learnedMs.TryGetValue(id, out var ms) ? Math.Max(1, ms) : _fallbackWeight;
+            _weights[id] = TimeShare * timeMs[id] / totalMs + (1 - TimeShare) * equal;
         }
+
+        // A reporter that turns up mid-solution counts as an average step.
+        _fallbackWeight = equal;
     }
 
     /// <summary>
