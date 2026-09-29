@@ -90,6 +90,8 @@
 		         Link="Linked\SolveDiagnostics.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\CallbackSession.cs"
 		         Link="Linked\CallbackSession.cs"/>
+		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\StepProgress.cs"
+		         Link="Linked\StepProgress.cs"/>
 		<Compile Include="..\Selva.GH\Features\Drawing\Goos\StyleJson.cs"
 		         Link="Linked\StyleJson.cs"/>
 		<!-- The tessellator's flatness math, split out of CurveTessellator precisely so it

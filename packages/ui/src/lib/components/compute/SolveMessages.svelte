@@ -114,11 +114,24 @@
 		return () => clearTimeout(timer);
 	});
 
+	// A solve that finishes quickly never shows the live panel: flashing it for 50 ms reads as a
+	// glitch, not as progress.
+	const LIVE_REVEAL_MS = 300;
+	let revealed = $state(false);
+	$effect(() => {
+		if (phase !== 'live') {
+			revealed = false;
+			return;
+		}
+		const timer = setTimeout(() => (revealed = true), LIVE_REVEAL_MS);
+		return () => clearTimeout(timer);
+	});
+
 	const visible = $derived(
 		phase === 'review' || phase === 'blocked'
 			? true
 			: phase === 'live'
-				? rows.length > 0 || progress.length > 0
+				? revealed && (rows.length > 0 || progress.length > 0)
 				: rows.length > 0 && lingering
 	);
 

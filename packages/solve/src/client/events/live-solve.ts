@@ -67,7 +67,13 @@ export function reduceLiveSolve(state: LiveSolveState, event: SolveEvent): LiveS
 		case 'progress': {
 			const source = typeof payload.source === 'string' ? payload.source : '';
 			const progress = new Map(next.progress);
-			progress.set(source, readProgress(payload));
+			const report = readProgress(payload);
+			// A bar that jumps back reads as broken. Within one solve a source only moves forward.
+			const previous = next.progress.get(source)?.fraction;
+			if (previous !== undefined && report.fraction !== undefined && report.fraction < previous) {
+				report.fraction = previous;
+			}
+			progress.set(source, report);
 			return { ...next, progress };
 		}
 

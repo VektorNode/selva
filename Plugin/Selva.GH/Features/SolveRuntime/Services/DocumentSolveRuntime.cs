@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Expressions;
 using Newtonsoft.Json;
+using Selva.GH.Features.SolveRuntime.Components;
 using Selva.GH.Utilities.Guards;
 using Selva.Schema.Constants;
 using Selva.Schema.Models;
@@ -41,6 +44,12 @@ public sealed class DocumentSolveRuntime
 
     // The finished solution's verdict, collected once. Cleared at SolutionStart.
     private SolveDiagnostics _verdict;
+
+    private readonly StepProgress _steps = new StepProgress();
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+
+    /// <summary>The one bar Report Progress components share.</summary>
+    private const string StepsSource = "steps";
 
     internal DocumentSolveRuntime(GH_Document document)
     {
@@ -85,6 +94,15 @@ public sealed class DocumentSolveRuntime
         if (total.HasValue) payload["total"] = total.Value;
         if (label != null) payload["label"] = label;
         Emit(SolveEventKinds.Progress, payload);
+    }
+
+    /// <summary>Called by a Report Progress component when it runs.</summary>
+    /// <param name="skipped">It got no data, so the step it describes will not run either.</param>
+    public void ReportStep(Guid reporterId, string message, bool skipped)
+    {
+        var snapshot = _steps.Step(reporterId, message, skipped, _clock.ElapsedMilliseconds);
+        if (snapshot is not StepProgress.Snapshot s) return;
+        EmitProgress(StepsSource, s.Fraction, s.Done, s.Total, s.Label);
     }
 
     /// <summary>
@@ -143,6 +161,25 @@ public sealed class DocumentSolveRuntime
         Interlocked.Exchange(ref _localSeq, 0);
         _verdict = null;
 
+        // A step re-runs whenever any of its inputs changed, not only the one its reporter sits on
+        // (a delay slider feeding the step directly). Re-run that reporter too, or the step runs
+        // unnamed and missing from the bar. A reporter is a pass-through, so this costs nothing.
+        var reporters = _document.Objects.OfType<GH_ReportProgress>().ToList();
+        foreach (var reporter in reporters)
+        {
+            if (reporter.Phase == GH_SolutionPhase.Blank) continue;
+            var stepExpired = reporter.Params.Output
+                .SelectMany(p => p.Recipients)
+                .Any(r => r.Attributes?.GetTopLevel?.DocObject is IGH_ActiveObject step
+                          && step.Phase == GH_SolutionPhase.Blank);
+            if (stepExpired) reporter.ExpireSolution(false);
+        }
+
+        // Expired now means it will run this solution; the rest keep last solution's data.
+        _steps.Begin(reporters
+            .Where(r => r.Phase == GH_SolutionPhase.Blank)
+            .Select(r => r.InstanceGuid));
+
         // On Compute the Selva server emits start and end itself: it knows about the solve
         // before Grasshopper does (queueing) and after (a failed request).
         if (SolveRuntimes.LocalTransport != null)
@@ -153,6 +190,8 @@ public sealed class DocumentSolveRuntime
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
+        _steps.End(_clock.ElapsedMilliseconds, learn: !_document.AbortRequested);
+
         if (SolveRuntimes.LocalTransport != null)
         {
             Emit(SolveEventKinds.SolveEnded, new Dictionary<string, object> { ["kind"] = Verdict().EndedKind });

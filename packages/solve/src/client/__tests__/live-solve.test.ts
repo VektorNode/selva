@@ -43,6 +43,14 @@ describe('reduceLiveSolve', () => {
 		});
 	});
 
+	it('never moves a bar backwards within a solve', () => {
+		const state = fold([
+			ev('progress', { source: 'steps', fraction: 0.6, label: 'a' }),
+			ev('progress', { source: 'steps', fraction: 0.4, label: 'b' })
+		]);
+		expect(state.progress.get('steps')).toEqual({ source: 'steps', fraction: 0.6, label: 'b' });
+	});
+
 	it('resets on a new solve id and passes unknown kinds through', () => {
 		seq = 0;
 		const first = fold([
