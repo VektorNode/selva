@@ -165,6 +165,6 @@ public class CallbackSessionTests
         Assert.True(diagnostics.Blocked);
         var message = Assert.Single(diagnostics.Messages);
         Assert.Equal("error", message.Level);
-        Assert.True(message.IsGate);
+        Assert.True(message.IsGate == true);
     }
 }

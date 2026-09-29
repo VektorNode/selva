@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Grasshopper.Kernel;
+using Selva.Schema.Models;
 
 namespace Selva.GH.Features.SolveRuntime.Services;
 

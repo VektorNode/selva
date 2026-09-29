@@ -24,11 +24,42 @@ function stripCommentKeys(value) {
 	return out;
 }
 
+/**
+ * Replaces each `{ "$ref": "<file>.json#/definitions/X" }` with a `tsType` naming X, so a
+ * type another schema owns is imported rather than emitted a second time. Returns the import
+ * lines to prepend, one per referenced file.
+ */
+function importCrossFileRefs(schema, generatedModuleFor) {
+	const byFile = new Map();
+	const walk = (node) => {
+		if (node === null || typeof node !== 'object') return;
+		if (Array.isArray(node)) return node.forEach(walk);
+		const ref = node.$ref;
+		const match =
+			typeof ref === 'string' ? /^([\w-]+\.json)#\/definitions\/(\w+)$/.exec(ref) : null;
+		if (match) {
+			const [, file, name] = match;
+			if (!byFile.has(file)) byFile.set(file, new Set());
+			byFile.get(file).add(name);
+			delete node.$ref;
+			node.tsType = name;
+			return;
+		}
+		Object.values(node).forEach(walk);
+	};
+	walk(schema);
+	return [...byFile].map(
+		([file, names]) =>
+			`import type { ${[...names].sort().join(', ')} } from './${generatedModuleFor[file]}';`
+	);
+}
+
 async function generateSchema(schemaFileName, outputFileName, rootTypeName, options = {}) {
 	const schemaPath = path.join(packageRoot, schemaFileName);
 	const outputPath = path.join(packageRoot, `./src/generated/${outputFileName}`);
 
 	const schema = stripCommentKeys(JSON.parse(fs.readFileSync(schemaPath, 'utf8')));
+	const imports = importCrossFileRefs(schema, { 'ui-schema.json': 'schema.js' });
 
 	// The root $ref confuses json-schema-to-typescript; the definitions carry everything.
 	delete schema.$ref;
@@ -81,6 +112,11 @@ async function generateSchema(schemaFileName, outputFileName, rootTypeName, opti
 		}
 
 		output = filtered.join('\n');
+		if (imports.length > 0) {
+			// After the banner, which is two comments: `/* eslint-disable */` and the notice.
+			const bannerEnd = output.indexOf('*/', output.indexOf('*/') + 2) + 2;
+			output = `${output.slice(0, bannerEnd)}\n\n${imports.join('\n')}${output.slice(bannerEnd)}`;
+		}
 
 		if (options.appendCode) {
 			output += options.appendCode;
@@ -235,6 +271,7 @@ export const UI_SCHEMA_VERSION = ${JSON.stringify(currentSchemaVersion)};
 	});
 
 	await generateSchema('preset-schema.json', 'preset.ts', 'ParameterPresetRoot');
+	await generateSchema('wire-schema.json', 'wire.ts', 'WireRoot');
 }
 
 main();

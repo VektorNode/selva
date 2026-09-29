@@ -9,8 +9,12 @@
 
 Live solve channel: a `SolveEvent` envelope carried over the plugin WebSocket locally and over
 SSE from the Selva server in cloud mode, fed on Compute by a callback the plugin POSTs to
-mid-solve. The callback reply carries an abort flag back into the running solve. Schema version
-2.15.0 (codegen-only, nothing to migrate).
+mid-solve. The callback reply carries an abort flag back into the running solve.
+
+`@selvajs/schemas`: message and runtime types (`SolveEvent`, the discovery models, session state)
+move from `ui-schema.json` into a new `wire-schema.json`. Type names and the package's exports are
+unchanged. The schema version stays 2.14.0: only definitions a saved UI schema can reach are
+versioned now.
 
 `@selvajs/ui`: `SolveMessages` replaces `SolveMessageDialog` — one bottom-centre panel for
 everything a solve reports: live diagnostics with Abort while solving, then Discard/Continue for

@@ -37,19 +37,50 @@ function canonicalise(value, mode) {
 	return out;
 }
 
+/** Names of the definitions `UISchema` reaches through `$ref`, itself included. */
+function reachableFromUISchema(definitions) {
+	const seen = new Set(['UISchema']);
+	const walk = (node) => {
+		if (node === null || typeof node !== 'object') return;
+		if (Array.isArray(node)) return node.forEach(walk);
+		for (const [key, child] of Object.entries(node)) {
+			if (key === '$ref' && typeof child === 'string' && child.startsWith('#/definitions/')) {
+				const name = child.slice('#/definitions/'.length);
+				if (!seen.has(name)) {
+					seen.add(name);
+					walk(definitions[name]);
+				}
+			} else {
+				walk(child);
+			}
+		}
+	};
+	walk(definitions.UISchema);
+	return seen;
+}
+
 /**
- * Deterministic string form of a schema's definitions with doc-only content
- * removed — `//_`-prefixed section comments, `description` keywords (pure
- * documentation; the Guid mapping reads `format`, never the description), and
- * the schemaVersion default (the field being bumped). Two schemas canonicalise
- * equal iff they describe the same format.
+ * Deterministic string form of the persisted format: the definitions `UISchema`
+ * reaches, with doc-only content removed — `//_`-prefixed section comments,
+ * `description` keywords (pure documentation; the Guid mapping reads `format`,
+ * never the description), and the schemaVersion default (the field being
+ * bumped). Two schemas canonicalise equal iff a saved schema reads the same
+ * under both.
+ *
+ * Unreachable definitions don't count: `schemaVersion` versions what is saved
+ * into a .gh, and nothing saved can contain a type `UISchema` never reaches.
  *
  * The naive `JSON.stringify(defs, Object.keys(defs).sort())` is NOT a valid
  * implementation: an array replacer filters keys at every nesting level, so
  * every definition serialises as `{}` and property-level edits go undetected.
  */
 export function canonicaliseDefinitions(schema) {
-	const defs = canonicalise(schema.definitions ?? {}, 'names');
+	const all = schema.definitions ?? {};
+	const reachable = reachableFromUISchema(all);
+	const persisted = Object.fromEntries(
+		Object.entries(all).filter(([name]) => reachable.has(name))
+	);
+	const defs = canonicalise(persisted, 'names');
 	if (defs.UISchema?.properties?.schemaVersion) {
 		delete defs.UISchema.properties.schemaVersion.default;
 	}

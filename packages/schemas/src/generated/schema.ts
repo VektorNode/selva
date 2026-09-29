@@ -365,71 +365,6 @@ export interface FlatLayoutConfig {
 	gap?: number;
 	groups: GroupConfig[];
 }
-export interface DiscoveredInput {
-	/**
-	 * Grasshopper parameter instance GUID
-	 */
-	id: string;
-	name: string;
-	nickname: string;
-	description: string;
-	type: ParamType;
-	default?: unknown;
-	minimum?: number;
-	maximum?: number;
-	stepSize?: number;
-	atLeast?: number;
-	atMost?: number;
-	treeAccess?: boolean;
-	/**
-	 * Key-value pairs for dropdown/selection options
-	 */
-	options?: {
-		[k: string]: string | undefined;
-	};
-	/**
-	 * File extensions the parameter accepts (e.g. ['.png', '.svg'] for an image input, geometry formats for a file input). Used to seed the file widget's accepted-formats default.
-	 */
-	acceptedFormats?: string[];
-	/**
-	 * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
-	 */
-	groupName?: string;
-	[k: string]: unknown | undefined;
-}
-export interface DiscoveredOutput {
-	/**
-	 * Grasshopper component instance GUID
-	 */
-	id: string;
-	nickname: string;
-	description?: string;
-	/**
-	 * Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input
-	 */
-	type: 'text' | 'number' | 'file' | 'chart' | 'dynamicValueList';
-	/**
-	 * For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate.
-	 */
-	targetInputId?: string;
-	/**
-	 * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
-	 */
-	groupName?: string;
-}
-export interface DiscoveredParameters {
-	sessionId: string;
-	timestamp: string;
-	/**
-	 * List of input parameters available for UI building
-	 */
-	inputs: DiscoveredInput[];
-	/**
-	 * List of output components available for UI building
-	 */
-	outputs: DiscoveredOutput[];
-	[k: string]: unknown | undefined;
-}
 export interface SchemaInput {
 	/**
 	 * Backend-specific parameter identifier (e.g. a Grasshopper InstanceGuid)
@@ -548,51 +483,6 @@ export interface ViewerOptions1 {
 	 */
 	backgroundColor?: string;
 }
-export interface SessionState {
-	sessionId: string;
-	active: boolean;
-	lastUpdate: string;
-	mode: 'builder' | 'preview';
-	[k: string]: unknown | undefined;
-}
-export interface RuntimeValues {
-	timestamp: string;
-	values: {
-		[k: string]: unknown | undefined;
-	};
-	[k: string]: unknown | undefined;
-}
-export interface SolveEvent {
-	solveId: string;
-	/**
-	 * Per-solve, monotonic from 1. Lets a consumer drop late or duplicate delivery.
-	 */
-	seq: number;
-	/**
-	 * ISO-8601 UTC timestamp
-	 */
-	at: string;
-	/**
-	 * Event kind: solveStarted, solveEnded, diagnostic, progress, valueListUpdated, ...
-	 */
-	type: string;
-	payload?: {
-		[k: string]: unknown | undefined;
-	};
-}
-export interface ValidationIssueMessage {
-	paramId: string;
-	/**
-	 * warning = can still load, error = cannot load
-	 */
-	severity: 'warning' | 'error';
-	message: string;
-	details?: {
-		expected?: string;
-		actual?: string;
-		[k: string]: unknown | undefined;
-	};
-}
 
 // ============================================================================
 // CONSTANTS (from schema)
@@ -609,7 +499,7 @@ export const ACCEPTED_FILE_FORMATS = [
 ] as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.15.0';
+export const UI_SCHEMA_VERSION = '2.14.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

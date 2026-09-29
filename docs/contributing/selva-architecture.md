@@ -16,8 +16,9 @@ UI on top, Rhino.Compute solving on the backend. Two runtime modes share one sch
 - **Compute app** (`@selvajs/selva`): the deployed product. Standalone, multi-user, solves through
   Rhino.Compute.
 
-[packages/schemas/ui-schema.json](../../packages/schemas/ui-schema.json) is the source contract: it generates
-TypeScript for the web stack and C# for the plugin, so UI and parameter shapes cannot drift.
+[packages/schemas/ui-schema.json](../../packages/schemas/ui-schema.json) (the saved UI schema) and
+[wire-schema.json](../../packages/schemas/wire-schema.json) (messages and runtime state) are the source
+contract: they generate TypeScript for the web stack and C# for the plugin, so the shapes cannot drift.
 
 The two runtimes are **independent**. They communicate only through the shared schema format and the
 `.gh` / `.ghx` file the designer uploads.
@@ -272,9 +273,12 @@ never string-concatenated ad hoc:
 packages/schemas/ui-schema.json
         ├─→ pnpm generate:ts → packages/schemas/src/generated/schema.ts
         └─→ pnpm generate:cs → Plugin/Selva.Schema/Models/UISchema.Generated.cs
+packages/schemas/wire-schema.json
+        ├─→ pnpm generate:ts → packages/schemas/src/generated/wire.ts
+        └─→ pnpm generate:cs → Plugin/Selva.Schema/Models/Wire.Generated.cs
 ```
 
-Edit `ui-schema.json`, run `pnpm generate`. CI fails on drift.
+Edit the schema, run `pnpm generate`. CI fails on drift.
 
 ---
 

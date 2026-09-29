@@ -643,93 +643,6 @@
 			]
 		},
 
-		"//_DISCOVERY_MODELS": "--- DISCOVERY MODELS (From Grasshopper) ---",
-		"DiscoveredInput": {
-			"type": "object",
-			"description": "Input parameter discovered in Grasshopper document",
-			"properties": {
-				"id": {
-					"type": "string",
-					"format": "guid",
-					"description": "Grasshopper parameter instance GUID"
-				},
-				"name": { "type": "string" },
-				"nickname": { "type": "string" },
-				"description": { "type": "string" },
-				"type": { "$ref": "#/definitions/ParamType" },
-				"default": {},
-				"minimum": { "type": "number" },
-				"maximum": { "type": "number" },
-				"stepSize": { "type": "number" },
-				"atLeast": { "type": "integer", "default": 1 },
-				"atMost": { "type": "integer", "default": 1 },
-				"treeAccess": { "type": "boolean", "default": false },
-				"options": {
-					"type": "object",
-					"additionalProperties": { "type": "string" },
-					"description": "Key-value pairs for dropdown/selection options"
-				},
-				"acceptedFormats": {
-					"type": "array",
-					"items": { "type": "string" },
-					"description": "File extensions the parameter accepts (e.g. ['.png', '.svg'] for an image input, geometry formats for a file input). Used to seed the file widget's accepted-formats default."
-				},
-				"groupName": {
-					"type": "string",
-					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
-				}
-			},
-			"required": ["id", "name", "nickname", "description", "type"]
-		},
-		"DiscoveredOutput": {
-			"type": "object",
-			"description": "Output component discovered in Grasshopper document",
-			"properties": {
-				"id": {
-					"type": "string",
-					"format": "guid",
-					"description": "Grasshopper component instance GUID"
-				},
-				"nickname": { "type": "string" },
-				"description": { "type": "string" },
-				"type": {
-					"type": "string",
-					"enum": ["text", "number", "file", "chart", "dynamicValueList"],
-					"description": "Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input"
-				},
-				"targetInputId": {
-					"type": "string",
-					"format": "guid",
-					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
-				},
-				"groupName": {
-					"type": "string",
-					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
-				}
-			},
-			"required": ["id", "nickname", "type"],
-			"additionalProperties": false
-		},
-		"DiscoveredParameters": {
-			"type": "object",
-			"description": "Collection of input and output parameters discovered in the current Grasshopper document",
-			"properties": {
-				"sessionId": { "type": "string" },
-				"timestamp": { "type": "string", "format": "date-time" },
-				"inputs": {
-					"type": "array",
-					"items": { "$ref": "#/definitions/DiscoveredInput" },
-					"description": "List of input parameters available for UI building"
-				},
-				"outputs": {
-					"type": "array",
-					"items": { "$ref": "#/definitions/DiscoveredOutput" },
-					"description": "List of output components available for UI building"
-				}
-			},
-			"required": ["sessionId", "timestamp", "inputs", "outputs"]
-		},
-
 		"//_SCHEMA_MODELS": "--- SCHEMA MODELS (Persisted) ---",
 		"InputStructure": {
 			"type": "string",
@@ -843,7 +756,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.15.0",
+					"default": "2.14.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -878,74 +791,6 @@
 				"layout": { "$ref": "#/definitions/LayoutConfig" }
 			},
 			"required": ["id", "name", "schemaVersion", "inputs", "outputs", "layout"],
-			"additionalProperties": false
-		},
-
-		"//_STATE_AND_RUNTIME": "--- STATE & RUNTIME ---",
-
-		"SessionState": {
-			"type": "object",
-			"properties": {
-				"sessionId": { "type": "string" },
-				"active": { "type": "boolean" },
-				"lastUpdate": { "type": "string", "format": "date-time" },
-				"mode": {
-					"type": "string",
-					"enum": ["builder", "preview"]
-				}
-			},
-			"required": ["sessionId", "active", "lastUpdate", "mode"]
-		},
-		"RuntimeValues": {
-			"type": "object",
-			"properties": {
-				"timestamp": { "type": "string", "format": "date-time" },
-				"values": {
-					"type": "object",
-					"additionalProperties": {}
-				}
-			},
-			"required": ["timestamp", "values"]
-		},
-		"SolveEvent": {
-			"type": "object",
-			"description": "One live event from a running solve. The header is fixed; `payload` is shaped by `type`. `type` is an open string so a new event kind is additive on every transport (unknown kinds pass through).",
-			"properties": {
-				"solveId": { "type": "string" },
-				"seq": {
-					"type": "integer",
-					"description": "Per-solve, monotonic from 1. Lets a consumer drop late or duplicate delivery."
-				},
-				"at": { "type": "string", "description": "ISO-8601 UTC timestamp" },
-				"type": {
-					"type": "string",
-					"description": "Event kind: solveStarted, solveEnded, diagnostic, progress, valueListUpdated, ..."
-				},
-				"payload": { "type": "object", "additionalProperties": {} }
-			},
-			"required": ["solveId", "seq", "at", "type"],
-			"additionalProperties": false
-		},
-		"ValidationIssueMessage": {
-			"type": "object",
-			"description": "Validation warning or error for a parameter",
-			"properties": {
-				"paramId": { "type": "string" },
-				"severity": {
-					"type": "string",
-					"enum": ["warning", "error"],
-					"description": "warning = can still load, error = cannot load"
-				},
-				"message": { "type": "string" },
-				"details": {
-					"type": "object",
-					"properties": {
-						"expected": { "type": "string" },
-						"actual": { "type": "string" }
-					}
-				}
-			},
-			"required": ["paramId", "severity", "message"],
 			"additionalProperties": false
 		}
 	},

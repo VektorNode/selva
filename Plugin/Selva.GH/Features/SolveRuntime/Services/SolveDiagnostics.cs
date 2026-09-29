@@ -1,44 +1,7 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using Selva.Schema.Models;
 
 namespace Selva.GH.Features.SolveRuntime.Services;
-
-/// <summary>
-///     One runtime message raised by a component during the solve.
-/// </summary>
-/// <remarks>
-///     Every property carries an explicit <c>[JsonProperty]</c>: the transport's serializer has no
-///     camelCase resolver, so a typed class otherwise goes out PascalCase and the web's validator
-///     drops the fields without failing anything (the same trap <c>SyncChange</c> fell into).
-/// </remarks>
-public class SolveDiagnostic
-{
-    /// <summary>"remark", "warning", or "error" — the wire vocabulary, matching the levels the
-    /// web UI's toast handler already understands.</summary>
-    [JsonProperty("level")]
-    public string Level { get; set; }
-
-    [JsonProperty("message")] public string Message { get; set; }
-
-    /// <summary>Nickname of the component that raised it, so the UI can say where.</summary>
-    [JsonProperty("source")]
-    public string Source { get; set; }
-
-    /// <summary>True when a Selva Message component raised this. Only these gate the outputs —
-    /// see <see cref="SolveDiagnostics.Blocked" />.</summary>
-    [JsonProperty("isGate")]
-    public bool IsGate { get; set; }
-
-    /// <summary>Payload for a live <c>diagnostic</c> event, shaped like the outputs envelope's entries.</summary>
-    public Dictionary<string, object> ToEventPayload() =>
-        new Dictionary<string, object>
-        {
-            ["level"] = Level,
-            ["message"] = Message,
-            ["source"] = Source,
-            ["isGate"] = IsGate
-        };
-}
 
 /// <summary>Everything the solve reported, and whether its outputs may be trusted.</summary>
 public class SolveDiagnostics

@@ -78,7 +78,7 @@ Found by driving the showcase live (see [Testing it live](#testing-it-live)):
 
 ### One catalog of event kinds
 
-Each known kind gets a payload definition in `ui-schema.json`: `SolveStartedPayload`,
+Each known kind gets a payload definition in `wire-schema.json`: `SolveStartedPayload`,
 `SolveEndedPayload`, `DiagnosticPayload`, `ProgressPayload`. `SolveEvent.type` stays an open
 string. An unknown kind passes through every hop untouched, so an old client never breaks on a new
 plugin.
@@ -222,7 +222,7 @@ it in one module.
 
 ### `SolveOutcome`: the plugin's verdict
 
-This is a new `ui-schema.json` type, generated into C# and TS:
+This is a new `wire-schema.json` type, generated into C# and TS:
 
 ```
 SolveOutcome { diagnostics: SolveDiagnostic[]; blocked: boolean; aborted: boolean }
@@ -305,7 +305,7 @@ path can't carry them. This is the same pattern as `WireFixtureContractTests`.
 
 Progress is the first one:
 
-1. Add `ProgressPayload` to `ui-schema.json`, then run `pnpm generate`.
+1. Add `ProgressPayload` to `wire-schema.json`, then run `pnpm generate`.
 2. Add one row to each kinds table, plus the fixture: `progress → latest, key = source`.
 3. Add the C# emitter: `SolveEvents.Progress(doc, source, fraction, label)`.
 4. Add the reducer case: `progress` → `state.progress.set(source, payload)`.

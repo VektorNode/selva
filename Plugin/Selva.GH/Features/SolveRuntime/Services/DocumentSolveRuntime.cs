@@ -52,7 +52,14 @@ public sealed class DocumentSolveRuntime
         _compute.EnsureSession(ReadCallbackTarget());
     }
 
-    public void EmitDiagnostic(SolveDiagnostic diagnostic) => Emit("diagnostic", diagnostic.ToEventPayload());
+    public void EmitDiagnostic(SolveDiagnostic diagnostic) =>
+        Emit("diagnostic", new Dictionary<string, object>
+        {
+            ["level"] = diagnostic.Level,
+            ["message"] = diagnostic.Message,
+            ["source"] = diagnostic.Source,
+            ["isGate"] = diagnostic.IsGate ?? false
+        });
 
     public void Emit(string type, Dictionary<string, object> payload)
     {

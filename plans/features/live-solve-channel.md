@@ -348,8 +348,8 @@ The tracer slice follows the design above with these deviations, each deliberate
 - **Share-token viewers get no stream.** The SSE and cancel routes require a session; anonymous
   public-link solves run exactly as before, without live events. Adding share-token support is a
   route-level change (resolve the token, use `share:<linkId>` as the owner key), not a design one.
-- **Schema version bumped to 2.15.0** with a no-op migration: the codegen guard versions every
-  definition in `ui-schema.json`, and `SolveEvent` had to live there for the cross-stack rule.
+- **`SolveEvent` lives in `wire-schema.json`**, with the other message and runtime types. Only
+  `ui-schema.json` is versioned, and only for what a saved schema can reach, so it needed no bump.
 - **`SolveMessageBroadcaster` is gone and `GH_Message` no longer aborts.** Grasshopper wipes the
   aborting component's own runtime messages before `SolutionEnd` (see below), so the abort erased
   the error that marks the block and the post-solve collection overwrote the blocked envelope with

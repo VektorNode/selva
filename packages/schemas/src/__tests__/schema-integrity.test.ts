@@ -9,12 +9,16 @@ import { UI_SCHEMA_VERSION } from '../index.js';
 
 const uiSchemaUrl = new URL('../../ui-schema.json', import.meta.url);
 const presetSchemaUrl = new URL('../../preset-schema.json', import.meta.url);
+const wireSchemaUrl = new URL('../../wire-schema.json', import.meta.url);
 
 const rawUiSchema = readFileSync(uiSchemaUrl, 'utf8');
 const uiSchema = JSON.parse(rawUiSchema) as {
 	definitions: Record<string, SchemaDef>;
 };
 const presetSchema = JSON.parse(readFileSync(presetSchemaUrl, 'utf8')) as {
+	definitions: Record<string, SchemaDef>;
+};
+const wireSchema = JSON.parse(readFileSync(wireSchemaUrl, 'utf8')) as {
 	definitions: Record<string, SchemaDef>;
 };
 
@@ -105,5 +109,20 @@ describe('preset-schema.json', () => {
 			const name = ref.replace('#/definitions/', '');
 			expect(presetSchema.definitions[name], `dangling $ref: ${ref}`).toBeDefined();
 		}
+	});
+});
+
+describe('wire-schema.json', () => {
+	it('every $ref resolves to a definition, here or in ui-schema.json', () => {
+		for (const ref of collectRefs(wireSchema)) {
+			const owner = ref.startsWith('ui-schema.json#') ? uiSchema : wireSchema;
+			const name = ref.replace(/^[\w-]*\.json/, '').replace('#/definitions/', '');
+			expect(owner.definitions[name], `dangling $ref: ${ref}`).toBeDefined();
+		}
+	});
+
+	it('shares no definition name with ui-schema.json (both generate into one C# namespace)', () => {
+		const clashes = Object.keys(wireSchema.definitions).filter((n) => n in uiSchema.definitions);
+		expect(clashes).toEqual([]);
 	});
 });
