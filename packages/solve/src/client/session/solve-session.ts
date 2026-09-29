@@ -7,10 +7,11 @@
 // republishes these getters as $state. Reading a getter without subscribing gives a
 // correct value but will not re-render.
 
-import type { SolveEvent, UISchema } from '@selvajs/schemas';
-import { readExternalValue } from './external-storage.js';
-import type { SolveDiagnostic, SolveResult } from '../shared/solve-fn.js';
-import type { SolveDriver } from './drivers/driver.js';
+import type { UISchema } from '@selvajs/schemas';
+import { readExternalValue } from '../external-storage.js';
+import type { SolveDiagnostic, SolveResult } from '../../shared/solve-fn.js';
+import type { SolveDriver } from '../drivers/driver.js';
+import { EMPTY_LIVE_SOLVE, reduceLiveSolve, type LiveSolveState } from '../events/live-solve.js';
 import {
 	buildInitialValues,
 	makeInitialFlags,
@@ -19,6 +20,8 @@ import {
 	blankOutputs,
 	commitSolveResult,
 	pickInputValues,
+	solvePhase,
+	type SolvePhase,
 	type SolveSessionState,
 	type RetainedSolveResult
 } from './solve-session-core.js';
@@ -57,11 +60,18 @@ export interface SolveSession {
 	 */
 	discard(): void;
 	/**
-	 * Events the running (or most recent) solve has emitted so far, oldest first. Reset when a
-	 * solve with a new id starts, so a host renders "what this solve has said", never a tail of
-	 * the previous one. Empty when the driver has no live channel.
+	 * What the running (or most recent) solve has said so far: its diagnostics, progress per
+	 * source, and how it ended. Reset when a solve with a new id starts, so a host renders "what
+	 * this solve has said", never a tail of the previous one. Stays empty when the driver has no
+	 * live channel.
 	 */
-	readonly liveEvents: SolveEvent[];
+	readonly live: LiveSolveState;
+	/**
+	 * Where the session is, as one value instead of four flags: `solving` while a solve runs,
+	 * `review` while a result waits for `acknowledge()`, `blocked` after a refused or aborted
+	 * solve, `idle` otherwise.
+	 */
+	readonly phase: SolvePhase;
 	/**
 	 * Asks the transport to stop the solve in flight. Cooperative on both paths — Grasshopper
 	 * stops at the next component boundary — so the result is a `solveEnded` (or nothing, if it
@@ -91,6 +101,12 @@ export interface SolveSession {
 	subscribe(listener: () => void): () => void;
 	/** For driver-owned state the session only forwards: `isSolving` lives on the driver, so wire this to its `onChange`. */
 	notify(): void;
+	/**
+	 * Stops listening to the driver's live events and drops every subscriber. Call when the
+	 * session is discarded: the event source can outlive it (the cloud stream belongs to the tab),
+	 * and would otherwise keep feeding a session nobody reads.
+	 */
+	dispose(): void;
 }
 
 export interface SolveSessionArgs {
@@ -122,16 +138,12 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 	const listeners = new Set<() => void>();
 	const emit = () => listeners.forEach((l) => l());
 
-	let liveEvents: SolveEvent[] = [];
-	let liveSolveId: string | null = null;
+	let live: LiveSolveState = EMPTY_LIVE_SOLVE;
 	// A driver with no live channel never calls this; nothing else in the session depends on it.
-	args.driver.onEvent?.((event) => {
-		if (event.solveId !== liveSolveId) {
-			liveSolveId = event.solveId;
-			liveEvents = [];
-		}
-		// A new array each time so a host comparing by reference re-renders.
-		liveEvents = [...liveEvents, event];
+	const stopEvents = args.driver.onEvent?.((event) => {
+		const next = reduceLiveSolve(live, event);
+		if (next === live) return;
+		live = next;
 		emit();
 	});
 
@@ -183,8 +195,11 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			// the footer still explains why nothing changed.
 			emit();
 		},
-		get liveEvents() {
-			return liveEvents;
+		get live() {
+			return live;
+		},
+		get phase() {
+			return solvePhase(state, args.driver.isSolving);
 		},
 		abort() {
 			args.driver.cancel();
@@ -261,11 +276,13 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		report(result) {
-			// Blocked is "no result" whatever the transport sent along: outputs blanked, viewer
-			// cleared. The session decides this, not the driver, so no transport can leak one.
+			// `finalizeResult` already dropped a rejected solve's outputs; this also nulls the
+			// ones still in `values` from the previous solve, which only the session can name.
 			applySolveResult(
 				state,
-				result.blocked ? { ...result, outputs: blankOutputs(currentSchema), meshes: [] } : result
+				result.blocked || result.aborted
+					? { ...result, outputs: blankOutputs(currentSchema), meshes: [] }
+					: result
 			);
 			emit();
 		},
@@ -280,6 +297,11 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			return () => listeners.delete(listener);
 		},
 
-		notify: emit
+		notify: emit,
+
+		dispose() {
+			stopEvents?.();
+			listeners.clear();
+		}
 	};
 }

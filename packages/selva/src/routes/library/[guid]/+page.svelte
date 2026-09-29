@@ -8,6 +8,7 @@
 	import MainNav from '$lib/components/MainNav.svelte';
 	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
 	import { page } from '$app/state';
+	import { untrack } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 
 	let { data }: PageProps = $props();
@@ -30,11 +31,16 @@
 
 	// One SSE stream per tab; the solve fn names it so the server routes each solve's events here.
 	// Anonymous share-token viewers get no stream (the route needs a session) and solve as before.
-	const liveEvents = createSolveEventStream({
-		endpoint: '/api/v1/solve-events',
-		cancelEndpoint: (solveId) => `/api/v1/solve/${solveId}/cancel`
-	});
-	$effect(() => () => liveEvents.close());
+	// Built only for a signed-in viewer: the stream connects as soon as it exists, and an
+	// anonymous one would retry a 401 forever. Signing in or out is a navigation, so the initial
+	// value is the only one this page sees.
+	const liveEvents = untrack(() => isAuthed)
+		? createSolveEventStream({
+				endpoint: '/api/v1/solve-events',
+				cancelEndpoint: (solveId) => `/api/v1/solve/${solveId}/cancel`
+			})
+		: null;
+	$effect(() => () => liveEvents?.close());
 
 	const onSolve = createComputeFetchSolveFn({
 		endpoint: '/api/v1/compute',
@@ -43,7 +49,7 @@
 		outputs: () => data.schema.outputs,
 		channel: () => (data.channel === 'draft' ? 'draft' : undefined),
 		versionId: () => data.versionId,
-		streamId: () => (isAuthed ? liveEvents.streamId : null),
+		streamId: () => liveEvents?.streamId ?? null,
 		meshes: shouldShowViewer()
 			? { extract: (response, opts) => getThreeObjectsFromComputeResponse(response, opts) }
 			: undefined,
@@ -61,7 +67,7 @@
 	brandName={pageData.branding?.name}
 	homeUrl="/"
 	solveDeadlineMs={data.solveDeadlineMs}
-	events={isAuthed ? liveEvents : undefined}
+	events={liveEvents ?? undefined}
 	footerComponent={ServerFooter}
 	footerComponentProps={() => ({ label: data.serverLabel })}
 >

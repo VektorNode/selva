@@ -2322,3 +2322,126 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+  /api/v1/solve-events:
+    get:
+      summary: "The tab's live event stream (SSE). Solves that name its `streamId` report here."
+      operationId: getSolve-events
+      tags:
+        - Solve-events
+      x-internal: true
+      parameters:
+        - name: streamId
+          in: query
+          required: false
+          description: "Minted by the tab, 16-64 URL-safe characters."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          description: The request conflicts with the current state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/solve-events/{solveId}":
+    post:
+      summary: "The plugin's callback from inside a Compute solve. The reply carries `abort`."
+      operationId: postSolve-eventsBySolveId
+      tags:
+        - Solve-events
+      x-internal: true
+      parameters:
+        - name: solveId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "410":
+          description: Error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/solve/{solveId}/cancel":
+    post:
+      summary: "Ask a running solve to abort. Cooperative: it stops at the next component."
+      operationId: postSolveBySolveIdCancel
+      tags:
+        - Solve
+      x-internal: true
+      parameters:
+        - name: solveId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Success. No content.
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"

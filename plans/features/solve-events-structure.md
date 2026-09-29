@@ -5,6 +5,37 @@ as built on `felix/state-machine`. This plan covers three things. First, the def
 that branch found. Second, where the event code should live. Third, what adding an event kind
 (progress first) should cost.
 
+## Status
+
+Implemented on `felix/state-machine`, plus the fork change on
+`compute.rhino3d@feat/8x/selva-live-events`. Verified live on 2026-09-29, locally through the
+bridge and on Compute through `compute-e2e/`: blocked, warning, Notify=Log, incidental messages,
+abort (reply and 410), recovery after abort, and a value burst mid-solve. A blocked Compute solve now
+returns 527 bytes instead of the full display payload. The Selva server's bus, SSE and cancel
+routes are covered by unit tests only.
+
+A multi-second stall before the next solve, seen after the showcase's blocked solve, turned out to
+be Rhino meshing 200+ sphere Breps for Grasshopper's shaded viewport preview on the UI thread, not
+the bridge. The showcase now has every preview turned off.
+
+Where the build differs from the text below:
+
+- **Wire types live in `wire-schema.json`**, not `ui-schema.json`. Only definitions a saved
+  `UISchema` reaches are versioned now, so the 2.15.0 bump is gone.
+- **No `SolveOutcomeBuilder.cs`.** `SolveDiagnostics.ToOutcome()` and `EndedKind` do the job;
+  `DocumentSolveRuntime.Verdict()` collects once per solution and caches it, so `solveEnded`,
+  the outputs envelope and `SelvaOutcome` agree.
+- **Fixtures sit in `packages/schemas/fixtures/solve/`**, not `fixtures/wire/`: the wire folder
+  holds one fixture per WebSocket envelope and its tests enforce that.
+- **`finalizeResult` takes no schema.** It drops a rejected solve's outputs; the session still
+  nulls the previous solve's output ids in `values`, which only it can name.
+- **The library page builds its stream only for a signed-in viewer**, since an eagerly opened
+  stream would otherwise retry a 401.
+- **The showcase's slow stages report progress** by reaching `EmitProgress` through reflection,
+  and check `AbortRequested` between ticks, so an abort lands mid-stage.
+- **An aborted verdict keeps only authored messages.** Components the abort skipped each warn
+  that their inputs failed to collect data; that is noise from the abort, not the definition.
+
 ## Why
 
 Adding one event kind today touches six places. Each one matches the kind by string literal, and

@@ -4,10 +4,12 @@
 // session owns values/meshes/solve-gating; this shell owns schema/notifications and routes
 // push events to the pure core. All transport quirks live in the GrasshopperSource adapter.
 
-import type { SolveEvent, SupportedTypes } from '@selvajs/schemas';
+import type { SupportedTypes } from '@selvajs/schemas';
 import type { WsOutputsMessage } from '$lib/websocket/websocket.svelte';
 import {
 	createSolveSession,
+	EMPTY_LIVE_SOLVE,
+	type SolvePhase,
 	type SolveSession,
 	type SolveReporter,
 	type SolveDiagnostic
@@ -34,7 +36,6 @@ const EMPTY_MESHES: unknown[] = [];
 // Shared instance: a fresh [] each read would be a new identity every time, retriggering
 // every $derived that reads it.
 const EMPTY_MESSAGES: string[] = [];
-const EMPTY_EVENTS: SolveEvent[] = [];
 const EMPTY_DIAGNOSTICS: SolveDiagnostic[] = [];
 
 /**
@@ -175,6 +176,7 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		driver = null;
 		unsubscribeSession?.();
 		unsubscribeSession = null;
+		session?.dispose();
 		session = null;
 	}
 
@@ -236,10 +238,14 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		discard() {
 			session?.discard();
 		},
-		/** What the running solve has emitted so far over the live channel. */
-		get liveEvents() {
+		/** What the running solve has said so far over the live channel. */
+		get live() {
 			void sessionVersion;
-			return session?.liveEvents ?? EMPTY_EVENTS;
+			return session?.live ?? EMPTY_LIVE_SOLVE;
+		},
+		get phase(): SolvePhase {
+			void sessionVersion;
+			return session?.phase ?? 'idle';
 		},
 		/** Asks Grasshopper to abort the running solution (cooperative, next component boundary). */
 		abort() {

@@ -58,7 +58,15 @@ a solve; placement runs on Grasshopper's UI thread and an immediate read can mis
 
 **To test the bridge end to end** (solve order, live events, abort, what the browser actually
 receives), record its WebSocket from inside Rhino: "Record the bridge's WebSocket traffic" in
-`reference.csx`. The fixture for it is `fixtures/grasshopper/live_solve_showcase.ghx`. For the
+`reference.csx`. The fixture for it is `fixtures/grasshopper/live_solve_showcase.ghx`. For
+timing, drive the bridge from outside Rhino with [`bridge-drive.mjs`](bridge-drive.mjs): every
+`run_csharp` call runs on Rhino's UI thread and releases whatever was queued there, so an in-Rhino
+recorder hides stalls.
+
+**A post-solve stall is usually the viewport preview.** After a solve that leaves many Breps
+upstream (the showcase's 200+ spheres), Rhino meshes them for Grasshopper's shaded preview on the
+UI thread for 10 s or more, and every value update waits behind it. Set
+`doc.PreviewMode = GH_PreviewMode.Disabled` before blaming the bridge. For the
 Compute path, [`compute-e2e/`](compute-e2e/) fakes the Selva callback (`sink.mjs`) and posts the
 same fixture to compute.geometry (`solve.mjs`).
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 
 namespace Selva.GH.Features.SolveRuntime.Services;
@@ -53,11 +54,18 @@ public sealed class CallbackSession
     {
         if (Ended) return;
 
+        // A newer `latest` event supersedes a queued one with the same key: a component
+        // reporting progress per item would otherwise fill the queue with stale fractions.
+        var key = SolveEventKinds.CoalesceKey(type, payload);
+        if (key != null)
+        {
+            _queue.RemoveAll(e => SolveEventKinds.CoalesceKey(e.Type, e.Payload) == key);
+        }
+
         if (_queue.Count >= MaxQueued)
         {
-            // Progress-class chatter is the only thing that can fill the queue; a diagnostic is
-            // never the one dropped.
-            var victim = _queue.FindIndex(e => e.Type != "diagnostic");
+            var delivery = SolveEventKinds.DeliveryOf(type);
+            var victim = FindVictim(delivery);
             if (victim < 0) return;
             _queue.RemoveAt(victim);
         }
@@ -70,6 +78,20 @@ public sealed class CallbackSession
             Type = type,
             Payload = payload
         });
+    }
+
+    /// <summary>
+    ///     The oldest queued event that may make room for one of <paramref name="incoming" />
+    ///     class: bestEffort goes first, then latest. A critical event is never the victim, and a
+    ///     non-critical one never displaces anything of a higher class. -1 when nothing may go.
+    /// </summary>
+    private int FindVictim(string incoming)
+    {
+        var bestEffort = _queue.FindIndex(e => SolveEventKinds.DeliveryOf(e.Type) == SolveEventKinds.BestEffort);
+        if (bestEffort >= 0) return bestEffort;
+        if (incoming == SolveEventKinds.BestEffort) return -1;
+        var latest = _queue.FindIndex(e => SolveEventKinds.DeliveryOf(e.Type) == SolveEventKinds.Latest);
+        return latest;
     }
 
     /// <summary>

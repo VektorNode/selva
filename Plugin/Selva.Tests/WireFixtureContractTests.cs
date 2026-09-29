@@ -182,7 +182,9 @@ public class WireFixtureContractTests
                     new Dictionary<string, object> { [ParamB.ToString()] = 9.5 },
                     new Dictionary<string, object>(),
                     binaryBatchCount: 2,
-                    modelUnits: "Meters"))
+                    modelUnits: "Meters",
+                    displayItems: null,
+                    outcome: SolveOutcomeContractTests.SampleVerdict().ToOutcome()))
         };
     }
 

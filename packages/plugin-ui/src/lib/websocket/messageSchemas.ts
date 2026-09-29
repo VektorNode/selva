@@ -107,6 +107,13 @@ const solveDiagnosticSchema = z.object({
 	isGate: z.boolean().nullish()
 });
 
+/** The plugin's verdict on the solve (`SolveOutcome` in wire-schema.json). */
+const solveOutcomeSchema = z.object({
+	diagnostics: z.array(solveDiagnosticSchema),
+	blocked: z.boolean(),
+	aborted: z.boolean()
+});
+
 const outputsSchema = baseEnvelope.extend({
 	type: z.literal('outputs'),
 	outputs: z.record(z.string(), z.unknown()).nullish(),
@@ -116,11 +123,9 @@ const outputsSchema = baseEnvelope.extend({
 	// Non-mesh display items (curves/points) ride the envelope as JSON; shape is validated by the
 	// compute parser, so here we only assert it's an array when present.
 	displayItems: z.array(z.unknown()).nullish(),
-	// Runtime messages ride the outputs envelope rather than a channel of their own, so a solve's
+	// The verdict rides the outputs envelope rather than a channel of its own, so a solve's
 	// messages and the outputs they describe can never interleave wrongly.
-	diagnostics: z.array(solveDiagnosticSchema).nullish(),
-	/** A Message component refused this solve: the outputs are empty by intent, not by failure. */
-	blocked: z.boolean().nullish()
+	outcome: solveOutcomeSchema.nullish()
 });
 
 // outputUpdate is currently subscribed by usePreviewState but not broadcast by the

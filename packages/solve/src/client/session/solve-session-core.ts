@@ -8,8 +8,8 @@
 
 import type { UISchema } from '@selvajs/schemas';
 import { getDefaultValue } from '@selvajs/schemas';
-import { getExternalInputs, type ExternalValueRef } from './external-storage.js';
-import type { SolveDiagnostic, SolveResult } from '../shared/solve-fn.js';
+import { getExternalInputs, type ExternalValueRef } from '../external-storage.js';
+import type { SolveDiagnostic, SolveResult } from '../../shared/solve-fn.js';
 
 /**
  * The slice of a reported result the session keeps addressable, so a host can commit exactly
@@ -194,6 +194,19 @@ export function commitSolveResult(
 	state.hasPendingChanges = false;
 	state.hasNeverSolved = false;
 	return state;
+}
+
+export type SolvePhase = 'idle' | 'solving' | 'review' | 'blocked';
+
+/**
+ * One value for what a host should show. Solving wins: a new solve supersedes a held or refused
+ * result. `isSolving` is passed in because the driver owns it.
+ */
+export function solvePhase(state: SolveSessionState, isSolving: boolean): SolvePhase {
+	if (isSolving) return 'solving';
+	if (state.awaitingAck) return 'review';
+	if (state.blocked) return 'blocked';
+	return 'idle';
 }
 
 /**

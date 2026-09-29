@@ -1,9 +1,13 @@
-// The cloud half of the live channel: one SSE stream per tab, opened lazily on the first
-// subscriber, carrying every solve this tab runs. The stream id is minted here rather than by
-// the server so a solve request can name it before the stream has even connected.
+// The cloud half of the live channel: one SSE stream per tab, carrying every solve this tab
+// runs. The stream id is minted here rather than by the server so a solve request can name it
+// before the stream has even connected.
+//
+// Opened when created, not on first subscribe: the server binds a solve to the stream only if
+// the stream is already registered, and a lazily opened one was rarely connected by the time
+// the first solve ran.
 
 import type { SolveEvent } from '@selvajs/schemas';
-import type { SolveEventSource } from './drivers/driver.js';
+import type { SolveEventSource } from '../drivers/driver.js';
 
 export interface SolveEventStreamOptions {
 	/** The SSE endpoint, e.g. `/api/v1/solve-events`. `streamId` is appended as a query param. */
@@ -53,6 +57,8 @@ export function createSolveEventStream(options: SolveEventStreamOptions): SolveE
 		});
 		// EventSource reconnects on its own; nothing to do on error beyond not tearing down.
 	}
+
+	open();
 
 	return {
 		streamId,

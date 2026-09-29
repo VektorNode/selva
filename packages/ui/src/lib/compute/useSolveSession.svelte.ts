@@ -20,11 +20,16 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 	let version = $state(0);
 
 	$effect(() => {
-		// The session is created alongside this adapter and outlives no other component, so
-		// dropping the subscription is the whole cleanup.
-		return session.subscribe(() => {
+		const unsubscribe = session.subscribe(() => {
 			version += 1;
 		});
+		// The session dies with the owning component. Its event source may not (the cloud
+		// stream belongs to the tab), so the session must stop listening to it, not only we to
+		// the session.
+		return () => {
+			unsubscribe();
+			session.dispose();
+		};
 	});
 
 	/** Registers the reactive dependency, then returns the live value. */
@@ -55,8 +60,11 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		get awaitingAck() {
 			return track(() => session.awaitingAck);
 		},
-		get liveEvents() {
-			return track(() => session.liveEvents);
+		get live() {
+			return track(() => session.live);
+		},
+		get phase() {
+			return track(() => session.phase);
 		},
 		abort: () => session.abort(),
 		get meshes() {
@@ -83,6 +91,7 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		report: (result) => session.report(result),
 		reportError: (message) => session.reportError(message),
 		subscribe: (listener) => session.subscribe(listener),
-		notify: () => session.notify()
+		notify: () => session.notify(),
+		dispose: () => session.dispose()
 	};
 }

@@ -34,7 +34,8 @@ const ctrl = new AbortController();
 const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 try {
 	const res = await fetch(COMPUTE, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, signal: ctrl.signal });
-	const json = await res.json();
+	const text = await res.text();
+	const json = JSON.parse(text);
 	const vals = Object.fromEntries(
 		(json.values ?? []).map((v) => {
 			const first = Object.values(v.InnerTree ?? {})[0]?.[0];
@@ -42,7 +43,7 @@ try {
 			return [v.ParamName, data.length > 60 ? `${data.slice(0, 60)}…(${data.length})` : data];
 		})
 	);
-	console.log(JSON.stringify({ solveId: solveId.slice(0, 8), status: res.status, ms: Date.now() - t0, errors: json.errors ?? [], warnings: json.warnings ?? [], values: vals }, null, 1));
+	console.log(JSON.stringify({ solveId: solveId.slice(0, 8), status: res.status, ms: Date.now() - t0, errors: json.errors ?? [], warnings: json.warnings ?? [], selva: json.selva ?? null, bytes: text.length, values: vals }, null, 1));
 } catch (e) {
 	console.log(JSON.stringify({ solveId: solveId.slice(0, 8), ms: Date.now() - t0, clientError: String(e.name ?? e) }));
 } finally {

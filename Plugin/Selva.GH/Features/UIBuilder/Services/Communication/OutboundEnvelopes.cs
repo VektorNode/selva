@@ -107,14 +107,12 @@ public static class OutboundEnvelopes
     ///     `binaryBatchCount` tells the client how many to collect. `displayItems` carries non-mesh
     ///     items (curves, points) as JSON, since they have no binary form; null when there are none,
     ///     so a mesh-only solve stays byte-for-byte identical to before displayItems existed.
-    ///     `diagnostics` carries the solve's runtime messages and `blocked` says a Message
-    ///     component refused the result; both null/false on a clean solve, keeping the common
-    ///     case unchanged on the wire.
+    ///     `outcome` is the plugin's verdict on the solve, the same object Rhino.Compute carries
+    ///     in its `selva` block, so the browser decodes one shape on both transports.
     /// </summary>
     public static object Outputs(string sessionId, Dictionary<string, object> outputs,
         Dictionary<string, object> fileOutputs, int binaryBatchCount, string modelUnits,
-        List<DisplayItem> displayItems = null, List<SolveDiagnostic> diagnostics = null,
-        bool blocked = false) =>
+        List<DisplayItem> displayItems, SolveOutcome outcome) =>
         new
         {
             type = "outputs",
@@ -124,8 +122,7 @@ public static class OutboundEnvelopes
             binaryBatchCount,
             modelUnits,
             displayItems,
-            diagnostics,
-            blocked
+            outcome
         };
 
     /// <summary>

@@ -150,11 +150,9 @@
 </AppShell>
 
 <SolveMessages
-	events={preview.liveEvents}
-	solving={preview.isSolving}
+	live={preview.live}
+	phase={preview.phase}
 	diagnostics={preview.diagnostics}
-	blocked={preview.blocked}
-	awaitingAck={preview.awaitingAck}
 	onabort={() => preview.abort()}
 	onconfirm={() => preview.acknowledge()}
 	ondiscard={() => preview.discard()}

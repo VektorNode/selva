@@ -14,11 +14,13 @@ import type {
 	WsSolveEventMessage
 } from '$lib/websocket/websocket.svelte';
 import type { SolveEvent } from '@selvajs/schemas';
-import type { SolveDiagnostic, SolveReporter } from '@selvajs/ui';
+import { decodeOutcome, finalizeResult, type SolveReporter } from '@selvajs/ui';
 import type { PreviewSolveDriver } from './schema-source';
 import { parseDisplayItems, parseMeshBatchBlob, SCALE_FACTORS } from '@selvajs/visualization/parse';
 import type { DisplayItem } from '@selvajs/visualization/parse';
 import type * as THREE from 'three';
+
+const CLEAN_OUTCOME = { diagnostics: [], blocked: false, aborted: false };
 
 /** Strip file metadata objects — Grasshopper already has the file. */
 function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
@@ -182,25 +184,18 @@ export function createWebSocketSolveDriver(
 		// our token was superseded mid-parse, skip the report so we don't apply stale display.
 		if (myToken !== outputsToken) return;
 
-		// The plugin already sends structure, so this path only narrows the level to the union
-		// `SolveDiagnostic` declares. The two string arrays are derived for hosts that read them;
-		// the message UI reads `diagnostics`. Attribution stays a field rather than being spliced
-		// into the text, so it can be rendered as a label.
-		const diagnostics: SolveDiagnostic[] = (message.diagnostics ?? []).map((d) => ({
-			level: d.level === 'error' || d.level === 'warning' ? d.level : 'remark',
-			message: d.message,
-			...(d.source ? { source: d.source } : {}),
-			...(d.isGate ? { isGate: true } : {})
-		}));
+		// `initialData` replays outputs without a verdict: nothing to report about it.
+		const outcome = decodeOutcome(message.outcome) ?? CLEAN_OUTCOME;
 
-		getReporter().report({
-			outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
-			...(sceneObjects !== undefined ? { meshes: sceneObjects } : {}),
-			errors: diagnostics.filter((d) => d.level === 'error').map((d) => d.message),
-			warnings: diagnostics.filter((d) => d.level === 'warning').map((d) => d.message),
-			diagnostics,
-			blocked: message.blocked ?? false
-		});
+		getReporter().report(
+			finalizeResult(
+				{
+					outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
+					meshes: sceneObjects
+				},
+				outcome
+			)
+		);
 	}
 
 	// Live events ride their own frame; the session decides what to do with them.

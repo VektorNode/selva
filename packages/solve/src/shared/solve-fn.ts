@@ -1,3 +1,5 @@
+import type { SolveDiagnostic } from '@selvajs/schemas';
+
 /**
  * The solve contract — what a solve returns and what a caller supplies to run one.
  *
@@ -42,24 +44,10 @@ export const SOLVE_AUTHORED_MARKER = '[Selva:msg]';
 export const SOLVE_LOG_ONLY_MARKER = '[Selva:log]';
 
 /**
- * One message a solve raised, with what the UI needs to decide how loudly to show it.
- *
- * `errors`/`warnings` carry the same text as flat strings and stay the display list; this adds
- * the two things a string cannot: who raised it, and whether it was deliberate. Both transports
- * populate it — the WebSocket natively, the Compute path by parsing its flattened strings.
+ * One message a solve raised, with who raised it and whether it was deliberate (`isGate`).
+ * Generated from `wire-schema.json`; both transports decode into it (see `outcome.ts`).
  */
-export interface SolveDiagnostic {
-	level: 'error' | 'warning' | 'remark';
-	/** What the author wrote, with any transport decoration stripped. */
-	message: string;
-	/** Nickname of the component that raised it, when the transport reports one. */
-	source?: string;
-	/**
-	 * Raised by a Selva Message component: the author chose to say this. Only these interrupt
-	 * the user; everything else is incidental Grasshopper noise and belongs in the log.
-	 */
-	isGate?: boolean;
-}
+export type { SolveDiagnostic };
 
 export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	outputs: Record<string, unknown>;
@@ -75,6 +63,11 @@ export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	 * should show `errors` instead of treating the empty outputs as a result.
 	 */
 	blocked?: boolean;
+	/**
+	 * The solve was stopped before it finished. Always also `blocked`: what computed before
+	 * the stop is not a result. Absent from a transport that cannot tell.
+	 */
+	aborted?: boolean;
 	/**
 	 * The unparsed payload this result was built from, passed through verbatim. Opaque here for the
 	 * same reason as `TMesh`: a consumer that must persist or re-submit exactly what it showed the

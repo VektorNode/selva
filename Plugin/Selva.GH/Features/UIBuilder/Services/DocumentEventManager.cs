@@ -371,7 +371,7 @@ public class DocumentEventManager : IDisposable
             return false;
         }
 
-        var diagnostics = SolveRuntimes.For(_currentDocument).CollectVerdict();
+        var diagnostics = SolveRuntimes.For(_currentDocument).Verdict();
 
         // Blocked means no outputs at all — not the outputs that happened to compute. Collected
         // first so a refused solve does not pay for display data it will never send.

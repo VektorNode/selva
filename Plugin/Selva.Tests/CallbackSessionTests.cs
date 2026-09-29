@@ -50,19 +50,36 @@ public class CallbackSessionTests
     }
 
     [Fact]
-    public void Enqueue_Full_DropsOldestNonDiagnostic()
+    public void Enqueue_Full_DropsOldestBestEffortFirst()
     {
         var session = NewSession();
         session.Enqueue("diagnostic", null, T0);
-        for (var i = 1; i < CallbackSession.MaxQueued; i++) session.Enqueue("progress", null, T0);
+        session.Enqueue("progress", Progress("mesh"), T0);
+        for (var i = 2; i < CallbackSession.MaxQueued; i++) session.Enqueue("custom", null, T0);
 
         session.Enqueue("diagnostic", null, T0);
 
         var batch = session.TakeAll();
         Assert.Equal(CallbackSession.MaxQueued, batch.Count);
         Assert.Equal("diagnostic", batch[0].Type);
-        Assert.Equal(3, batch[1].Seq); // seq 2, the oldest progress event, was dropped
+        Assert.Equal("progress", batch[1].Type);
+        Assert.Equal(4, batch[2].Seq); // seq 3, the oldest bestEffort event, was dropped
         Assert.Equal("diagnostic", batch[batch.Count - 1].Type);
+    }
+
+    [Fact]
+    public void Enqueue_Full_ProgressDisplacesProgress_NeverADiagnostic()
+    {
+        var session = NewSession();
+        session.Enqueue("progress", Progress("a"), T0);
+        for (var i = 1; i < CallbackSession.MaxQueued; i++) session.Enqueue("diagnostic", null, T0);
+
+        session.Enqueue("progress", Progress("b"), T0);
+
+        var batch = session.TakeAll();
+        Assert.Equal(CallbackSession.MaxQueued, batch.Count);
+        Assert.Equal("b", batch[batch.Count - 1].Payload["source"]);
+        Assert.Single(batch, e => e.Type == "progress");
     }
 
     [Fact]
@@ -71,10 +88,28 @@ public class CallbackSessionTests
         var session = NewSession();
         for (var i = 0; i < CallbackSession.MaxQueued; i++) session.Enqueue("diagnostic", null, T0);
 
-        session.Enqueue("progress", null, T0);
+        session.Enqueue("progress", Progress("mesh"), T0);
+        session.Enqueue("custom", null, T0);
 
         Assert.Equal(CallbackSession.MaxQueued, session.QueuedCount);
     }
+
+    [Fact]
+    public void Enqueue_Progress_ReplacesTheQueuedOneFromTheSameSource()
+    {
+        var session = NewSession();
+        session.Enqueue("progress", Progress("mesh", 0.1), T0);
+        session.Enqueue("progress", Progress("export", 0.5), T0);
+        session.Enqueue("progress", Progress("mesh", 0.2), T0);
+
+        var batch = session.TakeAll();
+        Assert.Equal(2, batch.Count);
+        Assert.Equal("export", batch[0].Payload["source"]);
+        Assert.Equal(0.2, batch[1].Payload["fraction"]);
+    }
+
+    private static Dictionary<string, object> Progress(string source, double fraction = 0.5) =>
+        new Dictionary<string, object> { ["source"] = source, ["fraction"] = fraction };
 
     // -------------------------------------------------------------------------
     // Replies

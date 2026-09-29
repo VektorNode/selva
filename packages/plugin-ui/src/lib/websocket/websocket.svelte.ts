@@ -45,28 +45,17 @@ export interface WsOutputsMessage extends WsSessionMessage {
 	 * mesh-only solves.
 	 */
 	displayItems?: import('@selvajs/visualization/parse').DisplayItem[];
-	/** Runtime messages raised during the solve. Absent on a clean solve. */
-	diagnostics?: WsSolveDiagnostic[];
 	/**
-	 * A Message component raised an error and refused the result: `outputs` is empty by intent.
-	 * Without this the UI cannot tell a blocked solve from one that produced nothing.
+	 * The plugin's verdict on the solve: its messages, whether a Message component refused it,
+	 * whether it was aborted. The same object Rhino.Compute returns in its `selva` block. Decoded
+	 * by `decodeOutcome`, never read field by field here.
 	 */
-	blocked?: boolean;
+	outcome?: import('@selvajs/schemas').SolveOutcome | null;
 }
 
 /** One live event from a running solve, nested under `event` because the envelope's `type` is taken. */
 export interface WsSolveEventMessage extends WsSessionMessage {
 	event: import('@selvajs/schemas').SolveEvent;
-}
-
-/** One runtime message from the solve. `level` is open, matching `runtimeMessage`'s. */
-export interface WsSolveDiagnostic {
-	level: string;
-	message: string;
-	/** Nickname of the component that raised it. */
-	source?: string;
-	/** Raised by a Selva Message component — the only kind that blocks a solve. */
-	isGate?: boolean;
 }
 
 export interface WsSchemaUpdatedMessage extends WsSessionMessage {

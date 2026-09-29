@@ -45,7 +45,21 @@ public class SolveDiagnostics
     /// diagnostics with no outputs, rather than geometry the author has declared invalid.</summary>
     public bool Blocked { get; set; }
 
+    /// <summary>The solution was stopped before it finished. Always also <see cref="Blocked" />.</summary>
+    public bool Aborted { get; private set; }
+
     public bool HasAny => Messages.Count > 0;
+
+    /// <summary>The wire vocabulary of <c>solveEnded.kind</c>, shared with the Selva server.</summary>
+    public string EndedKind => Aborted ? "aborted" : Blocked ? "blocked" : "ok";
+
+    public SolveOutcome ToOutcome() =>
+        new SolveOutcome
+        {
+            Diagnostics = new List<SolveDiagnostic>(Messages),
+            Blocked = Blocked,
+            Aborted = Aborted
+        };
 
     /// <summary>
     ///     An aborted solution still reaches SolutionEnd, with whatever computed before the stop
@@ -61,5 +75,6 @@ public class SolveDiagnostics
             IsGate = true
         });
         Blocked = true;
+        Aborted = true;
     }
 }

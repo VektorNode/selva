@@ -17,8 +17,7 @@ import {
 	type GrasshopperComputeResponse
 } from '@selvajs/compute/grasshopper';
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
-import { SOLVE_BLOCKED_MARKER } from '../shared/solve-fn.js';
-import { parseComputeDiagnostics } from './compute-diagnostics.js';
+import { decodeOutcome, finalizeResult, outcomeFromComputeMessages } from '../shared/outcome.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
@@ -183,22 +182,20 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		}
 		const processor = new GrasshopperResponseProcessor(solved, false);
 
-		const rawErrors = solved.errors ?? [];
-		const rawWarnings = solved.warnings ?? [];
-		// Compute flattens every runtime message to a string, so a guard's error is only
-		// recognizable by the marker the Message component writes into its text. Substring, not
-		// prefix: the server numbers each entry ("1. Solution exception: ..."). Strip it before
-		// display — it is wire plumbing, not something the author wrote.
-		const blocked = rawErrors.some((e) => e.includes(SOLVE_BLOCKED_MARKER));
+		// The plugin's own verdict when the fork returned one; otherwise recovered from the
+		// markers in Compute's flattened strings (stock server, or a plugin that predates it).
+		const outcome =
+			decodeOutcome(solved.selva?.outcome) ??
+			outcomeFromComputeMessages(solved.errors ?? [], solved.warnings ?? []);
+		// Decided before parsing: an older fork still ships a rejected solve's outputs, and the
+		// geometry alone can be megabytes the client would only throw away.
+		const rejected = outcome.blocked || outcome.aborted;
 
-		// A blocked solve still ran to completion on Compute (Grasshopper cannot stop it), so the
-		// response carries outputs and geometry the author has declared invalid. Drop them here,
-		// unparsed: the result is "no result", the same as the local bridge sends.
 		const meshes =
-			opts.meshes && !blocked ? await opts.meshes.extract(processor.response, { debug }) : [];
+			opts.meshes && !rejected ? await opts.meshes.extract(processor.response, { debug }) : [];
 
 		const resultOutputs: Record<string, unknown> = {};
-		for (const o of blocked ? [] : outputs) {
+		for (const o of rejected ? [] : outputs) {
 			const byId = processor.getValue({ byId: o.id }, { parseValues: true });
 			resultOutputs[o.id] =
 				byId ??
@@ -231,19 +228,6 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			}
 		}
 
-		// Parsed rather than passed through: Compute appends `: component "X" (guid)` to every
-		// message, which is wire plumbing the author did not write. The structured list keeps the
-		// attribution as a field, so the UI can show it as a label instead of inside the sentence.
-		const diagnostics = parseComputeDiagnostics(rawErrors, rawWarnings);
-
-		return {
-			outputs: resultOutputs,
-			meshes,
-			errors: diagnostics.filter((d) => d.level === 'error').map((d) => d.message),
-			warnings: diagnostics.filter((d) => d.level === 'warning').map((d) => d.message),
-			diagnostics,
-			blocked,
-			source: solved
-		};
+		return finalizeResult({ outputs: resultOutputs, meshes, source: solved }, outcome);
 	};
 }

@@ -31,7 +31,14 @@ export {
 	type SolveSession,
 	type SolveSessionArgs,
 	type SolveDriver,
-	type SolveReporter
+	type SolveReporter,
+	type LiveSolveState,
+	type SolvePhase,
+	// A push driver (plugin-ui's WebSocket) decodes the plugin's verdict with these.
+	EMPTY_LIVE_SOLVE,
+	decodeOutcome,
+	finalizeResult,
+	type SolveOutcome
 } from '@selvajs/solve/client';
 
 // Pre-step producer transit storage

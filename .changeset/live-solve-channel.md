@@ -14,10 +14,24 @@ mid-solve. The callback reply carries an abort flag back into the running solve.
 `@selvajs/schemas`: message and runtime types (`SolveEvent`, the discovery models, session state)
 move from `ui-schema.json` into a new `wire-schema.json`. Type names and the package's exports are
 unchanged. The schema version stays 2.14.0: only definitions a saved UI schema can reach are
-versioned now.
+versioned now. `wire-schema.json` adds `SolveDiagnostic`, `SolveOutcome` and a payload type per event
+kind; `SOLVE_EVENT_KINDS` gives each kind its delivery class (`critical`, `latest`, `bestEffort`).
+
+The plugin now decides each solve's verdict once (`SolveOutcome`: diagnostics, blocked, aborted)
+and both transports carry it: the local `outputs` envelope as `outcome`, and Rhino.Compute as a
+`selva` block when the VektorNode fork is used. A blocked or aborted Compute solve returns no
+values. Without the block the client falls back to the message markers, as before. Locally the
+plugin also emits `solveStarted`/`solveEnded`, so both paths send the same event sequence, and
+it can report `progress`.
+
+`@selvajs/solve`: the session exposes `live` (a `LiveSolveState`: diagnostics, progress per
+source, how the solve ended) instead of `liveEvents`, a `phase` (`idle`, `solving`,
+`review`, `blocked`), and `dispose()`. `SolveResult` gains `aborted`. `decodeOutcome` and
+`finalizeResult` are the one decoder both drivers use. The cloud event stream connects as soon
+as it is created.
 
 `@selvajs/ui`: `SolveMessages` replaces `SolveMessageDialog` — one bottom-centre panel for
-everything a solve reports: live diagnostics with Abort while solving, then Discard/Continue for
+everything a solve reports: live diagnostics and progress with Abort while solving, then Discard/Continue for
 warnings, Dismiss for a blocked solve, and remarks that linger and fade.
 
 `@selvajs/solve`: a blocked solve is applied immediately as "no result" — outputs blanked, viewer

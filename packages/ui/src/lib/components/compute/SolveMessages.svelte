@@ -5,28 +5,25 @@
 	// the app. Grasshopper's own warnings are about the definition, not the result, and go to the
 	// footer log instead — interrupting for them trains people to dismiss the one that mattered.
 	//
-	// While the solve runs the panel is fed by live events and offers Abort. When it ends the
-	// reported result replaces them outright — it lists the same messages, remarks included — so
-	// nothing is ever shown twice.
+	// While the solve runs the panel is fed by live events (messages and progress) and offers
+	// Abort. When it ends the reported result replaces them outright — it lists the same messages,
+	// remarks included — so nothing is ever shown twice.
 	//
 	// Of those, only warnings and errors get buttons. A remark states something without asking
 	// anything, so it appears on its own after the solve and fades.
 
 	import { CircleAlert, TriangleAlert, Info, LoaderCircle } from '@lucide/svelte';
-	import type { SolveEvent } from '@selvajs/schemas';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
+	import type { LiveSolveState, SolvePhase } from '@selvajs/solve/client';
 	import { Button } from '$lib/components/primitives/button';
 
 	interface Props {
 		/** What the running (or most recent) solve has said over the live channel. */
-		events: SolveEvent[];
-		solving: boolean;
+		live: LiveSolveState;
+		/** The session's phase: `solving`, `review` (result held), `blocked` or `idle`. */
+		phase: SolvePhase;
 		/** The last result's messages, with level, source and `isGate`. */
 		diagnostics?: SolveDiagnostic[];
-		/** The definition refused the solve (or it was aborted): already applied as no result. */
-		blocked?: boolean;
-		/** The last result is held back until the user continues or discards it. */
-		awaitingAck?: boolean;
 		onabort: () => void;
 		onconfirm: () => void;
 		ondiscard: () => void;
@@ -58,11 +55,9 @@
 	};
 
 	let {
-		events,
-		solving,
+		live,
+		phase: sessionPhase,
 		diagnostics = [],
-		blocked = false,
-		awaitingAck = false,
 		onabort,
 		onconfirm,
 		ondiscard,
@@ -71,23 +66,7 @@
 
 	const REMARK_LINGER_MS = 6000;
 
-	function toLevel(level: string | undefined): SolveDiagnostic['level'] {
-		return level === 'error' || level === 'warning' ? level : 'remark';
-	}
-
-	const liveDiagnostics = $derived<SolveDiagnostic[]>(
-		events
-			.filter((e) => e.type === 'diagnostic' && e.payload)
-			.map((e) => {
-				const d = e.payload as Partial<SolveDiagnostic> & { level?: string };
-				return {
-					level: toLevel(d.level),
-					message: d.message ?? '',
-					...(d.source ? { source: d.source } : {}),
-					...(d.isGate ? { isGate: true as const } : {})
-				};
-			})
-	);
+	const progress = $derived([...live.progress.values()]);
 	// Grasshopper's own complaints stay in the footer log; this panel shows what the author wrote.
 	const authored = $derived(diagnostics.filter((d) => d.isGate));
 
@@ -99,21 +78,20 @@
 
 	let dismissedFor = $state.raw<SolveDiagnostic[] | null>(null);
 
+	// The session's phase, except that a blocked solve the user dismissed reads as idle here.
 	type Phase = 'live' | 'review' | 'blocked' | 'idle';
 	const phase = $derived<Phase>(
-		solving
+		sessionPhase === 'solving'
 			? 'live'
-			: awaitingAck
-				? 'review'
-				: blocked && dismissedFor !== diagnostics
-					? 'blocked'
-					: 'idle'
+			: sessionPhase === 'blocked' && dismissedFor === diagnostics
+				? 'idle'
+				: sessionPhase
 	);
 
 	// While solving, the live channel is all there is. Once the result lands it is authoritative
 	// — it carries remarks too — so the live list is dropped entirely and nothing is shown twice.
 	const rows = $derived<SolveDiagnostic[]>(
-		phase === 'live' ? liveDiagnostics : phase === 'idle' ? authoredRemarks : authoredGating
+		phase === 'live' ? [...live.diagnostics] : phase === 'idle' ? authoredRemarks : authoredGating
 	);
 
 	// Remarks gate nothing, so after the solve they show briefly and fade.
@@ -139,7 +117,9 @@
 	const visible = $derived(
 		phase === 'review' || phase === 'blocked'
 			? true
-			: rows.length > 0 && (phase === 'live' || lingering)
+			: phase === 'live'
+				? rows.length > 0 || progress.length > 0
+				: rows.length > 0 && lingering
 	);
 
 	function dismiss() {
@@ -172,6 +152,35 @@
 				<LoaderCircle class="h-3.5 w-3.5 animate-spin" />
 				{labels.solving}
 			</div>
+			{#each progress as p (p.source ?? '')}
+				<div class="mb-2" data-testid="solve-progress">
+					<div class="mb-1 gap-2 text-xs flex justify-between text-muted-foreground">
+						<span class="truncate">{p.label ?? p.source ?? ''}</span>
+						{#if p.done !== undefined && p.total !== undefined}
+							<span class="shrink-0 tabular-nums">{p.done} / {p.total}</span>
+						{:else if p.fraction !== undefined}
+							<span class="shrink-0 tabular-nums">{Math.round(p.fraction * 100)}%</span>
+						{/if}
+					</div>
+					<div
+						class="h-1.5 overflow-hidden rounded-full bg-muted"
+						role="progressbar"
+						aria-label={p.label ?? p.source ?? labels.solving}
+						aria-valuemin={0}
+						aria-valuemax={100}
+						aria-valuenow={p.fraction !== undefined ? Math.round(p.fraction * 100) : undefined}
+					>
+						{#if p.fraction !== undefined}
+							<div
+								class="h-full rounded-full bg-primary transition-[width]"
+								style="width: {p.fraction * 100}%"
+							></div>
+						{:else}
+							<div class="animate-pulse h-full w-1/3 rounded-full bg-primary/60"></div>
+						{/if}
+					</div>
+				</div>
+			{/each}
 		{:else if phase === 'review' || phase === 'blocked'}
 			<div class="mb-2">
 				<div class="gap-2 text-sm font-medium flex items-center">

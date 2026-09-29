@@ -12,7 +12,7 @@ import {
 	SOLVE_BLOCKED_MARKER,
 	SOLVE_LOG_ONLY_MARKER,
 	type SolveDiagnostic
-} from '../shared/solve-fn.js';
+} from './solve-fn.js';
 
 /**
  * Compute's per-message attribution suffix. Anchored to the end and requiring the parenthesised

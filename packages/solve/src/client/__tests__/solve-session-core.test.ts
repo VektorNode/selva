@@ -7,7 +7,7 @@ import {
 	commitSolveResult,
 	needsAcknowledgement,
 	type SolveSessionState
-} from '../solve-session-core.js';
+} from '../session/solve-session-core.js';
 import type { UISchema } from '@selvajs/schemas';
 
 // These tests pin the lifecycle state machine that used to live inline in

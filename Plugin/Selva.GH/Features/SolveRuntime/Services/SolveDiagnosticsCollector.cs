@@ -23,12 +23,15 @@ public static class SolveDiagnosticsCollector
     /// <summary>What the finished solution reported, and whether its outputs may be shown.</summary>
     public static SolveDiagnostics CollectVerdict(GH_Document document)
     {
-        var diagnostics = Collect(document);
-        if (document != null && document.AbortRequested) diagnostics.MarkAborted();
+        // An abort leaves every component it skipped complaining that its inputs failed to
+        // collect data. That is the abort, not the definition, so only authored messages stay.
+        var aborted = document != null && document.AbortRequested;
+        var diagnostics = Collect(document, authoredOnly: aborted);
+        if (aborted) diagnostics.MarkAborted();
         return diagnostics;
     }
 
-    public static SolveDiagnostics Collect(GH_Document document)
+    public static SolveDiagnostics Collect(GH_Document document, bool authoredOnly = false)
     {
         var diagnostics = new SolveDiagnostics();
         if (document == null)
@@ -47,6 +50,11 @@ public static class SolveDiagnosticsCollector
             }
 
             var isGate = docObject.GetType().Name == MessageComponentTypeName;
+            if (authoredOnly && !isGate)
+            {
+                continue;
+            }
+
             var nickname = string.IsNullOrWhiteSpace(docObject.NickName)
                 ? docObject.GetType().Name
                 : docObject.NickName;

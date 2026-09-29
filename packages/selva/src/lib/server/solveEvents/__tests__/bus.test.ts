@@ -50,7 +50,7 @@ describe('SolveEventBus', () => {
 	it('closing a solve stops delivery and unsubscribing a stream drops its writer', () => {
 		const bus = createSolveEventBus();
 		const sink = collect();
-		const unsubscribe = bus.openStream('s1', 'user:a', sink.write);
+		const unsubscribe = bus.openStream('s1', 'user:a', sink.write)!;
 		bus.openSolve('solve-1', 's1', 'user:a');
 
 		bus.closeSolve('solve-1');
@@ -74,5 +74,39 @@ describe('SolveEventBus', () => {
 
 		expect(sink.events.filter((e) => e.type === 'progress')).toHaveLength(200);
 		expect(sink.events.filter((e) => e.type === 'diagnostic')).toHaveLength(1);
+	});
+});
+
+describe('SolveEventBus ownership', () => {
+	it('refuses a stream id another owner holds, and lets the owner reopen it', () => {
+		const bus = createSolveEventBus();
+		expect(bus.openStream('s1', 'user:a', () => {})).toBeTypeOf('function');
+		expect(bus.openStream('s1', 'user:b', () => {})).toBeNull();
+		expect(bus.openStream('s1', 'user:a', () => {})).toBeTypeOf('function');
+	});
+
+	it("never writes a solve's events to a stream its owner does not hold", () => {
+		const bus = createSolveEventBus();
+		const sink = collect();
+		const close = bus.openStream('s1', 'user:a', () => {})!;
+		bus.openSolve('solve-1', 's1', 'user:a');
+		close();
+		bus.openStream('s1', 'user:b', sink.write);
+
+		bus.publish('solve-1', [{ type: 'diagnostic', at: 't' }]);
+		expect(sink.events).toEqual([]);
+	});
+
+	it('lets solveEnded through the rate cap', () => {
+		const bus = createSolveEventBus();
+		const sink = collect();
+		bus.openStream('s1', 'user:a', sink.write);
+		bus.openSolve('solve-1', 's1', 'user:a');
+		bus.publish(
+			'solve-1',
+			Array.from({ length: 250 }, () => ({ type: 'custom', at: 't' }))
+		);
+		bus.publish('solve-1', [{ type: 'solveEnded', at: 't', payload: { kind: 'ok' } }]);
+		expect(sink.events.at(-1)?.type).toBe('solveEnded');
 	});
 });

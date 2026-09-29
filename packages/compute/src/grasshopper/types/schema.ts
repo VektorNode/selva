@@ -173,6 +173,18 @@ export interface GrasshopperComputeResponse
 	errors?: string[];
 	/** Computation warnings */
 	warnings?: string[];
+	/** Set by the VektorNode fork when a Selva plugin judged the solve; see {@link SelvaResponseBlock}. */
+	selva?: SelvaResponseBlock | null;
+}
+
+/**
+ * The Selva plugin's verdict on a solve, which the VektorNode fork copies verbatim into the
+ * response. `outcome` is `SolveOutcome` from `@selvajs/schemas`, typed loosely here because
+ * this package does not depend on it. A blocked or aborted outcome comes with empty `values`.
+ * Absent from a stock server, an older plugin, or a definition without a Selva component.
+ */
+export interface SelvaResponseBlock {
+	outcome?: unknown;
 }
 
 /**

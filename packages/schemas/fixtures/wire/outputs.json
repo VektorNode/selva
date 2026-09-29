@@ -8,6 +8,34 @@
 	"binaryBatchCount": 2,
 	"modelUnits": "Meters",
 	"displayItems": null,
-	"diagnostics": null,
-	"blocked": false
+	"outcome": {
+		"diagnostics": [
+			{
+				"level": "error",
+				"message": "More than 200 spheres",
+				"source": "Message",
+				"isGate": true
+			},
+			{
+				"level": "warning",
+				"message": "Radius overlaps",
+				"source": "Message",
+				"isGate": false
+			},
+			{
+				"level": "warning",
+				"message": "Input parameter G failed to collect data",
+				"source": "Area",
+				"isGate": false
+			},
+			{
+				"level": "remark",
+				"message": "Voronoi takes a while",
+				"source": "Message",
+				"isGate": true
+			}
+		],
+		"blocked": true,
+		"aborted": false
+	}
 }

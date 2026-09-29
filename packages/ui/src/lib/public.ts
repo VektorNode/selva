@@ -56,7 +56,9 @@ export {
 	type SolveSession,
 	type SolveSessionArgs,
 	type SolveDriver,
-	type SolveReporter
+	type SolveReporter,
+	type LiveSolveState,
+	type SolvePhase
 } from '@selvajs/solve/client';
 
 // Client-slot context: host apps render their own cell for client-sourced inputs,

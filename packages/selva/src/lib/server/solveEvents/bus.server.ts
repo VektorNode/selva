@@ -1,4 +1,4 @@
-import type { SolveEvent } from '@selvajs/schemas';
+import { solveEventDelivery, type SolveEvent } from '@selvajs/schemas';
 
 /**
  * Routes live solve events to the browser stream that asked for them, and carries
@@ -12,11 +12,16 @@ import type { SolveEvent } from '@selvajs/schemas';
 
 export interface SolveEventBus {
 	/**
-	 * Registers a browser stream. `ownerKey` is the caller's identity (the same key
-	 * the rate limiter uses); a solve may only attach to a stream with the same
-	 * owner. Returns the unsubscribe.
+	 * Registers a browser stream. `ownerKey` is the caller's identity (`liveOwnerKey`); a
+	 * solve may only attach to a stream with the same owner. The same owner reopening an id
+	 * (EventSource reconnects) replaces the writer. Returns the unsubscribe, or null when another
+	 * owner holds the id.
 	 */
-	openStream(streamId: string, ownerKey: string, write: (event: SolveEvent) => void): () => void;
+	openStream(
+		streamId: string,
+		ownerKey: string,
+		write: (event: SolveEvent) => void
+	): (() => void) | null;
 	ownsStream(streamId: string, ownerKey: string): boolean;
 	/** Binds a solve to a stream. Events for `solveId` go to that stream until `closeSolve`. */
 	openSolve(solveId: string, streamId: string, ownerKey: string): void;
@@ -25,8 +30,9 @@ export interface SolveEventBus {
 	/**
 	 * Delivers events from the solve (or from the server itself). `seq` is
 	 * re-stamped here, per solve and monotonic, so server-originated and
-	 * plugin-originated events share one sequence. Returns whether an abort is
-	 * pending, which is what the callback reply carries back.
+	 * plugin-originated events share one sequence. Delivered only to a stream the
+	 * solve's owner holds. Returns whether an abort is pending, which is what the
+	 * callback reply carries back.
 	 */
 	publish(
 		solveId: string,
@@ -53,7 +59,7 @@ interface SolveEntry {
 	windowCount: number;
 }
 
-/** Past this many events per second on one solve, progress-class events drop; diagnostics never do. */
+/** Past this many events per second on one solve, only `critical` kinds get through. */
 const MAX_EVENTS_PER_SECOND = 200;
 /** A solve the server never closed (crash mid-request) is forgotten after this. */
 const STALE_SOLVE_MS = 10 * 60 * 1000;
@@ -71,6 +77,8 @@ export function createSolveEventBus(): SolveEventBus {
 
 	return {
 		openStream(streamId, ownerKey, write) {
+			const held = streams.get(streamId);
+			if (held && held.ownerKey !== ownerKey) return null;
 			streams.set(streamId, { ownerKey, write });
 			return () => {
 				if (streams.get(streamId)?.write === write) streams.delete(streamId);
@@ -105,7 +113,10 @@ export function createSolveEventBus(): SolveEventBus {
 		publish(solveId, events) {
 			const solve = solves.get(solveId);
 			if (!solve) return { abort: false };
-			const stream = streams.get(solve.streamId);
+			const candidate = streams.get(solve.streamId);
+			// The stream id is the tab's secret, but ownership is checked anyway: a stream
+			// reopened under another owner must never receive this solve's events.
+			const stream = candidate?.ownerKey === solve.ownerKey ? candidate : undefined;
 
 			const now = Date.now();
 			if (now - solve.windowStart >= 1000) {
@@ -115,7 +126,11 @@ export function createSolveEventBus(): SolveEventBus {
 
 			for (const event of events) {
 				solve.windowCount++;
-				if (solve.windowCount > MAX_EVENTS_PER_SECOND && event.type !== 'diagnostic') continue;
+				if (
+					solve.windowCount > MAX_EVENTS_PER_SECOND &&
+					solveEventDelivery(event.type) !== 'critical'
+				)
+					continue;
 				solve.seq++;
 				stream?.write({ ...event, solveId, seq: solve.seq });
 			}

@@ -280,11 +280,9 @@
 </div>
 
 <SolveMessages
-	events={session.liveEvents}
-	solving={session.isSolving}
+	live={session.live}
+	phase={session.phase}
 	diagnostics={session.diagnostics}
-	blocked={session.blocked}
-	awaitingAck={session.awaitingAck}
 	onabort={() => session.abort()}
 	onconfirm={() => session.acknowledge()}
 	ondiscard={() => session.discard()}
