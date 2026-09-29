@@ -253,6 +253,18 @@ namespace Selva.Schema.Models
 
         [JsonProperty("label")]
         public string Label { get; set; }
+
+/// <summary>
+/// 0..1: where `fraction` will be when the running step ends. With `stepMs`, lets a host fill the bar across the step instead of jumping at its end.
+/// </summary>
+        [JsonProperty("nextFraction")]
+        public double? NextFraction { get; set; }
+
+/// <summary>
+/// How long the running step took last time, in milliseconds. Absent before it has been timed.
+/// </summary>
+        [JsonProperty("stepMs")]
+        public double? StepMs { get; set; }
     }
 
     public class ValidationIssueMessage

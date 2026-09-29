@@ -67,6 +67,7 @@
 		"@selvajs/local-provider": "workspace:*",
 		"@selvajs/platform": "workspace:*",
 		"@selvajs/supabase-provider": "workspace:*",
+		"@shadcn/lint": "^0.2.0",
 		"@sveltejs/adapter-auto": "catalog:",
 		"@sveltejs/kit": "catalog:",
 		"@sveltejs/package": "^2.5.7",

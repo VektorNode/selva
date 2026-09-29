@@ -43,6 +43,18 @@ describe('reduceLiveSolve', () => {
 		});
 	});
 
+	it('keeps the running step’s end point and last duration', () => {
+		const state = fold([
+			ev('progress', { source: 'steps', fraction: 0.2, nextFraction: 1.4, stepMs: 800 })
+		]);
+		expect(state.progress.get('steps')).toEqual({
+			source: 'steps',
+			fraction: 0.2,
+			nextFraction: 1,
+			stepMs: 800
+		});
+	});
+
 	it('never moves a bar backwards within a solve', () => {
 		const state = fold([
 			ev('progress', { source: 'steps', fraction: 0.6, label: 'a' }),

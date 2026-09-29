@@ -154,6 +154,14 @@ export interface ProgressPayload {
 	done?: number;
 	total?: number;
 	label?: string;
+	/**
+	 * 0..1: where `fraction` will be when the running step ends. With `stepMs`, lets a host fill the bar across the step instead of jumping at its end.
+	 */
+	nextFraction?: number;
+	/**
+	 * How long the running step took last time, in milliseconds. Absent before it has been timed.
+	 */
+	stepMs?: number;
 }
 export interface ValidationIssueMessage {
 	paramId: string;

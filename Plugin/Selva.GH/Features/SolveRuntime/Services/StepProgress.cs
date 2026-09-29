@@ -34,18 +34,30 @@ public sealed class StepProgress
 
     public readonly struct Snapshot
     {
-        public Snapshot(double fraction, int done, int total, string label)
+        public Snapshot(double fraction, double nextFraction, double? stepMs, int step, int total,
+            string label)
         {
             Fraction = fraction;
-            Done = done;
+            NextFraction = nextFraction;
+            StepMs = stepMs;
+            Step = step;
             Total = total;
             Label = label;
         }
 
         public double Fraction { get; }
 
-        /// <summary>Finished steps, skipped ones included.</summary>
-        public int Done { get; }
+        /// <summary>Where <see cref="Fraction" /> lands when the running step ends.</summary>
+        public double NextFraction { get; }
+
+        /// <summary>The running step's time last solution; null before it has been timed.</summary>
+        public double? StepMs { get; }
+
+        /// <summary>
+        ///     1-based number of the running step, counting skipped ones, so the UI reads "2 / 4"
+        ///     while the second step runs.
+        /// </summary>
+        public int Step { get; }
 
         public int Total { get; }
 
@@ -116,6 +128,14 @@ public sealed class StepProgress
         double Weight(Guid id) => _weights.TryGetValue(id, out var w) ? w : _fallbackWeight;
         var total = _expected.Sum(Weight);
         var done = _done.Sum(Weight);
-        return new Snapshot(total > 0 ? Math.Min(1, done / total) : 0, _done.Count, _expected.Count, _label);
+        var next = _current is Guid running ? done + Weight(running) : done;
+        double? stepMs = _current is Guid timed && _learnedMs.TryGetValue(timed, out var ms) ? ms : null;
+        return new Snapshot(
+            total > 0 ? Math.Min(1, done / total) : 0,
+            total > 0 ? Math.Min(1, next / total) : 0,
+            stepMs,
+            Math.Min(_expected.Count, _done.Count + (_current.HasValue ? 1 : 0)),
+            _expected.Count,
+            _label);
     }
 }

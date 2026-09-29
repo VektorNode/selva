@@ -85,7 +85,11 @@ public sealed class DocumentSolveRuntime
     /// <param name="source">One bar per source; a newer report from the same source replaces the older.</param>
     /// <param name="fraction">0..1, or null when the total is unknown.</param>
     public void EmitProgress(string source, double? fraction, int? done = null, int? total = null,
-        string label = null)
+        string label = null) =>
+        Emit(SolveEventKinds.Progress, ProgressFields(source, fraction, done, total, label));
+
+    private static Dictionary<string, object> ProgressFields(string source, double? fraction, int? done,
+        int? total, string label)
     {
         var payload = new Dictionary<string, object>();
         if (source != null) payload["source"] = source;
@@ -93,7 +97,7 @@ public sealed class DocumentSolveRuntime
         if (done.HasValue) payload["done"] = done.Value;
         if (total.HasValue) payload["total"] = total.Value;
         if (label != null) payload["label"] = label;
-        Emit(SolveEventKinds.Progress, payload);
+        return payload;
     }
 
     /// <summary>Called by a Report Progress component when it runs.</summary>
@@ -102,7 +106,10 @@ public sealed class DocumentSolveRuntime
     {
         var snapshot = _steps.Step(reporterId, message, skipped, _clock.ElapsedMilliseconds);
         if (snapshot is not StepProgress.Snapshot s) return;
-        EmitProgress(StepsSource, s.Fraction, s.Done, s.Total, s.Label);
+        var payload = ProgressFields(StepsSource, s.Fraction, s.Step, s.Total, s.Label);
+        payload["nextFraction"] = s.NextFraction;
+        if (s.StepMs.HasValue) payload["stepMs"] = s.StepMs.Value;
+        Emit(SolveEventKinds.Progress, payload);
     }
 
     /// <summary>

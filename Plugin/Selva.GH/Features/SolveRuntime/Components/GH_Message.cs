@@ -5,7 +5,7 @@ using Grasshopper.Kernel.Parameters;
 using Selva.GH.Features.SolveRuntime.Services;
 using Selva.Schema.Models;
 
-namespace Selva.GH.Features.ComputeIO.Components;
+namespace Selva.GH.Features.SolveRuntime.Components;
 
 /// <summary>
 ///     Raises a remark, warning, or error into the solve when Condition is false.

@@ -195,7 +195,15 @@
 				},
 				"done": { "type": "integer" },
 				"total": { "type": "integer" },
-				"label": { "type": "string" }
+				"label": { "type": "string" },
+				"nextFraction": {
+					"type": "number",
+					"description": "0..1: where `fraction` will be when the running step ends. With `stepMs`, lets a host fill the bar across the step instead of jumping at its end."
+				},
+				"stepMs": {
+					"type": "number",
+					"description": "How long the running step took last time, in milliseconds. Absent before it has been timed."
+				}
 			},
 			"additionalProperties": false
 		},

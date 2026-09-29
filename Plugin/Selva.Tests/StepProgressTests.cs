@@ -22,7 +22,9 @@ public class StepProgressTests
 
         var second = p.Step(B, "b", false, 100)!.Value;
         Assert.Equal(0.5, second.Fraction);
-        Assert.Equal(1, second.Done);
+        Assert.Equal(2, second.Step);
+        Assert.Equal(1, second.NextFraction);
+        Assert.Null(second.StepMs);
         Assert.Equal(2, second.Total);
         Assert.Equal("b", second.Label);
     }
@@ -58,6 +60,8 @@ public class StepProgressTests
         p.Step(A, "a", false, 2000);
         var atB = p.Step(B, "b", false, 2900)!.Value;
         Assert.Equal(0.9, atB.Fraction, 6);
+        Assert.Equal(1, atB.NextFraction, 6);
+        Assert.Equal(100, atB.StepMs);
     }
 
     [Fact]

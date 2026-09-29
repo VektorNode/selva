@@ -87,11 +87,16 @@ function readProgress(payload: Record<string, unknown>): ProgressPayload {
 	const fraction = num(payload.fraction);
 	const done = num(payload.done);
 	const total = num(payload.total);
+	const nextFraction = num(payload.nextFraction);
+	const stepMs = num(payload.stepMs);
+	const clamp = (v: number) => Math.min(1, Math.max(0, v));
 	return {
 		...(typeof payload.source === 'string' ? { source: payload.source } : {}),
-		...(fraction !== undefined ? { fraction: Math.min(1, Math.max(0, fraction)) } : {}),
+		...(fraction !== undefined ? { fraction: clamp(fraction) } : {}),
 		...(done !== undefined ? { done } : {}),
 		...(total !== undefined ? { total } : {}),
-		...(typeof payload.label === 'string' ? { label: payload.label } : {})
+		...(typeof payload.label === 'string' ? { label: payload.label } : {}),
+		...(nextFraction !== undefined ? { nextFraction: clamp(nextFraction) } : {}),
+		...(stepMs !== undefined && stepMs > 0 ? { stepMs } : {})
 	};
 }

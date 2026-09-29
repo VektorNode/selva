@@ -26,7 +26,7 @@ Three things go wrong because of that:
 - **The Compute hook depends on canvas order.** The callback session starts from the UI Builder's
   `SolveInstance`, and Grasshopper solves in document order, not dependency order. When the
   component is late in the object list, the heartbeat and abort polling start late.
-- **Other components already need it.** `GH_Message` (ComputeIO) emits events today, and progress,
+- **Other components already need it.** `GH_Message` emits events today, and progress,
   value lists and file exports will too. Each one would reach into UI Builder internals.
 
 ## Decision

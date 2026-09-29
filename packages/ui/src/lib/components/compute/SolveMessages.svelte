@@ -12,7 +12,8 @@
 	// Of those, only warnings and errors get buttons. A remark states something without asking
 	// anything, so it appears on its own after the solve and fades.
 
-	import { CircleAlert, TriangleAlert, Info, LoaderCircle } from '@lucide/svelte';
+	import { untrack } from 'svelte';
+	import { CircleAlert, TriangleAlert, Info, LoaderCircle, Square } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import type { LiveSolveState, SolvePhase } from '@selvajs/solve/client';
 	import { Button } from '$lib/components/primitives/button';
@@ -67,6 +68,49 @@
 	const REMARK_LINGER_MS = 6000;
 
 	const progress = $derived([...live.progress.values()]);
+
+	// A report only arrives when a step starts, so a bar that just shows `fraction` stands still
+	// through the step and then jumps. When the plugin knows how long the step took last time, the
+	// bar runs linearly to where the step will end, over that time. Steps are weighted by time, so
+	// linear gives one steady speed across the solve; any easing curve visibly speeds up and
+	// crawls within each step. A slower run waits at the step's end; a faster one snaps ahead.
+	let bars = $state.raw<Record<string, { width: number; ms: number }>>({});
+	// Any live event re-runs the effect below. Only a source with a new report may re-snap;
+	// the rest keep easing where they are.
+	let seen = new Map<string, unknown>();
+	let targets: Record<string, { width: number; ms: number }> = {};
+	$effect(() => {
+		const snapped: Record<string, { width: number; ms: number }> = {};
+		const eased: Record<string, { width: number; ms: number }> = {};
+		const current = untrack(() => bars);
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- bookkeeping for this effect; reactive reads here would re-trigger it
+		const nextSeen = new Map<string, unknown>();
+		for (const p of progress) {
+			if (p.fraction === undefined) continue;
+			const key = p.source ?? '';
+			nextSeen.set(key, p);
+			if (seen.get(key) === p && current[key]) {
+				snapped[key] = current[key];
+				// This run's cleanup cancelled the frame that would have started the ease.
+				if (targets[key] && current[key] !== targets[key]) eased[key] = targets[key];
+				continue;
+			}
+			snapped[key] = { width: p.fraction, ms: 150 };
+			if (p.nextFraction !== undefined && p.stepMs !== undefined) {
+				eased[key] = { width: p.nextFraction, ms: p.stepMs };
+			}
+		}
+		seen = nextSeen;
+		targets = eased;
+		bars = snapped;
+		if (Object.keys(eased).length === 0) return;
+		// Two frames: the snapped width must be painted before the eased one is set, or the
+		// browser folds both into one style change and there is nothing to transition from.
+		let frame = requestAnimationFrame(() => {
+			frame = requestAnimationFrame(() => (bars = { ...snapped, ...eased }));
+		});
+		return () => cancelAnimationFrame(frame);
+	});
 	// Grasshopper's own complaints stay in the footer log; this panel shows what the author wrote.
 	const authored = $derived(diagnostics.filter((d) => d.isGate));
 
@@ -161,39 +205,55 @@
 		data-phase={phase}
 	>
 		{#if phase === 'live'}
-			<div class="mb-2 gap-2 text-xs flex items-center text-muted-foreground">
-				<LoaderCircle class="h-3.5 w-3.5 animate-spin" />
-				{labels.solving}
-			</div>
-			{#each progress as p (p.source ?? '')}
-				<div class="mb-2" data-testid="solve-progress">
-					<div class="mb-1 gap-2 text-xs flex justify-between text-muted-foreground">
-						<span class="truncate">{p.label ?? p.source ?? ''}</span>
-						{#if p.done !== undefined && p.total !== undefined}
-							<span class="shrink-0 tabular-nums">{p.done} / {p.total}</span>
-						{:else if p.fraction !== undefined}
-							<span class="shrink-0 tabular-nums">{Math.round(p.fraction * 100)}%</span>
+			{@const head = progress[0]}
+			<div class="gap-3 flex items-center">
+				<div class="min-w-0 flex-1">
+					<div class="gap-2 flex items-center">
+						<LoaderCircle class="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
+						<span class="min-w-0 text-sm flex-1 truncate">{head?.label ?? labels.solving}</span>
+						{#if head?.done !== undefined && head?.total !== undefined}
+							<span class="text-xs shrink-0 text-muted-foreground tabular-nums">
+								{head.done} / {head.total}
+							</span>
 						{/if}
 					</div>
-					<div
-						class="h-1.5 overflow-hidden rounded-full bg-muted"
-						role="progressbar"
-						aria-label={p.label ?? p.source ?? labels.solving}
-						aria-valuemin={0}
-						aria-valuemax={100}
-						aria-valuenow={p.fraction !== undefined ? Math.round(p.fraction * 100) : undefined}
-					>
-						{#if p.fraction !== undefined}
+					{#each progress as p, i (p.source ?? '')}
+						<div class="mt-2" data-testid="solve-progress">
+							<!-- The first bar's label is the headline above; further bars label themselves. -->
+							{#if i > 0}
+								<div class="mb-1 gap-2 text-xs flex justify-between text-muted-foreground">
+									<span class="truncate">{p.label ?? p.source ?? ''}</span>
+									{#if p.done !== undefined && p.total !== undefined}
+										<span class="shrink-0 tabular-nums">{p.done} / {p.total}</span>
+									{/if}
+								</div>
+							{/if}
 							<div
-								class="h-full rounded-full bg-primary transition-[width]"
-								style="width: {p.fraction * 100}%"
-							></div>
-						{:else}
-							<div class="animate-pulse h-full w-1/3 rounded-full bg-primary/60"></div>
-						{/if}
-					</div>
+								class="h-1 overflow-hidden rounded-full bg-muted"
+								role="progressbar"
+								aria-label={p.label ?? p.source ?? labels.solving}
+								aria-valuemin={0}
+								aria-valuemax={100}
+								aria-valuenow={p.fraction !== undefined ? Math.round(p.fraction * 100) : undefined}
+							>
+								{#if p.fraction !== undefined}
+									{@const bar = bars[p.source ?? ''] ?? { width: p.fraction, ms: 150 }}
+									<div
+										class="h-full rounded-full bg-primary transition-[width] ease-linear"
+										style="width: {bar.width * 100}%; transition-duration: {bar.ms}ms"
+									></div>
+								{:else}
+									<div class="animate-pulse h-full w-1/3 rounded-full bg-primary/60"></div>
+								{/if}
+							</div>
+						</div>
+					{/each}
 				</div>
-			{/each}
+				<Button variant="outline" size="sm" class="shrink-0" onclick={onabort}>
+					<Square class="h-3 w-3 fill-current" />
+					{labels.abort}
+				</Button>
+			</div>
 		{:else if phase === 'review' || phase === 'blocked'}
 			<div class="mb-2">
 				<div class="gap-2 text-sm font-medium flex items-center">
@@ -211,31 +271,35 @@
 			</div>
 		{/if}
 
-		<ul class="max-h-40 space-y-2 text-sm overflow-y-auto">
-			{#each rows as row, i (i)}
-				<li class="gap-2 flex">
-					{#if row.level === 'error'}
-						<CircleAlert class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-					{:else if row.level === 'warning'}
-						<TriangleAlert class="mt-0.5 h-4 w-4 text-amber-500 shrink-0" />
-					{:else}
-						<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-					{/if}
-					<div class="min-w-0 flex-1">
-						<p class="wrap-anywhere">{row.message}</p>
-						{#if row.source}
-							<p class="text-xs text-muted-foreground">{row.source}</p>
+		{#if rows.length > 0}
+			<ul
+				class="max-h-40 space-y-2 text-sm overflow-y-auto {phase === 'live'
+					? 'mt-3 pt-3 border-t'
+					: ''}"
+			>
+				{#each rows as row, i (i)}
+					<li class="gap-2 flex">
+						{#if row.level === 'error'}
+							<CircleAlert class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+						{:else if row.level === 'warning'}
+							<TriangleAlert class="mt-0.5 h-4 w-4 text-amber-500 shrink-0" />
+						{:else}
+							<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
 						{/if}
-					</div>
-				</li>
-			{/each}
-		</ul>
+						<div class="min-w-0 flex-1">
+							<p class="wrap-anywhere">{row.message}</p>
+							{#if row.source}
+								<p class="text-xs text-muted-foreground">{row.source}</p>
+							{/if}
+						</div>
+					</li>
+				{/each}
+			</ul>
+		{/if}
 
-		{#if phase !== 'idle'}
+		{#if phase === 'review' || phase === 'blocked'}
 			<div class="mt-3 gap-2 flex justify-end">
-				{#if phase === 'live'}
-					<Button variant="outline" size="sm" onclick={onabort}>{labels.abort}</Button>
-				{:else if phase === 'blocked'}
+				{#if phase === 'blocked'}
 					<Button variant="outline" size="sm" onclick={dismiss}>{labels.dismiss}</Button>
 				{:else}
 					<Button variant="outline" size="sm" onclick={ondiscard}>{labels.discard}</Button>

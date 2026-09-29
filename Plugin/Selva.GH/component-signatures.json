@@ -1492,7 +1492,7 @@
 		{
 			"guid": "B7E4C2A1-3D9F-4E58-A6C0-8F1D5B2E7A93",
 			"class": "GH_Message",
-			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_Message.cs",
+			"file": "Plugin/Selva.GH/Features/SolveRuntime/Components/GH_Message.cs",
 			"inputs": [
 				{
 					"kind": "AddBooleanParameter",
@@ -1665,6 +1665,30 @@
 			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_GetColor.cs",
 			"inputs": [],
 			"outputs": []
+		},
+		{
+			"guid": "C8B23E4E-8093-406C-B859-3EBA38A2BCD6",
+			"class": "GH_ReportProgress",
+			"file": "Plugin/Selva.GH/Features/SolveRuntime/Components/GH_ReportProgress.cs",
+			"inputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Data",
+					"access": "tree"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Message",
+					"access": "tree"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Data",
+					"access": "tree"
+				}
+			]
 		},
 		{
 			"guid": "C8E1A7F4-2D63-4B95-9E08-7A1C5F3D6B92",
