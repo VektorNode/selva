@@ -56,6 +56,16 @@ Working tools: `g1_start`, `g1_place_component` (resolves third-party Guids fine
 is ground truth and what makes a debugging walk assertable instead of eyeballed. Read back _after_
 a solve; placement runs on Grasshopper's UI thread and an immediate read can miss it.
 
+**To test the bridge end to end** (solve order, live events, abort, what the browser actually
+receives), record its WebSocket from inside Rhino: "Record the bridge's WebSocket traffic" in
+`reference.csx`. The fixture for it is `fixtures/grasshopper/live_solve_showcase.ghx`. For the
+Compute path, [`compute-e2e/`](compute-e2e/) fakes the Selva callback (`sink.mjs`) and posts the
+same fixture to compute.geometry (`solve.mjs`).
+
+**`g1_get_canvas_graph` lists no sources on a standalone param** (Panel, Get Number, Text): their
+`Inputs` is always empty. Check `IGH_Param.Sources` / `Recipients` in C# before concluding a param
+is unwired.
+
 `run_csharp` has no implicit `using System` — fully qualify or declare usings. Its
 `System.Windows.Forms` CS1701 warning is harmless. When a call won't compile, reflect over the type
 rather than guessing at method names ("Discover an API" in `reference.csx`).
@@ -114,6 +124,19 @@ back (next section), or restore from git.
 `fixture_dynamic_value_list.ghx` additionally needs 8 C# Script bodies and a locked group, which
 have no equivalent graft path — hand-edit that one.
 
+## C# Script components (Rhino 8, `b6ba1144-…`)
+
+Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Three traps:
+
+- **`SetParametersFromScript()` does not parse the `RunScript` signature.** The params stay
+  `x`, `y` → `out`, `a`. Rename them yourself (`Name`, `NickName`, `Access`); `VariableName`
+  follows `Name`.
+- **The signature is regenerated from the params' type hints**, which default to `object`. Write
+  `RunScript(List<object> geo, object delay, ...)` and convert inside; a `double delay` in the
+  source compiles as `object` and fails.
+- **Value List items are expressions.** `new GH_ValueListItem("none", "none")` yields `none`;
+  quoting the expression (`"\"none\""`) yields the quotes too.
+
 ## Authoring the embedded UI schema
 
 `GH_UIBuilderComponent.Schema` is a public property (Selva >= 0.16.1) over the `_embeddedSchema`
@@ -155,6 +178,10 @@ plugin's own `Selva.Schema.Services.Validation.SchemaValidator` runs six rule cl
 use `SchemaValidator` on a schema already grafted onto a component.
 
 Set `documentId` to the live `doc.DocumentID`, not the value copied from another fixture.
+
+To extend a live schema, serialize it off the component, edit, then **strip `null` values before
+validating**: the C# serializer writes every unset optional as `null`, the JSON Schema rejects
+them, and the `oneOf` over layout items turns each one into dozens of misleading errors.
 
 Verify by reloading, never by assuming the save worked:
 

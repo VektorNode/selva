@@ -35,7 +35,7 @@ public class GH_Message : GH_Component
 
     protected override Bitmap Icon => null;
 
-    public override GH_Exposure Exposure => GH_Exposure.primary;
+    public override GH_Exposure Exposure => GH_Exposure.hidden;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

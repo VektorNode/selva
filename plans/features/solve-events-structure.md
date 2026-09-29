@@ -58,6 +58,22 @@ construction; they are listed so each gets a regression test.
    `OnSolutionEnd` posts synchronously on the solver thread. The code is acceptable (see Delivery
    below); the comment is not.
 
+Found by driving the showcase live (see [Testing it live](#testing-it-live)):
+
+9. **Local results arrive one update late.** `ComponentStateManager` debounces a `SolutionStart`
+   that lands within 100 ms of the previous end, and the debounce also left `IsSolving` false.
+   The dynamic value list reconcile starts exactly such a solve right after each real one. An
+   update arriving during it is applied mid-solve instead of coalesced, and its scheduled solution
+   only runs when the next message arrives. `IsBusy` has to count any started solve. This bug
+   predates the live channel.
+10. **Compute can't report an aborted solve.** An aborted Compute solve returns 200 with empty
+    outputs and incidental "Input parameter … failed to collect data" warnings. Nothing marks it
+    aborted, so the client shows a strange empty result. `SolveOutcome.aborted` below closes this.
+11. **A blocked Compute solve still ships its outputs.** 210 spheres returned the full 6.8 MB
+    display payload for a result the client discards. See the fork change under `SolveOutcome`.
+12. **A queued Compute solve is silent.** Two solves sent at once serialize on the solve lock,
+    and the second gets no events at all while it waits. See Open.
+
 ## Target structure
 
 ### One catalog of event kinds
@@ -235,6 +251,11 @@ is split between `DocumentEventManager` and `SolveDiagnosticsCollector`. The fun
 With the outcome carried structurally, remarks and `aborted` reach the cloud UI, and the regex
 path stops being load-bearing.
 
+**Withhold outputs the outcome rejects.** When `SelvaOutcome` says `blocked` or `aborted`, the
+fork returns the `selva` block and an empty `values` list instead of serializing the ContextBakes
+(defect 11). The client discards them anyway. The decision stays the plugin's: the fork only reads
+the flag, it does not judge the solve.
+
 ### Client: `@selvajs/solve/shared/outcome.ts`
 
 This is the one decoder, and it is framework- and transport-free:
@@ -320,8 +341,26 @@ label?: string }`. A null `fraction` means indeterminate.
   server-side grace period, all to save one round trip that is only paid when something was
   emitted.
 
+## Testing it live
+
+Both halves run against the showcase fixture,
+[`live_solve_showcase.ghx`](../../fixtures/grasshopper/live_solve_showcase.ghx). Its **Solve
+behaviour** group adds four slow stages (abort lands between them; progress will hook in there) and
+an incidental-message switch next to the existing remark, warning, blocking and Notify=Log cases.
+
+- **Local:** record the UI Bridge's WebSocket from inside Rhino with the MCP ("Record the bridge's
+  WebSocket traffic" in the rhino-mcp skill's `reference.csx`). Send value updates and a
+  `cancelSolve` from a background task; never wait on the UI thread, which the solve needs.
+- **Compute:** [`compute-e2e/`](../../.claude/skills/rhino-mcp/compute-e2e/) next to the skill.
+  `sink.mjs` stands in for the Selva callback route and can answer `abort` or `410` on cue;
+  `solve.mjs` posts the showcase to compute.geometry with a `selvaevents` block. This covers
+  plugin → fork → callback, not the Selva server's bus, SSE or cancel route.
+
 ## Open
 
+- **Queue position for a waiting Compute solve** (defect 12). The Selva server knows its own
+  FIFO depth and can emit it on `solveStarted`. Time spent waiting on the child's solve lock is
+  invisible to both.
 - Should share-link viewers get a stream? It needs the SSE and cancel routes to resolve a share
   token. With the owner key derived from access (above), that is a route change, not a design
   one.
