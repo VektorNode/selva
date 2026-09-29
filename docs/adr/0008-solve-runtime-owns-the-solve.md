@@ -35,7 +35,7 @@ Keep one component on the canvas. Split the code under it into three layers, wit
 pointing down only:
 
 ```
-UI Builder component   schema carrier + designer. Calls SolveRuntime.For(doc) like any component.
+UI Builder component   schema carrier + designer. Calls SolveRuntimes.For(doc) like any component.
         │
 Local bridge           WS/HTTP server, value apply, sync, broadcasts. ADR 0002's split applies here.
         │ registers as a transport
@@ -47,7 +47,8 @@ Solve runtime          one per GH_Document, works on both local and Compute:
 - **The solve runtime is not a component.** It is created lazily by the first Selva component
   that solves in a document. It subscribes to that document's `SolutionStart`/`SolutionEnd`
   itself, so no author places it, wires it, or can forget it. It lives in
-  `Features/SolveRuntime/`.
+  `Features/SolveRuntime/Services/`; the bridge also creates it when it registers on a
+  document, so local events carry the first solution's id.
 - **Its decisions are Rhino-free and linked into `Selva.Tests`.** That covers the callback session
   state machine, the event queue and building `SolveOutcome`. The Grasshopper-facing shell only
   subscribes to events and calls `RequestAbortSolution`.

@@ -8,6 +8,7 @@ using Grasshopper.Kernel;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Helpers;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Utilities.Helpers;
@@ -138,6 +139,10 @@ public class DocumentEventManager : IDisposable
 
         _currentDocument = document;
 
+        // Created now rather than by the first emitter, so it sees the next SolutionStart and
+        // local events carry that solution's id from the first one on.
+        SolveRuntimes.For(document);
+
         try
         {
             Instances.DocumentServer.DocumentRemoved += OnDocumentRemoved;
@@ -216,7 +221,6 @@ public class DocumentEventManager : IDisposable
 
     private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
     {
-        SolveEventSink.BeginLocalSolve();
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
         if (_webSocketTransport.IsRunning)
@@ -367,22 +371,7 @@ public class DocumentEventManager : IDisposable
             return false;
         }
 
-        var diagnostics = SolveDiagnosticsCollector.Collect(_currentDocument);
-
-        // An aborted solution still reaches SolutionEnd, with AbortRequested set and whatever
-        // computed before the stop sitting in the ContextBakes. That partial state is not a
-        // result and must not be shown as one.
-        if (_currentDocument.AbortRequested)
-        {
-            diagnostics.Messages.Add(new SolveDiagnostic
-            {
-                Level = "error",
-                Message = "Solve aborted",
-                Source = "Selva",
-                IsGate = true
-            });
-            diagnostics.Blocked = true;
-        }
+        var diagnostics = SolveRuntimes.For(_currentDocument).CollectVerdict();
 
         // Blocked means no outputs at all — not the outputs that happened to compute. Collected
         // first so a refused solve does not pay for display data it will never send.

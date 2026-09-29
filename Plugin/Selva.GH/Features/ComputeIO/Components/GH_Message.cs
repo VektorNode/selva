@@ -2,7 +2,7 @@ using System;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
-using Selva.GH.Features.UIBuilder.Services;
+using Selva.GH.Features.SolveRuntime.Services;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 
@@ -136,7 +136,7 @@ public class GH_Message : GH_Component
         // The live channel carries the structured message while the solve is still running, on
         // both transports. The post-solve collection reports it again once the solve ends; the
         // UI shows the result's list after that, not the live one.
-        SolveEventSink.Emit(OnPingDocument(), "diagnostic", SolveEventSink.DiagnosticPayload(
+        SolveRuntimes.For(OnPingDocument())?.EmitDiagnostic(
             new SolveDiagnostic
             {
                 Level = aborts ? "error" : runtimeLevel == GH_RuntimeMessageLevel.Warning ? "warning" : "remark",
@@ -145,7 +145,7 @@ public class GH_Message : GH_Component
                 // False under Notify = Log: the message is still the author's and still listed,
                 // it just does not interrupt.
                 IsGate = !logOnly
-            }));
+            });
     }
 
     /// <summary>

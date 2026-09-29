@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using Grasshopper.Kernel;
 
-namespace Selva.GH.Features.UIBuilder.Services;
+namespace Selva.GH.Features.SolveRuntime.Services;
 
 /// <summary>
 ///     Walks the document after a solution ends and collects every component's runtime messages.
@@ -18,6 +18,14 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public static class SolveDiagnosticsCollector
 {
     private const string MessageComponentTypeName = "GH_Message";
+
+    /// <summary>What the finished solution reported, and whether its outputs may be shown.</summary>
+    public static SolveDiagnostics CollectVerdict(GH_Document document)
+    {
+        var diagnostics = Collect(document);
+        if (document != null && document.AbortRequested) diagnostics.MarkAborted();
+        return diagnostics;
+    }
 
     public static SolveDiagnostics Collect(GH_Document document)
     {

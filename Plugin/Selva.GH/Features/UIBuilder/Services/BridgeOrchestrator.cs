@@ -6,6 +6,7 @@ using Grasshopper.Kernel;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Config;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services.Communication;
@@ -101,14 +102,12 @@ public class BridgeOrchestrator : IDisposable
     // WebSocket event handlers
     // -------------------------------------------------------------------------
 
-    // Runs on the socket's dispatch thread on purpose: the solver holds the UI thread, and a
-    // marshalled cancel would wait for the solve it is meant to stop. RequestAbortSolution only
-    // sets a flag the solver polls between components, so it is safe from here.
+    // Runs on the socket's dispatch thread on purpose; see DocumentSolveRuntime.RequestAbort.
     private void HandleCancelSolve(object sender, EventArgs e)
     {
         try
         {
-            _eventManager.CurrentDocument?.RequestAbortSolution();
+            SolveRuntimes.For(_eventManager.CurrentDocument)?.RequestAbort();
         }
         catch (Exception ex)
         {

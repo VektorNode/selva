@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Selva.Schema.Models;
 using Selva.GH.Features.Display.Services;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.Slva;
 

@@ -90,23 +90,23 @@ A feature folder of its own, because no single feature owns events. Ownership is
 [ADR 0008](../../docs/adr/0008-solve-runtime-owns-the-solve.md).
 
 ```
-Features/SolveRuntime/
-  SolveEvents.cs                    typed emitters: Diagnostic(doc, d), Progress(doc, source, …)
-  SolveEventSink.cs                 routing only: local WS / Compute callback / drop
-  Delivery/SolveEventQueue.cs       Rhino-free: bounded, class-aware, coalescing
-  Delivery/CallbackSession.cs       Rhino-free state machine, below
-  Transport/LocalSolveEventSender.cs
-  Transport/ComputeCallbackSender.cs   HTTP + timer, no decisions
-  Diagnostics/SolveDiagnostics.cs, SolveDiagnosticsCollector.cs   moved from UIBuilder/Services
+Features/SolveRuntime/Services/        flat, per STRUCTURE.md's feature layout
+  SolveRuntimes.cs                  SolveRuntimes.For(doc); the process-wide local transport
+  DocumentSolveRuntime.cs           per document: solve id, Emit/EmitDiagnostic routing, abort, verdict
+  CallbackSession.cs                Rhino-free: queue + reply state machine, below
+  ComputeCallbackTransport.cs       timer, HTTP, locking; no decisions
+  SolveDiagnostics.cs               Rhino-free verdict model (MarkAborted)
+  SolveDiagnosticsCollector.cs      document walk at SolutionEnd
 ```
 
-Components call `SolveEvents.Progress(...)`, never `Emit(type, dict)`, so the kind string and
-payload shape live in one file. `SolveEventQueue` and `CallbackSession` hold every decision and
-depend on no Rhino type. They get linked into `Selva.Tests` the same way `OutputPayloadBuilder`
-is.
+Components call typed emitters on `DocumentSolveRuntime` (`EmitDiagnostic` today, `EmitProgress`
+next), never `Emit(type, dict)`, so each kind's string and payload shape live in one place.
+`CallbackSession` holds every delivery decision, depends on no Rhino type, and is linked into
+`Selva.Tests` like `OutputPayloadBuilder`. Class-aware coalescing for `progress` goes in
+`CallbackSession.Enqueue`.
 
-**`CallbackSession`.** One session per `solveId`. It remembers the last ended id, so that id never
-restarts (fixes 3 and 4).
+**`CallbackSession`.** One session per `solveId`. An ended session is final for its id, so that id
+never restarts (fixes 3).
 
 | From   | On                             | Do                                   | To     |
 | ------ | ------------------------------ | ------------------------------------ | ------ |
@@ -217,7 +217,7 @@ is hand-written twice.
 
 The plugin builds the outcome once, at `SolutionEnd`, in one Rhino-free function. Today that logic
 is split between `DocumentEventManager` and `SolveDiagnosticsCollector`. The function goes to
-`Features/SolveRuntime/Diagnostics/SolveOutcomeBuilder.cs`. After that, each environment only
+`Features/SolveRuntime/Services/SolveOutcomeBuilder.cs`. After that, each environment only
 **encodes** the outcome:
 
 - **Local:** the `outputs` envelope carries `outcome: SolveOutcome`, replacing its loose

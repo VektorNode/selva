@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace Selva.GH.Features.UIBuilder.Services;
+namespace Selva.GH.Features.SolveRuntime.Services;
 
 /// <summary>
 ///     One runtime message raised by a component during the solve.
@@ -28,6 +28,16 @@ public class SolveDiagnostic
     /// see <see cref="SolveDiagnostics.Blocked" />.</summary>
     [JsonProperty("isGate")]
     public bool IsGate { get; set; }
+
+    /// <summary>Payload for a live <c>diagnostic</c> event, shaped like the outputs envelope's entries.</summary>
+    public Dictionary<string, object> ToEventPayload() =>
+        new Dictionary<string, object>
+        {
+            ["level"] = Level,
+            ["message"] = Message,
+            ["source"] = Source,
+            ["isGate"] = IsGate
+        };
 }
 
 /// <summary>Everything the solve reported, and whether its outputs may be trusted.</summary>
@@ -73,4 +83,20 @@ public class SolveDiagnostics
     public bool Blocked { get; set; }
 
     public bool HasAny => Messages.Count > 0;
+
+    /// <summary>
+    ///     An aborted solution still reaches SolutionEnd, with whatever computed before the stop
+    ///     sitting in the ContextBakes. That partial state is not a result, so it blocks.
+    /// </summary>
+    public void MarkAborted()
+    {
+        Messages.Add(new SolveDiagnostic
+        {
+            Level = "error",
+            Message = "Solve aborted",
+            Source = "Selva",
+            IsGate = true
+        });
+        Blocked = true;
+    }
 }

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Utilities.Helpers;
 
@@ -106,7 +107,7 @@ public class ServerLifecycleManager : IDisposable
 
             // Discarded deliberately: this runs on the solver's thread and must never wait on the
             // socket.
-            SolveEventSink.SetLocalSender(solveEvent =>
+            SolveRuntimes.SetLocalTransport(solveEvent =>
                 _ = _webSocketTransport.BroadcastSolveEvent(solveEvent));
 
             Logger.Log(
@@ -179,7 +180,7 @@ public class ServerLifecycleManager : IDisposable
     {
         // Before the socket closes: a message raised after this point has nowhere to go, and the
         // definition must keep solving in plain Grasshopper.
-        SolveEventSink.SetLocalSender(null);
+        SolveRuntimes.SetLocalTransport(null);
 
         try
         {
