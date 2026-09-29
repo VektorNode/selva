@@ -33,8 +33,8 @@ export const POST: RequestHandler = async ({ params, request }) => {
 	}
 
 	const bus = getSolveEventBus();
-	// 410 rather than 404: tells the plugin the solve is over so it stops posting, which
-	// matters after an abort, when Grasshopper never reaches SolutionEnd.
+	// 410 rather than 404: the plugin reads it as "the requester is gone" and aborts a solution
+	// that is still running, so a cancelled or timed-out request frees the Compute child.
 	if (!bus.isOpen(solveId)) apiError(410, ApiErrorCode.NOT_FOUND, 'Solve is no longer open');
 
 	let body: { events?: unknown };

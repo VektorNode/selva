@@ -67,8 +67,9 @@ export function createRequestResponseDriver<TMesh = unknown>(
 			throttle.trigger(values);
 		},
 		cancel() {
-			// Both halves: drop the client-side wait, and tell the server to stop the compute
-			// call it is holding. Without the second, the child keeps solving for nobody.
+			// Dropping the fetch alone stops the Compute child: the server closes the solve and the
+			// plugin's next callback gets a 410. The explicit cancel is for a server that keeps the
+			// solve open, and loses the race harmlessly (404) when the fetch abort closes it first.
 			throttle.cancel();
 			events?.cancelCurrent?.();
 		},

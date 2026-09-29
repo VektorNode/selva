@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -31,8 +32,9 @@ namespace Selva.GH.Features.UIBuilder.Services;
 ///         The reply is the way back in: <c>{ "abort": true }</c> calls
 ///         <see cref="GH_Document.RequestAbortSolution" />, which only sets a flag the solver
 ///         checks between components, so doing it from the timer thread is safe. Any non-2xx reply
-///         ends the session: the server no longer knows this solve, and an aborted solution never
-///         reaches <c>SolutionEnd</c> to end it here.
+///         ends the session. A 410 while the solution is still running also aborts it: the
+///         server closes a solve when its requester goes away, so that is how a cancelled or
+///         timed-out browser request stops the Compute child.
 ///     </para>
 ///     <para>
 ///         One session at a time. compute.geometry holds a process-wide solve lock, so a second
@@ -67,6 +69,14 @@ internal static class SolveEventCallbackSender
         public Timer Timer;
         public DateTime LastPostUtc;
         public bool Ended;
+        public bool ReachedSolutionEnd;
+
+        /// <summary>
+        ///     Held across take-batch-and-post, and always taken before <see cref="Gate" />. The
+        ///     bus stamps <c>seq</c> in arrival order, so two batches in flight at once would be
+        ///     renumbered in whatever order the network delivered them.
+        /// </summary>
+        public readonly object PostLock = new object();
     }
 
     public static void EnsureHooked(GH_Document document)
@@ -113,10 +123,13 @@ internal static class SolveEventCallbackSender
         var solveId = ReadConstant(document, SolveIdConstant);
         if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(solveId)) return null;
 
+        // An ended session is final for its solveId. Restarting it would post into a solve the
+        // server has closed, get a 410, end, and restart on the next emit, for the rest of the
+        // solve.
         var current = _session;
-        if (current != null && !current.Ended && current.SolveId == solveId)
+        if (current != null && current.SolveId == solveId)
         {
-            return current;
+            return current.Ended ? null : current;
         }
 
         current?.Timer?.Dispose();
@@ -129,7 +142,9 @@ internal static class SolveEventCallbackSender
             Document = document,
             LastPostUtc = DateTime.UtcNow
         };
-        session.Timer = new Timer(_ => Tick(session), null, FlushMs, FlushMs);
+        // One-shot, re-armed by Tick after its post returns. A periodic timer fires again while a
+        // slow post is still blocking, and the overlapping posts then arrive out of order.
+        session.Timer = new Timer(_ => Tick(session), null, FlushMs, Timeout.Infinite);
         _session = session;
 
         // Subscribed once per document, not per solve: compute.geometry caches the live
@@ -145,36 +160,57 @@ internal static class SolveEventCallbackSender
     private static void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
         Session session;
-        List<SolveEvent> batch;
         lock (Gate)
         {
             session = _session;
             if (session == null || session.Ended || !ReferenceEquals(session.Document, sender)) return;
             session.Ended = true;
+            session.ReachedSolutionEnd = true;
             session.Timer?.Dispose();
-            batch = TakeQueueLocked(session);
         }
 
-        // Nothing emitted means nothing to say: the HTTP response carries the final state.
-        if (batch.Count > 0)
+        // Runs on the solver thread, and waits out a Tick post still in flight so the final batch
+        // lands after it. That is the only way to land it before the server publishes
+        // `solveEnded`, and it costs one round trip, only when something was emitted.
+        lock (session.PostLock)
         {
-            Post(session, batch);
+            List<SolveEvent> batch;
+            lock (Gate) batch = TakeQueueLocked(session);
+
+            // Nothing emitted means nothing to say: the HTTP response carries the final state.
+            if (batch.Count > 0) Post(session, batch);
         }
     }
 
     private static void Tick(Session session)
     {
-        List<SolveEvent> batch;
-        lock (Gate)
+        lock (session.PostLock)
         {
-            if (session.Ended) return;
-            var due = (DateTime.UtcNow - session.LastPostUtc).TotalMilliseconds >= HeartbeatMs;
-            if (session.Queue.Count == 0 && !due) return;
-            batch = TakeQueueLocked(session);
-            session.LastPostUtc = DateTime.UtcNow;
-        }
+            List<SolveEvent> batch;
+            lock (Gate)
+            {
+                if (session.Ended) return;
+                var due = (DateTime.UtcNow - session.LastPostUtc).TotalMilliseconds >= HeartbeatMs;
+                if (session.Queue.Count == 0 && !due)
+                {
+                    RearmLocked(session);
+                    return;
+                }
 
-        Post(session, batch);
+                batch = TakeQueueLocked(session);
+                session.LastPostUtc = DateTime.UtcNow;
+            }
+
+            Post(session, batch);
+
+            lock (Gate) RearmLocked(session);
+        }
+    }
+
+    /// <summary>Caller holds <see cref="Gate" />, which is what keeps the timer undisposed here.</summary>
+    private static void RearmLocked(Session session)
+    {
+        if (!session.Ended) session.Timer?.Change(FlushMs, Timeout.Infinite);
     }
 
     /// <summary>Caller holds <see cref="Gate" />.</summary>
@@ -199,11 +235,14 @@ internal static class SolveEventCallbackSender
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.Token);
             }
 
-            // Timer and SolutionEnd threads, never the solver: blocking here is fine, and it keeps
-            // replies ordered with the batches they answer.
+            // Blocking keeps replies ordered with the batches they answer. The solver thread only
+            // waits here for the final flush, never mid-solve.
             using var response = Client.SendAsync(request).GetAwaiter().GetResult();
             if (!response.IsSuccessStatusCode)
             {
+                // 410 mid-solve: the server closed this solve because its requester is gone
+                // (cancelled, timed out, disconnected). Nobody will read the result.
+                if (response.StatusCode == HttpStatusCode.Gone) AbortIfRunning(session);
                 End(session);
                 return;
             }
@@ -211,7 +250,7 @@ internal static class SolveEventCallbackSender
             var reply = response.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             if (WantsAbort(reply))
             {
-                session.Document?.RequestAbortSolution();
+                AbortIfRunning(session);
                 End(session);
             }
         }
@@ -220,6 +259,15 @@ internal static class SolveEventCallbackSender
             Logger.Warn($"[SolveEventCallbackSender] Event post failed: {ex.Message}");
             End(session);
         }
+    }
+
+    // A flag left on a finished solution would abort nothing, but reads as an aborted solve to
+    // anything that checks AbortRequested before the next NewSolution resets it.
+    private static void AbortIfRunning(Session session)
+    {
+        bool running;
+        lock (Gate) running = !session.ReachedSolutionEnd;
+        if (running) session.Document?.RequestAbortSolution();
     }
 
     private static void End(Session session)
