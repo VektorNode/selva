@@ -63,15 +63,15 @@ The meshes are packed into a compact binary format:
    per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
    ```
 
-   | chunk  | payload                                                                 |
-   | ------ | ----------------------------------------------------------------------- |
-   | `GEOM` | the SLVA/SLVZ geometry blob from steps 1–5, its embedded metadata empty |
-   | `TABL` | the columnar object table (below), optionally SLVZ-wrapped              |
-   | `MATL` | materials JSON; a `map` of `slvm:tex:N` references the Nth `TEXR` chunk |
-   | `TEXR` | one texture: mime string + raw image bytes (extracted from data URIs)   |
-   | `CRVS` | polyline vertices for curve items — another bare SLVA blob, no indices  |
-   | `PNTS` | point positions, same encoding                                          |
-   | `EXTN` | namespaced host extension; readers skip namespaces they don't know      |
+   | chunk  | payload                                                                                                |
+   | ------ | ------------------------------------------------------------------------------------------------------ |
+   | `GEOM` | the SLVA/SLVZ geometry blob from steps 1–5, its embedded metadata empty                                |
+   | `TABL` | the columnar object table (below), optionally SLVZ-wrapped                                             |
+   | `MATL` | materials JSON; a `map`, `roughnessMap` or `normalMap` of `slvm:tex:N` references the Nth `TEXR` chunk |
+   | `TEXR` | one texture: mime string + raw image bytes (extracted from data URIs)                                  |
+   | `CRVS` | polyline vertices for curve items — another bare SLVA blob, no indices                                 |
+   | `PNTS` | point positions, same encoding                                                                         |
+   | `EXTN` | namespaced host extension; readers skip namespaces they don't know                                     |
 
    Readers skip unknown chunk types by length — that is the format's extension mechanism. The `TABL` object table is columnar and pays only for what's present: per-mesh vertex/triangle counts (vertex/index **starts are never stored** — geometry is concatenated in table order, so windows are prefix sums and can't overlap by construction), material run-lengths, an `originalIndex` column only when the material sort reordered the table, names/layers as string-pool references (the auto-numbering default collapses to one mode byte), and sparse attr columns — the key stored once, then only the objects carrying it (`gh:branch`, `ifc:guid`, `style:color`, …). Selva's own host data (`sourceComponentId`, the Rhino NURBS JSON behind each curve) lives in `EXTN "selva.gh"`, so the core container stays free of Grasshopper concepts: a foreign reader gets every mesh, name, layer and material without knowing Selva exists.
 

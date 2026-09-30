@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { getLogger, observeMaxAnisotropy } from '../../shared/index.js';
 
 /**
- * Anisotropic-filtering samples applied to color maps, keeping textures sharp at grazing angles
+ * Anisotropic-filtering samples applied to material textures, keeping them sharp at grazing angles
  * instead of blurring. Ceiling is hardware-defined (`renderer.capabilities.getMaxAnisotropy()`,
  * typically 16). Defaults to three's default (1 — no anisotropy) until a renderer reports in.
  */
@@ -22,15 +22,21 @@ export function setTextureAnisotropy(value: number): void {
 // forward it. `render/` publishes, this layer subscribes — neither imports the other.
 observeMaxAnisotropy(setTextureAnisotropy);
 
+export type TextureSlot = 'map' | 'roughnessMap' | 'normalMap';
+
 /**
- * Assigns a texture to `material.map` once fetched and decoded — the mesh renders untextured for
- * the first frames. Load failures log a warning and leave the material untextured rather than
- * breaking the batch.
+ * Assigns a texture to `material[slot]` once fetched and decoded — the mesh renders without it for
+ * the first frames. Load failures log a warning and leave the slot empty rather than breaking the
+ * batch.
  *
  * Each call loads independently: no caching, no cross-material sharing. The texture is owned by the
  * material it is assigned to, so the scene's normal dispose walk frees it like any other resource.
  */
-export function applyTextureMap(material: THREE.MeshPhysicalMaterial, url: string): void {
+export function applyTexture(
+	material: THREE.MeshPhysicalMaterial,
+	url: string,
+	slot: TextureSlot
+): void {
 	// No DOM (SSR / tests): textures can't decode without an image element; skip quietly.
 	if (typeof document === 'undefined') {
 		return;
@@ -39,16 +45,16 @@ export function applyTextureMap(material: THREE.MeshPhysicalMaterial, url: strin
 	new THREE.TextureLoader().load(
 		url,
 		(texture) => {
-			// Color maps are sRGB; without this the render is washed out.
-			texture.colorSpace = THREE.SRGBColorSpace;
-			// Keep textures crisp at grazing angles (see maxAnisotropy).
+			// Color maps are sRGB (without this the render is washed out); roughness and normal maps
+			// are data and must stay linear.
+			texture.colorSpace = slot === 'map' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
 			texture.anisotropy = maxAnisotropy;
-			material.map = texture;
+			material[slot] = texture;
 			material.needsUpdate = true;
 		},
 		undefined,
 		(error) => {
-			getLogger().warn(`Failed to load material texture ${url}:`, error);
+			getLogger().warn(`Failed to load material ${slot} ${url}:`, error);
 		}
 	);
 }

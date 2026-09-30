@@ -17,7 +17,12 @@ export { decodeBase64ToBinary } from './encoding.js';
 export { LOOKS } from './types.js';
 export type { Look, LookMaterialOverride, LookPreset, MaterialAppearanceOptions } from './types.js';
 
-export { LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from './looks.js';
+export {
+	LOOK_PRESETS,
+	DEFAULT_LOOK,
+	OWN_ENV_MAP_INTENSITY,
+	materialAppearanceForLook
+} from './looks.js';
 
 export { parseColor, applyOffset, computeCombinedBoundingBox } from './geometry.js';
 

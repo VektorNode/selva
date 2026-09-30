@@ -80,11 +80,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Obsolete components
 
+- **Three Material** (`B7665E1A-C4CC-49D6-8EDB-4AAEF045D9A8` → `80CD38E5-BC9E-47E4-88EE-8F35B7E109CC`): appends optional `Reflection`, `Clearcoat`, `Clearcoat Roughness`, `Anisotropy`, `Anisotropy Rotation`, `Roughness Map` and `Normal Map` inputs. Unwired, each stays off the wire and the viewer keeps its default. `Reflection` beats the look's value so a metal stays reflective in every look; `Clearcoat` replaces the automatic satin coat on metals. Anisotropy and the two maps make Web Display carry the mesh's texture coordinates; anisotropy is dropped for meshes that have none. Old definitions upgrade automatically.
 - **Display From File** (`8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81` → `B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241`): the `Id` input is gone now that SLVM v3 carries object identity in the container's own table, so loading no longer needs to restamp it. Old definitions upgrade automatically; the `Id` wire is dropped.
 
 ### Upgraders
 
 - `GH_DisplayFromFileUpgrader_To_0_18`: `8B2E5C71` → `B9FCCDF3` (drops the `Id` input).
+- `GH_ThreeMaterialUpgrader_To_0_21`: `B7665E1A` → `80CD38E5` (appends seven optional inputs).
 
 ## [0.14.0-beta.2] - 2026-06-29
 

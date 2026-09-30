@@ -101,9 +101,30 @@ public class SerializableMaterial
 
     [JsonProperty("transparent")] public bool Transparent { get; set; }
 
-    /// <summary>Texture URL/data URI; omitted from JSON when null.</summary>
+    /// <summary>Texture URL/data URI; omitted from JSON when null, like every field below it.</summary>
     [JsonProperty("map", NullValueHandling = NullValueHandling.Ignore)]
     public string Map { get; set; }
+
+    [JsonProperty("roughnessMap", NullValueHandling = NullValueHandling.Ignore)]
+    public string RoughnessMap { get; set; }
+
+    [JsonProperty("normalMap", NullValueHandling = NullValueHandling.Ignore)]
+    public string NormalMap { get; set; }
+
+    [JsonProperty("envMapIntensity", NullValueHandling = NullValueHandling.Ignore)]
+    public double? EnvMapIntensity { get; set; }
+
+    [JsonProperty("clearcoat", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Clearcoat { get; set; }
+
+    [JsonProperty("clearcoatRoughness", NullValueHandling = NullValueHandling.Ignore)]
+    public double? ClearcoatRoughness { get; set; }
+
+    [JsonProperty("anisotropy", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Anisotropy { get; set; }
+
+    [JsonProperty("anisotropyRotation", NullValueHandling = NullValueHandling.Ignore)]
+    public double? AnisotropyRotation { get; set; }
 
     public static SerializableMaterial FromThreeMaterial(ThreeMaterial material)
     {
@@ -114,8 +135,26 @@ public class SerializableMaterial
             Roughness = material.Roughness,
             Opacity = material.Opacity,
             Transparent = material.Transparent,
-            Map = string.IsNullOrEmpty(material.Map) ? null : material.Map
+            Map = NullIfEmpty(material.Map),
+            RoughnessMap = NullIfEmpty(material.RoughnessMap),
+            NormalMap = NullIfEmpty(material.NormalMap),
+            EnvMapIntensity = material.EnvMapIntensity,
+            Clearcoat = material.Clearcoat,
+            ClearcoatRoughness = material.ClearcoatRoughness,
+            Anisotropy = material.Anisotropy,
+            AnisotropyRotation = material.AnisotropyRotation
         };
+    }
+
+    /// <summary>Every member is a value type or an immutable string, so this is a full copy.</summary>
+    public SerializableMaterial Clone()
+    {
+        return (SerializableMaterial)MemberwiseClone();
+    }
+
+    private static string NullIfEmpty(string s)
+    {
+        return string.IsNullOrEmpty(s) ? null : s;
     }
 
     /// <summary>
@@ -143,7 +182,14 @@ public class SerializableMaterial
             Roughness = Roughness,
             Opacity = Opacity,
             Transparent = Transparent,
-            Map = Map
+            Map = Map,
+            RoughnessMap = RoughnessMap,
+            NormalMap = NormalMap,
+            EnvMapIntensity = EnvMapIntensity,
+            Clearcoat = Clearcoat,
+            ClearcoatRoughness = ClearcoatRoughness,
+            Anisotropy = Anisotropy,
+            AnisotropyRotation = AnisotropyRotation
         };
     }
 }

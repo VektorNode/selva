@@ -303,17 +303,21 @@ function parseMaterials(json: string | null, textures: Uint8Array[]): Serializab
 	}
 
 	for (const material of materials) {
-		if (material.map?.startsWith(TEX_REF_PREFIX)) {
-			const texIndex = Number(material.map.slice(TEX_REF_PREFIX.length));
-			const tex = textures[texIndex];
-			if (tex !== undefined) {
-				material.map = textureToDataUri(tex);
+		for (const slot of TEXTURE_SLOTS) {
+			const reference = material[slot];
+			if (reference?.startsWith(TEX_REF_PREFIX)) {
+				const tex = textures[Number(reference.slice(TEX_REF_PREFIX.length))];
+				if (tex !== undefined) {
+					material[slot] = textureToDataUri(tex);
+				}
 			}
 		}
 	}
 
 	return materials;
 }
+
+const TEXTURE_SLOTS = ['map', 'roughnessMap', 'normalMap'] as const;
 
 /** TEXR payload is [varint mimeLen][mime utf8][image bytes]; downstream wants a data URI. */
 function textureToDataUri(payload: Uint8Array): string {
