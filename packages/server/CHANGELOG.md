@@ -1,5 +1,22 @@
 # @selvajs/server
 
+## 1.4.0
+
+### Minor Changes
+
+- 5bff576: `createRouteClassifier` accepts `selfGatingPrefixes`, a list form of `selfGatingPrefix`.
+
+### Patch Changes
+
+- 08f32a3: chore(deps): bump the npm-major group across 1 directory with 2 updates
+- 251d17b: chore(deps): bump the npm group with 18 updates
+- Updated dependencies [b6f5796]
+- Updated dependencies [251d17b]
+- Updated dependencies [5bff576]
+- Updated dependencies [5bff576]
+  - @selvajs/compute@4.2.0
+  - @selvajs/schemas@5.1.0
+
 ## 1.3.3
 
 ### Patch Changes
