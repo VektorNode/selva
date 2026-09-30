@@ -45,6 +45,17 @@ export interface WsOutputsMessage extends WsSessionMessage {
 	 * mesh-only solves.
 	 */
 	displayItems?: import('@selvajs/visualization/parse').DisplayItem[];
+	/**
+	 * The plugin's verdict on the solve: its messages, whether a Message component refused it,
+	 * whether it was aborted. The same object Rhino.Compute returns in its `selva` block. Decoded
+	 * by `decodeOutcome`, never read field by field here.
+	 */
+	outcome?: import('@selvajs/schemas').SolveOutcome | null;
+}
+
+/** One live event from a running solve, nested under `event` because the envelope's `type` is taken. */
+export interface WsSolveEventMessage extends WsSessionMessage {
+	event: import('@selvajs/schemas').SolveEvent;
 }
 
 export interface WsSchemaUpdatedMessage extends WsSessionMessage {
@@ -337,6 +348,14 @@ export class WebSocketState {
 		} else {
 			console.warn('[WebSocket] Cannot send message - not connected');
 		}
+	}
+
+	/**
+	 * Asks the plugin to abort the running solution. Handled on the plugin's socket thread, so it
+	 * lands even while the solver holds the UI thread.
+	 */
+	sendCancelSolve(sessionId: string) {
+		this.send('cancelSolve', { sessionId });
 	}
 
 	/**

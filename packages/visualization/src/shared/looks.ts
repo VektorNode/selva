@@ -156,6 +156,13 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 	}
 };
 
+/**
+ * `userData` key holding a material's own `envMapIntensity`, set by the parser when the wire
+ * material carries one. `setLook` keeps it instead of the look's value, except in looks with a
+ * `materialOverride`: those restyle every mesh alike, so the look's value wins there.
+ */
+export const OWN_ENV_MAP_INTENSITY = 'selvaEnvMapIntensity';
+
 /** Baked at parse time (not toggleable at runtime). */
 export function materialAppearanceForLook(look: Look): MaterialAppearanceOptions {
 	const preset = LOOK_PRESETS[look];

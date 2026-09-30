@@ -6,6 +6,7 @@ using Grasshopper.Kernel;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Config;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services.Communication;
@@ -72,6 +73,7 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnSchemaSaveRequested -= HandleSchemaSave;
         _webSocketTransport.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply -= HandleApplySyncChanges;
+        _webSocketTransport.OnCancelSolveRequested -= HandleCancelSolve;
     }
 
     // -------------------------------------------------------------------------
@@ -93,11 +95,25 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnSchemaSaveRequested += HandleSchemaSave;
         _webSocketTransport.OnSyncPreviewRequested += HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply += HandleApplySyncChanges;
+        _webSocketTransport.OnCancelSolveRequested += HandleCancelSolve;
     }
 
     // -------------------------------------------------------------------------
     // WebSocket event handlers
     // -------------------------------------------------------------------------
+
+    // Runs on the socket's dispatch thread on purpose; see DocumentSolveRuntime.RequestAbort.
+    private void HandleCancelSolve(object sender, EventArgs e)
+    {
+        try
+        {
+            SolveRuntimes.For(_eventManager.CurrentDocument)?.RequestAbort();
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[BridgeOrchestrator] Cancel solve failed: {ex.Message}");
+        }
+    }
 
     private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
     {

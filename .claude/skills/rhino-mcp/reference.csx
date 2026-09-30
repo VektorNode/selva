@@ -314,3 +314,60 @@ var t = typeof(GH_IO.Serialization.GH_Archive); // or typeof(Grasshopper.Kernel.
 foreach (var m in t.GetMethods().Where(m => !m.Name.StartsWith("get_") && !m.Name.StartsWith("set_")))
     Console.WriteLine(m.ReturnType.Name + " " + m.Name + "("
         + string.Join(", ", m.GetParameters().Select(p => p.ParameterType.Name + " " + p.Name)) + ")");
+
+// ============================================================================
+// Record the bridge's WebSocket traffic (test solve order, events, abort)
+// ============================================================================
+// Connects to the UI Bridge the way the browser does and logs every frame with a
+// timestamp. Needs Enable = true. State lives in AppDomain data because each
+// run_csharp call is a separate compilation. Three calls: start, drive, read.
+//
+// Never wait for a solve inside run_csharp: it runs on the UI thread, which is the
+// thread the solve needs. Send from a background Task and read back in a later call.
+
+// --- 1. start ---------------------------------------------------------------
+using System;
+using System.Linq;
+using System.Net.WebSockets;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Collections.Concurrent;
+using Grasshopper.Kernel;
+
+var doc = Grasshopper.Instances.ActiveCanvas.Document;
+var bridge = (IGH_Component)doc.Objects.First(o => o.Name == "UI Bridge");
+var q = System.Web.HttpUtility.ParseQueryString(
+    new Uri(bridge.Params.Output[1].VolatileData.AllData(true).First().ToString()).Query);
+var ws = new ClientWebSocket();
+ws.ConnectAsync(new Uri("ws://localhost:" + q["wsPort"]), CancellationToken.None).Wait(3000);
+var log = new ConcurrentQueue<string>();
+var sw = System.Diagnostics.Stopwatch.StartNew();
+foreach (var kv in new (string, object)[] { ("ws", ws), ("log", log), ("sw", sw), ("session", q["session"]) })
+    AppDomain.CurrentDomain.SetData("selva.rec." + kv.Item1, kv.Item2);
+Task.Run(async () => {
+    var buf = new byte[1 << 20];
+    while (ws.State == WebSocketState.Open) {
+        var ms = new System.IO.MemoryStream();
+        WebSocketReceiveResult r;
+        do { r = await ws.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None); ms.Write(buf, 0, r.Count); }
+        while (!r.EndOfMessage);
+        if (r.MessageType == WebSocketMessageType.Close) break;
+        log.Enqueue(sw.ElapsedMilliseconds + " " + (r.MessageType == WebSocketMessageType.Text
+            ? System.Text.Encoding.UTF8.GetString(ms.ToArray()) : "[binary " + ms.Length + " bytes]"));
+    }
+});
+
+// --- 2. drive: a value update, then a cancel mid-solve ------------------------
+// Frames are `{ type, sessionId, ... }`: valueUpdate carries `values` keyed by input id.
+var ws = (ClientWebSocket)AppDomain.CurrentDomain.GetData("selva.rec.ws");
+var session = (string)AppDomain.CurrentDomain.GetData("selva.rec.session");
+Func<string, Task> send = j => ws.SendAsync(new ArraySegment<byte>(System.Text.Encoding.UTF8.GetBytes(j)),
+    WebSocketMessageType.Text, true, CancellationToken.None);
+send("{\"type\":\"valueUpdate\",\"sessionId\":\"" + session + "\",\"values\":{\"<input-id>\":1.0}}").Wait();
+Task.Run(async () => { await Task.Delay(1500); await send("{\"type\":\"cancelSolve\",\"sessionId\":\"" + session + "\"}"); });
+
+// --- 3. read (decode with System.Text.Json; Newtonsoft is not referenceable) ---
+var log = (ConcurrentQueue<string>)AppDomain.CurrentDomain.GetData("selva.rec.log");
+foreach (var line in log) Console.WriteLine(line.Length > 300 ? line.Substring(0, 300) : line);
+// Close when done, or the bridge keeps broadcasting to a client nobody reads:
+// ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None).Wait(2000);

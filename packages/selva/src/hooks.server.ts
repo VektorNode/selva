@@ -144,12 +144,18 @@ const routeClassifier = createRouteClassifier({
 	// Must answer without a session: load-balancer liveness probe, and the
 	// readiness probe the post-update poller waits on across a restart.
 	publicApis: ['/api/health', '/api/health/ready'],
-	// The blob proxy is *self-gating*: `/api/files/[...path]` classifies each
-	// path against the asset-class registry and applies per-class auth itself
-	// (public branding serves to anyone, org/project assets 401 without a
-	// session). The hook must not deny it up front. Only `/api/*` prefix
-	// allowed to carry its own authorization.
-	selfGatingPrefix: '/api/files/',
+	// Self-gating routes authorize each request themselves; the hook must not
+	// deny them up front. `/api/files/[...path]` classifies each path against
+	// the asset-class registry (public branding serves to anyone, org/project
+	// assets 401 without a session). `/api/v1/solve-events` holds the SSE stream
+	// (requires a session, checked in the route) and the Compute callback (no
+	// session by nature — a per-solve bearer instead). Nothing else under
+	// `/api/*` carries its own authorization.
+	//
+	// No trailing slash on solve-events: the SSE route IS that path, with the
+	// stream in a query param, so a trailing slash would deny the stream while
+	// letting the callback (which has a solveId segment) through.
+	selfGatingPrefixes: ['/api/files/', '/api/v1/solve-events'],
 	// Static-asset paths SvelteKit/adapter-node serves directly.
 	staticPrefixes: ['/_app/', '/favicon/'],
 	staticPaths: ['/favicon.svg', '/robots.txt']

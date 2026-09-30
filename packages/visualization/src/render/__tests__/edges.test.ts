@@ -3,6 +3,9 @@ import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 import { describe, expect, it, vi } from 'vitest';
 
+import { mergedBoxes } from '@tests/helpers/merged-mesh';
+
+import { setHiddenMembers } from '../../shared/index.js';
 import { addEdges, removeEdges, isEdgeOverlay, EDGE_USERDATA_KIND } from '../edges';
 
 function meshWithBox(): THREE.Mesh {
@@ -317,5 +320,32 @@ describe('edge geometry ownership', () => {
 
 		removeEdges(second);
 		expect(disposeB).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('edge overlay of a merged mesh', () => {
+	const segmentCount = (overlay: LineSegments2) =>
+		(overlay.geometry.getAttribute('instanceStart') as THREE.InterleavedBufferAttribute).count;
+
+	it('drops the edges of hidden members and restores them when shown', () => {
+		const mesh = mergedBoxes();
+		const [overlay] = addEdges(mesh);
+		const full = segmentCount(overlay!);
+
+		setHiddenMembers(mesh, new Set([1]));
+		expect(segmentCount(overlay!)).toBe((full * 2) / 3);
+
+		setHiddenMembers(mesh, new Set());
+		expect(segmentCount(overlay!)).toBe(full);
+	});
+
+	it('starts filtered when members were hidden before edges attached', () => {
+		const mesh = mergedBoxes();
+		const full = segmentCount(addEdges(mergedBoxes())[0]!);
+
+		setHiddenMembers(mesh, new Set([0, 2]));
+		const [overlay] = addEdges(mesh);
+
+		expect(segmentCount(overlay!)).toBe(full / 3);
 	});
 });

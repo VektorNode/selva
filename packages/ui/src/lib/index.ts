@@ -6,6 +6,7 @@ export * from './components/layout';
 
 export { default as AppLayout } from './components/compute/AppLayout.svelte';
 export { default as ComputeApp } from './components/compute/ComputeApp.svelte';
+export { default as SolveMessages } from './components/compute/SolveMessages.svelte';
 
 export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 
@@ -30,7 +31,14 @@ export {
 	type SolveSession,
 	type SolveSessionArgs,
 	type SolveDriver,
-	type SolveReporter
+	type SolveReporter,
+	type LiveSolveState,
+	type SolvePhase,
+	// A push driver (plugin-ui's WebSocket) decodes the plugin's verdict with these.
+	EMPTY_LIVE_SOLVE,
+	decodeOutcome,
+	finalizeResult,
+	type SolveOutcome
 } from '@selvajs/solve/client';
 
 // Pre-step producer transit storage
@@ -52,5 +60,5 @@ export { randomId } from './utils/randomId';
 
 // UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
-export type { SolveFn, SolveResult } from '@selvajs/solve/shared';
+export type { SolveFn, SolveResult, SolveDiagnostic } from '@selvajs/solve/shared';
 export { DEFAULT_PRESET_LABELS, type PresetLabels } from './types/presetLabels';

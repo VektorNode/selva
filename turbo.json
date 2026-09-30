@@ -12,9 +12,10 @@
 			"outputs": [
 				"src/generated/**",
 				"../../Plugin/Selva.Schema/Models/UISchema.Generated.cs",
+				"../../Plugin/Selva.Schema/Models/Wire.Generated.cs",
 				"../../Plugin/Selva.Schema/Constants/SchemaVersion.cs"
 			],
-			"inputs": ["ui-schema.json", "preset-schema.json", "scripts/**"],
+			"inputs": ["ui-schema.json", "preset-schema.json", "wire-schema.json", "scripts/**"],
 			"env": ["SCHEMA_GUARD_BASE_REF"]
 		},
 		"build": {

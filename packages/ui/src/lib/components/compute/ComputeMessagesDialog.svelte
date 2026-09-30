@@ -1,26 +1,100 @@
 <script lang="ts">
+	// The message centre: every message the last solve raised, reached from the footer badge.
+	//
+	// The counterpart to `SolveMessages`, which interrupts only for what the definition's author
+	// wrote. Everything else — Grasshopper complaining about its own components — lands here,
+	// where it is available without being in the way. One section per level, most severe first, with the
+	// component that raised each message shown as a label rather than spliced into its text.
+
 	import type { Snippet } from 'svelte';
-	import { CircleAlert, TriangleAlert, ChevronDown, ChevronRight } from '@lucide/svelte';
-	import * as Collapsible from '$lib/components/primitives/collapsible';
+	import { CircleAlert, TriangleAlert, Info } from '@lucide/svelte';
+	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import * as Dialog from '$lib/components/primitives/dialog';
-	import { groupMessages } from '$lib/utils/file-download';
+	import { Badge } from '$lib/components/primitives/badge';
 
 	interface Props {
+		/** The last solve's messages. Preferred over `errors`/`warnings` when both are given. */
+		diagnostics?: SolveDiagnostic[];
+		/** Fallback for hosts that only have the flat text. */
 		errors?: string[];
 		warnings?: string[];
 		/** Renders inside Dialog.Trigger. */
 		trigger: Snippet;
 	}
 
-	let { errors = [], warnings = [], trigger }: Props = $props();
+	let { diagnostics, errors = [], warnings = [], trigger }: Props = $props();
 
 	let open = $state(false);
-	let showErrors = $state(true);
-	let showWarnings = $state(false);
 
-	const groupedErrors = $derived(groupMessages(errors));
-	const groupedWarnings = $derived(groupMessages(warnings));
-	const totalCount = $derived(errors.length + warnings.length);
+	const rows = $derived<SolveDiagnostic[]>(
+		diagnostics?.length
+			? diagnostics
+			: [
+					...errors.map((message) => ({ level: 'error' as const, message })),
+					...warnings.map((message) => ({ level: 'warning' as const, message }))
+				]
+	);
+
+	interface Item {
+		level: SolveDiagnostic['level'];
+		message: string;
+		source?: string;
+		count: number;
+	}
+
+	// Tone classes are written out, never interpolated: Tailwind scans source text, so a
+	// constructed class name is not emitted and the icon would render colourless.
+	const LEVELS = [
+		{
+			level: 'error',
+			heading: 'Errors',
+			one: 'error',
+			many: 'errors',
+			icon: CircleAlert,
+			tone: 'text-destructive'
+		},
+		{
+			level: 'warning',
+			heading: 'Warnings',
+			one: 'warning',
+			many: 'warnings',
+			icon: TriangleAlert,
+			tone: 'text-amber-500'
+		},
+		{
+			level: 'remark',
+			heading: 'Notes',
+			one: 'note',
+			many: 'notes',
+			icon: Info,
+			tone: 'text-muted-foreground'
+		}
+	] as const;
+
+	/**
+	 * One section per level that has messages, most severe first; within a level, the order the
+	 * solve raised them. Repeats collapse into one row with a count: a definition fanning over 200
+	 * branches raises the same warning 200 times, and an unstacked list buries every other message.
+	 */
+	const sections = $derived(
+		LEVELS.map((meta) => {
+			// A null-prototype object rather than a Map: a local built fresh on each derive, never
+			// reactive state, and the lint rule that steers Map → SvelteMap cannot tell them apart.
+			const byKey: Record<string, Item> = Object.create(null);
+			const items: Item[] = [];
+			for (const d of rows) {
+				if (d.level !== meta.level) continue;
+				const key = `${d.message} ${d.source ?? ''}`;
+				if (byKey[key]) {
+					byKey[key].count++;
+				} else {
+					byKey[key] = { level: d.level, message: d.message, source: d.source, count: 1 };
+					items.push(byKey[key]);
+				}
+			}
+			return { ...meta, items };
+		}).filter((section) => section.items.length > 0)
+	);
 </script>
 
 <Dialog.Root bind:open>
@@ -28,98 +102,47 @@
 		{@render trigger()}
 	</Dialog.Trigger>
 
-	<Dialog.Content class="max-w-2xl max-h-[80vh]">
+	<Dialog.Content class="max-w-lg gap-4">
 		<Dialog.Header>
-			<Dialog.Title class="gap-2 flex items-center">
-				<CircleAlert class="h-5 w-5" />
-				Compute Messages
-			</Dialog.Title>
+			<Dialog.Title>Messages</Dialog.Title>
 			<Dialog.Description>
-				{totalCount}
-				{totalCount === 1 ? 'issue' : 'issues'} detected during solve
+				{#each sections as section, i (section.level)}
+					{#if i > 0}<span class="mx-1.5">·</span>{/if}
+					<span
+						>{section.items.length} {section.items.length === 1 ? section.one : section.many}</span
+					>
+				{/each}
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-3 pr-2 overflow-y-auto" style="max-height: calc(80vh - 180px);">
-			{#if errors.length > 0}
-				<Collapsible.Root bind:open={showErrors}>
-					<div class="overflow-hidden rounded-lg border border-destructive bg-card">
-						<div class="px-4 py-3 flex items-center">
-							<Collapsible.Trigger
-								class="-mx-4 -my-3 gap-3 px-4 py-3 flex flex-1 items-center text-left transition-colors hover:bg-destructive/5"
-							>
-								{#if showErrors}
-									<ChevronDown class="h-4 w-4 shrink-0 text-destructive" />
-								{:else}
-									<ChevronRight class="h-4 w-4 shrink-0 text-destructive" />
+		<div class="space-y-4 max-h-[60vh] overflow-y-auto">
+			{#each sections as section (section.level)}
+				<section>
+					<h3 class="mb-1.5 gap-1.5 text-xs font-medium flex items-center text-muted-foreground">
+						<section.icon class="h-3.5 w-3.5 {section.tone}" />
+						{section.heading}
+					</h3>
+					<ul class="divide-y rounded-lg border">
+						{#each section.items as item (item.message + (item.source ?? ''))}
+							<li class="gap-3 px-3 py-2 text-sm flex items-start justify-between">
+								<p class="min-w-0 wrap-anywhere">
+									{item.message}
+									{#if item.count > 1}
+										<span class="ml-1 text-xs text-muted-foreground tabular-nums"
+											>×{item.count}</span
+										>
+									{/if}
+								</p>
+								{#if item.source}
+									<Badge variant="secondary" class="font-normal max-w-[40%] shrink-0 truncate">
+										{item.source}
+									</Badge>
 								{/if}
-								<CircleAlert class="h-4 w-4 shrink-0 text-destructive" />
-								<span class="text-sm font-medium text-destructive">
-									{errors.length === 1 ? '1 Error' : `${errors.length} Errors`}
-								</span>
-							</Collapsible.Trigger>
-						</div>
-
-						<Collapsible.Content class="space-y-0">
-							<div class="max-h-60 px-4 py-3 overflow-y-auto border-t border-destructive bg-card">
-								<ul class="space-y-2">
-									{#each groupedErrors as { message, count } (message)}
-										<li class="gap-2 text-sm flex text-destructive/90">
-											<span class="shrink-0">•</span>
-											<span class="flex-1">
-												{message}
-												{#if count > 1}
-													<span class="ml-1 font-medium text-destructive/70">×{count} </span>
-												{/if}
-											</span>
-										</li>
-									{/each}
-								</ul>
-							</div>
-						</Collapsible.Content>
-					</div>
-				</Collapsible.Root>
-			{/if}
-
-			{#if warnings.length > 0}
-				<Collapsible.Root bind:open={showWarnings}>
-					<div class="overflow-hidden rounded-lg border border-warning/50 bg-card">
-						<div class="px-4 py-3 flex items-center">
-							<Collapsible.Trigger
-								class="-mx-4 -my-3 gap-3 px-4 py-3 flex flex-1 items-center text-left transition-colors hover:bg-warning/5"
-							>
-								{#if showWarnings}
-									<ChevronDown class="h-4 w-4 shrink-0 text-warning" />
-								{:else}
-									<ChevronRight class="h-4 w-4 shrink-0 text-warning" />
-								{/if}
-								<TriangleAlert class="h-4 w-4 shrink-0 text-warning" />
-								<span class="text-sm font-medium text-warning">
-									{warnings.length === 1 ? '1 Warning' : `${warnings.length} Warnings`}
-								</span>
-							</Collapsible.Trigger>
-						</div>
-
-						<Collapsible.Content class="space-y-0">
-							<div class="max-h-60 px-4 py-3 overflow-y-auto border-t border-warning/50 bg-card">
-								<ul class="space-y-2">
-									{#each groupedWarnings as { message, count } (message)}
-										<li class="gap-2 text-sm flex text-muted-foreground">
-											<span class="shrink-0">•</span>
-											<span class="flex-1">
-												{message}
-												{#if count > 1}
-													<span class="ml-1 font-medium text-warning/70">×{count}</span>
-												{/if}
-											</span>
-										</li>
-									{/each}
-								</ul>
-							</div>
-						</Collapsible.Content>
-					</div>
-				</Collapsible.Root>
-			{/if}
+							</li>
+						{/each}
+					</ul>
+				</section>
+			{/each}
 		</div>
 	</Dialog.Content>
 </Dialog.Root>

@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import { plugin as shadcn } from '@shadcn/lint';
 import prettier from 'eslint-config-prettier';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
@@ -49,6 +50,27 @@ export const config = [
 		rules: {
 			'no-undef': 'off'
 		}
+	},
+	{
+		// Design-system rules. Theme tokens come from each package's components.json
+		// (`tailwind.css`). Warn-only until the existing violations are burned down.
+		files: ['**/*.svelte', '**/*.ts'],
+		plugins: { shadcn },
+		settings: {
+			shadcn: { componentImports: ['^@selvajs/ui(/|$)'] }
+		},
+		rules: {
+			'shadcn/no-raw-colors': 'warn',
+			'shadcn/no-arbitrary-values': 'warn',
+			'shadcn/no-unknown-classes': 'warn',
+			'shadcn/no-inline-styles': 'warn',
+			'shadcn/no-restyle': ['warn', { allow: ['layout'] }]
+		}
+	},
+	{
+		// The primitives are the design system; they style themselves.
+		files: ['**/components/primitives/**'],
+		rules: { 'shadcn/no-restyle': 'off' }
 	},
 	{
 		ignores: [

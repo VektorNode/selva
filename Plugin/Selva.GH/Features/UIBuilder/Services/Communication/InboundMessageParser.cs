@@ -81,6 +81,9 @@ public sealed class InboundMessageParser
                 case "requestCurrentValues":
                     return InboundMessage.Of(InboundKind.RequestCurrentValues, msgType);
 
+                case "cancelSolve":
+                    return InboundMessage.Of(InboundKind.CancelSolve, msgType);
+
                 case "requestInitialData":
                     return InboundMessage.Of(InboundKind.RequestInitialData, msgType);
 

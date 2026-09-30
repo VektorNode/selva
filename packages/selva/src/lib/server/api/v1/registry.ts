@@ -436,6 +436,38 @@ export const V1_ENDPOINTS: Endpoint[] = [
 			{ name: 'computeServerId', description: 'Pin to a compute server.' }
 		],
 		errors: [400, 403, 422, 503]
+	},
+
+	// ==========================================================================
+	// Live solve events
+	// ==========================================================================
+	//
+	// Internal: the browser's live channel and the plugin's callback into it. Both
+	// are shaped by the Selva plugin and web app, not by the public contract.
+	{
+		method: 'GET',
+		path: '/solve-events',
+		summary: "The tab's live event stream (SSE). Solves that name its `streamId` report here.",
+		internal: true,
+		response: 'object',
+		query: [{ name: 'streamId', description: 'Minted by the tab, 16-64 URL-safe characters.' }],
+		errors: [400, 401, 409]
+	},
+	{
+		method: 'POST',
+		path: '/solve-events/{solveId}',
+		summary: "The plugin's callback from inside a Compute solve. The reply carries `abort`.",
+		internal: true,
+		response: 'object',
+		errors: [400, 401, 410]
+	},
+	{
+		method: 'POST',
+		path: '/solve/{solveId}/cancel',
+		summary: 'Ask a running solve to abort. Cooperative: it stops at the next component.',
+		internal: true,
+		response: 'empty',
+		errors: [401, 404]
 	}
 ];
 

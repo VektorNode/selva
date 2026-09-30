@@ -10,7 +10,7 @@ namespace Selva.GH.Features.Display.Services;
 ///     Process-wide content-addressed registry for material texture bytes, served over HTTP at
 ///     <c>/assets/{hash}</c> by <see cref="LocalWebServer" />.
 ///
-///     <c>GH_ThreeMaterial</c> registers bytes and gets back a hash-keyed URL for <see cref="ThreeMaterial.Map" />;
+///     <see cref="TextureInput" /> registers bytes and gets back a hash-keyed URL for a material map;
 ///     since the URL is derived from content, the browser caches it forever and re-solves only ship
 ///     the URL string, never the image bytes again.
 ///

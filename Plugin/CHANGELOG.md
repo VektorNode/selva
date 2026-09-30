@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Live solve channel**
+
+- The plugin reports each solve while it runs: `solveStarted`, `progress`, diagnostics and `solveEnded` as `SolveEvent`s. Locally they ride the WebSocket; on Rhino.Compute (VektorNode fork) the plugin POSTs them to the callback named in the request's `selvaevents` block, batched with a heartbeat. In plain Grasshopper they are dropped.
+- Abort from the web UI: a `cancelSolve` WebSocket message locally, the callback reply's `abort` flag on Compute. Either sets Grasshopper's abort flag, so the solve stops at the next component.
+- The plugin decides each solve's verdict once (`SolveOutcome`: diagnostics, blocked, aborted). Locally it travels on the `outputs` envelope as `outcome`; on Compute the fork returns it as the response's `selva` block. A blocked or aborted solve sends empty outputs, so the client clears the previous result.
+
+**Message component** (`Selva > Utilities`, hidden)
+
+- Raises a remark, warning or error when `Condition` is false and passes `Condition` through as `Passed`. An error blocks the solve's outputs from reaching the web UI; downstream components still compute, so gate expensive work on `Passed`.
+- `Level` (Remark/Warning/Error) and `Notify` (Popup/Log) are integer inputs with named values on right-click. Log adds the message to the list without interrupting; errors always interrupt.
+
+**Report Progress component** (`Selva > Utilities`, hidden)
+
+- Wired inline before a step, it passes `Data` through and shows `Message` with a progress bar in the web UI. The plugin derives the fraction from which reporters run this solution, weighted by each step's last timing, so authors never write one and the bar only moves forward.
+
+### Fixed
+
+- Changing a Value List from the web UI no longer solves the definition twice.
+
+### Added
+
 **Prepare UI Inputs**
 
 - New `Selva > UI` component, `Prepare UI Inputs` (`Plugin/Selva.GH/Features/UIBuilder/Components/GH_PrepareUIInputs.cs`). Registers existing Number Sliders, Value Lists, Boolean Toggles, and Panels by instance GUID, previews the contextual parameter (`Get Number`, `Get Integer`, `Get Value List`, `Get Boolean`, `Get String`) each one infers from its live data, and inserts it between the control and the inputs it drives - or beside a disconnected control - as one undoable, previewed operation. Existing compatible `Get` parameters are recognized and can be adopted, renamed, or repaired. Removal reverses the insertion and never deletes a node the component did not create or explicitly adopt.
@@ -59,11 +80,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Obsolete components
 
+- **Three Material** (`B7665E1A-C4CC-49D6-8EDB-4AAEF045D9A8` → `80CD38E5-BC9E-47E4-88EE-8F35B7E109CC`): appends optional `Reflection`, `Clearcoat`, `Clearcoat Roughness`, `Anisotropy`, `Anisotropy Rotation`, `Roughness Map` and `Normal Map` inputs. Unwired, each stays off the wire and the viewer keeps its default. `Reflection` beats the look's value so a metal stays reflective in every look; `Clearcoat` replaces the automatic satin coat on metals. Anisotropy and the two maps make Web Display carry the mesh's texture coordinates; anisotropy is dropped for meshes that have none. Old definitions upgrade automatically.
 - **Display From File** (`8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81` → `B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241`): the `Id` input is gone now that SLVM v3 carries object identity in the container's own table, so loading no longer needs to restamp it. Old definitions upgrade automatically; the `Id` wire is dropped.
 
 ### Upgraders
 
 - `GH_DisplayFromFileUpgrader_To_0_18`: `8B2E5C71` → `B9FCCDF3` (drops the `Id` input).
+- `GH_ThreeMaterialUpgrader_To_0_21`: `B7665E1A` → `80CD38E5` (appends seven optional inputs).
 
 ## [0.14.0-beta.2] - 2026-06-29
 

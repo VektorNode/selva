@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { createVisibilityState } from '../visibility.js';
 import { getStableKey } from '../identity.js';
+import { getSceneEntries } from '../entries.js';
+import { mergedBoxes } from '@tests/helpers/merged-mesh';
 
 describe('createVisibilityState', () => {
 	it('hides the whole subtree, not just the root', () => {
@@ -203,5 +205,43 @@ describe('createVisibilityState', () => {
 		expect(state.hidden.size).toBe(0);
 		// The object is about to be discarded, so its flag is deliberately left alone.
 		expect(mesh.visible).toBe(false);
+	});
+
+	describe('members of a merged mesh', () => {
+		const setup = () => {
+			const scene = new THREE.Scene();
+			const mesh = mergedBoxes();
+			scene.add(mesh);
+			return { mesh, entries: getSceneEntries(scene, 'Default'), state: createVisibilityState() };
+		};
+
+		it('stops drawing a hidden member', () => {
+			const { mesh, entries, state } = setup();
+
+			state.setEntryVisible(entries[1]!, false);
+
+			expect(Array.isArray(mesh.material)).toBe(true);
+			expect(mesh.geometry.groups.map((g) => g.start)).toEqual([0, 72]);
+		});
+
+		it('clears member ranges when the whole object is shown', () => {
+			const { mesh, entries, state } = setup();
+
+			state.setEntryVisible(entries[1]!, false);
+			state.setVisible(mesh, true);
+
+			expect(Array.isArray(mesh.material)).toBe(false);
+			expect(mesh.geometry.groups).toHaveLength(0);
+		});
+
+		it('turns the mesh back on when one member of a hidden layer is shown', () => {
+			const { mesh, entries, state } = setup();
+
+			state.toggleLayer([mesh]);
+			state.setEntryVisible(entries[2]!, true);
+
+			expect(mesh.visible).toBe(true);
+			expect(mesh.geometry.groups.map((g) => g.start)).toEqual([72]);
+		});
 	});
 });
