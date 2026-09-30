@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.18.1
+
+### Patch Changes
+
+- 7f0da02: Republish of the previous release. npm staged that release instead of publishing it and then dropped it, so those versions were never installable and npm won't accept them again. No code changes.
+
 ## 4.18.0
 
 ### Minor Changes
