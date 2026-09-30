@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
 using Selva.Slva;
 
 namespace Selva.Slva.Tests;
@@ -258,6 +259,49 @@ public class SlvmDocumentTests
         var decoded = RoundTrip(batch);
 
         Assert.Equal("https://example.test/t.png", decoded.Materials[0].Map);
+    }
+
+    [Fact]
+    public void RoughnessAndNormalMaps_ExtractAndReconstructAlongsideMap()
+    {
+        string DataUri(byte b) => "data:image/png;base64," + Convert.ToBase64String(new byte[] { 0x89, b });
+        var batch = BatchWithMeshes((0, "m", "", "src/0", null));
+        batch.Materials[0].Map = DataUri(1);
+        batch.Materials[0].RoughnessMap = DataUri(2);
+        batch.Materials[0].NormalMap = DataUri(3);
+
+        var decoded = RoundTrip(batch);
+
+        Assert.Equal(DataUri(1), decoded.Materials[0].Map);
+        Assert.Equal(DataUri(2), decoded.Materials[0].RoughnessMap);
+        Assert.Equal(DataUri(3), decoded.Materials[0].NormalMap);
+        // The writer copies materials; the caller's batch keeps its data URIs.
+        Assert.Equal(DataUri(2), batch.Materials[0].RoughnessMap);
+    }
+
+    [Fact]
+    public void OptionalScalars_RoundTripAndStayOffTheWireWhenUnset()
+    {
+        var batch = BatchWithMeshes((0, "m", "", "src/0", null));
+        var m = batch.Materials[0];
+        m.EnvMapIntensity = 1.0;
+        m.Clearcoat = 0.0;
+        m.ClearcoatRoughness = 0.2;
+        m.Anisotropy = 0.7;
+        m.AnisotropyRotation = 1.5;
+
+        var decoded = RoundTrip(batch).Materials[0];
+
+        Assert.Equal(1.0, decoded.EnvMapIntensity);
+        Assert.Equal(0.0, decoded.Clearcoat);
+        Assert.Equal(0.2, decoded.ClearcoatRoughness);
+        Assert.Equal(0.7, decoded.Anisotropy);
+        Assert.Equal(1.5, decoded.AnisotropyRotation);
+
+        var plain = JsonConvert.SerializeObject(new SerializableMaterial { Color = "#FFFFFF" });
+        Assert.DoesNotContain("clearcoat", plain);
+        Assert.DoesNotContain("anisotropy", plain);
+        Assert.DoesNotContain("envMapIntensity", plain);
     }
 
     // ============================================================================

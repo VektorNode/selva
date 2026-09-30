@@ -17,6 +17,12 @@ export function triangleCountOf(geometry: THREE.BufferGeometry): number {
 	return (geometry.index ? geometry.index.count : position.count) / 3;
 }
 
+/** `faces` maps each segment to its source triangle; null from the `EdgesGeometry` fallback. */
+export interface ExtractedEdges {
+	segments: Float32Array;
+	faces: Uint32Array | null;
+}
+
 interface FastPathData {
 	positions: Float32Array;
 	index: Uint32Array | Uint16Array | null;
@@ -77,19 +83,19 @@ function contentKey(data: FastPathData, thresholdAngle: number): string {
 	return `${thresholdAngle}:${data.positions.length}:${indexLength}:${hash >>> 0}`;
 }
 
-function extractViaThree(geometry: THREE.BufferGeometry, thresholdAngle: number): Float32Array {
+function extractViaThree(geometry: THREE.BufferGeometry, thresholdAngle: number): ExtractedEdges {
 	const edges = new THREE.EdgesGeometry(geometry, thresholdAngle);
 	const positions = edges.attributes.position
 		? (edges.attributes.position.array as Float32Array)
 		: new Float32Array(0);
 	edges.dispose(); // frees only GPU-side state; the CPU array is the return value
-	return positions;
+	return { segments: positions, faces: null };
 }
 
 export function extractSegmentsSync(
 	geometry: THREE.BufferGeometry,
 	thresholdAngle: number
-): Float32Array {
+): ExtractedEdges {
 	const data = fastPathData(geometry);
 	if (!data) return extractViaThree(geometry, thresholdAngle);
 
@@ -99,7 +105,7 @@ export function extractSegmentsSync(
 // --- Worker offload -----------------------------------------------------------------------------
 
 interface PendingRequest {
-	resolve: (segments: Float32Array) => void;
+	resolve: (edges: ExtractedEdges) => void;
 	reject: (error: Error) => void;
 }
 
@@ -127,15 +133,16 @@ function getExtractionWorker(): Worker | null {
 		);
 		const worker = new Worker(url);
 		worker.onmessage = (event: MessageEvent) => {
-			const { id, segments, error } = event.data as {
+			const { id, segments, faces, error } = event.data as {
 				id: number;
 				segments?: Float32Array;
+				faces?: Uint32Array;
 				error?: string;
 			};
 			const pending = pendingRequests.get(id);
 			if (!pending) return;
 			pendingRequests.delete(id);
-			if (segments) pending.resolve(segments);
+			if (segments) pending.resolve({ segments, faces: faces ?? null });
 			else pending.reject(new Error(error ?? 'edge extraction failed in worker'));
 		};
 		worker.onerror = () => {
@@ -159,8 +166,8 @@ function extractInWorker(
 	worker: Worker,
 	data: FastPathData,
 	thresholdAngle: number
-): Promise<Float32Array> {
-	return new Promise<Float32Array>((resolve, reject) => {
+): Promise<ExtractedEdges> {
+	return new Promise<ExtractedEdges>((resolve, reject) => {
 		const id = nextRequestId++;
 		pendingRequests.set(id, { resolve, reject });
 		// Copy before transfer — the originals back the render geometry.
@@ -173,12 +180,12 @@ function extractInWorker(
 }
 
 // In-flight dedupe: meshes with identical content share one worker round-trip.
-const inFlightExtractions = new Map<string, Promise<Float32Array>>();
+const inFlightExtractions = new Map<string, Promise<ExtractedEdges>>();
 
 export function extractSegmentsAsync(
 	geometry: THREE.BufferGeometry,
 	thresholdAngle: number
-): Promise<Float32Array> {
+): Promise<ExtractedEdges> {
 	const data = fastPathData(geometry);
 	if (!data || triangleCountOf(geometry) < INLINE_TRIANGLE_BUDGET) {
 		return Promise.resolve(extractSegmentsSync(geometry, thresholdAngle));

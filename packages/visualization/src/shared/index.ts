@@ -17,7 +17,12 @@ export { decodeBase64ToBinary } from './encoding.js';
 export { LOOKS } from './types.js';
 export type { Look, LookMaterialOverride, LookPreset, MaterialAppearanceOptions } from './types.js';
 
-export { LOOK_PRESETS, DEFAULT_LOOK, materialAppearanceForLook } from './looks.js';
+export {
+	LOOK_PRESETS,
+	DEFAULT_LOOK,
+	OWN_ENV_MAP_INTENSITY,
+	materialAppearanceForLook
+} from './looks.js';
 
 export { parseColor, applyOffset, computeCombinedBoundingBox } from './geometry.js';
 
@@ -27,3 +32,12 @@ export { publishMaxAnisotropy, observeMaxAnisotropy } from './gpu-capabilities.j
 
 export { disposeMaterial, disposeObjectTree } from './gpu-dispose.js';
 export type { DisposeOptions } from './gpu-dispose.js';
+
+export {
+	getHiddenMembers,
+	setHiddenMembers,
+	getBaseMaterial,
+	setMemberHighlight,
+	clearMemberHighlight,
+	onMemberDrawChange
+} from './merged-draw.js';

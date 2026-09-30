@@ -20,12 +20,14 @@ export interface RouteClassifierConfig {
 	 */
 	publicApis?: Iterable<string>;
 	/**
-	 * One prefix whose routes authorize each request themselves (e.g. a blob
-	 * proxy classifying per asset path). These classify as public so the hook
-	 * attaches a session best-effort and does not deny up front; the route makes
-	 * the real decision. Keep it to ONE prefix — every other API route stays
-	 * deny-by-default.
+	 * Prefixes whose routes authorize each request themselves (e.g. a blob
+	 * proxy classifying per asset path, or a callback authenticated by a
+	 * per-request bearer). These classify as public so the hook attaches a
+	 * session best-effort and does not deny up front; the route makes the real
+	 * decision. Keep the list short — every other API route stays deny-by-default.
 	 */
+	selfGatingPrefixes?: readonly string[];
+	/** Single-prefix form of `selfGatingPrefixes`. */
 	selfGatingPrefix?: string;
 	/** Static-asset prefixes the adapter serves directly (e.g. `/_app/`). */
 	staticPrefixes?: readonly string[];
@@ -46,7 +48,10 @@ export function createRouteClassifier(config: RouteClassifierConfig): RouteClass
 	const publicPages = new Set(config.publicPages ?? []);
 	const publicPrefixes = config.publicPrefixes ?? [];
 	const publicApis = new Set(config.publicApis ?? []);
-	const selfGatingPrefix = config.selfGatingPrefix;
+	const selfGatingPrefixes = [
+		...(config.selfGatingPrefixes ?? []),
+		...(config.selfGatingPrefix !== undefined ? [config.selfGatingPrefix] : [])
+	];
 	const staticPrefixes = config.staticPrefixes ?? [];
 	const staticPaths = new Set(config.staticPaths ?? []);
 
@@ -56,7 +61,7 @@ export function createRouteClassifier(config: RouteClassifierConfig): RouteClass
 	}
 
 	function isSelfGatingApiRoute(pathname: string): boolean {
-		return selfGatingPrefix !== undefined && pathname.startsWith(selfGatingPrefix);
+		return selfGatingPrefixes.some((p) => pathname.startsWith(p));
 	}
 
 	function isPublicRoute(pathname: string): boolean {

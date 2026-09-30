@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Config;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Utilities.Helpers;
@@ -91,6 +92,12 @@ public class WebSocketTransport : IDisposable
     public event EventHandler<SchemaSaveRequest> OnSchemaSaveRequested;
     public event EventHandler<UISchema> OnSyncPreviewRequested;
     public event EventHandler<List<SyncChange>> OnSyncChangesApply;
+
+    /// <summary>
+    ///     Raised on the socket's dispatch thread, never marshalled to the UI thread (the solver
+    ///     holds it). Handlers may only flip the document's abort flag.
+    /// </summary>
+    public event EventHandler OnCancelSolveRequested;
 
     protected virtual void Dispose(bool disposing)
     {
@@ -197,6 +204,11 @@ public class WebSocketTransport : IDisposable
         return BroadcastAsync(OutboundEnvelopes.Wrapped(_sessionId, messageType, data));
     }
 
+    public Task BroadcastSolveEvent(SolveEvent solveEvent)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SolveEvent(_sessionId, solveEvent));
+    }
+
     // Flat envelope: availableParams sits at the top level, matching TS WsParametersAddedMessage.
     public Task BroadcastParametersAdded(DiscoveredParameters availableParams)
     {
@@ -207,7 +219,8 @@ public class WebSocketTransport : IDisposable
         Dictionary<string, object> outputs,
         Dictionary<string, object> fileOutputs,
         List<object> displayData,
-        bool includeDisplayData = true)
+        bool includeDisplayData = true,
+        SolveDiagnostics diagnostics = null)
     {
         var doc = RhinoDoc.ActiveDoc;
         var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
@@ -263,7 +276,8 @@ public class WebSocketTransport : IDisposable
         // `displayItems` is null when empty so mesh-only solves stay unchanged on the wire.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
             _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
-            displayItems.Count > 0 ? displayItems : null));
+            displayItems.Count > 0 ? displayItems : null,
+            (diagnostics ?? new SolveDiagnostics()).ToOutcome()));
 
         // WebSocket preserves order, so these binary frames always arrive after the JSON envelope.
         // Capture the server field once: Stop() can null it from another thread mid-loop.
@@ -373,6 +387,34 @@ public class WebSocketTransport : IDisposable
             _sessionId, level, messageText, DateTime.UtcNow));
     }
 
+    /// <summary>
+    ///     Reports a solve that produced no result: refused by a Message component, or aborted.
+    /// </summary>
+    /// <remarks>
+    ///     Deliberately the same <c>outputs</c> envelope with empty outputs and
+    ///     <c>binaryBatchCount: 0</c>: the client clears what it was showing, so the previous
+    ///     result cannot pass for the answer to the current inputs.
+    /// </remarks>
+    public Task BroadcastBlockedSolve(SolveDiagnostics diagnostics)
+    {
+        if (diagnostics == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var doc = RhinoDoc.ActiveDoc;
+        var modelUnits = doc?.ModelUnitSystem.ToString() ?? "Meters";
+
+        return BroadcastAsync(OutboundEnvelopes.Outputs(
+            _sessionId,
+            new Dictionary<string, object>(),
+            new Dictionary<string, object>(),
+            binaryBatchCount: 0,
+            modelUnits: modelUnits,
+            displayItems: null,
+            outcome: diagnostics.ToOutcome()));
+    }
+
     public Task BroadcastSyncPreview(SyncDiff syncDiff)
     {
         if (syncDiff == null)
@@ -479,6 +521,13 @@ public class WebSocketTransport : IDisposable
 
                 case InboundKind.ApplySyncChanges:
                     MarshalToMainThread(() => OnSyncChangesApply?.Invoke(this, inbound.Changes));
+                    break;
+
+                case InboundKind.CancelSolve:
+                    // Deliberately NOT marshalled: the solver occupies the UI thread, so a
+                    // marshalled cancel would queue behind the very solve it is meant to stop.
+                    // The handler only flips the document's abort flag, which is safe here.
+                    OnCancelSolveRequested?.Invoke(this, EventArgs.Empty);
                     break;
 
                 case InboundKind.SessionMismatch:

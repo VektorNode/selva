@@ -8,15 +8,20 @@
 // correct value but will not re-render.
 
 import type { UISchema } from '@selvajs/schemas';
-import { readExternalValue } from './external-storage.js';
-import type { SolveResult } from '../shared/solve-fn.js';
-import type { SolveDriver } from './drivers/driver.js';
+import { readExternalValue } from '../external-storage.js';
+import type { SolveDiagnostic, SolveResult } from '../../shared/solve-fn.js';
+import type { SolveDriver } from '../drivers/driver.js';
+import { EMPTY_LIVE_SOLVE, reduceLiveSolve, type LiveSolveState } from '../events/live-solve.js';
 import {
 	buildInitialValues,
 	makeInitialFlags,
 	applyValueChange,
 	applySolveResult,
+	blankOutputs,
+	commitSolveResult,
 	pickInputValues,
+	solvePhase,
+	type SolvePhase,
 	type SolveSessionState,
 	type RetainedSolveResult
 } from './solve-session-core.js';
@@ -26,6 +31,53 @@ export interface SolveSession {
 	readonly error: string;
 	readonly computeErrors: string[];
 	readonly computeWarnings: string[];
+	/**
+	 * The last solve's messages with their level, source and `isGate`. Richer than the two
+	 * string arrays above and the list a message UI should render; they remain for hosts that
+	 * only want the text. Empty from a transport that reports no structure.
+	 */
+	readonly diagnostics: SolveDiagnostic[];
+	/**
+	 * The definition refused the last solve, or it was aborted. Applied at once, not held: the
+	 * outputs are blanked and the viewer cleared, and `computeErrors` holds the reason.
+	 */
+	readonly blocked: boolean;
+	/**
+	 * The last solve raised messages awaiting the user's confirmation, and its result is held
+	 * back until then. A host shows the messages and calls `acknowledge()` to release them.
+	 * Never true for a blocked solve.
+	 */
+	readonly awaitingAck: boolean;
+	/**
+	 * Releases a held result into the session. No-op when nothing is held. The solve already
+	 * ran — this applies what it produced, it does not re-solve.
+	 */
+	acknowledge(): void;
+	/**
+	 * Drops a held result instead of applying it. The viewer keeps what it was showing. No-op
+	 * when nothing is held, and never re-solves — like `acknowledge()`, it only decides the
+	 * fate of a result that already exists.
+	 */
+	discard(): void;
+	/**
+	 * What the running (or most recent) solve has said so far: its diagnostics, progress per
+	 * source, and how it ended. Reset when a solve with a new id starts, so a host renders "what
+	 * this solve has said", never a tail of the previous one. Stays empty when the driver has no
+	 * live channel.
+	 */
+	readonly live: LiveSolveState;
+	/**
+	 * Where the session is, as one value instead of four flags: `solving` while a solve runs,
+	 * `review` while a result waits for `acknowledge()`, `blocked` after a refused or aborted
+	 * solve, `idle` otherwise.
+	 */
+	readonly phase: SolvePhase;
+	/**
+	 * Asks the transport to stop the solve in flight. Cooperative on both paths — Grasshopper
+	 * stops at the next component boundary — so the result is a `solveEnded` (or nothing, if it
+	 * finished first), never an instant halt.
+	 */
+	abort(): void;
 	readonly meshes: unknown[];
 	/**
 	 * The last reported result without its meshes — what the viewer is currently showing,
@@ -49,6 +101,12 @@ export interface SolveSession {
 	subscribe(listener: () => void): () => void;
 	/** For driver-owned state the session only forwards: `isSolving` lives on the driver, so wire this to its `onChange`. */
 	notify(): void;
+	/**
+	 * Stops listening to the driver's live events and drops every subscriber. Call when the
+	 * session is discarded: the event source can outlive it (the cloud stream belongs to the tab),
+	 * and would otherwise keep feeding a session nobody reads.
+	 */
+	dispose(): void;
 }
 
 export interface SolveSessionArgs {
@@ -66,6 +124,10 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		error: '',
 		computeErrors: [],
 		computeWarnings: [],
+		diagnostics: [],
+		blocked: false,
+		awaitingAck: false,
+		heldResult: null,
 		meshes: [],
 		pendingValues: {},
 		hasPendingChanges: flags.hasPendingChanges,
@@ -75,6 +137,15 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 
 	const listeners = new Set<() => void>();
 	const emit = () => listeners.forEach((l) => l());
+
+	let live: LiveSolveState = EMPTY_LIVE_SOLVE;
+	// A driver with no live channel never calls this; nothing else in the session depends on it.
+	const stopEvents = args.driver.onEvent?.((event) => {
+		const next = reduceLiveSolve(live, event);
+		if (next === live) return;
+		live = next;
+		emit();
+	});
 
 	function dispatch() {
 		// Copy: state.values is the live map, and a driver may hold the payload across an
@@ -95,6 +166,43 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 		get computeWarnings() {
 			return state.computeWarnings;
+		},
+		get diagnostics() {
+			return state.diagnostics;
+		},
+		get blocked() {
+			return state.blocked;
+		},
+		get awaitingAck() {
+			return state.awaitingAck;
+		},
+
+		acknowledge() {
+			if (!state.awaitingAck) return;
+			const held = state.heldResult;
+			state.awaitingAck = false;
+			state.heldResult = null;
+			if (held) commitSolveResult(state, held);
+			emit();
+		},
+
+		discard() {
+			if (!state.awaitingAck) return;
+			state.awaitingAck = false;
+			state.heldResult = null;
+			// `values`, `meshes` and `lastResult` are untouched: the viewer keeps showing the last
+			// result the user accepted. The messages stay on `computeErrors`/`computeWarnings` so
+			// the footer still explains why nothing changed.
+			emit();
+		},
+		get live() {
+			return live;
+		},
+		get phase() {
+			return solvePhase(state, args.driver.isSolving);
+		},
+		abort() {
+			args.driver.cancel();
 		},
 		get meshes() {
 			return state.meshes;
@@ -150,6 +258,11 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			state.error = '';
 			state.computeErrors = [];
 			state.computeWarnings = [];
+			state.diagnostics = [];
+			state.blocked = false;
+			state.awaitingAck = false;
+			// Belongs to the previous definition, same as lastResult.
+			state.heldResult = null;
 			state.pendingValues = {};
 			state.values = buildInitialValues(schema, scopeKey, readExternalValue);
 			const f = makeInitialFlags(schema?.instanceSolve);
@@ -163,7 +276,14 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		report(result) {
-			applySolveResult(state, result);
+			// `finalizeResult` already dropped a rejected solve's outputs; this also nulls the
+			// ones still in `values` from the previous solve, which only the session can name.
+			applySolveResult(
+				state,
+				result.blocked || result.aborted
+					? { ...result, outputs: blankOutputs(currentSchema), meshes: [] }
+					: result
+			);
 			emit();
 		},
 
@@ -177,6 +297,11 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			return () => listeners.delete(listener);
 		},
 
-		notify: emit
+		notify: emit,
+
+		dispose() {
+			stopEvents?.();
+			listeners.clear();
+		}
 	};
 }

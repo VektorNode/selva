@@ -13,7 +13,7 @@ Each of these is silent: nothing fails at build time, and the damage shows up la
 - **Never change a param list on a released Grasshopper component** without the OBSOLETE + upgrader procedure below. Grasshopper binds wires by index; reusing the `ComponentGuid` with a changed param list rewires saved definitions.
 - **Never log a whole domain object.** Log identifiers (`eventType`, `actorId`, `userId`), never payloads. Erasure cannot reach stdout.
 - **Never add a `three` dependency to `@selvajs/compute`**, in any form, including a `/visualization` sub-export.
-- **Never hand-edit generated files.** Edit `ui-schema.json` and regenerate.
+- **Never hand-edit generated files.** Edit the JSON schema (`ui-schema.json` or `wire-schema.json`) and regenerate.
 - **Never hardcode a shared dep version.** Reference `catalog:` and edit `pnpm-workspace.yaml`.
 - **Never describe Selva as having "zero exposure" to data-protection law.** It holds personal data; the operator is the controller.
 
@@ -94,7 +94,7 @@ The rewrite is barely shorter. It's better because it names what breaks and why.
 
 ### Type safety end-to-end
 
-`packages/schemas/ui-schema.json` generates both TypeScript types for the UI and C# types for the plugin. Generated output lands in `packages/schemas/src/generated/schema.ts` and `Plugin/Selva.Schema/Models/UISchema.Generated.cs`. After editing the schema, run `pnpm generate`.
+Two JSON schemas in `packages/schemas/` generate both TypeScript and C# types. `ui-schema.json` is the UI schema saved into a .gh (versioned by `schemaVersion`); `wire-schema.json` holds messages and runtime state (discovery, solve events, diagnostics, the solve outcome), which are never saved. Output lands in `packages/schemas/src/generated/` and `Plugin/Selva.Schema/Models/`. After editing either, run `pnpm generate`.
 
 ### `@selvajs/compute`
 
@@ -190,7 +190,7 @@ pnpm type-check             # tsc --noEmit
 pnpm lint                   # ESLint, repo root, NOT via turbo
 pnpm format                 # Prettier
 pnpm test                   # vitest across packages that have tests
-pnpm generate               # regenerate TS + C# from ui-schema.json
+pnpm generate               # regenerate TS + C# from ui-schema.json and wire-schema.json
 
 pnpm clean                  # remove node_modules, .svelte-kit, pnpm-lock.yaml
 pnpm rebuild                # clean + install + build
@@ -206,7 +206,7 @@ Single package: `cd packages/<name> && pnpm test` (or `pnpm test:watch`).
 pnpm type-check && pnpm lint && pnpm test
 ```
 
-Plus `cd Plugin && dotnet build && dotnet test` if C# changed, and `pnpm generate` if `ui-schema.json` changed.
+Plus `cd Plugin && dotnet build && dotnet test` if C# changed, and `pnpm generate` if `ui-schema.json` or `wire-schema.json` changed.
 
 ### Local development
 

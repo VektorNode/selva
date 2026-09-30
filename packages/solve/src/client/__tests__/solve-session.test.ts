@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createSolveSession } from '../solve-session.js';
+import { createSolveSession } from '../session/solve-session.js';
 import { createRequestResponseDriver } from '../drivers/request-response.js';
 import type { SolveDriver, SolveReporter } from '../drivers/driver.js';
 import type { UISchema } from '@selvajs/schemas';
@@ -355,5 +355,140 @@ describe('createSolveSession.subscribe', () => {
 		// A later change must not retroactively mutate a payload the transport already holds.
 		session.setValue('a', 'z');
 		expect(dispatched.a).toBe('y');
+	});
+});
+
+describe('createSolveSession — holding a result behind its messages', () => {
+	function heldSession() {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({
+			outputs: { out: 'clean' },
+			meshes: [{ id: 'clean' }]
+		});
+		session.report({
+			outputs: { out: 'flagged' },
+			warnings: ['check this'],
+			// Only an authored message holds a result; a bare warning no longer gates.
+			diagnostics: [{ level: 'warning', message: 'check this', isGate: true }],
+			meshes: [{ id: 'flagged' }]
+		});
+		return session;
+	}
+
+	it('withholds the flagged result while surfacing its messages', () => {
+		const session = heldSession();
+		expect(session.awaitingAck).toBe(true);
+		expect(session.computeWarnings).toEqual(['check this']);
+		expect(session.values.out).toBe('clean');
+		expect(session.meshes).toEqual([{ id: 'clean' }]);
+	});
+
+	it('acknowledge() applies the held result without re-solving', () => {
+		const session = heldSession();
+		session.acknowledge();
+		expect(session.awaitingAck).toBe(false);
+		expect(session.values.out).toBe('flagged');
+		expect(session.meshes).toEqual([{ id: 'flagged' }]);
+	});
+
+	it('discard() drops it, leaving the last accepted result on screen', () => {
+		const session = heldSession();
+		session.discard();
+		expect(session.awaitingAck).toBe(false);
+		expect(session.values.out).toBe('clean');
+		expect(session.meshes).toEqual([{ id: 'clean' }]);
+		// The reason stays visible in the footer even though nothing was applied.
+		expect(session.computeWarnings).toEqual(['check this']);
+	});
+
+	it('a blocked solve replaces the result on screen with nothing', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({ outputs: { out: 'clean' }, meshes: [{ id: 'clean' }] });
+		session.report({ outputs: {}, errors: ['refused'], blocked: true });
+		expect(session.blocked).toBe(true);
+		expect(session.awaitingAck).toBe(false);
+		expect(session.values.out).toBe(null);
+		expect(session.meshes).toEqual([]);
+		expect(session.computeErrors).toEqual(['refused']);
+	});
+
+	it('both are no-ops when nothing is held', () => {
+		const session = createSolveSession({
+			schema: schema(true),
+			scopeKey: 's',
+			driver: recordingDriver()
+		});
+		session.report({ outputs: { out: 'clean' } });
+		session.acknowledge();
+		session.discard();
+		expect(session.values.out).toBe('clean');
+		expect(session.awaitingAck).toBe(false);
+	});
+});
+
+describe('createSolveSession live channel', () => {
+	function eventDriver() {
+		const listeners = new Set<(e: import('@selvajs/schemas').SolveEvent) => void>();
+		let solving = false;
+		const driver: SolveDriver = {
+			solve() {},
+			cancel() {},
+			get isSolving() {
+				return solving;
+			},
+			onEvent(listener) {
+				listeners.add(listener);
+				return () => listeners.delete(listener);
+			}
+		};
+		return {
+			driver,
+			listeners,
+			setSolving: (v: boolean) => (solving = v),
+			send: (type: string, payload = {}) =>
+				listeners.forEach((l) => l({ solveId: 's1', seq: ++seqN, at: '', type, payload }))
+		};
+	}
+	let seqN = 0;
+
+	it('folds events into live and notifies', () => {
+		const d = eventDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver: d.driver });
+		const listener = vi.fn();
+		session.subscribe(listener);
+		d.send('diagnostic', { level: 'warning', message: 'Too thin' });
+		expect(session.live.diagnostics).toEqual([{ level: 'warning', message: 'Too thin' }]);
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
+	it('dispose unsubscribes from the driver', () => {
+		const d = eventDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver: d.driver });
+		session.dispose();
+		expect(d.listeners.size).toBe(0);
+	});
+
+	it('phase reads solving, then review, then blocked', () => {
+		const d = eventDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver: d.driver });
+		expect(session.phase).toBe('idle');
+		d.setSolving(true);
+		expect(session.phase).toBe('solving');
+		d.setSolving(false);
+		session.report({
+			outputs: {},
+			diagnostics: [{ level: 'warning', message: 'w', isGate: true }]
+		});
+		expect(session.phase).toBe('review');
+		session.report({ outputs: {}, blocked: true, aborted: true });
+		expect(session.phase).toBe('blocked');
 	});
 });

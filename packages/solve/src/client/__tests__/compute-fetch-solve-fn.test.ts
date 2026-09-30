@@ -210,3 +210,75 @@ describe('createComputeFetchSolveFn — debug telemetry', () => {
 		logSpy.mockRestore();
 	});
 });
+
+describe('createComputeFetchSolveFn — blocked solves', () => {
+	it('flags blocked and strips the marker from the message shown', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({
+				values: [],
+				errors: ['1. Solution exception:[Selva:blocked] Wall too thin'],
+				warnings: []
+			})
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.blocked).toBe(true);
+		// Both the marker and Compute's numbered-exception wrapper are wire plumbing, not
+		// something the author wrote, so the user sees only their own sentence.
+		expect(result.errors).toEqual(['Wall too thin']);
+		expect(result.diagnostics).toEqual([
+			{ level: 'error', message: 'Wall too thin', isGate: true }
+		]);
+	});
+
+	it('drops the outputs and skips mesh extraction on a blocked solve', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({
+				values: [
+					{ ParamName: 'out', InnerTree: { '{0}': [{ type: 'System.Double', data: '1' }] } }
+				],
+				errors: ['[Selva:blocked] refused'],
+				warnings: []
+			})
+		);
+		const extract = vi.fn(async () => [{ id: 'mesh' }]);
+		const solve = createComputeFetchSolveFn(
+			baseOpts({
+				outputs: () => [{ id: 'out', nickname: 'out' }],
+				meshes: { extract }
+			} as never)
+		);
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.outputs).toEqual({});
+		expect(result.meshes).toEqual([]);
+		expect(extract).not.toHaveBeenCalled();
+	});
+
+	it('leaves an ordinary solve error unblocked and untouched', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({
+				values: [],
+				errors: ['1. Solution exception: division by zero'],
+				warnings: []
+			})
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.blocked).toBe(false);
+		expect(result.errors).toEqual(['1. Solution exception: division by zero']);
+	});
+
+	it('a warning-level Message never blocks: the marker rides only on errors', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({ values: [], errors: [], warnings: ['1. Wall is thin'] })
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+
+		expect(result.blocked).toBe(false);
+		expect(result.warnings).toEqual(['1. Wall is thin']);
+	});
+});

@@ -2,8 +2,14 @@ import * as THREE from 'three';
 import type { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
 
-import { buildLineGeometry, type EdgeGeometryEntry } from './edges/line-geometry.js';
-import { extractSegmentsAsync, extractSegmentsSync, triangleCountOf } from './edges/extraction.js';
+import { buildLineGeometry } from './edges/line-geometry.js';
+import {
+	extractSegmentsAsync,
+	extractSegmentsSync,
+	triangleCountOf,
+	type ExtractedEdges
+} from './edges/extraction.js';
+import { followHiddenMembers } from './edges/member-filter.js';
 import {
 	EDGES_SKIPPED_OVERLAY_BUDGET,
 	EDGES_SKIPPED_TRIANGLE_CAP,
@@ -80,15 +86,17 @@ function collectTargets(root: THREE.Object3D, resolved: ResolvedOptions): THREE.
 
 function attachOverlay(
 	mesh: THREE.Mesh,
-	entry: EdgeGeometryEntry,
+	edges: ExtractedEdges,
 	materials: MaterialPool,
 	resolved: ResolvedOptions
 ): LineSegments2 {
+	const entry = buildLineGeometry(edges.segments);
 	// Distance fade needs the transparent pass; overlays over the segment cap stay opaque instead
 	// of skipping outright — see EdgeOptions.maxSegments.
 	const fade = resolved.distanceFade && entry.segmentCount <= resolved.maxSegments;
 	const overlay = buildEdgeOverlay(entry, materials.for(mesh, fade), fade);
 	mesh.add(overlay); // child → inherits transform, disposed with the parent subtree
+	followHiddenMembers(overlay, mesh, edges);
 	return overlay;
 }
 
@@ -107,8 +115,8 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 	for (const mesh of collectTargets(root, resolved)) {
 		// Extraction itself is cached by content (`extraction.ts`), which is where the savings are;
 		// the line geometry is per-overlay and owned by it.
-		const segments = extractSegmentsSync(mesh.geometry, resolved.thresholdAngle);
-		created.push(attachOverlay(mesh, buildLineGeometry(segments), materials, resolved));
+		const edges = extractSegmentsSync(mesh.geometry, resolved.thresholdAngle);
+		created.push(attachOverlay(mesh, edges, materials, resolved));
 	}
 
 	materials.disposeUnused(created);
@@ -150,12 +158,12 @@ export async function addEdgesAsync(
 	const created: LineSegments2[] = [];
 
 	const attaches = collectTargets(root, resolved).map(async (mesh) => {
-		const segments = await extractSegmentsAsync(mesh.geometry, resolved.thresholdAngle);
+		const edges = await extractSegmentsAsync(mesh.geometry, resolved.thresholdAngle);
 		// Things may have moved on while extracting — attach only if this apply is still wanted.
 		if (generationOf(root) !== generation) return;
 		if (!isConnected(mesh, root)) return;
 		if (mesh.children.some((c) => c.userData?.kind === EDGE_USERDATA_KIND)) return;
-		created.push(attachOverlay(mesh, buildLineGeometry(segments), materials, resolved));
+		created.push(attachOverlay(mesh, edges, materials, resolved));
 	});
 
 	await Promise.all(attaches);

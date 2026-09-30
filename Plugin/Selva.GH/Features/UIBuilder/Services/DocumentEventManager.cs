@@ -8,6 +8,7 @@ using Grasshopper.Kernel;
 using Rhino;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Helpers;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Utilities.Helpers;
@@ -38,6 +39,9 @@ public class DocumentEventManager : IDisposable
     ///     never re-solves with enable=false, so edge detection alone misses the re-registration).
     /// </summary>
     public bool IsRegistered => _eventsRegistered;
+
+    /// <summary>The document events are attached to; null while unregistered.</summary>
+    public GH_Document CurrentDocument => _currentDocument;
 
     private Timer _documentModifiedTimer;
     private bool _eventsRegistered;
@@ -134,6 +138,10 @@ public class DocumentEventManager : IDisposable
         }
 
         _currentDocument = document;
+
+        // Created now rather than by the first emitter, so it sees the next SolutionStart and
+        // local events carry that solution's id from the first one on.
+        SolveRuntimes.For(document);
 
         try
         {
@@ -363,6 +371,16 @@ public class DocumentEventManager : IDisposable
             return false;
         }
 
+        var diagnostics = SolveRuntimes.For(_currentDocument).Verdict();
+
+        // Blocked means no outputs at all — not the outputs that happened to compute. Collected
+        // first so a refused solve does not pay for display data it will never send.
+        if (diagnostics.Blocked)
+        {
+            _ = _webSocketTransport.BroadcastBlockedSolve(diagnostics);
+            return true;
+        }
+
         var includeDisplayData = schema.ViewerOptions?.EnableLocal ?? false;
 
         var outputValues = _valueCollector.CollectOutputValues(_currentDocument, schema);
@@ -379,14 +397,22 @@ public class DocumentEventManager : IDisposable
             ? _valueCollector.CollectDisplayData(_currentDocument)
             : new List<object>();
 
-        if (outputValues.Count == 0 && fileOutputs.Count == 0 && displayData.Count == 0)
+        var hasPayload = outputValues.Count > 0 || fileOutputs.Count > 0 || displayData.Count > 0;
+
+        // Diagnostics keep the broadcast alive when there's nothing else to send: a solve whose
+        // only news is a warning still needs to reach the UI.
+        if (!hasPayload && !diagnostics.HasAny)
         {
             return false;
         }
 
-        var _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
-            includeDisplayData);
-        return true;
+        _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
+            includeDisplayData, diagnostics);
+
+        // Reports whether OUTPUTS went out, not whether anything did: ScheduleOutputBroadcast
+        // regenerates display data on a false, and a diagnostics-only broadcast must not pass for
+        // a payload — that would leave a freshly-connected browser with no geometry.
+        return hasPayload;
     }
 }
 

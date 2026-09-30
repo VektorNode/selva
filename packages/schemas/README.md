@@ -1,9 +1,14 @@
 # @selvajs/schemas
 
-Single source of truth for the shapes shared between the web UI and the Grasshopper plugin. `ui-schema.json` generates both sides:
+Single source of truth for the shapes shared between the web UI, the Selva server and the Grasshopper plugin. Three JSON schemas, each generating both sides:
 
-- TypeScript: `src/generated/schema.ts` (plus `preset.ts` from `preset-schema.json`)
-- C#: `Plugin/Selva.Schema/Models/UISchema.Generated.cs` and `Plugin/Selva.Schema/Constants/SchemaVersion.cs`
+| Source               | What it holds                                                                                     | TypeScript                | C#                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------ |
+| `ui-schema.json`     | The UI schema saved into a .gh: inputs, outputs, layout, widgets, viewer options. Versioned.      | `src/generated/schema.ts` | `Models/UISchema.Generated.cs`, `Constants/SchemaVersion.cs` |
+| `wire-schema.json`   | Messages and runtime state: discovery, solve events, diagnostics, the solve outcome. Never saved. | `src/generated/wire.ts`   | `Models/Wire.Generated.cs`                                   |
+| `preset-schema.json` | Saved parameter presets.                                                                          | `src/generated/preset.ts` | none                                                         |
+
+C# paths are under `Plugin/Selva.Schema/`, all in the `Selva.Schema.Models` namespace. A wire type may reference a UI type with `"$ref": "ui-schema.json#/definitions/X"`; the generators import it rather than emit it twice.
 
 Never edit the generated files. Edit the JSON schema and run, from the repo root:
 
@@ -36,7 +41,7 @@ Conventions the generators rely on:
 
 ## Changing the schema format = version bump
 
-The `default` on `UISchema.properties.schemaVersion` versions the **saved-schema format**; it is what lets the plugin migrate old saved definitions. The generators refuse to run when definitions changed without a bump (`scripts/lib/version-guard.js`). Doc-only edits — descriptions, section comments — don't count as changes.
+The `default` on `UISchema.properties.schemaVersion` versions the **saved-schema format**; it is what lets the plugin migrate old saved definitions. The generators refuse to run when a definition `UISchema` reaches changed without a bump (`scripts/lib/version-guard.js`). Doc-only edits (descriptions, section comments) and definitions nothing saved can reach don't count. `wire-schema.json` is never versioned: the fixtures below pin it.
 
 When you bump:
 
@@ -53,7 +58,7 @@ Besides the generated types, the package exports two small modules every schema 
 - `traversal.ts` — `getGroups` / `getLayoutItems` / `getInputItems`, the single place that knows how to walk a layout (tabbed vs flat). Readers are defensive: missing layout or groups yield empty results, never a throw.
 - `defaults.ts` — `getDefaultValue(paramType)`, the value an input carries when the schema provides none.
 
-The JSON schemas themselves are published and importable: `@selvajs/schemas/ui-schema.json`, `@selvajs/schemas/preset-schema.json`.
+The JSON schemas themselves are published and importable: `@selvajs/schemas/ui-schema.json`, `@selvajs/schemas/wire-schema.json`, `@selvajs/schemas/preset-schema.json`.
 
 ## Fixtures
 

@@ -21,7 +21,7 @@ function extractViaThree(geometry: THREE.BufferGeometry, angle: number): Float32
 function extractViaOurs(geometry: THREE.BufferGeometry, angle: number): Float32Array {
 	const positions = geometry.attributes.position.array as Float32Array;
 	const index = geometry.index ? (geometry.index.array as Uint32Array | Uint16Array) : null;
-	return extractEdgeSegments(positions, index, angle);
+	return extractEdgeSegments(positions, index, angle).segments;
 }
 
 /**

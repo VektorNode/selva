@@ -47,6 +47,17 @@ export interface GrasshopperBaseSchema {
 }
 
 /**
+ * Where a Selva-family plugin running inside the solve may POST live events, and
+ * the bearer it presents. The VektorNode fork hands these to the document as
+ * constants; a stock server ignores the block. Never echoed in the response.
+ */
+export interface SelvaEventTarget {
+	url: string;
+	solveId: string;
+	token: string;
+}
+
+/**
  * Definition source (used in args and response)
  */
 export interface GrasshopperDefinitionSource {
@@ -82,6 +93,8 @@ export interface GrasshopperComputeConfig extends ComputeConfig {
 	 * `cachesolve`.
 	 */
 	cacheerroredsolves?: boolean | null;
+	/** Per-solve live-event callback; see {@link SelvaEventTarget}. */
+	selvaevents?: SelvaEventTarget | null;
 }
 
 /**
@@ -116,6 +129,8 @@ export interface GrasshopperRequestSchema
 	extends GrasshopperBaseSchema, GrasshopperDefinitionSource {
 	/** Input values organized by parameter */
 	values?: DataTree[];
+	/** Per-solve live-event callback; see {@link SelvaEventTarget}. */
+	selvaevents?: SelvaEventTarget | null;
 }
 
 /**
@@ -158,6 +173,18 @@ export interface GrasshopperComputeResponse
 	errors?: string[];
 	/** Computation warnings */
 	warnings?: string[];
+	/** Set by the VektorNode fork when a Selva plugin judged the solve; see {@link SelvaResponseBlock}. */
+	selva?: SelvaResponseBlock | null;
+}
+
+/**
+ * The Selva plugin's verdict on a solve, which the VektorNode fork copies verbatim into the
+ * response. `outcome` is `SolveOutcome` from `@selvajs/schemas`, typed loosely here because
+ * this package does not depend on it. A blocked or aborted outcome comes with empty `values`.
+ * Absent from a stock server, an older plugin, or a definition without a Selva component.
+ */
+export interface SelvaResponseBlock {
+	outcome?: unknown;
 }
 
 /**

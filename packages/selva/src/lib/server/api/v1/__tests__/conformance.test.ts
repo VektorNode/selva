@@ -439,7 +439,10 @@ describe('every API handler is wrapped (v1: mount; admin: apiRoute or mount)', (
 		'GET api/admin/compute/status',
 		'POST api/v1/compute', // solve paths: streaming + their own metric marks
 		'POST api/v1/compute/schema',
-		'POST api/v1/definitions/[guid]/solve'
+		'POST api/v1/definitions/[guid]/solve',
+		'GET api/v1/solve-events', // SSE — the status line is sent before any event
+		'POST api/v1/solve-events/[solveId]', // plugin callback: reads status + `abort`, no provider calls
+		'POST api/v1/solve/[solveId]/cancel' // in-memory flag on the bus, no provider calls
 	]);
 
 	// `apiRoute` wraps a SvelteKit handler; `mount` wraps a transport-free one

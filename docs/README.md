@@ -73,6 +73,7 @@ Why things are the way they are. Excluded from the website glob.
 - [0005: UISchema Version and Disposable Schema Cache](./adr/0005-uischema-version-and-disposable-schema-cache.md)
 - [0006: Multi-org URL Shape and Reserved Slugs](./adr/0006-multi-org-url-shape-and-reserved-slugs.md)
 - [0007: Credential Recovery & Self-Change Belong on `IAuthProvider`](./adr/0007-auth-credential-recovery-and-change-gap.md)
+- [0008: A Per-Document Solve Runtime Owns the Solve](./adr/0008-solve-runtime-owns-the-solve.md)
 
 ## Conventions
 

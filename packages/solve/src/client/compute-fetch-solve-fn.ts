@@ -17,6 +17,7 @@ import {
 	type GrasshopperComputeResponse
 } from '@selvajs/compute/grasshopper';
 import type { SolveFn, SolveResult } from '../shared/solve-fn.js';
+import { decodeOutcome, finalizeResult, outcomeFromComputeMessages } from '../shared/outcome.js';
 
 export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	/** The compute endpoint to POST to, e.g. `/api/compute`. */
@@ -29,6 +30,8 @@ export interface ComputeFetchSolveFnOptions<TMesh = unknown> {
 	outputs: () => Array<{ id: string; nickname?: string }>;
 	channel?: () => 'live' | 'draft' | undefined;
 	versionId?: () => string | null | undefined;
+	/** The tab's live-event stream id (`createSolveEventStream().streamId`), so the server routes this solve's events to it. */
+	streamId?: () => string | null | undefined;
 	/** Omit entirely for a non-viewer consumer — `meshes` on the result stays `[]`. */
 	meshes?: {
 		extract: (
@@ -88,12 +91,14 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		const outputs = opts.outputs();
 		const channel = opts.channel?.();
 		const versionId = opts.versionId?.();
+		const streamId = opts.streamId?.();
 
 		const payload = JSON.stringify({
 			inputs,
 			values,
 			definitionUrl: opts.definitionUrl(),
-			...(versionId ? { versionId } : channel === 'draft' ? { channel: 'draft' } : {})
+			...(versionId ? { versionId } : channel === 'draft' ? { channel: 'draft' } : {}),
+			...(streamId ? { streamId } : {})
 		});
 
 		let res: Response;
@@ -177,10 +182,20 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 		}
 		const processor = new GrasshopperResponseProcessor(solved, false);
 
-		const meshes = opts.meshes ? await opts.meshes.extract(processor.response, { debug }) : [];
+		// The plugin's own verdict when the fork returned one; otherwise recovered from the
+		// markers in Compute's flattened strings (stock server, or a plugin that predates it).
+		const outcome =
+			decodeOutcome(solved.selva?.outcome) ??
+			outcomeFromComputeMessages(solved.errors ?? [], solved.warnings ?? []);
+		// Decided before parsing: an older fork still ships a rejected solve's outputs, and the
+		// geometry alone can be megabytes the client would only throw away.
+		const rejected = outcome.blocked || outcome.aborted;
+
+		const meshes =
+			opts.meshes && !rejected ? await opts.meshes.extract(processor.response, { debug }) : [];
 
 		const resultOutputs: Record<string, unknown> = {};
-		for (const o of outputs) {
+		for (const o of rejected ? [] : outputs) {
 			const byId = processor.getValue({ byId: o.id }, { parseValues: true });
 			resultOutputs[o.id] =
 				byId ??
@@ -213,12 +228,6 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			}
 		}
 
-		return {
-			outputs: resultOutputs,
-			meshes,
-			errors: solved.errors ?? [],
-			warnings: solved.warnings ?? [],
-			source: solved
-		};
+		return finalizeResult({ outputs: resultOutputs, meshes, source: solved }, outcome);
 	};
 }

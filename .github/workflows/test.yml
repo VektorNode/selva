@@ -61,7 +61,7 @@ jobs:
       - name: Audit production dependencies
         run: pnpm audit --prod --audit-level moderate
 
-      # ui-schema.json is the source of truth; the generated TS/C# is derived.
+      # ui-schema.json and wire-schema.json are the source of truth; the generated TS/C# is derived.
       # This is the CI backstop for both generator guarantees: stale committed
       # output, and (on PRs) a definitions change without a schemaVersion bump.
       # The bump guard compares against the PR base — in CI the working tree
@@ -76,6 +76,7 @@ jobs:
           if ! git diff --exit-code -- \
             packages/schemas/src/generated \
             Plugin/Selva.Schema/Models/UISchema.Generated.cs \
+            Plugin/Selva.Schema/Models/Wire.Generated.cs \
             Plugin/Selva.Schema/Constants/SchemaVersion.cs; then
             echo "::error::Generated code is out of date. Run 'pnpm generate' and commit the result."
             exit 1

@@ -8,12 +8,19 @@
 // parse can't clobber live outputs), the early/late binary-frame ring buffer, and the
 // in-flight `isSolving` mirror. The Solve Session never learns any of it.
 
-import type { WebSocketState, WsOutputsMessage } from '$lib/websocket/websocket.svelte';
-import type { SolveReporter } from '@selvajs/ui';
+import type {
+	WebSocketState,
+	WsOutputsMessage,
+	WsSolveEventMessage
+} from '$lib/websocket/websocket.svelte';
+import type { SolveEvent } from '@selvajs/schemas';
+import { decodeOutcome, finalizeResult, type SolveReporter } from '@selvajs/ui';
 import type { PreviewSolveDriver } from './schema-source';
 import { parseDisplayItems, parseMeshBatchBlob, SCALE_FACTORS } from '@selvajs/visualization/parse';
 import type { DisplayItem } from '@selvajs/visualization/parse';
 import type * as THREE from 'three';
+
+const CLEAN_OUTCOME = { diagnostics: [], blocked: false, aborted: false };
 
 /** Strip file metadata objects — Grasshopper already has the file. */
 function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
@@ -177,14 +184,33 @@ export function createWebSocketSolveDriver(
 		// our token was superseded mid-parse, skip the report so we don't apply stale display.
 		if (myToken !== outputsToken) return;
 
-		getReporter().report({
-			outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
-			...(sceneObjects !== undefined ? { meshes: sceneObjects } : {})
-		});
+		// `initialData` replays outputs without a verdict: nothing to report about it.
+		const outcome = decodeOutcome(message.outcome) ?? CLEAN_OUTCOME;
+
+		getReporter().report(
+			finalizeResult(
+				{
+					outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
+					meshes: sceneObjects
+				},
+				outcome
+			)
+		);
 	}
+
+	// Live events ride their own frame; the session decides what to do with them.
+	const eventListeners = new Set<(event: SolveEvent) => void>();
+	const handleSolveEvent = (message: unknown) => {
+		const event = (message as WsSolveEventMessage).event;
+		if (!event) return;
+		// eslint-disable-next-line no-console -- the only way to see a sub-100ms solve's events
+		console.debug('[Preview] solveEvent', event.type, event);
+		for (const listener of eventListeners) listener(event);
+	};
 
 	wsState.on('outputs', handleOutputs);
 	wsState.on('binaryFrame', handleBinaryFrame);
+	wsState.on('solveEvent', handleSolveEvent);
 
 	return {
 		solve(values) {
@@ -195,8 +221,15 @@ export function createWebSocketSolveDriver(
 			wsState.sendValueUpdate(sessionId, prepareValuesForSend(values));
 		},
 		cancel() {
-			// The WS transport has no per-solve cancel; the latest values simply win. Nothing to
-			// abort client-side.
+			// Nothing to drop client-side (the latest values simply win); the plugin is asked to
+			// abort the solution it is running.
+			if (wsState.connected) wsState.sendCancelSolve(sessionId);
+		},
+		onEvent(listener) {
+			eventListeners.add(listener);
+			return () => {
+				eventListeners.delete(listener);
+			};
 		},
 		get isSolving() {
 			return wsState.isSolving;
@@ -209,6 +242,8 @@ export function createWebSocketSolveDriver(
 		dispose() {
 			wsState.off('outputs', handleOutputs);
 			wsState.off('binaryFrame', handleBinaryFrame);
+			wsState.off('solveEvent', handleSolveEvent);
+			eventListeners.clear();
 			pendingExpectation = null;
 			pendingBlobs.length = 0;
 		}

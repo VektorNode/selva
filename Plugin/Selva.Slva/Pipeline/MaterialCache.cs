@@ -41,8 +41,8 @@ public class MaterialCache
     /// <summary>
     ///     Key over the identity-relevant material properties. Runs once per mesh in the batch
     ///     loop, so it must not allocate — a prior string key paid an interpolated string plus
-    ///     three double.ToString calls per mesh. Scalars round to 3 decimals; Map must participate
-    ///     or two materials differing only by texture would dedupe into one.
+    ///     three double.ToString calls per mesh. Scalars round to 3 decimals. Every serialized
+    ///     field must participate, or two materials differing only in it would dedupe into one.
     /// </summary>
     private readonly struct MaterialKey : IEquatable<MaterialKey>
     {
@@ -52,6 +52,13 @@ public class MaterialCache
         private readonly double _opacity;
         private readonly bool _transparent;
         private readonly string _map;
+        private readonly string _roughnessMap;
+        private readonly string _normalMap;
+        private readonly double? _envMapIntensity;
+        private readonly double? _clearcoat;
+        private readonly double? _clearcoatRoughness;
+        private readonly double? _anisotropy;
+        private readonly double? _anisotropyRotation;
 
         public MaterialKey(ThreeMaterial material)
         {
@@ -61,6 +68,18 @@ public class MaterialCache
             _opacity = Math.Round(material.Opacity, 3);
             _transparent = material.Transparent;
             _map = material.Map;
+            _roughnessMap = material.RoughnessMap;
+            _normalMap = material.NormalMap;
+            _envMapIntensity = Round(material.EnvMapIntensity);
+            _clearcoat = Round(material.Clearcoat);
+            _clearcoatRoughness = Round(material.ClearcoatRoughness);
+            _anisotropy = Round(material.Anisotropy);
+            _anisotropyRotation = Round(material.AnisotropyRotation);
+        }
+
+        private static double? Round(double? value)
+        {
+            return value.HasValue ? Math.Round(value.Value, 3) : (double?)null;
         }
 
         public bool Equals(MaterialKey other)
@@ -70,7 +89,14 @@ public class MaterialCache
                    && _roughness.Equals(other._roughness)
                    && _opacity.Equals(other._opacity)
                    && _transparent == other._transparent
-                   && string.Equals(_map, other._map, StringComparison.Ordinal);
+                   && string.Equals(_map, other._map, StringComparison.Ordinal)
+                   && string.Equals(_roughnessMap, other._roughnessMap, StringComparison.Ordinal)
+                   && string.Equals(_normalMap, other._normalMap, StringComparison.Ordinal)
+                   && _envMapIntensity == other._envMapIntensity
+                   && _clearcoat == other._clearcoat
+                   && _clearcoatRoughness == other._clearcoatRoughness
+                   && _anisotropy == other._anisotropy
+                   && _anisotropyRotation == other._anisotropyRotation;
         }
 
         public override bool Equals(object obj)
@@ -88,6 +114,13 @@ public class MaterialCache
                 hash = hash * 397 ^ _opacity.GetHashCode();
                 hash = hash * 397 ^ _transparent.GetHashCode();
                 hash = hash * 397 ^ (_map != null ? StringComparer.Ordinal.GetHashCode(_map) : 0);
+                hash = hash * 397 ^ (_roughnessMap != null ? StringComparer.Ordinal.GetHashCode(_roughnessMap) : 0);
+                hash = hash * 397 ^ (_normalMap != null ? StringComparer.Ordinal.GetHashCode(_normalMap) : 0);
+                hash = hash * 397 ^ _envMapIntensity.GetHashCode();
+                hash = hash * 397 ^ _clearcoat.GetHashCode();
+                hash = hash * 397 ^ _clearcoatRoughness.GetHashCode();
+                hash = hash * 397 ^ _anisotropy.GetHashCode();
+                hash = hash * 397 ^ _anisotropyRotation.GetHashCode();
                 return hash;
             }
         }

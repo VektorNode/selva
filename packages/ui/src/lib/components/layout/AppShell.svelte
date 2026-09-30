@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import PageHeader from './PageHeader.svelte';
 	import PageFooter from './PageFooter.svelte';
 
@@ -32,6 +33,8 @@
 		showFooter?: boolean;
 		errors?: string[];
 		warnings?: string[];
+		/** Structured messages for the footer badge and message centre. */
+		diagnostics?: SolveDiagnostic[];
 		/** Fully overrides the footer copyright line. `{name}` and `{year}` are substituted. */
 		footerText?: string;
 		footerChildren?: Snippet;
@@ -59,6 +62,7 @@
 		showFooter = false,
 		errors = [],
 		warnings = [],
+		diagnostics,
 		footerText,
 		footerChildren,
 		class: className = '',
@@ -138,7 +142,7 @@
 
 	{#if showFooter}
 		<div class="bottom-0 sticky z-10 shrink-0">
-			<PageFooter {errors} {warnings} copyrightName={_copyright} {footerText}>
+			<PageFooter {errors} {warnings} {diagnostics} copyrightName={_copyright} {footerText}>
 				{#if footerChildren}
 					{@render footerChildren()}
 				{/if}

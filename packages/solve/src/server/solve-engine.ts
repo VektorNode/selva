@@ -16,6 +16,7 @@ import {
 	isDefinitionRef,
 	stableStringify,
 	type DefinitionRef,
+	type SelvaEventTarget,
 	type SolveDefinition
 } from '@selvajs/compute/grasshopper';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
@@ -106,6 +107,12 @@ export interface SolveEngineSolveArgs {
 	loadStartMs?: number;
 	defLoadMs?: number;
 	prepMarks?: [string, number][];
+	/**
+	 * Per-solve live-event callback. A coalesced waiter shares the first caller's
+	 * compute call, so only that caller's target reaches the definition; the
+	 * others still get the server-emitted start/end events on their own stream.
+	 */
+	selvaEvents?: SelvaEventTarget;
 }
 
 export interface FrameworkAgnosticResponse {
@@ -248,6 +255,7 @@ export class SolveEngine {
 						responseMaxBytes: this.limits.computeResponseMaxBytes,
 						solveDeadlineMs: this.limits.solveDeadlineMs,
 						acceptEncoding,
+						selvaEvents: args.selvaEvents,
 						signal: abortController.signal,
 						loadStartMs: args.loadStartMs ?? performance.now(),
 						defLoadMs: args.defLoadMs ?? 0,

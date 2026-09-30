@@ -56,7 +56,9 @@ export {
 	type SolveSession,
 	type SolveSessionArgs,
 	type SolveDriver,
-	type SolveReporter
+	type SolveReporter,
+	type LiveSolveState,
+	type SolvePhase
 } from '@selvajs/solve/client';
 
 // Client-slot context: host apps render their own cell for client-sourced inputs,
@@ -80,5 +82,5 @@ export * from './schema/dynamic-value-list';
 
 // UI-facing runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';
-export type { SolveFn, SolveResult } from '@selvajs/solve/shared';
+export type { SolveFn, SolveResult, SolveDiagnostic } from '@selvajs/solve/shared';
 export { DEFAULT_PRESET_LABELS, type PresetLabels } from './types/presetLabels';

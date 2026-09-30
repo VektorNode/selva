@@ -1,0 +1,233 @@
+{
+	"$schema": "http://json-schema.org/draft-07/schema#",
+	"$id": "https://selva.dev/schemas/wire-schema.json",
+	"title": "Selva Wire Schema",
+	"description": "Messages and runtime state the plugin, the Selva server and the browser exchange. Never saved into a .gh, so it carries no schemaVersion: the fixtures in fixtures/wire/ pin it instead.",
+	"definitions": {
+		"DiscoveredInput": {
+			"type": "object",
+			"description": "Input parameter discovered in Grasshopper document",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "Grasshopper parameter instance GUID"
+				},
+				"name": { "type": "string" },
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": { "$ref": "ui-schema.json#/definitions/ParamType" },
+				"default": {},
+				"minimum": { "type": "number" },
+				"maximum": { "type": "number" },
+				"stepSize": { "type": "number" },
+				"atLeast": { "type": "integer", "default": 1 },
+				"atMost": { "type": "integer", "default": 1 },
+				"treeAccess": { "type": "boolean", "default": false },
+				"options": {
+					"type": "object",
+					"additionalProperties": { "type": "string" },
+					"description": "Key-value pairs for dropdown/selection options"
+				},
+				"acceptedFormats": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "File extensions the parameter accepts (e.g. ['.png', '.svg'] for an image input, geometry formats for a file input). Used to seed the file widget's accepted-formats default."
+				},
+				"groupName": {
+					"type": "string",
+					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
+				}
+			},
+			"required": ["id", "name", "nickname", "description", "type"]
+		},
+		"DiscoveredOutput": {
+			"type": "object",
+			"description": "Output component discovered in Grasshopper document",
+			"properties": {
+				"id": {
+					"type": "string",
+					"format": "guid",
+					"description": "Grasshopper component instance GUID"
+				},
+				"nickname": { "type": "string" },
+				"description": { "type": "string" },
+				"type": {
+					"type": "string",
+					"enum": ["text", "number", "file", "chart", "dynamicValueList"],
+					"description": "Output display type in UI: 'text' for text output, 'number' for numeric output, 'file' for downloadable files, 'chart' for rendered charts (e.g. Plotly), 'dynamicValueList' for computed value-list options routed back into a dynamic value list input"
+				},
+				"targetInputId": {
+					"type": "string",
+					"format": "guid",
+					"description": "For 'dynamicValueList' outputs: the instance GUID (paramId) of the DynamicValueList input that this output's computed options populate."
+				},
+				"groupName": {
+					"type": "string",
+					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
+				}
+			},
+			"required": ["id", "nickname", "type"],
+			"additionalProperties": false
+		},
+		"DiscoveredParameters": {
+			"type": "object",
+			"description": "Collection of input and output parameters discovered in the current Grasshopper document",
+			"properties": {
+				"sessionId": { "type": "string" },
+				"timestamp": { "type": "string", "format": "date-time" },
+				"inputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/DiscoveredInput" },
+					"description": "List of input parameters available for UI building"
+				},
+				"outputs": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/DiscoveredOutput" },
+					"description": "List of output components available for UI building"
+				}
+			},
+			"required": ["sessionId", "timestamp", "inputs", "outputs"]
+		},
+
+		"SessionState": {
+			"type": "object",
+			"properties": {
+				"sessionId": { "type": "string" },
+				"active": { "type": "boolean" },
+				"lastUpdate": { "type": "string", "format": "date-time" },
+				"mode": {
+					"type": "string",
+					"enum": ["builder", "preview"]
+				}
+			},
+			"required": ["sessionId", "active", "lastUpdate", "mode"]
+		},
+		"RuntimeValues": {
+			"type": "object",
+			"properties": {
+				"timestamp": { "type": "string", "format": "date-time" },
+				"values": {
+					"type": "object",
+					"additionalProperties": {}
+				}
+			},
+			"required": ["timestamp", "values"]
+		},
+		"SolveEvent": {
+			"type": "object",
+			"description": "One live event from a running solve. The header is fixed; `payload` is shaped by `type`. `type` is an open string so a new event kind is additive on every transport (unknown kinds pass through).",
+			"properties": {
+				"solveId": { "type": "string" },
+				"seq": {
+					"type": "integer",
+					"description": "Per-solve, monotonic from 1. Lets a consumer drop late or duplicate delivery."
+				},
+				"at": { "type": "string", "description": "ISO-8601 UTC timestamp" },
+				"type": {
+					"type": "string",
+					"description": "Event kind: solveStarted, solveEnded, diagnostic, progress, valueListUpdated, ..."
+				},
+				"payload": { "type": "object", "additionalProperties": {} }
+			},
+			"required": ["solveId", "seq", "at", "type"],
+			"additionalProperties": false
+		},
+		"SolveDiagnostic": {
+			"type": "object",
+			"description": "One runtime message a solve raised. Also the payload of a `diagnostic` event.",
+			"properties": {
+				"level": { "type": "string", "enum": ["error", "warning", "remark"] },
+				"message": {
+					"type": "string",
+					"description": "What the author wrote, transport decoration stripped."
+				},
+				"source": { "type": "string", "description": "Nickname of the component that raised it." },
+				"isGate": {
+					"type": "boolean",
+					"description": "Raised by a Selva Message component: the author chose to say this. Only these interrupt the user."
+				}
+			},
+			"required": ["level", "message"],
+			"additionalProperties": false
+		},
+		"SolveOutcome": {
+			"type": "object",
+			"description": "The plugin's verdict on a finished solve. Decided once at SolutionEnd; the local bridge and Rhino.Compute only carry it.",
+			"properties": {
+				"diagnostics": { "type": "array", "items": { "$ref": "#/definitions/SolveDiagnostic" } },
+				"blocked": {
+					"type": "boolean",
+					"description": "A Message component raised an error, or the solve was aborted. The outputs are not a result."
+				},
+				"aborted": { "type": "boolean", "description": "The solve was stopped before it finished." }
+			},
+			"required": ["diagnostics", "blocked", "aborted"],
+			"additionalProperties": false
+		},
+		"SolveEndedKind": {
+			"type": "string",
+			"enum": ["ok", "blocked", "aborted", "error"]
+		},
+		"SolveStartedPayload": {
+			"type": "object",
+			"description": "Payload of a `solveStarted` event. Empty today.",
+			"properties": {},
+			"additionalProperties": false
+		},
+		"SolveEndedPayload": {
+			"type": "object",
+			"description": "Payload of a `solveEnded` event.",
+			"properties": {
+				"kind": { "$ref": "#/definitions/SolveEndedKind" }
+			},
+			"required": ["kind"],
+			"additionalProperties": false
+		},
+		"ProgressPayload": {
+			"type": "object",
+			"description": "Payload of a `progress` event. Coalesced per `source`: only the newest per source matters.",
+			"properties": {
+				"source": { "type": "string", "description": "What is progressing; one bar per source." },
+				"fraction": {
+					"type": "number",
+					"description": "0..1. Absent means indeterminate."
+				},
+				"done": { "type": "integer" },
+				"total": { "type": "integer" },
+				"label": { "type": "string" },
+				"nextFraction": {
+					"type": "number",
+					"description": "0..1: where `fraction` will be when the running step ends. With `stepMs`, lets a host fill the bar across the step instead of jumping at its end."
+				},
+				"stepMs": {
+					"type": "number",
+					"description": "How long the running step took last time, in milliseconds. Absent before it has been timed."
+				}
+			},
+			"additionalProperties": false
+		},
+		"ValidationIssueMessage": {
+			"type": "object",
+			"description": "Validation warning or error for a parameter",
+			"properties": {
+				"paramId": { "type": "string" },
+				"severity": {
+					"type": "string",
+					"enum": ["warning", "error"],
+					"description": "warning = can still load, error = cannot load"
+				},
+				"message": { "type": "string" },
+				"details": {
+					"type": "object",
+					"properties": {
+						"expected": { "type": "string" },
+						"actual": { "type": "string" }
+					}
+				}
+			},
+			"required": ["paramId", "severity", "message"],
+			"additionalProperties": false
+		}
+	}
+}

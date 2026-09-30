@@ -6,7 +6,14 @@
 
 import type { SupportedTypes } from '@selvajs/schemas';
 import type { WsOutputsMessage } from '$lib/websocket/websocket.svelte';
-import { createSolveSession, type SolveSession, type SolveReporter } from '@selvajs/ui';
+import {
+	createSolveSession,
+	EMPTY_LIVE_SOLVE,
+	type SolvePhase,
+	type SolveSession,
+	type SolveReporter,
+	type SolveDiagnostic
+} from '@selvajs/ui';
 import { getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
 import type { SchemaSource, PreviewSolveDriver } from '$lib/schema-source/schema-source';
@@ -26,6 +33,10 @@ import {
 
 const EMPTY_VALUES: Record<string, unknown> = {};
 const EMPTY_MESHES: unknown[] = [];
+// Shared instance: a fresh [] each read would be a new identity every time, retriggering
+// every $derived that reads it.
+const EMPTY_MESSAGES: string[] = [];
+const EMPTY_DIAGNOSTICS: SolveDiagnostic[] = [];
 
 /**
  * @param source Defaults to the Grasshopper WebSocket source bound to the URL's wsPort.
@@ -165,6 +176,7 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		driver = null;
 		unsubscribeSession?.();
 		unsubscribeSession = null;
+		session?.dispose();
 		session = null;
 	}
 
@@ -192,6 +204,52 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		get hasPendingChanges() {
 			void sessionVersion;
 			return session?.hasPendingChanges ?? false;
+		},
+		/** Error-level runtime messages from the last solve. */
+		get computeErrors() {
+			void sessionVersion;
+			return session?.computeErrors ?? EMPTY_MESSAGES;
+		},
+		/** Warning- and remark-level runtime messages from the last solve. */
+		get computeWarnings() {
+			void sessionVersion;
+			return session?.computeWarnings ?? EMPTY_MESSAGES;
+		},
+		/** The last solve's messages with level, source and `isGate`. */
+		get diagnostics() {
+			void sessionVersion;
+			return session?.diagnostics ?? EMPTY_DIAGNOSTICS;
+		},
+		/** A Message component refused the last solve: its outputs were withheld on purpose. */
+		get blocked() {
+			void sessionVersion;
+			return session?.blocked ?? false;
+		},
+		/** The last solve's messages are waiting on the user; its result is held until then. */
+		get awaitingAck() {
+			void sessionVersion;
+			return session?.awaitingAck ?? false;
+		},
+		/** Releases the held result. No-op when nothing is held. */
+		acknowledge() {
+			session?.acknowledge();
+		},
+		/** Drops the held result, keeping what the viewer shows. No-op when nothing is held. */
+		discard() {
+			session?.discard();
+		},
+		/** What the running solve has said so far over the live channel. */
+		get live() {
+			void sessionVersion;
+			return session?.live ?? EMPTY_LIVE_SOLVE;
+		},
+		get phase(): SolvePhase {
+			void sessionVersion;
+			return session?.phase ?? 'idle';
+		},
+		/** Asks Grasshopper to abort the running solution (cooperative, next component boundary). */
+		abort() {
+			session?.abort();
 		},
 		get connected() {
 			return schemaSource.connected;

@@ -27,6 +27,8 @@ export type {
 	IoResponseSchema,
 	GrasshopperRequestSchema,
 	GrasshopperComputeResponse,
+	SelvaEventTarget,
+	SelvaResponseBlock,
 	OutputParamSchema,
 	InputParamSchema
 } from './schema';

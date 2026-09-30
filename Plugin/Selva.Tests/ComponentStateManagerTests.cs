@@ -85,6 +85,23 @@ public class ComponentStateManagerTests
         Assert.False(sm.IsBusy);
     }
 
+    [Fact]
+    public void DebouncedStart_WeDidNotSchedule_StillBusy()
+    {
+        // The dynamic value list reconcile starts a solve <100ms after the previous one ends. An
+        // update landing during it must coalesce: applied mid-solve, its scheduled solution never
+        // ran until the next message arrived, so every result showed one update late.
+        var sm = NewManager();
+        sm.SetSolving(true);
+        sm.SetSolving(false);
+
+        Assert.False(sm.SetSolving(true)); // debounced indicator
+        Assert.True(sm.IsBusy);
+
+        sm.SetSolving(false);
+        Assert.False(sm.IsBusy);
+    }
+
     // -------------------------------------------------------------------------
     // Pending coalesce buffer (lost-value guard)
     // -------------------------------------------------------------------------

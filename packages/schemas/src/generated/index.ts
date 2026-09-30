@@ -4,3 +4,4 @@
  */
 export * from './schema.js';
 export * from './preset.js';
+export * from './wire.js';

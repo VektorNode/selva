@@ -66,6 +66,17 @@ describe('isPublicRoute', () => {
 		expect(isSelfGatingApiRoute('/api/filesX/y')).toBe(false);
 	});
 
+	it('treats both solve-events routes as self-gating', () => {
+		// The SSE stream IS the bare path (the stream is a query param), while the
+		// Compute callback carries a solveId segment. A trailing slash on the prefix
+		// admits only the callback, and the live channel then dies with the stream
+		// denied before its route runs — silently, since the solve itself succeeds.
+		expect(isSelfGatingApiRoute('/api/v1/solve-events')).toBe(true);
+		expect(isSelfGatingApiRoute('/api/v1/solve-events/9f0c-solve-id')).toBe(true);
+		// The cancel route is a sibling, not under this prefix, and stays gated.
+		expect(isSelfGatingApiRoute('/api/v1/solve/abc/cancel')).toBe(false);
+	});
+
 	it('does not treat /loginX as public via prefix match', () => {
 		// /login is exact-match in PUBLIC_PAGE_ROUTES — a sibling like
 		// /login-other-thing must not be admitted by accident.
