@@ -328,10 +328,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public float[] MeshVertices;
         public int[] MeshFaces;
 
-        // Optional per-vertex channels (UVs additionally require the material to map a texture).
+        // Optional per-vertex channels (UVs additionally require ThreeMaterial.NeedsUvs).
         // Null = mesh contributes none.
         public float[] MeshUvs;
         public byte[] MeshColors;
+
+        // Replaces the work item's material for this mesh only; null keeps it.
+        public ThreeMaterial Material;
 
         // Item path (curve / point).
         public DisplayItem Item;
@@ -450,14 +453,24 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            // UVs are only worth carrying when the material actually maps a texture — brep meshing
-            // auto-fills TextureCoordinates with surface params, and emitting those for every plain
-            // mesh would inflate the payload for nothing. Vertex colors only exist when something
-            // explicitly set them, so presence alone is the gate.
-            var wantUvs = !string.IsNullOrEmpty(w.Material?.Map)
-                          && mesh.TextureCoordinates.Count == mesh.Vertices.Count;
+            // UVs are only worth carrying when the material needs them (a texture or anisotropy) —
+            // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
+            // every plain mesh would inflate the payload for nothing. Vertex colors only exist when
+            // something explicitly set them, so presence alone is the gate.
+            var hasUvs = mesh.TextureCoordinates.Count == mesh.Vertices.Count;
+            var wantUvs = w.Material != null && w.Material.NeedsUvs && hasUvs;
             var wantColors = mesh.VertexColors.Count == mesh.Vertices.Count
                              && mesh.VertexColors.Count > 0;
+
+            // The batch zero-fills UVs for meshes that lack them, and three.js anisotropy normalizes
+            // a tangent built from UV derivatives: zero UVs render NaN (black). Drop it for this mesh.
+            ThreeMaterial material = null;
+            if (!hasUvs && w.Material?.Anisotropy > 0)
+            {
+                material = w.Material.Clone();
+                material.Anisotropy = null;
+                material.AnisotropyRotation = null;
+            }
 
             // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
             // vertices it needs. Weld coincident vertices to shrink the payload, but respect normals
@@ -505,6 +518,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 MeshFaces = faces,
                 MeshUvs = uvs,
                 MeshColors = colors,
+                Material = material,
                 Bounds = mesh.GetBoundingBox(false)
             };
         });
@@ -569,7 +583,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                     : (branch.Meshes.Count + 1).ToString(),
                 Layer = w.Layer ?? "",
                 Metadata = w.Metadata,
-                Material = w.Material
+                Material = r.Material ?? w.Material
             });
 
             previewMeshes.Add(r.Mesh);

@@ -49,6 +49,9 @@ export function warnIfAddressKeysCollapse(
 	log: { warn(message: string, fields?: Record<string, unknown>): void }
 ): void {
 	if (addressWarningIssued) return;
+	// ORIGIN is the proxy tell (see `checkClientAddress`). Without it, loopback is
+	// a genuine local caller, e.g. `vite dev`.
+	if (!env.ORIGIN) return;
 	if (!addressKeysCollapsed(ip, Boolean(env.ADDRESS_HEADER))) return;
 	addressWarningIssued = true;
 	log.warn(

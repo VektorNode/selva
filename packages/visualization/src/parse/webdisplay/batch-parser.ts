@@ -275,6 +275,7 @@ function buildMeshesFromParsed(
 	const materials = materialsSrc.map((m) =>
 		createMaterial(m, {
 			vertexColors: parsed.colors != null,
+			hasUvs: parsed.uvs != null,
 			appearance: materialAppearance
 		})
 	);
@@ -423,7 +424,11 @@ async function tryBuildViaWorker(
 	if (assembled.length !== jobs.length) return null; // protocol mismatch → fall back to sync path
 
 	const materials = materialsSrc.map((m) =>
-		createMaterial(m, { vertexColors: raw.colors != null, appearance: opts.material })
+		createMaterial(m, {
+			vertexColors: raw.colors != null,
+			hasUvs: raw.uvs != null,
+			appearance: opts.material
+		})
 	);
 
 	const meshes: THREE.Mesh[] = [];

@@ -7,7 +7,8 @@
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { createRequestResponseDriver } from '@selvajs/solve/client';
-	import type { RetainedSolveResult, SolveSession } from '@selvajs/solve/client';
+	import type { RetainedSolveResult, SolveEventSource, SolveSession } from '@selvajs/solve/client';
+	import SolveMessages from './SolveMessages.svelte';
 	import { meshPolicy } from '@selvajs/visualization/parse';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import { useSolveSession } from '../../compute/useSolveSession.svelte';
@@ -52,6 +53,12 @@
 		 * have finished.
 		 */
 		solveDeadlineMs: number;
+		/**
+		 * Live events for the solves this app runs (`createSolveEventStream`). Pair it with
+		 * `streamId` on the `createComputeFetchSolveFn` that backs `onSolve`, or the server has
+		 * no stream to route to. Without it the app works as before, just with no mid-solve news.
+		 */
+		events?: SolveEventSource;
 		footerComponent?: any;
 		footerComponentProps?: () => Record<string, unknown>;
 		footerItemId?: string;
@@ -105,6 +112,7 @@
 		copyrightName,
 		footerText,
 		solveDeadlineMs,
+		events,
 		footerComponent,
 		footerComponentProps,
 		footerItemId = 'footer-item',
@@ -146,7 +154,8 @@
 		meshPolicy,
 		// `isSolving` lives on the driver, which the session can't observe — republish so the
 		// spinner and disabled states track it.
-		onChange: () => session.notify()
+		onChange: () => session.notify(),
+		events
 	});
 	// svelte-ignore state_referenced_locally
 	const session = useSolveSession({
@@ -231,6 +240,7 @@
 		rightContent={headerRight}
 		errors={session.computeErrors}
 		warnings={session.computeWarnings}
+		diagnostics={session.diagnostics}
 	>
 		{#if session.error}
 			<div class="min-h-100 p-8 flex items-center justify-center">
@@ -268,3 +278,23 @@
 		{/if}
 	</AppShell>
 </div>
+
+<SolveMessages
+	live={session.live}
+	phase={session.phase}
+	diagnostics={session.diagnostics}
+	onabort={() => session.abort()}
+	onconfirm={() => session.acknowledge()}
+	ondiscard={() => session.discard()}
+	labels={{
+		solving: t.solveSolving,
+		blockedTitle: t.solveBlockedTitle,
+		messagesTitle: t.solveMessagesTitle,
+		blockedDescription: t.solveBlocked,
+		messagesDescription: t.solveMessagesDescription,
+		confirm: t.solveMessagesConfirm,
+		discard: t.solveMessagesDiscard,
+		abort: t.solveMessagesAbort,
+		dismiss: t.solveMessagesDismiss
+	}}
+/>

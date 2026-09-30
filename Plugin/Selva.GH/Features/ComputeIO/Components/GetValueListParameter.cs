@@ -174,7 +174,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             {
                 if (vl.ListItems[i].Expression == firstValue)
                 {
-                    vl.SelectItem(i);
+                    SelectWithoutSolving(vl, i);
                     break;
                 }
             }
@@ -272,14 +272,14 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             if (vl.ListItems[i].Name == value || vl.ListItems[i].Expression == value)
             {
                 var index = i;
-                // SelectItem touches UI controls, so it must run on the UI thread.
+                // Touches UI controls, so it must run on the UI thread.
                 try
                 {
-                    RhinoApp.InvokeOnUiThread(new Action(() => vl.SelectItem(index)));
+                    RhinoApp.InvokeOnUiThread(new Action(() => SelectWithoutSolving(vl, index)));
                 }
                 catch
                 {
-                    vl.SelectItem(index);
+                    SelectWithoutSolving(vl, index);
                 }
 
                 return true;
@@ -287,6 +287,18 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         }
 
         return false;
+    }
+
+    // GH_ValueList.SelectItem ends in ExpireSolution(true), a solve of its own on top of the one
+    // the caller schedules: every dropdown change solved twice.
+    private static void SelectWithoutSolving(GH_ValueList vl, int index)
+    {
+        for (var i = 0; i < vl.ListItems.Count; i++)
+        {
+            vl.ListItems[i].Selected = i == index;
+        }
+
+        vl.ExpireSolution(false);
     }
 
     public void ClearContextualData()

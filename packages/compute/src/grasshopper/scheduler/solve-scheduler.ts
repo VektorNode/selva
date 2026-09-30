@@ -4,7 +4,12 @@ import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 
-import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
+import type {
+	DataTree,
+	GrasshopperComputeResponse,
+	GrasshopperComputeConfig,
+	SelvaEventTarget
+} from '../types';
 import type { SolveDefinition } from '@/core/definition-ref';
 import { hashSolveInputForDefinition, hashDefinition } from './stable-hash';
 
@@ -54,6 +59,8 @@ interface PendingItem {
 	resolve: (response: GrasshopperComputeResponse) => void;
 	reject: (error: ComputeError) => void;
 	externalSignal?: AbortSignal;
+	/** Per-solve live-event callback. Not part of the cache key: it names where events go, not what is solved. */
+	selvaevents?: SelvaEventTarget;
 	/**
 	 * Abort listener attached while the item waits in a queue, so a signal
 	 * firing pre-execution settles it instead of being silently ignored.
@@ -342,7 +349,7 @@ export class SolveScheduler {
 	solve(
 		definition: SolveDefinition,
 		dataTree: DataTree[],
-		options?: { signal?: AbortSignal }
+		options?: { signal?: AbortSignal; selvaevents?: SelvaEventTarget }
 	): Promise<GrasshopperComputeResponse> {
 		if (this.disposed) {
 			return Promise.reject(
@@ -404,7 +411,8 @@ export class SolveScheduler {
 				seq,
 				resolve,
 				reject,
-				externalSignal: options?.signal
+				externalSignal: options?.signal,
+				selvaevents: options?.selvaevents
 			};
 
 			// A signal firing while the item waits in a queue must settle it as
@@ -595,7 +603,8 @@ export class SolveScheduler {
 				...this.baseConfig,
 				signal: controller.signal,
 				...(this.timeoutMs !== undefined && { timeoutMs: this.timeoutMs }),
-				...(this.retry !== undefined && { retry: this.retry })
+				...(this.retry !== undefined && { retry: this.retry }),
+				...(item.selvaevents !== undefined && { selvaevents: item.selvaevents })
 			};
 
 			const { response, definitionReuploaded } = await this.runExecutor(

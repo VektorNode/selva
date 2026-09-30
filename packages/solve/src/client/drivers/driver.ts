@@ -1,3 +1,4 @@
+import type { SolveEvent } from '@selvajs/schemas';
 import type { SolveResult } from '../../shared/solve-fn.js';
 
 /**
@@ -25,6 +26,22 @@ export interface SolveDriver {
 	 * stale result from the prior definition's input space.
 	 */
 	clearCache?(): void;
+	/**
+	 * Live events from the running solve, when the transport carries them (a WebSocket frame
+	 * locally, an SSE stream in cloud mode). Returns the unsubscribe. A driver without a live
+	 * channel leaves this undefined and the session simply never sees events.
+	 */
+	onEvent?(listener: (event: SolveEvent) => void): () => void;
+}
+
+/**
+ * Where a request/response driver gets its live events from. The stream is owned by the host
+ * (it outlives individual solves), so the driver only subscribes and forwards.
+ */
+export interface SolveEventSource {
+	subscribe(listener: (event: SolveEvent) => void): () => void;
+	/** Asks the server to abort the solve currently in flight, if the source knows which one that is. */
+	cancelCurrent?(): void;
 }
 
 /** `TMesh` defaults to `unknown`: nothing here inspects meshes. A host with a concrete

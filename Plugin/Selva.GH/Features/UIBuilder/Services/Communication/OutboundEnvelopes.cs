@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Selva.Schema.Models;
 using Selva.GH.Features.Display.Services;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.Slva;
 
@@ -29,6 +30,14 @@ public static class OutboundEnvelopes
     /// </summary>
     public static object Wrapped(string sessionId, string messageType, object data) =>
         new { type = messageType, sessionId, data };
+
+    /// <summary>
+    ///     One live event from a running solve, nested under `event` because the envelope's own
+    ///     `type` is taken. Same <see cref="Selva.Schema.Models.SolveEvent" /> the Compute path
+    ///     posts to the Selva server, so the browser reads one shape on both transports.
+    /// </summary>
+    public static object SolveEvent(string sessionId, SolveEvent @event) =>
+        new { type = "solveEvent", sessionId, @event };
 
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };
@@ -98,10 +107,12 @@ public static class OutboundEnvelopes
     ///     `binaryBatchCount` tells the client how many to collect. `displayItems` carries non-mesh
     ///     items (curves, points) as JSON, since they have no binary form; null when there are none,
     ///     so a mesh-only solve stays byte-for-byte identical to before displayItems existed.
+    ///     `outcome` is the plugin's verdict on the solve, the same object Rhino.Compute carries
+    ///     in its `selva` block, so the browser decodes one shape on both transports.
     /// </summary>
     public static object Outputs(string sessionId, Dictionary<string, object> outputs,
         Dictionary<string, object> fileOutputs, int binaryBatchCount, string modelUnits,
-        List<DisplayItem> displayItems = null) =>
+        List<DisplayItem> displayItems, SolveOutcome outcome) =>
         new
         {
             type = "outputs",
@@ -110,7 +121,8 @@ public static class OutboundEnvelopes
             fileOutputs,
             binaryBatchCount,
             modelUnits,
-            displayItems
+            displayItems,
+            outcome
         };
 
     /// <summary>

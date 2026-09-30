@@ -32,7 +32,7 @@
 		}
 	],
 	"material": {
-		"component": "b7665e1a-c4cc-49d6-8edb-4aaef045d9a8",
+		"component": "80cd38e5-bc9e-47e4-88ee-8f35b7e109cc",
 		"note": "Single Three Material item broadcast across all 4 branches via Grasshopper's shortest-list matching. Color set to RGB(70,130,220) (a distinct blue) so it's visually obvious in a viewer; Metalness 0, Roughness 0.5, Opacity 1, Transparent false (component defaults)."
 	},
 	"apply": {
@@ -51,7 +51,7 @@
 			},
 			{
 				"Key": "material",
-				"Selector": "b7665e1a-c4cc-49d6-8edb-4aaef045d9a8",
+				"Selector": "80cd38e5-bc9e-47e4-88ee-8f35b7e109cc",
 				"X": 300,
 				"Y": 400,
 				"NickName": "TM"

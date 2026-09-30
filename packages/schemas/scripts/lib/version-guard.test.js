@@ -14,7 +14,8 @@ function makeSchema() {
 				type: 'object',
 				properties: {
 					schemaVersion: { type: 'string', default: '2.14.0' },
-					name: { type: 'string', description: 'Display name' }
+					name: { type: 'string', description: 'Display name' },
+					widget: { $ref: '#/definitions/Widget' }
 				},
 				required: ['name']
 			},
@@ -57,11 +58,18 @@ describe('compareSchemas — detects real definition changes', () => {
 	it('detects a definition added or removed', () => {
 		const changed = makeSchema();
 		changed.definitions.NewThing = { type: 'object' };
+		changed.definitions.UISchema.properties.thing = { $ref: '#/definitions/NewThing' };
 		expect(compareSchemas(makeSchema(), changed).definitionsChanged).toBe(true);
 
 		const removed = makeSchema();
 		delete removed.definitions.Widget;
 		expect(compareSchemas(makeSchema(), removed).definitionsChanged).toBe(true);
+	});
+
+	it('ignores a definition UISchema cannot reach', () => {
+		const changed = makeSchema();
+		changed.definitions.WireOnly = { type: 'object', properties: { seq: { type: 'integer' } } };
+		expect(compareSchemas(makeSchema(), changed).definitionsChanged).toBe(false);
 	});
 
 	it('detects removal of a property that is literally named "description"', () => {

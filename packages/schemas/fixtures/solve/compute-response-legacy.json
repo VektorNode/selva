@@ -1,0 +1,10 @@
+{
+	"values": [],
+	"errors": [
+		"1. Solution exception:[Selva:blocked] More than 200 spheres: component \"Message\" (380977dd-7cb3-49c0-af7a-d808e4f93a59)"
+	],
+	"warnings": [
+		"[Selva:log] Radius overlaps: component \"Message\" (380977dd-7cb3-49c0-af7a-d808e4f93a59)",
+		"Input parameter G failed to collect data: component \"Area\" (5b1c3f0e-2d4a-4e7b-9c1d-7f2a8e6b0c33)"
+	]
+}

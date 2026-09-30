@@ -13,6 +13,22 @@ export interface SerializableMaterial {
 	 * When set, the mesh blob also carries per-vertex UVs (FLAG_HAS_UVS) for meshes using it.
 	 */
 	map?: string;
+	/** Roughness texture (green channel), same reference forms as `map`. */
+	roughnessMap?: string;
+	/** Tangent-space normal texture, same reference forms as `map`. */
+	normalMap?: string;
+	/** Wins over the look's `envMapIntensity` (except in looks that override materials). */
+	envMapIntensity?: number;
+	/** Omitted: metallic materials get a satin coat, others none. */
+	clearcoat?: number;
+	clearcoatRoughness?: number;
+	/**
+	 * Stretches highlights along texture U, the grain of brushed or rolled sheet. Ignored when the
+	 * batch carries no UVs: three builds the tangent from UV derivatives.
+	 */
+	anisotropy?: number;
+	/** Radians, counter-clockwise from texture U. */
+	anisotropyRotation?: number;
 }
 
 /**

@@ -37,8 +37,8 @@ namespace Selva.Slva;
 ///     PNTS  point positions for point objects, same encoding as CRVS.
 ///     TABL  the object table (see <see cref="SlvmTable" /> for the byte layout). Optionally
 ///           SLVZ-wrapped.
-///     MATL  UTF-8 JSON {"materials":[...]}. A material's "map" may be "slvm:tex:N", which readers
-///           resolve against the Nth TEXR chunk.
+///     MATL  UTF-8 JSON {"materials":[...]}. A material's "map", "roughnessMap" or "normalMap" may be
+///           "slvm:tex:N", which readers resolve against the Nth TEXR chunk.
 ///     TEXR  one texture: [varint mimeLen][mime utf8][image bytes].
 ///     EXTN  host extension: [varint nsLen][namespace utf8][payload]. Foreign readers skip it.
 ///           Selva writes namespace "selva.gh" (see <see cref="SelvaExtension" />) with a JSON
@@ -472,30 +472,51 @@ public static class SlvmDocument
         var outMaterials = new List<SerializableMaterial>();
         foreach (var m in materials ?? new List<SerializableMaterial>())
         {
-            var map = m.Map;
-            if (map != null && map.StartsWith("data:", StringComparison.Ordinal))
-            {
-                var tex = TryParseDataUri(map);
-                if (tex != null)
-                {
-                    map = TexRefPrefix + textures.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    textures.Add(tex);
-                }
-            }
-
-            outMaterials.Add(new SerializableMaterial
-            {
-                Color = m.Color,
-                Metalness = m.Metalness,
-                Roughness = m.Roughness,
-                Opacity = m.Opacity,
-                Transparent = m.Transparent,
-                Map = map
-            });
+            // Copy: the caller's batch must keep its data URIs.
+            var copy = m.Clone();
+            copy.Map = ExtractTexture(copy.Map, textures);
+            copy.RoughnessMap = ExtractTexture(copy.RoughnessMap, textures);
+            copy.NormalMap = ExtractTexture(copy.NormalMap, textures);
+            outMaterials.Add(copy);
         }
 
         var json = JsonConvert.SerializeObject(new { materials = outMaterials });
         return (json, textures);
+    }
+
+    /// <summary>Moves a data URI into <paramref name="textures" /> and returns its TEXR ref; other references pass through.</summary>
+    private static string ExtractTexture(string reference, List<byte[]> textures)
+    {
+        if (reference == null || !reference.StartsWith("data:", StringComparison.Ordinal))
+        {
+            return reference;
+        }
+
+        var tex = TryParseDataUri(reference);
+        if (tex == null)
+        {
+            return reference;
+        }
+
+        textures.Add(tex);
+        return TexRefPrefix + (textures.Count - 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private static string ResolveTexture(string reference, List<byte[]> textures)
+    {
+        if (reference == null || !reference.StartsWith(TexRefPrefix, StringComparison.Ordinal)
+            || !int.TryParse(reference.Substring(TexRefPrefix.Length), out var texIndex)
+            || texIndex < 0 || texIndex >= textures.Count)
+        {
+            return reference;
+        }
+
+        var tex = textures[texIndex];
+        var pos = 0;
+        var mimeLen = (int)Varint.Read(tex, ref pos);
+        var mime = Encoding.UTF8.GetString(tex, pos, mimeLen);
+        pos += mimeLen;
+        return "data:" + mime + ";base64," + Convert.ToBase64String(tex, pos, tex.Length - pos);
     }
 
     /// <summary>"data:mime;base64,..." → [varint mimeLen][mime][raw bytes], or null if unparseable.</summary>
@@ -543,17 +564,9 @@ public static class SlvmDocument
 
         foreach (var m in materials)
         {
-            if (m.Map != null && m.Map.StartsWith(TexRefPrefix, StringComparison.Ordinal)
-                && int.TryParse(m.Map.Substring(TexRefPrefix.Length), out var texIndex)
-                && texIndex >= 0 && texIndex < textures.Count)
-            {
-                var tex = textures[texIndex];
-                var pos = 0;
-                var mimeLen = (int)Varint.Read(tex, ref pos);
-                var mime = Encoding.UTF8.GetString(tex, pos, mimeLen);
-                pos += mimeLen;
-                m.Map = "data:" + mime + ";base64," + Convert.ToBase64String(tex, pos, tex.Length - pos);
-            }
+            m.Map = ResolveTexture(m.Map, textures);
+            m.RoughnessMap = ResolveTexture(m.RoughnessMap, textures);
+            m.NormalMap = ResolveTexture(m.NormalMap, textures);
         }
 
         return materials;

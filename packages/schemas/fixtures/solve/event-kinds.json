@@ -1,0 +1,6 @@
+{
+	"solveStarted": { "delivery": "critical" },
+	"solveEnded": { "delivery": "critical" },
+	"diagnostic": { "delivery": "critical" },
+	"progress": { "delivery": "latest", "coalesceBy": "source" }
+}

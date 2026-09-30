@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Utilities.Helpers;
 
@@ -104,6 +105,11 @@ public class ServerLifecycleManager : IDisposable
                 return false;
             }
 
+            // Discarded deliberately: this runs on the solver's thread and must never wait on the
+            // socket.
+            SolveRuntimes.SetLocalTransport(solveEvent =>
+                _ = _webSocketTransport.BroadcastSolveEvent(solveEvent));
+
             Logger.Log(
                 $"[ServerLifecycleManager] WebSocket server started on port {_webSocketTransport.WebSocketPort}");
             return true;
@@ -172,6 +178,10 @@ public class ServerLifecycleManager : IDisposable
     /// <summary>Stops both servers. Callers must hold <see cref="_transitionGate" />, except Dispose and the in-flight-start rollback above.</summary>
     private void StopCore()
     {
+        // Before the socket closes: a message raised after this point has nowhere to go, and the
+        // definition must keep solving in plain Grasshopper.
+        SolveRuntimes.SetLocalTransport(null);
+
         try
         {
             if (_webSocketTransport.IsRunning)

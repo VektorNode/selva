@@ -33,6 +33,7 @@
 	},
 	"scripts": {
 		"dev": "vite dev",
+		"dev:lan": "vite dev --host",
 		"build": "rimraf build && vite build && node ./scripts/generate-templates.js",
 		"preview": "vite preview",
 		"start": "node build/index.js",

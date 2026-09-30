@@ -1,3 +1,5 @@
+import type { SolveDiagnostic } from '@selvajs/schemas';
+
 /**
  * The solve contract — what a solve returns and what a caller supplies to run one.
  *
@@ -11,11 +13,61 @@
  * The app that owns assembly (parse → `THREE.Object3D[]`) is the only place that knows the concrete
  * type, and it narrows by writing `SolveResult<THREE.Object3D>` at its own seam.
  */
+/**
+ * Marker the Grasshopper Message component prepends to a blocking error.
+ *
+ * Rhino.Compute flattens runtime messages to plain strings with no component attribution, so
+ * this is the only way that path can tell a deliberate block from any other solve error. The
+ * local WebSocket path carries `isGate` structurally and does not need it — but the component
+ * writes the marker unconditionally, because the same definition runs on both.
+ *
+ * Changing this string breaks blocking on deployed Selva for every already-published
+ * definition, since the text is baked into the .gh file's solve output, not the plugin.
+ */
+export const SOLVE_BLOCKED_MARKER = '[Selva:blocked]';
+
+/**
+ * Marker the Message component prepends to a remark or warning — the non-blocking levels.
+ *
+ * Same reason as `SOLVE_BLOCKED_MARKER`: on Rhino.Compute nothing structural survives, and the
+ * UI has to tell a message the author chose to write from an incidental Grasshopper warning.
+ * Definitions saved before this existed lack it, so the reader falls back to the component name.
+ */
+export const SOLVE_AUTHORED_MARKER = '[Selva:msg]';
+
+/**
+ * Marker for an authored message whose author chose Notify = Log.
+ *
+ * Still theirs — it keeps its attribution and its place in the message list — but it does not
+ * interrupt. Errors never carry it: their result is withheld, so they always interrupt.
+ */
+export const SOLVE_LOG_ONLY_MARKER = '[Selva:log]';
+
+/**
+ * One message a solve raised, with who raised it and whether it was deliberate (`isGate`).
+ * Generated from `wire-schema.json`; both transports decode into it (see `outcome.ts`).
+ */
+export type { SolveDiagnostic };
+
 export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	outputs: Record<string, unknown>;
 	meshes?: TMesh[];
 	errors?: string[];
 	warnings?: string[];
+	/** Structured form of `errors`/`warnings`, including remarks. Absent from transports that report neither. */
+	diagnostics?: SolveDiagnostic[];
+	/**
+	 * The definition refused this solve — a guard in the definition raised an error and its
+	 * outputs were withheld deliberately. Distinct from an errored solve that still returned
+	 * values, and from a transport failure: the solve ran and its answer is "no". Consumers
+	 * should show `errors` instead of treating the empty outputs as a result.
+	 */
+	blocked?: boolean;
+	/**
+	 * The solve was stopped before it finished. Always also `blocked`: what computed before
+	 * the stop is not a result. Absent from a transport that cannot tell.
+	 */
+	aborted?: boolean;
 	/**
 	 * The unparsed payload this result was built from, passed through verbatim. Opaque here for the
 	 * same reason as `TMesh`: a consumer that must persist or re-submit exactly what it showed the

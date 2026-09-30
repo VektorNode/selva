@@ -1,0 +1,80 @@
+using System.Collections.Generic;
+using Selva.Schema.Models;
+
+namespace Selva.GH.Features.SolveRuntime.Services;
+
+/// <summary>Everything the solve reported, and whether its outputs may be trusted.</summary>
+public class SolveDiagnostics
+{
+    /// <summary>
+    ///     Marker the Message component prepends to a blocking error, and the collector strips
+    ///     before the text reaches the UI.
+    ///
+    ///     Rhino.Compute flattens runtime messages to bare strings with no component attribution,
+    ///     so on that path this is the only way to tell a deliberate block from any other error.
+    ///     Must stay identical to <c>SOLVE_BLOCKED_MARKER</c> in
+    ///     <c>packages/solve/src/shared/solve-fn.ts</c>. It is baked into published definitions'
+    ///     solve output, so changing it breaks blocking for every .gh already in the wild.
+    /// </summary>
+    public const string BlockedMarker = "[Selva:blocked]";
+
+    /// <summary>
+    ///     Marks a Message component's non-blocking output (remark or warning) on the
+    ///     Rhino.Compute path, where <c>isGate</c> has no structural place to travel. Lets the
+    ///     browser tell a message the author chose to write from an incidental Grasshopper
+    ///     warning, which decides whether the user is interrupted.
+    ///     Must stay identical to <c>SOLVE_AUTHORED_MARKER</c> in
+    ///     <c>packages/solve/src/shared/solve-fn.ts</c>. A definition saved before this marker
+    ///     existed simply lacks it; the reader falls back to the component name.
+    /// </summary>
+    public const string AuthoredMarker = "[Selva:msg]";
+
+    /// <summary>
+    ///     Marks an authored message the author asked to keep quiet (Notify = Log). It is still
+    ///     theirs, so it keeps its attribution and its place in the message list, but it does not
+    ///     interrupt. Errors never carry this: their result is withheld, and an empty viewer with
+    ///     no explanation is worse than an interruption.
+    ///     Must stay identical to <c>SOLVE_LOG_ONLY_MARKER</c> in
+    ///     <c>packages/solve/src/shared/solve-fn.ts</c>.
+    /// </summary>
+    public const string LogOnlyMarker = "[Selva:log]";
+
+    public List<SolveDiagnostic> Messages { get; } = new List<SolveDiagnostic>();
+
+    /// <summary>True when a Message component raised an error. The bridge then sends the
+    /// diagnostics with no outputs, rather than geometry the author has declared invalid.</summary>
+    public bool Blocked { get; set; }
+
+    /// <summary>The solution was stopped before it finished. Always also <see cref="Blocked" />.</summary>
+    public bool Aborted { get; private set; }
+
+    public bool HasAny => Messages.Count > 0;
+
+    /// <summary>The wire vocabulary of <c>solveEnded.kind</c>, shared with the Selva server.</summary>
+    public string EndedKind => Aborted ? "aborted" : Blocked ? "blocked" : "ok";
+
+    public SolveOutcome ToOutcome() =>
+        new SolveOutcome
+        {
+            Diagnostics = new List<SolveDiagnostic>(Messages),
+            Blocked = Blocked,
+            Aborted = Aborted
+        };
+
+    /// <summary>
+    ///     An aborted solution still reaches SolutionEnd, with whatever computed before the stop
+    ///     sitting in the ContextBakes. That partial state is not a result, so it blocks.
+    /// </summary>
+    public void MarkAborted()
+    {
+        Messages.Add(new SolveDiagnostic
+        {
+            Level = "error",
+            Message = "Solve aborted",
+            Source = "Selva",
+            IsGate = true
+        });
+        Blocked = true;
+        Aborted = true;
+    }
+}

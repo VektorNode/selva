@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { clearMemberHighlight, setMemberHighlight } from '../../shared/index.js';
+
 // ============================================================================
 // Picking inside a merged mesh
 // ============================================================================
@@ -83,40 +85,17 @@ export function memberBounds(mesh: THREE.Mesh, member: PickableMember): THREE.Bo
 }
 
 /**
- * Restricts a merged mesh's geometry to draw one member's index range as a second group, so a
- * highlight material can be applied to just that range.
- *
- * Returns a restore function; call it before applying a different highlight. Both the groups and
- * the material array are reset outright rather than diffed — a merged mesh has no other use for
- * either, and rebuilding them is cheaper than tracking partial state.
+ * Draws one member of a merged mesh with `highlight`. Returns a restore function; call it before
+ * applying a different highlight. Members hidden by the outliner stay hidden either way.
  */
 export function highlightMemberRange(
 	mesh: THREE.Mesh,
 	member: PickableMember,
 	highlight: THREE.Material
 ): () => void {
-	if (member.indexStart == null || member.indexCount == null) return () => {};
+	const index = membersOf(mesh)?.indexOf(member) ?? -1;
+	if (index < 0 || member.indexStart == null || member.indexCount == null) return () => {};
 
-	const baseMaterial = mesh.material;
-	const previousGroups = mesh.geometry.groups.map((g) => ({ ...g }));
-	const indexCount = mesh.geometry.getIndex()?.count ?? 0;
-
-	mesh.geometry.clearGroups();
-	// Three renders groups in order and skips zero-length ones, so the before/after slices can be
-	// added unconditionally — a member at either end simply contributes an empty group.
-	mesh.geometry.addGroup(0, member.indexStart, 0);
-	mesh.geometry.addGroup(member.indexStart, member.indexCount, 1);
-	const tailStart = member.indexStart + member.indexCount;
-	mesh.geometry.addGroup(tailStart, Math.max(0, indexCount - tailStart), 0);
-
-	const base = Array.isArray(baseMaterial) ? baseMaterial[0]! : baseMaterial;
-	mesh.material = [base, highlight];
-
-	return () => {
-		mesh.geometry.clearGroups();
-		for (const group of previousGroups) {
-			mesh.geometry.addGroup(group.start, group.count, group.materialIndex);
-		}
-		mesh.material = baseMaterial;
-	};
+	setMemberHighlight(mesh, index, highlight);
+	return () => clearMemberHighlight(mesh);
 }

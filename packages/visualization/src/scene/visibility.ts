@@ -68,6 +68,8 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 				if (visible) hidden.delete(key);
 				else hidden.add(key);
 			}
+			// Showing the whole object must also drop ranges left by hiding single members.
+			applyEntryVisibility(object, hidden);
 		},
 
 		isEntryHidden: (entry) =>
@@ -81,6 +83,12 @@ export function createVisibilityState(hidden: Set<string> = new Set()): Visibili
 			if (visible) hidden.delete(entry.key);
 			else hidden.add(entry.key);
 			applyEntryVisibility(entry.object, hidden);
+			// The whole mesh may be off from a layer toggle; showing one member has to turn it back on.
+			if (visible && !entry.object.visible) {
+				entry.object.traverse((child) => {
+					child.visible = true;
+				});
+			}
 		},
 
 		isLayerHidden: (objects) => objects.length > 0 && objects.every((obj) => state.isHidden(obj)),

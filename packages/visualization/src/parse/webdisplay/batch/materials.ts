@@ -1,22 +1,23 @@
 import * as THREE from 'three';
 
-import { parseColor } from '../../../shared/index.js';
+import { OWN_ENV_MAP_INTENSITY, parseColor } from '../../../shared/index.js';
 
-import { applyTextureMap } from '../apply-texture.js';
+import { applyTexture } from '../apply-texture.js';
 
 import type { MaterialAppearanceOptions, SerializableMaterial } from '../types.js';
 
 // A near-pure metal has no diffuse response, so under the low-IBL 'technical' look it goes flat and
 // reads as painted card. Real architectural sheet metal is coated, not a bare mirror, so meaningfully
 // metallic materials get a thin satin clearcoat — a glossy dielectric layer independent of base
-// metalness/envMap, so folds catch light even when the IBL is dialed down.
+// metalness/envMap, so folds catch light even when the IBL is dialed down. A wire material that sets
+// `clearcoat` (0 for bare copper or zinc) replaces this default.
 const METAL_CLEARCOAT_THRESHOLD = 0.5;
 const METAL_CLEARCOAT = 0.5;
 const METAL_CLEARCOAT_ROUGHNESS = 0.3;
 
 export function createMaterial(
 	matData: SerializableMaterial,
-	options?: { vertexColors?: boolean; appearance?: MaterialAppearanceOptions }
+	options?: { vertexColors?: boolean; hasUvs?: boolean; appearance?: MaterialAppearanceOptions }
 ): THREE.MeshPhysicalMaterial {
 	const color = parseColor(matData.color);
 	const vertexColors = options?.vertexColors ?? false;
@@ -39,26 +40,38 @@ export function createMaterial(
 		depthTest: true
 	});
 
-	// HDR image-based-lighting reflection strength. Left at three's default (1) unless the caller
-	// dials it: <1 flattens reflections toward a matte/technical read, >1 pushes a glossier look.
-	if (appearance?.envMapIntensity != null) {
+	// HDR image-based-lighting reflection strength. The material's own value beats the look's, so a
+	// metal stays reflective in a dim look; otherwise three's default (1) unless the look dials it.
+	if (matData.envMapIntensity != null) {
+		material.envMapIntensity = matData.envMapIntensity;
+		material.userData[OWN_ENV_MAP_INTENSITY] = matData.envMapIntensity;
+	} else if (appearance?.envMapIntensity != null) {
 		material.envMapIntensity = appearance.envMapIntensity;
 	}
 
-	// See the constants above. Plastics/matte fall below the threshold and stay bare.
-	if (matData.metalness > METAL_CLEARCOAT_THRESHOLD) {
-		material.clearcoat = METAL_CLEARCOAT;
-		material.clearcoatRoughness = METAL_CLEARCOAT_ROUGHNESS;
+	const isMetal = matData.metalness > METAL_CLEARCOAT_THRESHOLD;
+	const clearcoat = matData.clearcoat ?? (isMetal ? METAL_CLEARCOAT : undefined);
+	if (clearcoat != null) {
+		material.clearcoat = clearcoat;
+		material.clearcoatRoughness =
+			matData.clearcoatRoughness ?? (isMetal ? METAL_CLEARCOAT_ROUGHNESS : 0);
+	}
+
+	// three builds the anisotropy tangent from UV derivatives; without a `uv` attribute it normalizes
+	// a zero vector and the mesh renders NaN-black.
+	if (matData.anisotropy != null && matData.anisotropy > 0 && options?.hasUvs) {
+		material.anisotropy = matData.anisotropy;
+		material.anisotropyRotation = matData.anisotropyRotation ?? 0;
 	}
 
 	if (vertexColors) {
 		applyVertexColorSRGBDecode(material);
 	}
 
-	// Async; the mesh renders untextured until the image decodes.
-	if (matData.map) {
-		applyTextureMap(material, matData.map);
-	}
+	// Async; the mesh renders without them until each image decodes.
+	if (matData.map) applyTexture(material, matData.map, 'map');
+	if (matData.roughnessMap) applyTexture(material, matData.roughnessMap, 'roughnessMap');
+	if (matData.normalMap) applyTexture(material, matData.normalMap, 'normalMap');
 
 	return material;
 }

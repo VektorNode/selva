@@ -20,7 +20,7 @@ selva/
 │   └── Releases/                   # Local build output only, NOT tracked; releases ship via plugin-release.yml
 │
 ├── packages/                       # TypeScript / Svelte workspace
-│   ├── schemas/                    # ui-schema.json + TS/C# code generators
+│   ├── schemas/                    # ui-schema.json, wire-schema.json + TS/C# code generators
 │   ├── compute/                    # @selvajs/compute: Rhino.Compute client + data-tree helpers (no three)
 │   ├── visualization/              # @selvajs/visualization: headless viewer core (scene/render/parse/shared)
 │   ├── solve/                      # @selvajs/solve: the solve flow, both sides of the wire (client/server/shared)
@@ -206,7 +206,7 @@ A domain folder named after the domain itself (`lib/compute/`, `lib/schema/`) is
 
 The plugin (C#) and UI (TS) are two implementations of one contract over WebSocket / Rhino.Compute. Rules to prevent drift:
 
-- **One source of truth per shape.** `ui-schema.json` generates both stacks (CI fails on drift). For non-generated wire shapes, use a single Rhino-free payload type shared by both paths; a `*ContractTests` test asserts they match.
+- **One source of truth per shape.** `ui-schema.json` (saved) and `wire-schema.json` (messages, runtime state) generate both stacks (CI fails on drift). For non-generated wire shapes, use a single Rhino-free payload type shared by both paths; a `*ContractTests` test asserts they match.
 - **One canonical location per concept.** Outputs live in `schema.Outputs`, canonicalized by `SchemaOutputCanonicalizer` at the boundary. Readers never tolerate "either/or".
 - **Keep decisions out of Rhino types.** Pull pure logic into Rhino-free classes (see `OutputPayloadBuilder`, `SchemaOutputCanonicalizer` in `Selva.GH/Features/UIBuilder/Services/`, exercised by `*ContractTests`/`*CanonicalizerTests` in `Selva.Tests`); leave only unwrap/IO in GH-typed shells.
 

@@ -113,11 +113,14 @@ public class OutboundEnvelopesTests
             new Dictionary<string, object> { ["out-area"] = 9 },
             new Dictionary<string, object>(),
             binaryBatchCount: 2,
-            modelUnits: "Meters"));
+            modelUnits: "Meters",
+            displayItems: null,
+            outcome: new SolveOutcome()));
 
         Assert.Equal("outputs", (string)json["type"]);
         Assert.Equal(2, (int)json["binaryBatchCount"]);
         Assert.Equal("Meters", (string)json["modelUnits"]);
+        Assert.False((bool)json["outcome"]["blocked"]);
     }
 
     [Fact]

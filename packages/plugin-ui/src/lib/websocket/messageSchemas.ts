@@ -99,6 +99,21 @@ const parametersAddedSchema = baseEnvelope.extend({
 	availableParams: z.unknown().nullish()
 });
 
+/** A runtime message raised during the solve. `level` stays open like `runtimeMessage`'s. */
+const solveDiagnosticSchema = z.object({
+	level: z.string(),
+	message: z.string(),
+	source: z.string().nullish(),
+	isGate: z.boolean().nullish()
+});
+
+/** The plugin's verdict on the solve (`SolveOutcome` in wire-schema.json). */
+const solveOutcomeSchema = z.object({
+	diagnostics: z.array(solveDiagnosticSchema),
+	blocked: z.boolean(),
+	aborted: z.boolean()
+});
+
 const outputsSchema = baseEnvelope.extend({
 	type: z.literal('outputs'),
 	outputs: z.record(z.string(), z.unknown()).nullish(),
@@ -107,7 +122,10 @@ const outputsSchema = baseEnvelope.extend({
 	modelUnits: z.string().nullish(),
 	// Non-mesh display items (curves/points) ride the envelope as JSON; shape is validated by the
 	// compute parser, so here we only assert it's an array when present.
-	displayItems: z.array(z.unknown()).nullish()
+	displayItems: z.array(z.unknown()).nullish(),
+	// The verdict rides the outputs envelope rather than a channel of its own, so a solve's
+	// messages and the outputs they describe can never interleave wrongly.
+	outcome: solveOutcomeSchema.nullish()
 });
 
 // outputUpdate is currently subscribed by usePreviewState but not broadcast by the
@@ -158,6 +176,19 @@ const runtimeMessageSchema = baseEnvelope.extend({
 	timestamp: z.string().nullish()
 });
 
+// One live event from a running solve. `event.type` is open on purpose: a new event kind is
+// additive on every transport, and the session ignores kinds it doesn't know.
+const solveEventSchema = baseEnvelope.extend({
+	type: z.literal('solveEvent'),
+	event: z.object({
+		solveId: z.string(),
+		seq: z.number(),
+		at: z.string(),
+		type: z.string(),
+		payload: z.record(z.string(), z.unknown()).nullish()
+	})
+});
+
 // `disconnecting` uses the generic `BroadcastMessage` envelope — payload nested
 // under `data` — and is handled inline in `handleMessage` before validation kicks
 // in. No schema needed.
@@ -185,7 +216,8 @@ const schemasByType = {
 	syncPreview: syncPreviewSchema,
 	syncApplied: syncAppliedSchema,
 	solvingState: solvingStateSchema,
-	runtimeMessage: runtimeMessageSchema
+	runtimeMessage: runtimeMessageSchema,
+	solveEvent: solveEventSchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

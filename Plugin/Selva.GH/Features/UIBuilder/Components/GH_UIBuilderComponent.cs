@@ -11,6 +11,7 @@ using Rhino;
 using Selva.Schema.Models;
 using Selva.Schema.Services;
 using Selva.GH.Config;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services;
@@ -138,6 +139,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         // Headless (Rhino.Compute): output the embedded schema and stop, no services/background tasks.
         if (HeadlessGuard.IsHeadless)
         {
+            // Opens the live-event session early so an abort can reach a definition whose
+            // components never emit; a no-op unless the solve request named a callback.
+            SolveRuntimes.For(OnPingDocument())?.EnsureHooked();
             DA.SetData(0, _embeddedSchema != null ? new UISchemaGoo(_embeddedSchema) : null);
             return;
         }

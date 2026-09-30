@@ -1,8 +1,17 @@
 import * as THREE from 'three';
 
-import { LOOK_PRESETS, materialAppearanceForLook } from '../../shared/index.js';
+import {
+	LOOK_PRESETS,
+	OWN_ENV_MAP_INTENSITY,
+	materialAppearanceForLook
+} from '../../shared/index.js';
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
-import type { Look, LookMaterialOverride, MaterialAppearanceOptions } from '../types.js';
+import type {
+	Look,
+	LookMaterialOverride,
+	LookPreset,
+	MaterialAppearanceOptions
+} from '../types.js';
 import { defaultUp, type ResolvedOptions } from './defaults.js';
 import type { PipelineController } from './pipeline-controller.js';
 import type { SceneLights } from './setup-lighting.js';
@@ -105,6 +114,14 @@ export function applyMaterialOverride(
 		target.wireframe = override.wireframe;
 	}
 	target.needsUpdate = true;
+}
+
+/** A material's own value (see `OWN_ENV_MAP_INTENSITY`) unless the look restyles every material. */
+export function envMapIntensityForLook(material: THREE.Material, preset: LookPreset): number {
+	const own = preset.materialOverride
+		? undefined
+		: (material.userData[OWN_ENV_MAP_INTENSITY] as number | undefined);
+	return own ?? preset.envMapIntensity;
 }
 
 /** The runtime lighting/material dials — everything a host can retune without rebuilding the scene. */
@@ -224,7 +241,10 @@ export function createAppearanceController(params: {
 					: [];
 			for (const material of materials) {
 				if ('envMapIntensity' in material) {
-					(material as THREE.MeshStandardMaterial).envMapIntensity = preset.envMapIntensity;
+					(material as THREE.MeshStandardMaterial).envMapIntensity = envMapIntensityForLook(
+						material,
+						preset
+					);
 				}
 				applyMaterialOverride(material as THREE.Material, preset.materialOverride);
 			}

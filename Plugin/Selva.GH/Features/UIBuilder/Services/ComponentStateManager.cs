@@ -56,7 +56,10 @@ public class ComponentStateManager
     ///     True while a solve is running OR scheduled-but-not-yet-started. Value updates arriving while
     ///     busy must coalesce into the pending buffer rather than scheduling a competing solve.
     /// </summary>
-    public bool IsBusy => IsSolving || _solveScheduled;
+    // _solveStartedSinceLastEnd, not just IsSolving: a debounced start leaves IsSolving false, and
+    // an update applied during that solve schedules a solution that never runs until the next
+    // message arrives.
+    public bool IsBusy => IsSolving || _solveScheduled || _solveStartedSinceLastEnd;
 
     public bool IsHeadlessMode => _isHeadless();
 

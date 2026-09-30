@@ -9,16 +9,25 @@ import `../server/*`.
 
 ## Main pieces
 
-| File                          | What it does                         |
-| ----------------------------- | ------------------------------------ |
-| `solve-session.ts`            | Creates the session                  |
-| `solve-session-core.ts`       | Holds the state changes              |
-| `drivers/driver.ts`           | Defines the transport boundary       |
-| `drivers/request-response.ts` | Request/response driver              |
-| `compute-fetch-solve-fn.ts`   | Ready-made HTTP solve function       |
-| `async-throttle.ts`           | Keeps only one solve in flight       |
-| `solve-memo.ts`               | Caches results on the client         |
-| `external-storage.ts`         | Stores inputs while they move around |
+| File                            | What it does                                               |
+| ------------------------------- | ---------------------------------------------------------- |
+| `session/solve-session.ts`      | Creates the session                                        |
+| `session/solve-session-core.ts` | Holds the state changes, including `phase`                 |
+| `events/live-solve.ts`          | Folds live events into `LiveSolveState`, one case per kind |
+| `events/solve-event-stream.ts`  | The cloud SSE stream, one per tab                          |
+| `drivers/driver.ts`             | Defines the transport boundary                             |
+| `drivers/request-response.ts`   | Request/response driver                                    |
+| `compute-fetch-solve-fn.ts`     | Ready-made HTTP solve function                             |
+| `async-throttle.ts`             | Keeps only one solve in flight                             |
+| `solve-memo.ts`                 | Caches results on the client                               |
+| `external-storage.ts`           | Stores inputs while they move around                       |
+
+A driver turns its transport's reply into a `SolveResult` with `finalizeResult` from
+`shared/outcome.ts`, after decoding the plugin's verdict with `decodeOutcome`. That is where
+"a blocked or aborted solve has no result" is decided, for every transport.
+
+Adding a live event kind: a case in `reduceLiveSolve` and a field on `LiveSolveState`. Unknown
+kinds already land in `LiveSolveState.other`.
 
 ## Typical flow
 

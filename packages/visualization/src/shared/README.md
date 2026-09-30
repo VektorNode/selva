@@ -20,6 +20,7 @@ vocabulary — are re-exported from `/render`, which a viewer host already impor
 | `gpu-ownership.ts`    | `canDisposeMaterial`, `protectMaterials` — the module-singleton claim                      |
 | `gpu-dispose.ts`      | `disposeMaterial`, `disposeObjectTree` — the only traversal that should free scene content |
 | `gpu-capabilities.ts` | `publishMaxAnisotropy`, `observeMaxAnisotropy`                                             |
+| `merged-draw.ts`      | Which members of a merged mesh draw: member hiding (`scene/`) and highlight (`render/`)    |
 
 ## Why these live here
 

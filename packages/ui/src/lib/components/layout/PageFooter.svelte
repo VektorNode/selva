@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { CircleAlert, TriangleAlert } from '@lucide/svelte';
+	import { CircleAlert, TriangleAlert, Info } from '@lucide/svelte';
+	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import { useFooter } from '$lib/contexts/footerContext.svelte';
 	import ComputeMessagesDialog from '../compute/ComputeMessagesDialog.svelte';
 	import FooterItemRenderer from './FooterItemRenderer.svelte';
@@ -8,6 +9,8 @@
 	interface Props {
 		errors?: string[];
 		warnings?: string[];
+		/** Structured messages, including remarks. Preferred over the two arrays above. */
+		diagnostics?: SolveDiagnostic[];
 		copyrightName?: string;
 		/** Fully overrides the copyright line. `{name}` and `{year}` are substituted. */
 		footerText?: string;
@@ -17,6 +20,7 @@
 	let {
 		errors = [],
 		warnings = [],
+		diagnostics,
 		copyrightName = 'Selva',
 		footerText,
 		children
@@ -47,8 +51,19 @@
 
 	let _currentYear = new Date().getFullYear();
 
-	const hasMessages = $derived(errors.length > 0 || warnings.length > 0);
-	const totalCount = $derived(errors.length + warnings.length);
+	// Counts come from `diagnostics` when the host supplies it, so remarks are included and the
+	// badge matches what the dialog lists.
+	const errorCount = $derived(
+		diagnostics ? diagnostics.filter((d) => d.level === 'error').length : errors.length
+	);
+	const warningCount = $derived(
+		diagnostics ? diagnostics.filter((d) => d.level === 'warning').length : warnings.length
+	);
+	const remarkCount = $derived(
+		diagnostics ? diagnostics.filter((d) => d.level === 'remark').length : 0
+	);
+	const totalCount = $derived(errorCount + warningCount + remarkCount);
+	const hasMessages = $derived(totalCount > 0);
 
 	const copyrightLine = $derived(
 		footerText
@@ -66,28 +81,33 @@
 		{/each}
 
 		{#if hasMessages}
-			<ComputeMessagesDialog {errors} {warnings}>
+			<ComputeMessagesDialog {errors} {warnings} {diagnostics}>
 				{#snippet trigger()}
 					<div
-						class="gap-1.5 px-2 py-1 rounded flex cursor-pointer items-center transition-colors hover:bg-muted {errors.length >
+						class="gap-1.5 px-2 py-1 rounded flex cursor-pointer items-center transition-colors hover:bg-muted {errorCount >
 						0
 							? 'text-destructive hover:bg-destructive/10'
-							: 'text-warning hover:bg-warning/10'}"
-						title={`${totalCount} ${totalCount === 1 ? 'issue' : 'issues'}`}
+							: warningCount > 0
+								? 'text-warning hover:bg-warning/10'
+								: 'hover:bg-muted'}"
+						title={`${totalCount} ${totalCount === 1 ? 'message' : 'messages'} from the last solve`}
 					>
-						{#if errors.length > 0}
+						{#if errorCount > 0}
 							<CircleAlert class="h-3.5 w-3.5" />
-							<span class="font-medium">{errors.length} Error{errors.length !== 1 ? 's' : ''}</span>
+							<span class="font-medium">{errorCount} Error{errorCount !== 1 ? 's' : ''}</span>
 						{/if}
 
-						{#if warnings.length > 0}
-							{#if errors.length > 0}
+						{#if warningCount > 0}
+							{#if errorCount > 0}
 								<span class="text-border">•</span>
 							{/if}
 							<TriangleAlert class="h-3.5 w-3.5" />
-							<span class="font-medium"
-								>{warnings.length} Warning{warnings.length !== 1 ? 's' : ''}</span
-							>
+							<span class="font-medium">{warningCount} Warning{warningCount !== 1 ? 's' : ''}</span>
+						{/if}
+
+						{#if errorCount === 0 && warningCount === 0}
+							<Info class="h-3.5 w-3.5" />
+							<span class="font-medium">{remarkCount} Note{remarkCount !== 1 ? 's' : ''}</span>
 						{/if}
 					</div>
 				{/snippet}

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { LOOK_PRESETS, type Look } from '../../../shared/index.js';
-import { applyMaterialOverride } from '../appearance.js';
+import { LOOK_PRESETS, OWN_ENV_MAP_INTENSITY, type Look } from '../../../shared/index.js';
+import { applyMaterialOverride, envMapIntensityForLook } from '../appearance.js';
 
 // Switching between two looks that both override used to leave behind whatever the first set and
 // the second was silent about: `wireframe` out of the wireframe look, `opacity`/`depthWrite` out of
@@ -74,5 +74,26 @@ describe('look material overrides do not leak into the next look', () => {
 		expect(viaOther.color.getHex()).toBe(direct.color.getHex());
 		expect(viaOther.roughness).toBe(direct.roughness);
 		expect(viaOther.metalness).toBe(direct.metalness);
+	});
+});
+
+describe('a material with its own envMapIntensity', () => {
+	const parsed = (own?: number) => {
+		const material = wall();
+		if (own !== undefined) material.userData[OWN_ENV_MAP_INTENSITY] = own;
+		return material;
+	};
+
+	it('keeps it across plain looks', () => {
+		expect(envMapIntensityForLook(parsed(1), LOOK_PRESETS.technical)).toBe(1);
+		expect(envMapIntensityForLook(parsed(), LOOK_PRESETS.technical)).toBe(
+			LOOK_PRESETS.technical.envMapIntensity
+		);
+	});
+
+	it.each(OVERRIDING)('takes the look value in %s, which restyles every material', (look) => {
+		expect(envMapIntensityForLook(parsed(1), LOOK_PRESETS[look])).toBe(
+			LOOK_PRESETS[look].envMapIntensity
+		);
 	});
 });
