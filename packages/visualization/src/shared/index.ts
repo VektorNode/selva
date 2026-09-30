@@ -27,3 +27,12 @@ export { publishMaxAnisotropy, observeMaxAnisotropy } from './gpu-capabilities.j
 
 export { disposeMaterial, disposeObjectTree } from './gpu-dispose.js';
 export type { DisposeOptions } from './gpu-dispose.js';
+
+export {
+	getHiddenMembers,
+	setHiddenMembers,
+	getBaseMaterial,
+	setMemberHighlight,
+	clearMemberHighlight,
+	onMemberDrawChange
+} from './merged-draw.js';

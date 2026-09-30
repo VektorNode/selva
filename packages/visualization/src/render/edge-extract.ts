@@ -11,7 +11,9 @@ export const MAX_EXTRACT_VERTICES = 0x4000000; // 2^26
 
 /**
  * @param index - Triangle indices, or null for non-indexed soup.
- * @returns Segment endpoint pairs, same layout as `EdgesGeometry.attributes.position.array`.
+ * @returns `segments`: endpoint pairs, same layout as `EdgesGeometry.attributes.position.array`.
+ *   `faces`: per segment, the triangle it came from, so a merged mesh can drop a hidden member's
+ *   edges without extracting again.
  * @throws If `positions` holds ≥ 2^26 vertices ({@link MAX_EXTRACT_VERTICES}) — callers fall
  *   back to `THREE.EdgesGeometry`.
  */
@@ -19,7 +21,7 @@ export function extractEdgeSegments(
 	positions: Float32Array,
 	index: Uint32Array | Uint16Array | null,
 	thresholdAngleDeg: number
-): Float32Array {
+): { segments: Float32Array; faces: Uint32Array } {
 	// No outer captures besides Math — this function is stringified via toString() to run inside
 	// a Worker ({@link edgeExtractWorkerSource}). Don't reference anything outside this body.
 	const PRECISION = 1e4; // same quantization grid as THREE.EdgesGeometry
@@ -75,14 +77,19 @@ export function extractEdgeSegments(
 	}
 
 	// --- Growable segment output ------------------------------------------------------------
-	let out = new Float32Array(4096);
+	let out = new Float32Array(6 * 1024);
 	let outLength = 0;
-	const emit = (i0: number, i1: number): void => {
+	let outFaces = new Uint32Array(1024);
+	const emit = (i0: number, i1: number, face: number): void => {
 		if (outLength + 6 > out.length) {
 			const grown = new Float32Array(out.length * 2);
 			grown.set(out);
 			out = grown;
+			const grownFaces = new Uint32Array(out.length / 6);
+			grownFaces.set(outFaces);
+			outFaces = grownFaces;
 		}
+		outFaces[outLength / 6] = face;
 		out[outLength++] = positions[3 * i0];
 		out[outLength++] = positions[3 * i0 + 1];
 		out[outLength++] = positions[3 * i0 + 2];
@@ -100,6 +107,7 @@ export function extractEdgeSegments(
 	const pendingIndex0: number[] = [];
 	const pendingIndex1: number[] = [];
 	const pendingNormals: number[] = [];
+	const pendingFaces: number[] = [];
 
 	const triCount = (index ? index.length : vertexCount) / 3;
 	for (let t = 0; t < triCount; t++) {
@@ -164,7 +172,7 @@ export function extractEdgeSegments(
 					nx * pendingNormals[3 * reverseSlot] +
 					ny * pendingNormals[3 * reverseSlot + 1] +
 					nz * pendingNormals[3 * reverseSlot + 2];
-				if (dot <= thresholdDot) emit(from, to);
+				if (dot <= thresholdDot) emit(from, to, t);
 				edgeSlots.set(reverseKey, -1);
 			} else {
 				const forwardKey = fromCanonical * ID_BITS + toCanonical;
@@ -174,6 +182,7 @@ export function extractEdgeSegments(
 					pendingIndex0.push(from);
 					pendingIndex1.push(to);
 					pendingNormals.push(nx, ny, nz);
+					pendingFaces.push(t);
 				}
 			}
 		}
@@ -181,15 +190,15 @@ export function extractEdgeSegments(
 
 	// --- Unmatched edges are boundaries — always kept ---------------------------------------
 	for (const slot of edgeSlots.values()) {
-		if (slot !== -1) emit(pendingIndex0[slot], pendingIndex1[slot]);
+		if (slot !== -1) emit(pendingIndex0[slot], pendingIndex1[slot], pendingFaces[slot]);
 	}
 
-	return out.slice(0, outLength);
+	return { segments: out.slice(0, outLength), faces: outFaces.slice(0, outLength / 6) };
 }
 
 /**
  * Worker source running {@link extractEdgeSegments} off the main thread. Protocol: receives
- * `{id, positions, index, thresholdAngle}`, replies `{id, segments}` (buffer transferred) or
+ * `{id, positions, index, thresholdAngle}`, replies `{id, segments, faces}` (buffers transferred) or
  * `{id, error}`.
  *
  * Relies on `extractEdgeSegments` stringifying to standalone code — guarded by a unit test that
@@ -201,8 +210,8 @@ export function edgeExtractWorkerSource(): string {
 		`self.onmessage = (event) => {`,
 		`  const { id, positions, index, thresholdAngle } = event.data;`,
 		`  try {`,
-		`    const segments = extract(positions, index, thresholdAngle);`,
-		`    self.postMessage({ id, segments }, [segments.buffer]);`,
+		`    const { segments, faces } = extract(positions, index, thresholdAngle);`,
+		`    self.postMessage({ id, segments, faces }, [segments.buffer, faces.buffer]);`,
 		`  } catch (error) {`,
 		`    self.postMessage({ id, error: String((error && error.message) || error) });`,
 		`  }`,

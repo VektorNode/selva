@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { getLogger } from '../../shared/index.js';
+import { getBaseMaterial, getLogger } from '../../shared/index.js';
 
 import type { CameraController } from '../camera-controller.js';
 import { computeContentBounds, isViewerAid } from '../three-helpers.js';
@@ -159,17 +159,21 @@ export function setupEventHandlers(
 	 * clicking one wall doesn't light up every wall sharing its material — see `merged-picking.ts`.
 	 */
 	const applyHighlight = (object: THREE.Object3D, member: PickableMember | null): boolean => {
+		if (member && object instanceof THREE.Mesh) {
+			// The material is an array while some members are hidden, so read the base through
+			// the draw-state owner rather than off the mesh.
+			const clone = getBaseMaterial(object).clone();
+			tintForSelection(clone, selectionColorObj, true);
+			memberHighlightMaterial = clone;
+			restoreMemberHighlight = highlightMemberRange(object, member, clone);
+			return true;
+		}
+
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
 		if (!(target.material instanceof THREE.Material)) return false;
 
 		const clone = target.material.clone();
 		tintForSelection(clone, selectionColorObj, object instanceof THREE.Mesh);
-
-		if (member && object instanceof THREE.Mesh) {
-			memberHighlightMaterial = clone;
-			restoreMemberHighlight = highlightMemberRange(object, member, clone);
-			return true;
-		}
 
 		originalMaterials.set(object, target.material);
 		target.material = clone;
