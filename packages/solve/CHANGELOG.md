@@ -1,5 +1,26 @@
 # @selvajs/solve
 
+## 1.2.0
+
+### Minor Changes
+
+- 5bff576: Live solve events and a single solve verdict.
+
+  - `SolveResult` gains `diagnostics` (level, source, `isGate` per message) and `aborted`. Both drivers decode the plugin's `SolveOutcome` through `decodeOutcome`/`finalizeResult`; on Rhino.Compute without the fork's `selva` block, the outcome is recovered from the message markers and the `: component "X" (guid)` suffix is stripped.
+  - A blocked or aborted solve returns no outputs or meshes and is applied at once. `awaitingAck`/`acknowledge()`/`discard()` hold back only a result with warnings.
+  - The session exposes `live` (`LiveSolveState`: diagnostics, progress per source, how the solve ended), `phase` (`idle`, `solving`, `review`, `blocked`), `abort()` and `dispose()`.
+  - `createSolveEventStream` opens the cloud SSE stream; pass it to the request/response driver as a `SolveEventSource` and its `streamId` to `createComputeFetchSolveFn`.
+  - `SolveEngine`/`runSolvePipeline` accept `selvaEvents` and forward it to Compute.
+
+### Patch Changes
+
+- Updated dependencies [b6f5796]
+- Updated dependencies [251d17b]
+- Updated dependencies [5bff576]
+- Updated dependencies [5bff576]
+  - @selvajs/compute@4.2.0
+  - @selvajs/schemas@5.1.0
+
 ## 1.1.1
 
 ### Patch Changes

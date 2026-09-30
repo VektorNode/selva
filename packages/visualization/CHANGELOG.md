@@ -1,5 +1,15 @@
 # @selvajs/visualization
 
+## 1.4.0
+
+### Minor Changes
+
+- 5bff576: Wire materials take optional `envMapIntensity`, `clearcoat`, `clearcoatRoughness`, `anisotropy`, `anisotropyRotation`, `roughnessMap` and `normalMap`. A material's own `envMapIntensity` wins over the look's, and `setLook` keeps it except in looks with a `materialOverride`. An explicit `clearcoat` replaces the automatic satin coat on metals. Anisotropy applies only when the batch carries UVs. SLVM `slvm:tex:N` references resolve in all three texture slots.
+
+### Patch Changes
+
+- 5bff576: Fix hiding single objects inside a merged mesh. Hidden members kept drawing because three ignores geometry groups on a single-material mesh, and selecting a member overwrote the hidden ranges. Hiding and selection highlight now compose, hidden members are no longer pickable, their edge overlay segments are dropped, and showing one member of a hidden layer turns the mesh back on.
+
 ## 1.3.1
 
 ### Patch Changes
