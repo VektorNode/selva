@@ -49,7 +49,7 @@
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@supabase/supabase-js": "^2.116.0",
+		"@supabase/supabase-js": "^2.117.2",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "catalog:",
 		"clsx": "catalog:",
@@ -80,7 +80,7 @@
 		"@selvajs/ui": "workspace:*",
 		"@selvajs/visualization": "workspace:*",
 		"@sveltejs/adapter-node": "^5.5.4",
-		"@types/nodemailer": "^8.0.1",
+		"@types/nodemailer": "^8.0.2",
 		"@types/three": "catalog:",
 		"rimraf": "catalog:",
 		"tw-animate-css": "catalog:",

@@ -75,8 +75,8 @@
 		"@tailwindcss/vite": "catalog:",
 		"@types/node": "catalog:",
 		"@types/three": "catalog:",
-		"@typescript-eslint/eslint-plugin": "^8.70.0",
-		"@typescript-eslint/parser": "^8.70.0",
+		"@typescript-eslint/eslint-plugin": "^8.70.1",
+		"@typescript-eslint/parser": "^8.70.1",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.23.0",
@@ -91,9 +91,9 @@
 		"svelte-check": "catalog:",
 		"tailwindcss": "catalog:",
 		"three": "catalog:",
-		"turbo": "^2.10.13",
+		"turbo": "^2.11.4",
 		"typescript": "catalog:",
-		"typescript-eslint": "^8.70.0",
+		"typescript-eslint": "^8.70.1",
 		"vite": "catalog:"
 	}
 }
