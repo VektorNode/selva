@@ -21,23 +21,44 @@ function fakePublisher(name, code, output = '') {
 	return path;
 }
 
-function runWrapper(fakePath) {
+/** A stand-in package list naming one `@selvajs/cli` version. */
+function fakePackageList(name, version) {
+	const path = join(workDir, `${name}.mjs`);
+	writeFileSync(path, `process.stdout.write('@selvajs/cli\\t${version}\\tpackages/cli\\n');\n`);
+	return path;
+}
+
+// 4.17.1 is live on npm; 99.99.99 never will be.
+const livePackages = fakePackageList('live-list', '4.17.1');
+const missingPackages = fakePackageList('missing-list', '99.99.99');
+
+function runWrapper(fakePath, packageList) {
 	return spawnSync('node', [wrapper], {
 		encoding: 'utf8',
-		env: { ...process.env, SELVA_FAKE_CHANGESET_PUBLISH: fakePath }
+		env: {
+			...process.env,
+			SELVA_FAKE_CHANGESET_PUBLISH: fakePath,
+			SELVA_FAKE_PACKAGE_LIST: packageList,
+			SELVA_VERIFY_ATTEMPTS: '1'
+		}
 	});
 }
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
-test('passes through a successful publish without touching the registry', () => {
-	const r = runWrapper(fakePublisher('ok', 0));
-	assert(r.status === 0, `expected exit 0, got ${r.status}`);
-	assert(
-		!r.stdout.includes('verifying the registry'),
-		'a green publish must not trigger reconciliation'
-	);
+test('passes a successful publish once every version is live', () => {
+	const r = runWrapper(fakePublisher('ok', 0), livePackages);
+	assert(r.status === 0, `expected exit 0, got ${r.status}\n${r.stdout}${r.stderr}`);
+	assert(r.stdout.includes('on npm'), `expected per-package verification\n${r.stdout}`);
+});
+
+test('fails a successful publish whose versions never went live', () => {
+	// The 2026-09-30 shape: a stage-only trusted publisher makes npm stage the
+	// upload, pnpm exits 0, and changesets prints "Successfully published".
+	const r = runWrapper(fakePublisher('staged', 0), missingPackages);
+	assert(r.status !== 0, 'a staged-but-not-live version must turn the release red');
+	assert(r.stderr.includes('staged'), `expected the staging hint, got:\n${r.stderr}`);
 });
 
 test('forgives a failed publish when every version is already on npm', () => {
@@ -48,24 +69,15 @@ test('forgives a failed publish when every version is already on npm', () => {
 			'already-published',
 			1,
 			'npm error You cannot publish over the previously published versions: 4.7.0.\n'
-		)
+		),
+		livePackages
 	);
 	assert(r.status === 0, `expected exit 0, got ${r.status}\n${r.stdout}${r.stderr}`);
 	assert(r.stdout.includes('on npm'), `expected per-package verification\n${r.stdout}`);
 });
 
 test('fails when a workspace version is not on npm', () => {
-	// Force a mismatch by pointing the wrapper at a bogus package list.
-	const listStub = join(workDir, 'fake-list.mjs');
-	writeFileSync(listStub, `process.stdout.write('@selvajs/cli\\t99.99.99\\tpackages/cli\\n');\n`);
-	const r = spawnSync('node', [wrapper], {
-		encoding: 'utf8',
-		env: {
-			...process.env,
-			SELVA_FAKE_CHANGESET_PUBLISH: fakePublisher('unpublished', 1),
-			SELVA_FAKE_PACKAGE_LIST: listStub
-		}
-	});
+	const r = runWrapper(fakePublisher('unpublished', 1), missingPackages);
 	assert(r.status !== 0, 'a version npm does not serve must keep the release red');
 	assert(
 		r.stderr.includes('not on npm'),

@@ -16,6 +16,11 @@
 // on npm at its workspace version → the release landed, exit 0. Anything
 // missing → exit non-zero. Deliberately does not parse changesets' output,
 // which splits names (stdout) from the failure header (stderr).
+//
+// A green publish is checked too. A trusted publisher that npm has set to
+// stage-only accepts the upload and exits 0, but the version never goes live
+// and changesets still prints "Successfully published". Unless it's caught
+// here, the release shows green and the version number ends up burned.
 
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -39,8 +44,6 @@ if (result.error) {
 	console.error(`\n✗ Failed to run changeset publish: ${result.error.message}`);
 	process.exit(1);
 }
-
-if (result.status === 0) process.exit(0);
 
 // Same source of truth the release workflow gates on, so the two can't
 // disagree about what "everything we publish" means.
@@ -81,37 +84,56 @@ async function publishedVersion(name, version) {
 	}
 }
 
-console.info('\n── changeset publish failed; verifying the registry ──\n');
-
-const packages = publishablePackages();
-const checks = await Promise.all(
-	packages.map(async (pkg) => ({ ...pkg, found: await publishedVersion(pkg.name, pkg.version) }))
-);
-
-const missing = [];
-
-for (const { name, version, found } of checks) {
-	if (found === version) {
-		console.info(`  ✓ ${name}@${version} — on npm.`);
-	} else {
-		console.info(`  ✗ ${name}@${version} — NOT on npm.`);
-		missing.push(`${name}@${version}`);
-	}
-}
-
-console.info('');
-
-if (missing.length > 0) {
-	console.error(
-		`✗ ${missing.length} package(s) are not on npm at their workspace version:\n` +
-			missing.map((p) => `  · ${p}`).join('\n') +
-			'\n'
-	);
-	process.exit(result.status ?? 1);
-}
+const published = result.status === 0;
 
 console.info(
-	'✓ Every publishable package is on npm at its workspace version — the release succeeded ' +
-		'(changeset publish exited non-zero on redundant re-publishes). Treating as success.\n'
+	published
+		? '\n── changeset publish succeeded; confirming the versions are live ──\n'
+		: '\n── changeset publish failed; verifying the registry ──\n'
 );
-process.exit(0);
+
+// A just-published version can take a moment to show up in the registry, so a
+// green publish gets a few retries. A failed one is checked once.
+// SELVA_VERIFY_ATTEMPTS shortens this for tests. Unset in CI.
+const attempts = published ? Number(process.env.SELVA_VERIFY_ATTEMPTS ?? 6) : 1;
+const RETRY_DELAY_MS = 10_000;
+
+let pending = publishablePackages();
+const live = [];
+
+for (let attempt = 1; attempt <= attempts && pending.length > 0; attempt++) {
+	if (attempt > 1) await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+	const checks = await Promise.all(
+		pending.map(async (pkg) => ({ ...pkg, found: await publishedVersion(pkg.name, pkg.version) }))
+	);
+	live.push(...checks.filter((c) => c.found === c.version));
+	pending = checks.filter((c) => c.found !== c.version);
+}
+
+for (const { name, version } of live) console.info(`  ✓ ${name}@${version} — on npm.`);
+for (const { name, version } of pending) console.info(`  ✗ ${name}@${version} — NOT on npm.`);
+console.info('');
+
+if (pending.length > 0) {
+	console.error(
+		`✗ ${pending.length} package(s) are not on npm at their workspace version:\n` +
+			pending.map((p) => `  · ${p.name}@${p.version}`).join('\n') +
+			'\n'
+	);
+	if (published) {
+		console.error(
+			'changeset publish exited 0, so npm most likely staged these instead of publishing them.\n' +
+				"Enable direct publishing on each package's trusted publisher config on npmjs.com.\n"
+		);
+	}
+	// exitCode, not process.exit(): exiting while fetch's keep-alive sockets
+	// close trips a libuv assertion on Windows and replaces the exit code.
+	process.exitCode = result.status || 1;
+} else {
+	console.info(
+		published
+			? '✓ Every publishable package is live on npm at its workspace version.\n'
+			: '✓ Every publishable package is on npm at its workspace version — the release succeeded ' +
+					'(changeset publish exited non-zero on redundant re-publishes). Treating as success.\n'
+	);
+}
