@@ -15,6 +15,13 @@ const METAL_CLEARCOAT_THRESHOLD = 0.5;
 const METAL_CLEARCOAT = 0.5;
 const METAL_CLEARCOAT_ROUGHNESS = 0.3;
 
+// Pushes surfaces back by a fraction of their own depth slope so crease edges keep their full width:
+// an edge line is a screen-space quad at the edge's depth, and without this the face on its near
+// side covers half of it. The same push lets anything just behind a grazing surface show through,
+// and that gap grows with distance. Measured on a 1 mm sheet with parts 1 mm behind it: 0.5 bled
+// from ~2 m, 0.25 from ~5 m with crease lines barely thinner, 0 only past ~10 m but halved lines.
+const SURFACE_OFFSET_FACTOR = 0.25;
+
 interface MaterialOptions {
 	vertexColors?: boolean;
 	hasUvs?: boolean;
@@ -71,9 +78,9 @@ export function createMaterial(
 		// Open surfaces need both sides; a closed solid's back faces are never visible and only
 		// z-fight with its front ones.
 		side: cullsBackFaces(matData, options) ? THREE.FrontSide : THREE.DoubleSide,
-		polygonOffset: true, // avoids z-fighting on coplanar faces
-		polygonOffsetFactor: 0.5,
-		polygonOffsetUnits: 0.5,
+		polygonOffset: true,
+		polygonOffsetFactor: SURFACE_OFFSET_FACTOR,
+		polygonOffsetUnits: 0,
 		depthWrite: true,
 		depthTest: true
 	});
