@@ -62,7 +62,8 @@ public class ThreeMaterial
 
     /// <summary>
     ///     0.0 to 1.0. Stretches highlights along the mesh's texture U direction, the grain of
-    ///     brushed or rolled sheet. Needs UVs, so setting it makes WebDisplay carry them.
+    ///     brushed or rolled sheet. Without a texture map WebDisplay replaces the UVs so U follows
+    ///     each part's bend axis (or longest extent when flat), not Rhino's surface parameters.
     /// </summary>
     [JsonProperty("anisotropy", NullValueHandling = NullValueHandling.Ignore)]
     public double? Anisotropy { get; set; }
@@ -71,13 +72,15 @@ public class ThreeMaterial
     [JsonProperty("anisotropyRotation", NullValueHandling = NullValueHandling.Ignore)]
     public double? AnisotropyRotation { get; set; }
 
-    /// <summary>True when rendering this material needs the mesh's texture coordinates.</summary>
     [JsonIgnore]
-    public bool NeedsUvs =>
+    public bool HasMaps =>
         !string.IsNullOrEmpty(Map)
         || !string.IsNullOrEmpty(RoughnessMap)
-        || !string.IsNullOrEmpty(NormalMap)
-        || Anisotropy > 0;
+        || !string.IsNullOrEmpty(NormalMap);
+
+    /// <summary>True when rendering this material needs the mesh's texture coordinates.</summary>
+    [JsonIgnore]
+    public bool NeedsUvs => HasMaps || Anisotropy > 0;
 
     /// <summary>A faithful deep copy: every member is a value type or an immutable string.</summary>
     public ThreeMaterial Clone()

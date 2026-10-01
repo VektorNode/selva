@@ -1,6 +1,6 @@
 import { meshAssemblyWorkerSource } from '../mesh-assembly.js';
 
-import type { AssembledGeometry } from '../mesh-assembly.js';
+import type { FinishedGeometry } from '../mesh-assembly.js';
 
 /**
  * Below this triangle count the synchronous path finishes in ~10 ms — a worker round-trip (two
@@ -10,7 +10,7 @@ import type { AssembledGeometry } from '../mesh-assembly.js';
 export const ASSEMBLY_WORKER_MIN_TRIANGLES = 50_000;
 
 interface PendingAssembly {
-	resolve: (geometries: AssembledGeometry[]) => void;
+	resolve: (geometries: FinishedGeometry[]) => void;
 	reject: (error: Error) => void;
 }
 
@@ -38,7 +38,7 @@ export function getAssemblyWorker(): Worker | null {
 		worker.onmessage = (event: MessageEvent) => {
 			const { id, geometries, error } = event.data as {
 				id: number;
-				geometries?: AssembledGeometry[];
+				geometries?: FinishedGeometry[];
 				error?: string;
 			};
 			const pending = pendingAssemblies.get(id);
@@ -66,8 +66,8 @@ export function requestAssembly(
 	worker: Worker,
 	input: unknown,
 	transfer: Transferable[]
-): Promise<AssembledGeometry[]> {
-	return new Promise<AssembledGeometry[]>((resolve, reject) => {
+): Promise<FinishedGeometry[]> {
+	return new Promise<FinishedGeometry[]>((resolve, reject) => {
 		const id = nextAssemblyRequestId++;
 		pendingAssemblies.set(id, { resolve, reject });
 		worker.postMessage({ id, input }, transfer);

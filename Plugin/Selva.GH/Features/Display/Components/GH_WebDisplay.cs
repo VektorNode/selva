@@ -453,6 +453,12 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
+            mesh.Normals.ComputeNormals();
+            if (w.Material is { Anisotropy: > 0, HasMaps: false })
+            {
+                GrainUvs.Apply(mesh);
+            }
+
             // UVs are only worth carrying when the material needs them (a texture or anisotropy) —
             // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
             // every plain mesh would inflate the payload for nothing. Vertex colors only exist when
@@ -484,7 +490,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             // with different UVs/colors would merge and smear texture seams / color boundaries.
             // Channels NOT being exported are cleared first so stale auto-generated data (brep TCs,
             // partial color sets) can't block the weld.
-            mesh.Normals.ComputeNormals();
             if (wantUvs || wantColors)
             {
                 if (!wantUvs && mesh.TextureCoordinates.Count > 0)

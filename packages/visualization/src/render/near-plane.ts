@@ -91,19 +91,30 @@ export function createNearPlaneFitter({
 // Nearest view depth
 // ============================================================================
 
-interface ChunkBounds {
+interface Chunks {
+	/** min xyz, max xyz per chunk, in the geometry's local space. */
+	boxes: Float32Array;
+	/** First and past-the-end triangle per chunk. */
+	ranges: Uint32Array;
+}
+
+interface ChunkBounds extends Chunks {
 	position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute;
 	positionVersion: number;
 	index: THREE.BufferAttribute | null;
 	indexVersion: number;
-	/** min xyz, max xyz per chunk, in the geometry's local space. */
-	boxes: Float32Array;
 }
 
 /**
- * Smallest view depth (distance along the camera's forward axis) of any content box inside the
+ * Smallest view depth (distance along the camera's forward axis) of any content inside the
  * frustum's side planes: `null` when the scene has no content, `Infinity` when none of it is in
- * view, ≤ 0 when a box reaches behind the camera.
+ * view.
+ *
+ * A chunk's box only bounds that depth from below, and loosely: a big box reaches beside and behind
+ * the camera even when its triangles are all well ahead. One 60-triangle wall around a building is
+ * one box the size of the building, which used to pin near to the floor from anywhere in it. So a
+ * box that could still be the nearest has its triangles clipped to the frustum and measured
+ * exactly; boxes already further than the best so far are skipped.
  */
 function createNearestDepthQuery() {
 	const chunkCache = new WeakMap<THREE.BufferGeometry, ChunkBounds>();
@@ -115,11 +126,14 @@ function createNearestDepthQuery() {
 	const worldPlanes = new Float64Array(20);
 	const localPlanes = new Float64Array(20);
 	const singleBox = new Float32Array(6);
+	// Sutherland–Hodgman ping-pong buffers: a triangle clipped by four planes keeps at most 7 corners.
+	let polygon = new Float64Array(21);
+	let clipped = new Float64Array(21);
 
 	let nearest = Infinity;
 	let sawContent = false;
 
-	const chunksOf = (object: THREE.Object3D, geometry: THREE.BufferGeometry): Float32Array => {
+	const chunksOf = (object: THREE.Object3D, geometry: THREE.BufferGeometry): ChunkBounds => {
 		const position = geometry.getAttribute('position');
 		const index = geometry.getIndex();
 		const cached = chunkCache.get(geometry);
@@ -130,17 +144,75 @@ function createNearestDepthQuery() {
 			cached.index === index &&
 			cached.indexVersion === (index?.version ?? -1)
 		) {
-			return cached.boxes;
+			return cached;
 		}
-		const boxes = buildChunkBoxes(position, index, memberStarts(object));
-		chunkCache.set(geometry, {
+		const built: ChunkBounds = {
+			...buildChunkBoxes(position, index, memberStarts(object)),
 			position,
 			positionVersion: versionOf(position),
 			index,
-			indexVersion: index?.version ?? -1,
-			boxes
-		});
-		return boxes;
+			indexVersion: index?.version ?? -1
+		};
+		chunkCache.set(geometry, built);
+		return built;
+	};
+
+	/** Exact nearest depth of a chunk's triangles inside the frustum's side planes. */
+	const chunkDepth = (chunks: ChunkBounds, chunk: number, planes: Float64Array): number => {
+		const { position, index } = chunks;
+		const indices = index?.array as ArrayLike<number> | undefined;
+		let best = Infinity;
+		for (let t = chunks.ranges[chunk * 2]!; t < chunks.ranges[chunk * 2 + 1]!; t++) {
+			for (let corner = 0; corner < 3; corner++) {
+				const v = indices ? indices[t * 3 + corner]! : t * 3 + corner;
+				polygon[corner * 3] = position.getX(v);
+				polygon[corner * 3 + 1] = position.getY(v);
+				polygon[corner * 3 + 2] = position.getZ(v);
+			}
+			let count = 3;
+			for (let p = 0; p < 16 && count > 0; p += 4) {
+				const a = planes[p]!;
+				const b = planes[p + 1]!;
+				const c = planes[p + 2]!;
+				const d = planes[p + 3]!;
+				let kept = 0;
+				for (let i = 0; i < count; i++) {
+					const j = (i + 1) % count;
+					const ix = polygon[i * 3]!;
+					const iy = polygon[i * 3 + 1]!;
+					const iz = polygon[i * 3 + 2]!;
+					const jx = polygon[j * 3]!;
+					const jy = polygon[j * 3 + 1]!;
+					const jz = polygon[j * 3 + 2]!;
+					const di = a * ix + b * iy + c * iz + d;
+					const dj = a * jx + b * jy + c * jz + d;
+					if (di >= 0) {
+						clipped[kept * 3] = ix;
+						clipped[kept * 3 + 1] = iy;
+						clipped[kept * 3 + 2] = iz;
+						kept++;
+					}
+					if (di >= 0 !== dj >= 0) {
+						const f = di / (di - dj);
+						clipped[kept * 3] = ix + (jx - ix) * f;
+						clipped[kept * 3 + 1] = iy + (jy - iy) * f;
+						clipped[kept * 3 + 2] = iz + (jz - iz) * f;
+						kept++;
+					}
+				}
+				[polygon, clipped] = [clipped, polygon];
+				count = kept;
+			}
+			for (let i = 0; i < count; i++) {
+				const depth =
+					planes[16]! * polygon[i * 3]! +
+					planes[17]! * polygon[i * 3 + 1]! +
+					planes[18]! * polygon[i * 3 + 2]! +
+					planes[19]!;
+				if (depth < best) best = depth;
+			}
+		}
+		return best;
 	};
 
 	// Moves the world planes into the object's local space instead of moving every box into world
@@ -159,7 +231,7 @@ function createNearestDepthQuery() {
 		return localPlanes;
 	};
 
-	const testBoxes = (boxes: Float32Array, planes: Float64Array) => {
+	const testBoxes = (boxes: Float32Array, planes: Float64Array, chunks?: ChunkBounds) => {
 		outer: for (let b = 0; b < boxes.length; b += 6) {
 			const minX = boxes[b]!;
 			const minY = boxes[b + 1]!;
@@ -186,7 +258,8 @@ function createNearestDepthQuery() {
 				bb * (bb > 0 ? minY : maxY) +
 				c * (c > 0 ? minZ : maxZ) +
 				planes[19]!;
-			if (depth < nearest) nearest = depth;
+			if (depth >= nearest) continue;
+			nearest = chunks ? Math.min(nearest, chunkDepth(chunks, b / 6, planes)) : depth;
 		}
 	};
 
@@ -197,7 +270,8 @@ function createNearestDepthQuery() {
 		sawContent = true;
 
 		if (isPlainTriangleMesh(object)) {
-			testBoxes(chunksOf(object, geometry), toLocalPlanes(object.matrixWorld));
+			const chunks = chunksOf(object, geometry);
+			testBoxes(chunks.boxes, toLocalPlanes(object.matrixWorld), chunks);
 			return;
 		}
 
@@ -292,7 +366,7 @@ function buildChunkBoxes(
 	position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
 	index: THREE.BufferAttribute | null,
 	breaks: number[]
-): Float32Array {
+): Chunks {
 	const triangleCount = Math.floor((index ? index.count : position.count) / 3);
 	const ranges: number[] = [];
 	let nextBreak = 0;
@@ -341,5 +415,5 @@ function buildChunkBoxes(
 		boxes[o + 4] = maxY;
 		boxes[o + 5] = maxZ;
 	}
-	return boxes;
+	return { boxes, ranges: Uint32Array.from(ranges) };
 }

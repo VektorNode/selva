@@ -57,6 +57,7 @@ Design references (check code against intent before changing it):
 Outstanding work:
 
 - [drawing-backlog.md](./contributing/drawing-backlog.md): what's still missing in the drawing / SVG / PDF pipeline
+- [materials-plan.md](./contributing/materials-plan.md): mapping, tangents, presets and environment for metal, wood and other viewer materials
 
 Package-local `CONTEXT.md` files ([ui](../packages/ui/CONTEXT.md),
 [compute](../packages/compute/CONTEXT.md)) stay next to their code on purpose:

@@ -32,7 +32,7 @@ describe('parseMeshBatchObject', () => {
 			expect(meshes).toHaveLength(3);
 		});
 
-		it('preserves total vertex and triangle counts', async () => {
+		it('preserves triangle count and keeps every source vertex', async () => {
 			const { batch, rawVertices, rawFaces } = buildMeshBatch({
 				materialCount: 2,
 				meshCount: 8,
@@ -53,7 +53,8 @@ describe('parseMeshBatchObject', () => {
 				totalIndices += index!.count;
 			}
 
-			expect(totalPositions * 3).toBe(rawVertices.length);
+			// Crease splitting may append copies of existing vertices, never drop one.
+			expect(totalPositions * 3).toBeGreaterThanOrEqual(rawVertices.length);
 			expect(totalIndices).toBe(rawFaces.length);
 		});
 
@@ -342,10 +343,12 @@ describe('parseMeshBatchObject', () => {
 				expect(uv.count).toBe(geom.getAttribute('position').count);
 
 				// Each mesh's slice must match its global vertex range.
-				const vertexStart = built.batch.groups
+				const source = built.batch.groups
 					.flatMap((g) => g.meshes)
-					.find((m) => m.name === mesh.userData.name)!.vertexStart;
-				for (let v = 0; v < uv.count; v++) {
+					.find((m) => m.name === mesh.userData.name)!;
+				const vertexStart = source.vertexStart;
+				// Vertices past the source's own are crease-split copies appended after it.
+				for (let v = 0; v < source.vertexCount; v++) {
 					expect(uv.getX(v)).toBeCloseTo(uvs![(vertexStart + v) * 2]!, 4);
 					expect(uv.getY(v)).toBeCloseTo(uvs![(vertexStart + v) * 2 + 1]!, 4);
 				}

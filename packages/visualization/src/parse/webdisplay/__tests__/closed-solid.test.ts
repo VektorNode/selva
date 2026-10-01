@@ -43,6 +43,26 @@ describe('isClosedSolid', () => {
 		expect(check(box)).toBe(true);
 	});
 
+	it('welds seam copies that rounded a float32 step apart', () => {
+		// As Rhino emits a solid far from the origin: each face computes the seam point itself.
+		const box = new THREE.BoxGeometry(200, 15, 50).translate(-2032, 2683, 0.97);
+		const position = box.getAttribute('position');
+		const nudge = (v: number) => {
+			const x = new Float32Array([position.getX(v)]);
+			new Uint32Array(x.buffer)[0]! += 1; // next float32 up
+			position.setX(v, x[0]!);
+		};
+		for (let v = 0; v < position.count; v += 3) nudge(v);
+		expect(check(box)).toBe(true);
+	});
+
+	it('keeps a real gap open, however small next to the part', () => {
+		const box = new THREE.BoxGeometry(200, 15, 50).translate(-2032, 2683, 0.97);
+		const position = box.getAttribute('position');
+		position.setX(0, position.getX(0) + 0.01); // 10 µm crack in a 200 mm part
+		expect(check(box)).toBe(false);
+	});
+
 	it('rejects an open box', () => {
 		const box = new THREE.BoxGeometry(1, 1, 1);
 		box.setIndex(Array.from(box.getIndex()!.array).slice(6)); // drop one face

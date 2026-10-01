@@ -15,11 +15,12 @@ import {
 	createMergedMesh,
 	finalizeMergedMesh,
 	finalizeSingleMesh,
+	geometryFrom,
 	splitGroupByLayer
 } from './batch/merge.js';
 import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
 
-import type { AssembledGeometry, AssemblyJob, AssemblyWindow } from './mesh-assembly.js';
+import type { AssemblyJob, AssemblyWindow, FinishedGeometry } from './mesh-assembly.js';
 import type { ParsedBinaryMeshBatch } from './binary-parser.js';
 import type {
 	DisplayBatch,
@@ -396,7 +397,7 @@ async function tryBuildViaWorker(
 	if (raw.uvs) transfer.push(raw.uvs.buffer);
 	if (raw.colors) transfer.push(raw.colors.buffer);
 
-	let assembled: AssembledGeometry[];
+	let assembled: FinishedGeometry[];
 	try {
 		assembled = await requestAssembly(
 			worker,
@@ -432,16 +433,8 @@ async function tryBuildViaWorker(
 		const result = assembled[i]!;
 		const ref = jobRefs[i]!;
 
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute('position', new THREE.BufferAttribute(result.positions, 3));
-		geometry.setAttribute('normal', new THREE.BufferAttribute(result.normals, 3));
-		geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
-		if (result.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(result.uvs, 2));
-		if (result.colors) {
-			geometry.setAttribute('color', new THREE.BufferAttribute(result.colors, 3, true));
-		}
-
-		const material = pickMaterial(ref.group.materialId, result.closed ?? false);
+		const geometry = geometryFrom(result);
+		const material = pickMaterial(ref.group.materialId, result.closed);
 		const mesh =
 			ref.kind === 'merged'
 				? finalizeMergedMesh(geometry, ref.group, material)

@@ -7,8 +7,8 @@
  * thickness they punch through as dark jagged triangles. Culled, they never compete.
  *
  * Members are tested apart, because two closed parts touching along an edge share it four ways and
- * would read as open together. Positions are welded by exact bit pattern: Rhino meshes each Brep
- * face separately, so a solid's seams carry duplicate vertices that only position identifies. Any
+ * would read as open together. Positions are welded first: Rhino meshes each Brep face separately,
+ * so a solid's seams carry duplicate vertices that only position identifies. Any
  * doubt (an unwelded seam, a non-manifold edge, inward winding) answers false, which keeps the
  * double-sided default.
  *
@@ -25,7 +25,6 @@ export function isClosedSolid(
 ): boolean {
 	// NOTE: self-contained by design (worker stringification) — no outer references besides Math.
 	if (memberIndexCounts.length === 0) return false;
-	const bits = new Uint32Array(positions.buffer, positions.byteOffset, positions.length);
 
 	const tableSizeFor = (count: number): number => {
 		let size = 16;
@@ -37,34 +36,71 @@ export function isClosedSolid(
 		// A tetrahedron is the smallest closed surface.
 		if (count < 12 || count % 3 !== 0) return false;
 
-		// --- Weld: map each corner to the first vertex carrying its exact position --------------
+		// --- Weld: map each corner to the first vertex at (nearly) its position ------------------
+		// Rhino meshes each Brep face on its own and stores float32 vertices, so the two copies of a
+		// seam point can round one or two float32 steps apart. Snap to a grid two steps wide at the
+		// part's largest coordinate: wide enough for that, far below its real features (sliver
+		// triangles along a fillet run down to ~1 µm, which a wider weld collapses).
+		let magnitude = 0;
+		for (let i = 0; i < count; i++) {
+			const v = indices[start + i]! * 3;
+			magnitude = Math.max(
+				magnitude,
+				Math.abs(positions[v]!),
+				Math.abs(positions[v + 1]!),
+				Math.abs(positions[v + 2]!)
+			);
+		}
+		if (!(magnitude > 0) || !Number.isFinite(magnitude)) return false;
+		const step = 2 * Math.pow(2, Math.floor(Math.log2(magnitude)) - 23);
+		const inverseCell = 1 / step;
+
 		const weldSize = tableSizeFor(count);
 		const weldMask = weldSize - 1;
-		const weldSlots = new Int32Array(weldSize).fill(-1);
+		const weldVertex = new Int32Array(weldSize).fill(-1);
+		const cellX = new Int32Array(weldSize);
+		const cellY = new Int32Array(weldSize);
+		const cellZ = new Int32Array(weldSize);
+		const cellSlot = (x: number, y: number, z: number): number => {
+			let h = Math.imul(x, 0x9e3779b1) ^ Math.imul(y, 0x85ebca77) ^ Math.imul(z, 0xc2b2ae3d);
+			h = (h ^ (h >>> 15)) & weldMask;
+			while (weldVertex[h] !== -1 && (cellX[h] !== x || cellY[h] !== y || cellZ[h] !== z)) {
+				h = (h + 1) & weldMask;
+			}
+			return h;
+		};
+		// The cell across the nearer boundary, for a point close enough to it that its near-copy could
+		// have rounded into the other cell.
+		const neighbour = (scaled: number, cell: number): number => {
+			const offset = scaled - cell;
+			return offset > 0.25 ? cell + 1 : offset < -0.25 ? cell - 1 : cell;
+		};
+
 		const welded = new Int32Array(count);
 		for (let i = 0; i < count; i++) {
 			const v = indices[start + i]!;
-			// -0 and +0 are one position with two bit patterns.
-			const x = bits[v * 3]! === 0x80000000 ? 0 : bits[v * 3]!;
-			const y = bits[v * 3 + 1]! === 0x80000000 ? 0 : bits[v * 3 + 1]!;
-			const z = bits[v * 3 + 2]! === 0x80000000 ? 0 : bits[v * 3 + 2]!;
-			let h = Math.imul(x, 0x9e3779b1) ^ Math.imul(y, 0x85ebca77) ^ Math.imul(z, 0xc2b2ae3d);
-			h = (h ^ (h >>> 15)) & weldMask;
+			const sx = positions[v * 3]! * inverseCell;
+			const sy = positions[v * 3 + 1]! * inverseCell;
+			const sz = positions[v * 3 + 2]! * inverseCell;
+			const x = Math.round(sx);
+			const y = Math.round(sy);
+			const z = Math.round(sz);
+			const nx = neighbour(sx, x);
+			const ny = neighbour(sy, y);
+			const nz = neighbour(sz, z);
+
 			let canonical = -1;
-			while (weldSlots[h] !== -1) {
-				const w = weldSlots[h]!;
-				if (
-					(bits[w * 3]! === 0x80000000 ? 0 : bits[w * 3]) === x &&
-					(bits[w * 3 + 1]! === 0x80000000 ? 0 : bits[w * 3 + 1]) === y &&
-					(bits[w * 3 + 2]! === 0x80000000 ? 0 : bits[w * 3 + 2]) === z
-				) {
-					canonical = w;
-					break;
-				}
-				h = (h + 1) & weldMask;
+			for (let combo = 0; combo < 8 && canonical === -1; combo++) {
+				if ((combo & 1 && nx === x) || (combo & 2 && ny === y) || (combo & 4 && nz === z)) continue;
+				const h = cellSlot(combo & 1 ? nx : x, combo & 2 ? ny : y, combo & 4 ? nz : z);
+				if (weldVertex[h] !== -1) canonical = weldVertex[h]!;
 			}
 			if (canonical === -1) {
-				weldSlots[h] = v;
+				const h = cellSlot(x, y, z);
+				weldVertex[h] = v;
+				cellX[h] = x;
+				cellY[h] = y;
+				cellZ[h] = z;
 				canonical = v;
 			}
 			welded[i] = canonical;

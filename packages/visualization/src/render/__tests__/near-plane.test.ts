@@ -140,6 +140,20 @@ describe('createNearPlaneFitter', () => {
 		expect(camera.near).toBeLessThanOrEqual(1);
 	});
 
+	it('measures triangles, not the box, when a chunk reaches behind the camera', () => {
+		// One chunk: a face 10 ahead, and one off to the side and behind. Their joint box contains
+		// the camera, which on its own would pin near to the floor.
+		const ahead = new THREE.PlaneGeometry(2, 2).translate(0, 0, -10);
+		const behind = new THREE.PlaneGeometry(10, 10).rotateY(Math.PI / 2).translate(50, 0, 10);
+		const scene = new THREE.Scene();
+		scene.add(new THREE.Mesh(mergeGeometries([ahead, behind]), new THREE.MeshBasicMaterial()));
+		const camera = cameraAt(0);
+
+		createNearPlaneFitter({ camera, scene }).update();
+
+		expect(camera.near).toBeCloseTo(5);
+	});
+
 	it('ignores hidden content and edge overlays', () => {
 		const scene = sceneWithUnitBoxAt(0, 0, -20);
 		const hidden = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());

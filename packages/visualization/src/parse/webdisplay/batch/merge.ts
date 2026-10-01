@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { isClosedSolid } from '../closed-solid.js';
+import { finishGeometry, type FinishedGeometry } from '../mesh-assembly.js';
 
 import { indexOutOfWindow } from './metadata.js';
 
@@ -99,23 +99,27 @@ export function createMergedMesh(
 		indexWriteCursor += meshMeta.indexCount;
 	}
 
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));
-	geometry.setIndex(new THREE.BufferAttribute(mergedIndices, 1));
-	if (mergedUvs) {
-		geometry.setAttribute('uv', new THREE.BufferAttribute(mergedUvs, 2));
-	}
-	if (mergedColors) {
-		geometry.setAttribute('color', new THREE.BufferAttribute(mergedColors, 3, true));
-	}
-	geometry.computeVertexNormals();
-
-	const closed = isClosedSolid(
-		mergedVertices,
-		mergedIndices,
+	const finished = finishGeometry(
+		{ positions: mergedVertices, indices: mergedIndices, uvs: mergedUvs, colors: mergedColors },
 		group.meshes.map((m) => m.indexCount)
 	);
-	return finalizeMergedMesh(geometry, group, pickMaterial(group.materialId, closed));
+	return finalizeMergedMesh(
+		geometryFrom(finished),
+		group,
+		pickMaterial(group.materialId, finished.closed)
+	);
+}
+
+export function geometryFrom(finished: FinishedGeometry): THREE.BufferGeometry {
+	const geometry = new THREE.BufferGeometry();
+	geometry.setAttribute('position', new THREE.BufferAttribute(finished.positions, 3));
+	geometry.setAttribute('normal', new THREE.BufferAttribute(finished.normals, 3));
+	geometry.setIndex(new THREE.BufferAttribute(finished.indices, 1));
+	if (finished.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(finished.uvs, 2));
+	if (finished.colors) {
+		geometry.setAttribute('color', new THREE.BufferAttribute(finished.colors, 3, true));
+	}
+	return geometry;
 }
 
 /**
@@ -225,22 +229,23 @@ export function createIndividualMeshes(
 			rebasedIndices[i] = indexValue - baseIndex;
 		}
 
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-		geometry.setIndex(new THREE.BufferAttribute(rebasedIndices, 1));
-		if (allUvs) {
-			const uvStart = meshMeta.vertexStart * 2;
-			const uvs = allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2);
-			geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-		}
-		if (allColors) {
-			const colors = allColors.slice(componentStart, componentStart + componentLen);
-			geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true));
-		}
-		geometry.computeVertexNormals();
-
-		const closed = isClosedSolid(vertices, rebasedIndices, [rebasedIndices.length]);
-		meshes.push(finalizeSingleMesh(geometry, meshMeta, pickMaterial(group.materialId, closed)));
+		const uvStart = meshMeta.vertexStart * 2;
+		const finished = finishGeometry(
+			{
+				positions: vertices,
+				indices: rebasedIndices,
+				uvs: allUvs ? allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2) : null,
+				colors: allColors ? allColors.slice(componentStart, componentStart + componentLen) : null
+			},
+			[rebasedIndices.length]
+		);
+		meshes.push(
+			finalizeSingleMesh(
+				geometryFrom(finished),
+				meshMeta,
+				pickMaterial(group.materialId, finished.closed)
+			)
+		);
 	}
 
 	return meshes;
