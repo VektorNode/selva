@@ -7,6 +7,7 @@ import {
 	materialAppearanceForLook
 } from '../../shared/index.js';
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
+import { applyReflectionEnvironment } from './reflection-environment.js';
 import type {
 	Look,
 	LookMaterialOverride,
@@ -257,6 +258,8 @@ export function createAppearanceController(params: {
 				applyMaterialOverride(material as THREE.Material, preset.materialOverride);
 			}
 		});
+		// An override can zero metalness, and lifting it restores it.
+		applyReflectionEnvironment(scene, scene);
 		requestRender();
 	};
 

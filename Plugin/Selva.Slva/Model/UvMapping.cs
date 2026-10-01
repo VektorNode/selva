@@ -13,5 +13,12 @@ public enum UvMapping
     Part = 2,
 
     /// <summary>Box projection in world mm; for materials with no direction, like concrete.</summary>
-    World = 3
+    World = 3,
+
+    /// <summary>
+    ///     A mesh's own texture coordinates, in model units, such as a sheet's flat-pattern positions
+    ///     with U along its rolling direction. Scaled to mm; input without its own falls back to
+    ///     <see cref="Part" />.
+    /// </summary>
+    Authored = 4
 }

@@ -13,6 +13,21 @@ namespace Selva.GH.Features.Display.Components;
 
 public class GH_ThreeMaterial : GH_Component
 {
+    private const int BaseInput = 13;
+    private const int MappingInput = 14;
+    private const int TextureSizeInput = 15;
+    private const int FinishInput = 16;
+    private const int TransmissionInput = 17;
+    private const int IorInput = 18;
+
+    // Index = the Finish input's value, so append only: a saved definition holds the number.
+    private static readonly (string label, string wire)[] Finishes =
+    {
+        ("None", null),
+        ("Brushed", "brushed"),
+        ("Rolled", "rolled")
+    };
+
     public GH_ThreeMaterial()
         : base("Three Material", "TM",
             "Creates a ThreeMaterial object for web display",
@@ -26,17 +41,17 @@ public class GH_ThreeMaterial : GH_Component
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
-        // No persistent defaults on 0-4: a default would count as wired and beat the preset.
-        pManager.AddColourParameter("Color", "C", "Material color. Leave empty for the preset's, or white.",
+        // No persistent defaults on 0-4: a default would count as wired and beat the base.
+        pManager.AddColourParameter("Color", "C", "Material color. Leave empty for the base's, or white.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Metalness", "M",
-            "Metalness (0.0 - 1.0). Leave empty for the preset's, or 0.", GH_ParamAccess.item);
+            "Metalness (0.0 - 1.0). Leave empty for the base's, or 0.", GH_ParamAccess.item);
         pManager.AddNumberParameter("Roughness", "R",
-            "Roughness (0.0 - 1.0). Leave empty for the preset's, or 0.5.", GH_ParamAccess.item);
-        pManager.AddNumberParameter("Opacity", "O", "Opacity (0.0 - 1.0). Leave empty for 1.",
+            "Roughness (0.0 - 1.0). Leave empty for the base's, or 0.5.", GH_ParamAccess.item);
+        pManager.AddNumberParameter("Opacity", "O", "Opacity (0.0 - 1.0). Leave empty for the base's, or 1.",
             GH_ParamAccess.item);
-        pManager.AddBooleanParameter("Transparent", "T", "Is material transparent? Leave empty for false.",
-            GH_ParamAccess.item);
+        pManager.AddBooleanParameter("Transparent", "T",
+            "Is material transparent? Leave empty for the base's, or false.", GH_ParamAccess.item);
         pManager.AddGenericParameter("Texture", "TX",
             "Optional texture for the material's color map: a bitmap, an image URL, or an image file path. "
             + "Meshes displayed with a textured material carry their texture coordinates to the web viewer.",
@@ -47,7 +62,7 @@ public class GH_ThreeMaterial : GH_Component
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Clearcoat", "CC",
             "Clear lacquer layer on top of the material (0.0 - 1.0), for lacquered finishes. "
-            + "Leave empty for none.",
+            + "Leave empty for the base's, or none.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Clearcoat Roughness", "CR",
             "Roughness of the clearcoat layer (0.0 - 1.0).", GH_ParamAccess.item);
@@ -60,24 +75,33 @@ public class GH_ThreeMaterial : GH_Component
             GH_ParamAccess.item);
         pManager.AddGenericParameter("Roughness Map", "RM",
             "Optional roughness texture (green channel scales Roughness): a bitmap, an image URL, or an "
-            + "image file path. A faint brushed or rolled pattern breaks up a flat CG look.",
+            + "image file path.",
             GH_ParamAccess.item);
         pManager.AddGenericParameter("Normal Map", "NM",
             "Optional tangent-space normal texture: a bitmap, an image URL, or an image file path.",
             GH_ParamAccess.item);
-        pManager.AddIntegerParameter("Preset", "P",
-            "Starting values for a real material (right-click for the list). Every wired input overrides "
-            + "its preset value.",
-            GH_ParamAccess.item);
+        pManager.AddParameter(new Param_ThreeMaterial("Base", "B",
+            "A material to start from, such as a Material Preset. Every wired input overrides its value.",
+            "Selva", "Display", GH_ParamAccess.item));
         pManager.AddIntegerParameter("Mapping", "MP",
             "Where texture coordinates come from (right-click for the list). Surface: Rhino's, as authored. "
             + "Part: along each part's grain, in mm. World: box projection in mm. "
-            + "Leave empty for the preset's, else Part unless a texture has no Texture Size.",
+            + "Authored: the input mesh's own, in model units (e.g. flat-pattern positions); Part when it has none. "
+            + "Leave empty for the base's, else Part unless a texture has no Texture Size.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Texture Size", "TS",
             "Millimetres of the real part one repeat of the textures covers, across the texture's width; "
-            + "its height follows the image's aspect. Needs Part or World mapping. "
+            + "its height follows the image's aspect. Needs Part, World or Authored mapping. "
             + "Leave empty to stretch textures once over the texture coordinates.",
+            GH_ParamAccess.item);
+        pManager.AddIntegerParameter("Finish", "F",
+            "Procedural streaks along the grain, no texture needed (right-click for the list): None, "
+            + "Brushed (fine fibres) or Rolled (faint rolling lines).",
+            GH_ParamAccess.item);
+        pManager.AddNumberParameter("Transmission", "TR",
+            "Light passing through (0.0 - 1.0), for glass. Unlike Opacity it keeps the reflections.",
+            GH_ParamAccess.item);
+        pManager.AddNumberParameter("IOR", "IOR", "Index of refraction (1.0 - 2.333); glass is about 1.52.",
             GH_ParamAccess.item);
 
         for (var i = 0; i < pManager.ParamCount; i++)
@@ -85,17 +109,16 @@ public class GH_ThreeMaterial : GH_Component
             pManager[i].Optional = true;
         }
 
-        var preset = (Param_Integer)pManager[13];
-        preset.AddNamedValue("None", 0);
-        for (var i = 1; i < MaterialPresets.All.Length; i++)
-        {
-            preset.AddNamedValue(MaterialPresets.All[i].Name, i);
-        }
-
-        var mapping = (Param_Integer)pManager[14];
+        var mapping = (Param_Integer)pManager[MappingInput];
         foreach (UvMapping value in Enum.GetValues(typeof(UvMapping)))
         {
             mapping.AddNamedValue(value.ToString(), (int)value);
+        }
+
+        var finish = (Param_Integer)pManager[FinishInput];
+        for (var i = 0; i < Finishes.Length; i++)
+        {
+            finish.AddNamedValue(Finishes[i].label, i);
         }
     }
 
@@ -108,99 +131,85 @@ public class GH_ThreeMaterial : GH_Component
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-        var presetValue = 0;
-        DA.GetData(13, ref presetValue);
-        var preset = MaterialPresets.Get(presetValue);
-        if (presetValue != 0 && preset == null)
+        ThreeMaterialGoo baseGoo = null;
+        DA.GetData(BaseInput, ref baseGoo);
+        var material = baseGoo?.Value?.Clone() ?? ThreeMaterial.Default();
+
+        if (TryGet(DA, 0, out Color color)) material.Color = color;
+        if (TryGet(DA, 1, out double metalness)) material.Metalness = metalness;
+        if (TryGet(DA, 2, out double roughness)) material.Roughness = roughness;
+        if (TryGet(DA, 3, out double opacity)) material.Opacity = opacity;
+        if (TryGet(DA, 4, out bool transparent)) material.Transparent = transparent;
+        if (TryGet(DA, 5, out IGH_Goo map)) material.Map = TextureInput.Resolve(map, this);
+        if (TryGet(DA, 6, out double reflection)) material.EnvMapIntensity = reflection;
+        if (TryGet(DA, 7, out double clearcoat)) material.Clearcoat = clearcoat;
+        if (TryGet(DA, 8, out double clearcoatRoughness)) material.ClearcoatRoughness = clearcoatRoughness;
+        if (TryGet(DA, 9, out double anisotropy)) material.Anisotropy = anisotropy;
+        if (TryGet(DA, 10, out double rotation)) material.AnisotropyRotation = rotation;
+        if (TryGet(DA, 11, out IGH_Goo roughnessMap)) material.RoughnessMap = TextureInput.Resolve(roughnessMap, this);
+        if (TryGet(DA, 12, out IGH_Goo normalMap)) material.NormalMap = TextureInput.Resolve(normalMap, this);
+        if (TryGet(DA, TransmissionInput, out double transmission)) material.Transmission = transmission;
+        if (TryGet(DA, IorInput, out double ior)) material.Ior = ior;
+
+        if (TryGet(DA, FinishInput, out int finish))
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Preset {presetValue} does not exist; using none.");
+            if (finish >= 0 && finish < Finishes.Length)
+            {
+                material.Finish = Finishes[finish].wire;
+            }
+            else
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Finish {finish} does not exist; ignored.");
+            }
         }
 
-        var color = preset?.Color ?? Color.White;
-        var metalness = preset?.Metalness ?? 0.0;
-        var roughness = preset?.Roughness ?? 0.5;
-        var opacity = 1.0;
-        var transparent = false;
-        IGH_Goo textureGoo = null;
-        IGH_Goo roughnessMapGoo = null;
-        IGH_Goo normalMapGoo = null;
-
-        DA.GetData(0, ref color);
-        DA.GetData(1, ref metalness);
-        DA.GetData(2, ref roughness);
-        DA.GetData(3, ref opacity);
-        DA.GetData(4, ref transparent);
-        DA.GetData(5, ref textureGoo);
-        DA.GetData(11, ref roughnessMapGoo);
-        DA.GetData(12, ref normalMapGoo);
-
-        var mapSize = GetOptionalNumber(DA, 15);
-        if (mapSize <= 0)
+        if (TryGet(DA, TextureSizeInput, out double mapSize))
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Texture Size must be positive; ignored.");
-            mapSize = null;
+            if (mapSize > 0)
+            {
+                material.MapSize = mapSize;
+            }
+            else
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Texture Size must be positive; ignored.");
+            }
         }
 
-        var mappingValue = 0;
-        var mappingWired = DA.GetData(14, ref mappingValue);
-        var mapping = preset?.Mapping ?? UvMapping.Auto;
+        var mappingWired = TryGet(DA, MappingInput, out int mappingValue);
         if (mappingWired)
         {
             if (Enum.IsDefined(typeof(UvMapping), mappingValue))
             {
-                mapping = (UvMapping)mappingValue;
+                material.Mapping = (UvMapping)mappingValue;
             }
             else
             {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Mapping {mappingValue} does not exist; using Auto.");
-                mapping = UvMapping.Auto;
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Mapping {mappingValue} does not exist; ignored.");
             }
         }
 
         // Rhino's surface UVs are 0-1 per face, not mm, so a real size can't apply to them.
-        if (mapping == UvMapping.Surface && mapSize != null)
+        if (material.Mapping == UvMapping.Surface && material.MapSize != null)
         {
             if (mappingWired)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                    "Texture Size needs Part or World mapping; ignored for Surface.");
-                mapSize = null;
+                    "Texture Size needs Part, World or Authored mapping; ignored for Surface.");
+                material.MapSize = null;
             }
             else
             {
-                mapping = UvMapping.Part;
+                material.Mapping = UvMapping.Part;
             }
         }
-
-        var material = new ThreeMaterial
-        {
-            Color = color,
-            Metalness = metalness,
-            Roughness = roughness,
-            Opacity = opacity,
-            Transparent = transparent,
-            Map = TextureInput.Resolve(textureGoo, this),
-            EnvMapIntensity = GetOptionalNumber(DA, 6),
-            Clearcoat = GetOptionalNumber(DA, 7),
-            ClearcoatRoughness = GetOptionalNumber(DA, 8),
-            Anisotropy = GetOptionalNumber(DA, 9) ?? preset?.Anisotropy,
-            AnisotropyRotation = GetOptionalNumber(DA, 10),
-            RoughnessMap = TextureInput.Resolve(roughnessMapGoo, this),
-            NormalMap = TextureInput.Resolve(normalMapGoo, this),
-            Finish = preset?.Finish,
-            Transmission = preset?.Transmission,
-            Ior = preset?.Ior,
-            Mapping = mapping,
-            MapSize = mapSize
-        };
 
         DA.SetData(0, new ThreeMaterialGoo(material));
     }
 
-    // Unwired stays null, so the wire omits the field and the viewer keeps its own default.
-    private static double? GetOptionalNumber(IGH_DataAccess DA, int index)
+    // False when unwired, so the base's value (or the wire's omission) stands.
+    private static bool TryGet<T>(IGH_DataAccess DA, int index, out T value)
     {
-        var value = 0.0;
-        return DA.GetData(index, ref value) ? value : (double?)null;
+        value = default;
+        return DA.GetData(index, ref value);
     }
 }

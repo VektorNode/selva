@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 import { computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
 import { isHostOwned } from './scene-ownership.js';
+import { applyReflectionEnvironment } from './scene-setup/reflection-environment.js';
 import { isoOffset } from './up-axis';
 
 const CAMERA_CONFIG = {
@@ -36,6 +37,7 @@ export function updateScene(
 
 	meshes.forEach((mesh) => {
 		scene.add(mesh);
+		applyReflectionEnvironment(mesh, scene);
 	});
 
 	const unionBoundingBox = computeCombinedBoundingBox(meshes);

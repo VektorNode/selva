@@ -5,10 +5,9 @@ using Selva.Slva;
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     Defaults behind Three Material's Preset input; every wired input still overrides. Metal and
-///     concrete base colours are physicallybased.info's measured linear values. Roughness and
-///     anisotropy are starting points, to be tuned against photos of the real product, never
-///     against another render.
+///     The finishes behind the Material Preset component. Metal and concrete base colours are
+///     physicallybased.info's measured linear values. Roughness and anisotropy are starting points,
+///     to be tuned against photos of the real product, never against another render.
 /// </summary>
 public static class MaterialPresets
 {
@@ -23,9 +22,26 @@ public static class MaterialPresets
         public string Finish;
         public double? Transmission;
         public double? Ior;
+
+        /// <summary>The material the Material Preset component outputs.</summary>
+        public ThreeMaterial ToMaterial()
+        {
+            return new ThreeMaterial
+            {
+                Color = Color,
+                Metalness = Metalness,
+                Roughness = Roughness,
+                Opacity = 1,
+                Anisotropy = Anisotropy,
+                Finish = Finish,
+                Transmission = Transmission,
+                Ior = Ior,
+                Mapping = Mapping
+            };
+        }
     }
 
-    // Index = the Preset input's integer value; 0 is "None".
+    // Index = the Material Preset input's integer value, so append only; 0 is unused.
     public static readonly Preset[] All =
     {
         null,
@@ -75,6 +91,17 @@ public static class MaterialPresets
         {
             Name = "Glass", Color = Color.White, Metalness = 0, Roughness = 0.05,
             Mapping = UvMapping.Surface, Transmission = 1, Ior = 1.52
+        },
+        // Appended, not inserted: the index is what a saved Preset input holds.
+        new()
+        {
+            Name = "Brass", Color = Linear(0.913, 0.776, 0.423), Metalness = 1,
+            Roughness = 0.35, Anisotropy = 0.3, Mapping = UvMapping.Part, Finish = "rolled"
+        },
+        new()
+        {
+            Name = "Titanium", Color = Linear(0.539, 0.497, 0.451), Metalness = 1,
+            Roughness = 0.4, Anisotropy = 0.3, Mapping = UvMapping.Part, Finish = "rolled"
         }
     };
 
@@ -82,6 +109,20 @@ public static class MaterialPresets
     public static Preset Get(int value)
     {
         return value > 0 && value < All.Length ? All[value] : null;
+    }
+
+    /// <summary>The preset with this exact <see cref="Preset.Name" />, or null.</summary>
+    public static Preset Find(string name)
+    {
+        for (var i = 1; i < All.Length; i++)
+        {
+            if (All[i].Name == name)
+            {
+                return All[i];
+            }
+        }
+
+        return null;
     }
 
     // Measured albedos are linear; Color is sRGB.

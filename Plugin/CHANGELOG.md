@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Material Preset component** (`Selva > Display`)
+
+- Outputs a ready material for a real finish: stainless steel brushed, aluminium mill finish, galvanised steel, weathered titanium zinc, copper, coil-coated (RAL), wood, concrete, glass, brass, titanium. Metal and concrete base colours are measured values from physicallybased.info. Wire it into a Display, or into Three Material's `Base` to override parts of it.
+
 **Live solve channel**
 
 - The plugin reports each solve while it runs: `solveStarted`, `progress`, diagnostics and `solveEnded` as `SolveEvent`s. Locally they ride the WebSocket; on Rhino.Compute (VektorNode fork) the plugin POSTs them to the callback named in the request's `selvaevents` block, batched with a heartbeat. In plain Grasshopper they are dropped.
@@ -27,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Changing a Value List from the web UI no longer solves the definition twice.
-- Web Display's grain UVs (anisotropic materials) no longer tilt on coarse flat parts or squeeze texture on faces oblique to the grain, and are now in millimetres whatever the model unit.
+- Web Display's grain UVs (anisotropic materials) no longer tilt on coarse flat parts or squeeze texture on faces oblique to the grain, follow each leg of a mitred corner piece instead of running vertical, and are now in millimetres whatever the model unit.
 
 ### Added
 
@@ -81,7 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Obsolete components
 
-- **Three Material** (`80CD38E5-BC9E-47E4-88EE-8F35B7E109CC` → `31100A9A-AA13-43EF-9C2C-8F3C56BC6D68`): appends optional `Preset`, `Mapping` and `Texture Size` inputs. `Preset` (stainless brushed, aluminium, galvanised, weathered zinc, copper, coil-coated, wood, concrete, glass) sets defaults that every wired input overrides; metal and concrete base colours are measured values from physicallybased.info. `Mapping` picks the texture coordinates: Surface (Rhino's), Part (along each part's grain, in mm, offset per part) or World (box projection in mm). `Texture Size` is the real width one texture repeat covers, in mm. Color, Metalness, Roughness, Opacity and Transparent lost their persistent defaults so a preset can fill them; unwired they fall back to the old defaults. Old definitions upgrade automatically.
+- **Three Material** (`80CD38E5-BC9E-47E4-88EE-8F35B7E109CC` → `31100A9A-AA13-43EF-9C2C-8F3C56BC6D68`): appends optional `Base`, `Mapping`, `Texture Size`, `Finish`, `Transmission` and `IOR` inputs. `Base` takes a material to start from, such as a Material Preset; every wired input overrides its value. `Mapping` picks the texture coordinates: Surface (Rhino's), Part (along each part's grain, in mm, offset per part), World (box projection in mm) or Authored (the input mesh's own UVs in model units, such as flat-pattern positions from a sheet-metal unroll; Part when it has none). `Texture Size` is the real width one texture repeat covers, in mm. `Finish` adds procedural brushed or rolled streaks along the grain. `Transmission` and `IOR` are for glass. Color, Metalness, Roughness, Opacity and Transparent lost their persistent defaults so a base can fill them; unwired and without a base they fall back to the old defaults. Old definitions upgrade automatically.
 - **Three Material** (`B7665E1A-C4CC-49D6-8EDB-4AAEF045D9A8` → `80CD38E5-BC9E-47E4-88EE-8F35B7E109CC`): appends optional `Reflection`, `Clearcoat`, `Clearcoat Roughness`, `Anisotropy`, `Anisotropy Rotation`, `Roughness Map` and `Normal Map` inputs. Unwired, each stays off the wire and the viewer keeps its default. `Reflection` beats the look's value so a metal stays reflective in every look; `Clearcoat` replaces the automatic satin coat on metals. Anisotropy and the two maps make Web Display carry the mesh's texture coordinates; anisotropy is dropped for meshes that have none. Old definitions upgrade automatically.
 - **Display From File** (`8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81` → `B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241`): the `Id` input is gone now that SLVM v3 carries object identity in the container's own table, so loading no longer needs to restamp it. Old definitions upgrade automatically; the `Id` wire is dropped.
 

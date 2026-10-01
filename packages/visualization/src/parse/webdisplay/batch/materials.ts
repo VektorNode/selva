@@ -159,22 +159,29 @@ export function applyVertexColorSRGBDecode(material: THREE.Material): void {
 	});
 }
 
-// Two octaves of streaks per finish: spacing across the grain in mm, and how far each scales
-// roughness either way. Starting points, to be tuned against photos of real sheet.
-const FINISH_OCTAVES: Record<NonNullable<SerializableMaterial['finish']>, [number, number][]> = {
+// Streak octaves per finish, in mm: length along the grain, width across it, and how far each
+// scales roughness (and half that, brightness) either way. Real brushing is many short fibres of
+// different lengths, not lines running the whole part, hence 2D noise stretched along the grain.
+// Starting points, to be tuned against photos of real sheet.
+const FINISH_OCTAVES: Record<
+	NonNullable<SerializableMaterial['finish']>,
+	[length: number, width: number, amplitude: number][]
+> = {
 	brushed: [
-		[0.05, 0.3],
-		[0.5, 0.2]
+		[8, 0.15, 0.14],
+		[20, 0.4, 0.09],
+		[50, 1.2, 0.05]
 	],
 	rolled: [
-		[4, 0.1],
-		[30, 0.08]
+		[40, 0.3, 0.03],
+		[120, 0.8, 0.02],
+		[300, 2.5, 0.01]
 	]
 };
 
 /**
- * Roughness streaks along the grain, generated from V (across it, in mm), so they need no texture
- * and never tile. Each octave fades out once a pixel spans a streak: finer than that it only
+ * Roughness and brightness streaks along the grain, from the UVs in mm, so they need no texture and
+ * never tile. Each octave fades out as a pixel grows to its width: finer than that it only
  * shimmers while the camera moves.
  */
 function applyFinish(
@@ -187,8 +194,8 @@ function applyFinish(
 	material.defines = { ...material.defines, USE_UV: '' };
 	const sum = octaves
 		.map(
-			([spacing, amplitude]) =>
-				`selvaOctave( v, footprint, ${spacing.toFixed(4)}, ${amplitude.toFixed(4)} )`
+			([length, width, amplitude]) =>
+				`selvaOctave( vUv, footprint, vec2( ${length.toFixed(4)}, ${width.toFixed(4)} ), ${amplitude.toFixed(4)} )`
 		)
 		.join(' + ');
 	addShaderPatch(material, `finish:${finish}`, (shader) => {
@@ -196,30 +203,38 @@ function applyFinish(
 			.replace(
 				'#include <common>',
 				`#include <common>
-				float selvaHash( float n ) {
-					n = fract( n * 0.1031 );
-					n *= n + 33.33;
-					n *= n + n;
-					return fract( n );
+				// Hash without sine: sin() loses precision on the large arguments mm UVs produce.
+				float selvaHash( vec2 p ) {
+					vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
+					p3 += dot( p3, p3.yzx + 33.33 );
+					return fract( ( p3.x + p3.y ) * p3.z );
 				}
-				float selvaNoise( float x ) {
-					float i = floor( x );
-					float f = fract( x );
-					return mix( selvaHash( i ), selvaHash( i + 1.0 ), f * f * ( 3.0 - 2.0 * f ) );
+				float selvaNoise( vec2 p ) {
+					vec2 i = floor( p );
+					vec2 f = fract( p );
+					vec2 s = f * f * ( 3.0 - 2.0 * f );
+					return mix(
+						mix( selvaHash( i ), selvaHash( i + vec2( 1.0, 0.0 ) ), s.x ),
+						mix( selvaHash( i + vec2( 0.0, 1.0 ) ), selvaHash( i + vec2( 1.0, 1.0 ) ), s.x ),
+						s.y
+					);
 				}
-				float selvaOctave( float v, float footprint, float spacing, float amplitude ) {
-					float fade = 1.0 - smoothstep( 0.25, 1.0, footprint / spacing );
-					return amplitude * fade * ( selvaNoise( v / spacing ) * 2.0 - 1.0 );
+				float selvaOctave( vec2 uv, float footprint, vec2 size, float amplitude ) {
+					float fade = 1.0 - smoothstep( 0.3, 1.0, footprint / size.y );
+					return amplitude * fade * ( selvaNoise( uv / size ) * 2.0 - 1.0 );
 				}`
+			)
+			.replace(
+				'#include <color_fragment>',
+				`#include <color_fragment>
+				float footprint = fwidth( vUv.y );
+				float selvaStreak = ${sum};
+				diffuseColor.rgb *= 1.0 + 0.5 * selvaStreak;`
 			)
 			.replace(
 				'#include <roughnessmap_fragment>',
 				`#include <roughnessmap_fragment>
-				{
-					float v = vUv.y;
-					float footprint = fwidth( v );
-					roughnessFactor = clamp( roughnessFactor * ( 1.0 + ${sum} ), 0.0, 1.0 );
-				}`
+				roughnessFactor = clamp( roughnessFactor * ( 1.0 + selvaStreak ), 0.0, 1.0 );`
 			);
 	});
 }

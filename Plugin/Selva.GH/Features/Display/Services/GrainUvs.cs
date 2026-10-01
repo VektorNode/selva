@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Rhino.Geometry;
 
 namespace Selva.GH.Features.Display.Services;
@@ -38,22 +39,31 @@ public static class GrainUvs
         return new Point2d((hash & 0xFFFF) / 65536.0 * range, (hash >> 16) / 65536.0 * range);
     }
 
+    // A piece this much more spread one way than the other (twice as long as wide) has a direction
+    // of its own.
+    private const double ElongatedSpread = 4;
+
+    // A piece's own direction wins only when it runs further than this from the part's grain.
+    private static readonly double CrossCos = Math.Cos(Math.PI / 4);
+
     /// <summary>Replaces the mesh's texture coordinates. Needs vertex normals.</summary>
     public static void Apply(Mesh mesh, double mmPerUnit, Point2d offset)
     {
         var (grain, centre) = Grain(mesh);
         var count = mesh.Vertices.Count;
+        var (pieceOf, pieceGrains) = PieceGrains(mesh, grain);
         var hasNormals = mesh.Normals.Count == count;
         var uvs = new Point2f[count];
         for (var i = 0; i < count; i++)
         {
             var p = (Point3d)mesh.Vertices[i] - centre;
             var n = hasNormals ? (Vector3d)mesh.Normals[i] : Vector3d.ZAxis;
+            var pieceGrain = pieceGrains[pieceOf[i]];
             // Projected into the face, or U shrinks by the sine of the grain's angle to the normal.
-            var along = grain - grain * n * n;
+            var along = pieceGrain - pieceGrain * n * n;
             if (along.Length < EdgeOnSine)
             {
-                along = grain;
+                along = pieceGrain;
                 along.PerpendicularTo(n);
             }
 
@@ -67,6 +77,124 @@ public static class GrainUvs
 
         mesh.TextureCoordinates.Clear();
         mesh.TextureCoordinates.SetTextureCoordinates(uvs);
+    }
+
+    /// <summary>
+    ///     The grain for each disjoint piece of the mesh (Web Display appends one per Brep face): the
+    ///     piece's own long axis where it is elongated across <paramref name="grain" />, else
+    ///     <paramref name="grain" />. A mitred corner turns its normals 90° about the vertical, so
+    ///     the part's grain comes out vertical, while each leg's faces still run along the leg.
+    /// </summary>
+    private static (int[] pieceOf, Vector3d[] grains) PieceGrains(Mesh mesh, Vector3d grain)
+    {
+        var count = mesh.Vertices.Count;
+        var parent = new int[count];
+        for (var i = 0; i < count; i++)
+        {
+            parent[i] = i;
+        }
+
+        int Find(int v)
+        {
+            while (parent[v] != v)
+            {
+                parent[v] = parent[parent[v]];
+                v = parent[v];
+            }
+
+            return v;
+        }
+
+        void Union(int a, int b)
+        {
+            parent[Find(a)] = Find(b);
+        }
+
+        foreach (var face in mesh.Faces)
+        {
+            Union(face.A, face.B);
+            Union(face.B, face.C);
+            if (face.IsQuad)
+            {
+                Union(face.C, face.D);
+            }
+        }
+
+        var pieceOf = new int[count];
+        var index = new Dictionary<int, int>();
+        for (var i = 0; i < count; i++)
+        {
+            var root = Find(i);
+            if (!index.TryGetValue(root, out var piece))
+            {
+                piece = index.Count;
+                index[root] = piece;
+            }
+
+            pieceOf[i] = piece;
+        }
+
+        var pieces = index.Count;
+        var spread = new double[pieces, 3, 3];
+        var area = new double[pieces];
+        var sum = new Vector3d[pieces];
+        var vertices = mesh.Vertices;
+
+        void Add(int piece, Point3d a, Point3d b, Point3d c)
+        {
+            var length = Vector3d.CrossProduct(b - a, c - a).Length;
+            var mid = (Vector3d)(a + b + c) / 3;
+            Vector3d va = (Vector3d)a, vb = (Vector3d)b, vc = (Vector3d)c;
+            for (var r = 0; r < 3; r++)
+            {
+                for (var k = 0; k < 3; k++)
+                {
+                    spread[piece, r, k] += length / 12 *
+                                           (va[r] * va[k] + vb[r] * vb[k] + vc[r] * vc[k] + 9 * mid[r] * mid[k]);
+                }
+            }
+
+            area[piece] += length;
+            sum[piece] += length * mid;
+        }
+
+        foreach (var face in mesh.Faces)
+        {
+            var piece = pieceOf[face.A];
+            Add(piece, vertices[face.A], vertices[face.B], vertices[face.C]);
+            if (face.IsQuad)
+            {
+                Add(piece, vertices[face.C], vertices[face.D], vertices[face.A]);
+            }
+        }
+
+        var grains = new Vector3d[pieces];
+        for (var piece = 0; piece < pieces; piece++)
+        {
+            grains[piece] = grain;
+            if (area[piece] == 0)
+            {
+                continue;
+            }
+
+            var mean = sum[piece] / area[piece];
+            var covariance = new double[3, 3];
+            for (var r = 0; r < 3; r++)
+            {
+                for (var k = 0; k < 3; k++)
+                {
+                    covariance[r, k] = spread[piece, r, k] / area[piece] - mean[r] * mean[k];
+                }
+            }
+
+            var (values, axes) = Eigen(covariance);
+            if (values[2] > ElongatedSpread * values[1] && Math.Abs(axes[2] * grain) < CrossCos)
+            {
+                grains[piece] = axes[2];
+            }
+        }
+
+        return (pieceOf, grains);
     }
 
     /// <summary>

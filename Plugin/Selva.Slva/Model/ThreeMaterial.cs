@@ -75,7 +75,8 @@ public class ThreeMaterial
     /// <summary>
     ///     Millimetres of the real part one repeat of the textures covers, across U; V follows the
     ///     image's aspect. Null: textures stretch once over the UVs. Only meaningful for
-    ///     <see cref="UvMapping.Part" /> and <see cref="UvMapping.World" />, whose UVs are in mm.
+    ///     <see cref="UvMapping.Part" />, <see cref="UvMapping.World" /> and <see cref="UvMapping.Authored" />,
+    ///     whose UVs are in mm.
     /// </summary>
     [JsonProperty("mapSize", NullValueHandling = NullValueHandling.Ignore)]
     public double? MapSize { get; set; }

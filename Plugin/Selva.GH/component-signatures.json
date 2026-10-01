@@ -9,6 +9,25 @@
 			"outputs": []
 		},
 		{
+			"guid": "15736FB4-A5A1-48AD-B0EE-A9193DB08DA8",
+			"class": "GH_MaterialPreset",
+			"file": "Plugin/Selva.GH/Features/Display/Components/GH_MaterialPreset.cs",
+			"inputs": [
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Preset",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_ThreeMaterial",
+					"name": "Material",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "1A6B7C2D-3E4F-4A5B-9C8D-7E6F5A4B3C21",
 			"class": "GH_Grid",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_Grid.cs",
@@ -245,8 +264,8 @@
 					"access": "item"
 				},
 				{
-					"kind": "AddIntegerParameter",
-					"name": "Preset",
+					"kind": "AddParameter:Param_ThreeMaterial",
+					"name": "Base",
 					"access": "item"
 				},
 				{
@@ -257,6 +276,21 @@
 				{
 					"kind": "AddNumberParameter",
 					"name": "Texture Size",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Finish",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Transmission",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "IOR",
 					"access": "item"
 				}
 			],

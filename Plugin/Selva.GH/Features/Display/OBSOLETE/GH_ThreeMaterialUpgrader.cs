@@ -7,8 +7,8 @@ namespace Selva.GH.Features.Display.OBSOLETE;
 
 /// <summary>
 ///     Upgrades OBSOLETE_ThreeMaterial_UntilV0_21_0 (80CD38E5) to GH_ThreeMaterial (31100A9A), which
-///     appends Preset, Mapping and Texture Size. All optional and left empty, so the material is
-///     unchanged.
+///     appends Base, Mapping, Texture Size, Finish, Transmission and IOR. All optional and left empty,
+///     so the material is unchanged.
 /// </summary>
 public class GH_ThreeMaterialUpgrader_To_0_22 : IGH_UpgradeObject
 {
@@ -39,7 +39,7 @@ public class GH_ThreeMaterialUpgrader_To_0_22 : IGH_UpgradeObject
             .MapInput(10, 10) // Anisotropy Rotation
             .MapInput(11, 11) // Roughness Map
             .MapInput(12, 12) // Normal Map
-            // Inputs 13-15 are new and stay empty
+            // Inputs 13-18 are new and stay empty
             .MapOutput(0, 0) // Material
             .Execute();
     }

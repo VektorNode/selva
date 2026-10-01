@@ -457,18 +457,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
 
             mesh.Normals.ComputeNormals();
-            if (w.Material is { NeedsUvs: true })
-            {
-                switch (w.Material.ResolvedMapping)
-                {
-                    case UvMapping.Part:
-                        GrainUvs.Apply(mesh, mmPerUnit, GrainUvs.Offset(w.Id, w.Material.MapSize));
-                        break;
-                    case UvMapping.World:
-                        BoxUvs.Apply(mesh, mmPerUnit);
-                        break;
-                }
-            }
+            // Only Authored vouches for an input mesh's UVs: a converted Brep carries surface parameters.
+            var authoredUvs = w.Material?.ResolvedMapping == UvMapping.Authored
+                              && w.Geom is Mesh input && input.TextureCoordinates.Count == input.Vertices.Count;
+            DisplayUvs.Apply(mesh, w.Material, w.Id, mmPerUnit, authoredUvs);
 
             // UVs are only worth carrying when the material needs them (a texture, anisotropy or a finish) —
             // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for

@@ -51,12 +51,17 @@ describe('createMaterial: optional wire fields', () => {
 
 		const shader = {
 			vertexShader: '#include <color_vertex>',
-			fragmentShader: '#include <common>\n#include <roughnessmap_fragment>',
+			fragmentShader:
+				'#include <common>\n#include <color_fragment>\n#include <roughnessmap_fragment>',
 			uniforms: {}
 		} as unknown as THREE.WebGLProgramParametersWithUniforms;
 		brushed.onBeforeCompile(shader, undefined as unknown as THREE.WebGLRenderer);
 		expect(shader.vertexShader).toContain('vColor.rgb = mix');
 		expect(shader.fragmentShader).toContain('selvaOctave');
+		// The streak is declared before both of its uses.
+		expect(shader.fragmentShader.indexOf('float selvaStreak')).toBeLessThan(
+			shader.fragmentShader.indexOf('roughnessFactor * ( 1.0 + selvaStreak )')
+		);
 	});
 
 	it('skips a finish without UVs', () => {

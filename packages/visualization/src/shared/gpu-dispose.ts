@@ -10,7 +10,9 @@ import { canDisposeMaterial } from './gpu-ownership.js';
 export function disposeMaterial(material: THREE.Material): void {
 	if (!canDisposeMaterial(material)) return;
 
-	for (const value of Object.values(material)) {
+	for (const [key, value] of Object.entries(material)) {
+		// An envMap is the scene's, shared by every metal: freeing it here would blank them all.
+		if (key === 'envMap') continue;
 		if (value instanceof THREE.Texture) {
 			value.dispose();
 		}
