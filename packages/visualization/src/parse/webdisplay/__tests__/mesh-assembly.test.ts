@@ -113,6 +113,9 @@ describe('meshAssemblyWorkerSource', () => {
 		expect(reply.id).toBe(3);
 		expect(reply.error).toBeUndefined();
 		expect(reply.geometries!.length).toBeGreaterThan(0);
+		for (const geometry of reply.geometries as { closed?: unknown }[]) {
+			expect(geometry.closed).toBeTypeOf('boolean');
+		}
 	});
 
 	it('reports errors instead of throwing', () => {

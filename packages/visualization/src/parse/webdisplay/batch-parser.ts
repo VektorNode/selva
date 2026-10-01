@@ -9,7 +9,7 @@ import {
 	getAssemblyWorker,
 	requestAssembly
 } from './batch/assembly-worker.js';
-import { createMaterial } from './batch/materials.js';
+import { createMaterialPicker } from './batch/materials.js';
 import {
 	createIndividualMeshes,
 	createMergedMesh,
@@ -272,13 +272,11 @@ function buildMeshesFromParsed(
 	const meshCreateStart = performance.now();
 	// Vertex colors are batch-wide when present — meshes without real colors carry a white fill,
 	// which multiplies to identity — so the material enables vertexColors unconditionally.
-	const materials = materialsSrc.map((m) =>
-		createMaterial(m, {
-			vertexColors: parsed.colors != null,
-			hasUvs: parsed.uvs != null,
-			appearance: materialAppearance
-		})
-	);
+	const pickMaterial = createMaterialPicker(materialsSrc, {
+		vertexColors: parsed.colors != null,
+		hasUvs: parsed.uvs != null,
+		appearance: materialAppearance
+	});
 
 	const meshes: THREE.Mesh[] = [];
 
@@ -291,7 +289,7 @@ function buildMeshesFromParsed(
 				group,
 				worldVertices,
 				parsed.indices,
-				materials,
+				pickMaterial,
 				parsed.uvs,
 				parsed.colors
 			);
@@ -301,7 +299,7 @@ function buildMeshesFromParsed(
 				group,
 				worldVertices,
 				parsed.indices,
-				materials,
+				pickMaterial,
 				parsed.uvs,
 				parsed.colors
 			);
@@ -423,13 +421,11 @@ async function tryBuildViaWorker(
 	}
 	if (assembled.length !== jobs.length) return null; // protocol mismatch → fall back to sync path
 
-	const materials = materialsSrc.map((m) =>
-		createMaterial(m, {
-			vertexColors: raw.colors != null,
-			hasUvs: raw.uvs != null,
-			appearance: opts.material
-		})
-	);
+	const pickMaterial = createMaterialPicker(materialsSrc, {
+		vertexColors: raw.colors != null,
+		hasUvs: raw.uvs != null,
+		appearance: opts.material
+	});
 
 	const meshes: THREE.Mesh[] = [];
 	for (let i = 0; i < assembled.length; i++) {
@@ -445,10 +441,11 @@ async function tryBuildViaWorker(
 			geometry.setAttribute('color', new THREE.BufferAttribute(result.colors, 3, true));
 		}
 
+		const material = pickMaterial(ref.group.materialId, result.closed ?? false);
 		const mesh =
 			ref.kind === 'merged'
-				? finalizeMergedMesh(geometry, ref.group, materials)
-				: finalizeSingleMesh(geometry, ref.meshMeta!, ref.group, materials);
+				? finalizeMergedMesh(geometry, ref.group, material)
+				: finalizeSingleMesh(geometry, ref.meshMeta!, material);
 		meshes.push(mesh);
 	}
 

@@ -15,9 +15,47 @@ const METAL_CLEARCOAT_THRESHOLD = 0.5;
 const METAL_CLEARCOAT = 0.5;
 const METAL_CLEARCOAT_ROUGHNESS = 0.3;
 
+interface MaterialOptions {
+	vertexColors?: boolean;
+	hasUvs?: boolean;
+	appearance?: MaterialAppearanceOptions;
+	/** Every mesh drawn with this material is a closed solid: see `isClosedSolid`. */
+	closed?: boolean;
+}
+
+// Transparent solids keep both sides: their far wall is meant to show through the near one.
+function cullsBackFaces(matData: SerializableMaterial, options?: MaterialOptions): boolean {
+	if (options?.appearance?.cullBackfaces) return true;
+	return (options?.closed ?? false) && !matData.transparent && matData.opacity >= 1;
+}
+
+/**
+ * Builds each wire material on first use, once per side it's needed on. `side` is per material, so
+ * one material shared by closed solids and open surfaces becomes two instances.
+ */
+export type MaterialPicker = (materialId: number, closed: boolean) => THREE.Material;
+
+export function createMaterialPicker(
+	materialsSrc: SerializableMaterial[],
+	options: Omit<MaterialOptions, 'closed'>
+): MaterialPicker {
+	const built = new Map<string, THREE.Material>();
+	return (materialId, closed) => {
+		const matData = materialsSrc[materialId]!;
+		const culled = cullsBackFaces(matData, { ...options, closed });
+		const key = `${materialId}:${culled}`;
+		let material = built.get(key);
+		if (!material) {
+			material = createMaterial(matData, { ...options, closed: culled });
+			built.set(key, material);
+		}
+		return material;
+	};
+}
+
 export function createMaterial(
 	matData: SerializableMaterial,
-	options?: { vertexColors?: boolean; hasUvs?: boolean; appearance?: MaterialAppearanceOptions }
+	options?: MaterialOptions
 ): THREE.MeshPhysicalMaterial {
 	const color = parseColor(matData.color);
 	const vertexColors = options?.vertexColors ?? false;
@@ -30,9 +68,9 @@ export function createMaterial(
 		opacity: matData.opacity,
 		transparent: matData.transparent,
 		vertexColors,
-		// Cull back faces for closed solids (crisper silhouette, less overdraw); keep both sides for
-		// open surfaces. Caller-controlled since Rhino emits both — default DoubleSide is the safe read.
-		side: appearance?.cullBackfaces ? THREE.FrontSide : THREE.DoubleSide,
+		// Open surfaces need both sides; a closed solid's back faces are never visible and only
+		// z-fight with its front ones.
+		side: cullsBackFaces(matData, options) ? THREE.FrontSide : THREE.DoubleSide,
 		polygonOffset: true, // avoids z-fighting on coplanar faces
 		polygonOffsetFactor: 0.5,
 		polygonOffsetUnits: 0.5,

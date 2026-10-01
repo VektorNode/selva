@@ -187,7 +187,7 @@ guide** — the seams, the traps, and a checklist.
 | `edge-detection-pass.ts`, `edge-extract.ts`                | screen-space edge detection (the fallback for skipped meshes) |
 | `render-pipeline.ts`                                       | the post-processing chain                                     |
 | `grid.ts`, `view-gizmo.ts`, `label-layer.ts`, `measure.ts` | overlays                                                      |
-| `near-plane.ts`                                            | keeps the near clip plane sane when zoomed out                |
+| `near-plane.ts`                                            | fits the near plane to the nearest geometry in view           |
 | `three-helpers.ts`                                         | `updateScene`, `clearScene`, bounds                           |
 | `three-materials.ts`                                       | shared material instances                                     |
 | `tool-registry.ts`, `scene-ownership.ts`                   | host-app pointer tools and geometry ownership tagging         |

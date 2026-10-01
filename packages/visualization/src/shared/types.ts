@@ -45,6 +45,11 @@ export type LookMaterialOverride = {
 	 * rather than a key light.
 	 */
 	wireframe?: boolean;
+	/**
+	 * Replaces the parsed side. Closed solids parse as `FrontSide`; a look that shows what's behind
+	 * a surface (x-ray, wireframe) needs their far side back.
+	 */
+	side?: THREE.Side;
 };
 
 /**
@@ -88,9 +93,8 @@ export interface MaterialAppearanceOptions {
 	/** Default 1 (three.js's own material default) when omitted. */
 	envMapIntensity?: number;
 	/**
-	 * `THREE.FrontSide` instead of `THREE.DoubleSide` — crisper silhouette on closed solids, but open
-	 * surfaces (which Rhino also emits) vanish when viewed from behind. Default false (DoubleSide) to
-	 * stay safe for surface geometry.
+	 * `THREE.FrontSide` on every mesh, open surfaces included, which then vanish when viewed from
+	 * behind. Default false: only meshes detected as closed solids are culled.
 	 */
 	cullBackfaces?: boolean;
 }

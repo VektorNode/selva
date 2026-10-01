@@ -92,7 +92,8 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			metalness: 0,
 			roughness: 0.9,
 			opacity: 0.28,
-			depthWrite: false
+			depthWrite: false,
+			side: THREE.DoubleSide
 		}
 	},
 	// The architectural line drawing: feature edges over flat white faces. The faces are the whole
@@ -151,7 +152,8 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			color: 0x2b3138,
 			metalness: 0,
 			roughness: 1,
-			wireframe: true
+			wireframe: true,
+			side: THREE.DoubleSide
 		}
 	}
 };

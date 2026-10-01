@@ -97,3 +97,18 @@ describe('a material with its own envMapIntensity', () => {
 		);
 	});
 });
+
+describe('look side override', () => {
+	it.each(['xray', 'wireframe'] as Look[])(
+		'shows the far side of a culled solid in %s, then culls it again',
+		(look) => {
+			const material = new THREE.MeshPhysicalMaterial({ side: THREE.FrontSide });
+
+			setLook(material, look);
+			expect(material.side).toBe(THREE.DoubleSide);
+
+			setLook(material, 'technical');
+			expect(material.side).toBe(THREE.FrontSide);
+		}
+	);
+});

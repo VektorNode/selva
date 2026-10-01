@@ -12,6 +12,8 @@
  * equivalence with the synchronous path is pinned by tests.
  */
 
+import { isClosedSolid } from './closed-solid.js';
+
 export interface AssemblyWindow {
 	vertexStart: number;
 	vertexCount: number;
@@ -52,6 +54,8 @@ export interface AssembledGeometry {
 	indices: Uint32Array;
 	uvs: Float32Array | null;
 	colors: Uint8Array | null;
+	/** Set by the worker after assembly, not by {@link assembleGeometries}: see {@link isClosedSolid}. */
+	closed?: boolean;
 }
 
 export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
@@ -289,17 +293,22 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 }
 
 /**
- * Worker script running {@link assembleGeometries} off the main thread. Protocol: receives
- * `{id, input}`, replies `{id, geometries}` with every output buffer transferred, or
- * `{id, error}`. Pinned by a test that evals this source against a stub `self`.
+ * Worker script running {@link assembleGeometries} and {@link isClosedSolid} off the main thread.
+ * Protocol: receives `{id, input}`, replies `{id, geometries}` with every output buffer
+ * transferred, or `{id, error}`. Pinned by a test that evals this source against a stub `self`.
  */
 export function meshAssemblyWorkerSource(): string {
 	return [
 		`const assemble = ${assembleGeometries.toString()};`,
+		`const isClosedSolid = ${isClosedSolid.toString()};`,
 		`self.onmessage = (event) => {`,
 		`  const { id, input } = event.data;`,
 		`  try {`,
 		`    const geometries = assemble(input);`,
+		`    geometries.forEach((g, i) => {`,
+		`      const counts = input.jobs[i].windows.map((w) => w.indexCount);`,
+		`      g.closed = isClosedSolid(g.positions, g.indices, counts);`,
+		`    });`,
 		`    const transfer = [];`,
 		`    for (const g of geometries) {`,
 		`      transfer.push(g.positions.buffer, g.normals.buffer, g.indices.buffer);`,

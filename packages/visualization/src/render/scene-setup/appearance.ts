@@ -28,6 +28,7 @@ type MaterialBaseline = {
 	transparent: boolean;
 	depthWrite: boolean;
 	wireframe: boolean;
+	side: THREE.Side;
 };
 
 const BASELINE_KEY = '__selvaLookBaseline';
@@ -48,6 +49,7 @@ function applyBaseline(target: OverridableMaterial, baseline: MaterialBaseline):
 	target.transparent = baseline.transparent;
 	target.depthWrite = baseline.depthWrite;
 	if (target.wireframe !== undefined) target.wireframe = baseline.wireframe;
+	target.side = baseline.side;
 }
 
 /** Restores the parsed values and forgets the baseline. No-op when nothing was overridden. */
@@ -91,7 +93,8 @@ export function applyMaterialOverride(
 			opacity: target.opacity,
 			transparent: target.transparent,
 			depthWrite: target.depthWrite,
-			wireframe: target.wireframe ?? false
+			wireframe: target.wireframe ?? false,
+			side: target.side
 		};
 	} else {
 		// Baseline captured by an earlier look — reset onto it so this override starts clean.
@@ -113,6 +116,7 @@ export function applyMaterialOverride(
 	if (override.wireframe !== undefined && target.wireframe !== undefined) {
 		target.wireframe = override.wireframe;
 	}
+	if (override.side !== undefined) target.side = override.side;
 	target.needsUpdate = true;
 }
 

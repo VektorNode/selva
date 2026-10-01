@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 
+import { isClosedSolid } from '../closed-solid.js';
+
 import { indexOutOfWindow } from './metadata.js';
+
+import type { MaterialPicker } from './materials.js';
 
 import type { MaterialGroup, MeshMetadata } from '../types.js';
 
@@ -34,7 +38,7 @@ export function createMergedMesh(
 	group: MaterialGroup,
 	allVertices: Float32Array,
 	allIndices: Uint16Array | Uint32Array,
-	materials: THREE.Material[],
+	pickMaterial: MaterialPicker,
 	allUvs: Float32Array | null = null,
 	allColors: Uint8Array | null = null
 ): THREE.Mesh {
@@ -106,7 +110,12 @@ export function createMergedMesh(
 	}
 	geometry.computeVertexNormals();
 
-	return finalizeMergedMesh(geometry, group, materials);
+	const closed = isClosedSolid(
+		mergedVertices,
+		mergedIndices,
+		group.meshes.map((m) => m.indexCount)
+	);
+	return finalizeMergedMesh(geometry, group, pickMaterial(group.materialId, closed));
 }
 
 /**
@@ -150,9 +159,9 @@ function mergedMembers(group: MaterialGroup): MergedMember[] {
 export function finalizeMergedMesh(
 	geometry: THREE.BufferGeometry,
 	group: MaterialGroup,
-	materials: THREE.Material[]
+	material: THREE.Material
 ): THREE.Mesh {
-	const threeMesh = new THREE.Mesh(geometry, materials[group.materialId]);
+	const threeMesh = new THREE.Mesh(geometry, material);
 	const firstMesh = group.meshes[0];
 	const meshNames = group.meshes.map((m) => m.name).filter((name) => name && name.length > 0);
 	threeMesh.name = meshNames.length > 0 ? meshNames[0]! : `merged_material_${group.materialId}`;
@@ -187,7 +196,7 @@ export function createIndividualMeshes(
 	group: MaterialGroup,
 	allVertices: Float32Array,
 	allIndices: Uint16Array | Uint32Array,
-	materials: THREE.Material[],
+	pickMaterial: MaterialPicker,
 	allUvs: Float32Array | null = null,
 	allColors: Uint8Array | null = null
 ): THREE.Mesh[] {
@@ -230,7 +239,8 @@ export function createIndividualMeshes(
 		}
 		geometry.computeVertexNormals();
 
-		meshes.push(finalizeSingleMesh(geometry, meshMeta, group, materials));
+		const closed = isClosedSolid(vertices, rebasedIndices, [rebasedIndices.length]);
+		meshes.push(finalizeSingleMesh(geometry, meshMeta, pickMaterial(group.materialId, closed)));
 	}
 
 	return meshes;
@@ -239,10 +249,9 @@ export function createIndividualMeshes(
 export function finalizeSingleMesh(
 	geometry: THREE.BufferGeometry,
 	meshMeta: MeshMetadata,
-	group: MaterialGroup,
-	materials: THREE.Material[]
+	material: THREE.Material
 ): THREE.Mesh {
-	const mesh = new THREE.Mesh(geometry, materials[group.materialId]);
+	const mesh = new THREE.Mesh(geometry, material);
 	mesh.name = meshMeta.name;
 	mesh.userData = {
 		source: 'compute',

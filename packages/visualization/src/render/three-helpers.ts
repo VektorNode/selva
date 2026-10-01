@@ -80,13 +80,16 @@ export function updateScene(
 // of the geometry.
 const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
 
+/** True if `object` itself roots a viewer aid; {@link isViewerAid} also checks ancestors. */
+export function isViewerAidRoot(object: THREE.Object3D): boolean {
+	return typeof object.userData.id === 'string' && VIEWER_AID_IDS.has(object.userData.id);
+}
+
 /** True if `object` or any ancestor is a viewer aid (grid/floor/labels/measure). */
 export function isViewerAid(object: THREE.Object3D): boolean {
 	let current: THREE.Object3D | null = object;
 	while (current) {
-		if (typeof current.userData.id === 'string' && VIEWER_AID_IDS.has(current.userData.id)) {
-			return true;
-		}
+		if (isViewerAidRoot(current)) return true;
 		current = current.parent;
 	}
 	return false;
