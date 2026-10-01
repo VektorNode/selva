@@ -1,19 +1,10 @@
 import * as THREE from 'three';
 
-import { OWN_ENV_MAP_INTENSITY, parseColor } from '../../../shared/index.js';
+import { OWN_ENV_MAP_INTENSITY, lookEnvMapIntensity, parseColor } from '../../../shared/index.js';
 
 import { applyTexture } from '../apply-texture.js';
 
 import type { MaterialAppearanceOptions, SerializableMaterial } from '../types.js';
-
-// A near-pure metal has no diffuse response, so under the low-IBL 'technical' look it goes flat and
-// reads as painted card. Real architectural sheet metal is coated, not a bare mirror, so meaningfully
-// metallic materials get a thin satin clearcoat — a glossy dielectric layer independent of base
-// metalness/envMap, so folds catch light even when the IBL is dialed down. A wire material that sets
-// `clearcoat` (0 for bare copper or zinc) replaces this default.
-const METAL_CLEARCOAT_THRESHOLD = 0.5;
-const METAL_CLEARCOAT = 0.5;
-const METAL_CLEARCOAT_ROUGHNESS = 0.3;
 
 // Pushes surfaces back by a fraction of their own depth slope so crease edges keep their full width:
 // an edge line is a screen-space quad at the edge's depth, and without this the face on its near
@@ -85,40 +76,65 @@ export function createMaterial(
 		depthTest: true
 	});
 
-	// HDR image-based-lighting reflection strength. The material's own value beats the look's, so a
-	// metal stays reflective in a dim look; otherwise three's default (1) unless the look dials it.
+	// The material's own value beats the look's; otherwise three's default (1) unless the look dials it.
 	if (matData.envMapIntensity != null) {
 		material.envMapIntensity = matData.envMapIntensity;
 		material.userData[OWN_ENV_MAP_INTENSITY] = matData.envMapIntensity;
 	} else if (appearance?.envMapIntensity != null) {
-		material.envMapIntensity = appearance.envMapIntensity;
+		material.envMapIntensity = lookEnvMapIntensity(appearance.envMapIntensity, matData.metalness);
 	}
 
-	const isMetal = matData.metalness > METAL_CLEARCOAT_THRESHOLD;
-	const clearcoat = matData.clearcoat ?? (isMetal ? METAL_CLEARCOAT : undefined);
-	if (clearcoat != null) {
-		material.clearcoat = clearcoat;
-		material.clearcoatRoughness =
-			matData.clearcoatRoughness ?? (isMetal ? METAL_CLEARCOAT_ROUGHNESS : 0);
+	if (matData.clearcoat != null) {
+		material.clearcoat = matData.clearcoat;
+		material.clearcoatRoughness = matData.clearcoatRoughness ?? 0;
 	}
 
-	// three builds the anisotropy tangent from UV derivatives; without a `uv` attribute it normalizes
-	// a zero vector and the mesh renders NaN-black.
+	// The anisotropy tangent comes from the UVs; without them three normalizes a zero vector and the
+	// mesh renders NaN-black.
 	if (matData.anisotropy != null && matData.anisotropy > 0 && options?.hasUvs) {
 		material.anisotropy = matData.anisotropy;
 		material.anisotropyRotation = matData.anisotropyRotation ?? 0;
 	}
 
+	if (matData.transmission != null) {
+		material.transmission = matData.transmission;
+		// A pane, not a lens: no thickness, so nothing behind it refracts sideways.
+		material.thickness = 0;
+	}
+	if (matData.ior != null) material.ior = matData.ior;
+
 	if (vertexColors) {
 		applyVertexColorSRGBDecode(material);
 	}
 
+	if (matData.finish && options?.hasUvs) {
+		applyFinish(material, matData.finish);
+	}
+
 	// Async; the mesh renders without them until each image decodes.
-	if (matData.map) applyTexture(material, matData.map, 'map');
-	if (matData.roughnessMap) applyTexture(material, matData.roughnessMap, 'roughnessMap');
-	if (matData.normalMap) applyTexture(material, matData.normalMap, 'normalMap');
+	const { mapSize } = matData;
+	if (matData.map) applyTexture(material, matData.map, 'map', mapSize);
+	if (matData.roughnessMap) applyTexture(material, matData.roughnessMap, 'roughnessMap', mapSize);
+	if (matData.normalMap) applyTexture(material, matData.normalMap, 'normalMap', mapSize);
 
 	return material;
+}
+
+type ShaderPatch = (shader: THREE.WebGLProgramParametersWithUniforms) => void;
+
+/**
+ * Chains `patch` after any earlier one. three caches compiled programs by `customProgramCacheKey`,
+ * which defaults to the `onBeforeCompile` source; a chained wrapper's source is the same whatever
+ * it wraps, so every patch must extend the key or two materials would share one program.
+ */
+function addShaderPatch(material: THREE.Material, key: string, patch: ShaderPatch): void {
+	const previous = material.onBeforeCompile;
+	const previousKey = material.customProgramCacheKey.bind(material);
+	material.onBeforeCompile = (shader, renderer) => {
+		previous.call(material, shader, renderer);
+		patch(shader);
+	};
+	material.customProgramCacheKey = () => `${previousKey()}|${key}`;
 }
 
 /**
@@ -128,7 +144,7 @@ export function createMaterial(
  * buffer, to keep the hot per-solve parse cheap.
  */
 export function applyVertexColorSRGBDecode(material: THREE.Material): void {
-	material.onBeforeCompile = (shader) => {
+	addShaderPatch(material, 'srgb-vertex-colors', (shader) => {
 		shader.vertexShader = shader.vertexShader.replace(
 			'#include <color_vertex>',
 			`#include <color_vertex>
@@ -140,5 +156,70 @@ export function applyVertexColorSRGBDecode(material: THREE.Material): void {
 				);
 			#endif`
 		);
-	};
+	});
+}
+
+// Two octaves of streaks per finish: spacing across the grain in mm, and how far each scales
+// roughness either way. Starting points, to be tuned against photos of real sheet.
+const FINISH_OCTAVES: Record<NonNullable<SerializableMaterial['finish']>, [number, number][]> = {
+	brushed: [
+		[0.05, 0.3],
+		[0.5, 0.2]
+	],
+	rolled: [
+		[4, 0.1],
+		[30, 0.08]
+	]
+};
+
+/**
+ * Roughness streaks along the grain, generated from V (across it, in mm), so they need no texture
+ * and never tile. Each octave fades out once a pixel spans a streak: finer than that it only
+ * shimmers while the camera moves.
+ */
+function applyFinish(
+	material: THREE.MeshPhysicalMaterial,
+	finish: NonNullable<SerializableMaterial['finish']>
+): void {
+	const octaves = FINISH_OCTAVES[finish];
+	if (!octaves) return;
+	// `vUv` exists only with a map or anisotropy; a finish needs it either way.
+	material.defines = { ...material.defines, USE_UV: '' };
+	const sum = octaves
+		.map(
+			([spacing, amplitude]) =>
+				`selvaOctave( v, footprint, ${spacing.toFixed(4)}, ${amplitude.toFixed(4)} )`
+		)
+		.join(' + ');
+	addShaderPatch(material, `finish:${finish}`, (shader) => {
+		shader.fragmentShader = shader.fragmentShader
+			.replace(
+				'#include <common>',
+				`#include <common>
+				float selvaHash( float n ) {
+					n = fract( n * 0.1031 );
+					n *= n + 33.33;
+					n *= n + n;
+					return fract( n );
+				}
+				float selvaNoise( float x ) {
+					float i = floor( x );
+					float f = fract( x );
+					return mix( selvaHash( i ), selvaHash( i + 1.0 ), f * f * ( 3.0 - 2.0 * f ) );
+				}
+				float selvaOctave( float v, float footprint, float spacing, float amplitude ) {
+					float fade = 1.0 - smoothstep( 0.25, 1.0, footprint / spacing );
+					return amplitude * fade * ( selvaNoise( v / spacing ) * 2.0 - 1.0 );
+				}`
+			)
+			.replace(
+				'#include <roughnessmap_fragment>',
+				`#include <roughnessmap_fragment>
+				{
+					float v = vUv.y;
+					float footprint = fwidth( v );
+					roughnessFactor = clamp( roughnessFactor * ( 1.0 + ${sum} ), 0.0, 1.0 );
+				}`
+			);
+	});
 }

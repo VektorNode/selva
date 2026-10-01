@@ -21,6 +21,7 @@ export {
 	LOOK_PRESETS,
 	DEFAULT_LOOK,
 	OWN_ENV_MAP_INTENSITY,
+	lookEnvMapIntensity,
 	materialAppearanceForLook
 } from './looks.js';
 

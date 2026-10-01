@@ -91,6 +91,17 @@ describe('a material with its own envMapIntensity', () => {
 		);
 	});
 
+	it('keeps a metal reflective in a look that dims fill', () => {
+		const metal = new THREE.MeshPhysicalMaterial({ metalness: 1 });
+		expect(envMapIntensityForLook(metal, LOOK_PRESETS.technical)).toBe(1);
+	});
+
+	it('reads the parsed metalness when leaving a look that overrode it', () => {
+		const metal = new THREE.MeshPhysicalMaterial({ metalness: 1 });
+		setLook(metal, 'arctic');
+		expect(envMapIntensityForLook(metal, LOOK_PRESETS.technical)).toBe(1);
+	});
+
 	it.each(OVERRIDING)('takes the look value in %s, which restyles every material', (look) => {
 		expect(envMapIntensityForLook(parsed(1), LOOK_PRESETS[look])).toBe(
 			LOOK_PRESETS[look].envMapIntensity

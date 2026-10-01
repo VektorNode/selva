@@ -4,21 +4,42 @@ using Rhino.Geometry;
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     UVs whose U runs along a part's grain, for an anisotropic material with no texture to honour.
+///     UVs in millimetres whose U runs along a part's grain and V across it: the <c>Part</c> mapping.
 ///     Brep surface parameters point U whichever way each surface happened to be built, so two
 ///     identical strips side by side came out brushed along and across and reflected differently.
+///     Exact on flat faces; on a rolled face V is a projection, not the unrolled length.
 /// </summary>
 public static class GrainUvs
 {
     // A face this close to edge-on to the grain (an end cap, a sheet's cut edge) has no grain of its
-    // own; U running along the grain would be constant there and three's tangent would be NaN.
+    // own; U running along the grain would be constant there and give the face no tangent.
     private const double EdgeOnSine = 0.1;
 
     // Below this share of the normal spread the part is flat, and its normals cannot name an axis.
     private const double FlatShare = 0.02;
 
+    // Used when the material has no Texture Size: the offset only has to differ between parts.
+    private const double DefaultOffsetRange = 1000;
+
+    /// <summary>
+    ///     A shift in mm, the same for a part on every solve, so neighbouring identical parts don't
+    ///     show the same patch of texture. Seeded from the item's id; <c>string.GetHashCode</c> is
+    ///     randomized per process on .NET Core, so it would reshuffle every launch.
+    /// </summary>
+    public static Point2d Offset(string id, double? mapSize)
+    {
+        var hash = 2166136261u;
+        foreach (var c in id ?? "")
+        {
+            hash = (hash ^ c) * 16777619u;
+        }
+
+        var range = mapSize ?? DefaultOffsetRange;
+        return new Point2d((hash & 0xFFFF) / 65536.0 * range, (hash >> 16) / 65536.0 * range);
+    }
+
     /// <summary>Replaces the mesh's texture coordinates. Needs vertex normals.</summary>
-    public static void Apply(Mesh mesh)
+    public static void Apply(Mesh mesh, double mmPerUnit, Point2d offset)
     {
         var (grain, centre) = Grain(mesh);
         var count = mesh.Vertices.Count;
@@ -39,7 +60,9 @@ public static class GrainUvs
             along.Unitize();
             var across = Vector3d.CrossProduct(n, along);
             across.Unitize();
-            uvs[i] = new Point2f((float)(p * along), (float)(p * across));
+            uvs[i] = new Point2f(
+                (float)(p * along * mmPerUnit + offset.X),
+                (float)(p * across * mmPerUnit + offset.Y));
         }
 
         mesh.TextureCoordinates.Clear();

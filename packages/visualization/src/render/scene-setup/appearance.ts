@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {
 	LOOK_PRESETS,
 	OWN_ENV_MAP_INTENSITY,
+	lookEnvMapIntensity,
 	materialAppearanceForLook
 } from '../../shared/index.js';
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
@@ -122,10 +123,13 @@ export function applyMaterialOverride(
 
 /** A material's own value (see `OWN_ENV_MAP_INTENSITY`) unless the look restyles every material. */
 export function envMapIntensityForLook(material: THREE.Material, preset: LookPreset): number {
-	const own = preset.materialOverride
-		? undefined
-		: (material.userData[OWN_ENV_MAP_INTENSITY] as number | undefined);
-	return own ?? preset.envMapIntensity;
+	if (preset.materialOverride) return preset.envMapIntensity;
+	const own = material.userData[OWN_ENV_MAP_INTENSITY] as number | undefined;
+	if (own != null) return own;
+	// Runs before the previous look's override is lifted, so read the parsed metalness.
+	const target = material as OverridableMaterial;
+	const metalness = target[BASELINE_KEY]?.metalness ?? target.metalness ?? 0;
+	return lookEnvMapIntensity(preset.envMapIntensity, metalness);
 }
 
 /** The runtime lighting/material dials — everything a host can retune without rebuilding the scene. */

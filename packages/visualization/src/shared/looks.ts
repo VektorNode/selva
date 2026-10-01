@@ -165,6 +165,16 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
  */
 export const OWN_ENV_MAP_INTENSITY = 'selvaEnvMapIntensity';
 
+/**
+ * A look dims `envMapIntensity` to turn down fill, but three scales a material's diffuse and
+ * specular IBL together. A metal has no diffuse, so the same dimming would only take away its
+ * reflection, which is all a metal shows. Blending toward 1 by metalness keeps a dielectric's fill
+ * on the look and a metal's reflection the same in every look.
+ */
+export function lookEnvMapIntensity(lookValue: number, metalness: number): number {
+	return lookValue + (1 - lookValue) * Math.min(1, Math.max(0, metalness));
+}
+
 /** Baked at parse time (not toggleable at runtime). */
 export function materialAppearanceForLook(look: Look): MaterialAppearanceOptions {
 	const preset = LOOK_PRESETS[look];

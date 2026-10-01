@@ -289,6 +289,10 @@ public class SlvmDocumentTests
         m.ClearcoatRoughness = 0.2;
         m.Anisotropy = 0.7;
         m.AnisotropyRotation = 1.5;
+        m.MapSize = 1250.0;
+        m.Finish = "brushed";
+        m.Transmission = 1.0;
+        m.Ior = 1.52;
 
         var decoded = RoundTrip(batch).Materials[0];
 
@@ -297,11 +301,19 @@ public class SlvmDocumentTests
         Assert.Equal(0.2, decoded.ClearcoatRoughness);
         Assert.Equal(0.7, decoded.Anisotropy);
         Assert.Equal(1.5, decoded.AnisotropyRotation);
+        Assert.Equal(1250.0, decoded.MapSize);
+        Assert.Equal("brushed", decoded.Finish);
+        Assert.Equal(1.0, decoded.Transmission);
+        Assert.Equal(1.52, decoded.Ior);
 
         var plain = JsonConvert.SerializeObject(new SerializableMaterial { Color = "#FFFFFF" });
         Assert.DoesNotContain("clearcoat", plain);
         Assert.DoesNotContain("anisotropy", plain);
         Assert.DoesNotContain("envMapIntensity", plain);
+        Assert.DoesNotContain("mapSize", plain);
+        Assert.DoesNotContain("finish", plain);
+        Assert.DoesNotContain("transmission", plain);
+        Assert.DoesNotContain("ior", plain);
     }
 
     // ============================================================================

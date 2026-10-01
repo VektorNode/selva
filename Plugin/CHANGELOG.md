@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Changing a Value List from the web UI no longer solves the definition twice.
+- Web Display's grain UVs (anisotropic materials) no longer tilt on coarse flat parts or squeeze texture on faces oblique to the grain, and are now in millimetres whatever the model unit.
 
 ### Added
 
@@ -80,11 +81,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Obsolete components
 
+- **Three Material** (`80CD38E5-BC9E-47E4-88EE-8F35B7E109CC` → `31100A9A-AA13-43EF-9C2C-8F3C56BC6D68`): appends optional `Preset`, `Mapping` and `Texture Size` inputs. `Preset` (stainless brushed, aluminium, galvanised, weathered zinc, copper, coil-coated, wood, concrete, glass) sets defaults that every wired input overrides; metal and concrete base colours are measured values from physicallybased.info. `Mapping` picks the texture coordinates: Surface (Rhino's), Part (along each part's grain, in mm, offset per part) or World (box projection in mm). `Texture Size` is the real width one texture repeat covers, in mm. Color, Metalness, Roughness, Opacity and Transparent lost their persistent defaults so a preset can fill them; unwired they fall back to the old defaults. Old definitions upgrade automatically.
 - **Three Material** (`B7665E1A-C4CC-49D6-8EDB-4AAEF045D9A8` → `80CD38E5-BC9E-47E4-88EE-8F35B7E109CC`): appends optional `Reflection`, `Clearcoat`, `Clearcoat Roughness`, `Anisotropy`, `Anisotropy Rotation`, `Roughness Map` and `Normal Map` inputs. Unwired, each stays off the wire and the viewer keeps its default. `Reflection` beats the look's value so a metal stays reflective in every look; `Clearcoat` replaces the automatic satin coat on metals. Anisotropy and the two maps make Web Display carry the mesh's texture coordinates; anisotropy is dropped for meshes that have none. Old definitions upgrade automatically.
 - **Display From File** (`8B2E5C71-9A34-4F6D-B017-3C4D5E6F7A81` → `B9FCCDF3-DBA3-47C0-BEAA-078ABFB92241`): the `Id` input is gone now that SLVM v3 carries object identity in the container's own table, so loading no longer needs to restamp it. Old definitions upgrade automatically; the `Id` wire is dropped.
 
 ### Upgraders
 
+- `GH_ThreeMaterialUpgrader_To_0_22`: `80CD38E5` → `31100A9A` (appends three optional inputs).
 - `GH_DisplayFromFileUpgrader_To_0_18`: `8B2E5C71` → `B9FCCDF3` (drops the `Id` input).
 - `GH_ThreeMaterialUpgrader_To_0_21`: `B7665E1A` → `80CD38E5` (appends seven optional inputs).
 

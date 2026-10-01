@@ -52,7 +52,7 @@ public class ThreeMaterial
     [JsonProperty("envMapIntensity", NullValueHandling = NullValueHandling.Ignore)]
     public double? EnvMapIntensity { get; set; }
 
-    /// <summary>0.0 to 1.0. Null lets the viewer pick (a satin coat on metals, none otherwise).</summary>
+    /// <summary>0.0 to 1.0. Null: no coat.</summary>
     [JsonProperty("clearcoat", NullValueHandling = NullValueHandling.Ignore)]
     public double? Clearcoat { get; set; }
 
@@ -72,6 +72,41 @@ public class ThreeMaterial
     [JsonProperty("anisotropyRotation", NullValueHandling = NullValueHandling.Ignore)]
     public double? AnisotropyRotation { get; set; }
 
+    /// <summary>
+    ///     Millimetres of the real part one repeat of the textures covers, across U; V follows the
+    ///     image's aspect. Null: textures stretch once over the UVs. Only meaningful for
+    ///     <see cref="UvMapping.Part" /> and <see cref="UvMapping.World" />, whose UVs are in mm.
+    /// </summary>
+    [JsonProperty("mapSize", NullValueHandling = NullValueHandling.Ignore)]
+    public double? MapSize { get; set; }
+
+    /// <summary>
+    ///     Procedural roughness streaks along the grain: <c>"brushed"</c> (fine lines) or
+    ///     <c>"rolled"</c> (broad bands). Null: uniform roughness.
+    /// </summary>
+    [JsonProperty("finish", NullValueHandling = NullValueHandling.Ignore)]
+    public string Finish { get; set; }
+
+    /// <summary>0.0 to 1.0. Light passing through, for glass; unlike opacity it keeps reflections.</summary>
+    [JsonProperty("transmission", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Transmission { get; set; }
+
+    /// <summary>Index of refraction, 1.0 to 2.333. Null: three's 1.5.</summary>
+    [JsonProperty("ior", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Ior { get; set; }
+
+    /// <summary>Where WebDisplay takes the texture coordinates from. Not sent to the viewer.</summary>
+    [JsonProperty("mapping", DefaultValueHandling = DefaultValueHandling.Ignore)]
+    public UvMapping Mapping { get; set; }
+
+    /// <summary><see cref="UvMapping.Auto" /> resolved against this material.</summary>
+    [JsonIgnore]
+    public UvMapping ResolvedMapping =>
+        Mapping != UvMapping.Auto ? Mapping
+        // A texture with no real size was authored against Rhino's mapping; grain alone wants Part.
+        : HasMaps && MapSize == null ? UvMapping.Surface
+        : UvMapping.Part;
+
     [JsonIgnore]
     public bool HasMaps =>
         !string.IsNullOrEmpty(Map)
@@ -80,7 +115,7 @@ public class ThreeMaterial
 
     /// <summary>True when rendering this material needs the mesh's texture coordinates.</summary>
     [JsonIgnore]
-    public bool NeedsUvs => HasMaps || Anisotropy > 0;
+    public bool NeedsUvs => HasMaps || Anisotropy > 0 || !string.IsNullOrEmpty(Finish);
 
     /// <summary>A faithful deep copy: every member is a value type or an immutable string.</summary>
     public ThreeMaterial Clone()

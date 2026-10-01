@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { OWN_ENV_MAP_INTENSITY } from '../../../shared/index.js';
@@ -19,7 +20,9 @@ describe('createMaterial: optional wire fields', () => {
 		const own = createMaterial(base({ envMapIntensity: 1 }), {
 			appearance: { envMapIntensity: 0.55 }
 		});
-		const follows = createMaterial(base(), { appearance: { envMapIntensity: 0.55 } });
+		const follows = createMaterial(base({ metalness: 0 }), {
+			appearance: { envMapIntensity: 0.55 }
+		});
 
 		expect(own.envMapIntensity).toBe(1);
 		// setLook reads it back from here.
@@ -34,6 +37,39 @@ describe('createMaterial: optional wire fields', () => {
 		expect(bare.clearcoat).toBe(0);
 		expect(coated.clearcoat).toBe(0.8);
 		expect(coated.clearcoatRoughness).toBeCloseTo(0.1);
+	});
+
+	it('compiles a separate program per finish, on top of the vertex-colour patch', () => {
+		const brushed = createMaterial(base({ finish: 'brushed' }), {
+			hasUvs: true,
+			vertexColors: true
+		});
+		const rolled = createMaterial(base({ finish: 'rolled' }), { hasUvs: true, vertexColors: true });
+
+		expect(brushed.defines?.USE_UV).toBe('');
+		expect(brushed.customProgramCacheKey()).not.toBe(rolled.customProgramCacheKey());
+
+		const shader = {
+			vertexShader: '#include <color_vertex>',
+			fragmentShader: '#include <common>\n#include <roughnessmap_fragment>',
+			uniforms: {}
+		} as unknown as THREE.WebGLProgramParametersWithUniforms;
+		brushed.onBeforeCompile(shader, undefined as unknown as THREE.WebGLRenderer);
+		expect(shader.vertexShader).toContain('vColor.rgb = mix');
+		expect(shader.fragmentShader).toContain('selvaOctave');
+	});
+
+	it('skips a finish without UVs', () => {
+		expect(createMaterial(base({ finish: 'brushed' }), { hasUvs: false }).defines?.USE_UV).toBe(
+			undefined
+		);
+	});
+
+	it('makes glass transmissive rather than transparent', () => {
+		const glass = createMaterial(base({ metalness: 0, transmission: 1, ior: 1.52 }));
+		expect(glass.transmission).toBe(1);
+		expect(glass.ior).toBeCloseTo(1.52);
+		expect(glass.transparent).toBe(false);
 	});
 
 	it('applies anisotropy only when the batch carries UVs', () => {

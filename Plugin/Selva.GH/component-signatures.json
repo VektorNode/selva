@@ -175,6 +175,100 @@
 			]
 		},
 		{
+			"guid": "31100A9A-AA13-43EF-9C2C-8F3C56BC6D68",
+			"class": "GH_ThreeMaterial",
+			"file": "Plugin/Selva.GH/Features/Display/Components/GH_ThreeMaterial.cs",
+			"inputs": [
+				{
+					"kind": "AddColourParameter",
+					"name": "Color",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Metalness",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Roughness",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Opacity",
+					"access": "item"
+				},
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Transparent",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Texture",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Reflection",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Clearcoat",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Clearcoat Roughness",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Anisotropy",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Anisotropy Rotation",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Roughness Map",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Normal Map",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Preset",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Mapping",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Texture Size",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_ThreeMaterial",
+					"name": "Material",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "3336B561-6152-4CA0-83D6-C0F5EED76540",
 			"class": "GH_DrawingView",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_DrawingView.cs",
@@ -928,85 +1022,6 @@
 				{
 					"kind": "AddGenericParameter",
 					"name": "Info",
-					"access": "item"
-				}
-			]
-		},
-		{
-			"guid": "80CD38E5-BC9E-47E4-88EE-8F35B7E109CC",
-			"class": "GH_ThreeMaterial",
-			"file": "Plugin/Selva.GH/Features/Display/Components/GH_ThreeMaterial.cs",
-			"inputs": [
-				{
-					"kind": "AddColourParameter",
-					"name": "Color",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Metalness",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Roughness",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Opacity",
-					"access": "item"
-				},
-				{
-					"kind": "AddBooleanParameter",
-					"name": "Transparent",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Texture",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Reflection",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Clearcoat",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Clearcoat Roughness",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Anisotropy",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Anisotropy Rotation",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Roughness Map",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Normal Map",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddParameter:Param_ThreeMaterial",
-					"name": "Material",
 					"access": "item"
 				}
 			]

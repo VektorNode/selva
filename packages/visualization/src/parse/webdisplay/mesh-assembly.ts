@@ -14,6 +14,7 @@
 
 import { isClosedSolid } from './closed-solid.js';
 import { splitCreases, type CreasedGeometry } from './crease-normals.js';
+import { grainTangents } from './grain-tangents.js';
 
 export interface AssemblyWindow {
 	vertexStart: number;
@@ -59,21 +60,25 @@ export interface AssembledGeometry {
 export interface FinishedGeometry extends CreasedGeometry {
 	/** See {@link isClosedSolid}. */
 	closed: boolean;
+	/** See {@link grainTangents}. Present exactly when `uvs` is. */
+	tangents: Float32Array | null;
 }
 
 /**
  * The shared tail of both parse paths, so the worker and the main-thread fallback can't drift.
  * Closedness is judged before the crease split, which only appends copies of existing positions.
+ * Tangents come after it, so each split copy takes only its own side's faces.
  */
 export function finishGeometry(
 	geometry: AssembledGeometry,
 	memberIndexCounts: number[]
 ): FinishedGeometry {
 	const closed = isClosedSolid(geometry.positions, geometry.indices, memberIndexCounts);
-	return {
-		...splitCreases(geometry.positions, geometry.indices, geometry.uvs, geometry.colors),
-		closed
-	};
+	const creased = splitCreases(geometry.positions, geometry.indices, geometry.uvs, geometry.colors);
+	const tangents = creased.uvs
+		? grainTangents(creased.positions, creased.normals, creased.indices, creased.uvs)
+		: null;
+	return { ...creased, closed, tangents };
 }
 
 export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
@@ -280,19 +285,23 @@ export function meshAssemblyWorkerSource(): string {
 		`const assemble = ${assembleGeometries.toString()};`,
 		`const isClosedSolid = ${isClosedSolid.toString()};`,
 		`const splitCreases = ${splitCreases.toString()};`,
+		`const grainTangents = ${grainTangents.toString()};`,
 		`self.onmessage = (event) => {`,
 		`  const { id, input } = event.data;`,
 		`  try {`,
-		// Mirrors finishGeometry, which can't be stringified: it captures the two functions above.
+		// Mirrors finishGeometry, which can't be stringified: it captures the functions above.
 		`    const geometries = assemble(input).map((g, i) => {`,
 		`      const counts = input.jobs[i].windows.map((w) => w.indexCount);`,
 		`      const closed = isClosedSolid(g.positions, g.indices, counts);`,
-		`      return { ...splitCreases(g.positions, g.indices, g.uvs, g.colors), closed };`,
+		`      const c = splitCreases(g.positions, g.indices, g.uvs, g.colors);`,
+		`      const tangents = c.uvs ? grainTangents(c.positions, c.normals, c.indices, c.uvs) : null;`,
+		`      return { ...c, closed, tangents };`,
 		`    });`,
 		`    const transfer = [];`,
 		`    for (const g of geometries) {`,
 		`      transfer.push(g.positions.buffer, g.normals.buffer, g.indices.buffer);`,
 		`      if (g.uvs) transfer.push(g.uvs.buffer);`,
+		`      if (g.tangents) transfer.push(g.tangents.buffer);`,
 		`      if (g.colors) transfer.push(g.colors.buffer);`,
 		`    }`,
 		`    self.postMessage({ id, geometries }, transfer);`,

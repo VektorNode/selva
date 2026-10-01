@@ -14,6 +14,7 @@ using Rhino.Render;
 using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
+using Selva.GH.Features.Drawing.Components;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
 using Selva.Slva;
@@ -164,18 +165,19 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         var meshSettings = ghMeshParams?.Value ?? MeshingParameters.FastRenderMesh;
         var componentId = InstanceGuid.ToString();
+        var mmPerUnit = DrawingUnits.ActiveDocMmPerUnit();
 
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
-                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId),
+                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit),
                 CancelToken));
             return;
         }
 
         if (!GetSolveResults(DA, out var result))
         {
-            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId);
+            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit);
         }
 
         if (result == null)
@@ -352,7 +354,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<GH_String> metaTree,
         GH_Structure<ThreeMaterialGoo> matTree,
         MeshingParameters meshSettings,
-        string componentId)
+        string componentId,
+        double mmPerUnit)
     {
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
         // attributes, minted identity, and owning branch. Geometry extraction touches GH_Goo
@@ -454,12 +457,20 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
 
             mesh.Normals.ComputeNormals();
-            if (w.Material is { Anisotropy: > 0, HasMaps: false })
+            if (w.Material is { NeedsUvs: true })
             {
-                GrainUvs.Apply(mesh);
+                switch (w.Material.ResolvedMapping)
+                {
+                    case UvMapping.Part:
+                        GrainUvs.Apply(mesh, mmPerUnit, GrainUvs.Offset(w.Id, w.Material.MapSize));
+                        break;
+                    case UvMapping.World:
+                        BoxUvs.Apply(mesh, mmPerUnit);
+                        break;
+                }
             }
 
-            // UVs are only worth carrying when the material needs them (a texture or anisotropy) —
+            // UVs are only worth carrying when the material needs them (a texture, anisotropy or a finish) —
             // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
             // every plain mesh would inflate the payload for nothing. Vertex colors only exist when
             // something explicitly set them, so presence alone is the gate.
@@ -468,8 +479,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             var wantColors = mesh.VertexColors.Count == mesh.Vertices.Count
                              && mesh.VertexColors.Count > 0;
 
-            // The batch zero-fills UVs for meshes that lack them, and three.js anisotropy normalizes
-            // a tangent built from UV derivatives: zero UVs render NaN (black). Drop it for this mesh.
+            // The batch zero-fills UVs for meshes that lack them, and the viewer builds the grain
+            // tangent from UVs: zero UVs give it no direction. Drop anisotropy for this mesh.
             ThreeMaterial material = null;
             if (!hasUvs && w.Material?.Anisotropy > 0)
             {

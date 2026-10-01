@@ -116,6 +116,9 @@ export function geometryFrom(finished: FinishedGeometry): THREE.BufferGeometry {
 	geometry.setAttribute('normal', new THREE.BufferAttribute(finished.normals, 3));
 	geometry.setIndex(new THREE.BufferAttribute(finished.indices, 1));
 	if (finished.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(finished.uvs, 2));
+	if (finished.tangents) {
+		geometry.setAttribute('tangent', new THREE.BufferAttribute(finished.tangents, 4));
+	}
 	if (finished.colors) {
 		geometry.setAttribute('color', new THREE.BufferAttribute(finished.colors, 3, true));
 	}
