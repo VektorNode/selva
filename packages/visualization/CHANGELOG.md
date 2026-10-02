@@ -1,5 +1,23 @@
 # @selvajs/visualization
 
+## 1.5.0
+
+### Minor Changes
+
+- 78727bf: Fix z-fighting on thin closed parts (sheet metal, hems) up close. Meshes detected as closed, outward-facing solids now cull their back faces, and the dynamic near plane fits to the nearest geometry in view instead of the whole scene's bounding sphere. Surfaces' slope-based polygon offset is halved, so parts just behind a surface seen at a grazing angle no longer show through it from about 2 m away.
+
+  `cullBackfaces: true` now forces `FrontSide` on every mesh; left off, only detected closed solids are culled. `LookMaterialOverride` takes an optional `side`, which the x-ray and wireframe looks set to `DoubleSide` so culled solids still show their far side.
+
+- 78727bf: Metals reflect a soft studio room instead of the scene HDR. The HDR's hard horizon over a near-black ground made a metal face split into a blown-out white band and a black one, jagged wherever roughness varied. Non-metals keep the HDR, so the looks don't change for them. The studio probe is each metal material's own `envMap`, which also makes three honour the material's `envMapIntensity` (a wire material's own value, else the look's blended toward 1 by metalness); with only `scene.environment`, three overwrites `envMapIntensity` with `scene.environmentIntensity` on every draw. The automatic satin clearcoat on metals is gone; set `clearcoat` on the wire material to get a coat back. Saved metal materials render differently after this change.
+
+  Meshes with UVs get a `tangent` attribute built from them, so anisotropy and normal maps no longer use noisy screen-space derivatives, and stay finite where U or V is constant.
+
+  Wire materials take optional `mapSize` (mm one texture repeat covers; maps then use `RepeatWrapping`), `finish` (`'brushed'` or `'rolled'`: procedural scratch fibres along the grain, in roughness, brightness and the normal, with brushing-pass bands that still read at a distance), `finishStrength` (scales the finish; 0 off), `transmission` and `ior` (glass).
+
+### Patch Changes
+
+- 78727bf: Fix shading and aliasing artifacts on sheet-metal models. Normals are recomputed from a full weld, area-weighted and split at creases sharper than 30°, so faces welded across a fold no longer smear into streaks around holes, and identical parts shade alike however the writer welded their seams. Closed-solid detection welds seam copies that float32 rounding left a step or two apart, so closed Breps are culled reliably. With ambient occlusion on, the scene renders with 4× MSAA below 2× DPR and at the full pixel ratio (`aoPixelRatio` now caps only the AO buffers), removing dashed highlights, jagged silhouettes and HiDPI blur. The dynamic near plane measures triangles clipped to the view, so a large mesh beside the camera no longer pins it to the floor.
+
 ## 1.4.1
 
 ### Patch Changes
