@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Material Preset component** (`Selva > Display`)
 
 - Outputs a ready material for a real finish: stainless steel brushed, aluminium mill finish, galvanised steel, weathered titanium zinc, copper, coil-coated (RAL), wood, concrete, glass, brass, titanium. Metal and concrete base colours are measured values from physicallybased.info. Wire it into a Display, or into Three Material's `Base` to override parts of it.
+- Materials carry an optional `FinishStrength` (wire `finishStrength`) that scales the brushed or rolled finish; 0 turns it off. Presets can set it; Three Material passes its `Base`'s through.
 
 **Live solve channel**
 
@@ -91,7 +92,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Upgraders
 
-- `GH_ThreeMaterialUpgrader_To_0_22`: `80CD38E5` → `31100A9A` (appends three optional inputs).
+- `GH_ThreeMaterialUpgrader_To_0_22`: `80CD38E5` → `31100A9A` (appends six optional inputs).
 - `GH_DisplayFromFileUpgrader_To_0_18`: `8B2E5C71` → `B9FCCDF3` (drops the `Id` input).
 - `GH_ThreeMaterialUpgrader_To_0_21`: `B7665E1A` → `80CD38E5` (appends seven optional inputs).
 

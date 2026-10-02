@@ -20,6 +20,7 @@ public static class MaterialPresets
         public double? Anisotropy;
         public UvMapping Mapping;
         public string Finish;
+        public double? FinishStrength;
         public double? Transmission;
         public double? Ior;
 
@@ -34,6 +35,7 @@ public static class MaterialPresets
                 Opacity = 1,
                 Anisotropy = Anisotropy,
                 Finish = Finish,
+                FinishStrength = FinishStrength,
                 Transmission = Transmission,
                 Ior = Ior,
                 Mapping = Mapping

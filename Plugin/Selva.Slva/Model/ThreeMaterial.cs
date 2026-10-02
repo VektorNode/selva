@@ -88,6 +88,10 @@ public class ThreeMaterial
     [JsonProperty("finish", NullValueHandling = NullValueHandling.Ignore)]
     public string Finish { get; set; }
 
+    /// <summary>Scales the <see cref="Finish" /> streaks; 0 draws none. Null: 1, the calibrated look.</summary>
+    [JsonProperty("finishStrength", NullValueHandling = NullValueHandling.Ignore)]
+    public double? FinishStrength { get; set; }
+
     /// <summary>0.0 to 1.0. Light passing through, for glass; unlike opacity it keeps reflections.</summary>
     [JsonProperty("transmission", NullValueHandling = NullValueHandling.Ignore)]
     public double? Transmission { get; set; }
@@ -116,7 +120,7 @@ public class ThreeMaterial
 
     /// <summary>True when rendering this material needs the mesh's texture coordinates.</summary>
     [JsonIgnore]
-    public bool NeedsUvs => HasMaps || Anisotropy > 0 || !string.IsNullOrEmpty(Finish);
+    public bool NeedsUvs => HasMaps || Anisotropy > 0 || (!string.IsNullOrEmpty(Finish) && (FinishStrength ?? 1) > 0);
 
     /// <summary>A faithful deep copy: every member is a value type or an immutable string.</summary>
     public ThreeMaterial Clone()

@@ -5,7 +5,8 @@
  *
  * Bumps the Grasshopper plugin version (the single source of truth is
  * Selva.GH.csproj <Version>, mirrored into AssemblyVersion / FileVersion /
- * InformationalVersion), commits the bump, creates a `plugin-v<x.y.z>` tag, and
+ * InformationalVersion), turns Plugin/CHANGELOG.md's [Unreleased] into the new
+ * version's section, commits both, creates a `plugin-v<x.y.z>` tag, and
  * pushes. Pushing the tag triggers .github/workflows/plugin-release.yml, which
  * verifies the tag matches the csproj version, builds the multi-target .gha /
  * .yak packages, pushes to the Yak registry, and cuts a GitHub Release.
@@ -40,6 +41,7 @@ import { execFileSync } from 'child_process';
 import { createInterface } from 'readline';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { cutRelease } from './plugin-changelog.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -235,6 +237,13 @@ const existingTags = execFileSync('git', ['tag', '--list', tag], {
 }).trim();
 if (existingTags) die(`Tag ${tag} already exists.`);
 
+// Before anything is written, so an empty changelog aborts with the csproj untouched.
+try {
+	cutRelease(targetVersion, undefined, { write: false });
+} catch (e) {
+	die(e.message);
+}
+
 // Release off main or beta, and only when in sync with the remote — otherwise
 // the final `git push` can be rejected, leaving a local tag for a version that
 // never ships. The plugin-release.yml workflow triggers purely on the
@@ -264,7 +273,9 @@ if (!DRY_RUN) {
 		encoding: 'utf8'
 	}).trim();
 	if (local !== remote) {
-		die(`Local ${branch} is not in sync with origin/${branch}. Pull/push so they match, then retry.`);
+		die(
+			`Local ${branch} is not in sync with origin/${branch}. Pull/push so they match, then retry.`
+		);
 	}
 }
 
@@ -278,6 +289,7 @@ info(`  ───────────────────`);
 info(`  version : ${currentVersion} → \x1b[1m${targetVersion}\x1b[0m`);
 info(`  channel : ${BETA ? 'beta (pre-release — hidden from normal yak installs)' : 'stable'}`);
 info(`  tag     : ${tag}`);
+info(`  notes   : Plugin/CHANGELOG.md [Unreleased] → [${targetVersion}]`);
 info(`  build   : ${BUILD ? 'yes (pnpm build:plugin)' : 'no (CI builds on tag push)'}`);
 info(`  push    : ${NO_PUSH ? 'no (local only)' : 'yes (triggers plugin-release.yml)'}`);
 info('');
@@ -320,6 +332,13 @@ if (DRY_RUN) {
 	info(`✓ Bumped Selva.GH.csproj to ${targetVersion}`);
 }
 
+if (DRY_RUN) {
+	info(`  [dry-run] cut Plugin/CHANGELOG.md [Unreleased] into [${targetVersion}]`);
+} else {
+	cutRelease(targetVersion);
+	info(`✓ Cut Plugin/CHANGELOG.md [${targetVersion}]`);
+}
+
 // ============================================================================
 // Optional local build
 // ============================================================================
@@ -333,7 +352,7 @@ if (BUILD) {
 // Commit, tag, push
 // ============================================================================
 
-run('git', ['add', path.relative(projectRoot, csprojPath)]);
+run('git', ['add', path.relative(projectRoot, csprojPath), path.join('Plugin', 'CHANGELOG.md')]);
 run('git', ['commit', '-m', `chore(plugin): release ${targetVersion}`]);
 run('git', ['tag', tag, '-m', `Selva Plugin ${targetVersion}`]);
 info(`✓ Committed and tagged ${tag}`);

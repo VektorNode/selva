@@ -34,4 +34,17 @@ public class ThreeMaterialTests
         Assert.Equal(UvMapping.Authored, back.Mapping);
         Assert.DoesNotContain("mapping", JsonConvert.SerializeObject(ThreeMaterial.Default(), new ColorJsonConverter()));
     }
+
+    [Fact]
+    public void FinishStrength_IsOffTheWireUntilSet_AndZeroNeedsNoUvs()
+    {
+        var material = ThreeMaterial.Default();
+        material.Finish = "brushed";
+        Assert.DoesNotContain("finishStrength", JsonConvert.SerializeObject(material, new ColorJsonConverter()));
+        Assert.True(material.NeedsUvs);
+
+        material.FinishStrength = 0;
+        Assert.Contains("\"finishStrength\":0", JsonConvert.SerializeObject(material, new ColorJsonConverter()));
+        Assert.False(material.NeedsUvs);
+    }
 }

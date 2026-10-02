@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OWN_ENV_MAP_INTENSITY, lookEnvMapIntensity, parseColor } from '../../../shared/index.js';
 
 import { applyTexture } from '../apply-texture.js';
+import { finishPatch, type ShaderPatch } from './finish.js';
 
 import type { MaterialAppearanceOptions, SerializableMaterial } from '../types.js';
 
@@ -107,8 +108,14 @@ export function createMaterial(
 		applyVertexColorSRGBDecode(material);
 	}
 
-	if (matData.finish && options?.hasUvs) {
-		applyFinish(material, matData.finish);
+	const finish =
+		matData.finish && options?.hasUvs
+			? finishPatch(matData.finish, matData.finishStrength ?? 1)
+			: null;
+	if (finish) {
+		// `vUv` exists only with a map or anisotropy; a finish needs it either way.
+		material.defines = { ...material.defines, USE_UV: '' };
+		addShaderPatch(material, finish.key, finish.patch);
 	}
 
 	// Async; the mesh renders without them until each image decodes.
@@ -119,8 +126,6 @@ export function createMaterial(
 
 	return material;
 }
-
-type ShaderPatch = (shader: THREE.WebGLProgramParametersWithUniforms) => void;
 
 /**
  * Chains `patch` after any earlier one. three caches compiled programs by `customProgramCacheKey`,
@@ -156,85 +161,5 @@ export function applyVertexColorSRGBDecode(material: THREE.Material): void {
 				);
 			#endif`
 		);
-	});
-}
-
-// Streak octaves per finish, in mm: length along the grain, width across it, and how far each
-// scales roughness (and half that, brightness) either way. Real brushing is many short fibres of
-// different lengths, not lines running the whole part, hence 2D noise stretched along the grain.
-// Starting points, to be tuned against photos of real sheet.
-const FINISH_OCTAVES: Record<
-	NonNullable<SerializableMaterial['finish']>,
-	[length: number, width: number, amplitude: number][]
-> = {
-	brushed: [
-		[8, 0.15, 0.14],
-		[20, 0.4, 0.09],
-		[50, 1.2, 0.05]
-	],
-	rolled: [
-		[40, 0.3, 0.03],
-		[120, 0.8, 0.02],
-		[300, 2.5, 0.01]
-	]
-};
-
-/**
- * Roughness and brightness streaks along the grain, from the UVs in mm, so they need no texture and
- * never tile. Each octave fades out as a pixel grows to its width: finer than that it only
- * shimmers while the camera moves.
- */
-function applyFinish(
-	material: THREE.MeshPhysicalMaterial,
-	finish: NonNullable<SerializableMaterial['finish']>
-): void {
-	const octaves = FINISH_OCTAVES[finish];
-	if (!octaves) return;
-	// `vUv` exists only with a map or anisotropy; a finish needs it either way.
-	material.defines = { ...material.defines, USE_UV: '' };
-	const sum = octaves
-		.map(
-			([length, width, amplitude]) =>
-				`selvaOctave( vUv, footprint, vec2( ${length.toFixed(4)}, ${width.toFixed(4)} ), ${amplitude.toFixed(4)} )`
-		)
-		.join(' + ');
-	addShaderPatch(material, `finish:${finish}`, (shader) => {
-		shader.fragmentShader = shader.fragmentShader
-			.replace(
-				'#include <common>',
-				`#include <common>
-				// Hash without sine: sin() loses precision on the large arguments mm UVs produce.
-				float selvaHash( vec2 p ) {
-					vec3 p3 = fract( vec3( p.xyx ) * 0.1031 );
-					p3 += dot( p3, p3.yzx + 33.33 );
-					return fract( ( p3.x + p3.y ) * p3.z );
-				}
-				float selvaNoise( vec2 p ) {
-					vec2 i = floor( p );
-					vec2 f = fract( p );
-					vec2 s = f * f * ( 3.0 - 2.0 * f );
-					return mix(
-						mix( selvaHash( i ), selvaHash( i + vec2( 1.0, 0.0 ) ), s.x ),
-						mix( selvaHash( i + vec2( 0.0, 1.0 ) ), selvaHash( i + vec2( 1.0, 1.0 ) ), s.x ),
-						s.y
-					);
-				}
-				float selvaOctave( vec2 uv, float footprint, vec2 size, float amplitude ) {
-					float fade = 1.0 - smoothstep( 0.3, 1.0, footprint / size.y );
-					return amplitude * fade * ( selvaNoise( uv / size ) * 2.0 - 1.0 );
-				}`
-			)
-			.replace(
-				'#include <color_fragment>',
-				`#include <color_fragment>
-				float footprint = fwidth( vUv.y );
-				float selvaStreak = ${sum};
-				diffuseColor.rgb *= 1.0 + 0.5 * selvaStreak;`
-			)
-			.replace(
-				'#include <roughnessmap_fragment>',
-				`#include <roughnessmap_fragment>
-				roughnessFactor = clamp( roughnessFactor * ( 1.0 + selvaStreak ), 0.0, 1.0 );`
-			);
 	});
 }

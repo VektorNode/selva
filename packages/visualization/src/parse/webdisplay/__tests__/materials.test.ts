@@ -52,15 +52,24 @@ describe('createMaterial: optional wire fields', () => {
 		const shader = {
 			vertexShader: '#include <color_vertex>',
 			fragmentShader:
-				'#include <common>\n#include <color_fragment>\n#include <roughnessmap_fragment>',
+				'#include <common>\n#include <color_fragment>\n#include <roughnessmap_fragment>\n' +
+				'#include <normal_fragment_begin>\n#include <normal_fragment_maps>',
 			uniforms: {}
 		} as unknown as THREE.WebGLProgramParametersWithUniforms;
 		brushed.onBeforeCompile(shader, undefined as unknown as THREE.WebGLRenderer);
+		const frag = shader.fragmentShader;
 		expect(shader.vertexShader).toContain('vColor.rgb = mix');
-		expect(shader.fragmentShader).toContain('selvaOctave');
-		// The streak is declared before both of its uses.
-		expect(shader.fragmentShader.indexOf('float selvaStreak')).toBeLessThan(
-			shader.fragmentShader.indexOf('roughnessFactor * ( 1.0 + selvaStreak )')
+		expect(frag).toContain('selvaFibres');
+		// Declared in color_fragment, before its uses in roughness and the normal.
+		expect(frag.indexOf('float selvaStreak')).toBeLessThan(
+			frag.indexOf('roughnessFactor * ( 1.0 + selvaStreak )')
+		);
+		expect(frag.indexOf('float selvaFibre ')).toBeLessThan(
+			frag.indexOf('selvaFibre * selvaAcross')
+		);
+		// The tilt goes after the normal exists.
+		expect(frag.indexOf('#include <normal_fragment_maps>')).toBeLessThan(
+			frag.indexOf('selvaFibre * selvaAcross')
 		);
 	});
 
@@ -68,6 +77,15 @@ describe('createMaterial: optional wire fields', () => {
 		expect(createMaterial(base({ finish: 'brushed' }), { hasUvs: false }).defines?.USE_UV).toBe(
 			undefined
 		);
+	});
+
+	it('keys the program on finish strength, and draws nothing at 0', () => {
+		const strong = createMaterial(base({ finish: 'brushed', finishStrength: 2 }), { hasUvs: true });
+		const plain = createMaterial(base({ finish: 'brushed' }), { hasUvs: true });
+		expect(strong.customProgramCacheKey()).not.toBe(plain.customProgramCacheKey());
+
+		const off = createMaterial(base({ finish: 'brushed', finishStrength: 0 }), { hasUvs: true });
+		expect(off.defines?.USE_UV).toBe(undefined);
 	});
 
 	it('makes glass transmissive rather than transparent', () => {

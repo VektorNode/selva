@@ -34,8 +34,10 @@ export interface SerializableMaterial {
 	 * when the writer sent UVs in mm. Omitted: maps stretch once over the UVs.
 	 */
 	mapSize?: number;
-	/** Procedural roughness streaks across the grain, from UVs in mm. */
+	/** Procedural scratch fibres along the grain, from UVs in mm. */
 	finish?: 'brushed' | 'rolled';
+	/** Scales the finish's streaks; 0 draws none. Omitted: 1. */
+	finishStrength?: number;
 	/** Light passing through (glass); unlike `opacity` it keeps reflections. */
 	transmission?: number;
 	ior?: number;

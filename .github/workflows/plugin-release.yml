@@ -46,6 +46,15 @@ jobs:
             exit 1
           }
 
+      # Before the build, so a tag pushed by hand without a changelog section
+      # fails here instead of publishing to Yak. `pnpm release:plugin` cuts it.
+      - name: Extract release notes from Plugin/CHANGELOG.md
+        shell: pwsh
+        run: |
+          $ver = $env:GITHUB_REF_NAME -replace '^plugin-v', ''
+          node scripts/plugin-changelog.mjs notes $ver > "$env:RUNNER_TEMP/notes.md"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
@@ -116,7 +125,7 @@ jobs:
             $env:GITHUB_REF_NAME
           ) + $packages + @(
             '--title', "Selva Plugin $env:GITHUB_REF_NAME",
-            '--generate-notes'
+            '--notes-file', "$env:RUNNER_TEMP/notes.md"
           )
           if ($env:GITHUB_REF_NAME -match '-beta') { $ghArgs += '--prerelease' }
           gh release create @ghArgs

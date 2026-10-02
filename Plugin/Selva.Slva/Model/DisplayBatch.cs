@@ -132,6 +132,9 @@ public class SerializableMaterial
     [JsonProperty("finish", NullValueHandling = NullValueHandling.Ignore)]
     public string Finish { get; set; }
 
+    [JsonProperty("finishStrength", NullValueHandling = NullValueHandling.Ignore)]
+    public double? FinishStrength { get; set; }
+
     [JsonProperty("transmission", NullValueHandling = NullValueHandling.Ignore)]
     public double? Transmission { get; set; }
 
@@ -157,6 +160,7 @@ public class SerializableMaterial
             AnisotropyRotation = material.AnisotropyRotation,
             MapSize = material.MapSize,
             Finish = NullIfEmpty(material.Finish),
+            FinishStrength = material.FinishStrength,
             Transmission = material.Transmission,
             Ior = material.Ior
         };
@@ -208,6 +212,7 @@ public class SerializableMaterial
             AnisotropyRotation = AnisotropyRotation,
             MapSize = MapSize,
             Finish = Finish,
+            FinishStrength = FinishStrength,
             Transmission = Transmission,
             Ior = Ior
         };

@@ -61,6 +61,7 @@ public class MaterialCache
         private readonly double? _anisotropyRotation;
         private readonly double? _mapSize;
         private readonly string _finish;
+        private readonly double? _finishStrength;
         private readonly double? _transmission;
         private readonly double? _ior;
 
@@ -81,6 +82,7 @@ public class MaterialCache
             _anisotropyRotation = Round(material.AnisotropyRotation);
             _mapSize = Round(material.MapSize);
             _finish = material.Finish;
+            _finishStrength = Round(material.FinishStrength);
             _transmission = Round(material.Transmission);
             _ior = Round(material.Ior);
         }
@@ -107,6 +109,7 @@ public class MaterialCache
                    && _anisotropyRotation == other._anisotropyRotation
                    && _mapSize == other._mapSize
                    && string.Equals(_finish, other._finish, StringComparison.Ordinal)
+                   && _finishStrength == other._finishStrength
                    && _transmission == other._transmission
                    && _ior == other._ior;
         }
@@ -135,6 +138,7 @@ public class MaterialCache
                 hash = hash * 397 ^ _anisotropyRotation.GetHashCode();
                 hash = hash * 397 ^ _mapSize.GetHashCode();
                 hash = hash * 397 ^ (_finish != null ? StringComparer.Ordinal.GetHashCode(_finish) : 0);
+                hash = hash * 397 ^ _finishStrength.GetHashCode();
                 hash = hash * 397 ^ _transmission.GetHashCode();
                 hash = hash * 397 ^ _ior.GetHashCode();
                 return hash;

@@ -107,12 +107,15 @@ against photos of the real product, never against another render.
 Glass uses `transmission` 1 and `ior` 1.52, not opacity, so it keeps its reflections. Transmission
 costs an extra render pass of the opaque scene.
 
-**Procedural finish** (`applyFinish` in `batch/materials.ts`): octaves of 2D value noise stretched
-along the grain, from the UVs in mm, scale roughness and (by half) brightness. Brushed fibres are
-8-50 mm long and 0.15-1.2 mm wide, matched to a photo of brushed aluminium; 1D noise across the grain
-made every streak run the full length of the part. Each octave fades out as a pixel grows to its
-width, or it shimmers. Keep the amplitudes low (brushed ±14% at most): anisotropy amplifies them,
-and at ±30% brushed steel read as coarse dark scratches. Shader patches chain through `addShaderPatch`, which extends `customProgramCacheKey`:
+**Procedural finish** (`batch/finish.ts`), from the UVs in mm, in roughness, brightness (by half)
+and the normal. Fibres are hard-edged across the grain, 2-40 mm long, each its own depth (most faint, a few
+deep) and tapered at both ends; one depth per row read as a single streak the height of the part; the normal tilts across the grain by the
+fibre depth, so single fibres glint. Brushed bands (brushing passes, 1.5-6 mm wide) carry the look
+at wall distance. Past pixel size a fibre layer switches to coarser cells standing for the rows they
+cover, so distance keeps the texture without shimmer. Fading octaves out instead, as the first
+version did, left only the widest, softest one at wall distance: soft full-height bands, nothing
+like the photos. Tuned by eye against photos of brushed stainless at 120 mm, 350 mm and 0.9 m;
+`finishStrength` scales the whole finish (0 off). Shader patches chain through `addShaderPatch`, which extends `customProgramCacheKey`:
 three keys programs on it, and it defaults to the `onBeforeCompile` source, which a chain doesn't
 change. Galvanised spangle, wood, concrete and patina need real scans: CC0 sets (ambientCG,
 Poly Haven) shipped as plugin assets.
