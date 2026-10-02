@@ -57,11 +57,20 @@ export function createRenderPipeline(
 	height: number,
 	options: RenderPipelineOptions
 ): RenderPipeline {
-	// Only the first target needs samples: RenderPass draws into it, every later pass is a
+	// Only the scene target needs samples: RenderPass draws into it, every later pass is a
 	// full-screen quad. EffectComposer clones the second from the first, so reset it.
 	const sceneTarget = new THREE.WebGLRenderTarget(width, height, { type: THREE.HalfFloatType });
 	const composer = new EffectComposer(renderer, sceneTarget);
 	composer.renderTarget2.samples = 0;
+
+	// RenderPass draws into `readBuffer`, and the composer's buffer swaps carry over between
+	// frames. With an odd number of swapping passes the scene would land in the unsampled target
+	// every other frame, so point `readBuffer` at the scene target before each frame.
+	const renderFrame = (deltaTime: number) => {
+		composer.readBuffer = sceneTarget;
+		composer.writeBuffer = composer.renderTarget2;
+		composer.render(deltaTime);
+	};
 
 	const renderPass = new RenderPass(scene, camera);
 	composer.addPass(renderPass);
@@ -110,7 +119,7 @@ export function createRenderPipeline(
 	composer.setSize(width, height);
 
 	return {
-		render: (deltaTime) => composer.render(deltaTime),
+		render: renderFrame,
 		// composer.setSize only — calling individual pass.setSize would reset AO/AA targets back to
 		// logical CSS size, undoing the pixel-ratio scaling.
 		setSize: (w, h, pixelRatio) => {

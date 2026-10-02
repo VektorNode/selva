@@ -173,3 +173,44 @@ describe('render pipeline sizing (issues 1/7)', () => {
 		expect(gtaoPass.height).toBe(300);
 	});
 });
+
+describe('render pipeline MSAA target', () => {
+	it('draws the scene into the multisampled target on every frame, whatever the swap count', async () => {
+		const { RenderPass } = await import('three/addons/postprocessing/RenderPass.js');
+		const { GTAOPass } = await import('three/addons/postprocessing/GTAOPass.js');
+		const { SMAAPass } = await import('three/addons/postprocessing/SMAAPass.js');
+		const { OutputPass } = await import('three/addons/postprocessing/OutputPass.js');
+		const { EdgeDetectionPass } = await import('../edge-detection-pass');
+
+		const sceneSamples: number[] = [];
+		const spies = [
+			vi
+				.spyOn(RenderPass.prototype, 'render')
+				.mockImplementation((_r, _w, readBuffer: THREE.WebGLRenderTarget) => {
+					sceneSamples.push(readBuffer.samples);
+				}),
+			...[GTAOPass, SMAAPass, OutputPass, EdgeDetectionPass].map((Pass) =>
+				vi.spyOn(Pass.prototype, 'render').mockImplementation(() => {})
+			)
+		];
+
+		const renderer = {
+			...stubRenderer(),
+			getRenderTarget: () => null,
+			setRenderTarget: () => {}
+		} as unknown as THREE.WebGLRenderer;
+		// AO on, edges off: three swapping passes, the odd count that used to alternate.
+		const pipeline = createRenderPipeline(
+			renderer,
+			new THREE.Scene(),
+			new THREE.PerspectiveCamera(20, 1, 0.1, 100),
+			800,
+			600,
+			{ toneMapping: THREE.NeutralToneMapping, toneMappingExposure: 1 }
+		);
+		for (let frame = 0; frame < 4; frame++) pipeline.render(0.016);
+
+		expect(sceneSamples).toEqual([4, 4, 4, 4]);
+		spies.forEach((spy) => spy.mockRestore());
+	});
+});

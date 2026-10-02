@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 import { EDGE_USERDATA_KIND } from '../edges/options';
 import { createNearPlaneFitter } from '../near-plane';
@@ -122,6 +125,20 @@ describe('createNearPlaneFitter', () => {
 		}));
 		scene.add(merged);
 		const camera = cameraAt(-45); // looks down -Z: 'ahead' is 4 away, the rest behind
+
+		createNearPlaneFitter({ camera, scene }).update();
+
+		expect(camera.near).toBeGreaterThan(1.5);
+		expect(camera.near).toBeLessThanOrEqual(2);
+	});
+
+	it('measures a Line2 curve by its points, not its template quad', () => {
+		// A curve 4 ahead of the camera, its object origin far behind it.
+		const geometry = new LineGeometry();
+		geometry.setPositions([-1, 0, -50, 1, 0, -50]);
+		const scene = new THREE.Scene();
+		scene.add(new Line2(geometry, new LineMaterial()));
+		const camera = cameraAt(-46);
 
 		createNearPlaneFitter({ camera, scene }).update();
 

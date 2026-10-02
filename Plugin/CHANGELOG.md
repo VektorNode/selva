@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Hidden tabs** (schema 2.15.0)
+
+- Tabs take an optional `visible` flag, toggled with the eye button on a tab in the builder. A hidden tab never shows in the web UI; its inputs still solve with their current values.
+- A tab whose groups are all hidden (by `visible: false` or visibility conditions) is hidden too, and a side panel with no visible tabs collapses away. Saved schemas upgrade automatically; absent means visible.
+- Update Selva Cloud before installing this plugin on a Rhino.Compute server: an older Selva rejects 2.15 schemas.
+
 **Material Preset component** (`Selva > Display`)
 
 - Outputs a ready material for a real finish: stainless steel brushed, aluminium mill finish, galvanised steel, weathered titanium zinc, copper, coil-coated (RAL), wood, concrete, glass, brass, titanium. Metal and concrete base colours are measured values from physicallybased.info. Wire it into a Display, or into Three Material's `Base` to override parts of it.
@@ -32,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Changing a Value List from the web UI no longer solves the definition twice.
+- Upgrading an obsolete component keeps values internalized in its colour, file and other non-primitive inputs. They were dropped, so an upgraded Three Material with a set colour turned white.
 - Web Display's grain UVs (anisotropic materials) no longer tilt on coarse flat parts or squeeze texture on faces oblique to the grain, follow each leg of a mitred corner piece instead of running vertical, and are now in millimetres whatever the model unit.
 
 ### Added

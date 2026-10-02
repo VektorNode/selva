@@ -336,7 +336,11 @@ function createNearestDepthQuery() {
 function isPlainTriangleMesh(object: THREE.Object3D): boolean {
 	const mesh = object as Partial<THREE.Mesh & THREE.InstancedMesh & THREE.SkinnedMesh>;
 	if (!mesh.isMesh || mesh.isInstancedMesh || mesh.isSkinnedMesh) return false;
-	return Object.keys(mesh.geometry!.morphAttributes).length === 0;
+	const geometry = mesh.geometry as THREE.BufferGeometry & { isInstancedBufferGeometry?: boolean };
+	// Line2's `position` is a template quad; its points live in instance attributes, which only
+	// the geometry's own computeBoundingBox reads.
+	if (geometry.isInstancedBufferGeometry) return false;
+	return Object.keys(geometry.morphAttributes).length === 0;
 }
 
 function versionOf(attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): number {
