@@ -1,5 +1,9 @@
 # @selvajs/cli
 
+## 4.19.0
+
+No changes in this release.
+
 ## 4.18.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # Schema Changelog
 
+## 5.2.0
+
+### Minor Changes
+
+- 78727bf: Tabs take an optional `visible` flag (schema 2.15.0); `visible: false` hides the tab. A tab whose groups are all hidden is hidden too, and a side panel with no visible tabs collapses away.
+
 ## 5.1.1
 
 ### Patch Changes
