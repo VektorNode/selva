@@ -19,16 +19,28 @@ export interface SerializableMaterial {
 	normalMap?: string;
 	/** Wins over the look's `envMapIntensity` (except in looks that override materials). */
 	envMapIntensity?: number;
-	/** Omitted: metallic materials get a satin coat, others none. */
+	/** Omitted: no coat. */
 	clearcoat?: number;
 	clearcoatRoughness?: number;
 	/**
 	 * Stretches highlights along texture U, the grain of brushed or rolled sheet. Ignored when the
-	 * batch carries no UVs: three builds the tangent from UV derivatives.
+	 * batch carries no UVs: the tangent is built from them.
 	 */
 	anisotropy?: number;
 	/** Radians, counter-clockwise from texture U. */
 	anisotropyRotation?: number;
+	/**
+	 * Millimetres one repeat of every map covers across U; V follows each image's aspect. Set only
+	 * when the writer sent UVs in mm. Omitted: maps stretch once over the UVs.
+	 */
+	mapSize?: number;
+	/** Procedural scratch fibres along the grain, from UVs in mm. */
+	finish?: 'brushed' | 'rolled';
+	/** Scales the finish's streaks; 0 draws none. Omitted: 1. */
+	finishStrength?: number;
+	/** Light passing through (glass); unlike `opacity` it keeps reflections. */
+	transmission?: number;
+	ior?: number;
 }
 
 /**

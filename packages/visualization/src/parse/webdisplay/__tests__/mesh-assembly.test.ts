@@ -5,7 +5,7 @@ import { buildMeshBatch } from '@tests/helpers/mesh-batch-builder';
 import { parseMeshBatchObject } from '../batch-parser';
 import { parseBinaryMeshBatchRaw } from '../binary-parser';
 import { splitGroupByLayer } from '../batch/merge';
-import { assembleGeometries, meshAssemblyWorkerSource } from '../mesh-assembly';
+import { assembleGeometries, finishGeometry, meshAssemblyWorkerSource } from '../mesh-assembly';
 
 import type { AssemblyInput, AssemblyJob } from '../mesh-assembly';
 import type { DisplayBatch } from '../types';
@@ -45,7 +45,13 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 
 		const syncMeshes = await parseMeshBatchObject(built.batch, { mergeByMaterial: merge });
 
-		const assembled = assembleGeometries(assemblyInputFor(built.batch, merge));
+		const input = assemblyInputFor(built.batch, merge);
+		const assembled = assembleGeometries(input).map((g, i) =>
+			finishGeometry(
+				g,
+				input.jobs[i]!.windows.map((w) => w.indexCount)
+			)
+		);
 		expect(assembled).toHaveLength(syncMeshes.length);
 
 		for (let i = 0; i < assembled.length; i++) {
@@ -77,8 +83,10 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 		const assembled = assembleGeometries(assemblyInputFor(built.batch, true));
 
 		expect(assembled).toHaveLength(syncMeshes.length);
+		// The sync path also splits creases, appending vertices after the assembled ones.
+		const syncPositions = syncMeshes[0]!.geometry.getAttribute('position').array as Float32Array;
 		expect(Array.from(assembled[0]!.positions)).toEqual(
-			Array.from(syncMeshes[0]!.geometry.getAttribute('position').array as Float32Array)
+			Array.from(syncPositions.subarray(0, assembled[0]!.positions.length))
 		);
 	});
 
@@ -113,6 +121,9 @@ describe('meshAssemblyWorkerSource', () => {
 		expect(reply.id).toBe(3);
 		expect(reply.error).toBeUndefined();
 		expect(reply.geometries!.length).toBeGreaterThan(0);
+		for (const geometry of reply.geometries as { closed?: unknown }[]) {
+			expect(geometry.closed).toBeTypeOf('boolean');
+		}
 	});
 
 	it('reports errors instead of throwing', () => {

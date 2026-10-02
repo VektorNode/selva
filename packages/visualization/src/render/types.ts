@@ -7,8 +7,8 @@ export type CameraConfig = {
 	far?: number;
 	target?: THREE.Vector3;
 	/**
-	 * Refit the near plane to the camera↔content gap every frame (default true) — recovers
-	 * depth-buffer precision when zoomed out, preventing distant z-fighting. `near` is only ever
+	 * Refit the near plane to the nearest content in view every frame (default true) — recovers
+	 * depth-buffer precision, preventing z-fighting between close surfaces. `near` is only ever
 	 * raised, never lowered below the configured value.
 	 */
 	dynamicNear?: boolean;

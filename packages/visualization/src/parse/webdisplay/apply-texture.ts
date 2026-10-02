@@ -35,7 +35,8 @@ export type TextureSlot = 'map' | 'roughnessMap' | 'normalMap';
 export function applyTexture(
 	material: THREE.MeshPhysicalMaterial,
 	url: string,
-	slot: TextureSlot
+	slot: TextureSlot,
+	mapSize?: number
 ): void {
 	// No DOM (SSR / tests): textures can't decode without an image element; skip quietly.
 	if (typeof document === 'undefined') {
@@ -49,6 +50,14 @@ export function applyTexture(
 			// are data and must stay linear.
 			texture.colorSpace = slot === 'map' ? THREE.SRGBColorSpace : THREE.NoColorSpace;
 			texture.anisotropy = maxAnisotropy;
+			if (mapSize) {
+				// UVs are in mm: one repeat per mapSize across, the image's aspect down.
+				const image = texture.image as { width?: number; height?: number } | undefined;
+				const aspect = image?.width && image.height ? image.height / image.width : 1;
+				texture.wrapS = THREE.RepeatWrapping;
+				texture.wrapT = THREE.RepeatWrapping;
+				texture.repeat.set(1 / mapSize, 1 / (mapSize * aspect));
+			}
 			material[slot] = texture;
 			material.needsUpdate = true;
 		},

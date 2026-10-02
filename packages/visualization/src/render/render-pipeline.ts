@@ -9,8 +9,9 @@ import { EdgeDetectionPass, type EdgeDetectionOptions } from './edge-detection-p
 
 /**
  * Pipeline: RenderPass → GTAOPass? → EdgeDetectionPass? → SMAAPass → OutputPass. EdgeDetectionPass
- * sits before SMAA so its 1px lines get antialiased. SMAA is required because EffectComposer
- * renders offscreen, so the renderer's own MSAA does nothing here; SMAA over TAA because TAA's
+ * sits before SMAA so its 1px lines get antialiased. EffectComposer renders offscreen, where the
+ * canvas's own MSAA never applies, so the scene target carries its own (see {@link msaaSamplesFor});
+ * SMAA then smooths what MSAA leaves, the edge pass's lines included. SMAA over TAA because TAA's
  * temporal jitter smears during OrbitControls drags. OutputPass applies tone mapping and color
  * space last, so SMAA operates on the pre-tonemapped image.
  */
@@ -33,10 +34,19 @@ export interface RenderPipelineOptions {
 	ambientOcclusion?: boolean;
 	/** AO strength 0–1. Default 1. */
 	aoIntensity?: number;
-	/** DPR cap for the composer's AO buffers; clamps `setSize`'s pixelRatio. Default 1. */
+	/** DPR cap for the AO buffers only; the scene itself renders at the full pixel ratio. Default 1. */
 	aoPixelRatio?: number;
 	/** Start with the screen-space edge pass enabled; pass an object to tune it. */
 	edgeDetection?: boolean | EdgeDetectionOptions;
+}
+
+/**
+ * Without MSAA a sub-pixel feature (a sheet's bright hem edge) comes out as a dashed line, which
+ * SMAA can't rebuild. At 2× DPR each CSS pixel already holds four samples, and 4× MSAA on top
+ * would cost ~250 MB on a 4K target for no visible gain.
+ */
+function msaaSamplesFor(pixelRatio: number): number {
+	return pixelRatio >= 2 ? 0 : 4;
 }
 
 export function createRenderPipeline(
@@ -47,7 +57,20 @@ export function createRenderPipeline(
 	height: number,
 	options: RenderPipelineOptions
 ): RenderPipeline {
-	const composer = new EffectComposer(renderer);
+	// Only the scene target needs samples: RenderPass draws into it, every later pass is a
+	// full-screen quad. EffectComposer clones the second from the first, so reset it.
+	const sceneTarget = new THREE.WebGLRenderTarget(width, height, { type: THREE.HalfFloatType });
+	const composer = new EffectComposer(renderer, sceneTarget);
+	composer.renderTarget2.samples = 0;
+
+	// RenderPass draws into `readBuffer`, and the composer's buffer swaps carry over between
+	// frames. With an odd number of swapping passes the scene would land in the unsampled target
+	// every other frame, so point `readBuffer` at the scene target before each frame.
+	const renderFrame = (deltaTime: number) => {
+		composer.readBuffer = sceneTarget;
+		composer.writeBuffer = composer.renderTarget2;
+		composer.render(deltaTime);
+	};
 
 	const renderPass = new RenderPass(scene, camera);
 	composer.addPass(renderPass);
@@ -75,14 +98,32 @@ export function createRenderPipeline(
 	renderer.toneMappingExposure = options.toneMappingExposure;
 
 	const aoPixelRatioCap = options.aoPixelRatio ?? 1;
+	// The composer sizes every pass at the scene's resolution; AO alone is cheap enough to run lower,
+	// and its blend samples by UV so it upscales onto the full-resolution frame.
+	let aoScale = 1;
+	if (gtaoPass) {
+		const setAoSize = gtaoPass.setSize.bind(gtaoPass);
+		gtaoPass.setSize = (w: number, h: number) =>
+			setAoSize(Math.max(1, Math.round(w * aoScale)), Math.max(1, Math.round(h * aoScale)));
+	}
+	const applyPixelRatio = (pixelRatio: number) => {
+		aoScale = Math.min(pixelRatio, aoPixelRatioCap) / pixelRatio;
+		const samples = msaaSamplesFor(pixelRatio);
+		if (sceneTarget.samples !== samples) {
+			sceneTarget.samples = samples;
+			sceneTarget.dispose(); // three reallocates on next use; samples alone doesn't trigger it
+		}
+		composer.setPixelRatio(pixelRatio);
+	};
+	applyPixelRatio(renderer.getPixelRatio());
 	composer.setSize(width, height);
 
 	return {
-		render: (deltaTime) => composer.render(deltaTime),
+		render: renderFrame,
 		// composer.setSize only — calling individual pass.setSize would reset AO/AA targets back to
 		// logical CSS size, undoing the pixel-ratio scaling.
 		setSize: (w, h, pixelRatio) => {
-			composer.setPixelRatio(Math.min(pixelRatio, aoPixelRatioCap));
+			applyPixelRatio(pixelRatio);
 			composer.setSize(w, h);
 		},
 		setCamera: (cam) => {

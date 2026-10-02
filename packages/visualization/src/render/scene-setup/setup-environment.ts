@@ -4,6 +4,7 @@ import { getLogger } from '../../shared/index.js';
 import { HDRLoader } from 'three/addons/loaders/HDRLoader.js';
 
 import { environmentRotationFor } from '../up-axis.js';
+import { createReflectionEnvironment } from './reflection-environment.js';
 import { defaultUp, type ResolvedOptions } from './defaults.js';
 
 export function setupEnvironment(
@@ -13,6 +14,11 @@ export function setupEnvironment(
 	isDisposed: () => boolean
 ) {
 	if (config.environment.enableEnvironmentLighting) {
+		createReflectionEnvironment(
+			scene,
+			renderer,
+			environmentRotationFor(config.environment.sceneUp ?? defaultUp)
+		);
 		new HDRLoader().load(
 			config.environment.hdrPath || '/baseHDR.hdr',
 			function (envMap) {

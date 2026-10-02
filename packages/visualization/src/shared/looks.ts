@@ -92,7 +92,8 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			metalness: 0,
 			roughness: 0.9,
 			opacity: 0.28,
-			depthWrite: false
+			depthWrite: false,
+			side: THREE.DoubleSide
 		}
 	},
 	// The architectural line drawing: feature edges over flat white faces. The faces are the whole
@@ -151,7 +152,8 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			color: 0x2b3138,
 			metalness: 0,
 			roughness: 1,
-			wireframe: true
+			wireframe: true,
+			side: THREE.DoubleSide
 		}
 	}
 };
@@ -162,6 +164,16 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
  * `materialOverride`: those restyle every mesh alike, so the look's value wins there.
  */
 export const OWN_ENV_MAP_INTENSITY = 'selvaEnvMapIntensity';
+
+/**
+ * A look dims `envMapIntensity` to turn down fill, but three scales a material's diffuse and
+ * specular IBL together. A metal has no diffuse, so the same dimming would only take away its
+ * reflection, which is all a metal shows. Blending toward 1 by metalness keeps a dielectric's fill
+ * on the look and a metal's reflection the same in every look.
+ */
+export function lookEnvMapIntensity(lookValue: number, metalness: number): number {
+	return lookValue + (1 - lookValue) * Math.min(1, Math.max(0, metalness));
+}
 
 /** Baked at parse time (not toggleable at runtime). */
 export function materialAppearanceForLook(look: Look): MaterialAppearanceOptions {

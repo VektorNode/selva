@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 
@@ -226,24 +227,37 @@ public class GH_ComponentUpgradeHelper
         }
         else
         {
-            // Fallback for GH_PersistentParam<T> types not special-cased above (geometry,
-            // brep, curve, etc). T is unknown here, so go through reflection to call
-            // GH_Structure<T>.CopyFrom instead of a generic cast.
-            var oldProp = oldParam.GetType()
-                .GetProperty("PersistentData", BindingFlags.Public | BindingFlags.Instance);
-            var newProp = newParam.GetType()
-                .GetProperty("PersistentData", BindingFlags.Public | BindingFlags.Instance);
-            if (oldProp != null && newProp != null)
+            // Fallback for GH_PersistentParam<T> types not special-cased above (colour,
+            // geometry, file path, etc). T is unknown here, so append through reflection.
+            // GH_Structure<T> has no CopyFrom; a null-conditional call to one copied nothing.
+            // An empty old input leaves the new one alone, so a default it sets survives.
+            var oldData = PersistentDataOf(oldParam) as IGH_Structure;
+            var newData = PersistentDataOf(newParam);
+            if (oldData == null || oldData.DataCount == 0 || newData == null) return;
+
+            var structureType = newData.GetType();
+            if (!structureType.IsGenericType) return;
+            var itemType = structureType.GetGenericArguments()[0];
+            var append = structureType.GetMethod("Append", [itemType, typeof(GH_Path)]);
+            if (append == null) return;
+
+            structureType.GetMethod("Clear", Type.EmptyTypes)?.Invoke(newData, null);
+            foreach (var path in oldData.Paths)
             {
-                var oldData = oldProp.GetValue(oldParam);
-                var newData = newProp.GetValue(newParam);
-                if (oldData != null && newData != null)
+                foreach (var item in oldData.get_Branch(path))
                 {
-                    newData.GetType()
-                        .GetMethod("CopyFrom", BindingFlags.Public | BindingFlags.Instance)
-                        ?.Invoke(newData, [oldData]);
+                    var goo = (item as IGH_Goo)?.Duplicate();
+                    if (goo != null && itemType.IsInstanceOfType(goo))
+                    {
+                        append.Invoke(newData, [goo, path]);
+                    }
                 }
             }
         }
     }
+
+    private static object PersistentDataOf(IGH_Param param) =>
+        param.GetType()
+            .GetProperty("PersistentData", BindingFlags.Public | BindingFlags.Instance)
+            ?.GetValue(param);
 }

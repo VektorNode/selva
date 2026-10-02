@@ -1,7 +1,7 @@
 /**
  * {@link assembleGeometries} is the hot, pure part of batch parsing: undoes the delta filter on
- * the raw wire arrays, dequantizes int16 positions to world floats, slices/rebases per-geometry
- * windows and computes vertex normals.
+ * the raw wire arrays, dequantizes int16 positions to world floats, and slices/rebases per-geometry
+ * windows. {@link finishGeometry} then adds normals and the closed-solid flag.
  * Everything it needs travels as typed arrays, so the whole stage runs in a Worker and the main
  * thread only wraps the returned buffers into `BufferGeometry` objects.
  *
@@ -11,6 +11,10 @@
  * That forces duplicating small helpers from `binary-parser.ts` (unzigzag/delta decode);
  * equivalence with the synchronous path is pinned by tests.
  */
+
+import { isClosedSolid } from './closed-solid.js';
+import { splitCreases, type CreasedGeometry } from './crease-normals.js';
+import { grainTangents } from './grain-tangents.js';
 
 export interface AssemblyWindow {
 	vertexStart: number;
@@ -48,10 +52,33 @@ export interface AssemblyInput {
 
 export interface AssembledGeometry {
 	positions: Float32Array;
-	normals: Float32Array;
 	indices: Uint32Array;
 	uvs: Float32Array | null;
 	colors: Uint8Array | null;
+}
+
+export interface FinishedGeometry extends CreasedGeometry {
+	/** See {@link isClosedSolid}. */
+	closed: boolean;
+	/** See {@link grainTangents}. Present exactly when `uvs` is. */
+	tangents: Float32Array | null;
+}
+
+/**
+ * The shared tail of both parse paths, so the worker and the main-thread fallback can't drift.
+ * Closedness is judged before the crease split, which only appends copies of existing positions.
+ * Tangents come after it, so each split copy takes only its own side's faces.
+ */
+export function finishGeometry(
+	geometry: AssembledGeometry,
+	memberIndexCounts: number[]
+): FinishedGeometry {
+	const closed = isClosedSolid(geometry.positions, geometry.indices, memberIndexCounts);
+	const creased = splitCreases(geometry.positions, geometry.indices, geometry.uvs, geometry.colors);
+	const tangents = creased.uvs
+		? grainTangents(creased.positions, creased.normals, creased.indices, creased.uvs)
+		: null;
+	return { ...creased, closed, tangents };
 }
 
 export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
@@ -236,49 +263,8 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 			indexCursor += window.indexCount;
 		}
 
-		// Vertex normals, mirroring THREE.BufferGeometry.computeVertexNormals: accumulate the
-		// non-normalized (area-weighted) face normal cross((c-b),(a-b)) onto each corner, then
-		// normalize per vertex.
-		const normals = new Float32Array(vertexTotal * 3);
-		for (let i = 0; i < outIndices.length; i += 3) {
-			const a = outIndices[i] * 3;
-			const b = outIndices[i + 1] * 3;
-			const c = outIndices[i + 2] * 3;
-
-			const cbx = positions[c] - positions[b];
-			const cby = positions[c + 1] - positions[b + 1];
-			const cbz = positions[c + 2] - positions[b + 2];
-			const abx = positions[a] - positions[b];
-			const aby = positions[a + 1] - positions[b + 1];
-			const abz = positions[a + 2] - positions[b + 2];
-
-			const nx = cby * abz - cbz * aby;
-			const ny = cbz * abx - cbx * abz;
-			const nz = cbx * aby - cby * abx;
-
-			normals[a] += nx;
-			normals[a + 1] += ny;
-			normals[a + 2] += nz;
-			normals[b] += nx;
-			normals[b + 1] += ny;
-			normals[b + 2] += nz;
-			normals[c] += nx;
-			normals[c + 1] += ny;
-			normals[c + 2] += nz;
-		}
-		for (let i = 0; i < normals.length; i += 3) {
-			const x = normals[i];
-			const y = normals[i + 1];
-			const z = normals[i + 2];
-			const length = Math.sqrt(x * x + y * y + z * z) || 1;
-			normals[i] = x / length;
-			normals[i + 1] = y / length;
-			normals[i + 2] = z / length;
-		}
-
 		results.push({
 			positions,
-			normals,
 			indices: outIndices,
 			uvs: outUvs,
 			colors: outColors
@@ -289,21 +275,33 @@ export function assembleGeometries(input: AssemblyInput): AssembledGeometry[] {
 }
 
 /**
- * Worker script running {@link assembleGeometries} off the main thread. Protocol: receives
- * `{id, input}`, replies `{id, geometries}` with every output buffer transferred, or
- * `{id, error}`. Pinned by a test that evals this source against a stub `self`.
+ * Worker script running {@link assembleGeometries} and {@link finishGeometry} off the main thread.
+ * Protocol: receives `{id, input}`, replies `{id, geometries}` (each a {@link FinishedGeometry})
+ * with every output buffer transferred, or `{id, error}`. Pinned by a test that evals this source
+ * against a stub `self`.
  */
 export function meshAssemblyWorkerSource(): string {
 	return [
 		`const assemble = ${assembleGeometries.toString()};`,
+		`const isClosedSolid = ${isClosedSolid.toString()};`,
+		`const splitCreases = ${splitCreases.toString()};`,
+		`const grainTangents = ${grainTangents.toString()};`,
 		`self.onmessage = (event) => {`,
 		`  const { id, input } = event.data;`,
 		`  try {`,
-		`    const geometries = assemble(input);`,
+		// Mirrors finishGeometry, which can't be stringified: it captures the functions above.
+		`    const geometries = assemble(input).map((g, i) => {`,
+		`      const counts = input.jobs[i].windows.map((w) => w.indexCount);`,
+		`      const closed = isClosedSolid(g.positions, g.indices, counts);`,
+		`      const c = splitCreases(g.positions, g.indices, g.uvs, g.colors);`,
+		`      const tangents = c.uvs ? grainTangents(c.positions, c.normals, c.indices, c.uvs) : null;`,
+		`      return { ...c, closed, tangents };`,
+		`    });`,
 		`    const transfer = [];`,
 		`    for (const g of geometries) {`,
 		`      transfer.push(g.positions.buffer, g.normals.buffer, g.indices.buffer);`,
 		`      if (g.uvs) transfer.push(g.uvs.buffer);`,
+		`      if (g.tangents) transfer.push(g.tangents.buffer);`,
 		`      if (g.colors) transfer.push(g.colors.buffer);`,
 		`    }`,
 		`    self.postMessage({ id, geometries }, transfer);`,

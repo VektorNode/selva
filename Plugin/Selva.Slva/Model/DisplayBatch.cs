@@ -126,6 +126,21 @@ public class SerializableMaterial
     [JsonProperty("anisotropyRotation", NullValueHandling = NullValueHandling.Ignore)]
     public double? AnisotropyRotation { get; set; }
 
+    [JsonProperty("mapSize", NullValueHandling = NullValueHandling.Ignore)]
+    public double? MapSize { get; set; }
+
+    [JsonProperty("finish", NullValueHandling = NullValueHandling.Ignore)]
+    public string Finish { get; set; }
+
+    [JsonProperty("finishStrength", NullValueHandling = NullValueHandling.Ignore)]
+    public double? FinishStrength { get; set; }
+
+    [JsonProperty("transmission", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Transmission { get; set; }
+
+    [JsonProperty("ior", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Ior { get; set; }
+
     public static SerializableMaterial FromThreeMaterial(ThreeMaterial material)
     {
         return new SerializableMaterial
@@ -142,7 +157,12 @@ public class SerializableMaterial
             Clearcoat = material.Clearcoat,
             ClearcoatRoughness = material.ClearcoatRoughness,
             Anisotropy = material.Anisotropy,
-            AnisotropyRotation = material.AnisotropyRotation
+            AnisotropyRotation = material.AnisotropyRotation,
+            MapSize = material.MapSize,
+            Finish = NullIfEmpty(material.Finish),
+            FinishStrength = material.FinishStrength,
+            Transmission = material.Transmission,
+            Ior = material.Ior
         };
     }
 
@@ -189,7 +209,12 @@ public class SerializableMaterial
             Clearcoat = Clearcoat,
             ClearcoatRoughness = ClearcoatRoughness,
             Anisotropy = Anisotropy,
-            AnisotropyRotation = AnisotropyRotation
+            AnisotropyRotation = AnisotropyRotation,
+            MapSize = MapSize,
+            Finish = Finish,
+            FinishStrength = FinishStrength,
+            Transmission = Transmission,
+            Ior = Ior
         };
     }
 }

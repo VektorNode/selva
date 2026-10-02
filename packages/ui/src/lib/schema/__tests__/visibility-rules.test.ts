@@ -5,9 +5,15 @@ import {
 	evaluateGroupVisibility,
 	buildVisibilityMap,
 	hasVisibleItems,
+	isTabVisible,
 	itemKey
 } from '../visibility-rules';
-import type { GroupVisibilityCondition, LayoutItem, VisibilityRule } from '@selvajs/schemas';
+import type {
+	GroupVisibilityCondition,
+	LayoutItem,
+	TabConfig,
+	VisibilityRule
+} from '@selvajs/schemas';
 
 // These tests pin the non-obvious branches: operator edge cases that are easy to
 // break in a refactor, and the action/short-circuit precedence in evaluateVisibility.
@@ -207,5 +213,33 @@ describe('hasVisibleItems', () => {
 		expect(hasVisibleItems(visible, {})).toBe(true);
 		expect(hasVisibleItems([...separators, ...visible], {})).toBe(true);
 		expect(hasVisibleItems(separators, {})).toBe(false);
+	});
+});
+
+describe('isTabVisible', () => {
+	const shownItem = [{ type: 'output', paramId: 'o' }] as unknown as LayoutItem[];
+	const hiddenItem = [{ type: 'input', paramId: 'i', visible: false }] as unknown as LayoutItem[];
+	const tab = (partial: Partial<TabConfig>): TabConfig =>
+		({ id: 't', label: 'T', groups: [], ...partial }) as TabConfig;
+
+	it('visible: false hides a tab that has visible items', () => {
+		const groups = [{ id: 'g', label: 'G', items: shownItem }];
+		expect(isTabVisible(tab({ groups }), {})).toBe(true);
+		expect(isTabVisible(tab({ groups, visible: false }), {})).toBe(false);
+	});
+
+	it('hides a tab whose groups are all hidden or empty', () => {
+		expect(isTabVisible(tab({}), {})).toBe(false);
+		expect(
+			isTabVisible(
+				tab({
+					groups: [
+						{ id: 'a', label: 'A', items: hiddenItem },
+						{ id: 'b', label: 'B', items: [] }
+					]
+				}),
+				{}
+			)
+		).toBe(false);
 	});
 });

@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import {
 	LOOK_PRESETS,
 	OWN_ENV_MAP_INTENSITY,
+	lookEnvMapIntensity,
 	materialAppearanceForLook
 } from '../../shared/index.js';
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
+import { applyReflectionEnvironment } from './reflection-environment.js';
 import type {
 	Look,
 	LookMaterialOverride,
@@ -28,6 +30,7 @@ type MaterialBaseline = {
 	transparent: boolean;
 	depthWrite: boolean;
 	wireframe: boolean;
+	side: THREE.Side;
 };
 
 const BASELINE_KEY = '__selvaLookBaseline';
@@ -48,6 +51,7 @@ function applyBaseline(target: OverridableMaterial, baseline: MaterialBaseline):
 	target.transparent = baseline.transparent;
 	target.depthWrite = baseline.depthWrite;
 	if (target.wireframe !== undefined) target.wireframe = baseline.wireframe;
+	target.side = baseline.side;
 }
 
 /** Restores the parsed values and forgets the baseline. No-op when nothing was overridden. */
@@ -91,7 +95,8 @@ export function applyMaterialOverride(
 			opacity: target.opacity,
 			transparent: target.transparent,
 			depthWrite: target.depthWrite,
-			wireframe: target.wireframe ?? false
+			wireframe: target.wireframe ?? false,
+			side: target.side
 		};
 	} else {
 		// Baseline captured by an earlier look — reset onto it so this override starts clean.
@@ -113,15 +118,19 @@ export function applyMaterialOverride(
 	if (override.wireframe !== undefined && target.wireframe !== undefined) {
 		target.wireframe = override.wireframe;
 	}
+	if (override.side !== undefined) target.side = override.side;
 	target.needsUpdate = true;
 }
 
 /** A material's own value (see `OWN_ENV_MAP_INTENSITY`) unless the look restyles every material. */
 export function envMapIntensityForLook(material: THREE.Material, preset: LookPreset): number {
-	const own = preset.materialOverride
-		? undefined
-		: (material.userData[OWN_ENV_MAP_INTENSITY] as number | undefined);
-	return own ?? preset.envMapIntensity;
+	if (preset.materialOverride) return preset.envMapIntensity;
+	const own = material.userData[OWN_ENV_MAP_INTENSITY] as number | undefined;
+	if (own != null) return own;
+	// Runs before the previous look's override is lifted, so read the parsed metalness.
+	const target = material as OverridableMaterial;
+	const metalness = target[BASELINE_KEY]?.metalness ?? target.metalness ?? 0;
+	return lookEnvMapIntensity(preset.envMapIntensity, metalness);
 }
 
 /** The runtime lighting/material dials — everything a host can retune without rebuilding the scene. */
@@ -249,6 +258,8 @@ export function createAppearanceController(params: {
 				applyMaterialOverride(material as THREE.Material, preset.materialOverride);
 			}
 		});
+		// An override can zero metalness, and lifting it restores it.
+		applyReflectionEnvironment(scene, scene);
 		requestRender();
 	};
 

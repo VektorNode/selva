@@ -9,17 +9,18 @@ import {
 	getAssemblyWorker,
 	requestAssembly
 } from './batch/assembly-worker.js';
-import { createMaterial } from './batch/materials.js';
+import { createMaterialPicker } from './batch/materials.js';
 import {
 	createIndividualMeshes,
 	createMergedMesh,
 	finalizeMergedMesh,
 	finalizeSingleMesh,
+	geometryFrom,
 	splitGroupByLayer
 } from './batch/merge.js';
 import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
 
-import type { AssembledGeometry, AssemblyJob, AssemblyWindow } from './mesh-assembly.js';
+import type { AssemblyJob, AssemblyWindow, FinishedGeometry } from './mesh-assembly.js';
 import type { ParsedBinaryMeshBatch } from './binary-parser.js';
 import type {
 	DisplayBatch,
@@ -272,13 +273,11 @@ function buildMeshesFromParsed(
 	const meshCreateStart = performance.now();
 	// Vertex colors are batch-wide when present — meshes without real colors carry a white fill,
 	// which multiplies to identity — so the material enables vertexColors unconditionally.
-	const materials = materialsSrc.map((m) =>
-		createMaterial(m, {
-			vertexColors: parsed.colors != null,
-			hasUvs: parsed.uvs != null,
-			appearance: materialAppearance
-		})
-	);
+	const pickMaterial = createMaterialPicker(materialsSrc, {
+		vertexColors: parsed.colors != null,
+		hasUvs: parsed.uvs != null,
+		appearance: materialAppearance
+	});
 
 	const meshes: THREE.Mesh[] = [];
 
@@ -291,7 +290,7 @@ function buildMeshesFromParsed(
 				group,
 				worldVertices,
 				parsed.indices,
-				materials,
+				pickMaterial,
 				parsed.uvs,
 				parsed.colors
 			);
@@ -301,7 +300,7 @@ function buildMeshesFromParsed(
 				group,
 				worldVertices,
 				parsed.indices,
-				materials,
+				pickMaterial,
 				parsed.uvs,
 				parsed.colors
 			);
@@ -398,7 +397,7 @@ async function tryBuildViaWorker(
 	if (raw.uvs) transfer.push(raw.uvs.buffer);
 	if (raw.colors) transfer.push(raw.colors.buffer);
 
-	let assembled: AssembledGeometry[];
+	let assembled: FinishedGeometry[];
 	try {
 		assembled = await requestAssembly(
 			worker,
@@ -423,32 +422,23 @@ async function tryBuildViaWorker(
 	}
 	if (assembled.length !== jobs.length) return null; // protocol mismatch → fall back to sync path
 
-	const materials = materialsSrc.map((m) =>
-		createMaterial(m, {
-			vertexColors: raw.colors != null,
-			hasUvs: raw.uvs != null,
-			appearance: opts.material
-		})
-	);
+	const pickMaterial = createMaterialPicker(materialsSrc, {
+		vertexColors: raw.colors != null,
+		hasUvs: raw.uvs != null,
+		appearance: opts.material
+	});
 
 	const meshes: THREE.Mesh[] = [];
 	for (let i = 0; i < assembled.length; i++) {
 		const result = assembled[i]!;
 		const ref = jobRefs[i]!;
 
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute('position', new THREE.BufferAttribute(result.positions, 3));
-		geometry.setAttribute('normal', new THREE.BufferAttribute(result.normals, 3));
-		geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
-		if (result.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(result.uvs, 2));
-		if (result.colors) {
-			geometry.setAttribute('color', new THREE.BufferAttribute(result.colors, 3, true));
-		}
-
+		const geometry = geometryFrom(result);
+		const material = pickMaterial(ref.group.materialId, result.closed);
 		const mesh =
 			ref.kind === 'merged'
-				? finalizeMergedMesh(geometry, ref.group, materials)
-				: finalizeSingleMesh(geometry, ref.meshMeta!, ref.group, materials);
+				? finalizeMergedMesh(geometry, ref.group, material)
+				: finalizeSingleMesh(geometry, ref.meshMeta!, material);
 		meshes.push(mesh);
 	}
 

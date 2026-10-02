@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { TabConfig } from '@selvajs/schemas';
-	import { GripVertical, Pencil, PanelLeft, PanelRight, ImageIcon } from '@lucide/svelte';
+	import {
+		GripVertical,
+		Pencil,
+		PanelLeft,
+		PanelRight,
+		ImageIcon,
+		Eye,
+		EyeOff
+	} from '@lucide/svelte';
 	import Icon from '@iconify/svelte';
 	import {
 		dragHandle,
@@ -253,7 +261,8 @@
 						{editingTabId === tabItem.id ? 'select-text' : 'select-none'}
 						{activeTabId === tabItem.id
 						? 'text-foreground'
-						: 'text-muted-foreground hover:text-muted-foreground/80'}"
+						: 'text-muted-foreground hover:text-muted-foreground/80'}
+						{tabItem.visible === false ? 'line-through opacity-60' : ''}"
 					onclick={() => onTabChange(tabItem.id)}
 					aria-pressed={activeTabId === tabItem.id}
 					title="Switch to tab"
@@ -332,6 +341,23 @@
 							<PanelRight size={12} />
 						{:else}
 							<PanelLeft size={12} />
+						{/if}
+					</button>
+
+					<button
+						type="button"
+						class="text-muted-foreground hover:bg-accent hover:text-foreground focus:ring-ring flex h-6 w-6 items-center justify-center rounded text-xs transition-colors focus:ring-2 focus:outline-none"
+						onclick={() => {
+							tabItem.visible = tabItem.visible === false ? undefined : false;
+						}}
+						title={tabItem.visible === false ? 'Hidden — click to show' : 'Visible — click to hide'}
+						aria-label="Toggle tab visibility"
+						aria-pressed={tabItem.visible === false}
+					>
+						{#if tabItem.visible === false}
+							<EyeOff size={12} />
+						{:else}
+							<Eye size={12} />
 						{/if}
 					</button>
 

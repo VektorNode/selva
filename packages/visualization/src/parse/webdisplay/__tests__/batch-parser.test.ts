@@ -32,7 +32,7 @@ describe('parseMeshBatchObject', () => {
 			expect(meshes).toHaveLength(3);
 		});
 
-		it('preserves total vertex and triangle counts', async () => {
+		it('preserves triangle count and keeps every source vertex', async () => {
 			const { batch, rawVertices, rawFaces } = buildMeshBatch({
 				materialCount: 2,
 				meshCount: 8,
@@ -53,7 +53,8 @@ describe('parseMeshBatchObject', () => {
 				totalIndices += index!.count;
 			}
 
-			expect(totalPositions * 3).toBe(rawVertices.length);
+			// Crease splitting may append copies of existing vertices, never drop one.
+			expect(totalPositions * 3).toBeGreaterThanOrEqual(rawVertices.length);
 			expect(totalIndices).toBe(rawFaces.length);
 		});
 
@@ -263,19 +264,18 @@ describe('parseMeshBatchObject', () => {
 			expect(mat.color.b).toBeCloseTo(0, COORD_TRANSFORM_TOLERANCE);
 		});
 
-		it('gives metallic materials a satin clearcoat but leaves matte ones bare', async () => {
-			// A near-pure metal has no diffuse response, so under low IBL it needs a clearcoat to read as
-			// coated metal rather than flat card; matte/plastic materials must stay bare (no false sheen).
+		it('keeps a metal reflective under a look that dims fill', async () => {
 			const built = buildMeshBatch({ materialCount: 2, meshCount: 2, vertsPerMesh: 3 });
-			built.batch.materials[0]!.metalness = 0.98; // metal → clearcoat
-			built.batch.materials[1]!.metalness = 0.1; // matte → no clearcoat
+			built.batch.materials[0]!.metalness = 0.98;
+			built.batch.materials[1]!.metalness = 0;
 			built.batch.compressedData = encodeBatchPayload(built.rawVertices, built.rawFaces, {
 				materials: built.batch.materials,
 				groups: built.batch.groups
 			});
 
 			const meshes = await parseMeshBatchObject(built.batch, {
-				mergeByMaterial: true
+				mergeByMaterial: true,
+				material: { envMapIntensity: 0.5 }
 			});
 			const byMetalness = (m: number) =>
 				meshes
@@ -283,10 +283,9 @@ describe('parseMeshBatchObject', () => {
 					.find((mat) => Math.abs(mat.metalness - m) < 1e-3)!;
 
 			const metal = byMetalness(0.98);
-			expect(metal.clearcoat).toBeGreaterThan(0);
-			expect(metal.clearcoatRoughness).toBeGreaterThan(0);
-
-			expect(byMetalness(0.1).clearcoat).toBe(0); // three's default — untouched
+			expect(metal.envMapIntensity).toBeCloseTo(0.99);
+			expect(metal.clearcoat).toBe(0); // no automatic coat
+			expect(byMetalness(0).envMapIntensity).toBe(0.5);
 		});
 	});
 
@@ -342,10 +341,12 @@ describe('parseMeshBatchObject', () => {
 				expect(uv.count).toBe(geom.getAttribute('position').count);
 
 				// Each mesh's slice must match its global vertex range.
-				const vertexStart = built.batch.groups
+				const source = built.batch.groups
 					.flatMap((g) => g.meshes)
-					.find((m) => m.name === mesh.userData.name)!.vertexStart;
-				for (let v = 0; v < uv.count; v++) {
+					.find((m) => m.name === mesh.userData.name)!;
+				const vertexStart = source.vertexStart;
+				// Vertices past the source's own are crease-split copies appended after it.
+				for (let v = 0; v < source.vertexCount; v++) {
 					expect(uv.getX(v)).toBeCloseTo(uvs![(vertexStart + v) * 2]!, 4);
 					expect(uv.getY(v)).toBeCloseTo(uvs![(vertexStart + v) * 2 + 1]!, 4);
 				}

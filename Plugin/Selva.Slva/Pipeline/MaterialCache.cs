@@ -59,6 +59,11 @@ public class MaterialCache
         private readonly double? _clearcoatRoughness;
         private readonly double? _anisotropy;
         private readonly double? _anisotropyRotation;
+        private readonly double? _mapSize;
+        private readonly string _finish;
+        private readonly double? _finishStrength;
+        private readonly double? _transmission;
+        private readonly double? _ior;
 
         public MaterialKey(ThreeMaterial material)
         {
@@ -75,6 +80,11 @@ public class MaterialCache
             _clearcoatRoughness = Round(material.ClearcoatRoughness);
             _anisotropy = Round(material.Anisotropy);
             _anisotropyRotation = Round(material.AnisotropyRotation);
+            _mapSize = Round(material.MapSize);
+            _finish = material.Finish;
+            _finishStrength = Round(material.FinishStrength);
+            _transmission = Round(material.Transmission);
+            _ior = Round(material.Ior);
         }
 
         private static double? Round(double? value)
@@ -96,7 +106,12 @@ public class MaterialCache
                    && _clearcoat == other._clearcoat
                    && _clearcoatRoughness == other._clearcoatRoughness
                    && _anisotropy == other._anisotropy
-                   && _anisotropyRotation == other._anisotropyRotation;
+                   && _anisotropyRotation == other._anisotropyRotation
+                   && _mapSize == other._mapSize
+                   && string.Equals(_finish, other._finish, StringComparison.Ordinal)
+                   && _finishStrength == other._finishStrength
+                   && _transmission == other._transmission
+                   && _ior == other._ior;
         }
 
         public override bool Equals(object obj)
@@ -121,6 +136,11 @@ public class MaterialCache
                 hash = hash * 397 ^ _clearcoatRoughness.GetHashCode();
                 hash = hash * 397 ^ _anisotropy.GetHashCode();
                 hash = hash * 397 ^ _anisotropyRotation.GetHashCode();
+                hash = hash * 397 ^ _mapSize.GetHashCode();
+                hash = hash * 397 ^ (_finish != null ? StringComparer.Ordinal.GetHashCode(_finish) : 0);
+                hash = hash * 397 ^ _finishStrength.GetHashCode();
+                hash = hash * 397 ^ _transmission.GetHashCode();
+                hash = hash * 397 ^ _ior.GetHashCode();
                 return hash;
             }
         }

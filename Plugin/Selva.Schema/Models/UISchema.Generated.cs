@@ -378,6 +378,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("position", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string Position { get; set; } = "center";
+
+/// <summary>
+/// Base visibility (static). If false, the tab is always hidden. A tab whose groups are all hidden is hidden too.
+/// </summary>
+        [JsonProperty("visible", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? Visible { get; set; } = true;
     }
 
 // ============================================================================

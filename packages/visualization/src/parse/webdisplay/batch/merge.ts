@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 
+import { finishGeometry, type FinishedGeometry } from '../mesh-assembly.js';
+
 import { indexOutOfWindow } from './metadata.js';
+
+import type { MaterialPicker } from './materials.js';
 
 import type { MaterialGroup, MeshMetadata } from '../types.js';
 
@@ -34,7 +38,7 @@ export function createMergedMesh(
 	group: MaterialGroup,
 	allVertices: Float32Array,
 	allIndices: Uint16Array | Uint32Array,
-	materials: THREE.Material[],
+	pickMaterial: MaterialPicker,
 	allUvs: Float32Array | null = null,
 	allColors: Uint8Array | null = null
 ): THREE.Mesh {
@@ -95,18 +99,30 @@ export function createMergedMesh(
 		indexWriteCursor += meshMeta.indexCount;
 	}
 
-	const geometry = new THREE.BufferGeometry();
-	geometry.setAttribute('position', new THREE.BufferAttribute(mergedVertices, 3));
-	geometry.setIndex(new THREE.BufferAttribute(mergedIndices, 1));
-	if (mergedUvs) {
-		geometry.setAttribute('uv', new THREE.BufferAttribute(mergedUvs, 2));
-	}
-	if (mergedColors) {
-		geometry.setAttribute('color', new THREE.BufferAttribute(mergedColors, 3, true));
-	}
-	geometry.computeVertexNormals();
+	const finished = finishGeometry(
+		{ positions: mergedVertices, indices: mergedIndices, uvs: mergedUvs, colors: mergedColors },
+		group.meshes.map((m) => m.indexCount)
+	);
+	return finalizeMergedMesh(
+		geometryFrom(finished),
+		group,
+		pickMaterial(group.materialId, finished.closed)
+	);
+}
 
-	return finalizeMergedMesh(geometry, group, materials);
+export function geometryFrom(finished: FinishedGeometry): THREE.BufferGeometry {
+	const geometry = new THREE.BufferGeometry();
+	geometry.setAttribute('position', new THREE.BufferAttribute(finished.positions, 3));
+	geometry.setAttribute('normal', new THREE.BufferAttribute(finished.normals, 3));
+	geometry.setIndex(new THREE.BufferAttribute(finished.indices, 1));
+	if (finished.uvs) geometry.setAttribute('uv', new THREE.BufferAttribute(finished.uvs, 2));
+	if (finished.tangents) {
+		geometry.setAttribute('tangent', new THREE.BufferAttribute(finished.tangents, 4));
+	}
+	if (finished.colors) {
+		geometry.setAttribute('color', new THREE.BufferAttribute(finished.colors, 3, true));
+	}
+	return geometry;
 }
 
 /**
@@ -150,9 +166,9 @@ function mergedMembers(group: MaterialGroup): MergedMember[] {
 export function finalizeMergedMesh(
 	geometry: THREE.BufferGeometry,
 	group: MaterialGroup,
-	materials: THREE.Material[]
+	material: THREE.Material
 ): THREE.Mesh {
-	const threeMesh = new THREE.Mesh(geometry, materials[group.materialId]);
+	const threeMesh = new THREE.Mesh(geometry, material);
 	const firstMesh = group.meshes[0];
 	const meshNames = group.meshes.map((m) => m.name).filter((name) => name && name.length > 0);
 	threeMesh.name = meshNames.length > 0 ? meshNames[0]! : `merged_material_${group.materialId}`;
@@ -187,7 +203,7 @@ export function createIndividualMeshes(
 	group: MaterialGroup,
 	allVertices: Float32Array,
 	allIndices: Uint16Array | Uint32Array,
-	materials: THREE.Material[],
+	pickMaterial: MaterialPicker,
 	allUvs: Float32Array | null = null,
 	allColors: Uint8Array | null = null
 ): THREE.Mesh[] {
@@ -216,21 +232,23 @@ export function createIndividualMeshes(
 			rebasedIndices[i] = indexValue - baseIndex;
 		}
 
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-		geometry.setIndex(new THREE.BufferAttribute(rebasedIndices, 1));
-		if (allUvs) {
-			const uvStart = meshMeta.vertexStart * 2;
-			const uvs = allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2);
-			geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
-		}
-		if (allColors) {
-			const colors = allColors.slice(componentStart, componentStart + componentLen);
-			geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3, true));
-		}
-		geometry.computeVertexNormals();
-
-		meshes.push(finalizeSingleMesh(geometry, meshMeta, group, materials));
+		const uvStart = meshMeta.vertexStart * 2;
+		const finished = finishGeometry(
+			{
+				positions: vertices,
+				indices: rebasedIndices,
+				uvs: allUvs ? allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2) : null,
+				colors: allColors ? allColors.slice(componentStart, componentStart + componentLen) : null
+			},
+			[rebasedIndices.length]
+		);
+		meshes.push(
+			finalizeSingleMesh(
+				geometryFrom(finished),
+				meshMeta,
+				pickMaterial(group.materialId, finished.closed)
+			)
+		);
 	}
 
 	return meshes;
@@ -239,10 +257,9 @@ export function createIndividualMeshes(
 export function finalizeSingleMesh(
 	geometry: THREE.BufferGeometry,
 	meshMeta: MeshMetadata,
-	group: MaterialGroup,
-	materials: THREE.Material[]
+	material: THREE.Material
 ): THREE.Mesh {
-	const mesh = new THREE.Mesh(geometry, materials[group.materialId]);
+	const mesh = new THREE.Mesh(geometry, material);
 	mesh.name = meshMeta.name;
 	mesh.userData = {
 		source: 'compute',

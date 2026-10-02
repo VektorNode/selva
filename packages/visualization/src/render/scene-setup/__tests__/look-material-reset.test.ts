@@ -91,9 +91,35 @@ describe('a material with its own envMapIntensity', () => {
 		);
 	});
 
+	it('keeps a metal reflective in a look that dims fill', () => {
+		const metal = new THREE.MeshPhysicalMaterial({ metalness: 1 });
+		expect(envMapIntensityForLook(metal, LOOK_PRESETS.technical)).toBe(1);
+	});
+
+	it('reads the parsed metalness when leaving a look that overrode it', () => {
+		const metal = new THREE.MeshPhysicalMaterial({ metalness: 1 });
+		setLook(metal, 'arctic');
+		expect(envMapIntensityForLook(metal, LOOK_PRESETS.technical)).toBe(1);
+	});
+
 	it.each(OVERRIDING)('takes the look value in %s, which restyles every material', (look) => {
 		expect(envMapIntensityForLook(parsed(1), LOOK_PRESETS[look])).toBe(
 			LOOK_PRESETS[look].envMapIntensity
 		);
 	});
+});
+
+describe('look side override', () => {
+	it.each(['xray', 'wireframe'] as Look[])(
+		'shows the far side of a culled solid in %s, then culls it again',
+		(look) => {
+			const material = new THREE.MeshPhysicalMaterial({ side: THREE.FrontSide });
+
+			setLook(material, look);
+			expect(material.side).toBe(THREE.DoubleSide);
+
+			setLook(material, 'technical');
+			expect(material.side).toBe(THREE.FrontSide);
+		}
+	);
 });

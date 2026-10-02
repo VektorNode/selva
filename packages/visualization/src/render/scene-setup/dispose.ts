@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { disposeObjectTree, type DisposeOptions } from '../../shared/index.js';
+import { disposeReflectionEnvironment } from './reflection-environment.js';
 
 export { disposeObjectTree };
 export type { DisposeOptions };
@@ -10,6 +11,7 @@ export function disposeSceneResources(scene: THREE.Scene, options?: DisposeOptio
 	disposeObjectTree(scene, options);
 
 	scene.environment?.dispose();
+	disposeReflectionEnvironment(scene);
 	if (scene.background instanceof THREE.Texture) {
 		scene.background.dispose();
 	}
