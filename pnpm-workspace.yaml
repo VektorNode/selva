@@ -53,6 +53,7 @@ overrides:
   # declared ranges, so this picks a version mermaid already accepts.
   mermaid@<11.16.1: ^11.16.1
   dompurify@<3.4.13: ^3.4.13
+  devalue@<5.9.3: ^5.9.4
   # pm2 pins js-yaml to an exact 4.3.0, so this deliberately overrules that
   # pin. Patch-level bump on the same major; revisit if pm2 ever pins for a
   # reason of its own.
