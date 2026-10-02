@@ -230,14 +230,16 @@ public class GH_ComponentUpgradeHelper
             // Fallback for GH_PersistentParam<T> types not special-cased above (colour,
             // geometry, file path, etc). T is unknown here, so append through reflection.
             // GH_Structure<T> has no CopyFrom; a null-conditional call to one copied nothing.
+            // An empty old input leaves the new one alone, so a default it sets survives.
             var oldData = PersistentDataOf(oldParam) as IGH_Structure;
             var newData = PersistentDataOf(newParam);
-            if (oldData == null || newData == null) return;
+            if (oldData == null || oldData.DataCount == 0 || newData == null) return;
 
             var structureType = newData.GetType();
-            var itemType = structureType.IsGenericType ? structureType.GetGenericArguments()[0] : null;
+            if (!structureType.IsGenericType) return;
+            var itemType = structureType.GetGenericArguments()[0];
             var append = structureType.GetMethod("Append", [itemType, typeof(GH_Path)]);
-            if (itemType == null || append == null) return;
+            if (append == null) return;
 
             structureType.GetMethod("Clear", Type.EmptyTypes)?.Invoke(newData, null);
             foreach (var path in oldData.Paths)
