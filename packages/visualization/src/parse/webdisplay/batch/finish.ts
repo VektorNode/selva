@@ -17,7 +17,7 @@ interface Fibres {
 	depth: number;
 }
 
-/** Soft bands of fibres brushed harder or lighter: what still reads at wall distance. */
+/** Soft streaks along the grain, as on rolled sheet. Not on brushed: any band longer than its fibres read as full-height streaks on a profile wall. */
 interface Bands {
 	width: number;
 	length: number;
@@ -32,10 +32,7 @@ const RECIPES: Record<Finish, { fibres: Fibres[]; bands: Bands[] }> = {
 			{ pitch: 0.04, length: [2, 12], depth: 0.3 },
 			{ pitch: 0.25, length: [5, 40], depth: 0.18 }
 		],
-		bands: [
-			{ width: 6, length: 500, depth: 0.08 },
-			{ width: 1.5, length: 150, depth: 0.06 }
-		]
+		bands: []
 	},
 	rolled: {
 		fibres: [{ pitch: 0.3, length: [80, 600], depth: 0.07 }],

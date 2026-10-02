@@ -354,6 +354,10 @@ export interface TabConfig {
 	 * Horizontal region where this tab should be positioned in multi-column layouts
 	 */
 	position?: 'left' | 'center' | 'right';
+	/**
+	 * Base visibility (static). If false, the tab is always hidden. A tab whose groups are all hidden is hidden too.
+	 */
+	visible?: boolean;
 }
 export interface TabbedLayoutConfig {
 	type: 'tabbed';
@@ -499,7 +503,7 @@ export const ACCEPTED_FILE_FORMATS = [
 ] as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.14.0';
+export const UI_SCHEMA_VERSION = '2.15.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

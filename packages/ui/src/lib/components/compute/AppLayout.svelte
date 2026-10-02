@@ -13,6 +13,7 @@
 	import { Button } from '$lib';
 	import ParameterPresetManager from './ParameterPresetManager.svelte';
 	import { getLocaleContext } from '../../i18n/localeContext.svelte';
+	import { buildVisibilityMap, isTabVisible, itemKey } from '../../schema/visibility-rules';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -68,12 +69,36 @@
 	const hasViewer = $derived(
 		!!(schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote)
 	);
-	const leftTabs = $derived(
-		schema.layout.type === 'tabbed' ? schema.layout.tabs.filter((t) => t.position !== 'right') : []
+	const shownTabs = $derived(
+		schema.layout.type === 'tabbed'
+			? schema.layout.tabs.filter((tab) => isTabVisible(tab, values))
+			: []
 	);
-	const rightTabs = $derived(
-		schema.layout.type === 'tabbed' ? schema.layout.tabs.filter((t) => t.position === 'right') : []
-	);
+	// A hidden or disabled input still solves, so reset it to its default — otherwise the
+	// value the user last set while it was visible keeps feeding the definition. Lives here,
+	// not in TabLayout: a panel whose tabs all hide unmounts and would miss the reset.
+	$effect(() => {
+		if (schema.layout.type !== 'tabbed') return;
+		const updates: Record<string, unknown> = {};
+		schema.layout.tabs.forEach((tab) =>
+			tab.groups.forEach((group) => {
+				const visibilityMap = buildVisibilityMap(group.items, values);
+				group.items.forEach((layoutItem) => {
+					if (layoutItem.type === 'linebreak') return;
+					const { visible, disabled, defaultValue } = visibilityMap[itemKey(layoutItem)];
+					const input = schema.inputs.find((i) => i.id === layoutItem.paramId);
+					if (!input || defaultValue === undefined) return;
+					if ((!visible || disabled) && values[input.id] !== defaultValue) {
+						updates[input.id] = defaultValue;
+					}
+				});
+			})
+		);
+		if (Object.keys(updates).length > 0) Object.assign(values, updates);
+	});
+
+	const leftTabs = $derived(shownTabs.filter((t) => t.position !== 'right'));
+	const rightTabs = $derived(shownTabs.filter((t) => t.position === 'right'));
 	const hasLeftPanel = $derived(leftTabs.length > 0);
 	const hasRightPanel = $derived(rightTabs.length > 0);
 	const hasSidebar = $derived(hasViewer || hasRightPanel);

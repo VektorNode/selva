@@ -4,7 +4,7 @@
 	import * as Tabs from '$lib/components/primitives/tabs';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
-	import { buildVisibilityMap, itemKey } from '$lib/schema/visibility-rules';
+	import { isTabVisible } from '$lib/schema/visibility-rules';
 	import { buildDynamicValueListOptions } from '$lib/schema/dynamic-value-list';
 
 	interface Props {
@@ -25,6 +25,7 @@
 	const visibleTabs = $derived(
 		schema.layout.type === 'tabbed'
 			? schema.layout.tabs.filter((tab) => {
+					if (!isTabVisible(tab, values)) return false;
 					if (!panelFilter) return true;
 					return panelFilter === 'right' ? tab.position === 'right' : tab.position !== 'right';
 				})
@@ -39,7 +40,7 @@
 	$effect(() => {
 		if (requestedTabId && visibleTabs.some((t) => t.id === requestedTabId)) {
 			activeTabId = requestedTabId;
-		} else if (visibleTabs.length > 0 && !activeTabId) {
+		} else if (visibleTabs.length > 0 && !visibleTabs.some((t) => t.id === activeTabId)) {
 			activeTabId = visibleTabs[0].id;
 		}
 	});
@@ -54,28 +55,6 @@
 			})
 		);
 		if (Object.keys(initial).length > 0) Object.assign(collapsedGroups, initial);
-	});
-
-	// A hidden or disabled input still solves, so reset it to its default — otherwise the
-	// value the user last set while it was visible keeps feeding the definition.
-	$effect(() => {
-		if (schema.layout.type !== 'tabbed') return;
-		const updates: Record<string, unknown> = {};
-		visibleTabs.forEach((tab) =>
-			tab.groups.forEach((group) => {
-				const visibilityMap = buildVisibilityMap(group.items, values);
-				group.items.forEach((layoutItem) => {
-					if (layoutItem.type === 'linebreak') return;
-					const { visible, disabled, defaultValue } = visibilityMap[itemKey(layoutItem)];
-					const input = schema.inputs.find((i) => i.id === layoutItem.paramId);
-					if (!input || defaultValue === undefined) return;
-					if ((!visible || disabled) && values[input.id] !== defaultValue) {
-						updates[input.id] = defaultValue;
-					}
-				});
-			})
-		);
-		if (Object.keys(updates).length > 0) Object.assign(values, updates);
 	});
 
 	function toggleGroup(groupId: string) {

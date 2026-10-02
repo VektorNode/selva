@@ -2,7 +2,8 @@ import type {
 	LayoutItem,
 	VisibilityRule,
 	VisibilityCondition,
-	GroupVisibilityCondition
+	GroupVisibilityCondition,
+	TabConfig
 } from '@selvajs/schemas';
 
 export interface VisibilityResult {
@@ -116,6 +117,12 @@ export function evaluateGroupVisibility(
 	const met = evaluateCondition(group.visibilityCondition, values);
 
 	return action === 'hide' ? !met : met;
+}
+
+export function isTabVisible(tab: TabConfig, values: Record<string, unknown>): boolean {
+	return (
+		tab.visible !== false && tab.groups.some((group) => evaluateGroupVisibility(group, values))
+	);
 }
 
 /**

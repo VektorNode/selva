@@ -110,8 +110,8 @@ costs an extra render pass of the opaque scene.
 **Procedural finish** (`batch/finish.ts`), from the UVs in mm, in roughness, brightness (by half)
 and the normal. Fibres are hard-edged across the grain, 2-40 mm long, each its own depth (most faint, a few
 deep) and tapered at both ends; one depth per row read as a single streak the height of the part; the normal tilts across the grain by the
-fibre depth, so single fibres glint. Brushed bands (brushing passes, 1.5-6 mm wide) carry the look
-at wall distance. Past pixel size a fibre layer switches to coarser cells standing for the rows they
+fibre depth, so single fibres glint. Only rolled gets bands (long soft streaks); on brushed, bands
+1.5-6 mm wide and 150-500 mm long read as full-height streaks on a profile wall. Past pixel size a fibre layer switches to coarser cells standing for the rows they
 cover, so distance keeps the texture without shimmer. Fading octaves out instead, as the first
 version did, left only the widest, softest one at wall distance: soft full-height bands, nothing
 like the photos. Tuned by eye against photos of brushed stainless at 120 mm, 350 mm and 0.9 m;
