@@ -6,7 +6,7 @@ catalogs:
   default:
     '@floating-ui/dom': ^1.8.0
     '@iconify/svelte': ^5.2.1
-    '@lucide/svelte': ^1.48.0
+    '@lucide/svelte': ^1.50.0
     '@playwright/test': ^1.63.0
     '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/kit': 2.70.3
@@ -14,15 +14,15 @@ catalogs:
     '@tailwindcss/vite': ^4.3.3
     # Track the runtime (.nvmrc / engines.node), not the newest Node line —
     # types ahead of the runtime typecheck APIs the deployed Node doesn't have.
-    '@types/node': ^26.6.2
+    '@types/node': ^26.6.4
     '@types/three': ^0.186.0
-    bits-ui: ^2.19.3
+    bits-ui: ^2.19.4
     clsx: ^2.1.1
     eslint: ^10.11.0
     mode-watcher: ^1.1.0
     prettier: ^3.9.9
     rimraf: ^6.1.3
-    sharp: ^0.35.4
+    sharp: ^0.35.5
     svelte: 5.57.1
     svelte-check: ^4.7.6
     svelte-sonner: ^1.2.1
@@ -36,10 +36,10 @@ catalogs:
     # at ^6. Tilde so a caret can't walk into the next major on its own — see
     # the matching ignore in .github/dependabot.yml.
     typescript: ~6.0.3
-    vite: ^8.3.1
-    vitest: ^5.0.2
-    ws: ^8.21.3
-    '@types/ws': ^8.5.13
+    vite: ^8.3.2
+    vitest: ^5.0.3
+    ws: ^8.22.0
+    '@types/ws': ^8.18.2
     zod: ^4.6.5
 
 # Transitive CVE bumps. Ranged so each one stops applying once the parent
