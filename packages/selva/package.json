@@ -79,7 +79,7 @@
 		"@selvajs/supabase-provider": "workspace:*",
 		"@selvajs/ui": "workspace:*",
 		"@selvajs/visualization": "workspace:*",
-		"@sveltejs/adapter-node": "^5.5.4",
+		"@sveltejs/adapter-node": "^6.0.0",
 		"@types/nodemailer": "^8.0.2",
 		"@types/three": "catalog:",
 		"rimraf": "catalog:",

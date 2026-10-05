@@ -23,7 +23,7 @@
 		"@lucide/svelte": "catalog:",
 		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",
-		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/adapter-static": "^4.0.0",
 		"@sveltejs/kit": "catalog:",
 		"svelte-check": "catalog:",
 		"@types/three": "catalog:",
