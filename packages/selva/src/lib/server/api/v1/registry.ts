@@ -21,7 +21,8 @@ import {
 	UpdateProjectMemberBodySchema,
 	CreateInviteBodySchema,
 	UpdateOrgMemberBodySchema,
-	OrgComputePatchBodySchema
+	OrgComputePatchBodySchema,
+	CreateApiTokenBodySchema
 } from '@selvajs/server/api';
 
 export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
@@ -373,6 +374,36 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		response: 'object',
 		status: 201,
 		errors: [403, 404, 409]
+	},
+	// Internal and session-only: a key can never manage keys.
+	{
+		method: 'GET',
+		path: '/orgs/{orgId}/tokens',
+		summary: 'Your API tokens in this org, revoked and expired included.',
+		internal: true,
+		response: 'collection',
+		query: [
+			{ name: 'all', description: "`true` for every member's tokens. Needs `manage_org_members`." }
+		],
+		errors: [403, 503]
+	},
+	{
+		method: 'POST',
+		path: '/orgs/{orgId}/tokens',
+		summary: 'Create an API token acting as you. The raw key is returned once, as `secret`.',
+		internal: true,
+		response: 'object',
+		status: 201,
+		requestBody: CreateApiTokenBodySchema,
+		errors: [400, 403, 503]
+	},
+	{
+		method: 'DELETE',
+		path: '/orgs/{orgId}/tokens/{tokenId}',
+		summary: 'Revoke an API token: your own, or any in the org with `manage_org_members`.',
+		internal: true,
+		response: 'empty',
+		errors: [403, 404, 503]
 	},
 	{
 		method: 'GET',

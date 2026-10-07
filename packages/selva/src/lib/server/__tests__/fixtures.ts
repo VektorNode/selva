@@ -40,6 +40,7 @@ import { isApiError } from '@selvajs/server/api';
 import { mapAppError } from '../api/sveltekit.js';
 import { shareLinkCodec } from '../shareLinks/token.server.js';
 import { inviteCodec } from '../invites/token.server.js';
+import { apiTokenCodec } from '../apiTokens/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 import { accessDepsFromConfig, type AccessDeps } from '../access.server.js';
 
@@ -128,7 +129,11 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 			// The app's own codecs, not fresh ones — a second codec would hash under
 			// a different secret than the seeders use, so lookups would miss and
 			// read as a broken handler rather than a broken fixture.
-			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
+			tokens: {
+				shareLinks: shareLinkCodec(),
+				invites: inviteCodec(),
+				apiTokens: apiTokenCodec()
+			},
 			services: { definitions: definitionService }
 		},
 		log: silentLog,

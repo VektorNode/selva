@@ -198,6 +198,29 @@ A sync may report `conflict` on a file you already have. It is refusing to overw
 
 Full setup, env vars, migrations, and RLS notes: [supabase-provider README](https://www.npmjs.com/package/@selvajs/supabase-provider).
 
+## API tokens
+
+Row security only sees a signed-in user, and an API-token request has no session. For each one, Selva signs a 60-second session for the token's owner, after checking the owner is still enabled and still a member of the token's org. That needs a signing key the project trusts. Without one, API tokens answer 503 and can't be created; browser sign-in keeps working. **Admin → System** shows whether the key works.
+
+**The key is a root credential.** It can sign a `service_role` token that bypasses every policy, so store it like `SUPABASE_SERVICE_ROLE_KEY`: server-only, never in a client bundle, rotated if it leaks.
+
+### Hosted project
+
+1. Generate a key: `npx supabase gen signing-key --algorithm ES256`. Keep the printed JWK in your secret store.
+2. In the dashboard, **Settings → JWT signing keys**, import it as a standby key.
+3. **Rotate** to it. Supabase only trusts a standby key after the rotation, and from then on it also signs every user session. Key changes are throttled for about five minutes.
+4. Put the JWK on one line in `SUPABASE_JWT_SIGNING_KEY` and restart Selva.
+
+To rotate later: import the new key and rotate to it, update `SUPABASE_JWT_SIGNING_KEY` and restart, and only then revoke the old key. Revoking first turns API tokens off until Selva has the new key.
+
+### Self-hosted stack
+
+Run `sh utils/add-new-auth-keys.sh --update-env`, then `sh run.sh recreate`. Copy the `"kty": "EC"` entry from `JWT_KEYS` into `SUPABASE_JWT_SIGNING_KEY`. Regenerating the keys signs everyone out, so rotate in a maintenance window and update Selva in the same one.
+
+### Legacy HS256 secret
+
+A project that never moved to signing keys can set `SUPABASE_JWT_SECRET` to its legacy JWT secret instead. It stops working the moment the project revokes that secret, which Supabase's own migration guide tells you to do, so treat it as a stopgap. The local CLI stack runs on it.
+
 ## Local development stack
 
 Needs Docker Desktop running; the first run pulls ~1 GB of images.

@@ -88,3 +88,22 @@ export type ApiTokenRevokeReason = z.infer<typeof ApiTokenRevokeReasonSchema>;
 /** The only lifetimes offered. Expiry is never optional. */
 export const API_TOKEN_LIFETIME_DAYS = [30, 90, 180] as const;
 export type ApiTokenLifetimeDays = (typeof API_TOKEN_LIFETIME_DAYS)[number];
+
+const ACTION_WORDS: Record<ApiScopeAction, string> = {
+	read: 'Read',
+	write: 'Read and change',
+	solve: 'Read and run solves on'
+};
+
+/** "Read and change everything in the org". Names no ids, so it suits an email. */
+export function describeApiScope(value: string): string {
+	const scope = parseApiScope(value);
+	if (!scope) return `Unknown scope (${value})`;
+	const what =
+		scope.resource.kind === 'project'
+			? 'one project'
+			: scope.resource.kind === 'definition'
+				? 'one definition'
+				: 'everything in the org';
+	return `${ACTION_WORDS[scope.action]} ${what}`;
+}

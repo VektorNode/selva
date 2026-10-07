@@ -178,3 +178,45 @@ describe('resolveApiToken', () => {
 		expect(result.kind).toBe('ok');
 	});
 });
+
+describe('resolveApiToken with delegated sessions', () => {
+	function delegating(w: World, ok = true) {
+		const delegatedSession = {
+			status: vi.fn(async () =>
+				ok ? { ok: true as const } : { ok: false as const, message: 'bad key' }
+			),
+			mint: vi.fn(async (userId: string) => `jwt-for-${userId}`)
+		};
+		w.deps.auth = { ...w.deps.auth, delegatedSession };
+		return delegatedSession;
+	}
+
+	it('runs the request under a session minted for the owner', async () => {
+		const w = world();
+		const delegated = delegating(w);
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result.kind).toBe('ok');
+		if (result.kind !== 'ok') return;
+		expect(delegated.mint).toHaveBeenCalledWith('u1');
+		expect(result.ctx.adapterContext).toEqual({ sessionToken: 'jwt-for-u1' });
+		expect(result.ctx.apiScope?.tokenId).toBe('tok-1');
+	});
+
+	it('never signs for a disabled owner', async () => {
+		const w = world({ user: { disabled: true } });
+		const delegated = delegating(w);
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
+		expect(delegated.mint).not.toHaveBeenCalled();
+	});
+
+	it('gives 503 for every key while the signing key is broken', async () => {
+		const w = world();
+		const delegated = delegating(w, false);
+		const lookup = vi.spyOn(w.deps.data.apiTokens!, 'getByTokenHash');
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result).toMatchObject({ kind: 'rejected', status: 503, code: 'API_TOKENS_UNAVAILABLE' });
+		expect(lookup).not.toHaveBeenCalled();
+		expect(delegated.mint).not.toHaveBeenCalled();
+	});
+});

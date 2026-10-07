@@ -24,7 +24,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: "A personal access token. `/api/v1` is the only prefix that accepts one — `/api/admin` never does."
+      description: "An API token (`selva_…`), sent as `Authorization: Bearer <token>` and never in the URL. It acts as the user who created it, in one org, narrowed by its scopes. `/api/v1` is the only prefix that accepts one; `/api/admin` never does."
   parameters:
     limit:
       name: limit
@@ -126,8 +126,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -153,6 +165,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -161,6 +179,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -185,8 +209,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -227,8 +263,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -293,7 +341,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -311,7 +359,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -341,6 +389,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -349,6 +403,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -379,6 +439,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -387,6 +453,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -411,6 +483,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -419,6 +497,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -487,6 +571,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -506,7 +596,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -536,6 +626,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -544,6 +640,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -577,6 +679,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -585,6 +693,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -634,6 +748,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -653,7 +773,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -688,6 +808,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -696,6 +822,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -725,6 +857,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -739,6 +877,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -773,6 +917,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -781,6 +931,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -816,6 +972,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -824,6 +986,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -871,6 +1039,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -879,6 +1053,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -912,6 +1092,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -920,6 +1106,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -954,6 +1146,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -962,6 +1160,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -992,6 +1196,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -1000,6 +1210,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1028,8 +1244,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1085,7 +1313,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1098,6 +1326,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1127,6 +1361,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -1135,6 +1375,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1191,7 +1437,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1210,6 +1456,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1235,7 +1487,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1248,6 +1500,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1282,7 +1540,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1295,6 +1553,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1349,7 +1613,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1362,6 +1626,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1414,7 +1684,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1433,6 +1703,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1469,7 +1745,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1488,6 +1764,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1518,7 +1800,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1537,6 +1819,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1567,7 +1855,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1580,6 +1868,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1614,13 +1908,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1681,7 +1981,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1700,6 +2000,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1730,7 +2036,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1749,6 +2055,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1783,13 +2095,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1864,7 +2182,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1877,6 +2195,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1908,7 +2232,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1921,6 +2245,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1956,7 +2286,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1975,6 +2305,195 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/tokens":
+    get:
+      summary: "Your API tokens in this org, revoked and expired included."
+      operationId: getOrgsByOrgIdTokens
+      tags:
+        - Orgs
+      x-internal: true
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
+        - name: all
+          in: query
+          required: false
+          description: "`true` for every member's tokens. Needs `manage_org_members`."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: "Create an API token acting as you. The raw key is returned once, as `secret`."
+      operationId: postOrgsByOrgIdTokens
+      tags:
+        - Orgs
+      x-internal: true
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                scopes:
+                  minItems: 1
+                  maxItems: 20
+                  type: array
+                  items:
+                    type: string
+                expiresInDays:
+                  anyOf:
+                    - type: number
+                      const: 30
+                    - type: number
+                      const: 90
+                    - type: number
+                      const: 180
+              required:
+                - name
+                - scopes
+                - expiresInDays
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/tokens/{tokenId}":
+    delete:
+      summary: "Revoke an API token: your own, or any in the org with `manage_org_members`."
+      operationId: deleteOrgsByOrgIdTokensByTokenId
+      tags:
+        - Orgs
+      x-internal: true
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Success. No content.
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2006,13 +2525,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2084,13 +2609,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2145,7 +2676,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -2158,6 +2689,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2189,7 +2726,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -2202,6 +2739,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2232,6 +2775,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -2251,7 +2800,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2308,7 +2857,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -2326,7 +2875,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2364,6 +2913,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: The request conflicts with the current state.
           content:
@@ -2372,6 +2927,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2408,6 +2969,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "410":
           description: Error.
           content:
@@ -2416,6 +2983,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2442,6 +3015,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -2450,6 +3029,12 @@ paths:
                 $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:

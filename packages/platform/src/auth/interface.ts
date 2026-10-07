@@ -241,6 +241,28 @@ export interface IProxyAuth {
 	readonly configuredHeaderNames: readonly string[];
 }
 
+export type DelegatedSessionStatus = { ok: true } | { ok: false; message: string };
+
+/**
+ * Signs a short-lived session for a user without their credentials, so an API
+ * token request runs under the same row security as that user's browser
+ * session. Only providers whose stores scope queries by a user session need
+ * it; without it their stores see an anonymous caller.
+ *
+ * Nothing can revoke a minted session before it expires, so callers must
+ * re-check the user (disabled, still a member) before every `mint`.
+ */
+export interface IDelegatedSession {
+	/**
+	 * Whether minting works with the configured key. A failure switches API
+	 * tokens off; browser sign-in is unaffected.
+	 */
+	status(): Promise<DelegatedSessionStatus>;
+
+	/** A session token acting as `userId`, valid for about a minute. Throws if `status` isn't ok. */
+	mint(userId: string): Promise<string>;
+}
+
 /**
  * Authentication provider — identity verification only. Profile state lives
  * in `IUserProfileStore`, platform permissions in `IPlatformPermissionStore`,
@@ -281,6 +303,12 @@ export interface IAuthProvider {
 	 * the logout button — Selva has no session to destroy.
 	 */
 	readonly proxyAuth?: IProxyAuth;
+
+	/**
+	 * Present for providers whose data stores scope by a user session (row
+	 * security). API token requests use it to act as the token's owner.
+	 */
+	readonly delegatedSession?: IDelegatedSession;
 
 	/** Verify a token (session cookie, JWT, ID token, etc.); null if invalid or expired. */
 	verifyToken(token: string): Promise<AuthUser | null>;

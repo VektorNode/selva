@@ -1,8 +1,8 @@
 /**
  * Response schemas for the v1 payloads that must not carry a stored secret.
  *
- * Three store types hold a credential next to fields a client legitimately
- * reads: `ShareLink.tokenHash` and `Invite.tokenHash` are HMACs of a token,
+ * Four store types hold a credential next to fields a client legitimately
+ * reads: `ShareLink.tokenHash`, `Invite.tokenHash` and `ApiToken.tokenHash` are HMACs of a token,
  * `ComputeServerCommon.apiKey` is a live Rhino.Compute key. Handlers used to
  * strip them by destructuring — `const { tokenHash: _omit, ...rest } = invite`
  * — which works until someone adds a field to the stored type or edits the line
@@ -113,4 +113,29 @@ export const OrgComputeResponseSchema = z.object({
 	defaultServerId: z.string().nullish(),
 	globalDefaultServerId: z.string().nullish(),
 	catalog: z.array(ComputeCatalogEntrySchema)
+});
+
+// ============================================================================
+// API tokens
+// ============================================================================
+
+export const ApiTokenResponseSchema = z.object({
+	id: z.string(),
+	userId: z.string(),
+	createdBy: z.string().nullable(),
+	orgId: z.string(),
+	name: z.string(),
+	scopes: z.array(z.string()),
+	createdAt: z.string(),
+	expiresAt: z.string(),
+	lastUsedAt: z.string().nullable(),
+	revokedAt: z.string().nullable(),
+	/** Scope refusals since midnight UTC, counted in this process only. */
+	refusedToday: z.number()
+});
+
+/** The mint response. `secret` is the raw key, returned exactly once. */
+export const CreatedApiTokenResponseSchema = z.object({
+	token: ApiTokenResponseSchema,
+	secret: z.string()
 });

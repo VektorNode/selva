@@ -185,10 +185,13 @@ export class SupabaseOrgStore implements IOrgStore {
 
 		// These tables have no `deleted_at` column, and the org soft-delete above
 		// doesn't trigger their FK CASCADE, so clean them up explicitly. Pending
-		// invites to a dead org are unredeemable; stale compute config is
-		// operational state with no audit need.
+		// invites and API keys for a dead org are unusable; stale compute config
+		// is operational state with no audit need.
 		const { error: invErr } = await client.from('invites').delete().eq('org_id', id);
 		if (invErr) throw mapPostgrestError(invErr);
+
+		const { error: tokErr } = await client.from('api_tokens').delete().eq('org_id', id);
+		if (tokErr) throw mapPostgrestError(tokErr);
 
 		const { error: cdErr } = await client
 			.from('compute_server_org_defaults')

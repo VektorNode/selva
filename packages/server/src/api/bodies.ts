@@ -19,6 +19,8 @@ import {
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
 	ALL_ORG_PERMISSIONS,
+	ApiScopeStringSchema,
+	API_TOKEN_LIFETIME_DAYS,
 	type OrgPermission
 } from '@selvajs/platform';
 
@@ -106,3 +108,13 @@ export const UpdateOrgMemberBodySchema = z
 	.refine((b) => b.role !== undefined || b.permissions !== undefined, {
 		message: 'Provide at least one of role, permissions'
 	});
+
+// ============================================================================
+// API tokens
+// ============================================================================
+
+export const CreateApiTokenBodySchema = z.object({
+	name: z.string().trim().min(1, 'Name is required').max(100),
+	scopes: z.array(ApiScopeStringSchema).min(1, 'Pick at least one scope').max(20),
+	expiresInDays: z.union(API_TOKEN_LIFETIME_DAYS.map((d) => z.literal(d)))
+});

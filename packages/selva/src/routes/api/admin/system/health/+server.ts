@@ -37,6 +37,9 @@ import { requirePermission } from '$lib/server/access.server';
  *      reads. These break a running deployment without failing anything at
  *      boot, so a panel that omits them reads as "all clear" while every user
  *      shares one login rate-limit bucket. Same rules `selva doctor` applies.
+ *   5. API token sessions — on Supabase, whether the configured signing key
+ *      is one the project accepts. A bad key turns API tokens off silently
+ *      otherwise: they answer 503 while browser sign-in keeps working.
  *
  * Deliberately NOT covered, because the running process cannot answer them
  * honestly — `selva doctor` owns these, and the panel says so:
@@ -127,6 +130,31 @@ function schemaVersionCheck(report: SchemaVersionReport | null): HealthCheck {
 		remediation:
 			'Sync the provider migrations into your Supabase project and run `npx supabase db push`, ' +
 			'then restart the app. `selva doctor` runs the same check from the CLI.'
+	};
+}
+
+/** API tokens on a provider with row security need a signing key Supabase trusts. */
+async function delegatedSessionCheck(): Promise<HealthCheck> {
+	const base = { id: 'api-token-sessions', label: 'API token sessions' };
+	const delegated = providers.auth.delegatedSession;
+	if (!delegated) {
+		return {
+			...base,
+			status: 'not_applicable',
+			summary: 'The active auth provider needs no signed sessions for API tokens.'
+		};
+	}
+	const status = await delegated.status();
+	if (status.ok) {
+		return { ...base, status: 'ok', summary: 'API tokens can act as their owners.' };
+	}
+	return {
+		...base,
+		status: 'degraded',
+		summary: `API tokens are off: ${status.message}`,
+		remediation:
+			'Set SUPABASE_JWT_SIGNING_KEY to the private ES256 JWK your Supabase project signs with ' +
+			'(see the Supabase provider docs), then restart. Browser sign-in is unaffected.'
 	};
 }
 
@@ -286,7 +314,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	// Reachability + writability run in parallel — independent of each other
 	// and of the at-rest check above. Each self-contains its error handling.
-	checks.push(...(await Promise.all([computeReachabilityCheck(locals), dataPathWritableCheck()])));
+	checks.push(
+		...(await Promise.all([
+			computeReachabilityCheck(locals),
+			dataPathWritableCheck(),
+			delegatedSessionCheck()
+		]))
+	);
 
 	checks.push(...deploymentConfigChecks());
 

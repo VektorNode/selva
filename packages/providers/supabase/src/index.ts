@@ -8,6 +8,7 @@ export {
 	SupabaseInviteStore,
 	SupabaseComputeServerStore,
 	SupabaseShareLinkStore,
+	SupabaseApiTokenStore,
 	SupabaseDataProvider,
 	EXPECTED_MIGRATION_HEAD,
 	SupabaseEventSink,

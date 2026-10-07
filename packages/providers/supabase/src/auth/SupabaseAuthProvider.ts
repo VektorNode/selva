@@ -1,8 +1,10 @@
 import { createClient, type SupabaseClient, type User } from '@supabase/supabase-js';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 import { DEFAULT_SCHEMA, type SelvaSchemaClient } from '../data/client.js';
+import { SupabaseDelegatedSession } from './SupabaseDelegatedSession.js';
 import type {
 	IAuthProvider,
+	IDelegatedSession,
 	IEmailLinkAuth,
 	IOAuthAuth,
 	IPasswordAuth,
@@ -45,6 +47,13 @@ export interface SupabaseAuthProviderConfig {
 	/** Recheck window for `'hybrid'` verification, in ms. Default 60s. */
 	revalidateMs?: number;
 	/**
+	 * Private ES256 JWK the project trusts, for API-token requests. Without it
+	 * (or `jwtSecret`), API tokens are off; sign-in is unaffected.
+	 */
+	jwtSigningKey?: string;
+	/** Legacy HS256 secret, used only when `jwtSigningKey` is unset. */
+	jwtSecret?: string;
+	/**
 	 * Sink for best-effort failures the provider swallows rather than throwing
 	 * (currently `touchLastLogin`). Defaults to `NoopLogger`. Only identifiers
 	 * are ever logged, never payloads.
@@ -66,6 +75,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	readonly oauth: IOAuthAuth;
 	readonly emailLink: IEmailLinkAuth;
 	readonly sessionRefresh: ISessionRefresh;
+	readonly delegatedSession: IDelegatedSession;
 
 	private readonly admin: SupabaseClient;
 	/**
@@ -125,6 +135,13 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			(user) => this.hydrate(user),
 			config.allowEmailLinkSignup ?? true
 		);
+		this.delegatedSession = new SupabaseDelegatedSession({
+			supabaseUrl: config.supabaseUrl,
+			anonKey: config.anonKey,
+			...(config.jwtSigningKey ? { signingKey: config.jwtSigningKey } : {}),
+			...(config.jwtSecret ? { jwtSecret: config.jwtSecret } : {}),
+			logger: this.logger
+		});
 	}
 
 	static fromEnv(env: Record<string, string | undefined>, logger?: ILogger): SupabaseAuthProvider {
@@ -149,7 +166,9 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false',
 			tokenVerification,
 			...(revalidateMs !== undefined ? { revalidateMs } : {}),
-			...(logger ? { logger } : {})
+			...(logger ? { logger } : {}),
+			...(env.SUPABASE_JWT_SIGNING_KEY ? { jwtSigningKey: env.SUPABASE_JWT_SIGNING_KEY } : {}),
+			...(env.SUPABASE_JWT_SECRET ? { jwtSecret: env.SUPABASE_JWT_SECRET } : {})
 		});
 	}
 

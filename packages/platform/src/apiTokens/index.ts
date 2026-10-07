@@ -13,7 +13,8 @@ export {
 	ApiTokenRevokeReasonSchema,
 	API_TOKEN_LIFETIME_DAYS,
 	parseApiScope,
-	formatApiScope
+	formatApiScope,
+	describeApiScope
 } from './types.js';
 export type { IApiTokenStore } from './interface.js';
 export type { ScopeTarget } from './scope.js';

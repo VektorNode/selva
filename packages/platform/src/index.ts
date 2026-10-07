@@ -8,7 +8,9 @@ export type {
 	ISessionRefresh,
 	IPasswordAuth,
 	IEmailLinkAuth,
-	IProxyAuth
+	IProxyAuth,
+	IDelegatedSession,
+	DelegatedSessionStatus
 } from './auth/interface.js';
 
 // ---------------------------------------------------------------------------
@@ -78,6 +80,7 @@ export {
 	API_TOKEN_LIFETIME_DAYS,
 	parseApiScope,
 	formatApiScope,
+	describeApiScope,
 	scopeAllows,
 	narrowApiTokenContext
 } from './apiTokens/index.js';

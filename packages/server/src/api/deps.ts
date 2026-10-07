@@ -16,6 +16,7 @@ import { isFlagEnabled, NoopEventSink } from '@selvajs/platform';
 import type { DefinitionService } from '../definitions/definition-service.js';
 import type { OrgAssetService } from '../organizations/org-asset-service.js';
 import type { TokenCodec } from '../tokens/token-codec.js';
+import type { ApiTokenCodec } from '../tokens/api-token-codec.js';
 import type {
 	IAuthProvider,
 	IDataProvider,
@@ -74,6 +75,8 @@ export interface SelvaDeps {
 	tokens: {
 		shareLinks?: TokenCodec;
 		invites?: TokenCodec;
+		/** Without it, minting answers 503 `API_TOKENS_UNAVAILABLE`. */
+		apiTokens?: ApiTokenCodec;
 	};
 	/**
 	 * Upload caps, in bytes.

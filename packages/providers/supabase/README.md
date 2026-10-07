@@ -62,6 +62,8 @@ Images are transcoded to WebP (1200px cap, quality 85) via the shared `transcode
 
 `SupabaseAuthProvider.verifyLogin` wraps `supabase.auth.signInWithPassword`, returning the JWT directly as `sessionToken`. `verifyToken` calls `supabase.auth.getUser(token)` — GoTrue validates the signature for us. Platform permissions merge in from `user_profiles.platform_permissions`.
 
+`delegatedSession` signs a 60-second session JWT for an API token's owner, so a token request reaches the stores as `adapterContext.sessionToken` and RLS treats it like that user's browser session. It signs ES256 with `SUPABASE_JWT_SIGNING_KEY` (or HS256 with the legacy `SUPABASE_JWT_SECRET`) and checks once, with a PostgREST read, that the project accepts the key. Claims are fixed (`role` and `aud` are `authenticated`, no `session_id`). Operator setup: [API tokens](../../../docs/self-hosting/providers/supabase.md#api-tokens).
+
 MFA methods on `IPasswordAuth` are currently undefined — MFA is deferred. If a user enrolls a factor via the Supabase dashboard, `signInWithPassword` returns an AAL1 session and routes that gate on AAL2 would fail; no route does today.
 
 ### Data + RLS

@@ -96,8 +96,9 @@ The Supabase stores scope every query by the user JWT, and a token request has n
     working when the operator revokes the legacy secret.
   - The key can mint `service_role` (verified live), so it gets the service key's handling:
     server-only, redacted from logs, and covered in the operator's rotation runbook.
-- **A bad key turns tokens off, not the app.** At startup Selva checks that the key's `kid` is in the
-  project JWKS (for HS256, it signs a probe and checks Supabase accepts it). If the check fails:
+- **A bad key turns tokens off, not the app.** On first use Selva signs a probe session and reads
+  through PostgREST; a 401 means the project doesn't trust the key. That also catches a standby key,
+  which a JWKS lookup would pass. A failed check is retried after 30 s. If it fails:
   - token requests get 503 `API_TOKENS_UNAVAILABLE`;
   - minting is blocked;
   - the admin health page shows the error.
@@ -207,7 +208,7 @@ are `x-internal` for v1.
 | `@selvajs/server/api`      | `runHandler` `action`/`idempotent`, scope check, rate limiter, idempotency (moved from `/compute`)                                                                                               |
 | Supabase provider          | Token store, `delegatedSession`, migration (`api_tokens`, `audit_events.token_id`, `jwt_reads_org`, SELECT policies)                                                                             |
 | Local provider             | JSON-file token store                                                                                                                                                                            |
-| `packages/selva`           | Hook wiring, mounted routes, `/settings/tokens` as the reference host page                                                                                                                       |
+| `packages/selva`           | Hook wiring, mounted routes, `/admin/tokens` as the reference host page                                                                                                                          |
 
 Reuse rather than reinvent: the token codec (`packages/server/src/tokens/token-codec.ts`), the
 invite store as the store template, and the share-link org roster (`/team/shares` and its RLS

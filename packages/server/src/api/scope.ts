@@ -21,9 +21,29 @@ export function assertScope(
 	target?: ScopeTarget
 ): void {
 	if (!ctx?.apiScope || scopeAllows(ctx, action, target)) return;
+	recordRefusal(ctx.apiScope.tokenId);
 	apiError(403, ApiErrorCode.FORBIDDEN, `This API token doesn't allow ${action} here.`, undefined, {
 		requiredScope: requiredScope(ctx, action, target)
 	});
+}
+
+// Per process and per UTC day, so the token page can flag a misconfigured
+// integration. Kept in memory on purpose: refusals are not audited.
+const refusals = new Map<string, { day: string; count: number }>();
+
+const utcDay = () => new Date().toISOString().slice(0, 10);
+
+function recordRefusal(tokenId: string): void {
+	const day = utcDay();
+	const entry = refusals.get(tokenId);
+	if (entry?.day === day) entry.count++;
+	else refusals.set(tokenId, { day, count: 1 });
+}
+
+/** Scope refusals for `tokenId` since midnight UTC, in this process. */
+export function scopeRefusalsToday(tokenId: string): number {
+	const entry = refusals.get(tokenId);
+	return entry?.day === utcDay() ? entry.count : 0;
 }
 
 function requiredScope(ctx: RequestContext, action: ApiScopeAction, target?: ScopeTarget): string {

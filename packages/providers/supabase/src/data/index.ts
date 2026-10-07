@@ -4,6 +4,7 @@ export { SupabaseDefinitionStore } from './SupabaseDefinitionStore.js';
 export { SupabaseInviteStore } from './SupabaseInviteStore.js';
 export { SupabaseComputeServerStore } from './SupabaseComputeServerStore.js';
 export { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
+export { SupabaseApiTokenStore } from './SupabaseApiTokenStore.js';
 export { SupabaseDataProvider } from './SupabaseDataProvider.js';
 export { EXPECTED_MIGRATION_HEAD } from './migrationHead.js';
 export { SupabaseEventSink } from './SupabaseEventSink.js';

@@ -143,7 +143,39 @@ Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Three traps:
   `RunScript(List<object> geo, object delay, ...)` and convert inside; a `double delay` in the
   source compiles as `object` and fails.
 - **Value List items are expressions.** `new GH_ValueListItem("none", "none")` yields `none`;
-  quoting the expression (`"\"none\""`) yields the quotes too.
+  quoting the expression (`"\"none\""`) yields the quotes too. Only the local canvas sees them:
+  Compute takes the value from the schema, so a server solve won't reveal it.
+
+Adding your own params: remove the defaults with `Params.UnregisterInputParameter`, then for each
+one call `((IGH_VariableParameterComponent)c).CreateParameter(side, i)`, set `Name`/`NickName`/
+`Access` (list access is what makes the signature `List<object>`), and `Params.RegisterInputParam`
+(or `RegisterOutputParam`). Keep the `out` output. Finish with `VariableParameterMaintenance()` and
+`Params.OnParametersChanged()`, and only then call `SetSource`. Keep long bodies in a file and pass
+`File.ReadAllText(path)`; `TryGetSource(out string)` reads one back.
+
+## Setting values and toggles
+
+- **`SetPersistentData` appends** to whatever default the param already holds. A component that
+  ships with a default (SheepMetal's Unroller `Orient`) ends up with two values, and everything
+  downstream runs twice. Clear first:
+  `p.GetType().GetProperty("PersistentData").GetValue(p)` → `Clear()`, then `SetPersistentData`.
+- **Toggle `Enable` off and on in separate `run_csharp` calls.** Doing both in one call left the
+  bridge `Offline` with a stale URL. Check that `bridge.Message` starts with `Ready`.
+- **Editing a Get param's source re-syncs that input from Grasshopper**, wiping the description
+  authored in the schema. Setting the param's own `Description` is not picked up. Re-read the
+  schema after canvas edits and restore it through the `Schema` property before saving.
+
+## Capturing the viewport
+
+`get_viewport_image` can return more than a tool result holds (240 K characters at 800×450). Write
+a PNG from `run_csharp` and read the file instead:
+
+- `view.CaptureToBitmap(new Size(w, h))` works. Above roughly 1.3× the viewport size it ignores
+  the display mode and draws the grid: 1600 px was clean on a 1244 px viewport, 2400 px was not.
+- `ViewCapture.CaptureToBitmap(ViewCaptureSettings)` returned a blank image.
+- To show solved geometry, bake it to temporary layers with layer materials, capture, then delete
+  the objects and layers. Set `doc.PreviewMode = GH_PreviewMode.Disabled` first, or every
+  intermediate component's preview is in the shot.
 
 ## Authoring the embedded UI schema
 

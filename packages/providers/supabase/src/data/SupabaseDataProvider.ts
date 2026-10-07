@@ -20,6 +20,7 @@ import { SupabaseDefinitionStore } from './SupabaseDefinitionStore.js';
 import { SupabaseInviteStore } from './SupabaseInviteStore.js';
 import { SupabaseComputeServerStore } from './SupabaseComputeServerStore.js';
 import { SupabaseShareLinkStore } from './SupabaseShareLinkStore.js';
+import { SupabaseApiTokenStore } from './SupabaseApiTokenStore.js';
 import { SupabaseUserProfileProvider } from '../userProfile/SupabaseUserProfileProvider.js';
 import { SupabasePlatformPermissionStore } from '../permissions/SupabasePlatformPermissionStore.js';
 
@@ -62,6 +63,7 @@ export class SupabaseDataProvider implements IDataProvider {
 	readonly invites: SupabaseInviteStore;
 	readonly computeServer: SupabaseComputeServerStore;
 	readonly shareLinks: SupabaseShareLinkStore;
+	readonly apiTokens: SupabaseApiTokenStore;
 	readonly userProfile: SupabaseUserProfileProvider;
 	readonly permissions: SupabasePlatformPermissionStore;
 	readonly platformProjectGrants: IPlatformProjectGrantStore;
@@ -84,6 +86,7 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.invites = new SupabaseInviteStore(clients, events);
 		this.computeServer = new SupabaseComputeServerStore(clients, secretKey, logger);
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
+		this.apiTokens = new SupabaseApiTokenStore(clients, events);
 		this.userProfile = new SupabaseUserProfileProvider(clients);
 		this.permissions = new SupabasePlatformPermissionStore(clients);
 		this.platformProjectGrants = notImplementedGrantStore;

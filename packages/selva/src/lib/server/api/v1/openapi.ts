@@ -21,13 +21,13 @@ type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
 const ERROR_DESCRIPTIONS: Record<number, string> = {
 	400: 'Validation failed.',
 	401: 'Missing or invalid credentials.',
-	403: 'Authenticated, but not permitted to perform this action.',
+	403: 'Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed.',
 	404: 'No such resource, or the caller cannot see it.',
 	409: 'The request conflicts with the current state.',
 	422: 'Well-formed but not processable.',
 	429: 'Rate limited. Retry after the interval in `Retry-After`.',
 	500: 'Unexpected server error.',
-	503: 'The compute server is unconfigured or unreachable.'
+	503: 'The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`).'
 };
 
 function requestBodySchema(schema: ZodType): Json {
@@ -158,7 +158,10 @@ function operationFor(ep: Endpoint): Json {
 	}
 
 	const responses = responseFor(ep) as Record<string, Json>;
-	for (const status of [...(ep.errors ?? []), 401, 500].sort((a, b) => a - b)) {
+	// Any operation can refuse a token (403 scope, 503 tokens off), so those join
+	// the always-possible set.
+	const statuses = new Set([...(ep.errors ?? []), 401, 403, 500, 503]);
+	for (const status of [...statuses].sort((a, b) => a - b)) {
 		responses[String(status)] = {
 			description: ERROR_DESCRIPTIONS[status] ?? 'Error.',
 			content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } }
@@ -244,8 +247,9 @@ export function buildOpenApiDocument(version: string = API_VERSION): Json {
 					type: 'http',
 					scheme: 'bearer',
 					description:
-						'A personal access token. `/api/v1` is the only prefix that accepts one — ' +
-						'`/api/admin` never does.'
+						'An API token (`selva_…`), sent as `Authorization: Bearer <token>` and never in the URL. ' +
+						'It acts as the user who created it, in one org, narrowed by its scopes. ' +
+						'`/api/v1` is the only prefix that accepts one; `/api/admin` never does.'
 				}
 			},
 			parameters: {

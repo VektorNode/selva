@@ -54,3 +54,4 @@ export {
 } from './projectMembers.js';
 export { getOrgCompute, updateOrgCompute } from './orgCompute.js';
 export { listInvites, createInvite, revokeInvite, resendInvite } from './invites.js';
+export { listApiTokens, createApiToken, revokeApiToken } from './apiTokens.js';

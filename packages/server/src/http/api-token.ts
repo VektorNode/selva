@@ -25,7 +25,7 @@ export type ApiTokenResolution =
 export interface ResolveApiTokenDeps {
 	/** Absent when the host hasn't configured API tokens: a sent key gets 503. */
 	codec?: ApiTokenCodec;
-	auth: Pick<IAuthProvider, 'getUser'>;
+	auth: Pick<IAuthProvider, 'getUser' | 'delegatedSession'>;
 	data: Pick<IDataProvider, 'apiTokens' | 'orgs'>;
 	/** Receives background failures (the `lastUsedAt` write). Logs the token id only. */
 	log?: ILogger;
@@ -45,6 +45,13 @@ const UNAUTHORIZED: ApiTokenResolution = {
 	status: 401,
 	code: ApiErrorCode.UNAUTHORIZED,
 	message: 'This API token is invalid, expired or revoked.'
+};
+
+const UNAVAILABLE: ApiTokenResolution = {
+	kind: 'rejected',
+	status: 503,
+	code: ApiErrorCode.API_TOKENS_UNAVAILABLE,
+	message: 'API tokens are not available on this server.'
 };
 
 /**
@@ -89,14 +96,11 @@ export async function resolveApiToken(
 	}
 
 	const store = deps.data.apiTokens;
-	if (!deps.codec || !store) {
-		return {
-			kind: 'rejected',
-			status: 503,
-			code: ApiErrorCode.API_TOKENS_UNAVAILABLE,
-			message: 'API tokens are not available on this server.'
-		};
-	}
+	if (!deps.codec || !store) return UNAVAILABLE;
+
+	// The provider logs why; the admin health page shows it.
+	const delegated = deps.auth.delegatedSession;
+	if (delegated && !(await delegated.status()).ok) return UNAVAILABLE;
 
 	if (!deps.codec.hasValidChecksum(raw)) return UNAUTHORIZED;
 	const token = await store.getByTokenHash(SYSTEM_CONTEXT, deps.codec.hashToken(raw));
@@ -109,13 +113,19 @@ export async function resolveApiToken(
 	if (!user || user.disabled || !member) return UNAUTHORIZED;
 
 	// Platform permissions aren't read: narrowing drops them anyway.
-	const ctx = narrowApiTokenContext(
+	let ctx = narrowApiTokenContext(
 		await buildRequestContext(
 			{ user, platformPermissions: [], membership: member, pinOrg: true },
 			{ orgs: deps.data.orgs }
 		),
 		token
 	);
+
+	// Signed only after the user check above: a minted session can't be
+	// revoked, and row security doesn't look at bans.
+	if (delegated) {
+		ctx = { ...ctx, adapterContext: { sessionToken: await delegated.mint(user.id) } };
+	}
 
 	const now = deps.now?.() ?? Date.now();
 	if (!token.lastUsedAt || now - Date.parse(token.lastUsedAt) >= LAST_USED_WRITE_INTERVAL_MS) {

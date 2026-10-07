@@ -1,6 +1,15 @@
 <script lang="ts">
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
-	import { Gauge, Building2, Folders, Users, Server, Settings, ScrollText } from '@lucide/svelte';
+	import {
+		Gauge,
+		Building2,
+		Folders,
+		Users,
+		Server,
+		Settings,
+		ScrollText,
+		KeyRound
+	} from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { OrgPermission, PlatformPermission, TenancyMode } from '@selvajs/platform';
 
@@ -54,6 +63,13 @@
 				icon: Server,
 				match: 'prefix' as const,
 				show: can('manage_compute')
+			},
+			{
+				href: '/admin/tokens',
+				label: 'API tokens',
+				icon: KeyRound,
+				match: 'prefix' as const,
+				show: can('manage_api_tokens')
 			},
 			{
 				href: '/admin/system',

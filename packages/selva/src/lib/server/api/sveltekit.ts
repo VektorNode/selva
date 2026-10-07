@@ -28,6 +28,7 @@ import {
 } from '../providers.server';
 import { shareLinkCodec } from '../shareLinks/token.server';
 import { inviteCodec } from '../invites/token.server';
+import { apiTokenCodec } from '../apiTokens/token.server';
 import { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../computeLimits';
 import { evictComputeClient } from '../compute/engine.server';
 
@@ -81,7 +82,11 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 		{
 			// Resolved per request, not captured: both codecs re-key on the secret,
 			// so a rotated SELVA_HMAC_KEY takes effect without a restart.
-			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
+			tokens: {
+				shareLinks: shareLinkCodec(),
+				invites: inviteCodec(),
+				apiTokens: apiTokenCodec()
+			},
 			// Passed explicitly — depsFromConfig's defaults would silently ignore
 			// this deployment's MAX_*_FILE_SIZE_BYTES.
 			uploadLimits: {

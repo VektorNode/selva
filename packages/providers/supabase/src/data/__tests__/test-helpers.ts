@@ -48,6 +48,7 @@ export async function resetAllData(ctx: TestContext): Promise<void> {
 	await truncate(ctx, 'solve_metrics');
 	await truncate(ctx, 'share_links');
 	await truncate(ctx, 'invites');
+	await truncate(ctx, 'api_tokens');
 	// Versions FK to definitions ON DELETE CASCADE, but `definitions` can't
 	// be wiped while live/draft pointers reference versions (ON DELETE
 	// RESTRICT). Null the pointers, drop versions, then drop defs.
