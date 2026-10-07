@@ -1,7 +1,8 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, noContent, requireParams } from '$lib/server/api/http';
-import { getAuthProvider } from '$lib/server/providers.server';
+import { getAuthProvider, providers } from '$lib/server/providers.server';
+import { revokeUserApiTokens } from '@selvajs/server/handlers';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
@@ -68,6 +69,14 @@ export const POST: RequestHandler = apiRoute(
 			userId: id,
 			actorId: actorFrom(locals.ctx!)
 		});
+
+		await revokeUserApiTokens(
+			providers.data.apiTokens,
+			locals.ctx!,
+			id,
+			{ reason: 'user_disabled' },
+			locals.log
+		);
 
 		return noContent();
 	}

@@ -21,7 +21,7 @@ import {
 import { createClient } from '@supabase/supabase-js';
 import { SupabaseApiTokenStore } from '../SupabaseApiTokenStore.js';
 import { SupabaseDelegatedSession } from '../../auth/SupabaseDelegatedSession.js';
-import { readEnv, resetAllData, seedPlainUser } from './test-helpers.js';
+import { readEnv, resetAllData, seedPlainUser, seedUser } from './test-helpers.js';
 
 const envCtx = readEnv();
 
@@ -174,17 +174,44 @@ if (!envCtx) {
 					await store.create(ctxFor(alice.userId, alice.sessionToken), mine);
 					await store.create(ctxFor(bob.userId, bob.sessionToken), theirs);
 
-					const asAlice = ctxFor(alice.userId, await delegated.mint(alice.userId));
+					const asAlice = ctxFor(alice.userId, await delegated.mint(alice.userId, { orgId }));
 					expect((await store.listByOrg(asAlice, orgId)).items.map((i) => i.id)).toEqual([mine.id]);
 
 					// GoTrue accepts it too: `aud` is set and there's no `session_id` to look up.
 					const { data, error } = await createClient(env.url, env.anonKey, {
 						auth: { persistSession: false, autoRefreshToken: false }
-					}).auth.getUser(await delegated.mint(alice.userId));
+					}).auth.getUser(await delegated.mint(alice.userId, { orgId }));
 					expect(error).toBeNull();
 					expect(data.user?.id).toBe(alice.userId);
 				}
 			);
+
+			it.skipIf(!secret)("drops an instance admin's bypass under a delegated session", async () => {
+				const delegated = new SupabaseDelegatedSession({
+					supabaseUrl: env.url,
+					anonKey: env.anonKey,
+					jwtSecret: secret!
+				});
+				const instanceAdmin = await seedUser(env, '');
+				await addMember(orgId, instanceAdmin.userId, 'member');
+				const elsewhere = await seedOrg(bob.userId);
+				await addMember(elsewhere, bob.userId, 'owner');
+				const foreign = tokenFor(bob.userId, elsewhere);
+				await store.create(ctxFor(bob.userId, bob.sessionToken), foreign);
+
+				// Their browser session reaches the other org through the admin bypass…
+				const asSession = ctxFor(instanceAdmin.userId, instanceAdmin.sessionToken);
+				expect((await store.listByOrg(asSession, elsewhere)).items.map((i) => i.id)).toEqual([
+					foreign.id
+				]);
+				// …a key acting for them in `orgId` does not.
+				const asKey = ctxFor(
+					instanceAdmin.userId,
+					await delegated.mint(instanceAdmin.userId, { orgId })
+				);
+				expect((await store.listByOrg(asKey, elsewhere)).items).toEqual([]);
+				expect(await store.get(asKey, foreign.id)).toBeNull();
+			});
 
 			it('reports a wrong secret instead of signing with it', async () => {
 				const delegated = new SupabaseDelegatedSession({
@@ -194,7 +221,7 @@ if (!envCtx) {
 				});
 				const status = await delegated.status();
 				expect(status.ok).toBe(false);
-				await expect(delegated.mint(alice.userId)).rejects.toThrow(/rejected/);
+				await expect(delegated.mint(alice.userId, { orgId })).rejects.toThrow(/rejected/);
 			});
 		});
 	});

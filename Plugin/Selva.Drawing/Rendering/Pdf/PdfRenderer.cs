@@ -229,13 +229,16 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (metadata.ModifiedAt.HasValue) pdf.Info.ModificationDate = metadata.ModifiedAt.Value;
 	}
 
-	// One top-level outline entry per Page, named after Page.Title (or "Page N" when
-	// blank), with sub-entries for any DrawingView that has a Caption.
+	// One outline entry per Page, named after Page.Title (or "Page N" when blank), with
+	// sub-entries for any DrawingView that has a Caption. A run of pages sharing a Chapter
+	// nests under one entry pointing at the run's first page.
 	private static void ApplyOutlines(PdfDocument pdf, Document document, IReadOnlyList<PdfPage> pdfPages)
 	{
 		if (pdfPages == null || pdfPages.Count == 0) return;
 		// A zero-page document gets a synthesised blank page with no model Page to name.
 		if (document.Pages.Count == 0) return;
+
+		PdfOutline chapter = null;
 
 		var n = Math.Min(document.Pages.Count, pdfPages.Count);
 		for (var i = 0; i < n; i++)
@@ -243,7 +246,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			var modelPage = document.Pages[i];
 			var pdfPage = pdfPages[i];
 			var title = string.IsNullOrEmpty(modelPage.Title) ? "Page " + (i + 1) : modelPage.Title;
-			var top = pdf.Outlines.Add(title, pdfPage, true);
+
+			if (string.IsNullOrEmpty(modelPage.Chapter)) chapter = null;
+			else if (chapter == null || chapter.Title != modelPage.Chapter)
+				chapter = pdf.Outlines.Add(modelPage.Chapter, pdfPage, true);
+
+			var top = (chapter?.Outlines ?? pdf.Outlines).Add(title, pdfPage, true);
 
 			foreach (var view in EnumerateDrawingViewsWithCaptions(modelPage.Content))
 			{

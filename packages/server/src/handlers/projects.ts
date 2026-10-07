@@ -30,6 +30,7 @@ import {
 	hasPermission,
 	slugify,
 	SYSTEM_CONTEXT,
+	outsideTokenOrg,
 	validateProjectFlags,
 	withAdminBypass,
 	type ProjectVisibility
@@ -127,7 +128,9 @@ export const getProject: ApiHandler = async (req) => {
 	// Read as SYSTEM to decide visibility here rather than let the store decide:
 	// the 404-not-403 rule above needs the row before it can hide it.
 	const project = await req.deps.projects.getProject(SYSTEM_CONTEXT, id);
-	if (!project) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	if (!project || outsideTokenOrg(ctx, project.orgId)) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	}
 
 	const [orgMembers, projectMembers, grants] = await Promise.all([
 		req.deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [project.orgId], ctx.userId),

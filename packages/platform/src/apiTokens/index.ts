@@ -18,4 +18,4 @@ export {
 } from './types.js';
 export type { IApiTokenStore } from './interface.js';
 export type { ScopeTarget } from './scope.js';
-export { scopeAllows, narrowApiTokenContext } from './scope.js';
+export { scopeAllows, narrowApiTokenContext, outsideTokenOrg } from './scope.js';

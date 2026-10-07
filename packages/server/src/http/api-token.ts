@@ -124,7 +124,8 @@ export async function resolveApiToken(
 	// Signed only after the user check above: a minted session can't be
 	// revoked, and row security doesn't look at bans.
 	if (delegated) {
-		ctx = { ...ctx, adapterContext: { sessionToken: await delegated.mint(user.id) } };
+		const sessionToken = await delegated.mint(user.id, { orgId: token.orgId });
+		ctx = { ...ctx, adapterContext: { sessionToken } };
 	}
 
 	const now = deps.now?.() ?? Date.now();

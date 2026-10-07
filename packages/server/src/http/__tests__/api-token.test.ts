@@ -197,7 +197,7 @@ describe('resolveApiToken with delegated sessions', () => {
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
 		expect(result.kind).toBe('ok');
 		if (result.kind !== 'ok') return;
-		expect(delegated.mint).toHaveBeenCalledWith('u1');
+		expect(delegated.mint).toHaveBeenCalledWith('u1', { orgId: ORG });
 		expect(result.ctx.adapterContext).toEqual({ sessionToken: 'jwt-for-u1' });
 		expect(result.ctx.apiScope?.tokenId).toBe('tok-1');
 	});

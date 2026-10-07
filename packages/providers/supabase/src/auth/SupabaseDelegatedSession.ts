@@ -47,6 +47,10 @@ interface Signer {
  *
  * `aud` is required by GoTrue's `getUser` (400 without it); `session_id` is
  * omitted because GoTrue looks it up and rejects one with no session row.
+ *
+ * `selva_org` marks the session as delegated. `selva.is_instance_admin()`
+ * returns false for any session carrying it, so an instance admin's key can't
+ * reach other orgs through the policies' admin bypass.
  */
 export class SupabaseDelegatedSession implements IDelegatedSession {
 	private readonly signer: Signer | null;
@@ -105,10 +109,10 @@ export class SupabaseDelegatedSession implements IDelegatedSession {
 		return next.result;
 	}
 
-	async mint(userId: string): Promise<string> {
+	async mint(userId: string, { orgId }: { orgId: string }): Promise<string> {
 		const status = await this.status();
 		if (!status.ok) throw new ProviderError(status.message, 503);
-		return this.signFor(this.signer!, userId);
+		return this.signFor(this.signer!, userId, orgId);
 	}
 
 	/**
@@ -122,7 +126,7 @@ export class SupabaseDelegatedSession implements IDelegatedSession {
 			const res = await this.fetchFn(`${this.baseUrl}/rest/v1/orgs?select=id&limit=1`, {
 				headers: {
 					apikey: this.config.anonKey,
-					Authorization: `Bearer ${this.signFor(signer, randomUUID())}`,
+					Authorization: `Bearer ${this.signFor(signer, randomUUID(), randomUUID())}`,
 					'Accept-Profile': 'selva'
 				}
 			});
@@ -145,7 +149,7 @@ export class SupabaseDelegatedSession implements IDelegatedSession {
 		}
 	}
 
-	private signFor(signer: Signer, userId: string): string {
+	private signFor(signer: Signer, userId: string, orgId: string): string {
 		const iat = Math.floor(this.now() / 1000);
 		const header = { alg: signer.alg, typ: 'JWT', ...(signer.kid ? { kid: signer.kid } : {}) };
 		const payload = {
@@ -154,7 +158,8 @@ export class SupabaseDelegatedSession implements IDelegatedSession {
 			aud: 'authenticated',
 			iat,
 			exp: iat + TTL_SECONDS,
-			iss: `${this.baseUrl}/auth/v1`
+			iss: `${this.baseUrl}/auth/v1`,
+			selva_org: orgId
 		};
 		const input = `${base64url(header)}.${base64url(payload)}`;
 		return `${input}.${signer.sign(Buffer.from(input)).toString('base64url')}`;

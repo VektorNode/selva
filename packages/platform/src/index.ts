@@ -82,7 +82,8 @@ export {
 	formatApiScope,
 	describeApiScope,
 	scopeAllows,
-	narrowApiTokenContext
+	narrowApiTokenContext,
+	outsideTokenOrg
 } from './apiTokens/index.js';
 
 // projects

@@ -43,7 +43,8 @@ import {
 	canEdit,
 	canManage,
 	canEditProjectSettings,
-	canEditDefinition
+	canEditDefinition,
+	outsideTokenOrg
 } from '@selvajs/platform';
 import {
 	createProjectAccessInputBuilder,
@@ -249,7 +250,9 @@ async function loadProjectOr404(
 	src: HasDeps
 ): Promise<Project> {
 	const project = await projectsOf(src).getProject(ctx, projectId);
-	if (!project) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	if (!project || outsideTokenOrg(ctx, project.orgId)) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	}
 	return project;
 }
 
@@ -517,6 +520,8 @@ export async function requireCanSolve(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = preloadedProject ?? (await loadProjectOr404(ctx, projectId, locals));
+	if (outsideTokenOrg(ctx, project.orgId))
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
 	const allowed = await contentCheck(async () =>
 		canSolve(await buildProjectAccessInput(ctx, project, locals))
 	);
@@ -552,6 +557,9 @@ export async function requireEditableDefinition(locals: ScopedLocals, guid: stri
 		projectsOf(locals).getProject(ctx, record.projectId),
 		projectsOf(locals).getProjectMember(ctx, record.projectId, ctx.userId)
 	]);
+	if (project && outsideTokenOrg(ctx, project.orgId)) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
+	}
 	const allowed = await contentCheck(async () =>
 		canEditDefinition({
 			project,
@@ -588,6 +596,7 @@ export async function requireCanEditDefinition(
 				: definitionMetaOf(locals).get(ctx, definitionGuid),
 			projectsOf(locals).getProjectMember(ctx, projectId, ctx.userId)
 		]);
+		if (project && outsideTokenOrg(ctx, project.orgId)) return false;
 		return canEditDefinition({
 			project,
 			definition,

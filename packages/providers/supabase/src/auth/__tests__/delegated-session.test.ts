@@ -3,6 +3,7 @@ import { createPublicKey, generateKeyPairSync, verify } from 'node:crypto';
 import { SupabaseDelegatedSession } from '../SupabaseDelegatedSession.js';
 
 const URL_ = 'https://project.supabase.co';
+const ORG = '0a1b2c3d-4444-4555-8666-777788889999';
 const USER = '6f1d2c3b-1111-4222-8333-944455556666';
 
 function es256Jwk(kid = 'kid-1') {
@@ -38,7 +39,7 @@ describe('SupabaseDelegatedSession', () => {
 			fetch: accepting(),
 			now: () => now
 		});
-		const { header, payload, input, signature } = decode(await session.mint(USER));
+		const { header, payload, input, signature } = decode(await session.mint(USER, { orgId: ORG }));
 
 		expect(header).toEqual({ alg: 'ES256', typ: 'JWT', kid: 'kid-1' });
 		expect(payload).toEqual({
@@ -47,7 +48,8 @@ describe('SupabaseDelegatedSession', () => {
 			aud: 'authenticated',
 			iat: now / 1000,
 			exp: now / 1000 + 60,
-			iss: `${URL_}/auth/v1`
+			iss: `${URL_}/auth/v1`,
+			selva_org: ORG
 		});
 		const publicKey = createPublicKey({
 			key: { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y },
@@ -68,7 +70,7 @@ describe('SupabaseDelegatedSession', () => {
 			]),
 			fetch: accepting()
 		});
-		expect(decode(await session.mint(USER)).header.kid).toBe('current');
+		expect(decode(await session.mint(USER, { orgId: ORG })).header.kid).toBe('current');
 	});
 
 	it('prefers the ES256 key over the legacy secret', async () => {
@@ -79,7 +81,7 @@ describe('SupabaseDelegatedSession', () => {
 			jwtSecret: 'legacy',
 			fetch: accepting()
 		});
-		expect(decode(await session.mint(USER)).header.alg).toBe('ES256');
+		expect(decode(await session.mint(USER, { orgId: ORG })).header.alg).toBe('ES256');
 	});
 
 	it.each([
@@ -102,7 +104,7 @@ describe('SupabaseDelegatedSession', () => {
 		const status = await session.status();
 		expect(status.ok).toBe(false);
 		expect(!status.ok && status.message).toMatch(message);
-		await expect(session.mint(USER)).rejects.toMatchObject({ statusCode: 503 });
+		await expect(session.mint(USER, { orgId: ORG })).rejects.toMatchObject({ statusCode: 503 });
 		expect(fetch).not.toHaveBeenCalled();
 	});
 
@@ -114,8 +116,8 @@ describe('SupabaseDelegatedSession', () => {
 			jwtSecret: 'secret',
 			fetch
 		});
-		await session.mint(USER);
-		await session.mint(USER);
+		await session.mint(USER, { orgId: ORG });
+		await session.mint(USER, { orgId: ORG });
 		expect(fetch).toHaveBeenCalledTimes(1);
 		const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
 		expect(url).toBe(`${URL_}/rest/v1/orgs?select=id&limit=1`);

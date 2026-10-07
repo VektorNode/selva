@@ -64,3 +64,13 @@ export function narrowApiTokenContext(
 	const scopes = token.scopes.map(parseApiScope).filter((s): s is ApiScope => s !== null);
 	return { ...ctx, platformPermissions: [], apiScope: { tokenId: token.id, scopes } };
 }
+
+/**
+ * True when an API-token request reaches for something owned by an org other
+ * than the token's. A token is bound to one org, so that resource doesn't
+ * exist for it, even when the owner belongs to the other org too. Treat it as
+ * not found. Session requests are never outside.
+ */
+export function outsideTokenOrg(ctx: RequestContext, orgId: string): boolean {
+	return ctx.apiScope !== undefined && orgId !== ctx.actingOrgId;
+}

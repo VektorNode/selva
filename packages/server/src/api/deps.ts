@@ -103,6 +103,8 @@ export interface SelvaDeps {
 	notifications?: INotificationProvider;
 	/** Instance display name, used where a record has none. */
 	instanceName: string;
+	/** Where a person manages their API tokens, linked from the new-key email. Host-relative. */
+	apiTokenSettingsPath: string;
 	/**
 	 * Drop the host's warm compute client for one server id.
 	 *
@@ -148,13 +150,15 @@ export function depsFromConfig(
 		uploadLimits,
 		evictComputeClient = () => {},
 		notifications,
-		instanceName = 'Selva'
+		instanceName = 'Selva',
+		apiTokenSettingsPath = '/settings/tokens'
 	}: {
 		tokens?: SelvaDeps['tokens'];
 		uploadLimits?: Partial<SelvaDeps['uploadLimits']>;
 		evictComputeClient?: SelvaDeps['evictComputeClient'];
 		notifications?: INotificationProvider;
 		instanceName?: string;
+		apiTokenSettingsPath?: string;
 	} = {}
 ): SelvaDeps {
 	const { data } = config;
@@ -184,6 +188,7 @@ export function depsFromConfig(
 		evictComputeClient,
 		notifications,
 		instanceName,
+		apiTokenSettingsPath,
 		services
 	};
 }

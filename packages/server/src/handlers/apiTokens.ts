@@ -14,8 +14,10 @@ import {
 	hasPermission,
 	parseApiScope,
 	type ApiToken,
+	type ApiTokenRevokeReason,
 	type ApiTokenSummary,
 	type IApiTokenStore,
+	type ILogger,
 	type RequestContext
 } from '@selvajs/platform';
 import { renderApiTokenCreatedEmail } from '@selvajs/notifications';
@@ -134,7 +136,7 @@ async function mailTokenCreated(req: ApiRequest, token: ApiToken): Promise<void>
 				orgName: org?.name ?? req.deps.instanceName,
 				scopes: token.scopes.map(describeApiScope),
 				expiresAt: token.expiresAt,
-				manageUrl: `${req.url.origin}/admin/tokens`
+				manageUrl: `${req.url.origin}${req.deps.apiTokenSettingsPath}`
 			}),
 			req.log
 		);
@@ -220,3 +222,33 @@ export const revokeApiToken: ApiHandler = async (req) => {
 	await store.revoke(ctx, tokenId, own ? 'owner' : 'admin');
 	return noContent();
 };
+
+/**
+ * Revoke every live key `userId` holds, in one org or (no `orgId`) all of
+ * them. Call it when someone leaves an org or is disabled: the resolver already
+ * refuses those keys, but without this they would work again the moment the
+ * person is re-added or re-enabled.
+ *
+ * Best effort. The removal or disable has already committed, so a failure is
+ * logged rather than thrown.
+ */
+export async function revokeUserApiTokens(
+	store: IApiTokenStore | undefined,
+	ctx: RequestContext,
+	userId: string,
+	opts: { orgId?: string; reason: ApiTokenRevokeReason },
+	log: ILogger
+): Promise<void> {
+	if (!store) return;
+	try {
+		await store.revokeAllForUser(ctx, userId, opts);
+	} catch (err) {
+		log.error('Failed to revoke API tokens', {
+			component: 'ApiTokens',
+			userId,
+			orgId: opts.orgId,
+			reason: opts.reason,
+			err: err instanceof Error ? err.message : String(err)
+		});
+	}
+}

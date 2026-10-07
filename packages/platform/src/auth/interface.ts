@@ -259,8 +259,12 @@ export interface IDelegatedSession {
 	 */
 	status(): Promise<DelegatedSessionStatus>;
 
-	/** A session token acting as `userId`, valid for about a minute. Throws if `status` isn't ok. */
-	mint(userId: string): Promise<string>;
+	/**
+	 * A session token acting as `userId` inside `orgId`, valid for about a
+	 * minute. It carries no instance-admin rights, whatever the user holds: those
+	 * never ride on a bearer key. Throws if `status` isn't ok.
+	 */
+	mint(userId: string, opts: { orgId: string }): Promise<string>;
 }
 
 /**

@@ -60,6 +60,10 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
   declares none gets the org-level check, so forgetting it refuses narrow keys rather than leaking.
 - **Requests without a token always pass `scopeAllows`.** Browser sessions are unaffected.
 - **Keys drop the owner's platform permissions.** Instance authority never rides on a bearer key.
+- **A key only reaches its own org, even when its owner belongs to others.** Scopes alone don't
+  enforce this: `all` and `org` never look at the target's org. Every guard that loads a project
+  for a decision, and the project scan behind the listings, treats another org's project as not
+  found (`outsideTokenOrg`). Host routes use the same helper.
 
 ### Resolution
 
@@ -82,8 +86,12 @@ The Supabase stores scope every query by the user JWT, and a token request has n
 [#322](https://github.com/VektorNode/selva/issues/322))
 
 - **Selva signs a short-lived JWT for the owner** through an optional auth-provider capability,
-  `delegatedSession.mint(userId, { readOrg? })`. Claims are hardcoded: `sub`, `role` and `aud` both
-  `authenticated`, `iat`, `exp`, and never `session_id`. Without `aud`, GoTrue's `getUser` returns 400.
+  `delegatedSession.mint(userId, { orgId })`. Claims are hardcoded: `sub`, `role` and `aud` both
+  `authenticated`, `iat`, `exp`, `selva_org`, and never `session_id`. Without `aud`, GoTrue's
+  `getUser` returns 400.
+  - `selva_org` marks the session as delegated: `selva.is_instance_admin()` returns false for it,
+    which closes every policy's admin bypass at once. Without it an instance admin's key read every
+    org through RLS. `selva.delegated_org()` exposes it to host policies.
   - Only the Supabase provider implements it; local and header have no RLS.
   - Minted JWTs never go through `verifyToken`.
 - **60 s, signed per request, no cache.** Signing costs microseconds. The resolver re-checks the user

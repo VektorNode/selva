@@ -220,8 +220,12 @@ export const deleteDefinition: ApiHandler = async (req) => {
 /** Metadata only. New versions POST to `/versions`. */
 export const updateDefinition: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
-	const { ctx } = await requireEditableDefinition(req, guid);
+	const { ctx, record } = await requireEditableDefinition(req, guid);
 	const patch = await parseBody(req.request, UpdateMetadataInputSchema);
+	// Moving needs the same rights on the destination as uploading there.
+	if (patch.projectId && patch.projectId !== record.projectId) {
+		await requireCanCreateDefinition(req, patch.projectId);
+	}
 
 	await definitionService(req.deps).updateMeta(ctx, guid, patch);
 	return noContent();

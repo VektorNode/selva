@@ -31,6 +31,7 @@ import {
 	type RequestContext
 } from '@selvajs/platform';
 import { requireManageOrgMembers, requireActingOrg } from '../access/index.js';
+import { revokeUserApiTokens } from './apiTokens.js';
 
 const ROSTER_PAGE_LIMIT = 200;
 // Runaway guard against an adapter returning a non-advancing cursor. Matches
@@ -258,6 +259,14 @@ export const removeOrgMember: ApiHandler = async (req) => {
 			});
 		}
 	}
+
+	await revokeUserApiTokens(
+		req.deps.data.apiTokens,
+		ctx,
+		userId,
+		{ orgId, reason: 'member_removed' },
+		req.log
+	);
 
 	return noContent();
 };

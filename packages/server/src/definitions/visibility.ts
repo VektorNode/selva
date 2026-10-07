@@ -14,7 +14,7 @@
  * per-project `await` inside a loop reintroduces the N+1 this replaced.
  */
 
-import { SYSTEM_CONTEXT, canView } from '@selvajs/platform';
+import { SYSTEM_CONTEXT, canView, outsideTokenOrg } from '@selvajs/platform';
 import type {
 	DefinitionListOptions,
 	DefinitionRecord,
@@ -75,7 +75,8 @@ export async function resolveAccessibleProjects(
 	const grantStore = deps.platformProjectGrants;
 
 	const orgsPage = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: SCAN_LIMIT });
-	const orgIds = orgsPage.items.map((o) => o.id);
+	// An API token sees its own org only, cross-org public projects included.
+	const orgIds = orgsPage.items.map((o) => o.id).filter((id) => !outsideTokenOrg(ctx, id));
 
 	const projectPages = await Promise.all(
 		orgIds.map((orgId) => projectStore.listProjects(SYSTEM_CONTEXT, orgId, { limit: SCAN_LIMIT }))
@@ -159,7 +160,7 @@ export async function getVisibleDefinition(
 	if (!record) return null;
 
 	const project = await projectStore.getProject(SYSTEM_CONTEXT, record.projectId);
-	if (!project) return null;
+	if (!project || outsideTokenOrg(ctx, project.orgId)) return null;
 
 	const [orgMembers, projectMembers, grants] = await Promise.all([
 		deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [project.orgId], ctx.userId),
