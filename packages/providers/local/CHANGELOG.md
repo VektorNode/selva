@@ -1,5 +1,23 @@
 # @selvajs/local-provider
 
+## 0.16.0-beta.0
+
+### Minor Changes
+
+- d50c8fa: API tokens, resolution and enforcement (no minting UI yet).
+
+  - `@selvajs/platform`: `ApiToken`, `IApiTokenStore` (optional `apiTokens` on `IDataProvider`), `scopeAllows`, `narrowApiTokenContext`, `apiScope` on `RequestContext`, the `manage_api_tokens` and `read_all_org_projects` permissions, `api_token.*` events, and `actorOf`, which adds `tokenId` to events written during a token request. `read_all_org_projects` is not in the owner/admin defaults.
+  - `@selvajs/server`: `resolveApiToken` and `buildRequestContext` in `/http`; `createApiTokenCodec` (`selva_` keys with a checksum) in `/tokens`; `runHandler` checks API-token scopes, with `action` and `scopeTarget` options; `ApiError` gains `details`; new code `API_TOKENS_UNAVAILABLE`.
+  - `@selvajs/local-provider`: `LocalApiTokenStore`, wired into the org-delete cascade and user erasure.
+  - `@selvajs/selva`: the hook resolves `Authorization: Bearer selva_…` on `/api/v1/*` before the cookie, and a bad key never falls back to the session.
+
+### Patch Changes
+
+- Updated dependencies [d50c8fa]
+- Updated dependencies [5a96097]
+- Updated dependencies [5a96097]
+  - @selvajs/platform@0.21.0-beta.0
+
 ## 0.15.3
 
 ### Patch Changes

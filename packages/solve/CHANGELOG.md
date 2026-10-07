@@ -1,5 +1,14 @@
 # @selvajs/solve
 
+## 1.2.3-beta.0
+
+### Patch Changes
+
+- Updated dependencies [d50c8fa]
+- Updated dependencies [5a96097]
+- Updated dependencies [5a96097]
+  - @selvajs/platform@0.21.0-beta.0
+
 ## 1.2.2
 
 ### Patch Changes

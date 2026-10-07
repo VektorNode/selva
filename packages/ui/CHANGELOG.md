@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 6.5.1-beta.0
+
+### Patch Changes
+
+- @selvajs/solve@1.2.3-beta.0
+
 ## 6.5.0
 
 ### Minor Changes
