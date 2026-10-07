@@ -49,6 +49,8 @@ const EVENT_TYPE_ALLOWLIST: Record<DomainEventType, true> = {
 	'invite.created': true,
 	'invite.accepted': true,
 	'invite.revoked': true,
+	'api_token.created': true,
+	'api_token.revoked': true,
 	'user.created': true,
 	'user.deleted': true,
 	'user.disabled': true,
@@ -339,6 +341,8 @@ function targetFor(event: DomainEvent): { kind: AuditTargetKind; id: string } | 
 		case 'invite.created':
 		case 'invite.accepted':
 		case 'invite.revoked':
+		case 'api_token.created':
+		case 'api_token.revoked':
 			return { kind: 'org', id: event.orgId };
 		case 'user.created':
 		case 'user.deleted':

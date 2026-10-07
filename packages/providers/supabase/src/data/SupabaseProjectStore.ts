@@ -8,7 +8,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { ProviderError, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
@@ -108,7 +108,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			type: 'project.created',
 			projectId: project.id,
 			orgId: project.orgId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -175,11 +175,11 @@ export class SupabaseProjectStore implements IProjectStore {
 			await this.events.emit({
 				type: 'definition.deleted',
 				definitionId: row.guid,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 
-		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'project.deleted', projectId: id, ...actorOf(ctx) });
 	}
 
 	async reactivateProject(
@@ -216,7 +216,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			type: 'project.created',
 			projectId: project.id,
 			orgId: project.orgId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 		return project;
 	}
@@ -296,7 +296,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			type: 'project_member.added',
 			projectId: member.projectId,
 			userId: member.userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -323,7 +323,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			projectId,
 			userId,
 			role,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -340,7 +340,7 @@ export class SupabaseProjectStore implements IProjectStore {
 			type: 'project_member.removed',
 			projectId,
 			userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 }

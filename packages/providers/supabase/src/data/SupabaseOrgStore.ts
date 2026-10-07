@@ -9,12 +9,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import {
-	DEFAULT_ORG_PERMISSIONS,
-	ProviderError,
-	actorFrom,
-	NoopEventSink
-} from '@selvajs/platform';
+import { DEFAULT_ORG_PERMISSIONS, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
@@ -102,7 +97,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			{ onConflict: 'org_id,user_id' }
 		);
 		if (memberError) throw mapPostgrestError(memberError);
-		await this.events.emit({ type: 'org.created', orgId: org.id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'org.created', orgId: org.id, ...actorOf(ctx) });
 	}
 
 	async updateOrg(
@@ -211,7 +206,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			.eq('owner_org_id', id);
 		if (csErr) throw mapPostgrestError(csErr);
 
-		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'org.deleted', orgId: id, ...actorOf(ctx) });
 	}
 
 	// ============================================================================
@@ -323,7 +318,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			type: 'org_member.added',
 			orgId: member.orgId,
 			userId: member.userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -355,7 +350,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			orgId,
 			userId,
 			role,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -384,7 +379,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			orgId,
 			userId,
 			permissions: [...permissions],
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -425,7 +420,7 @@ export class SupabaseOrgStore implements IOrgStore {
 			type: 'org_member.removed',
 			orgId,
 			userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 }

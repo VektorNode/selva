@@ -17,7 +17,13 @@ export {
 	requireUpload,
 	throwZodError
 } from './request.js';
-export { runHandler, toErrorBody, type ApiErrorBody } from './respond.js';
+export { runHandler, toErrorBody, type ApiErrorBody, type RunHandlerOptions } from './respond.js';
+export {
+	assertScope,
+	actionForMethod,
+	projectScopeTarget,
+	definitionScopeTarget
+} from './scope.js';
 export { mapCoreError } from './map-core-error.js';
 export { parseListOptions, parseDefinitionListOptions } from './pagination.js';
 export {

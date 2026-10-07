@@ -5,6 +5,7 @@ import type {
 	IDefinitionStore,
 	IComputeServerStore,
 	IInviteStore,
+	IApiTokenStore,
 	IShareLinkStore,
 	IUserProfileStore,
 	IPlatformPermissionStore,
@@ -20,6 +21,7 @@ import { LocalProjectStore } from './LocalProjectStore.js';
 import { LocalDefinitionStore } from './LocalDefinitionStore.js';
 import { LocalComputeServerStore } from './LocalComputeServerStore.js';
 import { LocalInviteStore } from './LocalInviteStore.js';
+import { LocalApiTokenStore } from './LocalApiTokenStore.js';
 import { LocalShareLinkStore } from './LocalShareLinkStore.js';
 import { LocalPlatformProjectGrantStore } from './LocalPlatformProjectGrantStore.js';
 import { LocalUserProfileProvider } from '../userProfile/LocalUserProfileProvider.js';
@@ -40,6 +42,7 @@ export class LocalDataProvider implements IDataProvider {
 	readonly definitions: IDefinitionStore;
 	readonly computeServer: IComputeServerStore;
 	readonly invites: IInviteStore;
+	readonly apiTokens: IApiTokenStore;
 	readonly shareLinks: IShareLinkStore;
 	readonly userProfile: IUserProfileStore;
 	readonly permissions: IPlatformPermissionStore;
@@ -49,7 +52,9 @@ export class LocalDataProvider implements IDataProvider {
 	private readonly userData: LocalUserDataStore;
 
 	private constructor(
-		stores: Omit<IDataProvider, 'ensureUser' | 'onUserDeleted'>,
+		stores: Omit<IDataProvider, 'ensureUser' | 'onUserDeleted' | 'apiTokens'> & {
+			apiTokens: IApiTokenStore;
+		},
 		userData: LocalUserDataStore
 	) {
 		this.events = stores.events;
@@ -58,6 +63,7 @@ export class LocalDataProvider implements IDataProvider {
 		this.definitions = stores.definitions;
 		this.computeServer = stores.computeServer;
 		this.invites = stores.invites;
+		this.apiTokens = stores.apiTokens;
 		this.shareLinks = stores.shareLinks;
 		this.userProfile = stores.userProfile;
 		this.permissions = stores.permissions;
@@ -96,6 +102,7 @@ export class LocalDataProvider implements IDataProvider {
 		} catch {
 			// Already absent — nothing to clean up.
 		}
+		await this.apiTokens.eraseUser(ctx, userId);
 		// `findUserMembership` returns one live membership at a time; removing it
 		// surfaces the next. 100 is far above any real org count — a ceiling in
 		// case a store bug ever turns removal into a no-op.
@@ -117,6 +124,7 @@ export class LocalDataProvider implements IDataProvider {
 		const loader = new LocalOrgStoreLoader(dataPath);
 		const platformProjectGrants = LocalPlatformProjectGrantStore.fromEnv(env);
 		const invites = LocalInviteStore.fromEnv(env, events);
+		const apiTokens = LocalApiTokenStore.fromEnv(env, events);
 		const computeServer = LocalComputeServerStore.fromEnv(env);
 		const projects = new LocalProjectStore({ loader, grants: platformProjectGrants, events });
 		const definitions = new LocalDefinitionStore(dataPath, undefined, events);
@@ -127,6 +135,7 @@ export class LocalDataProvider implements IDataProvider {
 		const orgs = new LocalOrgStore({
 			loader,
 			invites,
+			apiTokens,
 			computeServer,
 			grants: platformProjectGrants,
 			events
@@ -153,6 +162,7 @@ export class LocalDataProvider implements IDataProvider {
 				definitions,
 				computeServer,
 				invites,
+				apiTokens,
 				shareLinks,
 				userProfile: new LocalUserProfileProvider(userData),
 				permissions: new LocalPlatformPermissionStore(userData),

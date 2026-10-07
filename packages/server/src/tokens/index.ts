@@ -6,3 +6,11 @@ export {
 	type TokenCodec,
 	type TokenCodecConfig
 } from './token-codec.js';
+
+// API tokens (`selva_`): the same HMAC-at-rest scheme, plus a checksum.
+export {
+	createApiTokenCodec,
+	API_TOKEN_PREFIX,
+	looksLikeApiToken,
+	type ApiTokenCodec
+} from './api-token-codec.js';

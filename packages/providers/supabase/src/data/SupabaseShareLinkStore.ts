@@ -7,7 +7,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { actorFrom, NoopEventSink } from '@selvajs/platform';
+import { actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -47,7 +47,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			type: 'share_link.minted',
 			linkId: link.id,
 			definitionId: link.definitionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -134,7 +134,7 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 			.eq('id', id)
 			.is('revoked_at', null);
 		if (error) throw mapPostgrestError(error);
-		await this.events.emit({ type: 'share_link.revoked', linkId: id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'share_link.revoked', linkId: id, ...actorOf(ctx) });
 	}
 
 	async tryIncrementSolveCount(_ctx: RequestContext, id: string): Promise<number | null> {

@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import type {
 	IOrgStore,
 	IInviteStore,
+	IApiTokenStore,
 	IComputeServerStore,
 	IPlatformProjectGrantStore,
 	IEventSink,
@@ -20,12 +21,13 @@ import {
 	ProviderError,
 	auditUpdate,
 	auditSoftDelete,
-	actorFrom,
+	actorOf,
 	NoopEventSink
 } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 import { LocalInviteStore } from './LocalInviteStore.js';
+import { LocalApiTokenStore } from './LocalApiTokenStore.js';
 import { LocalComputeServerStore } from './LocalComputeServerStore.js';
 import { LocalPlatformProjectGrantStore } from './LocalPlatformProjectGrantStore.js';
 
@@ -83,11 +85,12 @@ export class LocalOrgStoreLoader {
 export interface LocalOrgStoreOptions {
 	loader: LocalOrgStoreLoader;
 	/**
-	 * Sibling stores for the `deleteOrg` cascade — invites, compute config, and
-	 * grants live in separate JSON files the loader can't reach. Required, not
+	 * Sibling stores for the `deleteOrg` cascade — invites, API tokens, compute
+	 * config, and grants live in separate JSON files the loader can't reach. Required, not
 	 * optional: an unwired cascade silently leaks operational data.
 	 */
 	invites: IInviteStore;
+	apiTokens: IApiTokenStore;
 	computeServer: IComputeServerStore;
 	grants: IPlatformProjectGrantStore;
 	events?: IEventSink;
@@ -97,6 +100,7 @@ export class LocalOrgStore implements IOrgStore {
 	private readonly loader: LocalOrgStoreLoader;
 	private readonly events: IEventSink;
 	private readonly invites: IInviteStore;
+	private readonly apiTokens: IApiTokenStore;
 	private readonly computeServer: IComputeServerStore;
 	private readonly grants: IPlatformProjectGrantStore;
 
@@ -105,6 +109,7 @@ export class LocalOrgStore implements IOrgStore {
 		return new LocalOrgStore({
 			loader: new LocalOrgStoreLoader(env.DATA_PATH),
 			invites: LocalInviteStore.fromEnv(env),
+			apiTokens: LocalApiTokenStore.fromEnv(env),
 			computeServer: LocalComputeServerStore.fromEnv(env),
 			grants: LocalPlatformProjectGrantStore.fromEnv(env)
 		});
@@ -113,6 +118,7 @@ export class LocalOrgStore implements IOrgStore {
 	constructor(opts: LocalOrgStoreOptions) {
 		this.loader = opts.loader;
 		this.invites = opts.invites;
+		this.apiTokens = opts.apiTokens;
 		this.computeServer = opts.computeServer;
 		this.grants = opts.grants;
 		this.events = opts.events ?? new NoopEventSink();
@@ -155,7 +161,7 @@ export class LocalOrgStore implements IOrgStore {
 			deletedAt: null
 		});
 		await this.loader.write(store);
-		await this.events.emit({ type: 'org.created', orgId: org.id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'org.created', orgId: org.id, ...actorOf(ctx) });
 	}
 
 	async updateOrg(
@@ -201,13 +207,14 @@ export class LocalOrgStore implements IOrgStore {
 		// Invites and compute config are operational, not user data, so they
 		// hard-delete rather than soft-delete — no audit trail to preserve.
 		await this.invites.deleteByOrg(ctx, id);
+		await this.apiTokens.deleteByOrg(ctx, id);
 		await this.computeServer.deleteByOrg(ctx, id);
 		// User grants survive — they're identity-scoped, not org-scoped.
 		for (const projectId of orgProjectIds) {
 			await this.grants.deleteByProject(ctx, projectId);
 		}
 		await this.grants.deleteByGranteeOrg(ctx, id);
-		await this.events.emit({ type: 'org.deleted', orgId: id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'org.deleted', orgId: id, ...actorOf(ctx) });
 	}
 
 	async listOrgMembers(
@@ -279,7 +286,7 @@ export class LocalOrgStore implements IOrgStore {
 			type: 'org_member.added',
 			orgId: member.orgId,
 			userId: member.userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -303,7 +310,7 @@ export class LocalOrgStore implements IOrgStore {
 			orgId,
 			userId,
 			role,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -324,7 +331,7 @@ export class LocalOrgStore implements IOrgStore {
 			orgId,
 			userId,
 			permissions: [...permissions],
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -351,7 +358,7 @@ export class LocalOrgStore implements IOrgStore {
 			type: 'org_member.removed',
 			orgId,
 			userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 }

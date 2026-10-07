@@ -17,6 +17,7 @@ import {
 	runHandler,
 	type ApiHandler,
 	type ApiRequest,
+	type RunHandlerOptions,
 	type SelvaDeps
 } from '@selvajs/server/api';
 import {
@@ -47,7 +48,13 @@ export function mapAppError(err: unknown): ApiError | undefined {
 		// form with `fields` (Zod's per-field detail) — both are live, so this
 		// reads the body rather than just the status.
 		const body = err.body as
-			{ message?: string; code?: ApiErrorCode; fields?: Record<string, string> } | string;
+			| {
+					message?: string;
+					code?: ApiErrorCode;
+					fields?: Record<string, string>;
+					details?: Record<string, string>;
+			  }
+			| string;
 		if (typeof body === 'string') {
 			return new ApiError(err.status, codeForStatus(err.status), body);
 		}
@@ -55,7 +62,8 @@ export function mapAppError(err: unknown): ApiError | undefined {
 			err.status,
 			body?.code ?? codeForStatus(err.status),
 			body?.message ?? 'Request failed',
-			body?.fields
+			body?.fields,
+			body?.details
 		);
 	}
 	return mapCoreError(err);
@@ -102,8 +110,18 @@ export function toApiRequest(event: RequestEvent): ApiRequest {
 	};
 }
 
-/** Mount a transport-free handler as a SvelteKit `RequestHandler`. */
-export function mount(fallback: string, handler: ApiHandler) {
+/**
+ * Mount a transport-free handler as a SvelteKit `RequestHandler`.
+ *
+ * Routes addressed by a project or definition pass `scopeTarget`, so a key
+ * scoped to that project or definition can reach them; solve routes pass
+ * `action: 'solve'`.
+ */
+export function mount(
+	fallback: string,
+	handler: ApiHandler,
+	opts: Pick<RunHandlerOptions, 'action' | 'scopeTarget'> = {}
+) {
 	return (event: RequestEvent): Promise<Response> =>
-		runHandler(handler, toApiRequest(event), { fallback, mapError: mapAppError });
+		runHandler(handler, toApiRequest(event), { fallback, mapError: mapAppError, ...opts });
 }

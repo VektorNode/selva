@@ -45,3 +45,9 @@ export type { PlatformPermissionStoreConformanceOptions } from './suites/platfor
 
 export { runPlatformProjectGrantStoreConformance } from './suites/platformProjectGrantStoreSuite.js';
 export type { PlatformProjectGrantStoreConformanceOptions } from './suites/platformProjectGrantStoreSuite.js';
+
+export { runApiTokenStoreConformance } from './suites/apiTokenStoreSuite.js';
+export type {
+	ApiTokenStoreConformanceOptions,
+	ApiTokenTestScope
+} from './suites/apiTokenStoreSuite.js';

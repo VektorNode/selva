@@ -6,7 +6,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { NoopEventSink, actorFrom } from '@selvajs/platform';
+import { NoopEventSink, actorOf } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -40,7 +40,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			inviteId: invite.id,
 			orgId: invite.orgId,
 			email: invite.email,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -88,7 +88,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			inviteId: id,
 			orgId: (row as { org_id: string }).org_id,
 			userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -107,7 +107,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			type: 'invite.revoked',
 			inviteId: id,
 			orgId: (row as { org_id: string }).org_id,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -129,7 +129,7 @@ export class SupabaseInviteStore implements IInviteStore {
 				type: 'invite.revoked',
 				inviteId: id,
 				orgId,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 		return ids;

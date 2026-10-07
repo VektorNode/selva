@@ -300,6 +300,12 @@ export function buildOpenApiDocument(version: string = API_VERSION): Json {
 							description:
 								'Per-field messages, keyed by dotted path. Present on validation failures.',
 							additionalProperties: { type: 'string' }
+						},
+						details: {
+							type: 'object',
+							description:
+								'Machine-readable context. A scope refusal carries `requiredScope`, e.g. `write:org:<id>`.',
+							additionalProperties: { type: 'string' }
 						}
 					},
 					required: ['message', 'code']

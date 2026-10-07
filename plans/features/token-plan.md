@@ -55,7 +55,11 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
   a handler can declare `action` (solve routes declare `solve`). Per-handler calls were rejected:
   a forgotten call silently lets a read-only key write. A host that bypasses `runHandler` must call
   `scopeAllows` itself.
+- **Routes addressed by a project or definition declare a `scopeTarget`** (`projectScopeTarget`,
+  `definitionScopeTarget`), which is how a project key reaches `/projects/{id}`. A route that
+  declares none gets the org-level check, so forgetting it refuses narrow keys rather than leaking.
 - **Requests without a token always pass `scopeAllows`.** Browser sessions are unaffected.
+- **Keys drop the owner's platform permissions.** Instance authority never rides on a bearer key.
 
 ### Resolution
 

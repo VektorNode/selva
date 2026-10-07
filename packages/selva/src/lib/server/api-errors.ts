@@ -1,7 +1,7 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { ProviderError, type ILogger } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
-import { isApiError } from '@selvajs/server/api';
+import { ApiErrorCode, isApiError } from '@selvajs/server/api';
 import { SchemaExtractionError } from '@selvajs/server/definitions';
 import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 
@@ -14,20 +14,9 @@ import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 // machine-readable string so consumers (the web UI, any external CLI/SDK) can
 // branch on the failure class without parsing the human message.
 
-/** Stable, machine-readable error codes. Append-only — never renumber/rename. */
-export const ApiErrorCode = {
-	VALIDATION_FAILED: 'VALIDATION_FAILED',
-	UNAUTHORIZED: 'UNAUTHORIZED',
-	FORBIDDEN: 'FORBIDDEN',
-	NOT_FOUND: 'NOT_FOUND',
-	CONFLICT: 'CONFLICT',
-	UNPROCESSABLE: 'UNPROCESSABLE',
-	COMPUTE_UNAVAILABLE: 'COMPUTE_UNAVAILABLE',
-	SETUP_REQUIRED: 'SETUP_REQUIRED',
-	INTERNAL: 'INTERNAL'
-} as const;
-
-export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
+// One code list for the app and every package handler, so the spec's enum
+// can't miss a code a handler raises.
+export { ApiErrorCode };
 
 /**
  * Thin wrapper over SvelteKit's `error()` that forces the `{ message, code }`
@@ -38,9 +27,10 @@ export function apiError(
 	status: number,
 	code: ApiErrorCode,
 	message: string,
-	fields?: Record<string, string>
+	fields?: Record<string, string>,
+	details?: Record<string, string>
 ): never {
-	throw error(status, fields ? { message, code, fields } : { message, code });
+	throw error(status, { message, code, ...(fields && { fields }), ...(details && { details }) });
 }
 
 /** Default code for a given HTTP status, used when mapping opaque errors. */
@@ -90,7 +80,7 @@ export function handleApiError(err: unknown, fallback: string, log?: ILogger): n
 	// so translate rather than letting a validation failure fall through to the
 	// 500 branch below.
 	if (isApiError(err)) {
-		apiError(err.status, err.code, err.message, err.fields);
+		apiError(err.status, err.code, err.message, err.fields, err.details);
 	}
 	// Compute unreachable, or serving a schema shape the app cannot read → 503
 	// (both are operator-side); invalid/newer-than-supported schema → 422.

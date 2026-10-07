@@ -12,7 +12,7 @@ import type {
 	Page,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -156,7 +156,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			type: 'definition.created',
 			definitionId: record.guid,
 			projectId: record.projectId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -190,7 +190,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition.deleted',
 			definitionId: guid,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -210,7 +210,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			await this.events.emit({
 				type: 'definition.deleted',
 				definitionId: row.guid,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 	}
@@ -248,7 +248,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			type: 'definition_version.created',
 			versionId: version.id,
 			definitionId: version.definitionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -303,7 +303,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition_version.deleted',
 			versionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -319,7 +319,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			type: 'definition.published',
 			definitionId,
 			versionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 

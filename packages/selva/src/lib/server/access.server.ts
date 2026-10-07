@@ -17,7 +17,7 @@
  */
 
 import { error, redirect } from '@sveltejs/kit';
-import { ALL_PLATFORM_PERMISSIONS, hasPermission, type AuthUser } from '@selvajs/platform';
+import { OPERATOR_PLATFORM_PERMISSIONS, hasPermission, type AuthUser } from '@selvajs/platform';
 import { isApiError } from '@selvajs/server/api';
 import { requireAuthed, type AnyPermission, type Locals } from '@selvajs/server/access';
 
@@ -34,7 +34,12 @@ export async function asHttpError<T>(run: () => T | Promise<T>): Promise<T> {
 		return await run();
 	} catch (err) {
 		if (isApiError(err)) {
-			throw error(err.status, { message: err.message, code: err.code, fields: err.fields });
+			throw error(err.status, {
+				message: err.message,
+				code: err.code,
+				fields: err.fields,
+				details: err.details
+			});
 		}
 		throw err;
 	}
@@ -61,7 +66,7 @@ export const assertManageCompute = (locals: Locals) =>
  */
 export function assertAnyPlatformPermission(locals: Locals): AuthUser {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = ALL_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
+	const allowed = OPERATOR_PLATFORM_PERMISSIONS.some((p) => hasPermission(ctx, p));
 	if (!allowed) redirect(303, '/library');
 	return user;
 }

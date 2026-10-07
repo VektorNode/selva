@@ -35,6 +35,8 @@
 		'invite.created': 'Invite · created',
 		'invite.accepted': 'Invite · accepted',
 		'invite.revoked': 'Invite · revoked',
+		'api_token.created': 'API token · created',
+		'api_token.revoked': 'API token · revoked',
 		'user.created': 'User · created',
 		'user.deleted': 'User · deleted',
 		'user.disabled': 'User · disabled',

@@ -10,7 +10,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { ProviderError, SYSTEM_CONTEXT, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ProviderError, SYSTEM_CONTEXT, actorOf, NoopEventSink } from '@selvajs/platform';
 import { paginate } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -99,7 +99,7 @@ export class LocalShareLinkStore implements IShareLinkStore {
 			type: 'share_link.minted',
 			linkId: link.id,
 			definitionId: link.definitionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -185,7 +185,7 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		if (!l || !this.isLive(l)) return; // idempotent
 		l.revokedAt = new Date().toISOString();
 		await this.writeAll(all);
-		await this.events.emit({ type: 'share_link.revoked', linkId: id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'share_link.revoked', linkId: id, ...actorOf(ctx) });
 	}
 
 	async tryIncrementSolveCount(_ctx: RequestContext, id: string): Promise<number | null> {

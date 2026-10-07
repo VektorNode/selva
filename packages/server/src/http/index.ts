@@ -14,3 +14,10 @@ export {
 	type LoginRateLimiter,
 	type LoginRateLimiterConfig
 } from './login-rate-limit.js';
+export { buildRequestContext, type BuildRequestContextInput } from './request-context.js';
+export {
+	resolveApiToken,
+	type ApiTokenResolution,
+	type ResolveApiTokenDeps,
+	type ResolveApiTokenOptions
+} from './api-token.js';

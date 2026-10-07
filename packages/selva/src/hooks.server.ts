@@ -1,11 +1,17 @@
 import { redirect } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import { isApiError } from '@selvajs/server/api';
-import type { AuthUser, RequestContext } from '@selvajs/platform';
+import type { AuthUser, PlatformPermission } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
-import { applySecurityHeaders, createRouteClassifier } from '@selvajs/server/http';
+import {
+	applySecurityHeaders,
+	buildRequestContext,
+	createRouteClassifier,
+	resolveApiToken
+} from '@selvajs/server/http';
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
 import { providers, getErrorReporter, getEventSink, getLogger } from '$lib/server/providers.server';
+import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
@@ -66,54 +72,18 @@ async function ensureUserOnce(userId: string): Promise<void> {
 	ensuredUserIds.add(userId);
 }
 
-/**
- * Builds a per-request context from an authenticated user: resolves active-org
- * membership and its OrgPermissions.
- *
- * Active-org resolution: single tenancy picks the deployment's one org; multi
- * tenancy picks the first org the user belongs to (URL-prefix resolution via
- * `/o/{slug}/...` will replace this once routes are tenant-namespaced).
- *
- * Exported for tests: the fixture's `actAs()` mirrors this logic, so a direct
- * test pins the production function against drift.
- */
-export async function buildContext(
+/** A session context: the user's first membership, or an instance admin's first-org fallback. */
+function sessionContext(
 	user: AuthUser,
-	// Forwarded as `adapterContext` so adapters needing the upstream auth token
-	// (e.g. Supabase RLS) can pull it off the context.
+	// Forwarded so adapters scoping by the upstream token (Supabase RLS) get it.
 	sessionToken: string | undefined,
-	// Pre-fetched by the hook so the four independent per-request reads
-	// (ensureUser, getProfile, getFor, findUserMembership) run in one
-	// `Promise.all` instead of serially, all as SYSTEM_CONTEXT since the
-	// user's own ctx isn't built yet.
-	platformPermissions: RequestContext['platformPermissions'],
+	platformPermissions: PlatformPermission[],
 	membership: Awaited<ReturnType<typeof providers.data.orgs.findUserMembership>>
-): Promise<RequestContext> {
-	let actingOrgId: string | undefined;
-	let orgPermissions: RequestContext['orgPermissions'] = [];
-
-	if (membership) {
-		actingOrgId = membership.org.id;
-		orgPermissions = membership.member.permissions;
-	}
-
-	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
-		// Instance admins without a membership row fall back to the first org so
-		// admin tooling stays usable before a switcher exists. Depends on the
-		// reads above (only fires with no membership + instance_admin), so it
-		// stays sequential.
-		const firstOrgPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
-		const firstOrg = firstOrgPage.items[0];
-		if (firstOrg) actingOrgId = firstOrg.id;
-	}
-
-	return {
-		userId: user.id,
-		actingOrgId,
-		platformPermissions,
-		orgPermissions,
-		adapterContext: sessionToken ? { sessionToken } : undefined
-	};
+) {
+	return buildRequestContext(
+		{ user, sessionToken, platformPermissions, membership: membership?.member ?? null },
+		{ orgs: providers.data.orgs }
+	);
 }
 
 // ============================================================================
@@ -211,6 +181,35 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	// is still live and ready, and the first-run 503 below would tell a load
 	// balancer (or the post-update poller) the opposite.
 	if (pathname === '/api/health' || pathname === '/api/health/ready') {
+		return applyResponseHeaders(await resolve(event), pathname, requestId);
+	}
+
+	// A `selva_` key decides the request on its own: it never falls back to the
+	// cookie, so a broken key can't quietly run as whoever is signed in.
+	const tokenResult = await resolveApiToken(event.request, {
+		codec: apiTokenCodec(),
+		auth: providers.auth,
+		data: providers.data,
+		log: event.locals.log
+	});
+	if (tokenResult.kind === 'rejected') {
+		const { status, code, message } = tokenResult;
+		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+		if (status === 401) headers['WWW-Authenticate'] = 'Bearer error="invalid_token"';
+		return applyResponseHeaders(
+			new Response(JSON.stringify({ message, code }), { status, headers }),
+			pathname,
+			requestId
+		);
+	}
+	if (tokenResult.kind === 'ok') {
+		const { user, ctx, token } = tokenResult;
+		event.locals.log = event.locals.log.child({ tokenId: token.id });
+		event.locals.user = user;
+		event.locals.ctx = ctx;
+		event.locals.profile =
+			(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
+			emptyProfile(user.id);
 		return applyResponseHeaders(await resolve(event), pathname, requestId);
 	}
 
@@ -322,7 +321,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 		event.locals.user = user;
 		event.locals.profile = profile ?? emptyProfile(user.id);
-		event.locals.ctx = await buildContext(user, token, platformPermissions, membership);
+		event.locals.ctx = await sessionContext(user, token, platformPermissions, membership);
 	} else {
 		// Public page route (e.g. `/`): best-effort session attach. If a valid
 		// session cookie is present, populate locals so the UI reflects authed
@@ -370,7 +369,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			]);
 			event.locals.user = user;
 			event.locals.profile = profile ?? emptyProfile(user.id);
-			event.locals.ctx = await buildContext(user, token, platformPermissions, membership);
+			event.locals.ctx = await sessionContext(user, token, platformPermissions, membership);
 		}
 	}
 
@@ -432,14 +431,19 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 	// errors get a generic message to avoid leaking internals.
 	if (isHttpError(error)) {
 		const body = error.body as App.Error;
-		return { message: body.message, code: body.code, fields: body.fields };
+		return { message: body.message, code: body.code, fields: body.fields, details: body.details };
 	}
 	// Backstop only. `ApiError` reaching here means a page load called a guard
 	// without going through `asHttpError()` — SvelteKit's `get_status` returns 500
 	// for anything that isn't its own `HttpError`, and `handleError` cannot
 	// change the status, so the message below is right but the status is not.
 	if (isApiError(error)) {
-		return { message: error.message, code: error.code, fields: error.fields };
+		return {
+			message: error.message,
+			code: error.code,
+			fields: error.fields,
+			details: error.details
+		};
 	}
 	if (status === 404) {
 		return { message: 'Page not found.', code: 'NOT_FOUND' };

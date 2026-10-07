@@ -15,7 +15,11 @@ export type {
 // permissions
 // ---------------------------------------------------------------------------
 export type { PlatformPermission } from './permissions/types.js';
-export { PlatformPermissionSchema, ALL_PLATFORM_PERMISSIONS } from './permissions/types.js';
+export {
+	PlatformPermissionSchema,
+	ALL_PLATFORM_PERMISSIONS,
+	OPERATOR_PLATFORM_PERMISSIONS
+} from './permissions/types.js';
 export type { IPlatformPermissionStore } from './permissions/interface.js';
 
 // userProfile
@@ -45,6 +49,7 @@ export {
 	CreateOrgSchema,
 	UpdateOrgSchema,
 	ALL_ORG_PERMISSIONS,
+	ORG_MANAGEMENT_PERMISSIONS,
 	DEFAULT_ORG_PERMISSIONS,
 	OWNER_ADMIN_ONLY_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS
@@ -53,6 +58,29 @@ export {
 // invites
 export type { Invite } from './invites/types.js';
 export type { IInviteStore } from './invites/interface.js';
+
+// apiTokens
+export type {
+	ApiScope,
+	ApiScopeAction,
+	ApiScopeResource,
+	ApiToken,
+	ApiTokenSummary,
+	ApiTokenRevokeReason,
+	ApiTokenLifetimeDays,
+	IApiTokenStore,
+	ScopeTarget
+} from './apiTokens/index.js';
+export {
+	ApiScopeActionSchema,
+	ApiScopeStringSchema,
+	ApiTokenRevokeReasonSchema,
+	API_TOKEN_LIFETIME_DAYS,
+	parseApiScope,
+	formatApiScope,
+	scopeAllows,
+	narrowApiTokenContext
+} from './apiTokens/index.js';
 
 // projects
 export type { Project, ProjectMember } from './projects/types.js';
@@ -201,7 +229,7 @@ export {
 // events
 // ---------------------------------------------------------------------------
 export type { DomainEvent, DomainEventType, IEventSink } from './events/interface.js';
-export { actorFrom, NoopEventSink, AUDIT_EVENT_VERSION } from './events/interface.js';
+export { actorFrom, actorOf, NoopEventSink, AUDIT_EVENT_VERSION } from './events/interface.js';
 export type {
 	AuditEventRow,
 	AuditCursor,

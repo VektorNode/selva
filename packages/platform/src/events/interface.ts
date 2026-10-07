@@ -1,4 +1,6 @@
-export type DomainEvent =
+import type { ApiTokenRevokeReason } from '../apiTokens/types.js';
+
+type DomainEventBody =
 	| { type: 'org.created'; orgId: string; actorId: string }
 	| { type: 'org.deleted'; orgId: string; actorId: string }
 	| { type: 'org_member.added'; orgId: string; userId: string; actorId: string }
@@ -71,6 +73,21 @@ export type DomainEvent =
 	  }
 	| { type: 'invite.accepted'; inviteId: string; orgId: string; userId: string; actorId: string }
 	| { type: 'invite.revoked'; inviteId: string; orgId: string; actorId: string }
+	// Ids only: the token name is free text people fill with personal detail.
+	| {
+			type: 'api_token.created';
+			apiTokenId: string;
+			orgId: string;
+			userId: string;
+			actorId: string;
+	  }
+	| {
+			type: 'api_token.revoked';
+			apiTokenId: string;
+			orgId: string;
+			reason: ApiTokenRevokeReason;
+			actorId: string;
+	  }
 	// Platform scope. `instance_admin` reaches every tenant's data, so a change
 	// to it is the one grant whose history has to survive the admin who made it —
 	// including the self-elevate/act/revoke sequence, which leaves no other trace.
@@ -110,6 +127,13 @@ export type DomainEvent =
 			actorId: string;
 	  };
 
+/**
+ * `tokenId` is set on any event written during an API-token request, so a
+ * key's actions can be told apart from the same person's browser actions.
+ * Spread {@link actorOf} rather than setting it by hand.
+ */
+export type DomainEvent = DomainEventBody & { tokenId?: string };
+
 export type DomainEventType = DomainEvent['type'];
 
 /**
@@ -144,6 +168,16 @@ export interface IEventSink {
  */
 export function actorFrom(ctx: { userId: string; system?: boolean }): string {
 	return ctx.userId || 'system';
+}
+
+/** `actorId` plus, for an API-token request, `tokenId`. Spread into an event. */
+export function actorOf(ctx: {
+	userId: string;
+	system?: boolean;
+	apiScope?: { tokenId: string };
+}): { actorId: string; tokenId?: string } {
+	const actorId = actorFrom(ctx);
+	return ctx.apiScope ? { actorId, tokenId: ctx.apiScope.tokenId } : { actorId };
 }
 
 /** Discards every event. Used when `SelvaConfig.events` is omitted. */

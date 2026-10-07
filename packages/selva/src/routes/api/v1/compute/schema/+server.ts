@@ -1,5 +1,6 @@
 import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
-import { requireCanCreateDefinition, scoped } from '$lib/server/access.server';
+import { asHttpError, requireCanCreateDefinition, scoped } from '$lib/server/access.server';
+import { assertScope } from '@selvajs/server/api';
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
@@ -30,6 +31,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// Same gate as POST /api/definitions: container projects need owner/editor;
 	// commons projects (`autoJoinOnUpload=true`) accept any authenticated user.
 	// Eliminates the random-authenticated-drain path the auth-only check left open.
+	await asHttpError(() => assertScope(locals.ctx, 'write', { projectId }));
 	const { project } = await requireCanCreateDefinition(scoped(locals), projectId);
 
 	// Pin to the same server the upload will use, so schema extraction runs on

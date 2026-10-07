@@ -78,6 +78,11 @@
 			"types": "./dist/invites/index.d.ts",
 			"import": "./dist/invites/index.js"
 		},
+		"./apiTokens": {
+			"selva-source": "./src/apiTokens/index.ts",
+			"types": "./dist/apiTokens/index.d.ts",
+			"import": "./dist/apiTokens/index.js"
+		},
 		"./shareLinks": {
 			"selva-source": "./src/shareLinks/index.ts",
 			"types": "./dist/shareLinks/index.d.ts",

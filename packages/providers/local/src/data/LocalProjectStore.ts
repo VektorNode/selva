@@ -14,7 +14,7 @@ import {
 	ProviderError,
 	auditUpdate,
 	auditSoftDelete,
-	actorFrom,
+	actorOf,
 	NoopEventSink
 } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
@@ -126,7 +126,7 @@ export class LocalProjectStore implements IProjectStore {
 			type: 'project.created',
 			projectId: project.id,
 			orgId: project.orgId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -195,7 +195,7 @@ export class LocalProjectStore implements IProjectStore {
 		await this.definitions?.deleteByProject(ctx, id);
 		// Grants have no soft-delete column, so this hard-deletes them.
 		await this.grants.deleteByProject(ctx, id);
-		await this.events.emit({ type: 'project.deleted', projectId: id, actorId: actorFrom(ctx) });
+		await this.events.emit({ type: 'project.deleted', projectId: id, ...actorOf(ctx) });
 	}
 
 	async reactivateProject(
@@ -228,7 +228,7 @@ export class LocalProjectStore implements IProjectStore {
 			type: 'project.created',
 			projectId: project.id,
 			orgId: project.orgId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 		return project;
 	}
@@ -292,7 +292,7 @@ export class LocalProjectStore implements IProjectStore {
 			type: 'project_member.added',
 			projectId: member.projectId,
 			userId: member.userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -315,7 +315,7 @@ export class LocalProjectStore implements IProjectStore {
 			projectId,
 			userId,
 			role,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -331,7 +331,7 @@ export class LocalProjectStore implements IProjectStore {
 			type: 'project_member.removed',
 			projectId,
 			userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 }

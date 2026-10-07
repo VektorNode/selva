@@ -3,6 +3,7 @@ import { ALL_PLATFORM_PERMISSIONS } from './permissions/types.js';
 import type { OrgPermission } from './organizations/schemas.js';
 import { ALL_ORG_PERMISSIONS } from './organizations/schemas.js';
 import { ProviderError } from './errors.js';
+import type { ApiScope } from './apiTokens/types.js';
 
 /**
  * Per-request identity + scope passed to every data provider call, built once
@@ -33,6 +34,11 @@ export interface RequestContext {
 	 * guard refuses.
 	 */
 	shareLinkId?: string;
+	/**
+	 * Set when the request authenticated with an API token. `scopeAllows` reads
+	 * it; a request without it is a browser or proxy session.
+	 */
+	apiScope?: { tokenId: string; scopes: readonly ApiScope[] };
 	/** Opaque adapter payload — the Supabase adapter passes the user JWT through for RLS; local ignores it. */
 	adapterContext?: unknown;
 }

@@ -7,7 +7,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { NoopEventSink, actorFrom } from '@selvajs/platform';
+import { NoopEventSink, actorOf } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
 import { readJsonFile, writeJsonFile } from './fsJson.js';
 
@@ -59,7 +59,7 @@ export class LocalInviteStore implements IInviteStore {
 			inviteId: invite.id,
 			orgId: invite.orgId,
 			email: invite.email,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -90,7 +90,7 @@ export class LocalInviteStore implements IInviteStore {
 			inviteId: invite.id,
 			orgId: invite.orgId,
 			userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -104,7 +104,7 @@ export class LocalInviteStore implements IInviteStore {
 			type: 'invite.revoked',
 			inviteId: id,
 			orgId: target.orgId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -126,7 +126,7 @@ export class LocalInviteStore implements IInviteStore {
 				type: 'invite.revoked',
 				inviteId: invite.id,
 				orgId: invite.orgId,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 		return [...ids];

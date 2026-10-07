@@ -61,16 +61,27 @@ export type OrgAssetKind = z.infer<typeof OrgAssetKindSchema>;
 
 export const ALL_ORG_ASSET_KINDS: readonly OrgAssetKind[] = OrgAssetKindSchema.options;
 
-/** Org-scope permissions. A user may hold different sets in different orgs. */
+/**
+ * Org-scope permissions. A user may hold different sets in different orgs.
+ *
+ * `read_all_org_projects` lets its holder mint an API token that reads and
+ * solves every project in the org, including ones they aren't a member of.
+ */
 export const OrgPermissionSchema = z.enum([
 	'manage_org_members',
 	'manage_org_compute',
 	'manage_definitions',
-	'manage_projects'
+	'manage_projects',
+	'read_all_org_projects'
 ]);
 export type OrgPermission = z.infer<typeof OrgPermissionSchema>;
 
 export const ALL_ORG_PERMISSIONS: readonly OrgPermission[] = OrgPermissionSchema.options;
+
+/** The permissions that run some part of `/team`. */
+export const ORG_MANAGEMENT_PERMISSIONS: readonly OrgPermission[] = ALL_ORG_PERMISSIONS.filter(
+	(p) => p !== 'read_all_org_projects'
+);
 
 /** Governance perms — never grantable to `member`. */
 export const OWNER_ADMIN_ONLY_PERMISSIONS: readonly OrgPermission[] = [
@@ -82,10 +93,15 @@ export const MEMBER_ASSIGNABLE_PERMISSIONS: readonly OrgPermission[] = ALL_ORG_P
 	(p) => !OWNER_ADMIN_ONLY_PERMISSIONS.includes(p)
 );
 
-/** Applied when adding a member without an explicit permissions list. */
+/**
+ * Applied when adding a member without an explicit permissions list.
+ *
+ * `read_all_org_projects` is never a default: a key holding it reads projects
+ * its owner isn't a member of, without the audit trail Reclaim leaves.
+ */
 export const DEFAULT_ORG_PERMISSIONS: Record<OrgRole, readonly OrgPermission[]> = {
-	owner: [...ALL_ORG_PERMISSIONS],
-	admin: [...ALL_ORG_PERMISSIONS],
+	owner: [...ORG_MANAGEMENT_PERMISSIONS],
+	admin: [...ORG_MANAGEMENT_PERMISSIONS],
 	member: []
 };
 

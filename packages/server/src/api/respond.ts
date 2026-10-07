@@ -9,18 +9,22 @@
  */
 
 import { ApiError, ApiErrorCode, isApiError } from './errors.js';
+import type { ApiScopeAction, ScopeTarget } from '@selvajs/platform';
 import type { ApiHandler, ApiRequest, ApiResponse } from './types.js';
+import { actionForMethod, assertScope } from './scope.js';
 
 export interface ApiErrorBody {
 	message: string;
 	code: ApiErrorCode;
 	fields?: Record<string, string>;
+	details?: Record<string, string>;
 }
 
 export function toErrorBody(err: ApiError): ApiErrorBody {
-	return err.fields
-		? { message: err.message, code: err.code, fields: err.fields }
-		: { message: err.message, code: err.code };
+	const body: ApiErrorBody = { message: err.message, code: err.code };
+	if (err.fields) body.fields = err.fields;
+	if (err.details) body.details = err.details;
+	return body;
 }
 
 function toResponse(result: ApiResponse | Response): Response {
@@ -35,19 +39,41 @@ function toResponse(result: ApiResponse | Response): Response {
 	});
 }
 
-/**
- * Run a handler and serialize whatever comes out, including failures.
- *
- * `mapError` lets a host fold its own domain errors into the envelope before
- * the 500 fallback — the Selva app maps `ProviderError`, `SchemaExtractionError`
- * and `ComputeServerUnconfiguredError` this way, none of which belong here.
- */
+export interface RunHandlerOptions {
+	/** The 500 message when the handler throws something unmapped. */
+	fallback: string;
+	/**
+	 * Folds a host's own domain errors into the envelope before the 500 fallback.
+	 * The Selva app maps `ProviderError`, `SchemaExtractionError` and
+	 * `ComputeServerUnconfiguredError` this way, none of which belong here.
+	 */
+	mapError?: (err: unknown) => ApiError | undefined;
+	/**
+	 * What the route does, for API-token scope checks. Defaults from the method:
+	 * `GET`/`HEAD` are `read`, everything else `write`. Solve routes say `solve`.
+	 */
+	action?: ApiScopeAction;
+	/**
+	 * The project or definition the route touches. Without it the scope check is
+	 * org-level, which project- and definition-scoped keys never pass.
+	 */
+	scopeTarget?: (req: ApiRequest) => ScopeTarget | Promise<ScopeTarget>;
+}
+
+/** Run a handler and serialize whatever comes out, including failures. */
 export async function runHandler(
 	handler: ApiHandler,
 	req: ApiRequest,
-	{ fallback, mapError }: { fallback: string; mapError?: (err: unknown) => ApiError | undefined }
+	{ fallback, mapError, action, scopeTarget }: RunHandlerOptions
 ): Promise<Response> {
 	try {
+		if (req.ctx?.apiScope) {
+			assertScope(
+				req.ctx,
+				action ?? actionForMethod(req.request.method),
+				scopeTarget ? await scopeTarget(req) : undefined
+			);
+		}
 		return toResponse(await handler(req));
 	} catch (err) {
 		if (isApiError(err)) {

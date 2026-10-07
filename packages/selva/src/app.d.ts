@@ -8,7 +8,8 @@ declare global {
 			code?: string;
 			/** Per-field validation messages, keyed by dotted field path. Only set on `VALIDATION_FAILED`. */
 			fields?: Record<string, string>;
-			details?: string;
+			/** Machine-readable context, e.g. `requiredScope` on an API-token scope refusal. */
+			details?: Record<string, string>;
 		}
 		interface Locals {
 			/** Set by hooks.server.ts for protected routes. */

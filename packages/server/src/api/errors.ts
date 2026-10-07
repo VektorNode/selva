@@ -18,7 +18,9 @@ export const ApiErrorCode = {
 	UNPROCESSABLE: 'UNPROCESSABLE',
 	COMPUTE_UNAVAILABLE: 'COMPUTE_UNAVAILABLE',
 	SETUP_REQUIRED: 'SETUP_REQUIRED',
-	INTERNAL: 'INTERNAL'
+	INTERNAL: 'INTERNAL',
+	/** API tokens are switched off or misconfigured here; browser sessions still work. */
+	API_TOKENS_UNAVAILABLE: 'API_TOKENS_UNAVAILABLE'
 } as const;
 
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
@@ -28,18 +30,22 @@ export class ApiError extends Error {
 	readonly code: ApiErrorCode;
 	/** Per-field validation messages, keyed by dotted path. Only on VALIDATION_FAILED. */
 	readonly fields?: Record<string, string>;
+	/** Machine-readable context, e.g. `requiredScope` on a scope refusal. */
+	readonly details?: Record<string, string>;
 
 	constructor(
 		status: number,
 		code: ApiErrorCode,
 		message: string,
-		fields?: Record<string, string>
+		fields?: Record<string, string>,
+		details?: Record<string, string>
 	) {
 		super(message);
 		this.name = 'ApiError';
 		this.status = status;
 		this.code = code;
 		this.fields = fields;
+		this.details = details;
 	}
 }
 
@@ -52,9 +58,10 @@ export function apiError(
 	status: number,
 	code: ApiErrorCode,
 	message: string,
-	fields?: Record<string, string>
+	fields?: Record<string, string>,
+	details?: Record<string, string>
 ): never {
-	throw new ApiError(status, code, message, fields);
+	throw new ApiError(status, code, message, fields, details);
 }
 
 /** Default code for a status, for mapping errors that carry no code of their own. */

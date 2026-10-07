@@ -39,7 +39,7 @@ type PinoFactory = (options: {
  * It matches by FIELD NAME, and only at the top level or one level deep (the
  * `*.` entries). It will not catch personal data — an email nested in a payload
  * sails straight through, and a log line reaches a collector that erasure can
- * never reach. Note the nested `*.` set covers only five of the eight names.
+ * never reach. The nested `*.` set doesn't cover every top-level name.
  */
 const REDACTED_PATHS = [
 	'token',
@@ -49,7 +49,13 @@ const REDACTED_PATHS = [
 	'api_key',
 	'password',
 	'authorization',
+	'Authorization',
 	'cookie',
+	// A freshly minted API token is returned as `secret`.
+	'secret',
+	'*.secret',
+	'*.authorization',
+	'*.Authorization',
 	'*.token',
 	'*.sessionToken',
 	'*.refreshToken',

@@ -13,6 +13,7 @@ export {
 	LocalProjectStore,
 	LocalDefinitionStore,
 	LocalInviteStore,
+	LocalApiTokenStore,
 	LocalComputeServerStore,
 	LocalShareLinkStore,
 	LocalPlatformProjectGrantStore

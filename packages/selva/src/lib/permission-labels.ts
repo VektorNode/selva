@@ -16,10 +16,12 @@ export const PERMISSION_LABELS: Record<AnyPermission, string> = {
 	manage_instance_users: 'Manage instance users',
 	manage_compute: 'Manage compute',
 	manage_updates: 'Manage updates',
+	manage_api_tokens: 'Manage API tokens',
 	manage_org_members: 'Manage org members',
 	manage_org_compute: 'Manage org compute',
 	manage_definitions: 'Manage definitions',
-	manage_projects: 'Manage projects'
+	manage_projects: 'Manage projects',
+	read_all_org_projects: 'Read all org projects'
 };
 
 export const PERMISSION_DESCRIPTIONS: Record<AnyPermission, string> = {
@@ -27,10 +29,13 @@ export const PERMISSION_DESCRIPTIONS: Record<AnyPermission, string> = {
 	manage_instance_users: 'Create, disable, and delete any user on the instance.',
 	manage_compute: 'Configure the instance Rhino.Compute pool.',
 	manage_updates: 'Run the application update script.',
+	manage_api_tokens: 'Create API tokens that call the API as this user.',
 	manage_org_members: 'Invite, remove, and change roles of org members.',
 	manage_org_compute: "Configure this org's BYO compute server.",
 	manage_definitions: 'Upload, edit, and delete any definition in the org.',
-	manage_projects: 'Create, edit, and delete any project in the org.'
+	manage_projects: 'Create, edit, and delete any project in the org.',
+	read_all_org_projects:
+		'Create API tokens that read and solve every project in the org, including ones this user is not a member of.'
 };
 
 export const ROLE_TONE: Record<OrgRole, string> = {

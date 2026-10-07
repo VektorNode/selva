@@ -23,7 +23,7 @@ import type { ApiHandler, ApiRequest } from '../api/index.js';
 import {
 	MEMBER_ASSIGNABLE_PERMISSIONS,
 	ALL_ORG_PERMISSIONS,
-	actorFrom,
+	actorOf,
 	canChangeOrgRole,
 	type OrgPermission,
 	type OrgRole,
@@ -230,7 +230,7 @@ export const removeOrgMember: ApiHandler = async (req) => {
 			orgId,
 			userId,
 			projectIds: orphaned.map((p) => p.id),
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 		req.log.warn('Org member removal left projects without an owner', {
 			orgId,

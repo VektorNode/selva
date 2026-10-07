@@ -16,7 +16,7 @@ import {
 	ProviderError,
 	auditUpdate,
 	auditSoftDelete,
-	actorFrom,
+	actorOf,
 	NoopEventSink
 } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
@@ -202,7 +202,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			type: 'definition.created',
 			definitionId: record.guid,
 			projectId: record.projectId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -248,7 +248,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition.deleted',
 			definitionId: guid,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -270,7 +270,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			await this.events.emit({
 				type: 'definition.deleted',
 				definitionId: record.guid,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 	}
@@ -334,7 +334,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			type: 'definition_version.created',
 			versionId: version.id,
 			definitionId: version.definitionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -388,7 +388,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition_version.deleted',
 			versionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -458,7 +458,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 				type: 'definition.published',
 				definitionId,
 				versionId,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 	}

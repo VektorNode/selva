@@ -15,7 +15,7 @@
  */
 
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { isApiError } from '@selvajs/server/api';
+import { assertScope, isApiError } from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
 import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
 import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
@@ -209,6 +209,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 
 		if (!sharedAccess) {
 			try {
+				assertScope(access.ctx, 'solve', { projectId: record.projectId, definitionId: guid });
 				if (channel === 'draft' || explicitVersionId) {
 					await requireCanEditDefinition(scoped(locals), record.projectId, guid, {
 						project,
@@ -256,6 +257,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		definitionSource = localDefinitionRef;
 		mark('blob');
 	} else {
+		// A remote URL names no project, so only an org-wide key may solve it.
+		assertScope(access.ctx, 'solve');
 		try {
 			definitionSource = await loadRemoteDefinition(definitionUrl);
 		} catch (err) {
@@ -406,7 +409,7 @@ export function mapSolveError(err: unknown, locals: App.Locals): never {
 	// which gives anything that isn't an `HttpError` a 500, turning a working
 	// permission check into an operator error page.
 	if (isApiError(err)) {
-		apiError(err.status, err.code, err.message);
+		apiError(err.status, err.code, err.message, err.fields, err.details);
 	}
 
 	if (err instanceof ComputeServerUnconfiguredError) {

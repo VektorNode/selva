@@ -92,9 +92,15 @@ components:
             - COMPUTE_UNAVAILABLE
             - SETUP_REQUIRED
             - INTERNAL
+            - API_TOKENS_UNAVAILABLE
         fields:
           type: object
           description: "Per-field messages, keyed by dotted path. Present on validation failures."
+          additionalProperties:
+            type: string
+        details:
+          type: object
+          description: "Machine-readable context. A scope refusal carries `requiredScope`, e.g. `write:org:<id>`."
           additionalProperties:
             type: string
       required:
@@ -1658,6 +1664,7 @@ paths:
                       - manage_org_compute
                       - manage_definitions
                       - manage_projects
+                      - read_all_org_projects
       responses:
         "204":
           description: Success. No content.
@@ -1827,12 +1834,14 @@ paths:
                           - manage_compute
                           - manage_instance_users
                           - manage_updates
+                          - manage_api_tokens
                       - type: string
                         enum:
                           - manage_org_members
                           - manage_org_compute
                           - manage_definitions
                           - manage_projects
+                          - read_all_org_projects
               required:
                 - email
       responses:
