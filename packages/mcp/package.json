@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/mcp",
-	"version": "0.0.0",
+	"version": "0.1.0-beta.0",
 	"description": "MCP server machinery for Selva hosts: tools over a host's /api/v1, with key auth, error mapping and annotations from its OpenAPI document",
 	"license": "MIT",
 	"author": "VektorNode",
