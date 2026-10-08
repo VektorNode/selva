@@ -14,3 +14,4 @@ export {
 	looksLikeApiToken,
 	type ApiTokenCodec
 } from './api-token-codec.js';
+export type { ApiTokenHolderPolicy } from './api-token-holder.js';

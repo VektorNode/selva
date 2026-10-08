@@ -58,6 +58,17 @@ function requireSessionInOrg(req: ApiRequest): { ctx: RequestContext; orgId: str
 	return requireActingOrg(req, req.params.orgId);
 }
 
+function requireMayHoldApiTokens(req: ApiRequest, ctx: RequestContext): void {
+	const policy = req.deps.tokens.mayHoldApiTokens;
+	if (!policy) {
+		requirePermission(req, 'manage_api_tokens');
+		return;
+	}
+	if (!policy(ctx)) {
+		apiError(403, ApiErrorCode.FORBIDDEN, 'You can’t create API tokens in this org.');
+	}
+}
+
 function unavailable(): never {
 	apiError(
 		503,
@@ -168,7 +179,7 @@ export const listApiTokens: ApiHandler = async (req) => {
 /** Mint a token acting as the caller. The raw key is in this response and nowhere else. */
 export const createApiToken: ApiHandler = async (req) => {
 	const { ctx, orgId } = requireSessionInOrg(req);
-	requirePermission(req, 'manage_api_tokens');
+	requireMayHoldApiTokens(req, ctx);
 	const { user } = requireCaller(req);
 	const store = storeOf(req);
 	const codec = codecOf(req);

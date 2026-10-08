@@ -103,6 +103,7 @@ components:
             - INTERNAL
             - API_TOKENS_UNAVAILABLE
             - RATE_LIMITED
+            - API_TOKEN_HOLDER_REFUSED
         fields:
           type: object
           description: "Per-field messages, keyed by dotted path. Present on validation failures."

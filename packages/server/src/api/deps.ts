@@ -17,6 +17,7 @@ import type { DefinitionService } from '../definitions/definition-service.js';
 import type { OrgAssetService } from '../organizations/org-asset-service.js';
 import type { TokenCodec } from '../tokens/token-codec.js';
 import type { ApiTokenCodec } from '../tokens/api-token-codec.js';
+import type { ApiTokenHolderPolicy } from '../tokens/api-token-holder.js';
 import type { ApiRateLimiter } from './rate-limit.js';
 import type { ApiIdempotencyStore } from './idempotency.js';
 import type {
@@ -79,6 +80,8 @@ export interface SelvaDeps {
 		invites?: TokenCodec;
 		/** Without it, minting answers 503 `API_TOKENS_UNAVAILABLE`. */
 		apiTokens?: ApiTokenCodec;
+		/** Who may mint and use API tokens. Absent: the platform permission `manage_api_tokens`. */
+		mayHoldApiTokens?: ApiTokenHolderPolicy;
 	};
 	/**
 	 * Upload caps, in bytes.

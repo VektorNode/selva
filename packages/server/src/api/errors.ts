@@ -22,7 +22,9 @@ export const ApiErrorCode = {
 	/** API tokens are switched off or misconfigured here; browser sessions still work. */
 	API_TOKENS_UNAVAILABLE: 'API_TOKENS_UNAVAILABLE',
 	/** Too many requests, or a share link's solve cap is spent. `Retry-After`, when sent, says when to retry. */
-	RATE_LIMITED: 'RATE_LIMITED'
+	RATE_LIMITED: 'RATE_LIMITED',
+	/** The key is valid, but the host's holder policy no longer lets its owner hold API tokens. */
+	API_TOKEN_HOLDER_REFUSED: 'API_TOKEN_HOLDER_REFUSED'
 } as const;
 
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];

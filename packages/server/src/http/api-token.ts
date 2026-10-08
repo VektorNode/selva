@@ -13,6 +13,7 @@ import {
 	looksLikeApiToken,
 	type ApiTokenCodec
 } from '../tokens/api-token-codec.js';
+import type { ApiTokenHolderPolicy } from '../tokens/api-token-holder.js';
 import { buildRequestContext } from './request-context.js';
 
 export type ApiTokenResolution =
@@ -26,7 +27,10 @@ export interface ResolveApiTokenDeps {
 	/** Absent when the host hasn't configured API tokens: a sent key gets 503. */
 	codec?: ApiTokenCodec;
 	auth: Pick<IAuthProvider, 'getUser' | 'delegatedSession'>;
-	data: Pick<IDataProvider, 'apiTokens' | 'orgs'>;
+	/** `permissions` is read only for `mayHoldApiTokens`; without it the policy sees no platform permissions. */
+	data: Pick<IDataProvider, 'apiTokens' | 'orgs'> & Partial<Pick<IDataProvider, 'permissions'>>;
+	/** The same policy passed as `SelvaDeps.tokens.mayHoldApiTokens`. Absent: keys aren't re-checked against one. */
+	mayHoldApiTokens?: ApiTokenHolderPolicy;
 	/** Receives background failures (the `lastUsedAt` write). Logs the token id only. */
 	log?: ILogger;
 	now?: () => number;
@@ -54,6 +58,13 @@ const UNAVAILABLE: ApiTokenResolution = {
 	message: 'API tokens are not available on this server.'
 };
 
+const HOLDER_REFUSED: ApiTokenResolution = {
+	kind: 'rejected',
+	status: 403,
+	code: ApiErrorCode.API_TOKEN_HOLDER_REFUSED,
+	message: 'This API token’s owner may no longer use API tokens in this org.'
+};
+
 /**
  * Authenticate a request by its `Authorization: Bearer selva_…` header.
  *
@@ -63,7 +74,8 @@ const UNAVAILABLE: ApiTokenResolution = {
  * broken key and act as someone else.
  *
  * The owner is re-checked on every request (disabled, still a member of the
- * token's org), then their live context is narrowed to the token's scopes.
+ * token's org, and the host's holder policy if any), then their live context
+ * is narrowed to the token's scopes.
  */
 export async function resolveApiToken(
 	request: Request,
@@ -106,20 +118,23 @@ export async function resolveApiToken(
 	const token = await store.getByTokenHash(SYSTEM_CONTEXT, deps.codec.hashToken(raw));
 	if (!token) return UNAUTHORIZED;
 
-	const [user, member] = await Promise.all([
+	const policy = deps.mayHoldApiTokens;
+	const [user, member, platformPermissions] = await Promise.all([
 		deps.auth.getUser(token.userId),
-		deps.data.orgs.getOrgMember(SYSTEM_CONTEXT, token.orgId, token.userId)
+		deps.data.orgs.getOrgMember(SYSTEM_CONTEXT, token.orgId, token.userId),
+		// Read only for the policy: narrowing drops platform permissions anyway.
+		policy && deps.data.permissions
+			? deps.data.permissions.getFor(SYSTEM_CONTEXT, token.userId)
+			: []
 	]);
 	if (!user || user.disabled || !member) return UNAUTHORIZED;
 
-	// Platform permissions aren't read: narrowing drops them anyway.
-	let ctx = narrowApiTokenContext(
-		await buildRequestContext(
-			{ user, platformPermissions: [], membership: member, pinOrg: true },
-			{ orgs: deps.data.orgs }
-		),
-		token
+	const live = await buildRequestContext(
+		{ user, platformPermissions, membership: member, pinOrg: true },
+		{ orgs: deps.data.orgs }
 	);
+	if (policy && !policy(live)) return HOLDER_REFUSED;
+	let ctx = narrowApiTokenContext(live, token);
 
 	// Signed only after the user check above: a minted session can't be
 	// revoked, and row security doesn't look at bans.

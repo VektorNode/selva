@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { ApiToken, AuthUser, IApiTokenStore, OrgMember } from '@selvajs/platform';
+import type {
+	ApiToken,
+	AuthUser,
+	IApiTokenStore,
+	OrgMember,
+	RequestContext
+} from '@selvajs/platform';
 import { resolveApiToken, type ResolveApiTokenDeps } from '../api-token.js';
 import { createApiTokenCodec } from '../../tokens/api-token-codec.js';
 
@@ -176,6 +182,57 @@ describe('resolveApiToken', () => {
 		w.touch.mockRejectedValueOnce(new Error('disk full'));
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
 		expect(result.kind).toBe('ok');
+	});
+});
+
+describe('resolveApiToken with a holder policy', () => {
+	it('asks the policy with the owner’s live context in the token’s org, platform permissions included', async () => {
+		const w = world();
+		const seen: RequestContext[] = [];
+		w.deps.data = {
+			...w.deps.data,
+			permissions: { getFor: async () => ['manage_api_tokens'] } as never
+		};
+		w.deps.mayHoldApiTokens = (ctx) => (seen.push(ctx), true);
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result.kind).toBe('ok');
+		expect(seen).toHaveLength(1);
+		expect(seen[0]).toMatchObject({
+			actingOrgId: ORG,
+			platformPermissions: ['manage_api_tokens'],
+			orgPermissions: ['manage_projects']
+		});
+		expect(seen[0]!.apiScope).toBeUndefined();
+		if (result.kind === 'ok') expect(result.ctx.platformPermissions).toEqual([]);
+	});
+
+	it('refuses the key with 403 once the policy turns false, without revoking it', async () => {
+		const w = world();
+		let holds = true;
+		w.deps.mayHoldApiTokens = (ctx) => holds && ctx.orgPermissions.includes('manage_projects');
+		expect((await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).kind).toBe('ok');
+
+		holds = false;
+		expect(await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).toEqual({
+			kind: 'rejected',
+			status: 403,
+			code: 'API_TOKEN_HOLDER_REFUSED',
+			message: expect.any(String)
+		});
+		expect(w.token.revokedAt).toBeNull();
+
+		holds = true;
+		expect((await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).kind).toBe('ok');
+	});
+
+	it('checks membership before the policy', async () => {
+		const w = world();
+		w.member = null;
+		const policy = vi.fn(() => true);
+		w.deps.mayHoldApiTokens = policy;
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
+		expect(policy).not.toHaveBeenCalled();
 	});
 });
 

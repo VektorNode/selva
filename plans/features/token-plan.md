@@ -13,7 +13,8 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
 
 - **Built:** token model, scopes and enforcement, resolution, delegated sessions, read-every-project,
   lifecycle and audit, the mint email, the endpoints, the per-token rate limit (#318) and
-  idempotency (#319). Rate limit and idempotency details are under their sections below.
+  idempotency (#319), and the host holder policy (`mayHoldApiTokens`). Rate limit and idempotency
+  details are under their sections below.
 - **Not built:** the expiry reminder email. It needs a scheduled sweep (the engine has no
   scheduler) and a per-token "reminded" marker so N instances or a restart don't resend, which
   means a new store method and a migration on both providers.
@@ -49,8 +50,14 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
   every store and policy would have to learn it. ([#317](https://github.com/VektorNode/selva/issues/317))
 - **Expiry is required: 30, 90 or 180 days.** The mint form defaults to `read`, whole org, 30 days;
   `write` and `solve` are opt-in with a warning. ([#323](https://github.com/VektorNode/selva/issues/323))
-- **Minting needs `manage_api_tokens`** (platform permission) and can never exceed the creator's live
-  rights.
+- **Minting needs `manage_api_tokens`** (platform permission) unless the host decides instead, and
+  can never exceed the creator's live rights. A host passes `mayHoldApiTokens: (ctx) => boolean` in
+  `depsFromConfig`'s `tokens` and to `resolveApiToken`; it replaces the permission check at mint,
+  and the resolver re-asks it on every request against the owner's live context in the token's org,
+  so a key whose owner no longer qualifies gets 403 `API_TOKEN_HOLDER_REFUSED` without being
+  revoked. Granting a platform permission per user was rejected: who holds keys is a host rule, such
+  as "shop admins" (`manage_org_members`). Without a policy, use is not re-checked against
+  `manage_api_tokens`.
 
 ### Scopes and enforcement
 
