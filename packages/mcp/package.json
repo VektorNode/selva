@@ -1,0 +1,63 @@
+{
+	"name": "@selvajs/mcp",
+	"version": "0.0.0",
+	"description": "MCP server machinery for Selva hosts: tools over a host's /api/v1, with key auth, error mapping and annotations from its OpenAPI document",
+	"license": "MIT",
+	"author": "VektorNode",
+	"homepage": "https://selva.dev",
+	"bugs": "https://github.com/VektorNode/selva/issues",
+	"keywords": [
+		"selva",
+		"mcp",
+		"model-context-protocol",
+		"openapi"
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/VektorNode/selva.git",
+		"directory": "packages/mcp"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=24.0.0"
+	},
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"selva-source": "./src/index.ts",
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"!**/__tests__/**",
+		"!**/*.test.*",
+		"!**/*.spec.*"
+	],
+	"scripts": {
+		"build": "tsc",
+		"dev": "tsc --watch",
+		"type-check": "tsc --noEmit",
+		"prepack": "publint --strict",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"lint": "eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js"
+	},
+	"dependencies": {
+		"@modelcontextprotocol/sdk": "^1.30.1",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@selvajs/config": "workspace:*",
+		"@selvajs/server": "workspace:*",
+		"@types/node": "catalog:",
+		"typescript": "catalog:",
+		"vitest": "catalog:"
+	}
+}

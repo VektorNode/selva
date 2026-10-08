@@ -1,187 +1,16 @@
 /**
- * Builds the OpenAPI 3.1 document for `/api/v1` from the route registry.
- *
- * Request schemas come from `z.toJSONSchema` over the actual validators, so a
- * renamed body field changes the spec on the next generate rather than leaving
- * the yaml describing a field that no longer exists.
- *
- * Response schemas are *not* derived — handlers build payloads from store
- * records with no Zod validator on the way out. They're described structurally
- * instead (pagination envelope, error envelope), and resource bodies stay open.
- * Claiming more precision than exists would be worse than claiming less.
+ * Selva's `/api/v1` OpenAPI document: the shared builder from
+ * `@selvajs/server/api` over this app's route registry.
  */
 
-import { z, type ZodType } from 'zod';
-import { V1_ENDPOINTS, type Endpoint } from './registry.js';
-import { ApiErrorCode } from '../../api-errors.js';
-import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@selvajs/platform';
-
-type Json = string | number | boolean | null | Json[] | { [k: string]: Json };
+import { buildOpenApiDocument as build, type Json } from '@selvajs/server/api';
+import { V1_ENDPOINTS } from './registry.js';
 
 const ERROR_DESCRIPTIONS: Record<number, string> = {
-	400: 'Validation failed.',
-	401: 'Missing or invalid credentials.',
 	403: 'Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed.',
-	404: 'No such resource, or the caller cannot see it.',
-	409: 'The request conflicts with the current state.',
-	422: 'Well-formed but not processable.',
 	429: 'Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget.',
-	500: 'Unexpected server error.',
 	503: 'The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`).'
 };
-
-function requestBodySchema(schema: ZodType): Json {
-	// io: 'input' — fields with defaults are optional on the way in, unlike the output view.
-	const json = z.toJSONSchema(schema, { io: 'input', target: 'draft-2020-12' }) as Record<
-		string,
-		Json
-	>;
-	// A nested schema inherits its dialect from the document; a $schema key
-	// here makes some validators treat the subtree as a separate document.
-	delete json.$schema;
-	return json;
-}
-
-function multipartSchema(fields: NonNullable<Endpoint['multipart']>): Json {
-	const properties: Record<string, Json> = {};
-	const required: string[] = [];
-	for (const f of fields) {
-		properties[f.field] = { type: 'string', description: f.description };
-		if (f.required) required.push(f.field);
-	}
-	return required.length
-		? { type: 'object', properties, required }
-		: { type: 'object', properties };
-}
-
-function responseFor(ep: Endpoint): Json {
-	if (ep.response === 'empty') {
-		return { '204': { description: 'Success. No content.' } };
-	}
-	const status = String(ep.status ?? 200);
-	if (ep.response === 'collection') {
-		return {
-			[status]: {
-				description: 'A page of results.',
-				content: {
-					'application/json': { schema: { $ref: '#/components/schemas/Page' } }
-				}
-			}
-		};
-	}
-	if (ep.response === 'binary') {
-		return {
-			[status]: {
-				description: 'Binary payload.',
-				content: { 'application/octet-stream': { schema: { type: 'string', format: 'binary' } } }
-			}
-		};
-	}
-	return {
-		[status]: {
-			description: 'Success.',
-			content: { 'application/json': { schema: { type: 'object' } } }
-		}
-	};
-}
-
-function parametersFor(ep: Endpoint): Json[] {
-	const params: Json[] = [];
-
-	for (const name of ep.path.matchAll(/\{(\w+)\}/g)) {
-		params.push({
-			name: name[1],
-			in: 'path',
-			required: true,
-			schema: { type: 'string' }
-		});
-	}
-
-	if (ep.response === 'collection') {
-		params.push(
-			{ $ref: '#/components/parameters/limit' },
-			{ $ref: '#/components/parameters/cursor' },
-			{ $ref: '#/components/parameters/orderBy' },
-			{ $ref: '#/components/parameters/orderDir' }
-		);
-	}
-
-	for (const q of ep.query ?? []) {
-		params.push({
-			name: q.name,
-			in: 'query',
-			required: false,
-			description: q.description,
-			schema: { type: 'string' }
-		});
-	}
-
-	return params;
-}
-
-function operationFor(ep: Endpoint): Json {
-	const op: Record<string, Json> = {
-		summary: ep.summary,
-		operationId: operationId(ep),
-		tags: [tagFor(ep.path)]
-	};
-
-	if (ep.internal) op['x-internal'] = true;
-
-	const params = parametersFor(ep);
-	if (params.length) op.parameters = params;
-
-	if (ep.requestBody) {
-		op.requestBody = {
-			required: true,
-			content: { 'application/json': { schema: requestBodySchema(ep.requestBody) } }
-		};
-	} else if (ep.multipart) {
-		op.requestBody = {
-			required: true,
-			content: { 'multipart/form-data': { schema: multipartSchema(ep.multipart) } }
-		};
-	}
-
-	if (ep.idempotent) {
-		op.parameters = [
-			...((op.parameters as Json[]) ?? []),
-			{ $ref: '#/components/parameters/idempotencyKey' }
-		];
-	}
-
-	const responses = responseFor(ep) as Record<string, Json>;
-	// Any operation can refuse a token (403 scope, 429 rate limit, 503 tokens off),
-	// so those join the always-possible set.
-	const statuses = new Set([...(ep.errors ?? []), 401, 403, 429, 500, 503]);
-	if (ep.idempotent) statuses.add(422);
-	for (const status of [...statuses].sort((a, b) => a - b)) {
-		responses[String(status)] = {
-			description: ERROR_DESCRIPTIONS[status] ?? 'Error.',
-			content: { 'application/json': { schema: { $ref: '#/components/schemas/Error' } } }
-		};
-	}
-	op.responses = responses;
-
-	return op;
-}
-
-function tagFor(path: string): string {
-	const first = path.split('/')[1] ?? 'root';
-	return first.charAt(0).toUpperCase() + first.slice(1);
-}
-
-function operationId(ep: Endpoint): string {
-	const segments = ep.path
-		.split('/')
-		.filter(Boolean)
-		.map((s) => (s.startsWith('{') ? `By${cap(s.slice(1, -1))}` : cap(s)));
-	return ep.method.toLowerCase() + segments.join('');
-}
-
-function cap(s: string): string {
-	return s.charAt(0).toUpperCase() + s.slice(1);
-}
 
 /** Route prefix every endpoint in this registry is served under. */
 export const API_BASE_PATH = '/api/v1';
@@ -198,14 +27,10 @@ export const API_BASE_PATH = '/api/v1';
 export const API_VERSION = `${/v(\d+)$/.exec(API_BASE_PATH)?.[1] ?? '1'}.0.0`;
 
 export function buildOpenApiDocument(version: string = API_VERSION): Json {
-	const paths: Record<string, Record<string, Json>> = {};
-	for (const ep of V1_ENDPOINTS) {
-		const path = `${API_BASE_PATH}${ep.path}`;
-		(paths[path] ??= {})[ep.method.toLowerCase()] = operationFor(ep);
-	}
-
-	return {
-		openapi: '3.1.0',
+	return build(V1_ENDPOINTS, {
+		basePath: API_BASE_PATH,
+		errorDescriptions: ERROR_DESCRIPTIONS,
+		alwaysErrors: [401, 403, 429, 500, 503],
 		info: {
 			title: 'Selva API',
 			version,
@@ -223,103 +48,30 @@ export function buildOpenApiDocument(version: string = API_VERSION): Json {
 				'`403`. `403` means the resource is visible but the action is not allowed.\n\n' +
 				'**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser ' +
 				'requests and non-browser clients holding a token.\n\n' +
+				'**Scopes.** Each operation names the API-token scope it needs as `x-scope`: `read`, ' +
+				'`write` or `solve`.\n\n' +
 				'Instance administration lives at `/api/admin`, is session-only, is never reachable ' +
 				'with a bearer token, and is not described here.',
 			license: { name: 'MIT' }
 		},
-		servers: [{ url: '/', description: 'The Selva instance serving this document.' }],
 		security: [{ cookieAuth: [] }, { bearerAuth: [] }],
-		components: {
-			securitySchemes: {
-				cookieAuth: {
-					type: 'apiKey',
-					in: 'cookie',
-					name: 'session',
-					description: 'Browser session cookie. Same-origin only.'
-				},
-				bearerAuth: {
-					type: 'http',
-					scheme: 'bearer',
-					description:
-						'An API token (`selva_…`), sent as `Authorization: Bearer <token>` and never in the URL. ' +
-						'It acts as the user who created it, in one org, narrowed by its scopes. ' +
-						'`/api/v1` is the only prefix that accepts one; `/api/admin` never does.'
-				}
+		securitySchemes: {
+			cookieAuth: {
+				type: 'apiKey',
+				in: 'cookie',
+				name: 'session',
+				description: 'Browser session cookie. Same-origin only.'
 			},
-			parameters: {
-				limit: {
-					name: 'limit',
-					in: 'query',
-					required: false,
-					description: `Page size. Out-of-range values clamp rather than fail, so a client walking a cursor is never stopped by pagination plumbing. Default ${DEFAULT_PAGE_LIMIT}.`,
-					schema: { type: 'integer', minimum: 1, maximum: MAX_PAGE_LIMIT }
-				},
-				cursor: {
-					name: 'cursor',
-					in: 'query',
-					required: false,
-					description:
-						"An opaque cursor from a previous response's `nextCursor`. Do not construct or parse one.",
-					schema: { type: 'string' }
-				},
-				orderBy: {
-					name: 'orderBy',
-					in: 'query',
-					required: false,
-					schema: { type: 'string', enum: ['createdAt', 'updatedAt', 'name'] }
-				},
-				orderDir: {
-					name: 'orderDir',
-					in: 'query',
-					required: false,
-					schema: { type: 'string', enum: ['asc', 'desc'] }
-				},
-				idempotencyKey: {
-					name: 'Idempotency-Key',
-					in: 'header',
-					required: false,
-					description:
-						'A client-chosen key, 1 to 255 characters. Repeating the request with the same key within the retention window replays the first successful response instead of running it again; the replay carries `Idempotency-Replayed: true`. Keys are scoped to the calling token (or user, for a browser session). Reusing a key with a different method, path or body returns `422`. A failed attempt is not kept, so a corrected retry runs. The store is per-process and in-memory: it absorbs retries, does not survive a restart, and is not shared between app instances.',
-					schema: { type: 'string', minLength: 1, maxLength: 255 }
-				}
-			},
-			schemas: {
-				Page: {
-					type: 'object',
-					description:
-						'The envelope every collection returns. `nextCursor` is absent on the last page.',
-					properties: {
-						items: { type: 'array', items: { type: 'object' } },
-						nextCursor: { type: 'string' }
-					},
-					required: ['items']
-				},
-				Error: {
-					type: 'object',
-					description:
-						'Every failure carries this shape. Branch on `code`, not on the human-readable `message`.',
-					properties: {
-						message: { type: 'string' },
-						code: { type: 'string', enum: Object.values(ApiErrorCode) },
-						fields: {
-							type: 'object',
-							description:
-								'Per-field messages, keyed by dotted path. Present on validation failures.',
-							additionalProperties: { type: 'string' }
-						},
-						details: {
-							type: 'object',
-							description:
-								'Machine-readable context. A scope refusal carries `requiredScope`, e.g. `write:org:<id>`.',
-							additionalProperties: { type: 'string' }
-						}
-					},
-					required: ['message', 'code']
-				}
+			bearerAuth: {
+				type: 'http',
+				scheme: 'bearer',
+				description:
+					'An API token (`selva_…`), sent as `Authorization: Bearer <token>` and never in the URL. ' +
+					'It acts as the user who created it, in one org, narrowed by its scopes. ' +
+					'`/api/v1` is the only prefix that accepts one; `/api/admin` never does.'
 			}
-		},
-		paths: paths as unknown as Json
-	};
+		}
+	});
 }
 
 // ============================================================================

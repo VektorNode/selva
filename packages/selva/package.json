@@ -71,6 +71,7 @@
 		"@selvajs/config": "workspace:*",
 		"@selvajs/header-auth-provider": "workspace:*",
 		"@selvajs/local-provider": "workspace:*",
+		"@selvajs/mcp": "workspace:*",
 		"@selvajs/notifications": "workspace:*",
 		"@selvajs/platform": "workspace:*",
 		"@selvajs/schemas": "workspace:*",

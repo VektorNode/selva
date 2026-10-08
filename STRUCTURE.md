@@ -30,6 +30,7 @@ selva/
 │   │   ├── supabase/               # Supabase provider (@selvajs/supabase-provider)
 │   │   └── header-auth/            # Forward-auth provider (@selvajs/header-auth-provider)
 │   ├── server/                     # @selvajs/server: server building blocks (limits, rate limit, SSRF guard, definitions)
+│   ├── mcp/                        # @selvajs/mcp: MCP server over a host's /api/v1
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── plugin-ui/                  # Plugin UI: schema designer + preview, embedded into Selva.gha
 │   ├── selva/                      # @selvajs/selva: deployable Selva app (cloud mode)

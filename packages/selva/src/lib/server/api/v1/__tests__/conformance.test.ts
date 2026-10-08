@@ -190,6 +190,33 @@ describe('every route is in the registry, and every registry entry is a route', 
 		expect(honoured.sort()).toEqual(documented.sort());
 		expect(documented.length).toBeGreaterThan(0);
 	});
+
+	it('documents the scope each route checks', () => {
+		// MCP tool annotations come from `x-scope`: a solve documented as `write`
+		// ships without the open-world hint, so clients release without confirming.
+		// The plugin's callback takes a per-solve bearer, never an API token.
+		const NO_TOKEN = new Set(['POST /solve-events/{solveId}']);
+		const checked = v1Routes.flatMap((r) => {
+			const source = stripComments(readFileSync(r.file, 'utf8'));
+			return r.methods.map((m) => {
+				const start = source.search(new RegExp(`export\\s+const\\s+${m}\\s*:`));
+				const next = source.slice(start + 1).search(/export\s+const\s+[A-Z]+\s*:/);
+				const segment = next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+				const scope =
+					/action:\s*'(\w+)'/.exec(segment)?.[1] ??
+					/assertScope\(\s*locals\.ctx,\s*'(\w+)'/.exec(segment)?.[1] ??
+					// `runSolve` asserts `solve` itself.
+					(/runSolve\(/.test(segment) ? 'solve' : m === 'GET' ? 'read' : 'write');
+				return [`${m} /${r.routePath}`.replace(/\[(\w+)\]/g, '{$1}'), scope] as const;
+			});
+		});
+		const documented = new Map(V1_ENDPOINTS.map((e) => [endpointKey(e.method, e.path), e.scope]));
+		const mismatched = checked.filter(
+			([key, scope]) => !NO_TOKEN.has(key) && documented.get(key) !== scope
+		);
+		expect(mismatched).toEqual([]);
+		expect(checked.filter(([, scope]) => scope === 'solve').length).toBeGreaterThan(0);
+	});
 });
 
 // ============================================================================

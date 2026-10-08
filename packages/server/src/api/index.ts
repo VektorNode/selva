@@ -52,6 +52,15 @@ export {
 	definitionScopeTarget
 } from './scope.js';
 export { mapCoreError } from './map-core-error.js';
+export {
+	buildOpenApiDocument,
+	operationId,
+	type Endpoint,
+	type HttpMethod,
+	type Json,
+	type OpenApiOptions,
+	type ResponseKind
+} from './openapi.js';
 export { parseListOptions, parseDefinitionListOptions } from './pagination.js';
 export {
 	SolveBodySchema,

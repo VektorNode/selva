@@ -323,6 +323,31 @@ importers:
         specifier: 'catalog:'
         version: 5.0.2(@opentelemetry/api@1.9.1)(@types/node@26.6.2)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
 
+  packages/mcp:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.30.1
+        version: 1.30.1(supports-color@8.1.1)(zod@4.6.5)
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.5
+    devDependencies:
+      '@selvajs/config':
+        specifier: workspace:*
+        version: link:../config
+      '@selvajs/server':
+        specifier: workspace:*
+        version: link:../server
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.2
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.2(@opentelemetry/api@1.9.1)(@types/node@26.6.2)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+
   packages/notifications:
     dependencies:
       '@selvajs/platform':
@@ -578,6 +603,9 @@ importers:
       '@selvajs/local-provider':
         specifier: workspace:*
         version: link:../providers/local
+      '@selvajs/mcp':
+        specifier: workspace:*
+        version: link:../mcp
       '@selvajs/notifications':
         specifier: workspace:*
         version: link:../notifications
@@ -8035,7 +8063,7 @@ snapshots:
     dependencies:
       '@chevrotain/types': 11.1.2
 
-  '@modelcontextprotocol/sdk@1.30.1(supports-color@7.2.0)(zod@4.6.5)':
+  '@modelcontextprotocol/sdk@1.30.1(supports-color@8.1.1)(zod@4.6.5)':
     dependencies:
       '@hono/node-server': 2.1.1(hono@4.13.9)
       ajv: 8.20.0
@@ -8046,7 +8074,7 @@ snapshots:
       eventsource: 3.0.7
       eventsource-parser: 3.1.1
       express: 5.2.1(supports-color@8.1.1)
-      express-rate-limit: 8.7.0(express@5.2.1(supports-color@8.1.1))(supports-color@7.2.0)
+      express-rate-limit: 8.7.0(express@5.2.1(supports-color@8.1.1))(supports-color@8.1.1)
       hono: 4.13.9
       jose: 6.2.12
       json-schema-typed: 8.0.2
@@ -9612,11 +9640,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  body-parser@2.3.0(supports-color@7.2.0):
+  body-parser@2.3.0(supports-color@8.1.1):
     dependencies:
       bytes: 3.1.2
       content-type: 2.1.0
-      debug: 4.4.3(supports-color@7.2.0)
+      debug: 4.4.3(supports-color@8.1.1)
       http-errors: 2.0.1
       iconv-lite: 0.7.3
       on-finished: 2.4.1
@@ -10579,9 +10607,9 @@ snapshots:
   exponential-backoff@3.1.3:
     optional: true
 
-  express-rate-limit@8.7.0(express@5.2.1(supports-color@8.1.1))(supports-color@7.2.0):
+  express-rate-limit@8.7.0(express@5.2.1(supports-color@8.1.1))(supports-color@8.1.1):
     dependencies:
-      debug: 4.4.3(supports-color@7.2.0)
+      debug: 4.4.3(supports-color@8.1.1)
       express: 5.2.1(supports-color@8.1.1)
       ip-address: 10.7.2
     transitivePeerDependencies:
@@ -10626,17 +10654,17 @@ snapshots:
   express@5.2.1(supports-color@8.1.1):
     dependencies:
       accepts: 2.0.0
-      body-parser: 2.3.0(supports-color@7.2.0)
+      body-parser: 2.3.0(supports-color@8.1.1)
       content-disposition: 1.1.0
       content-type: 1.0.5
       cookie: 0.7.2
       cookie-signature: 1.2.2
-      debug: 4.4.3(supports-color@7.2.0)
+      debug: 4.4.3(supports-color@8.1.1)
       depd: 2.0.0
       encodeurl: 2.0.0
       escape-html: 1.0.3
       etag: 1.8.1
-      finalhandler: 2.1.1(supports-color@7.2.0)
+      finalhandler: 2.1.1(supports-color@8.1.1)
       fresh: 2.0.0
       http-errors: 2.0.1
       merge-descriptors: 2.0.0
@@ -10648,7 +10676,7 @@ snapshots:
       qs: 6.16.0
       range-parser: 1.3.0
       router: 2.2.0(supports-color@8.1.1)
-      send: 1.2.1(supports-color@7.2.0)
+      send: 1.2.1(supports-color@8.1.1)
       serve-static: 2.2.1(supports-color@8.1.1)
       statuses: 2.0.2
       type-is: 2.1.0
@@ -10731,9 +10759,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  finalhandler@2.1.1(supports-color@7.2.0):
+  finalhandler@2.1.1(supports-color@8.1.1):
     dependencies:
-      debug: 4.4.3(supports-color@7.2.0)
+      debug: 4.4.3(supports-color@8.1.1)
       encodeurl: 2.0.0
       escape-html: 1.0.3
       on-finished: 2.4.1
@@ -10755,7 +10783,7 @@ snapshots:
       '@google-cloud/cloud-sql-connector': 1.12.0(supports-color@8.1.1)
       '@google-cloud/pubsub': 5.3.1(supports-color@8.1.1)
       '@inquirer/prompts': 7.10.1(@types/node@26.6.2)
-      '@modelcontextprotocol/sdk': 1.30.1(supports-color@7.2.0)(zod@4.6.5)
+      '@modelcontextprotocol/sdk': 1.30.1(supports-color@8.1.1)(zod@4.6.5)
       abort-controller: 3.0.0
       ajv: 8.20.0
       ajv-formats: 3.0.1(ajv@8.20.0)
@@ -12780,16 +12808,6 @@ snapshots:
       points-on-curve: 0.2.0
       points-on-path: 0.2.1
 
-  router@2.2.0(supports-color@7.2.0):
-    dependencies:
-      debug: 4.4.3(supports-color@7.2.0)
-      depd: 2.0.0
-      is-promise: 4.0.0
-      parseurl: 1.3.3
-      path-to-regexp: 8.4.2
-    transitivePeerDependencies:
-      - supports-color
-
   router@2.2.0(supports-color@8.1.1):
     dependencies:
       debug: 4.4.3(supports-color@8.1.1)
@@ -12891,22 +12909,6 @@ snapshots:
       ms: 2.1.3
       on-finished: 2.4.1
       range-parser: 1.2.1
-      statuses: 2.0.2
-    transitivePeerDependencies:
-      - supports-color
-
-  send@1.2.1(supports-color@7.2.0):
-    dependencies:
-      debug: 4.4.3(supports-color@7.2.0)
-      encodeurl: 2.0.0
-      escape-html: 1.0.3
-      etag: 1.8.1
-      fresh: 2.0.0
-      http-errors: 2.0.1
-      mime-types: 3.0.2
-      ms: 2.1.3
-      on-finished: 2.4.1
-      range-parser: 1.3.0
       statuses: 2.0.2
     transitivePeerDependencies:
       - supports-color
@@ -13185,7 +13187,7 @@ snapshots:
       on-finished: 2.4.1
       on-headers: 1.1.0
       path-to-regexp: 1.9.0
-      router: 2.2.0(supports-color@7.2.0)
+      router: 2.2.0(supports-color@8.1.1)
       update-notifier-cjs: 5.1.7
     optionalDependencies:
       re2: 1.26.1

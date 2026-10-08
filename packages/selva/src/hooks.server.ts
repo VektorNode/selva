@@ -12,6 +12,7 @@ import {
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
 import { providers, getErrorReporter, getEventSink, getLogger } from '$lib/server/providers.server';
 import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
+import { MCP_PATH } from '$lib/server/mcp/server';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
@@ -112,8 +113,10 @@ const routeClassifier = createRouteClassifier({
 	// gating it would hide it from callers deciding whether to integrate.
 	publicPrefixes: ['/auth/', '/logout', '/docs/'],
 	// Must answer without a session: load-balancer liveness probe, and the
-	// readiness probe the post-update poller waits on across a restart.
-	publicApis: ['/api/health', '/api/health/ready'],
+	// readiness probe the post-update poller waits on across a restart. The v1
+	// spec is public for the same reason `/docs/` is. `/mcp` gates itself: it needs a
+	// key and passes it through to `/api/v1`, which authenticates every call.
+	publicApis: ['/api/health', '/api/health/ready', '/api/v1/openapi.json', MCP_PATH],
 	// Self-gating routes authorize each request themselves; the hook must not
 	// deny them up front. `/api/files/[...path]` classifies each path against
 	// the asset-class registry (public branding serves to anyone, org/project
@@ -186,12 +189,16 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	// A `selva_` key decides the request on its own: it never falls back to the
 	// cookie, so a broken key can't quietly run as whoever is signed in.
-	const tokenResult = await resolveApiToken(event.request, {
-		codec: apiTokenCodec(),
-		auth: providers.auth,
-		data: providers.data,
-		log: event.locals.log
-	});
+	// `/mcp` carries a key but isn't under `/api/v1`, so the resolver would refuse it.
+	const tokenResult =
+		pathname === MCP_PATH
+			? ({ kind: 'none' } as const)
+			: await resolveApiToken(event.request, {
+					codec: apiTokenCodec(),
+					auth: providers.auth,
+					data: providers.data,
+					log: event.locals.log
+				});
 	if (tokenResult.kind === 'rejected') {
 		const { status, code, message } = tokenResult;
 		const headers: Record<string, string> = { 'Content-Type': 'application/json' };

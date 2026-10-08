@@ -25,6 +25,9 @@ describe('isPublicRoute', () => {
 		// is guaranteed. Both probes are exact-match entries — neither inherits
 		// public status from the other.
 		['/api/health/ready'],
+		['/api/v1/openapi.json'],
+		// Self-gating: needs a key, which every /api/v1 call it makes checks.
+		['/mcp'],
 		// The blob proxy is self-gating: it must pass the hook so it can apply
 		// per-asset-class auth itself (public branding for guests, 401 for
 		// org/project assets without a session).
