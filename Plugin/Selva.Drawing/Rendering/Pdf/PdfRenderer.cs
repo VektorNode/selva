@@ -575,6 +575,10 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		// here we simply skip it rather than throw.
 		if (element.Format == ImageFormat.Svg) return;
 
+		// ImageSharp sniffs the format itself and would decode TIFF too (GHSA-wmxv-xphr-5c9g),
+		// so only bytes that ARE one of the supported formats reach it.
+		if (!IsPngJpegOrWebp(element.Data)) return;
+
 		// The page graphics root is Y-up (flipped once at page setup). A raster XImage has
 		// a fixed top-down orientation, so drawn directly it would appear mirrored. Counter-
 		// flip locally — same trick the symbol-form builder and Visit(TextElement) use:
@@ -600,6 +604,13 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			_gfx.Restore(state);
 		}
 	}
+
+	internal static bool IsPngJpegOrWebp(byte[] d) =>
+		d.Length >= 8 && d[0] == 0x89 && d[1] == 0x50 && d[2] == 0x4E && d[3] == 0x47
+			&& d[4] == 0x0D && d[5] == 0x0A && d[6] == 0x1A && d[7] == 0x0A
+		|| d.Length >= 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF
+		|| d.Length >= 12 && d[0] == 0x52 && d[1] == 0x49 && d[2] == 0x46 && d[3] == 0x46
+			&& d[8] == 0x57 && d[9] == 0x45 && d[10] == 0x42 && d[11] == 0x50;
 
 	public void Visit(DimensionElement element)
 	{

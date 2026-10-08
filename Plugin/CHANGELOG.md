@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- PDF export embeds only PNG, JPEG and WEBP images, checked by their file signature. Other formats (TIFF among them) are skipped instead of handed to ImageSharp, which has open TIFF decoder advisories.
+- Five ImageSharp 2.1.13 advisories (2026-10-07) are suppressed in `Selva.Drawing`: their fix needs ImageSharp 4.x, which the PDF stack can't load. The rest are unreachable from Selva; a crafted embedded image can still cost memory.
+
 ## [0.22.0] - 2026-10-03
 
 ### Added

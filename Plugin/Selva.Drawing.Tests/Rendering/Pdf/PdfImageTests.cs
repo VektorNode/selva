@@ -58,6 +58,17 @@ public class PdfImageTests
     }
 
     [Fact]
+    public void Only_png_jpeg_and_webp_signatures_reach_the_decoder()
+    {
+        Assert.True(PdfRenderer.IsPngJpegOrWebp(RedPng));
+        Assert.True(PdfRenderer.IsPngJpegOrWebp(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }));
+        Assert.True(PdfRenderer.IsPngJpegOrWebp("RIFF\0\0\0\0WEBPVP8 "u8.ToArray()));
+        Assert.False(PdfRenderer.IsPngJpegOrWebp("II*\0\b\0\0\0"u8.ToArray()));
+        Assert.False(PdfRenderer.IsPngJpegOrWebp("MM\0+\0\b\0\0"u8.ToArray()));
+        Assert.False(PdfRenderer.IsPngJpegOrWebp("GIF89a"u8.ToArray()));
+    }
+
+    [Fact]
     public void Corrupt_data_is_skipped_without_throwing()
     {
         var bytes = RenderScene(new ImageElement
