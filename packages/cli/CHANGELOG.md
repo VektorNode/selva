@@ -1,5 +1,9 @@
 # @selvajs/cli
 
+## 4.20.0-beta.2
+
+No changes in this release.
+
 ## 4.20.0-beta.1
 
 No changes in this release.
