@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0-beta.1] - 2026-10-08
+
 ### Security
 
 - PDF export embeds only PNG, JPEG and WEBP images, checked by their file signature. Other formats (TIFF among them) are skipped instead of handed to ImageSharp, which has open TIFF decoder advisories.
