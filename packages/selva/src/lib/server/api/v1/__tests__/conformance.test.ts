@@ -168,6 +168,28 @@ describe('every route is in the registry, and every registry entry is a route', 
 		expect(v1Routes.length).toBeGreaterThan(20);
 		expect(adminRoutes.length).toBeGreaterThan(10);
 	});
+
+	it('documents Idempotency-Key exactly where a route honours it', () => {
+		// Each direction fails silently: a spec promising replays the route
+		// ignores duplicates a client's create, and an undocumented one is
+		// never sent.
+		const honoured = v1Routes.flatMap((r) => {
+			const source = stripComments(readFileSync(r.file, 'utf8'));
+			return r.methods
+				.filter((m) => {
+					const start = source.search(new RegExp(`export\\s+const\\s+${m}\\s*:`));
+					const next = source.slice(start + 1).search(/export\s+const\s+[A-Z]+\s*:/);
+					const segment = next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+					return /idempotent:\s*true|runIdempotent\(/.test(segment);
+				})
+				.map((m) => `${m} /${r.routePath}`.replace(/\[(\w+)\]/g, '{$1}'));
+		});
+		const documented = V1_ENDPOINTS.filter((e) => e.idempotent).map((e) =>
+			endpointKey(e.method, e.path)
+		);
+		expect(honoured.sort()).toEqual(documented.sort());
+		expect(documented.length).toBeGreaterThan(0);
+	});
 });
 
 // ============================================================================

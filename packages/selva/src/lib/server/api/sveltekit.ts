@@ -31,6 +31,7 @@ import { inviteCodec } from '../invites/token.server';
 import { apiTokenCodec } from '../apiTokens/token.server';
 import { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../computeLimits';
 import { evictComputeClient } from '../compute/engine.server';
+import { apiRateLimiter } from '../computeRateLimit.server';
 
 /**
  * This app's own errors, folded into the shared envelope.
@@ -97,7 +98,9 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 			// leaves a warm client holding a rotated URL or key.
 			evictComputeClient,
 			notifications: getNotificationProvider(),
-			instanceName: getBranding().name
+			instanceName: getBranding().name,
+			// Module singleton: the limiter must outlive this per-request deps object.
+			apiRateLimiter
 		}
 	);
 }
@@ -120,12 +123,12 @@ export function toApiRequest(event: RequestEvent): ApiRequest {
  *
  * Routes addressed by a project or definition pass `scopeTarget`, so a key
  * scoped to that project or definition can reach them; solve routes pass
- * `action: 'solve'`.
+ * `action: 'solve'`; creates pass `idempotent: true`.
  */
 export function mount(
 	fallback: string,
 	handler: ApiHandler,
-	opts: Pick<RunHandlerOptions, 'action' | 'scopeTarget'> = {}
+	opts: Pick<RunHandlerOptions, 'action' | 'scopeTarget' | 'idempotent'> = {}
 ) {
 	return (event: RequestEvent): Promise<Response> =>
 		runHandler(handler, toApiRequest(event), { fallback, mapError: mapAppError, ...opts });

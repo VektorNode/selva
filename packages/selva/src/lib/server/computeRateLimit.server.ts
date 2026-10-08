@@ -10,6 +10,13 @@
 
 import { createComputeRateLimiter, type RateLimitResult } from '@selvajs/server/compute';
 import { RATE_LIMIT_WINDOW_MS, RATE_LIMIT_MAX_REQUESTS } from './computeLimits';
+import {
+	createApiRateLimiter,
+	resolveApiRateLimitConfig,
+	type ApiRateLimiter
+} from '@selvajs/server/api';
+import { env } from '$env/dynamic/private';
+import { lazyLogger } from '$lib/server/providers.server';
 
 const limiter = createComputeRateLimiter({
 	windowMs: RATE_LIMIT_WINDOW_MS,
@@ -39,3 +46,10 @@ export function resetComputeRateLimit(): void {
 }
 
 export type { RateLimitResult };
+
+// Per-token request limit for `/api/v1`, charged by `runHandler` and by the
+// solve routes that build their own response. `null` when
+// API_TOKEN_RATE_LIMIT_MAX=0.
+export const apiRateLimiter: ApiRateLimiter | null = createApiRateLimiter(
+	resolveApiRateLimitConfig(env, lazyLogger)
+);

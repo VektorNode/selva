@@ -17,6 +17,8 @@ import type { DefinitionService } from '../definitions/definition-service.js';
 import type { OrgAssetService } from '../organizations/org-asset-service.js';
 import type { TokenCodec } from '../tokens/token-codec.js';
 import type { ApiTokenCodec } from '../tokens/api-token-codec.js';
+import type { ApiRateLimiter } from './rate-limit.js';
+import type { ApiIdempotencyStore } from './idempotency.js';
 import type {
 	IAuthProvider,
 	IDataProvider,
@@ -101,6 +103,14 @@ export interface SelvaDeps {
 	 * handlers report `not-configured` rather than failing the write.
 	 */
 	notifications?: INotificationProvider;
+	/**
+	 * Per-token request limit `runHandler` charges. Absent: the process-wide
+	 * default (`DEFAULT_API_RATE_LIMIT`). `null`: no limit. A host's own limiter
+	 * must outlive the request, since deps are rebuilt per request.
+	 */
+	apiRateLimiter?: ApiRateLimiter | null;
+	/** Replay store for routes mounted with `idempotent: true`. Absent: the process-wide default. */
+	idempotency?: ApiIdempotencyStore;
 	/** Instance display name, used where a record has none. */
 	instanceName: string;
 	/** Where a person manages their API tokens, linked from the new-key email. Host-relative. */
@@ -151,7 +161,9 @@ export function depsFromConfig(
 		evictComputeClient = () => {},
 		notifications,
 		instanceName = 'Selva',
-		apiTokenSettingsPath = '/settings/tokens'
+		apiTokenSettingsPath = '/settings/tokens',
+		apiRateLimiter,
+		idempotency
 	}: {
 		tokens?: SelvaDeps['tokens'];
 		uploadLimits?: Partial<SelvaDeps['uploadLimits']>;
@@ -159,6 +171,8 @@ export function depsFromConfig(
 		notifications?: INotificationProvider;
 		instanceName?: string;
 		apiTokenSettingsPath?: string;
+		apiRateLimiter?: ApiRateLimiter | null;
+		idempotency?: ApiIdempotencyStore;
 	} = {}
 ): SelvaDeps {
 	const { data } = config;
@@ -189,6 +203,8 @@ export function depsFromConfig(
 		notifications,
 		instanceName,
 		apiTokenSettingsPath,
+		apiRateLimiter,
+		idempotency,
 		services
 	};
 }

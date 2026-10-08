@@ -25,7 +25,7 @@ const ERROR_DESCRIPTIONS: Record<number, string> = {
 	404: 'No such resource, or the caller cannot see it.',
 	409: 'The request conflicts with the current state.',
 	422: 'Well-formed but not processable.',
-	429: 'Rate limited. Retry after the interval in `Retry-After`.',
+	429: 'Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget.',
 	500: 'Unexpected server error.',
 	503: 'The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`).'
 };
@@ -143,24 +143,18 @@ function operationFor(ep: Endpoint): Json {
 		};
 	}
 
-	if (ep.method === 'POST' && ep.path.endsWith('/solve')) {
+	if (ep.idempotent) {
 		op.parameters = [
 			...((op.parameters as Json[]) ?? []),
-			{
-				name: 'Idempotency-Key',
-				in: 'header',
-				required: false,
-				description:
-					'A client-chosen key. Repeating a request with the same key within the retention window replays the first response instead of solving again; the replay carries `Idempotency-Replayed: true`. The store is per-process and in-memory — it absorbs retries, it is not a durable result cache, and it does not survive a restart or a second app instance.',
-				schema: { type: 'string' }
-			}
+			{ $ref: '#/components/parameters/idempotencyKey' }
 		];
 	}
 
 	const responses = responseFor(ep) as Record<string, Json>;
-	// Any operation can refuse a token (403 scope, 503 tokens off), so those join
-	// the always-possible set.
-	const statuses = new Set([...(ep.errors ?? []), 401, 403, 500, 503]);
+	// Any operation can refuse a token (403 scope, 429 rate limit, 503 tokens off),
+	// so those join the always-possible set.
+	const statuses = new Set([...(ep.errors ?? []), 401, 403, 429, 500, 503]);
+	if (ep.idempotent) statuses.add(422);
 	for (const status of [...statuses].sort((a, b) => a - b)) {
 		responses[String(status)] = {
 			description: ERROR_DESCRIPTIONS[status] ?? 'Error.',
@@ -279,6 +273,14 @@ export function buildOpenApiDocument(version: string = API_VERSION): Json {
 					in: 'query',
 					required: false,
 					schema: { type: 'string', enum: ['asc', 'desc'] }
+				},
+				idempotencyKey: {
+					name: 'Idempotency-Key',
+					in: 'header',
+					required: false,
+					description:
+						'A client-chosen key, 1 to 255 characters. Repeating the request with the same key within the retention window replays the first successful response instead of running it again; the replay carries `Idempotency-Replayed: true`. Keys are scoped to the calling token (or user, for a browser session). Reusing a key with a different method, path or body returns `422`. A failed attempt is not kept, so a corrected retry runs. The store is per-process and in-memory: it absorbs retries, does not survive a restart, and is not shared between app instances.',
+					schema: { type: 'string', minLength: 1, maxLength: 255 }
 				}
 			},
 			schemas: {

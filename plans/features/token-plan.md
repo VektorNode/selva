@@ -9,6 +9,17 @@ session. Everything here ships in `@selvajs/*` packages so a host app with its o
 the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope**, **host app**,
 **delegated session**, **service account**) are defined in [CONTEXT.md](../../CONTEXT.md).
 
+## Status
+
+- **Built:** token model, scopes and enforcement, resolution, delegated sessions, read-every-project,
+  lifecycle and audit, the mint email, the endpoints, the per-token rate limit (#318) and
+  idempotency (#319). Rate limit and idempotency details are under their sections below.
+- **Not built:** the expiry reminder email. It needs a scheduled sweep (the engine has no
+  scheduler) and a per-token "reminded" marker so N instances or a restart don't resend, which
+  means a new store method and a migration on both providers.
+- **Designed, not built:** service accounts ([service-accounts.md](service-accounts.md)) and a
+  webhook dispatcher ([webhooks.md](webhooks.md)).
+
 ## How a request flows
 
 1. The host hook sees `Authorization: Bearer selva_…` and calls `resolveApiToken` **before** the
@@ -147,6 +158,13 @@ The Supabase stores scope every query by the user JWT, and a token request has n
 - **429 `RATE_LIMITED` with `Retry-After`,** plus `RateLimit-Limit` and `RateLimit-Remaining` on
   every token response.
 - **`ApiErrorCode` merges into `@selvajs/server`;** the app's duplicate copy goes.
+- **As built.** `SelvaDeps.apiRateLimiter`: absent uses a process-wide default (600 per 60 s),
+  `null` turns it off, or pass any `ApiRateLimiter` (`hit(key)`, may be async). The Selva app
+  builds one with `resolveApiRateLimitConfig` from `API_TOKEN_RATE_LIMIT_MAX` (`0` = off) and
+  `API_TOKEN_RATE_LIMIT_WINDOW_MS`. The bucket is charged before the scope check so a throttled
+  key never reaches `scopeTarget`'s database read. Routes that build their own response call
+  `chargeApiRateLimit`, `rateLimitedResponse` and `withRateLimitHeaders`; the solve core does.
+  The compute and share-cap 429s also carry `RATE_LIMITED`.
 
 ### Idempotency
 
@@ -160,6 +178,12 @@ The Supabase stores scope every query by the user JWT, and a token request has n
   separate durable idempotency table was rejected: a crash between it and the insert still
   duplicates.
 - **Selva's own creates opt in:** solve, project, definition, version, share link.
+- **As built.** `RunHandlerOptions.idempotent`; the store is `SelvaDeps.idempotency` (default:
+  process-wide, 5-minute TTL). Only responses below 400 are kept, so a failed attempt frees the
+  key. Keys are 1 to 255 characters, else 400. The registry's `idempotent` flag documents the
+  header in OpenAPI, and the conformance test fails when a route and the registry disagree.
+  Routes outside `runHandler` use `runIdempotent` with `idempotencyCallerId` and
+  `requestFingerprint`, as the solve route does.
 
 ### Lifecycle, audit and privacy
 

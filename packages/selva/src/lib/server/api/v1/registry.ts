@@ -52,6 +52,8 @@ export interface Endpoint {
 	query?: { name: string; description: string }[];
 	/** Documented failure statuses beyond the always-possible 401/500. */
 	errors?: number[];
+	/** Honours `Idempotency-Key`; must match the route's `idempotent` mount option. */
+	idempotent?: boolean;
 }
 
 const solveErrors = [400, 401, 404, 429, 503];
@@ -96,6 +98,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions',
+		idempotent: true,
 		summary: 'Create a definition from a Grasshopper file.',
 		response: 'object',
 		status: 201,
@@ -135,6 +138,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/solve',
+		idempotent: true,
 		summary: 'Solve a definition. The primary action of the API.',
 		response: 'object',
 		requestBody: SolveBodySchema,
@@ -157,6 +161,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/versions',
+		idempotent: true,
 		summary: 'Upload a new version.',
 		response: 'object',
 		status: 201,
@@ -212,6 +217,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/share-links',
+		idempotent: true,
 		summary: 'Create a share link. The raw token is returned once and never again.',
 		response: 'object',
 		status: 201,
@@ -237,6 +243,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/projects',
+		idempotent: true,
 		summary: 'Create a project.',
 		response: 'object',
 		status: 201,

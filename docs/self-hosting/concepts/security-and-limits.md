@@ -35,6 +35,19 @@ Keyed by caller: `user:<id>` for signed-in solves, `share:<linkId>` for
 share-token solves, so anonymous link traffic never eats into the owner's budget.
 Over the limit returns **429** with a `Retry-After` header.
 
+### API tokens (`/api/v1`)
+
+| Env var                          | Default | Meaning                                              |
+| -------------------------------- | ------- | ---------------------------------------------------- |
+| `API_TOKEN_RATE_LIMIT_WINDOW_MS` | `60000` | Window length.                                       |
+| `API_TOKEN_RATE_LIMIT_MAX`       | `600`   | Max requests per token per window; `0` turns it off. |
+
+Keyed by token, so two keys of one user have separate budgets. Browser sessions
+are not charged. A token solve also draws on its owner's compute bucket above, so
+extra keys never buy extra compute. Over the limit returns **429** `RATE_LIMITED`
+with `Retry-After`; every token response carries `RateLimit-Limit` and
+`RateLimit-Remaining`.
+
 ### Login
 
 Hardcoded, **not** env-configurable: **5 failed attempts per 15 minutes**, keyed

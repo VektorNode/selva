@@ -1,7 +1,7 @@
 import { error, isHttpError } from '@sveltejs/kit';
 import { ProviderError, type ILogger } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
-import { ApiErrorCode, isApiError } from '@selvajs/server/api';
+import { ApiErrorCode, codeForStatus, isApiError } from '@selvajs/server/api';
 import { SchemaExtractionError } from '@selvajs/server/definitions';
 import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 
@@ -31,28 +31,6 @@ export function apiError(
 	details?: Record<string, string>
 ): never {
 	throw error(status, { message, code, ...(fields && { fields }), ...(details && { details }) });
-}
-
-/** Default code for a given HTTP status, used when mapping opaque errors. */
-function codeForStatus(status: number): ApiErrorCode {
-	switch (status) {
-		case 400:
-			return ApiErrorCode.VALIDATION_FAILED;
-		case 401:
-			return ApiErrorCode.UNAUTHORIZED;
-		case 403:
-			return ApiErrorCode.FORBIDDEN;
-		case 404:
-			return ApiErrorCode.NOT_FOUND;
-		case 409:
-			return ApiErrorCode.CONFLICT;
-		case 422:
-			return ApiErrorCode.UNPROCESSABLE;
-		case 503:
-			return ApiErrorCode.COMPUTE_UNAVAILABLE;
-		default:
-			return ApiErrorCode.INTERNAL;
-	}
 }
 
 // Postgres unique-constraint names → friendly explanations. Postgrest surfaces

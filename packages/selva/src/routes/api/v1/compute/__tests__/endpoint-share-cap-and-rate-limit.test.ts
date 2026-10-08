@@ -84,6 +84,7 @@ describe('POST /api/compute — share-link solve cap (Q5.1)', () => {
 		// The route — not the store — is what turns the refusal into a 429.
 		expect(res.status).toBe(429);
 		expect(JSON.stringify(res.json)).toMatch(/cap reached/i);
+		expect((res.json as { code?: string }).code).toBe('RATE_LIMITED');
 
 		// And the refusal did not consume another solve.
 		const after = await tp.config.data.shareLinks.getById(SYSTEM_CONTEXT, link.id);

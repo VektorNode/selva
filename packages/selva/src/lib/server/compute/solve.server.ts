@@ -15,7 +15,15 @@
  */
 
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { assertScope, isApiError } from '@selvajs/server/api';
+import {
+	ApiError,
+	assertScope,
+	chargeApiRateLimit,
+	isApiError,
+	rateLimitedResponse,
+	toErrorBody,
+	withRateLimitHeaders
+} from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
 import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
 import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
@@ -28,7 +36,7 @@ import type {
 	SolveDefinition,
 	SolveEnvelope
 } from '@selvajs/solve/server';
-import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
+import { apiRateLimiter, checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/access.server';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
@@ -167,23 +175,31 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			);
 	};
 
-	// Per-key rate limit; runs before DB reads so throttled callers don't burn quota.
+	// Both limits run before DB reads so throttled callers don't burn quota. A
+	// token pays its own request bucket and its owner's compute bucket, so ten
+	// keys of one user never buy ten times the compute.
+	const tokenVerdict = await chargeApiRateLimit(access.ctx, apiRateLimiter);
+	if (tokenVerdict && !tokenVerdict.allowed) {
+		recordMetric('rate_limited');
+		return rateLimitedResponse(tokenVerdict);
+	}
 	const rateLimit = checkComputeRateLimit(access.rateLimitKey);
 	if (!rateLimit.allowed) {
 		recordMetric('rate_limited');
-		const retryAfter = rateLimit.retryAfter ?? 1;
-		return new Response(
-			JSON.stringify({
-				message: `Too many compute requests. Retry in ${retryAfter}s.`,
-				retryAfter
-			}),
-			{
+		const retryAfter = String(rateLimit.retryAfter ?? 1);
+		const err = new ApiError(
+			429,
+			ApiErrorCode.RATE_LIMITED,
+			`Too many compute requests. Retry in ${retryAfter}s.`,
+			undefined,
+			{ retryAfter }
+		);
+		return withRateLimitHeaders(
+			new Response(JSON.stringify(toErrorBody(err)), {
 				status: 429,
-				headers: {
-					'Content-Type': 'application/json',
-					'Retry-After': String(retryAfter)
-				}
-			}
+				headers: { 'Content-Type': 'application/json', 'Retry-After': retryAfter }
+			}),
+			tokenVerdict
 		);
 	}
 
@@ -288,7 +304,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		);
 		if (next === null) {
 			recordMetric('share_cap');
-			apiError(429, ApiErrorCode.INTERNAL, 'Share link solve cap reached.');
+			apiError(429, ApiErrorCode.RATE_LIMITED, 'Share link solve cap reached.');
 		}
 		mark('shareCap');
 	}
@@ -394,7 +410,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// Builds the Response itself (incl. `Retry-After` on a rejected `shed`,
 	// which `apiError` cannot set) and still throws `compute_error` through to
 	// the caller's outer catch.
-	return engine.toWebResponse(outcome);
+	return withRateLimitHeaders(engine.toWebResponse(outcome), tokenVerdict);
 }
 
 /**

@@ -19,6 +19,32 @@ export {
 } from './request.js';
 export { runHandler, toErrorBody, type ApiErrorBody, type RunHandlerOptions } from './respond.js';
 export {
+	createApiRateLimiter,
+	defaultApiRateLimiter,
+	resolveApiRateLimitConfig,
+	chargeApiRateLimit,
+	rateLimitHeaders,
+	rateLimitedResponse,
+	withRateLimitHeaders,
+	DEFAULT_API_RATE_LIMIT,
+	type ApiRateLimiter,
+	type ApiRateLimitConfig,
+	type ApiRateLimitVerdict
+} from './rate-limit.js';
+export {
+	createApiIdempotencyStore,
+	defaultApiIdempotencyStore,
+	idempotencyCallerId,
+	readIdempotencyKey,
+	requestFingerprint,
+	runIdempotent,
+	IDEMPOTENCY_KEY_HEADER,
+	MAX_IDEMPOTENCY_KEY_LENGTH,
+	DEFAULT_API_IDEMPOTENCY_TTL_MS,
+	type ApiIdempotencyStore,
+	type IdempotentEntry
+} from './idempotency.js';
+export {
 	assertScope,
 	actionForMethod,
 	scopeRefusalsToday,

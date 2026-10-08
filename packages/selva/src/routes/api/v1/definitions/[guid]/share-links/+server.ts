@@ -9,5 +9,6 @@ export const GET: RequestHandler = mount('Failed to list share links', listShare
 	scopeTarget
 });
 export const POST: RequestHandler = mount('Failed to create share link', createShareLink, {
-	scopeTarget
+	scopeTarget,
+	idempotent: true
 });

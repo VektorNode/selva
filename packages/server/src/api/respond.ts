@@ -8,24 +8,26 @@
  * `toErrorBody` and serialize itself.
  */
 
-import { ApiError, ApiErrorCode, isApiError } from './errors.js';
+import { ApiError, ApiErrorCode, isApiError, toErrorBody } from './errors.js';
 import type { ApiScopeAction, ScopeTarget } from '@selvajs/platform';
 import type { ApiHandler, ApiRequest, ApiResponse } from './types.js';
 import { actionForMethod, assertScope } from './scope.js';
+import {
+	chargeApiRateLimit,
+	defaultApiRateLimiter,
+	rateLimitedResponse,
+	withRateLimitHeaders
+} from './rate-limit.js';
+import {
+	defaultApiIdempotencyStore,
+	fingerprintBody,
+	idempotencyCallerId,
+	readIdempotencyKey,
+	requestFingerprint,
+	runIdempotent
+} from './idempotency.js';
 
-export interface ApiErrorBody {
-	message: string;
-	code: ApiErrorCode;
-	fields?: Record<string, string>;
-	details?: Record<string, string>;
-}
-
-export function toErrorBody(err: ApiError): ApiErrorBody {
-	const body: ApiErrorBody = { message: err.message, code: err.code };
-	if (err.fields) body.fields = err.fields;
-	if (err.details) body.details = err.details;
-	return body;
-}
+export { toErrorBody, type ApiErrorBody } from './errors.js';
 
 function toResponse(result: ApiResponse | Response): Response {
 	if (result instanceof Response) return result;
@@ -58,24 +60,21 @@ export interface RunHandlerOptions {
 	 * org-level, which project- and definition-scoped keys never pass.
 	 */
 	scopeTarget?: (req: ApiRequest) => ScopeTarget | Promise<ScopeTarget>;
+	/**
+	 * Honour `Idempotency-Key`: a repeat from the same caller replays the first
+	 * response, and a key reused with a different body gets 422. Opt in per
+	 * route; what is safe to replay differs.
+	 */
+	idempotent?: boolean;
 }
 
 /** Run a handler and serialize whatever comes out, including failures. */
 export async function runHandler(
 	handler: ApiHandler,
 	req: ApiRequest,
-	{ fallback, mapError, action, scopeTarget }: RunHandlerOptions
+	{ fallback, mapError, action, scopeTarget, idempotent }: RunHandlerOptions
 ): Promise<Response> {
-	try {
-		if (req.ctx?.apiScope) {
-			assertScope(
-				req.ctx,
-				action ?? actionForMethod(req.request.method),
-				scopeTarget ? await scopeTarget(req) : undefined
-			);
-		}
-		return toResponse(await handler(req));
-	} catch (err) {
+	const fail = (err: unknown): Response => {
 		if (isApiError(err)) {
 			return toResponse({ status: err.status, body: toErrorBody(err) });
 		}
@@ -97,5 +96,57 @@ export async function runHandler(
 			status: 500,
 			body: { message: fallback, code: ApiErrorCode.INTERNAL }
 		});
+	};
+
+	let verdict;
+	try {
+		// Charged before the scope check: `scopeTarget` may read the database,
+		// and a throttled key must not reach it.
+		const limiter =
+			req.deps.apiRateLimiter === undefined ? defaultApiRateLimiter() : req.deps.apiRateLimiter;
+		verdict = await chargeApiRateLimit(req.ctx, limiter);
+		if (verdict && !verdict.allowed) return rateLimitedResponse(verdict);
+	} catch (err) {
+		return fail(err);
 	}
+
+	let res: Response;
+	try {
+		if (req.ctx?.apiScope) {
+			assertScope(
+				req.ctx,
+				action ?? actionForMethod(req.request.method),
+				scopeTarget ? await scopeTarget(req) : undefined
+			);
+		}
+		const run = async () => {
+			try {
+				return toResponse(await handler(req));
+			} catch (err) {
+				return fail(err);
+			}
+		};
+		const clientKey = idempotent && req.ctx ? readIdempotencyKey(req.request) : null;
+		if (clientKey && req.ctx) {
+			const fingerprint = await requestFingerprint(
+				req.request.method,
+				req.url.pathname + req.url.search,
+				await fingerprintBody(req.request)
+			);
+			res = await runIdempotent(
+				{
+					store: req.deps.idempotency ?? defaultApiIdempotencyStore(),
+					callerId: idempotencyCallerId(req.ctx),
+					clientKey,
+					fingerprint
+				},
+				run
+			);
+		} else {
+			res = await run();
+		}
+	} catch (err) {
+		res = fail(err);
+	}
+	return withRateLimitHeaders(res, verdict);
 }

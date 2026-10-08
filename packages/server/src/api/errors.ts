@@ -20,7 +20,9 @@ export const ApiErrorCode = {
 	SETUP_REQUIRED: 'SETUP_REQUIRED',
 	INTERNAL: 'INTERNAL',
 	/** API tokens are switched off or misconfigured here; browser sessions still work. */
-	API_TOKENS_UNAVAILABLE: 'API_TOKENS_UNAVAILABLE'
+	API_TOKENS_UNAVAILABLE: 'API_TOKENS_UNAVAILABLE',
+	/** Too many requests, or a share link's solve cap is spent. `Retry-After`, when sent, says when to retry. */
+	RATE_LIMITED: 'RATE_LIMITED'
 } as const;
 
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];
@@ -47,6 +49,20 @@ export class ApiError extends Error {
 		this.fields = fields;
 		this.details = details;
 	}
+}
+
+export interface ApiErrorBody {
+	message: string;
+	code: ApiErrorCode;
+	fields?: Record<string, string>;
+	details?: Record<string, string>;
+}
+
+export function toErrorBody(err: ApiError): ApiErrorBody {
+	const body: ApiErrorBody = { message: err.message, code: err.code };
+	if (err.fields) body.fields = err.fields;
+	if (err.details) body.details = err.details;
+	return body;
 }
 
 export function isApiError(err: unknown): err is ApiError {
@@ -79,6 +95,8 @@ export function codeForStatus(status: number): ApiErrorCode {
 			return ApiErrorCode.CONFLICT;
 		case 422:
 			return ApiErrorCode.UNPROCESSABLE;
+		case 429:
+			return ApiErrorCode.RATE_LIMITED;
 		case 503:
 			return ApiErrorCode.COMPUTE_UNAVAILABLE;
 		default:

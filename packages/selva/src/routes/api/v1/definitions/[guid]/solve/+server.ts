@@ -1,13 +1,18 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode, handleApiError } from '$lib/server/api-errors';
-import { SolveBodySchema } from '@selvajs/server/api';
 import { parseBody, requireCaller, requireParams } from '$lib/server/api/http';
 import type { PipelineInput } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { runSolve, mapSolveError } from '$lib/server/compute/solve.server';
-import { withIdempotency } from '$lib/server/computeIdempotency.server';
-import { idempotencyKey, toStoredResponse, fromStoredResponse } from '@selvajs/server/compute';
+import { solveIdempotencyStore } from '$lib/server/computeIdempotency.server';
+import {
+	SolveBodySchema,
+	idempotencyCallerId,
+	readIdempotencyKey,
+	requestFingerprint,
+	runIdempotent
+} from '@selvajs/server/api';
 
 /**
  * The definition-addressed solve — v1's flagship action, and what the CLI's
@@ -19,7 +24,7 @@ import { idempotencyKey, toStoredResponse, fromStoredResponse } from '@selvajs/s
  * keeps the URL-addressed and share-token flows.
  */
 
-export const POST: RequestHandler = async ({ request, params, locals }) => {
+export const POST: RequestHandler = async ({ request, params, locals, url }) => {
 	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
 
 	const loadStart = performance.now();
@@ -72,17 +77,19 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 		});
 
 	try {
-		const clientKey = request.headers.get('idempotency-key');
+		const clientKey = readIdempotencyKey(request);
 		if (!clientKey) return await solve();
 
-		// Caller identity is part of the key: `Idempotency-Key` is client-chosen,
-		// so two tenants can pick the same string. Once PATs land, the token id
-		// belongs here so two tokens of one user don't share replays.
-		const key = idempotencyKey(user.id, clientKey);
-		const { value, replayed } = await withIdempotency(key, async () =>
-			toStoredResponse(await solve())
+		// The body is already consumed, so the fingerprint hashes the parsed value.
+		return await runIdempotent(
+			{
+				store: solveIdempotencyStore,
+				callerId: idempotencyCallerId(ctx),
+				clientKey,
+				fingerprint: await requestFingerprint('POST', url.pathname, JSON.stringify(body))
+			},
+			solve
 		);
-		return fromStoredResponse(value, replayed);
 	} catch (err) {
 		mapSolveError(err, locals);
 	}
