@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/ui",
-	"version": "6.5.1-beta.0",
+	"version": "6.5.1-beta.1",
 	"description": "Shared UI components and utilities for Selva applications",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -76,7 +76,7 @@
 		"@selvajs/schemas": "workspace:^",
 		"@selvajs/solve": "workspace:^",
 		"@selvajs/visualization": "workspace:^",
-		"@sveltejs/kit": "^2",
+		"@sveltejs/kit": "^2 || ^3",
 		"bits-ui": "^2.18.0",
 		"svelte": "^5",
 		"tailwind-variants": "^3.3.1",
