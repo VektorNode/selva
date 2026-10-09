@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0-beta.2] - 2026-10-09
+
 ### Fixed
 
 - WEBP images in PDF export embed lossless with transparency. PdfSharpCore had re-encoded them as JPEG, which smudged logos and put them on a grey box.
