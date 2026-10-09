@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 6.5.1-beta.1
+
+### Patch Changes
+
+- 4716a53: Accept SvelteKit 3 as a peer (`@sveltejs/kit: ^2 || ^3`). The package only imports `$app/state`, which Kit 3 keeps.
+
 ## 6.5.1-beta.0
 
 ### Patch Changes
