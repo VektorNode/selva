@@ -591,7 +591,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			_gfx.TranslateTransform(element.Position.X, topY);
 			_gfx.ScaleTransform(1, -1);
 
-			var data = element.Data;
+			var data = Embeddable(element.Data);
 			using var image = XImage.FromStream(() => new System.IO.MemoryStream(data));
 			_gfx.DrawImage(image, 0, 0, element.Width, element.Height);
 		}
@@ -603,6 +603,17 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		{
 			_gfx.Restore(state);
 		}
+	}
+
+	// PdfSharpCore embeds anything but PNG as a quality-75 JPEG with no alpha: a logo comes out
+	// smudged on a grey box. Re-encoded as PNG it embeds lossless (Flate) with an SMask.
+	private static byte[] Embeddable(byte[] data)
+	{
+		if (data[0] == 0x89 || data[0] == 0xFF) return data;
+		using var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(data);
+		using var png = new System.IO.MemoryStream();
+		SixLabors.ImageSharp.ImageExtensions.SaveAsPng(image, png);
+		return png.ToArray();
 	}
 
 	internal static bool IsPngJpegOrWebp(byte[] d) =>
