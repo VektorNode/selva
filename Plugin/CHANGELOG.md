@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.23.0-beta.3] - 2026-10-13
+
 ### Changed
 
 - PDF export is faster on documents with many drawing views: a path's bounds are computed once instead of on every layout measure pass, which nested grids and stacks repeat many times.
