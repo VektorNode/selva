@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- PDF export is faster on documents with many drawing views: a path's bounds are computed once instead of on every layout measure pass, which nested grids and stacks repeat many times.
+- An image repeated on every page (a header logo) is embedded in the PDF once instead of once per page, so it is decoded once and the file shrinks; pages render identically.
+
 ## [0.23.0-beta.2] - 2026-10-09
 
 ### Fixed

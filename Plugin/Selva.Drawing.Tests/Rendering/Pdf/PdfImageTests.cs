@@ -84,4 +84,29 @@ public class PdfImageTests
         using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
         Assert.Equal(1, reopened.PageCount);
     }
+
+    [Fact]
+    public void One_image_on_every_page_is_embedded_once()
+    {
+        using var png = new MemoryStream();
+        using (var raster = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(4, 4))
+            SixLabors.ImageSharp.ImageExtensions.SaveAsPng(raster, png);
+        var logo = png.ToArray();
+        Page WithLogo() => new Page
+        {
+            Content = new ImageElement { Data = logo, Format = ImageFormat.Png, Width = 10, Height = 10 },
+        };
+
+        // A PNG with alpha embeds as an image plus its SMask image, so compare against one page.
+        int ImageObjects(params Page[] pages)
+        {
+            using var ms = new MemoryStream(new PdfRenderer().Render(new Document { Pages = pages }));
+            using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
+            return reopened.Internals.GetAllObjects().OfType<PdfDictionary>()
+                .Count(d => d.Elements.GetName("/Subtype") == "/Image");
+        }
+
+        Assert.True(ImageObjects(WithLogo()) > 0);
+        Assert.Equal(ImageObjects(WithLogo()), ImageObjects(WithLogo(), WithLogo(), WithLogo()));
+    }
 }

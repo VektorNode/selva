@@ -54,6 +54,10 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	private Dictionary<string, SymbolFormCache> _symbolForms;
 	private PdfDocument _pdfDocument;
 
+	// PdfSharpCore embeds one image object per XImage instance, decoding it each time; a page
+	// header logo repeated on every page shares one XImage per document, keyed by array reference.
+	private Dictionary<byte[], XImage> _images;
+
 	private readonly struct SymbolFormCache
 	{
 		public SymbolFormCache(XForm form, BoundingBox bounds, double widthMm, double heightMm)
@@ -93,16 +97,25 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		_pdfDocument = pdf;
 		_renderedPages = new List<PdfPage>();
+		_images = new Dictionary<byte[], XImage>();
 
-		// Zero pages still gets one blank A4 so the file is well-formed (same fallback the
-		// SVG renderer uses).
-		if (document.Pages.Count == 0)
+		try
 		{
-			RenderPage(pdf, document, new Page { Content = new GroupElement() });
+			// Zero pages still gets one blank A4 so the file is well-formed (same fallback the
+			// SVG renderer uses).
+			if (document.Pages.Count == 0)
+			{
+				RenderPage(pdf, document, new Page { Content = new GroupElement() });
+			}
+			else
+			{
+				foreach (var page in document.Pages) RenderPage(pdf, document, page);
+			}
 		}
-		else
+		finally
 		{
-			foreach (var page in document.Pages) RenderPage(pdf, document, page);
+			foreach (var image in _images.Values) image.Dispose();
+			_images = null;
 		}
 
 		// Outlines need page refs, so this runs after all pages exist.
@@ -591,8 +604,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			_gfx.TranslateTransform(element.Position.X, topY);
 			_gfx.ScaleTransform(1, -1);
 
-			var data = Embeddable(element.Data);
-			using var image = XImage.FromStream(() => new System.IO.MemoryStream(data));
+			if (!_images.TryGetValue(element.Data, out var image))
+			{
+				var data = Embeddable(element.Data);
+				image = XImage.FromStream(() => new System.IO.MemoryStream(data));
+				_images[element.Data] = image;
+			}
 			_gfx.DrawImage(image, 0, 0, element.Width, element.Height);
 		}
 		catch
