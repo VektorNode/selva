@@ -256,9 +256,18 @@
 		<!-- Spacer sized to the full list; windowed rows are placed into it by offset. The listbox
 		     sits here rather than per layer: windowing renders one flat row list, so every option
 		     shares a single owner. -->
-		<div role="listbox" aria-multiselectable="true" class="relative" style:height="{totalHeight}px">
+		<div
+			role="listbox"
+			aria-multiselectable="true"
+			class="relative h-(--list-h)"
+			style:--list-h="{totalHeight}px"
+		>
 			{#each visibleRows as row (row.key)}
-				<div class="inset-x-0 absolute" style:top="{row.top}px" style:height="{row.height}px">
+				<div
+					class="inset-x-0 absolute top-(--row-top) h-(--row-h)"
+					style:--row-top="{row.top}px"
+					style:--row-h="{row.height}px"
+				>
 					{#if row.kind === 'layer'}
 						{@const entries = row.entries}
 						{@const numHidden = hiddenCount(entries)}
@@ -304,7 +313,7 @@
 								{row.layerName}
 							</span>
 
-							<span class="shrink-0 text-[10px] text-muted-foreground/50 tabular-nums">
+							<span class="shrink-0 text-2xs text-muted-foreground/50 tabular-nums">
 								{entries.length}
 							</span>
 						</div>
@@ -355,7 +364,7 @@
 								</span>
 
 								<span
-									class="rounded px-1 py-0.5 font-medium shrink-0 bg-muted text-[9px] text-muted-foreground/70"
+									class="rounded px-1 py-0.5 font-medium shrink-0 bg-muted text-2xs text-muted-foreground/70"
 								>
 									{getTypeLabel(entry.object)}
 								</span>
@@ -390,7 +399,7 @@
 		background: transparent;
 	}
 	div::-webkit-scrollbar-thumb {
-		background: hsl(var(--muted-foreground) / 0.15);
+		background: color-mix(in oklch, var(--muted-foreground) 15%, transparent);
 		border-radius: 2px;
 	}
 </style>

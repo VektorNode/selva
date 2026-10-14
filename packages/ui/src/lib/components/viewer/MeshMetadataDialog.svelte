@@ -48,10 +48,10 @@
 </script>
 
 <Dialog.Root bind:open {onOpenChange}>
-	<Dialog.Content class="min-w-60 max-w-xs p-0 gap-0 w-auto overflow-hidden">
+	<Dialog.Content variant="flush" class="min-w-60 max-w-xs w-auto">
 		{#if meshName}
 			<div class="px-4 pt-3 pb-2 border-b">
-				<Dialog.Title class="text-sm font-semibold">{meshName}</Dialog.Title>
+				<Dialog.Title size="sm">{meshName}</Dialog.Title>
 			</div>
 		{:else}
 			<Dialog.Title class="sr-only">{t.objectFallbackName}</Dialog.Title>
@@ -102,7 +102,7 @@
 									{:else if typeof value === 'number'}
 										<span class="font-mono">{value}</span>
 									{:else if typeof value === 'boolean'}
-										<span class={value ? 'text-green-500' : 'text-muted-foreground'}
+										<span class={value ? 'text-success' : 'text-muted-foreground'}
 											>{value ? 'true' : 'false'}</span
 										>
 									{:else}

@@ -22,7 +22,7 @@
 </script>
 
 <Select.Root type="single" bind:value>
-	<Select.Trigger class="gap-2 w-[140px]">
+	<Select.Trigger class="gap-2 w-35">
 		<Palette size={14} />
 		<span>{triggerContent}</span>
 	</Select.Trigger>

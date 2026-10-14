@@ -217,14 +217,14 @@
 
 	let resolvedIsEmbedded = $derived(isEmbedded ?? page.url.searchParams.get('embed') === 'true');
 	let resolvedPrimaryColor = $derived(primaryColor ?? page.url.searchParams.get('primary'));
-	let customStyle = $derived(
-		resolvedPrimaryColor ? `--primary: ${hexToOklch(resolvedPrimaryColor)}` : ''
+	let primaryOverride = $derived(
+		resolvedPrimaryColor ? hexToOklch(resolvedPrimaryColor) : undefined
 	);
 
 	let pageTitle = $derived(title ?? (schema?.description || schema.name));
 </script>
 
-<div style={customStyle} style:display="contents">
+<div class="contents" style:--primary={primaryOverride}>
 	<AppShell
 		mode="fixed"
 		showHeader={!resolvedIsEmbedded}

@@ -13,7 +13,7 @@
 
 {#if show}
 	<div
-		class="bottom-6 left-6 gap-3 px-5 py-3 shadow-xl fixed z-50 flex animate-[selva-slideInLeft_0.2s_ease-out] items-center rounded-lg border border-primary/20 bg-primary text-primary-foreground"
+		class="bottom-6 left-6 gap-3 px-5 py-3 shadow-xl animate-in fade-in slide-in-from-left fixed z-50 flex items-center rounded-lg border border-primary/20 bg-primary text-primary-foreground duration-200"
 	>
 		<div class="h-5 w-5 relative flex shrink-0 items-center justify-center">
 			<div
@@ -29,31 +29,3 @@
 		</div>
 	</div>
 {/if}
-
-<style>
-	@keyframes selva-slideInLeft {
-		from {
-			transform: translateX(-110%);
-			opacity: 0;
-		}
-		to {
-			transform: translateX(0);
-			opacity: 1;
-		}
-	}
-
-	@keyframes selva-sweep {
-		0% {
-			width: 0%;
-			margin-left: 0%;
-		}
-		50% {
-			width: 60%;
-			margin-left: 20%;
-		}
-		100% {
-			width: 0%;
-			margin-left: 100%;
-		}
-	}
-</style>

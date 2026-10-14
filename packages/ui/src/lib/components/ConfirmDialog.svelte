@@ -38,20 +38,12 @@
 		<AlertDialog.Header>
 			<AlertDialog.Title>{title}</AlertDialog.Title>
 			{#if description}
-				<AlertDialog.Description class={variant === 'destructive' ? 'text-destructive' : undefined}>
-					{description}
-				</AlertDialog.Description>
+				<AlertDialog.Description>{description}</AlertDialog.Description>
 			{/if}
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel disabled={pending}>{cancelLabel}</AlertDialog.Cancel>
-			<AlertDialog.Action
-				onclick={handleConfirm}
-				disabled={pending}
-				class={variant === 'destructive'
-					? 'text-destructive-foreground bg-destructive hover:bg-destructive/90'
-					: undefined}
-			>
+			<AlertDialog.Action onclick={handleConfirm} disabled={pending} {variant}>
 				{pending ? (pendingLabel ?? confirmLabel) : confirmLabel}
 			</AlertDialog.Action>
 		</AlertDialog.Footer>

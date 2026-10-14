@@ -1,0 +1,9 @@
+{
+	// dev/ sits outside the SvelteKit tsconfig's `include`; this gives ESLint's typed pass
+	// and the IDE a project for the mock Grasshopper server. Not used for emit.
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"types": ["node"]
+	},
+	"include": ["**/*.ts"]
+}

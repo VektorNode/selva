@@ -185,7 +185,7 @@
 									</div>
 								</div>
 
-								<div class="overflow-x-auto rounded border bg-white dark:bg-gray-900">
+								<div class="overflow-x-auto rounded-sm border bg-white dark:bg-gray-900">
 									<table class="w-full text-sm">
 										<thead class="bg-blue-100 dark:bg-blue-900">
 											<tr class="text-left">
@@ -282,7 +282,7 @@
 									</div>
 								</div>
 
-								<div class="overflow-x-auto rounded border bg-white dark:bg-gray-900">
+								<div class="overflow-x-auto rounded-sm border bg-white dark:bg-gray-900">
 									<table class="w-full text-sm">
 										<thead class="bg-green-100 dark:bg-green-900">
 											<tr class="text-left">

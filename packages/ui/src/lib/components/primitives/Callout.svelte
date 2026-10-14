@@ -1,7 +1,7 @@
 <script lang="ts" module>
 	import { type VariantProps, tv } from 'tailwind-variants';
-	import { Info, TriangleAlert, CircleCheck, CircleX, Lightbulb } from '@lucide/svelte';
 	import type { Component } from 'svelte';
+	import { SEVERITY_ICON, SEVERITY_TEXT, type Severity } from './severity';
 
 	export const calloutVariants = tv({
 		base: 'flex items-start gap-2.5 rounded-lg border px-3.5 py-3 text-sm',
@@ -19,20 +19,12 @@
 
 	export type CalloutTone = NonNullable<VariantProps<typeof calloutVariants>['tone']>;
 
-	const TONE_ICON: Record<CalloutTone, Component> = {
-		info: Info,
-		tip: Lightbulb,
-		success: CircleCheck,
-		warning: TriangleAlert,
-		danger: CircleX
-	};
-
-	const TONE_ACCENT: Record<CalloutTone, string> = {
-		info: 'text-info',
-		tip: 'text-muted-foreground',
-		success: 'text-success',
-		warning: 'text-warning',
-		danger: 'text-destructive'
+	const TONE_SEVERITY: Record<CalloutTone, Severity> = {
+		info: 'info',
+		tip: 'note',
+		success: 'success',
+		warning: 'warning',
+		danger: 'error'
 	};
 </script>
 
@@ -51,7 +43,8 @@
 
 	let { tone = 'info', title, icon, class: className, children, ...restProps }: Props = $props();
 
-	const Icon = $derived(icon === undefined ? TONE_ICON[tone] : icon);
+	const Icon = $derived(icon === undefined ? SEVERITY_ICON[TONE_SEVERITY[tone]] : icon);
+	const accent = $derived(SEVERITY_TEXT[TONE_SEVERITY[tone]]);
 </script>
 
 <div
@@ -60,11 +53,11 @@
 	{...restProps}
 >
 	{#if Icon}
-		<Icon class={cn('mt-0.5 h-4 w-4 shrink-0', TONE_ACCENT[tone])} />
+		<Icon class={cn('mt-0.5 h-4 w-4 shrink-0', accent)} />
 	{/if}
 	<div class="min-w-0 space-y-1">
 		{#if title}
-			<p class={cn('leading-tight font-medium', TONE_ACCENT[tone])}>{title}</p>
+			<p class={cn('leading-tight font-medium', accent)}>{title}</p>
 		{/if}
 		<div class="leading-relaxed text-muted-foreground [&_a]:underline [&_strong]:text-foreground">
 			{@render children()}

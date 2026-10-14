@@ -17,10 +17,13 @@ Every route needs a `session` query param; the root page refuses to proceed with
 ## Development
 
 ```bash
-pnpm dev:plugin    # http://localhost:5173
+pnpm dev:plugin         # http://localhost:5173, connects to a running Rhino
+pnpm dev:plugin:mock    # same, plus a fake Grasshopper: no Rhino needed
 ```
 
 No env vars — the WebSocket port arrives in the query string.
+
+With the mock, open `/builder?session=dev`. [dev/mock-grasshopper.ts](dev/mock-grasshopper.ts) serves a multi-tab definition with unplaced parameters to drag in, fakes solves, and keeps saves in memory until it exits. It takes port 8765, so stop it before testing against a real Rhino.
 
 ## Production
 

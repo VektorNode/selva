@@ -288,13 +288,13 @@
 <div class="relative">
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
-			class="group bg-background hover:border-border border-border/60 overflow-hidden py-1.5 transition-all hover:shadow-sm"
+			class="group bg-background hover:border-border border-border/60 overflow-hidden rounded-lg py-1.5 transition-all hover:shadow-sm"
 		>
 			<!-- Compact header row (always visible) -->
-			<div class="flex items-center gap-2 px-3 py-1.5">
+			<div data-builder-item-header class="flex items-center gap-2 px-3 py-1.5">
 				<div
 					use:dragHandle
-					class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab rounded p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+					class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 					role="button"
 					tabindex="0"
 					aria-label="Drag to reorder"
@@ -341,7 +341,7 @@
 					</span>
 				{/if}
 				<Collapsible.Trigger
-					class="hover:bg-accent/50 relative ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded {hasNonDefaultConfig
+					class="hover:bg-accent/50 relative ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-sm {hasNonDefaultConfig
 						? 'text-primary'
 						: 'text-muted-foreground hover:text-foreground'}"
 					aria-label={expanded ? 'Collapse details' : 'Expand details'}
@@ -367,7 +367,7 @@
 								bind:value={item.span}
 								min="1"
 								max={columns}
-								class="border-border bg-background text-foreground w-8 rounded border px-1 py-0.5 text-[10px]"
+								class="border-border bg-background text-foreground w-8 rounded-sm border px-1 py-0.5 text-[10px]"
 							/>
 						</label>
 					{/if}
@@ -404,7 +404,7 @@
 											<div class="grid grid-cols-2 gap-1">
 												<button
 													onclick={() => setFileOutputMode('file')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
 														isFileOutput
 															? 'bg-primary text-primary-foreground border-primary'
 															: 'border-border/70 hover:border-border hover:bg-accent'
@@ -414,7 +414,7 @@
 												</button>
 												<button
 													onclick={() => setFileOutputMode('image')}
-													class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+													class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
 														isImageOutput
 															? 'bg-primary text-primary-foreground border-primary'
 															: 'border-border/70 hover:border-border hover:bg-accent'
@@ -463,7 +463,7 @@
 										{:else}
 											<select
 												bind:value={dynamicValueListOutputConfig.targetInputId}
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
 											>
 												<option value="">— Select an input —</option>
 												{#each dynamicValueListInputs as input (input.id)}
@@ -490,7 +490,7 @@
 									</div>
 									{#if showSliderPerfWarning}
 										<div
-											class="mt-1 rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900"
+											class="mt-1 rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900"
 										>
 											This slider has ~{sliderStepCount.toLocaleString()} steps. Sliders above
 											{SLIDER_STEPS_WARNING_THRESHOLD.toLocaleString()} steps can noticeably slow the
@@ -531,7 +531,7 @@
 														fileInputConfig.allowedInputModes?.includes(mode) ?? true}
 													<button
 														onclick={() => toggleAllowedMode(mode)}
-														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+														class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
 															isAllowed
 																? 'bg-primary text-primary-foreground border-primary'
 																: 'border-border/70 hover:border-border hover:bg-accent'
@@ -555,7 +555,7 @@
 												<div class="grid grid-cols-2 gap-1">
 													<button
 														onclick={() => setFileInputMode('upload')}
-														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+														class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
 															(fileInputConfig.defaultInputMode ?? 'upload') === 'upload'
 																? 'bg-primary text-primary-foreground border-primary'
 																: 'border-border/70 hover:border-border hover:bg-accent'
@@ -565,7 +565,7 @@
 													</button>
 													<button
 														onclick={() => setFileInputMode('url')}
-														class={`rounded border px-2 py-1 text-[10px] transition-colors ${
+														class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
 															fileInputConfig.defaultInputMode === 'url'
 																? 'bg-primary text-primary-foreground border-primary'
 																: 'border-border/70 hover:border-border hover:bg-accent'
@@ -586,7 +586,7 @@
 													{@const isChecked = fileInputConfig.acceptedFormats?.includes(format)}
 													<button
 														onclick={() => toggleAcceptedFormat(format)}
-														class={`rounded border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
+														class={`rounded-sm border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
 															isChecked
 																? 'bg-primary text-primary-foreground border-primary'
 																: 'border-border/70 hover:border-border hover:bg-accent'
@@ -611,7 +611,7 @@
 												min="1"
 												bind:value={config.maxLength}
 												placeholder="No limit"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
 											/>
 										</div>
 
@@ -624,7 +624,7 @@
 												type="text"
 												bind:value={config.pattern}
 												placeholder="e.g., ^[a-zA-Z0-9]+$"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
 											/>
 										</div>
 
@@ -638,7 +638,7 @@
 													type="text"
 													bind:value={config.customErrorMessage}
 													placeholder="Invalid format"
-													class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 text-[10px] focus:outline-none"
+													class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
 												/>
 											</div>
 										{/if}
@@ -657,7 +657,7 @@
 									value={sourceKind}
 									onchange={(e) =>
 										setSourceKind(e.currentTarget.value as 'user' | 'client' | 'server')}
-									class="border-border/70 bg-background focus:border-primary h-6 rounded border px-1.5 text-[10px] focus:outline-none"
+									class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
 								>
 									<option value="user">User (form)</option>
 									<option value="client">Client (browser app)</option>
@@ -678,7 +678,7 @@
 										placeholder={sourceKind === 'client'
 											? 'e.g. line-app'
 											: 'e.g. capture.geometry'}
-										class="border-border/70 bg-background focus:border-primary h-6 rounded border px-2 font-mono text-[10px] focus:outline-none"
+										class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
 									/>
 									<span class="text-muted-foreground/70 text-[9px]">
 										{#if sourceKind === 'client'}
@@ -697,7 +697,7 @@
 												value={clientPresentation}
 												onchange={(e) =>
 													setClientPresentation(e.currentTarget.value as 'hidden' | 'slot')}
-												class="border-border/70 bg-background focus:border-primary h-6 rounded border px-1.5 text-[10px] focus:outline-none"
+												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
 											>
 												<option value="hidden">Hidden</option>
 												<option value="slot">Custom slot (host app)</option>

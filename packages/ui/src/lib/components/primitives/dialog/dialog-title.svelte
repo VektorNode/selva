@@ -5,13 +5,17 @@
 	let {
 		ref = $bindable(null),
 		class: className,
+		size = 'default',
 		...restProps
-	}: DialogPrimitive.TitleProps = $props();
+	}: DialogPrimitive.TitleProps & {
+		/** `sm` for compact, popover-like dialogs that title a single object. */
+		size?: 'default' | 'sm';
+	} = $props();
 </script>
 
 <DialogPrimitive.Title
 	bind:ref
 	data-slot="dialog-title"
-	class={cn('text-lg font-semibold leading-none', className)}
+	class={cn('font-semibold leading-none', size === 'sm' ? 'text-sm' : 'text-lg', className)}
 	{...restProps}
 />

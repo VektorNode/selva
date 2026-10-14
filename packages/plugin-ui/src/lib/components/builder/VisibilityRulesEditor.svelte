@@ -103,7 +103,7 @@
 			</div>
 
 			{#if visibilityCondition && visibilityCondition.rules?.length > 1}
-				<div class=" border-border flex h-5 items-center gap-0 rounded border">
+				<div class=" border-border flex h-5 items-center gap-0 rounded-sm border">
 					<button
 						onclick={() => setMode('all')}
 						class={`px-2 text-[9px] font-medium transition-colors ${

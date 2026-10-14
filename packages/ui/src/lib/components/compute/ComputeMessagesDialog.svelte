@@ -3,14 +3,13 @@
 	//
 	// The counterpart to `SolveMessages`, which interrupts only for what the definition's author
 	// wrote. Everything else — Grasshopper complaining about its own components — lands here,
-	// where it is available without being in the way. One section per level, most severe first, with the
-	// component that raised each message shown as a label rather than spliced into its text.
+	// where it is available without being in the way. Most severe first, with the component that
+	// raised each message on its own line rather than spliced into its text.
 
 	import type { Snippet } from 'svelte';
-	import { CircleAlert, TriangleAlert, Info } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import * as Dialog from '$lib/components/primitives/dialog';
-	import { Badge } from '$lib/components/primitives/badge';
+	import IssueList, { type Issue } from '$lib/components/primitives/IssueList.svelte';
 
 	interface Props {
 		/** The last solve's messages. Preferred over `errors`/`warnings` when both are given. */
@@ -42,32 +41,24 @@
 		count: number;
 	}
 
-	// Tone classes are written out, never interpolated: Tailwind scans source text, so a
-	// constructed class name is not emitted and the icon would render colourless.
 	const LEVELS = [
 		{
 			level: 'error',
-			heading: 'Errors',
+			severity: 'error',
 			one: 'error',
-			many: 'errors',
-			icon: CircleAlert,
-			tone: 'text-destructive'
+			many: 'errors'
 		},
 		{
 			level: 'warning',
-			heading: 'Warnings',
+			severity: 'warning',
 			one: 'warning',
-			many: 'warnings',
-			icon: TriangleAlert,
-			tone: 'text-amber-500'
+			many: 'warnings'
 		},
 		{
 			level: 'remark',
-			heading: 'Notes',
+			severity: 'note',
 			one: 'note',
-			many: 'notes',
-			icon: Info,
-			tone: 'text-muted-foreground'
+			many: 'notes'
 		}
 	] as const;
 
@@ -95,14 +86,25 @@
 			return { ...meta, items };
 		}).filter((section) => section.items.length > 0)
 	);
+
+	const issues = $derived<Issue[]>(
+		sections.flatMap((section) =>
+			section.items.map((item) => ({
+				severity: section.severity,
+				message: item.message,
+				source: item.source,
+				count: item.count
+			}))
+		)
+	);
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Trigger class="focus:outline-none">
+	<Dialog.Trigger>
 		{@render trigger()}
 	</Dialog.Trigger>
 
-	<Dialog.Content class="max-w-lg gap-4">
+	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title>Messages</Dialog.Title>
 			<Dialog.Description>
@@ -115,34 +117,6 @@
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-4 max-h-[60vh] overflow-y-auto">
-			{#each sections as section (section.level)}
-				<section>
-					<h3 class="mb-1.5 gap-1.5 text-xs font-medium flex items-center text-muted-foreground">
-						<section.icon class="h-3.5 w-3.5 {section.tone}" />
-						{section.heading}
-					</h3>
-					<ul class="divide-y rounded-lg border">
-						{#each section.items as item (item.message + (item.source ?? ''))}
-							<li class="gap-3 px-3 py-2 text-sm flex items-start justify-between">
-								<p class="min-w-0 wrap-anywhere">
-									{item.message}
-									{#if item.count > 1}
-										<span class="ml-1 text-xs text-muted-foreground tabular-nums"
-											>×{item.count}</span
-										>
-									{/if}
-								</p>
-								{#if item.source}
-									<Badge variant="secondary" class="font-normal max-w-[40%] shrink-0 truncate">
-										{item.source}
-									</Badge>
-								{/if}
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/each}
-		</div>
+		<IssueList {issues} />
 	</Dialog.Content>
 </Dialog.Root>

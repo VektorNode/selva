@@ -129,13 +129,13 @@
 			id: 'draft',
 			label: 'Draft — work in progress',
 			icon: Circle,
-			iconStyle: 'color: var(--muted-foreground); fill: var(--muted-foreground);'
+			iconClass: 'fill-muted-foreground text-muted-foreground'
 		},
 		{
 			id: 'published',
 			label: 'Published — live and visible to runners',
 			icon: Circle,
-			iconStyle: 'color: #22c55e; fill: #22c55e;'
+			iconClass: 'fill-success text-success'
 		}
 	];
 

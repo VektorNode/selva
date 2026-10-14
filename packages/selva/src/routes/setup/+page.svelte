@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button, Input, Label, Alert } from '@selvajs/ui';
-	import { CircleAlert } from '@lucide/svelte';
+	import { Button, Input, Label, Callout } from '@selvajs/ui';
 
 	interface ActionData {
 		error?: string;
@@ -54,10 +53,9 @@
 		</div>
 
 		{#if form?.error}
-			<Alert.Root variant="destructive">
-				<CircleAlert />
-				<Alert.Description>{form.error}</Alert.Description>
-			</Alert.Root>
+			<Callout tone="danger">
+				{form.error}
+			</Callout>
 		{/if}
 
 		{#if data.oauthProviders.length > 0}
@@ -166,27 +164,21 @@
 						Expected email: <code class="bg-muted rounded px-1 py-0.5">{data.bootstrapEmail}</code>
 					</p>
 				{:else}
-					<Alert.Root variant="destructive">
-						<CircleAlert />
-						<Alert.Description>
-							<code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> is unset. Set it in
-							<code>.env</code>, restart, and reload this page — otherwise the first
-							proxy-authenticated visitor would gain admin (and may not be you).
-						</Alert.Description>
-					</Alert.Root>
+					<Callout tone="danger">
+						<code>BOOTSTRAP_INSTANCE_ADMIN_EMAIL</code> is unset. Set it in
+						<code>.env</code>, restart, and reload this page — otherwise the first
+						proxy-authenticated visitor would gain admin (and may not be you).
+					</Callout>
 				{/if}
 				<a href="/" class="block">
 					<Button type="button" variant="outline" class="w-full">Continue</Button>
 				</a>
 			</div>
 		{:else if !data.hasPasswordAuth && !data.hasEmailLink && data.oauthProviders.length === 0}
-			<Alert.Root variant="destructive">
-				<CircleAlert />
-				<Alert.Description>
-					No setup methods are configured. Configure password auth, email-link sign-in, or OAuth
-					providers before bootstrapping the first admin.
-				</Alert.Description>
-			</Alert.Root>
+			<Callout tone="danger">
+				No setup methods are configured. Configure password auth, email-link sign-in, or OAuth
+				providers before bootstrapping the first admin.
+			</Callout>
 		{/if}
 	</div>
 </div>

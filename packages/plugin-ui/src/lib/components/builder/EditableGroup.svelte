@@ -13,10 +13,23 @@
 	import LineBreakItem from './LineBreakItem.svelte';
 	import { ChevronDown, GripVertical, MousePointerClick, Trash2 } from '@lucide/svelte';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
-	import { dragHandle, dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME } from 'svelte-dnd-action';
+	import {
+		dragHandle,
+		dragHandleZone,
+		SHADOW_ITEM_MARKER_PROPERTY_NAME,
+		TRIGGERS
+	} from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
+	import { flip } from 'svelte/animate';
 	import { SvelteMap } from 'svelte/reactivity';
-	import { DND_TYPE_PARAM, isDiscoveredInput, isDiscoveredOutput } from '$lib/dnd/dndzone-helpers';
+	import {
+		DND_FLIP_MS,
+		DND_TYPE_PARAM,
+		isDiscoveredInput,
+		isDiscoveredOutput,
+		liftDraggedElement
+	} from '$lib/dnd/dndzone-helpers';
+	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
 
 	type ZoneItem = (LayoutItem | DiscoveredInput | DiscoveredOutput) & {
 		isDndShadowItem?: true;
@@ -60,6 +73,10 @@
 	let localItems = $state<ZoneItem[]>([]);
 	let isItemDragging = $state(false);
 	let draggedSpan = $state(1);
+	let ghostHeight = $state(0);
+	// Only the origin zone is guaranteed a finalize; a zone the item merely passed through gets
+	// its last consider on leave, so it has to stop mirroring there or it never resyncs.
+	let isDragOrigin = false;
 
 	$effect(() => {
 		if (!isItemDragging) {
@@ -71,18 +88,24 @@
 	const isDndTarget = $derived(localItems.some((i) => i.isDndShadowItem));
 
 	function handleConsider(e: CustomEvent<DndEvent<ZoneItem>>) {
-		isItemDragging = true;
-		const draggedId = e.detail.info?.id;
-		if (draggedId) {
-			const all = [...localItems, ...(group.items as ZoneItem[])];
-			const dragged = all.find((i) => i.id === draggedId && !i.isDndShadowItem);
-			if (dragged && 'type' in dragged && dragged.type === 'linebreak') {
-				draggedSpan = group.columns ?? 1;
-			} else if (dragged && 'span' in dragged) {
-				draggedSpan = (dragged as InputLayoutItem | OutputLayoutItem).span ?? 1;
-			} else {
-				// Foreign item from sidebar — defaults to span 1.
+		if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED) {
+			isDragOrigin = true;
+			captureDragFootprint(e, localItems);
+		}
+		// The shadow item carries the dragged item's data, wherever the drag started.
+		const shadow = e.detail.items.find((i) => i.isDndShadowItem);
+		isItemDragging = isDragOrigin || !!shadow;
+		if (shadow) {
+			if (isDiscoveredInput(shadow) || isDiscoveredOutput(shadow)) {
+				// A sidebar row is shorter than the card it becomes; size the slot for the card.
 				draggedSpan = 1;
+				ghostHeight = placedItemHeight() || dragFootprint.height;
+			} else {
+				draggedSpan =
+					'type' in shadow && shadow.type === 'linebreak'
+						? (group.columns ?? 1)
+						: ((shadow as InputLayoutItem | OutputLayoutItem).span ?? 1);
+				ghostHeight = dragFootprint.height;
 			}
 		}
 		localItems = e.detail.items;
@@ -90,6 +113,7 @@
 
 	function handleFinalize(e: CustomEvent<DndEvent<ZoneItem>>) {
 		isItemDragging = false;
+		isDragOrigin = false;
 
 		const items = e.detail.items.filter((i) => !i.isDndShadowItem);
 
@@ -150,6 +174,30 @@
 		onFinalize(committed);
 	}
 
+	// Collapsed height of a placed card, read off any card on the canvas: an expanded card is
+	// taller, so take its header row plus the card's own padding and border.
+	function placedItemHeight(): number {
+		const header = document.querySelector<HTMLElement>('[data-builder-item-header]');
+		const card = header?.closest<HTMLElement>('[data-slot="card"]');
+		if (!header || !card) return 0;
+		const style = getComputedStyle(card);
+		const chrome = ['paddingTop', 'paddingBottom', 'borderTopWidth', 'borderBottomWidth'] as const;
+		return chrome.reduce((sum, key) => sum + parseFloat(style[key]), header.offsetHeight);
+	}
+
+	function gridColumnFor(item: ZoneItem): string {
+		const columns = group.columns ?? 1;
+		if (item[SHADOW_ITEM_MARKER_PROPERTY_NAME]) {
+			return draggedSpan >= columns ? '1 / -1' : `span ${draggedSpan}`;
+		}
+		if ('type' in item && item.type === 'linebreak') return '1 / -1';
+		if ('type' in item && (item.type === 'input' || item.type === 'output')) {
+			const span = (item as InputLayoutItem | OutputLayoutItem).span ?? 1;
+			return `span ${Math.min(Math.max(1, span), columns)}`;
+		}
+		return 'span 1';
+	}
+
 	function toggleCollapsed() {
 		group.collapsed = !group.collapsed;
 	}
@@ -164,7 +212,7 @@
 		<!-- Drag Handle (group-level) — TabEditor declares the dragHandleZone. -->
 		<div
 			use:dragHandle
-			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 			role="button"
 			tabindex="0"
 			aria-label="Drag to reorder"
@@ -176,7 +224,7 @@
 				<div class="flex items-center gap-1">
 					<button
 						type="button"
-						class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex h-6 w-6 shrink-0 items-center justify-center rounded transition-transform duration-200 {group.collapsed
+						class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-transform duration-200 {group.collapsed
 							? ''
 							: 'rotate-180'}"
 						onclick={toggleCollapsed}
@@ -187,7 +235,7 @@
 					<input
 						type="text"
 						bind:value={group.label}
-						class="text-foreground hover:border-border focus:border-primary flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
+						class="text-foreground hover:border-border focus:border-primary flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
 						placeholder="Group name"
 					/>
 				</div>
@@ -195,7 +243,7 @@
 				<input
 					type="text"
 					bind:value={group.description}
-					class="text-muted-foreground hover:border-border focus:border-primary ml-7 flex-1 rounded border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
+					class="text-muted-foreground hover:border-border focus:border-primary ml-7 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
 					placeholder="Description"
 				/>
 			</div>
@@ -209,7 +257,7 @@
 						bind:value={group.columns}
 						min="1"
 						max="4"
-						class="border-border bg-background text-foreground w-10 rounded border px-1 py-0.5 text-xs"
+						class="border-border bg-background text-foreground w-10 rounded-sm border px-1 py-0.5 text-xs"
 					/>
 				</label>
 				<Button
@@ -248,7 +296,7 @@
 			</button>
 
 			{#if showVisibilityRules}
-				<div class="bg-card mt-2 rounded p-2">
+				<div class="bg-card mt-2 rounded-sm p-2">
 					<VisibilityRulesEditor
 						bind:visibilityCondition={group.visibilityCondition}
 						{availableInputs}
@@ -268,45 +316,39 @@
 					use:dragHandleZone={{
 						items: localItems,
 						type: DND_TYPE_PARAM,
-						flipDurationMs: 200,
-						dropTargetClasses: ['ring-2', 'ring-primary'],
-						dropTargetStyle: {}
+						flipDurationMs: DND_FLIP_MS,
+						dropTargetClasses: ['ring-1', 'ring-primary/30'],
+						dropTargetStyle: {},
+						// The library aims with the clone's centre, not the pointer. Centred, a full-width
+						// item can still target one column of a grid once it shrinks to the cell.
+						centreDraggedOnCursor: true,
+						transformDraggedElement: liftDraggedElement
 					}}
 					onconsider={handleConsider}
 					onfinalize={handleFinalize}
-					class="grid min-h-14 items-start gap-3 rounded-md transition-all
+					class="grid min-h-14 content-start items-start gap-3 rounded-lg transition-all
 						{group.items.length === 0 ? 'border-border min-h-15 border-2 border-dashed p-3' : ''}"
 					style="grid-template-columns: repeat({group.columns}, 1fr);"
 				>
 					{#each localItems as item (item.id)}
-						{#if (item as ZoneItem)[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
-							<!-- Placeholder: outer div gets visibility:hidden from dndzone; inner overrides with visibility:visible -->
-							<div
-								style="grid-column: {draggedSpan >= (group.columns ?? 1)
-									? '1 / -1'
-									: `span ${draggedSpan}`}"
-							>
+						<div
+							animate:flip={{ duration: DND_FLIP_MS }}
+							style="grid-column: {gridColumnFor(item)}"
+						>
+							{#if item[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
+								<!-- dndzone hides the shadow's outer div; the inner one opts back in. -->
 								<div
-									style="visibility: visible; min-height: 3rem;"
-									class="border-primary/30 bg-primary/5 pointer-events-none rounded border-2 border-dashed"
+									style:--ghost-h="{ghostHeight || 48}px"
+									class="border-primary/40 bg-primary/5 pointer-events-none visible h-(--ghost-h) rounded-lg border-2 border-dashed"
 								></div>
-							</div>
-						{:else if 'type' in item && item.type === 'linebreak'}
-							<div style="grid-column: 1 / -1;">
+							{:else if 'type' in item && item.type === 'linebreak'}
 								<LineBreakItem
 									item={item as LineBreakLayoutItem}
 									onRemove={() => onRemoveItem(item.id)}
 								/>
-							</div>
-						{:else if 'type' in item && (item.type === 'input' || item.type === 'output')}
-							{@const idx = localItems.indexOf(item)}
-							{@const layoutItem = item as InputLayoutItem | OutputLayoutItem}
-							<div
-								style="grid-column: span {Math.min(
-									Math.max(1, layoutItem.span ?? 1),
-									group.columns ?? 1
-								)}"
-							>
+							{:else if 'type' in item && (item.type === 'input' || item.type === 'output')}
+								{@const idx = localItems.indexOf(item)}
+								{@const layoutItem = item as InputLayoutItem | OutputLayoutItem}
 								<BuilderGroupItem
 									bind:item={localItems[idx] as InputLayoutItem | OutputLayoutItem}
 									paramInfo={getParameterInfo(layoutItem.paramId)}
@@ -317,19 +359,17 @@
 									currentValue={outputValues[layoutItem.paramId]}
 									onRemove={() => onRemoveItem(item.id)}
 								/>
-							</div>
-						{:else}
-							<!-- Foreign sidebar item — show a neutral placeholder while hovering. -->
-							<div style="grid-column: span 1">
+							{:else}
+								<!-- Foreign sidebar item — show a neutral placeholder while hovering. -->
 								<div
-									class="border-primary/30 bg-primary/5 rounded border-2 border-dashed p-3 text-sm opacity-70"
+									class="border-primary/30 bg-primary/5 rounded-lg border-2 border-dashed p-3 text-sm opacity-70"
 								>
 									{('nickname' in item && item.nickname) ||
 										('name' in item && (item as { name?: string }).name) ||
 										'New parameter'}
 								</div>
-							</div>
-						{/if}
+							{/if}
+						</div>
 					{/each}
 				</div>
 

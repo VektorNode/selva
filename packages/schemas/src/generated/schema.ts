@@ -194,7 +194,7 @@ export interface NumberWidgetConfig {
 	placeholder?: string;
 	renderAsSlider?: boolean;
 	/**
-	 * Hide the min/max range hint shown next to the label / under the input
+	 * Never show the min/max hint. Without it, a number box shows the hint beside its label while focused; sliders never show it.
 	 */
 	hideRange?: boolean;
 }

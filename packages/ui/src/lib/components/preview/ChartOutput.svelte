@@ -188,11 +188,7 @@
 	{:else if !figData}
 		<div class="px-4 py-8 text-sm text-center text-muted-foreground">Waiting for chart data...</div>
 	{:else}
-		<div
-			bind:this={containerEl}
-			class="w-full"
-			style="height: {isFullscreen ? '100vh' : '380px'};"
-		></div>
+		<div bind:this={containerEl} class="w-full {isFullscreen ? 'h-screen' : 'h-95'}"></div>
 
 		<div
 			class="gap-1 left-2 top-2 absolute z-10 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 {isFullscreen

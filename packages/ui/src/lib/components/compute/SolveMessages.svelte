@@ -13,10 +13,12 @@
 	// anything, so it appears on its own after the solve and fades.
 
 	import { untrack } from 'svelte';
-	import { CircleAlert, TriangleAlert, Info, LoaderCircle } from '@lucide/svelte';
+	import { LoaderCircle } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import type { LiveSolveState, SolvePhase } from '@selvajs/solve/client';
 	import { Button } from '$lib/components/primitives/button';
+	import IssueList, { type Issue } from '$lib/components/primitives/IssueList.svelte';
+	import SeverityIcon from '$lib/components/primitives/SeverityIcon.svelte';
 
 	interface Props {
 		/** What the running (or most recent) solve has said over the live channel. */
@@ -194,6 +196,15 @@
 		view === 'live' ? [...live.diagnostics] : view === 'idle' ? authoredRemarks : authoredGating
 	);
 
+	// A remark states something without asking anything, so it reads as a quiet note.
+	const issues = $derived<Issue[]>(
+		rows.map((d) => ({
+			severity: d.level === 'remark' ? 'note' : d.level,
+			message: d.message,
+			source: d.source
+		}))
+	);
+
 	// Steps a few milliseconds long would swap the headline faster than it can be read. Each one
 	// stays up for at least this long; steps that end sooner are skipped in the label but still
 	// count in the bar. The label and its step count move together so they never disagree.
@@ -245,7 +256,7 @@
 
 {#if visible}
 	<div
-		class="bottom-4 p-3 shadow-lg fixed left-1/2 z-50 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border bg-background {view ===
+		class="bottom-4 p-3 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg border bg-background {view ===
 		'blocked'
 			? 'border-destructive/50'
 			: ''}"
@@ -267,8 +278,8 @@
 						{/if}
 						<Button
 							variant="secondary"
-							size="sm"
-							class="-my-1 h-7 px-3 text-xs shrink-0"
+							size="xs"
+							class="-my-1 shrink-0"
 							disabled={finishing}
 							onclick={onabort}
 						>
@@ -299,8 +310,9 @@
 										? { width: 1, ms: FINISH_MS }
 										: (bars[p.source ?? ''] ?? { width: p.fraction, ms: 150 })}
 									<div
-										class="h-full rounded-full bg-primary transition-[width] ease-linear"
-										style="width: {bar.width * 100}%; transition-duration: {bar.ms}ms"
+										class="h-full w-(--bar-width) rounded-full bg-primary transition-all duration-(--bar-ms) ease-linear"
+										style:--bar-width="{bar.width * 100}%"
+										style:--bar-ms="{bar.ms}ms"
 									></div>
 								{:else}
 									<div class="animate-pulse h-full w-1/3 rounded-full bg-primary/60"></div>
@@ -314,10 +326,10 @@
 			<div class="mb-2">
 				<div class="gap-2 text-sm font-medium flex items-center">
 					{#if view === 'blocked'}
-						<CircleAlert class="h-4 w-4 shrink-0 text-destructive" />
+						<SeverityIcon severity="error" />
 						{labels.blockedTitle}
 					{:else}
-						<TriangleAlert class="h-4 w-4 text-amber-500 shrink-0" />
+						<SeverityIcon severity="warning" />
 						{labels.messagesTitle}
 					{/if}
 				</div>
@@ -328,29 +340,9 @@
 		{/if}
 
 		{#if rows.length > 0}
-			<ul
-				class="max-h-40 space-y-2 text-sm overflow-y-auto {view === 'live'
-					? 'mt-3 pt-3 border-t'
-					: ''}"
-			>
-				{#each rows as row, i (i)}
-					<li class="gap-2 flex">
-						{#if row.level === 'error'}
-							<CircleAlert class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-						{:else if row.level === 'warning'}
-							<TriangleAlert class="mt-0.5 h-4 w-4 text-amber-500 shrink-0" />
-						{:else}
-							<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-						{/if}
-						<div class="min-w-0 flex-1">
-							<p class="wrap-anywhere">{row.message}</p>
-							{#if row.source}
-								<p class="text-xs text-muted-foreground">{row.source}</p>
-							{/if}
-						</div>
-					</li>
-				{/each}
-			</ul>
+			<div class="max-h-40 overflow-y-auto {view === 'live' ? 'mt-3 pt-3 border-t' : ''}">
+				<IssueList {issues} variant="plain" />
+			</div>
 		{/if}
 
 		{#if view === 'review' || view === 'blocked'}

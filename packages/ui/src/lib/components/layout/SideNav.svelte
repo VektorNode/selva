@@ -82,7 +82,7 @@
 				{/if}
 				<span class="text-sm font-medium flex-1 truncate">{item.label}</span>
 				{#if item.badge !== undefined}
-					<span class="font-mono shrink-0 text-[11px] tabular-nums opacity-60">{item.badge}</span>
+					<span class="font-mono shrink-0 text-2xs tabular-nums opacity-60">{item.badge}</span>
 				{/if}
 			</a>
 		{/each}

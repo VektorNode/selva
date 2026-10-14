@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button, Input, Label, Alert } from '@selvajs/ui';
-	import { CircleAlert } from '@lucide/svelte';
+	import { Button, Input, Label, Callout } from '@selvajs/ui';
 	import { fade } from 'svelte/transition';
 
 	interface ActionData {
@@ -103,14 +102,11 @@
 		{#if form?.error}
 			{#key attempt}
 				<div in:fade={{ duration: 120 }}>
-					<Alert.Root variant="destructive" aria-live="assertive">
-						<CircleAlert />
-						<Alert.Description>
-							{form.error}{#if attempt > 1}
-								<span class="opacity-80"> (attempt {attempt})</span>
-							{/if}
-						</Alert.Description>
-					</Alert.Root>
+					<Callout tone="danger" aria-live="assertive">
+						{form.error}{#if attempt > 1}
+							<span class="opacity-80"> (attempt {attempt})</span>
+						{/if}
+					</Callout>
 				</div>
 			{/key}
 		{/if}
@@ -233,12 +229,9 @@
 				{/if}
 			</div>
 		{:else if noAuthMethods}
-			<Alert.Root variant="destructive">
-				<CircleAlert />
-				<Alert.Description>
-					No login methods are configured. Set up an auth provider before signing in.
-				</Alert.Description>
-			</Alert.Root>
+			<Callout tone="danger">
+				No login methods are configured. Set up an auth provider before signing in.
+			</Callout>
 		{/if}
 	</div>
 </div>

@@ -20,6 +20,7 @@
 	--accent: oklch(0.93 0 0);
 	--accent-foreground: oklch(0.3 0 0);
 	--destructive: oklch(0.6 0.18 27);
+	--destructive-foreground: oklch(0.985 0 0);
 	--border: oklch(0.86 0 0);
 	--input: oklch(0.91 0 0);
 	--ring: oklch(0.67 0 0);
@@ -44,6 +45,8 @@
 	--sidebar-ring: oklch(0.67 0 0);
 	--inputparam: oklch(1 0 0);
 	--outputparam: oklch(1 0 0);
+	/* Scrim behind modal dialogs and drawers. */
+	--overlay: oklch(0 0 0 / 50%);
 }
 
 .dark {
@@ -62,6 +65,7 @@
 	--accent: oklch(0.36 0 0);
 	--accent-foreground: oklch(0.92 0 0);
 	--destructive: oklch(0.7 0.17 22);
+	--destructive-foreground: oklch(0.985 0 0);
 	--border: oklch(1 0 0 / 14%);
 	--input: oklch(1 0 0 / 12%);
 	--ring: oklch(0.74 0 0);
@@ -108,6 +112,8 @@
 	--color-accent: var(--accent);
 	--color-accent-foreground: var(--accent-foreground);
 	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-overlay: var(--overlay);
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
@@ -132,6 +138,43 @@
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-inputparam: var(--inputparam);
 	--color-outputparam: var(--outputparam);
+}
+
+/* Design tokens beyond Tailwind's defaults. Reach for these before an arbitrary value: the
+   design-system lint rejects `text-[10px]`, `max-h-[85dvh]` and the like. */
+@theme {
+	/* Type tags, counters and other dense labels. */
+	--text-2xs: 0.625rem;
+	--text-2xs--line-height: calc(0.875 / 0.625);
+	/* Bottom sheets cast their shadow upward. */
+	--shadow-sheet: 0 -4px 24px oklch(0 0 0 / 12%);
+	/* Width of anything that must keep a 1rem gutter on each side of the viewport. */
+	--container-screen-inset: calc(100% - 2rem);
+}
+
+@utility max-h-dialog {
+	max-height: 85dvh;
+}
+
+@utility no-scrollbar {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+/* Number fields whose value is set elsewhere (a slider, a stepper) drop the browser's spinner. */
+@utility no-spinner {
+	appearance: textfield;
+	&::-webkit-inner-spin-button,
+	&::-webkit-outer-spin-button {
+		appearance: none;
+		margin: 0;
+	}
+}
+
+@utility rounded-inherit {
+	border-radius: inherit;
 }
 
 @layer base {

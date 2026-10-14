@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { LayoutItem, InputLayoutItem, OutputLayoutItem } from '@selvajs/schemas';
 	import type { Snippet } from 'svelte';
-	import * as Card from '$lib/components/primitives/card';
 	import { ChevronDown } from '@lucide/svelte';
 	import { buildVisibilityMap, itemKey } from '$lib/schema/visibility-rules';
 
@@ -20,7 +19,7 @@
 			]
 		>;
 		outputSnippet: Snippet<[layoutItem: OutputLayoutItem]>;
-		/** When true, renders items flat without the Card wrapper, header, or collapse toggle. */
+		/** When true, renders items without the header or collapse toggle. */
 		flat?: boolean;
 	}
 
@@ -37,110 +36,84 @@
 		flat = false
 	}: Props = $props();
 
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' || e.key === ' ') {
-			e.preventDefault();
-			onToggle();
-		}
-	}
-
-	// One visibility evaluation per item per render; columnStarts and gridItem both read it.
 	const visibilityMap = $derived(buildVisibilityMap(items, values));
 
-	// Hidden items must not consume a slot here, because gridItem skips them entirely —
-	// counting them would offset every following item's column.
-	const columnStarts = $derived.by(() => {
-		const positions: number[] = [];
-		let col = 0;
-		for (const item of items) {
-			if (item.type === 'linebreak') {
-				positions.push(0);
-				col = 0;
-				continue;
-			}
-			const visibility = visibilityMap[itemKey(item)];
-			if (!visibility.visible) {
-				positions.push(0);
-				continue;
-			}
-			const span = Math.min(Math.max(1, item.span ?? 1), columns);
-			if (col + span > columns) col = 0;
-			positions.push(col);
-			col = (col + span) % columns;
-		}
-		return positions;
-	});
+	// Below this a label and its control stop fitting side by side, so a wide group
+	// sheds columns as its panel narrows instead of squeezing every input.
+	const MIN_COLUMN_WIDTH = 160;
+	const COLUMN_GAP = 16;
+
+	let gridWidth = $state(0);
+	const effectiveColumns = $derived(
+		gridWidth === 0
+			? columns
+			: Math.max(
+					1,
+					Math.min(columns, Math.floor((gridWidth + COLUMN_GAP) / (MIN_COLUMN_WIDTH + COLUMN_GAP)))
+				)
+	);
 </script>
 
-{#if flat}
-	<div class="p-6">
-		<div class="schema-grid gap-6 grid" style="--schema-cols: {columns};">
-			{#each items as layoutItem, i (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
-				{@render gridItem(layoutItem, columns, columnStarts[i] === 0)}
-			{/each}
-		</div>
+{#snippet grid()}
+	<div
+		class="schema-grid"
+		style="--schema-cols: {effectiveColumns}; --column-gap: {COLUMN_GAP}px;"
+		bind:clientWidth={gridWidth}
+	>
+		{#each items as layoutItem (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
+			{@render gridItem(layoutItem)}
+		{/each}
 	</div>
-{:else}
-	<Card.Root class="gap-0 py-0 pt-0 overflow-hidden">
-		<Card.Header
-			class="pt-4 pb-4! cursor-pointer border-b border-border bg-muted transition-colors select-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
-			role="button"
-			tabindex={0}
+{/snippet}
+
+<section class="shadow-xs rounded-xl bg-card">
+	{#if flat}
+		<div class="p-4">
+			{@render grid()}
+		</div>
+	{:else}
+		<button
+			type="button"
+			class="gap-3 px-4 py-3.5 flex w-full items-start text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
 			aria-expanded={!collapsed}
 			onclick={onToggle}
-			onkeydown={handleKeydown}
 		>
-			<Card.Title>{label}</Card.Title>
-			{#if description}
-				<Card.Description>{description}</Card.Description>
-			{/if}
-			<Card.Action>
-				<ChevronDown
-					class="h-4 w-4 text-muted-foreground transition-transform duration-200 {collapsed
-						? ''
-						: 'rotate-180'}"
-				/>
-			</Card.Action>
-		</Card.Header>
-		<div class="content-wrapper" class:collapsed>
+			<span class="min-w-0 flex-1">
+				<span class="text-base font-semibold leading-snug block text-foreground">{label}</span>
+				{#if description}
+					<span class="text-xs mt-0.5 leading-snug block text-muted-foreground">{description}</span>
+				{/if}
+			</span>
+			<ChevronDown
+				class="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 {collapsed
+					? '-rotate-90'
+					: ''}"
+			/>
+		</button>
+		<div class="content-wrapper" class:collapsed inert={collapsed}>
 			<div class="content-inner">
-				<Card.Content class="p-6">
-					<div class="schema-grid gap-6 grid" style="--schema-cols: {columns};">
-						{#each items as layoutItem, i (layoutItem.type === 'linebreak' ? layoutItem.id : layoutItem.paramId)}
-							{@render gridItem(layoutItem, columns, columnStarts[i] === 0)}
-						{/each}
-					</div>
-				</Card.Content>
+				<div class="px-4 pt-1 pb-5">
+					{@render grid()}
+				</div>
 			</div>
 		</div>
-	</Card.Root>
-{/if}
+	{/if}
+</section>
 
-{#snippet gridItem(layoutItem: LayoutItem, cols: number, isFirstInRow: boolean)}
+{#snippet gridItem(layoutItem: LayoutItem)}
 	{#if layoutItem.type === 'linebreak'}
-		<div style="grid-column: 1 / -1" class="h-px bg-border" aria-hidden="true"></div>
+		<div class="grid-break" aria-hidden="true"></div>
 	{:else}
 		{@const visibility = visibilityMap[itemKey(layoutItem)]}
-		{@const span = Math.min(Math.max(1, layoutItem.span ?? 1), cols)}
+		{@const span = Math.min(Math.max(1, layoutItem.span ?? 1), effectiveColumns)}
 		{#if visibility.visible}
-			{#if layoutItem.type === 'input'}
-				<div
-					class="grid-cell min-w-0 flex items-center"
-					class:opacity-50={visibility.disabled}
-					class:col-divider={!isFirstInRow && cols > 1}
-					style="grid-column: span {span} / span {span}"
-				>
+			<div class="grid-cell min-w-0" class:opacity-50={visibility.disabled} style="--span: {span}">
+				{#if layoutItem.type === 'input'}
 					{@render inputSnippet(layoutItem, visibility)}
-				</div>
-			{:else if layoutItem.type === 'output'}
-				<div
-					class="grid-cell"
-					class:col-divider={!isFirstInRow && cols > 1}
-					style="grid-column: span {span} / span {span}"
-				>
+				{:else if layoutItem.type === 'output'}
 					{@render outputSnippet(layoutItem)}
-				</div>
-			{/if}
+				{/if}
+			</div>
 		{/if}
 	{/if}
 {/snippet}
@@ -158,27 +131,23 @@
 
 	.content-inner {
 		min-height: 0;
+		overflow: hidden;
 	}
 
 	.schema-grid {
+		display: grid;
 		grid-template-columns: repeat(var(--schema-cols), minmax(0, 1fr));
+		gap: 1rem var(--column-gap);
+		align-items: start;
 	}
 
-	/* Vertical divider painted in the column gap. `gap-6` is 24px, so a 12px
-	   negative margin + 12px padding centres the 1px line in the gutter. */
-	.col-divider {
-		border-left: 1px solid var(--border);
-		padding-left: 12px;
-		margin-left: -12px;
+	.grid-cell {
+		grid-column: span var(--span) / span var(--span);
 	}
 
-	/* When the container collapses the grid to 1 visual column, the items are
-	   stacked and the divider would float on the left of every row. Hide it. */
-	@container (max-width: 320px) {
-		.col-divider {
-			border-left: 0;
-			padding-left: 0;
-			margin-left: 0;
-		}
+	/* An empty full-width row: the two row gaps around it already read as a break. */
+	.grid-break {
+		grid-column: 1 / -1;
+		margin-block: -0.25rem;
 	}
 </style>

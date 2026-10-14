@@ -51,7 +51,6 @@
 	maxlength={config?.maxLength}
 	data-invalid={validationError ? true : undefined}
 	aria-invalid={validationError ? true : undefined}
-	class={validationError ? 'border-destructive' : ''}
 	{disabled}
 	oninput={() => {
 		validationError = null;

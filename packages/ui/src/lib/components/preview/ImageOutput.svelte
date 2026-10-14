@@ -97,10 +97,8 @@
 		</div>
 	{:else}
 		<div
-			class="w-full"
-			style="height: {isFullscreen ? '100vh' : '380px'}; {backgroundColor
-				? `background-color: ${backgroundColor};`
-				: ''}"
+			class="w-full bg-(--image-bg) {isFullscreen ? 'h-screen' : 'h-95'}"
+			style:--image-bg={backgroundColor}
 		>
 			<img
 				src={dataUrl}

@@ -7,6 +7,7 @@
 	"scripts": {
 		"predev": "node ../../scripts/sync-shared-assets.js",
 		"dev": "vite dev",
+		"dev:mock": "node dev/mock-grasshopper.ts --with-dev-server",
 		"prebuild": "node ../../scripts/sync-shared-assets.js",
 		"build": "vite build",
 		"preview": "vite preview",

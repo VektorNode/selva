@@ -83,60 +83,31 @@
 	{/if}
 {/snippet}
 
-<Tabs.Content value={tab.id} class="min-h-0 p-0 flex-1">
-	<ScrollArea class="h-full" orientation="vertical">
-		<div class="p-4 tab-content-container">
-			{#if visibleGroups.length === 0}
-				<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
-			{:else}
-				<div class="gap-8 flex flex-col">
-					{#each visibleGroups as group (group.id)}
-						<Group
-							label={group.label}
-							description={group.description}
-							items={group.items}
-							columns={group.columns ?? 1}
-							collapsed={collapsedGroups[group.id] ?? false}
-							{values}
-							onToggle={() => onToggleGroup(group.id)}
-							inputSnippet={renderInput}
-							outputSnippet={renderOutput}
-							flat={visibleGroups.length === 1}
-						/>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	</ScrollArea>
+<Tabs.Content value={tab.id} class="min-h-0">
+	<div class="h-full bg-muted dark:bg-background">
+		<ScrollArea class="h-full" orientation="vertical">
+			<div class="px-3">
+				{#if visibleGroups.length === 0}
+					<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
+				{:else}
+					<div class="gap-3 py-3 flex flex-col">
+						{#each visibleGroups as group (group.id)}
+							<Group
+								label={group.label}
+								description={group.description}
+								items={group.items}
+								columns={group.columns ?? 1}
+								collapsed={collapsedGroups[group.id] ?? false}
+								{values}
+								onToggle={() => onToggleGroup(group.id)}
+								inputSnippet={renderInput}
+								outputSnippet={renderOutput}
+								flat={visibleGroups.length === 1}
+							/>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</ScrollArea>
+	</div>
 </Tabs.Content>
-
-<style>
-	.tab-content-container {
-		container-type: inline-size;
-	}
-
-	@container (max-width: 320px) {
-		:global(.schema-grid) {
-			grid-template-columns: 1fr;
-		}
-	}
-	@container (min-width: 321px) and (max-width: 560px) {
-		:global(.schema-grid) {
-			grid-template-columns: repeat(min(2, var(--schema-cols)), minmax(0, 1fr));
-		}
-	}
-
-	/* Fallback for browsers without container query support */
-	@supports not (container-type: inline-size) {
-		@media (max-width: 639px) {
-			:global(.schema-grid) {
-				grid-template-columns: 1fr;
-			}
-		}
-		@media (min-width: 640px) and (max-width: 1023px) {
-			:global(.schema-grid) {
-				grid-template-columns: repeat(min(2, var(--schema-cols)), minmax(0, 1fr));
-			}
-		}
-	}
-</style>

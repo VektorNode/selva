@@ -1,10 +1,14 @@
 <script lang="ts">
 	import { Card, Button, StateDisplay } from '@selvajs/ui';
 	import { EditableTabNav, EditableGroup } from '$lib/components/builder';
+	import TabSettingsBar from './TabSettingsBar.svelte';
+	import { Plus } from '@lucide/svelte';
 	import type { TabConfig, GroupConfig, DiscoveredInput, LayoutItem } from '@selvajs/schemas';
 	import { dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
-	import { DND_TYPE_GROUP } from '$lib/dnd/dndzone-helpers';
+	import { flip } from 'svelte/animate';
+	import { DND_FLIP_MS, DND_TYPE_GROUP, liftDraggedGroup } from '$lib/dnd/dndzone-helpers';
+	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
 
 	interface Props {
 		tabs: TabConfig[];
@@ -70,6 +74,7 @@
 
 		if (trigger === TRIGGERS.DRAG_STARTED && id) {
 			draggedGroupId = id;
+			captureDragFootprint(e, localGroups);
 		}
 
 		isGroupDragging = true;
@@ -129,83 +134,84 @@
 	}
 </script>
 
-<Card.Root class="shadow-sm">
-	<Card.Header class="flex flex-row items-center justify-between space-y-0">
-		<div></div>
-		<Button onclick={onAddTab}>+ Add Tab</Button>
-	</Card.Header>
-	<Card.Content>
-		<div class="min-h-[200px]">
-			{#if !tabs || tabs.length === 0}
-				<StateDisplay
-					type="empty"
-					size="large"
-					title="No tabs yet"
-					message="Click 'Add Tab' to create your first tab"
-				/>
-			{:else}
-				<EditableTabNav
-					{tabs}
-					{activeTabId}
-					{onTabChange}
-					{onRemoveTab}
-					{onReorderTabs}
-					groupDragActive={isGroupDragging}
-					onPendingTargetChange={(id) => (pendingTargetTabId = id)}
-				/>
-
-				{#if activeTab}
-					<div class="animate-[fadeIn_0.2s]">
-						<div class="mb-6 flex justify-end">
-							<Button variant="outline" onclick={() => onAddGroup(activeTab.id)}>
-								+ Add Group
-							</Button>
-						</div>
-
-						<div
-							use:dragHandleZone={{
-								items: localGroups,
-								type: DND_TYPE_GROUP,
-								flipDurationMs: 200,
-								dropAnimationDisabled: true,
-								dropTargetClasses: ['ring-2', 'ring-primary'],
-								dropTargetStyle: {}
-							}}
-							onconsider={handleGroupConsider}
-							onfinalize={handleGroupFinalize}
-							class="flex min-h-20 flex-col gap-6"
-						>
-							{#each localGroups as group, groupIndex (group.id)}
-								{#if (group as ZoneGroup)[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
-									<div
-										class="border-primary/30 bg-primary/5 min-h-20 rounded border-2 border-dashed"
-									></div>
-								{:else}
-									<EditableGroup
-										bind:group={localGroups[groupIndex] as GroupConfig}
-										onFinalize={(items) => onReorder(items, activeTab.id, group.id)}
-										onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
-										onRemove={() => onRemoveGroup(activeTab.id, group.id)}
-										onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
-										onRemoveItem={(itemId) => onRemoveItem(activeTab.id, group.id, itemId)}
-										{availableInputs}
-										{getParameterInfo}
-										{outputValues}
-									/>
-								{/if}
-							{/each}
-						</div>
-
-						{#if activeTab.groups.length === 0 && !isGroupDragging}
-							<StateDisplay
-								type="empty"
-								size="medium"
-								message="No groups yet. Click 'Add Group' to organize your parameters."
-							/>
-						{/if}
-					</div>
-				{/if}
-			{/if}
+<Card.Root variant="flush">
+	{#if !tabs || tabs.length === 0}
+		<div class="flex flex-col items-center gap-4 p-6">
+			<StateDisplay
+				type="empty"
+				size="large"
+				title="No tabs yet"
+				message="Tabs split the app into pages. Add one to start placing groups."
+			/>
+			<Button onclick={onAddTab}>
+				<Plus />
+				Add tab
+			</Button>
 		</div>
-	</Card.Content>
+	{:else}
+		<EditableTabNav
+			{tabs}
+			{activeTabId}
+			{onTabChange}
+			{onAddTab}
+			{onReorderTabs}
+			groupDragActive={isGroupDragging}
+			onPendingTargetChange={(id) => (pendingTargetTabId = id)}
+		/>
+
+		{#if activeTab}
+			<TabSettingsBar
+				tab={activeTab}
+				onRemove={() => onRemoveTab(activeTab.id)}
+				onAddGroup={() => onAddGroup(activeTab.id)}
+			/>
+
+			<div class="animate-in fade-in p-4 duration-200 sm:p-6">
+				<div
+					use:dragHandleZone={{
+						items: localGroups,
+						type: DND_TYPE_GROUP,
+						flipDurationMs: DND_FLIP_MS,
+						dropAnimationDisabled: true,
+						dropTargetStyle: {},
+						transformDraggedElement: liftDraggedGroup
+					}}
+					onconsider={handleGroupConsider}
+					onfinalize={handleGroupFinalize}
+					class="flex min-h-20 flex-col gap-6"
+				>
+					{#each localGroups as group, groupIndex (group.id)}
+						<div animate:flip={{ duration: DND_FLIP_MS }}>
+							{#if group[SHADOW_ITEM_MARKER_PROPERTY_NAME]}
+								<div
+									style:--ghost-h="{dragFootprint.height || 80}px"
+									class="border-primary/40 bg-primary/5 visible h-(--ghost-h) rounded-xl border-2 border-dashed"
+								></div>
+							{:else}
+								<EditableGroup
+									bind:group={localGroups[groupIndex] as GroupConfig}
+									onFinalize={(items) => onReorder(items, activeTab.id, group.id)}
+									onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
+									onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+									onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
+									onRemoveItem={(itemId) => onRemoveItem(activeTab.id, group.id, itemId)}
+									{availableInputs}
+									{getParameterInfo}
+									{outputValues}
+								/>
+							{/if}
+						</div>
+					{/each}
+				</div>
+
+				{#if activeTab.groups.length === 0 && !isGroupDragging}
+					<StateDisplay
+						type="empty"
+						size="medium"
+						message="No groups yet. Add a group, then drag parameters into it."
+					/>
+				{/if}
+			</div>
+		{/if}
+	{/if}
 </Card.Root>

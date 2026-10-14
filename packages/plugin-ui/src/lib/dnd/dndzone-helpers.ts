@@ -60,3 +60,33 @@ export function isTabConfig(x: unknown): x is TabConfig {
 	const o = x as Record<string, unknown>;
 	return typeof o.id === 'string' && Array.isArray(o.groups);
 }
+
+// ============================================================================
+// Shared drag feel
+// ============================================================================
+
+export const DND_TYPE_TAB = 'selva-tab';
+
+/** Pass the same value to the zone's `flipDurationMs` and to `animate:flip` on its items. */
+export const DND_FLIP_MS = 180;
+
+// The library moves the clone with `transform`, so the lift uses the independent `scale`
+// property and a `filter` shadow, which follows the card's rounded corners. The library also
+// focuses the clone, which draws a square focus ring around the rounded card.
+export function liftDraggedElement(el?: HTMLElement): void {
+	if (!el) return;
+	el.style.outline = 'none';
+	el.style.scale = '1.02';
+	el.style.filter = 'drop-shadow(0 10px 18px rgb(0 0 0 / 0.18))';
+	el.style.opacity = '0.95';
+}
+
+// An expanded group can be taller than the viewport; cap the clone so the drop target stays
+// visible. The placeholder keeps the full height, so the layout itself doesn't move.
+export function liftDraggedGroup(el?: HTMLElement): void {
+	if (!el) return;
+	liftDraggedElement(el);
+	el.style.maxHeight = '220px';
+	el.style.overflow = 'hidden';
+	el.style.maskImage = 'linear-gradient(to bottom, black 65%, transparent)';
+}

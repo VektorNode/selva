@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { UISchema } from '@selvajs/schemas';
-	import { Dialog, AlertDialog as Alert, Button, Badge } from '@selvajs/ui';
-	import { AlertCircle, AlertTriangle, CheckCircle2, Info } from '@lucide/svelte';
+	import { Dialog, Callout, IssueList, Button, Badge, type Issue } from '@selvajs/ui';
 	import {
 		validateImportedSchema,
 		prepareImportedSchema,
@@ -27,6 +26,18 @@
 
 	const errors = $derived(validation.issues.filter((i) => i.severity === 'error'));
 	const warnings = $derived(validation.issues.filter((i) => i.severity === 'warning'));
+	const issues = $derived<Issue[]>(
+		validation.issues.map((issue) => ({
+			severity: issue.severity,
+			message: issue.message,
+			detail: issue.details
+				? Object.entries(issue.details)
+						.filter(([, value]) => value !== undefined)
+						.map(([key, value]) => `${key}: ${String(value)}`)
+						.join(' · ')
+				: undefined
+		}))
+	);
 
 	function handleConfirm() {
 		if (!validation.canLoad) return;
@@ -36,14 +47,6 @@
 		});
 
 		onConfirm(prepared);
-	}
-
-	function getIssueIcon(severity: 'error' | 'warning') {
-		return severity === 'error' ? AlertCircle : AlertTriangle;
-	}
-
-	function getIssueColorClass(severity: 'error' | 'warning') {
-		return severity === 'error' ? 'text-destructive' : 'text-warning';
 	}
 </script>
 
@@ -113,29 +116,17 @@
 			</div>
 
 			{#if validation.isValid}
-				<Alert.Root>
-					<CheckCircle2 class="text-success h-4 w-4" />
-					<Alert.Title>Schema Valid</Alert.Title>
-					<Alert.Description>
-						This schema is compatible with your current document and can be safely imported.
-					</Alert.Description>
-				</Alert.Root>
+				<Callout tone="success" title="Schema Valid">
+					This schema is compatible with your current document and can be safely imported.
+				</Callout>
 			{:else if validation.canLoad}
-				<Alert.Root>
-					<AlertTriangle class="text-warning h-4 w-4" />
-					<Alert.Title>Warnings Found</Alert.Title>
-					<Alert.Description>
-						The schema can be imported but has some warnings. Review them below.
-					</Alert.Description>
-				</Alert.Root>
+				<Callout tone="warning" title="Warnings Found">
+					The schema can be imported but has some warnings. Review them below.
+				</Callout>
 			{:else}
-				<Alert.Root>
-					<AlertCircle class="h-4 w-4" />
-					<Alert.Title>Cannot Import</Alert.Title>
-					<Alert.Description>
-						This schema has validation errors and cannot be imported. See details below.
-					</Alert.Description>
-				</Alert.Root>
+				<Callout tone="danger" title="Cannot Import">
+					This schema has validation errors and cannot be imported. See details below.
+				</Callout>
 			{/if}
 
 			{#if validation.issues.length > 0}
@@ -147,44 +138,18 @@
 						</Badge>
 					</h3>
 
-					<div class="max-h-60 space-y-2 overflow-y-auto rounded-lg border p-3">
-						{#each validation.issues as issue, i (i)}
-							{@const Icon = getIssueIcon(issue.severity)}
-							<div class="flex gap-2 text-sm">
-								<Icon class="mt-0.5 h-4 w-4 shrink-0 {getIssueColorClass(issue.severity)}" />
-								<div class="flex-1">
-									<p class="font-medium {getIssueColorClass(issue.severity)}">
-										{issue.message}
-									</p>
-									{#if issue.details}
-										<dl class="text-muted-foreground mt-1 space-y-0.5 text-xs">
-											{#each Object.entries(issue.details) as [key, value] (key)}
-												{#if value !== undefined}
-													<div class="flex gap-2">
-														<dt class="font-medium">{key}:</dt>
-														<dd class="font-mono">{String(value)}</dd>
-													</div>
-												{/if}
-											{/each}
-										</dl>
-									{/if}
-								</div>
-							</div>
-						{/each}
-					</div>
+					<IssueList {issues} class="max-h-60 overflow-y-auto" />
 				</div>
 			{/if}
 
-			<Alert.Root>
-				<Info class="h-4 w-4" />
-				<Alert.Title>What happens when you import?</Alert.Title>
-				<Alert.Description class="space-y-1 text-sm">
-					<p>• Your current layout configuration will be completely replaced</p>
-					<p>• All tabs, groups, and widget arrangements will be updated</p>
-					<p>• Parameter values are NOT affected (only the layout)</p>
-					<p>• The schema will be saved to your Grasshopper document</p>
-				</Alert.Description>
-			</Alert.Root>
+			<Callout tone="info" title="What happens when you import?">
+				<ul class="list-inside list-disc">
+					<li>Your current layout configuration will be completely replaced</li>
+					<li>All tabs, groups, and widget arrangements will be updated</li>
+					<li>Parameter values are NOT affected (only the layout)</li>
+					<li>The schema will be saved to your Grasshopper document</li>
+				</ul>
+			</Callout>
 		</div>
 
 		<Dialog.Footer class="flex gap-2">

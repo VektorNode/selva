@@ -3,6 +3,8 @@
 	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/primitives/input';
 	import { Slider } from '$lib/components/primitives/slider';
+	import * as InputGroup from '$lib/components/primitives/input-group';
+	import { Separator } from '$lib/components/primitives/separator';
 	import * as Field from '$lib/components/primitives/field';
 
 	interface Props {
@@ -16,8 +18,6 @@
 	let { inputId, value = $bindable(), config, onChange, disabled = false }: Props = $props();
 
 	let validationError = $state<string | null>(null);
-	let sliderEditing = $state(false);
-	let sliderInputValue = $state('');
 
 	const min = $derived(config?.minimum ?? 0);
 	const max = $derived(config?.maximum ?? 100);
@@ -49,72 +49,53 @@
 		commitSliderDebounced(newValue);
 	}
 
-	function focusSliderInput(node: HTMLInputElement) {
-		node.focus();
-		node.select();
-	}
+	const decimals = $derived(Math.max(0, -Math.floor(Math.log10(step))));
 
-	function decimalPlaces(stepSize: number): number {
-		return Math.max(0, -Math.floor(Math.log10(stepSize)));
+	function commitTypedValue(input: HTMLInputElement) {
+		const parsed = parseFloat(input.value);
+		if (isNaN(parsed)) {
+			input.value = numValue.toFixed(decimals);
+			return;
+		}
+		const clamped = Math.min(max, Math.max(min, parsed));
+		input.value = clamped.toFixed(decimals);
+		if (clamped === value) return;
+		value = clamped;
+		onChange(clamped);
 	}
 </script>
 
 {#if config?.renderAsSlider}
-	{@const dp = decimalPlaces(step)}
-	<div class="gap-4 flex items-center">
-		<Slider
-			type="single"
-			value={numValue}
+	<!-- Value and track share one box, the height of a number input, so mixed rows line up and
+	     a value can't be read as belonging to the neighbouring slider. -->
+	<InputGroup.Root>
+		<InputGroup.Input
+			id={inputId}
+			type="number"
+			class="w-18 flex-none"
+			value={numValue.toFixed(decimals)}
 			{min}
 			{max}
 			{step}
-			class="flex-1"
-			onValueChange={handleSliderChange}
 			{disabled}
+			onchange={(e) => commitTypedValue(e.currentTarget)}
+			onkeydown={(e) => {
+				if (e.key === 'Enter') e.currentTarget.blur();
+			}}
 		/>
-		{#if sliderEditing}
-			<input
-				use:focusSliderInput
-				type="number"
+		<Separator orientation="vertical" />
+		<div class="px-3.5 min-w-0 flex flex-1 items-center">
+			<Slider
+				type="single"
+				value={numValue}
+				{min}
+				{max}
 				{step}
-				class="min-w-12 w-16 text-sm border-b border-border bg-transparent text-right outline-none focus:border-foreground"
-				bind:value={sliderInputValue}
-				onblur={() => {
-					const parsed = parseFloat(sliderInputValue);
-					if (!isNaN(parsed)) handleSliderChange(Math.min(max, Math.max(min, parsed)));
-					sliderEditing = false;
-				}}
-				onkeydown={(e) => {
-					if (e.key === 'Enter') {
-						const parsed = parseFloat(sliderInputValue);
-						if (!isNaN(parsed)) handleSliderChange(Math.min(max, Math.max(min, parsed)));
-						sliderEditing = false;
-					} else if (e.key === 'Escape') {
-						sliderEditing = false;
-					}
-				}}
+				onValueChange={handleSliderChange}
+				{disabled}
 			/>
-		{:else}
-			<span
-				role="button"
-				tabindex={0}
-				class="min-w-12 text-sm cursor-text text-right text-muted-foreground select-none"
-				title="Double-click to edit"
-				ondblclick={() => {
-					sliderInputValue = numValue.toFixed(dp);
-					sliderEditing = true;
-				}}
-				onkeydown={(e) => {
-					if (e.key === 'Enter' || e.key === ' ') {
-						sliderInputValue = numValue.toFixed(dp);
-						sliderEditing = true;
-					}
-				}}
-			>
-				{numValue.toFixed(dp)}
-			</span>
-		{/if}
-	</div>
+		</div>
+	</InputGroup.Root>
 {:else}
 	<Input
 		id={inputId}
@@ -126,7 +107,6 @@
 		placeholder={config?.placeholder}
 		data-invalid={validationError ? true : undefined}
 		aria-invalid={validationError ? true : undefined}
-		class={validationError ? 'border-destructive' : ''}
 		{disabled}
 		oninput={() => (validationError = null)}
 		onchange={(e) => {

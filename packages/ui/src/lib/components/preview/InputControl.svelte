@@ -16,8 +16,7 @@
 		isColorWidget
 	} from '@selvajs/schemas';
 	import * as Field from '$lib/components/primitives/field';
-	import * as Dialog from '$lib/components/primitives/dialog';
-	import { HelpCircle } from '@lucide/svelte';
+	import HelpButton from './HelpButton.svelte';
 	import {
 		CheckboxInput,
 		ChecklistInput,
@@ -65,15 +64,15 @@
 	});
 	const clientSlot = getClientSlot();
 
-	// Min/max hint rendered next to the label. `hideRange` lets the author suppress it.
+	// Sliders never show the hint: the track already conveys the bounds.
 	const numberRangeHint = $derived.by(() => {
 		if (!isNumberWidget(item)) return null;
 		const cfg = item.config;
-		if (cfg?.hideRange) return null;
+		if (cfg?.hideRange || cfg?.renderAsSlider) return null;
 		const hasMin = typeof cfg?.minimum === 'number';
 		const hasMax = typeof cfg?.maximum === 'number';
 		if (!hasMin && !hasMax) return null;
-		if (hasMin && hasMax) return `${cfg!.minimum} to ${cfg!.maximum}`;
+		if (hasMin && hasMax) return `${cfg!.minimum} – ${cfg!.maximum}`;
 		if (hasMin) return `≥ ${cfg!.minimum}`;
 		return `≤ ${cfg!.maximum}`;
 	});
@@ -171,54 +170,52 @@
 	}
 </script>
 
+{#snippet labelText(forId?: string, tone: 'quiet' | 'strong' = 'quiet')}
+	<Field.Label for={forId} class="min-w-0 block break-words">
+		<span
+			class={tone === 'quiet' ? 'font-normal text-muted-foreground' : 'font-normal text-foreground'}
+			>{label}</span
+		>
+	</Field.Label>
+{/snippet}
+
+{#snippet helpButton()}
+	{#if item.description}
+		<HelpButton {label} description={item.description} />
+	{/if}
+{/snippet}
+
+{#snippet fieldHeader(forId?: string)}
+	<div class="gap-1.5 min-h-5 min-w-0 flex items-center">
+		{@render labelText(forId)}
+		{@render helpButton()}
+		{#if showRangeInLabel}
+			<span
+				class="text-xs pl-2 ml-auto hidden shrink-0 whitespace-nowrap text-muted-foreground tabular-nums group-focus-within/field:inline"
+			>
+				{numberRangeHint}
+			</span>
+		{/if}
+	</div>
+{/snippet}
+
 {#if isClientSlot}
 	{#if clientSlot}
-		<Field.Field>
-			<Field.Label class="gap-2 flex items-center">
-				{label}
-				{#if item.description}
-					<Dialog.Root>
-						<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
-							<HelpCircle size={16} />
-						</Dialog.Trigger>
-						<Dialog.Content class="sm:max-w-md">
-							<Dialog.Header>
-								<Dialog.Title>{label}</Dialog.Title>
-								<Dialog.Description>{item.description}</Dialog.Description>
-							</Dialog.Header>
-						</Dialog.Content>
-					</Dialog.Root>
-				{/if}
-			</Field.Label>
+		<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
+			{@render fieldHeader()}
 			{@render clientSlot({
 				inputId: item.paramId,
 				displayName: label,
 				value,
 				onValueChange: commit
 			})}
-		</Field.Field>
+		</div>
 	{/if}
 {:else if !hideDynamicListWhenEmpty}
-	<Field.Field>
-		<Field.Label for={inputId} class="gap-2 flex items-center">
-			{label}
-			{#if item.description}
-				<Dialog.Root>
-					<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
-						<HelpCircle size={16} />
-					</Dialog.Trigger>
-					<Dialog.Content class="sm:max-w-md">
-						<Dialog.Header>
-							<Dialog.Title>{label}</Dialog.Title>
-							<Dialog.Description>{item.description}</Dialog.Description>
-						</Dialog.Header>
-					</Dialog.Content>
-				</Dialog.Root>
-			{/if}
-			{#if showRangeInLabel}
-				<span class="text-xs font-normal text-muted-foreground">{numberRangeHint}</span>
-			{/if}
-		</Field.Label>
+	<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
+		{#if !isCheckboxWidget(item)}
+			{@render fieldHeader(inputId)}
+		{/if}
 
 		{#if isNumberWidget(item)}
 			{@const config = item.config}
@@ -235,7 +232,10 @@
 				value={typeof value === 'boolean' ? value : undefined}
 				onChange={commit}
 				{disabled}
-			/>
+			>
+				{@render labelText(inputId, 'strong')}
+				{@render helpButton()}
+			</CheckboxInput>
 		{:else if isTextWidget(item)}
 			{@const config = item.config}
 			<TextInput
@@ -307,5 +307,5 @@
 				onChange={(newValue) => commit(newValue)}
 			/>
 		{/if}
-	</Field.Field>
+	</div>
 {/if}

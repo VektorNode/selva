@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Download, Upload, AlertTriangle, CheckCircle } from '@lucide/svelte';
+	import { Download, Upload } from '@lucide/svelte';
 	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import {
 		createSavedState,
@@ -8,7 +8,7 @@
 		exportStateAsJson,
 		importStateFromJson
 	} from '../../schema/param-exporter';
-	import { Button, Input, Label, Textarea, Dialog, Card, toast } from '../primitives';
+	import { Button, Input, Label, Textarea, Dialog, Callout, IssueList, toast } from '../primitives';
 
 	import type { ActionButton } from '../../types/actionButton';
 	import { DEFAULT_PRESET_LABELS, type PresetLabels } from '../../types/presetLabels';
@@ -156,7 +156,7 @@
 </script>
 
 {#if showSaveButton}
-	<Button variant="default" size="sm" onclick={openExportDialog}>
+	<Button variant="outline" size="sm" onclick={openExportDialog}>
 		<Download class="mr-2 h-4 w-4" />
 		{t.saveButton}
 	</Button>
@@ -239,7 +239,7 @@
 		</Dialog.Header>
 
 		{#if onListStates}
-			<div class="py-4 max-h-[60vh] overflow-y-auto">
+			<div class="py-4">
 				{#if isLoadingList}
 					<p class="text-sm py-8 text-center text-muted-foreground">…</p>
 				{:else if listError}
@@ -283,7 +283,7 @@
 
 <!-- Validation Dialog -->
 <Dialog.Root bind:open={showValidationDialog}>
-	<Dialog.Content class="max-w-2xl max-h-[80vh] overflow-y-auto">
+	<Dialog.Content class="max-w-2xl">
 		<Dialog.Header>
 			<Dialog.Title>{t.validationTitle}</Dialog.Title>
 			<Dialog.Description>
@@ -296,75 +296,31 @@
 		{#if loadResult}
 			<div class="gap-4 py-4 grid">
 				{#if loadResult.isValid}
-					<Card.Root class="p-4 border-success/30 bg-success/5">
-						<div class="gap-3 flex items-start">
-							<CheckCircle class="h-5 w-5 text-success" />
-							<div>
-								<h4 class="text-sm font-semibold text-success-foreground">
-									{t.validationNoIssuesTitle}
-								</h4>
-								<p class="text-sm mt-1 text-success-foreground/80">
-									{t.validationNoIssuesBody}
-								</p>
-							</div>
-						</div>
-					</Card.Root>
+					<Callout tone="success" title={t.validationNoIssuesTitle}>
+						{t.validationNoIssuesBody}
+					</Callout>
 				{:else if loadResult.canLoad}
-					<Card.Root class="p-4 border-warning/30 bg-warning/5">
-						<div class="gap-3 flex items-start">
-							<AlertTriangle class="h-5 w-5 text-warning" />
-							<div>
-								<h4 class="text-sm font-semibold text-warning-foreground">
-									{t.validationWarningsTitle}
-								</h4>
-								<p class="text-sm mt-1 text-warning-foreground/80">
-									{t.validationWarningsBody.replace('{count}', String(loadResult.issues.length))}
-								</p>
-							</div>
-						</div>
-					</Card.Root>
+					<Callout tone="warning" title={t.validationWarningsTitle}>
+						{t.validationWarningsBody.replace('{count}', String(loadResult.issues.length))}
+					</Callout>
 				{:else}
-					<Card.Root class="p-4 border-destructive/30 bg-destructive/5">
-						<div class="gap-3 flex items-start">
-							<AlertTriangle class="h-5 w-5 text-destructive" />
-							<div>
-								<h4 class="text-sm font-semibold text-destructive">{t.validationErrorsTitle}</h4>
-								<p class="text-sm mt-1 text-destructive/80">
-									{t.validationErrorsBody}
-								</p>
-							</div>
-						</div>
-					</Card.Root>
+					<Callout tone="danger" title={t.validationErrorsTitle}>
+						{t.validationErrorsBody}
+					</Callout>
 				{/if}
 
 				{#if !loadResult.isValid}
-					<div class="space-y-2">
+					<div class="gap-2 flex flex-col">
 						<h4 class="text-sm font-medium">{t.validationIssuesHeading}</h4>
-						{#each loadResult.issues as issue (issue.message)}
-							<div
-								class="p-3 rounded-lg border {issue.severity === 'error'
-									? 'border-destructive/30 bg-destructive/5'
-									: 'border-warning/30 bg-warning/5'}"
-							>
-								<div class="gap-2 flex items-start">
-									<AlertTriangle
-										class="h-4 w-4 mt-0.5 {issue.severity === 'error'
-											? 'text-destructive'
-											: 'text-warning'}"
-									/>
-									<div class="flex-1">
-										<p class="text-sm font-medium">{issue.message}</p>
-										{#if issue.details}
-											<p class="text-xs mt-1 text-muted-foreground">
-												{t.validationExpected}
-												{issue.details.expected} → {t.validationActual}
-												{issue.details.actual}
-											</p>
-										{/if}
-									</div>
-								</div>
-							</div>
-						{/each}
+						<IssueList
+							issues={loadResult.issues.map((issue) => ({
+								severity: issue.severity === 'error' ? 'error' : 'warning',
+								message: issue.message,
+								detail: issue.details
+									? `${t.validationExpected} ${issue.details.expected} → ${t.validationActual} ${issue.details.actual}`
+									: undefined
+							}))}
+						/>
 					</div>
 				{/if}
 			</div>

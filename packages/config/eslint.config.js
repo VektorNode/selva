@@ -53,7 +53,8 @@ export const config = [
 	},
 	{
 		// Design-system rules. Theme tokens come from each package's components.json
-		// (`tailwind.css`). Warn-only until the existing violations are burned down.
+		// (`tailwind.css`). Warn-only while a package still has violations; one that has
+		// none raises them to errors in its own config (see packages/ui).
 		files: ['**/*.svelte', '**/*.ts'],
 		plugins: { shadcn },
 		settings: {

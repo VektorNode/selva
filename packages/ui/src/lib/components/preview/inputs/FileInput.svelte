@@ -257,7 +257,7 @@
 	const acceptAttribute = $derived(acceptedFormats.length > 0 ? acceptedFormats.join(',') : '*');
 </script>
 
-<div class="gap-4 flex w-full flex-col">
+<div class="gap-2.5 flex w-full flex-col">
 	<input
 		bind:this={fileInput}
 		type="file"
@@ -267,15 +267,16 @@
 	/>
 
 	{#if showToggle}
-		<div class="rounded text-xs flex overflow-hidden border">
+		<div class="p-0.5 text-xs flex rounded-md bg-muted">
 			{#each effectiveModes as mode (mode)}
 				<button
 					type="button"
 					onclick={() => (activeMode = mode)}
-					class={`px-3 py-1 flex-1 transition-colors ${
+					aria-pressed={activeMode === mode}
+					class={`px-3 py-1 font-medium flex-1 rounded-sm transition-colors ${
 						activeMode === mode
-							? 'bg-primary text-primary-foreground'
-							: 'text-muted-foreground hover:bg-accent'
+							? 'shadow-xs bg-background text-foreground'
+							: 'text-muted-foreground hover:text-foreground'
 					}`}
 				>
 					{mode === 'upload' ? 'Upload' : 'URL'}
@@ -286,7 +287,7 @@
 
 	{#if activeMode === 'url'}
 		<div class="gap-2 flex flex-col">
-			<Label for="url-input" class="gap-2 flex items-center">
+			<Label for="url-input">
 				<Link size={16} />
 				File URL
 			</Label>
@@ -297,7 +298,7 @@
 					bind:value={urlInput}
 					placeholder="https://example.com/model.3dm"
 					disabled={isLoading}
-					class={urlError ? 'border-destructive focus-visible:ring-destructive' : ''}
+					aria-invalid={urlError ? true : undefined}
 					oninput={() => {
 						urlError = null;
 						urlSuccess = '';
@@ -342,14 +343,10 @@
 		</div>
 	{:else}
 		<div class="gap-2 flex flex-col">
-			<Label for="file-upload" class="gap-2 flex items-center">
-				<FileUp size={16} />
-				Upload File
-			</Label>
 			<Button
 				type="button"
-				variant="outline"
-				class="gap-2 w-full {isDragging ? 'border-primary' : ''}"
+				variant={isDragging ? 'secondary' : 'outline'}
+				class="w-full"
 				onclick={openFilePicker}
 				ondragover={handleDragOver}
 				ondragleave={handleDragLeave}

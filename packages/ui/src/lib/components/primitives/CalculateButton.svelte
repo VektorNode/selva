@@ -24,7 +24,7 @@
 		disabled={!hasPendingChanges && !isSolving}
 		aria-busy={isSolving}
 		class="gap-2 font-medium w-full transition-all duration-200
-			{hasPendingChanges && !isSolving ? 'selva-pending-pulse shadow-md' : ''}
+			{hasPendingChanges && !isSolving ? 'shadow-md' : ''}
 			{!hasPendingChanges && !isSolving ? 'text-muted-foreground' : ''}"
 	>
 		{#if isSolving}

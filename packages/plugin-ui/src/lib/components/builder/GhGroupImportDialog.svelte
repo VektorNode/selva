@@ -100,7 +100,7 @@
 					{@const checkboxId = `gh-group-${summary.name}`}
 					<label
 						for={checkboxId}
-						class="hover:bg-accent/40 flex cursor-pointer items-center justify-between gap-3 rounded px-2 py-2"
+						class="hover:bg-accent/40 flex cursor-pointer items-center justify-between gap-3 rounded-sm px-2 py-2"
 					>
 						<div class="flex items-center gap-3">
 							<Checkbox id={checkboxId} {checked} onCheckedChange={() => toggle(summary.name)} />

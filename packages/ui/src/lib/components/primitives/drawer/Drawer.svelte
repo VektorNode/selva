@@ -21,7 +21,7 @@
 	role="button"
 	tabindex="-1"
 	aria-label={ariaLabel}
-	class="inset-0 bg-black/30 fixed z-50"
+	class="inset-0 fixed z-50 bg-overlay"
 	onclick={onClose}
 	onkeydown={handleKey}
 ></div>

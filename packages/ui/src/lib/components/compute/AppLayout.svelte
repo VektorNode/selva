@@ -162,8 +162,8 @@
 			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} />
 		{/if}
 		{#if showParameterStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
-			<div class="panel-footer px-3">
-				<div class="gap-2 flex flex-wrap items-center justify-center">
+			<div class="panel-footer px-1">
+				<div class="gap-2 flex flex-wrap items-center [&>button]:flex-1">
 					{#if showParameterStateManager}
 						<ParameterPresetManager
 							{schema}
@@ -226,10 +226,9 @@
 			</div>
 
 			<div
-				class="drawer-container"
+				class="drawer-container rounded-t-2xl z-40 border-t bg-background shadow-sheet"
 				class:drawer-open={drawerOpen}
 				class:drawer-closed={!drawerOpen}
-				style="z-index: 40;"
 			>
 				<button
 					class="drawer-handle-bar"
@@ -363,7 +362,7 @@
 					</Resizable.Pane>
 					<Resizable.Handle
 						withHandle
-						class="bg-transparent"
+						line={false}
 						data-collapsed={leftCollapsed}
 						onclick={() => {
 							if (leftCollapsed) leftPaneRef?.expand();
@@ -390,7 +389,7 @@
 				{#if hasRightPanel}
 					<Resizable.Handle
 						withHandle
-						class="bg-transparent"
+						line={false}
 						data-collapsed={rightCollapsed}
 						onclick={() => {
 							if (rightCollapsed) rightPaneRef?.expand();
@@ -460,8 +459,8 @@
 
 	.panel-footer {
 		flex-shrink: 0;
-		padding-top: 1.5rem;
-		padding-bottom: 1rem;
+		padding-top: 0.75rem;
+		padding-bottom: 0.5rem;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
@@ -472,13 +471,8 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		z-index: 100;
 		display: flex;
 		flex-direction: column;
-		border-radius: 1rem 1rem 0 0;
-		background: var(--background);
-		border-top: 1px solid var(--border);
-		box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
 		transition: height 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 		overflow: hidden;
 	}

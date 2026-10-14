@@ -1,14 +1,16 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
-	import { Search, ChevronDown, Check } from '@lucide/svelte';
+	import { ChevronDown } from '@lucide/svelte';
 	import { cn } from '$lib/utils.js';
+	import { buttonVariants } from './button';
+	import * as Popover from './popover';
+	import * as Command from './command';
 
 	export interface FilterableDropdownItem {
 		id: string;
 		label: string;
 		icon?: Component;
 		iconClass?: string;
-		iconStyle?: string;
 	}
 
 	interface Props {
@@ -19,6 +21,7 @@
 		placeholder?: string;
 		triggerIcon?: Component;
 		searchPlaceholder?: string;
+		/** Above this many items the list gets a filter box. */
 		searchThreshold?: number;
 		disabled?: boolean;
 		class?: string;
@@ -38,149 +41,59 @@
 	}: Props = $props();
 
 	let open = $state(false);
-	let query = $state('');
-	let highlighted = $state(0);
-	let inputRef = $state<HTMLInputElement>();
-	let containerRef = $state<HTMLDivElement>();
 
 	const selected = $derived(items.find((item) => item.id === value) ?? null);
-	const showSearch = $derived(items.length > searchThreshold);
-
-	const matches = $derived.by(() => {
-		const q = query.trim().toLowerCase();
-		if (!q) return items;
-		return items.filter((item) => item.label.toLowerCase().includes(q));
-	});
-
-	$effect(() => {
-		void matches;
-		highlighted = 0;
-	});
-
-	$effect(() => {
-		if (open) {
-			queueMicrotask(() => inputRef?.focus());
-		} else {
-			query = '';
-		}
-	});
+	const SelectedIcon = $derived(selected?.icon ?? TriggerIcon);
 
 	function pick(item: FilterableDropdownItem) {
 		onChange(item.id);
 		open = false;
 	}
-
-	function handleKey(e: KeyboardEvent) {
-		if (e.key === 'ArrowDown') {
-			e.preventDefault();
-			highlighted = Math.min(highlighted + 1, matches.length - 1);
-		} else if (e.key === 'ArrowUp') {
-			e.preventDefault();
-			highlighted = Math.max(highlighted - 1, 0);
-		} else if (e.key === 'Enter') {
-			e.preventDefault();
-			const m = matches[highlighted];
-			if (m) pick(m);
-		} else if (e.key === 'Escape') {
-			e.preventDefault();
-			open = false;
-		}
-	}
-
-	function handleDocClick(e: MouseEvent) {
-		if (!open) return;
-		if (containerRef && !containerRef.contains(e.target as Node)) open = false;
-	}
-
-	$effect(() => {
-		if (!open) return;
-		document.addEventListener('mousedown', handleDocClick);
-		return () => document.removeEventListener('mousedown', handleDocClick);
-	});
-
-	const SelectedIcon = $derived(selected?.icon);
 </script>
 
-<div bind:this={containerRef} class={cn('relative', className)}>
-	<button
-		type="button"
+<Popover.Root bind:open>
+	<Popover.Trigger
 		{id}
 		{disabled}
-		onclick={() => (open = !open)}
+		role="combobox"
+		aria-expanded={open}
 		class={cn(
-			'h-10 gap-2 px-3 text-sm flex w-full items-center rounded-md border bg-background text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-			open ? 'border-ring ring-2 ring-ring/30' : 'border-input hover:bg-muted/40'
+			buttonVariants({ variant: 'outline' }),
+			'font-normal w-full justify-start',
+			className
 		)}
 	>
 		{#if SelectedIcon}
-			<SelectedIcon
-				class={cn('h-3.5 w-3.5 shrink-0', selected?.iconClass ?? 'text-muted-foreground')}
-				style={selected?.iconStyle}
-			/>
-		{:else if TriggerIcon}
-			<TriggerIcon class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+			<SelectedIcon class={cn('size-3.5', selected?.iconClass ?? 'text-muted-foreground')} />
 		{/if}
-		<span class={cn('min-w-0 flex-1 truncate', selected ? '' : 'text-muted-foreground')}>
+		<span class={cn('min-w-0 flex-1 truncate text-left', !selected && 'text-muted-foreground')}>
 			{selected ? selected.label : placeholder}
 		</span>
-		<ChevronDown
-			class={cn(
-				'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-				open ? 'rotate-180' : ''
-			)}
-		/>
-	</button>
-
-	{#if open}
-		<div
-			class="right-0 left-0 mt-1 shadow-md absolute top-full z-50 overflow-hidden rounded-md border border-border bg-popover"
-		>
-			{#if showSearch}
-				<div class="relative border-b border-border">
-					<Search
-						class="left-3 h-3.5 w-3.5 pointer-events-none absolute top-1/2 -translate-y-1/2 text-muted-foreground"
-					/>
-					<input
-						bind:this={inputRef}
-						bind:value={query}
-						onkeydown={handleKey}
-						placeholder={searchPlaceholder}
-						class="h-8 pr-3 pl-9 text-sm w-full bg-transparent outline-none placeholder:text-muted-foreground"
-					/>
-				</div>
+		<ChevronDown class="size-3.5 text-muted-foreground" />
+	</Popover.Trigger>
+	<Popover.Content align="start" class="p-0 w-(--bits-popover-anchor-width)">
+		<Command.Root>
+			{#if items.length > searchThreshold}
+				<Command.Input placeholder={searchPlaceholder} />
 			{/if}
-
-			<div class="max-h-60 overflow-y-auto">
-				{#if matches.length === 0}
-					<p class="px-3 py-3 text-xs text-center text-muted-foreground">
-						No matches for "{query}"
-					</p>
-				{:else}
-					{#each matches as item, i (item.id)}
-						{@const ItemIcon = item.icon}
-						<button
-							type="button"
-							onclick={() => pick(item)}
-							onmouseenter={() => (highlighted = i)}
-							class={cn(
-								'gap-2 px-3 py-1.5 text-sm flex w-full items-center text-left transition-colors',
-								highlighted === i ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'
-							)}
-						>
-							{#if ItemIcon}
-								<ItemIcon
-									class={cn('h-3.5 w-3.5 shrink-0', item.iconClass ?? 'text-muted-foreground')}
-									style={item.iconStyle}
-								/>
-							{/if}
-							<span class="flex-1 truncate">{item.label}</span>
-							{#if item.id === value}
-								<Check class="h-3.5 w-3.5 shrink-0 text-primary" />
-							{/if}
-						</button>
-					{/each}
-				{/if}
-			</div>
-		</div>
-	{/if}
-</div>
+			<Command.List>
+				<Command.Empty>No matches.</Command.Empty>
+				{#each items as item (item.id)}
+					{@const ItemIcon = item.icon}
+					<!-- Filter on the label; the id is only the key. -->
+					<Command.Item
+						value={item.id}
+						keywords={[item.label]}
+						data-checked={item.id === value}
+						onSelect={() => pick(item)}
+					>
+						{#if ItemIcon}
+							<ItemIcon class={cn('size-3.5', item.iconClass ?? 'text-muted-foreground')} />
+						{/if}
+						<span class="truncate">{item.label}</span>
+					</Command.Item>
+				{/each}
+			</Command.List>
+		</Command.Root>
+	</Popover.Content>
+</Popover.Root>

@@ -45,8 +45,8 @@
 		{placeholder}
 		data-slot="input"
 		class={cn(
-			'h-9 min-w-0 px-3 py-1 text-base shadow-xs md:text-sm flex w-full rounded-md border border-input bg-background ring-offset-background transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30',
-			'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+			'h-9 min-w-0 px-3 py-1 text-base shadow-xs md:text-sm flex w-full rounded-md border border-input bg-background ring-offset-background transition outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30',
+			'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50',
 			'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
 			'pl-9 pr-12',
 			className
@@ -65,7 +65,7 @@
 	{:else if badge !== undefined}
 		<span
 			class={cn(
-				'right-3 font-mono absolute top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground',
+				'right-3 font-mono text-xs absolute top-1/2 -translate-y-1/2 text-muted-foreground',
 				badgeClass
 			)}
 		>

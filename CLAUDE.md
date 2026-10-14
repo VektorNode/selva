@@ -173,6 +173,7 @@ traversal has already happened by then.
 
 ```bash
 pnpm dev:plugin             # plugin-ui dev server (http://localhost:5173)
+pnpm dev:plugin:mock        # same, against a fake Grasshopper (no Rhino)
 pnpm dev:selva              # Selva app, your own .env and .selva-data
 
 # Same app pinned to one auth provider, each on throwaway data:

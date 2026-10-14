@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button, Input, Label, Alert } from '@selvajs/ui';
-	import { CircleAlert } from '@lucide/svelte';
+	import { Button, Input, Label, Callout } from '@selvajs/ui';
 	import type { PageData } from './$types';
 
 	interface ActionData {
@@ -48,22 +47,18 @@
 			</div>
 
 			{#if data.mode === 'join' && !data.signedInAsInvitee}
-				<Alert.Root>
-					<CircleAlert />
-					<Alert.Description>
-						Sign in as {data.email}, then open this link again to join.
-					</Alert.Description>
-				</Alert.Root>
+				<Callout tone="info">
+					Sign in as {data.email}, then open this link again to join.
+				</Callout>
 				<a href="/login" class="text-primary block text-center text-sm underline">Go to sign in</a>
 			{:else}
 				<form method="POST" class="space-y-4">
 					<input type="hidden" name="token" value={data.token} />
 
 					{#if form?.error}
-						<Alert.Root variant="destructive">
-							<CircleAlert />
-							<Alert.Description>{form.error}</Alert.Description>
-						</Alert.Root>
+						<Callout tone="danger">
+							{form.error}
+						</Callout>
 					{/if}
 
 					{#if data.mode === 'password'}

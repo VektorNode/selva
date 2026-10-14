@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { Card, Button, ScrollArea } from '@selvajs/ui';
-	import { Layers } from '@lucide/svelte';
-	import { SchemaInfoPanel, AvailableItemList, GhGroupImportDialog } from '$lib/components/builder';
+	import { ScrollArea, Tabs } from '@selvajs/ui';
+	import { Box, ListTree, Settings2 } from '@lucide/svelte';
 	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
-	import { getSessionIdFromUrl } from '$lib/utils/session';
+	import { usePersisted } from '$lib/composables/usePersisted.svelte';
+	import ParameterPanel from './sidebar/ParameterPanel.svelte';
+	import AppSettingsPanel from './sidebar/AppSettingsPanel.svelte';
+	import ViewerSettingsPanel from './sidebar/ViewerSettingsPanel.svelte';
 
 	interface Props {
 		schema: UISchema;
@@ -40,101 +42,69 @@
 		onImportGhGroups
 	}: Props = $props();
 
-	let importDialogOpen = $state(false);
+	const PANELS = ['parameters', 'app', 'viewer'] as const;
+	type Panel = (typeof PANELS)[number];
+	const panel = usePersisted<Panel>('builder.sidebar.panel', 'parameters');
+	$effect(() => {
+		if (!PANELS.includes(panel.value)) panel.value = 'parameters';
+	});
 
-	const hasGhGroups = $derived(
-		availableInputs.some((i) => !!i.groupName?.trim()) ||
-			availableOutputs.some((o) => !!o.groupName?.trim())
+	const unplacedCount = $derived(
+		[...availableInputs, ...availableOutputs].filter((p) => !placedIds.has(p.id)).length
 	);
-
-	const schemaInfoStorageKey = $derived(`builder.schemaInfo.open:${getSessionIdFromUrl()}`);
-
-	let schemaInfoOpen = $state(true);
-
-	$effect(() => {
-		if (typeof localStorage === 'undefined') return;
-		const stored = localStorage.getItem(schemaInfoStorageKey);
-		if (stored !== null) schemaInfoOpen = stored === '1';
-	});
-
-	$effect(() => {
-		if (typeof localStorage === 'undefined') return;
-		localStorage.setItem(schemaInfoStorageKey, schemaInfoOpen ? '1' : '0');
-	});
 </script>
 
-<aside class="h-full">
-	<ScrollArea class="h-full">
-		<div class="flex flex-col gap-6">
-			<Card.Root class="shadow-sm">
-				<Card.Header class="flex flex-row items-center justify-between space-y-0">
-					<Card.Title class="text-xl">Available Parameters</Card.Title>
-					{#if syncNeeded}
-						<Button
-							variant="default"
-							size="sm"
-							onclick={onSync}
-							class="bg-amber-500 hover:bg-amber-600"
-						>
-							Sync
-						</Button>
+<aside
+	class="border-border bg-card flex h-full flex-col overflow-hidden rounded-xl border shadow-sm"
+>
+	<Tabs.Root bind:value={panel.value} class="flex min-h-0 flex-1 flex-col">
+		<div class="border-border border-b p-2">
+			<Tabs.List class="w-full">
+				<Tabs.Trigger value="parameters">
+					<ListTree />
+					Parameters
+					{#if unplacedCount > 0}
+						<span class="text-muted-foreground text-xs tabular-nums">{unplacedCount}</span>
 					{/if}
-				</Card.Header>
-				<Card.Content>
-					<p class="text-accent-foreground/40 mb-4 text-sm">
-						Drag parameters into groups below or use the context menu (right click on param) to add
-						them to specific tabs/groups.
-					</p>
-
-					{#if hasGhGroups}
-						<Button
-							variant="outline"
-							size="sm"
-							class="mb-4 w-full"
-							onclick={() => (importDialogOpen = true)}
-						>
-							<Layers class="mr-2 h-4 w-4" />
-							Add by Grasshopper group
-						</Button>
-					{/if}
-
-					<AvailableItemList
-						items={availableInputs}
-						title="Inputs"
-						placedIds={Array.from(placedIds)}
-						tabs={schema?.layout?.type === 'tabbed' ? schema.layout.tabs : []}
-						{onAddToGroup}
-						{onAddToNewGroup}
-					/>
-
-					<AvailableItemList
-						items={availableOutputs}
-						title="Outputs"
-						placedIds={Array.from(placedIds)}
-						tabs={schema?.layout?.type === 'tabbed' ? schema.layout.tabs : []}
-						{onAddToGroup}
-						{onAddToNewGroup}
-					/>
-				</Card.Content>
-			</Card.Root>
-
-			<SchemaInfoPanel
-				{schema}
-				{onSchemaChange}
-				liveInputs={availableInputs}
-				liveOutputs={availableOutputs}
-				bind:open={schemaInfoOpen}
-			/>
+				</Tabs.Trigger>
+				<Tabs.Trigger value="app">
+					<Settings2 />
+					App
+				</Tabs.Trigger>
+				<Tabs.Trigger value="viewer">
+					<Box />
+					Viewer
+				</Tabs.Trigger>
+			</Tabs.List>
 		</div>
-	</ScrollArea>
-</aside>
 
-<GhGroupImportDialog
-	open={importDialogOpen}
-	{availableInputs}
-	{availableOutputs}
-	{placedIds}
-	onOpenChange={(open) => (importDialogOpen = open)}
-	onConfirm={(groupNames) =>
-		onImportGhGroups(groupNames, availableInputs, availableOutputs, placedIds)}
-/>
+		<ScrollArea class="min-h-0 flex-1">
+			<div class="px-4 pt-1 pb-3">
+				<Tabs.Content value="parameters">
+					<ParameterPanel
+						tabs={schema.layout?.type === 'tabbed' ? schema.layout.tabs : []}
+						{availableInputs}
+						{availableOutputs}
+						{placedIds}
+						{syncNeeded}
+						{onSync}
+						{onAddToGroup}
+						{onAddToNewGroup}
+						{onImportGhGroups}
+					/>
+				</Tabs.Content>
+				<Tabs.Content value="app">
+					<AppSettingsPanel
+						{schema}
+						{onSchemaChange}
+						liveInputs={availableInputs}
+						liveOutputs={availableOutputs}
+					/>
+				</Tabs.Content>
+				<Tabs.Content value="viewer">
+					<ViewerSettingsPanel {schema} {onSchemaChange} />
+				</Tabs.Content>
+			</div>
+		</ScrollArea>
+	</Tabs.Root>
+</aside>

@@ -12,7 +12,7 @@
 </script>
 
 <div
-	class="group/lb relative flex items-center gap-2 rounded px-1 py-2 transition-all select-none"
+	class="group/lb relative flex items-center gap-2 rounded-sm px-1 py-2 transition-all select-none"
 	role="separator"
 	aria-label="Line break — drag to reorder"
 >

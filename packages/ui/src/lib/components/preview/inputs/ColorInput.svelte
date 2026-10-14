@@ -11,7 +11,7 @@
 	<input
 		type="color"
 		value={value || '#000000'}
-		class="h-9 w-12 rounded p-1 cursor-pointer border border-input bg-background"
+		class="h-9 w-12 rounded p-1 cursor-pointer border border-input bg-background dark:bg-input/30"
 		onchange={(e) => {
 			const newValue = (e.currentTarget as HTMLInputElement).value;
 			onChange(newValue);

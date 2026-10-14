@@ -26,12 +26,9 @@
 		Frame,
 		Ruler,
 		Grid3x3,
-		Check,
-		ChevronRight,
 		Palette,
 		Spline
 	} from '@lucide/svelte';
-	import { DropdownMenu } from 'bits-ui';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -39,6 +36,8 @@
 	import SceneManager from './SceneManager.svelte';
 	import MeshMetadataDialog from './MeshMetadataDialog.svelte';
 	import * as Resizable from '$lib/components/primitives/resizable/index.js';
+	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
+	import { Button } from '$lib/components/primitives/button/index.js';
 	import type { Locale } from '$lib/i18n/messages';
 	import { setLocaleContext, getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
@@ -417,7 +416,7 @@
 <div
 	class="min-h-64 sm:min-h-96 lg:min-h-125 relative h-full flex-1 border {isFullscreen
 		? 'fullscreen-viewer'
-		: 'overflow-hidden rounded-[0.625rem]'}"
+		: 'overflow-hidden rounded-lg'}"
 >
 	<Resizable.PaneGroup direction="horizontal" class="h-full w-full">
 		<!-- `defaultSize` must sum to 100 across the live panes. Panes register a frame before the
@@ -426,7 +425,7 @@
 		     scene pane keeps a sliver of its intended width. Hence 85 + 15, and the explicit id/order
 		     so a conditionally-rendered pane keeps its slot. -->
 		<Resizable.Pane id="viewport" order={1} defaultSize={sceneManagerOpen ? 85 : 100} minSize={40}>
-			<div class="relative h-full w-full" style="touch-action: none;">
+			<div class="relative h-full w-full touch-none">
 				<!-- Mesh count of the geometry currently in the scene. The canvas itself is opaque to
 				     the DOM, so this is the only observable proof a solve's geometry decoded and
 				     rendered; e2e asserts on it. -->
@@ -444,19 +443,18 @@
 				></div>
 
 				{#if isSolving}
-					<div
-						class="inset-0 absolute z-10 animate-[selva-viewer-fade-in_0.2s_ease-out] backdrop-blur-[2px] transition-all duration-300"
-					></div>
+					<div class="inset-0 animate-in fade-in backdrop-blur-xs absolute z-10 duration-200"></div>
 				{/if}
 
 				{#if logoUrl}
 					<!-- Bottom offset matches the tools menu so it clears the mobile drawer handle.
 					     Always pointer-events:none so it never intercepts canvas drags. -->
 					<div
-						class="right-4 {isFullscreen ? 'bottom-4' : 'bottom-16 sm:bottom-4'} absolute z-20"
-						style={hideButton
-							? 'opacity: 0; pointer-events: none;'
-							: 'opacity: 1; pointer-events: none;'}
+						class="right-4 {isFullscreen
+							? 'bottom-4'
+							: 'bottom-16 sm:bottom-4'} pointer-events-none absolute z-20 {hideButton
+							? 'opacity-0'
+							: ''}"
 					>
 						<img
 							src={logoUrl}
@@ -467,171 +465,131 @@
 				{/if}
 
 				{#if config.showToolsMenu}
-					{@const itemClass =
-						'gap-2 px-2 py-1.5 text-sm flex cursor-pointer select-none items-center rounded-sm outline-none transition-colors hover:bg-muted focus:bg-muted'}
 					<div
 						class="left-4 {isFullscreen
 							? 'bottom-4'
-							: 'bottom-16 sm:bottom-4'} absolute z-50 flex items-center"
-						style={hideButton
-							? 'opacity: 0; pointer-events: none;'
-							: 'opacity: 1; pointer-events: auto;'}
+							: 'bottom-16 sm:bottom-4'} shadow-lg absolute z-50 flex items-center rounded-lg {hideButton
+							? 'pointer-events-none opacity-0'
+							: ''}"
 					>
 						<DropdownMenu.Root>
-							<DropdownMenu.Trigger
-								class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95 data-[state=open]:bg-secondary/60"
-								title={t.toolsMenu}
-								aria-label={t.toolsMenu}
-							>
-								<Settings2 class="h-5 w-5 text-card-foreground" />
+							<DropdownMenu.Trigger>
+								{#snippet child({ props })}
+									<Button
+										{...props}
+										variant="outline"
+										size="icon-lg"
+										title={t.toolsMenu}
+										aria-label={t.toolsMenu}
+									>
+										<Settings2 />
+									</Button>
+								{/snippet}
 							</DropdownMenu.Trigger>
-							<DropdownMenu.Portal>
-								<DropdownMenu.Content
-									sideOffset={6}
-									align="start"
-									class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 min-w-44 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
-								>
-									<DropdownMenu.Item class={itemClass} onSelect={toggleProjection}>
-										{#if projection === 'perspective'}
-											<Square class="h-4 w-4" />
-											{t.switchToOrthographic}
-										{:else}
-											<Box class="h-4 w-4" />
-											{t.switchToPerspective}
-										{/if}
-									</DropdownMenu.Item>
+							<!-- Above the fullscreen viewer, which sits at z-index 10000. -->
+							<DropdownMenu.Content sideOffset={6} class="min-w-44 z-10001 w-auto">
+								<DropdownMenu.Item onSelect={toggleProjection}>
+									{#if projection === 'perspective'}
+										<Square />
+										{t.switchToOrthographic}
+									{:else}
+										<Box />
+										{t.switchToPerspective}
+									{/if}
+								</DropdownMenu.Item>
+								<DropdownMenu.Item onSelect={() => fitToView?.()}>
+									<Frame />
+									{t.fitToView}
+								</DropdownMenu.Item>
 
-									<DropdownMenu.Item class={itemClass} onSelect={() => fitToView?.()}>
-										<Frame class="h-4 w-4" />
-										{t.fitToView}
-									</DropdownMenu.Item>
+								<DropdownMenu.Sub>
+									<DropdownMenu.SubTrigger>
+										<Box />
+										{t.views}
+									</DropdownMenu.SubTrigger>
+									<DropdownMenu.SubContent class="z-10001">
+										{#each VIEW_PRESETS as { preset, label } (preset)}
+											<DropdownMenu.Item onSelect={() => setView(preset)}
+												>{label()}</DropdownMenu.Item
+											>
+										{/each}
+									</DropdownMenu.SubContent>
+								</DropdownMenu.Sub>
 
+								{#if config.showDisplayMenu}
 									<DropdownMenu.Sub>
-										<DropdownMenu.SubTrigger class="{itemClass} data-[state=open]:bg-muted">
-											<Box class="h-4 w-4" />
-											<span class="flex-1">{t.views}</span>
-											<ChevronRight class="h-4 w-4 text-muted-foreground" />
+										<DropdownMenu.SubTrigger>
+											<Palette />
+											{t.display}
 										</DropdownMenu.SubTrigger>
-										<DropdownMenu.SubContent
-											sideOffset={4}
-											class="min-w-32 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
-										>
-											{#each VIEW_PRESETS as { preset, label } (preset)}
-												<DropdownMenu.Item
-													class="px-2 py-1.5 text-sm flex cursor-pointer items-center rounded-sm transition-colors outline-none select-none hover:bg-muted focus:bg-muted"
-													onSelect={() => setView(preset)}
-												>
-													{label()}
-												</DropdownMenu.Item>
-											{/each}
-										</DropdownMenu.SubContent>
-									</DropdownMenu.Sub>
-
-									{#if config.showDisplayMenu}
-										<DropdownMenu.Sub>
-											<DropdownMenu.SubTrigger class="{itemClass} data-[state=open]:bg-muted">
-												<Palette class="h-4 w-4" />
-												<span class="flex-1">{t.display}</span>
-												<ChevronRight class="h-4 w-4 text-muted-foreground" />
-											</DropdownMenu.SubTrigger>
-											<DropdownMenu.SubContent
-												sideOffset={4}
-												class="min-w-40 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
+										<DropdownMenu.SubContent class="min-w-40 z-10001">
+											<DropdownMenu.RadioGroup
+												value={renderStyle}
+												onValueChange={(look) => setRenderStyle(look as typeof renderStyle)}
 											>
 												{#each STYLE_OPTIONS as { look, label } (look)}
-													<DropdownMenu.Item
-														closeOnSelect={false}
-														class="{itemClass} {renderStyle === look ? 'text-primary' : ''}"
-														onSelect={() => setRenderStyle(look)}
-													>
-														<span class="flex-1">{label}</span>
-														{#if renderStyle === look}
-															<Check class="h-4 w-4" />
-														{/if}
-													</DropdownMenu.Item>
+													<DropdownMenu.RadioItem value={look} closeOnSelect={false}>
+														{label}
+													</DropdownMenu.RadioItem>
 												{/each}
+											</DropdownMenu.RadioGroup>
+											<DropdownMenu.Separator />
+											<DropdownMenu.CheckboxItem
+												checked={edgesVisible}
+												onCheckedChange={toggleEdges}
+											>
+												<Spline />
+												{t.edges}
+											</DropdownMenu.CheckboxItem>
+										</DropdownMenu.SubContent>
+									</DropdownMenu.Sub>
+								{/if}
 
-												<DropdownMenu.Separator class="my-1 h-px bg-border" />
+								<DropdownMenu.CheckboxItem checked={measureActive} onCheckedChange={toggleMeasure}>
+									<Ruler />
+									{t.measure}
+								</DropdownMenu.CheckboxItem>
 
-												<DropdownMenu.Item
-													closeOnSelect={false}
-													class="{itemClass} {edgesVisible ? 'text-primary' : ''}"
-													onSelect={toggleEdges}
-												>
-													<Spline class="h-4 w-4" />
-													<span class="flex-1">{t.edges}</span>
-													{#if edgesVisible}
-														<Check class="h-4 w-4" />
-													{/if}
-												</DropdownMenu.Item>
-											</DropdownMenu.SubContent>
-										</DropdownMenu.Sub>
-									{/if}
+								{#if config.showGridToggle}
+									<DropdownMenu.CheckboxItem checked={gridVisible} onCheckedChange={toggleGrid}>
+										<Grid3x3 />
+										{t.grid}
+									</DropdownMenu.CheckboxItem>
+								{/if}
 
-									<DropdownMenu.Item
-										closeOnSelect={false}
-										class="{itemClass} {measureActive ? 'text-primary' : ''}"
-										onSelect={toggleMeasure}
+								{#if config.showSceneManager || config.showScreenshotButton || config.showFullscreenButton}
+									<DropdownMenu.Separator />
+								{/if}
+
+								{#if config.showSceneManager}
+									<DropdownMenu.CheckboxItem
+										checked={sceneManagerOpen}
+										onCheckedChange={() => (sceneManagerOpen = !sceneManagerOpen)}
 									>
-										<Ruler class="h-4 w-4" />
-										<span class="flex-1">{t.measure}</span>
-										{#if measureActive}
-											<Check class="h-4 w-4" />
+										<Layers />
+										{t.sceneManager}
+									</DropdownMenu.CheckboxItem>
+								{/if}
+
+								{#if config.showScreenshotButton}
+									<DropdownMenu.Item onSelect={downloadScreenshot}>
+										<Camera />
+										{t.screenshot}
+									</DropdownMenu.Item>
+								{/if}
+
+								{#if config.showFullscreenButton}
+									<DropdownMenu.Item onSelect={toggleFullscreen}>
+										{#if isFullscreen}
+											<Minimize />
+											{t.exitFullscreen}
+										{:else}
+											<Maximize />
+											{t.fullscreen}
 										{/if}
 									</DropdownMenu.Item>
-
-									{#if config.showGridToggle}
-										<DropdownMenu.Item
-											closeOnSelect={false}
-											class="{itemClass} {gridVisible ? 'text-primary' : ''}"
-											onSelect={toggleGrid}
-										>
-											<Grid3x3 class="h-4 w-4" />
-											<span class="flex-1">{t.grid}</span>
-											{#if gridVisible}
-												<Check class="h-4 w-4" />
-											{/if}
-										</DropdownMenu.Item>
-									{/if}
-
-									{#if config.showSceneManager || config.showScreenshotButton || config.showFullscreenButton}
-										<DropdownMenu.Separator class="my-1 h-px bg-border" />
-									{/if}
-
-									{#if config.showSceneManager}
-										<DropdownMenu.Item
-											closeOnSelect={false}
-											class="{itemClass} {sceneManagerOpen ? 'text-primary' : ''}"
-											onSelect={() => (sceneManagerOpen = !sceneManagerOpen)}
-										>
-											<Layers class="h-4 w-4" />
-											<span class="flex-1">{t.sceneManager}</span>
-											{#if sceneManagerOpen}
-												<Check class="h-4 w-4" />
-											{/if}
-										</DropdownMenu.Item>
-									{/if}
-
-									{#if config.showScreenshotButton}
-										<DropdownMenu.Item class={itemClass} onSelect={downloadScreenshot}>
-											<Camera class="h-4 w-4" />
-											{t.screenshot}
-										</DropdownMenu.Item>
-									{/if}
-
-									{#if config.showFullscreenButton}
-										<DropdownMenu.Item class={itemClass} onSelect={toggleFullscreen}>
-											{#if isFullscreen}
-												<Minimize class="h-4 w-4" />
-												{t.exitFullscreen}
-											{:else}
-												<Maximize class="h-4 w-4" />
-												{t.fullscreen}
-											{/if}
-										</DropdownMenu.Item>
-									{/if}
-								</DropdownMenu.Content>
-							</DropdownMenu.Portal>
+								{/if}
+							</DropdownMenu.Content>
 						</DropdownMenu.Root>
 					</div>
 				{/if}
@@ -697,15 +655,6 @@
 		}
 		to {
 			backdrop-filter: blur(0px);
-		}
-	}
-
-	@keyframes selva-viewer-fade-in {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
 		}
 	}
 </style>

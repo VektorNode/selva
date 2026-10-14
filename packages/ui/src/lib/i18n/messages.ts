@@ -65,6 +65,8 @@ export interface ViewerMessages {
 	solveSolving: string;
 	parametersTab: string;
 	moreTab: string;
+	scrollTabsBack: string;
+	scrollTabsForward: string;
 	expandPanel: string;
 	collapsePanel: string;
 	/** `{side}` is replaced with `panelSideLeft` / `panelSideRight`. */
@@ -133,6 +135,8 @@ const en: ViewerMessages = {
 	solveSolving: 'Solving…',
 	parametersTab: 'Parameters',
 	moreTab: 'More',
+	scrollTabsBack: 'Previous tabs',
+	scrollTabsForward: 'More tabs',
 	expandPanel: 'Expand panel',
 	collapsePanel: 'Collapse panel',
 	expandSidePanel: 'Expand {side} panel',
@@ -200,6 +204,8 @@ const de: ViewerMessages = {
 	solveSolving: 'Berechnung läuft…',
 	parametersTab: 'Parameter',
 	moreTab: 'Mehr',
+	scrollTabsBack: 'Vorherige Tabs',
+	scrollTabsForward: 'Weitere Tabs',
 	expandPanel: 'Bereich aufklappen',
 	collapsePanel: 'Bereich zuklappen',
 	expandSidePanel: '{side} Bereich aufklappen',

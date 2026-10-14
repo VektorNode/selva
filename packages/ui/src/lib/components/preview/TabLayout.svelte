@@ -66,10 +66,10 @@
 	}
 </script>
 
-<Card.Root class="pt-1 min-h-0 mx-1 flex flex-1 flex-col overflow-hidden">
-	<Tabs.Root value={activeTabId} class="gap-0 min-h-0 flex flex-1 flex-col">
+<Card.Root variant="flush" class="min-h-0 mx-1 flex-1">
+	<Tabs.Root value={activeTabId} variant="line" class="min-h-0 flex-1">
 		{#if showTabBar}
-			<TabBar tabs={visibleTabs} onTabChange={handleTabChange} />
+			<TabBar tabs={visibleTabs} {activeTabId} onTabChange={handleTabChange} />
 		{/if}
 
 		{#each visibleTabs as tab (tab.id)}
