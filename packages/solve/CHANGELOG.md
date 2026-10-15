@@ -1,5 +1,12 @@
 # @selvajs/solve
 
+## 1.2.3-beta.1
+
+### Patch Changes
+
+- Updated dependencies [90ba461]
+  - @selvajs/compute@4.2.2-beta.0
+
 ## 1.2.3-beta.0
 
 ### Patch Changes

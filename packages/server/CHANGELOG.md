@@ -1,5 +1,12 @@
 # @selvajs/server
 
+## 1.5.0-beta.5
+
+### Patch Changes
+
+- Updated dependencies [90ba461]
+  - @selvajs/compute@4.2.2-beta.0
+
 ## 1.5.0-beta.4
 
 ### Minor Changes

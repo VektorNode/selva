@@ -1,5 +1,12 @@
 # @selvajs/ui
 
+## 6.6.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [90ba461]
+  - @selvajs/compute@4.2.2-beta.0
+
 ## 6.6.0-beta.2
 
 ### Minor Changes

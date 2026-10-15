@@ -1,5 +1,11 @@
 # @selvajs/compute
 
+## 4.2.2-beta.0
+
+### Patch Changes
+
+- 90ba461: The liveness probe no longer follows a redirect from `/`: a Compute build that redirects its root (to rhino3d.com) reads as online at once, instead of timing out on the public internet and sending the `RhinoComputeKey` header along.
+
 ## 4.2.1
 
 ### Patch Changes
