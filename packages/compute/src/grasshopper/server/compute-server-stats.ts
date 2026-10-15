@@ -98,8 +98,8 @@ export default class ComputeServerStats {
 	/**
 	 * Check if the server is online.
 	 *
-	 * This is a single-sample probe: it returns `true` only on a 2xx from the
-	 * proxy liveness root `/`, and `false` for every other outcome (non-2xx,
+	 * This is a single-sample probe: it returns `true` only on a 2xx or a redirect
+	 * from the proxy liveness root `/`, and `false` for every other outcome (4xx/5xx,
 	 * network error, or timeout). A cold or briefly-busy-but-up server can therefore
 	 * read as offline — callers that gate on this (e.g. client construction)
 	 * should retry rather than treat a single `false` as authoritative.
@@ -133,13 +133,22 @@ export default class ComputeServerStats {
 		// The rhino.compute proxy has no `/healthcheck` route; its real liveness
 		// signal is `GET /`, which returns "compute.rhino3d running". Probing an
 		// unknown path would instead be forwarded to a child and only tells us the
-		// proxy can reach one.
+		// proxy can reach one. Some builds redirect `/` to rhino3d.com instead: the
+		// redirect is not followed (it would carry the API key off-site and put the
+		// public internet inside the probe's timeout), and answering with one is
+		// alive.
 		const url = `${this.serverUrl}/`;
 
 		try {
-			const response = await this.fetchWithTimeout(url, { method: 'GET' }, timeoutMs);
+			const response = await this.fetchWithTimeout(
+				url,
+				{ method: 'GET', redirect: 'manual' },
+				timeoutMs
+			);
+			const redirected =
+				response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400);
 
-			return { online: response.ok, status: response.status };
+			return { online: response.ok || redirected, status: response.status };
 		} catch (err) {
 			getLogger().debug('[ComputeServerStats] Fetch error:', err);
 			return {

@@ -203,6 +203,15 @@
 		<Button variant="outline" size="sm" onclick={() => (showBatchProcessor = !showBatchProcessor)}>
 			Batch Processors
 		</Button>
+		<Button
+			variant={builderState?.state.isDirty ? 'default' : 'outline'}
+			size="sm"
+			onclick={() => saveSchema().catch(() => {})}
+			disabled={!builderState?.state.draft}
+			title="Save schema (Ctrl+S / ⌘S)"
+		>
+			<Save class="h-4 w-4" />Save
+		</Button>
 	{/snippet}
 
 	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -284,12 +293,6 @@
 								outputValues={builderState.state.outputValues}
 							/>
 						{/if}
-
-						<div class="mb-20 flex justify-end gap-4">
-							<Button onclick={() => saveSchema().catch(() => {})}>
-								<Save class="mr-2 h-4 w-4" />Save Schema
-							</Button>
-						</div>
 					</main>
 				</Resizable.Pane>
 			</Resizable.PaneGroup>

@@ -134,7 +134,7 @@
 	}
 </script>
 
-<Card.Root variant="flush">
+<Card.Root variant="flush" class="shrink-0">
 	{#if !tabs || tabs.length === 0}
 		<div class="flex flex-col items-center gap-4 p-6">
 			<StateDisplay

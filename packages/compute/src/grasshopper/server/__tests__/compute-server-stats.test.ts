@@ -86,6 +86,21 @@ describe('probeServer', () => {
 		await stats.dispose();
 	});
 
+	it('reads a redirect from `/` as online without following it', async () => {
+		fetchMock.mockResolvedValue(res('', { ok: false, status: 302 }));
+		const stats = new ComputeServerStats(SERVER, 'key');
+		await expect(stats.probeServer()).resolves.toEqual({ online: true, status: 302 });
+		expect(fetchMock.mock.calls[0][1]).toMatchObject({ redirect: 'manual' });
+		await stats.dispose();
+	});
+
+	it('reads an opaque redirect (browser fetch) as online', async () => {
+		fetchMock.mockResolvedValue({ ...res('', { ok: false, status: 0 }), type: 'opaqueredirect' });
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.probeServer()).resolves.toEqual({ online: true, status: 0 });
+		await stats.dispose();
+	});
+
 	it('reports the connection error when the network rejects', async () => {
 		fetchMock.mockRejectedValue(new TypeError('fetch failed'));
 		const stats = new ComputeServerStats(SERVER);
