@@ -13,15 +13,15 @@ import { createMcpServer, fromOperation, inputFrom, tool } from '@selvajs/mcp';
 import openapi from './openapi.json'; // the host's own spec, bundled at build time
 
 const server = createMcpServer({
-	name: 'parafa',
+	name: 'acme',
 	version: '1.0.0',
-	baseUrl: process.env.PARAFA_URL!,
-	apiKey: process.env.PARAFA_API_KEY!,
+	baseUrl: process.env.ACME_URL!,
+	apiKey: process.env.ACME_API_KEY!, // stdio only; `handle` uses each request's own
 	openapi,
 	tools: [
-		fromOperation('getOrdersById', { name: 'parafa_get_order', description, shape }),
+		fromOperation('getOrdersById', { name: 'acme_get_order', description, shape }),
 		tool({
-			name: 'parafa_create_job',
+			name: 'acme_create_job',
 			description,
 			input: inputFrom('postJobs', { extend: { angleMode: { enum: ['turn', 'corner'] } } }),
 			calls: ['postJobs'],
@@ -46,9 +46,18 @@ await server.listen({ transport: 'stdio' }); // checks the live spec first
 - **Idempotent operations get a generated `Idempotency-Key`**, reused across retries, so a
   timed-out solve replays instead of running twice. The host's idempotency store is in memory:
   a restart mid-solve can still run it twice.
+- **Over HTTP, each request brings its own key.** `handle` sends the request's
+  `Authorization: Bearer` key to `/api/v1` and never the configured `apiKey`; a request without
+  one gets 401. `apiKey` is only for `listen` and `verify`.
 - **The key is redacted** from every tool output.
 - **`listen` checks the live spec** at `/api/v1/openapi.json`: every declared call must exist
   with the same scope, or the server refuses to start.
+
+## Output
+
+A tool returns a string, or `{ text, structured?, images? }`. `images` (`{ data, mimeType }`,
+base64) follow the text as MCP image content, for a model that can see. Clients render PNG, JPEG,
+GIF and WebP, not SVG.
 
 ## Typed calls
 

@@ -52,22 +52,26 @@ function serve(
 	return { server, calls: f.calls };
 }
 
+function mcpRequest(method: string, params: unknown, key?: string) {
+	return new Request('https://host/mcp', {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'application/json, text/event-stream',
+			...(key && { Authorization: `Bearer ${key}` })
+		},
+		body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
+	});
+}
+
 /** One JSON-RPC request through the streamable-HTTP handler, SSE reply parsed. */
 async function rpc(
 	server: ReturnType<typeof createMcpServer>,
 	method: string,
-	params: unknown = {}
+	params: unknown = {},
+	key = KEY
 ) {
-	const res = await server.handle(
-		new Request('https://host/mcp', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				Accept: 'application/json, text/event-stream'
-			},
-			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })
-		})
-	);
+	const res = await server.handle(mcpRequest(method, params, key));
 	const text = await res.text();
 	const data = text
 		.split('\n')
@@ -140,6 +144,60 @@ describe('createMcpServer', () => {
 		expect(bad.content[0].text).toMatch(/Invalid arguments/);
 		const ok = await rpc(server, 'tools/call', { name: 'release_job', arguments: { id: 'j1' } });
 		expect(ok.content[0].text).toBe('Released j1, key [redacted]');
+	});
+
+	it('returns pictures after the text', async () => {
+		const plan = tool({
+			name: 'plan',
+			description: 'The plan.',
+			input: z.object({}),
+			calls: ['getOrders'],
+			run: async () => ({ text: 'Plan', images: [{ data: 'iVBORw0K', mimeType: 'image/png' }] })
+		});
+		const { server } = serve([], [plan]);
+		const result = await rpc(server, 'tools/call', { name: 'plan', arguments: {} });
+		expect(result.content).toEqual([
+			{ type: 'text', text: 'Plan' },
+			{ type: 'image', data: 'iVBORw0K', mimeType: 'image/png' }
+		]);
+	});
+
+	it('answers HTTP as each request’s own key, never the configured one', async () => {
+		const f = fakeFetch([json({ ok: true }), json({ ok: true })]);
+		const server = createMcpServer({
+			name: 'test',
+			version: '0.0.0',
+			baseUrl: 'https://host',
+			apiKey: KEY,
+			fetch: f.fetch,
+			openapi: SPEC,
+			tools: [release]
+		});
+		const call = { name: 'release_job', arguments: { id: 'j1' } };
+
+		const anonymous = await server.handle(mcpRequest('tools/call', call));
+		expect(anonymous.status).toBe(401);
+		expect(anonymous.headers.get('WWW-Authenticate')).toBe('Bearer');
+
+		const a = await rpc(server, 'tools/call', call, 'selva_a');
+		await rpc(server, 'tools/call', call, 'selva_b');
+		expect(f.calls.map((c) => c.headers.Authorization)).toEqual([
+			'Bearer selva_a',
+			'Bearer selva_b'
+		]);
+		expect(a.content[0].text).toBe('Released j1, key [redacted]');
+	});
+
+	it('needs `apiKey` only for listen and verify', async () => {
+		const server = createMcpServer({
+			name: 'test',
+			version: '0.0.0',
+			baseUrl: 'https://host',
+			openapi: SPEC,
+			tools: [getOrder]
+		});
+		await expect(server.verify()).rejects.toThrow(/need `apiKey`/);
+		await expect(server.listen({ transport: 'stdio' })).rejects.toThrow(/need `apiKey`/);
 	});
 
 	it('refuses internal, multipart and unknown operations at startup', () => {

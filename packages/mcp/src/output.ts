@@ -2,6 +2,14 @@
 export interface ToolOutput {
 	text: string;
 	structured?: Record<string, unknown>;
+	/** Pictures for a model that can see, after the text. Clients render PNG, JPEG, GIF and WebP; not SVG. */
+	images?: ToolImage[];
+}
+
+export interface ToolImage {
+	/** Base64, no `data:` prefix. */
+	data: string;
+	mimeType: string;
 }
 
 /** Roughly 5k tokens: enough for a page of records, small enough to leave room to think. */

@@ -23,5 +23,5 @@ export type {
 	UntypedCallArgs
 } from './client.js';
 export { ApiCallError, describeError, type ErrorHint } from './errors.js';
-export { jsonOutput, listOutput, truncate, type ToolOutput } from './output.js';
+export { jsonOutput, listOutput, truncate, type ToolImage, type ToolOutput } from './output.js';
 export type { JsonSchema, Operation, ScopeAction } from './spec.js';

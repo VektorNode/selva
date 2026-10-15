@@ -68,7 +68,6 @@ function serve(responses: unknown[]) {
 		name: 'selva',
 		version: '0',
 		baseUrl: 'https://selva.test',
-		apiKey: 'selva_k',
 		fetch,
 		openapi: buildOpenApiDocument(),
 		tools: selvaTools('https://selva.test')
@@ -82,7 +81,8 @@ async function call(server: ReturnType<typeof createMcpServer>, name: string, ar
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
-				Accept: 'application/json, text/event-stream'
+				Accept: 'application/json, text/event-stream',
+				Authorization: 'Bearer selva_k'
 			},
 			body: JSON.stringify({
 				jsonrpc: '2.0',

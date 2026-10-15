@@ -39,7 +39,12 @@ export interface PromptDefinition {
 	render(args: Record<string, string>): string;
 }
 
-export interface McpServerOptions extends ApiClientOptions {
+export interface McpServerOptions extends Omit<ApiClientOptions, 'apiKey'> {
+	/**
+	 * The key `listen` and `verify` send. `handle` never uses it: each HTTP request brings
+	 * its own, so a remote caller can't borrow the server's.
+	 */
+	apiKey?: string;
 	name: string;
 	version: string;
 	/** Read by clients as the server's system prompt: conventions every tool shares. */
@@ -70,7 +75,10 @@ export interface SelvaMcpServer {
 	verify(): Promise<void>;
 	/** Serves over stdio after `verify` passes. */
 	listen(options: { transport: 'stdio'; verify?: boolean }): Promise<void>;
-	/** Answers one streamable-HTTP request, stateless. Mount it at `/mcp`. */
+	/**
+	 * Answers one streamable-HTTP request, stateless, with the request's own bearer key.
+	 * Without one it answers 401. Mount it at `/mcp`.
+	 */
 	handle(request: Request): Promise<Response>;
 }
 
@@ -79,7 +87,36 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 	const tools = resolveTools(options.tools, spec);
 	for (const r of options.resources ?? []) checkCalls(`resource ${r.uri}`, r.calls, spec);
 
-	function build(): Server {
+	function build(apiKey: string): Server {
+		const clientOptions = { ...options, apiKey };
+		// No key may reach the model, even echoed back inside an upstream message.
+		const keys = [apiKey, ...(options.apiKey ? [options.apiKey] : [])];
+		const redact = (text: string) =>
+			keys.reduce((out, key) => out.split(key).join('[redacted]'), text);
+
+		function toResult(out: ToolOutput): CallToolResult {
+			return {
+				content: [
+					{ type: 'text', text: redact(out.text) },
+					...(out.images ?? []).map(({ data, mimeType }) => ({
+						type: 'image' as const,
+						data,
+						mimeType
+					}))
+				],
+				...(out.structured && {
+					structuredContent: JSON.parse(redact(JSON.stringify(out.structured))) as Record<
+						string,
+						unknown
+					>
+				})
+			};
+		}
+
+		function errorResult(text: string): CallToolResult {
+			return { isError: true, content: [{ type: 'text', text: redact(text) }] };
+		}
+
 		const server = new Server(
 			{ name: options.name, version: options.version },
 			{
@@ -127,7 +164,7 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 						}, HEARTBEAT_MS);
 
 			try {
-				const api = createApiClient(spec, options, new Set(resolved.def.calls));
+				const api = createApiClient(spec, clientOptions, new Set(resolved.def.calls));
 				const args: unknown = resolved.input.parse(req.params.arguments ?? {});
 				const out = await resolved.def.run(api, args, { signal: extra.signal, spec });
 				return toResult(typeof out === 'string' ? { text: out } : out);
@@ -151,7 +188,7 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 			server.setRequestHandler(ReadResourceRequestSchema, async (req) => {
 				const resource = resources.find((r) => r.uri === req.params.uri);
 				if (!resource) throw new Error(`Unknown resource ${req.params.uri}`);
-				const api = createApiClient(spec, options, new Set(resource.calls));
+				const api = createApiClient(spec, clientOptions, new Set(resource.calls));
 				const text = redact(await resource.read(api));
 				return { contents: [{ uri: resource.uri, mimeType: resource.mimeType, text }] };
 			});
@@ -177,31 +214,15 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 		return server;
 	}
 
-	// The key must never reach the model, even echoed back inside an upstream message.
-	function redact(text: string): string {
-		return options.apiKey ? text.split(options.apiKey).join('[redacted]') : text;
-	}
-
-	function toResult(out: ToolOutput): CallToolResult {
-		return {
-			content: [{ type: 'text', text: redact(out.text) }],
-			...(out.structured && {
-				structuredContent: JSON.parse(redact(JSON.stringify(out.structured))) as Record<
-					string,
-					unknown
-				>
-			})
-		};
-	}
-
-	function errorResult(text: string): CallToolResult {
-		return { isError: true, content: [{ type: 'text', text: redact(text) }] };
+	function configuredKey(): string {
+		if (!options.apiKey) throw new Error('`listen` and `verify` need `apiKey`');
+		return options.apiKey;
 	}
 
 	async function verify(): Promise<void> {
 		const doFetch = options.fetch ?? fetch;
 		const url = options.baseUrl.replace(/\/$/, '') + (options.specPath ?? '/api/v1/openapi.json');
-		const res = await doFetch(url, { headers: { Authorization: `Bearer ${options.apiKey}` } });
+		const res = await doFetch(url, { headers: { Authorization: `Bearer ${configuredKey()}` } });
 		if (!res.ok)
 			throw new Error(`Could not read the host's API document at ${url}: HTTP ${res.status}`);
 		const live = indexOperations(await res.json());
@@ -232,17 +253,34 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 	return {
 		verify,
 		async listen({ verify: check = true }) {
+			const apiKey = configuredKey();
 			if (check) await verify();
-			await build().connect(new StdioServerTransport());
+			await build(apiKey).connect(new StdioServerTransport());
 		},
 		async handle(request) {
+			const apiKey = bearerOf(request);
+			if (!apiKey) return keyRequired();
 			const transport = new WebStandardStreamableHTTPServerTransport({
 				sessionIdGenerator: undefined
 			});
-			await build().connect(transport);
+			await build(apiKey).connect(transport);
 			return transport.handleRequest(request);
 		}
 	};
+}
+
+function bearerOf(request: Request): string | undefined {
+	return /^Bearer\s+(\S+)\s*$/i.exec(request.headers.get('Authorization') ?? '')?.[1];
+}
+
+function keyRequired(): Response {
+	return new Response(
+		JSON.stringify({
+			message: 'Send an API key as `Authorization: Bearer <key>`.',
+			code: 'UNAUTHORIZED'
+		}),
+		{ status: 401, headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' } }
+	);
 }
 
 function resolveTools(
