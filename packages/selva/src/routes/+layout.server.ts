@@ -1,4 +1,5 @@
 import { getBranding, flag, getAuthProvider } from '$lib/server/providers.server';
+import { canHoldApiTokens } from '@selvajs/server/tokens';
 import type { LayoutServerLoad } from './$types';
 
 // Expose the authenticated user to every route in the app.
@@ -28,7 +29,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			? {
 					orgId: locals.ctx.actingOrgId,
 					platformPermissions: locals.ctx.platformPermissions,
-					orgPermissions: locals.ctx.orgPermissions
+					orgPermissions: locals.ctx.orgPermissions,
+					mayHoldApiTokens: canHoldApiTokens(locals.ctx)
 				}
 			: null,
 		flags: {

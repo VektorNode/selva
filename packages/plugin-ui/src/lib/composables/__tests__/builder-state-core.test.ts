@@ -13,6 +13,7 @@ import {
 	syncParameters,
 	saveDraft,
 	markDirty,
+	editDraft,
 	discardDraft,
 	type BuilderDeps,
 	type BuilderNotifier
@@ -47,7 +48,7 @@ function makeNotifier(): BuilderNotifier & { calls: Record<string, string[]> } {
 function setup() {
 	const source = createFakeSource();
 	const notify = makeNotifier();
-	const history = { clearHistory: vi.fn() };
+	const history = { push: vi.fn(), clearHistory: vi.fn() };
 	const state = createInitialBuilderState();
 	const deps: BuilderDeps = { sessionId: SESSION, source, history, notify, clone: plainClone };
 	return { source, notify, history, state, deps };
@@ -269,6 +270,21 @@ describe('saveDraft', () => {
 		expect(notify.calls.error.some((m) => m.includes('stale base'))).toBe(true);
 	});
 
+	it('keeps dirty when the draft was edited while the save was in flight', async () => {
+		const { state, deps, source, notify } = setup();
+		state.draft = schema();
+		markDirty(state);
+
+		const pending = saveDraft(state, deps);
+		markDirty(state);
+		await resolveLastSave(source, true);
+		const result = await pending;
+
+		expect(result).toBe(true);
+		expect(state.isDirty).toBe(true);
+		expect(notify.calls.success).toHaveLength(1);
+	});
+
 	it('refuses to save when disconnected', async () => {
 		const { state, deps, source, notify } = setup();
 		state.draft = schema();
@@ -286,6 +302,31 @@ describe('markDirty / discardDraft', () => {
 		const { state } = setup();
 		markDirty(state);
 		expect(state.isDirty).toBe(true);
+	});
+
+	it('editDraft snapshots the draft before the edit, then marks it dirty', () => {
+		const { state, deps, history } = setup();
+		state.draft = schema({ documentId: 'before' } as never);
+
+		editDraft(state, deps, () => (state.draft!.documentId = 'after'), 'doc-id');
+
+		expect(history.push).toHaveBeenCalledWith(
+			expect.objectContaining({ documentId: 'before' }),
+			'doc-id'
+		);
+		expect(state.draft.documentId).toBe('after');
+		expect(state.isDirty).toBe(true);
+	});
+
+	it('editDraft does nothing before a draft exists', () => {
+		const { state, deps, history } = setup();
+		const apply = vi.fn();
+
+		editDraft(state, deps, apply);
+
+		expect(apply).not.toHaveBeenCalled();
+		expect(history.push).not.toHaveBeenCalled();
+		expect(state.isDirty).toBe(false);
 	});
 
 	it('discardDraft re-clones canonical and clears dirty', () => {

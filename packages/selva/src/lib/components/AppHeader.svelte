@@ -30,7 +30,7 @@
 	const pageData = $derived(
 		page.data as {
 			user?: { platformPermissions?: PlatformPermission[] } | null;
-			ctx?: { orgPermissions?: OrgPermission[] } | null;
+			ctx?: { orgPermissions?: OrgPermission[]; mayHoldApiTokens?: boolean } | null;
 			branding?: { name: string; copyrightName: string };
 		}
 	);
@@ -56,7 +56,11 @@
 		{/if}
 		{#if isAuthed}
 			<UserChip />
-			<SettingsMenu {platformPermissions} {orgPermissions} />
+			<SettingsMenu
+				{platformPermissions}
+				{orgPermissions}
+				mayHoldApiTokens={pageData.ctx?.mayHoldApiTokens}
+			/>
 		{:else}
 			<Button href="/login" size="sm">Sign in</Button>
 		{/if}

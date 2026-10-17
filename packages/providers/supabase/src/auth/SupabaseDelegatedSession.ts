@@ -14,13 +14,18 @@ export interface SupabaseDelegatedSessionConfig {
 	signingKey?: string;
 	/** `SUPABASE_JWT_SECRET`: the legacy HS256 secret. Used only without `signingKey`. */
 	jwtSecret?: string;
+	/**
+	 * How long a minted session lives. It is minted once per request, so it must
+	 * outlive the slowest one (a solve), or the writes after it fail with an
+	 * expired JWT. Default 60.
+	 */
+	ttlSeconds?: number;
 	logger?: ILogger;
 	fetch?: typeof fetch;
 	now?: () => number;
 }
 
-/** Long enough for one request, short enough that a ban takes effect quickly. */
-const TTL_SECONDS = 60;
+const DEFAULT_TTL_SECONDS = 60;
 /** A failed check (network, or a key not yet rotated in) is retried after this long. */
 const RECHECK_FAILED_MS = 30_000;
 
@@ -157,7 +162,7 @@ export class SupabaseDelegatedSession implements IDelegatedSession {
 			role: 'authenticated',
 			aud: 'authenticated',
 			iat,
-			exp: iat + TTL_SECONDS,
+			exp: iat + (this.config.ttlSeconds ?? DEFAULT_TTL_SECONDS),
 			iss: `${this.baseUrl}/auth/v1`,
 			selva_org: orgId
 		};

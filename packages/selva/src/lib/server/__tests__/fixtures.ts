@@ -343,6 +343,8 @@ type AnyHandler = (event: any) => unknown | Promise<unknown>;
 
 export interface CallOpts {
 	locals: unknown;
+	/** Defaults to POST with a body, GET without. */
+	method?: string;
 	params?: Record<string, string>;
 	url?: string;
 	body?: unknown;
@@ -358,7 +360,7 @@ export interface CallOpts {
 export async function call(handler: AnyHandler, opts: CallOpts): Promise<CallResult> {
 	const url = new URL(opts.url ?? 'http://test.local/');
 	const init: RequestInit = {
-		method: opts.body !== undefined ? 'POST' : 'GET',
+		method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
 		headers: opts.headers ?? {}
 	};
 	if (opts.body !== undefined) {

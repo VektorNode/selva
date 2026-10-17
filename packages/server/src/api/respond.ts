@@ -130,7 +130,7 @@ export async function runHandler(
 		if (clientKey && req.ctx) {
 			const fingerprint = await requestFingerprint(
 				req.request.method,
-				req.url.pathname + req.url.search,
+				req.url,
 				await fingerprintBody(req.request)
 			);
 			res = await runIdempotent(

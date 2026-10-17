@@ -4,14 +4,16 @@
 	import { Settings, Users, Shield } from '@lucide/svelte';
 	import type { Component } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
-	import { ORG_MANAGEMENT_PERMISSIONS, OPERATOR_PLATFORM_PERMISSIONS } from '@selvajs/platform';
+	import { ALL_ORG_PERMISSIONS, OPERATOR_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 
 	interface Props {
 		platformPermissions?: PlatformPermission[];
 		orgPermissions?: OrgPermission[];
+		/** `/team/tokens` is the only `/team` page some API-token holders can use. */
+		mayHoldApiTokens?: boolean;
 	}
 
-	let { platformPermissions = [], orgPermissions = [] }: Props = $props();
+	let { platformPermissions = [], orgPermissions = [], mayHoldApiTokens = false }: Props = $props();
 
 	let open = $state(false);
 	let triggerEl = $state<HTMLButtonElement | null>(null);
@@ -23,13 +25,15 @@
 	// type-checks after a permission is added, and the menu would silently stop
 	// appearing for whoever holds the new one.
 	const ANY_PLATFORM_PERM = OPERATOR_PLATFORM_PERMISSIONS;
-	const ANY_ORG_ADMIN_PERM = ORG_MANAGEMENT_PERMISSIONS;
+	const ANY_ORG_ADMIN_PERM = ALL_ORG_PERMISSIONS;
 
 	const showAdmin = $derived(
 		isPlatformAdmin || ANY_PLATFORM_PERM.some((p) => platformPermissions.includes(p))
 	);
 	const showTeam = $derived(
-		isPlatformAdmin || ANY_ORG_ADMIN_PERM.some((p) => orgPermissions.includes(p))
+		isPlatformAdmin ||
+			mayHoldApiTokens ||
+			ANY_ORG_ADMIN_PERM.some((p) => orgPermissions.includes(p))
 	);
 
 	const items = $derived(

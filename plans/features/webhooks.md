@@ -1,7 +1,5 @@
 # Webhooks
 
-**Status: designed, not built.**
-
 An integration polling `/api/v1` for "what changed" is slow and burns its rate limit. Webhooks push
 org events to a URL the org registers. The hard requirement comes from host apps: the events an ERP
 cares about (a job released or withdrawn) are the **host's** domain, so the engine must deliver
@@ -21,7 +19,7 @@ event types it has never heard of.
 - **Widen the sink, keep the engine union closed:**
 
   ```ts
-  /** A host-defined event. The type must start with the host's own prefix, e.g. `parafa.`. */
+  /** A host-defined event. The type must start with the host's own prefix, e.g. `acme.`. */
   export interface HostEvent {
   	type: `${string}.${string}`;
   	orgId: string;
@@ -35,7 +33,7 @@ event types it has never heard of.
   }
   ```
 
-  A host declares its own union (`{ type: 'parafa.job.released'; jobId; releaseId; ... }`) and
+  A host declares its own union (`{ type: 'acme.job.released'; jobId; releaseId; ... }`) and
   emits it with `deps.events.emit({ ...event, ...actorOf(ctx) })`. The engine never imports it.
 
 - **Engine names stay unprefixed and reserved.** A host type must carry a prefix the host owns; a

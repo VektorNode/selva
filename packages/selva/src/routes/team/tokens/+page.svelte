@@ -159,10 +159,6 @@
 		<Callout tone="info" title="No organization">
 			A token acts inside one organization. Join one first.
 		</Callout>
-	{:else if !data.canMint}
-		<Callout tone="info" title="You can't create tokens yet">
-			Ask an instance admin to give you the “Manage API tokens” permission.
-		</Callout>
 	{:else}
 		<Card.Root>
 			<Card.Header>

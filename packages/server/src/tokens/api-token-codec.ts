@@ -6,8 +6,8 @@ import { createTokenCodec, type TokenCodec } from './token-codec.js';
  * API token format: `selva_` + 30 base62 random chars + 6 base62 chars of
  * CRC32 over the random part. 42 chars total.
  *
- * - The prefix is what secret scanners match on; `sk_` was dropped because
- *   Stripe and OpenAI keys share it.
+ * - The prefix is what secret scanners match on. Not `sk_`: Stripe and OpenAI
+ *   keys use it.
  * - 30 base62 chars carry ~178 bits of entropy.
  * - The checksum lets the resolver reject a typo or a truncated paste without
  *   a store lookup. It is not a MAC: the HMAC at rest is what authenticates.

@@ -288,6 +288,7 @@
 								onReorder={actions.onReorder}
 								onRemoveItem={actions.onRemoveItem}
 								onAddLineBreak={actions.onAddLineBreak}
+								onEdit={(apply, coalesceKey) => builderState?.editDraft(apply, coalesceKey)}
 								availableInputs={allAvailableInputs}
 								{getParameterInfo}
 								outputValues={builderState.state.outputValues}

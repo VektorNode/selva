@@ -33,6 +33,8 @@ export interface BuilderState {
 	draft: UISchema | null;
 	/** Flipped on the first mutation of `draft` in a session. Cleared on save / discard. */
 	isDirty: boolean;
+	/** Bumped by every `markDirty`, so a save can tell whether the draft changed while in flight. */
+	editRevision: number;
 	/** documentId of the currently-loaded Grasshopper definition (carried on the schema). */
 	documentId: string | null;
 	loading: boolean;
@@ -53,8 +55,10 @@ export interface BuilderNotifier {
 	error(message: string): void;
 }
 
-/** Undo-history hook the core clears on canonical replacement. */
+/** Undo-history hook: snapshots before an edit, cleared on canonical replacement. */
 export interface BuilderHistory {
+	/** Back-to-back pushes with the same `coalesceKey` keep only the first snapshot. */
+	push(schema: UISchema, coalesceKey?: string): void;
 	clearHistory(): void;
 }
 
@@ -79,6 +83,7 @@ export function createInitialBuilderState(): BuilderState {
 		canonicalHash: null,
 		draft: null,
 		isDirty: false,
+		editRevision: 0,
 		documentId: null,
 		loading: true,
 		error: '',
@@ -131,9 +136,25 @@ export function replaceCanonical(
 	deps.history.clearHistory();
 }
 
-/** Mark the draft as dirty on the first mutation in a session. */
 export function markDirty(state: BuilderState): void {
-	if (!state.isDirty) state.isDirty = true;
+	state.isDirty = true;
+	state.editRevision++;
+}
+
+/**
+ * Apply an inline edit (a label, a toggle) to the draft with an undo step, and mark it dirty.
+ * Pass the field as `coalesceKey` so typing into it makes one undo step, not one per keystroke.
+ */
+export function editDraft(
+	state: BuilderState,
+	deps: BuilderDeps,
+	apply: () => void,
+	coalesceKey?: string
+): void {
+	if (!state.draft) return;
+	deps.history.push(deps.clone(state.draft), coalesceKey);
+	apply();
+	markDirty(state);
 }
 
 /** Reset the draft to a fresh clone of canonical. Clears dirty. */
@@ -416,8 +437,9 @@ export function applySyncChanges(
 
 /**
  * Persist the draft through the source and apply the post-save lifecycle transition.
- * Returns the SaveResult so the route can act on it. On success, clears dirty so the next
- * schemaUpdated broadcast re-clones the draft cleanly; on failure the dirty draft is kept.
+ * Returns the SaveResult so the route can act on it. On success, clears dirty (unless the draft
+ * changed mid-save) so the next schemaUpdated broadcast re-clones the draft cleanly; on failure
+ * the dirty draft is kept.
  */
 export async function saveDraft(state: BuilderState, deps: BuilderDeps): Promise<boolean> {
 	if (!state.draft) {
@@ -433,6 +455,7 @@ export async function saveDraft(state: BuilderState, deps: BuilderDeps): Promise
 		return false;
 	}
 
+	const savedRevision = state.editRevision;
 	const result = await deps.source.save(
 		deps.sessionId,
 		deps.clone(state.draft),
@@ -442,7 +465,8 @@ export async function saveDraft(state: BuilderState, deps: BuilderDeps): Promise
 	if (result.ok) {
 		// The schemaUpdated broadcast that precedes the ack carries the just-saved state.
 		// Clearing isDirty lets replaceCanonical re-clone the draft cleanly on that broadcast.
-		state.isDirty = false;
+		// Edits made while the save was in flight weren't sent, so they keep the draft dirty.
+		if (state.editRevision === savedRevision) state.isDirty = false;
 		deps.notify.success('Schema saved successfully');
 		return true;
 	}

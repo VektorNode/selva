@@ -56,10 +56,3 @@ export {
 	storedKeysById,
 	type IncomingServerBase
 } from './server-config-write.js';
-export {
-	idempotencyKey,
-	toStoredResponse,
-	fromStoredResponse,
-	IDEMPOTENCY_REPLAYED_HEADER,
-	type StoredResponse
-} from './idempotency-http.js';

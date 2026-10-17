@@ -1,14 +1,12 @@
 # MCP package (`@selvajs/mcp`)
 
-**Status: built (2026-10-08), steps 1-4 below.** Not yet live-tested against a real client. Parafa adopts the shared builder after the next `@selvajs/server` publish.
-
 Agents should drive a Selva host the way scripts do: through `/api/v1` with a key. Each host has
 its own domain (Selva: definitions and solves; a host app: whatever it builds on top), so the
 engine ships the machinery and each host writes its tools. The engine never learns a host's
 entities.
 
 Research behind the Selva tools: [mcp-from-api-tokens.md](../research/mcp-from-api-tokens.md).
-First outside consumer: parafa (`docs/plans/mcp-server.md` there).
+The host-side examples below come from the first outside host.
 
 ## Split
 
@@ -25,17 +23,17 @@ The server is a **client of `/api/v1`**: no store access, no second auth path. R
 inside the host app and still calls `/api/v1` over HTTP. It is per instance: one shared MCP
 server in front of many instances would hold every operator's keys.
 
-## Prerequisite: one contract shape for every host
+## One contract shape for every host
 
-Parafa's registry already carries `scope`, emits `x-scope` and serves `GET /api/v1/openapi.json`;
-Selva's does none of these. Before the package:
+The engine can only build tools from a spec it can read, so every host describes its API with the
+same builder:
 
-- Move `Endpoint` and `buildOpenApiDocument(endpoints, info)` into `@selvajs/server/api`. Response
-  kinds: `collection | object | empty | binary` (parafa's `zip` becomes `binary`), since
+- `Endpoint` and `buildOpenApiDocument(endpoints, info)` live in `@selvajs/server/api`. Response
+  kinds: `collection | object | empty | binary` (a host's zip download is `binary`), since
   `collection` is the paging contract bounded outputs rely on.
 - `Endpoint.scope: ApiScopeAction`, emitted as `x-scope`. The conformance test checks it against
   the scope the route mounts with, as it does `idempotent`.
-- Selva serves `/api/v1/openapi.json` next to the YAML docs route.
+- Every host serves `GET /api/v1/openapi.json`; Selva serves it next to the YAML docs route.
 
 The engine reads only what that builder emits: `operationId`, `x-scope`, the idempotency
 parameter, `x-internal`.
@@ -49,13 +47,13 @@ const server = createMcpServer({
 	openapi, // the host's own generated spec, imported at build time
 	tools: [
 		tool({
-			name: 'parafa_create_job',
+			name: 'acme_create_job',
 			description,
 			input: inputFrom('postJobs', { extend: { angleMode } }),
 			calls: ['postJobs'],
 			run: async (api, args) => api.call('postJobs', { body: toTurnAngles(args) })
 		}),
-		fromOperation('getOrdersById', { name: 'parafa_get_order', description, shape })
+		fromOperation('getOrdersById', { name: 'acme_get_order', description, shape })
 	],
 	resources,
 	prompts
@@ -79,15 +77,17 @@ exists with the same `x-scope`. A mismatch fails fast: the host is older than th
   returns a tool error naming the wait and telling the model not to retry; a compute budget can
   be hours.
 - **Annotations on every tool**, from its declared calls, most permissive wins: all `read` →
-  `readOnlyHint`; any DELETE → `destructiveHint`; all idempotent → `idempotentHint`; any `solve` →
-  open-world, so clients confirm first.
+  `readOnlyHint`; any DELETE → `destructiveHint`; all GET, PUT or DELETE → `idempotentHint`; any
+  `solve` → open-world, so clients confirm first. An operation that accepts an `Idempotency-Key`
+  doesn't count: the key makes a retry safe, but each tool call sends a fresh one, so calling the
+  tool again creates again or solves again.
 - **The key never appears in tool arguments or output.**
 - **Outputs are bounded**: list tools page with a small default; a `detail: 'full'` switch for the
   rest. Text for the model plus `structuredContent`.
-- **Solves are synchronous** on both hosts, and their progress channel is internal. `api.call`
-  takes a long timeout for `solve` operations, sends MCP progress only as a heartbeat, and retries
-  a dropped connection with the same `Idempotency-Key`. The idempotency store is in-memory, so a
-  host restart mid-solve can run it twice.
+- **Solves are synchronous** on Selva and the first outside host, and their progress channel is
+  internal. `api.call` takes a long timeout for `solve` operations, sends MCP progress only as a
+  heartbeat, and retries a dropped connection with the same `Idempotency-Key`. The idempotency
+  store is in-memory, so a host restart mid-solve can run it twice.
 
 ## Selva's tools
 
@@ -95,19 +95,12 @@ exists with the same `x-scope`. A mismatch fails fast: the host is older than th
 ranges, value-list options), `selva_solve`, maybe `selva_list_projects`. No deletes, share links,
 tokens or admin.
 
+Selva's own server runs only at `/mcp` inside the app, so it needs no stdio binary or bundled spec.
+Its calls stay untyped until a second Selva consumer justifies `openapi-typescript` codegen.
+
 `selva_solve` returns scalar outputs by name, a one-line summary per geometry output ("3 meshes,
 14k vertices"), solve errors and warnings verbatim, and a link to the definition for a human.
 `detail: 'full'` returns the raw response.
-
-## Order
-
-1. Prerequisite above.
-2. Package core: stdio + key auth, `tool` / `inputFrom` / `fromOperation`, error mapping,
-   annotations, startup check.
-3. Selva's own server, as the first consumer. It runs only at `/mcp` inside the app, so it
-   needs no stdio binary or bundled spec; its calls stay untyped until a second Selva consumer
-   justifies `openapi-typescript` codegen.
-4. Streamable HTTP at `/mcp`, API key as bearer.
 
 ## Open
 

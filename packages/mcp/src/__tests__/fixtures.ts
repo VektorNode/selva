@@ -69,6 +69,7 @@ export interface Recorded {
 	method: string;
 	url: string;
 	headers: Record<string, string>;
+	credentials?: RequestCredentials;
 	body?: unknown;
 }
 
@@ -80,6 +81,7 @@ export function fakeFetch(responses: (Response | Error)[]) {
 			method: init?.method ?? 'GET',
 			url: String(input),
 			headers: init?.headers as Record<string, string>,
+			credentials: init?.credentials,
 			body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
 		});
 		const next = responses.shift();

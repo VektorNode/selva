@@ -9,18 +9,6 @@ session. Everything here ships in `@selvajs/*` packages so a host app with its o
 the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope**, **host app**,
 **delegated session**, **service account**) are defined in [CONTEXT.md](../../CONTEXT.md).
 
-## Status
-
-- **Built:** token model, scopes and enforcement, resolution, delegated sessions, read-every-project,
-  lifecycle and audit, the mint email, the endpoints, the per-token rate limit (#318) and
-  idempotency (#319), and the host holder policy (`mayHoldApiTokens`). Rate limit and idempotency
-  details are under their sections below.
-- **Not built:** the expiry reminder email. It needs a scheduled sweep (the engine has no
-  scheduler) and a per-token "reminded" marker so N instances or a restart don't resend, which
-  means a new store method and a migration on both providers.
-- **Designed, not built:** service accounts ([service-accounts.md](service-accounts.md)) and a
-  webhook dispatcher ([webhooks.md](webhooks.md)).
-
 ## How a request flows
 
 1. The host hook sees `Authorization: Bearer selva_…` and calls `resolveApiToken` **before** the
@@ -29,7 +17,7 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
    revoked keys.
 3. It rebuilds the owner's live context in the token's org with `buildRequestContext`, then
    narrows it to the token's scopes. Narrowing only removes rights.
-4. On Supabase it signs a 60 s delegated-session JWT for the owner into
+4. On Supabase it signs a delegated-session JWT for the owner, long enough to outlive a solve, into
    `ctx.adapterContext.sessionToken`, so row security applies as if the owner were logged in.
 5. `runHandler` applies the scope check (from the HTTP method or the route's declared `action`), the
    per-token rate limit, and opt-in idempotency, then runs the handler.
@@ -39,8 +27,8 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
 ### Token model
 
 - **Format: `selva_` + base62 random + CRC32 checksum.** A distinctive prefix lets secret scanners
-  match it, and the checksum rejects typos before a DB lookup. `sk_` was dropped because Stripe and
-  OpenAI keys share it. Hashed at rest by `createTokenCodec` with `SELVA_HMAC_KEY`; the raw value is
+  match it, and the checksum rejects typos before a DB lookup. `sk_` was rejected because Stripe and
+  OpenAI keys use it. Hashed at rest by `createTokenCodec` with `SELVA_HMAC_KEY`; the raw value is
   shown once. ([#323](https://github.com/VektorNode/selva/issues/323))
 - **One org per token, fixed at mint.** A user in two orgs can't reach the wrong one by accident,
   and the org roster is exact. ([#317](https://github.com/VektorNode/selva/issues/317))
@@ -50,14 +38,13 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
   every store and policy would have to learn it. ([#317](https://github.com/VektorNode/selva/issues/317))
 - **Expiry is required: 30, 90 or 180 days.** The mint form defaults to `read`, whole org, 30 days;
   `write` and `solve` are opt-in with a warning. ([#323](https://github.com/VektorNode/selva/issues/323))
-- **Minting needs `manage_api_tokens`** (platform permission) unless the host decides instead, and
-  can never exceed the creator's live rights. A host passes `mayHoldApiTokens: (ctx) => boolean` in
-  `depsFromConfig`'s `tokens` and to `resolveApiToken`; it replaces the permission check at mint,
-  and the resolver re-asks it on every request against the owner's live context in the token's org,
-  so a key whose owner no longer qualifies gets 403 `API_TOKEN_HOLDER_REFUSED` without being
-  revoked. Granting a platform permission per user was rejected: who holds keys is a host rule, such
-  as "shop admins" (`manage_org_members`). Without a policy, use is not re-checked against
-  `manage_api_tokens`.
+- **Holding a key needs `manage_api_tokens`** (platform permission) unless the host decides
+  instead, and a key can never exceed the creator's live rights. A host passes
+  `mayHoldApiTokens: (ctx) => boolean` in `depsFromConfig`'s `tokens` and to `resolveApiToken`; it
+  replaces the permission check. Either check runs at mint and again on every request against the
+  owner's live context in the token's org, so a key whose owner no longer qualifies gets 403
+  `API_TOKEN_HOLDER_REFUSED` without being revoked. Granting a platform permission per user was
+  rejected: who holds keys is a host rule, such as "shop admins" (`manage_org_members`).
 
 ### Scopes and enforcement
 
@@ -138,20 +125,24 @@ The Supabase stores scope every query by the user JWT, and a token request has n
 
 ### Read every project in the org
 
-([#320](https://github.com/VektorNode/selva/issues/320))
+This is the design for [#320](https://github.com/VektorNode/selva/issues/320). No other section
+depends on it.
 
-- **The org permission `read_all_org_projects`, granted by org admins,** lets its holder mint a
-  read + solve key covering every project in the token's org, including projects they aren't a
-  member of. It replaces the earlier instance-wide `read_all_projects`, which would have broken the
-  one-org rule.
+- **An org permission, `read_all_org_projects`, granted by org admins,** would let its holder mint
+  a read + solve key covering every project in the token's org, including projects they aren't a
+  member of. An instance-wide `read_all_projects` was rejected: it breaks the one-org rule.
 - **Content only: projects, definitions, versions, solves.** Member lists stay member-only because
-  they're personal data. The key is never allowed to write.
-- **The permission is re-checked live at resolution,** so withdrawing it neuters existing keys.
-- **On Supabase the delegated JWT carries `selva_read_org: <orgId>`,** honoured only by the SELECT
-  policies on `projects`, `definitions` and `definition_versions`. Write policies never read it, so
-  the database itself rules out writes.
-- **App-side, the `contentCheck` view and solve guards accept the scope; edit guards don't.** The
-  local provider relies on these guards alone.
+  they're personal data. The key can never write.
+- **The permission would be re-checked live at resolution,** so withdrawing it neuters existing
+  keys.
+- **On Supabase the delegated JWT would carry `selva_read_org: <orgId>`,** honoured only by the
+  SELECT policies on `projects`, `definitions` and `definition_versions`. Write policies never read
+  it, so the database itself rules out writes.
+- **App-side, the `contentCheck` view and solve guards would accept the scope; edit guards
+  wouldn't.** The local provider relies on these guards alone.
+- **Its tests must pin** that such a key reads and solves a non-member project in its org, can't
+  edit it, can't see its members, and can't reach another org, and that it stops working once its
+  owner loses `read_all_org_projects`.
 
 ### Rate limiting
 
@@ -165,7 +156,7 @@ The Supabase stores scope every query by the user JWT, and a token request has n
 - **429 `RATE_LIMITED` with `Retry-After`,** plus `RateLimit-Limit` and `RateLimit-Remaining` on
   every token response.
 - **`ApiErrorCode` merges into `@selvajs/server`;** the app's duplicate copy goes.
-- **As built.** `SelvaDeps.apiRateLimiter`: absent uses a process-wide default (600 per 60 s),
+- **Wiring.** `SelvaDeps.apiRateLimiter`: absent uses a process-wide default (600 per 60 s),
   `null` turns it off, or pass any `ApiRateLimiter` (`hit(key)`, may be async). The Selva app
   builds one with `resolveApiRateLimitConfig` from `API_TOKEN_RATE_LIMIT_MAX` (`0` = off) and
   `API_TOKEN_RATE_LIMIT_WINDOW_MS`. The bucket is charged before the scope check so a throttled
@@ -185,7 +176,7 @@ The Supabase stores scope every query by the user JWT, and a token request has n
   separate durable idempotency table was rejected: a crash between it and the insert still
   duplicates.
 - **Selva's own creates opt in:** solve, project, definition, version, share link.
-- **As built.** `RunHandlerOptions.idempotent`; the store is `SelvaDeps.idempotency` (default:
+- **Wiring.** `RunHandlerOptions.idempotent`; the store is `SelvaDeps.idempotency` (default:
   process-wide, 5-minute TTL). Only responses below 400 are kept, so a failed attempt frees the
   key. Keys are 1 to 255 characters, else 400. The registry's `idempotent` flag documents the
   header in OpenAPI, and the conformance test fails when a route and the registry disagree.
@@ -217,8 +208,14 @@ The Supabase stores scope every query by the user JWT, and a token request has n
 ([#323](https://github.com/VektorNode/selva/issues/323))
 
 - **Emails go out on mint and 3 days before expiry,** when the server has mail configured.
+- **The expiry reminder needs a scheduled sweep and a per-token "reminded" marker.** The engine has
+  no scheduler, and without the marker N instances or a restart would each resend the reminder.
+  The marker means a new store method and a migration on both providers.
+- **The token page lives at `/team/tokens`,** with the org's other surfaces, because a key belongs
+  to one org. The tab shows only to users who may hold API tokens.
 - **The token page shows** scopes in plain words, last used, expiry, and badges: expiring soon,
-  unused for 30 days, refused N times today. Org admins see the whole roster and can revoke any key.
+  unused for 30 days, refused N times today. Holders of `manage_org_members` see the whole roster
+  and can revoke any key.
 - **Refusals are logged and badged, never auto-revoked.** A burst is usually a misconfigured
   integration.
 - **403 bodies name the missing scope** (`details.requiredScope`) unless access is deliberately
@@ -232,22 +229,22 @@ The Supabase stores scope every query by the user JWT, and a token request has n
 | ------ | --------------------------------------- | ------------------------------------------------------------------------- |
 | POST   | `/api/v1/orgs/{orgId}/tokens`           | Returns `{ token, secret }` once, with `Cache-Control: no-store`          |
 | GET    | `/api/v1/orgs/{orgId}/tokens`           | Own tokens; `?all=true` returns the roster and needs `manage_org_members` |
-| DELETE | `/api/v1/orgs/{orgId}/tokens/{tokenId}` | Owner or org admin; returns 204                                           |
+| DELETE | `/api/v1/orgs/{orgId}/tokens/{tokenId}` | Owner or `manage_org_members`; returns 204                                |
 
 These endpoints are session-only, so a key can't manage keys and a leaked one can't spawn more. They
 are `x-internal` for v1.
 
 ## Where it lives
 
-| Package                    | Holds                                                                                                                                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@selvajs/platform`        | `ApiToken`, `IApiTokenStore` (+ `apiTokens` on `IDataProvider`), `scopeAllows`, `narrowApiTokenContext`, `manage_api_tokens`, `read_all_org_projects`, `api_token.*` events, `IDelegatedSession` |
-| `@selvajs/server/http`     | `resolveApiToken`, `buildRequestContext`                                                                                                                                                         |
-| `@selvajs/server/handlers` | `createApiToken`, `listApiTokens`, `revokeApiToken`                                                                                                                                              |
-| `@selvajs/server/api`      | `runHandler` `action`/`idempotent`, scope check, rate limiter, idempotency (moved from `/compute`)                                                                                               |
-| Supabase provider          | Token store, `delegatedSession`, migration (`api_tokens`, `audit_events.token_id`, `jwt_reads_org`, SELECT policies)                                                                             |
-| Local provider             | JSON-file token store                                                                                                                                                                            |
-| `packages/selva`           | Hook wiring, mounted routes, `/admin/tokens` as the reference host page                                                                                                                          |
+| Package                    | Holds                                                                                                                                                                   |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@selvajs/platform`        | `ApiToken`, `IApiTokenStore` (+ `apiTokens` on `IDataProvider`), `scopeAllows`, `narrowApiTokenContext`, `manage_api_tokens`, `api_token.*` events, `IDelegatedSession` |
+| `@selvajs/server/http`     | `resolveApiToken`, `buildRequestContext`                                                                                                                                |
+| `@selvajs/server/handlers` | `createApiToken`, `listApiTokens`, `revokeApiToken`                                                                                                                     |
+| `@selvajs/server/api`      | `runHandler` `action`/`idempotent`, scope check, rate limiter, idempotency                                                                                              |
+| Supabase provider          | Token store, `delegatedSession`, migration (`api_tokens`, `audit_events.token_id`)                                                                                      |
+| Local provider             | JSON-file token store                                                                                                                                                   |
+| `packages/selva`           | Hook wiring, mounted routes, `/team/tokens` as the reference host page                                                                                                  |
 
 Reuse rather than reinvent: the token codec (`packages/server/src/tokens/token-codec.ts`), the
 invite store as the store template, and the share-link org roster (`/team/shares` and its RLS
@@ -256,9 +253,6 @@ migration) as the template for the token roster.
 ## Invariants the tests must pin
 
 - A `read` key fails a `POST`; a `project:A` key fails on project B and on any org-level host route.
-- A read-every-project key reads and solves a non-member project in its org, can't edit it, can't
-  see its members, and can't reach another org. It stops working once its owner loses
-  `read_all_org_projects`.
 - A bad key plus a valid cookie gets 401, and `/api/admin/*` rejects every key, including an
   instance admin's.
 - A banned or removed owner's key fails before any JWT is signed.
@@ -270,9 +264,10 @@ migration) as the template for the token roster.
 - **The CLI's `selva login`:** [#215](https://github.com/VektorNode/selva/issues/215). It will be a
   plain `/api/v1` client with no admin commands, because instance administration stays
   cookie-only.
-- **The MCP server:** [#216](https://github.com/VektorNode/selva/issues/216). It will be a thin
-  client of `/api/v1` whose tool schemas are generated from the frozen spec, deferred until that
-  spec is stable. OAuth 2.1 for a remote MCP connector comes later, and should resolve to the same
-  principal and scopes.
-- **Building service accounts.** Only the door is kept open.
+- **The MCP server:** [#216](https://github.com/VektorNode/selva/issues/216), designed in
+  [mcp-package.md](mcp-package.md). It is a client of `/api/v1` with a key, so it acts with that
+  key's principal and scopes. OAuth 2.1 for a remote MCP connector should resolve to the same.
+- **Service accounts:** [service-accounts.md](service-accounts.md). Only the door is kept open
+  here.
+- **A webhook dispatcher:** [webhooks.md](webhooks.md).
 - **A host app's own routes, hook, token page and spec.**

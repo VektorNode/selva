@@ -2,6 +2,7 @@ import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/se
 import { asHttpError, requireCanCreateDefinition, scoped } from '$lib/server/access.server';
 import { assertScope } from '@selvajs/server/api';
 import type { RequestHandler } from './$types';
+import { withApiRateLimit } from '$lib/server/api/sveltekit';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { MAX_DEFINITION_FILE_SIZE } from '$lib/server/computeLimits';
@@ -15,7 +16,7 @@ import {
 // constant overhead on top of the raw .gh bytes; 1 MB clears it comfortably.
 const MULTIPART_OVERHEAD = 1024 * 1024;
 
-export const POST: RequestHandler = async ({ request, locals, url }) => {
+export const POST: RequestHandler = withApiRateLimit(async ({ request, locals, url }) => {
 	const projectId = url.searchParams.get('projectId');
 	if (!projectId) {
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'projectId query parameter is required');
@@ -92,4 +93,4 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	return new Response(JSON.stringify(schemas), {
 		headers: { 'Content-Type': 'application/json' }
 	});
-};
+});

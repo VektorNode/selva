@@ -61,11 +61,12 @@
 		Array.from(new Set([...availableInputs, ...availableOutputs].map((p): string => p.type))).sort()
 	);
 
-	// Drop persisted choices the current definition can't satisfy, or the list looks empty for no
-	// visible reason.
-	$effect(() => {
-		if (!(groupBy.value in GROUP_BY_LABELS)) groupBy.value = 'none';
-		if (groupBy.value === 'ghGroup' && !hasGhGroups) groupBy.value = 'none';
+	// Ignore persisted choices this definition can't satisfy, or the list looks empty for no
+	// visible reason. Never write the fallback back: the preference is shared by every definition.
+	const activeGroupBy = $derived.by((): GroupBy => {
+		if (!Object.hasOwn(GROUP_BY_LABELS, groupBy.value)) return 'none';
+		if (groupBy.value === 'ghGroup' && !hasGhGroups) return 'none';
+		return groupBy.value;
 	});
 	const activeTypes = $derived(types.value.filter((t) => allTypes.includes(t)));
 
@@ -96,11 +97,11 @@
 		<div class="grid grid-cols-2 gap-2">
 			<Select.Root
 				type="single"
-				value={groupBy.value}
+				value={activeGroupBy}
 				onValueChange={(v) => (groupBy.value = v as GroupBy)}
 			>
 				<Select.Trigger size="sm" class="w-full" aria-label="Group parameters">
-					{GROUP_BY_LABELS[groupBy.value]}
+					{GROUP_BY_LABELS[activeGroupBy]}
 				</Select.Trigger>
 				<Select.Content>
 					{#each Object.entries(GROUP_BY_LABELS) as [value, label] (value)}
@@ -131,23 +132,25 @@
 
 	<div class="flex flex-col">
 		<AvailableItemList
+			id="inputs"
 			title="Inputs"
 			items={availableInputs}
 			{placedIds}
 			{query}
 			types={activeTypes}
-			groupBy={groupBy.value}
+			groupBy={activeGroupBy}
 			{tabs}
 			{onAddToGroup}
 			{onAddToNewGroup}
 		/>
 		<AvailableItemList
+			id="outputs"
 			title="Outputs"
 			items={availableOutputs}
 			{placedIds}
 			{query}
 			types={activeTypes}
-			groupBy={groupBy.value}
+			groupBy={activeGroupBy}
 			{tabs}
 			{onAddToGroup}
 			{onAddToNewGroup}

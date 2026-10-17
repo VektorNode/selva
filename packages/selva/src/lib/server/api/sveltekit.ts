@@ -7,14 +7,17 @@
  * handler runs under Next or Hono behind a sibling adapter roughly this size.
  */
 
-import { isHttpError, type RequestEvent } from '@sveltejs/kit';
+import { isHttpError, json, type RequestEvent } from '@sveltejs/kit';
 import {
 	ApiError,
 	ApiErrorCode,
+	chargeApiRateLimit,
 	codeForStatus,
 	depsFromConfig,
 	mapCoreError,
+	rateLimitedResponse,
 	runHandler,
+	withRateLimitHeaders,
 	type ApiHandler,
 	type ApiRequest,
 	type RunHandlerOptions,
@@ -99,6 +102,7 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 			evictComputeClient,
 			notifications: getNotificationProvider(),
 			instanceName: getBranding().name,
+			apiTokenSettingsPath: '/team/tokens',
 			// Module singleton: the limiter must outlive this per-request deps object.
 			apiRateLimiter
 		}
@@ -132,4 +136,24 @@ export function mount(
 ) {
 	return (event: RequestEvent): Promise<Response> =>
 		runHandler(handler, toApiRequest(event), { fallback, mapError: mapAppError, ...opts });
+}
+
+/**
+ * The per-token rate limit for a route that builds its own `Response` instead
+ * of going through `mount`: charged before the handler runs, and `RateLimit-*`
+ * on every token response, thrown errors included.
+ */
+export function withApiRateLimit<E extends RequestEvent>(
+	handler: (event: E) => Promise<Response>
+): (event: E) => Promise<Response> {
+	return async (event) => {
+		const verdict = await chargeApiRateLimit(event.locals.ctx, apiRateLimiter);
+		if (verdict && !verdict.allowed) return rateLimitedResponse(verdict);
+		try {
+			return withRateLimitHeaders(await handler(event), verdict);
+		} catch (err) {
+			if (!verdict || !isHttpError(err)) throw err;
+			return withRateLimitHeaders(json(err.body, { status: err.status }), verdict);
+		}
+	};
 }

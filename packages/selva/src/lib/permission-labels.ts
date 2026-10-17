@@ -20,8 +20,7 @@ export const PERMISSION_LABELS: Record<AnyPermission, string> = {
 	manage_org_members: 'Manage org members',
 	manage_org_compute: 'Manage org compute',
 	manage_definitions: 'Manage definitions',
-	manage_projects: 'Manage projects',
-	read_all_org_projects: 'Read all org projects'
+	manage_projects: 'Manage projects'
 };
 
 export const PERMISSION_DESCRIPTIONS: Record<AnyPermission, string> = {
@@ -33,9 +32,7 @@ export const PERMISSION_DESCRIPTIONS: Record<AnyPermission, string> = {
 	manage_org_members: 'Invite, remove, and change roles of org members.',
 	manage_org_compute: "Configure this org's BYO compute server.",
 	manage_definitions: 'Upload, edit, and delete any definition in the org.',
-	manage_projects: 'Create, edit, and delete any project in the org.',
-	read_all_org_projects:
-		'Create API tokens that read and solve every project in the org, including ones this user is not a member of.'
+	manage_projects: 'Create, edit, and delete any project in the org.'
 };
 
 export const ROLE_TONE: Record<OrgRole, string> = {

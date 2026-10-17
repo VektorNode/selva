@@ -125,6 +125,9 @@ export function createApiClient(
 				res = await doFetch(url, {
 					method: op.method,
 					headers,
+					// The key is the only credential: a host fetch that forwards the incoming
+					// request's cookies must not let a session ride along.
+					credentials: 'omit',
 					body: args.body === undefined ? undefined : JSON.stringify(args.body),
 					signal
 				});

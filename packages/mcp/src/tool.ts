@@ -205,8 +205,10 @@ export function annotationsFor(calls: string[], spec: OperationIndex): Annotatio
 	return {
 		readOnlyHint: ops.every((op) => op.scope === 'read'),
 		destructiveHint: ops.some((op) => op.method === 'DELETE'),
+		// Not `op.idempotent`: that key makes one call's retry safe, but every tool call
+		// sends a fresh one, so calling a create or solve tool again does it again.
 		idempotentHint: ops.every(
-			(op) => op.idempotent || op.method === 'GET' || op.method === 'PUT' || op.method === 'DELETE'
+			(op) => op.method === 'GET' || op.method === 'PUT' || op.method === 'DELETE'
 		),
 		openWorldHint: ops.some((op) => op.scope === 'solve')
 	};

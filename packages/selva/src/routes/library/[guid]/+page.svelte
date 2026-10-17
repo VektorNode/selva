@@ -17,7 +17,7 @@
 	const pageData = $derived(
 		page.data as {
 			user?: { platformPermissions?: PlatformPermission[] } | null;
-			ctx?: { orgPermissions?: OrgPermission[] } | null;
+			ctx?: { orgPermissions?: OrgPermission[]; mayHoldApiTokens?: boolean } | null;
 			branding?: { name: string };
 		}
 	);
@@ -96,6 +96,7 @@
 			<SettingsMenu
 				platformPermissions={pageData.user?.platformPermissions ?? []}
 				orgPermissions={pageData.ctx?.orgPermissions ?? []}
+				mayHoldApiTokens={pageData.ctx?.mayHoldApiTokens}
 			/>
 		{/if}
 	{/snippet}

@@ -12,6 +12,8 @@
 
 	interface AvailableItemListProps {
 		items: GroupedItem[];
+		/** Stable key the open/closed folds are remembered under. */
+		id: string;
 		title: string;
 		placedIds: ReadonlySet<string>;
 		query: string;
@@ -29,6 +31,7 @@
 
 	let {
 		items,
+		id,
 		title,
 		placedIds,
 		query,
@@ -39,11 +42,12 @@
 		onAddToNewGroup
 	}: AvailableItemListProps = $props();
 
+	// Both storage keys are read once; `id` is fixed for the component's lifetime.
 	// svelte-ignore state_referenced_locally
-	const sectionOpen = usePersisted(`builder.params.open:${title}`, true);
+	const sectionOpen = usePersisted(`builder.params.open:${id}`, true);
 	// Keyed by `${groupBy}:${clusterKey}` so each grouping mode remembers its own folds.
 	// svelte-ignore state_referenced_locally
-	const clusterOpen = usePersisted<Record<string, boolean>>(`builder.params.clusters:${title}`, {});
+	const clusterOpen = usePersisted<Record<string, boolean>>(`builder.params.clusters:${id}`, {});
 
 	const unplaced = $derived(items.filter((i) => !placedIds.has(i.id)));
 

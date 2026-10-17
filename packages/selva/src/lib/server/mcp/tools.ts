@@ -16,6 +16,7 @@ import {
 	type SchemaInput,
 	type UISchema
 } from '@selvajs/schemas';
+import type { RhinoModule } from 'rhino3dm';
 import { z } from 'zod';
 
 interface DefinitionItem {
@@ -131,8 +132,49 @@ function resolveValues(
 // ============================================================================
 
 const SCALAR = /^System\.(Double|Single|Int16|Int32|Int64|Decimal|String|Boolean)$/;
+const MESH = 'Rhino.Geometry.Mesh';
 
-function summarizeSolve(res: SolveResponse, link: string): ToolOutput {
+type TreeItem = DataTree['InnerTree'][string][number];
+
+// Loaded on the first solve that returns a mesh: the WASM module is large and
+// most tool calls never need it.
+let rhino: Promise<RhinoModule | null> | null = null;
+function loadRhino(): Promise<RhinoModule | null> {
+	rhino ??= import('rhino3dm').then((m) => m.default()).catch(() => null);
+	return rhino;
+}
+
+// rhino3dm objects live on the WASM heap and are never garbage collected; its
+// typings leave out the `delete()` every emscripten binding has.
+interface WasmMesh {
+	vertices(): { count: number; delete(): void };
+	delete(): void;
+}
+
+/** Vertices across the mesh items, or null when there are none or rhino3dm can't decode them. */
+async function meshVertexCount(items: TreeItem[]): Promise<number | null> {
+	const meshes = items.filter((i) => i.type === MESH);
+	if (!meshes.length) return null;
+	const r = await loadRhino();
+	if (!r) return null;
+	let total = 0;
+	for (const item of meshes) {
+		let mesh: WasmMesh | undefined;
+		try {
+			mesh = r.CommonObject.decode(JSON.parse(item.data)) as unknown as WasmMesh;
+			const vertices = mesh.vertices();
+			total += vertices.count;
+			vertices.delete();
+		} catch {
+			return null;
+		} finally {
+			mesh?.delete();
+		}
+	}
+	return total;
+}
+
+async function summarizeSolve(res: SolveResponse, link: string): Promise<ToolOutput> {
 	const lines: string[] = [];
 	const structured: Record<string, unknown> = {};
 
@@ -150,11 +192,14 @@ function summarizeSolve(res: SolveResponse, link: string): ToolOutput {
 			const name = i.type.split('.').pop() ?? i.type;
 			counts.set(name, (counts.get(name) ?? 0) + 1);
 		}
-		const summary = items.length
-			? [...counts].map(([type, n]) => `${n} ${type}`).join(', ')
-			: 'empty';
-		structured[tree.ParamName] = { geometry: Object.fromEntries(counts) };
-		lines.push(`${tree.ParamName}: ${summary}`);
+		const vertices = await meshVertexCount(items);
+		const parts = [...counts].map(([type, n]) => `${n} ${type}`);
+		if (vertices !== null) parts.push(`${vertices.toLocaleString('en-US')} vertices`);
+		structured[tree.ParamName] = {
+			geometry: Object.fromEntries(counts),
+			...(vertices !== null && { vertices })
+		};
+		lines.push(`${tree.ParamName}: ${items.length ? parts.join(', ') : 'empty'}`);
 	}
 
 	if (!lines.length) lines.push('The solve returned no outputs.');
@@ -244,7 +289,8 @@ export function selvaTools(origin: string): ToolDefinition<any, any>[] {
 		description:
 			'Runs the live version of a definition on Rhino Compute and returns its number and text ' +
 			'outputs, with a one-line summary of each geometry output. Spends compute; can take minutes. ' +
-			'Inputs left out keep their defaults. Call selva_describe_definition first.',
+			'Inputs left out keep their defaults. Call selva_describe_definition first. ' +
+			"`detail: 'full'` adds the raw solve response, geometry included; it can be very large.",
 		input: z.object({
 			guid: z.string(),
 			values: z
@@ -252,10 +298,11 @@ export function selvaTools(origin: string): ToolDefinition<any, any>[] {
 				.default({})
 				.describe(
 					'Input values keyed by the names selva_describe_definition lists. Dropdowns take an option name.'
-				)
+				),
+			detail: z.enum(['summary', 'full']).default('summary')
 		}),
 		calls: ['getDefinitionsByGuidSchema', 'postDefinitionsByGuidSolve'],
-		async run(api, { guid, values }, { signal }) {
+		async run(api, { guid, values, detail }, { signal }) {
 			const schema = (await api.call('getDefinitionsByGuidSchema', {
 				params: { guid },
 				signal
@@ -266,7 +313,10 @@ export function selvaTools(origin: string): ToolDefinition<any, any>[] {
 				body: { inputs: schema.inputs, values: resolveValues(describeInputs(schema), values) },
 				signal
 			})) as SolveResponse;
-			return summarizeSolve(res, `${origin}/library/${encodeURIComponent(guid)}`);
+			const summary = await summarizeSolve(res, `${origin}/library/${encodeURIComponent(guid)}`);
+			return detail === 'full'
+				? { ...summary, structured: { ...summary.structured, response: res } }
+				: summary;
 		}
 	});
 

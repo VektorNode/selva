@@ -24,6 +24,11 @@ function isLive(t: ApiToken, now: number): boolean {
 	return t.revokedAt === null && Date.parse(t.expiresAt) > now;
 }
 
+// Every write is load, modify, save of one file, so writes on the same path
+// queue here: an interleaved `touchLastUsed` would otherwise save a stale copy
+// and un-revoke a key. Single-process only, like the rest of this provider.
+const writeLocks = new Map<string, Promise<unknown>>();
+
 function summarize({ tokenHash: _hash, ...rest }: ApiToken): ApiTokenSummary {
 	return rest;
 }
@@ -55,10 +60,23 @@ export class LocalApiTokenStore implements IApiTokenStore {
 		return writeJsonFile(this.filePath, file);
 	}
 
+	private locked<T>(fn: () => Promise<T>): Promise<T> {
+		// Chain onto the tail however the previous write settled, so one
+		// rejection can't wedge the queue.
+		const next = (writeLocks.get(this.filePath) ?? Promise.resolve()).then(fn, fn);
+		writeLocks.set(
+			this.filePath,
+			next.catch(() => {})
+		);
+		return next;
+	}
+
 	async create(ctx: RequestContext, token: ApiToken): Promise<void> {
-		const file = await this.load();
-		file.tokens.push(token);
-		await this.save(file);
+		await this.locked(async () => {
+			const file = await this.load();
+			file.tokens.push(token);
+			await this.save(file);
+		});
 		await this.events.emit({
 			type: 'api_token.created',
 			apiTokenId: token.id,
@@ -93,12 +111,15 @@ export class LocalApiTokenStore implements IApiTokenStore {
 	}
 
 	async revoke(ctx: RequestContext, id: string, reason: ApiTokenRevokeReason): Promise<void> {
-		const file = await this.load();
-		const token = file.tokens.find((t) => t.id === id);
-		if (!token || token.revokedAt !== null) return;
-		token.revokedAt = new Date().toISOString();
-		await this.save(file);
-		await this.emitRevoked(ctx, token, reason);
+		const token = await this.locked(async () => {
+			const file = await this.load();
+			const found = file.tokens.find((t) => t.id === id);
+			if (!found || found.revokedAt !== null) return null;
+			found.revokedAt = new Date().toISOString();
+			await this.save(file);
+			return found;
+		});
+		if (token) await this.emitRevoked(ctx, token, reason);
 	}
 
 	async revokeAllForUser(
@@ -106,40 +127,50 @@ export class LocalApiTokenStore implements IApiTokenStore {
 		userId: string,
 		opts: { orgId?: string; reason: ApiTokenRevokeReason }
 	): Promise<string[]> {
-		const file = await this.load();
-		const doomed = file.tokens.filter(
-			(t) => t.userId === userId && t.revokedAt === null && (!opts.orgId || t.orgId === opts.orgId)
-		);
-		if (doomed.length === 0) return [];
-		const at = new Date().toISOString();
-		for (const t of doomed) t.revokedAt = at;
-		await this.save(file);
+		const doomed = await this.locked(async () => {
+			const file = await this.load();
+			const matching = file.tokens.filter(
+				(t) =>
+					t.userId === userId && t.revokedAt === null && (!opts.orgId || t.orgId === opts.orgId)
+			);
+			if (matching.length === 0) return [];
+			const at = new Date().toISOString();
+			for (const t of matching) t.revokedAt = at;
+			await this.save(file);
+			return matching;
+		});
 		for (const t of doomed) await this.emitRevoked(ctx, t, opts.reason);
 		return doomed.map((t) => t.id);
 	}
 
-	async touchLastUsed(_ctx: RequestContext, id: string, at: string): Promise<void> {
-		const file = await this.load();
-		const token = file.tokens.find((t) => t.id === id);
-		if (!token) return;
-		token.lastUsedAt = at;
-		await this.save(file);
+	touchLastUsed(_ctx: RequestContext, id: string, at: string): Promise<void> {
+		return this.locked(async () => {
+			const file = await this.load();
+			const token = file.tokens.find((t) => t.id === id);
+			if (!token) return;
+			token.lastUsedAt = at;
+			await this.save(file);
+		});
 	}
 
-	async eraseUser(_ctx: RequestContext, userId: string): Promise<void> {
-		const file = await this.load();
-		const before = JSON.stringify(file.tokens);
-		file.tokens = file.tokens
-			.filter((t) => t.userId !== userId)
-			.map((t) => (t.createdBy === userId ? { ...t, createdBy: null } : t));
-		if (JSON.stringify(file.tokens) !== before) await this.save(file);
+	eraseUser(_ctx: RequestContext, userId: string): Promise<void> {
+		return this.locked(async () => {
+			const file = await this.load();
+			const before = JSON.stringify(file.tokens);
+			file.tokens = file.tokens
+				.filter((t) => t.userId !== userId)
+				.map((t) => (t.createdBy === userId ? { ...t, createdBy: null } : t));
+			if (JSON.stringify(file.tokens) !== before) await this.save(file);
+		});
 	}
 
-	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
-		const file = await this.load();
-		const before = file.tokens.length;
-		file.tokens = file.tokens.filter((t) => t.orgId !== orgId);
-		if (file.tokens.length !== before) await this.save(file);
+	deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
+		return this.locked(async () => {
+			const file = await this.load();
+			const before = file.tokens.length;
+			file.tokens = file.tokens.filter((t) => t.orgId !== orgId);
+			if (file.tokens.length !== before) await this.save(file);
+		});
 	}
 
 	private emitRevoked(

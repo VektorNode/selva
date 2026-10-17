@@ -4,6 +4,7 @@ import type {
 	AuthUser,
 	IApiTokenStore,
 	OrgMember,
+	PlatformPermission,
 	RequestContext
 } from '@selvajs/platform';
 import { resolveApiToken, type ResolveApiTokenDeps } from '../api-token.js';
@@ -18,6 +19,7 @@ interface World {
 	token: ApiToken;
 	user: AuthUser;
 	member: OrgMember | null;
+	platformPermissions: PlatformPermission[];
 	touch: ReturnType<typeof vi.fn>;
 	deps: ResolveApiTokenDeps;
 }
@@ -57,6 +59,7 @@ function world(overrides: { token?: Partial<ApiToken>; user?: Partial<AuthUser> 
 			updatedAt: '',
 			updatedBy: ''
 		} as OrgMember | null,
+		platformPermissions: ['manage_api_tokens'],
 		touch: vi.fn(async () => {})
 	} as World;
 	const store = {
@@ -72,7 +75,8 @@ function world(overrides: { token?: Partial<ApiToken>; user?: Partial<AuthUser> 
 			orgs: {
 				getOrgMember: async () => w.member,
 				listOrgs: async () => ({ items: [] })
-			} as never
+			} as never,
+			permissions: { getFor: async () => w.platformPermissions } as never
 		}
 	};
 	return w;
@@ -185,14 +189,25 @@ describe('resolveApiToken', () => {
 	});
 });
 
+describe('resolveApiToken without a holder policy', () => {
+	it('refuses the key once its owner loses manage_api_tokens, without revoking it', async () => {
+		const w = world();
+		expect((await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).kind).toBe('ok');
+
+		w.platformPermissions = [];
+		expect(await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).toMatchObject({
+			kind: 'rejected',
+			status: 403,
+			code: 'API_TOKEN_HOLDER_REFUSED'
+		});
+		expect(w.token.revokedAt).toBeNull();
+	});
+});
+
 describe('resolveApiToken with a holder policy', () => {
 	it('asks the policy with the owner’s live context in the token’s org, platform permissions included', async () => {
 		const w = world();
 		const seen: RequestContext[] = [];
-		w.deps.data = {
-			...w.deps.data,
-			permissions: { getFor: async () => ['manage_api_tokens'] } as never
-		};
 		w.deps.mayHoldApiTokens = (ctx) => (seen.push(ctx), true);
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
 		expect(result.kind).toBe('ok');

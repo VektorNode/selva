@@ -1,5 +1,5 @@
 import type { ApiScopeAction, RequestContext, ScopeTarget } from '@selvajs/platform';
-import { scopeAllows } from '@selvajs/platform';
+import { outsideTokenOrg, scopeAllows } from '@selvajs/platform';
 import { apiError, ApiErrorCode } from './errors.js';
 import type { ApiRequest } from './types.js';
 
@@ -60,12 +60,17 @@ export function projectScopeTarget(param = 'id') {
 /**
  * Scope target for routes addressed by a definition guid param. Loads the
  * record so a project-scoped key reaches the definitions inside its project.
+ *
+ * A definition outside the key's org resolves like a missing one: otherwise the
+ * 403 detail would confirm the guid exists and name its project.
  */
 export function definitionScopeTarget(param = 'guid') {
 	return async (req: ApiRequest): Promise<ScopeTarget> => {
 		const definitionId = req.params[param];
 		if (!definitionId || !req.ctx) return { definitionId };
 		const record = await req.deps.definitionMeta.get(req.ctx, definitionId);
-		return { definitionId, projectId: record?.projectId };
+		const project = record ? await req.deps.projects.getProject(req.ctx, record.projectId) : null;
+		if (!project || outsideTokenOrg(req.ctx, project.orgId)) return { definitionId };
+		return { definitionId, projectId: project.id };
 	};
 }

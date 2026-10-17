@@ -7,7 +7,12 @@
 	import { dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
-	import { DND_FLIP_MS, DND_TYPE_GROUP, liftDraggedGroup } from '$lib/dnd/dndzone-helpers';
+	import {
+		DND_FLIP_MS,
+		DND_TYPE_GROUP,
+		draggedItemMove,
+		liftDraggedGroup
+	} from '$lib/dnd/dndzone-helpers';
 	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
 
 	interface Props {
@@ -25,6 +30,8 @@
 		onReorder: (items: LayoutItem[], tabId: string, groupId: string) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
 		onAddLineBreak: (tabId: string, groupId: string) => void;
+		/** Runs `apply` as an undoable draft edit; see `editDraft`. */
+		onEdit: (apply: () => void, coalesceKey?: string) => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		outputValues?: Record<string, unknown>;
@@ -45,6 +52,7 @@
 		onReorder,
 		onRemoveItem,
 		onAddLineBreak,
+		onEdit,
 		availableInputs,
 		getParameterInfo,
 		outputValues = {}
@@ -113,24 +121,15 @@
 		}
 
 		const committed = e.detail.items.filter((g) => !g.isDndShadowItem) as GroupConfig[];
-		const oldIds = activeTab.groups.map((g) => g.id);
-		const newIds = committed.map((g) => g.id);
-
-		let from = -1;
-		let to = -1;
-		for (let i = 0; i < oldIds.length; i++) {
-			if (oldIds[i] !== newIds[i]) {
-				from = oldIds.indexOf(newIds[i]);
-				to = i;
-				break;
-			}
-		}
+		const move = draggedItemMove(
+			activeTab.groups.map((g) => g.id),
+			committed.map((g) => g.id),
+			e.detail.info.id
+		);
 
 		localGroups = committed as ZoneGroup[];
 
-		if (from !== -1 && to !== -1 && from !== to) {
-			onReorderGroups(activeTab.id, from, to);
-		}
+		if (move) onReorderGroups(activeTab.id, move.from, move.to);
 	}
 </script>
 
@@ -162,6 +161,7 @@
 		{#if activeTab}
 			<TabSettingsBar
 				tab={activeTab}
+				{onEdit}
 				onRemove={() => onRemoveTab(activeTab.id)}
 				onAddGroup={() => onAddGroup(activeTab.id)}
 			/>
@@ -190,6 +190,7 @@
 							{:else}
 								<EditableGroup
 									bind:group={localGroups[groupIndex] as GroupConfig}
+									{onEdit}
 									onFinalize={(items) => onReorder(items, activeTab.id, group.id)}
 									onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
 									onRemove={() => onRemoveGroup(activeTab.id, group.id)}

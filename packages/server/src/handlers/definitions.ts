@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import {
 	apiError,
 	ApiErrorCode,
+	assertScope,
 	collection,
 	created,
 	formText,
@@ -222,8 +223,10 @@ export const updateDefinition: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 	const { ctx, record } = await requireEditableDefinition(req, guid);
 	const patch = await parseBody(req.request, UpdateMetadataInputSchema);
-	// Moving needs the same rights on the destination as uploading there.
+	// Moving needs the same rights on the destination as uploading there, and a
+	// key scoped to the source project must not carry the definition out of it.
 	if (patch.projectId && patch.projectId !== record.projectId) {
+		assertScope(ctx, 'write', { projectId: patch.projectId });
 		await requireCanCreateDefinition(req, patch.projectId);
 	}
 

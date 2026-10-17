@@ -220,5 +220,23 @@ export function runApiTokenStoreConformance(opts: ApiTokenStoreConformanceOption
 			expect(await store.get(SYSTEM_CONTEXT, doomed.id)).toBeNull();
 			expect(await store.get(SYSTEM_CONTEXT, kept.id)).not.toBeNull();
 		});
+
+		it('concurrent writes never undo each other', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const used = token(scope);
+			await store.create(ctx(scope.ownerId), used);
+
+			const minted = [token(scope), token(scope)];
+			await Promise.all([
+				store.touchLastUsed(SYSTEM_CONTEXT, used.id, new Date().toISOString()),
+				store.revoke(SYSTEM_CONTEXT, used.id, 'owner'),
+				store.touchLastUsed(SYSTEM_CONTEXT, used.id, new Date().toISOString()),
+				...minted.map((t) => store.create(ctx(scope.ownerId), t))
+			]);
+
+			expect((await store.get(SYSTEM_CONTEXT, used.id))?.revokedAt).toBeTruthy();
+			for (const t of minted) expect(await store.get(SYSTEM_CONTEXT, t.id)).not.toBeNull();
+		});
 	});
 }

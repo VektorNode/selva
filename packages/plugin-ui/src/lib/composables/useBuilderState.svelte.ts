@@ -13,6 +13,7 @@ import { useSchemaHistory } from './useSchemaHistory.svelte';
 import {
 	createInitialBuilderState,
 	markDirty as coreMarkDirty,
+	editDraft as coreEditDraft,
 	discardDraft as coreDiscardDraft,
 	handleOutputs as coreHandleOutputs,
 	handleInitialData as coreHandleInitialData,
@@ -133,6 +134,8 @@ export function useBuilderState(sessionId: string, source?: SchemaSource) {
 		applySyncChanges: (changes: SyncChange[]) => coreApplySyncChanges(state, deps, changes),
 		save: () => coreSaveDraft(state, deps),
 		markDirty: () => coreMarkDirty(state),
+		editDraft: (apply: () => void, coalesceKey?: string) =>
+			coreEditDraft(state, deps, apply, coalesceKey),
 		discardDraft: () => coreDiscardDraft(state, deps),
 		initialize,
 		cleanup

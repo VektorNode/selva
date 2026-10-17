@@ -1,4 +1,5 @@
 import type { RequestHandler } from './$types';
+import { withApiRateLimit } from '$lib/server/api/sveltekit';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getSolveEventBus } from '$lib/server/solveEvents/bus.server';
 import { liveOwnerKey } from '$lib/server/solveEvents/liveSolve.server';
@@ -13,7 +14,7 @@ import { assertScope } from '@selvajs/server/api';
 
 const STREAM_ID = /^[A-Za-z0-9_-]{16,64}$/;
 
-export const GET: RequestHandler = async ({ url, locals, request }) => {
+export const GET: RequestHandler = withApiRateLimit(async ({ url, locals, request }) => {
 	const ownerKey = liveOwnerKey(locals.user?.id);
 	if (!ownerKey) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
 	await asHttpError(() => assertScope(locals.ctx, 'read'));
@@ -31,4 +32,4 @@ export const GET: RequestHandler = async ({ url, locals, request }) => {
 	});
 	if (!response) apiError(409, ApiErrorCode.CONFLICT, 'streamId is in use');
 	return response;
-};
+});

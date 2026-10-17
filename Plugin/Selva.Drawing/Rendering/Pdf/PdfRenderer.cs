@@ -590,7 +590,8 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		// ImageSharp sniffs the format itself and would decode TIFF too (GHSA-wmxv-xphr-5c9g),
 		// so only bytes that ARE one of the supported formats reach it.
-		if (!IsPngJpegOrWebp(element.Data)) return;
+		var format = SniffRaster(element.Data);
+		if (format == RasterFormat.Unsupported) return;
 
 		// The page graphics root is Y-up (flipped once at page setup). A raster XImage has
 		// a fixed top-down orientation, so drawn directly it would appear mirrored. Counter-
@@ -606,7 +607,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 			if (!_images.TryGetValue(element.Data, out var image))
 			{
-				var data = Embeddable(element.Data);
+				var data = Embeddable(element.Data, format);
 				image = XImage.FromStream(() => new System.IO.MemoryStream(data));
 				_images[element.Data] = image;
 			}
@@ -622,23 +623,55 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 	}
 
-	// PdfSharpCore embeds anything but PNG as a quality-75 JPEG with no alpha: a logo comes out
-	// smudged on a grey box. Re-encoded as PNG it embeds lossless (Flate) with an SMask.
-	private static byte[] Embeddable(byte[] data)
+	// PdfSharpCore decodes every image and writes a decoded PNG as a lossless Flate bitmap with an
+	// SMask; anything else it re-encodes as a quality-75 JPEG (DCTDecode) with no alpha.
+	//   - PNG passes through: it already takes the lossless path.
+	//   - JPEG passes through: it has no alpha to lose and ends up DCTDecode either way. As PNG,
+	//     a photo would embed as a lossless bitmap, much larger for no visible gain.
+	//   - WEBP is re-encoded as PNG first, or its alpha is dropped and a logo comes out smudged
+	//     on a grey box.
+	private static byte[] Embeddable(byte[] data, RasterFormat format)
 	{
-		if (data[0] == 0x89 || data[0] == 0xFF) return data;
+		if (format != RasterFormat.Webp) return data;
 		using var image = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgba32>(data);
 		using var png = new System.IO.MemoryStream();
 		SixLabors.ImageSharp.ImageExtensions.SaveAsPng(image, png);
 		return png.ToArray();
 	}
 
-	internal static bool IsPngJpegOrWebp(byte[] d) =>
-		d.Length >= 8 && d[0] == 0x89 && d[1] == 0x50 && d[2] == 0x4E && d[3] == 0x47
-			&& d[4] == 0x0D && d[5] == 0x0A && d[6] == 0x1A && d[7] == 0x0A
-		|| d.Length >= 3 && d[0] == 0xFF && d[1] == 0xD8 && d[2] == 0xFF
-		|| d.Length >= 12 && d[0] == 0x52 && d[1] == 0x49 && d[2] == 0x46 && d[3] == 0x46
-			&& d[8] == 0x57 && d[9] == 0x45 && d[10] == 0x42 && d[11] == 0x50;
+	private enum RasterFormat { Unsupported, Png, Jpeg, Webp }
+
+	// Leading bytes that identify each raster format allowed to reach ImageSharp:
+	//   PngSignature:  the full 8-byte PNG file signature, "\x89PNG\r\n\x1A\n".
+	//   JpegSignature: FF D8 is the SOI (start of image) marker; the FF after it opens the
+	//                  first segment marker, which every JPEG has.
+	//   RiffTag:       "RIFF" at offset 0. Offsets 4-7 hold the little-endian chunk size and
+	//                  are not checked.
+	//   WebpTag:       "WEBP" at offset 8, the RIFF form type that separates WEBP from other
+	//                  RIFF files (WAV, AVI).
+	private static readonly byte[] PngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+	private static readonly byte[] JpegSignature = { 0xFF, 0xD8, 0xFF };
+	private static readonly byte[] RiffTag = { 0x52, 0x49, 0x46, 0x46 };
+	private static readonly byte[] WebpTag = { 0x57, 0x45, 0x42, 0x50 };
+	private const int WebpTagOffset = 8;
+
+	private static RasterFormat SniffRaster(byte[] data)
+	{
+		if (HasBytesAt(data, 0, PngSignature)) return RasterFormat.Png;
+		if (HasBytesAt(data, 0, JpegSignature)) return RasterFormat.Jpeg;
+		if (HasBytesAt(data, 0, RiffTag) && HasBytesAt(data, WebpTagOffset, WebpTag)) return RasterFormat.Webp;
+		return RasterFormat.Unsupported;
+	}
+
+	private static bool HasBytesAt(byte[] data, int offset, byte[] expected)
+	{
+		if (data.Length < offset + expected.Length) return false;
+		for (var i = 0; i < expected.Length; i++)
+			if (data[offset + i] != expected[i]) return false;
+		return true;
+	}
+
+	internal static bool IsPngJpegOrWebp(byte[] data) => SniffRaster(data) != RasterFormat.Unsupported;
 
 	public void Visit(DimensionElement element)
 	{
@@ -710,12 +743,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		switch (element.Pattern)
 		{
 			case HatchPatternKind.Solid:
-			{
-				// Fill-only: needs no pen, so a zero-width LineStyle still fills.
-				var solid = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
-				_gfx.DrawPath(solid, xpath);
-				break;
-			}
+				{
+					// Fill-only: needs no pen, so a zero-width LineStyle still fills.
+					var solid = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
+					_gfx.DrawPath(solid, xpath);
+					break;
+				}
 			case HatchPatternKind.Lines:
 				if (pen != null) DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
 				break;

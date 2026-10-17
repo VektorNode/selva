@@ -62,7 +62,7 @@ export interface McpServerOptions extends Omit<ApiClientOptions, 'apiKey'> {
 }
 
 interface ResolvedTool {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- same reason as `McpServerOptions.tools`
 	def: ToolDefinition<any, any>;
 	input: ResolvedInput;
 	annotations: Annotations;
@@ -77,9 +77,10 @@ export interface SelvaMcpServer {
 	listen(options: { transport: 'stdio'; verify?: boolean }): Promise<void>;
 	/**
 	 * Answers one streamable-HTTP request, stateless, with the request's own bearer key.
-	 * Without one it answers 401. Mount it at `/mcp`.
+	 * Without one it answers 401. Mount it at `/mcp`. `fetch` overrides the configured one
+	 * for this request, for hosts whose fetch is bound to the incoming request.
 	 */
-	handle(request: Request): Promise<Response>;
+	handle(request: Request, overrides?: { fetch?: typeof fetch }): Promise<Response>;
 }
 
 export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
@@ -87,8 +88,8 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 	const tools = resolveTools(options.tools, spec);
 	for (const r of options.resources ?? []) checkCalls(`resource ${r.uri}`, r.calls, spec);
 
-	function build(apiKey: string): Server {
-		const clientOptions = { ...options, apiKey };
+	function build(apiKey: string, fetch = options.fetch): Server {
+		const clientOptions = { ...options, apiKey, fetch };
 		// No key may reach the model, even echoed back inside an upstream message.
 		const keys = [apiKey, ...(options.apiKey ? [options.apiKey] : [])];
 		const redact = (text: string) =>
@@ -257,13 +258,15 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 			if (check) await verify();
 			await build(apiKey).connect(new StdioServerTransport());
 		},
-		async handle(request) {
+		async handle(request, overrides) {
 			const apiKey = bearerOf(request);
-			if (!apiKey) return keyRequired();
+			// Anything else would reach /api/v1 as "no key" and, on a host whose fetch
+			// forwards cookies, run as the browser session instead.
+			if (!apiKey?.startsWith(API_KEY_PREFIX)) return keyRequired();
 			const transport = new WebStandardStreamableHTTPServerTransport({
 				sessionIdGenerator: undefined
 			});
-			await build(apiKey).connect(transport);
+			await build(apiKey, overrides?.fetch ?? options.fetch).connect(transport);
 			return transport.handleRequest(request);
 		}
 	};
@@ -273,10 +276,13 @@ function bearerOf(request: Request): string | undefined {
 	return /^Bearer\s+(\S+)\s*$/i.exec(request.headers.get('Authorization') ?? '')?.[1];
 }
 
+/** The prefix every Selva API token carries (`API_TOKEN_PREFIX` in `@selvajs/server/tokens`). */
+const API_KEY_PREFIX = 'selva_';
+
 function keyRequired(): Response {
 	return new Response(
 		JSON.stringify({
-			message: 'Send an API key as `Authorization: Bearer <key>`.',
+			message: 'Send a Selva API key as `Authorization: Bearer selva_…`.',
 			code: 'UNAUTHORIZED'
 		}),
 		{ status: 401, headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' } }
@@ -284,7 +290,7 @@ function keyRequired(): Response {
 }
 
 function resolveTools(
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- same reason as `McpServerOptions.tools`
 	defs: ToolDefinition<any, any>[],
 	spec: OperationIndex
 ): Map<string, ResolvedTool> {

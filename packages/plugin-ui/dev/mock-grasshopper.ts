@@ -654,6 +654,15 @@ function broadcast(wss: WebSocketServer, message: Record<string, unknown>) {
 
 const wss = new WebSocketServer({ port: PORT });
 
+wss.on('error', (err: NodeJS.ErrnoException) => {
+	const reason =
+		err.code === 'EADDRINUSE'
+			? `port ${PORT} is already in use, most likely by Rhino with Selva loaded. Stop it or pass --port.`
+			: err.message;
+	console.error(`[mock-grasshopper] ${reason}`);
+	process.exit(1);
+});
+
 wss.on('connection', (ws) => {
 	let pendingSolve: ReturnType<typeof setTimeout> | undefined;
 
@@ -726,12 +735,13 @@ wss.on('connection', (ws) => {
 	ws.on('close', () => clearTimeout(pendingSolve));
 });
 
-if (process.argv.includes('--with-dev-server')) {
-	const vite = spawn('pnpm', ['dev'], { stdio: 'inherit' });
-	vite.on('exit', (code) => process.exit(code ?? 0));
-}
-
-// eslint-disable-next-line no-console
-console.log(
-	`[mock-grasshopper] ws://localhost:${PORT}  ·  open http://localhost:5173/builder?session=dev`
-);
+wss.on('listening', () => {
+	console.info(
+		`[mock-grasshopper] ws://localhost:${PORT}  ·  open http://localhost:5173/builder?session=dev&wsPort=${PORT}`
+	);
+	if (process.argv.includes('--with-dev-server')) {
+		// Windows only resolves pnpm's .cmd shim through a shell.
+		const vite = spawn('pnpm', ['dev'], { stdio: 'inherit', shell: process.platform === 'win32' });
+		vite.on('exit', (code) => process.exit(code ?? 0));
+	}
+});

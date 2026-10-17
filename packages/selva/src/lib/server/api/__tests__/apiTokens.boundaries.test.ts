@@ -32,6 +32,23 @@ import {
 	GET as getDefinition,
 	PATCH as patchDefinition
 } from '../../../../routes/api/v1/definitions/[guid]/+server.js';
+import * as definitionRoute from '../../../../routes/api/v1/definitions/[guid]/+server.js';
+import * as definitionSchemaRoute from '../../../../routes/api/v1/definitions/[guid]/schema/+server.js';
+import * as definitionPublishRoute from '../../../../routes/api/v1/definitions/[guid]/publish/+server.js';
+import * as definitionSolveRoute from '../../../../routes/api/v1/definitions/[guid]/solve/+server.js';
+import * as shareLinksRoute from '../../../../routes/api/v1/definitions/[guid]/share-links/+server.js';
+import * as versionsRoute from '../../../../routes/api/v1/definitions/[guid]/versions/+server.js';
+import * as versionRoute from '../../../../routes/api/v1/definitions/[guid]/versions/[versionId]/+server.js';
+import * as versionSchemaRoute from '../../../../routes/api/v1/definitions/[guid]/versions/[versionId]/schema/+server.js';
+import * as projectRoute from '../../../../routes/api/v1/projects/[id]/+server.js';
+import * as projectMembersRoute from '../../../../routes/api/v1/projects/[id]/members/+server.js';
+import * as projectMemberRoute from '../../../../routes/api/v1/projects/[id]/members/[userId]/+server.js';
+import * as reclaimRoute from '../../../../routes/api/v1/projects/[id]/reclaim/+server.js';
+import * as orgRoute from '../../../../routes/api/v1/orgs/[orgId]/+server.js';
+import * as orgMembersRoute from '../../../../routes/api/v1/orgs/[orgId]/members/+server.js';
+import * as orgMemberRoute from '../../../../routes/api/v1/orgs/[orgId]/members/[userId]/+server.js';
+import * as invitesRoute from '../../../../routes/api/v1/orgs/[orgId]/invites/+server.js';
+import * as orgComputeRoute from '../../../../routes/api/v1/orgs/[orgId]/compute/+server.js';
 
 let tp: TestProviders;
 
@@ -83,7 +100,7 @@ async function twoOrgs() {
 	});
 	const home = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
 	const away = await seedDefinition(tp, { projectId: elsewhere.id, ownerId: alice.id });
-	return { alice, acme, alicesPrivate, elsewhere, home, away };
+	return { alice, acme, bigClient, alicesPrivate, elsewhere, home, away };
 }
 
 describe('API token org boundary', () => {
@@ -141,7 +158,156 @@ describe('API token org boundary', () => {
 	});
 });
 
+describe('API token org boundary, every route addressed by id', () => {
+	type Handler = (event: never) => unknown;
+	type Ids = Awaited<ReturnType<typeof twoOrgs>>;
+	// The key's owner can reach every one of these from a session; the key, minted
+	// in Acme, must find nothing at Big Client. Write bodies are minimal: the
+	// boundary has to hold before validation would ever matter.
+	const routes: [string, string, Handler, (ids: Ids) => Record<string, string>, unknown?][] = [
+		['GET', 'definitions/[guid]', definitionRoute.GET, (i) => ({ guid: i.away.record.guid })],
+		[
+			'PATCH',
+			'definitions/[guid]',
+			definitionRoute.PATCH,
+			(i) => ({ guid: i.away.record.guid }),
+			{ description: 'x' }
+		],
+		['DELETE', 'definitions/[guid]', definitionRoute.DELETE, (i) => ({ guid: i.away.record.guid })],
+		[
+			'GET',
+			'definitions/[guid]/schema',
+			definitionSchemaRoute.GET,
+			(i) => ({ guid: i.away.record.guid })
+		],
+		[
+			'POST',
+			'definitions/[guid]/publish',
+			definitionPublishRoute.POST,
+			(i) => ({ guid: i.away.record.guid }),
+			{ versionId: '00000000-0000-4000-8000-000000000000' }
+		],
+		[
+			'POST',
+			'definitions/[guid]/solve',
+			definitionSolveRoute.POST,
+			(i) => ({ guid: i.away.record.guid }),
+			{ values: {} }
+		],
+		[
+			'GET',
+			'definitions/[guid]/share-links',
+			shareLinksRoute.GET,
+			(i) => ({ guid: i.away.record.guid })
+		],
+		[
+			'POST',
+			'definitions/[guid]/share-links',
+			shareLinksRoute.POST,
+			(i) => ({ guid: i.away.record.guid }),
+			{}
+		],
+		[
+			'GET',
+			'definitions/[guid]/versions',
+			versionsRoute.GET,
+			(i) => ({ guid: i.away.record.guid })
+		],
+		[
+			'GET',
+			'definitions/[guid]/versions/[versionId]',
+			versionRoute.GET,
+			(i) => ({ guid: i.away.record.guid, versionId: i.away.version.id })
+		],
+		[
+			'DELETE',
+			'definitions/[guid]/versions/[versionId]',
+			versionRoute.DELETE,
+			(i) => ({ guid: i.away.record.guid, versionId: i.away.version.id })
+		],
+		[
+			'GET',
+			'definitions/[guid]/versions/[versionId]/schema',
+			versionSchemaRoute.GET,
+			(i) => ({ guid: i.away.record.guid, versionId: i.away.version.id })
+		],
+		['GET', 'projects/[id]', projectRoute.GET, (i) => ({ id: i.elsewhere.id })],
+		['PATCH', 'projects/[id]', projectRoute.PATCH, (i) => ({ id: i.elsewhere.id }), { name: 'x' }],
+		['DELETE', 'projects/[id]', projectRoute.DELETE, (i) => ({ id: i.elsewhere.id })],
+		['GET', 'projects/[id]/members', projectMembersRoute.GET, (i) => ({ id: i.elsewhere.id })],
+		[
+			'POST',
+			'projects/[id]/members',
+			projectMembersRoute.POST,
+			(i) => ({ id: i.elsewhere.id }),
+			{ userId: '00000000-0000-4000-8000-000000000000', role: 'viewer' }
+		],
+		[
+			'DELETE',
+			'projects/[id]/members/[userId]',
+			projectMemberRoute.DELETE,
+			(i) => ({ id: i.elsewhere.id, userId: i.alice.id })
+		],
+		['POST', 'projects/[id]/reclaim', reclaimRoute.POST, (i) => ({ id: i.elsewhere.id }), {}],
+		['GET', 'orgs/[orgId]', orgRoute.GET, (i) => ({ orgId: i.bigClient.id })],
+		['GET', 'orgs/[orgId]/members', orgMembersRoute.GET, (i) => ({ orgId: i.bigClient.id })],
+		[
+			'DELETE',
+			'orgs/[orgId]/members/[userId]',
+			orgMemberRoute.DELETE,
+			(i) => ({ orgId: i.bigClient.id, userId: i.alice.id })
+		],
+		['GET', 'orgs/[orgId]/invites', invitesRoute.GET, (i) => ({ orgId: i.bigClient.id })],
+		['GET', 'orgs/[orgId]/compute', orgComputeRoute.GET, (i) => ({ orgId: i.bigClient.id })]
+	];
+
+	it.each(routes)(
+		'%s %s finds nothing in the other org',
+		async (method, _path, handler, params, body) => {
+			const ids = await twoOrgs();
+			const keyed = await keyLocals(await mint(ids.alice.id, ids.acme.id));
+			const res = await call(handler as never, {
+				locals: keyed,
+				method,
+				params: params(ids),
+				body
+			});
+			expect([403, 404]).toContain(res.status);
+			const text = JSON.stringify(res.json ?? '');
+			expect(text).not.toContain(ids.elsewhere.id);
+			expect(text).not.toContain(ids.bigClient.id);
+		}
+	);
+});
+
 describe('moving a definition', () => {
+	it("won't carry a definition out of a project-scoped key's project", async () => {
+		tp = await freshProviders();
+		const { alice, acme, alicesPrivate } = await seedAcme(tp);
+		const alsoAlices = await seedProject(tp, {
+			orgId: acme.id,
+			name: 'Alice too',
+			slug: 'alice-too',
+			ownerId: alice.id,
+			visibility: 'private'
+		});
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const keyed = await keyLocals(
+			await mint(alice.id, acme.id, [`write:project:${alicesPrivate.id}`])
+		);
+
+		const res = await call(patchDefinition, {
+			locals: keyed,
+			method: 'PATCH',
+			params: { guid: def.record.guid },
+			body: { projectId: alsoAlices.id }
+		});
+		expect(res.status).toBe(403);
+		expect((await tp.config.data.definitions.get(SYSTEM_CONTEXT, def.record.guid))?.projectId).toBe(
+			alicesPrivate.id
+		);
+	});
+
 	it('needs edit rights on the destination, from a session too', async () => {
 		tp = await freshProviders();
 		const { alice, bob, acme, alicesPrivate } = await seedAcme(tp);

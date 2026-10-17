@@ -78,7 +78,7 @@ async function rpc(
 		.filter((l) => l.startsWith('data:'))
 		.map((l) => JSON.parse(l.slice(5)) as { result?: Record<string, unknown>; error?: unknown })
 		.find((m) => 'result' in m || 'error' in m);
-	return data!.result as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+	return data!.result as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any -- JSON-RPC results are untyped; each test reads its own shape
 }
 
 describe('createMcpServer', () => {
@@ -93,8 +93,8 @@ describe('createMcpServer', () => {
 			destructiveHint: false,
 			openWorldHint: false
 		});
-		expect(byName.create_order).toMatchObject({ readOnlyHint: false, idempotentHint: true });
-		expect(byName.release_job).toMatchObject({ openWorldHint: true });
+		expect(byName.create_order).toMatchObject({ readOnlyHint: false, idempotentHint: false });
+		expect(byName.release_job).toMatchObject({ openWorldHint: true, idempotentHint: false });
 		expect(byName.delete_order).toMatchObject({ destructiveHint: true });
 	});
 
@@ -178,6 +178,10 @@ describe('createMcpServer', () => {
 		const anonymous = await server.handle(mcpRequest('tools/call', call));
 		expect(anonymous.status).toBe(401);
 		expect(anonymous.headers.get('WWW-Authenticate')).toBe('Bearer');
+		// A bearer that isn't a Selva key must not fall through to "no key".
+		const junk = await server.handle(mcpRequest('tools/call', call, 'not-a-key'));
+		expect(junk.status).toBe(401);
+		expect(f.calls).toHaveLength(0);
 
 		const a = await rpc(server, 'tools/call', call, 'selva_a');
 		await rpc(server, 'tools/call', call, 'selva_b');

@@ -1,7 +1,7 @@
-import { redirect } from '@sveltejs/kit';
+import { redirect, type RequestEvent } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import { isApiError } from '@selvajs/server/api';
-import type { AuthUser, PlatformPermission } from '@selvajs/platform';
+import type { AuthUser } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import {
 	applySecurityHeaders,
@@ -73,15 +73,32 @@ async function ensureUserOnce(userId: string): Promise<void> {
 	ensuredUserIds.add(userId);
 }
 
-/** A session context: the user's first membership, or an instance admin's first-org fallback. */
-function sessionContext(
+/**
+ * Populate `locals` for a signed-in session: profile, platform permissions and
+ * acting org (the user's first membership, or an instance admin's fallback).
+ *
+ * The four reads are independent and keyed only by `user.id`, so they run in
+ * one `Promise.all` as SYSTEM_CONTEXT (`ctx` isn't built yet). `ensureUser` is
+ * the local equivalent of Supabase's `handle_new_auth_user` trigger, memoized
+ * per process. Racing it against the reads is safe: on a brand-new user's first
+ * request they may land before the row is seeded, but each fails soft to empty,
+ * the correct state for a user with nothing yet.
+ */
+async function attachSession(
+	event: RequestEvent,
 	user: AuthUser,
 	// Forwarded so adapters scoping by the upstream token (Supabase RLS) get it.
-	sessionToken: string | undefined,
-	platformPermissions: PlatformPermission[],
-	membership: Awaited<ReturnType<typeof providers.data.orgs.findUserMembership>>
-) {
-	return buildRequestContext(
+	sessionToken: string | undefined
+): Promise<void> {
+	const [, profile, platformPermissions, membership] = await Promise.all([
+		ensureUserOnce(user.id),
+		providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
+		providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
+		providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
+	]);
+	event.locals.user = user;
+	event.locals.profile = profile ?? emptyProfile(user.id);
+	event.locals.ctx = await buildRequestContext(
 		{ user, sessionToken, platformPermissions, membership: membership?.member ?? null },
 		{ orgs: providers.data.orgs }
 	);
@@ -303,32 +320,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
 		}
 
-		// Four independent per-request reads, keyed only by `user.id` with no
-		// dependency between them, so they run in one `Promise.all` — hook
-		// latency becomes ~the slowest read instead of the sum of four. All run
-		// as SYSTEM_CONTEXT since `ctx` isn't built yet.
-		//
-		//  1. ensureUser — local equivalent of Supabase's `handle_new_auth_user`
-		//     trigger, guarantees a `user-data.json` row exists. Memoized
-		//     per-process (`ensureUserOnce`); Supabase makes it a no-op.
-		//  2. getProfile — display name / starred / recent runs.
-		//  3. getFor — platform permissions.
-		//  4. findUserMembership — acting org + org permissions.
-		//
-		// Racing ensureUser (a write-guard) against 2–4 is safe: on a brand-new
-		// user's first request the reads may land before the row is seeded, but
-		// each fails soft to empty (`null` profile → emptyProfile, `[]`
-		// permissions, no membership) — the correct state for a user with nothing yet.
-		const [, profile, platformPermissions, membership] = await Promise.all([
-			ensureUserOnce(user.id),
-			providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
-			providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
-			providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
-		]);
-
-		event.locals.user = user;
-		event.locals.profile = profile ?? emptyProfile(user.id);
-		event.locals.ctx = await sessionContext(user, token, platformPermissions, membership);
+		await attachSession(event, user, token);
 	} else {
 		// Public page route (e.g. `/`): best-effort session attach. If a valid
 		// session cookie is present, populate locals so the UI reflects authed
@@ -366,18 +358,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 				}
 			}
 		}
-		if (user) {
-			// Same four-read parallelization as the gated path above (see there).
-			const [, profile, platformPermissions, membership] = await Promise.all([
-				ensureUserOnce(user.id),
-				providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
-				providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
-				providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
-			]);
-			event.locals.user = user;
-			event.locals.profile = profile ?? emptyProfile(user.id);
-			event.locals.ctx = await sessionContext(user, token, platformPermissions, membership);
-		}
+		if (user) await attachSession(event, user, token);
 	}
 
 	return applyResponseHeaders(await resolve(event), pathname, requestId);

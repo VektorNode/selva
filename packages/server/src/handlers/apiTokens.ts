@@ -18,6 +18,8 @@ import {
 	type ApiTokenSummary,
 	type IApiTokenStore,
 	type ILogger,
+	type ListOptions,
+	type Page,
 	type RequestContext
 } from '@selvajs/platform';
 import { renderApiTokenCreatedEmail } from '@selvajs/notifications';
@@ -37,13 +39,8 @@ import {
 	shapedCollection
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
-import {
-	requireActingOrg,
-	requireCanViewProject,
-	requireManageOrgMembers,
-	requirePermission
-} from '../access/index.js';
-import type { ApiTokenCodec } from '../tokens/index.js';
+import { requireActingOrg, requireCanViewProject } from '../access/index.js';
+import { canHoldApiTokens, type ApiTokenCodec } from '../tokens/index.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -59,12 +56,7 @@ function requireSessionInOrg(req: ApiRequest): { ctx: RequestContext; orgId: str
 }
 
 function requireMayHoldApiTokens(req: ApiRequest, ctx: RequestContext): void {
-	const policy = req.deps.tokens.mayHoldApiTokens;
-	if (!policy) {
-		requirePermission(req, 'manage_api_tokens');
-		return;
-	}
-	if (!policy(ctx)) {
+	if (!canHoldApiTokens(ctx, req.deps.tokens.mayHoldApiTokens)) {
 		apiError(403, ApiErrorCode.FORBIDDEN, 'You can’t create API tokens in this org.');
 	}
 }
@@ -85,8 +77,35 @@ function codecOf(req: ApiRequest): ApiTokenCodec {
 	return req.deps.tokens.apiTokens ?? unavailable();
 }
 
-function toResponse(token: ApiTokenSummary) {
+export type ApiTokenRow = ApiTokenSummary & { refusedToday: number };
+
+function toResponse(token: ApiTokenSummary): ApiTokenRow {
 	return { ...token, refusedToday: scopeRefusalsToday(token.id) };
+}
+
+/** Who sees every owner's keys in an org and may revoke any of them. */
+export const canManageApiTokenRoster = (ctx: RequestContext): boolean =>
+	hasPermission(ctx, 'manage_org_members');
+
+/**
+ * Keys in `orgId`, newest first, including revoked and expired ones: the
+ * caller's own, or with `roster` everyone's. The list endpoint and a host's
+ * token page both read through here, so they can't disagree on who sees what.
+ */
+export async function listOrgApiTokens(
+	store: IApiTokenStore,
+	ctx: RequestContext,
+	orgId: string,
+	{ roster = false, ...opts }: ListOptions & { roster?: boolean } = {}
+): Promise<Page<ApiTokenRow>> {
+	if (roster && !canManageApiTokenRoster(ctx)) {
+		apiError(403, ApiErrorCode.FORBIDDEN, 'Only org admins can see everyone’s API tokens.');
+	}
+	const page = await store.listByOrg(ctx, orgId, {
+		...opts,
+		userId: roster ? undefined : ctx.userId
+	});
+	return { ...page, items: page.items.map(toResponse) };
 }
 
 /**
@@ -160,20 +179,14 @@ async function mailTokenCreated(req: ApiRequest, token: ApiToken): Promise<void>
 	}
 }
 
-/**
- * The caller's own tokens in this org, newest first, including revoked and
- * expired ones. `?all=true` returns everyone's and needs `manage_org_members`.
- */
+/** The caller's own keys in this org. `?all=true` returns everyone's and needs `manage_org_members`. */
 export const listApiTokens: ApiHandler = async (req) => {
 	const { ctx, orgId } = requireSessionInOrg(req);
-	const all = req.url.searchParams.get('all') === 'true';
-	if (all) requireManageOrgMembers(req);
-
-	const page = await storeOf(req).listByOrg(ctx, orgId, {
+	const page = await listOrgApiTokens(storeOf(req), ctx, orgId, {
 		...parseListOptions(req.url),
-		userId: all ? undefined : ctx.userId
+		roster: req.url.searchParams.get('all') === 'true'
 	});
-	return shapedCollection(ApiTokenResponseSchema, { ...page, items: page.items.map(toResponse) });
+	return shapedCollection(ApiTokenResponseSchema, page);
 };
 
 /** Mint a token acting as the caller. The raw key is in this response and nowhere else. */
@@ -227,7 +240,7 @@ export const revokeApiToken: ApiHandler = async (req) => {
 
 	const token = await store.get(ctx, tokenId);
 	const own = token?.userId === ctx.userId;
-	if (!token || token.orgId !== orgId || (!own && !hasPermission(ctx, 'manage_org_members'))) {
+	if (!token || token.orgId !== orgId || (!own && !canManageApiTokenRoster(ctx))) {
 		apiError(404, ApiErrorCode.NOT_FOUND, 'API token not found');
 	}
 	await store.revoke(ctx, tokenId, own ? 'owner' : 'admin');

@@ -31,7 +31,7 @@ resolve, on purpose, so it stays visible which slice a consumer depends on.
 | `@selvajs/server/compute`       | Compute limits, rate limiting, idempotency, SSRF guard, remote-definition fetch                         |
 | `@selvajs/server/definitions`   | Definition service, compute-schema extraction, render loader                                            |
 | `@selvajs/server/providers`     | Env-driven provider selection over a caller-supplied registry                                           |
-| `@selvajs/server/tokens`        | HMAC codec for capability-URL tokens (share links, invites)                                             |
+| `@selvajs/server/tokens`        | HMAC token codecs: capability URLs (share links, invites), `selva_` API tokens; API-token holder policy |
 | `@selvajs/server/errors`        | Sentry-backed `IErrorReporter`                                                                          |
 | `@selvajs/server/logging`       | pino-backed `ILogger` + request-id correlation                                                          |
 | `@selvajs/server/http`          | Security headers, body-size and redirect guards, route classification                                   |

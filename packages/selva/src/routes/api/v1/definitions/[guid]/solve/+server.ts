@@ -86,7 +86,7 @@ export const POST: RequestHandler = async ({ request, params, locals, url }) => 
 				store: solveIdempotencyStore,
 				callerId: idempotencyCallerId(ctx),
 				clientKey,
-				fingerprint: await requestFingerprint('POST', url.pathname, JSON.stringify(body))
+				fingerprint: await requestFingerprint('POST', url, JSON.stringify(body))
 			},
 			solve
 		);

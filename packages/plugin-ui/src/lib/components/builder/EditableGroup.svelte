@@ -37,6 +37,8 @@
 
 	interface EditableGroupProps {
 		group: GroupConfig;
+		/** Runs `apply` as an undoable draft edit; see `editDraft`. */
+		onEdit: (apply: () => void, coalesceKey?: string) => void;
 		onFinalize: (items: LayoutItem[]) => void;
 		onParameterDrop?: (event: CustomEvent) => void;
 		onRemove: () => void;
@@ -49,6 +51,7 @@
 
 	let {
 		group = $bindable(),
+		onEdit,
 		onFinalize,
 		onParameterDrop,
 		onRemove,
@@ -199,7 +202,7 @@
 	}
 
 	function toggleCollapsed() {
-		group.collapsed = !group.collapsed;
+		onEdit(() => (group.collapsed = !group.collapsed));
 	}
 </script>
 
@@ -234,7 +237,10 @@
 					</button>
 					<input
 						type="text"
-						bind:value={group.label}
+						bind:value={
+							() => group.label,
+							(label) => onEdit(() => (group.label = label), `group-label:${group.id}`)
+						}
 						class="text-foreground hover:border-border focus:border-primary flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
 						placeholder="Group name"
 					/>
@@ -242,7 +248,11 @@
 
 				<input
 					type="text"
-					bind:value={group.description}
+					bind:value={
+						() => group.description,
+						(description) =>
+							onEdit(() => (group.description = description), `group-description:${group.id}`)
+					}
 					class="text-muted-foreground hover:border-border focus:border-primary ml-7 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
 					placeholder="Description"
 				/>
@@ -254,7 +264,10 @@
 					Col:
 					<input
 						type="number"
-						bind:value={group.columns}
+						bind:value={
+							() => group.columns,
+							(columns) => onEdit(() => (group.columns = columns), `group-columns:${group.id}`)
+						}
 						min="1"
 						max="4"
 						class="border-border bg-background text-foreground w-10 rounded-sm border px-1 py-0.5 text-xs"

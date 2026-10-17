@@ -1,12 +1,12 @@
 /**
  * `Idempotency-Key` for mounted routes that opt in with `idempotent: true`.
  *
- * Built on the solve route's store and wire contract (`../compute/idempotency*`):
- * the store absorbs in-flight and near-term retries in this process; it is not
- * a durable record. A create that must never duplicate also needs the key on
+ * Built on the generic store (`../compute/idempotency.ts`) and the wire
+ * contract (`./idempotency-http.ts`). The store absorbs in-flight and near-term
+ * retries in this process; it is not a durable record. A create that must never duplicate also needs the key on
  * the created row under a unique constraint, written in the same transaction.
  *
- * Each entry carries a fingerprint of method, path and body, so a client that
+ * Each entry carries a fingerprint of method, path, query and body, so a client that
  * reuses a key for a different request gets 422 instead of someone else's
  * replay. Only responses below 400 are kept: a failed attempt frees the key so
  * a corrected retry can run.
@@ -19,7 +19,7 @@ import {
 	idempotencyKey,
 	toStoredResponse,
 	type StoredResponse
-} from '../compute/idempotency-http.js';
+} from './idempotency-http.js';
 import { apiError, ApiErrorCode } from './errors.js';
 
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
@@ -74,13 +74,13 @@ async function sha256Hex(bytes: BufferSource): Promise<string> {
 	return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** SHA-256 over method, path and body, hex. */
+/** SHA-256 over method, path with query, and body, hex. */
 export async function requestFingerprint(
 	method: string,
-	path: string,
+	url: URL,
 	body: ArrayBuffer | string
 ): Promise<string> {
-	const head = new TextEncoder().encode(`${method.toUpperCase()} ${path}\n`);
+	const head = new TextEncoder().encode(`${method.toUpperCase()} ${url.pathname}${url.search}\n`);
 	const tail = typeof body === 'string' ? new TextEncoder().encode(body) : new Uint8Array(body);
 	const bytes = new Uint8Array(head.length + tail.length);
 	bytes.set(head);

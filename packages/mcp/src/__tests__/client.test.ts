@@ -42,6 +42,7 @@ describe('api.call', () => {
 		await api.call('getOrdersById', { params: { id: 'a b' } });
 		expect(calls[0].url).toBe('https://host/api/v1/orders/a%20b');
 		expect(calls[0].headers.Authorization).toBe(`Bearer ${KEY}`);
+		expect(calls[0].credentials).toBe('omit');
 	});
 
 	it('sends one Idempotency-Key across a retried create', async () => {

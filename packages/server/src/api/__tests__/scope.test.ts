@@ -74,19 +74,31 @@ describe('runHandler scope check', () => {
 		expect(other.body.details).toEqual({ requiredScope: 'read:project:p2' });
 	});
 
+	const definitionMeta = {
+		get: async (_ctx: unknown, guid: string) =>
+			({ d1: { projectId: 'p1' }, d2: { projectId: 'p2' }, d3: { projectId: 'p3' } })[guid] ?? null
+	} as unknown as SelvaDeps['definitionMeta'];
+	const projects = {
+		getProject: async (_ctx: unknown, id: string) =>
+			({ p1: { id, orgId: ORG }, p2: { id, orgId: ORG }, p3: { id, orgId: 'org-b' } })[id] ?? null
+	} as unknown as SelvaDeps['projects'];
+	const definitionOpts = { scopeTarget: definitionScopeTarget('guid') };
+
 	it('lets a project key reach a definition inside its project', async () => {
-		const definitionMeta = {
-			get: async (_ctx: unknown, guid: string) =>
-				guid === 'd1' ? { projectId: 'p1' } : guid === 'd2' ? { projectId: 'p2' } : null
-		} as unknown as SelvaDeps['definitionMeta'];
-		const opts = { scopeTarget: definitionScopeTarget('guid') };
 		const ctx = keyed('read:project:p1');
-		expect((await run(request(ctx, 'GET', { guid: 'd1' }, { definitionMeta }), opts)).status).toBe(
-			200
-		);
-		expect((await run(request(ctx, 'GET', { guid: 'd2' }, { definitionMeta }), opts)).status).toBe(
-			403
-		);
+		const deps = { definitionMeta, projects };
+		expect((await run(request(ctx, 'GET', { guid: 'd1' }, deps), definitionOpts)).status).toBe(200);
+		expect((await run(request(ctx, 'GET', { guid: 'd2' }, deps), definitionOpts)).status).toBe(403);
+	});
+
+	it('refuses a definition in another org exactly like a missing one', async () => {
+		const ctx = keyed('read:project:p1');
+		const deps = { definitionMeta, projects };
+		const foreign = await run(request(ctx, 'GET', { guid: 'd3' }, deps), definitionOpts);
+		const missing = await run(request(ctx, 'GET', { guid: 'nope' }, deps), definitionOpts);
+		expect(foreign.status).toBe(403);
+		expect(foreign.body.details).toEqual({ requiredScope: 'read:definition:d3' });
+		expect(missing.body.details).toEqual({ requiredScope: 'read:definition:nope' });
 	});
 
 	it('never runs the handler when the scope check fails', async () => {

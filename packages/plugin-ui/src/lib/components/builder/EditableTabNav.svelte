@@ -11,7 +11,12 @@
 	} from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
-	import { DND_FLIP_MS, DND_TYPE_TAB, liftDraggedElement } from '$lib/dnd/dndzone-helpers';
+	import {
+		DND_FLIP_MS,
+		DND_TYPE_TAB,
+		draggedItemMove,
+		liftDraggedElement
+	} from '$lib/dnd/dndzone-helpers';
 	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
 
 	interface EditableTabNavProps {
@@ -73,24 +78,15 @@
 		}
 
 		const committed = items.filter((it) => !it.isDndShadowItem) as TabConfig[];
-		const oldIds = tabs.map((t) => t.id);
-		const newIds = committed.map((t) => t.id);
-
-		let from = -1;
-		let to = -1;
-		for (let i = 0; i < oldIds.length; i++) {
-			if (oldIds[i] !== newIds[i]) {
-				from = oldIds.indexOf(newIds[i]);
-				to = i;
-				break;
-			}
-		}
+		const move = draggedItemMove(
+			tabs.map((t) => t.id),
+			committed.map((t) => t.id),
+			e.detail.info.id
+		);
 
 		localTabs = committed as ZoneTab[];
 
-		if (from !== -1 && to !== -1 && from !== to && onReorderTabs) {
-			onReorderTabs(from, to);
-		}
+		if (move) onReorderTabs?.(move.from, move.to);
 	}
 
 	// svelte-dnd-action's dragged clone sits over the cursor and absorbs pointer

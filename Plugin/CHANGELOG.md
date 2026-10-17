@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Builder: the sidebar splits into Parameters, App and Viewer panels that remember their folds and filters, each tab gets a settings bar (icon, name, panel side, visibility), and a Save button highlights while there are unsaved edits.
+
+### Fixed
+
+- Builder: dragging a tab or group two or more places forward drops it where you let go, instead of only one place forward.
+- Builder: tab and group edits mark the draft unsaved and can be undone, so the unsaved-changes prompt fires and a Grasshopper broadcast no longer drops them. Edits made while a save is in flight stay unsaved.
+
 ## [0.23.0-beta.3] - 2026-10-13
 
 ### Changed

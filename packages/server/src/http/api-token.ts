@@ -13,7 +13,7 @@ import {
 	looksLikeApiToken,
 	type ApiTokenCodec
 } from '../tokens/api-token-codec.js';
-import type { ApiTokenHolderPolicy } from '../tokens/api-token-holder.js';
+import { canHoldApiTokens, type ApiTokenHolderPolicy } from '../tokens/api-token-holder.js';
 import { buildRequestContext } from './request-context.js';
 
 export type ApiTokenResolution =
@@ -27,9 +27,8 @@ export interface ResolveApiTokenDeps {
 	/** Absent when the host hasn't configured API tokens: a sent key gets 503. */
 	codec?: ApiTokenCodec;
 	auth: Pick<IAuthProvider, 'getUser' | 'delegatedSession'>;
-	/** `permissions` is read only for `mayHoldApiTokens`; without it the policy sees no platform permissions. */
-	data: Pick<IDataProvider, 'apiTokens' | 'orgs'> & Partial<Pick<IDataProvider, 'permissions'>>;
-	/** The same policy passed as `SelvaDeps.tokens.mayHoldApiTokens`. Absent: keys aren't re-checked against one. */
+	data: Pick<IDataProvider, 'apiTokens' | 'orgs' | 'permissions'>;
+	/** The same policy passed as `SelvaDeps.tokens.mayHoldApiTokens`. Absent: the owner must still hold `manage_api_tokens`. */
 	mayHoldApiTokens?: ApiTokenHolderPolicy;
 	/** Receives background failures (the `lastUsedAt` write). Logs the token id only. */
 	log?: ILogger;
@@ -74,8 +73,8 @@ const HOLDER_REFUSED: ApiTokenResolution = {
  * broken key and act as someone else.
  *
  * The owner is re-checked on every request (disabled, still a member of the
- * token's org, and the host's holder policy if any), then their live context
- * is narrowed to the token's scopes.
+ * token's org, still allowed to hold keys), then their live context is
+ * narrowed to the token's scopes.
  */
 export async function resolveApiToken(
 	request: Request,
@@ -118,14 +117,11 @@ export async function resolveApiToken(
 	const token = await store.getByTokenHash(SYSTEM_CONTEXT, deps.codec.hashToken(raw));
 	if (!token) return UNAUTHORIZED;
 
-	const policy = deps.mayHoldApiTokens;
 	const [user, member, platformPermissions] = await Promise.all([
 		deps.auth.getUser(token.userId),
 		deps.data.orgs.getOrgMember(SYSTEM_CONTEXT, token.orgId, token.userId),
-		// Read only for the policy: narrowing drops platform permissions anyway.
-		policy && deps.data.permissions
-			? deps.data.permissions.getFor(SYSTEM_CONTEXT, token.userId)
-			: []
+		// Read only for the holder check: narrowing drops platform permissions anyway.
+		deps.data.permissions.getFor(SYSTEM_CONTEXT, token.userId)
 	]);
 	if (!user || user.disabled || !member) return UNAUTHORIZED;
 
@@ -133,7 +129,7 @@ export async function resolveApiToken(
 		{ user, platformPermissions, membership: member, pinOrg: true },
 		{ orgs: deps.data.orgs }
 	);
-	if (policy && !policy(live)) return HOLDER_REFUSED;
+	if (!canHoldApiTokens(live, deps.mayHoldApiTokens)) return HOLDER_REFUSED;
 	let ctx = narrowApiTokenContext(live, token);
 
 	// Signed only after the user check above: a minted session can't be

@@ -1,6 +1,6 @@
 # Service accounts
 
-**Status: designed, not built.** Follows the door [token-plan.md](token-plan.md) left open.
+Follows the door [token-plan.md](token-plan.md) left open.
 
 An API token acts as the user who minted it. When that member leaves, the lifecycle rules revoke
 their keys and the ERP integration they set up stops. A **service account** (CONTEXT.md: "a user
@@ -28,7 +28,8 @@ person who set it up") gives the org a key owner that never leaves.
   ```
 
 - **One org, fixed at creation,** same as a token. It is an ordinary `org_members` row in that org,
-  so membership checks, project membership and `read_all_org_projects` work unchanged.
+  so membership checks and project membership work unchanged, as would an org permission such as
+  the proposed `read_all_org_projects` ([#320](https://github.com/VektorNode/selva/issues/320)).
 - **Tokens for it** are `api_tokens` rows with `user_id = <service account>` and
   `created_by = <admin who minted>`. No token schema change.
 

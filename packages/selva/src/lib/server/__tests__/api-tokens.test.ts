@@ -33,6 +33,10 @@ afterEach(async () => {
 });
 
 async function mint(t: TestProviders, userId: string, orgId: string, scopes: string[]) {
+	// The resolver refuses a key whose owner may not hold one. Added to what the
+	// owner already holds, so an instance admin stays one.
+	const held = await t.config.data.permissions.getFor(SYSTEM_CONTEXT, userId);
+	await grantPlatformPermissions(t, userId, [...new Set([...held, 'manage_api_tokens' as const])]);
 	const raw = codec.mintRawToken();
 	const id = randomUUID();
 	await t.config.data.apiTokens!.create(SYSTEM_CONTEXT, {

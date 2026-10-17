@@ -60,6 +60,20 @@ describe('SupabaseDelegatedSession', () => {
 		).toBe(true);
 	});
 
+	it('lives as long as it is told to', async () => {
+		const now = 1_800_000_000_000;
+		const session = new SupabaseDelegatedSession({
+			supabaseUrl: URL_,
+			anonKey: 'anon',
+			signingKey: JSON.stringify(es256Jwk()),
+			ttlSeconds: 160,
+			fetch: accepting(),
+			now: () => now
+		});
+		const { payload } = decode(await session.mint(USER, { orgId: ORG }));
+		expect(payload.exp - payload.iat).toBe(160);
+	});
+
 	it('takes the signing key out of a signing_keys.json array', async () => {
 		const session = new SupabaseDelegatedSession({
 			supabaseUrl: URL_,

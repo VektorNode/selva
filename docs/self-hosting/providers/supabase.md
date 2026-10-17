@@ -200,7 +200,7 @@ Full setup, env vars, migrations, and RLS notes: [supabase-provider README](http
 
 ## API tokens
 
-Row security only sees a signed-in user, and an API-token request has no session. For each one, Selva signs a 60-second session for the token's owner, after checking the owner is still enabled and still a member of the token's org. That needs a signing key the project trusts. Without one, API tokens answer 503 and can't be created; browser sign-in keeps working. **Admin → System** shows whether the key works.
+Row security only sees a signed-in user, and an API-token request has no session. For each one, Selva signs a session for the token's owner that lasts the solve deadline (`COMPUTE_SOLVE_DEADLINE_MS`) plus a minute, after checking the owner is still enabled and still a member of the token's org. That needs a signing key the project trusts. Without one, API tokens answer 503 and can't be created; browser sign-in keeps working. **Admin → System** shows whether the key works.
 
 **The key is a root credential.** It can sign a `service_role` token that bypasses every policy, so store it like `SUPABASE_SERVICE_ROLE_KEY`: server-only, never in a client bundle, rotated if it leaks.
 

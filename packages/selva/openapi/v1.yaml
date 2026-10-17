@@ -2257,7 +2257,6 @@ paths:
                       - manage_org_compute
                       - manage_definitions
                       - manage_projects
-                      - read_all_org_projects
       responses:
         "204":
           description: Success. No content.
@@ -2473,7 +2472,6 @@ paths:
                           - manage_org_compute
                           - manage_definitions
                           - manage_projects
-                          - read_all_org_projects
               required:
                 - email
       responses:

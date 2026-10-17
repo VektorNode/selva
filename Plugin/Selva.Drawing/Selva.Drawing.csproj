@@ -29,12 +29,12 @@
                         1. Release: PdfSharpCore is PrivateAssets="all", which severs its transitive deps
                            too — nothing copied SixLabors next to the .gha, so PDF raster embedding threw
                            FileNotFoundException. The merge target below needs $(Pkg…) to stage them.
-                        2. Both configs: PdfSharpCore 1.3.67 asks for ImageSharp 1.0.4, which carries 7
-                           known CVEs including use-after-free and out-of-bounds write in the PNG and GIF
-                           decoders — exactly what PdfRenderer feeds user-supplied images to. NuGet audit
-                           only flags direct references, so this stayed invisible while transitive. 2.1.11
-                           is the patched 2.x; PdfSharpCore's dependency is a minimum, not a pin, and its
-                           image path is exercised by PdfImageTests.
+                        2. Both configs: PdfSharpCore asks for ImageSharp 1.x, which carries known CVEs
+                           including use-after-free and out-of-bounds write in the PNG and GIF decoders —
+                           exactly what PdfRenderer feeds user-supplied images to. NuGet audit only flags
+                           direct references, so a transitive one hides them. The direct reference takes
+                           the patched 2.x pinned in Directory.Packages.props; PdfSharpCore's dependency
+                           is a minimum, not a pin, and its image path is exercised by PdfImageTests.
 
                         GeneratePathProperty is Release-only because only the merge target reads $(Pkg…).
                 -->
@@ -43,7 +43,7 @@
                 <PackageReference Include="SixLabors.ImageSharp" Condition="'$(Configuration)' != 'Release'" />
                 <PackageReference Include="SixLabors.Fonts" Condition="'$(Configuration)' != 'Release'" />
                 <!--
-                        ImageSharp 2.1.11 needs Unsafe >= 5.0 (Unsafe.SkipInit) and CodePages,
+                        ImageSharp 2.x needs Unsafe >= 5.0 (Unsafe.SkipInit) and CodePages,
                         but PrivateAssets="all" severs those transitive deps, and Selva.GH's own
                         net48 graph resolves an older Unsafe (4.x, via System.Memory) that lacks
                         SkipInit — MissingMethodException on JPEG decode in netfx Rhino. Merging
@@ -58,8 +58,8 @@
 	</ItemGroup>
 
 	<!--
-		ImageSharp 2.1.13 advisories of 2026-10-07. Fixed only in 4.1.2 (net8.0-only; 3.x is net6.0-only),
-		which neither this netstandard2.0 target nor PdfSharpCore 1.3.67 (ImageSharp 1.x/2.x API) can take.
+		ImageSharp advisories with no fix on the 2.x line: the patched releases target only modern
+		.NET, which neither this netstandard2.0 target nor PdfSharpCore (ImageSharp 1.x/2.x API) can take.
 		Unreachable: histogram equalization and TIFF encoding are never called, PdfRenderer only lets
 		PNG/JPEG/WEBP bytes reach the decoder. Remaining: ICC CLUT allocation (DoS) via a crafted image.
 		Drop these once PdfSharpCore is replaced.

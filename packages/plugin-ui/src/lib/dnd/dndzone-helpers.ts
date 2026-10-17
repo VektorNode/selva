@@ -62,6 +62,22 @@ export function isTabConfig(x: unknown): x is TabConfig {
 }
 
 // ============================================================================
+// Reorder on finalize
+// ============================================================================
+
+/** Where the dragged item moved, as splice indices; null when it didn't move. */
+export function draggedItemMove(
+	oldIds: readonly string[],
+	newIds: readonly string[],
+	draggedId: string
+): { from: number; to: number } | null {
+	const from = oldIds.indexOf(draggedId);
+	const to = newIds.indexOf(draggedId);
+	if (from === -1 || to === -1 || from === to) return null;
+	return { from, to };
+}
+
+// ============================================================================
 // Shared drag feel
 // ============================================================================
 

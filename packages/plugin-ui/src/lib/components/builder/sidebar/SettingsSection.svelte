@@ -14,6 +14,7 @@
 
 	let { id, title, description, children }: Props = $props();
 
+	// The storage key is read once; `id` is fixed for the component's lifetime.
 	// svelte-ignore state_referenced_locally
 	const open = usePersisted(`builder.section.open:${id}`, true);
 </script>

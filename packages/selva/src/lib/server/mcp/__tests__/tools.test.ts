@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import rhino3dm from 'rhino3dm';
 import { createMcpServer } from '@selvajs/mcp';
 import { buildOpenApiDocument } from '../../api/v1/openapi.js';
 import { selvaTools } from '../tools.js';
@@ -94,8 +95,22 @@ async function call(server: ReturnType<typeof createMcpServer>, name: string, ar
 	);
 	const line = (await res.text()).split('\n').find((l) => l.startsWith('data:'))!;
 	return (
-		JSON.parse(line.slice(5)) as { result: { isError?: boolean; content: { text: string }[] } }
+		JSON.parse(line.slice(5)) as {
+			result: {
+				isError?: boolean;
+				content: { text: string }[];
+				structuredContent?: Record<string, unknown>;
+			};
+		}
 	).result;
+}
+
+/** A Grasshopper output item holding a real mesh with `n` vertices. */
+async function meshItem(n: number) {
+	const rhino = await rhino3dm();
+	const mesh = new rhino.Mesh();
+	for (let i = 0; i < n; i++) mesh.vertices().add(i, 0, 0);
+	return { type: 'Rhino.Geometry.Mesh', data: JSON.stringify(mesh.encode()) };
 }
 
 describe('selva MCP tools', () => {
@@ -122,6 +137,26 @@ describe('selva MCP tools', () => {
 		expect(text).toContain('Shape: 2 Mesh');
 		expect(text).toContain('Warning: 1. Slow component');
 		expect(text).toContain('https://selva.test/library/g1');
+	});
+
+	it('counts vertices across the mesh items it can decode', async () => {
+		const shape = {
+			ParamName: 'Shape',
+			InnerTree: { '{0}': [await meshItem(3), await meshItem(4)] }
+		};
+		const { server } = serve([SCHEMA, { values: [shape] }]);
+		const { content, structuredContent } = await call(server, 'selva_solve', { guid: 'g1' });
+		expect(content[0].text).toContain('Shape: 2 Mesh, 7 vertices');
+		expect(structuredContent?.outputs).toEqual({ Shape: { geometry: { Mesh: 2 }, vertices: 7 } });
+	});
+
+	it("adds the raw response only with detail: 'full'", async () => {
+		const { server } = serve([SCHEMA, SOLVED, SCHEMA, SOLVED]);
+		const summary = await call(server, 'selva_solve', { guid: 'g1' });
+		expect(summary.structuredContent).not.toHaveProperty('response');
+		const full = await call(server, 'selva_solve', { guid: 'g1', detail: 'full' });
+		expect(full.structuredContent?.response).toEqual(SOLVED);
+		expect(full.content[0].text).toContain('Weight: 12.4');
 	});
 
 	it('names the real inputs when the model guesses one', async () => {

@@ -5,13 +5,18 @@
 	import TabIcon from './TabIcon.svelte';
 
 	interface Props {
-		/** The active tab; edits write straight into it, like every other field on the canvas. */
 		tab: TabConfig;
+		/** Runs `apply` as an undoable draft edit; see `editDraft`. */
+		onEdit: (apply: () => void, coalesceKey?: string) => void;
 		onRemove: () => void;
 		onAddGroup: () => void;
 	}
 
-	let { tab, onRemove, onAddGroup }: Props = $props();
+	let { tab, onEdit, onRemove, onAddGroup }: Props = $props();
+
+	function setIcon(icon: string | undefined) {
+		onEdit(() => (tab.icon = icon), `tab-icon:${tab.id}`);
+	}
 </script>
 
 <div class="border-border bg-muted/40 flex flex-wrap items-center gap-2 border-b px-4 py-2">
@@ -30,11 +35,11 @@
 					<Input
 						id="tab-icon"
 						value={tab.icon ?? ''}
-						oninput={(e) => (tab.icon = e.currentTarget.value.trim() || undefined)}
+						oninput={(e) => setIcon(e.currentTarget.value.trim() || undefined)}
 						placeholder="AB or mdi:home"
 					/>
 					{#if tab.icon}
-						<Button variant="ghost" size="sm" onclick={() => (tab.icon = undefined)}>Clear</Button>
+						<Button variant="ghost" size="sm" onclick={() => setIcon(undefined)}>Clear</Button>
 					{/if}
 				</div>
 				<p class="text-muted-foreground text-xs">
@@ -54,7 +59,10 @@
 	<Input
 		aria-label="Tab name"
 		value={tab.label}
-		oninput={(e) => (tab.label = e.currentTarget.value)}
+		oninput={(e) => {
+			const label = e.currentTarget.value;
+			onEdit(() => (tab.label = label), `tab-label:${tab.id}`);
+		}}
 		placeholder="Tab name"
 		class="w-48"
 	/>
@@ -63,10 +71,12 @@
 		type="single"
 		variant="outline"
 		size="sm"
-		value={tab.position === 'right' ? 'right' : 'left'}
-		onValueChange={(side) => {
-			if (side) tab.position = side === 'right' ? 'right' : undefined;
-		}}
+		bind:value={
+			() => (tab.position === 'right' ? 'right' : 'left'),
+			(side) => {
+				if (side) onEdit(() => (tab.position = side === 'right' ? 'right' : undefined));
+			}
+		}
 		aria-label="Panel side"
 	>
 		<ToggleGroup.Item value="left" aria-label="Left panel" title="Left panel">
@@ -81,7 +91,7 @@
 		<Switch
 			id="tab-visible"
 			checked={tab.visible !== false}
-			onCheckedChange={(visible) => (tab.visible = visible ? undefined : false)}
+			onCheckedChange={(visible) => onEdit(() => (tab.visible = visible ? undefined : false))}
 		/>
 		<Label for="tab-visible">Visible</Label>
 	</div>

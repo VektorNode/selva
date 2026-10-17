@@ -53,6 +53,8 @@ export interface SupabaseAuthProviderConfig {
 	jwtSigningKey?: string;
 	/** Legacy HS256 secret, used only when `jwtSigningKey` is unset. */
 	jwtSecret?: string;
+	/** Lifetime of an API-token request's delegated session; see `SupabaseDelegatedSessionConfig.ttlSeconds`. */
+	delegatedSessionTtlSeconds?: number;
 	/**
 	 * Sink for best-effort failures the provider swallows rather than throwing
 	 * (currently `touchLastLogin`). Defaults to `NoopLogger`. Only identifiers
@@ -140,11 +142,18 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			anonKey: config.anonKey,
 			...(config.jwtSigningKey ? { signingKey: config.jwtSigningKey } : {}),
 			...(config.jwtSecret ? { jwtSecret: config.jwtSecret } : {}),
+			...(config.delegatedSessionTtlSeconds
+				? { ttlSeconds: config.delegatedSessionTtlSeconds }
+				: {}),
 			logger: this.logger
 		});
 	}
 
-	static fromEnv(env: Record<string, string | undefined>, logger?: ILogger): SupabaseAuthProvider {
+	static fromEnv(
+		env: Record<string, string | undefined>,
+		logger?: ILogger,
+		options: Pick<SupabaseAuthProviderConfig, 'delegatedSessionTtlSeconds'> = {}
+	): SupabaseAuthProvider {
 		const supabaseUrl = env.SUPABASE_URL;
 		const anonKey = env.SUPABASE_ANON_KEY;
 		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -168,7 +177,8 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			...(revalidateMs !== undefined ? { revalidateMs } : {}),
 			...(logger ? { logger } : {}),
 			...(env.SUPABASE_JWT_SIGNING_KEY ? { jwtSigningKey: env.SUPABASE_JWT_SIGNING_KEY } : {}),
-			...(env.SUPABASE_JWT_SECRET ? { jwtSecret: env.SUPABASE_JWT_SECRET } : {})
+			...(env.SUPABASE_JWT_SECRET ? { jwtSecret: env.SUPABASE_JWT_SECRET } : {}),
+			...options
 		});
 	}
 

@@ -9,14 +9,15 @@
 		Link2,
 		SlidersHorizontal,
 		RotateCcw,
-		Server
+		Server,
+		KeyRound
 	} from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { Organization, OrgPermission } from '@selvajs/platform';
 
 	interface LayoutProps {
 		data: {
-			ctx: { orgPermissions: OrgPermission[] } | null;
+			ctx: { orgPermissions: OrgPermission[]; mayHoldApiTokens: boolean } | null;
 			org: Organization | null;
 		};
 		children?: import('svelte').Snippet;
@@ -69,6 +70,13 @@
 				icon: Link2,
 				match: 'prefix' as const,
 				show: enableSharing && can('manage_definitions')
+			},
+			{
+				href: '/team/tokens',
+				label: 'API tokens',
+				icon: KeyRound,
+				match: 'prefix' as const,
+				show: !!data.ctx?.mayHoldApiTokens
 			},
 			{
 				href: '/team/compute',

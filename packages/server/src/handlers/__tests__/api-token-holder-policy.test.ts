@@ -1,7 +1,6 @@
 /**
- * A host-supplied `mayHoldApiTokens` replaces `manage_api_tokens` at mint, and
- * the resolver re-asks it on every request, so losing the role turns the key
- * off without revoking it.
+ * A host-supplied `mayHoldApiTokens` replaces `manage_api_tokens`, at mint and
+ * on every request, so losing the role turns the key off without revoking it.
  */
 
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -109,7 +108,7 @@ describe('API tokens under a host holder policy', () => {
 			status: 403,
 			code: 'API_TOKEN_HOLDER_REFUSED'
 		});
-		// Without the policy the resolver doesn't re-check who may hold keys.
-		expect((await resolve(h, secret)).kind).toBe('ok');
+		// Without the policy the resolver falls back to manage_api_tokens, which alice lacks.
+		expect(await resolve(h, secret)).toMatchObject({ code: 'API_TOKEN_HOLDER_REFUSED' });
 	});
 });

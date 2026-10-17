@@ -156,6 +156,21 @@ if (!envCtx) {
 			expect(hash.error?.code).toBe('42501');
 		});
 
+		it('never lets the owner revive a revoked key', async () => {
+			const t = tokenFor(alice.userId, orgId);
+			await store.create(ctxFor(alice.userId, alice.sessionToken), t);
+			await store.revoke(ctxFor(admin.userId, admin.sessionToken), t.id, 'admin');
+
+			const revive = await rawAs(alice.sessionToken)
+				.from('api_tokens')
+				.update({ revoked_at: null })
+				.eq('id', t.id);
+			expect(revive.error?.code).toBe('42501');
+			expect(
+				(await store.get(ctxFor(alice.userId, alice.sessionToken), t.id))?.revokedAt
+			).toBeTruthy();
+		});
+
 		describe('delegated sessions (legacy HS256 secret)', () => {
 			const secret = process.env.SUPABASE_JWT_SECRET;
 
