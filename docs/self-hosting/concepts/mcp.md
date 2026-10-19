@@ -2,7 +2,7 @@
 title: MCP server
 order: 10
 published: true
-description: 'Connect an AI agent to Selva over MCP: the endpoint, the key it needs, and what it can and cannot do.'
+description: 'Connect an AI agent to Selva over MCP: the endpoint, signing in with OAuth or a key, and what it can and cannot do.'
 ---
 
 # MCP server
@@ -16,10 +16,31 @@ so it sees exactly what that key sees and is rate-limited the same way.
 
 ## Connect
 
+Point the client at `https://<your-selva-host>/mcp`. It signs in one of two ways.
+
+### Sign in through the browser (OAuth)
+
+Clients that support MCP authorization, such as claude.ai connectors, Claude Desktop and Claude
+Code, need only the URL. On first use they open Selva in a browser, where you sign in and choose
+what the client may do:
+
+- **Read**: browse definitions and their inputs.
+- **Read and run solves**: also solve, which spends your compute budget.
+
+Allowing it creates an API token named after the client, such as "Claude (OAuth)". It lasts 30
+days and shows up under **Settings → API tokens**, where you can revoke it. When it expires, the
+client asks you to sign in again.
+
+In claude.ai: **Settings → Connectors → Add custom connector**, and paste the URL.
+
+OAuth needs `SELVA_HMAC_KEY` set, as API tokens do. Behind a forward-auth proxy, some routes
+must skip the proxy's sign-in: see [Header auth with Entra](../providers/header-auth-entra.md#part-5-caddyfile).
+
+### Send a key yourself
+
 1. Create an API key at **Settings → API tokens** (`/team/tokens`). Pick **Read and run solves**; a
-   **Read** key can browse and describe but every solve gets 403.
-2. Point the client at `https://<your-selva-host>/mcp` and send the key as a header:
-   `Authorization: Bearer selva_…`.
+   **Read** key sees no solve tool.
+2. Send it as a header: `Authorization: Bearer selva_…`.
 
 Claude Code:
 
@@ -29,12 +50,13 @@ claude mcp add --transport http selva https://selva.example.com/mcp \
 ```
 
 Other clients that support remote MCP servers with custom headers take the same URL and header in
-their MCP config. The transport is streamable HTTP, stateless: every message is a `POST`.
+their MCP config.
+
+A browser-based client, such as a web MCP inspector, is refused unless its origin is listed in
+`MCP_ALLOWED_ORIGINS` (see [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)).
 
 ## Limits
 
-- **A key header is the only way in.** There is no OAuth flow yet, so clients that can only
-  connect through OAuth, such as claude.ai connectors, can't use it.
 - **Solves spend compute.** A token solve draws on its owner's compute budget, and the token rate
   limit applies on top: see [Security and limits](./security-and-limits.md#api-tokens-apiv1).
   The server tells the agent to confirm with the user before a series of solves.

@@ -41,6 +41,11 @@
 			"types": "./dist/providers/index.d.ts",
 			"import": "./dist/providers/index.js"
 		},
+		"./oauth": {
+			"selva-source": "./src/oauth/index.ts",
+			"types": "./dist/oauth/index.d.ts",
+			"import": "./dist/oauth/index.js"
+		},
 		"./tokens": {
 			"selva-source": "./src/tokens/index.ts",
 			"types": "./dist/tokens/index.d.ts",

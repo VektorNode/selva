@@ -13,7 +13,10 @@ const config = {
 		adapter: adapterNode({
 			out: 'build',
 			precompress: true
-		})
+		}),
+		// The form-CSRF check runs in hooks.server.ts instead, which can exempt the
+		// OAuth token endpoint and bearer-authenticated uploads. `*` turns this one off.
+		csrf: { trustedOrigins: ['*'] }
 	}
 };
 

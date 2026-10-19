@@ -28,6 +28,15 @@ describe('isPublicRoute', () => {
 		['/api/v1/openapi.json'],
 		// Self-gating: needs a key, which every /api/v1 call it makes checks.
 		['/mcp'],
+		// OAuth discovery, registration and token exchange take no session: MCP
+		// clients call them server-to-server. Consent signs in on its own, so the
+		// login redirect keeps the authorize query.
+		['/.well-known/oauth-protected-resource'],
+		['/.well-known/oauth-protected-resource/mcp'],
+		['/.well-known/oauth-authorization-server'],
+		['/oauth/register'],
+		['/oauth/token'],
+		['/oauth/authorize'],
 		// The blob proxy is self-gating: it must pass the hook so it can apply
 		// per-asset-class auth itself (public branding for guests, 401 for
 		// org/project assets without a session).
@@ -55,7 +64,9 @@ describe('isPublicRoute', () => {
 		['/billing'],
 		['/billing/invoice/123'],
 		['/help'],
-		['/whatever']
+		['/whatever'],
+		['/.well-known/anything-else'],
+		['/oauth/other']
 	])('classifies %j as NOT public (deny-by-default)', (path) => {
 		expect(isPublicRoute(path)).toBe(false);
 	});

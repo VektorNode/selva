@@ -1,6 +1,8 @@
 import { createMcpServer, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
 import { parseApiScope } from '@selvajs/platform';
 import { env } from '$env/dynamic/private';
+import { OAUTH_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
+import { oauthServer } from '$lib/server/oauth/server';
 import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
@@ -49,7 +51,11 @@ export function handleMcp(request: Request, origin: string, fetch: typeof global
 			openapi: buildOpenApiDocument(),
 			tools: selvaTools(origin),
 			grantedActions,
-			allowedOrigins: mcpAllowedOrigins()
+			allowedOrigins: mcpAllowedOrigins(),
+			// Only when OAuth can run: a challenge pointing at a 503 sends clients nowhere.
+			...(oauthServer(origin) && {
+				challenge: { resourceMetadataUrl: resourceMetadataUrl(origin), scopes: [...OAUTH_SCOPES] }
+			})
 		});
 		cached = { origin, server };
 	}

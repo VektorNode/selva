@@ -153,6 +153,11 @@ it means storing a rotating secret per grant, which is a store change in both pr
 monthly re-consent turns out to annoy people.
 _Verify:_ that Claude re-runs sign-in on a 401 when it holds no refresh token.
 
+**CSRF.** SvelteKit's form-CSRF check refuses a form-encoded POST without a matching `Origin`,
+which is every server-to-server token request. It can trust origins but not exempt a path, so it
+is off in `svelte.config.js`, and the hook runs the same check with two exemptions: the token
+endpoint, and any request carrying `Authorization`, which a cross-site form can't set.
+
 **Header-auth deployments.** The proxy's forward-auth must let these through unauthenticated:
 
 - `/.well-known/oauth-*`, `/oauth/register` and `/oauth/token`, which Claude's backend calls

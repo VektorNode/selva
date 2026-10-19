@@ -150,6 +150,20 @@ sudo nano /etc/caddy/Caddyfile
         }
     }
 
+    # Requests Selva authenticates itself skip forward_auth: anything carrying a
+    # Selva API key, the MCP endpoint, and the OAuth endpoints MCP clients call
+    # server-to-server. /oauth/authorize is not listed: it needs your sign-in.
+    @selfAuthenticated {
+        header Authorization "Bearer selva_*"
+    }
+    handle @selfAuthenticated {
+        reverse_proxy 127.0.0.1:3000
+    }
+    @mcpPublic path /mcp /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/* /.well-known/oauth-authorization-server /oauth/register /oauth/token
+    handle @mcpPublic {
+        reverse_proxy 127.0.0.1:3000
+    }
+
     # Everything else: authenticate, map identity onto SELVA-*, proxy to Selva.
     handle {
         forward_auth 127.0.0.1:4180 {
@@ -175,6 +189,8 @@ The `request_header -` lines strip inbound copies and are **essential** against 
 
 - **Site scope, not inside `handle`.** At site scope they cover every route including `/oauth2/*`, and run before either `handle` block. Inside a `handle`, Caddy runs `request_header` in its own fixed directive order rather than the order you wrote, so a strip line below `forward_auth` does not reliably strip before it.
 - **Strip both families.** `SELVA-*` because that is what the provider reads, and `X-Auth-Request-*` because `copy_headers` forwards a client-supplied copy when oauth2-proxy doesn't set its own.
+
+The `@selfAuthenticated` and `@mcpPublic` blocks let API tokens and MCP clients reach Selva without an Entra session. They are safe because the site-scope strip lines above remove any identity header first, so these requests carry only what Selva verifies itself. Drop both blocks if you use neither API tokens nor MCP.
 
 The `handle_response @bad` block redirects 401s to the Entra login page; without it you get a bare unauthorized response. Use `header Location ...` + `respond 302`; `redirect` is not valid inside `handle_response`.
 

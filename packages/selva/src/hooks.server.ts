@@ -7,12 +7,15 @@ import {
 	applySecurityHeaders,
 	buildRequestContext,
 	createRouteClassifier,
+	isCrossSiteFormSubmission,
 	resolveApiToken
 } from '@selvajs/server/http';
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
 import { providers, getErrorReporter, getEventSink, getLogger } from '$lib/server/providers.server';
 import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
 import { MCP_PATH } from '$lib/server/mcp/server';
+
+const OAUTH_TOKEN_PATH = '/oauth/token';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
@@ -119,7 +122,9 @@ const PUBLIC_PAGE_ROUTES: ReadonlySet<string> = new Set([
 	'/', // guests see the landing page; authed users get redirected by +page.server.ts
 	'/login',
 	'/setup',
-	'/accept-invite'
+	'/accept-invite',
+	// Signs in on its own: the hook's login redirect would drop the OAuth query.
+	'/oauth/authorize'
 ]);
 
 const routeClassifier = createRouteClassifier({
@@ -133,7 +138,19 @@ const routeClassifier = createRouteClassifier({
 	// readiness probe the post-update poller waits on across a restart. The v1
 	// spec is public for the same reason `/docs/` is. `/mcp` gates itself: it needs a
 	// key and passes it through to `/api/v1`, which authenticates every call.
-	publicApis: ['/api/health', '/api/health/ready', '/api/v1/openapi.json', MCP_PATH],
+	// OAuth discovery, registration and token exchange are called server-to-server
+	// by MCP clients, with no session.
+	publicApis: [
+		'/api/health',
+		'/api/health/ready',
+		'/api/v1/openapi.json',
+		MCP_PATH,
+		'/.well-known/oauth-protected-resource',
+		'/.well-known/oauth-protected-resource/mcp',
+		'/.well-known/oauth-authorization-server',
+		'/oauth/register',
+		OAUTH_TOKEN_PATH
+	],
 	// Self-gating routes authorize each request themselves; the hook must not
 	// deny them up front. `/api/files/[...path]` classifies each path against
 	// the asset-class registry (public branding serves to anyone, org/project
@@ -191,6 +208,21 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	}
 
 	const { pathname } = event.url;
+
+	// SvelteKit's own check is off (svelte.config.js) because it can't exempt the
+	// token endpoint or bearer requests; this is the same check with those exemptions.
+	if (
+		!import.meta.env.DEV &&
+		isCrossSiteFormSubmission(event.request, { exemptPaths: [OAUTH_TOKEN_PATH] })
+	) {
+		return applyResponseHeaders(
+			new Response(`Cross-site ${event.request.method} form submissions are forbidden`, {
+				status: 403
+			}),
+			pathname,
+			requestId
+		);
+	}
 
 	// Static assets bypass every gate below — no auth, no first-run check.
 	if (isStaticAsset(pathname)) {
@@ -378,7 +410,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 // framable (embedding is what Selva-engine apps are for), but the operator
 // surfaces below hold an authenticated admin session, where a framable page is
 // a UI-redress attack.
-const FRAME_DENIED_PREFIXES = ['/admin', '/setup', '/login'];
+const FRAME_DENIED_PREFIXES = ['/admin', '/setup', '/login', '/oauth'];
 
 function deniesFraming(pathname: string): boolean {
 	return FRAME_DENIED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
