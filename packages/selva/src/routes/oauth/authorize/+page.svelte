@@ -33,9 +33,9 @@
 				</p>
 			</div>
 
-			<Callout tone={data.loopbackOnly ? 'warning' : 'info'}>
+			<Callout tone={data.loopback ? 'warning' : 'info'}>
 				The token goes to <span class="font-medium">{data.redirectHost}</span>.
-				{#if data.loopbackOnly}
+				{#if data.loopback}
 					That is a program on your own computer. Only continue if you just started this connection
 					yourself.
 				{/if}
@@ -45,8 +45,7 @@
 				<Callout tone="danger">{form.error}</Callout>
 			{/if}
 
-			<form method="POST" action="?/approve" class="space-y-4">
-				<input type="hidden" name="query" value={data.query} />
+			<form method="POST" action="?{data.query}&/approve" class="space-y-4">
 				<fieldset class="space-y-2">
 					<legend class="text-foreground text-sm font-medium">Access</legend>
 					<label class="flex items-start gap-2 text-sm">
@@ -67,8 +66,7 @@
 				</fieldset>
 				<Button type="submit" class="w-full">Allow</Button>
 			</form>
-			<form method="POST" action="?/deny">
-				<input type="hidden" name="query" value={data.query} />
+			<form method="POST" action="?{data.query}&/deny">
 				<Button type="submit" variant="outline" class="w-full">Cancel</Button>
 			</form>
 		{/if}

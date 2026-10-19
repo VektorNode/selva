@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
-import { createOAuthServer, OAuthError } from '../index.js';
+import { createOAuthServer, isLoopbackRedirect, OAuthError } from '../index.js';
 
 const ORIGIN = 'https://selva.test';
 const SECRET = 's'.repeat(32);
@@ -231,5 +231,50 @@ describe('discovery', () => {
 			scopes_supported: ['read', 'solve'],
 			bearer_methods_supported: ['header']
 		});
+	});
+});
+
+describe('review fixes', () => {
+	it('always grants read alongside solve, so a solve-only request still mints', async () => {
+		expect((await authorized(server(), { scope: 'solve' })).request.scopes).toEqual([
+			'read',
+			'solve'
+		]);
+	});
+
+	it('remembers a failed metadata fetch for a while instead of refetching', async () => {
+		let fetched = 0;
+		const oauth = server({
+			fetchClientMetadata: async () => {
+				fetched++;
+				throw new Error('down');
+			}
+		});
+		const id = 'https://down.test/client';
+		await expect(oauth.resolveClient(id)).rejects.toThrow(OAuthError);
+		await expect(oauth.resolveClient(id)).rejects.toThrow(OAuthError);
+		expect(fetched).toBe(1);
+	});
+
+	it('binds a code to the origin that issued it', async () => {
+		const { oauth, clientId, request } = await authorized();
+		const code = new URL(oauth.approve(request, GRANT)).searchParams.get('code')!;
+		const elsewhere = createOAuthServer({ origin: 'https://other.test', secret: SECRET });
+		expect(elsewhere.exchange(tokenForm(clientId, code)).body.error).toBe('invalid_grant');
+	});
+
+	it('refuses a replay across server instances that share the redeemed set', async () => {
+		const redeemedCodes = new Map<string, number>();
+		const first = server({ redeemedCodes });
+		const { clientId, request } = await authorized(first);
+		const code = new URL(first.approve(request, GRANT)).searchParams.get('code')!;
+		expect(first.exchange(tokenForm(clientId, code)).status).toBe(200);
+		const rebuilt = server({ redeemedCodes });
+		expect(rebuilt.exchange(tokenForm(clientId, code)).body.error).toBe('invalid_grant');
+	});
+
+	it('knows a loopback redirect when it sees one', () => {
+		expect(isLoopbackRedirect('http://127.0.0.1:5555/cb')).toBe(true);
+		expect(isLoopbackRedirect('https://claude.ai/api/mcp/auth_callback')).toBe(false);
 	});
 });

@@ -1,5 +1,10 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { apiScopesFor, OAuthError, type OAuthScope } from '@selvajs/server/oauth';
+import {
+	apiScopesFor,
+	isLoopbackRedirect,
+	OAuthError,
+	type OAuthScope
+} from '@selvajs/server/oauth';
 import { canHoldApiTokens } from '@selvajs/server/tokens';
 import { providers } from '$lib/server/providers.server';
 import { oauthServer } from '$lib/server/oauth/server';
@@ -8,16 +13,25 @@ import type { Actions, PageServerLoad } from './$types';
 // The shortest lifetime Settings → API tokens offers. No refresh tokens: on
 // expiry the client gets a 401 and signs in again.
 const TOKEN_DAYS = 30;
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 function serverFor(origin: string) {
 	return oauthServer(origin) ?? error(503, 'OAuth is not configured on this server.');
 }
 
-/** The authorize query, from the page URL on load and from a hidden field on submit. */
-async function parse(origin: string, query: string) {
+/**
+ * The authorize query without SvelteKit's `/action` key. The forms post to the
+ * same query, so a failed action re-renders this page rather than a bare URL.
+ */
+function authorizeQuery(url: URL): string {
+	const params = new URLSearchParams(url.search);
+	for (const key of [...params.keys()]) if (key.startsWith('/')) params.delete(key);
+	return params.toString();
+}
+
+async function parse(url: URL) {
 	try {
-		return { request: await serverFor(origin).parseAuthorizeRequest(new URLSearchParams(query)) };
+		const query = new URLSearchParams(authorizeQuery(url));
+		return { request: await serverFor(url.origin).parseAuthorizeRequest(query) };
 	} catch (err) {
 		if (err instanceof OAuthError) return { problem: err.message };
 		throw err;
@@ -26,9 +40,10 @@ async function parse(origin: string, query: string) {
 
 export const load: PageServerLoad = async ({ url, locals }) => {
 	// A bad client or redirect URI is shown, never redirected: the target is what can't be trusted.
-	const { request, problem } = await parse(url.origin, url.search);
+	const { request, problem } = await parse(url);
 	if (!request) return { ok: false as const, problem };
 
+	// The hook gates this page; this covers a session that ended between the two.
 	if (!locals.user || !locals.ctx) {
 		redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
@@ -36,14 +51,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		return { ok: false as const, problem: 'Your account can’t create API tokens in this org.' };
 	}
 	const org = await providers.data.orgs.getOrg(locals.ctx, locals.ctx.actingOrgId);
-	const redirectHosts = [...new Set(request.client.redirectUris.map((u) => new URL(u).hostname))];
 
 	return {
 		ok: true as const,
-		query: url.search,
+		query: authorizeQuery(url),
 		clientName: request.client.name,
 		redirectHost: new URL(request.redirectUri).host,
-		loopbackOnly: redirectHosts.every((h) => LOOPBACK.has(h)),
+		loopback: isLoopbackRedirect(request.redirectUri),
 		scopes: request.scopes,
 		orgName: org?.name ?? 'this org',
 		days: TOKEN_DAYS
@@ -53,14 +67,13 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 export const actions: Actions = {
 	approve: async ({ request: req, url, locals, fetch }) => {
 		const form = await req.formData();
-		const { request } = await parse(url.origin, String(form.get('query') ?? ''));
+		const { request } = await parse(url);
 		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
 		const orgId = locals.ctx?.actingOrgId;
 		if (!orgId) return fail(403, { error: 'Sign in first.' });
 
-		// The user may narrow what the client asked for, never widen it.
-		const access = form.get('access') === 'solve' ? 'solve' : 'read';
-		const scopes: OAuthScope[] = request.scopes.filter((s) => s === 'read' || s === access);
+		// The user may narrow what the client asked for, never widen it. `read` is always granted.
+		const scopes: OAuthScope[] = form.get('access') === 'solve' ? request.scopes : ['read'];
 
 		// Through the same endpoint as Settings → API tokens, so holder policy, scope
 		// checks, the audit event and the owner's email all apply.
@@ -92,9 +105,8 @@ export const actions: Actions = {
 		);
 	},
 
-	deny: async ({ request: req, url }) => {
-		const form = await req.formData();
-		const { request } = await parse(url.origin, String(form.get('query') ?? ''));
+	deny: async ({ url }) => {
+		const { request } = await parse(url);
 		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
 		redirect(303, serverFor(url.origin).deny(request));
 	}

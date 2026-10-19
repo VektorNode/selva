@@ -122,9 +122,7 @@ const PUBLIC_PAGE_ROUTES: ReadonlySet<string> = new Set([
 	'/', // guests see the landing page; authed users get redirected by +page.server.ts
 	'/login',
 	'/setup',
-	'/accept-invite',
-	// Signs in on its own: the hook's login redirect would drop the OAuth query.
-	'/oauth/authorize'
+	'/accept-invite'
 ]);
 
 const routeClassifier = createRouteClassifier({
@@ -349,7 +347,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					requestId
 				);
 			}
-			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
+			// With the query: an OAuth authorize request is nothing without it.
+			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname + event.url.search)}`);
 		}
 
 		await attachSession(event, user, token);

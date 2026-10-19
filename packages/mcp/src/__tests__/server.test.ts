@@ -156,6 +156,11 @@ describe('createMcpServer', () => {
 		expect((await withOrigin('https://host')).status).toBe(200);
 		expect((await withOrigin('https://inspector.test')).status).toBe(200);
 		expect((await withOrigin()).status).toBe(200);
+
+		// DNS rebinding: the request's own URL is the attacker's name, so it proves nothing.
+		const rebound = new Request('https://rebound.test/mcp', mcpRequest('tools/list', {}, KEY));
+		rebound.headers.set('Origin', 'https://rebound.test');
+		expect((await server.handle(rebound)).status).toBe(403);
 	});
 
 	it('points a 401 at the resource metadata and names the scopes to ask for', async () => {

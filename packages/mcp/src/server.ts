@@ -57,8 +57,9 @@ export interface McpServerOptions extends Omit<ApiClientOptions, 'apiKey'> {
 	/** Where the live spec is served, for `verify`. Default `/api/v1/openapi.json`. */
 	specPath?: string;
 	/**
-	 * Browser origins `handle` accepts besides the host's own, e.g. a web MCP inspector.
-	 * Native clients send no `Origin` and are unaffected.
+	 * Browser origins `handle` accepts besides `baseUrl`'s, e.g. a web MCP inspector.
+	 * Native clients send no `Origin` and are unaffected. `baseUrl` must be the
+	 * configured origin, not one read from the request's `Host`, or a rebinding page passes.
 	 */
 	allowedOrigins?: string[];
 	/**
@@ -322,12 +323,8 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 		return tools.get(message.params.name);
 	}
 
-	const trustedOrigins = (request: Request) =>
-		new Set([
-			new URL(request.url).origin,
-			new URL(options.baseUrl).origin,
-			...(options.allowedOrigins ?? [])
-		]);
+	// Not the request's own URL: under DNS rebinding that is the attacker's name.
+	const trusted = new Set([new URL(options.baseUrl).origin, ...(options.allowedOrigins ?? [])]);
 
 	// One handler for every request; the key and fetch ride in `authInfo`, which the
 	// SDK passes through to the factory untouched. 2025-era clients are served statelessly.
@@ -349,7 +346,7 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 		async handle(request, overrides) {
 			// DNS rebinding: a page on another origin that resolves to this host.
 			const origin = request.headers.get('Origin');
-			if (origin && !trustedOrigins(request).has(origin)) return originRefused();
+			if (origin && !trusted.has(origin)) return originRefused();
 			const apiKey = bearerOf(request);
 			// Anything else would reach /api/v1 as "no key" and, on a host whose fetch
 			// forwards cookies, run as the browser session instead.

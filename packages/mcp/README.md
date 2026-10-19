@@ -58,7 +58,8 @@ await server.listen({ transport: 'stdio' }); // checks the live spec first
   challenge. `challenge` adds `resource_metadata` and `scope` to the 401 and 403, for OAuth
   clients.
 
-Both protocol eras are served: `2026-07-28` per request, and 2025-era clients statelessly.
+Both protocol eras are served: the current stateless revision per request, and older clients
+through the SDK's stateless fallback.
 
 ## Output
 

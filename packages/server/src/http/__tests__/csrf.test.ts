@@ -48,3 +48,13 @@ describe('isCrossSiteFormSubmission', () => {
 		expect(isCrossSiteFormSubmission(get)).toBe(false);
 	});
 });
+
+describe('isCrossSiteFormSubmission with a non-Selva Authorization header', () => {
+	it('still checks a form post whose Authorization is not a Selva key', () => {
+		expect(
+			isCrossSiteFormSubmission(
+				post('/login', { ...form, Authorization: 'Bearer eyJhbGciOi.idtoken' })
+			)
+		).toBe(true);
+	});
+});

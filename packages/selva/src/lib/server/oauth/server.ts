@@ -6,7 +6,11 @@
 
 import { json, type RequestEvent } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
-import { assertSafeRemoteDefinitionUrl, createComputeRateLimiter } from '@selvajs/server/compute';
+import {
+	assertSafeRemoteDefinitionUrl,
+	createComputeRateLimiter,
+	readBodyWithCap
+} from '@selvajs/server/compute';
 import { createOAuthServer, type OAuthServer } from '@selvajs/server/oauth';
 import { MIN_TOKEN_SECRET_LENGTH } from '@selvajs/server/tokens';
 
@@ -16,6 +20,8 @@ const METADATA_MAX_BYTES = 64 * 1024;
 // One slot, as for `/mcp`: the origin comes from the request, so a map would grow
 // with whatever hosts a caller sends. Re-keyed on the secret, like the token codecs.
 let cached: { origin: string; secret: string; server: OAuthServer } | null = null;
+// Outlives `cached`, so rebuilding the server for another origin can't forget a redeemed code.
+const redeemedCodes = new Map<string, number>();
 
 /** Undefined without a usable SELVA_HMAC_KEY: the endpoints then answer 503. */
 export function oauthServer(origin: string): OAuthServer | undefined {
@@ -25,7 +31,7 @@ export function oauthServer(origin: string): OAuthServer | undefined {
 		cached = {
 			origin,
 			secret,
-			server: createOAuthServer({ origin, secret, fetchClientMetadata })
+			server: createOAuthServer({ origin, secret, fetchClientMetadata, redeemedCodes })
 		};
 	}
 	return cached.server;
@@ -34,15 +40,21 @@ export function oauthServer(origin: string): OAuthServer | undefined {
 /** The URL is an unknown client's, so it goes through the same guard as remote definitions. */
 async function fetchClientMetadata(url: string): Promise<unknown> {
 	await assertSafeRemoteDefinitionUrl(url);
-	const res = await fetch(url, {
-		headers: { Accept: 'application/json' },
-		redirect: 'error',
-		signal: AbortSignal.timeout(METADATA_TIMEOUT_MS)
-	});
-	if (!res.ok) throw new Error(`HTTP ${res.status}`);
-	const text = await res.text();
-	if (text.length > METADATA_MAX_BYTES) throw new Error('Metadata document too large');
-	return JSON.parse(text);
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), METADATA_TIMEOUT_MS);
+	try {
+		const res = await fetch(url, {
+			headers: { Accept: 'application/json' },
+			redirect: 'error',
+			signal: controller.signal
+		});
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		// Counted while streaming: a body with no or a lying Content-Length must not buffer whole.
+		const bytes = await readBodyWithCap(res, METADATA_MAX_BYTES, controller);
+		return JSON.parse(new TextDecoder().decode(bytes));
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 // Registration and token exchange take no credential, so the IP is the only key.

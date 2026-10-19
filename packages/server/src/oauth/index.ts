@@ -7,9 +7,10 @@
  * token endpoint. So `/mcp` and `/api/v1` keep one credential type.
  *
  * Nothing here is stored. A registered client's id is its own signed metadata,
- * and a code is its own encrypted grant. The only state is an in-memory set of
- * redeemed codes, so on several replicas a code could be redeemed once per
- * replica within its minute, and only by whoever holds the PKCE verifier.
+ * and a code is its own encrypted grant, bound to the issuing origin. The only
+ * state is the set of redeemed codes, in the host's memory, so on several
+ * replicas a code could be redeemed once per replica within its minute, and only
+ * by whoever holds the PKCE verifier.
  */
 
 import {
@@ -32,6 +33,9 @@ const CODE_TTL_MS = 60_000;
 const CLIENT_NAME_MAX = 100;
 const REDIRECT_URIS_MAX = 10;
 const CIMD_TTL_MS = 60 * 60_000;
+// A failing metadata URL is not refetched for this long: each fetch is outbound
+// work an anonymous caller could otherwise trigger at will.
+const CIMD_FAILURE_TTL_MS = 60_000;
 const CIMD_CACHE_MAX = 500;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -86,6 +90,11 @@ export interface OAuthServerOptions {
 	 * so the host must guard it against SSRF. Without it, URL client ids are refused.
 	 */
 	fetchClientMetadata?: (url: string) => Promise<unknown>;
+	/**
+	 * Redeemed code hashes and their expiry. Pass one map for the process so a
+	 * rebuilt server (a new origin, a rotated secret) still refuses a replay.
+	 */
+	redeemedCodes?: Map<string, number>;
 	now?: () => number;
 }
 
@@ -144,9 +153,12 @@ export function createOAuthServer(options: OAuthServerOptions) {
 	const { origin } = options;
 	const now = options.now ?? Date.now;
 	const signKey = derive(options.secret, 'selva-oauth-client');
-	const codeKey = derive(options.secret, 'selva-oauth-code');
-	const redeemed = new Map<string, number>();
-	const metadataCache = new Map<string, { at: number; client: OAuthClient }>();
+	const codeKey = derive(options.secret, `selva-oauth-code:${origin}`);
+	const redeemed = options.redeemedCodes ?? new Map<string, number>();
+	const metadataCache = new Map<
+		string,
+		{ at: number; client: OAuthClient } | { at: number; failure: OAuthError }
+	>();
 
 	// ==========================================================================
 	// Clients
@@ -197,32 +209,29 @@ export function createOAuthServer(options: OAuthServerOptions) {
 
 	async function metadataClient(url: string): Promise<OAuthClient> {
 		const cached = metadataCache.get(url);
-		if (cached && now() - cached.at < CIMD_TTL_MS) return cached.client;
+		if (cached) {
+			if ('client' in cached && now() - cached.at < CIMD_TTL_MS) return cached.client;
+			if ('failure' in cached && now() - cached.at < CIMD_FAILURE_TTL_MS) throw cached.failure;
+		}
 		if (!options.fetchClientMetadata) {
 			throw new OAuthError('invalid_client', 'This server does not accept URL client ids.');
 		}
-		let doc: { client_id?: unknown; client_name?: unknown; redirect_uris?: unknown };
 		try {
-			doc = (await options.fetchClientMetadata(url)) as typeof doc;
-		} catch {
-			throw new OAuthError('invalid_client', 'The client metadata document could not be read.');
+			const client = await readMetadata(url, options.fetchClientMetadata);
+			remember(url, { at: now(), client });
+			return client;
+		} catch (err) {
+			if (!(err instanceof OAuthError)) throw err;
+			remember(url, { at: now(), failure: err });
+			throw err;
 		}
-		if (doc?.client_id !== url) {
-			throw new OAuthError('invalid_client', 'The metadata document names a different client_id.');
-		}
-		const client: OAuthClient = {
-			clientId: url,
-			name:
-				typeof doc.client_name === 'string' && doc.client_name.trim()
-					? doc.client_name.trim().slice(0, CLIENT_NAME_MAX)
-					: new URL(url).host,
-			redirectUris: checkRedirectUris(doc.redirect_uris)
-		};
+	}
+
+	function remember(url: string, entry: Parameters<typeof metadataCache.set>[1]) {
 		if (metadataCache.size >= CIMD_CACHE_MAX) {
 			metadataCache.delete(metadataCache.keys().next().value!);
 		}
-		metadataCache.set(url, { at: now(), client });
-		return client;
+		metadataCache.set(url, entry);
 	}
 
 	// ==========================================================================
@@ -371,11 +380,37 @@ export function apiScopesFor(scopes: readonly OAuthScope[]): string[] {
 // Helpers
 // ============================================================================
 
-/** Defaults to every scope when the client asks for none; unknown scopes are dropped. */
+async function readMetadata(
+	url: string,
+	fetchClientMetadata: (url: string) => Promise<unknown>
+): Promise<OAuthClient> {
+	let doc: { client_id?: unknown; client_name?: unknown; redirect_uris?: unknown };
+	try {
+		doc = (await fetchClientMetadata(url)) as typeof doc;
+	} catch {
+		throw new OAuthError('invalid_client', 'The client metadata document could not be read.');
+	}
+	if (doc?.client_id !== url) {
+		throw new OAuthError('invalid_client', 'The metadata document names a different client_id.');
+	}
+	return {
+		clientId: url,
+		name:
+			typeof doc.client_name === 'string' && doc.client_name.trim()
+				? doc.client_name.trim().slice(0, CLIENT_NAME_MAX)
+				: new URL(url).host,
+		redirectUris: checkRedirectUris(doc.redirect_uris)
+	};
+}
+
+/**
+ * Every scope when the client asks for none; unknown scopes are dropped. `read`
+ * is always in: `solve` includes it at /api/v1, and a grant without it is empty.
+ */
 function parseScopes(raw: string | null): OAuthScope[] {
 	const asked = (raw ?? '').split(' ').filter(Boolean);
-	const known = OAUTH_SCOPES.filter((s) => asked.includes(s));
-	return known.length ? known : [...OAUTH_SCOPES];
+	if (!OAUTH_SCOPES.some((s) => asked.includes(s))) return [...OAUTH_SCOPES];
+	return OAUTH_SCOPES.filter((s) => s === 'read' || asked.includes(s));
 }
 
 function checkRedirectUris(value: unknown): string[] {
@@ -404,6 +439,15 @@ function isAllowedRedirect(uri: string): boolean {
 	return (
 		url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname))
 	);
+}
+
+/** A redirect to a program on the user's own machine, which any local process can claim. */
+export function isLoopbackRedirect(uri: string): boolean {
+	try {
+		return LOOPBACK_HOSTS.has(new URL(uri).hostname);
+	} catch {
+		return false;
+	}
 }
 
 /** Exact, except a loopback redirect matches on any port (RFC 8252 §7.3). */

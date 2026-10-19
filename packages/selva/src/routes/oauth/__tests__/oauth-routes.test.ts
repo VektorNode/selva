@@ -73,7 +73,12 @@ async function redirected(run: () => unknown): Promise<URL> {
 
 const signedIn = {
 	user: { id: 'u1' },
-	ctx: { userId: 'u1', actingOrgId: 'o1', orgPermissions: ['manage_api_tokens'] }
+	ctx: {
+		userId: 'u1',
+		actingOrgId: 'o1',
+		orgPermissions: [],
+		platformPermissions: ['manage_api_tokens']
+	}
 };
 
 describe('OAuth routes', () => {
@@ -102,6 +107,29 @@ describe('OAuth routes', () => {
 		expect(data).toMatchObject({ ok: false, problem: expect.stringContaining('not registered') });
 	});
 
+	it('re-renders the consent page, not an error, when approval fails', async () => {
+		const query = `?${authorizeQuery(await registeredClient())}`;
+		const refused = (async () =>
+			Response.json(
+				{ message: 'You can’t create API tokens in this org.' },
+				{ status: 403 }
+			)) as typeof fetch;
+		const form = new FormData();
+		form.set('access', 'solve');
+		const actionUrl = `/oauth/authorize${query}&/approve`;
+		const failed = await actions.approve(
+			event(actionUrl, { method: 'POST', body: form, locals: signedIn, fetch: refused })
+		);
+		expect(failed).toMatchObject({
+			status: 403,
+			data: { error: expect.stringContaining('can’t') }
+		});
+		// SvelteKit then runs load on the action URL.
+		const data = await load(event(actionUrl, { locals: signedIn }) as AnyEvent);
+		expect(data).toMatchObject({ ok: true, clientName: 'Claude' });
+		expect((data as { query: string }).query).not.toContain('/approve');
+	});
+
 	it('mints a token at consent and hands it over at the token endpoint', async () => {
 		const query = `?${authorizeQuery(await registeredClient())}`;
 		const minted: { url: string; body: unknown }[] = [];
@@ -117,11 +145,10 @@ describe('OAuth routes', () => {
 		}) as typeof fetch;
 
 		const form = new FormData();
-		form.set('query', query);
 		form.set('access', 'read');
 		const back = await redirected(() =>
 			actions.approve(
-				event('/oauth/authorize?/approve', {
+				event(`/oauth/authorize${query}&/approve`, {
 					method: 'POST',
 					body: form,
 					locals: signedIn,

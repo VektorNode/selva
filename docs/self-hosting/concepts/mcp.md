@@ -27,9 +27,9 @@ what the client may do:
 - **Read**: browse definitions and their inputs.
 - **Read and run solves**: also solve, which spends your compute budget.
 
-Allowing it creates an API token named after the client, such as "Claude (OAuth)". It lasts 30
-days and shows up under **Settings → API tokens**, where you can revoke it. When it expires, the
-client asks you to sign in again.
+Allowing it creates an API token named after the client, such as "Claude (OAuth)". The consent
+page says how long it lasts. It shows up under **Settings → API tokens**, where you can revoke it.
+When it expires, the client asks you to sign in again.
 
 In claude.ai: **Settings → Connectors → Add custom connector**, and paste the URL.
 
