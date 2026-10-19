@@ -1,5 +1,13 @@
 # @selvajs/selva
 
+## 4.20.0-beta.6
+
+### Minor Changes
+
+- 873470a: MCP tools: `selva_describe_definition` and `selva_solve` take `definition`, a guid or an exact display name. A read-only key no longer sees `selva_solve`. Long number outputs show their first 50 values. `MCP_ALLOWED_ORIGINS` lists extra browser origins `/mcp` accepts.
+- 0aac511: - MCP clients can sign in through the browser: OAuth discovery, registration, a consent page at `/oauth/authorize` and a token endpoint. Approving mints a 30-day API token named after the client. `/mcp`'s 401 points clients at it.
+  - The form-CSRF check moves from SvelteKit into the hook, so the OAuth token endpoint and API-token multipart uploads (which send no `Origin`) are no longer refused in production.
+
 ## 4.20.0-beta.5
 
 ### Minor Changes
