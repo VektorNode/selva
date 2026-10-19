@@ -84,5 +84,20 @@ export const dummyOutputValues: Record<string, unknown> = {
 		}
 	],
 	'output-007': JSON.stringify(chart),
-	'output-008': contourPlot
+	'output-008': contourPlot,
+	'output-009': [
+		{
+			fileName: 'preview',
+			fileType: '.svg',
+			data: `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="#e8eef5"/><polygon points="200,40 340,120 340,220 200,280 60,220 60,120" fill="#4f7cac" stroke="#2c4a6b" stroke-width="4"/><polygon points="200,40 340,120 200,190 60,120" fill="#7fa6cf"/><line x1="200" y1="190" x2="200" y2="280" stroke="#2c4a6b" stroke-width="4"/></svg>`,
+			isBase64Encoded: false
+		},
+		{
+			// Hairlines and tiny labels, to check that zooming keeps fine detail sharp.
+			fileName: 'detail',
+			fileType: '.svg',
+			data: `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000"><rect width="1600" height="1000" fill="#fff"/><g stroke="#cbd5e1" stroke-width="0.5">${Array.from({ length: 81 }, (_, i) => `<line x1="${i * 20}" y1="0" x2="${i * 20}" y2="1000"/>`).join('')}${Array.from({ length: 51 }, (_, i) => `<line x1="0" y1="${i * 20}" x2="1600" y2="${i * 20}"/>`).join('')}</g><g font-family="monospace" font-size="4" fill="#334155">${Array.from({ length: 40 }, (_, i) => `<text x="${i * 40 + 2}" y="6">${i * 40}</text>`).join('')}</g><circle cx="800" cy="500" r="300" fill="none" stroke="#2563eb" stroke-width="0.75"/><path d="M200 800 Q 800 100 1400 800" fill="none" stroke="#dc2626" stroke-width="0.5"/></svg>`,
+			isBase64Encoded: false
+		}
+	]
 };

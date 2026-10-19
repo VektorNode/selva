@@ -13,13 +13,7 @@
 	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
 	import { Button, Card, Collapsible, Switch } from '@selvajs/ui';
-	import {
-		ArrowDownToLine,
-		ArrowUpFromLine,
-		ChevronDown,
-		GripVertical,
-		AlertTriangle
-	} from '@lucide/svelte';
+	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
 	import { dragHandle } from 'svelte-dnd-action';
@@ -61,31 +55,6 @@
 	let typeLabel = $derived(paramInfo?.type ?? item.widgetType);
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 
-	// Above this many steps, the slider widget gets noticeably laggy on drag —
-	// each tick fires a re-render and a debounced WS round-trip.
-	const SLIDER_STEPS_WARNING_THRESHOLD = 3000;
-	const sliderStepCount = $derived.by(() => {
-		if (!isNumberInput || !paramInfo) return 0;
-		const min = paramInfo.minimum;
-		const max = paramInfo.maximum;
-		const step = paramInfo.stepSize;
-		if (
-			typeof min !== 'number' ||
-			typeof max !== 'number' ||
-			typeof step !== 'number' ||
-			step <= 0 ||
-			!Number.isFinite(max - min)
-		) {
-			return 0;
-		}
-		return Math.floor((max - min) / step);
-	});
-	const sliderTooManySteps = $derived(sliderStepCount > SLIDER_STEPS_WARNING_THRESHOLD);
-	const showSliderPerfWarning = $derived.by(() => {
-		if (!isNumberInput || !sliderTooManySteps) return false;
-		const cfg = item.config as NumberWidgetConfig | undefined;
-		return cfg?.renderAsSlider ?? true;
-	});
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
 	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
 	let isDropdownInput = $derived(item.type === 'input' && item.widgetType === 'dropdown');
@@ -316,15 +285,6 @@
 						{typeLabel}
 					</span>
 				{/if}
-				{#if showSliderPerfWarning}
-					<span
-						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400"
-						title={`Slider has ~${sliderStepCount.toLocaleString()} steps (> ${SLIDER_STEPS_WARNING_THRESHOLD.toLocaleString()}). May slow the UI on drag. Increase the step size in Grasshopper or turn off Slider mode.`}
-					>
-						<AlertTriangle size={10} strokeWidth={2.5} />
-						{sliderStepCount.toLocaleString()} steps
-					</span>
-				{/if}
 				<input
 					type="text"
 					bind:value={item.displayName}
@@ -488,16 +448,6 @@
 											class="scale-75"
 										/>
 									</div>
-									{#if showSliderPerfWarning}
-										<div
-											class="mt-1 rounded-sm border border-amber-300 bg-amber-50 px-2 py-1 text-[10px] text-amber-900"
-										>
-											This slider has ~{sliderStepCount.toLocaleString()} steps. Sliders above
-											{SLIDER_STEPS_WARNING_THRESHOLD.toLocaleString()} steps can noticeably slow the
-											UI on drag. Consider increasing the step size in Grasshopper or switching to a number
-											input.
-										</div>
-									{/if}
 								{/if}
 
 								{#if isDropdownInput && dropdownConfig}
