@@ -6,6 +6,8 @@ engine ships the machinery and each host writes its tools. The engine never lear
 entities.
 
 Research behind the Selva tools: [mcp-from-api-tokens.md](../research/mcp-from-api-tokens.md).
+Spec and client requirements, checked against `/mcp`:
+[mcp-best-practices.md](../research/mcp-best-practices.md).
 The host-side examples below come from the first outside host.
 
 ## Split

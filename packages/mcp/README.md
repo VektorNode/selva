@@ -52,10 +52,18 @@ await server.listen({ transport: 'stdio' }); // checks the live spec first
 - **The key is redacted** from every tool output.
 - **`listen` checks the live spec** at `/api/v1/openapi.json`: every declared call must exist
   with the same scope, or the server refuses to start.
+- **A browser `Origin` must be the host's own** or listed in `allowedOrigins`; anything else gets 403. Native clients send none.
+- **`grantedActions` hides what the key can't use.** Given it, `tools/list` drops tools whose
+  calls need an action the key lacks, and calling one answers 403 with an `insufficient_scope`
+  challenge. `challenge` adds `resource_metadata` and `scope` to the 401 and 403, for OAuth
+  clients.
+
+Both protocol eras are served: `2026-07-28` per request, and 2025-era clients statelessly.
 
 ## Output
 
-A tool returns a string, or `{ text, structured?, images? }`. `images` (`{ data, mimeType }`,
+A tool returns a string, or `{ text, structured?, images? }`. A tool with `output` (Zod or JSON
+Schema) lists it as `outputSchema`, and clients may reject a `structured` that doesn't match it. `images` (`{ data, mimeType }`,
 base64) follow the text as MCP image content, for a model that can see. Clients render PNG, JPEG,
 GIF and WebP, not SVG.
 

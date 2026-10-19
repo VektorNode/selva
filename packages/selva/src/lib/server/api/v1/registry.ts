@@ -46,7 +46,8 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		method: 'GET',
 		path: '/me',
 		scope: 'read',
-		summary: 'The calling identity, its acting org, and its effective permissions.',
+		summary:
+			'The calling identity, its acting org, its effective permissions, and for a token its id and scopes.',
 		response: 'object'
 	},
 	{

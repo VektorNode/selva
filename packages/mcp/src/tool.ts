@@ -26,6 +26,12 @@ export interface ToolDefinition<Ops = never, Args = Record<string, unknown>> {
 	description: string;
 	/** A Zod schema validates and types `args`; JSON Schema and derived inputs pass args through. */
 	input: ZodType<Args> | JsonSchema | DerivedInput;
+	/**
+	 * The shape of `structured`, listed as the tool's `outputSchema`. Clients may reject a
+	 * result that doesn't match, so every success must return `structured` in this shape,
+	 * `detail: 'full'` included. Keep it as loose as the real data.
+	 */
+	output?: ZodType | JsonSchema;
 	/** Every operationId `run` may call. Annotations derive from these; `api.call` refuses others. */
 	calls: string[];
 	run(api: Api<Ops>, args: Args, ctx: ToolContext): Promise<ToolOutput | string>;
@@ -70,6 +76,8 @@ export interface FromOperationOptions {
 	limit?: number;
 	omit?: string[];
 	errorHint?: ErrorHint;
+	/** See `ToolDefinition.output`. The raw body under `detail: 'full'` must match it too. */
+	output?: ZodType | JsonSchema;
 }
 
 const DETAIL: JsonSchema = {
@@ -93,6 +101,7 @@ export function fromOperation(
 		}),
 		calls: [operationId],
 		errorHint: options.errorHint,
+		output: options.output,
 		async run(api, args, { spec, signal }) {
 			const op = spec.get(operationId)!;
 			const { detail, ...rest } = args;
@@ -190,6 +199,13 @@ function derive(input: DerivedInput, spec: OperationIndex): JsonSchema {
 		...(required.size && { required: [...required] }),
 		...(op.body && op.body.additionalProperties === false && { additionalProperties: false })
 	};
+}
+
+export function resolveOutput(output: ZodType | JsonSchema): JsonSchema {
+	if (!(output instanceof z.ZodType)) return output;
+	const schema = z.toJSONSchema(output, { io: 'output', target: 'draft-2020-12' }) as JsonSchema;
+	delete schema.$schema;
+	return schema;
 }
 
 export interface Annotations {

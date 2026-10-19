@@ -38,6 +38,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [plugin-compat-gate](./features/plugin-compat-gate.md)                          | [#218](https://github.com/VektorNode/selva/issues/218)                          |
 | [mountable-api](./features/mountable-api.md)                                    | **unfiled** — in flight, handoff is in the plan itself                          |
 | [presolve-bundle](./features/presolve-bundle.md)                                | **unfiled** — parked on a storage decision                                      |
+| [mcp-next](./features/mcp-next.md)                                              | **unfiled**: transport, tool surface, SDK v2, OAuth, evals, apps                |
 | [cloud-binary-transport](./features/cloud-binary-transport.md)                  | **unfiled** — deliberately deferred                                             |
 | [slva-identity](./features/slva-identity.md)                                    | **unfiled** — in flight on `feat/mesh-compression`                              |
 | [live-solve-channel](./features/live-solve-channel.md)                          | **unfiled** — design only; builds on solve-diagnostics                          |

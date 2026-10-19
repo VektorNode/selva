@@ -4,6 +4,7 @@
  * derived per request from the caller's membership, not frozen at mint time.
  */
 
+import { formatApiScope } from '@selvajs/platform';
 import { requireCaller, type ApiHandler } from '../api/index.js';
 
 export const getMe: ApiHandler = async (req) => {
@@ -17,7 +18,10 @@ export const getMe: ApiHandler = async (req) => {
 			actingOrgId: ctx.actingOrgId,
 			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
-			starredDefinitions: req.profile?.starredDefinitions ?? []
+			starredDefinitions: req.profile?.starredDefinitions ?? [],
+			...(ctx.apiScope && {
+				apiToken: { id: ctx.apiScope.tokenId, scopes: ctx.apiScope.scopes.map(formatApiScope) }
+			})
 		}
 	};
 };

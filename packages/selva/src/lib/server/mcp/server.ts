@@ -1,8 +1,29 @@
-import { createMcpServer } from '@selvajs/mcp';
+import { createMcpServer, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
+import { parseApiScope } from '@selvajs/platform';
+import { env } from '$env/dynamic/private';
 import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
 export const MCP_PATH = '/mcp';
+
+/** `write` and `solve` each include `read`, as `scopeAllows` decides at /api/v1. */
+export async function grantedActions(api: UntypedApi): Promise<ScopeAction[]> {
+	const me = (await api.call('getMe')) as { apiToken?: { scopes: string[] } };
+	const actions = new Set<ScopeAction>();
+	for (const s of me.apiToken?.scopes ?? []) {
+		const scope = parseApiScope(s);
+		if (!scope) continue;
+		actions.add(scope.action).add('read');
+	}
+	return [...actions];
+}
+
+function mcpAllowedOrigins(): string[] {
+	return (env.MCP_ALLOWED_ORIGINS ?? '')
+		.split(',')
+		.map((o) => o.trim())
+		.filter(Boolean);
+}
 
 // Built once and reused: building indexes the OpenAPI document and resolves
 // every tool, which an unauthenticated POST must not be able to trigger. One
@@ -26,7 +47,9 @@ export function handleMcp(request: Request, origin: string, fetch: typeof global
 			instructions: INSTRUCTIONS,
 			baseUrl: origin,
 			openapi: buildOpenApiDocument(),
-			tools: selvaTools(origin)
+			tools: selvaTools(origin),
+			grantedActions,
+			allowedOrigins: mcpAllowedOrigins()
 		});
 		cached = { origin, server };
 	}
