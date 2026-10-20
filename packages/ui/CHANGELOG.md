@@ -1,5 +1,34 @@
 # @selvajs/ui
 
+## 6.6.0-beta.5
+
+### Minor Changes
+
+- daf8a99: The panel footer is Calculate plus one ⋯ menu. Saving and loading inputs, and every `panelActions` entry, are items in that menu instead of a row of buttons; on a phone the menu sits in the drawer's pinned footer, so saving and loading are reachable there too.
+
+  - `PresetLabels`: `saveButton` and `loadButton` become `saveMenuItem` and `loadMenuItem` ("Save inputs…", "Load inputs…"); the save dialog's confirm button reads the new `saveConfirmButton`. Dialog copy says "inputs" instead of "parameter state".
+  - `ActionButton`: `size` is gone and `variant` is `'default' | 'destructive'`; `hint` shows under the item's label.
+  - `CalculateButton` takes a `trailing` snippet, drawn beside the button in its row.
+  - New message `moreActions` names the menu.
+
+- daf8a99: `ComputeApp` takes `messages?: Partial<ViewerMessages>`, layered over the `lang` catalog, so a host can reword any string of the app's chrome or supply every string for a language without a built-in catalog. The overrides reach every component inside, the viewer included. `setLocaleContext` takes the same overrides as an optional second getter, for a host that provides the locale at its root or uses `Viewer` on its own.
+
+  Every user-visible string the compute app renders now comes from `ViewerMessages`, with English and German entries: image, chart, file and text outputs, the file, number, text and dropdown inputs, the footer's message counts and copyright line, the message-centre dialog, the dialog close button, the theme toggle, the viewer's display looks and `ErrorScreen`. A `{name}` in a message is a placeholder the component fills in; pairs ending in `One`/`Other` are singular and plural.
+
+- daf8a99: `ActionButton` (the `panelActions` prop) takes `disabled?: boolean` and `hint?: string`. The hint is a short line under the button, linked to it with `aria-describedby`, so a host can show an action as unavailable with its reason instead of hiding it. In click-to-calculate mode the calculate button now sits above the panel actions, in the order they are used. On a phone the panel actions and the calculate button are pinned in the drawer's footer instead of following the last field.
+- daf8a99: - `ComputeApp` takes `onSolved(settlement)`, called once per settled solve.
+  - A `panelActions` entry can set `solvesFirst`: picking it solves when the inputs changed (or waits for a running or held solve), then runs `onclick` with the applied result. A refused or failed solve skips the action; its messages already show. While inputs are stale the item reads "Calculates first" unless it has its own `hint`.
+  - `useSolveSession` forwards `ensureSolved`, `onSettled` and `reportAborted`; `SolveSettlement` is exported.
+
+### Patch Changes
+
+- daf8a99: Accessibility fixes in the compute app. The layout's root is now the page's `<main>` landmark, so don't wrap `ComputeApp` or `AppLayout` in another `<main>`. Each panel has a visually hidden `h2` named after its tab, and each group title is an `h3` around its collapse button, with the group description outside the button. Solve progress is announced through live regions that stay mounted (the solving indicator, the live solve panel's current step, and the calculate button's start and finish), since a region created together with its text is not read out. The field help button and the dialog close button are 24×24 px, with a 44 px hit area on touch; on touch the panel's buttons, inputs and selects are at least 44 px tall. Slider thumbs and colour inputs are named by their field label, the phone drawer's handle is named by its visible label (the `expandPanel`/`collapsePanel` messages are gone; `aria-expanded` carries the state), and the drawer's fields are inert while it is closed. The page footer stays on one line at 320 px.
+- daf8a99: Stronger contrast for control boundaries, focus and error text in `base.css`. `--input` is `oklch(0.62 0 0)` in light mode (was `oklch(0.91 0 0)`, about 1.3:1) and `oklch(1 0 0 / 36%)` in dark mode (was 12%), at least 3:1 against background, card and muted, so field borders and unchecked boxes stay visible. `--ring` and `--sidebar-ring` are `oklch(0.55 0 0)` in light mode (was 0.67), and every primitive now draws its focus ring at full opacity instead of 50%, so the ring reaches 3:1 too; destructive buttons and badges use the same ring as the rest. Light `--destructive` is `oklch(0.55 0.19 27)` (was `oklch(0.6 0.18 27)`), so error text reaches 4.5:1.
+- daf8a99: Plainer default wording for people who don't know how the app computes: the calculate button reads "Berechnen" (it said "Zum Berechnen klicken", wrong on a touch screen), a finished solve reads "Berechnet" instead of "Aktuell", the solving indicator's subtitle no longer names Grasshopper ("This can take a moment…" / "Das kann einen Moment dauern…"), and loading reads "Loading…" / "Wird geladen…" rather than mentioning a schema.
+- daf8a99: An image or chart output without data no longer draws an empty "waiting" box: it stays hidden until a solve returns its data, and a group, tab or side pane holding nothing else closes with it, so an unsolved preview no longer takes a third of the screen. While a returned image is still decoding, its frame shows a loading indicator. A dynamic value list output, which never draws, no longer leaves an empty cell in its group.
+- Updated dependencies [daf8a99]
+  - @selvajs/solve@1.3.0-beta.2
+
 ## 6.6.0-beta.4
 
 ### Patch Changes
