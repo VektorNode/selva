@@ -14,6 +14,8 @@
 	import HelpButton from './HelpButton.svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { Label } from '$lib/components/primitives/label';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatCount, formatMessage } from '$lib/i18n/messages';
 
 	interface Props {
 		item: OutputLayoutItem;
@@ -22,6 +24,9 @@
 	}
 
 	let { item, value, displayName }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let copied = $state(false);
 	let copyTimeout: ReturnType<typeof setTimeout>;
@@ -142,7 +147,7 @@
 				await downloadFiles(filesArray, fileName);
 			}
 		} catch (err) {
-			downloadError = err instanceof Error ? err.message : 'Failed to download files';
+			downloadError = err instanceof Error ? err.message : t.downloadFailed;
 			console.error('[OutputDisplayWidget] Download error:', err);
 		} finally {
 			downloading = false;
@@ -160,7 +165,7 @@
 {/snippet}
 
 {#snippet placeholder()}
-	<span class="text-muted-foreground not-italic">Waiting for data...</span>
+	<span class="text-muted-foreground not-italic">{t.waitingForData}</span>
 {/snippet}
 
 {#snippet treeNodes(nodes: Map<string, TreeNode>, path: string)}
@@ -209,7 +214,7 @@
 {#snippet fileDisplay()}
 	{#if fileCount === 0}
 		<div class="rounded px-3 py-3 text-sm border border-border bg-muted text-muted-foreground">
-			Waiting for file data...
+			{t.waitingForFiles}
 		</div>
 	{:else}
 		<div class="gap-2 flex flex-col">
@@ -218,7 +223,7 @@
 					<span class="min-w-0 text-sm font-medium truncate text-foreground">
 						{fileCount === 1
 							? `${filesArray[0].fileName}${filesArray[0].fileType}`
-							: `${fileCount} files`}
+							: formatMessage(t.fileCount, { count: fileCount })}
 					</span>
 					<span class="text-xs shrink-0 text-muted-foreground">{formatFileSize(totalSize)}</span>
 				</div>
@@ -245,18 +250,16 @@
 				<div
 					class="rounded px-3 py-2 text-sm border border-destructive bg-destructive/10 text-destructive"
 				>
-					<div class="font-medium">Duplicate file names detected</div>
+					<div class="font-medium">{t.duplicateFilesTitle}</div>
 					<div class="mt-1 text-xs">
-						The following {duplicatePaths.length === 1 ? 'path appears' : 'paths appear'} more than once:
+						{formatCount(duplicatePaths.length, t.duplicatePathsOne, t.duplicatePathsOther)}
 					</div>
 					<ul class="mt-1 ml-4 text-xs list-disc">
 						{#each duplicatePaths as path (path)}
 							<li class="truncate"><span class="font-mono">{path}</span></li>
 						{/each}
 					</ul>
-					<div class="mt-1 text-xs">
-						Rename outputs in your Grasshopper definition so each file has a unique name.
-					</div>
+					<div class="mt-1 text-xs">{t.duplicateFilesHint}</div>
 				</div>
 			{/if}
 			{#if downloadError}
@@ -268,8 +271,10 @@
 			{/if}
 			<Button onclick={handleDownload} disabled={downloading || hasDuplicates} class="w-full">
 				{downloading
-					? 'Downloading...'
-					: `Download ${fileCount === 1 ? 'File' : `${fileCount} Files`}`}
+					? t.downloading
+					: fileCount === 1
+						? t.downloadFile
+						: formatMessage(t.downloadFiles, { count: fileCount })}
 			</Button>
 		</div>
 	{/if}
@@ -316,7 +321,7 @@
 							: 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}"
 					>
 						<Button onclick={copyToClipboard} size="sm">
-							{copied ? 'Copied!' : 'Copy'}
+							{copied ? t.copied : t.copy}
 						</Button>
 					</div>
 				{/if}

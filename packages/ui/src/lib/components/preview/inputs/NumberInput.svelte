@@ -6,16 +6,30 @@
 	import * as InputGroup from '$lib/components/primitives/input-group';
 	import { Separator } from '$lib/components/primitives/separator';
 	import * as Field from '$lib/components/primitives/field';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatMessage } from '$lib/i18n/messages';
 
 	interface Props {
 		inputId: string;
+		/** Id of the field's label, which also names the slider thumb. */
+		labelId?: string;
 		value?: number;
 		config?: NumberWidgetConfig;
 		onChange: (value: SupportedTypes) => void;
 		disabled?: boolean;
 	}
 
-	let { inputId, value = $bindable(), config, onChange, disabled = false }: Props = $props();
+	let {
+		inputId,
+		labelId,
+		value = $bindable(),
+		config,
+		onChange,
+		disabled = false
+	}: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let validationError = $state<string | null>(null);
 
@@ -29,9 +43,9 @@
 
 	function validateNumber(val: number): string | null {
 		if (config?.minimum !== undefined && val < config.minimum)
-			return `Minimum value is ${config.minimum}`;
+			return formatMessage(t.minValue, { min: config.minimum });
 		if (config?.maximum !== undefined && val > config.maximum)
-			return `Maximum value is ${config.maximum}`;
+			return formatMessage(t.maxValue, { max: config.maximum });
 		return null;
 	}
 
@@ -158,7 +172,8 @@
 				min={trackMin}
 				max={trackMax}
 				step={useProxyTrack ? 1 : step}
-				title="Hold Shift to drag finely"
+				title={t.fineDragHint}
+				thumbLabelledby={labelId}
 				{disabled}
 			/>
 		</div>

@@ -19,11 +19,14 @@
 	--muted-foreground: oklch(0.5 0 0);
 	--accent: oklch(0.93 0 0);
 	--accent-foreground: oklch(0.3 0 0);
-	--destructive: oklch(0.6 0.18 27);
+	/* 4.5:1 as small text on background, card and muted, and under white text. */
+	--destructive: oklch(0.55 0.19 27);
 	--destructive-foreground: oklch(0.985 0 0);
 	--border: oklch(0.86 0 0);
-	--input: oklch(0.91 0 0);
-	--ring: oklch(0.67 0 0);
+	/* Field borders and unchecked boxes: at least 3:1 against background, card and muted, the
+	   WCAG minimum for a control's boundary. Same for the focus ring, which is drawn opaque. */
+	--input: oklch(0.62 0 0);
+	--ring: oklch(0.55 0 0);
 	--success: oklch(0.66 0.14 145);
 	--success-foreground: oklch(0.99 0 0);
 	--warning: oklch(0.78 0.12 75);
@@ -42,7 +45,7 @@
 	--sidebar-accent: oklch(0.93 0 0);
 	--sidebar-accent-foreground: oklch(0.3 0 0);
 	--sidebar-border: oklch(0.88 0 0);
-	--sidebar-ring: oklch(0.67 0 0);
+	--sidebar-ring: oklch(0.55 0 0);
 	--inputparam: oklch(1 0 0);
 	--outputparam: oklch(1 0 0);
 	/* Scrim behind modal dialogs and drawers. */
@@ -67,7 +70,7 @@
 	--destructive: oklch(0.7 0.17 22);
 	--destructive-foreground: oklch(0.985 0 0);
 	--border: oklch(1 0 0 / 14%);
-	--input: oklch(1 0 0 / 12%);
+	--input: oklch(1 0 0 / 36%);
 	--ring: oklch(0.74 0 0);
 	--success: oklch(0.74 0.15 145);
 	--success-foreground: oklch(0.18 0.03 145);
@@ -179,7 +182,7 @@
 
 @layer base {
 	* {
-		@apply border-border outline-ring/50;
+		@apply border-border outline-ring;
 	}
 	html,
 	body {

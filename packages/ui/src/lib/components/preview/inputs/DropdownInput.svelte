@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, SupportedTypes } from '@selvajs/schemas';
 	import * as Select from '$lib/components/primitives/select';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	interface Props {
 		value?: string;
@@ -10,6 +11,8 @@
 	}
 
 	let { value, config, onChange, disabled = false }: Props = $props();
+
+	const locale = getLocaleContext();
 
 	const options = $derived(config?.options || {});
 	const currentValue = $derived(value || '');
@@ -30,7 +33,7 @@
 	{disabled}
 >
 	<Select.Trigger class="w-full" {disabled}>
-		{currentLabel || 'Select an option...'}
+		{currentLabel || locale.messages.selectOption}
 	</Select.Trigger>
 	<Select.Content>
 		{#each Object.entries(options) as [name, expr] (name)}

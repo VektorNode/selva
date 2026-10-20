@@ -3,9 +3,9 @@
  * unset keys fall back to `DEFAULT_PRESET_LABELS`.
  */
 export interface PresetLabels {
-	// Toolbar buttons
-	saveButton: string;
-	loadButton: string;
+	// Panel footer menu
+	saveMenuItem: string;
+	loadMenuItem: string;
 
 	// Save dialog
 	saveDialogTitle: string;
@@ -19,6 +19,7 @@ export interface PresetLabels {
 	saveTagsLabel: string;
 	saveTagsPlaceholder: string;
 	saveNameRequired: string;
+	saveConfirmButton: string;
 
 	// Load dialog
 	loadDialogTitle: string;
@@ -47,12 +48,12 @@ export interface PresetLabels {
 }
 
 export const DEFAULT_PRESET_LABELS: PresetLabels = {
-	saveButton: 'Save State',
-	loadButton: 'Load State',
+	saveMenuItem: 'Save inputs…',
+	loadMenuItem: 'Load inputs…',
 
-	saveDialogTitle: 'Save Parameter State',
-	saveDialogDescription: 'Save the current parameter values as a .slvp file',
-	saveNameLabel: 'State Name *',
+	saveDialogTitle: 'Save inputs',
+	saveDialogDescription: 'Save the current input values as a .slvp file',
+	saveNameLabel: 'Name *',
 	saveNamePlaceholder: 'e.g., Design Option A',
 	saveDescriptionLabel: 'Description',
 	saveDescriptionPlaceholder: 'Optional description of this state',
@@ -60,10 +61,11 @@ export const DEFAULT_PRESET_LABELS: PresetLabels = {
 	saveAuthorPlaceholder: 'Your name or email',
 	saveTagsLabel: 'Tags',
 	saveTagsPlaceholder: 'facade, option-a, client-approved (comma-separated)',
-	saveNameRequired: 'Please enter a name for this state',
+	saveNameRequired: 'Please enter a name for these inputs',
+	saveConfirmButton: 'Save',
 
-	loadDialogTitle: 'Load Parameter State',
-	loadDialogDescription: 'Select a .slvp state file from your drive to load',
+	loadDialogTitle: 'Load inputs',
+	loadDialogDescription: 'Select a .slvp file from your drive to load',
 	loadFromFileButton: 'Select .slvp File',
 	loadEmptyList: 'No saved states found',
 	loadImportError: 'Failed to import state: ',

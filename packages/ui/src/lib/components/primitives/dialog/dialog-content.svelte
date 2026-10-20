@@ -4,6 +4,7 @@
 	import type { Snippet } from 'svelte';
 	import * as Dialog from './index.js';
 	import { cn, type WithoutChildrenOrChild } from '$lib/utils.js';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	let {
 		ref = $bindable(null),
@@ -20,6 +21,8 @@
 		/** `flush` drops padding and gap, for content that draws its own sections edge to edge. */
 		variant?: 'default' | 'flush';
 	} = $props();
+
+	const locale = getLocaleContext();
 </script>
 
 <Dialog.Portal {...portalProps}>
@@ -36,11 +39,12 @@
 	>
 		{@render children?.()}
 		{#if showCloseButton}
+			<!-- 24px around the 16px icon, and 44px of hit area on touch, without moving the icon. -->
 			<DialogPrimitive.Close
-				class="end-4 top-4 rounded-xs [&_svg:not([class*='size-'])]:size-4 absolute opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0"
+				class="end-3 top-3 p-1 rounded-xs [&_svg:not([class*='size-'])]:size-4 pointer-coarse:after:-inset-2.5 absolute opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none pointer-coarse:after:absolute [&_svg]:pointer-events-none [&_svg]:shrink-0"
 			>
 				<XIcon />
-				<span class="sr-only">Close</span>
+				<span class="sr-only">{locale.messages.close}</span>
 			</DialogPrimitive.Close>
 		{/if}
 	</DialogPrimitive.Content>

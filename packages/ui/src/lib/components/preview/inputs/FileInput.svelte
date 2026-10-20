@@ -5,6 +5,8 @@
 	import { toast } from '$lib/components/primitives/sonner';
 	import { FileUp, Link, CircleAlert, CircleCheck } from '@lucide/svelte';
 	import { APP_DEFAULTS } from '$lib/constants';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatMessage } from '$lib/i18n/messages';
 
 	interface Props {
 		value?: string;
@@ -21,6 +23,9 @@
 		allowedInputModes,
 		onChange
 	}: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let effectiveModes = $derived(
 		allowedInputModes && allowedInputModes.length > 0
@@ -52,9 +57,12 @@
 				if (parsed.type === 'base64') {
 					if (parsed._isMetadata && parsed._fileSize) {
 						const sizeMB = (parsed._fileSize / 1024 / 1024).toFixed(2);
-						uploadedFileName = `Uploaded file (${parsed.fileEnding}, ${sizeMB}MB)`;
+						uploadedFileName = formatMessage(t.uploadedFileSize, {
+							ext: parsed.fileEnding,
+							size: sizeMB
+						});
 					} else {
-						uploadedFileName = `Uploaded file (${parsed.fileEnding})`;
+						uploadedFileName = formatMessage(t.uploadedFile, { ext: parsed.fileEnding });
 					}
 				} else if (parsed.type === 'url') {
 					urlInput = parsed.file;
@@ -64,6 +72,20 @@
 			}
 		}
 	});
+
+	function formatNotAccepted(fileEnding: string): string {
+		return formatMessage(t.fileFormatNotAccepted, {
+			ext: fileEnding,
+			formats: acceptedFormats.join(', ')
+		});
+	}
+
+	function formatTooLarge(bytes: number): string {
+		return formatMessage(t.fileTooLarge, {
+			size: (bytes / 1024 / 1024).toFixed(2),
+			max: APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB
+		});
+	}
 
 	function getFileExtension(filename: string): string {
 		// Strip query strings before extracting extension
@@ -96,19 +118,21 @@
 			try {
 				parsedUrl = new URL(urlInput);
 			} catch {
-				urlError = { message: 'Invalid URL — make sure it starts with https://', isCors: false };
+				urlError = { message: t.urlInvalid, isCors: false };
 				return;
 			}
 
 			if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
-				urlError = { message: 'Only http:// and https:// URLs are supported.', isCors: false };
+				urlError = { message: t.urlProtocolUnsupported, isCors: false };
 				return;
 			}
 
 			const response = await fetch(urlInput);
 			if (!response.ok) {
 				urlError = {
-					message: `Server returned ${response.status} ${response.statusText}. Check the URL is correct and publicly accessible.`,
+					message: formatMessage(t.urlServerError, {
+						status: `${response.status} ${response.statusText}`.trim()
+					}),
 					isCors: false
 				};
 				return;
@@ -118,17 +142,14 @@
 			const fileEnding = getFileExtension(urlInput);
 
 			if (!isValidFileExtension(fileEnding)) {
-				urlError = {
-					message: `File format "${fileEnding}" is not accepted. Allowed: ${acceptedFormats.join(', ')}`,
-					isCors: false
-				};
+				urlError = { message: formatNotAccepted(fileEnding), isCors: false };
 				return;
 			}
 
 			const maxSize = APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES;
 			if (blob.size > maxSize) {
 				urlError = {
-					message: `File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB). Download it and use Upload instead.`,
+					message: `${formatTooLarge(blob.size)} ${t.fileTooLargeUseUpload}`,
 					isCors: false
 				};
 				return;
@@ -140,12 +161,15 @@
 					const result = e.target?.result as string;
 					resolve(result.includes(',') ? result.split(',')[1] : result);
 				};
-				reader.onerror = () => reject(new Error('Failed to read the downloaded file.'));
+				reader.onerror = () => reject(new Error(t.fileReadFailed));
 				reader.readAsDataURL(blob);
 			});
 			const data = JSON.stringify({ file: base64Data, type: 'base64', fileEnding });
 			value = data;
-			urlSuccess = `Loaded ${fileEnding} (${(blob.size / 1024).toFixed(0)} KB)`;
+			urlSuccess = formatMessage(t.fileLoaded, {
+				ext: fileEnding,
+				size: (blob.size / 1024).toFixed(0)
+			});
 			onChange(data);
 		} catch (error) {
 			if (isCorsError(error)) {
@@ -158,26 +182,22 @@
 				})();
 				// The opaque TypeError hides CORS blocks and plain network failures (404, DNS)
 				// alike, so the message has to cover both.
-				let hint =
-					'Check that the URL is correct and the file is publicly accessible. If the server requires login, download the file and use the Upload option instead.';
+				let hint = t.urlUnreachableHint;
 				if (host.includes('sharepoint.com') || host.includes('onedrive.com')) {
-					hint =
-						'SharePoint/OneDrive blocks browser access. Open the file in SharePoint, use "Download" to save it locally, then upload it here.';
+					hint = t.urlHintSharePoint;
 				} else if (host.includes('drive.google.com')) {
-					hint =
-						'Google Drive blocks browser access. Use "Download" in Google Drive to save the file locally, then upload it here.';
+					hint = t.urlHintGoogleDrive;
 				} else if (host.includes('dropbox.com')) {
-					hint =
-						'Dropbox links may block browser access. Try changing "?dl=0" to "?dl=1" in the URL, or download and upload instead.';
+					hint = t.urlHintDropbox;
 				}
 				urlError = {
-					message: `Could not reach "${host}" — the file may not exist, or the server does not allow browser access.`,
+					message: formatMessage(t.urlUnreachable, { host }),
 					isCors: true,
 					hint
 				};
 			} else {
 				urlError = {
-					message: error instanceof Error ? error.message : 'Unknown error',
+					message: error instanceof Error ? error.message : t.unknownError,
 					isCors: false
 				};
 			}
@@ -194,7 +214,7 @@
 		const fileEnding = getFileExtension(file.name);
 
 		if (!isValidFileExtension(fileEnding)) {
-			toast.error(`File format not accepted: ${fileEnding}`);
+			toast.error(formatNotAccepted(fileEnding));
 			return;
 		}
 
@@ -204,9 +224,7 @@
 		// note in constants.ts) — some files pass here and still 413. The URL import
 		// path applies the same cap.
 		if (file.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
-			toast.error(
-				`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB).`
-			);
+			toast.error(formatTooLarge(file.size));
 			return;
 		}
 
@@ -279,7 +297,7 @@
 							: 'text-muted-foreground hover:text-foreground'
 					}`}
 				>
-					{mode === 'upload' ? 'Upload' : 'URL'}
+					{mode === 'upload' ? t.fileModeUpload : t.fileModeUrl}
 				</button>
 			{/each}
 		</div>
@@ -289,7 +307,7 @@
 		<div class="gap-2 flex flex-col">
 			<Label for="url-input">
 				<Link size={16} />
-				File URL
+				{t.fileUrlLabel}
 			</Label>
 			<div class="gap-2 flex">
 				<Input
@@ -310,7 +328,7 @@
 					disabled={isLoading || !urlInput.trim()}
 					onclick={handleUrlChange}
 				>
-					{isLoading ? 'Fetching...' : 'Fetch'}
+					{isLoading ? t.fetchingFile : t.fetchFile}
 				</Button>
 			</div>
 
@@ -336,9 +354,7 @@
 			{/if}
 
 			{#if !urlError && !urlSuccess}
-				<p class="text-xs text-muted-foreground">
-					URL must be publicly accessible (no login required).
-				</p>
+				<p class="text-xs text-muted-foreground">{t.fileUrlPublic}</p>
 			{/if}
 		</div>
 	{:else}
@@ -353,11 +369,11 @@
 				ondrop={handleDrop}
 			>
 				<FileUp size={16} />
-				{uploadedFileName || 'Choose File or Drag & Drop'}
+				{uploadedFileName || t.chooseFile}
 			</Button>
 			{#if acceptedFormats.length > 0}
 				<p class="text-xs text-muted-foreground">
-					Accepted formats: {acceptedFormats.join(', ')}
+					{formatMessage(t.acceptedFormats, { formats: acceptedFormats.join(', ') })}
 				</p>
 			{/if}
 		</div>

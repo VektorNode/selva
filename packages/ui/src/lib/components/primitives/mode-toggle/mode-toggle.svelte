@@ -3,10 +3,13 @@
 	import Moon from '@lucide/svelte/icons/moon';
 	import { toggleMode } from 'mode-watcher';
 	import { Button } from '$lib/components/primitives/button';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+
+	const locale = getLocaleContext();
 </script>
 
 <Button onclick={toggleMode} variant="outline" size="icon">
 	<Sun class="size-5 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
 	<Moon class="size-5 absolute scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
-	<span class="sr-only">Toggle theme</span>
+	<span class="sr-only">{locale.messages.toggleTheme}</span>
 </Button>

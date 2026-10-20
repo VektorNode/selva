@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Download, Upload } from '@lucide/svelte';
+	import { Upload } from '@lucide/svelte';
 	import type { UISchema, ParameterPreset } from '@selvajs/schemas';
 	import {
 		createSavedState,
@@ -9,17 +9,12 @@
 		importStateFromJson
 	} from '../../schema/param-exporter';
 	import { Button, Input, Label, Textarea, Dialog, Callout, IssueList, toast } from '../primitives';
-
-	import type { ActionButton } from '../../types/actionButton';
 	import { DEFAULT_PRESET_LABELS, type PresetLabels } from '../../types/presetLabels';
 
 	interface Props {
 		schema: UISchema;
 		currentValues: Record<string, unknown>;
 		onLoadValues: (values: Record<string, unknown>) => void;
-		showSaveButton?: boolean;
-		showLoadButton?: boolean;
-		actions?: ActionButton[];
 		/** When set, persist saved states via this callback instead of downloading a .slvp file. */
 		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
 		/** When set, the Load dialog lists these states instead of showing a file input. */
@@ -28,17 +23,7 @@
 		labels?: Partial<PresetLabels>;
 	}
 
-	let {
-		schema,
-		currentValues,
-		onLoadValues,
-		showSaveButton = true,
-		showLoadButton = true,
-		actions = [],
-		onSaveState,
-		onListStates,
-		labels
-	}: Props = $props();
+	let { schema, currentValues, onLoadValues, onSaveState, onListStates, labels }: Props = $props();
 
 	const t = $derived({ ...DEFAULT_PRESET_LABELS, ...labels });
 
@@ -58,7 +43,8 @@
 	let isLoadingList = $state(false);
 	let listError = $state('');
 
-	function openExportDialog() {
+	/** Opens the save dialog. The panel footer's menu calls it. */
+	export function openSave() {
 		exportName = `State ${new Date().toLocaleDateString()}`;
 		exportDescription = '';
 		exportAuthor = schema.author || '';
@@ -128,7 +114,8 @@
 		loadResult = null;
 	}
 
-	async function openLoadDialog() {
+	/** Opens the load dialog. The panel footer's menu calls it. */
+	export async function openLoad() {
 		showLoadDialog = true;
 		if (!onListStates) return;
 
@@ -154,30 +141,6 @@
 		showLoadDialog = false;
 	}
 </script>
-
-{#if showSaveButton}
-	<Button variant="outline" size="sm" onclick={openExportDialog}>
-		<Download class="mr-2 h-4 w-4" />
-		{t.saveButton}
-	</Button>
-{/if}
-
-{#if showLoadButton}
-	<Button variant="outline" size="sm" onclick={openLoadDialog}>
-		<Upload class="mr-2 h-4 w-4" />
-		{t.loadButton}
-	</Button>
-{/if}
-
-{#each actions as action (action.id)}
-	<Button variant={action.variant ?? 'outline'} size={action.size ?? 'sm'} onclick={action.onclick}>
-		{#if action.icon}
-			{@const IconComponent = action.icon}
-			<IconComponent class="mr-2 h-4 w-4" />
-		{/if}
-		{action.label}
-	</Button>
-{/each}
 
 <!-- .sps is the pre-rename extension; files with it exist on users' drives, so keep accepting it. -->
 <input
@@ -225,7 +188,7 @@
 
 		<Dialog.Footer>
 			<Button variant="outline" onclick={() => (showExportDialog = false)}>{t.cancelButton}</Button>
-			<Button onclick={handleExport}>{t.saveButton}</Button>
+			<Button onclick={handleExport}>{t.saveConfirmButton}</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>

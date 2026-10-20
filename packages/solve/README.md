@@ -76,6 +76,27 @@ manual mode:
 <button onclick={() => session.solve()} disabled={!session.hasPendingChanges}> Solve </button>
 ```
 
+### Knowing when a solve is done
+
+`solve()` returns a promise of how the solve ended, and `onSettled` tells you about every solve,
+the ones `setValue` starts included:
+
+```ts
+const settled = await session.solve();
+if (settled.status === 'applied') save(settled.result);
+
+session.onSettled((s) => analytics.track('solve', s.status));
+```
+
+A solve settles once nothing about it can change: a result held for review counts when the user
+accepts or rejects it, and one a queued solve is about to replace never counts. The promise never
+rejects; a failure is a status (`SolveSettlement` in
+[`solve-session.ts`](./src/client/session/solve-session.ts) lists them).
+
+For an action that needs the result for the current inputs, such as an export, use
+`ensureSolved()`: it answers from the result on screen when nothing changed and solves only when
+it must.
+
 ### Why three objects and not one
 
 ```

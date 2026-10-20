@@ -3,6 +3,8 @@
 	import { onMount } from 'svelte';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
 	import { loadScript } from '$lib/utils/loadScript';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatMessage } from '$lib/i18n/messages';
 
 	interface Props {
 		item: OutputChartLayoutItem;
@@ -10,6 +12,9 @@
 	}
 
 	let { item: _item, value }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	const MAP_TYPE_SET = new Set(['scattermap', 'scattermapbox', 'choropleth', 'scattergeo']);
 
@@ -49,11 +54,11 @@
 		if (!wrapperEl) return;
 		if (!document.fullscreenElement) {
 			wrapperEl.requestFullscreen().catch((err) => {
-				error = `Fullscreen unavailable: ${err.message}`;
+				error = formatMessage(t.fullscreenUnavailable, { error: err.message });
 			});
 		} else {
 			document.exitFullscreen().catch((err) => {
-				error = `Exit fullscreen failed: ${err.message}`;
+				error = formatMessage(t.exitFullscreenFailed, { error: err.message });
 			});
 		}
 	}
@@ -129,7 +134,7 @@
 				...figData.config
 			});
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to render chart';
+			error = e instanceof Error ? e.message : t.chartRenderFailed;
 		} finally {
 			loading = false;
 		}
@@ -183,10 +188,9 @@
 >
 	{#if error}
 		<div class="px-4 py-3 text-sm text-destructive">{error}</div>
-	{:else if !figData && value}
-		<div class="px-4 py-8 text-sm text-center text-muted-foreground">Receiving chart data...</div>
 	{:else if !figData}
-		<div class="px-4 py-8 text-sm text-center text-muted-foreground">Waiting for chart data...</div>
+		<!-- The layout hides this output while it has no data, so this is data that doesn't parse yet. -->
+		<div class="px-4 py-8 text-sm text-center text-muted-foreground">{t.chartReceiving}</div>
 	{:else}
 		<div bind:this={containerEl} class="w-full {isFullscreen ? 'h-screen' : 'h-95'}"></div>
 
@@ -206,7 +210,8 @@
 			<button
 				onclick={toggleFullscreen}
 				disabled={loading}
-				title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+				title={isFullscreen ? t.exitFullscreen : t.fullscreen}
+				aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
 				class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
 			>
 				{#if isFullscreen}

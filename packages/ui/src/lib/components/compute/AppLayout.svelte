@@ -1,8 +1,9 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes, ParameterPreset } from '@selvajs/schemas';
+	import type { SolveSettlement } from '@selvajs/solve/client';
 	import type { ActionButton } from '../../types/actionButton';
 	import type { PresetLabels } from '../../types/presetLabels';
-	import { ChevronUp } from '@lucide/svelte';
+	import { ChevronUp, Download, Ellipsis, Upload } from '@lucide/svelte';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import CalculateButton from '../primitives/CalculateButton.svelte';
@@ -10,10 +11,13 @@
 	import TabLayout from '../preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
 	import * as Resizable from '$lib/components/primitives/resizable';
+	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
 	import { Button } from '$lib';
 	import ParameterPresetManager from './ParameterPresetManager.svelte';
+	import { runPanelAction } from '../../compute/run-panel-action';
 	import { getLocaleContext } from '../../i18n/localeContext.svelte';
 	import { buildVisibilityMap, isTabVisible, itemKey } from '../../schema/visibility-rules';
+	import { DEFAULT_PRESET_LABELS } from '../../types/presetLabels';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -29,6 +33,11 @@
 		hasNeverSolved?: boolean;
 		isViewerFullscreen?: boolean;
 		oncalculate?: () => void;
+		/**
+		 * The result for the current inputs, solving if it must (`session.ensureSolved`). Needed
+		 * by `solvesFirst` actions; without it they run straight away.
+		 */
+		ensureSolved?: () => Promise<SolveSettlement>;
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes, forceSolve?: boolean) => void | Promise<void>;
 		onLoadValues?: (values: Record<string, unknown>) => void | Promise<void>;
@@ -52,6 +61,7 @@
 		hasNeverSolved = false,
 		isViewerFullscreen = $bindable(false),
 		oncalculate = () => {},
+		ensureSolved,
 		values,
 		onValueChange,
 		onLoadValues,
@@ -65,6 +75,11 @@
 		logoUrl,
 		onViewerReady
 	}: Props = $props();
+
+	const presetText = $derived({ ...DEFAULT_PRESET_LABELS, ...presetLabels });
+	let presets = $state<ParameterPresetManager | null>(null);
+	const hasMenu = $derived(showSaveButton || showLoadButton || panelActions.length > 0);
+	const resultIsStale = $derived(hasPendingChanges || hasNeverSolved);
 
 	const hasViewer = $derived(
 		!!(schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote)
@@ -151,54 +166,110 @@
 	}
 </script>
 
+<!-- Everything but Calculate: saving and loading inputs, then the host's own actions. -->
+{#snippet actionsMenu()}
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					variant="outline"
+					size="icon-lg"
+					class="shrink-0"
+					title={t.moreActions}
+					aria-label={t.moreActions}
+				>
+					<Ellipsis />
+				</Button>
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<!-- Above the fullscreen viewer, which sits at z-index 10000. -->
+		<DropdownMenu.Content side="top" align="end" sideOffset={6} class="min-w-56 z-10001 w-auto">
+			{#if showSaveButton}
+				<DropdownMenu.Item onSelect={() => presets?.openSave()}>
+					<Download />
+					{presetText.saveMenuItem}
+				</DropdownMenu.Item>
+			{/if}
+			{#if showLoadButton}
+				<DropdownMenu.Item onSelect={() => presets?.openLoad()}>
+					<Upload />
+					{presetText.loadMenuItem}
+				</DropdownMenu.Item>
+			{/if}
+			{#if (showSaveButton || showLoadButton) && panelActions.length > 0}
+				<DropdownMenu.Separator />
+			{/if}
+			{#each panelActions as action (action.id)}
+				{@const hint =
+					action.hint ?? (action.solvesFirst && resultIsStale ? t.calculatesFirst : undefined)}
+				<DropdownMenu.Item
+					disabled={action.disabled}
+					variant={action.variant ?? 'default'}
+					onSelect={() => runPanelAction(action, ensureSolved)}
+					class="items-start"
+				>
+					{#if action.icon}
+						{@const IconComponent = action.icon}
+						<IconComponent class="mt-0.5" />
+					{/if}
+					<span class="flex flex-col">
+						{action.label}
+						{#if hint}
+							<span class="text-xs leading-snug text-muted-foreground">{hint}</span>
+						{/if}
+					</span>
+				</DropdownMenu.Item>
+			{/each}
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+{/snippet}
+
+<!-- One primary action and one menu. A definition that solves on every change has no Calculate,
+     so the menu sits alone at the end of the row. -->
+{#snippet footer()}
+	{#if schema.instanceSolve === false}
+		<CalculateButton
+			{hasPendingChanges}
+			{hasNeverSolved}
+			{isSolving}
+			{oncalculate}
+			trailing={hasMenu ? actionsMenu : undefined}
+		/>
+	{:else if hasMenu}
+		<div class="mt-3 pb-3 pt-2 px-2 flex justify-end border-t border-border/50">
+			{@render actionsMenu()}
+		</div>
+	{/if}
+{/snippet}
+
+<!-- `hostsFooter` marks the one panel that carries the footer. On a phone the footer moves to the
+     drawer's pinned bottom instead. -->
 {#snippet panelContent(
 	panelFilter: 'left' | 'right' | undefined,
 	requestedTabId: string | null,
-	showParameterStateManager = true,
-	showCalculateButton = true
+	hostsFooter = true
 )}
 	<div class="panel-content-wrapper">
 		{#if schema.layout.type === 'tabbed'}
 			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} />
 		{/if}
-		{#if showParameterStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
+		{#if hostsFooter && !isMobile}
 			<div class="panel-footer px-1">
-				<div class="gap-2 flex flex-wrap items-center [&>button]:flex-1">
-					{#if showParameterStateManager}
-						<ParameterPresetManager
-							{schema}
-							currentValues={values}
-							onLoadValues={handleLoadValues}
-							{showSaveButton}
-							{showLoadButton}
-							{onSaveState}
-							{onListStates}
-							labels={presetLabels}
-						/>
-					{/if}
-					{#each panelActions as action (action.id)}
-						<Button
-							variant={action.variant ?? 'outline'}
-							size={action.size ?? 'sm'}
-							onclick={action.onclick}
-						>
-							{#if action.icon}
-								{@const IconComponent = action.icon}
-								<IconComponent class="mr-2 h-4 w-4" />
-							{/if}
-							{action.label}
-						</Button>
-					{/each}
-				</div>
-				{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
-					<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
-				{/if}
+				{@render footer()}
 			</div>
 		{/if}
 	</div>
 {/snippet}
 
-<div
+<!-- Pinned under the scrolling fields, so the primary action never sits at the end of a long list. -->
+{#snippet drawerFooter(isInert: boolean)}
+	<div class="drawer-footer" inert={isInert}>
+		{@render footer()}
+	</div>
+{/snippet}
+
+<main
 	data-layout-root
 	class="min-h-0 sm:flex-row sm:py-(--page-py) flex flex-1 flex-col overflow-hidden {leftCollapsed
 		? 'sm:pl-0'
@@ -230,12 +301,12 @@
 				class:drawer-open={drawerOpen}
 				class:drawer-closed={!drawerOpen}
 			>
+				<!-- Named by its visible label; aria-expanded carries the open/closed state. -->
 				<button
 					class="drawer-handle-bar"
 					onclick={() => (drawerOpen = !drawerOpen)}
 					ontouchstart={onDrawerTouchStart}
 					ontouchend={onDrawerTouchEnd}
-					aria-label={drawerOpen ? t.collapsePanel : t.expandPanel}
 					aria-expanded={drawerOpen}
 				>
 					<div class="drawer-pill"></div>
@@ -248,62 +319,47 @@
 					/>
 				</button>
 
-				<div class="drawer-content">
+				<!-- Inert while closed: the fields are clipped out of view, and tabbing into them
+				     would scroll the drawer's insides around behind the handle. -->
+				<div class="drawer-content" inert={!drawerOpen}>
 					<div class="px-3 pb-6">
 						{#if hasLeftPanel}
-							{@render panelContent(
-								hasRightPanel ? 'left' : undefined,
-								requestedLeftTabId,
-								!hasRightPanel,
-								false
-							)}
+							{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
 						{/if}
 						{#if hasRightPanel}
-							<div class="my-4 gap-2 flex items-center">
+							<!-- Decorative: the section below names itself with a heading. -->
+							<div class="my-4 gap-2 flex items-center" aria-hidden="true">
 								<div class="h-px flex-1 bg-border"></div>
 								<span class="text-xs font-medium px-1 text-muted-foreground">
 									{rightTabs[0]?.label ?? t.moreTab}
 								</span>
 								<div class="h-px flex-1 bg-border"></div>
 							</div>
-							{@render panelContent('right', requestedRightTabId, true, false)}
+							{@render panelContent('right', requestedRightTabId, false)}
 						{/if}
 					</div>
 				</div>
 
-				{#if schema.instanceSolve === false}
-					<div class="drawer-footer">
-						<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
-					</div>
-				{/if}
+				{@render drawerFooter(!drawerOpen)}
 			</div>
 		{:else}
 			<div class="flex flex-1 flex-col overflow-hidden">
 				<div class="px-3 pt-3 flex-1 overflow-y-auto">
 					{#if hasLeftPanel}
-						{@render panelContent(
-							hasRightPanel ? 'left' : undefined,
-							requestedLeftTabId,
-							!hasRightPanel,
-							false
-						)}
+						{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
 					{/if}
 					{#if hasRightPanel}
-						<div class="my-4 gap-2 flex items-center">
+						<div class="my-4 gap-2 flex items-center" aria-hidden="true">
 							<div class="h-px flex-1 bg-border"></div>
 							<span class="text-xs font-medium px-1 text-muted-foreground">
 								{rightTabs[0]?.label ?? t.moreTab}
 							</span>
 							<div class="h-px flex-1 bg-border"></div>
 						</div>
-						{@render panelContent('right', requestedRightTabId, true, false)}
+						{@render panelContent('right', requestedRightTabId, false)}
 					{/if}
 				</div>
-				{#if schema.instanceSolve === false}
-					<div class="drawer-footer">
-						<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
-					</div>
-				{/if}
+				{@render drawerFooter(false)}
 			</div>
 		{/if}
 	{:else if !hasViewer && !isTwoPanelMode && hasLeftPanel !== hasRightPanel}
@@ -312,9 +368,7 @@
 			<div class="min-h-0 flex h-full w-4/5 flex-col">
 				{@render panelContent(
 					hasRightPanel ? 'right' : undefined,
-					hasRightPanel ? requestedRightTabId : requestedLeftTabId,
-					!hasRightPanel,
-					!hasRightPanel
+					hasRightPanel ? requestedRightTabId : requestedLeftTabId
 				)}
 			</div>
 		</div>
@@ -412,7 +466,7 @@
 								? 'hidden'
 								: ''}"
 						>
-							{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
+							{@render panelContent('right', requestedRightTabId, !hasLeftPanel)}
 						</div>
 					</Resizable.Pane>
 				{/if}
@@ -432,9 +486,20 @@
 			{/if}
 		</div>
 	{/if}
-</div>
 
-<SolvingIndicator show={showSolvingIndicator} />
+	<SolvingIndicator show={showSolvingIndicator} />
+</main>
+
+<!-- The save, load and validation dialogs; the footer's menu opens them. -->
+<ParameterPresetManager
+	bind:this={presets}
+	{schema}
+	currentValues={values}
+	onLoadValues={handleLoadValues}
+	{onSaveState}
+	{onListStates}
+	labels={presetLabels}
+/>
 
 <style>
 	.fullscreen-layout {
@@ -480,8 +545,10 @@
 	.drawer-closed {
 		height: 60px;
 	}
+	/* The pinned footer takes a fixed slice, so a short phone opens the drawer further to leave
+	   room for the fields; a tall one keeps it at 60% of the screen. */
 	.drawer-open {
-		height: 60svh;
+		height: max(60svh, min(30rem, 100svh - 10rem));
 	}
 
 	.drawer-handle-bar {
@@ -524,6 +591,25 @@
 	.drawer-footer {
 		flex-shrink: 0;
 		padding: 0rem 1rem;
-		border-top: 1px solid var(--border);
+	}
+
+	/* Touch gets 44px targets on the panel's controls; a fine pointer keeps the denser sizes. */
+	@media (pointer: coarse) {
+		.panel-content-wrapper
+			:global(
+				:is(
+					[data-slot='button'],
+					[data-slot='input'],
+					[data-slot='select-trigger'],
+					[data-slot='input-group']
+				)
+			),
+		.drawer-footer :global([data-slot='button']) {
+			min-height: 2.75rem;
+		}
+		.panel-content-wrapper :global([data-slot='input-group'] > [data-slot='input-group-control']) {
+			align-self: stretch;
+			height: auto;
+		}
 	}
 </style>

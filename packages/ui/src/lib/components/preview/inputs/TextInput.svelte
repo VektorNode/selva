@@ -3,6 +3,8 @@
 	import { debounce } from '$lib/utils/debounce';
 	import { Input } from '$lib/components/primitives/input';
 	import * as Field from '$lib/components/primitives/field';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatMessage } from '$lib/i18n/messages';
 
 	interface Props {
 		inputId: string;
@@ -14,6 +16,9 @@
 
 	let { inputId, value = $bindable(), config, onChange, disabled = false }: Props = $props();
 
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
+
 	let validationError = $state<string | null>(null);
 	let currentValue = $state(value || '');
 
@@ -21,13 +26,13 @@
 
 	function validateText(val: string): string | null {
 		if (config?.maxLength && val.length > config.maxLength)
-			return `Maximum ${config.maxLength} characters allowed`;
+			return formatMessage(t.maxLength, { max: config.maxLength });
 		if (config?.pattern) {
 			try {
 				if (!new RegExp(config.pattern).test(val))
-					return config.customErrorMessage || 'Invalid format';
+					return config.customErrorMessage || t.invalidFormat;
 			} catch {
-				return 'Invalid validation pattern configured';
+				return t.invalidPattern;
 			}
 		}
 		return null;

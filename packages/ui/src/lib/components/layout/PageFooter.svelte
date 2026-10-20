@@ -5,6 +5,8 @@
 	import { useFooter } from '$lib/contexts/footerContext.svelte';
 	import ComputeMessagesDialog from '../compute/ComputeMessagesDialog.svelte';
 	import FooterItemRenderer from './FooterItemRenderer.svelte';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatCount, formatMessage } from '$lib/i18n/messages';
 
 	interface Props {
 		errors?: string[];
@@ -25,6 +27,9 @@
 		footerText,
 		children
 	}: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let footerStore = (() => {
 		try {
@@ -66,16 +71,15 @@
 	const hasMessages = $derived(totalCount > 0);
 
 	const copyrightLine = $derived(
-		footerText
-			? footerText.replace('{name}', copyrightName).replace('{year}', String(_currentYear))
-			: `by ${copyrightName} © ${_currentYear}`
+		formatMessage(footerText ?? t.copyright, { name: copyrightName, year: _currentYear })
 	);
 </script>
 
+<!-- One line at any width: the message counts keep their size and the copyright truncates. -->
 <footer
-	class="px-4 gap-4 text-xs h-7 flex shrink-0 items-center justify-between border-t border-border bg-background text-muted-foreground select-none"
+	class="px-4 gap-4 text-xs h-7 flex shrink-0 items-center justify-between border-t border-border bg-background whitespace-nowrap text-muted-foreground select-none"
 >
-	<div class="gap-4 flex items-center">
+	<div class="gap-4 flex shrink-0 items-center">
 		{#each leftItems as item (item.id)}
 			<FooterItemRenderer {item} />
 		{/each}
@@ -90,11 +94,13 @@
 							: warningCount > 0
 								? 'text-warning hover:bg-warning/10'
 								: 'hover:bg-muted'}"
-						title={`${totalCount} ${totalCount === 1 ? 'message' : 'messages'} from the last solve`}
+						title={formatCount(totalCount, t.lastSolveMessagesOne, t.lastSolveMessagesOther)}
 					>
 						{#if errorCount > 0}
 							<CircleAlert class="h-3.5 w-3.5" />
-							<span class="font-medium">{errorCount} Error{errorCount !== 1 ? 's' : ''}</span>
+							<span class="font-medium"
+								>{formatCount(errorCount, t.errorCountOne, t.errorCountOther)}</span
+							>
 						{/if}
 
 						{#if warningCount > 0}
@@ -102,12 +108,16 @@
 								<span class="text-border">•</span>
 							{/if}
 							<TriangleAlert class="h-3.5 w-3.5" />
-							<span class="font-medium">{warningCount} Warning{warningCount !== 1 ? 's' : ''}</span>
+							<span class="font-medium"
+								>{formatCount(warningCount, t.warningCountOne, t.warningCountOther)}</span
+							>
 						{/if}
 
 						{#if errorCount === 0 && warningCount === 0}
 							<Info class="h-3.5 w-3.5" />
-							<span class="font-medium">{remarkCount} Note{remarkCount !== 1 ? 's' : ''}</span>
+							<span class="font-medium"
+								>{formatCount(remarkCount, t.noteCountOne, t.noteCountOther)}</span
+							>
 						{/if}
 					</div>
 				{/snippet}
@@ -121,11 +131,11 @@
 		{/if}
 	</div>
 
-	<div class="gap-4 ml-auto flex items-center">
+	<div class="gap-4 min-w-0 ml-auto flex items-center">
 		{#each rightItems as item (item.id)}
 			<FooterItemRenderer {item} />
 		{/each}
 
-		<p>{copyrightLine}</p>
+		<p class="truncate">{copyrightLine}</p>
 	</div>
 </footer>

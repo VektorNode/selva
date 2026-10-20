@@ -86,10 +86,13 @@ export function useSolveSession(args: SolveSessionArgs): SolveSession {
 		discard: () => session.discard(),
 		setValue: (id, value, forceSolve) => session.setValue(id, value, forceSolve),
 		solve: () => session.solve(),
+		ensureSolved: () => session.ensureSolved(),
+		onSettled: (listener) => session.onSettled(listener),
 		loadValues: (incoming) => session.loadValues(incoming),
 		rebuild: (schema, scopeKey) => session.rebuild(schema, scopeKey),
 		report: (result) => session.report(result),
 		reportError: (message) => session.reportError(message),
+		reportAborted: () => session.reportAborted(),
 		subscribe: (listener) => session.subscribe(listener),
 		notify: () => session.notify(),
 		dispose: () => session.dispose()

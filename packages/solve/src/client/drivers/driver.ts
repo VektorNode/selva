@@ -15,11 +15,21 @@ import type { SolveResult } from '../../shared/solve-fn.js';
  * frames that arrive unsolicited (a replay on connect, a recompute triggered outside the web
  * UI) would otherwise be stamped with an unrelated input set, which is precisely the stale
  * pairing the field exists to prevent.
+ *
+ * **Every solve asked for ends in exactly one report**: `report`, `reportError` or
+ * `reportAborted`. A host awaiting `session.solve()` waits for it, so a driver that drops a
+ * request silently leaves that promise unresolved until the session is rebuilt or disposed.
  */
 export interface SolveDriver {
 	solve(values: Record<string, unknown>): void;
 	cancel(): void;
 	readonly isSolving: boolean;
+	/**
+	 * A newer solve is waiting behind the one now reporting, so the session holds back its
+	 * settlement until that one lands. Optional: a push transport with no client-side queue
+	 * leaves it undefined, and every report settles.
+	 */
+	readonly hasQueued?: boolean;
 	/**
 	 * Drops cached solve results. Optional — only the request/response driver has a
 	 * client-side memo to clear. Call on rebuild: a definition swap must not serve a
@@ -49,4 +59,6 @@ export interface SolveEventSource {
 export interface SolveReporter<TMesh = unknown> {
 	report(result: SolveResult<TMesh>): void;
 	reportError(message: string): void;
+	/** The solve was cancelled before it produced anything. Nothing on screen changes. */
+	reportAborted(): void;
 }

@@ -53,10 +53,10 @@ export function createAsyncThrottle<T>(
 		currentAbortController = new AbortController();
 		const { signal } = currentAbortController;
 		const deadlineId = setTimeout(() => {
-			// Cleared in `finally` on every other path, so firing means a genuine
-			// timeout — the only signal for it (the abort itself is swallowed below).
+			// Cleared in `finally` on every other path, so firing means a genuine timeout.
 			console.warn(`[Solve/throttle] run exceeded ${runDeadlineMs}ms — aborting`);
-			currentAbortController?.abort();
+			// The reason tells `run` a timeout from a cancel: one is a failure, the other not.
+			currentAbortController?.abort(new DOMException('Run deadline exceeded', 'TimeoutError'));
 		}, runDeadlineMs);
 
 		setRunning(true);

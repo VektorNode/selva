@@ -28,11 +28,24 @@ export function createRequestResponseDriver<TMesh = unknown>(
 	// after the throttle's latest-wins ordering has picked these values to run.
 	const memo = createSolveMemo<TMesh>({ meshPolicy });
 
+	// A stopped run still ends in a report: a timeout is a failure the user should read, a
+	// cancel is not. Either way a host awaiting the solve hears back.
+	function reportStopped(signal: AbortSignal) {
+		const reason = signal.reason as { name?: string } | undefined;
+		if (reason?.name === 'TimeoutError') {
+			getReporter().reportError(
+				`The solve took longer than ${Math.round(solveDeadlineMs / 1000)} s and was stopped.`
+			);
+		} else {
+			getReporter().reportAborted();
+		}
+	}
+
 	const throttle = createAsyncThrottle<Record<string, unknown>>(
 		async (values, signal) => {
 			const cached = memo.get(values);
 			if (cached !== undefined) {
-				if (signal.aborted) return;
+				if (signal.aborted) return reportStopped(signal);
 				getReporter().report(cached);
 				return;
 			}
@@ -41,7 +54,7 @@ export function createRequestResponseDriver<TMesh = unknown>(
 				if (signal.aborted) {
 					// eslint-disable-next-line no-console -- normal during a slider scrub; not a warning
 					console.debug('[Solve/driver] solve completed after abort — result discarded');
-					return;
+					return reportStopped(signal);
 				}
 				// Stamped here rather than in the SolveFn: a memo hit never calls it, so values
 				// captured inside would pair the served result with whatever solved last.
@@ -51,8 +64,8 @@ export function createRequestResponseDriver<TMesh = unknown>(
 			} catch (err) {
 				if (signal.aborted) {
 					// eslint-disable-next-line no-console -- normal during a slider scrub; not a warning
-					console.debug('[Solve/driver] solve aborted (superseded, cancelled, or timed out)');
-					return;
+					console.debug('[Solve/driver] solve aborted (cancelled or timed out)');
+					return reportStopped(signal);
 				}
 				console.warn('[Solve/driver] solve failed:', err);
 				getReporter().reportError(err instanceof Error ? err.message : String(err));
@@ -75,6 +88,9 @@ export function createRequestResponseDriver<TMesh = unknown>(
 		},
 		get isSolving() {
 			return throttle.isRunning;
+		},
+		get hasQueued() {
+			return throttle.hasPending;
 		},
 		clearCache() {
 			memo.clear();

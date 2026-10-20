@@ -99,7 +99,13 @@ const myDriver: SolveDriver = {
 getReporter().report({ outputs, meshes, errors, warnings });
 ```
 
-If the transport fails, call `reportError(message)`.
+If the transport fails, call `reportError(message)`. If the solve was cancelled before it produced
+anything, call `reportAborted()`. Every solve the session asks for must end in exactly one of the
+three: `session.solve()` resolves on it, so a dropped request leaves that promise waiting.
+
+A driver with its own queue also exposes `hasQueued`, true while a newer solve waits behind the one
+reporting. The session then holds back that result's settlement, so a host hears about the solve
+that lands, not every one on the way. A push transport without a queue leaves it out.
 
 ## Real-world examples
 

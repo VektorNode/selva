@@ -30,6 +30,7 @@ export {
 	createRequestResponseDriver,
 	type SolveSession,
 	type SolveSessionArgs,
+	type SolveSettlement,
 	type SolveDriver,
 	type SolveReporter,
 	type LiveSolveState,

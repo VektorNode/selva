@@ -87,6 +87,9 @@
 	<div class="h-full bg-muted dark:bg-background">
 		<ScrollArea class="h-full" orientation="vertical">
 			<div class="px-3">
+				<!-- A heading per panel lets a screen reader jump between them; the tab, when shown,
+				     already names it on screen. -->
+				<h2 class="sr-only">{tab.label}</h2>
 				{#if visibleGroups.length === 0}
 					<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
 				{:else}

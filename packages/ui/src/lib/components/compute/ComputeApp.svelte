@@ -7,7 +7,12 @@
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { createSolvingIndicator } from '../../compute/solving.svelte';
 	import { createRequestResponseDriver } from '@selvajs/solve/client';
-	import type { RetainedSolveResult, SolveEventSource, SolveSession } from '@selvajs/solve/client';
+	import type {
+		RetainedSolveResult,
+		SolveEventSource,
+		SolveSession,
+		SolveSettlement
+	} from '@selvajs/solve/client';
 	import SolveMessages from './SolveMessages.svelte';
 	import { meshPolicy } from '@selvajs/visualization/parse';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
@@ -19,8 +24,8 @@
 	import { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import { setClientSlot, type ClientSlot } from '../../contexts/clientSlotContext.svelte';
-	import type { Locale } from '../../i18n/messages';
-	import { setLocaleContext, getLocaleContext } from '../../i18n/localeContext.svelte';
+	import type { Locale, ViewerMessages } from '../../i18n/messages';
+	import { layerLocaleContext } from '../../i18n/localeContext.svelte';
 
 	import type { Snippet } from 'svelte';
 
@@ -34,8 +39,11 @@
 		isEmbedded?: boolean;
 		primaryColor?: string;
 		showModeToggle?: boolean;
+		/** Host actions, listed in the panel footer's ⋯ menu after saving and loading inputs. */
 		panelActions?: ActionButton[];
+		/** Lists "Save inputs…" in the footer menu. */
 		showSaveButton?: boolean;
+		/** Lists "Load inputs…" in the footer menu. */
 		showLoadButton?: boolean;
 		/** When set, persist saved states via this callback instead of downloading a .slvp file. */
 		onSaveState?: (state: ParameterPreset) => void | Promise<void>;
@@ -74,6 +82,12 @@
 			 */
 			getSession: () => SolveSession;
 		}) => void;
+		/**
+		 * Once per settled solve: applied, discarded, blocked, aborted or failed. A result held
+		 * for review counts when the user accepts or rejects it, and one a queued solve replaces
+		 * never does. Auto-solves from input changes count too.
+		 */
+		onSolved?: (settlement: SolveSettlement) => void;
 		/** Hands the live three.js viewer to the host once it mounts. See `Viewer.svelte` for the contract. */
 		onViewerReady?: (viewer: ThreeViewer) => void | (() => void);
 		/** Viewer chrome and defaults. `backgroundColor` and `showSceneManager` are set by the layout. */
@@ -92,6 +106,14 @@
 		// Language for the app's own chrome, English when unset. Does not translate
 		// schema-authored labels or Grasshopper-sourced names/metadata.
 		lang?: Locale;
+		/**
+		 * Replaces individual strings of the app's own chrome, layered over the `lang` catalog
+		 * (`VIEWER_MESSAGES`): reword a label, or supply every string for a language with no
+		 * built-in catalog. Reaches every component inside, the viewer included. A `{name}`
+		 * placeholder in the default is filled the same way in an override. The preset manager's
+		 * strings come from `presetLabels` instead.
+		 */
+		messages?: Partial<ViewerMessages>;
 	}
 
 	let {
@@ -123,22 +145,26 @@
 		brandName,
 		header,
 		onReady,
+		onSolved,
 		onViewerReady,
 		viewerConfig = {},
 		externalScopeKey,
 		clientSlot,
-		lang
+		lang,
+		messages
 	}: Props = $props();
 
 	// Reaches InputControl deep in the tree.
 	// svelte-ignore state_referenced_locally
 	setClientSlot(clientSlot);
 
-	// Resolution: explicit `lang` → host-provided locale → English. Passed as a getter so
-	// switching `lang` updates the chrome live.
-	const hostLocale = getLocaleContext();
-	setLocaleContext(() => lang ?? hostLocale.locale);
-	const t = $derived(getLocaleContext().messages);
+	// Resolution: explicit `lang` → host-provided locale → English, with `messages` on top.
+	// Getters, so switching either updates the chrome live.
+	const locale = layerLocaleContext(
+		() => lang,
+		() => messages
+	);
+	const t = $derived(locale.messages);
 
 	const resolvedScopeKey = $derived(externalScopeKey || definitionKey || schema?.id || '');
 
@@ -167,6 +193,9 @@
 	let isViewerFullscreen = $state(false);
 
 	const solvingIndicator = createSolvingIndicator(() => session.isSolving);
+
+	// Read at call time, so a host swapping the callback needs no resubscribe.
+	$effect(() => session.onSettled((settlement) => onSolved?.(settlement)));
 
 	$effect(() => {
 		onReady?.({
@@ -272,6 +301,7 @@
 					{presetLabels}
 					onValueChange={handleValueChange}
 					oncalculate={handleCalculate}
+					ensureSolved={() => session.ensureSolved()}
 					onLoadValues={() => session.loadValues({})}
 				/>
 			{/key}
@@ -286,15 +316,4 @@
 	onabort={() => session.abort()}
 	onconfirm={() => session.acknowledge()}
 	ondiscard={() => session.discard()}
-	labels={{
-		solving: t.solveSolving,
-		blockedTitle: t.solveBlockedTitle,
-		messagesTitle: t.solveMessagesTitle,
-		blockedDescription: t.solveBlocked,
-		messagesDescription: t.solveMessagesDescription,
-		confirm: t.solveMessagesConfirm,
-		discard: t.solveMessagesDiscard,
-		abort: t.solveMessagesAbort,
-		dismiss: t.solveMessagesDismiss
-	}}
 />

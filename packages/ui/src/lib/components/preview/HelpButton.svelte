@@ -12,13 +12,15 @@
 </script>
 
 <!-- Every field has one, so a column of them is noise. Where a fine pointer can hover, it shows
-     only while the pointer or focus is inside the enclosing `group/field`; touch keeps it visible. -->
+     only while the pointer or focus is inside the enclosing `group/field`; touch keeps it visible.
+     The box is 24px, touch gets a 44px hit area, and the negative margin keeps the label row from
+     growing. -->
 <Dialog.Root>
 	<Dialog.Trigger>
 		{#snippet child({ props })}
 			<button
 				{...props}
-				class="-m-1 p-1 shrink-0 cursor-help rounded-sm text-muted-foreground transition hover:text-foreground pointer-fine:opacity-0 pointer-fine:group-focus-within/field:opacity-100 pointer-fine:group-hover/field:opacity-100 pointer-fine:focus-visible:opacity-100"
+				class="-m-1 size-6 pointer-coarse:after:-inset-2.5 relative flex shrink-0 cursor-help items-center justify-center rounded-sm text-muted-foreground transition hover:text-foreground pointer-coarse:after:absolute pointer-fine:opacity-0 pointer-fine:group-focus-within/field:opacity-100 pointer-fine:group-hover/field:opacity-100 pointer-fine:focus-visible:opacity-100"
 				aria-label={label}
 			>
 				<HelpCircle class="size-3.5" />

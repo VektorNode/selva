@@ -3,6 +3,7 @@
 	import * as Card from './primitives/card/index.js';
 	import { Button } from './primitives/button/index.js';
 	import Callout from './primitives/Callout.svelte';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	interface Props {
 		status?: number;
@@ -12,6 +13,9 @@
 	}
 
 	let { status = 500, message, details, homeLink = '/' }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 </script>
 
 <div class="p-4 flex min-h-screen items-center justify-center bg-background">
@@ -26,7 +30,7 @@
 		</Card.Header>
 		<Card.Content>
 			<div class="gap-4 flex flex-col">
-				<Callout tone="danger" title="Error">
+				<Callout tone="danger" title={t.errorTitle}>
 					{#if message}{message}{/if}
 				</Callout>
 				{#if details}
@@ -37,7 +41,7 @@
 			</div>
 		</Card.Content>
 		<Card.Footer>
-			<Button variant="outline" href={homeLink} rel="external" class="w-full">Go Home</Button>
+			<Button variant="outline" href={homeLink} rel="external" class="w-full">{t.goHome}</Button>
 		</Card.Footer>
 	</Card.Root>
 </div>

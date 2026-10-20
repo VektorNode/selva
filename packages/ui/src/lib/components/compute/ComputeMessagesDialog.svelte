@@ -10,6 +10,8 @@
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import * as Dialog from '$lib/components/primitives/dialog';
 	import IssueList, { type Issue } from '$lib/components/primitives/IssueList.svelte';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatCount } from '$lib/i18n/messages';
 
 	interface Props {
 		/** The last solve's messages. Preferred over `errors`/`warnings` when both are given. */
@@ -22,6 +24,9 @@
 	}
 
 	let { diagnostics, errors = [], warnings = [], trigger }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let open = $state(false);
 
@@ -41,26 +46,11 @@
 		count: number;
 	}
 
-	const LEVELS = [
-		{
-			level: 'error',
-			severity: 'error',
-			one: 'error',
-			many: 'errors'
-		},
-		{
-			level: 'warning',
-			severity: 'warning',
-			one: 'warning',
-			many: 'warnings'
-		},
-		{
-			level: 'remark',
-			severity: 'note',
-			one: 'note',
-			many: 'notes'
-		}
-	] as const;
+	const levels = $derived([
+		{ level: 'error', severity: 'error', one: t.errorCountOne, other: t.errorCountOther },
+		{ level: 'warning', severity: 'warning', one: t.warningCountOne, other: t.warningCountOther },
+		{ level: 'remark', severity: 'note', one: t.noteCountOne, other: t.noteCountOther }
+	] as const);
 
 	/**
 	 * One section per level that has messages, most severe first; within a level, the order the
@@ -68,23 +58,25 @@
 	 * branches raises the same warning 200 times, and an unstacked list buries every other message.
 	 */
 	const sections = $derived(
-		LEVELS.map((meta) => {
-			// A null-prototype object rather than a Map: a local built fresh on each derive, never
-			// reactive state, and the lint rule that steers Map → SvelteMap cannot tell them apart.
-			const byKey: Record<string, Item> = Object.create(null);
-			const items: Item[] = [];
-			for (const d of rows) {
-				if (d.level !== meta.level) continue;
-				const key = `${d.message} ${d.source ?? ''}`;
-				if (byKey[key]) {
-					byKey[key].count++;
-				} else {
-					byKey[key] = { level: d.level, message: d.message, source: d.source, count: 1 };
-					items.push(byKey[key]);
+		levels
+			.map((meta) => {
+				// A null-prototype object rather than a Map: a local built fresh on each derive, never
+				// reactive state, and the lint rule that steers Map → SvelteMap cannot tell them apart.
+				const byKey: Record<string, Item> = Object.create(null);
+				const items: Item[] = [];
+				for (const d of rows) {
+					if (d.level !== meta.level) continue;
+					const key = `${d.message} ${d.source ?? ''}`;
+					if (byKey[key]) {
+						byKey[key].count++;
+					} else {
+						byKey[key] = { level: d.level, message: d.message, source: d.source, count: 1 };
+						items.push(byKey[key]);
+					}
 				}
-			}
-			return { ...meta, items };
-		}).filter((section) => section.items.length > 0)
+				return { ...meta, items };
+			})
+			.filter((section) => section.items.length > 0)
 	);
 
 	const issues = $derived<Issue[]>(
@@ -106,13 +98,11 @@
 
 	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>Messages</Dialog.Title>
+			<Dialog.Title>{t.messagesTitle}</Dialog.Title>
 			<Dialog.Description>
 				{#each sections as section, i (section.level)}
 					{#if i > 0}<span class="mx-1.5">·</span>{/if}
-					<span
-						>{section.items.length} {section.items.length === 1 ? section.one : section.many}</span
-					>
+					<span>{formatCount(section.items.length, section.one, section.other)}</span>
 				{/each}
 			</Dialog.Description>
 		</Dialog.Header>

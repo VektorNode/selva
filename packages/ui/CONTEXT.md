@@ -49,6 +49,14 @@ result into `values` and applies the post-solve lifecycle transitions (clear pen
 clear never-solved). Report-based rather than return-based so push transports fit
 without contortion.
 
+## Settlement
+
+How one solve ended, once nothing about it can change: `applied`, `discarded`, `blocked`,
+`aborted` or `failed`. A result held for review settles when the user accepts or rejects it;
+one a queued solve replaces never settles. `session.solve()` resolves with it,
+`session.onSettled` and `ComputeApp`'s `onSolved` report each one, and a footer action marked
+`solvesFirst` runs only on an applied one.
+
 ## Mesh policy
 
 The clone/dispose rules the request/response driver's result memo needs. **This package

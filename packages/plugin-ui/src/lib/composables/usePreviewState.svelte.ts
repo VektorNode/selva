@@ -64,7 +64,8 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		reportError: (message) => {
 			if (session) session.reportError(message);
 			else state.error = message;
-		}
+		},
+		reportAborted: () => session?.reportAborted()
 	};
 
 	// Built lazily on the first initialData (from inside handleInitialData's loadValues, once

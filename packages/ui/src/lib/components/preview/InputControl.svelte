@@ -27,6 +27,7 @@
 		TextInput
 	} from '$lib/components/preview/inputs';
 	import { getClientSlot } from '$lib/contexts/clientSlotContext.svelte';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	interface Props {
 		item: InputLayoutItem;
@@ -51,6 +52,8 @@
 		disabled = false,
 		dynamicOptions
 	}: Props = $props();
+
+	const locale = getLocaleContext();
 
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
@@ -171,7 +174,11 @@
 </script>
 
 {#snippet labelText(forId?: string, tone: 'quiet' | 'strong' = 'quiet')}
-	<Field.Label for={forId} class="min-w-0 block break-words">
+	<Field.Label
+		for={forId}
+		id={forId ? `${forId}-label` : undefined}
+		class="min-w-0 block break-words"
+	>
 		<span
 			class={tone === 'quiet' ? 'font-normal text-muted-foreground' : 'font-normal text-foreground'}
 			>{label}</span
@@ -221,6 +228,7 @@
 			{@const config = item.config}
 			<NumberInput
 				{inputId}
+				labelId="{inputId}-label"
 				value={typeof value === 'number' ? value : undefined}
 				{config}
 				onChange={commit}
@@ -290,7 +298,7 @@
 					/>
 				{/if}
 			{:else}
-				<p class="text-sm text-muted-foreground">No options available yet.</p>
+				<p class="text-sm text-muted-foreground">{locale.messages.noOptionsYet}</p>
 			{/if}
 		{:else if isFileWidget(item)}
 			{@const config = item.config as FileInputWidgetConfig}
@@ -303,6 +311,7 @@
 			/>
 		{:else if isColorWidget(item)}
 			<ColorInput
+				{inputId}
 				value={typeof value === 'string' ? value : '#000000'}
 				onChange={(newValue) => commit(newValue)}
 			/>

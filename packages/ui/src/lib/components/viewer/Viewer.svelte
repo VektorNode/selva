@@ -39,7 +39,7 @@
 	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
 	import { Button } from '$lib/components/primitives/button/index.js';
 	import type { Locale } from '$lib/i18n/messages';
-	import { setLocaleContext, getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { layerLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	export interface ViewerConfig {
 		showScreenshotButton?: boolean;
@@ -103,12 +103,8 @@
 
 	const config = $derived({ ...defaultViewerConfig, ...viewerConfig });
 
-	// Read the host's locale before overriding it for our subtree.
-	const hostLocale = getLocaleContext();
-
 	// A getter, not a value: it is re-read reactively, so changing `lang` updates the chrome live.
-	setLocaleContext(() => lang ?? hostLocale.locale);
-	const locale = getLocaleContext();
+	const locale = layerLocaleContext(() => lang);
 	const t = $derived(locale.messages);
 
 	let canvas: HTMLCanvasElement;
@@ -146,16 +142,23 @@
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
-	// Derived from LOOKS so adding a look in @selvajs/visualization shows up here with no edit; the
-	// map only overrides the names that don't survive capitalisation ('xray' → 'X-Ray').
-	const LOOK_LABELS: Partial<Record<Look, string>> = {
-		xray: 'X-Ray',
-		lineart: 'Line Art'
-	};
-	const STYLE_OPTIONS: { look: Look; label: string }[] = LOOKS.map((look) => ({
-		look,
-		label: LOOK_LABELS[look] ?? look.charAt(0).toUpperCase() + look.slice(1)
-	}));
+	// Derived from LOOKS so a look added in @selvajs/visualization shows up here with no edit,
+	// under its capitalised name until it gets a message.
+	const lookLabels = $derived<Partial<Record<Look, string>>>({
+		technical: t.lookTechnical,
+		studio: t.lookStudio,
+		showcase: t.lookShowcase,
+		arctic: t.lookArctic,
+		xray: t.lookXray,
+		lineart: t.lookLineart,
+		wireframe: t.lookWireframe
+	});
+	const styleOptions = $derived<{ look: Look; label: string }[]>(
+		LOOKS.map((look) => ({
+			look,
+			label: lookLabels[look] ?? look.charAt(0).toUpperCase() + look.slice(1)
+		}))
+	);
 
 	const VIEW_PRESETS: { preset: ViewPreset; label: () => string }[] = [
 		{ preset: 'top', label: () => t.viewTop },
@@ -527,7 +530,7 @@
 												value={renderStyle}
 												onValueChange={(look) => setRenderStyle(look as typeof renderStyle)}
 											>
-												{#each STYLE_OPTIONS as { look, label } (look)}
+												{#each styleOptions as { look, label } (look)}
 													<DropdownMenu.RadioItem value={look} closeOnSelect={false}>
 														{label}
 													</DropdownMenu.RadioItem>

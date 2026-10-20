@@ -161,6 +161,7 @@ export function createWebSocketSolveDriver(
 		// Non-mesh display items ride the JSON envelope, already tessellated by the plugin.
 		// Tessellated objects get the same unit scale the mesh blobs received, so items and meshes
 		// share one frame.
+		let displayError: string | undefined;
 		if (hasDisplayItems) {
 			try {
 				if (myToken === outputsToken) {
@@ -174,9 +175,8 @@ export function createWebSocketSolveDriver(
 			} catch (err) {
 				// Surfaced, not just logged: the usual cause is a Display component old enough to emit
 				// untessellated curves, and the fix is on the canvas the author is looking at.
-				const detail = err instanceof Error ? err.message : String(err);
+				displayError = err instanceof Error ? err.message : String(err);
 				console.error('[Preview] Error parsing display items:', err);
-				getReporter().reportError(detail);
 			}
 		}
 
@@ -196,6 +196,8 @@ export function createWebSocketSolveDriver(
 				outcome
 			)
 		);
+		// After the report, so the solve settles once, as applied; the error still shows.
+		if (displayError) getReporter().reportError(displayError);
 	}
 
 	// Live events ride their own frame; the session decides what to do with them.
@@ -216,6 +218,8 @@ export function createWebSocketSolveDriver(
 		solve(values) {
 			if (!wsState.connected) {
 				console.warn('[Preview] Cannot send values - WebSocket not connected');
+				// Every solve asked for ends in a report, or `session.solve()` never resolves.
+				getReporter().reportError('Not connected to Grasshopper.');
 				return;
 			}
 			wsState.sendValueUpdate(sessionId, prepareValuesForSend(values));

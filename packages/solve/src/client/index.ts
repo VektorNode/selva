@@ -13,7 +13,7 @@
 // Must never import `../server/*`. Enforced by eslint `no-restricted-imports`.
 
 export { createSolveSession } from './session/solve-session.js';
-export type { SolveSession, SolveSessionArgs } from './session/solve-session.js';
+export type { SolveSession, SolveSessionArgs, SolveSettlement } from './session/solve-session.js';
 
 export { createRequestResponseDriver } from './drivers/request-response.js';
 export type { RequestResponseDriverOptions } from './drivers/request-response.js';

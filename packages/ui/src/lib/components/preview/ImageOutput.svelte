@@ -5,6 +5,7 @@
 		ChevronLeft,
 		ChevronRight,
 		Download,
+		LoaderCircle,
 		Maximize,
 		Minimize,
 		Scan,
@@ -12,6 +13,8 @@
 		ZoomOut
 	} from '@lucide/svelte';
 	import { downloadFiles, isFileData, MIME_BY_EXT } from '$lib/utils/file-download';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { formatMessage } from '$lib/i18n/messages';
 
 	interface Props {
 		item: OutputImageLayoutItem;
@@ -19,6 +22,9 @@
 	}
 
 	let { item, value }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	const SUPPORTED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg']);
 	const ZOOM_STEP = 1.5;
@@ -257,11 +263,11 @@
 		if (!wrapperEl) return;
 		if (!document.fullscreenElement) {
 			wrapperEl.requestFullscreen().catch((err) => {
-				error = `Fullscreen unavailable: ${err.message}`;
+				error = formatMessage(t.fullscreenUnavailable, { error: err.message });
 			});
 		} else {
 			document.exitFullscreen().catch((err) => {
-				error = `Exit fullscreen failed: ${err.message}`;
+				error = formatMessage(t.exitFullscreenFailed, { error: err.message });
 			});
 		}
 	}
@@ -281,7 +287,7 @@
 		try {
 			await downloadFiles(current, current.fileName);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Download failed';
+			error = e instanceof Error ? e.message : t.downloadFailed;
 		} finally {
 			downloading = false;
 		}
@@ -291,175 +297,199 @@
 		'flex h-7 min-w-7 items-center justify-center rounded px-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
 </script>
 
-<div
-	bind:this={wrapperEl}
-	class="rounded flex flex-col overflow-hidden border border-border bg-background {isFullscreen
-		? 'h-screen'
-		: ''}"
->
-	{#if error}
-		<div class="px-4 py-3 text-sm text-destructive">{error}</div>
-	{:else if unsupported}
-		<div class="px-4 py-3 text-sm text-destructive">
-			Unsupported image format: <span class="font-mono">{extOf(unsupported) || '(unknown)'}</span>.
-			Supported: .png, .jpg, .jpeg, .webp, .gif, .svg
-		</div>
-	{:else if !current}
-		<div class="px-4 py-8 text-sm text-center text-muted-foreground">Waiting for image...</div>
-	{:else}
-		<!-- The stage is a pan/zoom surface with its own keyboard shortcuts; no native element fits. -->
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-		<div
-			bind:this={stageEl}
-			role="application"
-			aria-roledescription="image viewer"
-			aria-label={item.displayName ?? current.fileName}
-			tabindex="0"
-			class="relative w-full overflow-hidden outline-none select-none focus-visible:ring-2 focus-visible:ring-ring
+<!-- The layout hides this output until a solve returns a file, so there is no empty state here. -->
+{#if error || unsupported || current}
+	<div
+		bind:this={wrapperEl}
+		class="rounded flex flex-col overflow-hidden border border-border bg-background {isFullscreen
+			? 'h-screen'
+			: ''}"
+	>
+		{#if error}
+			<div class="px-4 py-3 text-sm text-destructive">{error}</div>
+		{:else if unsupported}
+			<div class="px-4 py-3 text-sm text-destructive">
+				{formatMessage(t.imageUnsupported, {
+					ext: extOf(unsupported) || t.imageUnknownFormat,
+					formats: [...SUPPORTED_EXTS].join(', ')
+				})}
+			</div>
+		{:else if current}
+			<!-- The stage is a pan/zoom surface with its own keyboard shortcuts; no native element fits. -->
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+			<div
+				bind:this={stageEl}
+				role="application"
+				aria-roledescription={t.imageViewer}
+				aria-label={item.displayName ?? current.fileName}
+				tabindex="0"
+				class="relative w-full overflow-hidden outline-none select-none focus-visible:ring-2 focus-visible:ring-ring
 				{isFullscreen ? 'flex-1' : 'h-95'}
 				{dragging ? 'cursor-grabbing' : pannable ? 'cursor-grab' : 'cursor-zoom-in'}
 				{fitted ? 'touch-pan-y' : 'touch-none'}
 				{backgroundColor ? 'bg-(--image-bg)' : 'checkerboard'}"
-			style:--image-bg={backgroundColor}
-			onpointerdown={onPointerDown}
-			onpointermove={onPointerMove}
-			onpointerup={onPointerUp}
-			onpointercancel={onPointerUp}
-			ondblclick={onDoubleClick}
-			onkeydown={onKeyDown}
-		>
-			{#if decodeFailed}
-				<div class="inset-0 text-sm absolute flex items-center justify-center text-destructive">
-					Couldn't decode {current.fileName}{current.fileType}
-				</div>
-			{:else}
-				<img
-					src={dataUrl}
-					alt=""
-					draggable="false"
-					onload={onImageLoad}
-					onerror={() => (decodeFailed = true)}
-					class="absolute top-(--img-y) left-(--img-x) h-(--img-h) w-(--img-w) max-w-none
+				style:--image-bg={backgroundColor}
+				onpointerdown={onPointerDown}
+				onpointermove={onPointerMove}
+				onpointerup={onPointerUp}
+				onpointercancel={onPointerUp}
+				ondblclick={onDoubleClick}
+				onkeydown={onKeyDown}
+			>
+				{#if decodeFailed}
+					<div class="inset-0 text-sm absolute flex items-center justify-center text-destructive">
+						{formatMessage(t.imageDecodeFailed, { file: `${current.fileName}${current.fileType}` })}
+					</div>
+				{:else}
+					{#if !ready}
+						<div
+							class="inset-0 gap-2 text-sm absolute flex items-center justify-center text-muted-foreground"
+						>
+							<LoaderCircle size={16} class="animate-spin" />
+							{t.imageLoading}
+						</div>
+					{/if}
+					<img
+						src={dataUrl}
+						alt=""
+						draggable="false"
+						onload={onImageLoad}
+						onerror={() => (decodeFailed = true)}
+						class="absolute top-(--img-y) left-(--img-x) h-(--img-h) w-(--img-w) max-w-none
 						{pixelated ? 'pixelated' : ''}
 						{ready ? '' : 'invisible'}"
-					style:--img-x="{x}px"
-					style:--img-y="{y}px"
-					style:--img-w="{naturalW * scale}px"
-					style:--img-h="{naturalH * scale}px"
-				/>
-			{/if}
+						style:--img-x="{x}px"
+						style:--img-y="{y}px"
+						style:--img-w="{naturalW * scale}px"
+						style:--img-h="{naturalH * scale}px"
+					/>
+				{/if}
+
+				{#if images.length > 1}
+					<button
+						onclick={() => step(-1)}
+						title="{t.previousImage} (←)"
+						aria-label={t.previousImage}
+						class="left-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border bg-background/80 text-foreground hover:bg-background"
+					>
+						<ChevronLeft size={16} />
+					</button>
+					<button
+						onclick={() => step(1)}
+						title="{t.nextImage} (→)"
+						aria-label={t.nextImage}
+						class="right-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border bg-background/80 text-foreground hover:bg-background"
+					>
+						<ChevronRight size={16} />
+					</button>
+				{/if}
+
+				<div
+					class="px-2.5 py-1 text-xs bottom-2 rounded pointer-events-none absolute left-1/2 -translate-x-1/2 bg-foreground/80 text-background transition-opacity {showWheelHint
+						? 'opacity-100'
+						: 'opacity-0'}"
+				>
+					{t.zoomHint}
+				</div>
+			</div>
 
 			{#if images.length > 1}
-				<button
-					onclick={() => step(-1)}
-					title="Previous image (←)"
-					class="left-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border bg-background/80 text-foreground hover:bg-background"
-				>
-					<ChevronLeft size={16} />
-				</button>
-				<button
-					onclick={() => step(1)}
-					title="Next image (→)"
-					class="right-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border bg-background/80 text-foreground hover:bg-background"
-				>
-					<ChevronRight size={16} />
-				</button>
+				<div class="gap-1.5 p-1.5 flex overflow-x-auto border-t border-border">
+					{#each images as image, i (i)}
+						<button
+							onclick={() => select(i)}
+							title="{image.fileName}{image.fileType}"
+							class="h-12 w-16 rounded shrink-0 overflow-hidden border-2 bg-muted transition-colors {i ===
+							currentIndex
+								? 'border-primary'
+								: 'border-transparent opacity-70 hover:opacity-100'}"
+						>
+							<img src={toDataUrl(image)} alt="" class="h-full w-full object-contain" />
+						</button>
+					{/each}
+				</div>
 			{/if}
 
-			<div
-				class="px-2.5 py-1 text-xs bottom-2 rounded pointer-events-none absolute left-1/2 -translate-x-1/2 bg-foreground/80 text-background transition-opacity {showWheelHint
-					? 'opacity-100'
-					: 'opacity-0'}"
-			>
-				Hold Ctrl or ⌘ and scroll to zoom
-			</div>
-		</div>
+			<div class="gap-2 px-2 py-1 text-xs flex items-center border-t border-border">
+				<div class="min-w-0 gap-1.5 flex flex-1 items-center text-muted-foreground">
+					<span class="truncate text-foreground">{current.fileName}{current.fileType}</span>
+					{#if ready}
+						<span class="shrink-0 tabular-nums">{naturalW}×{naturalH}</span>
+					{/if}
+				</div>
 
-		{#if images.length > 1}
-			<div class="gap-1.5 p-1.5 flex overflow-x-auto border-t border-border">
-				{#each images as image, i (i)}
+				<div class="gap-0.5 flex shrink-0 items-center">
 					<button
-						onclick={() => select(i)}
-						title="{image.fileName}{image.fileType}"
-						class="h-12 w-16 rounded shrink-0 overflow-hidden border-2 bg-muted transition-colors {i ===
-						currentIndex
-							? 'border-primary'
-							: 'border-transparent opacity-70 hover:opacity-100'}"
+						class={toolButton}
+						onclick={() => zoomTo(scale / ZOOM_STEP)}
+						disabled={!ready || scale <= minScale + 1e-3}
+						title="{t.zoomOut} (−)"
+						aria-label={t.zoomOut}
 					>
-						<img src={toDataUrl(image)} alt="" class="h-full w-full object-contain" />
+						<ZoomOut size={14} />
 					</button>
-				{/each}
+					<span class="w-11 text-center text-muted-foreground tabular-nums">{zoomPercent}%</span>
+					<button
+						class={toolButton}
+						onclick={() => zoomTo(scale * ZOOM_STEP)}
+						disabled={!ready || scale >= maxScale - 1e-3}
+						title="{t.zoomIn} (+)"
+						aria-label={t.zoomIn}
+					>
+						<ZoomIn size={14} />
+					</button>
+					<button
+						class={toolButton}
+						onclick={fit}
+						disabled={!ready || fitted}
+						title="{t.zoomFit} (0)"
+						aria-label={t.zoomFit}
+					>
+						<Scan size={14} />
+					</button>
+					<button
+						class="{toolButton} font-medium tabular-nums"
+						onclick={() => zoomTo(1)}
+						disabled={!ready || Math.abs(scale - 1) < 1e-3}
+						title="{t.zoomActual} (1)"
+						aria-label={t.zoomActual}
+					>
+						1:1
+					</button>
+
+					{#if allowDownload || allowFullscreen}
+						<div class="mx-1 h-4 w-px bg-border"></div>
+					{/if}
+					{#if allowDownload}
+						<button
+							class={toolButton}
+							onclick={handleDownload}
+							disabled={downloading}
+							title={t.downloadImage}
+							aria-label={t.downloadImage}
+						>
+							<Download size={14} />
+						</button>
+					{/if}
+					{#if allowFullscreen}
+						<button
+							class={toolButton}
+							onclick={toggleFullscreen}
+							title="{isFullscreen ? t.exitFullscreen : t.fullscreen} (F)"
+							aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
+						>
+							{#if isFullscreen}
+								<Minimize size={14} />
+							{:else}
+								<Maximize size={14} />
+							{/if}
+						</button>
+					{/if}
+				</div>
 			</div>
 		{/if}
-
-		<div class="gap-2 px-2 py-1 text-xs flex items-center border-t border-border">
-			<div class="min-w-0 gap-1.5 flex flex-1 items-center text-muted-foreground">
-				<span class="truncate text-foreground">{current.fileName}{current.fileType}</span>
-				{#if ready}
-					<span class="shrink-0 tabular-nums">{naturalW}×{naturalH}</span>
-				{/if}
-			</div>
-
-			<div class="gap-0.5 flex shrink-0 items-center">
-				<button
-					class={toolButton}
-					onclick={() => zoomTo(scale / ZOOM_STEP)}
-					disabled={!ready || scale <= minScale + 1e-3}
-					title="Zoom out (−)"
-				>
-					<ZoomOut size={14} />
-				</button>
-				<span class="w-11 text-center text-muted-foreground tabular-nums">{zoomPercent}%</span>
-				<button
-					class={toolButton}
-					onclick={() => zoomTo(scale * ZOOM_STEP)}
-					disabled={!ready || scale >= maxScale - 1e-3}
-					title="Zoom in (+)"
-				>
-					<ZoomIn size={14} />
-				</button>
-				<button class={toolButton} onclick={fit} disabled={!ready || fitted} title="Fit (0)">
-					<Scan size={14} />
-				</button>
-				<button
-					class="{toolButton} font-medium tabular-nums"
-					onclick={() => zoomTo(1)}
-					disabled={!ready || Math.abs(scale - 1) < 1e-3}
-					title="Actual pixels (1)"
-				>
-					1:1
-				</button>
-
-				{#if allowDownload || allowFullscreen}
-					<div class="mx-1 h-4 w-px bg-border"></div>
-				{/if}
-				{#if allowDownload}
-					<button
-						class={toolButton}
-						onclick={handleDownload}
-						disabled={downloading}
-						title="Download image"
-					>
-						<Download size={14} />
-					</button>
-				{/if}
-				{#if allowFullscreen}
-					<button
-						class={toolButton}
-						onclick={toggleFullscreen}
-						title={isFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
-					>
-						{#if isFullscreen}
-							<Minimize size={14} />
-						{:else}
-							<Maximize size={14} />
-						{/if}
-					</button>
-				{/if}
-			</div>
-		</div>
-	{/if}
-</div>
+	</div>
+{/if}
 
 <style>
 	/* Shows transparency in PNG/WebP/SVG output instead of blending it into the page. */

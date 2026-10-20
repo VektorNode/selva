@@ -38,6 +38,9 @@
 
 	const visibilityMap = $derived(buildVisibilityMap(items, values));
 
+	const uid = $props.id();
+	const descriptionId = `${uid}-description`;
+
 	// Below this a label and its control stop fitting side by side, so a wide group
 	// sheds columns as its panel narrows instead of squeezing every input.
 	const MIN_COLUMN_WIDTH = 160;
@@ -72,24 +75,36 @@
 			{@render grid()}
 		</div>
 	{:else}
-		<button
-			type="button"
-			class="gap-3 px-4 py-3.5 flex w-full items-start text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-			aria-expanded={!collapsed}
-			onclick={onToggle}
-		>
-			<span class="min-w-0 flex-1">
-				<span class="text-base font-semibold leading-snug block text-foreground">{label}</span>
-				{#if description}
-					<span class="text-xs mt-0.5 leading-snug block text-muted-foreground">{description}</span>
-				{/if}
-			</span>
-			<ChevronDown
-				class="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 {collapsed
-					? '-rotate-90'
-					: ''}"
-			/>
-		</button>
+		<!-- The host's page owns the h1 and the panel holds the h2. The description sits outside the
+		     heading's button, so the heading and the button are named by the label alone. -->
+		<h3>
+			<button
+				type="button"
+				class="gap-3 px-4 pt-3.5 flex w-full items-start text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset {description
+					? 'pb-0'
+					: 'pb-3.5'}"
+				aria-expanded={!collapsed}
+				aria-describedby={description ? descriptionId : undefined}
+				onclick={onToggle}
+			>
+				<span class="min-w-0 text-base font-semibold leading-snug flex-1 text-foreground"
+					>{label}</span
+				>
+				<ChevronDown
+					class="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 {collapsed
+						? '-rotate-90'
+						: ''}"
+				/>
+			</button>
+		</h3>
+		{#if description}
+			<p
+				id={descriptionId}
+				class="pl-4 pr-11 pt-0.5 pb-3.5 text-xs leading-snug text-muted-foreground"
+			>
+				{description}
+			</p>
+		{/if}
 		<div class="content-wrapper" class:collapsed inert={collapsed}>
 			<div class="content-inner">
 				<div class="px-4 pt-1 pb-5">

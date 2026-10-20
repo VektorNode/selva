@@ -1,0 +1,5 @@
+---
+'@selvajs/ui': patch
+---
+
+Accessibility fixes in the compute app. The layout's root is now the page's `<main>` landmark, so don't wrap `ComputeApp` or `AppLayout` in another `<main>`. Each panel has a visually hidden `h2` named after its tab, and each group title is an `h3` around its collapse button, with the group description outside the button. Solve progress is announced through live regions that stay mounted (the solving indicator, the live solve panel's current step, and the calculate button's start and finish), since a region created together with its text is not read out. The field help button and the dialog close button are 24×24 px, with a 44 px hit area on touch; on touch the panel's buttons, inputs and selects are at least 44 px tall. Slider thumbs and colour inputs are named by their field label, the phone drawer's handle is named by its visible label (the `expandPanel`/`collapsePanel` messages are gone; `aria-expanded` carries the state), and the drawer's fields are inert while it is closed. The page footer stays on one line at 320 px.

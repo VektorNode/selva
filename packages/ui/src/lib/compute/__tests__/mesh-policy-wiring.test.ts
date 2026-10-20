@@ -31,7 +31,8 @@ function collectingReporter(): SolveReporter<THREE.Object3D> & {
 	return {
 		reports,
 		report: (result) => reports.push(result),
-		reportError: () => {}
+		reportError: () => {},
+		reportAborted: () => {}
 	};
 }
 

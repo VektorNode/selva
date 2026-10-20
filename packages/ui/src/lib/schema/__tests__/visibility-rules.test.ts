@@ -243,3 +243,36 @@ describe('isTabVisible', () => {
 		).toBe(false);
 	});
 });
+
+describe('outputs that draw nothing', () => {
+	const output = (widgetType: string) =>
+		({ type: 'output', paramId: 'o', widgetType }) as unknown as LayoutItem;
+	const image = { fileName: 'plan', fileType: '.png', data: 'AAAA', isBase64Encoded: true };
+
+	it('an image output is hidden until a solve returns a file, then shown', () => {
+		expect(evaluateVisibility(output('image'), { o: null }).visible).toBe(false);
+		expect(evaluateVisibility(output('image'), { o: [] }).visible).toBe(false);
+		expect(evaluateVisibility(output('image'), { o: image }).visible).toBe(true);
+		expect(evaluateVisibility(output('image'), { o: [image] }).visible).toBe(true);
+	});
+
+	it('a chart output is hidden until it has data; other outputs show their own placeholder', () => {
+		expect(evaluateVisibility(output('chart'), { o: '' }).visible).toBe(false);
+		expect(evaluateVisibility(output('chart'), { o: '{"data":[]}' }).visible).toBe(true);
+		expect(evaluateVisibility(output('text'), { o: null }).visible).toBe(true);
+	});
+
+	it('a dynamic value list output never draws', () => {
+		expect(evaluateVisibility(output('dynamicValueList'), { o: ['a'] }).visible).toBe(false);
+	});
+
+	it('a tab holding only a pending preview hides, so its pane closes until the image lands', () => {
+		const tab = {
+			id: 't',
+			label: 'Preview',
+			groups: [{ id: 'g', label: 'G', items: [output('image')] }]
+		} as unknown as TabConfig;
+		expect(isTabVisible(tab, { o: null })).toBe(false);
+		expect(isTabVisible(tab, { o: [image] })).toBe(true);
+	});
+});

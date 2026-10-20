@@ -19,6 +19,7 @@
 	import { Button } from '$lib/components/primitives/button';
 	import IssueList, { type Issue } from '$lib/components/primitives/IssueList.svelte';
 	import SeverityIcon from '$lib/components/primitives/SeverityIcon.svelte';
+	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	interface Props {
 		/** What the running (or most recent) solve has said over the live channel. */
@@ -30,32 +31,7 @@
 		onabort: () => void;
 		onconfirm: () => void;
 		ondiscard: () => void;
-		labels?: Labels;
 	}
-
-	interface Labels {
-		solving: string;
-		blockedTitle: string;
-		messagesTitle: string;
-		blockedDescription: string;
-		messagesDescription: string;
-		confirm: string;
-		discard: string;
-		abort: string;
-		dismiss: string;
-	}
-
-	const DEFAULT_LABELS: Labels = {
-		solving: 'Solving…',
-		blockedTitle: 'Solve stopped',
-		messagesTitle: 'Solve messages',
-		blockedDescription: 'The definition stopped this solve. No results were produced.',
-		messagesDescription: 'This solve reported the following. Continue to see the result.',
-		confirm: 'Continue',
-		discard: 'Discard',
-		abort: 'Abort',
-		dismiss: 'Dismiss'
-	};
 
 	let {
 		live,
@@ -63,9 +39,11 @@
 		diagnostics = [],
 		onabort,
 		onconfirm,
-		ondiscard,
-		labels = DEFAULT_LABELS
+		ondiscard
 	}: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	const REMARK_LINGER_MS = 6000;
 
@@ -239,6 +217,19 @@
 				: rows.length > 0 && lingering
 	);
 
+	// What a screen reader hears of the passive views, through a region that outlives the panel: one
+	// created together with its text is not announced. The step name, not its counter, so a long
+	// solve announces each step rather than every tick. Review and blocked are alerts of their own.
+	const announcement = $derived(
+		!visible
+			? ''
+			: view === 'live'
+				? ((headline ?? progress[0])?.label ?? t.solveSolving)
+				: view === 'idle'
+					? rows.map((d) => d.message).join(' ')
+					: ''
+	);
+
 	function dismiss() {
 		dismissedFor = diagnostics;
 	}
@@ -254,13 +245,15 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
+<div class="sr-only" role="status" aria-live="polite">{announcement}</div>
+
 {#if visible}
 	<div
 		class="bottom-4 p-3 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg border bg-background {view ===
 		'blocked'
 			? 'border-destructive/50'
 			: ''}"
-		role={view === 'live' || view === 'idle' ? 'status' : 'alert'}
+		role={view === 'review' || view === 'blocked' ? 'alert' : undefined}
 		data-testid="solve-messages"
 		data-view={view}
 	>
@@ -270,7 +263,7 @@
 				<div>
 					<div class="gap-2 flex items-center">
 						<LoaderCircle class="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-						<span class="min-w-0 text-sm flex-1 truncate">{head?.label ?? labels.solving}</span>
+						<span class="min-w-0 text-sm flex-1 truncate">{head?.label ?? t.solveSolving}</span>
 						{#if head?.done !== undefined && head?.total !== undefined}
 							<span class="text-xs shrink-0 text-muted-foreground tabular-nums">
 								{head.done} / {head.total}
@@ -283,7 +276,7 @@
 							disabled={finishing}
 							onclick={onabort}
 						>
-							{labels.abort}
+							{t.solveMessagesAbort}
 						</Button>
 					</div>
 					{#each progress as p, i (p.source ?? '')}
@@ -300,7 +293,7 @@
 							<div
 								class="h-1 overflow-hidden rounded-full bg-muted"
 								role="progressbar"
-								aria-label={p.label ?? p.source ?? labels.solving}
+								aria-label={p.label ?? p.source ?? t.solveSolving}
 								aria-valuemin={0}
 								aria-valuemax={100}
 								aria-valuenow={p.fraction !== undefined ? Math.round(p.fraction * 100) : undefined}
@@ -327,14 +320,14 @@
 				<div class="gap-2 text-sm font-medium flex items-center">
 					{#if view === 'blocked'}
 						<SeverityIcon severity="error" />
-						{labels.blockedTitle}
+						{t.solveBlockedTitle}
 					{:else}
 						<SeverityIcon severity="warning" />
-						{labels.messagesTitle}
+						{t.solveMessagesTitle}
 					{/if}
 				</div>
 				<p class="text-xs text-muted-foreground">
-					{view === 'blocked' ? labels.blockedDescription : labels.messagesDescription}
+					{view === 'blocked' ? t.solveBlocked : t.solveMessagesDescription}
 				</p>
 			</div>
 		{/if}
@@ -348,10 +341,10 @@
 		{#if view === 'review' || view === 'blocked'}
 			<div class="mt-3 gap-2 flex justify-end">
 				{#if view === 'blocked'}
-					<Button variant="outline" size="sm" onclick={dismiss}>{labels.dismiss}</Button>
+					<Button variant="outline" size="sm" onclick={dismiss}>{t.solveMessagesDismiss}</Button>
 				{:else}
-					<Button variant="outline" size="sm" onclick={ondiscard}>{labels.discard}</Button>
-					<Button size="sm" onclick={onconfirm}>{labels.confirm}</Button>
+					<Button variant="outline" size="sm" onclick={ondiscard}>{t.solveMessagesDiscard}</Button>
+					<Button size="sm" onclick={onconfirm}>{t.solveMessagesConfirm}</Button>
 				{/if}
 			</div>
 		{/if}
