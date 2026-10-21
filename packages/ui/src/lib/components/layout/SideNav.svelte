@@ -43,13 +43,15 @@
 	}
 </script>
 
+<!-- On a phone a 240px column would leave the page ~150px, so the nav becomes a scrolling strip
+     above the content and the eyebrow, header and footer drop out. -->
 <aside
-	class={`w-60 flex h-full shrink-0 flex-col overflow-y-auto bg-background ${
-		border ? 'border-r border-border' : ''
+	class={`sm:h-full sm:w-60 sm:overflow-y-auto sm:border-b-0 flex w-full shrink-0 flex-col border-b border-border bg-background ${
+		border ? 'sm:border-r' : ''
 	} ${className}`}
 >
 	{#if eyebrow}
-		<div class="px-4 pt-5 pb-3">
+		<div class="px-4 pt-5 pb-3 sm:block hidden">
 			<span class="text-xs font-medium tracking-wider text-muted-foreground uppercase">
 				{eyebrow}
 			</span>
@@ -57,30 +59,36 @@
 	{/if}
 
 	{#if header}
-		<div class="px-3 pb-3">
+		<div class="px-3 pb-3 sm:block hidden">
 			{@render header()}
 		</div>
 	{/if}
 
-	<nav class="pb-4 pr-2 flex-1 space-y-px">
+	<nav
+		class="gap-1 py-2 sm:gap-0 sm:pt-0 sm:pb-4 sm:pr-2 sm:flex-1 sm:space-y-px sm:block sm:px-0 flex overflow-x-auto px-(--page-px)"
+	>
 		{#each items as item (item.href)}
 			{@const active = isActive(item)}
 			{@const Icon = item.icon}
 			<a
 				href={item.href}
-				class={`group gap-2 py-1.5 pr-2.5 relative flex w-full items-center text-left transition-colors ${
+				class={`group gap-2 py-2 pr-2.5 sm:py-1.5 sm:w-full relative flex shrink-0 items-center text-left transition-colors ${
 					active
-						? 'pl-4 rounded-r-md bg-accent text-accent-foreground'
-						: 'mx-2 pl-2.5 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+						? 'pl-2.5 sm:pl-4 sm:rounded-l-none sm:rounded-r-md rounded-md bg-accent text-accent-foreground'
+						: 'sm:mx-2 pl-2.5 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground'
 				}`}
 			>
 				{#if active}
-					<span class="left-0 top-0 bottom-0 w-0.75 absolute bg-primary" aria-hidden="true"></span>
+					<span
+						class="left-0 top-0 bottom-0 w-0.75 sm:block absolute hidden bg-primary"
+						aria-hidden="true"
+					></span>
 				{/if}
 				{#if Icon}
 					<Icon class="h-3.5 w-3.5 shrink-0 opacity-70" />
 				{/if}
-				<span class="text-sm font-medium flex-1 truncate">{item.label}</span>
+				<span class="text-sm font-medium sm:flex-1 sm:truncate whitespace-nowrap">{item.label}</span
+				>
 				{#if item.badge !== undefined}
 					<span class="font-mono shrink-0 text-2xs tabular-nums opacity-60">{item.badge}</span>
 				{/if}
@@ -89,7 +97,7 @@
 	</nav>
 
 	{#if footer}
-		<div class="px-3 py-3 border-t border-border/60">
+		<div class="px-3 py-3 sm:block hidden border-t border-border/60">
 			{@render footer()}
 		</div>
 	{/if}

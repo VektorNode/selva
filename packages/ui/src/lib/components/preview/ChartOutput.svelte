@@ -196,10 +196,10 @@
 		<!-- The layout hides this output while it has no data, so this is data that doesn't parse yet. -->
 		<div class="px-4 py-8 text-sm text-center text-muted-foreground">{t.chartReceiving}</div>
 	{:else}
-		<div bind:this={containerEl} class="w-full {isFullscreen ? 'h-screen' : 'h-95'}"></div>
+		<div bind:this={containerEl} class="w-full {isFullscreen ? 'h-dvh' : 'h-95'}"></div>
 
 		<div
-			class="gap-1 left-2 top-2 absolute z-10 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 {isFullscreen
+			class="gap-1 left-2 top-2 absolute z-10 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100 {isFullscreen
 				? 'opacity-100'
 				: ''}"
 		>

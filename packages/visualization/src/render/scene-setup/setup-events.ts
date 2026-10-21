@@ -272,7 +272,14 @@ export function setupEventHandlers(
 
 	const handleDoubleClick = (event: MouseEvent) => {
 		const hit = pickAt(event.clientX, event.clientY);
-		if (!hit) return;
+		if (!hit) {
+			// The way back out after framing a part. On touch there is no F key, and a pinch-out
+			// from a small part back to the whole model takes many gestures.
+			if (config.events?.enableDoubleClickZoom) {
+				cameraController.frameBounds(computeContentBounds(scene), true);
+			}
+			return;
+		}
 		const target = hit.object;
 
 		config.events?.onMeshDoubleClicked?.(target);

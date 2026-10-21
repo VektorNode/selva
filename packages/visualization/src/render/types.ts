@@ -218,7 +218,7 @@ export type EventConfig = {
 	enableEventHandlers?: boolean;
 	enableKeyboardControls?: boolean;
 	enableClickToFocus?: boolean;
-	/** Default true. */
+	/** Double-click frames the object under the cursor, or all content on empty background. Default true. */
 	enableDoubleClickZoom?: boolean;
 	onReady?: () => void;
 	/** Fires every animation frame, after controls update and before render. */

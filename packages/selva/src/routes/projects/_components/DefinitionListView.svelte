@@ -13,7 +13,10 @@
 
 	let { records, projects, onOpen }: Props = $props();
 
-	const gridTemplate = 'grid-template-columns: 40px 1.6fr 0.9fr 0.8fr 0.7fr 0.6fr 36px';
+	// Phones drop project, updated and runs: at 390px the full row pushed the open button out of
+	// the clipped card. `minmax(0, …)` lets long names truncate instead of widening the row.
+	const gridTemplate =
+		'grid-cols-[40px_minmax(0,1fr)_auto_36px] sm:grid-cols-[40px_minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,0.6fr)_36px]';
 
 	function projectName(id: string) {
 		return projects.find((p) => p.id === id)?.name ?? '';
@@ -22,16 +25,16 @@
 
 <div class="border-border bg-card overflow-hidden rounded-xl border">
 	<div
-		class="border-border bg-muted/50 text-muted-foreground grid border-b px-4 py-2.5 font-mono text-[10.5px] tracking-widest uppercase"
-		style={gridTemplate}
+		class="border-border bg-muted/50 text-muted-foreground grid gap-4 border-b px-4 py-2.5 font-mono text-[10.5px] tracking-widest uppercase {gridTemplate}"
 	>
-		<span></span><span>Definition</span><span>Project</span><span>Status</span><span>Updated</span>
-		<span class="text-right">Runs</span><span></span>
+		<span></span><span>Definition</span><span class="hidden sm:block">Project</span><span
+			>Status</span
+		><span class="hidden sm:block">Updated</span>
+		<span class="hidden text-right sm:block">Runs</span><span></span>
 	</div>
 	{#each records as record, i (record.guid)}
 		<div
-			class={`grid items-center gap-4 px-4 py-3 text-[13px] ${i < records.length - 1 ? 'border-border border-b' : ''}`}
-			style={gridTemplate}
+			class={`grid items-center gap-4 px-4 py-3 text-[13px] ${gridTemplate} ${i < records.length - 1 ? 'border-border border-b' : ''}`}
 		>
 			{#if record.coverImage}
 				<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md">
@@ -49,25 +52,29 @@
 					</span>
 				</div>
 			{/if}
-			<span class="min-w-0">
+			<span class="min-w-0 truncate sm:whitespace-normal">
 				<span class="font-semibold">{record.displayName}</span>
 				{#if record.description}
-					<span class="text-muted-foreground ml-2 text-[12px]">
+					<span class="text-muted-foreground ml-2 hidden text-[12px] sm:inline">
 						{record.description.slice(0, 60)}{record.description.length > 60 ? '…' : ''}
 					</span>
 				{/if}
 			</span>
-			<span class="text-muted-foreground">{projectName(record.projectId)}</span>
+			<span class="text-muted-foreground hidden truncate sm:block"
+				>{projectName(record.projectId)}</span
+			>
 			<span><StatusBadge status={record.status} /></span>
-			<span class="text-muted-foreground font-mono text-[12px]"
+			<span class="text-muted-foreground hidden font-mono text-[12px] sm:block"
 				>{formatUpdated(record.updatedAt)}</span
 			>
-			<span class="text-right font-mono text-[12px]">{record.solveCount.toLocaleString()}</span>
+			<span class="hidden text-right font-mono text-[12px] sm:block"
+				>{record.solveCount.toLocaleString()}</span
+			>
 			<span class="flex justify-end">
 				<button
 					type="button"
 					onclick={() => onOpen(record)}
-					class="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1 transition-colors"
+					class="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1 transition-colors pointer-coarse:p-2"
 					aria-label="Open {record.displayName}"
 				>
 					<Ellipsis class="h-4 w-4" />

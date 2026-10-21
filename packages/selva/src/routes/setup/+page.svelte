@@ -43,7 +43,7 @@
 	<title>Setup - {page.data.branding.name}</title>
 </svelte:head>
 
-<div class="bg-background flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+<div class="bg-background flex min-h-dvh items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
 	<div class="w-full max-w-sm space-y-6">
 		<div class="space-y-1 text-center">
 			<h2 class="text-foreground text-2xl font-bold tracking-tight">Create Admin Account</h2>

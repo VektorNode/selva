@@ -34,7 +34,7 @@
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { createSceneOutliner, type SceneOutliner } from '@selvajs/visualization/scene';
 	import SceneManager from './SceneManager.svelte';
-	import MeshMetadataDialog from './MeshMetadataDialog.svelte';
+	import MeshMetadataPanel from './MeshMetadataPanel.svelte';
 	import * as Resizable from '$lib/components/primitives/resizable/index.js';
 	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
 	import { Button } from '$lib/components/primitives/button/index.js';
@@ -122,6 +122,7 @@
 	let updateGridScale: (() => void) | null = null;
 	let updateShadowBounds: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
+	let clearSelection: (() => void) | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
 	let hideButton = $state(false);
@@ -194,6 +195,10 @@
 			grid: { enabled: config.showToolsMenu && config.showGridToggle },
 			measure: { enabled: config.showToolsMenu },
 			events: {
+				// Fires before onMeshMetadataClicked, so picking an object without metadata closes the
+				// previous object's panel instead of leaving it describing the wrong thing.
+				onObjectSelected: closeMetadata,
+				onBackgroundClicked: closeMetadata,
 				onMeshMetadataClicked: config.enableMeshClick
 					? (metadata: Record<string, unknown>) => {
 							if (hasUsefulMetadata(metadata)) {
@@ -224,6 +229,7 @@
 		updateGridScale = init.updateGridScale;
 		updateShadowBounds = init.updateShadowBounds;
 		fitToView = init.fitToView;
+		clearSelection = init.clearSelection;
 		projection = init.cameraController.getProjection();
 
 		const renderer = init.renderer;
@@ -375,6 +381,29 @@
 		}
 	});
 
+	function closeMetadata() {
+		selectedMeshMetadata = null;
+		selectedMeshName = null;
+	}
+
+	function dismissMetadata() {
+		closeMetadata();
+		clearSelection?.();
+		invalidate?.();
+	}
+
+	// The panel describes an object from the previous solve once new meshes arrive.
+	$effect(() => {
+		void meshes;
+		untrack(closeMetadata);
+	});
+
+	// Dialogs portal to <body>, so one opened over the fullscreen viewer needs lifting above it.
+	$effect(() => {
+		document.body.toggleAttribute('data-viewer-fullscreen', isFullscreen);
+		return () => document.body.removeAttribute('data-viewer-fullscreen');
+	});
+
 	function toggleFullscreen() {
 		isFullscreen = !isFullscreen;
 	}
@@ -450,12 +479,9 @@
 				{/if}
 
 				{#if logoUrl}
-					<!-- Bottom offset matches the tools menu so it clears the mobile drawer handle.
-					     Always pointer-events:none so it never intercepts canvas drags. -->
+					<!-- pointer-events:none so it never intercepts canvas drags. -->
 					<div
-						class="right-4 {isFullscreen
-							? 'bottom-4'
-							: 'bottom-16 sm:bottom-4'} pointer-events-none absolute z-20 {hideButton
+						class="right-4 bottom-4 pointer-events-none absolute z-20 {hideButton
 							? 'opacity-0'
 							: ''}"
 					>
@@ -467,11 +493,18 @@
 					</div>
 				{/if}
 
+				{#if selectedMeshMetadata}
+					<MeshMetadataPanel
+						metadata={selectedMeshMetadata}
+						meshName={selectedMeshName}
+						onClose={dismissMetadata}
+						class="top-3 right-3 left-3 sm:right-auto sm:max-h-2/3 sm:w-72 absolute z-30 max-h-1/2"
+					/>
+				{/if}
+
 				{#if config.showToolsMenu}
 					<div
-						class="left-4 {isFullscreen
-							? 'bottom-4'
-							: 'bottom-16 sm:bottom-4'} shadow-lg absolute z-50 flex items-center rounded-lg {hideButton
+						class="left-4 bottom-4 gap-2 *:shadow-lg absolute z-50 flex items-center *:rounded-md {hideButton
 							? 'pointer-events-none opacity-0'
 							: ''}"
 					>
@@ -594,6 +627,18 @@
 								{/if}
 							</DropdownMenu.Content>
 						</DropdownMenu.Root>
+						<!-- Touch has no F key, and fit-to-view is the way back from a framed part. -->
+						<div class="hidden pointer-coarse:block">
+							<Button
+								variant="outline"
+								size="icon-lg"
+								title={t.fitToView}
+								aria-label={t.fitToView}
+								onclick={() => fitToView?.()}
+							>
+								<Frame />
+							</Button>
+						</div>
 					</div>
 				{/if}
 			</div>
@@ -608,22 +653,12 @@
 	</Resizable.PaneGroup>
 </div>
 
-<MeshMetadataDialog
-	open={selectedMeshMetadata !== null}
-	metadata={selectedMeshMetadata}
-	meshName={selectedMeshName}
-	{isFullscreen}
-	onOpenChange={(open: boolean) => {
-		if (!open) {
-			setTimeout(() => {
-				selectedMeshMetadata = null;
-				selectedMeshName = null;
-			}, 200);
-		}
-	}}
-/>
-
 <style>
+	:global([data-viewer-fullscreen] [data-slot='dialog-content']),
+	:global([data-viewer-fullscreen] [data-slot='dialog-overlay']) {
+		z-index: 10001;
+	}
+
 	.fullscreen-viewer {
 		position: fixed;
 		inset: 0;

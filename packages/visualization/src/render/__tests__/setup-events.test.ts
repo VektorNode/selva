@@ -103,6 +103,22 @@ describe('setupEventHandlers click vs double-click', () => {
 		handlers.dispose();
 	});
 
+	it('frames all content on a double-click over empty background', () => {
+		const { canvas, fire } = fakeCanvas();
+		const controller = stubCameraController();
+		const config = {
+			events: { enableClickToFocus: true, enableDoubleClickZoom: true, selectionColor: '#ff0000' }
+		} as unknown as ResolvedOptions;
+		const handlers = setupEventHandlers(canvas, sceneWithCube(), controller, config);
+
+		fire('dblclick', { clientX: 5, clientY: 5 });
+
+		const [box, animate] = vi.mocked(controller.frameBounds).mock.calls[0];
+		expect(box.getSize(new THREE.Vector3()).x).toBe(2);
+		expect(animate).toBe(true);
+		handlers.dispose();
+	});
+
 	it('ignores a click that was really a drag', () => {
 		const { fire, handlers, onMeshMetadataClicked } = setup();
 

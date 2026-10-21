@@ -203,6 +203,16 @@
 	// ============================================================================
 	// Projects
 	// ============================================================================
+	function selectProject(id: string | null) {
+		activeProjectId = id;
+		const project = data.projects.find((p) => p.id === id);
+		if (project) {
+			const params = new SvelteURLSearchParams($page.url.search);
+			params.set('project', project.slug);
+			window.history.replaceState(null, '', `?${params}`);
+		}
+	}
+
 	async function createProject(p: {
 		name: string;
 		description: string;
@@ -303,20 +313,23 @@
 		records={data.records}
 		{activeProjectId}
 		canManageProjects={data.canManageProjects}
-		onSelect={(id) => {
-			activeProjectId = id;
-			const project = data.projects.find((p) => p.id === id);
-			if (project) {
-				const params = new SvelteURLSearchParams($page.url.search);
-				params.set('project', project.slug);
-				window.history.replaceState(null, '', `?${params}`);
-			}
-		}}
+		onSelect={selectProject}
 		onCreate={createProject}
 	/>
 
-	<div class="flex flex-1 flex-col overflow-hidden">
+	<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
 		<div class="border-border bg-background shrink-0 border-b px-(--page-px) py-5">
+			<select
+				aria-label="Project"
+				value={activeProjectId ?? ''}
+				onchange={(e) => selectProject(e.currentTarget.value || null)}
+				class="border-input bg-background mb-4 h-10 w-full rounded-md border px-3 text-sm sm:hidden"
+			>
+				<option value="">All projects</option>
+				{#each data.projects as project (project.id)}
+					<option value={project.id}>{project.name}</option>
+				{/each}
+			</select>
 			<SectionHeader
 				class="mb-0"
 				eyebrow={activeProject ? activeProject.name : 'All projects'}
@@ -346,8 +359,8 @@
 		</div>
 
 		<div class="flex-1 overflow-y-auto px-(--page-px) py-5">
-			<div class="mb-5 flex items-center gap-3">
-				<div class="max-w-lg flex-1">
+			<div class="mb-5 flex flex-wrap items-center gap-3">
+				<div class="max-w-lg min-w-0 flex-1 basis-full sm:basis-auto">
 					<Search
 						bind:value={searchQuery}
 						placeholder="Search by name, description, tags…"

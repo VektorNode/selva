@@ -42,14 +42,16 @@
 	{@const Icon = item.icon}
 	<a
 		href={item.href}
+		aria-label={item.label}
+		title={item.label}
 		class={[
-			'flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
+			'flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors sm:h-8',
 			active
 				? 'bg-accent text-accent-foreground'
 				: 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
 		].join(' ')}
 	>
-		<Icon class="h-3.5 w-3.5" />
-		{item.label}
+		<Icon class="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+		<span class="hidden sm:inline">{item.label}</span>
 	</a>
 {/each}

@@ -3,7 +3,7 @@
 :root {
 	--radius: 0.625rem;
 	--header-h: 3.5rem;
-	--page-px: 1.5rem;
+	--page-px: 1rem;
 	--page-py: 1.75rem;
 	--background: oklch(0.99 0 0);
 	--foreground: oklch(0.22 0 0);
@@ -178,6 +178,13 @@
 
 @utility rounded-inherit {
 	border-radius: inherit;
+}
+
+/* Phones keep a narrower gutter: at 390px every 8px of side padding is 2% of the width. */
+@media (min-width: 40rem) {
+	:root {
+		--page-px: 1.5rem;
+	}
 }
 
 @layer base {

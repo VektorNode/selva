@@ -318,7 +318,7 @@
 					<div
 						class="right-2 top-2 absolute transition-opacity {copied
 							? 'opacity-100'
-							: 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}"
+							: 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100'}"
 					>
 						<Button onclick={copyToClipboard} size="sm">
 							{copied ? t.copied : t.copy}

@@ -124,9 +124,14 @@
 	const isTwoPanelMode = $derived(!hasViewer && hasLeftPanel && hasRightPanel);
 
 	let isMobile = $state(false);
-	let drawerOpen = $state(false);
+	// Half keeps the model visible above the fields so a change can be watched as it solves;
+	// full is for long forms.
+	type DrawerState = 'closed' | 'half' | 'full';
+	let drawer = $state<DrawerState>('closed');
+	const DRAWER_STATES: DrawerState[] = ['closed', 'half', 'full'];
 
-	const activeLeftTabLabel = $derived(leftTabs[0]?.label ?? t.parametersTab);
+	// With several tabs the first tab's name would mislabel whichever one is showing.
+	const drawerLabel = $derived(leftTabs.length === 1 ? leftTabs[0].label : t.parametersTab);
 
 	$effect(() => {
 		const mqMobile = window.matchMedia('(max-width: 639px)');
@@ -154,18 +159,30 @@
 		await onLoadValues?.(loadedValues);
 	}
 
-	let _touchStartY = 0;
+	let touchStartY = 0;
+
+	function stepDrawer(by: number) {
+		const index = DRAWER_STATES.indexOf(drawer) + by;
+		drawer = DRAWER_STATES[Math.max(0, Math.min(DRAWER_STATES.length - 1, index))];
+	}
 
 	function onDrawerTouchStart(e: TouchEvent) {
-		_touchStartY = e.touches[0].clientY;
+		touchStartY = e.touches[0].clientY;
 	}
 
 	function onDrawerTouchEnd(e: TouchEvent) {
-		const deltaY = e.changedTouches[0].clientY - _touchStartY;
+		const deltaY = e.changedTouches[0].clientY - touchStartY;
 		const SWIPE_THRESHOLD = 40;
 		if (Math.abs(deltaY) > SWIPE_THRESHOLD) {
-			drawerOpen = deltaY < 0; // swipe up → open, swipe down → close
+			// Suppresses the click a short swipe can still end in, which would step the drawer twice.
+			e.preventDefault();
+			stepDrawer(deltaY < 0 ? 1 : -1);
 		}
+	}
+
+	// A tap walks closed → half → full → closed.
+	function onDrawerHandleClick() {
+		drawer = drawer === 'full' ? 'closed' : DRAWER_STATES[DRAWER_STATES.indexOf(drawer) + 1];
 	}
 </script>
 
@@ -279,16 +296,19 @@
 		: 'sm:pl-(--page-px)'} {rightCollapsed ? 'sm:pr-0' : 'sm:pr-(--page-px)'}"
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
+	class:mobile-root={isMobile}
 >
 	{#if isMobile}
 		{#if hasViewer}
-			<div class="min-h-0 flex flex-1 flex-col">
+			<!-- Ends above the drawer rather than behind it, so the model stays centred in what is
+			     visible. It jumps straight to its new size: animating it would resize the canvas,
+			     and its render targets, on every frame of the drawer's slide. -->
+			<div class="viewer-region" class:viewer-region-raised={drawer !== 'closed'}>
 				<Viewer
 					{meshes}
 					bind:isFullscreen={isViewerFullscreen}
 					{isSolving}
-					isBlurred={drawerOpen}
-					{drawerOpen}
+					drawerOpen={drawer === 'full'}
 					{logoUrl}
 					{onViewerReady}
 					viewerConfig={{
@@ -300,31 +320,30 @@
 			</div>
 
 			<div
-				class="drawer-container rounded-t-2xl z-40 border-t bg-background shadow-sheet"
-				class:drawer-open={drawerOpen}
-				class:drawer-closed={!drawerOpen}
+				class="drawer-container rounded-t-2xl z-40 border-t bg-background shadow-sheet drawer-{drawer}"
 			>
 				<!-- Named by its visible label; aria-expanded carries the open/closed state. -->
 				<button
-					class="drawer-handle-bar"
-					onclick={() => (drawerOpen = !drawerOpen)}
+					class="drawer-handle-bar touch-none"
+					onclick={onDrawerHandleClick}
 					ontouchstart={onDrawerTouchStart}
 					ontouchend={onDrawerTouchEnd}
-					aria-expanded={drawerOpen}
+					aria-expanded={drawer !== 'closed'}
 				>
 					<div class="drawer-pill"></div>
-					<span class="text-sm font-medium ml-2 text-foreground">{activeLeftTabLabel}</span>
+					<span class="text-sm font-medium ml-2 text-foreground">{drawerLabel}</span>
 					<ChevronUp
 						size={16}
-						class="ml-auto text-muted-foreground transition-transform duration-300 {drawerOpen
-							? ''
-							: 'rotate-180'}"
+						class="ml-auto text-muted-foreground transition-transform duration-300 {drawer ===
+						'full'
+							? 'rotate-180'
+							: ''}"
 					/>
 				</button>
 
 				<!-- Inert while closed: the fields are clipped out of view, and tabbing into them
 				     would scroll the drawer's insides around behind the handle. -->
-				<div class="drawer-content" inert={!drawerOpen}>
+				<div class="drawer-content" inert={drawer === 'closed'}>
 					<div class="px-3 pb-6">
 						{#if hasLeftPanel}
 							{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
@@ -343,7 +362,7 @@
 					</div>
 				</div>
 
-				{@render drawerFooter(!drawerOpen)}
+				{@render drawerFooter(drawer === 'closed')}
 			</div>
 		{:else}
 			<div class="flex flex-1 flex-col overflow-hidden">
@@ -534,6 +553,22 @@
 		gap: 0.5rem;
 	}
 
+	.mobile-root {
+		--drawer-closed-h: 60px;
+		--drawer-half-h: 50%;
+	}
+
+	.viewer-region {
+		position: absolute;
+		inset: 0 0 var(--drawer-closed-h) 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.viewer-region-raised {
+		bottom: var(--drawer-half-h);
+	}
+
 	.drawer-container {
 		position: absolute;
 		bottom: 0;
@@ -546,12 +581,14 @@
 	}
 
 	.drawer-closed {
-		height: 60px;
+		height: var(--drawer-closed-h);
 	}
-	/* The pinned footer takes a fixed slice, so a short phone opens the drawer further to leave
-	   room for the fields; a tall one keeps it at 60% of the screen. */
-	.drawer-open {
-		height: max(60svh, min(30rem, 100svh - 10rem));
+	.drawer-half {
+		height: var(--drawer-half-h);
+	}
+	/* Leaves a strip of the model showing, so the sheet still reads as sitting over the viewer. */
+	.drawer-full {
+		height: calc(100% - 3rem);
 	}
 
 	.drawer-handle-bar {

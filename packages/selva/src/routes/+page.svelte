@@ -64,16 +64,17 @@
 								class={`group hover:bg-muted/40 grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
 									i < dashboard.recentRuns.length - 1 ? 'border-border border-b' : ''
 								}`}
-								style="grid-template-columns: 1fr 120px auto"
+								style="grid-template-columns: minmax(0, 1fr) auto auto"
 							>
 								<span class="truncate font-medium">{run.definitionName}</span>
 								<span class="text-muted-foreground font-mono text-xs">
 									{formatRelative(run.timestamp)}
 								</span>
 								<span
-									class="flex items-center gap-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100"
+									class="flex items-center gap-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
 								>
-									Resume <ArrowRight class="h-3 w-3" />
+									<span class="hidden sm:inline">Resume</span>
+									<ArrowRight class="h-3 w-3" />
 								</span>
 							</button>
 						{/each}

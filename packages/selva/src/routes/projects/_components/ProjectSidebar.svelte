@@ -53,7 +53,10 @@
 	}
 </script>
 
-<aside class="border-border bg-background flex w-60 shrink-0 flex-col overflow-y-auto border-r">
+<!-- Phones get the page's project picker instead: this column would leave the list ~150px. -->
+<aside
+	class="border-border bg-background hidden w-60 shrink-0 flex-col overflow-y-auto border-r sm:flex"
+>
 	<div class="flex items-center justify-between px-4 pt-5 pb-3">
 		<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
 			Projects

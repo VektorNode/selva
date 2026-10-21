@@ -110,7 +110,7 @@
 				class={`absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full backdrop-blur-sm transition-all disabled:opacity-60 ${
 					starred
 						? 'bg-amber-400/90 text-white'
-						: 'bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-black/55'
+						: 'bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-black/55 pointer-coarse:opacity-100'
 				}`}
 			>
 				<Star class="h-3.5 w-3.5 {starred ? 'fill-current' : ''}" />
@@ -170,7 +170,7 @@
 				</span>
 				{#if onToggleStar}
 					<span
-						class="text-foreground flex items-center gap-1 font-medium opacity-0 transition-opacity group-hover:opacity-100"
+						class="text-foreground flex items-center gap-1 font-medium opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
 					>
 						Open <ArrowRight class="h-3 w-3" />
 					</span>

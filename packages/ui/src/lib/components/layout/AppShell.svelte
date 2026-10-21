@@ -74,14 +74,16 @@
 
 	const rootClass = $derived(
 		_mode === 'fixed'
-			? `flex flex-col h-screen overflow-hidden bg-background ${className}`
-			: `flex flex-col min-h-screen bg-background ${className}`
+			? // dvh, not vh: iOS sizes 100vh to the viewport without its toolbar, which hides the
+				// footer and the phone drawer's handle behind the toolbar.
+				`flex flex-col h-dvh overflow-hidden bg-background ${className}`
+			: `flex flex-col min-h-dvh bg-background ${className}`
 	);
 
 	const bodyShellClass = $derived(
 		_mode === 'fixed'
-			? `flex flex-1 min-h-0 ${sidenav ? 'flex-row' : 'flex-col'} ${bodyClass}`.trim()
-			: `flex-1 ${sidenav ? 'flex flex-row' : ''} ${bodyClass}`.trim()
+			? `flex flex-1 min-h-0 ${sidenav ? 'flex-col sm:flex-row' : 'flex-col'} ${bodyClass}`.trim()
+			: `flex-1 ${sidenav ? 'flex flex-col sm:flex-row' : ''} ${bodyClass}`.trim()
 	);
 
 	const bodyShellStyle = '';
@@ -92,13 +94,15 @@
 	const sidenavWrapClass = $derived(
 		_mode === 'fixed'
 			? 'flex shrink-0'
-			: 'flex shrink-0 self-start sticky top-(--header-h) max-h-[calc(100svh-var(--header-h))]'
+			: 'flex shrink-0 sm:self-start sm:sticky sm:top-(--header-h) sm:max-h-[calc(100svh-var(--header-h))]'
 	);
 
 	// The sticky wrapper is only as tall as its content, so in scroll mode the divider comes
 	// from the main column's left edge — that one spans the full body height.
 	const mainClass = $derived(
-		_mode === 'fixed' ? 'flex-1 overflow-y-auto' : 'flex-1 overflow-y-auto border-l border-border'
+		_mode === 'fixed'
+			? 'min-h-0 flex-1 overflow-y-auto'
+			: 'min-w-0 flex-1 overflow-y-auto border-border sm:border-l'
 	);
 </script>
 

@@ -18,7 +18,9 @@
 	}: SectionHeaderProps = $props();
 </script>
 
-<div class={`mb-6 gap-5 flex items-start justify-between ${className}`}>
+<div
+	class={`mb-6 gap-3 sm:gap-5 sm:flex-row sm:items-start sm:justify-between flex flex-col ${className}`}
+>
 	<div class="min-w-0">
 		{#if eyebrow}
 			<div class="mb-1.5 text-xs font-medium tracking-wider text-muted-foreground uppercase">
@@ -31,7 +33,7 @@
 		{/if}
 	</div>
 	{#if actions}
-		<div class="gap-2 flex shrink-0 items-center">
+		<div class="gap-2 flex shrink-0 flex-wrap items-center">
 			{@render actions()}
 		</div>
 	{/if}

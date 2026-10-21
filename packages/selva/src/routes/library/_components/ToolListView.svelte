@@ -15,7 +15,9 @@
 
 	let { records, starredIds, loadingGuid, starBusyGuid, onOpen, onToggleStar }: Props = $props();
 
-	const gridTemplate = 'grid-template-columns: 40px minmax(0, 1.7fr) minmax(0, 1fr) 90px 36px';
+	// Phones drop tags and run count so the name keeps a readable width.
+	const gridTemplate =
+		'grid-cols-[40px_minmax(0,1fr)_auto] sm:grid-cols-[40px_minmax(0,1.7fr)_minmax(0,1fr)_90px_36px]';
 </script>
 
 <div class="border-border bg-card overflow-hidden rounded-xl border">
@@ -25,8 +27,7 @@
 			onclick={() => onOpen(record.guid)}
 			disabled={loadingGuid === record.guid}
 			class="hover:bg-muted/40 group grid w-full items-center gap-4 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60
-				{i < records.length - 1 ? 'border-border border-b' : ''}"
-			style={gridTemplate}
+				{gridTemplate} {i < records.length - 1 ? 'border-border border-b' : ''}"
 		>
 			{#if record.coverImage}
 				<div class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md">
@@ -54,7 +55,7 @@
 				{/if}
 			</div>
 
-			<div class="flex flex-wrap items-center gap-1">
+			<div class="hidden flex-wrap items-center gap-1 sm:flex">
 				{#if record.tags?.length}
 					{#each record.tags.slice(0, 3) as tag (tag)}
 						<span
@@ -65,7 +66,7 @@
 				{/if}
 			</div>
 
-			<span class="text-muted-foreground font-mono text-[12px]">
+			<span class="text-muted-foreground hidden font-mono text-[12px] sm:inline">
 				{record.solveCount > 0 ? `${record.solveCount.toLocaleString()} runs` : '—'}
 			</span>
 
@@ -77,7 +78,7 @@
 					onToggle={() => onToggleStar(record.guid)}
 				/>
 				<ArrowRight
-					class="text-muted-foreground h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100"
+					class="text-muted-foreground h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
 				/>
 			</div>
 		</button>

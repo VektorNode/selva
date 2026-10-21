@@ -31,27 +31,31 @@
 <header
 	class={`top-0 backdrop-blur-sm sticky z-40 border-b border-border bg-background/90 ${className}`}
 >
-	<div class="gap-5 flex h-(--header-h) items-center px-(--page-px)">
+	<div class="gap-2 sm:gap-5 flex h-(--header-h) items-center px-(--page-px)">
 		<!-- Logo -->
-		<a href={homeUrl} class="gap-2 flex shrink-0 items-center">
+		<a href={homeUrl} class="gap-2 flex shrink-0 items-center" aria-label={brandName}>
 			<img src={logo} alt="" aria-hidden="true" class="h-5 w-5" />
-			<span class="font-semibold text-sm tracking-tight">{brandName}</span>
+			<!-- On a phone the page title needs the room more than the brand does. -->
+			<span
+				class="font-semibold text-sm tracking-tight {title !== undefined ? 'sm:inline hidden' : ''}"
+				>{brandName}</span
+			>
 		</a>
 
 		{#if title !== undefined}
-			<span class="text-sm text-border">/</span>
-			<span class="text-sm font-medium text-muted-foreground">{title ?? ''}</span>
+			<span class="text-sm shrink-0 text-border">/</span>
+			<span class="text-sm font-medium min-w-0 truncate text-muted-foreground">{title ?? ''}</span>
 		{/if}
 
 		<!-- Primary nav next to logo -->
 		{#if navItems}
-			<nav class="ml-5 gap-1 flex">
+			<nav class="sm:ml-5 gap-1 flex shrink-0">
 				{@render navItems()}
 			</nav>
 		{/if}
 
 		<!-- Right cluster: identity + utilities, anchored flush-right -->
-		<div class="gap-2 ml-auto flex items-center">
+		<div class="gap-2 ml-auto flex shrink-0 items-center">
 			{#if rightContent}
 				{@render rightContent()}
 			{/if}

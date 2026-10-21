@@ -302,7 +302,7 @@
 	<div
 		bind:this={wrapperEl}
 		class="rounded flex flex-col overflow-hidden border border-border bg-background {isFullscreen
-			? 'h-screen'
+			? 'h-dvh'
 			: ''}"
 	>
 		{#if error}

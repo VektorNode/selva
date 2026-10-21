@@ -78,15 +78,15 @@
 	{#snippet headerRight()}
 		{#if data.versionId}
 			<span
-				class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase"
+				class="bg-warning/15 text-warning shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide whitespace-nowrap uppercase"
 			>
-				v{data.versionNumber} preview
+				v{data.versionNumber}<span class="hidden sm:inline"> preview</span>
 			</span>
 		{:else if data.channel === 'draft'}
 			<span
-				class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase"
+				class="bg-warning/15 text-warning shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide whitespace-nowrap uppercase"
 			>
-				Draft preview
+				Draft<span class="hidden sm:inline"> preview</span>
 			</span>
 		{/if}
 		{#if isAuthed}

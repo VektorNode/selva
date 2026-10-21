@@ -18,7 +18,7 @@
 	const t = $derived(locale.messages);
 </script>
 
-<div class="p-4 flex min-h-screen items-center justify-center bg-background">
+<div class="p-4 flex min-h-dvh items-center justify-center bg-background">
 	<Card.Root class="max-w-md w-full">
 		<Card.Header>
 			<div class="gap-4 flex flex-col items-center text-center">
