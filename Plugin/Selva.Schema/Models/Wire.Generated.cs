@@ -286,6 +286,276 @@ namespace Selva.Schema.Models
         public object Details { get; set; }
     }
 
+    public class SelvaAccount
+    {
+
+        [JsonProperty("status")]
+        public string Status { get; set; }
+
+/// <summary>
+/// The instance this account is for, normalised to an origin. Absent until the user names one.
+/// </summary>
+        [JsonProperty("origin")]
+        public string Origin { get; set; }
+
+/// <summary>
+/// The origin's host as shown to the user: an internationalised name in punycode, so a look-alike domain is visible.
+/// </summary>
+        [JsonProperty("host")]
+        public string Host { get; set; }
+
+/// <summary>
+/// Instances this machine has signed in to before.
+/// </summary>
+        [JsonProperty("knownOrigins")]
+        public List<string> KnownOrigins { get; set; } = new List<string>();
+
+        [JsonProperty("user", NullValueHandling = NullValueHandling.Ignore)]
+        public SelvaUser User { get; set; }
+
+        [JsonProperty("org", NullValueHandling = NullValueHandling.Ignore)]
+        public SelvaOrg Org { get; set; }
+
+/// <summary>
+/// When the token stops working, ISO 8601.
+/// </summary>
+        [JsonProperty("expiresAt")]
+        public string ExpiresAt { get; set; }
+
+/// <summary>
+/// What a pasted key can do beyond reading and uploading, e.g. `write:all`. Empty for a browser sign-in.
+/// </summary>
+        [JsonProperty("extraScopes")]
+        public List<string> ExtraScopes { get; set; } = new List<string>();
+
+/// <summary>
+/// keychain: kept in the OS credential store across Rhino sessions. memory: lost when Rhino closes.
+/// </summary>
+        [JsonProperty("storage")]
+        public string Storage { get; set; }
+
+/// <summary>
+/// Why the last sign-in or sign-out ended the way it did, when it needs saying.
+/// </summary>
+        [JsonProperty("message")]
+        public string Message { get; set; }
+    }
+
+    public class SelvaUser
+    {
+
+        [JsonProperty("email")]
+        public string Email { get; set; }
+
+        [JsonProperty("displayName")]
+        public string DisplayName { get; set; }
+    }
+
+    public class SelvaOrg
+    {
+
+        [JsonProperty("id")]
+        public string Id { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+    }
+
+    public class SelvaTargets
+    {
+
+        [JsonProperty("origin")]
+        public string Origin { get; set; }
+
+/// <summary>
+/// Projects the user can create definitions in.
+/// </summary>
+        [JsonProperty("projects")]
+        public List<SelvaProject> Projects { get; set; } = new List<SelvaProject>();
+
+        [JsonProperty("suggestion", NullValueHandling = NullValueHandling.Ignore)]
+        public SelvaVersionTarget Suggestion { get; set; }
+
+/// <summary>
+/// Other editable definitions uploaded from the same Grasshopper document.
+/// </summary>
+        [JsonProperty("matches")]
+        public List<SelvaVersionTarget> Matches { get; set; } = new List<SelvaVersionTarget>();
+
+        [JsonProperty("defaults")]
+        public SelvaDefinitionDefaults Defaults { get; set; }
+
+        [JsonProperty("file")]
+        public SelvaUploadFile File { get; set; }
+
+/// <summary>
+/// Why nothing can be uploaded right now.
+/// </summary>
+        [JsonProperty("blockedReason")]
+        public string BlockedReason { get; set; }
+    }
+
+    public class SelvaProject
+    {
+
+        [JsonProperty("id")]
+        public string Id { get; set; }
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+    }
+
+    public class SelvaVersionTarget
+    {
+
+        [JsonProperty("definitionGuid")]
+        public string DefinitionGuid { get; set; }
+
+        [JsonProperty("displayName")]
+        public string DisplayName { get; set; }
+
+        [JsonProperty("projectName")]
+        public string ProjectName { get; set; }
+
+        [JsonProperty("latestVersionNumber")]
+        public int LatestVersionNumber { get; set; }
+
+        [JsonProperty("liveVersionNumber")]
+        public int? LiveVersionNumber { get; set; }
+
+/// <summary>
+/// The version this file last uploaded. Absent for a match found by document id.
+/// </summary>
+        [JsonProperty("linkedVersionNumber")]
+        public int? LinkedVersionNumber { get; set; }
+
+/// <summary>
+/// Versions uploaded after linkedVersionNumber, newest first.
+/// </summary>
+        [JsonProperty("newerVersions")]
+        public List<SelvaVersionSummary> NewerVersions { get; set; } = new List<SelvaVersionSummary>();
+    }
+
+    public class SelvaVersionSummary
+    {
+
+        [JsonProperty("versionNumber")]
+        public int VersionNumber { get; set; }
+
+        [JsonProperty("uploadedAt")]
+        public string UploadedAt { get; set; }
+
+        [JsonProperty("byYou")]
+        public bool ByYou { get; set; }
+
+        [JsonProperty("changeNote")]
+        public string ChangeNote { get; set; }
+    }
+
+    public class SelvaDefinitionDefaults
+    {
+
+        [JsonProperty("displayName")]
+        public string DisplayName { get; set; }
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+        [JsonProperty("category")]
+        public string Category { get; set; }
+
+        [JsonProperty("tags")]
+        public List<string> Tags { get; set; } = new List<string>();
+    }
+
+    public class SelvaUploadFile
+    {
+
+        [JsonProperty("name")]
+        public string Name { get; set; }
+
+        [JsonProperty("sizeBytes")]
+        public int SizeBytes { get; set; }
+    }
+
+    public class SelvaUploadRequest
+    {
+
+        [JsonProperty("kind")]
+        public string Kind { get; set; }
+
+        [JsonProperty("projectId")]
+        public string ProjectId { get; set; }
+
+        [JsonProperty("displayName")]
+        public string DisplayName { get; set; }
+
+        [JsonProperty("description")]
+        public string Description { get; set; }
+
+        [JsonProperty("category")]
+        public string Category { get; set; }
+
+        [JsonProperty("tags")]
+        public List<string> Tags { get; set; } = new List<string>();
+
+        [JsonProperty("definitionGuid")]
+        public string DefinitionGuid { get; set; }
+
+        [JsonProperty("changeNote")]
+        public string ChangeNote { get; set; }
+
+/// <summary>
+/// Point the definition's live channel at the new version. Off, it lands as the draft.
+/// </summary>
+        [JsonProperty("makeLive")]
+        public bool MakeLive { get; set; }
+    }
+
+    public class SelvaUploadProgress
+    {
+
+/// <summary>
+/// uploading covers Selva checking the file on Rhino.Compute, which happens before it answers.
+/// </summary>
+        [JsonProperty("stage")]
+        public string Stage { get; set; }
+    }
+
+    public class SelvaUploadResult
+    {
+
+        [JsonProperty("ok")]
+        public bool Ok { get; set; }
+
+        [JsonProperty("definitionGuid")]
+        public string DefinitionGuid { get; set; }
+
+        [JsonProperty("displayName")]
+        public string DisplayName { get; set; }
+
+        [JsonProperty("versionNumber")]
+        public int? VersionNumber { get; set; }
+
+/// <summary>
+/// The new version is what users of the definition get.
+/// </summary>
+        [JsonProperty("live")]
+        public bool Live { get; set; }
+
+/// <summary>
+/// The definition's page on the instance.
+/// </summary>
+        [JsonProperty("url")]
+        public string Url { get; set; }
+
+        [JsonProperty("error")]
+        public string Error { get; set; }
+
+        [JsonProperty("cancelled")]
+        public bool? Cancelled { get; set; }
+    }
+
 // ============================================================================
     // AVAILABLE PARAMETERS
     // ============================================================================

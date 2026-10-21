@@ -176,6 +176,65 @@ public class WireFixtureContractTests
             ["sync-applied.json"] = ("SyncApplied",
                 OutboundEnvelopes.SyncApplied(Session, true, null)),
 
+            ["selva-account.json"] = ("SelvaAccount",
+                OutboundEnvelopes.SelvaAccount(Session, new SelvaAccount
+                {
+                    Status = "signedIn",
+                    Origin = "https://selva.example.com",
+                    Host = "selva.example.com",
+                    KnownOrigins = new List<string> { "https://selva.example.com" },
+                    User = new SelvaUser { Email = "ada@example.com", DisplayName = "Ada" },
+                    Org = new SelvaOrg { Id = "org-1", Name = "Studio" },
+                    ExpiresAt = "2026-02-14T12:00:00Z",
+                    ExtraScopes = new List<string>(),
+                    Storage = "keychain"
+                })),
+
+            ["selva-targets.json"] = ("SelvaTargets",
+                OutboundEnvelopes.SelvaTargets(Session, new SelvaTargets
+                {
+                    Origin = "https://selva.example.com",
+                    Projects = new List<SelvaProject> { new SelvaProject { Id = "project-1", Name = "Tower" } },
+                    Suggestion = new SelvaVersionTarget
+                    {
+                        DefinitionGuid = "44444444-4444-4444-8444-444444444444",
+                        DisplayName = "Facade panel",
+                        ProjectName = "Tower",
+                        LatestVersionNumber = 4,
+                        LiveVersionNumber = 3,
+                        LinkedVersionNumber = 3,
+                        NewerVersions = new List<SelvaVersionSummary>
+                        {
+                            new SelvaVersionSummary
+                            {
+                                VersionNumber = 4, UploadedAt = "2026-01-14T09:30:00Z", ByYou = false,
+                                ChangeNote = "Thicker mullions"
+                            }
+                        }
+                    },
+                    Matches = new List<SelvaVersionTarget>(),
+                    Defaults = new SelvaDefinitionDefaults
+                    {
+                        DisplayName = "Facade panel", Description = "Panelised facade", Category = "Facade",
+                        Tags = new List<string> { "tower" }
+                    },
+                    File = new SelvaUploadFile { Name = "facade.gh", SizeBytes = 182_044 }
+                })),
+
+            ["selva-upload-progress.json"] = ("SelvaUploadProgress",
+                OutboundEnvelopes.SelvaUploadProgress(Session, new SelvaUploadProgress { Stage = "uploading" })),
+
+            ["selva-upload-result.json"] = ("SelvaUploadResult",
+                OutboundEnvelopes.SelvaUploadResult(Session, new SelvaUploadResult
+                {
+                    Ok = true,
+                    DefinitionGuid = "44444444-4444-4444-8444-444444444444",
+                    DisplayName = "Facade panel",
+                    VersionNumber = 5,
+                    Live = false,
+                    Url = "https://selva.example.com/library/44444444-4444-4444-8444-444444444444"
+                })),
+
             ["outputs.json"] = ("Outputs",
                 OutboundEnvelopes.Outputs(
                     Session,
@@ -246,6 +305,17 @@ public class WireFixtureContractTests
         }
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    // The web UI never holds a Selva key, so no envelope may carry one.
+    [Fact]
+    public void Envelopes_NeverCarryASelvaKey()
+    {
+        foreach (var (fileName, (_, envelope)) in Samples())
+        {
+            var json = JsonConvert.SerializeObject(envelope, TransportSettings);
+            Assert.False(json.Contains("selva_"), $"{fileName} carries a selva_ string.");
+        }
     }
 
     private static string FindRepoRoot()

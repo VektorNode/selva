@@ -228,6 +228,214 @@
 			},
 			"required": ["paramId", "severity", "message"],
 			"additionalProperties": false
+		},
+		"SelvaAccount": {
+			"type": "object",
+			"description": "Who the plugin is signed in to Selva as, for the web UI's account row. Never carries the token: the plugin holds it.",
+			"properties": {
+				"status": {
+					"type": "string",
+					"enum": ["signedOut", "signingIn", "signedIn"]
+				},
+				"origin": {
+					"type": "string",
+					"description": "The instance this account is for, normalised to an origin. Absent until the user names one."
+				},
+				"host": {
+					"type": "string",
+					"description": "The origin's host as shown to the user: an internationalised name in punycode, so a look-alike domain is visible."
+				},
+				"knownOrigins": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "Instances this machine has signed in to before."
+				},
+				"user": { "$ref": "#/definitions/SelvaUser" },
+				"org": { "$ref": "#/definitions/SelvaOrg" },
+				"expiresAt": {
+					"type": "string",
+					"description": "When the token stops working, ISO 8601."
+				},
+				"extraScopes": {
+					"type": "array",
+					"items": { "type": "string" },
+					"description": "What a pasted key can do beyond reading and uploading, e.g. `write:all`. Empty for a browser sign-in."
+				},
+				"storage": {
+					"type": "string",
+					"enum": ["keychain", "memory"],
+					"description": "keychain: kept in the OS credential store across Rhino sessions. memory: lost when Rhino closes."
+				},
+				"message": {
+					"type": "string",
+					"description": "Why the last sign-in or sign-out ended the way it did, when it needs saying."
+				}
+			},
+			"required": ["status", "knownOrigins", "extraScopes", "storage"],
+			"additionalProperties": false
+		},
+		"SelvaUser": {
+			"type": "object",
+			"properties": {
+				"email": { "type": "string" },
+				"displayName": { "type": "string" }
+			},
+			"required": ["email"],
+			"additionalProperties": false
+		},
+		"SelvaOrg": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"name": { "type": "string" }
+			},
+			"required": ["id", "name"],
+			"additionalProperties": false
+		},
+		"SelvaTargets": {
+			"type": "object",
+			"description": "Where the open definition can go: a new definition in one of these projects, or a new version of a definition Selva already has. `suggestion` is the definition this file was last uploaded to on this instance, when the user can still edit it.",
+			"properties": {
+				"origin": { "type": "string" },
+				"projects": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/SelvaProject" },
+					"description": "Projects the user can create definitions in."
+				},
+				"suggestion": { "$ref": "#/definitions/SelvaVersionTarget" },
+				"matches": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/SelvaVersionTarget" },
+					"description": "Other editable definitions uploaded from the same Grasshopper document."
+				},
+				"defaults": { "$ref": "#/definitions/SelvaDefinitionDefaults" },
+				"file": { "$ref": "#/definitions/SelvaUploadFile" },
+				"blockedReason": {
+					"type": "string",
+					"description": "Why nothing can be uploaded right now."
+				}
+			},
+			"required": ["origin", "projects", "matches", "defaults", "file"],
+			"additionalProperties": false
+		},
+		"SelvaProject": {
+			"type": "object",
+			"properties": {
+				"id": { "type": "string" },
+				"name": { "type": "string" }
+			},
+			"required": ["id", "name"],
+			"additionalProperties": false
+		},
+		"SelvaVersionTarget": {
+			"type": "object",
+			"properties": {
+				"definitionGuid": { "type": "string" },
+				"displayName": { "type": "string" },
+				"projectName": { "type": "string" },
+				"latestVersionNumber": { "type": "integer" },
+				"liveVersionNumber": { "type": "integer" },
+				"linkedVersionNumber": {
+					"type": "integer",
+					"description": "The version this file last uploaded. Absent for a match found by document id."
+				},
+				"newerVersions": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/SelvaVersionSummary" },
+					"description": "Versions uploaded after linkedVersionNumber, newest first."
+				}
+			},
+			"required": ["definitionGuid", "displayName", "latestVersionNumber", "newerVersions"],
+			"additionalProperties": false
+		},
+		"SelvaVersionSummary": {
+			"type": "object",
+			"properties": {
+				"versionNumber": { "type": "integer" },
+				"uploadedAt": { "type": "string" },
+				"byYou": { "type": "boolean" },
+				"changeNote": { "type": "string" }
+			},
+			"required": ["versionNumber", "uploadedAt", "byYou"],
+			"additionalProperties": false
+		},
+		"SelvaDefinitionDefaults": {
+			"type": "object",
+			"description": "Filled from the saved UI schema.",
+			"properties": {
+				"displayName": { "type": "string" },
+				"description": { "type": "string" },
+				"category": { "type": "string" },
+				"tags": { "type": "array", "items": { "type": "string" } }
+			},
+			"required": ["displayName", "tags"],
+			"additionalProperties": false
+		},
+		"SelvaUploadFile": {
+			"type": "object",
+			"description": "What would be uploaded: the whole definition as it is on the canvas, internalised data and script source included.",
+			"properties": {
+				"name": { "type": "string" },
+				"sizeBytes": { "type": "integer" }
+			},
+			"required": ["name", "sizeBytes"],
+			"additionalProperties": false
+		},
+		"SelvaUploadRequest": {
+			"type": "object",
+			"description": "The web UI's upload choice. newDefinition reads projectId and the metadata; newVersion reads definitionGuid and changeNote.",
+			"properties": {
+				"kind": {
+					"type": "string",
+					"enum": ["newDefinition", "newVersion"]
+				},
+				"projectId": { "type": "string" },
+				"displayName": { "type": "string" },
+				"description": { "type": "string" },
+				"category": { "type": "string" },
+				"tags": { "type": "array", "items": { "type": "string" } },
+				"definitionGuid": { "type": "string" },
+				"changeNote": { "type": "string" },
+				"makeLive": {
+					"type": "boolean",
+					"description": "Point the definition's live channel at the new version. Off, it lands as the draft."
+				}
+			},
+			"required": ["kind", "makeLive"],
+			"additionalProperties": false
+		},
+		"SelvaUploadProgress": {
+			"type": "object",
+			"properties": {
+				"stage": {
+					"type": "string",
+					"enum": ["preparing", "uploading", "publishing"],
+					"description": "uploading covers Selva checking the file on Rhino.Compute, which happens before it answers."
+				}
+			},
+			"required": ["stage"],
+			"additionalProperties": false
+		},
+		"SelvaUploadResult": {
+			"type": "object",
+			"properties": {
+				"ok": { "type": "boolean" },
+				"definitionGuid": { "type": "string" },
+				"displayName": { "type": "string" },
+				"versionNumber": { "type": "integer" },
+				"live": {
+					"type": "boolean",
+					"description": "The new version is what users of the definition get."
+				},
+				"url": {
+					"type": "string",
+					"description": "The definition's page on the instance."
+				},
+				"error": { "type": "string" },
+				"cancelled": { "type": "boolean" }
+			},
+			"required": ["ok", "live"],
+			"additionalProperties": false
 		}
 	}
 }

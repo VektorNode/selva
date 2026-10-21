@@ -37,6 +37,30 @@ public enum InboundKind
     /// <summary>`cancelSolve` — no payload. Handled off the UI thread, which the solver holds.</summary>
     CancelSolve,
 
+    /// <summary>`selvaGetAccount` — no payload. Answered with `selvaAccount`.</summary>
+    SelvaGetAccount,
+
+    /// <summary>`selvaConnect` with the instance URL the user typed, not yet normalised.</summary>
+    SelvaConnect,
+
+    /// <summary>`selvaSignIn` — no payload. Starts the browser sign-in for the active instance.</summary>
+    SelvaSignIn,
+
+    /// <summary>`selvaUseApiKey` — no payload. The key is pasted into a plugin dialog, never the page.</summary>
+    SelvaUseApiKey,
+
+    /// <summary>`selvaSignOut` — no payload.</summary>
+    SelvaSignOut,
+
+    /// <summary>`selvaListTargets` — no payload. Answered with `selvaTargets`.</summary>
+    SelvaListTargets,
+
+    /// <summary>`selvaUpload` with a request whose kind and makeLive are present.</summary>
+    SelvaUpload,
+
+    /// <summary>`selvaCancel` — no payload. Stops a sign-in or upload in flight.</summary>
+    SelvaCancel,
+
     /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
@@ -69,6 +93,10 @@ public sealed class InboundMessage
     public string BaseSchemaHash { get; init; }
 
     public List<SyncChange> Changes { get; init; }
+
+    public string Origin { get; init; }
+
+    public SelvaUploadRequest UploadRequest { get; init; }
 
     // Populated per-Kind, so most instances leave several of these null. The plugin compiles
     // without a nullable context; the test project links this file in under one, hence the

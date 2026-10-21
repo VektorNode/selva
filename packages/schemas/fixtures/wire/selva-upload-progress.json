@@ -1,0 +1,7 @@
+{
+	"type": "selvaUploadProgress",
+	"sessionId": "session-fixture",
+	"progress": {
+		"stage": "uploading"
+	}
+}

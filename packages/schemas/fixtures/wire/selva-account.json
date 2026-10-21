@@ -1,0 +1,22 @@
+{
+	"type": "selvaAccount",
+	"sessionId": "session-fixture",
+	"account": {
+		"status": "signedIn",
+		"origin": "https://selva.example.com",
+		"host": "selva.example.com",
+		"knownOrigins": ["https://selva.example.com"],
+		"user": {
+			"email": "ada@example.com",
+			"displayName": "Ada"
+		},
+		"org": {
+			"id": "org-1",
+			"name": "Studio"
+		},
+		"expiresAt": "2026-02-14T12:00:00Z",
+		"extraScopes": [],
+		"storage": "keychain",
+		"message": null
+	}
+}

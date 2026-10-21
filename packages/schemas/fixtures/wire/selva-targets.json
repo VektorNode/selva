@@ -1,0 +1,41 @@
+{
+	"type": "selvaTargets",
+	"sessionId": "session-fixture",
+	"targets": {
+		"origin": "https://selva.example.com",
+		"projects": [
+			{
+				"id": "project-1",
+				"name": "Tower"
+			}
+		],
+		"suggestion": {
+			"definitionGuid": "44444444-4444-4444-8444-444444444444",
+			"displayName": "Facade panel",
+			"projectName": "Tower",
+			"latestVersionNumber": 4,
+			"liveVersionNumber": 3,
+			"linkedVersionNumber": 3,
+			"newerVersions": [
+				{
+					"versionNumber": 4,
+					"uploadedAt": "2026-01-14T09:30:00Z",
+					"byYou": false,
+					"changeNote": "Thicker mullions"
+				}
+			]
+		},
+		"matches": [],
+		"defaults": {
+			"displayName": "Facade panel",
+			"description": "Panelised facade",
+			"category": "Facade",
+			"tags": ["tower"]
+		},
+		"file": {
+			"name": "facade.gh",
+			"sizeBytes": 182044
+		},
+		"blockedReason": null
+	}
+}

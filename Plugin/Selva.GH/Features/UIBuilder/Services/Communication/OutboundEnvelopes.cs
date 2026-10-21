@@ -39,6 +39,21 @@ public static class OutboundEnvelopes
     public static object SolveEvent(string sessionId, SolveEvent @event) =>
         new { type = "solveEvent", sessionId, @event };
 
+    // The four Selva envelopes nest their payload because each payload type is shared with the
+    // generated TS types; none of them carries the token.
+
+    public static object SelvaAccount(string sessionId, SelvaAccount account) =>
+        new { type = "selvaAccount", sessionId, account };
+
+    public static object SelvaTargets(string sessionId, SelvaTargets targets) =>
+        new { type = "selvaTargets", sessionId, targets };
+
+    public static object SelvaUploadProgress(string sessionId, SelvaUploadProgress progress) =>
+        new { type = "selvaUploadProgress", sessionId, progress };
+
+    public static object SelvaUploadResult(string sessionId, SelvaUploadResult result) =>
+        new { type = "selvaUploadResult", sessionId, result };
+
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };
 

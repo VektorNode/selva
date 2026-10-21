@@ -189,6 +189,80 @@ const solveEventSchema = baseEnvelope.extend({
 	})
 });
 
+// ============================================================================
+// Selva account and upload (SelvaAccount, SelvaTargets, … in wire-schema.json)
+// ============================================================================
+
+const selvaVersionTargetSchema = z.object({
+	definitionGuid: z.string(),
+	displayName: z.string(),
+	projectName: z.string().nullish(),
+	latestVersionNumber: z.number(),
+	liveVersionNumber: z.number().nullish(),
+	linkedVersionNumber: z.number().nullish(),
+	newerVersions: z.array(
+		z.object({
+			versionNumber: z.number(),
+			uploadedAt: z.string(),
+			byYou: z.boolean(),
+			changeNote: z.string().nullish()
+		})
+	)
+});
+
+const selvaAccountSchema = baseEnvelope.extend({
+	type: z.literal('selvaAccount'),
+	account: z.object({
+		status: z.enum(['signedOut', 'signingIn', 'signedIn']),
+		origin: z.string().nullish(),
+		host: z.string().nullish(),
+		knownOrigins: z.array(z.string()),
+		user: z.object({ email: z.string(), displayName: z.string().nullish() }).nullish(),
+		org: z.object({ id: z.string(), name: z.string() }).nullish(),
+		expiresAt: z.string().nullish(),
+		extraScopes: z.array(z.string()),
+		storage: z.enum(['keychain', 'memory']),
+		message: z.string().nullish()
+	})
+});
+
+const selvaTargetsSchema = baseEnvelope.extend({
+	type: z.literal('selvaTargets'),
+	targets: z.object({
+		origin: z.string(),
+		projects: z.array(z.object({ id: z.string(), name: z.string() })),
+		suggestion: selvaVersionTargetSchema.nullish(),
+		matches: z.array(selvaVersionTargetSchema),
+		defaults: z.object({
+			displayName: z.string(),
+			description: z.string().nullish(),
+			category: z.string().nullish(),
+			tags: z.array(z.string())
+		}),
+		file: z.object({ name: z.string(), sizeBytes: z.number() }),
+		blockedReason: z.string().nullish()
+	})
+});
+
+const selvaUploadProgressSchema = baseEnvelope.extend({
+	type: z.literal('selvaUploadProgress'),
+	progress: z.object({ stage: z.enum(['preparing', 'uploading', 'publishing']) })
+});
+
+const selvaUploadResultSchema = baseEnvelope.extend({
+	type: z.literal('selvaUploadResult'),
+	result: z.object({
+		ok: z.boolean(),
+		definitionGuid: z.string().nullish(),
+		displayName: z.string().nullish(),
+		versionNumber: z.number().nullish(),
+		live: z.boolean(),
+		url: z.string().nullish(),
+		error: z.string().nullish(),
+		cancelled: z.boolean().nullish()
+	})
+});
+
 // `disconnecting` uses the generic `BroadcastMessage` envelope — payload nested
 // under `data` — and is handled inline in `handleMessage` before validation kicks
 // in. No schema needed.
@@ -217,7 +291,11 @@ const schemasByType = {
 	syncApplied: syncAppliedSchema,
 	solvingState: solvingStateSchema,
 	runtimeMessage: runtimeMessageSchema,
-	solveEvent: solveEventSchema
+	solveEvent: solveEventSchema,
+	selvaAccount: selvaAccountSchema,
+	selvaTargets: selvaTargetsSchema,
+	selvaUploadProgress: selvaUploadProgressSchema,
+	selvaUploadResult: selvaUploadResultSchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

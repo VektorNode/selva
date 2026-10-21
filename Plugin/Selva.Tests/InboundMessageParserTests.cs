@@ -190,4 +190,61 @@ public class InboundMessageParserTests
         var msg = Parse(@"{ ""type"": """", ""sessionId"": ""session-1"" }");
         Assert.Equal(InboundKind.Malformed, msg.Kind);
     }
+
+    // -------------------------------------------------------------------------
+    // Selva account and upload
+    // -------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("selvaGetAccount", InboundKind.SelvaGetAccount)]
+    [InlineData("selvaSignIn", InboundKind.SelvaSignIn)]
+    [InlineData("selvaUseApiKey", InboundKind.SelvaUseApiKey)]
+    [InlineData("selvaSignOut", InboundKind.SelvaSignOut)]
+    [InlineData("selvaListTargets", InboundKind.SelvaListTargets)]
+    [InlineData("selvaCancel", InboundKind.SelvaCancel)]
+    public void SelvaCommands_WithoutPayload_Classify(string type, InboundKind kind)
+    {
+        Assert.Equal(kind, Parse($@"{{ ""type"": ""{type}"", ""sessionId"": ""session-1"" }}").Kind);
+    }
+
+    [Fact]
+    public void SelvaConnect_BindsTheOrigin()
+    {
+        var msg = Parse(@"{ ""type"": ""selvaConnect"", ""sessionId"": ""session-1"",
+                           ""origin"": ""selva.example.com"" }");
+
+        Assert.Equal(InboundKind.SelvaConnect, msg.Kind);
+        Assert.Equal("selva.example.com", msg.Origin);
+    }
+
+    [Fact]
+    public void SelvaConnect_WithoutAnOrigin_IsMissingField()
+    {
+        var msg = Parse(@"{ ""type"": ""selvaConnect"", ""sessionId"": ""session-1"" }");
+        Assert.Equal(InboundKind.MissingField, msg.Kind);
+    }
+
+    [Fact]
+    public void SelvaUpload_BindsTheRequest()
+    {
+        var msg = Parse(@"{ ""type"": ""selvaUpload"", ""sessionId"": ""session-1"",
+                           ""request"": { ""kind"": ""newVersion"", ""makeLive"": true,
+                                          ""definitionGuid"": ""44444444-4444-4444-8444-444444444444"",
+                                          ""changeNote"": ""Thicker mullions"" } }");
+
+        Assert.Equal(InboundKind.SelvaUpload, msg.Kind);
+        Assert.Equal("newVersion", msg.UploadRequest.Kind);
+        Assert.True(msg.UploadRequest.MakeLive);
+        Assert.Equal("Thicker mullions", msg.UploadRequest.ChangeNote);
+    }
+
+    [Theory]
+    [InlineData(@"{ ""type"": ""selvaUpload"", ""sessionId"": ""session-1"" }")]
+    [InlineData(@"{ ""type"": ""selvaUpload"", ""sessionId"": ""session-1"", ""request"": { ""makeLive"": true } }")]
+    [InlineData(@"{ ""type"": ""selvaUpload"", ""sessionId"": ""session-1"", ""request"": { ""kind"": ""replace"", ""makeLive"": true } }")]
+    [InlineData(@"{ ""type"": ""selvaUpload"", ""sessionId"": ""session-1"", ""request"": { ""kind"": ""newVersion"" } }")]
+    public void SelvaUpload_WithoutAUsableRequest_IsMissingField(string json)
+    {
+        Assert.Equal(InboundKind.MissingField, Parse(json).Kind);
+    }
 }

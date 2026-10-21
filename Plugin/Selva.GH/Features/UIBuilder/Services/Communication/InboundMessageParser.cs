@@ -134,6 +134,59 @@ public sealed class InboundMessageParser
                         };
                     }
 
+                case "selvaGetAccount":
+                    return InboundMessage.Of(InboundKind.SelvaGetAccount, msgType);
+
+                case "selvaConnect":
+                    {
+                        var origin = jObj["origin"]?.Type == JTokenType.String ? (string)jObj["origin"] : null;
+                        if (string.IsNullOrWhiteSpace(origin))
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.SelvaConnect,
+                            MessageType = msgType,
+                            Origin = origin
+                        };
+                    }
+
+                case "selvaSignIn":
+                    return InboundMessage.Of(InboundKind.SelvaSignIn, msgType);
+
+                case "selvaUseApiKey":
+                    return InboundMessage.Of(InboundKind.SelvaUseApiKey, msgType);
+
+                case "selvaSignOut":
+                    return InboundMessage.Of(InboundKind.SelvaSignOut, msgType);
+
+                case "selvaListTargets":
+                    return InboundMessage.Of(InboundKind.SelvaListTargets, msgType);
+
+                case "selvaUpload":
+                    {
+                        // makeLive is a plain bool once bound, so its presence is checked on the JSON.
+                        var request = jObj["request"] as JObject;
+                        var kind = request?["kind"]?.ToString();
+                        if (request?["makeLive"]?.Type != JTokenType.Boolean ||
+                            (kind != "newDefinition" && kind != "newVersion"))
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.SelvaUpload,
+                            MessageType = msgType,
+                            UploadRequest = request.ToObject<SelvaUploadRequest>(_serializer)
+                        };
+                    }
+
+                case "selvaCancel":
+                    return InboundMessage.Of(InboundKind.SelvaCancel, msgType);
+
                 default:
                     return InboundMessage.Of(InboundKind.Unknown, msgType);
             }

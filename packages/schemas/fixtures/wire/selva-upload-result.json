@@ -1,0 +1,14 @@
+{
+	"type": "selvaUploadResult",
+	"sessionId": "session-fixture",
+	"result": {
+		"ok": true,
+		"definitionGuid": "44444444-4444-4444-8444-444444444444",
+		"displayName": "Facade panel",
+		"versionNumber": 5,
+		"live": false,
+		"url": "https://selva.example.com/library/44444444-4444-4444-8444-444444444444",
+		"error": null,
+		"cancelled": null
+	}
+}
