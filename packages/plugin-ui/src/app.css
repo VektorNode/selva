@@ -4,3 +4,21 @@
 
 /* Import base theme styles from @selvajs/ui */
 @import '@selvajs/ui/styles/base.css';
+
+/* Builder scope marks. Local and Compute differ in lightness as well as hue, and each mark
+   carries an icon and a label, so neither is told apart by colour alone. Text in these
+   colours holds 4.5:1 on their own 10% tint. */
+:root {
+	--scope-local: oklch(0.47 0.14 295);
+	--scope-compute: oklch(0.5 0.12 245);
+}
+
+.dark {
+	--scope-local: oklch(0.8 0.1 295);
+	--scope-compute: oklch(0.76 0.11 245);
+}
+
+@theme inline {
+	--color-scope-local: var(--scope-local);
+	--color-scope-compute: var(--scope-compute);
+}

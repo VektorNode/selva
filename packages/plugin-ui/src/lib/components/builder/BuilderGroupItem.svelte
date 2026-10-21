@@ -16,7 +16,12 @@
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import ScopeChip from './scope/ScopeChip.svelte';
+	import ScopeSection from './scope/ScopeSection.svelte';
+	import { SOURCE_KIND_LABELS, type SourceKind } from '$lib/features/builder';
 	import { dragHandle } from 'svelte-dnd-action';
+
+	const SOURCE_KINDS = Object.keys(SOURCE_KIND_LABELS) as SourceKind[];
 
 	interface BuilderGroupItemProps {
 		item: LayoutItem;
@@ -195,7 +200,7 @@
 	// Absent source = 'user'. See InputSource in the schema for what 'client'/'server' + key mean.
 	let sourceKind = $derived((item as { source?: InputSource }).source?.kind ?? 'user');
 
-	function setSourceKind(kind: 'user' | 'client' | 'server') {
+	function setSourceKind(kind: SourceKind) {
 		if (item.type !== 'input') return;
 		const target = item as { source?: InputSource; visible?: boolean };
 		if (kind === 'user') {
@@ -254,7 +259,7 @@
 	}
 </script>
 
-<div class="relative">
+<div class="relative" data-builder-item-id={item.id}>
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
 			class="group bg-background hover:border-border border-border/60 overflow-hidden rounded-lg py-1.5 transition-all hover:shadow-sm"
@@ -293,6 +298,13 @@
 					style="field-sizing: content; min-width: 7rem; max-width: 18rem;"
 					placeholder="Display Name"
 				/>
+				{#if isInput && sourceKind !== 'user'}
+					<ScopeChip
+						scope="compute"
+						label={SOURCE_KIND_LABELS[sourceKind]}
+						title="Value source: {SOURCE_KIND_LABELS[sourceKind]}"
+					/>
+				{/if}
 				{#if detectedChartType}
 					<span
 						class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize"
@@ -324,7 +336,7 @@
 							Span:
 							<input
 								type="number"
-								bind:value={item.span}
+								bind:value={() => item.span ?? 1, (span) => (item.span = span ?? undefined)}
 								min="1"
 								max={columns}
 								class="border-border bg-background text-foreground w-8 rounded-sm border px-1 py-0.5 text-[10px]"
@@ -598,72 +610,6 @@
 						</div>
 					{/if}
 
-					<!-- Value source (input items only): who supplies this input. -->
-					{#if isInput}
-						<div class="border-border/70 mt-1 flex flex-col gap-1 border-t pt-2 text-[11px]">
-							<div class="flex items-center justify-between gap-2">
-								<span class="text-muted-foreground">Value source</span>
-								<select
-									value={sourceKind}
-									onchange={(e) =>
-										setSourceKind(e.currentTarget.value as 'user' | 'client' | 'server')}
-									class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
-								>
-									<option value="user">User (form)</option>
-									<option value="client">Client (browser app)</option>
-									<option value="server">Server (looked up)</option>
-								</select>
-							</div>
-
-							{#if sourceKind !== 'user'}
-								{@const source = (item as { source?: InputSource }).source}
-								<div class="flex flex-col gap-1">
-									<input
-										type="text"
-										value={source?.key ?? ''}
-										oninput={(e) => {
-											const t = item as { source?: InputSource };
-											if (t.source) t.source.key = e.currentTarget.value || undefined;
-										}}
-										placeholder={sourceKind === 'client'
-											? 'e.g. line-app'
-											: 'e.g. capture.geometry'}
-										class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
-									/>
-									<span class="text-muted-foreground/70 text-[9px]">
-										{#if sourceKind === 'client'}
-											Filled by a browser app before the form runs. The key names which producer to
-											open. Hidden from the form by default.
-										{:else}
-											Looked up on the server at solve time. The key names what to fetch. Never
-											shown in the form.
-										{/if}
-									</span>
-
-									{#if sourceKind === 'client'}
-										<div class="flex items-center justify-between gap-2">
-											<span class="text-muted-foreground">In the form</span>
-											<select
-												value={clientPresentation}
-												onchange={(e) =>
-													setClientPresentation(e.currentTarget.value as 'hidden' | 'slot')}
-												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
-											>
-												<option value="hidden">Hidden</option>
-												<option value="slot">Custom slot (host app)</option>
-											</select>
-										</div>
-										{#if clientPresentation === 'slot'}
-											<span class="text-muted-foreground/70 text-[9px]">
-												The host app renders its own element here; Selva renders nothing itself.
-											</span>
-										{/if}
-									{/if}
-								</div>
-							{/if}
-						</div>
-					{/if}
-
 					<!-- Visibility Rules Section (separate from Advanced) -->
 					<div class="border-border/70 mt-1 border-t pt-1">
 						<button
@@ -692,6 +638,79 @@
 							/>
 						{/if}
 					</div>
+
+					<!-- Value source (input items only): who supplies this input. -->
+					{#if isInput}
+						<ScopeSection scope="compute">
+							<div class="flex flex-col gap-1">
+								<span class="text-muted-foreground text-[10px] font-medium">Value source</span>
+								<div class="grid grid-cols-3 gap-1">
+									{#each SOURCE_KINDS as kind (kind)}
+										<button
+											type="button"
+											aria-pressed={sourceKind === kind}
+											onclick={() => setSourceKind(kind)}
+											class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
+												sourceKind === kind
+													? 'bg-primary text-primary-foreground border-primary'
+													: 'border-border/70 bg-background hover:border-border hover:bg-accent'
+											}`}
+										>
+											{SOURCE_KIND_LABELS[kind]}
+										</button>
+									{/each}
+								</div>
+							</div>
+
+							{#if sourceKind !== 'user'}
+								{@const source = (item as { source?: InputSource }).source}
+								<div class="flex flex-col gap-1">
+									<input
+										type="text"
+										aria-label="Source key"
+										value={source?.key ?? ''}
+										oninput={(e) => {
+											const t = item as { source?: InputSource };
+											if (t.source) t.source.key = e.currentTarget.value || undefined;
+										}}
+										placeholder={sourceKind === 'client'
+											? 'e.g. line-app'
+											: 'e.g. capture.geometry'}
+										class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
+									/>
+									<span class="text-muted-foreground text-[10px]">
+										{#if sourceKind === 'client'}
+											Filled by a browser app before the form runs. The key names which producer to
+											open. Hidden from the form by default.
+										{:else}
+											Looked up on the server at solve time. The key names what to fetch. Never
+											shown in the form.
+										{/if}
+									</span>
+
+									{#if sourceKind === 'client'}
+										<div class="flex items-center justify-between gap-2">
+											<span class="text-muted-foreground">In the form</span>
+											<select
+												value={clientPresentation}
+												onchange={(e) =>
+													setClientPresentation(e.currentTarget.value as 'hidden' | 'slot')}
+												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
+											>
+												<option value="hidden">Hidden</option>
+												<option value="slot">Custom slot (host app)</option>
+											</select>
+										</div>
+										{#if clientPresentation === 'slot'}
+											<span class="text-muted-foreground text-[10px]">
+												The host app renders its own element here; Selva renders nothing itself.
+											</span>
+										{/if}
+									{/if}
+								</div>
+							{/if}
+						</ScopeSection>
+					{/if}
 				</div>
 			</Collapsible.Content>
 		</Card.Root>

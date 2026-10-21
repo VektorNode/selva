@@ -65,13 +65,13 @@ namespace Selva.Schema.Models
         public string PluginVersion { get; set; }
 
 /// <summary>
-/// User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])
+/// Tags for the Selva library (e.g., ['architecture', 'facade']). Selva copies them into the definition when it is uploaded; after that the definition's own tags win. At most MAX_TAGS, none containing a comma.
 /// </summary>
         [JsonProperty("tags")]
         public List<string> Tags { get; set; } = new List<string>();
 
 /// <summary>
-/// Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')
+/// Category for the Selva library (e.g., 'architecture', 'structural'). Selva copies it into the definition when it is uploaded; after that the definition's own category wins. At most MAX_CATEGORY_LENGTH characters.
 /// </summary>
         [JsonProperty("category")]
         public string Category { get; set; }
@@ -542,13 +542,13 @@ namespace Selva.Schema.Models
     {
 
 /// <summary>
-/// If true, display mesh data is sent to the web preview for local rendering
+/// If true, the plugin streams display meshes to its local web preview, which then shows the 3D viewer. Selva ignores it.
 /// </summary>
         [JsonProperty("enableLocal", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? EnableLocal { get; set; } = false;
 
 /// <summary>
-/// If true, enables remote rendering via Rhino Compute
+/// If true, Selva draws the display meshes in the Rhino.Compute response and shows the 3D viewer. The plugin's local preview ignores it.
 /// </summary>
         [JsonProperty("enableRemote", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? EnableRemote { get; set; } = false;

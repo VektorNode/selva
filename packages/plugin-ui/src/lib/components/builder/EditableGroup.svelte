@@ -21,7 +21,7 @@
 	} from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
-	import { SvelteMap } from 'svelte/reactivity';
+	import type { SvelteSet } from 'svelte/reactivity';
 	import {
 		DND_FLIP_MS,
 		DND_TYPE_PARAM,
@@ -47,6 +47,8 @@
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		outputValues?: Record<string, unknown>;
+		/** Ids of the open item cards, held by the page so the sidebar can open one. */
+		expandedItems: SvelteSet<string>;
 	}
 
 	let {
@@ -59,17 +61,18 @@
 		onRemoveItem,
 		availableInputs,
 		getParameterInfo,
-		outputValues = {}
+		outputValues = {},
+		expandedItems
 	}: EditableGroupProps = $props();
 
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
-	const expandedItems = new SvelteMap<string, boolean>();
 	function isExpanded(id: string) {
-		return expandedItems.get(id) ?? false;
+		return expandedItems.has(id);
 	}
 	function setExpanded(id: string, value: boolean) {
-		expandedItems.set(id, value);
+		if (value) expandedItems.add(id);
+		else expandedItems.delete(id);
 	}
 
 	// Local items mirror — synced from group.items when not dragging.
@@ -207,6 +210,7 @@
 </script>
 
 <Card.Root
+	data-builder-group-id={group.id}
 	class="group bg-muted gap-0 overflow-hidden border-2 py-0 {isDndTarget ? 'border-primary' : ''}"
 >
 	<Card.Header

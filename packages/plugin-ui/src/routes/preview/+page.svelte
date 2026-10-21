@@ -117,6 +117,7 @@
 			{#key preview.state.schema}
 				<AppLayout
 					schema={preview.state.schema}
+					showViewer={!!preview.state.schema.viewerOptions?.enableLocal}
 					meshes={preview.displayMeshes}
 					isSolving={preview.isSolving}
 					showSolvingIndicator={preview.state.schema.instanceSolve !== false &&

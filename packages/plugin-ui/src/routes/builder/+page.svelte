@@ -15,7 +15,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import { buildSessionParams } from '$lib/utils/session';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
 
@@ -162,6 +162,19 @@
 		}
 	}
 
+	const expandedItems = new SvelteSet<string>();
+
+	async function revealItem(tabId: string, groupId: string, itemId: string) {
+		if (tabId) handleTabChange(tabId);
+		expandedItems.add(itemId);
+		await tick();
+		// A collapsed group renders no cards; then the group itself is the best we can show.
+		const target =
+			document.querySelector(`[data-builder-item-id="${CSS.escape(itemId)}"]`) ??
+			document.querySelector(`[data-builder-group-id="${CSS.escape(groupId)}"]`);
+		target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+	}
+
 	useFooterItem({
 		id: 'ws-status',
 		component: WsStatusFooter,
@@ -264,6 +277,7 @@
 							onAddToGroup={actions.onAddToGroup}
 							onAddToNewGroup={actions.onAddToNewGroup}
 							onImportGhGroups={actions.onImportGhGroups}
+							onRevealItem={revealItem}
 						/>
 					</div>
 				</Resizable.Pane>
@@ -292,6 +306,7 @@
 								availableInputs={allAvailableInputs}
 								{getParameterInfo}
 								outputValues={builderState.state.outputValues}
+								{expandedItems}
 							/>
 						{/if}
 					</main>

@@ -16,6 +16,7 @@
 		type FilterableDropdownItem
 	} from '@selvajs/ui';
 	import { ArrowLeft, Circle, Image, Trash2, X } from '@lucide/svelte';
+	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
 	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selvajs/platform';
@@ -252,12 +253,17 @@
 			<div class="grid grid-cols-2 gap-3">
 				<div class="space-y-1.5">
 					<Label for="edit-cat">Category</Label>
-					<Input id="edit-cat" maxlength={40} bind:value={category} placeholder="e.g. Facade" />
+					<Input
+						id="edit-cat"
+						maxlength={MAX_CATEGORY_LENGTH}
+						bind:value={category}
+						placeholder="e.g. Facade"
+					/>
 				</div>
 				<div class="space-y-1.5">
 					<div class="flex items-center justify-between">
 						<Label for="edit-tags">Tags</Label>
-						<span class="text-muted-foreground text-xs">{tags.length}/5</span>
+						<span class="text-muted-foreground text-xs">{tags.length}/{MAX_TAGS}</span>
 					</div>
 					{#if tags.length > 0}
 						<div class="mb-1 flex flex-wrap gap-1">
@@ -278,13 +284,13 @@
 					<Input
 						id="edit-tags"
 						placeholder="Add tag + Enter"
-						disabled={tags.length >= 5}
+						disabled={tags.length >= MAX_TAGS}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault();
 								const el = e.currentTarget as HTMLInputElement;
 								const tag = el.value.trim();
-								if (tag && !tags.includes(tag) && tags.length < 5) {
+								if (tag && !tags.includes(tag) && tags.length < MAX_TAGS) {
 									tags = [...tags, tag];
 									el.value = '';
 								}

@@ -401,11 +401,11 @@ export interface SchemaOutput {
 }
 export interface ViewerOptions {
 	/**
-	 * If true, display mesh data is sent to the web preview for local rendering
+	 * If true, the plugin streams display meshes to its local web preview, which then shows the 3D viewer. Selva ignores it.
 	 */
 	enableLocal?: boolean;
 	/**
-	 * If true, enables remote rendering via Rhino Compute
+	 * If true, Selva draws the display meshes in the Rhino.Compute response and shows the 3D viewer. The plugin's local preview ignores it.
 	 */
 	enableRemote?: boolean;
 	/**
@@ -430,11 +430,11 @@ export interface UISchema {
 	 */
 	pluginVersion?: string;
 	/**
-	 * User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])
+	 * Tags for the Selva library (e.g., ['architecture', 'facade']). Selva copies them into the definition when it is uploaded; after that the definition's own tags win. At most MAX_TAGS, none containing a comma.
 	 */
 	tags?: string[];
 	/**
-	 * Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')
+	 * Category for the Selva library (e.g., 'architecture', 'structural'). Selva copies it into the definition when it is uploaded; after that the definition's own category wins. At most MAX_CATEGORY_LENGTH characters.
 	 */
 	category?: string;
 	/**
@@ -475,11 +475,11 @@ export interface UISchema {
  */
 export interface ViewerOptions1 {
 	/**
-	 * If true, display mesh data is sent to the web preview for local rendering
+	 * If true, the plugin streams display meshes to its local web preview, which then shows the 3D viewer. Selva ignores it.
 	 */
 	enableLocal?: boolean;
 	/**
-	 * If true, enables remote rendering via Rhino Compute
+	 * If true, Selva draws the display meshes in the Rhino.Compute response and shows the 3D viewer. The plugin's local preview ignores it.
 	 */
 	enableRemote?: boolean;
 	/**
@@ -501,6 +501,8 @@ export const ACCEPTED_FILE_FORMATS = [
 	'.dxf',
 	'.stl'
 ] as const;
+export const MAX_TAGS = 5 as const;
+export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
 export const UI_SCHEMA_VERSION = '2.15.0';

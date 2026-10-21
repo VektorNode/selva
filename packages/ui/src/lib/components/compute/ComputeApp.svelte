@@ -283,6 +283,7 @@
 			{#key definitionKey}
 				<AppLayout
 					{schema}
+					showViewer={!!schema.viewerOptions?.enableRemote}
 					meshes={session.meshes}
 					isSolving={session.isSolving}
 					showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}

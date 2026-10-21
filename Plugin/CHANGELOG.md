@@ -7,13 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Builder: the App panel sets the definition's category and tags next to its name and description, marked Compute since only Selva uses them. Selva copies all four in when the definition is uploaded.
+
 ### Changed
 
-- Builder: the sidebar splits into Parameters, App and Viewer panels that remember their folds and filters, each tab gets a settings bar (icon, name, panel side, visibility), and a Save button highlights while there are unsaved edits.
+- Builder: the sidebar splits into Parameters, App, Local and Compute panels that remember their folds and filters, each tab gets a settings bar (icon, name, panel side, visibility), and a Save button highlights while there are unsaved edits. App holds what applies everywhere, Local what only this plugin's preview uses (Local render), Compute what only Selva uses (Compute render, and a list of inputs filled by something other than the form). The panel tabs shrink to icons when the sidebar is narrow.
+- Builder: an input's value source sits in a Compute only section at the end of its card, picked with Form, Client app or Server buttons, and a collapsed card shows a chip when its value comes from a client app or the server.
+- Local render and Compute render each drive one host: the plugin's preview shows the 3D viewer only with Local render on, Selva only with Compute render on. Either switch used to turn the viewer on in both.
 
 ### Fixed
 
 - Builder: dragging a tab or group two or more places forward drops it where you let go, instead of only one place forward.
+- Builder: an item card's Span field shows 1 when the item has no span saved, instead of an empty box.
 - Builder: tab and group edits mark the draft unsaved and can be undone, so the unsaved-changes prompt fires and a Grasshopper broadcast no longer drops them. Edits made while a save is in flight stay unsaved.
 
 ## [0.23.0-beta.3] - 2026-10-13

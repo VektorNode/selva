@@ -4,7 +4,9 @@
 	"title": "Selva UI Schema",
 	"description": "Schema definitions for Selva UI configuration",
 	"constants": {
-		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl"]
+		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl"],
+		"maxTags": 5,
+		"maxCategoryLength": 40
 	},
 	"definitions": {
 		"//_PRIMITIVES": "--- PRIMITIVES ---",
@@ -706,12 +708,12 @@
 				"enableLocal": {
 					"type": "boolean",
 					"default": false,
-					"description": "If true, display mesh data is sent to the web preview for local rendering"
+					"description": "If true, the plugin streams display meshes to its local web preview, which then shows the 3D viewer. Selva ignores it."
 				},
 				"enableRemote": {
 					"type": "boolean",
 					"default": false,
-					"description": "If true, enables remote rendering via Rhino Compute"
+					"description": "If true, Selva draws the display meshes in the Rhino.Compute response and shows the 3D viewer. The plugin's local preview ignores it."
 				},
 				"backgroundColor": {
 					"type": "string",
@@ -744,11 +746,11 @@
 				"tags": {
 					"type": "array",
 					"items": { "type": "string" },
-					"description": "User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])"
+					"description": "Tags for the Selva library (e.g., ['architecture', 'facade']). Selva copies them into the definition when it is uploaded; after that the definition's own tags win. At most MAX_TAGS, none containing a comma."
 				},
 				"category": {
 					"type": "string",
-					"description": "Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')"
+					"description": "Category for the Selva library (e.g., 'architecture', 'structural'). Selva copies it into the definition when it is uploaded; after that the definition's own category wins. At most MAX_CATEGORY_LENGTH characters."
 				},
 				"author": {
 					"type": "string",

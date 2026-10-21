@@ -113,6 +113,7 @@
 	<div class="flex flex-1 flex-col overflow-hidden bg-background">
 		<AppLayout
 			{schema}
+			showViewer={!!schema.viewerOptions?.enableRemote}
 			{meshes}
 			{isSolving}
 			showSolvingIndicator={schema.instanceSolve !== false}

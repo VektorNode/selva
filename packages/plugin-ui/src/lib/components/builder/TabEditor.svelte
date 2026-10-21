@@ -7,6 +7,7 @@
 	import { dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
 	import type { DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
+	import type { SvelteSet } from 'svelte/reactivity';
 	import {
 		DND_FLIP_MS,
 		DND_TYPE_GROUP,
@@ -35,6 +36,8 @@
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		outputValues?: Record<string, unknown>;
+		/** Ids of the open item cards. */
+		expandedItems: SvelteSet<string>;
 	}
 
 	let {
@@ -55,7 +58,8 @@
 		onEdit,
 		availableInputs,
 		getParameterInfo,
-		outputValues = {}
+		outputValues = {},
+		expandedItems
 	}: Props = $props();
 
 	const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
@@ -199,6 +203,7 @@
 									{availableInputs}
 									{getParameterInfo}
 									{outputValues}
+									{expandedItems}
 								/>
 							{/if}
 						</div>

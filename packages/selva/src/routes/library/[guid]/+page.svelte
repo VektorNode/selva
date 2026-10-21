@@ -24,9 +24,7 @@
 	const isAuthed = $derived(!!pageData.user);
 
 	function shouldShowViewer(): boolean {
-		return Boolean(
-			data.schema.viewerOptions?.enableLocal || data.schema.viewerOptions?.enableRemote
-		);
+		return Boolean(data.schema.viewerOptions?.enableRemote);
 	}
 
 	// One SSE stream per tab; the solve fn names it so the server routes each solve's events here.

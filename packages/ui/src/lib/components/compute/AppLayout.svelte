@@ -26,6 +26,11 @@
 
 	interface Props {
 		schema: UISchema;
+		/**
+		 * Whether to draw the 3D viewer. Each host reads its own switch: the plugin's preview
+		 * `viewerOptions.enableLocal`, a Rhino.Compute host `viewerOptions.enableRemote`.
+		 */
+		showViewer: boolean;
 		meshes?: any[];
 		isSolving: boolean;
 		showSolvingIndicator?: boolean;
@@ -54,6 +59,7 @@
 
 	let {
 		schema,
+		showViewer: hasViewer,
 		meshes = [],
 		isSolving,
 		showSolvingIndicator = false,
@@ -81,9 +87,6 @@
 	const hasMenu = $derived(showSaveButton || showLoadButton || panelActions.length > 0);
 	const resultIsStale = $derived(hasPendingChanges || hasNeverSolved);
 
-	const hasViewer = $derived(
-		!!(schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote)
-	);
 	const shownTabs = $derived(
 		schema.layout.type === 'tabbed'
 			? schema.layout.tabs.filter((tab) => isTabVisible(tab, values))
