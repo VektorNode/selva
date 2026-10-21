@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { RequestContext } from '../../context.js';
 import { narrowApiTokenContext, scopeAllows } from '../scope.js';
-import { formatApiScope, parseApiScope } from '../types.js';
+import { describeApiScope, formatApiScope, parseApiScope } from '../types.js';
 
 const ORG = 'org-a';
+const EXPIRES = '2099-01-01T00:00:00.000Z';
 
 function session(): RequestContext {
 	return {
@@ -15,7 +16,7 @@ function session(): RequestContext {
 }
 
 function keyed(...scopes: string[]): RequestContext {
-	return narrowApiTokenContext(session(), { id: 't1', orgId: ORG, scopes });
+	return narrowApiTokenContext(session(), { id: 't1', orgId: ORG, scopes, expiresAt: EXPIRES });
 }
 
 describe('parseApiScope', () => {
@@ -95,7 +96,49 @@ describe('narrowApiTokenContext', () => {
 
 	it('refuses a context acting in another org', () => {
 		expect(() =>
-			narrowApiTokenContext(session(), { id: 't1', orgId: 'org-b', scopes: ['read:all'] })
+			narrowApiTokenContext(session(), {
+				id: 't1',
+				orgId: 'org-b',
+				scopes: ['read:all'],
+				expiresAt: EXPIRES
+			})
 		).toThrow();
+	});
+
+	it('carries the key’s expiry', () => {
+		expect(keyed('read:all').apiScope?.expiresAt).toBe(EXPIRES);
+	});
+});
+
+describe('upload', () => {
+	it.each(['upload:all', 'upload:project:p1', 'upload:definition:d1'])('round-trips %s', (s) => {
+		expect(formatApiScope(parseApiScope(s)!)).toBe(s);
+	});
+
+	it('includes read and nothing else', () => {
+		const ctx = keyed('upload:all');
+		expect(scopeAllows(ctx, 'upload')).toBe(true);
+		expect(scopeAllows(ctx, 'read')).toBe(true);
+		expect(scopeAllows(ctx, 'write')).toBe(false);
+		expect(scopeAllows(ctx, 'solve')).toBe(false);
+	});
+
+	it('is included in write, but not in read or solve', () => {
+		expect(scopeAllows(keyed('write:all'), 'upload')).toBe(true);
+		expect(scopeAllows(keyed('read:all'), 'upload')).toBe(false);
+		expect(scopeAllows(keyed('solve:all'), 'upload')).toBe(false);
+	});
+
+	it('follows the resource like any other action', () => {
+		const ctx = keyed('upload:project:p1');
+		expect(scopeAllows(ctx, 'upload', { projectId: 'p1', definitionId: 'd1' })).toBe(true);
+		expect(scopeAllows(ctx, 'upload', { projectId: 'p2' })).toBe(false);
+		expect(scopeAllows(ctx, 'upload')).toBe(false);
+	});
+
+	it('is described in plain words', () => {
+		expect(describeApiScope('upload:all')).toBe(
+			'Read and upload definitions to everything in the org'
+		);
 	});
 });

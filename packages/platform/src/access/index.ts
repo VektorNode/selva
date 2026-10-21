@@ -13,6 +13,7 @@ export {
 	canView,
 	canSolve,
 	canEdit,
+	canCreateDefinition,
 	canManage,
 	canEditProjectSettings,
 	canChangeVisibilityToPublic,

@@ -23,11 +23,14 @@ export function scopeAllows(
 ): boolean {
 	const api = ctx.apiScope;
 	if (!api) return true;
-	return api.scopes.some((s) => actionCovers(s.action, action) && resourceCovers(s, ctx, target));
+	return api.scopes.some(
+		(s) => apiScopeActionCovers(s.action, action) && resourceCovers(s, ctx, target)
+	);
 }
 
-function actionCovers(granted: ApiScopeAction, wanted: ApiScopeAction): boolean {
-	return granted === wanted || wanted === 'read';
+/** Does a scope granting `granted` allow `wanted`? */
+export function apiScopeActionCovers(granted: ApiScopeAction, wanted: ApiScopeAction): boolean {
+	return granted === wanted || wanted === 'read' || (granted === 'write' && wanted === 'upload');
 }
 
 function resourceCovers(scope: ApiScope, ctx: RequestContext, target?: ScopeTarget): boolean {
@@ -56,13 +59,17 @@ function resourceCovers(scope: ApiScope, ctx: RequestContext, target?: ScopeTarg
  */
 export function narrowApiTokenContext(
 	ctx: RequestContext,
-	token: Pick<ApiToken, 'id' | 'orgId' | 'scopes'>
+	token: Pick<ApiToken, 'id' | 'orgId' | 'scopes' | 'expiresAt'>
 ): RequestContext {
 	if (ctx.actingOrgId !== token.orgId) {
 		throw new ProviderError('API token context must act in the token’s org', 500);
 	}
 	const scopes = token.scopes.map(parseApiScope).filter((s): s is ApiScope => s !== null);
-	return { ...ctx, platformPermissions: [], apiScope: { tokenId: token.id, scopes } };
+	return {
+		...ctx,
+		platformPermissions: [],
+		apiScope: { tokenId: token.id, scopes, expiresAt: token.expiresAt }
+	};
 }
 
 /**

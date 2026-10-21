@@ -93,6 +93,12 @@ export interface DefinitionRecord {
 	 */
 	liveVersionId: string | null;
 	draftVersionId: string | null;
+	/**
+	 * The Grasshopper document GUID (lowercase) from the schema Compute
+	 * extracted at the last upload that carried one. A copied `.gh` keeps its
+	 * GUID, so this suggests a match and never proves one.
+	 */
+	sourceDocumentId?: string;
 	createdAt: string;
 	updatedAt: string;
 	/** Soft-delete marker, independent of `status`: a store filters this out regardless of `archived`. */
@@ -120,6 +126,8 @@ export interface DefinitionListItem {
 	status: DefinitionStatus;
 	solveCount: number;
 	liveVersionId: string | null;
+	/** See {@link DefinitionRecord.sourceDocumentId}. */
+	sourceDocumentId: string | null;
 	updatedAt: string;
 }
 
@@ -135,6 +143,7 @@ export function toDefinitionListItem(r: DefinitionRecord): DefinitionListItem {
 		status: r.status,
 		solveCount: r.solveCount,
 		liveVersionId: r.liveVersionId,
+		sourceDocumentId: r.sourceDocumentId ?? null,
 		updatedAt: r.updatedAt
 	};
 }
@@ -161,6 +170,7 @@ export interface DefinitionRecordPatch {
 	solveCacheLimit?: number | null;
 	status?: DefinitionStatus;
 	ownerId?: string;
+	sourceDocumentId?: string | null;
 }
 
 export type DefinitionChannel = 'live' | 'draft';

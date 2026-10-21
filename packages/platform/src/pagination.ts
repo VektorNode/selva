@@ -37,6 +37,8 @@ export interface DefinitionListOptions extends Omit<ListOptions, 'orderBy'> {
 	 * post-fetch can return a page of 50 with 3 items.
 	 */
 	projectIds?: readonly string[];
+	/** Only definitions whose `sourceDocumentId` equals this lowercase GUID. */
+	sourceDocumentId?: string;
 }
 
 export interface Page<T> {

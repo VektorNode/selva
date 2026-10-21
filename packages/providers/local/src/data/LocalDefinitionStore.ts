@@ -115,6 +115,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			const allowedProjects = new Set(opts.projectIds);
 			filtered = filtered.filter((r) => allowedProjects.has(r.projectId));
 		}
+		if (opts?.sourceDocumentId) {
+			filtered = filtered.filter((r) => r.sourceDocumentId === opts.sourceDocumentId);
+		}
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
 			return filtered.filter((r) => allowed.has(r.status));
@@ -234,6 +237,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			}),
 			...(patch.status !== undefined && { status: patch.status }),
 			...(patch.ownerId !== undefined && { ownerId: patch.ownerId }),
+			...(patch.sourceDocumentId !== undefined && {
+				sourceDocumentId: clearable(patch.sourceDocumentId) as string | undefined
+			}),
 			...auditUpdate(ctx, existing.updatedBy ?? existing.ownerId)
 		};
 		await this.writeConfig(config);

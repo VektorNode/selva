@@ -20,7 +20,7 @@ import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 
 /** Explicit column list for `definitions` — every field `rowToRecord` consumes. */
 const DEFINITION_COLUMNS =
-	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
+	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, source_document_id, created_at, updated_at, deleted_at';
 /**
  * Explicit column list for `definition_versions`, minus the `schema` JSONB.
  * `schema` can be hundreds of KB per row, so the list projection leaves it out
@@ -109,6 +109,8 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			if (opts.projectIds.length === 0) return { items: [] };
 			query = query.in('project_id', [...opts.projectIds]);
 		}
+
+		if (opts?.sourceDocumentId) query = query.eq('source_document_id', opts.sourceDocumentId);
 
 		if (opts?.statuses?.length) {
 			query = query.in('status', opts.statuses);
@@ -424,6 +426,7 @@ interface DefinitionRow {
 	next_version_number: number | string;
 	live_version_id: string | null;
 	draft_version_id: string | null;
+	source_document_id?: string | null;
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
@@ -470,6 +473,7 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 			typeof row.next_version_number === 'string'
 				? Number(row.next_version_number)
 				: row.next_version_number,
+		sourceDocumentId: row.source_document_id ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null
@@ -494,6 +498,7 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		status: r.status,
 		run_count: r.solveCount,
 		next_version_number: r.nextVersionNumber,
+		source_document_id: r.sourceDocumentId ?? null,
 		created_at: r.createdAt,
 		updated_at: r.updatedAt,
 		deleted_at: r.deletedAt ?? null
@@ -514,6 +519,7 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.solveCacheLimit !== undefined) row.solve_cache_limit = patch.solveCacheLimit;
 	if (patch.status !== undefined) row.status = patch.status;
 	if (patch.ownerId !== undefined) row.owner_id = patch.ownerId;
+	if (patch.sourceDocumentId !== undefined) row.source_document_id = patch.sourceDocumentId;
 	return row;
 }
 

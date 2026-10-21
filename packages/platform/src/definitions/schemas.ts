@@ -8,6 +8,11 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 // that does `config.definitions[guid]`.
 export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
 
+/** A Grasshopper document GUID as stores keep and compare it (lowercase), or null for anything else. */
+export function toSourceDocumentId(value: unknown): string | null {
+	return typeof value === 'string' && UUID_REGEX.test(value) ? value.toLowerCase() : null;
+}
+
 // Intentionally omits `pending` (see `DefinitionStatus` in ./types.ts): it's a
 // create-internal state `DefinitionService.create` writes during the
 // metadata-first window, and a client must never hand-set it through an update.

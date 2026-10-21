@@ -133,6 +133,15 @@ export function canEdit(input: ProjectAccessInput): boolean {
 	return member?.role === 'owner' || member?.role === 'editor';
 }
 
+/**
+ * Adding a new definition. Commons projects (`autoJoinOnUpload`) take uploads
+ * from anyone who reaches them, and the uploader owns what they upload;
+ * everywhere else it needs {@link canEdit}.
+ */
+export function canCreateDefinition(input: ProjectAccessInput): boolean {
+	return input.project?.autoJoinOnUpload === true || canEdit(input);
+}
+
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canManage(input: ProjectAccessInput): boolean {
 	if (input.project?.visibility === 'platform') {

@@ -38,7 +38,7 @@ export interface RequestContext {
 	 * Set when the request authenticated with an API token. `scopeAllows` reads
 	 * it; a request without it is a browser or proxy session.
 	 */
-	apiScope?: { tokenId: string; scopes: readonly ApiScope[] };
+	apiScope?: { tokenId: string; scopes: readonly ApiScope[]; expiresAt: string };
 	/** Opaque adapter payload — the Supabase adapter passes the user JWT through for RLS; local ignores it. */
 	adapterContext?: unknown;
 }

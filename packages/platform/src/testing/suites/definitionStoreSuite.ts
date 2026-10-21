@@ -286,6 +286,43 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect((await store.get(ctx(scope.ownerId), guid))?.solveCacheLimit).toBeUndefined();
 		});
 
+		it('sourceDocumentId round-trips through create, update and clear', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			const docA = makeUuid();
+			const docB = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, sourceDocumentId: docA }));
+			expect((await store.get(ctx(scope.ownerId), guid))?.sourceDocumentId).toBe(docA);
+
+			await store.update(ctx(scope.ownerId), guid, { sourceDocumentId: docB });
+			expect((await store.get(ctx(scope.ownerId), guid))?.sourceDocumentId).toBe(docB);
+
+			await store.update(ctx(scope.ownerId), guid, { sourceDocumentId: null });
+			expect((await store.get(ctx(scope.ownerId), guid))?.sourceDocumentId).toBeUndefined();
+		});
+
+		it('list filters by sourceDocumentId in the query', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const doc = makeUuid();
+			const match = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid: match, sourceDocumentId: doc }));
+			await store.create(
+				ctx(scope.ownerId),
+				record(scope, { guid: makeUuid(), sourceDocumentId: makeUuid() })
+			);
+			await store.create(ctx(scope.ownerId), record(scope, { guid: makeUuid() }));
+
+			const page = await store.list(ctx(scope.ownerId), {
+				sourceDocumentId: doc,
+				projectIds: [scope.projectId],
+				limit: 1
+			});
+			expect(page.items.map((r) => r.guid)).toEqual([match]);
+			expect(page.nextCursor).toBeUndefined();
+		});
+
 		it('update on missing guid throws ProviderError with status 404', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

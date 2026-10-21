@@ -24,5 +24,6 @@ export {
 	CreateDefinitionInputSchema,
 	UpdateMetadataInputSchema,
 	GuidSchema,
-	UUID_REGEX
+	UUID_REGEX,
+	toSourceDocumentId
 } from './schemas.js';

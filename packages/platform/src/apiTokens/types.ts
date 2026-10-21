@@ -1,7 +1,11 @@
 import { z } from 'zod';
 
-/** `write` and `solve` each include `read`; neither includes the other. */
-export const ApiScopeActionSchema = z.enum(['read', 'write', 'solve']);
+/**
+ * `write`, `solve` and `upload` each include `read`, and `write` includes
+ * `upload`. `upload` covers only creating definitions, uploading versions and
+ * making a version live: it can't edit metadata, delete or share.
+ */
+export const ApiScopeActionSchema = z.enum(['read', 'write', 'solve', 'upload']);
 export type ApiScopeAction = z.infer<typeof ApiScopeActionSchema>;
 
 /**
@@ -22,7 +26,8 @@ export interface ApiScope {
 
 // Ids are uuids or guids in practice; the charset only has to keep `:` out so
 // the string form stays unambiguous.
-const SCOPE_PATTERN = /^(read|write|solve):(all|(org|project|definition):([A-Za-z0-9_-]{1,128}))$/;
+const SCOPE_PATTERN =
+	/^(read|write|solve|upload):(all|(org|project|definition):([A-Za-z0-9_-]{1,128}))$/;
 
 /** `read:all`, `write:org:<id>`, `solve:project:<id>`, `read:definition:<guid>`. */
 export function parseApiScope(value: string): ApiScope | null {
@@ -92,7 +97,8 @@ export type ApiTokenLifetimeDays = (typeof API_TOKEN_LIFETIME_DAYS)[number];
 const ACTION_WORDS: Record<ApiScopeAction, string> = {
 	read: 'Read',
 	write: 'Read and change',
-	solve: 'Read and run solves on'
+	solve: 'Read and run solves on',
+	upload: 'Read and upload definitions to'
 };
 
 /** "Read and change everything in the org". Names no ids, so it suits an email. */

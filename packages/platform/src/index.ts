@@ -81,6 +81,7 @@ export {
 	formatApiScope,
 	describeApiScope,
 	scopeAllows,
+	apiScopeActionCovers,
 	narrowApiTokenContext,
 	outsideTokenOrg
 } from './apiTokens/index.js';
@@ -130,7 +131,8 @@ export {
 	CreateDefinitionInputSchema,
 	UpdateMetadataInputSchema,
 	GuidSchema,
-	UUID_REGEX
+	UUID_REGEX,
+	toSourceDocumentId
 } from './definitions/schemas.js';
 
 // ---------------------------------------------------------------------------
@@ -217,6 +219,7 @@ export {
 	canView,
 	canSolve,
 	canEdit,
+	canCreateDefinition,
 	canManage,
 	canEditProjectSettings,
 	canChangeVisibilityToPublic,
