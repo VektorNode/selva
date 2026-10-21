@@ -45,7 +45,11 @@
 		// @ts-expect-error — Plotly is loaded dynamically onto window
 		if (window.Plotly) return window.Plotly;
 
-		await loadScript('https://cdn.plot.ly/plotly-3.4.0.min.js', { crossOrigin: 'anonymous' });
+		// Pinned by hash: the plugin's web UI runs this on the origin that holds its bridge secret.
+		await loadScript('https://cdn.plot.ly/plotly-3.4.0.min.js', {
+			crossOrigin: 'anonymous',
+			integrity: 'sha384-pFOQ7loGBChmUyS4Tszy+he8OWeYkwTFjc2xii4aJUWWiGwf2u2OEc04T5iDRpMp'
+		});
 		// @ts-expect-error — Plotly is loaded dynamically onto window
 		return window.Plotly;
 	}
