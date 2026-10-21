@@ -44,6 +44,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [live-solve-channel](./features/live-solve-channel.md)                          | **unfiled** — design only; builds on solve-diagnostics                          |
 | [solve-events-structure](./features/solve-events-structure.md)                  | **unfiled** — review defects + event-kind catalog; builds on live-solve-channel |
 | [viewer-hotspots](./features/viewer-hotspots.md)                                | **unfiled** — design only; wire-walk verified live in Rhino                     |
+| [publish-from-plugin](./features/publish-from-plugin.md)                        | **unfiled** — design only; its bridge lockdown should be filed on its own first |
 
 The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until
