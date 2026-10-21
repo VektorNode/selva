@@ -107,23 +107,19 @@ public sealed class SelvaUploadCoordinator : IDisposable
         switch (message.Kind)
         {
             case InboundKind.SelvaGetAccount:
-                Run(_ =>
-                {
-                    BroadcastAccount();
-                    return Task.CompletedTask;
-                });
+                RunAccount(_ => Task.CompletedTask);
                 break;
             case InboundKind.SelvaConnect:
-                Run(ct => Accounts().ConnectAsync(message.Origin, ct));
+                RunAccount(ct => Accounts().ConnectAsync(message.Origin, ct));
                 break;
             case InboundKind.SelvaSignIn:
-                Run(ct => Accounts().SignInAsync(ct));
+                RunAccount(ct => Accounts().SignInAsync(ct));
                 break;
             case InboundKind.SelvaUseApiKey:
                 RhinoApp.InvokeOnUiThread(new Action(PromptForApiKey));
                 break;
             case InboundKind.SelvaSignOut:
-                Run(ct => Accounts().SignOutAsync(ct));
+                RunAccount(ct => Accounts().SignOutAsync(ct));
                 break;
             case InboundKind.SelvaListTargets:
                 Run(ListTargetsAsync);
@@ -145,20 +141,18 @@ public sealed class SelvaUploadCoordinator : IDisposable
     private void PromptForApiKey()
     {
         var origin = Accounts().Snapshot().Origin;
-        if (origin == null)
+        string key = null;
+        if (origin != null)
         {
-            Run(ct => Accounts().UseApiKeyAsync(string.Empty, ct));
-            return;
+            using var dialog = new ApiKeyDialog(SelvaOrigin.DisplayHost(origin));
+            dialog.UseRhinoStyle();
+            key = dialog.ShowModal(Instances.EtoDocumentEditor ?? RhinoEtoApp.MainWindow);
         }
 
-        using var dialog = new ApiKeyDialog(SelvaOrigin.DisplayHost(origin));
-        dialog.UseRhinoStyle();
-        var owner = Instances.EtoDocumentEditor ?? RhinoEtoApp.MainWindow;
-        var key = dialog.ShowModal(owner);
-        if (!string.IsNullOrWhiteSpace(key))
-        {
-            Run(ct => Accounts().UseApiKeyAsync(key, ct));
-        }
+        // Without an address the manager says so; a cancelled dialog just re-sends the account.
+        RunAccount(ct => origin == null || !string.IsNullOrWhiteSpace(key)
+            ? Accounts().UseApiKeyAsync(key ?? string.Empty, ct)
+            : Task.CompletedTask);
     }
 
     private async Task ListTargetsAsync(CancellationToken cancellationToken)
@@ -404,6 +398,22 @@ public sealed class SelvaUploadCoordinator : IDisposable
     private static SelvaApiClient Client(SelvaSession session)
     {
         return new SelvaApiClient(session.Origin, session.Token, UserAgent(), SelvaApiClient.CreateHandler());
+    }
+
+    /// <summary>The page waits for a selvaAccount after every account command, so one always follows.</summary>
+    private void RunAccount(Func<CancellationToken, Task> work)
+    {
+        Run(async ct =>
+        {
+            try
+            {
+                await work(ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                BroadcastAccount();
+            }
+        });
     }
 
     private static void Run(Func<CancellationToken, Task> work)
