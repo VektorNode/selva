@@ -111,7 +111,7 @@
 
 	{#if showCreateForm}
 		<Card.Root>
-			<Card.Content class="space-y-3 pt-6">
+			<Card.Content class="space-y-3">
 				<div>
 					<p class="text-sm font-medium">New project</p>
 					<p class="text-muted-foreground text-xs">
@@ -141,7 +141,7 @@
 	{/if}
 
 	<Card.Root>
-		<Card.Content class="pt-6">
+		<Card.Content>
 			{#if data.projects.length === 0}
 				<EmptyState
 					icon={FolderKanban}
@@ -154,10 +154,10 @@
 					getKey={(p) => p.id}
 					columns={[
 						{ label: 'Project' },
-						{ label: 'Visibility', width: '120px' },
-						{ label: 'Members', width: '100px', align: 'right' },
-						{ label: 'Updated', width: '120px', align: 'right' },
-						{ label: '', width: '80px' }
+						{ label: 'Visibility', width: '120px', hideOnMobile: true },
+						{ label: 'Members', width: '100px', align: 'right', hideOnMobile: true },
+						{ label: 'Updated', width: '120px', align: 'right', hideOnMobile: true },
+						{ label: '', width: '40px' }
 					]}
 				>
 					{#snippet row(project)}

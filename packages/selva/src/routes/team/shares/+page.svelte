@@ -72,7 +72,7 @@
 	/>
 
 	<Card.Root>
-		<Card.Content class="space-y-4 pt-6">
+		<Card.Content class="space-y-4">
 			{#if data.rows.length === 0}
 				<EmptyState
 					icon={Link2}
@@ -97,9 +97,9 @@
 						getKey={(r) => r.id}
 						columns={[
 							{ label: 'Link' },
-							{ label: 'Minted by', width: '160px' },
-							{ label: 'Solves', width: '100px', align: 'right' },
-							{ label: 'Expires', width: '120px', align: 'right' },
+							{ label: 'Minted by', width: '160px', hideOnMobile: true },
+							{ label: 'Solves', width: '100px', align: 'right', hideOnMobile: true },
+							{ label: 'Expires', width: '120px', align: 'right', hideOnMobile: true },
 							{ label: '', width: '80px' }
 						]}
 					>

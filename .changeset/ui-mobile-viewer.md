@@ -11,3 +11,5 @@ Phone and touch fixes for the viewer and the app shell:
 - `PageHeader` truncates the title and hides the brand name next to a title on phones. `SideNav` becomes a scrolling strip above the content below 640px. `SectionHeader` stacks its actions under the title.
 - Dialogs keep a 1rem gutter even when the caller passes a `max-w-*`, alert dialogs scroll when taller than the screen, and `Drawer` is capped at the screen width.
 - The output copy button and chart toolbar, hover-only before, are always visible on touch devices.
+- Native `<select>` elements get a drawn chevron with its own right gutter. The browser's arrow sat on the border at the `px-2`/`px-3` padding every caller uses.
+- `DataTableColumn` takes `hideOnMobile` to drop a column below 640px, and a column without a `width` is `minmax(0, 1fr)` so long values truncate instead of widening their row.

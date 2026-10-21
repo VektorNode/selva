@@ -39,7 +39,7 @@
 	<title>{branding.name}</title>
 </svelte:head>
 
-<AppHeader>
+<AppHeader showSignIn={isAuthed}>
 	{#if isAuthed}
 		<PageContent class="mx-auto w-full max-w-6xl space-y-10">
 			<div>
@@ -127,10 +127,12 @@
 			{/if}
 		</PageContent>
 	{:else}
-		<div class="flex flex-1 flex-col items-center justify-center px-4 text-center">
+		<div class="flex flex-col items-center px-4 py-24 text-center">
 			<div class="max-w-md space-y-6">
 				<h1 class="text-4xl font-bold tracking-tight">{branding.name}</h1>
-				<p class="text-muted-foreground text-lg">{branding.tagline}</p>
+				{#if branding.tagline}
+					<p class="text-muted-foreground text-lg">{branding.tagline}</p>
+				{/if}
 				<div class="flex justify-center gap-3">
 					<Button href="/login">Sign in</Button>
 				</div>

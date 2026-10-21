@@ -43,6 +43,13 @@
 	// Owners/admins hold every org permission implicitly, so listing them adds
 	// nothing the role badge doesn't already say.
 	const orgSummaryPerms = $derived<OrgPermission[]>(isOwnerOrAdmin ? [] : user.orgPermissions);
+	// Same for `instance_admin`: it passes every platform permission check.
+	const platformSummaryPerms = $derived<PlatformPermission[]>(
+		user.platformPermissions.includes('instance_admin')
+			? ['instance_admin']
+			: user.platformPermissions
+	);
+	const hasSummary = $derived(platformSummaryPerms.length > 0 || orgSummaryPerms.length > 0);
 
 	// Deleting or disabling a platform admin is a platform-scope permission
 	// change, so `manage_instance_users` alone does not authorize it — the server
@@ -68,11 +75,28 @@
 	}
 </script>
 
+{#snippet permissionChips()}
+	{#each platformSummaryPerms as p (p)}
+		<span
+			class="text-2xs rounded-full bg-amber-500/10 px-2 py-0.5 font-mono whitespace-nowrap text-amber-700 dark:text-amber-400"
+		>
+			{PERM_LABEL[p]}
+		</span>
+	{/each}
+	{#each orgSummaryPerms as p (p)}
+		<span
+			class="bg-muted text-muted-foreground text-2xs rounded-full px-2 py-0.5 font-mono whitespace-nowrap"
+		>
+			{PERM_LABEL[p]}
+		</span>
+	{/each}
+{/snippet}
+
 <div class={`px-4 py-3 ${expanded ? 'bg-accent/20' : ''}`}>
 	<div class="flex items-center gap-3">
 		<button
 			type="button"
-			class="text-muted-foreground hover:text-foreground shrink-0 rounded-sm p-0.5"
+			class="text-muted-foreground hover:text-foreground shrink-0 rounded-sm p-0.5 pointer-coarse:p-2"
 			onclick={onToggleExpand}
 			aria-label={expanded ? 'Collapse permissions' : 'Expand permissions'}
 		>
@@ -90,22 +114,9 @@
 			disabled={user.disabled}
 			lastLoginAt={user.lastLoginAt}
 		>
-			{#if !expanded && (user.platformPermissions.length > 0 || orgSummaryPerms.length > 0)}
-				<div class="mt-1.5 flex flex-wrap gap-1">
-					{#each user.platformPermissions as p (p)}
-						<span
-							class="rounded-full bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] text-amber-700 dark:text-amber-400"
-						>
-							{PERM_LABEL[p]}
-						</span>
-					{/each}
-					{#each orgSummaryPerms as p (p)}
-						<span
-							class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 font-mono text-[10px]"
-						>
-							{PERM_LABEL[p]}
-						</span>
-					{/each}
+			{#if !expanded && hasSummary}
+				<div class="mt-1.5 hidden flex-wrap gap-1 sm:flex">
+					{@render permissionChips()}
 				</div>
 			{/if}
 		</UserRowIdentity>
@@ -135,8 +146,15 @@
 		</Button>
 	</div>
 
+	<!-- On a phone the identity column is too narrow for chips: they wrap one word per line. -->
+	{#if !expanded && hasSummary}
+		<div class="mt-2 flex flex-wrap gap-1 sm:hidden">
+			{@render permissionChips()}
+		</div>
+	{/if}
+
 	{#if expanded}
-		<div class="mt-4 ml-10 space-y-4">
+		<div class="mt-4 space-y-4 sm:ml-10">
 			<section>
 				<h4 class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
 					Platform

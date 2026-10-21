@@ -266,7 +266,7 @@
 						getKey={(t) => t.id}
 						columns={[
 							{ label: 'Token' },
-							{ label: 'Last used', width: '110px' },
+							{ label: 'Last used', width: '110px', hideOnMobile: true },
 							{ label: 'Expires', width: '110px' },
 							{ label: '', width: '56px' }
 						]}
@@ -295,9 +295,9 @@
 							rows={data.roster}
 							getKey={(t) => t.id}
 							columns={[
-								{ label: 'Owner', width: '160px' },
+								{ label: 'Owner', width: '160px', hideOnMobile: true },
 								{ label: 'Token' },
-								{ label: 'Last used', width: '110px' },
+								{ label: 'Last used', width: '110px', hideOnMobile: true },
 								{ label: 'Expires', width: '110px' },
 								{ label: '', width: '56px' }
 							]}

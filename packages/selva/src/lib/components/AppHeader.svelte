@@ -14,6 +14,8 @@
 		sidenav?: Snippet;
 		showMainNav?: boolean;
 		rightExtras?: Snippet;
+		/** Off on a page that offers sign-in in its own body, so guests don't see it twice. */
+		showSignIn?: boolean;
 		children: Snippet;
 	}
 
@@ -24,6 +26,7 @@
 		sidenav,
 		showMainNav = true,
 		rightExtras,
+		showSignIn = true,
 		children
 	}: Props = $props();
 
@@ -61,7 +64,7 @@
 				{orgPermissions}
 				mayHoldApiTokens={pageData.ctx?.mayHoldApiTokens}
 			/>
-		{:else}
+		{:else if showSignIn}
 			<Button href="/login" size="sm">Sign in</Button>
 		{/if}
 	{/snippet}

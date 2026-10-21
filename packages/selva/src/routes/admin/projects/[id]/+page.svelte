@@ -288,7 +288,7 @@
 							getKey={(g) => g.id}
 							columns={[
 								{ label: 'Grantee' },
-								{ label: 'Type', width: '120px' },
+								{ label: 'Type', width: '120px', hideOnMobile: true },
 								{ label: 'Access', width: '120px' },
 								{ label: '', width: '40px', align: 'right' }
 							]}
@@ -356,7 +356,7 @@
 							columns={[
 								{ label: 'Definition' },
 								{ label: 'Status', width: '120px' },
-								{ label: 'Updated', width: '140px', align: 'right' }
+								{ label: 'Updated', width: '140px', align: 'right', hideOnMobile: true }
 							]}
 						>
 							{#snippet row(def)}

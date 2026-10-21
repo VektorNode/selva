@@ -134,8 +134,8 @@
 					getKey={(p) => p.id}
 					columns={[
 						{ label: 'Project' },
-						{ label: 'Host org', width: '200px' },
-						{ label: 'Created', width: '140px', align: 'right' }
+						{ label: 'Host org', width: '200px', hideOnMobile: true },
+						{ label: 'Created', width: '140px', align: 'right', hideOnMobile: true }
 					]}
 				>
 					{#snippet row(project)}
