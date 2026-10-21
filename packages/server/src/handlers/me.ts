@@ -20,7 +20,11 @@ export const getMe: ApiHandler = async (req) => {
 			orgPermissions: ctx.orgPermissions,
 			starredDefinitions: req.profile?.starredDefinitions ?? [],
 			...(ctx.apiScope && {
-				apiToken: { id: ctx.apiScope.tokenId, scopes: ctx.apiScope.scopes.map(formatApiScope) }
+				apiToken: {
+					id: ctx.apiScope.tokenId,
+					scopes: ctx.apiScope.scopes.map(formatApiScope),
+					expiresAt: ctx.apiScope.expiresAt
+				}
 			})
 		}
 	};

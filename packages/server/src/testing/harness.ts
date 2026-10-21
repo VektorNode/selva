@@ -241,6 +241,8 @@ export async function seedDefinition(
 		ownerId: string;
 		displayName?: string;
 		guid?: string;
+		/** The Grasshopper document GUID the extracted schema carries. */
+		documentId?: string;
 	}
 ): Promise<SeededDefinition> {
 	const service = h.deps?.services?.definitions;
@@ -262,9 +264,12 @@ export async function seedDefinition(
 		platformPermissions: ['instance_admin'],
 		orgPermissions: []
 	};
-	const schema = { name: 'Test', inputs: [], outputs: [] } as unknown as Parameters<
-		typeof service.create
-	>[3];
+	const schema = {
+		name: 'Test',
+		inputs: [],
+		outputs: [],
+		...(opts.documentId && { documentId: opts.documentId })
+	} as unknown as Parameters<typeof service.create>[3];
 	return service.create(ctx, input, file, schema);
 }
 
@@ -394,7 +399,7 @@ export interface CallHandlerOpts {
 	/** Defaults to POST with a body, GET without. */
 	method?: string;
 	/** The options a route passes to `mount`, so scope checks run as they do in production. */
-	mount?: Pick<RunHandlerOptions, 'action' | 'scopeTarget'>;
+	mount?: Pick<RunHandlerOptions, 'action' | 'scopeTarget' | 'anyScope'>;
 }
 
 export interface CallResult {

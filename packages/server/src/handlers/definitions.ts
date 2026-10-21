@@ -23,7 +23,7 @@ import {
 	throwZodError
 } from '../api/index.js';
 import type { ApiHandler } from '../api/index.js';
-import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
+import { toDefinitionListItem, toSourceDocumentId, type DefinitionStatus } from '@selvajs/platform';
 import {
 	CreateDefinitionInputSchema,
 	GuidSchema,
@@ -37,8 +37,11 @@ import { resolveServerForOrg } from '../compute/index.js';
 import {
 	fetchSchemaFromCompute,
 	getVisibleDefinition,
+	listEditableDefinitionsByDocument,
 	listVisibleDefinitions,
+	loadVisibleDefinition,
 	loadVisibleVersion,
+	mayUploadToDefinition,
 	resolveAccessibleProjects
 } from '../definitions/index.js';
 import { definitionService } from './services.js';
@@ -48,9 +51,18 @@ const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived']
 /**
  * Definitions the caller can view. Visibility is resolved into the query via
  * `projectIds`, so `limit`/`nextCursor` describe the filtered set.
+ *
+ * `?documentId=<guid>` narrows to definitions uploaded from that Grasshopper
+ * document which the caller can upload a new version of.
  */
 export const listDefinitions: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
+
+	const documentParam = req.url.searchParams.get('documentId');
+	const documentId = documentParam === null ? null : toSourceDocumentId(documentParam);
+	if (documentParam !== null && !documentId) {
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'documentId must be a GUID');
+	}
 
 	const statusParam = req.url.searchParams.get('status');
 	if (statusParam && !LISTABLE_STATUSES.includes(statusParam as DefinitionStatus)) {
@@ -61,15 +73,14 @@ export const listDefinitions: ApiHandler = async (req) => {
 		);
 	}
 
-	const page = await listVisibleDefinitions(
-		ctx,
-		{
-			...parseDefinitionListOptions(req.url),
-			projectId: req.url.searchParams.get('projectId') ?? undefined,
-			statuses: statusParam ? [statusParam as DefinitionStatus] : undefined
-		},
-		req.deps
-	);
+	const opts = {
+		...parseDefinitionListOptions(req.url),
+		projectId: req.url.searchParams.get('projectId') ?? undefined,
+		statuses: statusParam ? [statusParam as DefinitionStatus] : undefined
+	};
+	const page = documentId
+		? await listEditableDefinitionsByDocument(ctx, documentId, opts, req.deps)
+		: await listVisibleDefinitions(ctx, opts, req.deps);
 	return collection({ items: page.items.map(toDefinitionListItem), nextCursor: page.nextCursor });
 };
 
@@ -186,13 +197,17 @@ function versionSummary(v: DefinitionVersion) {
 	};
 }
 
-/** The record plus its live and draft version summaries. */
+/**
+ * The record plus its live and draft version summaries. `canEdit` says whether
+ * the caller can upload a version and make one live, scope included for a key.
+ */
 export const getDefinition: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 	const { ctx } = requireCaller(req);
 
-	const record = await getVisibleDefinition(ctx, guid, req.deps);
-	if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
+	const visible = await loadVisibleDefinition(ctx, guid, req.deps);
+	if (!visible) apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
+	const { record } = visible;
 
 	const meta = req.deps.definitionMeta;
 	const [liveVersion, draftVersion] = await Promise.all([
@@ -203,6 +218,8 @@ export const getDefinition: ApiHandler = async (req) => {
 	return {
 		body: {
 			...record,
+			sourceDocumentId: record.sourceDocumentId ?? null,
+			canEdit: mayUploadToDefinition(ctx, visible, req.deps),
 			liveVersion: liveVersion ? versionSummary(liveVersion) : null,
 			draftVersion: draftVersion ? versionSummary(draftVersion) : null
 		}

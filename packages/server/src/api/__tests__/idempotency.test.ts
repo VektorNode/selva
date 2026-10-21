@@ -13,7 +13,12 @@ function session(userId = 'u1'): RequestContext {
 }
 
 function keyed(tokenId: string): RequestContext {
-	return narrowApiTokenContext(session(), { id: tokenId, orgId: ORG, scopes: ['write:all'] });
+	return narrowApiTokenContext(session(), {
+		id: tokenId,
+		orgId: ORG,
+		scopes: ['write:all'],
+		expiresAt: '2099-01-01T00:00:00.000Z'
+	});
 }
 
 let store: ApiIdempotencyStore;

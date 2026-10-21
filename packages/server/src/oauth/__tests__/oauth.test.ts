@@ -1,6 +1,13 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
-import { createOAuthServer, isLoopbackRedirect, OAuthError } from '../index.js';
+import {
+	apiScopesFor,
+	consentChoices,
+	createOAuthServer,
+	GRASSHOPPER_CLIENT_ID,
+	isLoopbackRedirect,
+	OAuthError
+} from '../index.js';
 
 const ORIGIN = 'https://selva.test';
 const SECRET = 's'.repeat(32);
@@ -21,7 +28,9 @@ describe('dynamic client registration', () => {
 		expect(client).toEqual({
 			clientId: res.body.client_id,
 			name: 'Claude',
-			redirectUris: ['https://claude.ai/api/mcp/auth_callback']
+			redirectUris: ['https://claude.ai/api/mcp/auth_callback'],
+			builtIn: false,
+			scopes: ['read', 'solve']
 		});
 	});
 
@@ -228,9 +237,13 @@ describe('discovery', () => {
 		expect(server().protectedResourceMetadata()).toEqual({
 			resource: `${ORIGIN}/mcp`,
 			authorization_servers: [ORIGIN],
-			scopes_supported: ['read', 'solve'],
+			scopes_supported: ['read', 'solve', 'upload'],
 			bearer_methods_supported: ['header']
 		});
+	});
+
+	it('tells the plugin it can take uploads', () => {
+		expect(server().authorizationServerMetadata().scopes_supported).toContain('upload');
 	});
 });
 
@@ -276,5 +289,130 @@ describe('review fixes', () => {
 	it('knows a loopback redirect when it sees one', () => {
 		expect(isLoopbackRedirect('http://127.0.0.1:5555/cb')).toBe(true);
 		expect(isLoopbackRedirect('https://claude.ai/api/mcp/auth_callback')).toBe(false);
+	});
+});
+
+// ============================================================================
+// The built-in Grasshopper client and the per-client scope allowlist
+// ============================================================================
+
+describe('the built-in Grasshopper client', () => {
+	const ask = (oauth: ReturnType<typeof server>, extra: Record<string, string>) =>
+		oauth.parseAuthorizeRequest(
+			new URLSearchParams({
+				client_id: GRASSHOPPER_CLIENT_ID,
+				redirect_uri: 'http://127.0.0.1:53121/callback',
+				response_type: 'code',
+				code_challenge: CHALLENGE,
+				code_challenge_method: 'S256',
+				state: 'st',
+				scope: 'upload',
+				resource: ORIGIN,
+				...extra
+			})
+		);
+
+	it('resolves without registration and says it is built in', async () => {
+		const client = await server().resolveClient(GRASSHOPPER_CLIENT_ID);
+		expect(client).toMatchObject({ name: 'Selva for Grasshopper', builtIn: true });
+	});
+
+	it('grants exactly upload when that is what it asks for', async () => {
+		const request = await ask(server(), {});
+		expect(request.scopes).toEqual(['upload']);
+		expect(apiScopesFor(request.scopes)).toEqual(['upload:all']);
+		expect(consentChoices(request.scopes)).toEqual([{ access: 'upload', scopes: ['upload'] }]);
+	});
+
+	it('accepts any port on 127.0.0.1/callback', async () => {
+		for (const port of ['1', '53121', '65535']) {
+			await expect(
+				ask(server(), { redirect_uri: `http://127.0.0.1:${port}/callback` })
+			).resolves.toMatchObject({ redirectUri: `http://127.0.0.1:${port}/callback` });
+		}
+	});
+
+	it.each([
+		'https://evil.test/callback',
+		'http://evil.test/callback',
+		'http://localhost:53121/callback',
+		'http://[::1]:53121/callback',
+		'http://127.0.0.1:53121/other',
+		'http://127.0.0.1:53121/callback/',
+		'http://127.0.0.1:53121/callback?x=1',
+		'http://127.0.0.1:53121/callback#x',
+		'http://user@127.0.0.1:53121/callback',
+		'https://127.0.0.1:53121/callback',
+		'http://127.0.0.1.evil.test/callback'
+	])('refuses the redirect %s', async (redirect) => {
+		await expect(ask(server(), { redirect_uri: redirect })).rejects.toThrow(/not registered/);
+	});
+
+	it('runs the whole flow and hands over the key with scope "upload"', async () => {
+		const oauth = server();
+		const request = await ask(oauth, {});
+		const code = new URL(oauth.approve(request, { ...GRANT, scopes: ['upload'] })).searchParams.get(
+			'code'
+		)!;
+		const res = oauth.exchange(
+			new URLSearchParams({
+				grant_type: 'authorization_code',
+				code,
+				client_id: GRASSHOPPER_CLIENT_ID,
+				redirect_uri: 'http://127.0.0.1:53121/callback',
+				code_verifier: VERIFIER,
+				resource: ORIGIN
+			})
+		);
+		expect(res.body).toMatchObject({
+			access_token: 'selva_raw',
+			token_type: 'Bearer',
+			scope: 'upload'
+		});
+	});
+});
+
+describe('registered clients and upload', () => {
+	it('drops upload for a DCR client: it gets read and solve at most', async () => {
+		expect((await authorized(server(), { scope: 'upload' })).request.scopes).toEqual([
+			'read',
+			'solve'
+		]);
+		expect((await authorized(server(), { scope: 'read upload' })).request.scopes).toEqual(['read']);
+		expect((await authorized(server(), { scope: 'read solve upload' })).request.scopes).toEqual([
+			'read',
+			'solve'
+		]);
+	});
+
+	it('drops upload for a CIMD client too', async () => {
+		const URL_ID = 'https://client.test/metadata';
+		const oauth = server({
+			fetchClientMetadata: async () => ({
+				client_id: URL_ID,
+				client_name: 'Selva for Grasshopper',
+				redirect_uris: ['http://127.0.0.1/callback']
+			})
+		});
+		const request = await oauth.parseAuthorizeRequest(
+			new URLSearchParams({
+				client_id: URL_ID,
+				redirect_uri: 'http://127.0.0.1:5000/callback',
+				response_type: 'code',
+				code_challenge: CHALLENGE,
+				code_challenge_method: 'S256',
+				scope: 'upload'
+			})
+		);
+		expect(request.client.builtIn).toBe(false);
+		expect(request.scopes).not.toContain('upload');
+	});
+
+	it('offers read, or read and solve, at consent', () => {
+		expect(consentChoices(['read', 'solve'])).toEqual([
+			{ access: 'read', scopes: ['read'] },
+			{ access: 'solve', scopes: ['read', 'solve'] }
+		]);
+		expect(consentChoices(['read'])).toEqual([{ access: 'read', scopes: ['read'] }]);
 	});
 });

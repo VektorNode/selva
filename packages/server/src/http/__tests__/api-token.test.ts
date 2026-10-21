@@ -5,6 +5,8 @@ import type {
 	IApiTokenStore,
 	OrgMember,
 	PlatformPermission,
+	Project,
+	ProjectMember,
 	RequestContext
 } from '@selvajs/platform';
 import { resolveApiToken, type ResolveApiTokenDeps } from '../api-token.js';
@@ -20,8 +22,23 @@ interface World {
 	user: AuthUser;
 	member: OrgMember | null;
 	platformPermissions: PlatformPermission[];
+	/** The org's projects, and the owner's role in each (absent: not a member). */
+	projects: Project[];
+	roles: Map<string, ProjectMember['role']>;
 	touch: ReturnType<typeof vi.fn>;
 	deps: ResolveApiTokenDeps;
+}
+
+function project(id: string): Project {
+	return {
+		id,
+		orgId: ORG,
+		name: id,
+		slug: id,
+		visibility: 'org',
+		ownerId: 'someone',
+		autoJoinOnUpload: false
+	} as Project;
 }
 
 function world(overrides: { token?: Partial<ApiToken>; user?: Partial<AuthUser> } = {}): World {
@@ -60,6 +77,8 @@ function world(overrides: { token?: Partial<ApiToken>; user?: Partial<AuthUser> 
 			updatedBy: ''
 		} as OrgMember | null,
 		platformPermissions: ['manage_api_tokens'],
+		projects: [project('p1')],
+		roles: new Map(),
 		touch: vi.fn(async () => {})
 	} as World;
 	const store = {
@@ -74,9 +93,23 @@ function world(overrides: { token?: Partial<ApiToken>; user?: Partial<AuthUser> 
 			apiTokens: store,
 			orgs: {
 				getOrgMember: async () => w.member,
+				getOrgMembersFor: async (_ctx: unknown, ids: string[]) =>
+					new Map(ids.map((id) => [id, w.member])),
 				listOrgs: async () => ({ items: [] })
 			} as never,
-			permissions: { getFor: async () => w.platformPermissions } as never
+			permissions: { getFor: async () => w.platformPermissions } as never,
+			projects: {
+				listProjects: async () => ({ items: w.projects }),
+				getProjectMembersFor: async (_ctx: unknown, ids: string[]) =>
+					new Map(
+						ids.map((id) => {
+							const role = w.roles.get(id);
+							return [id, role ? ({ projectId: id, userId: 'u1', role } as ProjectMember) : null];
+						})
+					)
+			} as never,
+			platformProjectGrants: { listByProjects: async () => new Map() } as never,
+			definitions: {} as never
 		}
 	};
 	return w;
@@ -204,11 +237,65 @@ describe('resolveApiToken without a holder policy', () => {
 	});
 });
 
+describe('resolveApiToken for a key that only reads and uploads', () => {
+	function uploader(scopes = ['upload:all']) {
+		const w = world({ token: { scopes } });
+		w.platformPermissions = [];
+		w.roles.set('p1', 'editor');
+		return w;
+	}
+
+	it('resolves without manage_api_tokens while the owner can create a definition', async () => {
+		const w = uploader();
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result.kind).toBe('ok');
+		if (result.kind === 'ok') expect(result.ctx.apiScope?.expiresAt).toBe(w.token.expiresAt);
+	});
+
+	it('stops working when the owner loses their last editable project', async () => {
+		const w = uploader(['read:all', 'upload:all']);
+		expect((await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).kind).toBe('ok');
+
+		w.roles.set('p1', 'viewer');
+		expect(await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).toMatchObject({
+			kind: 'rejected',
+			status: 403,
+			code: 'API_TOKEN_HOLDER_REFUSED'
+		});
+		expect(w.token.revokedAt).toBeNull();
+	});
+
+	it('counts a commons project, which takes anyone’s uploads', async () => {
+		const w = uploader();
+		w.roles.clear();
+		w.projects = [{ ...project('commons'), visibility: 'public', autoJoinOnUpload: true }];
+		expect((await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).kind).toBe('ok');
+	});
+
+	it.each([[['write:all']], [['solve:all']], [['upload:all', 'solve:all']]])(
+		'still needs manage_api_tokens for %j',
+		async (scopes) => {
+			const w = uploader(scopes);
+			expect(await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).toMatchObject({
+				code: 'API_TOKEN_HOLDER_REFUSED'
+			});
+		}
+	);
+
+	it('treats a scope it can’t parse as broad', async () => {
+		const w = uploader(['upload:all', 'admin:all']);
+		expect(await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps)).toMatchObject({
+			code: 'API_TOKEN_HOLDER_REFUSED'
+		});
+	});
+});
+
 describe('resolveApiToken with a holder policy', () => {
 	it('asks the policy with the owner’s live context in the token’s org, platform permissions included', async () => {
 		const w = world();
 		const seen: RequestContext[] = [];
-		w.deps.mayHoldApiTokens = (ctx) => (seen.push(ctx), true);
+		const seenScopes: unknown[] = [];
+		w.deps.mayHoldApiTokens = (ctx, scopes) => (seen.push(ctx), seenScopes.push(scopes), true);
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
 		expect(result.kind).toBe('ok');
 		expect(seen).toHaveLength(1);
@@ -218,6 +305,7 @@ describe('resolveApiToken with a holder policy', () => {
 			orgPermissions: ['manage_projects']
 		});
 		expect(seen[0]!.apiScope).toBeUndefined();
+		expect(seenScopes).toEqual([[{ action: 'read', resource: { kind: 'all' } }]]);
 		if (result.kind === 'ok') expect(result.ctx.platformPermissions).toEqual([]);
 	});
 

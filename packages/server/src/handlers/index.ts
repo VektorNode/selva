@@ -58,8 +58,14 @@ export {
 	listApiTokens,
 	createApiToken,
 	revokeApiToken,
+	revokeOwnApiToken,
 	revokeUserApiTokens,
 	listOrgApiTokens,
 	canManageApiTokenRoster,
-	type ApiTokenRow
+	mintApiToken,
+	mayHoldApiTokens,
+	type ApiTokenRow,
+	type MintApiTokenInput,
+	type MintedApiToken
 } from './apiTokens.js';
+export { consentOrgs, mintConsentToken, type ConsentOrg } from './oauthConsent.js';

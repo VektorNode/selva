@@ -1,5 +1,6 @@
 /**
- * OAuth 2.1 for MCP clients, with this instance as its own authorization server.
+ * OAuth 2.1 for MCP clients and the Grasshopper plugin, with this instance as
+ * its own authorization server.
  *
  * The access token is an ordinary API token. The host mints it while the user is
  * signed in, at consent, through the same path as Settings → API tokens; this
@@ -24,8 +25,28 @@ import {
 } from 'node:crypto';
 
 /** The scopes a grant can carry. Each maps to one org-wide API scope. */
-export const OAUTH_SCOPES = ['read', 'solve'] as const;
+export const OAUTH_SCOPES = ['read', 'solve', 'upload'] as const;
 export type OAuthScope = (typeof OAUTH_SCOPES)[number];
+
+/**
+ * All a registered (DCR or CIMD) client can be granted. Its name and redirects
+ * are whatever the registrant chose, so `upload`, which puts code on the org's
+ * Compute server, stays with the built-in client and a look-alike can't phish for it.
+ */
+export const REGISTERED_CLIENT_SCOPES = ['read', 'solve'] as const satisfies readonly OAuthScope[];
+
+/** The Grasshopper plugin's client id. Built in, so it needs no registration and works air-gapped. */
+export const GRASSHOPPER_CLIENT_ID = 'selva-grasshopper';
+
+// Loopback on any port (RFC 8252 §7.3), but only this host and path: the code
+// can only ever reach a program on the user's own machine.
+const GRASSHOPPER_CLIENT: OAuthClient = {
+	clientId: GRASSHOPPER_CLIENT_ID,
+	name: 'Selva for Grasshopper',
+	redirectUris: ['http://127.0.0.1/callback'],
+	builtIn: true,
+	scopes: ['read', 'upload']
+};
 
 export const MCP_PATH = '/mcp';
 
@@ -60,6 +81,10 @@ export interface OAuthClient {
 	/** Shown on the consent page. Unverified for a registered client: whatever it claimed. */
 	name: string;
 	redirectUris: string[];
+	/** Shipped with this server, so its name can be trusted. */
+	builtIn: boolean;
+	/** All this client can be granted, whatever it asks for. */
+	scopes: readonly OAuthScope[];
 }
 
 /** A validated `/oauth/authorize` request, ready for the consent page. */
@@ -193,6 +218,7 @@ export function createOAuthServer(options: OAuthServerOptions) {
 	}
 
 	async function resolveClient(clientId: string): Promise<OAuthClient> {
+		if (clientId === GRASSHOPPER_CLIENT_ID) return GRASSHOPPER_CLIENT;
 		if (clientId.startsWith('dcr_')) return registeredClient(clientId);
 		if (clientId.startsWith('https://')) return metadataClient(clientId);
 		throw new OAuthError('invalid_client', 'Unknown client.');
@@ -204,7 +230,13 @@ export function createOAuthServer(options: OAuthServerOptions) {
 			throw new OAuthError('invalid_client', 'Unknown client.');
 		}
 		const meta = JSON.parse(unb64(payload)) as { n: string; r: string[] };
-		return { clientId, name: meta.n || 'An MCP client', redirectUris: meta.r };
+		return {
+			clientId,
+			name: meta.n || 'An MCP client',
+			redirectUris: meta.r,
+			builtIn: false,
+			scopes: REGISTERED_CLIENT_SCOPES
+		};
 	}
 
 	async function metadataClient(url: string): Promise<OAuthClient> {
@@ -268,7 +300,7 @@ export function createOAuthServer(options: OAuthServerOptions) {
 			redirectUri,
 			state: query.get('state') ?? undefined,
 			codeChallenge,
-			scopes: parseScopes(query.get('scope')),
+			scopes: parseScopes(query.get('scope'), client.scopes),
 			resource
 		};
 	}
@@ -399,18 +431,44 @@ async function readMetadata(
 			typeof doc.client_name === 'string' && doc.client_name.trim()
 				? doc.client_name.trim().slice(0, CLIENT_NAME_MAX)
 				: new URL(url).host,
-		redirectUris: checkRedirectUris(doc.redirect_uris)
+		redirectUris: checkRedirectUris(doc.redirect_uris),
+		builtIn: false,
+		scopes: REGISTERED_CLIENT_SCOPES
 	};
 }
 
 /**
- * Every scope when the client asks for none; unknown scopes are dropped. `read`
- * is always in: `solve` includes it at /api/v1, and a grant without it is empty.
+ * What the request asks for, within what its client may have. A scope outside
+ * that is dropped, not refused, so a client that asks for every advertised
+ * scope still signs in with what it may have. Asking for none of them means all
+ * of them. `read` rides along with `solve`, which the consent page offers as
+ * "read and run solves".
  */
-function parseScopes(raw: string | null): OAuthScope[] {
-	const asked = (raw ?? '').split(' ').filter(Boolean);
-	if (!OAUTH_SCOPES.some((s) => asked.includes(s))) return [...OAUTH_SCOPES];
-	return OAUTH_SCOPES.filter((s) => s === 'read' || asked.includes(s));
+function parseScopes(raw: string | null, allowed: readonly OAuthScope[]): OAuthScope[] {
+	const asked = (raw ?? '')
+		.split(' ')
+		.filter((s): s is OAuthScope => (allowed as readonly string[]).includes(s));
+	if (!asked.length) return [...allowed];
+	return allowed.filter((s) => asked.includes(s) || (s === 'read' && asked.includes('solve')));
+}
+
+/** One access level a consent page offers, and the scopes approving it grants. */
+export interface ConsentChoice {
+	access: 'read' | 'solve' | 'upload';
+	scopes: OAuthScope[];
+}
+
+/**
+ * The access levels a consent page offers for a request, narrowest first. The
+ * user may narrow what the client asked for, never widen it. An upload request
+ * is offered as asked: narrowing it to read would leave the client unable to
+ * do the one thing it signed in for.
+ */
+export function consentChoices(scopes: readonly OAuthScope[]): ConsentChoice[] {
+	if (scopes.includes('upload')) return [{ access: 'upload', scopes: [...scopes] }];
+	const choices: ConsentChoice[] = [{ access: 'read', scopes: ['read'] }];
+	if (scopes.includes('solve')) choices.push({ access: 'solve', scopes: [...scopes] });
+	return choices;
 }
 
 function checkRedirectUris(value: unknown): string[] {
@@ -466,7 +524,10 @@ export function redirectMatches(registered: string, requested: string): boolean 
 		LOOPBACK_HOSTS.has(a.hostname) &&
 		a.hostname === b.hostname &&
 		a.pathname === b.pathname &&
-		a.search === b.search
+		a.search === b.search &&
+		!b.hash &&
+		!b.username &&
+		!b.password
 	);
 }
 

@@ -19,7 +19,12 @@ function session(userId = 'u1'): RequestContext {
 }
 
 function keyed(tokenId: string, userId = 'u1'): RequestContext {
-	return narrowApiTokenContext(session(userId), { id: tokenId, orgId: ORG, scopes: ['write:all'] });
+	return narrowApiTokenContext(session(userId), {
+		id: tokenId,
+		orgId: ORG,
+		scopes: ['write:all'],
+		expiresAt: '2099-01-01T00:00:00.000Z'
+	});
 }
 
 function request(ctx: RequestContext, limiter: ApiRateLimiter | null): ApiRequest {

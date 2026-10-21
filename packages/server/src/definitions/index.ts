@@ -23,10 +23,15 @@ export {
 
 export {
 	resolveAccessibleProjects,
+	canCreateDefinitionInOrg,
 	listVisibleDefinitions,
+	listEditableDefinitionsByDocument,
 	getVisibleDefinition,
+	loadVisibleDefinition,
+	mayUploadToDefinition,
 	loadVisibleVersion,
 	type VisibilityDeps,
+	type VisibleDefinition,
 	type AccessibleProjectSet,
 	type ListVisibleDefinitionsResult
 } from './visibility.js';

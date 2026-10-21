@@ -9,7 +9,7 @@ import type {
 	UpdateMetadataInput,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, definitionPaths } from '@selvajs/platform';
+import { ProviderError, definitionPaths, toSourceDocumentId } from '@selvajs/platform';
 
 /**
  * Not the HTTP body — that's `CreateDefinitionInputSchema` in
@@ -71,6 +71,7 @@ export class DefinitionService {
 			nextVersionNumber: 2,
 			liveVersionId: null,
 			draftVersionId: null,
+			sourceDocumentId: toSourceDocumentId(schema.documentId) ?? undefined,
 			createdAt: now,
 			updatedAt: now,
 			deletedAt: null
@@ -152,6 +153,11 @@ export class DefinitionService {
 		};
 		await this.data.definitions.createVersion(ctx, version);
 		await this.data.definitions.setDraftVersion(ctx, guid, versionId);
+		// A schema without a GUID leaves the old one: it says nothing about which file this is.
+		const sourceDocumentId = toSourceDocumentId(schema.documentId);
+		if (sourceDocumentId && sourceDocumentId !== existing.sourceDocumentId) {
+			await this.data.definitions.update(ctx, guid, { sourceDocumentId });
+		}
 
 		return version;
 	}

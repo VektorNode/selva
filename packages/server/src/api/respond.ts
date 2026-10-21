@@ -61,6 +61,11 @@ export interface RunHandlerOptions {
 	 */
 	scopeTarget?: (req: ApiRequest) => ScopeTarget | Promise<ScopeTarget>;
 	/**
+	 * Skip the scope check: every API token may call the route, whatever its
+	 * scopes. Only for a route whose whole effect is on the calling key itself.
+	 */
+	anyScope?: boolean;
+	/**
 	 * Honour `Idempotency-Key`: a repeat from the same caller replays the first
 	 * response, and a key reused with a different body gets 422. Opt in per
 	 * route; what is safe to replay differs.
@@ -72,7 +77,7 @@ export interface RunHandlerOptions {
 export async function runHandler(
 	handler: ApiHandler,
 	req: ApiRequest,
-	{ fallback, mapError, action, scopeTarget, idempotent }: RunHandlerOptions
+	{ fallback, mapError, action, scopeTarget, anyScope, idempotent }: RunHandlerOptions
 ): Promise<Response> {
 	const fail = (err: unknown): Response => {
 		if (isApiError(err)) {
@@ -112,7 +117,7 @@ export async function runHandler(
 
 	let res: Response;
 	try {
-		if (req.ctx?.apiScope) {
+		if (req.ctx?.apiScope && !anyScope) {
 			assertScope(
 				req.ctx,
 				action ?? actionForMethod(req.request.method),

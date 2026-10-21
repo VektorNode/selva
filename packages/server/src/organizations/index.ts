@@ -3,3 +3,4 @@
 
 export { OrgAssetService } from './org-asset-service.js';
 export { listAllOrgMembers } from './list-all-members.js';
+export { listUserMemberships } from './user-memberships.js';

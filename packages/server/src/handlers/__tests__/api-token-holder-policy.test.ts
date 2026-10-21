@@ -13,7 +13,8 @@ import { createApiToken, listApiTokens } from '../apiTokens.js';
 
 const codec = createApiTokenCodec('k'.repeat(32));
 const shopAdmins: ApiTokenHolderPolicy = (ctx) => hasPermission(ctx, 'manage_org_members');
-const body = { name: 'CI', scopes: ['read:all'], expiresInDays: 30 };
+// Broader than read and upload, so without a policy it needs manage_api_tokens.
+const body = { name: 'CI', scopes: ['write:all'], expiresInDays: 30 };
 
 let tp: HandlerHarness | null = null;
 

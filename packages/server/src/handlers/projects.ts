@@ -24,6 +24,7 @@ import {
 } from '../api/index.js';
 import {
 	canChangeVisibilityToPublic,
+	canCreateDefinition,
 	canEdit,
 	canSolve,
 	canView,
@@ -31,6 +32,7 @@ import {
 	slugify,
 	SYSTEM_CONTEXT,
 	outsideTokenOrg,
+	scopeAllows,
 	validateProjectFlags,
 	withAdminBypass,
 	type ProjectVisibility
@@ -44,10 +46,16 @@ import {
 } from '../access/index.js';
 import { createProjectWithUniqueSlug } from '../projects/index.js';
 
+/**
+ * Projects the caller can view. `canCreateDefinitions` says whether
+ * `POST /definitions` would take this project from this caller: the same rule
+ * as the route, and for an API token its `upload` scope there.
+ */
 export const listProjects: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
 
-	const { projects } = await resolveAccessibleProjects(ctx, req.deps);
+	const set = await resolveAccessibleProjects(ctx, req.deps);
+	const { projects } = set;
 	const { limit, cursor } = parseListOptions(req.url);
 	// The accessible set is resolved in-process rather than by the store, so the
 	// cursor is an index into it. Opaque to callers either way.
@@ -58,8 +66,21 @@ export const listProjects: ApiHandler = async (req) => {
 
 	const items = projects.slice(start, start + (limit ?? projects.length));
 	const nextIndex = start + items.length;
+	// The create route names its project in the body, so it checks scope org-wide.
+	const tokenMayUpload = scopeAllows(ctx, 'upload');
 	return collection({
-		items,
+		items: items.map((project) => ({
+			...project,
+			canCreateDefinitions:
+				tokenMayUpload &&
+				canCreateDefinition(
+					projectAccessInputFromRowsWith(req, ctx, project, {
+						member: set.memberByProjectId.get(project.id) ?? null,
+						orgMember: set.orgMemberByOrgId.get(project.orgId) ?? null,
+						platformGrants: set.grantsByProjectId.get(project.id) ?? []
+					})
+				)
+		})),
 		nextCursor: nextIndex < projects.length ? String(nextIndex) : undefined
 	});
 };

@@ -4,7 +4,8 @@ import type {
 	IAuthProvider,
 	IDataProvider,
 	ILogger,
-	RequestContext
+	RequestContext,
+	SelvaFlags
 } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, narrowApiTokenContext } from '@selvajs/platform';
 import { ApiErrorCode } from '../api/errors.js';
@@ -27,9 +28,17 @@ export interface ResolveApiTokenDeps {
 	/** Absent when the host hasn't configured API tokens: a sent key gets 503. */
 	codec?: ApiTokenCodec;
 	auth: Pick<IAuthProvider, 'getUser' | 'delegatedSession'>;
-	data: Pick<IDataProvider, 'apiTokens' | 'orgs' | 'permissions'>;
-	/** The same policy passed as `SelvaDeps.tokens.mayHoldApiTokens`. Absent: the owner must still hold `manage_api_tokens`. */
+	data: Pick<
+		IDataProvider,
+		'apiTokens' | 'orgs' | 'permissions' | 'projects' | 'platformProjectGrants' | 'definitions'
+	>;
+	/** The same policy passed as `SelvaDeps.tokens.mayHoldApiTokens`. Absent: the default rule in `canHoldApiTokens`. */
 	mayHoldApiTokens?: ApiTokenHolderPolicy;
+	/**
+	 * The host's feature flags, which decide project visibility in the holder
+	 * rule's project scan. Absent: every flag off, which only ever refuses more.
+	 */
+	flag?: (name: keyof SelvaFlags) => boolean;
 	/** Receives background failures (the `lastUsedAt` write). Logs the token id only. */
 	log?: ILogger;
 	now?: () => number;
@@ -129,7 +138,17 @@ export async function resolveApiToken(
 		{ user, platformPermissions, membership: member, pinOrg: true },
 		{ orgs: deps.data.orgs }
 	);
-	if (!canHoldApiTokens(live, deps.mayHoldApiTokens)) return HOLDER_REFUSED;
+	const holds = await canHoldApiTokens(live, token.scopes, {
+		policy: deps.mayHoldApiTokens,
+		deps: {
+			orgs: deps.data.orgs,
+			projects: deps.data.projects,
+			platformProjectGrants: deps.data.platformProjectGrants,
+			definitionMeta: deps.data.definitions,
+			flag: deps.flag ?? (() => false)
+		}
+	});
+	if (!holds) return HOLDER_REFUSED;
 	let ctx = narrowApiTokenContext(live, token);
 
 	// Signed only after the user check above: a minted session can't be

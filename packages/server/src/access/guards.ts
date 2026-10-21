@@ -40,7 +40,7 @@ import {
 	canChangeOrgRole,
 	canView,
 	canSolve,
-	canEdit,
+	canCreateDefinition,
 	canManage,
 	canEditProjectSettings,
 	canEditDefinition,
@@ -309,10 +309,9 @@ export async function requireCanCreateDefinition(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId, locals);
-	const allowed = await contentCheck(async () => {
-		if (project.autoJoinOnUpload) return true;
-		return canEdit(await buildProjectAccessInput(ctx, project, locals));
-	});
+	const allowed = await contentCheck(async () =>
+		canCreateDefinition(await buildProjectAccessInput(ctx, project, locals))
+	);
 	if (!allowed) {
 		apiError(
 			403,

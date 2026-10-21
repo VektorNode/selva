@@ -2,7 +2,8 @@
  * API tokens: mint, list, revoke.
  *
  * **Session-only.** A key can't manage keys, so a leaked one can't mint more or
- * revoke the owner's others to cover its tracks.
+ * revoke the owner's others to cover its tracks. The one exception is a key
+ * revoking itself, which only ever takes access away.
  *
  * **The raw key exists only in the mint response.** The store holds its HMAC,
  * and every response goes through a schema that has no `tokenHash`.
@@ -14,6 +15,7 @@ import {
 	hasPermission,
 	parseApiScope,
 	type ApiToken,
+	type ApiTokenLifetimeDays,
 	type ApiTokenRevokeReason,
 	type ApiTokenSummary,
 	type IApiTokenStore,
@@ -55,10 +57,17 @@ function requireSessionInOrg(req: ApiRequest): { ctx: RequestContext; orgId: str
 	return requireActingOrg(req, req.params.orgId);
 }
 
-function requireMayHoldApiTokens(req: ApiRequest, ctx: RequestContext): void {
-	if (!canHoldApiTokens(ctx, req.deps.tokens.mayHoldApiTokens)) {
-		apiError(403, ApiErrorCode.FORBIDDEN, 'You can’t create API tokens in this org.');
-	}
+/**
+ * May `ctx` hold a key with `scopes`, by the host's policy or the default rule?
+ * The one call every mint path makes, so a host's token page and its consent
+ * screen can't disagree with the mint.
+ */
+export function mayHoldApiTokens(
+	deps: ApiRequest['deps'],
+	ctx: RequestContext,
+	scopes: readonly string[]
+): Promise<boolean> {
+	return canHoldApiTokens(ctx, scopes, { policy: deps.tokens.mayHoldApiTokens, deps });
 }
 
 function unavailable(): never {
@@ -189,18 +198,51 @@ export const listApiTokens: ApiHandler = async (req) => {
 	return shapedCollection(ApiTokenResponseSchema, page);
 };
 
-/** Mint a token acting as the caller. The raw key is in this response and nowhere else. */
-export const createApiToken: ApiHandler = async (req) => {
-	const { ctx, orgId } = requireSessionInOrg(req);
-	requireMayHoldApiTokens(req, ctx);
-	const { user } = requireCaller(req);
+export interface MintApiTokenInput {
+	name: string;
+	scopes: readonly string[];
+	expiresInDays: ApiTokenLifetimeDays;
+}
+
+export interface MintedApiToken {
+	token: ApiTokenRow;
+	/** The raw key. Shown once; the store keeps only its HMAC. */
+	secret: string;
+}
+
+/**
+ * Mint a token acting as the caller, in the caller's acting org. Every mint
+ * goes through here, the token endpoint and an OAuth consent alike, so the
+ * holder rule, the scope checks, the audit event and the owner's email always
+ * apply. A consent screen passes a `req` whose `ctx` acts in the org the user
+ * picked.
+ */
+export async function mintApiToken(
+	req: ApiRequest,
+	input: MintApiTokenInput
+): Promise<MintedApiToken> {
+	const { ctx, user } = requireCaller(req);
+	const orgId = ctx.actingOrgId;
+	if (ctx.apiScope || !orgId) {
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'API tokens can only be created from a signed-in session.'
+		);
+	}
+	if (!(await mayHoldApiTokens(req.deps, ctx, input.scopes))) {
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'You can’t create API tokens with this access in this org.'
+		);
+	}
 	const store = storeOf(req);
 	const codec = codecOf(req);
 	// A key minted now would only ever get 503.
 	const delegated = req.deps.auth.delegatedSession;
 	if (delegated && !(await delegated.status()).ok) unavailable();
 
-	const input = await parseBody(req.request, CreateApiTokenBodySchema);
 	await assertScopesReachable(req, orgId, input.scopes);
 
 	const raw = codec.mintRawToken();
@@ -222,10 +264,17 @@ export const createApiToken: ApiHandler = async (req) => {
 	await mailTokenCreated(req, token);
 
 	const { tokenHash: _hash, ...summary } = token;
+	return { token: toResponse(summary), secret: raw };
+}
+
+/** Mint a token acting as the caller. The raw key is in this response and nowhere else. */
+export const createApiToken: ApiHandler = async (req) => {
+	requireSessionInOrg(req);
+	const input = await parseBody(req.request, CreateApiTokenBodySchema);
 	return {
 		status: 201,
 		headers: { 'Cache-Control': 'no-store' },
-		body: CreatedApiTokenResponseSchema.parse({ token: toResponse(summary), secret: raw })
+		body: CreatedApiTokenResponseSchema.parse(await mintApiToken(req, input))
 	};
 };
 
@@ -244,6 +293,24 @@ export const revokeApiToken: ApiHandler = async (req) => {
 		apiError(404, ApiErrorCode.NOT_FOUND, 'API token not found');
 	}
 	await store.revoke(ctx, tokenId, own ? 'owner' : 'admin');
+	return noContent();
+};
+
+/**
+ * Revoke the key that sent this request, and nothing else. Any key may call it,
+ * whatever its scopes, so a client signing out never needs more than it has.
+ * A browser session gets 400: it has no key to revoke.
+ */
+export const revokeOwnApiToken: ApiHandler = async (req) => {
+	const { ctx } = requireCaller(req);
+	if (!ctx.apiScope) {
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			'Only an API token can revoke itself. Revoke tokens from the web app instead.'
+		);
+	}
+	await storeOf(req).revoke(ctx, ctx.apiScope.tokenId, 'owner');
 	return noContent();
 };
 

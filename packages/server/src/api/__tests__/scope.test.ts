@@ -13,7 +13,12 @@ function session(): RequestContext {
 }
 
 function keyed(...scopes: string[]): RequestContext {
-	return narrowApiTokenContext(session(), { id: 't1', orgId: ORG, scopes });
+	return narrowApiTokenContext(session(), {
+		id: 't1',
+		orgId: ORG,
+		scopes,
+		expiresAt: '2099-01-01T00:00:00.000Z'
+	});
 }
 
 function request(
