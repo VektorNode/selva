@@ -1,5 +1,17 @@
 # @selvajs/solve
 
+## 1.3.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [594da9c]
+- Updated dependencies [a0e6628]
+- Updated dependencies [a0e6628]
+- Updated dependencies [65786d5]
+  - @selvajs/compute@4.3.0-beta.1
+  - @selvajs/schemas@5.3.0-beta.0
+  - @selvajs/platform@0.21.0-beta.3
+
 ## 1.3.0-beta.2
 
 ### Minor Changes

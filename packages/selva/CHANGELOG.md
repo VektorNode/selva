@@ -1,5 +1,16 @@
 # @selvajs/selva
 
+## 4.20.0-beta.7
+
+### Minor Changes
+
+- 2ae4347: The Grasshopper plugin can sign in and upload. The consent page shows built-in apps as such, lets someone in several organizations pick one, and mints through the server core rather than calling back into the app, which fixes approval behind a forward-auth proxy. `/team/tokens` shows to anyone who can create a definition, offering them an "Upload definitions" key, and `DELETE /api/v1/me/token` lets a key revoke itself.
+
+### Patch Changes
+
+- a0e6628: Uploading a definition fills its category from the schema, as it already did its name, description and tags.
+- a0e6628: A definition's viewer and its display meshes follow Compute render (`viewerOptions.enableRemote`) alone. Local render only drives the plugin's preview, so a definition with only Local render on opens without a viewer.
+
 ## 4.20.0-beta.6
 
 ### Minor Changes

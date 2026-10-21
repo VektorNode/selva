@@ -1,5 +1,20 @@
 # @selvajs/ui
 
+## 6.6.0-beta.6
+
+### Minor Changes
+
+- a0e6628: `AppLayout` takes a required `showViewer` prop instead of reading the schema's viewer flags itself, so each host decides from its own switch. `ComputeApp` shows the 3D viewer only when `viewerOptions.enableRemote` is set; `enableLocal`, which belongs to the plugin's local preview, no longer turns it on.
+
+### Patch Changes
+
+- 5b67744: Charts load Plotly with a Subresource Integrity hash, so a changed file on the CDN is refused instead of run. `loadScript` takes an `integrity` option.
+- Updated dependencies [594da9c]
+- Updated dependencies [a0e6628]
+- Updated dependencies [a0e6628]
+  - @selvajs/compute@4.3.0-beta.1
+  - @selvajs/schemas@5.3.0-beta.0
+
 ## 6.6.0-beta.5
 
 ### Minor Changes

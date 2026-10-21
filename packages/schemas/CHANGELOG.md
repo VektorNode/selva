@@ -1,5 +1,15 @@
 # Schema Changelog
 
+## 5.3.0-beta.0
+
+### Minor Changes
+
+- a0e6628: `MAX_TAGS` and `MAX_CATEGORY_LENGTH` export the limits on a schema's `tags` and `category`, the same ones Selva's definition forms apply. The two fields' descriptions say that Selva copies them into a definition on upload and that the definition's own values win after that.
+
+### Patch Changes
+
+- a0e6628: `ViewerOptions.enableLocal` and `enableRemote` describe which host reads them: `enableLocal` the plugin's local preview, `enableRemote` Selva.
+
 ## 5.2.0
 
 ### Minor Changes
