@@ -50,14 +50,23 @@ export const load: PageServerLoad = async (event) => {
 		redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
 
-	const choices = consentChoices(request.scopes);
-	const orgs = await consentOrgs(toApiRequest(event), apiScopesFor(choices[0]!.scopes));
-	if (!orgs.length) {
+	// A level the user can't hold in any of their orgs isn't offered: picking it could only fail.
+	const api = toApiRequest(event);
+	const offered = (
+		await Promise.all(
+			consentChoices(request.scopes).map(async (choice) => ({
+				access: choice.access,
+				orgs: await consentOrgs(api, apiScopesFor(choice.scopes))
+			}))
+		)
+	).filter((c) => c.orgs.length);
+	if (!offered.length) {
 		return {
 			ok: false as const,
 			problem: 'Your account can’t give an app this access in any of your organizations.'
 		};
 	}
+	const orgs = offered[0]!.orgs;
 	const acting = orgs.find((o) => o.id === locals.ctx?.actingOrgId);
 
 	return {
@@ -67,7 +76,7 @@ export const load: PageServerLoad = async (event) => {
 		builtIn: request.client.builtIn,
 		redirectHost: new URL(request.redirectUri).host,
 		loopback: isLoopbackRedirect(request.redirectUri),
-		choices: choices.map((c) => c.access),
+		choices: offered.map((c) => c.access),
 		orgs,
 		orgId: (acting ?? orgs[0]!).id,
 		days: TOKEN_DAYS

@@ -222,15 +222,25 @@ describe('consent', () => {
 		}
 	});
 
+	it('offers only the access the user may hold somewhere', async () => {
+		const w = await world();
+		const query = authorizeQuery(await registeredClient(), { scope: 'read solve' });
+		// Dana may hold a read key but not a solve key: she has no manage_api_tokens.
+		const data = await load(
+			event(`/oauth/authorize?${query}`, { locals: await actAs(tp, w.dana.id) }) as AnyEvent
+		);
+		expect(data).toMatchObject({ ok: true, choices: ['read'] });
+	});
+
 	it('never grants upload to a registered client', async () => {
 		const w = await world();
+		await grantPlatformPermissions(tp, w.alice.id, ['manage_api_tokens']);
 		const query = authorizeQuery(await registeredClient(), { scope: 'read solve upload' });
 		const data = await load(
 			event(`/oauth/authorize?${query}`, { locals: await actAs(tp, w.alice.id) }) as AnyEvent
 		);
 		expect(data).toMatchObject({ ok: true, choices: ['read', 'solve'] });
 		// A forged form field can't pick an access level the page didn't offer.
-		await grantPlatformPermissions(tp, w.alice.id, ['manage_api_tokens']);
 		const back = await redirected(async () =>
 			approve(query, await actAs(tp, w.alice.id), { access: 'upload', orgId: w.acme.id })
 		);
