@@ -49,7 +49,9 @@ export function buildOpenApiDocument(version: string = API_VERSION): Json {
 				'**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser ' +
 				'requests and non-browser clients holding a token.\n\n' +
 				'**Scopes.** Each operation names the API-token scope it needs as `x-scope`: `read`, ' +
-				'`write` or `solve`.\n\n' +
+				'`write`, `solve` or `upload`. `write`, `solve` and `upload` each include `read`, and ' +
+				'`write` includes `upload`. `upload` allows creating definitions, uploading versions and ' +
+				'making a version live, and nothing else: it cannot edit metadata, delete or share.\n\n' +
 				'Instance administration lives at `/api/admin`, is session-only, is never reachable ' +
 				'with a bearer token, and is not described here.',
 			license: { name: 'MIT' }

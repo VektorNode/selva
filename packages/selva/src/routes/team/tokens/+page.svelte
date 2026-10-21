@@ -28,8 +28,10 @@
 
 	let { data }: { data: PageData } = $props();
 
+	// Seeded once from the narrowest preset offered; the form resets it after each mint.
+	// svelte-ignore state_referenced_locally
+	let access = $state<AccessPreset>(data.presets[0] ?? 'read');
 	let name = $state('');
-	let access = $state<AccessPreset>('read');
 	let lifetime = $state<string>('30');
 	let creating = $state(false);
 	let secret = $state<string | null>(null);
@@ -37,7 +39,15 @@
 	let confirmingRevoke = $state<TokenRow | null>(null);
 	let revokingId = $state<string | null>(null);
 
-	const risky = $derived(access !== 'read');
+	const RISK: Partial<Record<AccessPreset, string>> = {
+		upload:
+			'Anyone holding this token can upload definitions and make a version live where you can, until it expires or you revoke it. Uploading a definition runs its scripts on the org’s Compute server.',
+		solve: 'Solves use compute and count against your solve limit.',
+		write:
+			'Anyone holding this token can change or delete what you can, until it expires or you revoke it.',
+		full: 'Anyone holding this token can change or delete what you can, until it expires or you revoke it.'
+	};
+	const risk = $derived(RISK[access]);
 
 	async function create(event: SubmitEvent) {
 		event.preventDefault();
@@ -61,7 +71,7 @@
 			secret = body.secret;
 			copied = false;
 			name = '';
-			access = 'read';
+			access = data.presets[0] ?? 'read';
 			await invalidateAll();
 		} catch {
 			toast.error('Failed to create the token');
@@ -197,14 +207,14 @@
 							<Select.Root
 								type="single"
 								value={access}
-								onValueChange={(v) => (access = (v as AccessPreset) ?? 'read')}
+								onValueChange={(v) => (access = (v as AccessPreset) ?? data.presets[0])}
 							>
 								<Select.Trigger id="token-access">
 									<span class="truncate">{ACCESS_PRESETS[access].label}</span>
 								</Select.Trigger>
 								<Select.Content>
-									{#each Object.entries(ACCESS_PRESETS) as [key, preset] (key)}
-										<Select.Item value={key} label={preset.label} />
+									{#each data.presets as key (key)}
+										<Select.Item value={key} label={ACCESS_PRESETS[key].label} />
 									{/each}
 								</Select.Content>
 							</Select.Root>
@@ -226,12 +236,8 @@
 								</Select.Content>
 							</Select.Root>
 						</div>
-						{#if risky}
-							<Callout tone="warning" class="sm:col-span-3">
-								{access === 'solve'
-									? 'Solves use compute and count against your solve limit.'
-									: 'Anyone holding this token can change or delete what you can, until it expires or you revoke it.'}
-							</Callout>
+						{#if risk}
+							<Callout tone="warning" class="sm:col-span-3">{risk}</Callout>
 						{/if}
 						<div class="sm:col-span-3">
 							<Button type="submit" disabled={creating || !name.trim()}>Create token</Button>

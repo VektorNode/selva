@@ -11,7 +11,7 @@ A long-lived `selva_` bearer credential minted by a user, acting as that user wi
 _Avoid_: PAT, machine key
 
 **Scope**:
-One grant on an API token: an action (`read`, `write`, `solve`) paired with a resource (`all`, an org, a project, or a definition). `write` and `solve` each include `read`.
+One grant on an API token: an action (`read`, `write`, `solve`, `upload`) paired with a resource (`all`, an org, a project, or a definition). `write`, `solve` and `upload` each include `read`, and `write` includes `upload`.
 _Avoid_: permission (that is what a user holds; scopes only narrow it)
 
 **Service account**:

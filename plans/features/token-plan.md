@@ -38,26 +38,35 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
   every store and policy would have to learn it. ([#317](https://github.com/VektorNode/selva/issues/317))
 - **Expiry is required: 30, 90 or 180 days.** The mint form defaults to `read`, whole org, 30 days;
   `write` and `solve` are opt-in with a warning. ([#323](https://github.com/VektorNode/selva/issues/323))
-- **Holding a key needs `manage_api_tokens`** (platform permission) unless the host decides
-  instead, and a key can never exceed the creator's live rights. A host passes
-  `mayHoldApiTokens: (ctx) => boolean` in `depsFromConfig`'s `tokens` and to `resolveApiToken`; it
-  replaces the permission check. Either check runs at mint and again on every request against the
-  owner's live context in the token's org, so a key whose owner no longer qualifies gets 403
-  `API_TOKEN_HOLDER_REFUSED` without being revoked. Granting a platform permission per user was
-  rejected: who holds keys is a host rule, such as "shop admins" (`manage_org_members`).
+- **Holding a key needs `manage_api_tokens`** (platform permission), **except a key whose scopes
+  only read and upload**, which needs only the right to create a definition in one project of the
+  token's org: it can do nothing the owner's browser session can't. That exception lets a designer
+  sign the Grasshopper plugin in without an admin also handing them the right to mint broad keys
+  ([publish-from-plugin.md](./publish-from-plugin.md)). A key can never exceed the creator's live
+  rights. A host can decide instead: it passes
+  `mayHoldApiTokens: (ctx, scopes) => boolean | Promise<boolean>` in `depsFromConfig`'s `tokens`
+  and to `resolveApiToken`, and that replaces both rules. The check runs at mint and again on every
+  request against the owner's live context in the token's org, so a key whose owner no longer
+  qualifies gets 403 `API_TOKEN_HOLDER_REFUSED` without being revoked. Granting a platform
+  permission per user was rejected: who holds keys is a host rule, such as "shop admins"
+  (`manage_org_members`).
 
 ### Scopes and enforcement
 
-- **Actions are only `read`, `write`, `solve`; `write` and `solve` include `read`.** A host app maps
-  its own scopes onto these three and accepts the cost: it can't grant writes on one of its resources
-  without the others. Host-registered actions were rejected as more engine surface than anything
-  needs today. Scopes are stored as strings, so they can be added later without migrating keys.
-  ([#315](https://github.com/VektorNode/selva/issues/315))
+- **Actions are `read`, `write`, `solve` and `upload`.** `write`, `solve` and `upload` include
+  `read`, and `write` includes `upload`. `upload` covers exactly creating a definition, uploading a
+  version, making a version live and previewing a file's schema, so the Grasshopper plugin holds a
+  key that can't delete, edit metadata or share ([publish-from-plugin.md](./publish-from-plugin.md)).
+  A host app maps its own scopes onto these and accepts the cost: it can't grant writes on one of
+  its resources without the others. Host-registered actions were rejected as more engine surface
+  than anything needs today. Scopes are stored as strings, so an action is added without migrating
+  keys. ([#315](https://github.com/VektorNode/selva/issues/315))
 - **Resources: `all`, `org`, `project`, `definition`.** `scopeAllows(ctx, action, resource?)` with
   no resource is an org-level check, and only `all` or org-scoped keys pass it. A project key is
   refused on a host app's org-level routes such as orders.
 - **`runHandler` checks scope automatically.** `GET`/`HEAD` mean `read`, everything else `write`, and
-  a handler can declare `action` (solve routes declare `solve`). Per-handler calls were rejected:
+  a handler can declare `action` (solve routes declare `solve`, upload routes `upload`). Per-handler
+  calls were rejected:
   a forgotten call silently lets a read-only key write. A host that bypasses `runHandler` must call
   `scopeAllows` itself.
 - **Routes addressed by a project or definition declare a `scopeTarget`** (`projectScopeTarget`,
@@ -230,9 +239,10 @@ depends on it.
 | POST   | `/api/v1/orgs/{orgId}/tokens`           | Returns `{ token, secret }` once, with `Cache-Control: no-store`          |
 | GET    | `/api/v1/orgs/{orgId}/tokens`           | Own tokens; `?all=true` returns the roster and needs `manage_org_members` |
 | DELETE | `/api/v1/orgs/{orgId}/tokens/{tokenId}` | Owner or `manage_org_members`; returns 204                                |
+| DELETE | `/api/v1/me/token`                      | The calling key revokes itself, whatever its scopes; returns 204          |
 
-These endpoints are session-only, so a key can't manage keys and a leaked one can't spawn more. They
-are `x-internal` for v1.
+The org endpoints are session-only, so a key can't manage keys and a leaked one can't spawn more.
+They are `x-internal` for v1. A key revoking itself is the one exception: it only takes access away.
 
 ## Where it lives
 

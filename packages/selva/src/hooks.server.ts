@@ -11,7 +11,13 @@ import {
 	resolveApiToken
 } from '@selvajs/server/http';
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
-import { providers, getErrorReporter, getEventSink, getLogger } from '$lib/server/providers.server';
+import {
+	providers,
+	flag,
+	getErrorReporter,
+	getEventSink,
+	getLogger
+} from '$lib/server/providers.server';
 import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
 import { MCP_PATH } from '$lib/server/mcp/server';
 
@@ -244,6 +250,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					codec: apiTokenCodec(),
 					auth: providers.auth,
 					data: providers.data,
+					flag,
 					log: event.locals.log
 				});
 	if (tokenResult.kind === 'rejected') {

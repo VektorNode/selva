@@ -7,6 +7,7 @@ const scopeTarget = definitionScopeTarget('guid');
 
 export const GET: RequestHandler = mount('Failed to list versions', listVersions, { scopeTarget });
 export const POST: RequestHandler = mount('Failed to upload definition version', uploadVersion, {
+	action: 'upload',
 	scopeTarget,
 	idempotent: true
 });

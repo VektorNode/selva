@@ -5,7 +5,7 @@ openapi: "3.1.0"
 info:
   title: Selva API
   version: "1.0.0"
-  description: "The tenant-scoped Selva API. Every endpoint acts as the calling identity and is confined to that identity's organization.\n\n**Stability.** Public endpoints are additive-only within v1: new optional fields and parameters may appear, but nothing is removed, renamed, or changed in type or meaning. A breaking change ships as a new route under `/api/v2` alongside this one. Anything deprecated inside v1 keeps working for a stated window and returns a `Deprecation` header while it does.\n\n**Operations marked `x-internal` carry none of that promise.** They exist to serve the Selva web UI and may change or disappear without notice.\n\n**Existence is never disclosed.** A resource the caller may not see returns `404`, not `403`. `403` means the resource is visible but the action is not allowed.\n\n**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser requests and non-browser clients holding a token.\n\n**Scopes.** Each operation names the API-token scope it needs as `x-scope`: `read`, `write` or `solve`.\n\nInstance administration lives at `/api/admin`, is session-only, is never reachable with a bearer token, and is not described here."
+  description: "The tenant-scoped Selva API. Every endpoint acts as the calling identity and is confined to that identity's organization.\n\n**Stability.** Public endpoints are additive-only within v1: new optional fields and parameters may appear, but nothing is removed, renamed, or changed in type or meaning. A breaking change ships as a new route under `/api/v2` alongside this one. Anything deprecated inside v1 keeps working for a stated window and returns a `Deprecation` header while it does.\n\n**Operations marked `x-internal` carry none of that promise.** They exist to serve the Selva web UI and may change or disappear without notice.\n\n**Existence is never disclosed.** A resource the caller may not see returns `404`, not `403`. `403` means the resource is visible but the action is not allowed.\n\n**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser requests and non-browser clients holding a token.\n\n**Scopes.** Each operation names the API-token scope it needs as `x-scope`: `read`, `write`, `solve` or `upload`. `write`, `solve` and `upload` each include `read`, and `write` includes `upload`. `upload` allows creating definitions, uploading versions and making a version live, and nothing else: it cannot edit metadata, delete or share.\n\nInstance administration lives at `/api/admin`, is session-only, is never reachable with a bearer token, and is not described here."
   license:
     name: MIT
 servers:
@@ -164,18 +164,64 @@ paths:
                 $ref: "#/components/schemas/Error"
   /api/v1/me:
     get:
-      summary: "The calling identity, its acting org, its effective permissions, and for a token its id and scopes."
+      summary: "The calling identity, its acting org, its effective permissions, and for a token its id, scopes and expiry."
       operationId: getMe
       tags:
         - Me
       x-scope: read
       responses:
         "200":
-          description: Success.
+          description: "`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token."
           content:
             application/json:
               schema:
                 type: object
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/me/token:
+    delete:
+      summary: Revoke the API token that sent this request. A key can revoke itself and nothing else; a browser session gets 400.
+      operationId: deleteMeToken
+      tags:
+        - Me
+      x-scope: read
+      responses:
+        "204":
+          description: Success. No content.
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           description: Missing or invalid credentials.
           content:
@@ -327,13 +373,25 @@ paths:
           description: "One of `draft`, `published`, `archived`."
           schema:
             type: string
+        - name: documentId
+          in: query
+          required: false
+          description: "A Grasshopper document GUID. Returns only definitions last uploaded from that document which the caller can upload a new version of. Not a GUID: 400."
+          schema:
+            type: string
       responses:
         "200":
-          description: A page of results.
+          description: "Each item has `sourceDocumentId`: the Grasshopper document GUID the definition was last uploaded from, or null."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Page"
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           description: Missing or invalid credentials.
           content:
@@ -369,7 +427,7 @@ paths:
       operationId: postDefinitions
       tags:
         - Definitions
-      x-scope: write
+      x-scope: upload
       parameters:
         - $ref: "#/components/parameters/idempotencyKey"
       requestBody:
@@ -471,7 +529,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Success.
+          description: "`canEdit` is true when the caller can upload a version and make one live; for an API token that includes its scopes. `sourceDocumentId` is the Grasshopper document GUID it was last uploaded from, or null."
           content:
             application/json:
               schema:
@@ -837,7 +895,7 @@ paths:
       operationId: postDefinitionsByGuidVersions
       tags:
         - Definitions
-      x-scope: write
+      x-scope: upload
       parameters:
         - name: guid
           in: path
@@ -1105,7 +1163,7 @@ paths:
       operationId: postDefinitionsByGuidPublish
       tags:
         - Definitions
-      x-scope: write
+      x-scope: upload
       parameters:
         - name: guid
           in: path
@@ -1434,7 +1492,7 @@ paths:
         - $ref: "#/components/parameters/orderDir"
       responses:
         "200":
-          description: A page of results.
+          description: "Each item has `canCreateDefinitions`: whether `POST /definitions` would accept this project from the caller, scopes included for an API token."
           content:
             application/json:
               schema:
@@ -3193,7 +3251,7 @@ paths:
       operationId: postComputeSchema
       tags:
         - Compute
-      x-scope: write
+      x-scope: upload
       x-internal: true
       parameters:
         - name: projectId

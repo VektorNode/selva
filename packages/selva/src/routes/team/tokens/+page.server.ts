@@ -5,9 +5,9 @@ import {
 	listOrgApiTokens,
 	type ApiTokenRow
 } from '@selvajs/server/handlers';
-import { canHoldApiTokens } from '@selvajs/server/tokens';
 import { getUserProfileStore, providers } from '$lib/server/providers.server';
 import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
+import { offeredTokenPresets } from '$lib/server/apiTokens/presets.server';
 import type { TokenRow } from '$lib/apiTokens';
 import type { PageServerLoad } from './$types';
 
@@ -19,19 +19,26 @@ const toRow = ({ orgId: _o, createdBy: _c, ...t }: ApiTokenRow): TokenRow => t;
 
 /**
  * The caller's API tokens in the acting org, plus the org-wide roster for
- * `manage_org_members`. Only for people who may hold keys; minting and revoking
- * go through `/api/v1/orgs/{orgId}/tokens`, so this page exercises the same
- * endpoints a host app would.
+ * `manage_org_members`. Only for people who may hold keys, and the form offers
+ * only the presets they may mint; minting and revoking go through
+ * `/api/v1/orgs/{orgId}/tokens`, so this page exercises the same endpoints a
+ * host app would.
  */
-export const load: PageServerLoad = async ({ locals }) => {
-	const ctx = locals.ctx;
+export const load: PageServerLoad = async (event) => {
+	const ctx = event.locals.ctx;
 	if (!ctx) redirect(303, '/login');
-	if (!canHoldApiTokens(ctx)) redirect(303, '/team');
+	const presets = await offeredTokenPresets(event);
+	if (!presets.length) redirect(303, '/team');
 
 	const store = providers.data.apiTokens;
 	const orgId = ctx.actingOrgId ?? null;
 	const canManageRoster = canManageApiTokenRoster(ctx);
-	const base = { orgId, available: Boolean(store && apiTokenCodec()), canManageRoster };
+	const base = {
+		orgId,
+		available: Boolean(store && apiTokenCodec()),
+		canManageRoster,
+		presets
+	};
 	if (!store || !orgId) return { ...base, mine: [] as TokenRow[], roster: [] as RosterRow[] };
 
 	const mine = await listOrgApiTokens(store, ctx, orgId, { limit: 200 });

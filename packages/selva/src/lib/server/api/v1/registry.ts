@@ -47,8 +47,20 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		path: '/me',
 		scope: 'read',
 		summary:
-			'The calling identity, its acting org, its effective permissions, and for a token its id and scopes.',
-		response: 'object'
+			'The calling identity, its acting org, its effective permissions, and for a token its id, scopes and expiry.',
+		response: 'object',
+		returns:
+			'`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token.'
+	},
+	// Every key may call it, whatever its scopes; `read` is the action every key holds.
+	{
+		method: 'DELETE',
+		path: '/me/token',
+		scope: 'read',
+		summary:
+			'Revoke the API token that sent this request. A key can revoke itself and nothing else; a browser session gets 400.',
+		response: 'empty',
+		errors: [400, 503]
 	},
 	{
 		method: 'PUT',
@@ -75,15 +87,23 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		scope: 'read',
 		summary: 'List definitions the caller can see.',
 		response: 'collection',
+		returns:
+			'Each item has `sourceDocumentId`: the Grasshopper document GUID the definition was last uploaded from, or null.',
 		query: [
 			{ name: 'projectId', description: 'Restrict to one project.' },
-			{ name: 'status', description: 'One of `draft`, `published`, `archived`.' }
-		]
+			{ name: 'status', description: 'One of `draft`, `published`, `archived`.' },
+			{
+				name: 'documentId',
+				description:
+					'A Grasshopper document GUID. Returns only definitions last uploaded from that document which the caller can upload a new version of. Not a GUID: 400.'
+			}
+		],
+		errors: [400]
 	},
 	{
 		method: 'POST',
 		path: '/definitions',
-		scope: 'write',
+		scope: 'upload',
 		idempotent: true,
 		summary: 'Create a definition from a Grasshopper file.',
 		response: 'object',
@@ -106,6 +126,8 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		scope: 'read',
 		summary: 'Definition record plus its live and draft version summaries.',
 		response: 'object',
+		returns:
+			'`canEdit` is true when the caller can upload a version and make one live; for an API token that includes its scopes. `sourceDocumentId` is the Grasshopper document GUID it was last uploaded from, or null.',
 		errors: [404]
 	},
 	{
@@ -153,7 +175,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/versions',
-		scope: 'write',
+		scope: 'upload',
 		idempotent: true,
 		summary: 'Upload a new version.',
 		response: 'object',
@@ -191,7 +213,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/publish',
-		scope: 'write',
+		scope: 'upload',
 		summary: 'Promote a version to live.',
 		response: 'object',
 		errors: [400, 404]
@@ -240,7 +262,9 @@ export const V1_ENDPOINTS: Endpoint[] = [
 		path: '/projects',
 		scope: 'read',
 		summary: 'List projects the caller can view.',
-		response: 'collection'
+		response: 'collection',
+		returns:
+			'Each item has `canCreateDefinitions`: whether `POST /definitions` would accept this project from the caller, scopes included for an API token.'
 	},
 	{
 		method: 'POST',
@@ -492,7 +516,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/compute/schema',
-		scope: 'write',
+		scope: 'upload',
 		summary: 'Extract UI schemas from an uploaded file before it becomes a definition.',
 		internal: true,
 		response: 'object',

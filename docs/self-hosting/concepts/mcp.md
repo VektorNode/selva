@@ -27,18 +27,16 @@ what the client may do:
 - **Read**: browse definitions and their inputs.
 - **Read and run solves**: also solve, which spends your compute budget.
 
-Allowing it creates an API token named after the client, such as "Claude (OAuth)". The consent
-page says how long it lasts. It shows up under **Settings → API tokens**, where you can revoke it.
-When it expires, the client asks you to sign in again.
+Allowing it creates an API token named after the client, such as "Claude (OAuth)", for 30 days.
+It shows up under **Team → API tokens**, where you can revoke it. When it expires, the client
+asks you to sign in again. [Signing in from apps](./signing-in-from-apps.md) covers the flow,
+the org picker, and who may approve which access.
 
 In claude.ai: **Settings → Connectors → Add custom connector**, and paste the URL.
 
-OAuth needs `SELVA_HMAC_KEY` set, as API tokens do. Behind a forward-auth proxy, some routes
-must skip the proxy's sign-in: see [Header auth with Entra](../providers/header-auth-entra.md#part-5-caddyfile).
-
 ### Send a key yourself
 
-1. Create an API key at **Settings → API tokens** (`/team/tokens`). Pick **Read and run solves**; a
+1. Create an API key at **Team → API tokens** (`/team/tokens`). Pick **Read and run solves**; a
    **Read** key sees no solve tool.
 2. Send it as a header: `Authorization: Bearer selva_…`.
 

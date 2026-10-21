@@ -132,7 +132,7 @@ export function toApiRequest(event: RequestEvent): ApiRequest {
 export function mount(
 	fallback: string,
 	handler: ApiHandler,
-	opts: Pick<RunHandlerOptions, 'action' | 'scopeTarget' | 'idempotent'> = {}
+	opts: Pick<RunHandlerOptions, 'action' | 'scopeTarget' | 'anyScope' | 'idempotent'> = {}
 ) {
 	return (event: RequestEvent): Promise<Response> =>
 		runHandler(handler, toApiRequest(event), { fallback, mapError: mapAppError, ...opts });

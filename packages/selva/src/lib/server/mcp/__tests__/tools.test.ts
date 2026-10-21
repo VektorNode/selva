@@ -332,6 +332,15 @@ describe('grantedActions', () => {
 		expect(await grantedActions(asKey(['read:all']))).toEqual(['read']);
 	});
 
+	it('counts upload as granted by write, and nothing else by upload', async () => {
+		expect((await grantedActions(asKey(['write:all']))).sort()).toEqual([
+			'read',
+			'upload',
+			'write'
+		]);
+		expect((await grantedActions(asKey(['upload:all']))).sort()).toEqual(['read', 'upload']);
+	});
+
 	it('grants nothing to a caller without a token', async () => {
 		expect(await grantedActions({ call: async () => ({ userId: 'u' }) })).toEqual([]);
 	});

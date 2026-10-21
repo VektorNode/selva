@@ -1,21 +1,23 @@
 import { createMcpServer, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
-import { parseApiScope } from '@selvajs/platform';
+import { ApiScopeActionSchema, apiScopeActionCovers, parseApiScope } from '@selvajs/platform';
 import { env } from '$env/dynamic/private';
-import { OAUTH_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
+import { REGISTERED_CLIENT_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
 import { oauthServer } from '$lib/server/oauth/server';
 import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
 export const MCP_PATH = '/mcp';
 
-/** `write` and `solve` each include `read`, as `scopeAllows` decides at /api/v1. */
+/** Every action the key's scopes cover, as `scopeAllows` decides at /api/v1. */
 export async function grantedActions(api: UntypedApi): Promise<ScopeAction[]> {
 	const me = (await api.call('getMe')) as { apiToken?: { scopes: string[] } };
 	const actions = new Set<ScopeAction>();
 	for (const s of me.apiToken?.scopes ?? []) {
 		const scope = parseApiScope(s);
 		if (!scope) continue;
-		actions.add(scope.action).add('read');
+		for (const action of ApiScopeActionSchema.options) {
+			if (apiScopeActionCovers(scope.action, action)) actions.add(action);
+		}
 	}
 	return [...actions];
 }
@@ -54,7 +56,10 @@ export function handleMcp(request: Request, origin: string, fetch: typeof global
 			allowedOrigins: mcpAllowedOrigins(),
 			// Only when OAuth can run: a challenge pointing at a 503 sends clients nowhere.
 			...(oauthServer(origin) && {
-				challenge: { resourceMetadataUrl: resourceMetadataUrl(origin), scopes: [...OAUTH_SCOPES] }
+				challenge: {
+					resourceMetadataUrl: resourceMetadataUrl(origin),
+					scopes: [...REGISTERED_CLIENT_SCOPES]
+				}
 			})
 		});
 		cached = { origin, server };

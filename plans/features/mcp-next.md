@@ -103,7 +103,8 @@ The metadata advertises:
 - `client_id_metadata_document_supported: true`
 - `token_endpoint_auth_methods_supported: ["none"]`
 - `authorization_response_iss_parameter_supported: true`
-- `scopes_supported: ["read", "solve"]`
+- `scopes_supported: ["read", "solve", "upload"]`; only the built-in Grasshopper client is ever
+  granted `upload` ([publish-from-plugin.md](./publish-from-plugin.md))
 
 Claude picks CIMD only when both the second and third are present.
 

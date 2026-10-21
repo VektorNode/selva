@@ -6,5 +6,6 @@ import { publishDefinition } from '@selvajs/server/handlers';
 const scopeTarget = definitionScopeTarget('guid');
 
 export const POST: RequestHandler = mount('Failed to publish version', publishDefinition, {
+	action: 'upload',
 	scopeTarget
 });

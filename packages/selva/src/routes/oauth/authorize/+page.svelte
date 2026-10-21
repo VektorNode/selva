@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button, Callout } from '@selvajs/ui';
+	import { Badge, Button, Callout } from '@selvajs/ui';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -9,6 +9,13 @@
 	}
 
 	let { data, form }: Props = $props();
+
+	const ACCESS_TEXT = {
+		read: 'Read: browse definitions and their inputs',
+		solve: 'Read and run solves: spends your compute budget',
+		upload:
+			'Upload definitions: create definitions and new versions where you can, and make a version live. It can’t delete or share anything.'
+	} as const;
 </script>
 
 <svelte:head>
@@ -27,9 +34,16 @@
 				<h2 class="text-foreground text-2xl font-bold tracking-tight">
 					Connect {data.clientName}
 				</h2>
+				{#if data.builtIn}
+					<Badge variant="secondary">Built into {page.data.branding.name}</Badge>
+				{:else}
+					<p class="text-muted-foreground text-xs">
+						The app chose this name itself. {page.data.branding.name} hasn’t checked it.
+					</p>
+				{/if}
 				<p class="text-muted-foreground text-sm">
-					{data.clientName} wants to use {page.data.branding.name} as you, in {data.orgName}. It
-					gets an API token that lasts {data.days} days. You can revoke it under Settings → API tokens.
+					{data.clientName} wants to use {page.data.branding.name} as you. It gets an API token that lasts
+					{data.days} days. You can revoke it under Team → API tokens.
 				</p>
 			</div>
 
@@ -46,23 +60,37 @@
 			{/if}
 
 			<form method="POST" action="?{data.query}&/approve" class="space-y-4">
+				{#if data.orgs.length > 1}
+					<label class="block space-y-2 text-sm">
+						<span class="text-foreground font-medium">Organization</span>
+						<select
+							name="orgId"
+							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+						>
+							{#each data.orgs as org (org.id)}
+								<option value={org.id} selected={org.id === data.orgId}>{org.name}</option>
+							{/each}
+						</select>
+					</label>
+				{:else}
+					<input type="hidden" name="orgId" value={data.orgId} />
+					<p class="text-muted-foreground text-sm">
+						In <span class="text-foreground font-medium">{data.orgs[0]?.name}</span>.
+					</p>
+				{/if}
 				<fieldset class="space-y-2">
 					<legend class="text-foreground text-sm font-medium">Access</legend>
-					<label class="flex items-start gap-2 text-sm">
-						<input
-							type="radio"
-							name="access"
-							value="read"
-							checked={!data.scopes.includes('solve')}
-						/>
-						<span>Read: browse definitions and their inputs</span>
-					</label>
-					{#if data.scopes.includes('solve')}
+					{#each data.choices as access, i (access)}
 						<label class="flex items-start gap-2 text-sm">
-							<input type="radio" name="access" value="solve" checked />
-							<span>Read and run solves: spends your compute budget</span>
+							<input
+								type="radio"
+								name="access"
+								value={access}
+								checked={i === data.choices.length - 1}
+							/>
+							<span>{ACCESS_TEXT[access]}</span>
 						</label>
-					{/if}
+					{/each}
 				</fieldset>
 				<Button type="submit" class="w-full">Allow</Button>
 			</form>

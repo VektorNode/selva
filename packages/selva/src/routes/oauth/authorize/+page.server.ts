@@ -1,17 +1,18 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import {
 	apiScopesFor,
+	consentChoices,
 	isLoopbackRedirect,
-	OAuthError,
-	type OAuthScope
+	OAuthError
 } from '@selvajs/server/oauth';
-import { canHoldApiTokens } from '@selvajs/server/tokens';
-import { providers } from '$lib/server/providers.server';
+import { consentOrgs, mintConsentToken } from '@selvajs/server/handlers';
+import { isApiError } from '@selvajs/server/api';
+import { toApiRequest } from '$lib/server/api/sveltekit';
 import { oauthServer } from '$lib/server/oauth/server';
 import type { Actions, PageServerLoad } from './$types';
 
-// The shortest lifetime Settings → API tokens offers. No refresh tokens: on
-// expiry the client gets a 401 and signs in again.
+// The shortest lifetime the token page offers. No refresh tokens: on expiry
+// the client gets a 401 and signs in again.
 const TOKEN_DAYS = 30;
 
 function serverFor(origin: string) {
@@ -38,7 +39,8 @@ async function parse(url: URL) {
 	}
 }
 
-export const load: PageServerLoad = async ({ url, locals }) => {
+export const load: PageServerLoad = async (event) => {
+	const { url, locals } = event;
 	// A bad client or redirect URI is shown, never redirected: the target is what can't be trusted.
 	const { request, problem } = await parse(url);
 	if (!request) return { ok: false as const, problem };
@@ -47,60 +49,58 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	if (!locals.user || !locals.ctx) {
 		redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
-	if (!locals.ctx.actingOrgId || !canHoldApiTokens(locals.ctx)) {
-		return { ok: false as const, problem: 'Your account can’t create API tokens in this org.' };
+
+	const choices = consentChoices(request.scopes);
+	const orgs = await consentOrgs(toApiRequest(event), apiScopesFor(choices[0]!.scopes));
+	if (!orgs.length) {
+		return {
+			ok: false as const,
+			problem: 'Your account can’t give an app this access in any of your organizations.'
+		};
 	}
-	const org = await providers.data.orgs.getOrg(locals.ctx, locals.ctx.actingOrgId);
+	const acting = orgs.find((o) => o.id === locals.ctx?.actingOrgId);
 
 	return {
 		ok: true as const,
 		query: authorizeQuery(url),
 		clientName: request.client.name,
+		builtIn: request.client.builtIn,
 		redirectHost: new URL(request.redirectUri).host,
 		loopback: isLoopbackRedirect(request.redirectUri),
-		scopes: request.scopes,
-		orgName: org?.name ?? 'this org',
+		choices: choices.map((c) => c.access),
+		orgs,
+		orgId: (acting ?? orgs[0]!).id,
 		days: TOKEN_DAYS
 	};
 };
 
 export const actions: Actions = {
-	approve: async ({ request: req, url, locals, fetch }) => {
-		const form = await req.formData();
-		const { request } = await parse(url);
+	approve: async (event) => {
+		const form = await event.request.formData();
+		const { request } = await parse(event.url);
 		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
-		const orgId = locals.ctx?.actingOrgId;
-		if (!orgId) return fail(403, { error: 'Sign in first.' });
+		if (!event.locals.ctx) return fail(403, { error: 'Sign in first.' });
 
-		// The user may narrow what the client asked for, never widen it. `read` is always granted.
-		const scopes: OAuthScope[] = form.get('access') === 'solve' ? request.scopes : ['read'];
-
-		// Through the same endpoint as Settings → API tokens, so holder policy, scope
-		// checks, the audit event and the owner's email all apply.
-		const res = await fetch(`/api/v1/orgs/${encodeURIComponent(orgId)}/tokens`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
+		const choices = consentChoices(request.scopes);
+		const choice = choices.find((c) => c.access === form.get('access')) ?? choices[0]!;
+		let minted;
+		try {
+			minted = await mintConsentToken(toApiRequest(event), String(form.get('orgId') ?? ''), {
 				name: `${request.client.name} (OAuth)`.slice(0, 100),
-				scopes: apiScopesFor(scopes),
+				scopes: apiScopesFor(choice.scopes),
 				expiresInDays: TOKEN_DAYS
-			})
-		});
-		if (!res.ok) {
-			const body = (await res.json().catch(() => ({}))) as { message?: string };
-			return fail(res.status, { error: body.message ?? 'The token could not be created.' });
+			});
+		} catch (err) {
+			if (isApiError(err)) return fail(err.status, { error: err.message });
+			throw err;
 		}
-		const { token, secret } = (await res.json()) as {
-			token: { id: string; expiresAt: string };
-			secret: string;
-		};
 		redirect(
 			303,
-			serverFor(url.origin).approve(request, {
-				tokenId: token.id,
-				secret,
-				scopes,
-				expiresAt: token.expiresAt
+			serverFor(event.url.origin).approve(request, {
+				tokenId: minted.token.id,
+				secret: minted.secret,
+				scopes: choice.scopes,
+				expiresAt: minted.token.expiresAt
 			})
 		);
 	},

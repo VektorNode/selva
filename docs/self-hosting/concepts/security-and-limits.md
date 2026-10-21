@@ -8,7 +8,8 @@ description: 'Request limits, rate limiting, guards on outbound fetches, and the
 # Security & Limits
 
 The guardrails an operator tunes: rate limits, size and concurrency caps, the guard
-on remote-definition URLs, the two secret keys, and cookie/transport behaviour.
+on remote-definition URLs, who can run code on Compute, the two secret keys, and
+cookie/transport behaviour.
 [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)
 is the authoritative env-var list and documents each inline.
 
@@ -115,6 +116,34 @@ a moment later.
 
 Rhino.Compute _server_ URLs are not subject to this guard; they are configured in
 `/admin/compute` and stored by the data provider, not fetched from user input.
+
+## Who can put code on Compute
+
+A Grasshopper definition is a program. Its script components (C#, Python, VB) run on
+the Rhino.Compute server with whatever rights the Compute process has. Compute loads a
+file when it's uploaded, to read its inputs, and again for every solve. So anyone who can
+get a definition onto Compute can run code there.
+
+These people can:
+
+- **Anyone who can create a definition**, from the web app or the API: project owners
+  and editors, and on a commons project anyone who reaches it. A new version needs edit
+  rights on that definition. This has always been true of the web upload.
+- **Anyone holding an API token with `upload` or `write`.** The Grasshopper plugin signs
+  in with an `upload` token ([Signing in from apps](./signing-in-from-apps.md)). That's one
+  more way in, not more reach: a token uploads only where its owner could from the browser.
+- **Anyone who can solve a remote definition.** `/api/v1/compute` takes a `definitionUrl`,
+  and any signed-in user or org-wide `solve` token may point it at a file they host. The
+  [URL guard](#guard-on-remote-definition-urls) stops it reaching your network, not the
+  file's scripts running once Compute has it.
+
+Selva doesn't sandbox scripts, and can't tell a harmless one from a hostile one. Treat the
+Compute server as running code from everyone above:
+
+- Give it its own machine or VM and its own unprivileged service account.
+- Keep secrets off it: no Selva database credentials, no `SELVA_*` keys, no cloud
+  credentials the service account can read.
+- Limit what it can reach on the network to what definitions actually need.
 
 ## Secrets
 

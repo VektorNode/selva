@@ -1,6 +1,7 @@
 /** The scope sets the token form offers. Each covers the whole org. */
 export const ACCESS_PRESETS = {
 	read: { label: 'Read', scopes: ['read:all'] },
+	upload: { label: 'Upload definitions', scopes: ['upload:all'] },
 	solve: { label: 'Read and run solves', scopes: ['solve:all'] },
 	write: { label: 'Read and change', scopes: ['write:all'] },
 	full: { label: 'Read, change and run solves', scopes: ['write:all', 'solve:all'] }
