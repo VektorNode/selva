@@ -16,8 +16,9 @@ else, a client identity for the plugin, and the whole plugin side.
 
 ## The bridge has to be locked down first
 
-The plugin's local WebSocket accepts any connection and hands out its session id to whoever asks.
-A web page open in the same browser can do this while a UI Bridge is enabled:
+Before this plan, the plugin's local WebSocket accepted any connection and handed out its session
+id to whoever asked. A web page open in the same browser could do this while a UI Bridge was
+enabled:
 
 1. Open `ws://localhost:8765`. The server never reads `Origin` or `Host`
    (`WebSocketServer.cs`, `WebSocketHandshake.cs`).
@@ -28,13 +29,14 @@ A web page open in the same browser can do this while a UI Bridge is enabled:
 4. Send `valueUpdate`, `saveSchema` or `applySyncChanges` with that id: change inputs, overwrite
    the saved schema, rename parameters on the canvas.
 
-That is a live problem today, independent of this plan, and it should be filed and fixed on its
-own. Adding upload to this bridge before it's fixed would let any web page upload the open
-definition to the user's Selva as them. The fix:
+That was a live problem independent of this plan, so the lockdown landed first, in a commit of
+its own. Adding upload to the open bridge would have let any web page upload the open definition
+to the user's Selva as them. The fix:
 
 - **Check `Origin` at the handshake.** Allow only the origins of this component's own web
-  server (`http://localhost:{webPort}` and `http://127.0.0.1:{webPort}`), plus the dev server's
-  origin when the component runs in dev mode. Refuse a missing `Origin`: the only real client is
+  server (`http://localhost:{webPort}` and `http://127.0.0.1:{webPort}`), or, when the build has
+  no embedded web UI, the dev server's: `pnpm dev:plugin` on 5173, which `strictPort` keeps from
+  moving. Refuse a missing `Origin`: the only real client is
   a browser, and browsers always send it. On net48 the check runs on the `HttpListener` context
   before `AcceptWebSocketAsync`.
 - **Check `Host`** against `localhost:{port}` and `127.0.0.1:{port}`, on the WebSocket and on
@@ -100,8 +102,10 @@ The native-app pattern from RFC 8252, which Selva's authorization server already
    the plugin never sees a password.
 5. The user signs in with whatever provider the instance uses, picks the org if they belong to
    several, and approves.
-6. The listener takes one `GET /callback`. It checks `state`, then `iss`, answers with a fixed
-   page ("Signed in. You can close this tab.") that echoes nothing back, and closes. It gives up
+6. The listener answers requests until one is this sign-in's `GET /callback`. It checks `state`,
+   then `iss`, answers with a fixed page ("Signed in. You can close this tab.") that echoes
+   nothing back, and closes. A callback with another `state` gets the same kind of page and is
+   otherwise ignored, so a stray request on the port can't end the sign-in. It gives up
    after five minutes. `error=access_denied` reads as "cancelled".
 7. The plugin redeems the code at the token endpoint, then calls `GET /api/v1/me` with the token
    to show who and which org it signed in as. Switching org means signing in again.
@@ -132,8 +136,8 @@ program that started the flow can redeem it.
 
 ### A new `upload` action
 
-Today a token's actions are `read`, `write` and `solve`, and OAuth grants only `read` and `solve`.
-Uploading needs `write`, and `write:all` can also delete projects and definitions, edit any
+Before this, a token's actions were `read`, `write` and `solve`, and OAuth granted only `read`
+and `solve`. Uploading needed `write`, and `write:all` can also delete projects and definitions, edit any
 definition's metadata and create public share links. Thirty days of that on a designer's laptop
 is far more than the button needs.
 
@@ -158,13 +162,13 @@ delete anything, and a rollback in Selva points live back at any earlier version
 
 Holding any key needs the platform permission `manage_api_tokens`, which no regular user has, and
 which also lets its holder mint `write:all` keys for 180 days. So the holder check looks at the
-key's scopes. A key whose scopes are only `read` and `upload` needs only the right to create a
-definition in at least one project of the token's org: it can do nothing the user's browser
-session can't. Anything broader still needs `manage_api_tokens`.
+key's scopes. A key whose scopes are only `read` and `upload`, a read-only key included, needs
+only the right to create a definition in at least one project of the token's org: it can do
+nothing the user's browser session can't. Anything broader still needs `manage_api_tokens`.
 
-The check runs at mint and on every request, as it does today, so a designer who loses their
-last editable project loses the key's use with it. `ApiTokenHolderPolicy` takes only the context
-today; it gains the key's scopes. `/team/tokens` shows to these users too, so they can see and
+The check runs at mint and on every request, so a designer who loses their last editable
+project loses the key's use with it. `ApiTokenHolderPolicy` takes the key's scopes as well as the
+context. `/team/tokens` shows to these users too, so they can see and
 revoke their keys, and its mint form offers them only the upload preset.
 
 This amends the token plan's holding rule as well.
@@ -232,7 +236,10 @@ When the upload dialog opens:
 
 1. **The file has a link for this instance.** The plugin loads the definition. If it's there and
    the user can edit it, the dialog suggests "New version of _Facade panel_ in _Tower_". If
-   Selva's newest version isn't the one this file last uploaded, it says who uploaded what since.
+   Selva's newest version isn't the one this file last uploaded, it lists what was uploaded
+   since: version, date, change note, and whether it was you. Not other people's names: the API
+   gives no way to look a user up by id, and adding one for this would show every editor's name
+   to anyone who can upload, which the web app doesn't do either.
 2. **No link, but Selva knows the file.** Every extracted schema carries the Grasshopper
    `documentId`, but only inside the version's JSON blob. A `source_document_id` column on
    definitions, set at create and on each version upload, lets
@@ -277,13 +284,13 @@ valid until it expires or is revoked at `/team/tokens`.
 - **The built-in client** and per-client scope allowlist in `@selvajs/server/oauth`; consent copy
   for `upload`; `upload` in `scopes_supported`.
 - **The org picker on the consent page**, designed in [mcp-next.md](./mcp-next.md) and built
-  here. Consent uses the acting org today, which is the user's first membership, so a user in
-  two orgs could only ever upload to the first. It fixes MCP sign-in for them too.
-- **Consent mints through the core, not `event.fetch`.** The approve action posts to its own
+  here. Consent used the acting org, which is the user's first membership, so a user in two
+  orgs could only ever have uploaded to the first. It fixes MCP sign-in for them too.
+- **Consent mints through the core, not `event.fetch`.** The approve action posted to its own
   token endpoint with SvelteKit's internal fetch, which forwards only `cookie` and
-  `authorization`. Header-auth identity comes from `SELVA-*` headers, which are dropped, so by
-  reading the code approval fails on forward-auth deployments. That's MCP sign-in on Entra too.
-  Calling `createApiToken` with `locals.ctx` fixes both and is what route handlers should do
+  `authorization`. Header-auth identity comes from `SELVA-*` headers, which were dropped, so
+  approval failed on forward-auth deployments. That was MCP sign-in on Entra too.
+  Calling `mintApiToken` in-process fixes both and is what route handlers should do
   anyway. It needs a test through the real hook with the header-auth provider, not a stubbed
   `fetch`.
 - **`DELETE /api/v1/me/token`**, self-revoke, reason `owner`.
