@@ -11,6 +11,7 @@ using Rhino;
 using Selva.Schema.Models;
 using Selva.Schema.Services;
 using Selva.GH.Config;
+using Selva.GH.Features.SelvaUpload.Services;
 using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Goos;
@@ -47,6 +48,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // solving. A rename compiles clean and makes every definition report "no embedded schema".
     private UISchema _embeddedSchema;
     private Dictionary<string, object> _embeddedValues;
+
+    // Where this file was last uploaded, one link per Selva instance. Saved beside the schema, not
+    // in it: the schema is shared with every host, a link belongs to one instance.
+    private List<SelvaDefinitionLink> _selvaLinks = new List<SelvaDefinitionLink>();
     private EventHandler _onDocumentModified;
     private EventHandler _onSolutionEnded;
     private EventHandler _onSolutionStarted;
@@ -232,6 +237,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             schema => _embeddedSchema = schema
         );
 
+        _service.SelvaUpload.Initialize(
+            this,
+            () => _embeddedSchema,
+            () => _selvaLinks,
+            links => _selvaLinks = links
+        );
+
         _service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
         // Keep watched set in sync when new params are merged into the schema
@@ -397,6 +409,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         _embeddedSchema = other._embeddedSchema;
         _embeddedValues = other._embeddedValues;
+        _selvaLinks = other._selvaLinks;
     }
 
     private void HandleDisablingState(GH_Document document)
@@ -736,6 +749,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
         }
 
+        if (_selvaLinks.Count > 0)
+        {
+            writer.SetString(SelvaDefinitionLinks.ArchiveItem, SelvaDefinitionLinks.Serialize(_selvaLinks));
+        }
+
         // Skip under headless hosts like Rhino.Compute, which never legitimately save back.
         if (_embeddedSchema != null && !HeadlessGuard.IsHeadless)
         {
@@ -763,6 +781,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     public override bool Read(GH_IReader reader)
     {
+        _selvaLinks = SelvaDefinitionLinks.Parse(
+            reader.ItemExists(SelvaDefinitionLinks.ArchiveItem)
+                ? reader.GetString(SelvaDefinitionLinks.ArchiveItem)
+                : null);
+
         if (reader.ItemExists("Schema") || reader.ItemExists("Values"))
         {
             try

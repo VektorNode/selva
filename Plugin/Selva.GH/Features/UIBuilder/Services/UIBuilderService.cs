@@ -26,6 +26,7 @@ public class UIBuilderService : IDisposable
     public ServerLifecycleManager ServerManager { get; private set; }
     public BridgeOrchestrator BridgeService { get; private set; }
     public DocumentSynchronizationService DocumentSyncService { get; private set; }
+    public SelvaUploadCoordinator SelvaUpload { get; private set; }
 
     public string SessionId { get; }
 
@@ -37,6 +38,7 @@ public class UIBuilderService : IDisposable
     public void Dispose()
     {
         BridgeService?.Dispose();
+        SelvaUpload?.Dispose();
         DocumentSyncService?.Dispose();
         ServerManager?.Dispose();
         WebSocketTransport?.Dispose();
@@ -69,6 +71,7 @@ public class UIBuilderService : IDisposable
             PluginVersion,
             SessionId
         );
+        SelvaUpload = new SelvaUploadCoordinator(WebSocketTransport);
         DocumentSyncService = new DocumentSynchronizationService(
             EventManager,
             SchemaSynchronizer,

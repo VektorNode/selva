@@ -56,6 +56,8 @@
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\WebSocketServer.cs"
 		         Link="Linked\WebSocketServer.cs"/>
 		<Compile Include="..\Selva.GH\Config\AppConfig.cs" Link="Linked\AppConfig.cs"/>
+		<!-- The Selva client's Rhino-free parts: everything but the bridge handler and its dialog. -->
+		<Compile Include="..\Selva.GH\Features\SelvaUpload\Services\*.cs" Link="Linked\SelvaUpload\%(Filename)%(Extension)"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\Logger.cs" Link="Linked\Logger.cs"/>
 		<Compile Include="..\Selva.GH\Features\ComputeIO\Components\OptionPairParser.cs"
 		         Link="Linked\OptionPairParser.cs"/>

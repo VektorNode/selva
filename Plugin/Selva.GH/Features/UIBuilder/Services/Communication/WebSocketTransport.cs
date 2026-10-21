@@ -101,6 +101,12 @@ public class WebSocketTransport : IDisposable
     /// </summary>
     public event EventHandler OnCancelSolveRequested;
 
+    /// <summary>
+    ///     The selva* commands, raised on the socket's dispatch thread: each starts network work,
+    ///     and the handler hops to the UI thread itself where it touches the document.
+    /// </summary>
+    public event EventHandler<InboundMessage> OnSelvaCommand;
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
@@ -433,6 +439,27 @@ public class WebSocketTransport : IDisposable
         return BroadcastAsync(OutboundEnvelopes.SyncApplied(_sessionId, success, message));
     }
 
+    public Task BroadcastSelvaAccount(SelvaAccount account)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaAccount(_sessionId, account));
+    }
+
+    public Task BroadcastSelvaTargets(SelvaTargets targets)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaTargets(_sessionId, targets));
+    }
+
+    public Task BroadcastSelvaUploadProgress(string stage)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaUploadProgress(_sessionId,
+            new SelvaUploadProgress { Stage = stage }));
+    }
+
+    public Task BroadcastSelvaUploadResult(SelvaUploadResult result)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaUploadResult(_sessionId, result));
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
@@ -531,6 +558,17 @@ public class WebSocketTransport : IDisposable
                     // marshalled cancel would queue behind the very solve it is meant to stop.
                     // The handler only flips the document's abort flag, which is safe here.
                     OnCancelSolveRequested?.Invoke(this, EventArgs.Empty);
+                    break;
+
+                case InboundKind.SelvaGetAccount:
+                case InboundKind.SelvaConnect:
+                case InboundKind.SelvaSignIn:
+                case InboundKind.SelvaUseApiKey:
+                case InboundKind.SelvaSignOut:
+                case InboundKind.SelvaListTargets:
+                case InboundKind.SelvaUpload:
+                case InboundKind.SelvaCancel:
+                    OnSelvaCommand?.Invoke(this, inbound);
                     break;
 
                 case InboundKind.SessionMismatch:

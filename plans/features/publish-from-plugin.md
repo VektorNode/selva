@@ -107,7 +107,9 @@ The native-app pattern from RFC 8252, which Selva's authorization server already
    to show who and which org it signed in as. Switching org means signing in again.
 
 **Pasting a key instead.** Behind a "Use an API key" link, for places the browser flow can't
-work. The plugin checks the key's format, calls `/me` with it and stores it the same way. When
+work. The link opens a dialog in Rhino, not a field in the web UI, so the key never crosses the
+bridge. The plugin checks the key's format and checksum, calls `/me` with it and stores it the
+same way. When
 its scopes go beyond `read` and `upload`, the plugin says what else the key can do and suggests
 an upload key instead. It warns; it doesn't refuse.
 
@@ -188,7 +190,7 @@ says so.
 
 ### Talking to Selva
 
-One `HttpClient` per instance, separate from `FileImporter`'s. That one's SSRF guard refuses
+An `HttpClient` of its own, separate from `FileImporter`'s. That one's SSRF guard refuses
 private addresses, and a company's Selva is often on one; here the user picked the host.
 
 - `AllowAutoRedirect = false`. A redirect is an error that names where it pointed, so a token is
@@ -208,10 +210,10 @@ private addresses, and a company's Selva is often on one; here the user picked t
 The web UI asks; the plugin acts. New messages on the bridge, with their payloads in
 `wire-schema.json` and pinned by the shared wire fixtures like the existing ones:
 
-- in: `selvaConnect {origin}`, `selvaSignIn`, `selvaSignOut`, `selvaListTargets`,
-  `selvaUpload {target, metadata | changeNote}`, `selvaCancel`
-- out: `selvaAccount {status, origin, user, org, expiresAt}`, `selvaTargets`,
-  `selvaUploadProgress`, `selvaUploadResult`
+- in: `selvaGetAccount`, `selvaConnect {origin}`, `selvaSignIn`, `selvaUseApiKey`,
+  `selvaSignOut`, `selvaListTargets`, `selvaUpload {request}`, `selvaCancel`
+- out: `selvaAccount {account}`, `selvaTargets {targets}`, `selvaUploadProgress {progress}`,
+  `selvaUploadResult {result}`
 
 None of them carries the token. A fixture test fails if any outbound envelope has a `selva_`
 string in it.
@@ -250,8 +252,10 @@ unsaved canvas changes go up and the file on disk isn't touched. Upload is disab
 builder has unsaved schema changes: Compute reads the schema saved in the component, and an
 unsaved one would go up stale.
 
-The dialog shows the size against the instance's limit and says what's in the file: the whole
-definition, including internalised data and script source.
+The dialog shows the size and says what's in the file: the whole definition, including
+internalised data and script source. The instance's size limit isn't published, so a file over it
+gets Selva's own refusal. The links are stripped from the uploaded copy: they name every instance
+the file went to.
 
 ### Expiry and signing out
 
