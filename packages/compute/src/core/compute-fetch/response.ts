@@ -248,6 +248,11 @@ export async function handleResponse(
 		setResponseWireSize(parsed, rawBody.length);
 		return parsed;
 	} catch (error) {
+		// The signal stays armed while the body streams: an abort or timeout here must reach the
+		// caller's abort/timeout classification, not read as a truncated (retryable) body.
+		if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+			throw error;
+		}
 		// Classify by the declared Content-Type (issue 87). A 2xx that DECLARES a
 		// non-JSON body (HTML from a captive portal, a reverse-proxy login page, a
 		// misconfigured endpoint) is deterministic — refetching returns the same

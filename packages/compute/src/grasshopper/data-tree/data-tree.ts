@@ -197,8 +197,9 @@ export class TreeBuilder {
 				const tree = new TreeBuilder(input.nickname || 'unnamed');
 				const value = input.default;
 
-				// Handle tree access (complex TreeBuilder structure)
-				if (input.treeAccess && isDataTreeDefault(value)) {
+				// Dispatch on shape, not `treeAccess`: normalizeDefault also keeps list-access
+				// (`atMost > 1`) defaults as trees, which would otherwise ship as one JSON string.
+				if (isDataTreeDefault(value)) {
 					tree.fromDataTreeDefault(value);
 
 					// Apply numeric constraints to tree items

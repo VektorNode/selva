@@ -1,6 +1,8 @@
 import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { validateServerUrl } from '@/core/server/validate-server-url';
+import { buildAuthHeaders } from '@/core/compute-fetch/request';
+import type { ComputeAuth } from '@/core/types';
 
 /**
  * ComputeServerStats provides methods to query Rhino Compute server statistics.
@@ -25,7 +27,7 @@ import { validateServerUrl } from '@/core/server/validate-server-url';
  */
 export default class ComputeServerStats {
 	private readonly serverUrl: string;
-	private readonly apiKey?: string;
+	private readonly headers: Record<string, string>;
 	private disposed = false;
 	private activeMonitors: Set<() => void> = new Set();
 	private activeTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
@@ -41,26 +43,15 @@ export default class ComputeServerStats {
 
 	/**
 	 * @param serverUrl - Base URL of the Rhino Compute server with http:// or https:// scheme (e.g., 'http://localhost:6500')
-	 * @param apiKey - Optional API key for authentication
+	 * @param auth - An API key, or the same auth fields a solve's `ComputeConfig` carries
+	 *   (`apiKey`, `apiKeyHeader`, `authToken`, `headers`).
 	 */
-	constructor(serverUrl: string, apiKey?: string) {
+	constructor(serverUrl: string, auth?: string | ComputeAuth) {
 		this.serverUrl = validateServerUrl(serverUrl);
-		this.apiKey = apiKey;
-	}
-
-	/**
-	 * Build request headers with optional API key.
-	 */
-	private buildHeaders(): Record<string, string> {
-		const headers: Record<string, string> = {
+		this.headers = {
+			...buildAuthHeaders(typeof auth === 'string' ? { apiKey: auth } : (auth ?? {})),
 			'Content-Type': 'application/json'
 		};
-
-		if (this.apiKey) {
-			headers['RhinoComputeKey'] = this.apiKey;
-		}
-
-		return headers;
 	}
 
 	/**
@@ -78,7 +69,7 @@ export default class ComputeServerStats {
 		// normalized (lowercased) identically — a caller's `Content-Type` replaces
 		// the default instead of coexisting as a differently-cased duplicate that
 		// the runtime would combine into "application/json, text/plain".
-		const merged = new Headers(this.buildHeaders());
+		const merged = new Headers(this.headers);
 		if (init.headers) {
 			new Headers(init.headers).forEach((value, key) => {
 				merged.set(key, value);

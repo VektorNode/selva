@@ -84,6 +84,27 @@ describe('GrasshopperClient.create', () => {
 		expect(probes).toBe(1);
 	});
 
+	it('authenticates the liveness probe the way solves authenticate', async () => {
+		// A gateway that only accepts the bearer token and a custom key header.
+		fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+			const headers = new Headers(init.headers);
+			const authorized =
+				headers.get('Authorization') === 'Bearer t' && headers.get('X-Api-Key') === 'k';
+			return Promise.resolve(
+				authorized ? onlineServer() : createMockResponse({}, { ok: false, status: 401 })
+			);
+		});
+
+		const client = await GrasshopperClient.create({
+			serverUrl: SERVER,
+			authToken: 'Bearer t',
+			apiKey: 'k',
+			apiKeyHeader: 'X-Api-Key'
+		});
+		expect(client).toBeInstanceOf(GrasshopperClient);
+		await client.dispose();
+	});
+
 	it('still exhausts the ladder for a retryable failure', async () => {
 		let probes = 0;
 		fetchMock.mockImplementation(() => {

@@ -125,7 +125,7 @@ export default class GrasshopperClient {
 
 	private constructor(config: GrasshopperComputeConfig) {
 		this.config = this.normalizeComputeConfig(config);
-		this.serverStats = new ComputeServerStats(this.config.serverUrl, this.config.apiKey);
+		this.serverStats = new ComputeServerStats(this.config.serverUrl, this.config);
 	}
 
 	/**

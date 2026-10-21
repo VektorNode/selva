@@ -52,7 +52,13 @@ export { readField, hasField } from './utils/read-field';
 export { decodeBase64ToBinary } from './utils/encoding';
 
 // Configuration
-export type { ComputeConfig, RetryPolicy, ServerErrorCodeMap, ServerTiming } from './types';
+export type {
+	ComputeAuth,
+	ComputeConfig,
+	RetryPolicy,
+	ServerErrorCodeMap,
+	ServerTiming
+} from './types';
 
 // Definition forms — backend-agnostic (bytes, or a lazy identity-keyed byte ref),
 // so a second backend's solve signature doesn't reach into `/grasshopper`.

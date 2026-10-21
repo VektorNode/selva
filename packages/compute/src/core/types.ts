@@ -69,6 +69,9 @@ export interface ComputeConfig {
 	onServerTiming?: (timing: ServerTiming, requestId: string) => void;
 }
 
+/** The config fields that decide how a request authenticates. */
+export type ComputeAuth = Pick<ComputeConfig, 'apiKey' | 'apiKeyHeader' | 'authToken' | 'headers'>;
+
 // Server-Timing metrics (ms). `raw` preserves non-standard metrics.
 export interface ServerTiming {
 	decode?: number;

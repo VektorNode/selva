@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TreeBuilder } from '../data-tree';
+import { processInput } from '../../io/input/input-processors';
 import type { DataTree, InputParam } from '../../types';
 
 /**
@@ -142,6 +143,28 @@ describe('TreeBuilder.fromInputParams — definition IO -> trees', () => {
 		const trees = TreeBuilder.fromInputParams([input]);
 		expect(Object.keys(trees[0].InnerTree)).toEqual(['{0}', '{1}']);
 		expect((trees[0].InnerTree as any)['{0}']).toEqual([{ data: 1 }, { data: 2 }]);
+	});
+
+	it('expands a list-access default end to end instead of sending it as one JSON string', () => {
+		const input = processInput({
+			name: 'pts',
+			nickname: 'pts',
+			paramType: 'Number',
+			treeAccess: false,
+			atLeast: 1,
+			atMost: 2147483647,
+			default: {
+				InnerTree: {
+					'{0}': [
+						{ type: 'System.Double', data: '1' },
+						{ type: 'System.Double', data: '2' }
+					]
+				}
+			}
+		} as any);
+
+		const trees = TreeBuilder.fromInputParams([input]);
+		expect(trees[0].InnerTree).toEqual({ '{0}': [{ data: 1 }, { data: 2 }] });
 	});
 });
 

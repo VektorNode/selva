@@ -274,6 +274,23 @@ describe('API key header', () => {
 		await stats.dispose();
 	});
 
+	it('sends the same auth headers a solve would when given ComputeConfig auth fields', async () => {
+		route({ '/version': () => res(JSON.stringify({ rhino: '8', compute: '1', git_sha: null })) });
+		const stats = new ComputeServerStats(SERVER, {
+			apiKey: 'k',
+			apiKeyHeader: 'X-Api-Key',
+			authToken: 'Bearer t',
+			headers: { 'X-Route': 'a', 'X-Api-Key': 'caller-cannot-clobber' }
+		});
+		await stats.getVersion();
+		const headers = new Headers((fetchMock.mock.calls[0][1] as RequestInit).headers);
+		expect(headers.get('X-Api-Key')).toBe('k');
+		expect(headers.get('Authorization')).toBe('Bearer t');
+		expect(headers.get('X-Route')).toBe('a');
+		expect(headers.get('RhinoComputeKey')).toBeNull();
+		await stats.dispose();
+	});
+
 	it('omits RhinoComputeKey when no apiKey is set', async () => {
 		route({ '/version': () => res(JSON.stringify({ rhino: '8', compute: '1', git_sha: null })) });
 		const stats = new ComputeServerStats(SERVER);

@@ -1,6 +1,6 @@
 import { getLogger } from '../utils/logger';
 
-import type { ComputeConfig } from '../types';
+import type { ComputeAuth, ComputeConfig } from '../types';
 
 export function buildUrl(endpoint: string, serverUrl: string): string {
 	const base = serverUrl.replace(/\/+$/, '');
@@ -25,15 +25,24 @@ const warnedNoAuth = new Set<string>();
 /** Header name rhino.compute reads the API key from. Override via `ComputeConfig.apiKeyHeader`. */
 export const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
 
+/**
+ * Caller headers plus credentials. Every request to the server builds its headers here,
+ * so a liveness probe authenticates exactly like the solve it gates.
+ */
+export function buildAuthHeaders(auth: ComputeAuth): Record<string, string> {
+	return {
+		// Caller headers first so the credentials below OVERWRITE them.
+		...auth.headers,
+		...(auth.authToken && { Authorization: auth.authToken }),
+		...(auth.apiKey && { [auth.apiKeyHeader ?? DEFAULT_API_KEY_HEADER]: auth.apiKey })
+	};
+}
+
 export function buildHeaders(requestId: string, config: ComputeConfig): HeadersInit {
 	const headers: HeadersInit = {
-		// Caller headers first so the transport's own headers below OVERWRITE them —
-		// a caller can never clobber the request id, content type, or auth.
-		...config.headers,
+		...buildAuthHeaders(config),
 		'X-Request-ID': requestId,
-		'Content-Type': 'application/json',
-		...(config.authToken && { Authorization: config.authToken }),
-		...(config.apiKey && { [config.apiKeyHeader ?? DEFAULT_API_KEY_HEADER]: config.apiKey })
+		'Content-Type': 'application/json'
 	};
 
 	if (

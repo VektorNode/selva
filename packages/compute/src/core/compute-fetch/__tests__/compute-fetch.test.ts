@@ -566,6 +566,43 @@ describe('fetchCompute — abort and timeout', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	/** A 200 whose body never finishes streaming; `text()` rejects with the signal's reason. */
+	function stalledBodyResponse(signal: AbortSignal | null | undefined): Response {
+		return {
+			...createMockResponse(null, { headers: { 'Content-Type': 'application/json' } }),
+			text: () =>
+				new Promise<string>((_resolve, reject) => {
+					signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+				})
+		} as Response;
+	}
+
+	it('a timeout while the body streams is TIMEOUT_ERROR, not a JSON parse failure', async () => {
+		fetchMock.mockImplementation((_url, init) =>
+			Promise.resolve(stalledBodyResponse((init as RequestInit).signal))
+		);
+
+		await expect(
+			fetchCompute('grasshopper', {}, { ...config, timeoutMs: 20 })
+		).rejects.toMatchObject({ code: 'TIMEOUT_ERROR' });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('a caller abort while the body streams is ABORTED, not a JSON parse failure', async () => {
+		fetchMock.mockImplementation((_url, init) =>
+			Promise.resolve(stalledBodyResponse((init as RequestInit).signal))
+		);
+
+		const controller = new AbortController();
+		const promise = fetchCompute('grasshopper', {}, { ...config, signal: controller.signal });
+		const assertion = expect(promise).rejects.toMatchObject({ code: 'ABORTED' });
+
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		controller.abort();
+
+		await assertion;
+	});
+
 	it('a runtime-internal abort with no armed timeout is not reported as a timeout (issue 88)', async () => {
 		vi.useFakeTimers();
 		try {
