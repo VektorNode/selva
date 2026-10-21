@@ -1,6 +1,6 @@
 /**
- * Selva's MCP tools: find a definition, read its inputs, solve it, read back numbers.
- * No deletes, share links, tokens or admin.
+ * Selva's MCP tools: find a definition, read its inputs, solve it, read back numbers,
+ * publish a version. No deletes, share links, tokens or admin.
  */
 
 import {
@@ -27,6 +27,12 @@ interface DefinitionItem {
 	status: string;
 	projectId: string;
 	liveVersionId: string | null;
+}
+
+interface DefinitionRecord {
+	displayName: string;
+	liveVersion: { id: string } | null;
+	draftVersion: { id: string } | null;
 }
 
 interface ProjectItem {
@@ -339,6 +345,13 @@ export const SolveOutput = z.object({
 	response: z.unknown().optional()
 });
 
+export const PublishOutput = z.object({
+	guid: z.string(),
+	versionId: z.string(),
+	versionNumber: z.number(),
+	link: z.string()
+});
+
 // `any`: tools bind different `Args`, and a list of them has no common type.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function selvaTools(origin: string): ToolDefinition<any, any>[] {
@@ -440,11 +453,52 @@ export function selvaTools(origin: string): ToolDefinition<any, any>[] {
 		}
 	});
 
-	return [listProjects, listDefinitions, describeDefinition, solve];
+	const publish = tool({
+		name: 'selva_publish_definition',
+		title: 'Publish a definition',
+		description:
+			'Makes a version live and marks the definition published, so people running definitions see ' +
+			'it. Without `versionId` it publishes the newest unpublished upload, or, when there is none, ' +
+			'the version already live (which only changes the status). Changes what everyone runs: ' +
+			'confirm with the user first.',
+		input: z.object({
+			definition: definitionArg,
+			versionId: z
+				.string()
+				.optional()
+				.describe('A version id to make live instead, including an older one to roll back to.')
+		}),
+		output: PublishOutput,
+		calls: ['getDefinitions', 'getDefinitionsByGuid', 'postDefinitionsByGuidPublish'],
+		async run(api, { definition, versionId }, { signal }) {
+			const guid = await resolveDefinition(api, definition, signal);
+			const record = (await api.call('getDefinitionsByGuid', {
+				params: { guid },
+				signal
+			})) as DefinitionRecord;
+			// The endpoint defaults to the draft alone; a definition whose only
+			// version is already live would get "No version to publish".
+			const target = versionId ?? record.draftVersion?.id ?? record.liveVersion?.id;
+			if (!target) throw new Error(`${record.displayName} has no uploaded version to publish.`);
+			const { version } = (await api.call('postDefinitionsByGuidPublish', {
+				params: { guid },
+				body: { versionId: target },
+				signal
+			})) as { version: { id: string; versionNumber: number } };
+			const link = `${origin}/library/${encodeURIComponent(guid)}`;
+			return {
+				text: `${record.displayName}: version ${version.versionNumber} is live and the definition is published. ${link}`,
+				structured: { guid, versionId: version.id, versionNumber: version.versionNumber, link }
+			};
+		}
+	});
+
+	return [listProjects, listDefinitions, describeDefinition, solve, publish];
 }
 
 export const INSTRUCTIONS =
 	'Selva runs Grasshopper definitions on Rhino Compute. To answer a design question: find a ' +
 	'definition (selva_list_definitions), read its inputs (selva_describe_definition), then solve it ' +
 	'(selva_solve) and read the numbers back. Solving spends the owner’s compute budget: confirm ' +
-	'with the user before a series of solves.';
+	'with the user before a series of solves. Publishing changes what everyone runs: confirm before ' +
+	'calling selva_publish_definition.';

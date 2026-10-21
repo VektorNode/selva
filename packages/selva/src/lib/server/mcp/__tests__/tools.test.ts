@@ -311,6 +311,48 @@ describe('selva MCP tools', () => {
 		).toBe(true);
 	});
 
+	it('publishes the draft when there is one', async () => {
+		const { server, sent } = serve([
+			{ displayName: 'Shelf', liveVersion: { id: 'v1' }, draftVersion: { id: 'v2' } },
+			{ version: { id: 'v2', versionNumber: 2 } }
+		]);
+		const { content, structuredContent } = await call(server, 'selva_publish_definition', {
+			definition: GUID
+		});
+		expect(sent[1].url).toBe(`https://selva.test/api/v1/definitions/${GUID}/publish`);
+		expect(sent[1].body).toEqual({ versionId: 'v2' });
+		expect(content[0].text).toContain('Shelf: version 2 is live');
+		expect(structuredContent).toMatchObject({ versionId: 'v2', versionNumber: 2 });
+	});
+
+	it('republishes the live version when there is no draft, which flips the status', async () => {
+		const { server, sent } = serve([
+			{ displayName: 'Shelf', liveVersion: { id: 'v1' }, draftVersion: null },
+			{ version: { id: 'v1', versionNumber: 1 } }
+		]);
+		await call(server, 'selva_publish_definition', { definition: GUID });
+		expect(sent[1].body).toEqual({ versionId: 'v1' });
+	});
+
+	it('publishes the version it is given', async () => {
+		const { server, sent } = serve([
+			{ displayName: 'Shelf', liveVersion: { id: 'v3' }, draftVersion: null },
+			{ version: { id: 'v1', versionNumber: 1 } }
+		]);
+		await call(server, 'selva_publish_definition', { definition: GUID, versionId: 'v1' });
+		expect(sent[1].body).toEqual({ versionId: 'v1' });
+	});
+
+	it('says so when there is nothing to publish', async () => {
+		const { server, sent } = serve([
+			{ displayName: 'Shelf', liveVersion: null, draftVersion: null }
+		]);
+		const result = await call(server, 'selva_publish_definition', { definition: GUID });
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toContain('Shelf has no uploaded version to publish.');
+		expect(sent).toHaveLength(1);
+	});
+
 	it('names the real inputs when the model guesses one', async () => {
 		const { server, sent } = serve([SCHEMA]);
 		const result = await call(server, 'selva_solve', { definition: GUID, values: { Depth: 3 } });

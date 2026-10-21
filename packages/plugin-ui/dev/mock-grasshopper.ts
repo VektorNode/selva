@@ -1065,12 +1065,19 @@ wss.on('connection', (ws) => {
 });
 
 wss.on('listening', () => {
+	const pagePath = `/builder?session=dev&wsPort=${PORT}#s=${SECRET}`;
 	console.info(
-		`[mock-grasshopper] ws://localhost:${PORT}  ·  open http://localhost:5173/builder?session=dev&wsPort=${PORT}#s=${SECRET}`
+		`[mock-grasshopper] ws://localhost:${PORT}  ·  open http://localhost:5173${pagePath}`
 	);
 	if (process.argv.includes('--with-dev-server')) {
-		// Windows only resolves pnpm's .cmd shim through a shell.
-		const vite = spawn('pnpm', ['dev'], { stdio: 'inherit', shell: process.platform === 'win32' });
+		// Vite's own "Local:" link has no #s= fragment, so the page refuses to connect; open the
+		// full URL instead. Windows only resolves pnpm's .cmd shim through a shell, which would
+		// read the & and # in the path, hence the quoting there.
+		const openArg = process.platform === 'win32' ? `"${pagePath}"` : pagePath;
+		const vite = spawn('pnpm', ['dev', '--open', openArg], {
+			stdio: 'inherit',
+			shell: process.platform === 'win32'
+		});
 		vite.on('exit', (code) => process.exit(code ?? 0));
 	}
 });

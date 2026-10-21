@@ -8,8 +8,9 @@ description: 'Connect an AI agent to Selva over MCP: the endpoint, signing in wi
 # MCP server
 
 Every Selva instance serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp`. An agent
-connected to it can find a definition, read its inputs, solve it and read the numbers back. It
-cannot delete anything, manage share links or tokens, or reach `/admin`.
+connected to it can find a definition, read its inputs, solve it and read the numbers back. With
+a key that can upload, it can also publish a version. It cannot delete anything, manage share
+links or tokens, or reach `/admin`.
 
 The endpoint is a client of `/api/v1`: each tool call goes through the API with the caller's key,
 so it sees exactly what that key sees and is rate-limited the same way.
@@ -37,7 +38,8 @@ In claude.ai: **Settings → Connectors → Add custom connector**, and paste th
 ### Send a key yourself
 
 1. Create an API key at **Team → API tokens** (`/team/tokens`). Pick **Read and run solves**; a
-   **Read** key sees no solve tool.
+   **Read** key sees no solve tool. To publish from the agent, pick **Read, change and run
+   solves**. Browser sign-in never grants publishing.
 2. Send it as a header: `Authorization: Bearer selva_…`.
 
 Claude Code:
