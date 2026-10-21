@@ -5,13 +5,25 @@
 //
 // The first message must be `authenticate` with STUB_SECRET, as the plugin requires.
 // Handled inbound after that: requestInitialData -> initialData; saveSchema -> schemaUpdated +
-// schemaSaved; valueUpdate -> outputs (echoes a trivial computed value). Everything else is
-// ignored. No binary mesh frames (binaryBatchCount omitted = "leave meshes alone").
+// schemaSaved; valueUpdate -> outputs (echoes a trivial computed value); selvaGetAccount,
+// selvaListTargets and selvaUpload -> the shared wire fixtures (signed in, a suggestion, a
+// successful upload). Everything else is ignored. No binary mesh frames (binaryBatchCount
+// omitted = "leave meshes alone").
 
+import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 
-export const STUB_PORT = 8765;
+// Set E2E_WS_PORT when the dev mock or Rhino already holds 8765; specs hand it to the page as wsPort.
+export const STUB_PORT = Number(process.env.E2E_WS_PORT ?? 8765);
 export const STUB_SECRET = 'e2e-secret';
+
+const wireFixtures = new URL('../../schemas/fixtures/wire/', import.meta.url);
+
+/** A shared wire fixture, re-addressed to the page's session. */
+function fixture(name: string, sessionId: string): Record<string, unknown> {
+	const message = JSON.parse(readFileSync(new URL(name, wireFixtures), 'utf-8'));
+	return { ...message, sessionId };
+}
 
 // A minimal but valid UISchema: one number input placed in one tab/group, one output. Layout
 // defaults are filled by the app, but a tab is provided so the builder shows a real editor
@@ -148,6 +160,19 @@ export function startStub(port = STUB_PORT): WebSocketServer {
 							modelUnits: 'Meters'
 						});
 					}
+					break;
+
+				case 'selvaGetAccount':
+					send(ws, fixture('selva-account.json', sessionId));
+					break;
+
+				case 'selvaListTargets':
+					send(ws, fixture('selva-targets.json', sessionId));
+					break;
+
+				case 'selvaUpload':
+					send(ws, fixture('selva-upload-progress.json', sessionId));
+					send(ws, fixture('selva-upload-result.json', sessionId));
 					break;
 
 				default:

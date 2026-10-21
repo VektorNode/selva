@@ -23,7 +23,7 @@ pnpm dev:plugin:mock    # same, plus a fake Grasshopper: no Rhino needed
 
 No env vars — the WebSocket port arrives in the query string.
 
-With the mock, open `/builder?session=dev#s=mock` (the URL the mock prints). [dev/mock-grasshopper.ts](dev/mock-grasshopper.ts) serves a multi-tab definition with unplaced parameters to drag in, fakes solves, and keeps saves in memory until it exits. It takes port 8765, so stop it before testing against a real Rhino.
+With the mock, open `/builder?session=dev#s=mock` (the URL the mock prints). [dev/mock-grasshopper.ts](dev/mock-grasshopper.ts) serves a multi-tab definition with unplaced parameters to drag in, fakes solves, and keeps saves in memory until it exits. It also fakes the plugin's Selva sign-in and upload, so "Upload to Selva" runs end to end, failures included. It takes port 8765, so stop it before testing against a real Rhino.
 
 ## Production
 

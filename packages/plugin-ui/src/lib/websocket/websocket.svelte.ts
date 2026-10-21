@@ -106,6 +106,22 @@ export interface WsCurrentValuesMessage extends WsSessionMessage {
 	values: Record<string, unknown>;
 }
 
+export interface WsSelvaAccountMessage extends WsSessionMessage {
+	account: import('@selvajs/schemas').SelvaAccount;
+}
+
+export interface WsSelvaTargetsMessage extends WsSessionMessage {
+	targets: import('@selvajs/schemas').SelvaTargets;
+}
+
+export interface WsSelvaUploadProgressMessage extends WsSessionMessage {
+	progress: import('@selvajs/schemas').SelvaUploadProgress;
+}
+
+export interface WsSelvaUploadResultMessage extends WsSessionMessage {
+	result: import('@selvajs/schemas').SelvaUploadResult;
+}
+
 /**
  * Represents a single metadata difference between Grasshopper and schema
  * Note: property names match JSON.NET PascalCase serialization of C# classes

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { STUB_SECRET } from './ws-stub';
+import { STUB_PORT, STUB_SECRET } from './ws-stub';
 
 // Smoke: /preview loads the schema from the stub and renders the interactive UI. Proves the
 // preview route boots through GrasshopperSource + the Solve Session, and that the initial
@@ -9,7 +9,7 @@ const SESSION = 'e2e-session';
 
 test.describe('/preview', () => {
 	test('connects to the stub and renders the input UI', async ({ page }) => {
-		await page.goto(`/preview?session=${SESSION}#s=${STUB_SECRET}`);
+		await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
 
 		await expect(page.getByRole('button', { name: 'Interactive Preview' })).toBeVisible();
 

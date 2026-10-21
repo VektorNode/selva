@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import * as path from 'node:path';
 
 // E2E runs the production SPA build (adapter-static) served by `vite preview`, with a
-// WebSocket stub standing in for Grasshopper on :8765 (see e2e/ws-stub.ts). The app runs
+// WebSocket stub standing in for Grasshopper (see e2e/ws-stub.ts for its port). The app runs
 // unmodified through its GrasshopperSource, exercising the real transport end to end —
 // something the node-env unit tests can't do.
 //

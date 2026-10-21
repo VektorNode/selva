@@ -9,6 +9,7 @@ Quick reference for what lives where. The repo-wide rules are in [STRUCTURE.md](
 | `composables/`          | Reactive helpers (`.svelte.ts` files using runes).                                                                               |
 | `websocket/`            | Builder-specific WebSocket bridge to the Grasshopper plugin.                                                                     |
 | `schema-source/`        | Where a schema and its solves come from — the Grasshopper source, a fake for tests, and the WebSocket solve driver.              |
+| `selva-source/`         | The plugin's Selva sign-in and upload, as commands and events for "Upload to Selva" — the Grasshopper source and a fake.         |
 | `dnd/`                  | Drag-and-drop primitives the builder canvas is built on.                                                                         |
 | `utils/`                | Generic helpers (no domain assumptions).                                                                                         |
 | `app.config.ts`         | Schema version and WebSocket constants (default port, query-param name, reconnect settings).                                     |

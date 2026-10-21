@@ -10,17 +10,20 @@
 		toast,
 		useFooterItem
 	} from '@selvajs/ui';
-	import { Save, RefreshCw } from '@lucide/svelte';
+	import { Save, RefreshCw, CloudUpload } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
+	import SelvaUploadDialog from '$lib/components/selva-upload/SelvaUploadDialog.svelte';
 	import { buildSessionParams } from '$lib/utils/session';
 	import { onMount, tick } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
+	import { useSelvaUpload, type SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
 
 	let sessionId = $state('');
 	let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
+	let selvaUpload = $state<SelvaUpload | null>(null);
 	let showBatchProcessor = $state(false);
 	let saveInFlight: Promise<boolean> | null = null;
 
@@ -67,6 +70,9 @@
 	}
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
+
+	// An upload already running can still be watched; a new one waits for the save.
+	const uploadNeedsSave = $derived(!!builderState?.state.isDirty && !selvaUpload?.state.uploading);
 
 	const placedInLayoutIds = $derived.by(() => {
 		const ids = new SvelteSet<string>();
@@ -144,11 +150,16 @@
 		builderState = useBuilderState(urlSessionId);
 		// initialize() now owns the connect handshake (via the SchemaSource) and the first fetch.
 		builderState.initialize();
+		selvaUpload = useSelvaUpload(urlSessionId, {
+			isSchemaDirty: () => builderState?.state.isDirty ?? false
+		});
+		selvaUpload.initialize();
 		window.addEventListener('keydown', handleKeydown);
 
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
 			builderState?.cleanup();
+			selvaUpload?.cleanup();
 		};
 	});
 
@@ -225,6 +236,17 @@
 		>
 			<Save class="h-4 w-4" />Save
 		</Button>
+		<!-- The title sits on a wrapper: a disabled button gets no hover, so its own title never shows. -->
+		<span title={uploadNeedsSave ? 'Save the schema first' : undefined}>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => selvaUpload?.open()}
+				disabled={!builderState?.state.draft || !selvaUpload || uploadNeedsSave}
+			>
+				<CloudUpload class="h-4 w-4" />Upload to Selva
+			</Button>
+		</span>
 	{/snippet}
 
 	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -367,6 +389,10 @@
 			</Dialog.Footer>
 		</Dialog.Content>
 	</Dialog.Root>
+
+	{#if selvaUpload}
+		<SelvaUploadDialog upload={selvaUpload} />
+	{/if}
 
 	{#if builderState}
 		<SyncDialog
