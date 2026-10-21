@@ -51,9 +51,7 @@ public sealed class InboundMessageParser
         }
 
         var sid = jObj["sessionId"]?.ToString();
-
-        // requestInitialData establishes the session — exempt from the session check.
-        if (msgType != "requestInitialData" && sid != expectedSessionId)
+        if (sid != expectedSessionId)
         {
             return InboundMessage.Of(InboundKind.SessionMismatch, msgType);
         }

@@ -43,6 +43,7 @@ public class WebSocketTransport : IDisposable
 
     private readonly int _port;
     private readonly string _sessionId;
+    private readonly string _bridgeSecret;
 
     // Parsing/classifying inbound frames is pure (InboundMessageParser, unit-tested separately);
     // this class owns only the socket, thread marshalling, and event raising.
@@ -63,9 +64,10 @@ public class WebSocketTransport : IDisposable
 
     private WebSocketServer _webSocketServer;
 
-    public WebSocketTransport(string sessionId, int port = 8765)
+    public WebSocketTransport(string sessionId, string bridgeSecret, int port = AppConfig.WebSocket.DefaultPort)
     {
         _sessionId = sessionId;
+        _bridgeSecret = bridgeSecret ?? throw new ArgumentNullException(nameof(bridgeSecret));
         _port = port;
     }
 
@@ -114,7 +116,8 @@ public class WebSocketTransport : IDisposable
         _disposed = true;
     }
 
-    public async Task StartAsync(Action<string> logMessage)
+    /// <param name="allowedOrigins">Origins whose pages may open a socket: wherever the web UI is served from.</param>
+    public async Task StartAsync(Action<string> logMessage, IReadOnlyCollection<string> allowedOrigins)
     {
         if (_webSocketServer?.IsRunning == true)
         {
@@ -123,7 +126,7 @@ public class WebSocketTransport : IDisposable
 
         try
         {
-            _webSocketServer = new WebSocketServer(_port);
+            _webSocketServer = new WebSocketServer(_bridgeSecret, allowedOrigins, _port);
             _webSocketServer.OnClientConnected += HandleClientConnected;
             _webSocketServer.OnMessageReceived += HandleMessageReceived;
 
@@ -450,7 +453,7 @@ public class WebSocketTransport : IDisposable
     private void HandleClientConnected(object sender, WebSocket _)
     {
 #if DEBUG
-        Logger.Log("[WebSocketTransport] WebSocket client connected (waiting for requestInitialData).");
+        Logger.Log("[WebSocketTransport] WebSocket client authenticated (waiting for requestInitialData).");
 #endif
     }
 

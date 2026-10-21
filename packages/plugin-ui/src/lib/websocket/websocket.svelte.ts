@@ -4,6 +4,7 @@
  */
 
 import {
+	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
 	WEBSOCKET_MAX_RECONNECT_ATTEMPTS,
 	WEBSOCKET_RECONNECT_INTERVAL,
 	DEFAULT_WEBSOCKET_PORT
@@ -147,11 +148,14 @@ export class WebSocketState {
 	private batchedValues: Record<string, unknown> = {};
 	private currentSessionId: string | null = null;
 	private _hasConnectedBefore = false;
+	private authSecret: string | null = null;
 	private readonly BATCH_DELAY_MS = 50; // Batch updates within 50ms window
 
 	// Reactive state using Svelte 5 runes
 	connected = $state(false);
 	isSolving = $state(false);
+	/** The plugin refused this page's secret: it belongs to another session. Reconnecting won't help. */
+	authRejected = $state(false);
 
 	constructor(private url: string) {
 		this.on('solvingState', (data) => {
@@ -203,12 +207,22 @@ export class WebSocketState {
 		});
 	}
 
+	/** Must be set before `connect()`; the socket sends it as its first message. */
+	setAuthSecret(secret: string) {
+		this.authSecret = secret;
+		this.authRejected = false;
+	}
+
 	/**
-	 * Connect to the WebSocket server
+	 * Connect to the WebSocket server. Resolves true once the plugin has accepted the secret.
 	 */
 	connect(): Promise<boolean> {
-		if (this.socket?.readyState === WebSocket.OPEN) {
+		if (this.connected) {
 			return Promise.resolve(true);
+		}
+		const secret = this.authSecret;
+		if (!secret || this.authRejected) {
+			return Promise.resolve(false);
 		}
 		// If a connect is already in flight, return its promise so concurrent
 		// callers all see the same outcome instead of getting an early `true`.
@@ -233,12 +247,16 @@ export class WebSocketState {
 				// Receive binary frames as ArrayBuffer (the SLVA mesh blob transport).
 				this.socket.binaryType = 'arraybuffer';
 
-				this.socket.onopen = () => {
+				const socket = this.socket;
+				socket.onopen = () => {
 					if (this._shouldReloadOnReconnect) {
 						window.location.reload();
 						return;
 					}
+					socket.send(JSON.stringify({ type: 'authenticate', secret }));
+				};
 
+				const onAuthenticated = () => {
 					this.reconnectAttempts = 0;
 					this._serverDisconnected = false;
 					this.connected = true;
@@ -269,6 +287,10 @@ export class WebSocketState {
 						}
 
 						const message = JSON.parse(event.data);
+						if (message?.type === 'authenticated') {
+							onAuthenticated();
+							return;
+						}
 						this.handleMessage(message);
 					} catch (error) {
 						console.error('[WebSocket] Failed to parse message:', error);
@@ -280,12 +302,15 @@ export class WebSocketState {
 					settle(false);
 				};
 
-				this.socket.onclose = () => {
+				this.socket.onclose = (event) => {
 					this.socket = null;
 					this.connected = false;
-					// If we closed before opening, settle false; otherwise this is a no-op.
+					if (event.code === BRIDGE_UNAUTHORIZED_CLOSE_CODE) {
+						this.authRejected = true;
+					}
+					// If we closed before authenticating, settle false; otherwise this is a no-op.
 					settle(false);
-					this.attemptReconnect();
+					if (!this.authRejected) this.attemptReconnect();
 				};
 			} catch (error) {
 				console.error('[WebSocket] Connection failed:', error);
@@ -473,7 +498,7 @@ export class WebSocketState {
 	 * Check if connected
 	 */
 	get isConnected(): boolean {
-		return this.socket?.readyState === WebSocket.OPEN;
+		return this.connected;
 	}
 
 	/**

@@ -67,13 +67,14 @@ public class InboundMessageParserTests
         Assert.Equal(InboundKind.RequestInitialData, msg.Kind);
     }
 
-    [Fact]
-    public void RequestInitialData_IsExemptFromSessionCheck()
+    // initialData carries the whole schema and the current values, so it is session-checked like
+    // every other message.
+    [Theory]
+    [InlineData(@"{ ""type"": ""requestInitialData"", ""sessionId"": ""some-other-session"" }")]
+    [InlineData(@"{ ""type"": ""requestInitialData"" }")]
+    public void RequestInitialData_FromAnotherSession_IsRefused(string json)
     {
-        // Mismatched or absent session id still establishes the session — this is the message
-        // that bootstraps a fresh client, so there's no prior session to check against yet.
-        var msg = Parse(@"{ ""type"": ""requestInitialData"", ""sessionId"": ""some-other-session"" }");
-        Assert.Equal(InboundKind.RequestInitialData, msg.Kind);
+        Assert.Equal(InboundKind.SessionMismatch, Parse(json).Kind);
     }
 
     // -------------------------------------------------------------------------

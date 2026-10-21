@@ -312,6 +312,10 @@
 					</main>
 				</Resizable.Pane>
 			</Resizable.PaneGroup>
+		{:else if builderState?.state.error}
+			<div class="flex min-h-100 items-center justify-center px-6">
+				<StateDisplay type="error" size="large" message={builderState.state.error} />
+			</div>
 		{/if}
 	</div>
 

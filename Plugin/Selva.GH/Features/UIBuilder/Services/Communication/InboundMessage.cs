@@ -22,7 +22,7 @@ public enum InboundKind
     /// <summary>`requestCurrentValues` — no payload.</summary>
     RequestCurrentValues,
 
-    /// <summary>`requestInitialData` — establishes the session; exempt from the session-id check.</summary>
+    /// <summary>`requestInitialData` — no payload.</summary>
     RequestInitialData,
 
     /// <summary>`saveSchema` with a non-null schema.</summary>
@@ -37,7 +37,7 @@ public enum InboundKind
     /// <summary>`cancelSolve` — no payload. Handled off the UI thread, which the solver holds.</summary>
     CancelSolve,
 
-    /// <summary>A known type whose `sessionId` didn't match (and isn't `requestInitialData`).</summary>
+    /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
     /// <summary>A known type missing a required field (e.g. `valueUpdate` with no `values`).</summary>

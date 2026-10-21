@@ -3,12 +3,17 @@
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster, toast, initializeFooterContext } from '@selvajs/ui';
 	import { onMount } from 'svelte';
+	import { getSessionIdFromUrl } from '$lib/utils/session';
+	import { bridgeSecretForPage } from '$lib/websocket/bridge-secret';
 
 	initializeFooterContext();
 
 	let { children } = $props();
 
 	onMount(() => {
+		const sessionId = getSessionIdFromUrl();
+		if (sessionId) bridgeSecretForPage(sessionId);
+
 		const handleRuntimeMessage = (event: CustomEvent<{ level: string; message: string }>) => {
 			const { level, message } = event.detail;
 

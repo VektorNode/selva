@@ -28,6 +28,10 @@ public class UIBuilderService : IDisposable
     public DocumentSynchronizationService DocumentSyncService { get; private set; }
 
     public string SessionId { get; }
+
+    /// <summary>What a page must send before the bridge talks to it. Never persisted, never logged.</summary>
+    public string BridgeSecret { get; } = BridgeAccess.NewSecret();
+
     public Version PluginVersion { get; }
 
     public void Dispose()
@@ -46,7 +50,7 @@ public class UIBuilderService : IDisposable
         ValueApplicator = new ValueApplicator();
         ValueCollector = new ValueCollector();
         StateManager = new ComponentStateManager();
-        WebSocketTransport = new WebSocketTransport(SessionId);
+        WebSocketTransport = new WebSocketTransport(SessionId, BridgeSecret);
 
         WebServer = new LocalWebServer();
 

@@ -68,7 +68,7 @@ cd Plugin && dotnet build
 pnpm dev:plugin
 ```
 
-The plugin serves the WebSocket (8765 by default) and the page connects back to it. Vite serves this app on 5173 too, so if the Selva app is already running, this one takes the next free port: check the terminal for the URL.
+The plugin serves the WebSocket (8765 by default) and opens the page on port 5173, which connects back to it. The plugin accepts only pages from that port, so Vite refuses to start rather than move to another one if 5173 is taken.
 
 ## Providers
 

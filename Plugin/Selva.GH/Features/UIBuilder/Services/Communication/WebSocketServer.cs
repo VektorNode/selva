@@ -33,6 +33,9 @@ public class WebSocketServer : IDisposable
 
     private readonly List<WebSocket> _connectedClients = new List<WebSocket>();
 
+    private readonly string _secret;
+    private readonly IReadOnlyCollection<string> _allowedOrigins;
+
     private CancellationTokenSource _cancellationTokenSource;
     private bool _disposed;
     private Timer _heartbeatTimer;
@@ -47,8 +50,13 @@ public class WebSocketServer : IDisposable
     private TcpListener _tcpListener;
 #endif
 
-    public WebSocketServer(int port = AppConfig.WebSocket.DefaultPort)
+    public WebSocketServer(
+        string secret,
+        IReadOnlyCollection<string> allowedOrigins,
+        int port = AppConfig.WebSocket.DefaultPort)
     {
+        _secret = secret ?? throw new ArgumentNullException(nameof(secret));
+        _allowedOrigins = allowedOrigins ?? throw new ArgumentNullException(nameof(allowedOrigins));
         Port = port;
     }
 
@@ -368,16 +376,21 @@ public class WebSocketServer : IDisposable
             {
                 var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
 
-                if (context.Request.IsWebSocketRequest)
+                if (!context.Request.IsWebSocketRequest)
+                {
+                    context.Response.StatusCode = 400;
+                    context.Response.Close();
+                }
+                else if (!IsAllowedUpgrade(context.Request.Headers["Host"], context.Request.Headers["Origin"]))
+                {
+                    context.Response.StatusCode = 403;
+                    context.Response.Close();
+                }
+                else
                 {
                     _ = Task.Run(
                         () => ProcessWebSocketRequestAsync(context, cancellationToken),
                         cancellationToken);
-                }
-                else
-                {
-                    context.Response.StatusCode = 400;
-                    context.Response.Close();
                 }
             }
             catch (HttpListenerException ex)
@@ -433,18 +446,7 @@ public class WebSocketServer : IDisposable
             var wsContext = await context.AcceptWebSocketAsync(null).ConfigureAwait(false);
             webSocket = wsContext.WebSocket;
 
-            if (!TryRegisterClient(webSocket))
-            {
-                await webSocket.CloseAsync(
-                    WebSocketCloseStatus.PolicyViolation,
-                    "Maximum client connections reached",
-                    CancellationToken.None).ConfigureAwait(false);
-                webSocket.Dispose();
-                return;
-            }
-
-            OnClientConnected?.Invoke(this, webSocket);
-            await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
+            await ServeClientAsync(webSocket, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -481,6 +483,15 @@ public class WebSocketServer : IDisposable
                 return;
             }
 
+            if (!IsAllowedUpgrade(request.GetHeader("Host"), request.GetHeader("Origin")))
+            {
+                await WebSocketHandshake
+                    .WriteErrorResponseAsync(networkStream, 403, "Forbidden", "Origin or Host not allowed.",
+                        cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
             string clientKey;
             try
             {
@@ -505,18 +516,7 @@ public class WebSocketServer : IDisposable
                 subProtocol: null,
                 keepAliveInterval: TimeSpan.FromMilliseconds(HEARTBEAT_INTERVAL));
 
-            if (!TryRegisterClient(webSocket))
-            {
-                await webSocket.CloseAsync(
-                    WebSocketCloseStatus.PolicyViolation,
-                    "Maximum client connections reached",
-                    CancellationToken.None).ConfigureAwait(false);
-                webSocket.Dispose();
-                return;
-            }
-
-            OnClientConnected?.Invoke(this, webSocket);
-            await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
+            await ServeClientAsync(webSocket, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -535,6 +535,116 @@ public class WebSocketServer : IDisposable
         }
     }
 #endif
+
+    private bool IsAllowedUpgrade(string host, string origin)
+    {
+        if (BridgeAccess.IsAllowedHost(host, Port) && BridgeAccess.IsAllowedOrigin(origin, _allowedOrigins))
+        {
+            return true;
+        }
+
+        var shown = string.IsNullOrEmpty(origin) ? "(none)" : origin.Length > 100 ? origin.Substring(0, 100) : origin;
+        Logger.Warn($"[WebSocket] Refused a connection from origin {shown}: not this component's web UI.");
+        return false;
+    }
+
+    /// <summary>
+    ///     The socket is registered for broadcasts and handed to <see cref="OnMessageReceived" />
+    ///     only after its first message proves it holds the secret.
+    /// </summary>
+    private async Task ServeClientAsync(WebSocket webSocket, CancellationToken cancellationToken)
+    {
+        if (!await AuthenticateAsync(webSocket, cancellationToken).ConfigureAwait(false))
+        {
+            Logger.Warn("[WebSocket] Closed a socket that did not authenticate.");
+            await CloseOutputQuietlyAsync(
+                webSocket, (WebSocketCloseStatus)BridgeAccess.UnauthorizedCloseCode, "Unauthorized")
+                .ConfigureAwait(false);
+            return;
+        }
+
+        // Sent before the socket is registered, so no broadcast can interleave with it.
+        var ack = Encoding.UTF8.GetBytes(BridgeAccess.AuthenticatedMessage);
+        using (var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+        {
+            sendTimeout.CancelAfter(BROADCAST_TIMEOUT);
+            await webSocket.SendAsync(new ArraySegment<byte>(ack), WebSocketMessageType.Text, true,
+                sendTimeout.Token).ConfigureAwait(false);
+        }
+
+        if (!TryRegisterClient(webSocket))
+        {
+            await CloseOutputQuietlyAsync(
+                webSocket, WebSocketCloseStatus.PolicyViolation, "Maximum client connections reached")
+                .ConfigureAwait(false);
+            return;
+        }
+
+        OnClientConnected?.Invoke(this, webSocket);
+        await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> AuthenticateAsync(WebSocket webSocket, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[BridgeAccess.MaxAuthenticateBytes];
+        var count = 0;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(AppConfig.WebSocket.AuthTimeoutMs);
+
+        try
+        {
+            WebSocketReceiveResult result;
+            do
+            {
+                if (count == buffer.Length)
+                {
+                    return false;
+                }
+
+                result = await webSocket
+                    .ReceiveAsync(new ArraySegment<byte>(buffer, count, buffer.Length - count), timeout.Token)
+                    .ConfigureAwait(false);
+
+                if (result.MessageType != WebSocketMessageType.Text)
+                {
+                    return false;
+                }
+
+                count += result.Count;
+            } while (!result.EndOfMessage);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (WebSocketException)
+        {
+            return false;
+        }
+
+        return BridgeAccess.IsValidAuthenticate(Encoding.UTF8.GetString(buffer, 0, count), _secret);
+    }
+
+    // A cancelled receive leaves the socket Aborted, with nothing left to close.
+    private static async Task CloseOutputQuietlyAsync(WebSocket webSocket, WebSocketCloseStatus status,
+        string reason)
+    {
+        if (webSocket.State != WebSocketState.Open)
+        {
+            return;
+        }
+
+        try
+        {
+            using var timeout = new CancellationTokenSource(AppConfig.WebSocket.ClientCloseTimeoutMs);
+            await webSocket.CloseOutputAsync(status, reason, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Error closing WebSocket: {ex.Message}");
+        }
+    }
 
     // Returns false if MAX_CLIENTS is reached; caller closes the socket in that case.
     private bool TryRegisterClient(WebSocket webSocket)

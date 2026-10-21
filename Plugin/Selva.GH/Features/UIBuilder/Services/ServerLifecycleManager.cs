@@ -3,6 +3,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Selva.GH.Config;
 using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Utilities.Helpers;
@@ -89,13 +90,17 @@ public class ServerLifecycleManager : IDisposable
                 Logger.Log($"[ServerLifecycleManager] HTTP server started on port {_webServer.Port}");
             }
 
-            // Start WebSocket server for real-time communication
+            // Without embedded assets the page comes from the Vite dev server.
+            var allowedOrigins = _webServer is { IsRunning: true }
+                ? BridgeAccess.LoopbackOrigins(_webServer.Port)
+                : BridgeAccess.LoopbackOrigins(AppConfig.UIBuilder.DevServerPort);
+
             await _webSocketTransport.StartAsync(msg =>
             {
 #if DEBUG
                 Logger.Log($"[ServerLifecycleManager] {msg}");
 #endif
-            }).ConfigureAwait(false);
+            }, allowedOrigins).ConfigureAwait(false);
 
             if (!_desiredRunning)
             {

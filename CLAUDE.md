@@ -211,7 +211,7 @@ Plus `cd Plugin && dotnet build && dotnet test` if C# changed, and `pnpm generat
 
 ### Local development
 
-Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin opens the dev-server URL with its own `wsPort` in the query string, and the page connects back over WebSocket: hot reload on web changes while the plugin stays debuggable.
+Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin opens the dev-server URL with its own `wsPort` in the query string and a session secret in the fragment, and the page connects back over WebSocket: hot reload on web changes while the plugin stays debuggable.
 
 ### Installing to Grasshopper
 

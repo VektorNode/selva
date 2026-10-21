@@ -12,6 +12,7 @@
 //   - Point3d/Vector3d ARE exercised, by CurveFlatnessTests. The operators
 //     must therefore mean what RhinoCommon's mean — note Vector3d * Vector3d
 //     is the dot product, not a component-wise multiply.
+//   - RhinoApp.WriteLine swallows what the linked Logger writes.
 //
 // If a test needs real behavior beyond this, move the logic under test into a
 // Rhino-free type rather than growing this file.
@@ -24,6 +25,16 @@ namespace Selva.GH.Utilities.Guards
         public static bool IsHeadless =>
             throw new System.NotSupportedException(
                 "HeadlessGuard is stubbed in Selva.Tests; inject the flag via ComponentStateManager's internal ctor.");
+    }
+}
+
+namespace Rhino
+{
+    public static class RhinoApp
+    {
+        public static void WriteLine(string message)
+        {
+        }
     }
 }
 

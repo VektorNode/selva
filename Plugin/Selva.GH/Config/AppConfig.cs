@@ -19,6 +19,7 @@ public static class AppConfig
         public const int PingTimeoutMs = 5_000; //  5 s
         public const int ServerStartupTimeoutMs = 5_000; //  5 s
         public const int ReceiveTimeoutMs = 120_000; // 2 min — covers large file uploads
+        public const int AuthTimeoutMs = 5_000; //  5 s — a socket that hasn't sent the secret by then is closed
     }
 
     // -------------------------------------------------------------------------
@@ -46,6 +47,9 @@ public static class AppConfig
     {
         // Lets Grasshopper finish its current solution before output data is read.
         public const int InitialOutputBroadcastDelayMs = 100;
+
+        // `pnpm dev:plugin`. Used when the build has no embedded web assets.
+        public const int DevServerPort = 5173;
     }
 
     // -------------------------------------------------------------------------

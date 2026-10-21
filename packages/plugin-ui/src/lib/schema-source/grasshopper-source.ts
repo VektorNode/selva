@@ -14,6 +14,7 @@ import type {
 	PreviewSolveDriver
 } from './schema-source';
 import { createWebSocketSolveDriver } from './websocket-solve-driver';
+import { bridgeSecretForPage } from '$lib/websocket/bridge-secret';
 import type {
 	WsSchemaSavedMessage,
 	WsSchemaSaveRejectedMessage,
@@ -21,6 +22,11 @@ import type {
 } from '$lib/websocket/websocket.svelte';
 
 const SAVE_TIMEOUT_MS = 10000;
+
+const NOT_OPENED_FROM_GRASSHOPPER =
+	'Open this page from Grasshopper: right-click the UI Bridge component and choose Open UI in Browser.';
+const LINK_REFUSED =
+	'Grasshopper refused this link. It belongs to an earlier session: reopen the UI from the UI Bridge component.';
 
 export function createGrasshopperSource(wsState: WebSocketState, port: number): SchemaSource {
 	return {
@@ -38,11 +44,17 @@ export function createGrasshopperSource(wsState: WebSocketState, port: number): 
 
 		async connect(sessionId: string): Promise<ConnectResult> {
 			if (!sessionId) return { ok: false, error: 'No session ID provided' };
+			const secret = bridgeSecretForPage(sessionId);
+			if (!secret) return { ok: false, error: NOT_OPENED_FROM_GRASSHOPPER };
+			wsState.setAuthSecret(secret);
+
 			const connected = await wsState.connect();
 			if (!connected) {
 				return {
 					ok: false,
-					error: `Failed to connect to Grasshopper via WebSocket on port ${port}. Make sure the UI Builder component is enabled.`
+					error: wsState.authRejected
+						? LINK_REFUSED
+						: `Failed to connect to Grasshopper via WebSocket on port ${port}. Make sure the UI Builder component is enabled.`
 				};
 			}
 			return { ok: true };

@@ -3,13 +3,15 @@
 // Rhino+Grasshopper. The app runs unmodified through its GrasshopperSource — a true
 // transport-level fake, not a FakeSource swap.
 //
-// Handled inbound: requestInitialData -> initialData; saveSchema -> schemaUpdated +
+// The first message must be `authenticate` with STUB_SECRET, as the plugin requires.
+// Handled inbound after that: requestInitialData -> initialData; saveSchema -> schemaUpdated +
 // schemaSaved; valueUpdate -> outputs (echoes a trivial computed value). Everything else is
 // ignored. No binary mesh frames (binaryBatchCount omitted = "leave meshes alone").
 
 import { WebSocketServer, type WebSocket } from 'ws';
 
 export const STUB_PORT = 8765;
+export const STUB_SECRET = 'e2e-secret';
 
 // A minimal but valid UISchema: one number input placed in one tab/group, one output. Layout
 // defaults are filled by the app, but a tab is provided so the builder shows a real editor
@@ -85,13 +87,30 @@ export function startStub(port = STUB_PORT): WebSocketServer {
 	const wss = new WebSocketServer({ port });
 
 	wss.on('connection', (ws) => {
+		let authenticated = false;
 		ws.on('message', (raw) => {
-			let msg: { type?: string; sessionId?: string; values?: Record<string, unknown> };
+			let msg: {
+				type?: string;
+				sessionId?: string;
+				secret?: string;
+				values?: Record<string, unknown>;
+			};
 			try {
 				msg = JSON.parse(raw.toString());
 			} catch {
 				return;
 			}
+
+			if (!authenticated) {
+				if (msg.type !== 'authenticate' || msg.secret !== STUB_SECRET) {
+					ws.close(4401, 'Unauthorized');
+					return;
+				}
+				authenticated = true;
+				send(ws, { type: 'authenticated' });
+				return;
+			}
+
 			const sessionId = msg.sessionId ?? '';
 
 			switch (msg.type) {

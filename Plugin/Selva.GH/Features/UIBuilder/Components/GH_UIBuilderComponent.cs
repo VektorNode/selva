@@ -15,6 +15,7 @@ using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services;
+using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Properties;
 using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
@@ -325,12 +326,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     // Only post the URL remark on an actual cold start, not a no-op re-confirm.
                     if (started && !wasRunning && _service.ServerManager.HttpPort.HasValue)
                     {
-                        var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
-                        var httpPort = _service.ServerManager.HttpPort.Value;
+                        var url = TryBuildSessionUrl();
                         RhinoApp.InvokeOnUiThread(new Action(() =>
                         {
-                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                                $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, $"Web UI available at: {url}");
                         }));
                     }
 
@@ -377,11 +376,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return null;
         }
 
-        var wsPort = _service.WebSocketTransport.WebSocketPort;
         var baseUrl = _service.WebServer?.IsRunning == true
             ? _service.WebServer.BaseUrl
-            : "http://localhost:5173";
-        return $"{baseUrl}/?session={_sessionId}&wsPort={wsPort}";
+            : $"http://localhost:{AppConfig.UIBuilder.DevServerPort}";
+        return BridgeAccess.SessionUrl(
+            baseUrl, _sessionId, _service.WebSocketTransport.WebSocketPort, _service.BridgeSecret);
     }
 
     /// <summary>Skipped when absent — the obsolete subclass registers only the Schema output.</summary>
@@ -433,8 +432,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         try
         {
-            var url = TryBuildSessionUrl()
-                      ?? $"http://localhost:5173/?session={_sessionId}&wsPort={AppConfig.WebSocket.DefaultPort}";
+            var url = TryBuildSessionUrl();
+            if (url == null)
+            {
+                return;
+            }
 
             Process.Start(new ProcessStartInfo
             {

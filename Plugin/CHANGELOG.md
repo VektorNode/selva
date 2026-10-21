@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Builder: an item card's Span field shows 1 when the item has no span saved, instead of an empty box.
 - Builder: tab and group edits mark the draft unsaved and can be undone, so the unsaved-changes prompt fires and a Grasshopper broadcast no longer drops them. Edits made while a save is in flight stay unsaved.
 
+### Security
+
+- UI Bridge: the local WebSocket only talks to the page the component opened. It refuses connections from any other origin or with a forged `Host`, and a socket must first send the secret the plugin puts in the page URL's fragment. Until now any web page open in the same browser could connect while the bridge was enabled, read the schema and values, and change inputs, the saved schema and parameter names. A browser tab opened before this update has to be reopened from the component.
+
 ## [0.23.0-beta.3] - 2026-10-13
 
 ### Changed

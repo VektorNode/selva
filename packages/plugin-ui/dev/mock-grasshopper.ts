@@ -648,8 +648,12 @@ function send(ws: WebSocket, message: Record<string, unknown>) {
 	ws.send(JSON.stringify(message));
 }
 
+// The plugin hands the page a fresh secret per session; the mock's is fixed.
+const SECRET = 'mock';
+const authenticated = new WeakSet<WebSocket>();
+
 function broadcast(wss: WebSocketServer, message: Record<string, unknown>) {
-	for (const client of wss.clients) send(client, message);
+	for (const client of wss.clients) if (authenticated.has(client)) send(client, message);
 }
 
 const wss = new WebSocketServer({ port: PORT });
@@ -673,6 +677,17 @@ wss.on('connection', (ws) => {
 		} catch {
 			return;
 		}
+
+		if (!authenticated.has(ws)) {
+			if (msg.type !== 'authenticate' || msg.secret !== SECRET) {
+				ws.close(4401, 'Unauthorized');
+				return;
+			}
+			authenticated.add(ws);
+			send(ws, { type: 'authenticated' });
+			return;
+		}
+
 		const sessionId = msg.sessionId ?? '';
 
 		switch (msg.type) {
@@ -737,7 +752,7 @@ wss.on('connection', (ws) => {
 
 wss.on('listening', () => {
 	console.info(
-		`[mock-grasshopper] ws://localhost:${PORT}  ·  open http://localhost:5173/builder?session=dev&wsPort=${PORT}`
+		`[mock-grasshopper] ws://localhost:${PORT}  ·  open http://localhost:5173/builder?session=dev&wsPort=${PORT}#s=${SECRET}`
 	);
 	if (process.argv.includes('--with-dev-server')) {
 		// Windows only resolves pnpm's .cmd shim through a shell.
