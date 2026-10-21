@@ -563,21 +563,40 @@ public class WebSocketServer : IDisposable
             return;
         }
 
-        // Sent before the socket is registered, so no broadcast can interleave with it.
-        var ack = Encoding.UTF8.GetBytes(BridgeAccess.AuthenticatedMessage);
-        using (var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
-        {
-            sendTimeout.CancelAfter(BROADCAST_TIMEOUT);
-            await webSocket.SendAsync(new ArraySegment<byte>(ack), WebSocketMessageType.Text, true,
-                sendTimeout.Token).ConfigureAwait(false);
-        }
-
+        // Registered before the acknowledgement, so a full server refuses instead of acknowledging
+        // and then dropping the socket.
         if (!TryRegisterClient(webSocket))
         {
             await CloseOutputQuietlyAsync(
                 webSocket, WebSocketCloseStatus.PolicyViolation, "Maximum client connections reached")
                 .ConfigureAwait(false);
             return;
+        }
+
+        ClientSendState state;
+        lock (_clientsLock)
+        {
+            _clientState.TryGetValue(webSocket, out state);
+        }
+
+        if (state == null)
+        {
+            return;
+        }
+
+        // Under the socket's send lock: a broadcast may already be going to it.
+        await state.SendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            sendTimeout.CancelAfter(BROADCAST_TIMEOUT);
+            var ack = Encoding.UTF8.GetBytes(BridgeAccess.AuthenticatedMessage);
+            await webSocket.SendAsync(new ArraySegment<byte>(ack), WebSocketMessageType.Text, true,
+                sendTimeout.Token).ConfigureAwait(false);
+        }
+        finally
+        {
+            state.SendLock.Release();
         }
 
         OnClientConnected?.Invoke(this, webSocket);

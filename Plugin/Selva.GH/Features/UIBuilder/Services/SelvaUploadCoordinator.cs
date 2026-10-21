@@ -151,7 +151,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
 
         // Without an address the manager says so; a cancelled dialog just re-sends the account.
         RunAccount(ct => origin == null || !string.IsNullOrWhiteSpace(key)
-            ? Accounts().UseApiKeyAsync(key ?? string.Empty, ct)
+            ? Accounts().UseApiKeyAsync(origin, key ?? string.Empty, ct)
             : Task.CompletedTask);
     }
 

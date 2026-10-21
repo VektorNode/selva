@@ -262,17 +262,26 @@ public sealed class SelvaAccountManager
         }
     }
 
-    /// <summary>For places the browser flow can't reach. The key comes from a plugin dialog, never the web UI.</summary>
-    public async Task UseApiKeyAsync(string key, CancellationToken cancellationToken)
+    /// <summary>
+    ///     For places the browser flow can't reach. The key comes from a plugin dialog, never the
+    ///     web UI. <paramref name="origin" /> is the instance the dialog named: the key goes there or
+    ///     nowhere, even if another page switched the active instance while the dialog was open.
+    /// </summary>
+    public async Task UseApiKeyAsync(string? origin, string key, CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var origin = ActiveOrigin();
             key = key.Trim();
             if (origin == null)
             {
                 SetMessage("Enter your Selva address first.");
+                return;
+            }
+
+            if (origin != ActiveOrigin())
+            {
+                SetMessage("The Selva address changed while the key dialog was open. Try again.");
                 return;
             }
 

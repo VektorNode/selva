@@ -18,6 +18,7 @@ public sealed class BridgeServerTests : IAsyncLifetime
 {
     private const string Secret = "the-secret";
     private const string PageOrigin = "http://localhost:4242";
+    private const int AppConfigClientLimit = Selva.GH.Config.AppConfig.WebSocket.MaxConcurrentClients;
 
     private readonly ConcurrentQueue<string> _received = new();
     private WebSocketServer _server = null!;
@@ -110,6 +111,34 @@ public sealed class BridgeServerTests : IAsyncLifetime
         await SendAsync(stranger, "{\"type\":\"authenticate\",\"secret\":\"guess\"}");
         var result = await stranger.ReceiveAsync(new ArraySegment<byte>(new byte[256]), Timeout());
         Assert.Equal(WebSocketMessageType.Close, result.MessageType);
+    }
+
+    // A page told it's connected and then dropped would reconnect forever.
+    [Fact]
+    public async Task Socket_OverTheClientLimit_IsRefusedWithoutAnAcknowledgement()
+    {
+        var members = new List<ClientWebSocket>();
+        try
+        {
+            for (var i = 0; i < AppConfigClientLimit; i++)
+            {
+                var member = await ConnectAsync();
+                await SendAsync(member, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
+                await ReceiveTextAsync(member);
+                members.Add(member);
+            }
+
+            using var extra = await ConnectAsync();
+            await SendAsync(extra, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
+            var result = await extra.ReceiveAsync(new ArraySegment<byte>(new byte[256]), Timeout());
+
+            Assert.Equal(WebSocketMessageType.Close, result.MessageType);
+            Assert.Equal(WebSocketCloseStatus.PolicyViolation, result.CloseStatus);
+        }
+        finally
+        {
+            members.ForEach(m => m.Dispose());
+        }
     }
 
     // -------------------------------------------------------------------------

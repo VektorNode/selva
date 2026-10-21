@@ -31,13 +31,40 @@ export function takeBridgeSecret(
 	}
 }
 
-/** {@link takeBridgeSecret} for the current page. */
-export function bridgeSecretForPage(sessionId: string): string | null {
-	let storage: Storage | null = null;
+export function isRemembered(
+	sessionId: string,
+	secret: string,
+	storage: SecretStorage | null
+): boolean {
 	try {
-		storage = window.sessionStorage;
+		return storage?.getItem(STORAGE_PREFIX + sessionId) === secret;
+	} catch {
+		return false;
+	}
+}
+
+function sessionStorageOrNull(): Storage | null {
+	try {
+		return window.sessionStorage;
 	} catch {
 		// Blocked by the browser's site-data settings.
+		return null;
 	}
-	return takeBridgeSecret(sessionId, window.location.hash, storage);
+}
+
+/** {@link takeBridgeSecret} for the current page. */
+export function bridgeSecretForPage(sessionId: string): string | null {
+	return takeBridgeSecret(sessionId, window.location.hash, sessionStorageOrNull());
+}
+
+/**
+ * Stores the secret from the page URL. True when the URL carried it and storage now holds it,
+ * so the fragment can leave the address bar and history.
+ */
+export function rememberBridgeSecret(sessionId: string): boolean {
+	const storage = sessionStorageOrNull();
+	const secret = takeBridgeSecret(sessionId, window.location.hash, storage);
+	return (
+		secret !== null && window.location.hash.length > 0 && isRemembered(sessionId, secret, storage)
+	);
 }

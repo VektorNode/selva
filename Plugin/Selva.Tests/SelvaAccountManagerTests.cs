@@ -165,7 +165,7 @@ public sealed class SelvaAccountManagerTests : IDisposable
         var manager = Manager();
         await manager.ConnectAsync(Origin, CancellationToken.None);
 
-        await manager.UseApiKeyAsync("  " + IssuedKey + "\n", CancellationToken.None);
+        await manager.UseApiKeyAsync(Origin, "  " + IssuedKey + "\n", CancellationToken.None);
 
         var account = manager.Snapshot();
         Assert.Equal("signedIn", account.Status);
@@ -179,7 +179,22 @@ public sealed class SelvaAccountManagerTests : IDisposable
         await manager.ConnectAsync(Origin, CancellationToken.None);
         var before = _selva.Requests;
 
-        await manager.UseApiKeyAsync("selva_typo", CancellationToken.None);
+        await manager.UseApiKeyAsync(Origin, "selva_typo", CancellationToken.None);
+
+        Assert.Equal(before, _selva.Requests);
+        Assert.Equal("signedOut", manager.Snapshot().Status);
+        Assert.NotNull(manager.Snapshot().Message);
+    }
+
+    // The dialog named one instance; another page may have switched the active one meanwhile.
+    [Fact]
+    public async Task PastedKey_GoesOnlyToTheInstanceTheDialogNamed()
+    {
+        var manager = Manager();
+        await manager.ConnectAsync("https://other.example.com", CancellationToken.None);
+        var before = _selva.Requests;
+
+        await manager.UseApiKeyAsync(Origin, IssuedKey, CancellationToken.None);
 
         Assert.Equal(before, _selva.Requests);
         Assert.Equal("signedOut", manager.Snapshot().Status);

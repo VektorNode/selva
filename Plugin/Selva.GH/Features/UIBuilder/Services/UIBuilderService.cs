@@ -30,7 +30,10 @@ public class UIBuilderService : IDisposable
 
     public string SessionId { get; }
 
-    /// <summary>What a page must send before the bridge talks to it. Never persisted, never logged.</summary>
+    /// <summary>
+    ///     What a page must send before the bridge talks to it. Travels only in the fragment of the
+    ///     page URL (the URL output and Open UI in Browser); never logged.
+    /// </summary>
     public string BridgeSecret { get; } = BridgeAccess.NewSecret();
 
     public Version PluginVersion { get; }

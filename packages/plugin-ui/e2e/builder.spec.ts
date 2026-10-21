@@ -23,6 +23,17 @@ test.describe('/builder', () => {
 		await expect(page.getByText('Main').first()).toBeVisible({ timeout: 10_000 });
 	});
 
+	test('drops the secret from the address bar and still reconnects after a reload', async ({
+		page
+	}) => {
+		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
+		await expect(page.getByText('Main').first()).toBeVisible({ timeout: 15_000 });
+		await expect(page).not.toHaveURL(/#s=/);
+
+		await page.reload();
+		await expect(page.getByText('Main').first()).toBeVisible({ timeout: 15_000 });
+	});
+
 	test('saves the schema through the stub', async ({ page }) => {
 		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
 		await expect(page.getByText('Loading schema...')).toBeHidden({ timeout: 15_000 });

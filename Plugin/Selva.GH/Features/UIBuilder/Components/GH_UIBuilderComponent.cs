@@ -336,12 +336,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
                     // Only post the URL remark on an actual cold start, not a no-op re-confirm.
+                    // No URL here: it carries the bridge secret, and a balloon ends up in screenshots.
                     if (started && !wasRunning && _service.ServerManager.HttpPort.HasValue)
                     {
-                        var url = TryBuildSessionUrl();
                         RhinoApp.InvokeOnUiThread(new Action(() =>
                         {
-                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, $"Web UI available at: {url}");
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                                "Web UI running. Right-click the component and choose Open UI in Browser.");
                         }));
                     }
 

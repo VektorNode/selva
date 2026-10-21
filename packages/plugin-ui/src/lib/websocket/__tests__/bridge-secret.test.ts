@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { takeBridgeSecret } from '../bridge-secret';
+import { isRemembered, takeBridgeSecret } from '../bridge-secret';
 
 function memoryStorage() {
 	const items = new Map<string, string>();
@@ -54,5 +54,26 @@ describe('takeBridgeSecret', () => {
 		expect(takeBridgeSecret('abc', '#s=SECRET', blocked)).toBe('SECRET');
 		expect(takeBridgeSecret('abc', '', blocked)).toBeNull();
 		expect(takeBridgeSecret('abc', '#s=SECRET', null)).toBe('SECRET');
+	});
+});
+
+describe('isRemembered', () => {
+	it('is true once storage holds the secret, so the fragment can leave the address bar', () => {
+		const storage = memoryStorage();
+		takeBridgeSecret('abc', '#s=SECRET', storage);
+		expect(isRemembered('abc', 'SECRET', storage)).toBe(true);
+	});
+
+	it('is false when storage is blocked: a reload still needs the fragment', () => {
+		const blocked = {
+			getItem: () => {
+				throw new Error('SecurityError');
+			},
+			setItem: () => {
+				throw new Error('SecurityError');
+			}
+		};
+		expect(isRemembered('abc', 'SECRET', blocked)).toBe(false);
+		expect(isRemembered('abc', 'SECRET', null)).toBe(false);
 	});
 });
