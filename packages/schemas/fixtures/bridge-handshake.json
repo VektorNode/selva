@@ -1,0 +1,5 @@
+{
+	"authenticate": { "type": "authenticate", "secret": "SECRET-FROM-THE-URL-FRAGMENT" },
+	"authenticated": { "type": "authenticated" },
+	"unauthorizedCloseCode": 4401
+}

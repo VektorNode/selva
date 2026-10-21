@@ -183,8 +183,6 @@ public class SelvaApiClientTests
         Assert.Single(handler.Requests);
     }
 
-    // -------------------------------------------------------------------------
-
     private static SelvaApiClient Client(HttpMessageHandler handler) =>
         new(Origin, Token, "Selva-Grasshopper/1.2.3 (Rhino 8; test)", handler);
 

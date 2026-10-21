@@ -1,3 +1,4 @@
+using Newtonsoft.Json.Linq;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 
 namespace Selva.Tests;
@@ -98,5 +99,18 @@ public class BridgeAccessTests
         Assert.Equal(
             "http://localhost:51234/?session=abc&wsPort=8765#s=SECRET",
             BridgeAccess.SessionUrl("http://localhost:51234", "abc", 8765, "SECRET"));
+    }
+
+    // The page reads the same file (bridge-handshake.test.ts), so the two sides can't drift.
+    [Fact]
+    public void Handshake_MatchesTheSharedFixture()
+    {
+        var fixture = JObject.Parse(File.ReadAllText(
+            Path.Combine(TestPaths.RepoRoot(), "packages", "schemas", "fixtures", "bridge-handshake.json")));
+        var authenticate = (JObject)fixture["authenticate"]!;
+
+        Assert.True(BridgeAccess.IsValidAuthenticate(authenticate.ToString(), (string)authenticate["secret"]!));
+        Assert.True(JToken.DeepEquals(fixture["authenticated"], JObject.Parse(BridgeAccess.AuthenticatedMessage)));
+        Assert.Equal((int)fixture["unauthorizedCloseCode"]!, BridgeAccess.UnauthorizedCloseCode);
     }
 }

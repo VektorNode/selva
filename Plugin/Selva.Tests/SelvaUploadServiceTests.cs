@@ -226,8 +226,6 @@ public class SelvaUploadServiceTests
         Assert.True(result.Cancelled);
     }
 
-    // -------------------------------------------------------------------------
-
     private sealed class FakeSelva : HttpMessageHandler
     {
         public bool FacadeCanEdit = true;

@@ -2,8 +2,8 @@
 // plugin signs in, holds the token and talks to Selva; the page only sends commands and reads
 // what comes back. No method here takes or returns a credential, and none may.
 //
-// Two adapters: GrasshopperSelvaSource (over the builder's WebSocket) and FakeSelvaSource
-// (records commands, replays events) for the node-env tests.
+// GrasshopperSelvaSource runs over the builder's WebSocket; FakeSelvaSource records commands
+// and replays events for the node-env tests.
 
 import type { SelvaUploadRequest } from '@selvajs/schemas';
 import type {

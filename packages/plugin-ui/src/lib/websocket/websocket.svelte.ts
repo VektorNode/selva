@@ -4,7 +4,6 @@
  */
 
 import {
-	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
 	WEBSOCKET_MAX_RECONNECT_ATTEMPTS,
 	WEBSOCKET_RECONNECT_INTERVAL,
 	DEFAULT_WEBSOCKET_PORT
@@ -13,6 +12,11 @@ import type { UISchema } from '@selvajs/schemas';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from '@selvajs/ui';
 import { validateInboundMessage } from './messageSchemas';
+import {
+	authenticateMessage,
+	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
+	isAuthenticatedMessage
+} from './bridge-handshake';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type MessageHandler = (data: any) => void;
@@ -269,7 +273,7 @@ export class WebSocketState {
 						window.location.reload();
 						return;
 					}
-					socket.send(JSON.stringify({ type: 'authenticate', secret }));
+					socket.send(JSON.stringify(authenticateMessage(secret)));
 				};
 
 				const onAuthenticated = () => {
@@ -303,7 +307,7 @@ export class WebSocketState {
 						}
 
 						const message = JSON.parse(event.data);
-						if (message?.type === 'authenticated') {
+						if (isAuthenticatedMessage(message)) {
 							onAuthenticated();
 							return;
 						}

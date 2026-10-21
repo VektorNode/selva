@@ -39,7 +39,7 @@ public static class OutboundEnvelopes
     public static object SolveEvent(string sessionId, SolveEvent @event) =>
         new { type = "solveEvent", sessionId, @event };
 
-    // The four Selva envelopes nest their payload because each payload type is shared with the
+    // The Selva envelopes nest their payload because each payload type is shared with the
     // generated TS types; none of them carries the token.
 
     public static object SelvaAccount(string sessionId, SelvaAccount account) =>

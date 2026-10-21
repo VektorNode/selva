@@ -33,8 +33,6 @@ public sealed class SelvaAccountManagerTests : IDisposable
         new(store ?? _os, Path.Combine(_dir, "accounts.json"), () => _selva, "ua",
             browser ?? (url => Approve(url)), now ?? (() => DateTimeOffset.Parse("2026-01-01T00:00:00Z")));
 
-    // -------------------------------------------------------------------------
-
     [Fact]
     public async Task Connect_RemembersTheNormalisedInstance()
     {
