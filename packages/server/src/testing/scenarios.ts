@@ -9,7 +9,14 @@
  */
 
 import type { Organization, Project } from '@selvajs/platform';
-import { seedDefinition, seedOrg, seedOrgMember, seedProject, seedUser } from './harness.js';
+import {
+	seedDefinition,
+	seedOrg,
+	seedOrgMember,
+	seedProject,
+	seedProjectMember,
+	seedUser
+} from './harness.js';
 import type { SeededDefinition, SeededUser, TestHarness } from './harness.js';
 
 export interface AcmeFixture {
@@ -60,6 +67,18 @@ export async function seedAcme(h: TestHarness): Promise<AcmeFixture> {
 	});
 
 	return { acme, alice, bob, alicesPrivate, acmeOrg, acmePublic };
+}
+
+/**
+ * Dana: an Acme member who edits Acme's org project and holds no platform
+ * permission. She may create definitions, so she may hold an upload or read
+ * key, and nothing broader.
+ */
+export async function seedAcmeDesigner(h: TestHarness, acme: AcmeFixture): Promise<SeededUser> {
+	const dana = await seedUser(h, 'dana@acme.test');
+	await seedOrgMember(h, { orgId: acme.acme.id, userId: dana.id, role: 'member' });
+	await seedProjectMember(h, { projectId: acme.acmeOrg.id, userId: dana.id, role: 'editor' });
+	return dana;
 }
 
 export interface BigClientFixture {

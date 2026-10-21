@@ -2,8 +2,9 @@ import { z } from 'zod';
 
 /**
  * `write`, `solve` and `upload` each include `read`, and `write` includes
- * `upload`. `upload` covers only creating definitions, uploading versions and
- * making a version live: it can't edit metadata, delete or share.
+ * `upload`. `upload` covers only creating definitions, uploading versions,
+ * checking a file's schema before upload and making a version live: it can't
+ * edit metadata, delete or share.
  */
 export const ApiScopeActionSchema = z.enum(['read', 'write', 'solve', 'upload']);
 export type ApiScopeAction = z.infer<typeof ApiScopeActionSchema>;

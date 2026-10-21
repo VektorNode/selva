@@ -1,6 +1,6 @@
 /**
- * The server half of an OAuth consent screen: which orgs the user may grant
- * access in, and minting the key in the one they picked.
+ * The server half of an OAuth consent screen: which access levels and orgs the
+ * user may grant, and minting the key in the org they picked.
  *
  * A key is bound to one org at mint. The user's session acts in one org too,
  * but they may belong to several, so consent builds a context pinned to the
@@ -11,6 +11,12 @@ import type { OrgMember, RequestContext } from '@selvajs/platform';
 import { apiError, ApiErrorCode, requireCaller, type ApiRequest } from '../api/index.js';
 import { buildRequestContext } from '../http/request-context.js';
 import { listUserMemberships } from '../organizations/user-memberships.js';
+import {
+	apiScopesFor,
+	consentChoices,
+	type ConsentChoice,
+	type OAuthScope
+} from '../oauth/index.js';
 import {
 	mayHoldApiTokens,
 	mintApiToken,
@@ -54,6 +60,32 @@ export async function consentOrgs(
 	return memberships
 		.filter((_, i) => allowed[i])
 		.map(({ org }) => ({ id: org.id, name: org.name }));
+}
+
+export interface ConsentOffer {
+	/** Narrowest first. Only levels the user may hold in at least one of their orgs. */
+	choices: ConsentChoice[];
+	/** Where the widest choice, the one the page preselects, may be granted. */
+	orgs: ConsentOrg[];
+}
+
+/**
+ * What a consent page offers for a request's scopes, and what its approval
+ * accepts. Null when the user may grant none of it anywhere.
+ */
+export async function consentOffer(
+	req: ApiRequest,
+	scopes: readonly OAuthScope[]
+): Promise<ConsentOffer | null> {
+	const levels = await Promise.all(
+		consentChoices(scopes).map(async (choice) => ({
+			choice,
+			orgs: await consentOrgs(req, apiScopesFor(choice.scopes))
+		}))
+	);
+	const offered = levels.filter((l) => l.orgs.length > 0);
+	if (!offered.length) return null;
+	return { choices: offered.map((l) => l.choice), orgs: offered[offered.length - 1]!.orgs };
 }
 
 /**

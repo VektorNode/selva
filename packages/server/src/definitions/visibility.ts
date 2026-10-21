@@ -17,7 +17,6 @@
 import {
 	SYSTEM_CONTEXT,
 	canCreateDefinition,
-	canEdit,
 	canEditDefinition,
 	canView,
 	outsideTokenOrg,
@@ -126,8 +125,8 @@ export async function resolveAccessibleProjects(
 
 /**
  * Whether the caller may create a definition in at least one project of
- * `orgId`, by the same rule `requireCanCreateDefinition` applies. Three reads
- * per page of the org's projects, stopping at the first project that passes.
+ * `orgId`, by the same rule `requireCanCreateDefinition` applies. Reads the
+ * org's projects a page at a time and stops at the first that passes.
  */
 export async function canCreateDefinitionInOrg(
 	ctx: RequestContext,
@@ -219,7 +218,7 @@ export async function listEditableDefinitionsByDocument(
 	const candidates = set.projects.filter(
 		(p) =>
 			(!projectId || p.id === projectId) &&
-			(p.autoJoinOnUpload || canEdit(projectAccessInputFromRowsWith({ deps }, ctx, p, rowsFor(p))))
+			canCreateDefinition(projectAccessInputFromRowsWith({ deps }, ctx, p, rowsFor(p)))
 	);
 
 	const page = await deps.definitionMeta.list(ctx, {

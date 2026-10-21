@@ -291,7 +291,13 @@ export async function setEnv(key: string, value: string | undefined): Promise<vo
  * they take a `TestHarness`, which `TestProviders` extends, so call sites
  * pass `tp` unchanged.
  */
-export { seedAcme, seedBigClient, seedThirdOrg, seedCommons } from '@selvajs/server/testing';
+export {
+	seedAcme,
+	seedAcmeDesigner,
+	seedBigClient,
+	seedThirdOrg,
+	seedCommons
+} from '@selvajs/server/testing';
 export type {
 	AcmeFixture,
 	BigClientFixture,

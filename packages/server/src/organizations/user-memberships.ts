@@ -4,8 +4,9 @@ import type { IOrgStore, OrgMember, Organization } from '@selvajs/platform';
 const PAGE = 200;
 
 /**
- * Every org `userId` belongs to, with their membership row. Two reads per page
- * of orgs, however many the user is in.
+ * Every org `userId` belongs to, with their membership row. Reads a page of
+ * orgs and the user's rows in it at a time, so the cost grows with the number
+ * of orgs, not with the number of members.
  */
 export async function listUserMemberships(
 	orgs: Pick<IOrgStore, 'listOrgs' | 'getOrgMembersFor'>,

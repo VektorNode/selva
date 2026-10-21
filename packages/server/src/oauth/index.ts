@@ -3,7 +3,7 @@
  * its own authorization server.
  *
  * The access token is an ordinary API token. The host mints it while the user is
- * signed in, at consent, through the same path as Settings → API tokens; this
+ * signed in, at consent, through the same path as Team → API tokens; this
  * module seals the raw key into the authorization code and hands it over at the
  * token endpoint. So `/mcp` and `/api/v1` keep one credential type.
  *
@@ -145,7 +145,7 @@ export function protectedResourceMetadata(origin: string) {
 	return {
 		resource: mcpResourceUrl(origin),
 		authorization_servers: [origin],
-		scopes_supported: [...OAUTH_SCOPES],
+		scopes_supported: [...REGISTERED_CLIENT_SCOPES],
 		bearer_methods_supported: ['header']
 	};
 }

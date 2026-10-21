@@ -35,7 +35,13 @@ export type {
 	CallHandlerOpts,
 	CallResult
 } from './harness.js';
-export { seedAcme, seedBigClient, seedThirdOrg, seedCommons } from './scenarios.js';
+export {
+	seedAcme,
+	seedAcmeDesigner,
+	seedBigClient,
+	seedThirdOrg,
+	seedCommons
+} from './scenarios.js';
 export type {
 	AcmeFixture,
 	BigClientFixture,

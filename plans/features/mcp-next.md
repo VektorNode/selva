@@ -83,7 +83,7 @@ changes a baseline.
 
 The access token is a `selva_` API token, minted through the same core as
 `POST /orgs/{orgId}/tokens`. `/mcp` and `/api/v1` keep one credential type, and `handle` doesn't
-change. The token's principal, org, scopes, audit trail and revocation at Settings → API tokens
+change. The token's principal, org, scopes, audit trail and revocation at Team → API tokens
 all come for free. The core lives in `@selvajs/server` so host apps get the same flow; Selva's
 routes only parse, guard and delegate.
 
@@ -104,7 +104,8 @@ The metadata advertises:
 - `token_endpoint_auth_methods_supported: ["none"]`
 - `authorization_response_iss_parameter_supported: true`
 - `scopes_supported: ["read", "solve", "upload"]`; only the built-in Grasshopper client is ever
-  granted `upload` ([publish-from-plugin.md](./publish-from-plugin.md))
+  granted `upload` ([publish-from-plugin.md](./publish-from-plugin.md)), so the `/mcp`
+  resource metadata lists `read` and `solve` alone
 
 Claude picks CIMD only when both the second and third are present.
 

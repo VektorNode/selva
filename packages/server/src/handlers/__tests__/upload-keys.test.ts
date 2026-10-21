@@ -13,10 +13,10 @@ import {
 	callHandler,
 	grantPlatformPermissions,
 	seedAcme,
+	seedAcmeDesigner,
 	seedBigClient,
 	seedDefinition,
 	seedOrgMember,
-	seedProjectMember,
 	seedUser,
 	type ActingLocals,
 	type AcmeFixture
@@ -49,10 +49,7 @@ async function world(): Promise<World> {
 	h = await freshHarness();
 	h.deps = { ...h.deps, tokens: { ...h.deps?.tokens, apiTokens: codec } };
 	const acme = await seedAcme(h);
-	const dana = await seedUser(h, 'dana@acme.test');
-	await seedOrgMember(h, { orgId: acme.acme.id, userId: dana.id, role: 'member' });
-	await seedProjectMember(h, { projectId: acme.acmeOrg.id, userId: dana.id, role: 'editor' });
-	return { ...acme, h, dana };
+	return { ...acme, h, dana: await seedAcmeDesigner(h, acme) };
 }
 
 function mint(locals: ActingLocals, orgId: string, scopes: string[]) {

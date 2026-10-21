@@ -10,10 +10,8 @@ import { resolveApiToken } from '@selvajs/server/http';
 import {
 	freshProviders,
 	seedAcme,
+	seedAcmeDesigner,
 	seedDefinition,
-	seedOrgMember,
-	seedProjectMember,
-	seedUser,
 	grantPlatformPermissions,
 	actAs,
 	call,
@@ -103,9 +101,7 @@ function ghForm(fields: Record<string, string> = {}): FormData {
 async function world() {
 	tp = await freshProviders();
 	const acme = await seedAcme(tp);
-	const dana = await seedUser(tp, 'dana@acme.test');
-	await seedOrgMember(tp, { orgId: acme.acme.id, userId: dana.id, role: 'member' });
-	await seedProjectMember(tp, { projectId: acme.acmeOrg.id, userId: dana.id, role: 'editor' });
+	const dana = await seedAcmeDesigner(tp, acme);
 	await withCompute();
 	return { ...acme, dana };
 }

@@ -7,9 +7,9 @@ import {
 	freshProviders,
 	grantPlatformPermissions,
 	seedAcme,
+	seedAcmeDesigner,
 	seedBigClient,
 	seedOrgMember,
-	seedProjectMember,
 	seedUser,
 	type TestProviders
 } from '$lib/server/__tests__/fixtures';
@@ -132,10 +132,7 @@ async function resolveKey(raw: string) {
 async function world() {
 	tp = await freshProviders();
 	const acme = await seedAcme(tp);
-	const dana = await seedUser(tp, 'dana@acme.test');
-	await seedOrgMember(tp, { orgId: acme.acme.id, userId: dana.id, role: 'member' });
-	await seedProjectMember(tp, { projectId: acme.acmeOrg.id, userId: dana.id, role: 'editor' });
-	return { ...acme, dana };
+	return { ...acme, dana: await seedAcmeDesigner(tp, acme) };
 }
 
 describe('discovery', () => {
@@ -184,8 +181,8 @@ describe('consent', () => {
 		// Dana may hold a read key but not a solve key: she has no manage_api_tokens.
 		const failed = await approve(query, locals, { access: 'solve', orgId: w.acme.id });
 		expect(failed).toMatchObject({
-			status: 403,
-			data: { error: expect.stringContaining('can’t') }
+			status: 400,
+			data: { error: expect.stringContaining('isn’t available') }
 		});
 		// SvelteKit then runs load on the action URL.
 		const data = await load(event(`/oauth/authorize?${query}&/approve`, { locals }) as AnyEvent);
@@ -241,16 +238,11 @@ describe('consent', () => {
 		);
 		expect(data).toMatchObject({ ok: true, choices: ['read', 'solve'] });
 		// A forged form field can't pick an access level the page didn't offer.
-		const back = await redirected(async () =>
-			approve(query, await actAs(tp, w.alice.id), { access: 'upload', orgId: w.acme.id })
-		);
-		const res = await redeem(
-			back.searchParams.get('code')!,
-			new URLSearchParams(query).get('client_id')!,
-			CALLBACK,
-			`${ORIGIN}/mcp`
-		);
-		expect(((await res.json()) as { scope: string }).scope).toBe('read');
+		const forged = await approve(query, await actAs(tp, w.alice.id), {
+			access: 'upload',
+			orgId: w.acme.id
+		});
+		expect(forged).toMatchObject({ status: 400 });
 	});
 });
 

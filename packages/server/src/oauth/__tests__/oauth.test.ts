@@ -234,10 +234,11 @@ describe('discovery', () => {
 			code_challenge_methods_supported: ['S256'],
 			authorization_response_iss_parameter_supported: true
 		});
+		// No MCP client can be granted upload, so the MCP resource doesn't offer it.
 		expect(server().protectedResourceMetadata()).toEqual({
 			resource: `${ORIGIN}/mcp`,
 			authorization_servers: [ORIGIN],
-			scopes_supported: ['read', 'solve', 'upload'],
+			scopes_supported: ['read', 'solve'],
 			bearer_methods_supported: ['header']
 		});
 	});

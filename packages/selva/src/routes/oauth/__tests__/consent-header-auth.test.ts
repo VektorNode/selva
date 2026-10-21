@@ -1,12 +1,11 @@
 /**
  * Consent under forward-auth, through the real hook.
  *
- * Header-auth identity rides on `SELVA-*` headers every request. Approval used
- * to mint by posting to the app's own token endpoint, and SvelteKit's internal
- * fetch forwards only `cookie` and `authorization`, so the minting request
- * arrived anonymous. This drives a proxied approval through `handle` with a
- * real `HeaderAuthProvider`, so the identity the hook resolves is the one that
- * mints.
+ * Header-auth identity rides on `SELVA-*` headers every request, and SvelteKit's
+ * internal fetch forwards only `cookie` and `authorization`, so consent must mint
+ * in-process rather than through the app's own token endpoint. This drives a
+ * proxied approval through `handle` with a real `HeaderAuthProvider`, so the
+ * identity the hook resolves is the one that mints.
  */
 
 import * as fs from 'node:fs/promises';

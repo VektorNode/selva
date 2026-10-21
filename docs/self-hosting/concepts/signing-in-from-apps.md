@@ -7,9 +7,8 @@ description: 'How the Grasshopper plugin and MCP clients sign in through the bro
 
 # Signing in from apps
 
-Two kinds of app sign in to Selva on your behalf: the Grasshopper plugin, to upload
-definitions, and MCP clients such as Claude, to read and solve them. Both use the same
-flow, the one native apps use everywhere: the app opens Selva in your browser, you sign in
+The Grasshopper plugin signs in to Selva on your behalf to upload definitions, and MCP
+clients such as Claude to read and solve them. Both use the same flow, the one native apps use everywhere: the app opens Selva in your browser, you sign in
 and approve, and the app gets an API token. The app never sees your password.
 
 ## What happens
@@ -40,8 +39,9 @@ internet access. The consent page marks it as built in.
   `http://127.0.0.1/callback` on any port: a listener the plugin opens while you sign in.
   `localhost`, another path or another host is refused.
 - **It asks for Upload definitions** (`upload`). That allows creating definitions and new
-  versions where you could already, and making a version live. It can't edit a
-  definition's details, delete anything or create share links.
+  versions where you could already, checking a file before it's uploaded, and making a
+  version live. It can't edit a definition's details, delete anything or create share
+  links.
 - **No admin has to switch it on.** Anyone who can create a definition in at least one
   project of the organization may approve it: a project owner or editor, or anyone on a
   commons project.
@@ -82,6 +82,13 @@ works again if they get the right back.
   `manage_org_members` see and revoke everyone's.
 - **An app signs out** by calling `DELETE /api/v1/me/token` with its token. That revokes
   the token it sent and nothing else.
+- **On the designer's machine** the plugin keeps the token in the system's credential
+  store: Credential Manager on Windows, the login keychain on macOS. It never goes into
+  the `.gh` file, the plugin's web UI or a log.
+
+Malware running as the same user is out of reach of any of this. On Windows it can read the
+user's stored credentials without a prompt; on macOS the keychain asks before another app
+reads the token, but such malware could also act through Rhino itself.
 
 ## Behind a forward-auth proxy
 

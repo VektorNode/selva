@@ -1,11 +1,6 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import {
-	apiScopesFor,
-	consentChoices,
-	isLoopbackRedirect,
-	OAuthError
-} from '@selvajs/server/oauth';
-import { consentOrgs, mintConsentToken } from '@selvajs/server/handlers';
+import { apiScopesFor, isLoopbackRedirect, OAuthError } from '@selvajs/server/oauth';
+import { consentOffer, mintConsentToken } from '@selvajs/server/handlers';
 import { isApiError } from '@selvajs/server/api';
 import { toApiRequest } from '$lib/server/api/sveltekit';
 import { oauthServer } from '$lib/server/oauth/server';
@@ -50,24 +45,14 @@ export const load: PageServerLoad = async (event) => {
 		redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
 
-	// A level the user can't hold in any of their orgs isn't offered: picking it could only fail.
-	const api = toApiRequest(event);
-	const offered = (
-		await Promise.all(
-			consentChoices(request.scopes).map(async (choice) => ({
-				access: choice.access,
-				orgs: await consentOrgs(api, apiScopesFor(choice.scopes))
-			}))
-		)
-	).filter((c) => c.orgs.length);
-	if (!offered.length) {
+	const offer = await consentOffer(toApiRequest(event), request.scopes);
+	if (!offer) {
 		return {
 			ok: false as const,
 			problem: 'Your account can’t give an app this access in any of your organizations.'
 		};
 	}
-	const orgs = offered[0]!.orgs;
-	const acting = orgs.find((o) => o.id === locals.ctx?.actingOrgId);
+	const acting = offer.orgs.find((o) => o.id === locals.ctx?.actingOrgId);
 
 	return {
 		ok: true as const,
@@ -76,9 +61,9 @@ export const load: PageServerLoad = async (event) => {
 		builtIn: request.client.builtIn,
 		redirectHost: new URL(request.redirectUri).host,
 		loopback: isLoopbackRedirect(request.redirectUri),
-		choices: offered.map((c) => c.access),
-		orgs,
-		orgId: (acting ?? orgs[0]!).id,
+		choices: offer.choices.map((c) => c.access),
+		orgs: offer.orgs,
+		orgId: (acting ?? offer.orgs[0]!).id,
 		days: TOKEN_DAYS
 	};
 };
@@ -90,11 +75,13 @@ export const actions: Actions = {
 		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
 		if (!event.locals.ctx) return fail(403, { error: 'Sign in first.' });
 
-		const choices = consentChoices(request.scopes);
-		const choice = choices.find((c) => c.access === form.get('access')) ?? choices[0]!;
+		const api = toApiRequest(event);
+		const offer = await consentOffer(api, request.scopes);
+		const choice = offer?.choices.find((c) => c.access === form.get('access'));
+		if (!choice) return fail(400, { error: 'That access isn’t available to you.' });
 		let minted;
 		try {
-			minted = await mintConsentToken(toApiRequest(event), String(form.get('orgId') ?? ''), {
+			minted = await mintConsentToken(api, String(form.get('orgId') ?? ''), {
 				name: `${request.client.name} (OAuth)`.slice(0, 100),
 				scopes: apiScopesFor(choice.scopes),
 				expiresInDays: TOKEN_DAYS

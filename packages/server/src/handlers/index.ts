@@ -68,4 +68,10 @@ export {
 	type MintApiTokenInput,
 	type MintedApiToken
 } from './apiTokens.js';
-export { consentOrgs, mintConsentToken, type ConsentOrg } from './oauthConsent.js';
+export {
+	consentOffer,
+	consentOrgs,
+	mintConsentToken,
+	type ConsentOffer,
+	type ConsentOrg
+} from './oauthConsent.js';
