@@ -170,10 +170,7 @@ async function build() {
 		// even when the merge corrupted a member reference. "Method reference is used
 		// with definition" is the pattern behind the 0.17.1 MissingMethodException:
 		// ILRepack rewrote a signature to a merged type and shipped it anyway.
-		const deadlyMergePatterns = [
-			'Method reference is used with definition',
-			'Duplicate type '
-		];
+		const deadlyMergePatterns = ['Method reference is used with definition', 'Duplicate type '];
 		const mergeProblems = deadlyMergePatterns.filter((p) => buildOutput.includes(p));
 		if (mergeProblems.length > 0) {
 			logError(`ILRepack reported a broken merge (${mergeProblems.join(', ')}) — aborting.`);
@@ -188,10 +185,13 @@ async function build() {
 		if (process.platform === 'win32') {
 			log('[3/5] Verifying merged plugin assemblies...');
 			try {
-				execSync('dotnet build Selva.PluginVerifier/Selva.PluginVerifier.csproj --configuration Release', {
-					cwd: join(projectRoot, 'Plugin'),
-					stdio: 'inherit'
-				});
+				execSync(
+					'dotnet build Selva.PluginVerifier/Selva.PluginVerifier.csproj --configuration Release',
+					{
+						cwd: join(projectRoot, 'Plugin'),
+						stdio: 'inherit'
+					}
+				);
 			} catch {
 				logError('Verifier build failed');
 				process.exit(1);
@@ -200,8 +200,14 @@ async function build() {
 			const verifierDir = join(projectRoot, 'Plugin/Selva.PluginVerifier/bin/Release');
 			const verifyLegs = [
 				{ tfm: 'net48', cmd: `"${join(verifierDir, 'net48/Selva.PluginVerifier.exe')}"` },
-				{ tfm: 'net7.0', cmd: `dotnet "${join(verifierDir, 'net7.0-windows/Selva.PluginVerifier.dll')}"` },
-				{ tfm: 'net9.0', cmd: `dotnet "${join(verifierDir, 'net9.0-windows/Selva.PluginVerifier.dll')}"` }
+				{
+					tfm: 'net7.0',
+					cmd: `dotnet "${join(verifierDir, 'net7.0-windows/Selva.PluginVerifier.dll')}"`
+				},
+				{
+					tfm: 'net9.0',
+					cmd: `dotnet "${join(verifierDir, 'net9.0-windows/Selva.PluginVerifier.dll')}"`
+				}
 			];
 			for (const leg of verifyLegs) {
 				const outDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release', leg.tfm);

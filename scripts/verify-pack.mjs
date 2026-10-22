@@ -121,7 +121,9 @@ function verify(pkg, entries) {
 	if (!srcAllowed) {
 		const srcFiles = entries.filter((e) => e.startsWith('src/') && /\.(ts|tsx|mts|cts)$/.test(e));
 		if (srcFiles.length > 0) {
-			problems.push(`ships ${srcFiles.length} src/ .ts file(s), e.g. ${srcFiles[0]} — dangling dev source`);
+			problems.push(
+				`ships ${srcFiles.length} src/ .ts file(s), e.g. ${srcFiles[0]} — dangling dev source`
+			);
 		}
 	}
 

@@ -13,10 +13,18 @@ const timeoutIdx = args.indexOf('--timeout');
 const timeoutMs = timeoutIdx >= 0 ? Number(args[timeoutIdx + 1]) : 60_000;
 
 const typeOf = (v) =>
-	typeof v === 'number' ? (Number.isInteger(v) ? 'System.Int32' : 'System.Double') : typeof v === 'boolean' ? 'System.Boolean' : 'System.String';
+	typeof v === 'number'
+		? Number.isInteger(v)
+			? 'System.Int32'
+			: 'System.Double'
+		: typeof v === 'boolean'
+			? 'System.Boolean'
+			: 'System.String';
 const values = Object.entries(inputs).map(([name, v]) => ({
 	ParamName: name,
-	InnerTree: { '{0}': [{ type: typeOf(v), data: typeof v === 'string' ? JSON.stringify(v) : String(v) }] }
+	InnerTree: {
+		'{0}': [{ type: typeOf(v), data: typeof v === 'string' ? JSON.stringify(v) : String(v) }]
+	}
 }));
 
 const solveId = randomUUID();
@@ -33,7 +41,12 @@ const t0 = Date.now();
 const ctrl = new AbortController();
 const timer = setTimeout(() => ctrl.abort(), timeoutMs);
 try {
-	const res = await fetch(COMPUTE, { method: 'POST', body: JSON.stringify(body), headers: { 'content-type': 'application/json' }, signal: ctrl.signal });
+	const res = await fetch(COMPUTE, {
+		method: 'POST',
+		body: JSON.stringify(body),
+		headers: { 'content-type': 'application/json' },
+		signal: ctrl.signal
+	});
 	const text = await res.text();
 	const json = JSON.parse(text);
 	const vals = Object.fromEntries(
@@ -43,9 +56,30 @@ try {
 			return [v.ParamName, data.length > 60 ? `${data.slice(0, 60)}…(${data.length})` : data];
 		})
 	);
-	console.log(JSON.stringify({ solveId: solveId.slice(0, 8), status: res.status, ms: Date.now() - t0, errors: json.errors ?? [], warnings: json.warnings ?? [], selva: json.selva ?? null, bytes: text.length, values: vals }, null, 1));
+	console.log(
+		JSON.stringify(
+			{
+				solveId: solveId.slice(0, 8),
+				status: res.status,
+				ms: Date.now() - t0,
+				errors: json.errors ?? [],
+				warnings: json.warnings ?? [],
+				selva: json.selva ?? null,
+				bytes: text.length,
+				values: vals
+			},
+			null,
+			1
+		)
+	);
 } catch (e) {
-	console.log(JSON.stringify({ solveId: solveId.slice(0, 8), ms: Date.now() - t0, clientError: String(e.name ?? e) }));
+	console.log(
+		JSON.stringify({
+			solveId: solveId.slice(0, 8),
+			ms: Date.now() - t0,
+			clientError: String(e.name ?? e)
+		})
+	);
 } finally {
 	clearTimeout(timer);
 }

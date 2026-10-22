@@ -7,7 +7,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 
 const PORT = 5199;
-const LOG = new URL("./sink.log", import.meta.url);
+const LOG = new URL('./sink.log', import.meta.url);
 let control = { mode: 'ok', afterMs: 0 };
 const firstSeen = new Map();
 const t0 = Date.now();
@@ -41,7 +41,9 @@ http
 		let events = [];
 		try {
 			events = JSON.parse(body).events ?? [];
-		} catch {}
+		} catch {
+			// A non-JSON body is logged with no events.
+		}
 		fs.appendFileSync(
 			LOG,
 			JSON.stringify({
@@ -49,7 +51,9 @@ http
 				solveId: solveId.slice(0, 8),
 				auth: req.headers.authorization ?? null,
 				n: events.length,
-				events: events.map((e) => `${e.seq}:${e.type}:${e.payload?.level ?? ''}:${e.payload?.message ?? ''}`),
+				events: events.map(
+					(e) => `${e.seq}:${e.type}:${e.payload?.level ?? ''}:${e.payload?.message ?? ''}`
+				),
 				status,
 				reply
 			}) + '\n'

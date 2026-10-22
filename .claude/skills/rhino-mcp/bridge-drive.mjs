@@ -16,17 +16,29 @@ ws.binaryType = 'arraybuffer';
 ws.onmessage = (m) => {
 	if (typeof m.data !== 'string') return log(`[binary ${m.data.byteLength}]`);
 	const r = JSON.parse(m.data);
-	if (r.type === 'solveEvent') return log(`event ${r.event.type} #${r.event.seq} ${r.event.solveId.slice(0, 6)} ${JSON.stringify(r.event.payload ?? {})}`);
-	if (r.type === 'outputs') return log(`outputs blocked=${r.outcome?.blocked} aborted=${r.outcome?.aborted} diags=${r.outcome?.diagnostics?.length} count=${r.outputs?.['0fd6ae9d-8c74-4a4d-8a39-7b4d2233c806']}`);
+	if (r.type === 'solveEvent')
+		return log(
+			`event ${r.event.type} #${r.event.seq} ${r.event.solveId.slice(0, 6)} ${JSON.stringify(r.event.payload ?? {})}`
+		);
+	if (r.type === 'outputs')
+		return log(
+			`outputs blocked=${r.outcome?.blocked} aborted=${r.outcome?.aborted} diags=${r.outcome?.diagnostics?.length} count=${r.outputs?.['0fd6ae9d-8c74-4a4d-8a39-7b4d2233c806']}`
+		);
 	if (r.type === 'solvingState') return log(`solvingState ${r.isSolving}`);
 	log(r.type);
 };
 ws.onopen = () => {
 	for (const s of steps)
 		setTimeout(() => {
-			const frame = s.send === 'cancel' ? { type: 'cancelSolve', sessionId: session } : { type: 'valueUpdate', sessionId: session, values: s.send };
+			const frame =
+				s.send === 'cancel'
+					? { type: 'cancelSolve', sessionId: session }
+					: { type: 'valueUpdate', sessionId: session, values: s.send };
 			log(`>>> ${JSON.stringify(frame.values ?? frame.type)}`);
 			ws.send(JSON.stringify(frame));
 		}, s.at);
-	setTimeout(() => { ws.close(); process.exit(0); }, total);
+	setTimeout(() => {
+		ws.close();
+		process.exit(0);
+	}, total);
 };

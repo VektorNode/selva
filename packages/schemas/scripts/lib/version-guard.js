@@ -28,7 +28,11 @@ function canonicalise(value, mode) {
 		if (mode === 'keywords' && key === 'description') continue;
 		let childMode = mode;
 		if (mode === 'keywords') {
-			childMode = NAME_MAP_KEYWORDS.has(key) ? 'names' : DATA_KEYWORDS.has(key) ? 'data' : 'keywords';
+			childMode = NAME_MAP_KEYWORDS.has(key)
+				? 'names'
+				: DATA_KEYWORDS.has(key)
+					? 'data'
+					: 'keywords';
 		} else if (mode === 'names') {
 			childMode = 'keywords';
 		}
@@ -77,9 +81,7 @@ function reachableFromUISchema(definitions) {
 export function canonicaliseDefinitions(schema) {
 	const all = schema.definitions ?? {};
 	const reachable = reachableFromUISchema(all);
-	const persisted = Object.fromEntries(
-		Object.entries(all).filter(([name]) => reachable.has(name))
-	);
+	const persisted = Object.fromEntries(Object.entries(all).filter(([name]) => reachable.has(name)));
 	const defs = canonicalise(persisted, 'names');
 	if (defs.UISchema?.properties?.schemaVersion) {
 		delete defs.UISchema.properties.schemaVersion.default;

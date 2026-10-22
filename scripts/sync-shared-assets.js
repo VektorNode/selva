@@ -15,26 +15,26 @@ const sharedDir = path.join(rootDir, 'assets', 'shared');
 
 /** @type {Record<string, string[]>} */
 const MANIFEST = {
-  'baseHDR.hdr': ['packages/plugin-ui/static', 'packages/ui/static'],
+	'baseHDR.hdr': ['packages/plugin-ui/static', 'packages/ui/static']
 };
 
 function syncAsset(assetName, targetDirs) {
-  const src = path.join(sharedDir, assetName);
-  if (!fs.existsSync(src)) {
-    console.error(`✗ Missing shared asset: ${src}`);
-    process.exitCode = 1;
-    return;
-  }
+	const src = path.join(sharedDir, assetName);
+	if (!fs.existsSync(src)) {
+		console.error(`✗ Missing shared asset: ${src}`);
+		process.exitCode = 1;
+		return;
+	}
 
-  for (const relDir of targetDirs) {
-    const destDir = path.join(rootDir, relDir);
-    fs.mkdirSync(destDir, { recursive: true });
-    const dest = path.join(destDir, assetName);
-    fs.copyFileSync(src, dest);
-    console.log(`✓ ${relDir}/${assetName}`);
-  }
+	for (const relDir of targetDirs) {
+		const destDir = path.join(rootDir, relDir);
+		fs.mkdirSync(destDir, { recursive: true });
+		const dest = path.join(destDir, assetName);
+		fs.copyFileSync(src, dest);
+		console.log(`✓ ${relDir}/${assetName}`);
+	}
 }
 
 for (const [asset, targets] of Object.entries(MANIFEST)) {
-  syncAsset(asset, targets);
+	syncAsset(asset, targets);
 }

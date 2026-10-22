@@ -65,10 +65,7 @@ const mdsvexOptions = {
 			// Backslash first, or it re-escapes the escapes added below. A code
 			// fence ending in `\` would otherwise close the template literal early
 			// and break the build with an error pointing nowhere near the doc.
-			const literal = escaped
-				.replace(/\\/g, '\\\\')
-				.replace(/`/g, '\\`')
-				.replace(/\$\{/g, '\\${');
+			const literal = escaped.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 			return `{@html \`${literal}\`}`;
 		}
 	}
