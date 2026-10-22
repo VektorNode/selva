@@ -268,7 +268,7 @@ export class TreeBuilder {
 	 * @example
 	 * ```ts
 	 * // With InnerTree format (low-level, from API)
-	 * let trees = await client.solve(definitionUrl, initialInputs);
+	 * let trees = TreeBuilder.fromInputParams(io.inputs);
 	 * trees = TreeBuilder.replaceTreeValue(trees, 'X', 42);
 	 * trees = TreeBuilder.replaceTreeValue(trees, 'Y', [1, 2, 3]);
 	 * ```
@@ -364,8 +364,8 @@ export class TreeBuilder {
 	 * ```ts
 	 * // With InnerTree from compute results
 	 * const result = await client.solve(definitionUrl, inputs);
-	 * const x = TreeBuilder.getTreeValue(result, 'X'); // Returns 42 (not [42])
-	 * const points = TreeBuilder.getTreeValue(result, 'Points'); // Returns [point1, point2, ...]
+	 * const x = TreeBuilder.getTreeValue(result.values, 'X'); // Returns 42 (not [42])
+	 * const points = TreeBuilder.getTreeValue(result.values, 'Points'); // Returns [point1, point2, ...]
 	 * ```
 	 */
 	public static getTreeValue(trees: TreeBuilder[], paramName: string): DataTreeValue | null;

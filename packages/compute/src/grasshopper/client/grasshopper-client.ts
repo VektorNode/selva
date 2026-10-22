@@ -104,7 +104,8 @@ function summarizeDataTree(dataTree: DataTree[]): DataTreeSummaryEntry[] {
  * });
  *
  * try {
- *   const result = await client.solve(definitionUrl, { x: 1, y: 2 });
+ *   const io = await client.getIO(definitionUrl);
+ *   const result = await client.solve(definitionUrl, TreeBuilder.fromInputParams(io.inputs));
  * } finally {
  *   await client.dispose(); // Clean up resources
  * }
@@ -348,7 +349,7 @@ export default class GrasshopperClient {
 			cacheKey === null
 				? solveGrasshopperDefinitionWithCacheKey(dataTree, definition, config).then((r) => ({
 						...r,
-						missed: false
+						missed: true
 					}))
 				: solveByCacheKey(dataTree, cacheKey, definition, config);
 

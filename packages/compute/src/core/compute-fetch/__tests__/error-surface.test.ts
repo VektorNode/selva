@@ -140,6 +140,20 @@ describe('Grasshopper partial-success (500 with values) still passes through', (
 	});
 });
 
+describe('status labels', () => {
+	it('labels a 504 as a gateway timeout', async () => {
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(null, { ok: false, status: 504, statusText: 'Gateway Timeout' })
+		);
+
+		const error = await fetchCompute('solve', {}, { ...config, retry: { attempts: 0 } }).catch(
+			(e: ComputeError) => e
+		);
+
+		expect((error as ComputeError).message).toMatch(/^Gateway timeout/);
+	});
+});
+
 describe('server error codes are caller-supplied', () => {
 	/** A 502 whose body carries a machine code — status maps to NETWORK_ERROR by default. */
 	const coded = () =>
@@ -156,6 +170,31 @@ describe('server error codes are caller-supplied', () => {
 		expect.assertions(1);
 		try {
 			await fetchCompute('solve', {}, config);
+		} catch (e) {
+			expect((e as ComputeError).code).toBe(ErrorCodes.NETWORK_ERROR);
+		}
+	});
+
+	it('ignores a server code that names an Object.prototype member', async () => {
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(null, {
+				ok: false,
+				status: 502,
+				statusText: 'Bad Gateway',
+				body: JSON.stringify({ error: 'Bad Gateway', code: 'constructor' })
+			})
+		);
+
+		expect.assertions(1);
+		try {
+			await fetchCompute(
+				'solve',
+				{},
+				{
+					...config,
+					serverErrorCodes: { definition_not_cached: ErrorCodes.DEFINITION_NOT_CACHED }
+				}
+			);
 		} catch (e) {
 			expect((e as ComputeError).code).toBe(ErrorCodes.NETWORK_ERROR);
 		}

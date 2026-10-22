@@ -263,6 +263,31 @@ describe('GrasshopperClient.solve (e2e through transport)', () => {
 	});
 });
 
+describe('GrasshopperClient.createScheduler', () => {
+	it('reports the first solve of a definition as a re-upload, then a pointer hit', async () => {
+		route({
+			'/': onlineServer,
+			'/grasshopper': () => createMockResponse({ values: [], pointer: 'md5_ABC' })
+		});
+		const client = await GrasshopperClient.create({ serverUrl: SERVER });
+		const settled: Array<boolean | undefined> = [];
+		const scheduler = client.createScheduler({
+			mode: 'queue',
+			onSettle: (_ctx, result) => {
+				if (result.status === 'success') settled.push(result.definitionReuploaded);
+			}
+		});
+		const definition = new TextEncoder().encode('definition-content');
+
+		await scheduler.solve(definition, []);
+		await scheduler.solve(definition, []);
+
+		expect(settled).toEqual([true, false]);
+		scheduler.dispose();
+		await client.dispose();
+	});
+});
+
 describe('GrasshopperClient.getIO (e2e through transport + parser pipeline)', () => {
 	it('fetches IO and parses raw inputs into typed InputParams', async () => {
 		// camelCase to match the real Compute8 server contract (pinned by

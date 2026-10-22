@@ -74,7 +74,7 @@ export function throwHttpError(
 			code: ErrorCodes.NETWORK_ERROR
 		},
 		504: {
-			message: `Service unavailable: ${statusText}${bodyHint}`,
+			message: `Gateway timeout: ${statusText}${bodyHint}`,
 			code: ErrorCodes.NETWORK_ERROR
 		}
 	};
@@ -106,7 +106,10 @@ export function mapServerErrorCode(
 	serverErrorCodes?: ServerErrorCodeMap
 ): ErrorCode | undefined {
 	if (!serverCode || !serverErrorCodes) return undefined;
-	return serverErrorCodes[serverCode];
+	// The code is server-supplied: `constructor` must not resolve through the prototype.
+	return Object.prototype.hasOwnProperty.call(serverErrorCodes, serverCode)
+		? serverErrorCodes[serverCode]
+		: undefined;
 }
 
 export async function handleResponse(

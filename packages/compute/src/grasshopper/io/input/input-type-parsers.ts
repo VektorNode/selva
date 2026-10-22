@@ -50,7 +50,7 @@ export interface InputTypeParser<T extends InputParam = InputParam> {
 	fallback(schema: InputParamSchema, base: BaseInputType): T;
 }
 
-import { applyRounding, getInputStepSize, serverStepSize } from './numeric-rounding';
+import { applyRounding, decimalsOf, getInputStepSize, serverStepSize } from './numeric-rounding';
 import {
 	booleanTransformer,
 	coerceDefault,
@@ -130,19 +130,10 @@ function computeNumeric(
 		stepSource = schema.maximum;
 	}
 
-	const stepSize =
-		serverStep ??
-		(stepSource !== undefined ? getInputStepSize(stepSource, roundingTolerance) : 0.1);
+	const stepSize = serverStep ?? (stepSource !== undefined ? getInputStepSize(stepSource) : 0.1);
 
 	// Apply precision to all numeric values
-	let decimalPlaces = 0;
-	const stepStr = String(stepSize);
-	const expMatch = stepStr.toLowerCase().match(/e(-?\d+)/);
-	if (expMatch) {
-		decimalPlaces = Math.abs(Number(expMatch[1]));
-	} else {
-		decimalPlaces = stepStr.split('.')[1]?.length ?? 0;
-	}
+	let decimalPlaces = decimalsOf(stepSize);
 
 	if (
 		decimalPlaces === 0 &&

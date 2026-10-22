@@ -30,20 +30,15 @@ export const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
  * so a liveness probe authenticates exactly like the solve it gates.
  */
 export function buildAuthHeaders(auth: ComputeAuth): Record<string, string> {
-	return {
-		// Caller headers first so the credentials below OVERWRITE them.
-		...auth.headers,
-		...(auth.authToken && { Authorization: auth.authToken }),
-		...(auth.apiKey && { [auth.apiKeyHeader ?? DEFAULT_API_KEY_HEADER]: auth.apiKey })
-	};
+	return mergeUnder(auth.headers, credentialHeaders(auth));
 }
 
 export function buildHeaders(requestId: string, config: ComputeConfig): HeadersInit {
-	const headers: HeadersInit = {
-		...buildAuthHeaders(config),
+	const headers = mergeUnder(config.headers, {
+		...credentialHeaders(config),
 		'X-Request-ID': requestId,
 		'Content-Type': 'application/json'
-	};
+	});
 
 	if (
 		!config.apiKey &&
@@ -58,6 +53,26 @@ export function buildHeaders(requestId: string, config: ComputeConfig): HeadersI
 	}
 
 	return headers;
+}
+
+function credentialHeaders(auth: ComputeAuth): Record<string, string> {
+	return {
+		...(auth.authToken && { Authorization: auth.authToken }),
+		...(auth.apiKey && { [auth.apiKeyHeader ?? DEFAULT_API_KEY_HEADER]: auth.apiKey })
+	};
+}
+
+/**
+ * Header names are case-insensitive and fetch joins duplicates, so a caller key
+ * matching a transport key in any case is dropped rather than sent alongside it.
+ */
+function mergeUnder(
+	caller: Record<string, string> | undefined,
+	transport: Record<string, string>
+): Record<string, string> {
+	const taken = new Set(Object.keys(transport).map((name) => name.toLowerCase()));
+	const kept = Object.entries(caller ?? {}).filter(([name]) => !taken.has(name.toLowerCase()));
+	return { ...Object.fromEntries(kept), ...transport };
 }
 
 export function generateRequestId(): string {

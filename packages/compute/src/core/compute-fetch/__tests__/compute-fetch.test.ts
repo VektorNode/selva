@@ -134,6 +134,35 @@ describe('fetchCompute — request shape', () => {
 		expect(headers['X-Request-ID']).not.toBe('forged');
 	});
 
+	it('drops a caller header that differs from a transport header only in case', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+
+		await fetchCompute(
+			'grasshopper',
+			{},
+			{
+				...config,
+				apiKey: 'real-key',
+				authToken: 'Bearer real',
+				headers: {
+					rhinocomputekey: 'attacker-key',
+					authorization: 'Bearer forged',
+					'content-type': 'text/plain',
+					'x-request-id': 'forged',
+					'x-selva-definition': 'guid-123'
+				}
+			}
+		);
+
+		// fetch joins same-name headers that differ in case: read them the way it sends them.
+		const headers = new Headers(fetchMock.mock.calls[0][1].headers);
+		expect(headers.get('RhinoComputeKey')).toBe('real-key');
+		expect(headers.get('Authorization')).toBe('Bearer real');
+		expect(headers.get('Content-Type')).toBe('application/json');
+		expect(headers.get('X-Request-ID')).not.toContain('forged');
+		expect(headers.get('X-Selva-Definition')).toBe('guid-123');
+	});
+
 	it('does not warn about missing credentials when an auth token is configured', async () => {
 		// Regression: the warning only checked apiKey, so authToken-authenticated
 		// requests to remote servers logged a spurious "no API key" warning.

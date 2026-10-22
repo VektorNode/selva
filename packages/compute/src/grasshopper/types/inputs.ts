@@ -153,7 +153,7 @@ export interface FileInputType extends BaseInputType {
 }
 
 /**
- * Color input type (stored as hex string)
+ * Color input type. Values are `"R, G, B"` strings (`"255, 0, 0"`), not hex.
  */
 export interface ColorInputType extends BaseInputType {
 	paramType: 'Color';

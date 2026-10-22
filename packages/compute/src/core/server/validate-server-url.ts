@@ -55,7 +55,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	if (!/^https?:\/\//i.test(trimmed)) {
 		throw new ComputeError(
 			`Invalid serverUrl: "${trimmed}". Must start with "http://" or "https://". ` +
-				`For example: "http://localhost:5000" or "https://example.com"`,
+				`For example: "http://localhost:6500" or "https://example.com"`,
 			ErrorCodes.INVALID_CONFIG,
 			{ context: { receivedServerUrl: raw } }
 		);

@@ -48,3 +48,17 @@ describe('normalizeDefault — malformed tree-access branch', () => {
 		expect(parseErrors.some((e) => e.code === 'MALFORMED_DEFAULT')).toBe(true);
 	});
 });
+
+describe('normalizeDefault — already-flattened tree default', () => {
+	it('keeps a branch-path map instead of dropping it as malformed', () => {
+		const { input, error } = processInputWithError(
+			createInputSchema({
+				paramType: 'Number',
+				treeAccess: true,
+				default: { '{0}': [1, 2] }
+			})
+		);
+		expect(error).toBeUndefined();
+		expect(input.default).toEqual({ '{0}': [1, 2] });
+	});
+});

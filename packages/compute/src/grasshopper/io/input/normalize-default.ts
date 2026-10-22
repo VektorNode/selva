@@ -1,5 +1,6 @@
 import { getLogger } from '@/core';
 import { readField, hasField } from '@/core/utils/read-field';
+import { isDataTreeDefault } from '../../data-tree/tree-path';
 import { booleanTransformer, numericTransformer } from './input-type-parsers';
 import type { InputParamSchema } from '../../types';
 
@@ -51,11 +52,9 @@ export function normalizeDefaultWithWarning(input: InputParamSchema): {
 		return { schema: input };
 	}
 
-	// An array default is already in the shape the per-type parsers expect
-	// (coerceDefault maps arrays) — `processInputs` is public and documents this
-	// shape. It must NOT fall into the malformed branch below just because
-	// `typeof [] === 'object'`.
-	if (Array.isArray(input.default)) {
+	// Arrays and branch-path maps are already flattened: the per-type parsers take
+	// both as-is, so neither may fall into the no-innerTree branch below.
+	if (Array.isArray(input.default) || isDataTreeDefault(input.default)) {
 		return { schema: input };
 	}
 

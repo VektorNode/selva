@@ -32,6 +32,8 @@ export async function fetchDefinitionIO(
 	definition: string | Uint8Array,
 	config: ComputeConfig
 ): Promise<GrasshopperParsedIORaw> {
+	warnIfClientSide('fetchDefinitionIO', config.suppressBrowserWarning);
+
 	const args = prepareGrasshopperArgs(definition, []);
 	const payload: { algo?: string | null; pointer?: string | null } = {};
 	if (args.algo) payload.algo = args.algo;
@@ -40,8 +42,7 @@ export async function fetchDefinitionIO(
 	if (!payload.algo && !payload.pointer) {
 		throw new ComputeError(
 			'Definition must resolve to either a URL pointer or base64 algo',
-			ErrorCodes.INVALID_INPUT,
-			{ context: { definition } }
+			ErrorCodes.INVALID_INPUT
 		);
 	}
 
@@ -53,7 +54,7 @@ export async function fetchDefinitionIO(
 
 	if (!response || typeof response !== 'object') {
 		throw new ComputeError('Invalid IO response structure', ErrorCodes.INVALID_INPUT, {
-			context: { response, definition }
+			context: { response }
 		});
 	}
 
@@ -149,7 +150,7 @@ function coerceDiagnostic(value: unknown): string | undefined {
  * ```typescript
  * const { inputs, outputs } = await fetchParsedDefinitionIO(
  *   'https://example.com/definition.gh',
- *   { serverUrl: 'https://compute.rhino3d.com', apiKey: 'YOUR_KEY' }
+ *   { serverUrl: 'http://localhost:6500', apiKey: 'YOUR_KEY' }
  * );
  *
  * // Inputs are now strongly typed
@@ -164,8 +165,6 @@ export async function fetchParsedDefinitionIO(
 	definition: string | Uint8Array,
 	config: ComputeConfig
 ): Promise<GrasshopperParsedIO> {
-	warnIfClientSide('fetchParsedDefinitionIO', config.suppressBrowserWarning);
-
 	const {
 		inputs: rawInputs,
 		outputs,

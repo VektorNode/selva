@@ -37,6 +37,8 @@ handles cancellation, retries, loading state, and (optionally) a response cache
 — things every real app needs and shouldn't have to rebuild.
 
 ```ts
+import { readFile } from 'node:fs/promises';
+import { ErrorCodes } from '@selvajs/compute/core';
 import {
 	GrasshopperClient,
 	TreeBuilder,
@@ -51,12 +53,15 @@ const client = await GrasshopperClient.create({
 // Configure the scheduler for your workload (see "Configuring the scheduler" below).
 const scheduler = client.createScheduler({ mode: 'latest-wins', timeoutMs: 30_000 });
 
+// A URL, or the .gh bytes: a bare file name would be sent as the definition text.
+const definition = new Uint8Array(await readFile('my-definition.gh'));
+
 // Inspect the definition's inputs once, build a data tree.
-const io = await client.getIO('my-definition.gh');
+const io = await client.getIO(definition);
 const inputTree = TreeBuilder.fromInputParams(io.inputs);
 
 // Solve. Returns a Promise — call it as often as you like.
-const result = await scheduler.solve('my-definition.gh', inputTree);
+const result = await scheduler.solve(definition, inputTree);
 const { values } = new GrasshopperResponseProcessor(result).getValues();
 ```
 
@@ -74,7 +79,7 @@ in-flight solve, or when the user aborts:
 
 ```ts
 scheduler.solve(definition, inputTree).catch((err) => {
-	if (/superseded|aborted/i.test(err.message)) return; // expected, not an error
+	if (err.code === ErrorCodes.SUPERSEDED || err.code === ErrorCodes.ABORTED) return; // expected
 	showError(err);
 });
 ```
@@ -85,11 +90,11 @@ The scheduler is one API with two knobs that matter — `mode` and `timeoutMs` �
 plus a couple of optional ones. Pick the row that matches what the user is
 doing in your UI:
 
-| Workload                          | `mode`          | `timeoutMs`      | `retry`           | Notes                                                                                                 |
-| --------------------------------- | --------------- | ---------------- | ----------------- | ----------------------------------------------------------------------------------------------------- |
-| **Slider scrubs / live previews** | `'latest-wins'` | `30_000`         | default           | Aborts in-flight solves when newer values arrive. Add `cache: { ttlMs: 60_000 }` for instant repeats. |
-| **Submit / long-running jobs**    | `'queue'`       | `0` (no timeout) | `{ attempts: 1 }` | Serial queue. Pass a caller `signal` so users can hit Cancel. Bump proxy idle timeouts (see below).   |
-| **Background / batch parallel**   | `'parallel'`    | `60_000`         | `{ attempts: 2 }` | Fires solves concurrently up to `maxConcurrent` (default 4).                                          |
+| Workload                          | `mode`          | `timeoutMs`      | `retry`           | Notes                                                                                                              |
+| --------------------------------- | --------------- | ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Slider scrubs / live previews** | `'latest-wins'` | `30_000`         | default           | Aborts in-flight solves when newer values arrive. Add `cache: { maxBytes: 64 * 1024 * 1024 }` for instant repeats. |
+| **Submit / long-running jobs**    | `'queue'`       | `0` (no timeout) | `{ attempts: 1 }` | Serial queue. Pass a caller `signal` so users can hit Cancel. Bump proxy idle timeouts (see below).                |
+| **Background / batch parallel**   | `'parallel'`    | `60_000`         | `{ attempts: 2 }` | Fires solves concurrently up to `maxConcurrent` (default 4).                                                       |
 
 You can create multiple schedulers from one client — typically one per UI
 surface. They share the connection pool but their queues, cancel scopes, and
@@ -151,8 +156,7 @@ Anything requiring either is marked where it's documented.
 
 The browser couldn't reach the server. Check, in order:
 
-1. **Server is running** — `curl http://localhost:6500/healthcheck` should return
-   a 200.
+1. **Server is running** — `curl http://localhost:6500/` should return a 200.
 2. **CORS** — if your Compute server is on a different origin than your app,
    the server must send `Access-Control-Allow-Origin`. Standard Rhino Compute
    does **not** ship with CORS enabled; you'll need to put it behind a proxy

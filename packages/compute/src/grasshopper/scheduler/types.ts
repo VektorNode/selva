@@ -116,12 +116,10 @@ export type SolveResult =
 			durationMs: number;
 			fromCache: boolean;
 			/**
-			 * Definition-cache telemetry for a real compute call (not a Selva-cache
-			 * `fromCache` hit). `false` → the server reused its cached definition via
-			 * the pointer (no upload); `true` → the pointer was cold/stale so the full
-			 * definition was re-uploaded. `undefined` when the server-definition-cache
-			 * fast path didn't run (reuse disabled, or a non-reusable definition such
-			 * as a remote URL).
+			 * Whether this solve uploaded the full definition: `true` on its first
+			 * solve or after the server evicted the cache key, `false` when the server
+			 * reused its cached copy via the pointer. `undefined` for a `fromCache`
+			 * hit, or when reuse is off or the definition is a URL.
 			 */
 			definitionReuploaded?: boolean;
 	  }
@@ -138,9 +136,10 @@ export type SolveExecutor = (
  * Cache-key-aware executor. When `cacheKey` is provided, the executor solves by
  * reference (`pointer: cacheKey`) and falls back to a full upload on a server
  * cache miss. Always reports the (possibly refreshed) `cacheKey` so the
- * scheduler can update its definition→key map, plus whether the fast path
- * `missed` (for telemetry). When `cacheKey` is null it's a first solve — upload
- * fully and capture the key the server assigns.
+ * scheduler can update its definition→key map, plus whether the full
+ * definition was uploaded (`missed`). When `cacheKey` is null it's a first
+ * solve: upload fully, report `missed: true`, and capture the key the server
+ * assigns.
  *
  * Supplied by the client (which owns the solve primitives); the scheduler stays
  * decoupled from the transport.

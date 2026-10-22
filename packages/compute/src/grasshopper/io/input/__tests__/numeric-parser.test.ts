@@ -65,6 +65,19 @@ describe('numeric parser', () => {
 			expect(parseNumeric(createNumericInputSchema({ default: 1.5 })).stepSize).toBe(0.1);
 		});
 
+		it.each([
+			[1.5, 0.1],
+			[0.25, 0.01],
+			[1e-7, 1e-7],
+			[5, 1],
+			[123.456, 0.001],
+			[0.30000000000000004, 0.1],
+			[3.3000000000000003, 0.1],
+			[1.5e21, 1]
+		])('infers step %s → %s, ignoring float noise and exponent notation', (value, step) => {
+			expect(parseNumeric(createNumericInputSchema({ default: value })).stepSize).toBe(step);
+		});
+
 		it('should use minimum for step when default is 0', () => {
 			expect(parseNumeric(createNumericInputSchema({ default: 0, minimum: 0.01 })).stepSize).toBe(
 				0.01

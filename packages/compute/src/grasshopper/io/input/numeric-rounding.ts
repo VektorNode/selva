@@ -8,49 +8,27 @@ export function applyRounding(value: number, decimalPlaces: number, tolerance: n
 	return value;
 }
 
-export function getInputStepSize(value: number, roundingTolerance: number): number {
-	if (!Number.isFinite(value)) return 0.1;
-	if (value === 0) return 0.1;
+const MAX_DECIMALS = 12;
 
-	const abs = Math.abs(value);
+/**
+ * Decimal places `x` is written with, ignoring float noise past 12 places:
+ * `0.30000000000000004` → 1, `1e-7` → 7, `1.5e21` → 0.
+ */
+export function decimalsOf(x: number): number {
+	if (!Number.isFinite(x)) return 0;
+	const [mantissa, exponent] = String(Math.abs(x)).split('e');
+	const decimals =
+		exponent === undefined
+			? (Math.abs(x).toFixed(MAX_DECIMALS).replace(/0+$/, '').split('.')[1]?.length ?? 0)
+			: (mantissa.split('.')[1]?.length ?? 0) - Number(exponent);
+	return Math.min(Math.max(decimals, 0), MAX_DECIMALS);
+}
 
-	if (abs >= 1) {
-		const str = String(value);
-		const decimalPart = str.split('.')[1];
-		if (decimalPart && decimalPart.length > 0) {
-			const decimals = Math.min(decimalPart.length, 12);
-			const step = Math.pow(10, -decimals);
-			const rounded = Number(step.toFixed(decimals));
-			return Math.abs(rounded - step) < roundingTolerance ? rounded : step;
-		}
-		return 1;
-	}
-
-	// Handle exponential notation
-	const s = String(value);
-	const expMatch = s.toLowerCase().match(/e(-?\d+)/);
-	if (expMatch) {
-		const exp = Number(expMatch[1]);
-		if (exp < 0 || s.toLowerCase().includes('e-')) {
-			const absExp = Math.abs(exp);
-			const step = Math.pow(10, -absExp);
-			const rounded = Number(step.toFixed(absExp));
-			return Math.abs(rounded - step) < roundingTolerance ? rounded : step;
-		}
-		return 0.1;
-	}
-
-	// Handle standard decimal notation
-	const MAX_DECIMALS = 12;
-	const fixed = abs.toFixed(MAX_DECIMALS);
-	const trimmed = fixed.replace(/0+$/, '');
-	const decimals = Math.min((trimmed.split('.')[1] || '').length, MAX_DECIMALS);
-
-	if (decimals === 0) return 0.1;
-
-	const step = Math.pow(10, -decimals);
-	const rounded = Number(step.toFixed(decimals));
-	return Math.abs(rounded - step) < roundingTolerance ? rounded : step;
+export function getInputStepSize(value: number): number {
+	if (!Number.isFinite(value) || value === 0) return 0.1;
+	const decimals = decimalsOf(value);
+	if (decimals === 0) return Math.abs(value) >= 1 ? 1 : 0.1;
+	return Number((10 ** -decimals).toFixed(decimals));
 }
 
 /**
