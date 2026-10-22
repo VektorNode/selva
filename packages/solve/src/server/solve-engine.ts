@@ -162,6 +162,7 @@ export class SolveEngine {
 			maxQueueDepth: this.limits.computeMaxQueueDepth,
 			queueWaitMs: this.limits.computeQueueWaitMs,
 			responseCacheMaxBytes: this.limits.computeSolveCacheBytes,
+			maxResponseBytes: this.limits.computeResponseMaxBytes,
 			debug: options.debug ?? false,
 			maxWarmComputeServers: options.maxWarmComputeServers,
 			onDebugLog:

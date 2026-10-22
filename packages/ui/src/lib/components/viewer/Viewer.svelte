@@ -513,7 +513,7 @@
 								{#snippet child({ props })}
 									<Button
 										{...props}
-										variant="outline"
+										variant="overlay"
 										size="icon-lg"
 										title={t.toolsMenu}
 										aria-label={t.toolsMenu}
@@ -630,7 +630,7 @@
 						<!-- Touch has no F key, and fit-to-view is the way back from a framed part. -->
 						<div class="hidden pointer-coarse:block">
 							<Button
-								variant="outline"
+								variant="overlay"
 								size="icon-lg"
 								title={t.fitToView}
 								aria-label={t.fitToView}

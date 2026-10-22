@@ -450,11 +450,11 @@ if [ -f /tmp/selva-health.$$ ]; then
     echo "[FATAL] auto-migrate followed by a rollback would leave code and database on different heads."
     echo "[FATAL] Apply them yourself, then re-run the update:"
     echo "[FATAL]   cd $(dirname "$ECOSYSTEM")"
-    echo "[FATAL]   npm install --prefer-online @selvajs/supabase-provider@latest"
+    echo "[FATAL]   npm install --prefer-online @selvajs/supabase-provider@$TAG"
     echo "[FATAL]   npx selva-supabase"
     echo "[FATAL]   npx supabase db push"
     echo "[FATAL] The provider install is not optional: the migration SQL ships inside that"
-    echo "[FATAL] package, and the rollback just pinned it back to the OLD version — so a sync"
+    echo "[FATAL] package, and the update only moves @selvajs/cli and @selvajs/selva — so a sync"
     echo "[FATAL] without it copies 0 files and the push reports 'up to date' having done nothing."
     echo "[FATAL] If db push asks for credentials, see docs/self-hosting/providers/supabase.md"
     echo "[FATAL] — it needs a Supabase ACCOUNT credential (supabase login, or SUPABASE_ACCESS_TOKEN),"
@@ -511,8 +511,9 @@ exit 6
 // shared with the outcome reconciler and the log path.
 export type UpdatePlan = { cwd: string; args: string[] };
 
-// All @selvajs/* packages move together — fixing a provider-only bug without
-// bumping the runtime is a supported flow.
+// Only the CLI and the runtime move. Provider code is bundled into
+// @selvajs/selva; @selvajs/supabase-provider carries just the migration SQL,
+// which the operator installs and pushes before updating.
 //
 // `npm install` pins to the channel's dist-tag rather than using `npm
 // update`, because `update` only ever moves FORWARD within the installed

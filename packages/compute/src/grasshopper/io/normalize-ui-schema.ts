@@ -13,6 +13,8 @@
  * without drifting each time `UISchema` gains a field.
  */
 
+import { setOwnField } from '@/core/utils/set-own-field';
+
 /** Maps keyed by the definition's author (dropdown labels): copied verbatim. */
 const USER_AUTHORED_MAPS = new Set(['options', 'defaultOptions', 'values']);
 
@@ -50,7 +52,7 @@ function normalizeValue(value: unknown): unknown {
 	const out: Record<string, unknown> = {};
 	for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
 		const canonical = toCamelCase(key);
-		out[canonical] = USER_AUTHORED_MAPS.has(canonical) ? child : normalizeValue(child);
+		setOwnField(out, canonical, USER_AUTHORED_MAPS.has(canonical) ? child : normalizeValue(child));
 	}
 	return out;
 }

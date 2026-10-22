@@ -2,6 +2,7 @@ import { ComputeError, ErrorCodes, type ErrorCode } from '../errors';
 import { getLogger } from '../utils/logger';
 import { readField } from '../utils/read-field';
 import { fireServerTiming } from './server-timing';
+import { ERROR_BODY_MAX_BYTES, readBodyText } from './read-body';
 import { isAbortError } from './signal';
 import { setResponseWireSize } from './wire-size';
 
@@ -36,10 +37,8 @@ function throwHttpError(
 	const { status, statusText } = response;
 	const { fullUrl, requestId, requestSize, config } = ctx;
 
-	const responseHeaders: Record<string, string> = {};
-	response.headers.forEach((value, key) => {
-		responseHeaders[key] = value;
-	});
+	// fromEntries defines own keys, so a header named `__proto__` can't replace the prototype.
+	const responseHeaders = Object.fromEntries(response.headers.entries());
 
 	const trimmed = detail.trim();
 	const bodyHint = trimmed ? ` — ${trimmed.slice(0, 200)}${trimmed.length > 200 ? '…' : ''}` : '';
@@ -100,17 +99,58 @@ function throwHttpError(
 	});
 }
 
+/** A 3xx, or a browser's `redirect: 'manual'` stand-in for one, which hides the status. */
+export function isRedirect(response: Response): boolean {
+	return response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400);
+}
+
+/** Following a redirect would send the API key header, which fetch keeps cross-origin, to the target. */
+function redirectError(response: Response, ctx: RequestContext): ComputeError {
+	const location = response.headers.get('Location') ?? undefined;
+	return new ComputeError(
+		`Server redirected the request${location ? ` to ${location}` : ''}. Redirects are not followed, ` +
+			'so credentials never leave serverUrl: set serverUrl to the address it redirects to.',
+		ErrorCodes.INVALID_CONFIG,
+		{
+			...(response.status > 0 && { statusCode: response.status }),
+			context: { url: ctx.fullUrl, requestId: ctx.requestId, location }
+		}
+	);
+}
+
+function tooLargeError(response: Response, ctx: RequestContext): ComputeError {
+	const { maxResponseBytes } = ctx.config;
+	return new ComputeError(
+		`Response body exceeded maxResponseBytes (${maxResponseBytes} bytes)`,
+		ErrorCodes.RESPONSE_TOO_LARGE,
+		{
+			statusCode: response.status,
+			context: { url: ctx.fullUrl, requestId: ctx.requestId, maxResponseBytes }
+		}
+	);
+}
+
 export async function handleResponse(
 	response: Response,
 	ctx: RequestContext,
 	startTime: number
 ): Promise<unknown> {
 	const { requestId, config } = ctx;
-	const { debug, onServerTiming } = config;
+	const { debug, onServerTiming, maxResponseBytes = Infinity } = config;
 	const responseTime = Math.round(performance.now() - startTime);
 
+	if (isRedirect(response)) {
+		await response.body?.cancel().catch(() => {});
+		throw redirectError(response, ctx);
+	}
+
 	if (!response.ok) {
-		const rawBody = await response.text();
+		const isServerError = response.status === 500;
+		const { text: rawBody, truncated } = await readBodyText(
+			response,
+			isServerError ? maxResponseBytes : Math.min(ERROR_BODY_MAX_BYTES, maxResponseBytes)
+		);
+		if (truncated && isServerError) throw tooLargeError(response, ctx);
 
 		if (debug) {
 			const logger = getLogger();
@@ -127,13 +167,15 @@ export async function handleResponse(
 		}
 
 		let parsed: any;
-		let isJson = true;
-		try {
-			parsed = JSON.parse(rawBody);
-		} catch (e) {
-			isJson = false;
-			if (debug && response.status === 500) {
-				getLogger().debug(`   Failed to parse error body as JSON: ${e}`);
+		let isJson = !truncated;
+		if (isJson) {
+			try {
+				parsed = JSON.parse(rawBody);
+			} catch (e) {
+				isJson = false;
+				if (debug && isServerError) {
+					getLogger().debug(`   Failed to parse error body as JSON: ${e}`);
+				}
 			}
 		}
 
@@ -142,7 +184,7 @@ export async function handleResponse(
 			typeof parsed?.code === 'string' ? parsed.code : undefined;
 		let detail = rawBody;
 
-		if (response.status === 500 && isJson) {
+		if (isServerError && isJson) {
 			// Values plus errors or warnings: the solve ran, so this is a partial success.
 			const values = readField(parsed, 'values');
 			const solveErrors = readField<unknown[]>(parsed, 'errors');
@@ -194,14 +236,15 @@ export async function handleResponse(
 
 	try {
 		// Text, then parse, so the wire size rides along for byte-budgeted caches.
-		const rawBody = await response.text();
+		const { text: rawBody, truncated } = await readBodyText(response, maxResponseBytes);
+		if (truncated) throw tooLargeError(response, ctx);
 		const parsed = JSON.parse(rawBody);
 		setResponseWireSize(parsed, rawBody.length);
 		return parsed;
 	} catch (error) {
 		// The signal stays armed while the body streams: an abort here is the caller's or the
 		// timeout's, not a truncated body.
-		if (isAbortError(error)) throw error;
+		if (isAbortError(error) || error instanceof ComputeError) throw error;
 		// A declared non-JSON body (captive portal, proxy login page) comes back identical on a
 		// retry. Anything else that fails to parse was most likely cut off mid-stream.
 		const contentType = (response.headers.get('Content-Type') ?? '').toLowerCase();

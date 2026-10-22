@@ -9,13 +9,14 @@ function getNodeBuffer(): typeof Buffer | undefined {
 }
 
 /**
- * WHATWG forgiving-base64 normalization: strip ASCII whitespace, then drop trailing padding where
- * the spec allows it (total length a multiple of 4). `null` when the result can't be base64.
+ * WHATWG forgiving-base64 normalization without the alphabet check: strip ASCII whitespace, then
+ * drop trailing padding where the spec allows it (total length a multiple of 4). `null` when the
+ * length can't be base64. The decoders check the alphabet themselves, faster than a regex.
  */
-function normalizeBase64(str: string): string | null {
+function stripBase64(str: string): string | null {
 	let data = str.replace(/[\t\n\f\r ]/g, '');
 	if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
-	return data.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(data) ? null : data;
+	return data.length % 4 === 1 ? null : data;
 }
 
 /**
@@ -23,23 +24,40 @@ function normalizeBase64(str: string): string | null {
  *   available in this environment.
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
-	const data = normalizeBase64(base64File);
-	if (data === null) {
+	const data = stripBase64(base64File);
+	const bytes = data === null ? null : decodeStripped(data);
+	if (bytes === null) {
 		throw new VisualizationError('Invalid base64 input.', ErrorCodes.ENCODING_ERROR, {
 			context: { inputLength: base64File.length }
 		});
 	}
+	return bytes;
+}
 
+/** Decode {@link stripBase64} output; `null` when a character is outside the alphabet. */
+function decodeStripped(data: string): Uint8Array | null {
 	// Prefer Buffer in Node: faster, and avoids the atob + charCodeAt latin-1 detour.
 	const Buffer = getNodeBuffer();
 	if (Buffer) {
-		// Copy out of the Buffer — small Buffer.from results are views over Node's shared 8 KiB pool
-		// slab, so returning one would retain the whole slab and leak unrelated pooled bytes to any
-		// consumer touching `.buffer` (structuredClone, postMessage transfer, etc).
-		return new Uint8Array(Buffer.from(data, 'base64'));
+		// Buffer decodes leniently: `-` and `_` as base64url, a non-ASCII char as its low byte, and
+		// any other stray char is skipped. Rule out the first two; a skip leaves the result short.
+		if (Buffer.byteLength(data, 'utf8') !== data.length) return null;
+		if (data.includes('-') || data.includes('_')) return null;
+		const decoded = Buffer.from(data, 'base64');
+		if (decoded.length !== Math.floor((data.length * 3) / 4)) return null;
+		// Small Buffer.from results are views over Node's shared 8 KiB pool slab: copy one out, or
+		// it retains the whole slab and leaks unrelated pooled bytes to any consumer touching
+		// `.buffer` (structuredClone, postMessage transfer, etc). A large one owns its memory.
+		const ownsBuffer = decoded.byteOffset === 0 && decoded.buffer.byteLength === decoded.length;
+		return ownsBuffer ? new Uint8Array(decoded.buffer, 0, decoded.length) : new Uint8Array(decoded);
 	}
 	if (typeof globalThis.atob === 'function') {
-		const binary = globalThis.atob(data);
+		let binary: string;
+		try {
+			binary = globalThis.atob(data);
+		} catch {
+			return null;
+		}
 		const bytes = new Uint8Array(binary.length);
 		for (let i = 0; i < binary.length; i++) {
 			bytes[i] = binary.charCodeAt(i) & 0xff;

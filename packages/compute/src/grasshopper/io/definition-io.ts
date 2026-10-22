@@ -2,6 +2,7 @@ import { ComputeConfig, ComputeError, ErrorCodes } from '@/core';
 import { fetchCompute } from '@/core/compute-fetch/compute-fetch';
 import { readField } from '@/core/utils/read-field';
 import { warnIfClientSide } from '@/core/utils/warnings';
+import { validateServerUrl } from '@/core/server/validate-server-url';
 import { prepareGrasshopperArgs, withGrasshopperErrorCodes } from '../solve';
 
 import { GrasshopperParsedIO, GrasshopperParsedIORaw } from '../types';
@@ -26,6 +27,7 @@ export async function fetchDefinitionIO(
 	config: ComputeConfig
 ): Promise<GrasshopperParsedIORaw> {
 	warnIfClientSide('fetchDefinitionIO', config.suppressBrowserWarning);
+	validateServerUrl(config.serverUrl);
 
 	const { algo, pointer } = prepareGrasshopperArgs(definition, []);
 	if (!algo && !pointer) {

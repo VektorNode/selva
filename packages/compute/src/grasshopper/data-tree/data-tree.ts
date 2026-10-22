@@ -48,17 +48,9 @@ export class TreeBuilder {
 
 	/** Append values to the branch at `path` (`[0, 1]` is `{0;1}`). */
 	public append(path: number[], items: DataTreeValue[]): this {
-		const pathKey = TreeBuilder.formatPathString(path);
-
-		if (!this.innerTree[pathKey]) {
-			this.innerTree[pathKey] = [];
-		}
-
-		const dataItems: ComputeDataItem[] = items.map((item) => ({
-			data: TreeBuilder.serializeValue(item)
-		}));
-
-		this.innerTree[pathKey].push(...dataItems);
+		const branch = (this.innerTree[TreeBuilder.formatPathString(path)] ??= []);
+		// A loop, not push(...items): spreading a few hundred thousand items overflows the stack.
+		for (const item of items) branch.push({ data: TreeBuilder.serializeValue(item) });
 		return this;
 	}
 

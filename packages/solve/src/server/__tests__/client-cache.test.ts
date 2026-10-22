@@ -92,6 +92,7 @@ function baseConfig() {
 		cacheerroredsolves: false,
 		reuseServerDefinitionCache: true,
 		responseCacheMaxBytes: 256 * 1024 * 1024,
+		maxResponseBytes: 300 * 1024 * 1024,
 		debug: false as boolean | 'verbose'
 	};
 }
@@ -354,6 +355,14 @@ describe('createClientCache — scheduler backpressure', () => {
 		await cache.getClient(server('s1'));
 		expect(createdSchedulerOptions[0].maxQueueDepth).toBeUndefined();
 		expect(createdSchedulerOptions[0].queueWaitMs).toBeUndefined();
+	});
+});
+
+describe('createClientCache — response size cap', () => {
+	it('hands maxResponseBytes to the compute client', async () => {
+		const cache = createClientCache({ ...baseConfig(), maxResponseBytes: 12_345 });
+		await cache.getClient(server('s1'));
+		expect(createdConfigs[0].maxResponseBytes).toBe(12_345);
 	});
 });
 

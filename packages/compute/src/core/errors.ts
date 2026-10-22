@@ -17,13 +17,21 @@ export const ErrorCodes = {
 	RATE_LIMIT: 'RATE_LIMIT',
 	/** A 2xx that declared a non-JSON body, e.g. a captive portal or proxy login page. Never retried. */
 	INVALID_RESPONSE: 'INVALID_RESPONSE',
+	/**
+	 * The response body passed `ComputeConfig.maxResponseBytes`; the download was cancelled there.
+	 * Never retried. `context` carries `{ maxResponseBytes }`.
+	 */
+	RESPONSE_TOO_LARGE: 'RESPONSE_TOO_LARGE',
 	/** Any failure not classified by another code. */
 	UNKNOWN_ERROR: 'UNKNOWN_ERROR',
 	/** An object was used after `dispose()`, or a file download failed part-way. */
 	INVALID_STATE: 'INVALID_STATE',
 	/** A caller-supplied argument is unusable: an empty definition, an unserializable body. */
 	INVALID_INPUT: 'INVALID_INPUT',
-	/** Bad configuration: an invalid `serverUrl`, an incomplete logger, an interval out of range. */
+	/**
+	 * Bad configuration: an invalid `serverUrl`, a server that answers with a redirect, an
+	 * incomplete logger, an interval out of range.
+	 */
 	INVALID_CONFIG: 'INVALID_CONFIG',
 	/** A browser-only API (file download) was called outside a browser. */
 	BROWSER_ONLY: 'BROWSER_ONLY',

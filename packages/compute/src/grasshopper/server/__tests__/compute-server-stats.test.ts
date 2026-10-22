@@ -614,3 +614,36 @@ describe('monitor', () => {
 		expect(callback).not.toHaveBeenCalled();
 	});
 });
+
+describe('ComputeServerStats — redirects and body size', () => {
+	it('never follows a redirect on a control-plane read', async () => {
+		fetchMock.mockResolvedValue(res('', { ok: false, status: 302 }));
+		const stats = new ComputeServerStats(SERVER, 'secret');
+
+		expect(await stats.getVersion()).toBeNull();
+		expect(await stats.purgeCache()).toBeNull();
+		for (const [, init] of fetchMock.mock.calls) expect(init).toMatchObject({ redirect: 'manual' });
+	});
+
+	it('gives up on an oversized body instead of buffering it', async () => {
+		fetchMock.mockResolvedValue(res('{"rhino":"' + 'x'.repeat(2 << 20) + '"}'));
+		const stats = new ComputeServerStats(SERVER);
+
+		expect(await stats.getVersion()).toBeNull();
+	});
+});
+
+describe('ComputeServerStats — probe connection', () => {
+	it('releases the probe response body', async () => {
+		let cancelled = false;
+		const body = new ReadableStream({
+			cancel() {
+				cancelled = true;
+			}
+		});
+		fetchMock.mockResolvedValueOnce(new Response(body, { status: 200 }));
+
+		expect(await new ComputeServerStats(SERVER).isServerOnline()).toBe(true);
+		expect(cancelled).toBe(true);
+	});
+});

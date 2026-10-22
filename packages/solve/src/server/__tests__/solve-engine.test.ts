@@ -96,6 +96,15 @@ function baseLimits(over: Partial<SolveEngineLimits> = {}): SolveEngineLimits {
 const server = { id: 'srv-1', serverUrl: 'https://compute.example' };
 const inputs: PipelineInput[] = [{ id: 'a', paramType: 'number', nickname: 'A' } as PipelineInput];
 
+describe('SolveEngine — compute response cap', () => {
+	it('caps the compute download at computeResponseMaxBytes', async () => {
+		createdConfigs.length = 0;
+		const engine = new SolveEngine({ limits: baseLimits({ computeResponseMaxBytes: 1000 }) });
+		await engine.getClient(server);
+		expect(createdConfigs[0].maxResponseBytes).toBe(1000);
+	});
+});
+
 describe('SolveEngine.solve — definitionSource variants', () => {
 	it('raw bytes without definitionKey throws', async () => {
 		const engine = new SolveEngine({ limits: baseLimits() });

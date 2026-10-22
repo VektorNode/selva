@@ -178,6 +178,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		// Queue-full or queue-timeout rejects the solve before compute runs — a load
 		// signal, not a failure, so it's `shed` rather than `compute_error`.
 		if (err instanceof ComputeError) {
+			if (err.code === ErrorCodes.RESPONSE_TOO_LARGE) return { kind: 'too_large' };
 			if (err.code === ErrorCodes.QUEUE_FULL) {
 				return {
 					kind: 'shed',

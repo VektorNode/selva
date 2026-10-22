@@ -2,6 +2,7 @@ import { isBase64Flag } from '@/core/files/handle-files';
 import type { RhinoModule } from 'rhino3dm';
 import { FileData } from '@/core/files/types';
 import { hasField, readField } from '@/core/utils/read-field';
+import { setOwnField } from '@/core/utils/set-own-field';
 import { GrasshopperComputeResponse, DataItem } from '../../types';
 import { decodeRhinoGeometry } from './rhino-decoder';
 import { disposeRhinoObjects } from './rhino-objects';
@@ -199,8 +200,9 @@ export function getValues<T = ParsedContext>(
 
 			const value = extractItemValue(item, type, parseValues, rhino);
 
-			if (!(key in result)) {
-				result[key] = value;
+			// Own keys only: an output named `constructor` must not find Object.prototype's.
+			if (!Object.prototype.hasOwnProperty.call(result, key)) {
+				setOwnField(result, key, value);
 			} else if (aggregated.has(key)) {
 				result[key].push(value);
 			} else {

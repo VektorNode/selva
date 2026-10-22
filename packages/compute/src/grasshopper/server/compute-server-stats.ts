@@ -2,6 +2,8 @@ import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { validateServerUrl } from '@/core/server/validate-server-url';
 import { buildAuthHeaders } from '@/core/compute-fetch/request';
+import { readBodyText } from '@/core/compute-fetch/read-body';
+import { isRedirect } from '@/core/compute-fetch/response';
 import type { ComputeAuth } from '@/core/types';
 
 export interface ServerVersion {
@@ -52,6 +54,9 @@ export default class ComputeServerStats {
 	/** Floor for `monitor()`'s `intervalMs` — anything lower hot-loops the server. */
 	private static readonly MIN_MONITOR_INTERVAL_MS = 100;
 
+	/** Every control-plane answer is a count, a version or a short map. */
+	private static readonly MAX_BODY_BYTES = 1 << 20;
+
 	/**
 	 * @param serverUrl - Base URL of the Rhino Compute server with http:// or https:// scheme (e.g., 'http://localhost:6500')
 	 * @param auth - An API key, or the same auth fields a solve's `ComputeConfig` carries
@@ -65,13 +70,16 @@ export default class ComputeServerStats {
 		};
 	}
 
-	/** Aborts after `timeoutMs` so a hung connection can't stall a probe or `monitor()`; `0` disables it. */
+	/**
+	 * Aborts after `timeoutMs` so a hung connection can't stall a probe or `monitor()`; `0` disables
+	 * it. Redirects are not followed: fetch would carry the API key header to the target.
+	 */
 	private fetchWithTimeout(
 		url: string,
 		init: RequestInit = {},
 		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS
 	): Promise<Response> {
-		const requestInit: RequestInit = { ...init, headers: this.headers };
+		const requestInit: RequestInit = { ...init, headers: this.headers, redirect: 'manual' };
 		if (timeoutMs > 0 && !requestInit.signal) {
 			requestInit.signal = AbortSignal.timeout(timeoutMs);
 		}
@@ -93,9 +101,15 @@ export default class ComputeServerStats {
 			const response = await this.fetchWithTimeout(`${this.serverUrl}${path}`, init, timeoutMs);
 			if (!response.ok) {
 				getLogger().warn(`[ComputeServerStats] ${label} failed:`, response.status);
+				await response.body?.cancel().catch(() => {});
 				return null;
 			}
-			return await response.text();
+			const { text, truncated } = await readBodyText(response, ComputeServerStats.MAX_BODY_BYTES);
+			if (truncated) {
+				getLogger().warn(`[ComputeServerStats] ${label} answered with an oversized body`);
+				return null;
+			}
+			return text;
 		} catch (err) {
 			getLogger().warn(`[ComputeServerStats] ${label} errored:`, err);
 			return null;
@@ -142,22 +156,15 @@ export default class ComputeServerStats {
 		// The rhino.compute proxy has no `/healthcheck` route; its real liveness
 		// signal is `GET /`, which returns "compute.rhino3d running". Probing an
 		// unknown path would instead be forwarded to a child and only tells us the
-		// proxy can reach one. Some builds redirect `/` to rhino3d.com instead: the
-		// redirect is not followed (it would carry the API key off-site and put the
-		// public internet inside the probe's timeout), and answering with one is
-		// alive.
+		// proxy can reach one. Some builds redirect `/` to rhino3d.com instead:
+		// answering with a redirect is alive.
 		const url = `${this.serverUrl}/`;
 
 		try {
-			const response = await this.fetchWithTimeout(
-				url,
-				{ method: 'GET', redirect: 'manual' },
-				timeoutMs
-			);
-			const redirected =
-				response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400);
-
-			return { online: response.ok || redirected, status: response.status };
+			const response = await this.fetchWithTimeout(url, { method: 'GET' }, timeoutMs);
+			// Unread, the body would hold its connection until garbage collection.
+			await response.body?.cancel().catch(() => {});
+			return { online: response.ok || isRedirect(response), status: response.status };
 		} catch (err) {
 			getLogger().debug('[ComputeServerStats] Fetch error:', err);
 			return {

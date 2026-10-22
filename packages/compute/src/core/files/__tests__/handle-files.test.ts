@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-import { extractFilesFromComputeResponse } from '../handle-files';
+import { unzipSync } from 'fflate';
+
+import { downloadFileData, extractFilesFromComputeResponse } from '../handle-files';
 import { base64ByteArray } from '@/core/utils/encoding';
 import type { FileData, FileBaseInfo } from '../types';
 
@@ -380,5 +382,37 @@ describe('extractFilesFromComputeResponse — duplicate-path rename', () => {
 			fd({ subFolder: 'b' })
 		]);
 		expect(files.map((f) => f.path)).toEqual(['a/model.txt', 'b/model.txt']);
+	});
+});
+
+describe('downloadFileData — archive contents', () => {
+	/** Stub just enough DOM to capture the archive the anchor click would save. */
+	function captureDownload(): () => Promise<Record<string, Uint8Array>> {
+		let blob: Blob | undefined;
+		vi.stubGlobal('document', {
+			createElement: () => ({ click() {}, remove() {} }),
+			body: { appendChild() {} }
+		});
+		vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+			blob = b as Blob;
+			return 'blob:test';
+		});
+		vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+		return async () => unzipSync(new Uint8Array(await blob!.arrayBuffer()));
+	}
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it('keeps a root file named `__proto__`, renamed, rather than losing it', async () => {
+		const read = captureDownload();
+		await downloadFileData(
+			[fd({ fileName: '__proto__', fileType: '' }), fd({ fileName: 'b', fileType: '.txt' })],
+			'out'
+		);
+		const entries = await read();
+		expect(Object.keys(entries).sort()).toEqual(['__proto__-2', 'b.txt']);
+		expect(new TextDecoder().decode(entries['__proto__-2'])).toBe('hello');
 	});
 });

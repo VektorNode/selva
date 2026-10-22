@@ -74,6 +74,25 @@ describe('deriveOutcome', () => {
 		expect(o.detail).toMatch(/same way/i);
 	});
 
+	it('tells a beta deployment to install the beta provider, not latest', () => {
+		const skew = [
+			'[FATAL] SCHEMA_SKEW: @selvajs/selva@4.20.0-beta.9 expects database migration head 20261021120000,',
+			'[FATAL] but this database is at 20261017120000. The new version is fine — its migrations',
+			'[DONE] Rolled back to 4.20.0-beta.6 — previous version is online'
+		];
+		const fromRunner = deriveOutcome(
+			5,
+			['[FATAL]   npm install --prefer-online @selvajs/supabase-provider@beta', ...skew].join('\n')
+		);
+		expect(fromRunner.detail).toContain('@selvajs/supabase-provider@beta`');
+
+		const fromPrelude = deriveOutcome(
+			5,
+			['[INFO] Updating deployment (cwd: /srv/selva, channel: beta)', ...skew].join('\n')
+		);
+		expect(fromPrelude.detail).toContain('@selvajs/supabase-provider@beta`');
+	});
+
 	it('does not fall through to the generic "review the log" rollback text on schema skew', () => {
 		const logs = [
 			'[FATAL] SCHEMA_SKEW: @selvajs/selva@4.14.0 expects database migration head 20260817200000,',

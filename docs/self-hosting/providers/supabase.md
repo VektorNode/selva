@@ -188,6 +188,8 @@ npx selva-supabase
 npx supabase db push
 ```
 
+On the beta channel, install `@selvajs/supabase-provider@beta` instead. `latest` is the stable line and ships none of the beta's migrations.
+
 Then run the update.
 
 Skipping the first line is the trap: `selva-supabase` copies from whatever provider version is installed, so with the old one still pinned it reports `0 copied` and `db push` says `Remote database is up to date`. Both look like success, and neither did anything.

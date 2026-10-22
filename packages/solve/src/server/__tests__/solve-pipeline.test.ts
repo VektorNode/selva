@@ -49,7 +49,8 @@ vi.mock('@selvajs/compute/core', () => {
 			QUEUE_FULL: 'QUEUE_FULL',
 			QUEUE_TIMEOUT: 'QUEUE_TIMEOUT',
 			ABORTED: 'ABORTED',
-			TIMEOUT_ERROR: 'TIMEOUT_ERROR'
+			TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+			RESPONSE_TOO_LARGE: 'RESPONSE_TOO_LARGE'
 		}
 	};
 });
@@ -57,7 +58,13 @@ vi.mock('@selvajs/compute/core', () => {
 import { ComputeError as MockComputeError } from '@selvajs/compute/core';
 const makeShedError = (
 	message: string,
-	code: 'QUEUE_FULL' | 'QUEUE_TIMEOUT' | 'ABORTED' | 'TIMEOUT_ERROR' | 'UNKNOWN_ERROR',
+	code:
+		| 'QUEUE_FULL'
+		| 'QUEUE_TIMEOUT'
+		| 'ABORTED'
+		| 'TIMEOUT_ERROR'
+		| 'RESPONSE_TOO_LARGE'
+		| 'UNKNOWN_ERROR',
 	options?: { statusCode?: number; context?: Record<string, unknown> }
 ) =>
 	new (
@@ -421,6 +428,17 @@ describe('runSolvePipeline — failure outcomes', () => {
 			baseArgs({
 				responseMaxBytes: 10, // tiny cap
 				client: fakeClient(async () => ({ values: 'a bigger than ten bytes payload' }))
+			})
+		);
+		expect(outcome.kind).toBe('too_large');
+	});
+
+	it('returns too_large when compute cut the download at its byte cap', async () => {
+		const outcome = await runSolvePipeline(
+			baseArgs({
+				client: fakeClient(async () => {
+					throw makeShedError('too large', 'RESPONSE_TOO_LARGE', { statusCode: 200 });
+				})
 			})
 		);
 		expect(outcome.kind).toBe('too_large');

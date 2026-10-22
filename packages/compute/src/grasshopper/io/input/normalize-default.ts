@@ -1,5 +1,6 @@
 import { ErrorCodes, getLogger } from '@/core';
 import { readField, hasField } from '@/core/utils/read-field';
+import { setOwnField } from '@/core/utils/set-own-field';
 import { isDataTreeDefault } from '../../data-tree/tree-path';
 import { booleanTransformer, numericTransformer } from './transformers';
 import type { ParserWarning } from './input-type-parsers';
@@ -104,7 +105,7 @@ export function normalizeDefault(input: InputParamSchema, label: string): Normal
 				}
 				parsed.push(data);
 			}
-			tree[branch] = parsed;
+			setOwnField(tree, branch, parsed);
 		}
 
 		// The good values survive; the dropped ones are reported.

@@ -123,3 +123,16 @@ describe('validateServerUrl', () => {
 		expect(validateServerUrl('http://[::1]:6500')).toBe('http://[::1]:6500');
 	});
 });
+
+describe('validateServerUrl — long runs', () => {
+	// `/x+$/` retries from every position of a run, so these took seconds when trimmed by regex.
+	it('trims a URL holding long runs of slashes and dots in linear time', () => {
+		const started = performance.now();
+		expect(validateServerUrl('http://h/' + '/'.repeat(200_000) + 'a')).toMatch(/a$/);
+		expect(validateServerUrl('http://h' + '/'.repeat(200_000))).toBe('http://h');
+		expect(() =>
+			validateServerUrl('http://compute.rhino3d.com' + '.'.repeat(100_000))
+		).toThrowError(ComputeError);
+		expect(performance.now() - started).toBeLessThan(1000);
+	});
+});

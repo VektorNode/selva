@@ -199,3 +199,60 @@ describe('detectBase64Payload heuristic', () => {
 		expect(detectBase64Payload('A'.repeat(64))).toBe('A'.repeat(64));
 	});
 });
+
+describe('decodeBase64ToBinary — strictness on both paths', () => {
+	/** The WHATWG forgiving-base64 rules, spelled out: what both decoders must accept. */
+	function reference(input: string): number[] | null {
+		let data = input.replace(/[\t\n\f\r ]/g, '');
+		if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
+		if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(data)) return null;
+		return [...originalBuffer.from(data, 'base64')];
+	}
+	const attempt = (input: string): number[] | null => {
+		try {
+			return [...decodeBase64ToBinary(input)];
+		} catch {
+			return null;
+		}
+	};
+
+	// Valid encodings, then near misses: each mutation splices in a character Buffer decodes
+	// leniently (base64url, the low byte of non-ASCII), stops on, or skips.
+	const tricky = ['A', '+', '/', '=', '-', '_', ' ', '\n', '.', 'é', 'Ł', '\ud800'];
+	let seed = 7;
+	const random = (n: number) => {
+		seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+		return seed % n;
+	};
+	const samples = Array.from({ length: 4000 }, () => {
+		const bytes = Uint8Array.from({ length: random(40) }, () => random(256));
+		let s = originalBuffer.from(bytes).toString('base64');
+		for (let m = random(3); m > 0; m--) {
+			const at = random(s.length + 1);
+			s = s.slice(0, at) + tricky[random(tricky.length)] + s.slice(at + random(2));
+		}
+		return s;
+	});
+
+	it('accepts and rejects exactly what the forgiving-base64 rules do, with Buffer', () => {
+		for (const s of samples) expect(attempt(s), JSON.stringify(s)).toEqual(reference(s));
+	});
+
+	it('accepts and rejects exactly what the forgiving-base64 rules do, with atob', () => {
+		delete (globalThis as any).Buffer;
+		for (const s of samples) expect(attempt(s), JSON.stringify(s)).toEqual(reference(s));
+	});
+
+	it('returns a large result that owns its whole ArrayBuffer', () => {
+		const bytes = decodeBase64ToBinary(originalBuffer.alloc(1 << 20, 9).toString('base64'));
+		expect(bytes.length).toBe(1 << 20);
+		expect(bytes.buffer.byteLength).toBe(1 << 20);
+		expect(bytes[12345]).toBe(9);
+	});
+
+	it('copies a small result out of the shared pool', () => {
+		const bytes = decodeBase64ToBinary('AQID');
+		expect([...bytes]).toEqual([1, 2, 3]);
+		expect(bytes.buffer.byteLength).toBe(3);
+	});
+});

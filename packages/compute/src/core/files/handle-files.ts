@@ -216,10 +216,14 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Promise<void> {
 	const { zip, strToU8 } = await import('fflate');
 
-	// Paths are already unique: extractFilesFromComputeResponse renames collisions.
+	// Paths are already unique: extractFilesFromComputeResponse renames collisions. fflate
+	// flattens entries into a plain object, where a root entry named `__proto__` is lost.
+	const taken = new Set(files.map((file) => file.path));
 	const zipData: Record<string, Uint8Array> = {};
 	for (const file of files) {
-		zipData[file.path] = typeof file.content === 'string' ? strToU8(file.content) : file.content;
+		const path = file.path === '__proto__' ? uniqueArchivePath(file.path, taken) : file.path;
+		taken.add(path);
+		zipData[path] = typeof file.content === 'string' ? strToU8(file.content) : file.content;
 	}
 
 	// Async `zip` deflates on a worker thread; `zipSync` would block the UI on large exports.

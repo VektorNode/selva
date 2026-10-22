@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { applyOptionalComputeSettings, prepareGrasshopperArgs } from '../solve';
 import type { DataTree, GrasshopperRequestSchema } from '../types';
 
@@ -114,5 +114,40 @@ describe('solve', () => {
 			expect(args.cachesolve).toBe(true);
 			expect(args.cacheerroredsolves).toBe(false);
 		});
+	});
+});
+
+describe('serverUrl validation in the Grasshopper entry points', () => {
+	it('rejects the blocked public endpoint before any request', async () => {
+		const { solveGrasshopperDefinition } = await import('../solve');
+		const { fetchDefinitionIO } = await import('../io/definition-io');
+		const config = { serverUrl: 'https://compute.rhino3d.com', suppressBrowserWarning: true };
+
+		await expect(solveGrasshopperDefinition([], 'https://x/def.gh', config)).rejects.toMatchObject({
+			code: 'INVALID_CONFIG'
+		});
+		await expect(fetchDefinitionIO('https://x/def.gh', config)).rejects.toMatchObject({
+			code: 'INVALID_CONFIG'
+		});
+		expect(global.fetch).not.toHaveBeenCalled();
+	});
+});
+
+describe('maxResponseBytes on a solve', () => {
+	it('does not count the definition the server echoes back after an upload', async () => {
+		const { solveGrasshopperDefinition } = await import('../solve');
+		const definition = new Uint8Array(3000).fill(7);
+		const algo = Buffer.from(definition).toString('base64');
+		const body = JSON.stringify({ algo, values: [] });
+		(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce(
+			new Response(body, { status: 200 })
+		);
+
+		const response = await solveGrasshopperDefinition([], definition, {
+			serverUrl: 'http://localhost:6500',
+			maxResponseBytes: 100,
+			suppressBrowserWarning: true
+		});
+		expect(response).toEqual({ values: [] });
 	});
 });

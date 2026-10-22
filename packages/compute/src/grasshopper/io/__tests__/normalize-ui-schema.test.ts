@@ -247,3 +247,19 @@ describe('normalizeUISchemaCasing', () => {
 		});
 	});
 });
+
+describe('normalizeUISchemaCasing — __proto__ keys', () => {
+	it('copies a `__proto__` key as data instead of adopting it as the prototype', () => {
+		const out = normalizeUISchemaCasing(
+			JSON.parse('{"Inputs":[],"__proto__":{"isAdmin":true,"schemaVersion":999}}')
+		) as Record<string, unknown>;
+
+		expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+		expect(out.isAdmin).toBeUndefined();
+		expect(out.schemaVersion).toBeUndefined();
+		expect(Object.getOwnPropertyDescriptor(out, '__proto__')?.value).toEqual({
+			isAdmin: true,
+			schemaVersion: 999
+		});
+	});
+});

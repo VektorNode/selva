@@ -71,9 +71,9 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	}
 
 	// Lowercase + strip any trailing dot so the FQDN form can't bypass the block.
-	const hostname = parsed.hostname.toLowerCase().replace(/\.+$/, '');
+	const hostname = trimTrailing(parsed.hostname.toLowerCase(), '.');
 	const blocked = (options?.blockedHosts ?? [DEFAULT_BLOCKED_HOST]).map((h) =>
-		h.toLowerCase().replace(/\.+$/, '')
+		trimTrailing(h.toLowerCase(), '.')
 	);
 	if (blocked.includes(hostname)) {
 		throw new ComputeError(
@@ -83,5 +83,12 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 		);
 	}
 
-	return trimmed.replace(/\/+$/, '');
+	return trimTrailing(trimmed, '/');
+}
+
+/** A loop, not `/x+$/`: that regex retries from every position of a long run and goes quadratic. */
+function trimTrailing(value: string, char: string): string {
+	let end = value.length;
+	while (end > 0 && value[end - 1] === char) end--;
+	return value.slice(0, end);
 }

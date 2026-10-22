@@ -631,3 +631,13 @@ describe('TreeBuilder — path string parsing', () => {
 		).toThrow(/Invalid Grasshopper tree path/);
 	});
 });
+
+describe('TreeBuilder — large branches', () => {
+	it('appends a branch far past the call-stack limit of a spread push', () => {
+		const values = Array.from({ length: 500_000 }, (_, i) => i);
+		const [tree] = TreeBuilder.fromValues([{ paramName: 'P', paramType: 'Number', value: values }]);
+		const branch = (tree.InnerTree as unknown as Record<string, { data: number }[]>)['{0}'];
+		expect(branch).toHaveLength(500_000);
+		expect(branch[499_999]).toEqual({ data: 499_999 });
+	});
+});

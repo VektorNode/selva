@@ -415,3 +415,26 @@ describe('getValues().dispose / disposeRhinoObjects', () => {
 		expect(obj.delete).toHaveBeenCalledTimes(1);
 	});
 });
+
+describe('getValues — outputs named after Object.prototype members', () => {
+	it('keeps each value as-is and the result a plain object', () => {
+		const names = ['constructor', 'toString', 'hasOwnProperty', '__proto__'];
+		const wire = JSON.parse(
+			JSON.stringify(response(...names.map((name) => param(name, [item('System.String', name)]))))
+		);
+
+		const { values } = getValues(wire);
+
+		for (const name of names)
+			expect(Object.getOwnPropertyDescriptor(values, name)?.value).toBe(name);
+		expect(Object.getPrototypeOf(values)).toBe(Object.prototype);
+	});
+
+	it('still aggregates repeated names', () => {
+		const wire = response(
+			param('constructor', [item('System.String', 'a')]),
+			param('constructor', [item('System.String', 'b')])
+		);
+		expect(getValues(wire).values.constructor).toEqual(['a', 'b']);
+	});
+});

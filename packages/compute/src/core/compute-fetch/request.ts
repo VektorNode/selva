@@ -2,10 +2,9 @@ import { getLogger } from '../utils/logger';
 
 import type { ComputeAuth, ComputeConfig } from '../types';
 
+/** `serverUrl` as `validateServerUrl` returns it: no trailing slash. */
 export function buildUrl(endpoint: string, serverUrl: string): string {
-	const base = serverUrl.replace(/\/+$/, '');
-	const path = endpoint.replace(/^\/+/, '');
-	return `${base}/${path}`;
+	return `${serverUrl}/${endpoint.replace(/^\/+/, '')}`;
 }
 
 function isLocalhost(serverUrl: string): boolean {

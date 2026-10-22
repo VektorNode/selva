@@ -81,6 +81,11 @@ export interface ClientCacheConfig {
 	 * the cache (`ComputeLimits.computeSolveCacheBytes`, env `COMPUTE_SOLVE_CACHE_MB`).
 	 */
 	responseCacheMaxBytes: number;
+	/**
+	 * Largest compute response body read; past it the download is cancelled (`too_large`).
+	 * Default: no limit.
+	 */
+	maxResponseBytes?: number;
 	debug: ClientCacheDebug;
 	/** Max distinct warm compute servers before the LRU evicts the oldest. Default 16. */
 	maxWarmComputeServers?: number;
@@ -186,7 +191,8 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// verbose flag so the concise cache logs can run without the noise.
 			debug: debugVerbose,
 			cachesolve: config.cachesolve,
-			cacheerroredsolves: config.cacheerroredsolves
+			cacheerroredsolves: config.cacheerroredsolves,
+			maxResponseBytes: config.maxResponseBytes
 		};
 
 		if (config.debug) {

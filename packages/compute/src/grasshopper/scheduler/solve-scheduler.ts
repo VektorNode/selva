@@ -35,7 +35,7 @@ const SERVER_CACHE_KEYS_MAX = 100;
 interface PendingItem {
 	definition: SolveDefinition;
 	dataTree: DataTree[];
-	definitionHash: string;
+	hashes: SolveInputHashes;
 	ctx: SolveContext;
 	/** Monotonic solve() ordinal, so an older item's late settle can't overwrite newer state. */
 	seq: number;
@@ -68,6 +68,73 @@ function hashDefinitionOnce(definition: SolveDefinition): string {
 		u8DefinitionHashes.set(definition, hash);
 	}
 	return hash;
+}
+
+/** One solve's input hashes, each taken on first use. */
+class SolveInputHashes {
+	private definitionMemo: string | undefined;
+	private keyMemo: string | undefined;
+
+	constructor(
+		private readonly hashDefinition: () => string,
+		private readonly dataTree: DataTree[]
+	) {}
+
+	get definitionHash(): string {
+		return (this.definitionMemo ??= this.hashDefinition());
+	}
+
+	get key(): string {
+		return (this.keyMemo ??= hashSolveInputForDefinition(this.definitionHash, this.dataTree));
+	}
+}
+
+/**
+ * The FIFO behind `queue` mode. Removing an item only drops it from `live`; the array is swept once
+ * the dead entries outnumber the live ones, so aborting n queued solves costs O(n), not O(n²).
+ */
+class SolveQueue {
+	private items: (PendingItem | undefined)[] = [];
+	private head = 0;
+	private readonly live = new Set<PendingItem>();
+
+	get size(): number {
+		return this.live.size;
+	}
+
+	push(item: PendingItem): void {
+		this.items.push(item);
+		this.live.add(item);
+	}
+
+	remove(item: PendingItem): void {
+		if (this.live.delete(item)) this.compact();
+	}
+
+	shift(): PendingItem | undefined {
+		while (this.head < this.items.length) {
+			const item = this.items[this.head];
+			// A taken slot is cleared so it doesn't hold the solve's definition and tree.
+			this.items[this.head++] = undefined;
+			if (item && this.live.delete(item)) {
+				this.compact();
+				return item;
+			}
+		}
+		return undefined;
+	}
+
+	private compact(): void {
+		if (this.live.size === 0) {
+			this.items = [];
+			this.head = 0;
+			return;
+		}
+		const dead = this.items.length - this.live.size;
+		if (dead <= 64 || dead <= this.live.size) return;
+		this.items = this.items.filter((item) => item !== undefined && this.live.has(item));
+		this.head = 0;
+	}
 }
 
 /**
@@ -131,6 +198,8 @@ export class SolveScheduler {
 	private readonly reuseServerDefinitionCache: boolean;
 	/** Definition hash → the server's cache key (`pointer`) for it. */
 	private readonly serverCacheKeys = new Map<string, string>();
+	/** A string definition re-sent unchanged is compared with this, far cheaper than hashing it. */
+	private lastStringDefinition: { value: string; hash: string } | null = null;
 
 	private readonly onStart?: SolveSchedulerOptions['onStart'];
 	private readonly onSettle?: SolveSchedulerOptions['onSettle'];
@@ -140,7 +209,7 @@ export class SolveScheduler {
 
 	private readonly inFlight = new Set<InFlightItem>();
 	private pendingForLatestWins: PendingItem | null = null;
-	private readonly fifoQueue: PendingItem[] = [];
+	private readonly fifo = new SolveQueue();
 
 	private _lastResult: GrasshopperComputeResponse | null = null;
 	private _lastError: ComputeError | null = null;
@@ -201,7 +270,7 @@ export class SolveScheduler {
 	}
 
 	get hasPending(): boolean {
-		return this.pendingForLatestWins !== null || this.fifoQueue.length > 0;
+		return this.pendingForLatestWins !== null || this.fifo.size > 0;
 	}
 
 	get inFlightCount(): number {
@@ -209,7 +278,7 @@ export class SolveScheduler {
 	}
 
 	get queueDepth(): number {
-		return this.fifoQueue.length + (this.pendingForLatestWins ? 1 : 0);
+		return this.fifo.size + (this.pendingForLatestWins ? 1 : 0);
 	}
 
 	get lastResult(): GrasshopperComputeResponse | null {
@@ -308,14 +377,24 @@ export class SolveScheduler {
 			);
 		}
 
-		const definitionHash = hashDefinitionOnce(definition);
-		const key = hashSolveInputForDefinition(definitionHash, dataTree);
+		const hashes = new SolveInputHashes(() => this.hashDefinitionMemo(definition), dataTree);
+		// Only the cache and the hooks read the key. Without them, hashing a multi-MB tree would be
+		// the costliest step of the call.
+		let key = '';
+		if (this.cacheEnabled || this.onStart || this.onSettle || this.onSuperseded) {
+			try {
+				key = hashes.key;
+			} catch (error) {
+				// A tree too deep or too large to stringify can't be sent either.
+				return Promise.reject(
+					new ComputeError('Solve input could not be hashed', ErrorCodes.INVALID_INPUT, {
+						originalError: error
+					})
+				);
+			}
+		}
 		const seq = ++this.solveSeq;
-		const ctx: SolveContext = {
-			key,
-			enqueuedAt: Date.now(),
-			startedAt: null
-		};
+		const ctx: SolveContext = { key, enqueuedAt: Date.now(), startedAt: null };
 
 		// An already-aborted signal rejects before anything else — including the
 		// cache: the documented contract is ABORTED, not a result.
@@ -347,7 +426,7 @@ export class SolveScheduler {
 			const item: PendingItem = {
 				definition,
 				dataTree,
-				definitionHash,
+				hashes,
 				ctx,
 				seq,
 				resolve,
@@ -398,8 +477,7 @@ export class SolveScheduler {
 
 	private dequeue(item: PendingItem): void {
 		if (this.pendingForLatestWins === item) this.pendingForLatestWins = null;
-		const queued = this.fifoQueue.indexOf(item);
-		if (queued >= 0) this.fifoQueue.splice(queued, 1);
+		this.fifo.remove(item);
 	}
 
 	private abortQueuedItem(item: PendingItem): void {
@@ -416,8 +494,7 @@ export class SolveScheduler {
 			{
 				statusCode: 503,
 				context: {
-					key: item.ctx.key,
-					queueDepth: this.fifoQueue.length,
+					queueDepth: this.fifo.size,
 					maxQueueDepth: this.maxQueueDepth
 				}
 			}
@@ -439,7 +516,6 @@ export class SolveScheduler {
 				{
 					statusCode: 503,
 					context: {
-						key: item.ctx.key,
 						waitedMs: Date.now() - item.ctx.enqueuedAt,
 						queueWaitMs: waitMs
 					}
@@ -472,15 +548,12 @@ export class SolveScheduler {
 			case 'queue': {
 				if (this.inFlight.size < this.maxConcurrent) {
 					this.execute(item);
-				} else if (
-					this.maxQueueDepth !== undefined &&
-					this.fifoQueue.length >= this.maxQueueDepth
-				) {
+				} else if (this.maxQueueDepth !== undefined && this.fifo.size >= this.maxQueueDepth) {
 					// Shed the newest call, so already-accepted work keeps its place.
 					this.shedAsQueueFull(item);
 				} else {
 					this.armQueueWaitTimer(item);
-					this.fifoQueue.push(item);
+					this.fifo.push(item);
 				}
 				break;
 			}
@@ -525,12 +598,7 @@ export class SolveScheduler {
 				};
 			}
 
-			const { response, definitionReuploaded } = await this.runExecutor(
-				item.definition,
-				item.dataTree,
-				item.definitionHash,
-				config
-			);
+			const { response, definitionReuploaded } = await this.runExecutor(item, config);
 			const durationMs = performance.now() - startTime;
 
 			this.writeCache(item.ctx.key, response);
@@ -564,16 +632,16 @@ export class SolveScheduler {
 	}
 
 	private async runExecutor(
-		definition: SolveDefinition,
-		dataTree: DataTree[],
-		definitionHash: string,
+		item: PendingItem,
 		config: GrasshopperComputeConfig
 	): Promise<{ response: GrasshopperComputeResponse; definitionReuploaded?: boolean }> {
+		const { definition, dataTree } = item;
 		if (!this.reuseServerDefinitionCache || isDefinitionUrl(definition)) {
 			const { response } = await this.executor(definition, dataTree, null, config);
 			return { response };
 		}
 
+		const definitionHash = item.hashes.definitionHash;
 		const knownKey = this.serverCacheKeys.get(definitionHash) ?? null;
 		const result = await this.executor(definition, dataTree, knownKey, config);
 
@@ -589,6 +657,14 @@ export class SolveScheduler {
 		return { response: result.response, definitionReuploaded: result.missed };
 	}
 
+	private hashDefinitionMemo(definition: SolveDefinition): string {
+		if (typeof definition !== 'string') return hashDefinitionOnce(definition);
+		if (this.lastStringDefinition?.value !== definition) {
+			this.lastStringDefinition = { value: definition, hash: hashDefinition(definition) };
+		}
+		return this.lastStringDefinition.hash;
+	}
+
 	private drainNext(): void {
 		if (this.disposed) return;
 
@@ -601,15 +677,14 @@ export class SolveScheduler {
 			return;
 		}
 
-		while (this.fifoQueue.length > 0 && this.inFlight.size < this.maxConcurrent) {
-			const next = this.fifoQueue.shift()!;
-			this.execute(next);
+		while (this.fifo.size > 0 && this.inFlight.size < this.maxConcurrent) {
+			this.execute(this.fifo.shift()!);
 		}
 	}
 
 	private supersede(item: PendingItem): void {
 		const err = new ComputeError('Superseded by newer solve', ErrorCodes.SUPERSEDED, {
-			context: { key: item.ctx.key, enqueuedAt: item.ctx.enqueuedAt }
+			context: { enqueuedAt: item.ctx.enqueuedAt }
 		});
 		if (this.settleError(item, err)) {
 			this.runHook(this.onSuperseded, item.ctx);
@@ -618,7 +693,7 @@ export class SolveScheduler {
 
 	private makeAbortError(ctx: SolveContext): ComputeError {
 		return new ComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
-			context: { key: ctx.key, enqueuedAt: ctx.enqueuedAt }
+			context: { enqueuedAt: ctx.enqueuedAt }
 		});
 	}
 
@@ -693,8 +768,7 @@ export class SolveScheduler {
 			this.fail(this.pendingForLatestWins, this.makeAbortError(this.pendingForLatestWins.ctx));
 			this.pendingForLatestWins = null;
 		}
-		while (this.fifoQueue.length > 0) {
-			const item = this.fifoQueue.shift()!;
+		for (let item = this.fifo.shift(); item; item = this.fifo.shift()) {
 			this.fail(item, this.makeAbortError(item.ctx));
 		}
 		for (const inflight of this.inFlight) {

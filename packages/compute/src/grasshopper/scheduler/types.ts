@@ -29,6 +29,8 @@ export interface CacheOptions {
 	 * fetch boundary — no re-serialization); a response without that hint
 	 * (custom executor) is sized by a one-off `JSON.stringify`. A single
 	 * response larger than the whole budget is served but never retained.
+	 * Parsed, a response of many small items holds more heap than its wire size,
+	 * so leave headroom.
 	 *
 	 * Required and must be > 0 — to disable caching, pass `cache: false`.
 	 */

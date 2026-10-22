@@ -3,10 +3,14 @@ import {
 	hashSolveInput,
 	hashSolveInputForDefinition,
 	hashDefinition,
-	stableStringify,
-	fnv1a,
-	fnv1aBytes
+	stableStringify
 } from '../stable-hash';
+import { TreeBuilder } from '../../data-tree/data-tree';
+
+// Computed independently with node:crypto over the UTF-16LE canonical strings.
+const PINNED_TREE_HASH = '0dc0064221f3ee95e77a4985e677d7ef18c74fa78c295d3834b595546c741271';
+const PINNED_STRING_KEY = `s:0a5b3df5c641fd2413225d667e94b27c0d984348abc424553efb52bcb4fe7be7|t:${PINNED_TREE_HASH}`;
+const PINNED_BYTES_KEY = `u8:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81|t:${PINNED_TREE_HASH}`;
 
 describe('stableStringify', () => {
 	it('is key-order independent for objects', () => {
@@ -98,30 +102,22 @@ describe('stableStringify', () => {
 	});
 });
 
-describe('fnv1a / fnv1aBytes', () => {
-	it('returns an 8-char hex string', () => {
-		expect(fnv1a('hello')).toMatch(/^[0-9a-f]{8}$/);
-		expect(fnv1aBytes(new Uint8Array([1, 2, 3]))).toMatch(/^[0-9a-f]{8}$/);
+describe('stableStringify markers', () => {
+	// A JSON body can carry any plain object, so none may stringify like a non-JSON value.
+	it('keeps non-JSON values apart from plain objects shaped like their markers', () => {
+		const bytes = new Uint8Array([1, 2, 3]);
+		const marker = stableStringify(bytes);
+		expect(stableStringify(JSON.parse(JSON.stringify({ __u8: 3, hash: 'x' })))).not.toBe(marker);
+		expect(stableStringify(new Map([['a', 1]]))).not.toBe(stableStringify({ __map: [['a', 1]] }));
+		const cyclic: Record<string, unknown> = {};
+		cyclic.self = cyclic;
+		expect(stableStringify(cyclic)).not.toBe(stableStringify({ self: '[Circular]' }));
 	});
 
-	it('agrees with fnv1a when bytes are ASCII char codes', () => {
-		// fnv1aBytes over the char codes of "abc" must equal fnv1a("abc").
-		const bytes = new Uint8Array([...'abc'].map((c) => c.charCodeAt(0)));
-		expect(fnv1aBytes(bytes)).toBe(fnv1a('abc'));
-	});
-
-	it('distinguishes different byte content', () => {
-		expect(fnv1aBytes(new Uint8Array([1, 2, 3]))).not.toBe(fnv1aBytes(new Uint8Array([3, 2, 1])));
-	});
-
-	// Published FNV-1a 32-bit vectors: a durable cache keyed by these hashes breaks if they move.
-	it('matches the reference FNV-1a values', () => {
-		expect(fnv1a('')).toBe('811c9dc5');
-		expect(fnv1a('a')).toBe('e40c292c');
-		expect(fnv1a('foobar')).toBe('bf9cf968');
-		expect(fnv1a('ü€😀')).toBe('676f0948');
-		const bytes = new Uint8Array(1024).map((_, i) => (i * 31 + 7) & 0xff);
-		expect(fnv1aBytes(bytes)).toBe('2c6d0dc5');
+	// JSON drops a function-valued key, so `{ a: fn }` goes over the wire as `{}`, not `{ a: null }`.
+	it('stringifies a function like undefined, not like null', () => {
+		expect(stableStringify({ a: () => 1 })).toBe(stableStringify({ a: undefined }));
+		expect(stableStringify({ a: () => 1 })).not.toBe(stableStringify({ a: null }));
 	});
 });
 
@@ -167,11 +163,30 @@ describe('hashSolveInput', () => {
 		expect(hashSolveInput('def.gh', [a])).not.toBe(hashSolveInput('def.gh', [b]));
 	});
 
-	// One 32-bit hash over the pair is birthday-collidable; with separate parts a collision
-	// needs both hashes and both lengths to collide at once.
-	it('keeps definition and tree hashes as separate key parts', () => {
-		const key = hashSolveInput('def.gh', tree);
-		expect(key).toMatch(/^s:\d+:[0-9a-f]{8}\|t:\d+:[0-9a-f]{8}$/);
+	it('keeps definition and tree hashes as separate SHA-256 key parts', () => {
+		expect(hashSolveInput('def.gh', tree)).toMatch(/^s:[0-9a-f]{64}\|t:[0-9a-f]{64}$/);
+		expect(hashSolveInput({ key: 'v1', load: async () => new Uint8Array() }, tree)).toMatch(
+			/^r:v1\|t:[0-9a-f]{64}$/
+		);
+	});
+
+	// A durable cache keyed by hashSolveInput misses every entry if these move.
+	it('matches pinned keys', () => {
+		expect(hashSolveInput('def.gh', tree)).toBe(PINNED_STRING_KEY);
+		expect(hashSolveInput(new Uint8Array([1, 2, 3]), tree)).toBe(PINNED_BYTES_KEY);
+	});
+
+	// The scheduler's cache serves every user of a server: a forged collision would let one user
+	// choose what another's solve returns.
+	it('separates a pair forged to collide under 32-bit FNV-1a', () => {
+		const labelled = (label: string) =>
+			TreeBuilder.fromValues([
+				{ paramName: 'Label', paramType: 'Text', value: label },
+				{ paramName: 'Width', paramType: 'Number', value: 12.5, minimum: 0, maximum: 100 }
+			]);
+		expect(hashSolveInput('def.gh', labelled('Hello, Selva!'))).not.toBe(
+			hashSolveInput('def.gh', labelled('pwned__W3jEwn'))
+		);
 	});
 
 	it('hashSolveInputForDefinition(hashDefinition(d), t) equals hashSolveInput(d, t)', () => {

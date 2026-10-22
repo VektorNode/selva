@@ -5,6 +5,7 @@ import { base64ByteArray, detectBase64Payload, encodeStringToBase64 } from '@/co
 import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
 import { warnIfClientSide } from '@/core/utils/warnings';
+import { validateServerUrl } from '@/core/server/validate-server-url';
 
 import {
 	GrasshopperRequestSchema,
@@ -158,12 +159,21 @@ async function runSolve(
 	args: GrasshopperRequestSchema,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey> {
+	validateServerUrl(config.serverUrl);
 	applyOptionalComputeSettings(args, config);
 
+	// The server echoes an uploaded definition back as `algo`: the limit is for the rest.
+	const { maxResponseBytes } = config;
 	const result = await fetchCompute<GrasshopperComputeResponse>(
 		'grasshopper',
 		args,
-		withGrasshopperErrorCodes(config)
+		withGrasshopperErrorCodes({
+			...config,
+			maxResponseBytes:
+				maxResponseBytes !== undefined && args.algo
+					? maxResponseBytes + args.algo.length
+					: maxResponseBytes
+		})
 	);
 
 	const {

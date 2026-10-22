@@ -54,6 +54,12 @@ export interface ComputeConfig {
 	 */
 	signal?: AbortSignal;
 	/**
+	 * Largest response body, in UTF-8 bytes, read before the download is cancelled with
+	 * `RESPONSE_TOO_LARGE`. A Grasshopper solve leaves out the uploaded definition the server echoes
+	 * back. Default: no limit.
+	 */
+	maxResponseBytes?: number;
+	/**
 	 * Maps the `code` field of this backend's JSON error bodies to our {@link ErrorCodes}. A listed
 	 * code outranks the status-based mapping: the server's production mode scrubs the human message
 	 * but not the code. Core knows no backend's codes; the client supplies its own table.

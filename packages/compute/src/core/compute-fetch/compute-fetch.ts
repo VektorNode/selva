@@ -1,6 +1,8 @@
 import { ComputeError, ErrorCodes } from '../errors';
 import { utf8ByteLength } from '../utils/encoding';
 import { getLogger } from '../utils/logger';
+import { validateServerUrl } from '../server/validate-server-url';
+import { ERROR_BODY_MAX_BYTES, readBodyText } from './read-body';
 import { buildUrl, buildHeaders, generateRequestId } from './request';
 import { handleResponse, type RequestContext } from './response';
 import { backoffDelay, isRetryableStatus, resolveRetryPolicy, retryDelay, sleep } from './retry';
@@ -40,13 +42,15 @@ async function attemptFetch(
 			method: 'POST',
 			body: ctx.body,
 			headers: ctx.headers,
-			signal
+			signal,
+			// handleResponse rejects a redirect rather than let the API key follow it.
+			redirect: 'manual'
 		});
 
 		if (!isFinal && isRetryableStatus(response.status, policy)) {
 			// Drain so the connection can be reused. The final attempt skips this branch so
 			// handleResponse reads the body into the error instead.
-			await response.text().catch(() => {});
+			await readBodyText(response, ERROR_BODY_MAX_BYTES).catch(() => {});
 			return {
 				ok: false,
 				retryable: true,
@@ -168,7 +172,17 @@ export async function fetchCompute<R = unknown>(
 	}
 	// UTF-8 bytes: `body.length` counts UTF-16 code units and undercounts non-ASCII payloads.
 	const requestSize = utf8ByteLength(body);
-	const fullUrl = buildUrl(endpoint, config.serverUrl);
+	// Shape only: which hosts to block is the backend's call, made where its client is built.
+	const serverUrl = validateServerUrl(config.serverUrl, { blockedHosts: [] });
+	const { maxResponseBytes } = config;
+	if (maxResponseBytes !== undefined && !(maxResponseBytes >= 0)) {
+		throw new ComputeError(
+			`maxResponseBytes must be a number of bytes, got ${maxResponseBytes}`,
+			ErrorCodes.INVALID_CONFIG,
+			{ context: { maxResponseBytes } }
+		);
+	}
+	const fullUrl = buildUrl(endpoint, serverUrl);
 	const headers = buildHeaders(requestId, config);
 	const retryPolicy = resolveRetryPolicy(config.retry);
 	const totalAttempts = retryPolicy.attempts + 1;
@@ -189,7 +203,7 @@ export async function fetchCompute<R = unknown>(
 		requestId,
 		headers,
 		config,
-		errorContext: { serverUrl: config.serverUrl, url: fullUrl, endpoint, requestId, requestSize }
+		errorContext: { serverUrl, url: fullUrl, endpoint, requestId, requestSize }
 	};
 
 	for (let attempt = 0; ; attempt++) {
