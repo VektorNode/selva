@@ -3,20 +3,12 @@
 	import { enhance } from '$app/forms';
 
 	import { LogIn, LogOut } from '@lucide/svelte';
+	import { userLabel, canLogOut, type IdentityPageData } from './userIdentity';
 
-	const pageData = $derived(
-		page.data as {
-			user?: { id: string; email?: string } | null;
-			profile?: { displayName?: string } | null;
-			hasProxyAuth?: boolean;
-		}
-	);
+	const pageData = $derived(page.data as IdentityPageData);
 	const user = $derived(pageData.user ?? null);
-	const profile = $derived(pageData.profile ?? null);
-	// Forward-auth deployments have no Selva session — sign-out is the proxy/IdP's job.
-	const showLogout = $derived(!pageData.hasProxyAuth);
-
-	const label = $derived(profile?.displayName ?? user?.email?.split('@')[0] ?? user?.id ?? '');
+	const showLogout = $derived(canLogOut(pageData));
+	const label = $derived(userLabel(pageData));
 
 	const initial = $derived(label[0]?.toUpperCase() ?? '');
 
@@ -43,6 +35,7 @@
 				<button
 					type="submit"
 					title="Log out"
+					aria-label="Log out"
 					class="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full p-2 transition-colors"
 				>
 					<LogOut class="h-3.5 w-3.5" />

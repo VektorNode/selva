@@ -462,7 +462,7 @@
 				     the DOM, so this is the only observable proof a solve's geometry decoded and
 				     rendered; e2e asserts on it. -->
 				<canvas
-					class="block h-full w-full"
+					class="viewer-canvas block h-full w-full select-none"
 					data-testid="viewer-canvas"
 					data-mesh-count={meshes.length}
 					bind:this={canvas}
@@ -664,6 +664,12 @@
 		inset: 0;
 		z-index: 10000;
 		border-radius: 0 !important;
+	}
+
+	/* A long press on touch otherwise selects the canvas as an image and opens the save/copy callout. */
+	.viewer-canvas {
+		-webkit-touch-callout: none;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.blur-overlay {

@@ -13,6 +13,9 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { page } from '$app/state';
+	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
+	import Check from '@lucide/svelte/icons/check';
+	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
 
 	interface SideNavProps {
 		items: SideNavItem[];
@@ -41,10 +44,12 @@
 		if (item.match === 'prefix') return path.startsWith(item.href);
 		return path === item.href;
 	}
+
+	const activeItem = $derived(items.find(isActive));
 </script>
 
-<!-- On a phone a 240px column would leave the page ~150px, so the nav becomes a scrolling strip
-     above the content and the eyebrow, header and footer drop out. -->
+<!-- On a phone a 240px column would leave the page ~150px, so the nav collapses to one switcher
+     naming the current section; the header and footer drop out. -->
 <aside
 	class={`sm:h-full sm:w-60 sm:overflow-y-auto sm:border-b-0 flex w-full shrink-0 flex-col border-b border-border bg-background ${
 		border ? 'sm:border-r' : ''
@@ -64,31 +69,67 @@
 		</div>
 	{/if}
 
-	<nav
-		class="gap-1 py-2 sm:gap-0 sm:pt-0 sm:pb-4 sm:pr-2 sm:flex-1 sm:space-y-px sm:block sm:px-0 flex overflow-x-auto px-(--page-px)"
-	>
+	<div class="py-2 sm:hidden px-(--page-px)">
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<button
+						{...props}
+						class="min-h-11 gap-3 px-3 text-sm font-medium flex w-full items-center rounded-md border border-border bg-card text-left"
+					>
+						{#if activeItem?.icon}
+							{@const Icon = activeItem.icon}
+							<Icon class="size-4 shrink-0 opacity-70" />
+						{/if}
+						<span class="min-w-0 flex-1 truncate">
+							{#if eyebrow}<span class="text-muted-foreground">{eyebrow} /</span>{/if}
+							{activeItem?.label ?? ''}
+						</span>
+						<ChevronsUpDown class="size-4 shrink-0 opacity-60" />
+					</button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content sideOffset={4}>
+				{#each items as item (item.href)}
+					{@const active = isActive(item)}
+					{@const Icon = item.icon}
+					<DropdownMenu.Item class="min-h-11">
+						{#snippet child({ props })}
+							<a href={item.href} aria-current={active ? 'page' : undefined} {...props}>
+								{#if Icon}<Icon class="size-4 opacity-70" />{/if}
+								<span class="flex-1">{item.label}</span>
+								{#if item.badge !== undefined}
+									<span class="font-mono text-2xs tabular-nums opacity-60">{item.badge}</span>
+								{/if}
+								{#if active}<Check class="size-4" aria-hidden="true" />{/if}
+							</a>
+						{/snippet}
+					</DropdownMenu.Item>
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+	</div>
+
+	<nav class="pb-4 pr-2 sm:block hidden flex-1 space-y-px">
 		{#each items as item (item.href)}
 			{@const active = isActive(item)}
 			{@const Icon = item.icon}
 			<a
 				href={item.href}
-				class={`group gap-2 py-2 pr-2.5 sm:py-1.5 sm:w-full relative flex shrink-0 items-center text-left transition-colors ${
+				aria-current={active ? 'page' : undefined}
+				class={`group gap-2 py-1.5 pr-2.5 relative flex w-full items-center text-left transition-colors ${
 					active
-						? 'pl-2.5 sm:pl-4 sm:rounded-l-none sm:rounded-r-md rounded-md bg-accent text-accent-foreground'
-						: 'sm:mx-2 pl-2.5 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+						? 'pl-4 rounded-r-md bg-accent text-accent-foreground'
+						: 'mx-2 pl-2.5 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground'
 				}`}
 			>
 				{#if active}
-					<span
-						class="left-0 top-0 bottom-0 w-0.75 sm:block absolute hidden bg-primary"
-						aria-hidden="true"
-					></span>
+					<span class="left-0 top-0 bottom-0 w-0.75 absolute bg-primary" aria-hidden="true"></span>
 				{/if}
 				{#if Icon}
 					<Icon class="h-3.5 w-3.5 shrink-0 opacity-70" />
 				{/if}
-				<span class="text-sm font-medium sm:flex-1 sm:truncate whitespace-nowrap">{item.label}</span
-				>
+				<span class="text-sm font-medium flex-1 truncate">{item.label}</span>
 				{#if item.badge !== undefined}
 					<span class="font-mono shrink-0 text-2xs tabular-nums opacity-60">{item.badge}</span>
 				{/if}

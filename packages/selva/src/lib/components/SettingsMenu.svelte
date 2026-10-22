@@ -1,15 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { Button } from '@selvajs/ui';
-	import { Settings, Users, Shield } from '@lucide/svelte';
-	import type { Component } from 'svelte';
+	import { Settings } from '@lucide/svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
-	import { ALL_ORG_PERMISSIONS, OPERATOR_PLATFORM_PERMISSIONS } from '@selvajs/platform';
+	import { settingsLinks } from './navItems';
 
 	interface Props {
 		platformPermissions?: PlatformPermission[];
 		orgPermissions?: OrgPermission[];
-		/** `/team/tokens` is the only `/team` page some API-token holders can use. */
 		mayHoldApiTokens?: boolean;
 	}
 
@@ -19,44 +17,7 @@
 	let triggerEl = $state<HTMLButtonElement | null>(null);
 	let menuEl = $state<HTMLDivElement | null>(null);
 
-	const isPlatformAdmin = $derived(platformPermissions.includes('instance_admin'));
-
-	// Derived from the schemas, never re-listed: a hand-copied array still
-	// type-checks after a permission is added, and the menu would silently stop
-	// appearing for whoever holds the new one.
-	const ANY_PLATFORM_PERM = OPERATOR_PLATFORM_PERMISSIONS;
-	const ANY_ORG_ADMIN_PERM = ALL_ORG_PERMISSIONS;
-
-	const showAdmin = $derived(
-		isPlatformAdmin || ANY_PLATFORM_PERM.some((p) => platformPermissions.includes(p))
-	);
-	const showTeam = $derived(
-		isPlatformAdmin ||
-			mayHoldApiTokens ||
-			ANY_ORG_ADMIN_PERM.some((p) => orgPermissions.includes(p))
-	);
-
-	const items = $derived(
-		[
-			{
-				href: '/team',
-				label: 'Team',
-				description: 'Members, projects, and org-wide settings',
-				icon: Users as Component,
-				show: showTeam,
-				match: 'prefix' as const
-			},
-			{
-				href: '/admin',
-				label: 'Admin',
-				description: 'Platform configuration and instance settings',
-				icon: Shield as Component,
-				show: showAdmin,
-				match: 'prefix' as const
-			}
-		].filter((i) => i.show)
-	);
-
+	const items = $derived(settingsLinks({ platformPermissions, orgPermissions, mayHoldApiTokens }));
 	const hasAny = $derived(items.length > 0);
 
 	function isActive(href: string): boolean {
