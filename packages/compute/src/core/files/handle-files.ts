@@ -4,18 +4,33 @@ import { decodeBase64ToBinary } from '@/core/utils/encoding';
 import { readField } from '@/core/utils/read-field';
 
 import { FileBaseInfo, FileData, ProcessedFile } from './types';
-import { groupFilesByRoot, pathBelowRoot, toArchiveName } from './sub-folder';
+import { groupFilesByRoot, pathBelowRoot, subFolderSegments, toArchiveName } from './sub-folder';
 
 /**
- * Extracts and processes files from compute response data without downloading
- * them. Never throws: undecodable/unnamed items and failed external fetches are
- * logged and dropped per-file (see {@link fetchRemoteFiles}).
+ * Decode the files in a compute response, plus any external `additionalFiles`, without
+ * downloading them. Never throws: an unnamed or undecodable item and a failed external fetch are
+ * logged and dropped, the rest still resolve. Colliding archive paths are renamed
+ * (`model.txt` → `model-2.txt`), so a consumer keying by `path` loses nothing.
  */
 export const extractFilesFromComputeResponse = async (
 	downloadableFiles: FileData[],
 	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
 ): Promise<ProcessedFile[]> => {
-	return processFiles(downloadableFiles, additionalFiles);
+	const processedFiles = decodeResponseFiles(downloadableFiles);
+
+	if (additionalFiles) {
+		const filesArray = Array.isArray(additionalFiles) ? additionalFiles : [additionalFiles];
+		processedFiles.push(...(await fetchRemoteFiles(filesArray)));
+	}
+
+	const taken = new Set<string>();
+	return processedFiles.map((file) => {
+		const path = uniqueArchivePath(file.path, taken);
+		taken.add(path);
+		if (path === file.path) return file;
+		getLogger().warn(`Duplicate archive path "${file.path}" — storing as "${path}".`);
+		return { ...file, path, fileName: path.slice(path.lastIndexOf('/') + 1) };
+	});
 };
 
 /** Downloads files from a compute response as a ZIP archive. */
@@ -24,7 +39,6 @@ export const downloadFileData = async (
 	fileFoldername: string,
 	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
 ): Promise<void> => {
-	// Check if we're in a browser environment
 	if (typeof document === 'undefined' || typeof Blob === 'undefined') {
 		throw new ComputeError(
 			'File download functionality is only available in browser environments. This function requires the DOM API (document, Blob).',
@@ -40,10 +54,12 @@ export const downloadFileData = async (
 	}
 
 	try {
-		const processedFiles = await processFiles(downloadableFiles, additionalFiles);
+		const processedFiles = await extractFilesFromComputeResponse(
+			downloadableFiles,
+			additionalFiles
+		);
 		await createAndDownloadZip(processedFiles, fileFoldername);
 	} catch (err) {
-		// Re-throw if it's already a ComputeError
 		if (err instanceof ComputeError) {
 			throw err;
 		}
@@ -59,15 +75,11 @@ export const downloadFileData = async (
 };
 
 /**
- * Download files as one archive per `Sub Folder` root.
+ * Download one archive per `Sub Folder` root (see {@link groupFilesByRoot}). Files with no root go
+ * into `fallbackName`, so a definition that never sets `Sub Folder` downloads as one archive.
  *
- * `ROOT::Panels` and `OTHERROOT::Panels` produce `ROOT.zip` and `OTHERROOT.zip`, each containing
- * `Panels/…` — the root names the archive instead of nesting inside it. Files with no root fall
- * back to `fallbackName`, so a definition that never sets `Sub Folder` downloads exactly as before.
- *
- * Archives are saved one at a time: browsers discard concurrent downloads issued in the same tick,
- * and these are user-initiated saves rather than a throughput-bound batch. Note that saving more
- * than one file per gesture may prompt for permission.
+ * Archives are saved one at a time: browsers discard concurrent downloads issued in the same tick.
+ * More than one save per gesture may prompt the user for permission.
  *
  * @param downloadableFiles - `FileData` items from the compute response.
  * @param fallbackName - Archive name for files with no `Sub Folder` root.
@@ -100,52 +112,18 @@ export const downloadFileDataByRoot = async (
 };
 
 /**
- * Reduce a server-controlled path field to safe relative segments for use inside the zip
- * (zip-slip defense): backslashes normalize to `/`, and empty, `.`, `..`, and drive-letter
- * segments are dropped so no entry can escape the extraction directory via traversal or an
- * absolute path. Returns '' when nothing safe remains.
- *
- * `::` nests, matching the `Sub Folder` input's Rhino-layer syntax. The plugin already
- * normalizes it, so this is for payloads from an older one — without it those land in a
- * literal folder named `ROOT::Panels`.
+ * Zip-slip defense for a server-controlled path: drop `.`, `..` and drive-letter segments so no
+ * entry escapes the extraction directory. `''` when nothing safe remains.
  */
 const sanitizeArchivePath = (raw: string): string =>
-	raw
-		.replace(/::/g, '/')
-		.replace(/\\/g, '/')
-		.split('/')
-		.map((segment) => segment.trim())
-		.filter(
-			(segment) =>
-				segment !== '' && segment !== '.' && segment !== '..' && !/^[a-zA-Z]:$/.test(segment)
-		)
+	subFolderSegments(raw)
+		.filter((segment) => segment !== '.' && segment !== '..' && !/^[a-zA-Z]:$/.test(segment))
 		.join('/');
 
-/**
- * Lenient read of the `isBase64Encoded` wire flag: some server branches serialize
- * booleans as strings (`"true"`/`"True"`), which must still count as base64 rather
- * than silently dropping the file (issue 95).
- */
-const isBase64Flag = (flag: unknown): boolean =>
+/** The `isBase64Encoded` wire flag. Some server branches send booleans as strings (`"True"`). */
+export const isBase64Flag = (flag: unknown): boolean =>
 	flag === true || (typeof flag === 'string' && flag.trim().toLowerCase() === 'true');
 
-/**
- * Decode the inline files carried in a compute response into `ProcessedFile`s.
- *
- * Pure and synchronous: base64 items are decoded to binary, plain-text items are
- * passed through, and the archive path is derived from `subFolder` + name.
- * Degrades per-file like {@link fetchRemoteFiles}: an item with no usable `data`
- * or with undecodable base64 is logged and skipped, never aborting the batch.
- * This is the half of file handling that both public entry points share; it
- * never touches the network and never throws.
- *
- * Wire fields are read case-insensitively via {@link readField}: mcneel-branch
- * servers serialize PascalCase (`FileName`, `Data`, `IsBase64Encoded`, …) while
- * the VektorNode fork uses camelCase — both must decode (issue 95).
- *
- * @param dataItems - `FileData` items from the compute response.
- * @returns The decoded files.
- */
 const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 	const processedFiles: ProcessedFile[] = [];
 
@@ -163,22 +141,15 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 		const subFolder = rawSubFolder ? sanitizeArchivePath(rawSubFolder) : '';
 		const filePath = subFolder !== '' ? `${subFolder}/${fileName}` : fileName;
 
-		// Only a genuinely absent/empty body is unusable — the flag's exact type
-		// must never decide that (issue 95).
 		const data = readField<unknown>(item, 'data');
 		if (typeof data !== 'string' || data === '') {
 			getLogger().warn(`Skipping file "${filePath}": item carries no usable data.`);
 			return;
 		}
 
-		// GH-authored, not interpreted here — passed through so a consumer that
-		// stores files rather than zipping them keeps the authoring context.
 		const metadata = readField<Record<string, string>>(item, 'metadata');
 
 		if (isBase64Flag(readField<unknown>(item, 'isBase64Encoded'))) {
-			// `decodeBase64ToBinary` already returns a correctly-bounded view;
-			// re-wrapping `.buffer` would discard its byteOffset/byteLength and
-			// expose the whole (possibly pooled) backing buffer as corrupt content.
 			try {
 				processedFiles.push({
 					fileName,
@@ -204,37 +175,21 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 	return processedFiles;
 };
 
-/** Abort a hung external-file fetch — one dead URL must degrade the batch, not stall it forever. */
+/** One dead URL must degrade the batch, not stall it forever. */
 const REMOTE_FILE_TIMEOUT_MS = 30_000;
 
-/**
- * Fetch externally-referenced files over HTTP into `ProcessedFile`s.
- *
- * Async and fallible by nature. A failed fetch (network error, non-OK status,
- * or timeout after {@link REMOTE_FILE_TIMEOUT_MS}) is logged and that file is
- * dropped — the rest still resolve — so one dead URL degrades the result rather
- * than aborting the whole batch. This swallow is deliberate and pinned by
- * tests; callers receive only the files that succeeded.
- *
- * @param refs - External file references to fetch.
- * @returns The successfully-fetched files (failures omitted).
- */
 const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> => {
 	const fetched = await Promise.all(
 		refs.map(async (file) => {
 			try {
-				const signal =
-					typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
-						? AbortSignal.timeout(REMOTE_FILE_TIMEOUT_MS)
-						: undefined;
-				const response = await fetch(file.filePath, { signal });
+				const response = await fetch(file.filePath, {
+					signal: AbortSignal.timeout(REMOTE_FILE_TIMEOUT_MS)
+				});
 				if (!response.ok) {
 					getLogger().warn(`Failed to fetch additional file from URL: ${file.filePath}`);
 					return null;
 				}
-				// One step, no intermediate Blob allocation (issue 111).
 				const arrayBuffer = await response.arrayBuffer();
-				// Same zip-slip defense as decodeResponseFiles — the name lands in the archive.
 				const safeName = sanitizeArchivePath(file.fileName);
 				if (safeName === '') {
 					getLogger().warn(`Skipping fetched file with unusable name: ${file.fileName}`);
@@ -258,60 +213,16 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 	return fetched.filter((f): f is ProcessedFile => f !== null);
 };
 
-/**
- * Compose the decoded response files with any fetched external files.
- *
- * Archive paths are de-duplicated here — on the path both public entry points
- * share — so `extractFilesFromComputeResponse` consumers keying by `path` never
- * lose files silently, matching the zip path's rename behavior (issue 111).
- *
- * @param dataItems - `FileData` items from the compute response.
- * @param additionalFiles - Optional external file references to fetch and include.
- * @returns A Promise resolving to the combined `ProcessedFile` list.
- */
-const processFiles = async (
-	dataItems: FileData[],
-	additionalFiles: FileBaseInfo[] | FileBaseInfo | null
-): Promise<ProcessedFile[]> => {
-	const processedFiles = decodeResponseFiles(dataItems);
-
-	if (additionalFiles) {
-		const filesArray = Array.isArray(additionalFiles) ? additionalFiles : [additionalFiles];
-		processedFiles.push(...(await fetchRemoteFiles(filesArray)));
-	}
-
-	const taken = new Set<string>();
-	return processedFiles.map((file) => {
-		const path = uniqueArchivePath(file.path, taken);
-		taken.add(path);
-		if (path === file.path) return file;
-		getLogger().warn(`Duplicate archive path "${file.path}" — storing as "${path}".`);
-		return { ...file, path, fileName: path.slice(path.lastIndexOf('/') + 1) };
-	});
-};
-
-/** Creates a ZIP archive from processed files and triggers a browser download. */
 async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Promise<void> {
 	const { zip, strToU8 } = await import('fflate');
 
-	// Convert files to fflate format. Zip entries are keyed by path, so two
-	// files with the same path would silently overwrite each other — rename
-	// collisions ("model.txt" → "model-2.txt") instead of losing data.
-	// (processFiles already de-duplicates; this is a cheap second line of
-	// defense in case callers construct ProcessedFiles themselves.)
+	// Paths are already unique: extractFilesFromComputeResponse renames collisions.
 	const zipData: Record<string, Uint8Array> = {};
-	const taken = new Set<string>();
-	files.forEach((file) => {
-		const path = uniqueArchivePath(file.path, taken);
-		taken.add(path);
-		if (path !== file.path) {
-			getLogger().warn(`Duplicate archive path "${file.path}" — storing as "${path}".`);
-		}
-		zipData[path] = typeof file.content === 'string' ? strToU8(file.content) : file.content;
-	});
+	for (const file of files) {
+		zipData[file.path] = typeof file.content === 'string' ? strToU8(file.content) : file.content;
+	}
 
-	// Async `zip` deflates on a worker thread instead of blocking the main thread
-	// like `zipSync` — keeps the UI responsive for large geometry exports.
+	// Async `zip` deflates on a worker thread; `zipSync` would block the UI on large exports.
 	const zipped = await new Promise<Uint8Array>((resolve, reject) => {
 		zip(zipData, { level: 6 }, (err, data) => (err ? reject(err) : resolve(data)));
 	});
@@ -337,18 +248,7 @@ function uniqueArchivePath(path: string, taken: ReadonlySet<string>): string {
 	}
 }
 
-/** Saves a Blob object as a file in the user's browser. */
 function saveFile(blob: Blob, filename: string) {
-	if (typeof document === 'undefined') {
-		throw new ComputeError(
-			'saveFile requires a browser environment with DOM API access.',
-			ErrorCodes.BROWSER_ONLY,
-			{
-				context: { function: 'saveFile', requiredAPI: 'document' }
-			}
-		);
-	}
-
 	const url = URL.createObjectURL(blob);
 	const a = document.createElement('a');
 	a.href = url;
@@ -357,7 +257,6 @@ function saveFile(blob: Blob, filename: string) {
 	document.body.appendChild(a);
 	a.click();
 	a.remove();
-	// Revoking synchronously can abort the download in some browsers — the
-	// browser only pins the blob once the download has actually started.
+	// Revoking synchronously can abort the download: the browser pins the blob only once it starts.
 	setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

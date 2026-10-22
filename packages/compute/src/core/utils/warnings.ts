@@ -4,15 +4,9 @@ import { getLogger } from './logger';
 const warnedFunctions = new Set<string>();
 
 /**
- * True only in a GENUINE browser/worker context — the case where an API key in
- * the config is actually exposed to end users. `typeof window !== 'undefined'`
- * alone is not enough: jsdom test environments define `window` too, and every
- * unsuppressed vitest/jest run would warn noisily (issue 110).
- *
- * Detection: `window` must exist, AND we must not be in Node (jsdom runs in
- * Node, so `process.versions.node` is defined there but never in a real
- * browser), AND the user agent must not carry jsdom's marker (belt-and-braces
- * for exotic setups that hide `process`). Genuine browsers pass all three.
+ * True only in a real browser, where an API key in the config is exposed to users. jsdom defines
+ * `window` too, so Node is ruled out by `process.versions.node`, and by jsdom's user-agent marker
+ * for setups that hide `process`.
  */
 function isRealBrowser(): boolean {
 	if (typeof window === 'undefined') return false;
@@ -40,7 +34,7 @@ export function warnIfClientSide(functionName: string, suppress?: boolean): void
 	}
 }
 
-/** @internal Reset the once-per-function dedupe — for tests only. */
+/** Reset the once-per-function dedupe. For tests. */
 export function resetClientSideWarnings(): void {
 	warnedFunctions.clear();
 }

@@ -1,9 +1,7 @@
 /**
- * Seam C — ComputeServerStats against the rhino.compute proxy front.
- *
- * Pins the three stats endpoints' contracts (verified against
- * VektorNode/compute.rhino3d@Compute8) AND the failure-mode behavior, which was
- * previously the least-covered seam:
+ * ComputeServerStats against the rhino.compute proxy front. Pins the endpoints'
+ * contracts (verified against VektorNode/compute.rhino3d@Compute8) and the
+ * failure modes:
  *
  *   GET /                    -> 200 "compute.rhino3d running" (proxy liveness root).
  *   GET /activechildren      -> plain-text integer (proxy writes ActiveComputeCount).
@@ -185,8 +183,8 @@ describe('getActiveChildren', () => {
 		await stats.dispose();
 	});
 
-	// Issue 113: parseInt would happily read "302 Found…" as 302 children — a
-	// redirect/error page must be rejected, not fed into purgeAllChildren.
+	// parseInt would read "302 Found…" as 302 children: a redirect/error page
+	// must be rejected, not fed into purgeAllChildren.
 	it('rejects a garbage-prefixed body instead of parsing its leading digits', async () => {
 		route({ '/activechildren': () => res('302 Found - redirecting') });
 		const stats = new ComputeServerStats(SERVER);
@@ -297,33 +295,6 @@ describe('API key header', () => {
 		await stats.getVersion();
 		const init = fetchMock.mock.calls[0][1] as RequestInit;
 		expect(new Headers(init.headers).get('RhinoComputeKey')).toBeNull();
-		await stats.dispose();
-	});
-});
-
-/**
- * Issue 113: caller headers must OVERRIDE the defaults after key normalization —
- * a differently-cased `Content-Type` must not survive as a duplicate key that the
- * runtime would combine into "application/json, text/plain".
- */
-describe('header merge normalization', () => {
-	it('a caller Content-Type overrides the default regardless of key casing', async () => {
-		fetchMock.mockResolvedValue(res('ok'));
-		const stats = new ComputeServerStats(SERVER, 'k');
-		// fetchWithTimeout is private; exercised directly since no public method
-		// passes custom headers today, but the merge must already be correct.
-		await (
-			stats as unknown as {
-				fetchWithTimeout: (url: string, init?: RequestInit) => Promise<Response>;
-			}
-		).fetchWithTimeout(`${SERVER}/`, { headers: { 'CONTENT-TYPE': 'text/plain' } });
-
-		const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
-		const contentTypeKeys = Object.keys(headers).filter((k) => k.toLowerCase() === 'content-type');
-		expect(contentTypeKeys).toHaveLength(1);
-		expect(headers[contentTypeKeys[0]]).toBe('text/plain');
-		// Defaults not overridden must survive the merge.
-		expect(new Headers(headers).get('RhinoComputeKey')).toBe('k');
 		await stats.dispose();
 	});
 });
@@ -570,7 +541,7 @@ describe('disposal', () => {
 describe('monitor', () => {
 	afterEach(() => setLogger(null));
 
-	// Issue 113: 0/negative/NaN intervalMs previously produced a hot ~1 ms polling loop.
+	// A sub-floor intervalMs would hot-loop the server.
 	it('throws INVALID_CONFIG for zero, negative, sub-floor, NaN, and Infinity intervalMs', async () => {
 		const stats = new ComputeServerStats(SERVER);
 		const cb = () => {};
@@ -604,8 +575,8 @@ describe('monitor', () => {
 		await stats.dispose();
 	});
 
-	// Issue 113: dispose() racing an in-flight poll is normal shutdown — the
-	// nested INVALID_STATE throw must not surface as an error-level log.
+	// dispose() racing an in-flight poll is normal shutdown: the nested
+	// INVALID_STATE throw must not surface as an error-level log.
 	it('does not error-log when dispose() races an in-flight poll', async () => {
 		let resolveFetch!: (r: Response) => void;
 		fetchMock.mockImplementation(() => new Promise<Response>((r) => (resolveFetch = r)));

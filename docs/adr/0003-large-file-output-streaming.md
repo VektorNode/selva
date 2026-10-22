@@ -147,25 +147,20 @@ Modeled directly on the existing authenticated blob proxy
 - `saveSingleFile`/`getBase64FileSize` stay for the still-inline small-file path; the large-file
   path bypasses them.
 
-## Compatibility with `@selvajs/compute` (sealed dist)
+## Compatibility with `@selvajs/compute`
 
-> At the time of writing, `@selvajs/compute` was consumed as a prebuilt external dist. It has since
-> become a workspace package (`packages/compute`, 4.x), so "cannot edit it" is no longer the
-> constraint, but the design below still holds, and no library change is needed to ship this ADR.
-
-The processor (`GrasshopperResponseProcessor`) was a prebuilt dist (v1.5.2) not edited here.
-The design avoids touching it:
+No library change is needed to ship this ADR:
 
 - Partitioning happens in **our** route, on the parsed `GrasshopperComputeResponse`, _after_ the
-  library returns it and _before_ `json()`. We mutate `values` (swap the base64 leaf for a
-  descriptor) ourselves.
-- The library's `extractMeshesFromResponse()` only reads geometry leaves, not `file` leaves, so
-  removing a file leaf does not affect mesh extraction.
-- `getValueByParamId` is called by **our** loop; we simply special-case `file`-typed outputs to
-  pass through the descriptor instead of calling the library for them.
+  library returns it and _before_ `json()`. We swap the base64 leaf in `values` for a descriptor
+  ourselves.
+- Mesh decoding (`getThreeObjectsFromComputeResponse` in `@selvajs/visualization/parse`) reads
+  only display leaves, not `file` leaves, so removing a file leaf does not affect it.
+- **Our** loop reads each output with `GrasshopperResponseProcessor.getValue({ byId })`; it
+  special-cases `file`-typed outputs to pass the descriptor through instead.
 
-If a future `@selvajs/compute` release wants to own this partitioning, the descriptor shape above
-is the contract to lift into it, but **no library change is required to ship this ADR.**
+If `@selvajs/compute` should own this partitioning later, the descriptor shape above is the
+contract to lift into it.
 
 ## New knobs (all in `computeLimits.ts`, env-overridable)
 

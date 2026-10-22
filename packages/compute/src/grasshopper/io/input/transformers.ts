@@ -1,5 +1,3 @@
-// Value transformers: coerce a schema's raw `default` to a typed value.
-
 import { getLogger } from '@/core';
 
 /**
@@ -10,15 +8,14 @@ import { getLogger } from '@/core';
 export type ValueTransformer<T> = (value: unknown) => T | null;
 
 /**
- * Coerce a schema's `default` through a transformer, mirroring the old
- * `processInputValue`: arrays map+filter (empty → undefined), scalars
- * transform-or-(undefined|preserve). Returns the new default value rather than
- * mutating.
+ * Coerce a schema's `default`: array items are transformed and the rejected ones
+ * filtered (none left → `undefined`); a rejected scalar becomes `undefined` when
+ * `dropInvalidScalar`, else is kept verbatim for the parser to report.
  */
 export function coerceDefault<T>(
 	value: unknown,
 	transform: ValueTransformer<T>,
-	setUndefinedOnEmpty: boolean
+	dropInvalidScalar: boolean
 ): unknown {
 	if (value === undefined || value === null) {
 		return value;
@@ -33,14 +30,9 @@ export function coerceDefault<T>(
 	if (transformed !== null) {
 		return transformed;
 	}
-	return setUndefinedOnEmpty ? undefined : value;
+	return dropInvalidScalar ? undefined : value;
 }
 
-/**
- * @internal Shared with `normalize-default.ts` so tree-access items are parsed
- * with the exact same rules as scalar/array defaults (issue: the tree path used
- * to hand-roll `Number(data)`, turning a blank double into `0`).
- */
 export const numericTransformer: ValueTransformer<number> = (value) => {
 	if (typeof value === 'number') return Number.isFinite(value) ? value : null;
 	if (typeof value === 'string') {
@@ -48,10 +40,8 @@ export const numericTransformer: ValueTransformer<number> = (value) => {
 		// `Number('')` is 0, so reject empty/whitespace before coercing — an empty
 		// default should drop to null, not silently become 0.
 		if (trimmed === '') return null;
-		// `Number()` also accepts hex/binary/octal literals ('0x10' → 16) and
-		// 'Infinity' — neither is a value a Grasshopper numeric default can
-		// legitimately hold (Infinity even survives applyRounding). Only decimal
-		// and exponent notation are accepted.
+		// `Number()` also accepts '0x10' and 'Infinity'; a Grasshopper numeric
+		// default holds neither.
 		if (/^[+-]?0[xbo]/i.test(trimmed)) return null;
 		const parsed = Number(trimmed);
 		return Number.isFinite(parsed) ? parsed : null;
@@ -59,12 +49,6 @@ export const numericTransformer: ValueTransformer<number> = (value) => {
 	return null;
 };
 
-/**
- * @internal Shared with `normalize-default.ts` (see {@link numericTransformer}).
- * Trims like the numeric transformer and follows the {@link ValueTransformer}
- * contract: `null` on a bad value, never a throw — bad array items are filtered
- * like non-string junk, and the boolean parser surfaces bad scalars itself.
- */
 export const booleanTransformer: ValueTransformer<boolean> = (value) => {
 	if (typeof value === 'boolean') return value;
 	if (typeof value === 'string') {

@@ -94,7 +94,7 @@ describe('onServerTiming callback', () => {
 		expect(onServerTiming).not.toHaveBeenCalled();
 	});
 
-	it('fires on the 500 partial-success path too (values + errors — issue 103)', async () => {
+	it('fires on the 500 partial-success path too (values + errors)', async () => {
 		const onServerTiming = vi.fn();
 		fetchMock.mockResolvedValueOnce(
 			createMockResponse(null, {

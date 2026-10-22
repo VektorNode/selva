@@ -52,7 +52,7 @@ describe('extractFilesFromComputeResponse — decode half', () => {
 });
 
 /**
- * Zip-slip defense (issue 94): `subFolder`/`fileName`/`fileType` are server-controlled;
+ * Zip-slip defense: `subFolder`/`fileName`/`fileType` are server-controlled;
  * traversal segments, absolute paths, and drive letters must never survive into archive paths.
  */
 describe('extractFilesFromComputeResponse — archive path sanitization', () => {
@@ -167,7 +167,6 @@ describe('extractFilesFromComputeResponse — fetch half', () => {
 		expect(Array.from(fetched!.content as Uint8Array)).toEqual([9, 9]);
 	});
 
-	// Issue 111: remote files may specify a subFolder instead of always landing at zip root.
 	it('honors an optional subFolder on external files (sanitized)', async () => {
 		vi.stubGlobal(
 			'fetch',
@@ -206,10 +205,10 @@ describe('extractFilesFromComputeResponse — fetch half', () => {
 });
 
 /**
- * Issue 95: wire payloads arrive PascalCase from mcneel-branch servers and with
+ * Wire payloads arrive PascalCase from mcneel-branch servers and with
  * string-typed booleans from others; neither shape may silently drop files.
  */
-describe('extractFilesFromComputeResponse — wire-shape leniency (issue 95)', () => {
+describe('extractFilesFromComputeResponse — wire-shape leniency', () => {
 	it('decodes a fully PascalCase payload (mcneel-branch server)', async () => {
 		const item = {
 			FileName: 'model',
@@ -346,10 +345,7 @@ describe('extractFilesFromComputeResponse — decode-failure skip branch', () =>
 	});
 });
 
-/**
- * Issue 111: duplicate archive paths must be renamed on the extract path too, not
- * just inside the zip — consumers keying by `path` must never lose files.
- */
+// Consumers keying by `path` must never lose files.
 describe('extractFilesFromComputeResponse — duplicate-path rename', () => {
 	it('renames colliding paths with a numeric suffix before the extension', async () => {
 		const files = await extractFilesFromComputeResponse([

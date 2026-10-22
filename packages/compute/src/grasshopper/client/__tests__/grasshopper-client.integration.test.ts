@@ -1,14 +1,6 @@
 /**
- * End-to-end tests for GrasshopperClient driven through the stubbed global
- * `fetch` (the production transport seam). These prove the whole path works —
- * client.create() health check, client.solve() → solveGrasshopperDefinition →
- * fetchCompute → HTTP, and client.getIO() → fetchParsedDefinitionIO → the
- * input-type parser pipeline — without a live Compute server.
- *
- * fetch is routed by URL so each leg (liveness `/` / grasshopper / io) is stubbed
- * independently, exercising the real URL building. The liveness probe hits the
- * proxy root `/`, not `/healthcheck` (which the rhino.compute proxy doesn't
- * expose) — see ComputeServerStats.isServerOnline.
+ * GrasshopperClient through the stubbed global `fetch`, routed by URL so each leg (liveness `/`,
+ * grasshopper, io) runs the real URL building without a live Compute server.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GrasshopperClient from '@/grasshopper/client/grasshopper-client';
@@ -208,7 +200,7 @@ describe('GrasshopperClient.solve (e2e through transport)', () => {
 		await client.dispose();
 	});
 
-	it('preserves partial-success values and summarizes inputs on the thrown error (issues 63/83)', async () => {
+	it('preserves partial-success values and summarizes inputs on the thrown error ', async () => {
 		const partial = {
 			values: [
 				{
@@ -248,14 +240,12 @@ describe('GrasshopperClient.solve (e2e through transport)', () => {
 
 		expect(error.code).toBe('COMPUTATION_ERROR');
 
-		// Issue 63: the outputs that DID compute travel on the error context so
-		// callers can render partial results.
+		// The outputs that did compute travel on the error, so callers can render them.
 		expect(error.context.values).toEqual(partial.values);
 		expect(error.context.errors).toEqual(partial.errors);
 		expect(error.context.warnings).toEqual(partial.warnings);
 
-		// Issue 83: the full dataTree must NOT be pinned by the error — only a
-		// compact summary (param names, item counts, byte sizes).
+		// Only a summary of the inputs: the full tree would pin multi-MB buffers.
 		expect(error.context.inputs).toBeUndefined();
 		expect(error.context.inputSummary).toEqual([
 			{ param: 'radius', items: 2, bytes: '5'.length + '2.5'.length }

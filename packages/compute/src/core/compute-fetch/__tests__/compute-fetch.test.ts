@@ -311,7 +311,7 @@ describe('fetchCompute — malformed responses', () => {
 		});
 	});
 
-	it('does NOT retry a 200 that declares a non-JSON body — INVALID_RESPONSE (issue 87)', async () => {
+	it('does NOT retry a 200 that declares a non-JSON body — INVALID_RESPONSE', async () => {
 		// A captive portal / reverse-proxy login page is deterministic: retrying
 		// refetches the same HTML. It must fail immediately with an honest code
 		// instead of burning the backoff schedule as NETWORK_ERROR + statusCode 200.
@@ -340,18 +340,28 @@ describe('fetchCompute — malformed responses', () => {
 		});
 	});
 
-	it('classifies a fetch TypeError as CORS_ERROR in a browser context (issue 90)', async () => {
-		// tests/setup.ts stubs `window = {}` (no document), which the transport
-		// treats as non-browser; adding a document simulates a real browser, where
-		// an opaque fetch TypeError is most likely a CORS misconfiguration.
-		(globalThis as any).window.document = {};
+	it('treats a bare window with no document as non-browser', async () => {
+		vi.stubGlobal('window', {});
+		try {
+			fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+			await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
+				code: 'NETWORK_ERROR'
+			});
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	// In a real browser an opaque fetch TypeError is most likely a CORS misconfiguration.
+	it('classifies a fetch TypeError as CORS_ERROR in a browser context', async () => {
+		vi.stubGlobal('window', { document: {} });
 		try {
 			fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 			await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 				code: 'CORS_ERROR'
 			});
 		} finally {
-			delete (globalThis as any).window.document;
+			vi.unstubAllGlobals();
 		}
 	});
 });
@@ -398,7 +408,7 @@ describe('fetchCompute — retry', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('honors a Retry-After header ABOVE maxDelayMs — the server window wins (issue 101)', async () => {
+	it('honors a Retry-After header ABOVE maxDelayMs — the server window wins', async () => {
 		fetchMock
 			.mockResolvedValueOnce(
 				createMockResponse(
@@ -425,7 +435,7 @@ describe('fetchCompute — retry', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
-	it('caps a pathological Retry-After at the 60s absolute bound (issue 101)', async () => {
+	it('caps a pathological Retry-After at the 60s absolute bound', async () => {
 		fetchMock
 			.mockResolvedValueOnce(
 				createMockResponse(
@@ -632,7 +642,7 @@ describe('fetchCompute — abort and timeout', () => {
 		await assertion;
 	});
 
-	it('a runtime-internal abort with no armed timeout is not reported as a timeout (issue 88)', async () => {
+	it('a runtime-internal abort with no armed timeout is not reported as a timeout', async () => {
 		vi.useFakeTimers();
 		try {
 			// No timeoutMs configured and no caller signal: an AbortError here comes
@@ -661,7 +671,7 @@ describe('fetchCompute — abort and timeout', () => {
 		}
 	});
 
-	it('re-arms the timeout per attempt — each retry composes a fresh signal (issue 89 doc pin)', async () => {
+	it('re-arms the timeout per attempt — each retry composes a fresh signal', async () => {
 		vi.useFakeTimers();
 		try {
 			fetchMock

@@ -521,7 +521,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'code',
 				lang: 'json',
-				text: '// Selva has the id on file — send it, not the .gh bytes\n{ "pointer": "md5:7ab3…", "values": [ … ] }\n\n// no id on file yet — send the whole definition\n{ "algo": "<base64 .gh bytes>", "values": [ … ] }'
+				text: '// Selva has the id on file — send it, not the .gh bytes\n{ "pointer": "md5_7ab3…", "values": [ … ] }\n\n// no id on file yet — send the whole definition\n{ "algo": "<base64 .gh bytes>", "values": [ … ] }'
 			},
 			{
 				kind: 'prose',

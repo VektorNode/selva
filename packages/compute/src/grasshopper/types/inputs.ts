@@ -25,17 +25,9 @@ export type InnerTreeData = {
 /**
  * Tree with parameter metadata (used in compute requests and responses).
  *
- * Field casing varies by server branch: stock mcneel compute (8.x/9.x)
- * serializes `Resthopper.IO.DataTree` in PascalCase (`ParamName`/`InnerTree`
- * — the C# class carries no `[JsonProperty]` attributes), while
- * camelCase-serializing forks return `paramName`/`innerTree` instead. This
- * client always *sends* PascalCase (see `DataTree.toCompute()` in
- * `data-tree.ts`), so the PascalCase fields remain the canonical/required
- * shape; the optional camelCase fields exist so responses from camelCase
- * forks are representable without casts. Code that must read trees across
- * both server families should use `readField`/`hasField`
- * (`@/core/utils/read-field`, case-insensitive) rather than direct property
- * access — `warnOnEmptyInnerTrees` in `solve.ts` is the reference example.
+ * This client sends PascalCase (`TreeBuilder.toComputeFormat()`), so those
+ * fields are required; a response's casing varies by server branch, so read
+ * one with `readField` rather than by property.
  */
 export interface DataTree {
 	/** PascalCase — stock mcneel servers, and the request shape this client sends. */

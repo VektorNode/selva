@@ -123,6 +123,7 @@ Plugin/Selva.GH/*.lscache
 !fixtures/**/*.gh
 !fixtures/**/*.ghx
 !examples/**/*.gh
+!packages/compute/tests/fixtures/*.gh
 
 # Definitions config files (production, not checked in)
 definitions-config.json
@@ -132,18 +133,12 @@ definitions-config.json
 packages/plugin-ui/static/baseHDR.hdr
 packages/ui/static/baseHDR.hdr
 
-# TypeDoc output — regenerate with `pnpm --filter @selvajs/compute build-docs`
-packages/compute/docs/api/
-packages/website/static/docs/
-
-
 # Terraform
 infra/terraform.tfvars
 infra/.terraform/
 infra/*.tfstate
 infra/*.tfstate.backup
 infra/.terraform.lock.hcl
-**/dist/
 .DS_Store
 
 # Generated API reference (typedoc) — rebuilt by packages/website/scripts/build-api-docs.mjs

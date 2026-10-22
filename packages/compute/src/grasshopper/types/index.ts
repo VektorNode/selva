@@ -21,10 +21,7 @@ export type {
 
 export type {
 	RhinoModelUnit,
-	GrasshopperBaseSchema,
-	GrasshopperDefinitionSource,
 	GrasshopperComputeConfig,
-	IoResponseSchema,
 	GrasshopperRequestSchema,
 	GrasshopperComputeResponse,
 	SelvaEventTarget,

@@ -17,7 +17,19 @@
 		"prettier": "catalog:"
 	},
 	"peerDependenciesMeta": {
+		"eslint": {
+			"optional": true
+		},
+		"vite": {
+			"optional": true
+		},
 		"vitest": {
+			"optional": true
+		},
+		"svelte": {
+			"optional": true
+		},
+		"prettier": {
 			"optional": true
 		}
 	}

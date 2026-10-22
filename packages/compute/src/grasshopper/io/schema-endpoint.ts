@@ -12,21 +12,11 @@ export interface SchemaEndpointResult<TSchema = unknown> {
  * Read compute's `/grasshopper/schema` body: `[{ FileName, Schemas }]` per
  * uploaded file, or a bare object for a single file.
  *
- * Use this rather than unwrapping the body by hand. The wrapper's casing varies
- * by server branch — mcneel serializes `FileName`/`Schemas`, the VektorNode fork
- * `fileName`/`schemas` — so a fixed-key read silently yields `undefined` against
- * half the servers, and the endpoint answers 200 either way. The failure looks
- * like "this definition has no schemas", which sends you debugging the wrong
- * thing entirely.
- *
- * A blanket key-rewrite (the old `camelcaseKeys` approach) is NOT the fix: it
- * reaches inside the schemas and mangles user-authored names — `"Display3d"` →
- * `"display3d"`, value-list labels like `"Option A"` → `"optionA"`. Only the two
- * wrapper keys are read here; schema CONTENTS pass through untouched, which is
- * why `TSchema` is a pass-through type parameter this module never inspects.
+ * Use this rather than unwrapping the body by hand: the wrapper keys' casing
+ * varies by server branch, and a fixed-key read yields "no schemas" with a 200.
+ * Only the two wrapper keys are read; schema contents pass through untouched.
  *
  * @typeParam TSchema - Your schema type (e.g. `UISchema`). Not inspected.
- * @param raw - The parsed JSON body.
  */
 export function readSchemaResults<TSchema = unknown>(
 	raw: unknown

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INPUT_TYPE_PARSERS } from '@/grasshopper/io/input/input-type-parsers';
 import { createTextInputSchema } from '@tests/helpers/test-data-builders';
-import type { BaseInputType, InputParamSchema } from '@/grasshopper/types';
+import type { BaseInputType, InputParamSchema, TextInputType } from '@/grasshopper/types';
 
 const base: BaseInputType = {
 	description: '',
@@ -12,7 +12,7 @@ const base: BaseInputType = {
 };
 
 function parseText(schema: InputParamSchema) {
-	return INPUT_TYPE_PARSERS.get('Text')!.parse(schema, base) as any;
+	return INPUT_TYPE_PARSERS.get('Text')!.parse(schema, base) as TextInputType;
 }
 
 describe('text parser', () => {
@@ -34,7 +34,6 @@ describe('text parser', () => {
 		});
 
 		it('strips only the leading quote when the trailing quote is missing', () => {
-			// Regression: slice(1, -1) on '"abc' dropped the last character ('ab').
 			expect(parseText(createTextInputSchema({ default: '"abc' })).default).toBe('abc');
 		});
 
@@ -53,7 +52,7 @@ describe('text parser', () => {
 
 		it('should filter non-string values', () => {
 			const result = parseText(
-				createTextInputSchema({ default: ['"Hello"', 123, null, '"World"'] as any[] })
+				createTextInputSchema({ default: ['"Hello"', 123, null, '"World"'] })
 			);
 			expect(result.default).toEqual(['Hello', 'World']);
 		});

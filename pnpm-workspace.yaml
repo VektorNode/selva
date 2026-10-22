@@ -19,6 +19,7 @@ catalogs:
     bits-ui: ^2.19.3
     clsx: ^2.1.1
     eslint: ^10.11.0
+    fflate: ^0.8.2
     mode-watcher: ^1.1.0
     prettier: ^3.9.9
     rhino3dm: 8.35.0

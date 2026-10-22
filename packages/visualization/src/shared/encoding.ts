@@ -1,5 +1,5 @@
-// Copied (not imported) from `@selvajs/compute`'s `decodeBase64ToBinary` to avoid depending on the
-// Rhino.Compute client for ~20 stable lines; keep the two in sync by hand.
+// Copied (not imported) from `@selvajs/compute`'s `decodeBase64ToBinary`: a few stable lines don't
+// justify depending on the Rhino.Compute client. Keep the two in sync by hand.
 
 import { VisualizationError, ErrorCodes } from './errors.js';
 
@@ -9,14 +9,22 @@ function getNodeBuffer(): typeof Buffer | undefined {
 }
 
 /**
+ * WHATWG forgiving-base64 normalization: strip ASCII whitespace, then drop trailing padding where
+ * the spec allows it (total length a multiple of 4). `null` when the result can't be base64.
+ */
+function normalizeBase64(str: string): string | null {
+	let data = str.replace(/[\t\n\f\r ]/g, '');
+	if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
+	return data.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(data) ? null : data;
+}
+
+/**
  * @throws {VisualizationError} `ENCODING_ERROR` if invalid, or `INVALID_STATE` if no decoder is
  *   available in this environment.
  */
 export function decodeBase64ToBinary(base64File: string): Uint8Array {
-	// Forgiving-base64: strip whitespace, then drop trailing padding only where length % 4 allows it.
-	let data = base64File.replace(/[\t\n\f\r ]/g, '');
-	if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
-	if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(data)) {
+	const data = normalizeBase64(base64File);
+	if (data === null) {
 		throw new VisualizationError('Invalid base64 input.', ErrorCodes.ENCODING_ERROR, {
 			context: { inputLength: base64File.length }
 		});

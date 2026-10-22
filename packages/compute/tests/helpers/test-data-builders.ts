@@ -31,6 +31,7 @@ import type { InputParamSchema } from '@/grasshopper/types';
  */
 export function createInputSchema(overrides: Partial<InputParamSchema> = {}): InputParamSchema {
 	return {
+		id: 'test-id',
 		name: 'test',
 		nickname: 'T',
 		description: '',
@@ -43,7 +44,7 @@ export function createInputSchema(overrides: Partial<InputParamSchema> = {}): In
 		atMost: 1,
 		default: null,
 		...overrides
-	} as InputParamSchema;
+	};
 }
 
 /**
@@ -95,25 +96,6 @@ export function createBooleanInputSchema(
 ): InputParamSchema {
 	return createInputSchema({
 		paramType: 'Boolean',
-		...overrides
-	});
-}
-
-/**
- * Creates an integer input parameter schema with integer-specific defaults
- *
- * @example
- * ```typescript
- * const intInput = createIntegerInputSchema({ default: 5 });
- * const steppedInput = createIntegerInputSchema({ stepSize: 1 });
- * ```
- */
-export function createIntegerInputSchema(
-	overrides: Partial<InputParamSchema> = {}
-): InputParamSchema {
-	return createInputSchema({
-		paramType: 'Integer',
-		stepSize: 1,
 		...overrides
 	});
 }

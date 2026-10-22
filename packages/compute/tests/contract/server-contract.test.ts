@@ -9,17 +9,15 @@
  * field the client reads, or the snapshot is refreshed to a server that dropped
  * a field.
  *
- * The companion live-drift test (`server-contract.live.test.ts`) is what fails
- * when the SERVER changes out from under the snapshot. Together: the snapshot is
- * the pinned contract, this file proves the client honors it, and the live test
- * proves the pin still matches GitHub.
+ * `pnpm contract:check` is what fails when the SERVER changes out from under the
+ * snapshot: it re-parses the live GitHub source and diffs it against the pin.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { flatten, type ServerContract } from './parse-server-contract';
+import { flatten, type ServerContract } from './parse-server-contract.mjs';
 
 const SNAPSHOT: ServerContract = JSON.parse(
 	readFileSync(resolve(__dirname, 'server-contract.snapshot.json'), 'utf8')

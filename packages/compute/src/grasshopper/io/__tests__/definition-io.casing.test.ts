@@ -1,22 +1,5 @@
-/**
- * Regression tests for the IO response casing seam.
- *
- * The `/io` response casing depends on the server branch: the VektorNode
- * Compute8 fork camelCases every field, while upstream-tracking branches
- * (mcneel 8.x/9.x, `8.x.selva`) keep the C# classes close to source — so the
- * top-level wrapper is PascalCase `Inputs`/`Outputs` and per-param fields are
- * `ParamType`/`Minimum`/… `fetchDefinitionIO` reads every field it depends on
- * case-insensitively (normalize-schema.ts) so BOTH shapes parse identically.
- *
- * This file pins the CLIENT side of that seam: it must surface the fields the
- * parser reads regardless of casing, and crucially must NOT mangle the keys of a
- * value-list `values` map — those are user-authored Grasshopper dropdown labels
- * (e.g. "Option A", "Small") and have to round-trip verbatim into the UI.
- *
- * Before the casing fix, fetchDefinitionIO ran camelcaseKeys(response, { deep:
- * true }), which rewrote "Option A" → "optionA" and corrupted the dropdown; the
- * later straight-through read then dropped every field on a PascalCase server.
- */
+// The `/io` body parses identically in either server casing, and the keys of a
+// value-list `values` map (user-authored dropdown labels) round-trip verbatim.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchDefinitionIO, fetchParsedDefinitionIO } from '../definition-io';
@@ -97,7 +80,7 @@ describe('fetchDefinitionIO casing seam', () => {
  * A PascalCase `/io` body as emitted by an upstream-tracking server branch
  * (`8.x.selva`): top-level `Inputs`/`Outputs`, per-param `ParamType`/`Minimum`/
  * `Name`/… with only `id`/`groupName`/`values` lowercased (the fields that DO
- * carry `[JsonProperty]`). This is the shape beta.3 reduced to zero inputs.
+ * carry `[JsonProperty]`).
  */
 function pascalIoResponse() {
 	return {
@@ -135,7 +118,6 @@ describe('fetchDefinitionIO parses a PascalCase server response (8.x.selva)', ()
 
 		const { inputs, outputs } = await fetchDefinitionIO('https://example.com/d.gh', CONFIG);
 
-		// The bug: beta.3 read response.inputs (lowercase) → undefined → [].
 		expect(inputs).toHaveLength(1);
 		expect(inputs[0]).toMatchObject({
 			id: 'guid-1',

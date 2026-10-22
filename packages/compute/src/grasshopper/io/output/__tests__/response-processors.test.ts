@@ -1,14 +1,3 @@
-/**
- * Characterization tests for the output decode pipeline (response-processors.ts).
- *
- * This 285-line module — the output-side mirror of the input parser pipeline —
- * had no test coverage. These pin its CURRENT behavior: per-system-type
- * decoding, the tryDecodeJSON double-parse, the stringOnly filter, byId/byName
- * lookup, duplicate-key aggregation, WebDisplay exclusion, and extractFileData.
- *
- * They assert what the code does today, so any later deepening of the decode
- * dispatch can be proven behavior-identical.
- */
 import { describe, expect, it, vi } from 'vitest';
 import { getValues, getValue, extractFileData } from '@/grasshopper/io/output/response-processors';
 import { disposeRhinoObjects } from '@/grasshopper/io/output/rhino-decoder';
@@ -99,8 +88,7 @@ describe('getValues — aggregation and keys', () => {
 	});
 
 	it('wraps (not merges) when the first item itself parses to an array', () => {
-		// Regression: Array.isArray-based aggregation pushed the second item INTO
-		// the first item's parsed array — [1,2,3,[4]] instead of [[1,2,3],[4]].
+		// Not [1,2,3,[4]]: a parsed array value must not be mistaken for the aggregate.
 		const res = response(
 			param('lists', [item('System.String', '[1,2,3]'), item('System.String', '[4]')])
 		);
@@ -175,9 +163,9 @@ describe('getValue', () => {
 	});
 });
 
-// --- missing / alternate-cased fields (issue 62) ------------------------------
+// --- missing / alternate-cased fields -----------------------------------------
 
-describe('resilience to missing or alternate-cased response fields — issue 62', () => {
+describe('resilience to missing or alternate-cased response fields', () => {
 	it('skips params with no InnerTree instead of throwing (warnings-only partial success)', () => {
 		// This is exactly what client.solve returns on a warnings-only partial
 		// success: a param that produced nothing ships without InnerTree.
@@ -233,9 +221,9 @@ describe('resilience to missing or alternate-cased response fields — issue 62'
 	});
 });
 
-// --- memoization (issue 84) ----------------------------------------------------
+// --- memoization --------------------------------------------------------------
 
-describe('parsed-JSON memoization — issue 84', () => {
+describe('parsed-JSON memoization', () => {
 	it('does not re-run JSON.parse on repeated reads of the same response', () => {
 		const res = response(
 			param('o', [item('SomeType', '{"a":1}')]),
@@ -293,13 +281,7 @@ describe('extractFileData', () => {
 		expect(extractFileData(res)).toEqual([]);
 	});
 
-	/**
-	 * Regression: mcneel-branch servers serialize these PascalCase, and the
-	 * `Selva.FileIO.FileData` payload carries `Id`/`Metadata` alongside. The
-	 * strict camelCase guard dropped every file here — before the tolerant
-	 * decoder in handle-files.ts saw it — so `getAndDownloadFiles` produced a
-	 * silently empty archive (issue 95).
-	 */
+	// mcneel-branch servers serialize these PascalCase, with `Id`/`Metadata` alongside.
 	it('extracts PascalCase FileData and normalizes it to camelCase', () => {
 		const pascal = {
 			Id: 'abc',
@@ -344,13 +326,8 @@ describe('extractFileData', () => {
 		expect(extractFileData(res)[0]).not.toHaveProperty('metadata');
 	});
 
-	/**
-	 * Regression: the issue-95 normalization reached only `extractFileData` (the
-	 * download path). `getValue` — how output *widgets* read their value — left
-	 * the record verbatim, so a PascalCase file failed the camelCase `isFileData`
-	 * guard in @selvajs/ui and rendered an empty placeholder ("Waiting for
-	 * image...") though the bytes had arrived. Both paths must agree.
-	 */
+	// Output widgets read through getValue, and @selvajs/ui's `isFileData` guard
+	// expects camelCase: both read paths must normalize alike.
 	it('normalizes PascalCase FileData read through getValue', () => {
 		const pascal = {
 			Id: 'abc',
@@ -373,7 +350,7 @@ describe('extractFileData', () => {
 	});
 });
 
-// --- WASM disposal (issue 48) --------------------------------------------------
+// --- WASM disposal ------------------------------------------------------------
 
 /**
  * Fake emscripten binding: exposes delete()/isDeleted() like real rhino3dm
@@ -403,7 +380,7 @@ function fakeRhino(created: ReturnType<typeof makeWasmObject>[]) {
 	};
 }
 
-describe('getValues().dispose / disposeRhinoObjects — issue 48', () => {
+describe('getValues().dispose / disposeRhinoObjects', () => {
 	const pointJson = JSON.stringify({ X: 1, Y: 2, Z: 3 });
 
 	it('dispose() deletes every decoded WASM object exactly once, idempotently', () => {

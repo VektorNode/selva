@@ -14,7 +14,7 @@
  * where the liveness root `/`, `/idlespan` and `/activechildren` live. `/version`
  * and `/plugins/*\/installed` work on either.
  *
- *   COMPUTE_LIVE_URL=http://localhost:6500 npx vitest run tests/contract/compute-server-stats.live.test.ts
+ *   COMPUTE_LIVE_URL=http://localhost:6500 pnpm test:live
  *
  * Pass COMPUTE_LIVE_KEY if the server has RHINO_COMPUTE_KEY configured.
  *
@@ -83,12 +83,5 @@ describe.runIf(Boolean(LIVE_URL))('ComputeServerStats — live read-only probes'
 		const all = await stats.getServerStats();
 		expect(all.isOnline).toBe(true);
 		expect(all.version?.rhino).toMatch(/\d+\./);
-	});
-});
-
-// Always-present marker so the file isn't reported as empty when skipped.
-describe('live stats test wiring', () => {
-	it('is opt-in via COMPUTE_LIVE_URL', () => {
-		expect(typeof LIVE_URL === 'string' || LIVE_URL === undefined).toBe(true);
 	});
 });

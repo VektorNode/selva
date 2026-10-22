@@ -154,7 +154,7 @@ This ADR gated K2, the client-cache extraction out of the app:
    - ✅ `getClient` takes an opaque `ServerIdentity`; `evict`/`disposeAll` exported.
    - ✅ `X-Selva-Definition` emitted on solve / `getIO`, via a new `ComputeConfig.headers` hook in
      `@selvajs/compute` (see the D2 implementation note). The publish gate named here is closed:
-     `@selvajs/compute` is a workspace package in this repo (currently 4.x), not an external pin.
+     `@selvajs/compute` is a workspace package in this repo, not an external pin.
 3. **Deferred until demand:** pool membership on `ComputeServerConfig` (additive), the router
    (`resolveServerForOrg` returns members + pick-by-hash with liveness fallback), the LB/autoscaling.
 

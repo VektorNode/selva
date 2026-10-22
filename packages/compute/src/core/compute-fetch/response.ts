@@ -1,53 +1,56 @@
 import { ComputeError, ErrorCodes, type ErrorCode } from '../errors';
+import { getLogger } from '../utils/logger';
 import { readField } from '../utils/read-field';
-import { log } from './log';
 import { fireServerTiming } from './server-timing';
+import { isAbortError } from './signal';
 import { setResponseWireSize } from './wire-size';
 
-import type { ServerErrorCodeMap, ServerTiming } from '../types';
+import type { ComputeConfig } from '../types';
+
+export interface RequestContext {
+	fullUrl: string;
+	requestId: string;
+	requestSize: number;
+	config: ComputeConfig;
+}
 
 /** Upper bound for the raw server body stored on error `context.responseBody`. */
 const MAX_CONTEXT_BODY_CHARS = 4096;
 
-/** Truncate a server body for storage on error context — bounded, with an honest marker. */
 function truncateBody(body: string): string {
 	if (body.length <= MAX_CONTEXT_BODY_CHARS) return body;
 	return `${body.slice(0, MAX_CONTEXT_BODY_CHARS)}… [truncated ${body.length - MAX_CONTEXT_BODY_CHARS} chars]`;
 }
 
-export function throwHttpError(
+/**
+ * `rawBody` is what came over the wire and goes on `context.responseBody`; `detail` may be a
+ * message rewritten from it and only feeds the error message.
+ */
+function throwHttpError(
 	response: Response,
-	fullUrl: string,
-	requestId: string,
-	requestSize: number,
-	serverUrl: string,
-	errorBody: string,
-	serverCode?: string,
-	rawBody?: string,
-	serverErrorCodes?: ServerErrorCodeMap
+	ctx: RequestContext,
+	rawBody: string,
+	detail: string,
+	serverCode: string | undefined
 ): never {
 	const { status, statusText } = response;
+	const { fullUrl, requestId, requestSize, config } = ctx;
 
 	const responseHeaders: Record<string, string> = {};
 	response.headers.forEach((value, key) => {
 		responseHeaders[key] = value;
 	});
 
-	const trimmed = errorBody.trim();
+	const trimmed = detail.trim();
 	const bodyHint = trimmed ? ` — ${trimmed.slice(0, 200)}${trimmed.length > 200 ? '…' : ''}` : '';
 
-	// context.responseBody holds the RAW server body (what actually came over the
-	// wire), bounded to MAX_CONTEXT_BODY_CHARS so a huge body isn't pinned for the
-	// error's lifetime. `errorBody` may have been rewritten into a synthesized
-	// message (500 exception shape) — that goes in the message, not the context.
-	const storedBody = rawBody ?? errorBody;
 	const context = {
 		url: fullUrl,
 		requestId,
 		method: 'POST',
 		requestSize,
-		serverUrl,
-		responseBody: storedBody ? truncateBody(storedBody) : undefined,
+		serverUrl: config.serverUrl,
+		responseBody: rawBody ? truncateBody(rawBody) : undefined,
 		responseHeaders
 	};
 
@@ -84,185 +87,123 @@ export function throwHttpError(
 		code: ErrorCodes.UNKNOWN_ERROR
 	};
 
-	// A machine code in the server's error body outranks the status-based mapping:
-	// it's stable across the server's production message-scrubbing, where the human
-	// message is replaced with a generic string. Keep the status-derived message
-	// for context.
-	const code = mapServerErrorCode(serverCode, serverErrorCodes) ?? error.code;
-
-	throw new ComputeError(error.message, code, { statusCode: status, context });
-}
-
-/**
- * Map a server-supplied error code (from the JSON error body's `code` field) to
- * one of our {@link ErrorCodes}. Returns `undefined` for an absent or unknown
- * code so the caller falls back to its status-based mapping.
- *
- * Which wire codes exist is backend-specific, so the table comes from the caller
- * ({@link ComputeConfig.serverErrorCodes}) — core does not know any of them.
- */
-export function mapServerErrorCode(
-	serverCode?: string,
-	serverErrorCodes?: ServerErrorCodeMap
-): ErrorCode | undefined {
-	if (!serverCode || !serverErrorCodes) return undefined;
+	const codes = config.serverErrorCodes;
 	// The code is server-supplied: `constructor` must not resolve through the prototype.
-	return Object.prototype.hasOwnProperty.call(serverErrorCodes, serverCode)
-		? serverErrorCodes[serverCode]
-		: undefined;
+	const serverMapped =
+		serverCode && codes && Object.prototype.hasOwnProperty.call(codes, serverCode)
+			? codes[serverCode]
+			: undefined;
+
+	throw new ComputeError(error.message, serverMapped ?? error.code, {
+		statusCode: status,
+		context
+	});
 }
 
 export async function handleResponse(
 	response: Response,
-	fullUrl: string,
-	requestId: string,
-	requestSize: number,
-	serverUrl: string,
-	startTime: number,
-	debug?: boolean,
-	onServerTiming?: (timing: ServerTiming, requestId: string) => void,
-	serverErrorCodes?: ServerErrorCodeMap
-): Promise<any> {
+	ctx: RequestContext,
+	startTime: number
+): Promise<unknown> {
+	const { requestId, config } = ctx;
+	const { debug, onServerTiming } = config;
 	const responseTime = Math.round(performance.now() - startTime);
 
 	if (!response.ok) {
-		// Read body once and reuse. `rawBody` stays what came over the wire (stored
-		// on error context); `errorBody` may be rewritten into a friendlier message.
 		const rawBody = await response.text();
-		let errorBody = rawBody;
 
-		// Enhanced logging for errors
 		if (debug) {
-			log(
-				`❌ Request [${requestId}] failed with HTTP ${response.status} in ${responseTime}ms`,
-				true
+			const logger = getLogger();
+			logger.debug(
+				`❌ Request [${requestId}] failed with HTTP ${response.status} in ${responseTime}ms`
 			);
-			log(`   URL: ${fullUrl}`, true);
-			log(`   Status: ${response.status} ${response.statusText}`, true);
-			if (errorBody) {
-				log(
-					`   Response body: ${errorBody.substring(0, 500)}${errorBody.length > 500 ? '...' : ''}`,
-					true
+			logger.debug(`   URL: ${ctx.fullUrl}`);
+			logger.debug(`   Status: ${response.status} ${response.statusText}`);
+			if (rawBody) {
+				logger.debug(
+					`   Response body: ${rawBody.substring(0, 500)}${rawBody.length > 500 ? '...' : ''}`
 				);
 			}
 		}
 
-		// A machine-readable code the server may tag onto its error body. Unlike the
-		// human `message`, it isn't scrubbed in the server's production (non-debug)
-		// mode, so it's the reliable signal for classifying the error (see
-		// throwHttpError → mapServerErrorCode). It can ride any error status, not
-		// just 500, so read it here.
-		let serverCode: string | undefined;
-
+		let parsed: any;
+		let isJson = true;
 		try {
-			const parsedForCode = JSON.parse(errorBody);
-			if (typeof parsedForCode?.code === 'string') serverCode = parsedForCode.code;
-		} catch {
-			// Non-JSON body — nothing to extract.
-		}
-
-		// Check if it's a valid compute response with errors/warnings
-		if (response.status === 500) {
-			try {
-				const parsed = JSON.parse(errorBody);
-				// If it has values, it's a partial success with errors. Read the fields
-				// case-insensitively: `values`/`errors`/`warnings` arrive PascalCase from
-				// stock mcneel servers — a casing miss here would throw the partial
-				// values away as a hard failure.
-				const values = readField(parsed, 'values');
-				const solveErrors = readField<unknown[]>(parsed, 'errors');
-				const solveWarnings = readField<unknown[]>(parsed, 'warnings');
-				if (values && (solveErrors || solveWarnings)) {
-					setResponseWireSize(parsed, errorBody.length);
-					if (debug) {
-						log(
-							`⚠️ Request [${requestId}] completed with solver errors in ${responseTime}ms`,
-							true
-						);
-						if (solveErrors && solveErrors.length > 0) {
-							log(`   Errors: ${JSON.stringify(solveErrors, null, 2)}`, true);
-						}
-						if (solveWarnings && solveWarnings.length > 0) {
-							log(`   Warnings: ${JSON.stringify(solveWarnings, null, 2)}`, true);
-						}
-					}
-					fireServerTiming(response, requestId, onServerTiming, debug);
-					return parsed;
-				}
-
-				// Raw server-side exception. The Compute8 server's exception handler
-				// (compute.geometry Startup.cs) emits:
-				//   { error: "Internal Server Error", message: "<category>: <detail>",
-				//     stackTrace?: string[] }   // stackTrace only when Config.Debug
-				// The actionable part is `message` — surface it, with the optional
-				// stack appended for debugging. We prefer `message`/`error` (current
-				// server) and keep `Message`/`ExceptionType`/`StackTrace` (old
-				// PascalCase .NET shape) as a back-compat fallback so an older server
-				// still produces a useful message.
-				const serverMessage =
-					(typeof parsed?.message === 'string' && parsed.message) ||
-					(typeof parsed?.Message === 'string' && parsed.Message) ||
-					'';
-				const exceptionType =
-					(typeof parsed?.ExceptionType === 'string' && parsed.ExceptionType) || '';
-				const stack = parsed?.stackTrace ?? parsed?.StackTrace;
-				const stackStr = Array.isArray(stack) ? stack.join('\n') : stack || '';
-
-				if (serverMessage) {
-					// Don't repeat the generic "Internal Server Error" label when the
-					// message already carries the real detail.
-					const prefix = exceptionType ? `${exceptionType}: ` : '';
-					errorBody = `${prefix}${serverMessage}${stackStr ? `\n${stackStr}` : ''}`;
-				} else if (parsed?.error) {
-					errorBody =
-						typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error, null, 2);
-				}
-			} catch (e) {
-				if (debug) {
-					log(`   Failed to parse error body as JSON: ${e}`, true);
-				}
-				// Not valid JSON, proceed with HTTP error
+			parsed = JSON.parse(rawBody);
+		} catch (e) {
+			isJson = false;
+			if (debug && response.status === 500) {
+				getLogger().debug(`   Failed to parse error body as JSON: ${e}`);
 			}
 		}
 
-		throwHttpError(
-			response,
-			fullUrl,
-			requestId,
-			requestSize,
-			serverUrl,
-			errorBody,
-			serverCode,
-			rawBody,
-			serverErrorCodes
-		);
+		// Any error status can carry a `code`, not just 500.
+		const serverCode: string | undefined =
+			typeof parsed?.code === 'string' ? parsed.code : undefined;
+		let detail = rawBody;
+
+		if (response.status === 500 && isJson) {
+			// Values plus errors or warnings: the solve ran, so this is a partial success.
+			const values = readField(parsed, 'values');
+			const solveErrors = readField<unknown[]>(parsed, 'errors');
+			const solveWarnings = readField<unknown[]>(parsed, 'warnings');
+			if (values && (solveErrors || solveWarnings)) {
+				setResponseWireSize(parsed, rawBody.length);
+				if (debug) {
+					const logger = getLogger();
+					logger.debug(
+						`⚠️ Request [${requestId}] completed with solver errors in ${responseTime}ms`
+					);
+					if (solveErrors && solveErrors.length > 0) {
+						logger.debug(`   Errors: ${JSON.stringify(solveErrors, null, 2)}`);
+					}
+					if (solveWarnings && solveWarnings.length > 0) {
+						logger.debug(`   Warnings: ${JSON.stringify(solveWarnings, null, 2)}`);
+					}
+				}
+				fireServerTiming(response, requestId, onServerTiming, debug);
+				return parsed;
+			}
+
+			// Compute8's exception handler sends `{ error, message: "<category>: <detail>",
+			// stackTrace? }`; older servers sent PascalCase `Message`/`ExceptionType`/`StackTrace`.
+			const serverMessage =
+				(typeof parsed?.message === 'string' && parsed.message) ||
+				(typeof parsed?.Message === 'string' && parsed.Message) ||
+				'';
+			const exceptionType =
+				(typeof parsed?.ExceptionType === 'string' && parsed.ExceptionType) || '';
+			const stack = parsed?.stackTrace ?? parsed?.StackTrace;
+			const stackStr = Array.isArray(stack) ? stack.join('\n') : stack || '';
+
+			if (serverMessage) {
+				const prefix = exceptionType ? `${exceptionType}: ` : '';
+				detail = `${prefix}${serverMessage}${stackStr ? `\n${stackStr}` : ''}`;
+			} else if (parsed?.error) {
+				detail =
+					typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error, null, 2);
+			}
+		}
+
+		throwHttpError(response, ctx, rawBody, detail, serverCode);
 	}
 
-	log(`✅ Request [${requestId}] completed in ${responseTime}ms`, debug);
+	if (debug) getLogger().debug(`✅ Request [${requestId}] completed in ${responseTime}ms`);
 
 	fireServerTiming(response, requestId, onServerTiming, debug);
 
 	try {
-		// text-then-parse (what `response.json()` does internally) so the body's
-		// wire size rides along with the parsed object — downstream byte-budgeted
-		// caches read it instead of re-serializing a potentially huge tree.
+		// Text, then parse, so the wire size rides along for byte-budgeted caches.
 		const rawBody = await response.text();
 		const parsed = JSON.parse(rawBody);
 		setResponseWireSize(parsed, rawBody.length);
 		return parsed;
 	} catch (error) {
-		// The signal stays armed while the body streams: an abort or timeout here must reach the
-		// caller's abort/timeout classification, not read as a truncated (retryable) body.
-		if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
-			throw error;
-		}
-		// Classify by the declared Content-Type (issue 87). A 2xx that DECLARES a
-		// non-JSON body (HTML from a captive portal, a reverse-proxy login page, a
-		// misconfigured endpoint) is deterministic — refetching returns the same
-		// page — so fail immediately with INVALID_RESPONSE (never retried). A body
-		// that fails to parse under a JSON (or absent) Content-Type means the
-		// stream was likely cut mid-body — as transient as any network error — and
-		// keeps the retryable NETWORK_ERROR classification.
+		// The signal stays armed while the body streams: an abort here is the caller's or the
+		// timeout's, not a truncated body.
+		if (isAbortError(error)) throw error;
+		// A declared non-JSON body (captive portal, proxy login page) comes back identical on a
+		// retry. Anything else that fails to parse was most likely cut off mid-stream.
 		const contentType = (response.headers.get('Content-Type') ?? '').toLowerCase();
 		const declaredNonJson = contentType !== '' && !contentType.includes('json');
 		if (declaredNonJson) {
@@ -271,17 +212,14 @@ export async function handleResponse(
 				ErrorCodes.INVALID_RESPONSE,
 				{
 					statusCode: response.status,
-					context: { url: fullUrl, requestId, contentType },
+					context: { url: ctx.fullUrl, requestId, contentType },
 					originalError: error instanceof Error ? error : new Error(String(error))
 				}
 			);
 		}
 		throw new ComputeError('Failed to parse JSON response', ErrorCodes.NETWORK_ERROR, {
 			statusCode: response.status,
-			context: {
-				url: fullUrl,
-				requestId
-			},
+			context: { url: ctx.fullUrl, requestId },
 			originalError: error instanceof Error ? error : new Error(String(error))
 		});
 	}

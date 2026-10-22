@@ -120,6 +120,16 @@ describe('fnv1a / fnv1aBytes', () => {
 	it('distinguishes different byte content', () => {
 		expect(fnv1aBytes(new Uint8Array([1, 2, 3]))).not.toBe(fnv1aBytes(new Uint8Array([3, 2, 1])));
 	});
+
+	// Published FNV-1a 32-bit vectors: a durable cache keyed by these hashes breaks if they move.
+	it('matches the reference FNV-1a values', () => {
+		expect(fnv1a('')).toBe('811c9dc5');
+		expect(fnv1a('a')).toBe('e40c292c');
+		expect(fnv1a('foobar')).toBe('bf9cf968');
+		expect(fnv1a('ü€😀')).toBe('676f0948');
+		const bytes = new Uint8Array(1024).map((_, i) => (i * 31 + 7) & 0xff);
+		expect(fnv1aBytes(bytes)).toBe('2c6d0dc5');
+	});
 });
 
 describe('hashSolveInput', () => {
@@ -176,9 +186,7 @@ describe('hashSolveInput', () => {
 		expect(key).toMatch(/^s:\d+:[0-9a-f]{8}\|t:\d+:[0-9a-f]{8}$/);
 	});
 
-	// Issue 57: the scheduler computes hashDefinition once at solve() entry and
-	// threads it through instead of re-hashing. That refactor is only sound if
-	// composing the precomputed definition hash yields byte-identical keys.
+	// The scheduler composes the key from a precomputed definition hash.
 	it('hashSolveInputForDefinition(hashDefinition(d), t) equals hashSolveInput(d, t)', () => {
 		const binary = new Uint8Array([1, 2, 3, 4]);
 		for (const def of ['def.gh', binary] as const) {

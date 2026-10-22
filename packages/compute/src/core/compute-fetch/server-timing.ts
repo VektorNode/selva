@@ -1,17 +1,10 @@
-import { log } from './log';
+import { getLogger } from '../utils/logger';
 
 import type { ServerTiming } from '../types';
 
 /**
- * Parse a `Server-Timing` header value into typed durations (ms).
- *
- * Header grammar (RFC 9110 §10.1.10), as emitted by the solve endpoint:
- *   `decode;dur=3, solve;dur=120, encode;dur=8`
- *
- * Returns null when the header is absent or carries no recognizable metric, so
- * the caller can skip the callback entirely.
- *
- * @internal exported for tests
+ * Parse a W3C Server Timing header, as the solve endpoint emits it:
+ * `decode;dur=3, solve;dur=120, encode;dur=8`. Null when it carries no recognised metric.
  */
 export function parseServerTiming(headerValue: string | null): ServerTiming | null {
 	if (!headerValue) return null;
@@ -32,12 +25,6 @@ export function parseServerTiming(headerValue: string | null): ServerTiming | nu
 	return sawMetric ? timing : null;
 }
 
-/**
- * Surface the server's per-request timing breakdown (if it sent one and a
- * caller is listening). Best-effort: a throwing callback must not fail the
- * request. Called on the success path AND the 500-with-values partial-success
- * path — solves that completed with Grasshopper errors carry real timings too.
- */
 export function fireServerTiming(
 	response: Response,
 	requestId: string,
@@ -50,6 +37,6 @@ export function fireServerTiming(
 	try {
 		onServerTiming(timing, requestId);
 	} catch (err) {
-		if (debug) log(`   onServerTiming callback threw: ${err}`, true);
+		if (debug) getLogger().debug(`   onServerTiming callback threw: ${err}`);
 	}
 }

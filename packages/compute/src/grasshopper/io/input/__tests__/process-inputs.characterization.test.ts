@@ -1,31 +1,24 @@
-/**
- * CHARACTERIZATION TESTS for the input-parsing pipeline.
- *
- * These pin the CURRENT shipped behavior of `processInputWithError` /
- * `processInputs` (raw InputParamSchema -> typed InputParam) so the upcoming
- * "input-type parser" refactor can be proven behavior-identical. They assert
- * what the code does TODAY, including quirks — see the tree-access section and
- * CONTEXT.md "Known-suspicious behavior". Do not "fix" a quirk here; if a quirk
- * is a real bug, change it in a dedicated commit and update these tests then.
- */
+// Pins what each param type does today, quirks included: a change here is a
+// behaviour change, so make it on purpose.
 import { describe, expect, it } from 'vitest';
 import {
 	processInput,
-	processInputs,
+	processInputsWithErrors,
 	processInputWithError
 } from '@/grasshopper/io/input/input-processors';
+import type { FileInputType, NumericInputType, ValueListInputType } from '@/grasshopper/types';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 describe('input pipeline characterization', () => {
 	describe('Number / Integer', () => {
 		it('coerces a string default to a number and derives step size', () => {
-			const { input, error } = processInputWithError(
+			const { input, errors } = processInputWithError(
 				createInputSchema({ paramType: 'Number', default: '1.5' })
 			);
-			expect(error).toBeUndefined();
+			expect(errors).toEqual([]);
 			expect(input.paramType).toBe('Number');
-			expect((input as any).default).toBe(1.5);
-			expect((input as any).stepSize).toBe(0.1);
+			expect(input.default).toBe(1.5);
+			expect((input as NumericInputType).stepSize).toBe(0.1);
 		});
 
 		it('carries minimum/maximum/atLeast/atMost through onto the typed param', () => {
@@ -47,7 +40,7 @@ describe('input pipeline characterization', () => {
 				atMost: 1
 			});
 			// step source falls back to maximum (10) -> integer-magnitude -> step 1
-			expect((input as any).stepSize).toBe(1);
+			expect((input as NumericInputType).stepSize).toBe(1);
 		});
 
 		it('rounds Integer defaults and forces stepSize 1', () => {
@@ -55,37 +48,36 @@ describe('input pipeline characterization', () => {
 				createInputSchema({ paramType: 'Integer', default: 42.7 })
 			);
 			expect(input.paramType).toBe('Integer');
-			expect((input as any).default).toBe(43);
-			expect((input as any).stepSize).toBe(1);
+			expect(input.default).toBe(43);
+			expect((input as NumericInputType).stepSize).toBe(1);
 		});
 	});
 
 	describe('Boolean', () => {
 		it('coerces a "true" string to boolean true', () => {
-			const { input, error } = processInputWithError(
+			const { input, errors } = processInputWithError(
 				createInputSchema({ paramType: 'Boolean', default: 'true' })
 			);
-			expect(error).toBeUndefined();
+			expect(errors).toEqual([]);
 			expect(input.paramType).toBe('Boolean');
-			expect((input as any).default).toBe(true);
+			expect(input.default).toBe(true);
 		});
 
 		it('an invalid boolean string is a recoverable failure -> safe default + error', () => {
-			const { input, error } = processInputWithError(
+			const { input, errors } = processInputWithError(
 				createInputSchema({ paramType: 'Boolean', default: 'maybe' })
 			);
 			expect(input.paramType).toBe('Boolean');
-			expect((input as any).default).toBe(false); // scalar safe default
-			expect(error).toBeDefined();
-			expect(error?.paramType).toBe('Boolean');
+			expect(input.default).toBe(false); // scalar safe default
+			expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR', paramType: 'Boolean' }]);
 		});
 
 		it('list-shaped boolean fallback is [false] (atMost > 1)', () => {
-			const { input, error } = processInputWithError(
+			const { input, errors } = processInputWithError(
 				createInputSchema({ paramType: 'Boolean', default: 'maybe', atMost: 5 })
 			);
-			expect(error).toBeDefined();
-			expect((input as any).default).toEqual([false]);
+			expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
+			expect(input.default).toEqual([false]);
 		});
 	});
 
@@ -95,51 +87,51 @@ describe('input pipeline characterization', () => {
 				createInputSchema({ paramType: 'Text', default: '"hello"' })
 			);
 			expect(input.paramType).toBe('Text');
-			expect((input as any).default).toBe('hello');
+			expect(input.default).toBe('hello');
 		});
 
 		it('passes a plain string through', () => {
 			const { input } = processInputWithError(
 				createInputSchema({ paramType: 'Text', default: 'world' })
 			);
-			expect((input as any).default).toBe('world');
+			expect(input.default).toBe('world');
 		});
 	});
 
 	describe('ValueList', () => {
 		it('builds a ValueList with its values map', () => {
-			const { input, error } = processInputWithError(
+			const { input, errors } = processInputWithError(
 				createInputSchema({
 					paramType: 'ValueList',
 					values: { A: '0', B: '1' },
-					default: '0'
+					default: 'A'
 				})
 			);
-			expect(error).toBeUndefined();
+			expect(errors).toEqual([]);
 			expect(input.paramType).toBe('ValueList');
-			expect((input as any).values).toEqual({ A: '0', B: '1' });
-			expect((input as any).default).toBe('0');
+			expect((input as ValueListInputType).values).toEqual({ A: '0', B: '1' });
+			expect(input.default).toBe('A');
 		});
 
-		it('an out-of-range default only WARNS — it still succeeds (no error)', () => {
-			const { input, error } = processInputWithError(
+		it('an out-of-range default only warns: it still succeeds', () => {
+			const { input, errors } = processInputWithError(
 				createInputSchema({
 					paramType: 'ValueList',
 					values: { A: '0', B: '1' },
 					default: 'not-a-key'
 				})
 			);
-			expect(error).toBeUndefined();
-			expect((input as any).default).toBe('not-a-key');
+			expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
+			expect(input.default).toBe('not-a-key');
 		});
 
 		it('a missing values map is a recoverable failure -> safe default + error', () => {
-			const { input, error } = processInputWithError(
+			const { input, errors } = processInputWithError(
 				createInputSchema({ paramType: 'ValueList', values: undefined, default: 'x' })
 			);
-			expect(error).toBeDefined();
+			expect(errors).toMatchObject([{ code: 'INVALID_INPUT' }]);
 			expect(input.paramType).toBe('ValueList');
-			expect((input as any).values).toEqual({});
+			expect((input as ValueListInputType).values).toEqual({});
 		});
 	});
 
@@ -149,7 +141,7 @@ describe('input pipeline characterization', () => {
 				createInputSchema({ paramType: 'Geometry', default: '{"x":1}' })
 			);
 			expect(input.paramType).toBe('Geometry');
-			expect((input as any).default).toEqual({ x: 1 });
+			expect(input.default).toEqual({ x: 1 });
 		});
 
 		it('carries acceptedFormats through onto a File param', () => {
@@ -158,10 +150,10 @@ describe('input pipeline characterization', () => {
 					paramType: 'File',
 					default: null,
 					acceptedFormats: ['.3dm', '.obj']
-				} as any)
+				})
 			);
 			expect(input.paramType).toBe('File');
-			expect((input as any).acceptedFormats).toEqual(['.3dm', '.obj']);
+			expect((input as FileInputType).acceptedFormats).toEqual(['.3dm', '.obj']);
 		});
 	});
 
@@ -171,17 +163,17 @@ describe('input pipeline characterization', () => {
 				createInputSchema({ paramType: 'Color', default: '"255, 0, 0"' })
 			);
 			expect(input.paramType).toBe('Color');
-			expect((input as any).default).toBe('255, 0, 0');
+			expect(input.default).toBe('255, 0, 0');
 		});
 	});
 
 	describe('unknown type', () => {
 		it('reports a VALIDATION_ERROR and falls back to a Geometry safe default', () => {
-			const { input, error } = processInputWithError(
+			const { input, errors } = processInputWithError(
 				createInputSchema({ paramType: 'definitelyNotAType' })
 			);
-			expect(error?.code).toBe('VALIDATION_ERROR');
-			expect(error?.message).toContain('definitelyNotAType');
+			expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
+			expect(errors[0].message).toContain('definitelyNotAType');
 			expect(input.paramType).toBe('Geometry');
 		});
 	});
@@ -197,19 +189,15 @@ describe('input pipeline characterization', () => {
 			}
 		};
 
-		// Previously a known bug: the numeric
-		// parser collapsed a tree-access default to `undefined`, silently dropping a
-		// tree-access slider's values. Now fixed — the tree is preserved as a
-		// DataTreeDefault for TreeBuilder.fromInputParams to consume.
 		it('preserves a tree-access Number default as a DataTreeDefault', () => {
 			const { input } = processInputWithError(
 				createInputSchema({
 					paramType: 'Number',
 					treeAccess: true,
-					default: treeDefault as any
+					default: treeDefault
 				})
 			);
-			expect((input as any).default).toEqual({ '{0}': [1.5, 2.5], '{1}': [3.5] });
+			expect(input.default).toEqual({ '{0}': [1.5, 2.5], '{1}': [3.5] });
 		});
 
 		it('preserves a tree-access Integer default and uses step size 1', () => {
@@ -217,21 +205,21 @@ describe('input pipeline characterization', () => {
 				createInputSchema({
 					paramType: 'Integer',
 					treeAccess: true,
-					default: { innerTree: { '{0}': [{ data: '5', type: 'System.Int32' }] } } as any
+					default: { innerTree: { '{0}': [{ data: '5', type: 'System.Int32' }] } }
 				})
 			);
-			expect((input as any).default).toEqual({ '{0}': [5] });
-			expect((input as any).stepSize).toBe(1);
+			expect(input.default).toEqual({ '{0}': [5] });
+			expect((input as NumericInputType).stepSize).toBe(1);
 		});
 
 		it('an empty innerTree collapses the default to undefined', () => {
 			const { input } = processInputWithError(
 				createInputSchema({
 					paramType: 'Number',
-					default: { innerTree: {} } as any
+					default: { innerTree: {} }
 				})
 			);
-			expect((input as any).default).toBeUndefined();
+			expect(input.default).toBeUndefined();
 		});
 	});
 
@@ -239,11 +227,11 @@ describe('input pipeline characterization', () => {
 		it('processInput returns just the typed param', () => {
 			const result = processInput(createInputSchema({ paramType: 'Text', default: 'x' }));
 			expect(result.paramType).toBe('Text');
-			expect((result as any).default).toBe('x');
+			expect(result.default).toBe('x');
 		});
 
-		it('processInputs maps a batch and preserves order', () => {
-			const results = processInputs([
+		it('processInputsWithErrors maps a batch and preserves order', () => {
+			const { inputs: results } = processInputsWithErrors([
 				createInputSchema({ name: 'a', paramType: 'Number', default: 1 }),
 				createInputSchema({ name: 'b', paramType: 'Text', default: 'y' })
 			]);

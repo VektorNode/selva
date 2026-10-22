@@ -12,7 +12,8 @@ import type { GrasshopperComputeResponse, DataItem } from '../../types';
 
 // Mock the file-download seam so getAndDownloadFiles doesn't need a DOM.
 const downloadFileData = vi.fn();
-vi.mock('@/core/files/handle-files', () => ({
+vi.mock('@/core/files/handle-files', async (importOriginal) => ({
+	...(await importOriginal<typeof import('@/core/files/handle-files')>()),
 	downloadFileData: (...args: unknown[]) => downloadFileData(...args)
 }));
 
@@ -91,10 +92,8 @@ describe('GrasshopperResponseProcessor — file download', () => {
 	});
 });
 
-// `extractMeshesFromResponse()` used to live here. Mesh decoding moved to `@selvajs/visualization`
-// so this package stays pure solve/data with no `three` dependency; callers now pass the raw
-// response to `getThreeMeshesFromComputeResponse` themselves. What this class still owes them is
-// access to that response — pinned below.
+// Mesh decoding lives in `@selvajs/visualization`: callers pass the raw response to
+// `getThreeObjectsFromComputeResponse` themselves, so this class must keep exposing it.
 describe('GrasshopperResponseProcessor — renderer hand-off', () => {
 	it('exposes the bound response so a renderer-side parser can consume it', () => {
 		const res = response(param('m', []));

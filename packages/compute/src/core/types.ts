@@ -1,17 +1,15 @@
 import type { ErrorCode } from './errors';
 
-// Config
-
-/**
- * Backend wire code (the JSON error body's `code` field) → one of our
- * {@link ErrorCodes}. An unlisted code falls back to the status-based mapping.
- */
+/** A backend's error-body `code` → one of our {@link ErrorCodes}. */
 export type ServerErrorCodeMap = Record<string, ErrorCode>;
 
-// Retry policy: exponential backoff, respects Retry-After header (up to 60s safety cap).
-// WHY: Duplicate-POST risk — network errors after send but before response may have
-// already executed the request on the server. Compute is idempotent, but non-idempotent
-// endpoints should set `attempts: 0`.
+/**
+ * Exponential backoff with jitter; a server `Retry-After` replaces the backoff for that attempt.
+ *
+ * Requests are POSTs: a connection lost after the body was sent may already have run on the
+ * server, and the retry runs it again. A solve is deterministic, so that wastes work but corrupts
+ * nothing; a non-idempotent endpoint should keep `attempts: 0`.
+ */
 export interface RetryPolicy {
 	/** Maximum number of retry attempts after the initial request (default: 0). */
 	attempts?: number;
@@ -24,8 +22,6 @@ export interface RetryPolicy {
 }
 
 export interface ComputeConfig {
-	// WHY: must target the proxy, not bare compute.geometry child process.
-	// ComputeServerStats needs proxy endpoints like / and /activechildren.
 	serverUrl: string;
 	/** Optional API key for authenticating with the server. Sent as {@link apiKeyHeader}. */
 	apiKey?: string;
@@ -34,45 +30,47 @@ export interface ComputeConfig {
 	 * rhino.compute expects. A different backend sets its own.
 	 */
 	apiKeyHeader?: string;
-	/** Optional Bearer token for authentication (e.g., when behind a proxy or API gateway) */
+	/** Sent verbatim as the `Authorization` header, so include the scheme (`Bearer …`). */
 	authToken?: string;
-	// WHY: merged UNDER auth/request-id headers so they can't be overridden.
-	// Use for routing hints (e.g. definition affinity) that reverse proxies read.
-	headers?: Record<string, string>;
-	/** Enable debug logging to the console */
-	debug?: boolean;
-	/** Suppress browser security warnings in the console */
-	suppressBrowserWarning?: boolean;
-	// WHY: per-attempt timeout (not total deadline). Re-armed on each retry, so
-	// worst-case = (attempts + 1) × timeoutMs + backoff. Pass your own signal for
-	// a hard overall deadline. Using AbortSignal.timeout avoids tab throttling.
-	timeoutMs?: number;
 	/**
-	 * Retry policy for transient errors. Default: no retries.
+	 * Extra request headers, e.g. routing hints a reverse proxy reads. A header the transport sets
+	 * (credentials, `X-Request-ID`, `Content-Type`) wins over a caller header of any casing.
 	 */
+	headers?: Record<string, string>;
+	/** Log each request at debug level through the configured logger (see `setLogger`). */
+	debug?: boolean;
+	/** Silence the warning logged when a call that carries the API key runs in a browser. */
+	suppressBrowserWarning?: boolean;
+	/**
+	 * Per-attempt timeout, re-armed on every retry: the worst case is `(attempts + 1) × timeoutMs`
+	 * plus backoff. Pass `signal` for an overall deadline.
+	 */
+	timeoutMs?: number;
+	/** Retry policy for transient errors. Default: no retries. */
 	retry?: RetryPolicy;
 	/**
-	 * Optional caller-supplied AbortSignal. Composes with the internal timeout —
-	 * whichever fires first wins. Lets callers cancel in-flight requests
-	 * (e.g. on component unmount or when superseding a stale solve).
+	 * Cancels the request, including during a retry backoff. Composes with `timeoutMs`: whichever
+	 * fires first wins.
 	 */
 	signal?: AbortSignal;
 	/**
-	 * Machine-readable error codes this backend tags onto its error bodies, mapped
-	 * to our {@link ErrorCodes}. A code here outranks the status-based mapping.
-	 * Core knows no backend's codes — the client supplies its own table.
+	 * Maps the `code` field of this backend's JSON error bodies to our {@link ErrorCodes}. A listed
+	 * code outranks the status-based mapping: the server's production mode scrubs the human message
+	 * but not the code. Core knows no backend's codes; the client supplies its own table.
 	 */
 	serverErrorCodes?: ServerErrorCodeMap;
-	// WHY: telemetry side-channel. Fires once per request (before return), including
-	// on partial-success (HTTP 500 with real timings). Doesn't change behavior.
-	// requestId matches X-Request-ID header for correlating with debug logs.
+	/**
+	 * Called with the server's `Server-Timing` breakdown when the response carries a recognised
+	 * metric, including on a 500 partial success. `requestId` matches the `X-Request-ID` header.
+	 * A throwing callback doesn't fail the request.
+	 */
 	onServerTiming?: (timing: ServerTiming, requestId: string) => void;
 }
 
 /** The config fields that decide how a request authenticates. */
 export type ComputeAuth = Pick<ComputeConfig, 'apiKey' | 'apiKeyHeader' | 'authToken' | 'headers'>;
 
-// Server-Timing metrics (ms). `raw` preserves non-standard metrics.
+/** `Server-Timing` durations in ms. `raw` keeps the whole header, unrecognised metrics included. */
 export interface ServerTiming {
 	decode?: number;
 	solve?: number;

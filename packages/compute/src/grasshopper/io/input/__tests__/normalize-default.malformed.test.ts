@@ -1,11 +1,5 @@
-/**
- * MALFORMED-DEFAULT ISOLATION for `normalizeDefault` / `processInputWithError` (issue 49).
- *
- * One malformed input must degrade to a per-input `parseErrors` entry, never abort the whole
- * definition-IO fetch. The tree-access branch used to `.map` over each innerTree branch with no
- * `Array.isArray` guard, and the normalizer ran before `processInputWithError`'s try — so a
- * branch value that wasn't an array threw a raw TypeError that escaped unwrapped.
- */
+// One malformed input must degrade to a per-input `parseErrors` entry, never abort the whole
+// definition-IO fetch.
 import { describe, expect, it } from 'vitest';
 import {
 	processInputWithError,
@@ -13,7 +7,7 @@ import {
 } from '@/grasshopper/io/input/input-processors';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
-/** A tree-access default whose branch value is not an array — the shape that used to throw. */
+/** A tree-access default whose branch value is not an array. */
 const nonArrayBranchDefault = {
 	ParamName: 'Get Number',
 	InnerTree: {
@@ -23,16 +17,16 @@ const nonArrayBranchDefault = {
 
 describe('normalizeDefault — malformed tree-access branch', () => {
 	it('degrades a non-array innerTree branch to a MALFORMED_DEFAULT error instead of throwing', () => {
-		const { input, error } = processInputWithError(
+		const { input, errors } = processInputWithError(
 			createInputSchema({
 				paramType: 'Number',
 				treeAccess: true,
-				default: nonArrayBranchDefault as any
+				default: nonArrayBranchDefault
 			})
 		);
 		expect(input).toBeDefined();
-		expect((input as any).default).toBeNull();
-		expect(error?.code).toBe('MALFORMED_DEFAULT');
+		expect(input.default).toBeNull();
+		expect(errors).toMatchObject([{ code: 'MALFORMED_DEFAULT' }]);
 	});
 
 	it('one malformed input does not abort the batch — the rest still parse', () => {
@@ -40,7 +34,7 @@ describe('normalizeDefault — malformed tree-access branch', () => {
 		const bad = createInputSchema({
 			paramType: 'Number',
 			treeAccess: true,
-			default: nonArrayBranchDefault as any
+			default: nonArrayBranchDefault
 		});
 
 		const { inputs, parseErrors } = processInputsWithErrors([bad, good]);
@@ -51,14 +45,14 @@ describe('normalizeDefault — malformed tree-access branch', () => {
 
 describe('normalizeDefault — already-flattened tree default', () => {
 	it('keeps a branch-path map instead of dropping it as malformed', () => {
-		const { input, error } = processInputWithError(
+		const { input, errors } = processInputWithError(
 			createInputSchema({
 				paramType: 'Number',
 				treeAccess: true,
 				default: { '{0}': [1, 2] }
 			})
 		);
-		expect(error).toBeUndefined();
+		expect(errors).toEqual([]);
 		expect(input.default).toEqual({ '{0}': [1, 2] });
 	});
 });

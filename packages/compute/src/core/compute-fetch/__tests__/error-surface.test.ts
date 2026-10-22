@@ -73,7 +73,7 @@ describe('Compute8 server-exception body is surfaced to the user', () => {
 	});
 });
 
-describe('error context.responseBody holds the raw, bounded server body (issue 104)', () => {
+describe('error context.responseBody holds the raw, bounded server body', () => {
 	it('stores the raw wire body, not the synthesized message', async () => {
 		const raw = serverException('Invalid argument: Radius must be positive', true);
 		fetchMock.mockResolvedValueOnce(

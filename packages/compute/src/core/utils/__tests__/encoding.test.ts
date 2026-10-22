@@ -1,22 +1,11 @@
-/**
- * Regression tests for the env-portable base64 helpers.
- *
- * - encodeStringToBase64 must work without Node's `Buffer` (browsers/workers),
- *   falling back to TextEncoder + btoa. It used bare `Buffer` and threw a
- *   ReferenceError in browsers — reachable from prepareGrasshopperArgs'
- *   plain-string path.
- * - decodeBase64ToBinary error paths, pool-copy behavior (issue 107), and the
- *   >32768-byte chunk boundary of the browser encode fallback (issue 108).
- * - utf8ByteLength surrogate handling.
- * - detectBase64Payload heuristic pins (issues 69/92).
- */
+// Every helper must behave the same with and without Node's `Buffer`: the tests delete it to
+// exercise the browser path.
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	encodeStringToBase64,
 	decodeBase64ToBinary,
 	base64ByteArray,
 	utf8ByteLength,
-	isBase64,
 	detectBase64Payload,
 	BASE64_DETECT_MIN_LENGTH
 } from '../encoding';
@@ -87,7 +76,7 @@ describe('decodeBase64ToBinary error paths', () => {
 	});
 });
 
-describe('decodeBase64ToBinary pool aliasing (issue 107)', () => {
+describe('decodeBase64ToBinary pool aliasing', () => {
 	it('returns bytes backed by an exactly-sized, non-shared ArrayBuffer', () => {
 		const bytes = decodeBase64ToBinary('aGVsbG8='); // "hello", 5 bytes
 		expect(bytes.byteOffset).toBe(0);
@@ -104,7 +93,7 @@ describe('decodeBase64ToBinary pool aliasing (issue 107)', () => {
 	});
 });
 
-describe('base64ByteArray chunk boundaries (issue 108)', () => {
+describe('base64ByteArray chunk boundaries', () => {
 	it('browser fallback matches the Buffer path across the >32768-byte chunk boundary', () => {
 		// Deliberately NOT a multiple of the 32766-byte chunk: exercises several
 		// full chunks plus a ragged final one, and both padded/unpadded tails.
@@ -155,7 +144,7 @@ describe('utf8ByteLength', () => {
 	});
 });
 
-describe('detectBase64Payload heuristic (issues 69/92)', () => {
+describe('detectBase64Payload heuristic', () => {
 	// 96 chars of canonical base64 (72 bytes), the realistic "definition" shape.
 	const longB64 = originalBuffer
 		.from(new Uint8Array(72).map((_, i) => i * 3 + 1))
@@ -208,14 +197,5 @@ describe('detectBase64Payload heuristic (issues 69/92)', () => {
 		// 64 'A's decode to 48 zero bytes — indistinguishable from real base64.
 		// Callers that must be exact pass Uint8Array; pinned so a change is loud.
 		expect(detectBase64Payload('A'.repeat(64))).toBe('A'.repeat(64));
-	});
-});
-
-describe('isBase64 (syntactic check, unchanged semantics)', () => {
-	it('remains a pure syntax check — short strings like "test" still pass', () => {
-		expect(isBase64('test')).toBe(true);
-		expect(isBase64('SGVsbG8=')).toBe(true);
-		expect(isBase64('not base64!!!')).toBe(false);
-		expect(isBase64('AAA')).toBe(false); // length % 4 !== 0
 	});
 });

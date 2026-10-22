@@ -5,7 +5,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
-import { SolveScheduler, type SolveExecutor, type CacheKeyExecutor } from '../solve-scheduler';
+import { SolveScheduler } from '../solve-scheduler';
+import type { SolveExecutor, CacheKeyExecutor } from '../types';
 import type { DefinitionRef } from '@/core/definition-ref';
 import { ErrorCodes } from '@/core/errors';
 import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
@@ -61,12 +62,12 @@ describe('scheduler + DefinitionRef', () => {
 		const refB = makeRef('version-1');
 
 		// First solve: no known pointer. Distinct trees so no L1 shortcut is possible.
-		await s.solve(refA, [{ ParamName: 'a', InnerTree: {} } as any]);
+		await s.solve(refA, [{ ParamName: 'a', InnerTree: {} }]);
 		// Second solve, same identity via a different object: learned pointer is passed.
 		next = { cacheKey: 'md5_RELEARNED', missed: true }; // simulate server-side eviction
-		await s.solve(refB, [{ ParamName: 'b', InnerTree: {} } as any]);
+		await s.solve(refB, [{ ParamName: 'b', InnerTree: {} }]);
 		// Third: the refreshed pointer from the miss is what gets used.
-		await s.solve(makeRef('version-1'), [{ ParamName: 'c', InnerTree: {} } as any]);
+		await s.solve(makeRef('version-1'), [{ ParamName: 'c', InnerTree: {} }]);
 
 		expect(calls.map((c) => c.cacheKey)).toEqual([null, 'md5_FIRST', 'md5_RELEARNED']);
 		expect(refA.load).not.toHaveBeenCalled();

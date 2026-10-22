@@ -1,15 +1,7 @@
 /**
- * Stable hashing for solve deduplication and caching.
- *
- * The public keying surface here — {@link stableStringify}, {@link hashDefinition},
- * {@link hashSolveInput} — is exported from the package barrel so a durable
- * (app-layer) cache or a pre-solved bundle viewer can reproduce the *exact*
- * canonicalize-and-hash path the scheduler's in-process cache uses. Key parity
- * across the two layers is a correctness requirement: a durable-cache key that
- * canonicalizes even slightly differently would miss every entry the scheduler
- * wrote (harmless) or, worse, collide differently (not). The FNV plumbing
- * (`fnv1a`/`fnv1aBytes`) and the pre-hashed-definition fast path
- * (`hashSolveInputForDefinition`) stay internal.
+ * Solve-key hashing, public so an app-layer durable cache or a pre-solved bundle viewer can
+ * reproduce the scheduler's exact key. A key that canonicalizes even slightly differently
+ * misses every entry the scheduler wrote, or worse, collides differently.
  */
 
 import { isDefinitionRef, type SolveDefinition } from '@/core/definition-ref';
@@ -82,65 +74,37 @@ export function stableStringify(value: unknown): string {
 	return stringify(value);
 }
 
-/**
- * 32-bit FNV-1a core over a sequence of byte/char codes. Returns unsigned hex.
- * Shared by the string and byte hashers so they stay the same algorithm.
- */
+/** 32-bit FNV-1a, as 8 hex chars. */
 function fnv1aCore(length: number, codeAt: (i: number) => number): string {
 	let hash = 0x811c9dc5;
 	for (let i = 0; i < length; i++) {
 		hash ^= codeAt(i);
-		hash = (hash + ((hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24))) >>> 0;
+		hash = Math.imul(hash, 0x01000193) >>> 0;
 	}
 	return hash.toString(16).padStart(8, '0');
 }
 
-/**
- * 32-bit FNV-1a— fast, no dependencies. Returns unsigned hex string.
- * @internal
- */
+/** @internal */
 export function fnv1a(input: string): string {
 	return fnv1aCore(input.length, (i) => input.charCodeAt(i));
 }
 
-/**
- * 32-bit FNV-1a over raw bytes. Returns unsigned hex string.
- * @internal
- */
+/** @internal */
 export function fnv1aBytes(bytes: Uint8Array): string {
 	return fnv1aCore(bytes.length, (i) => bytes[i]);
 }
 
-/**
- * Hash definition and data tree into a stable cache key.
- *
- * The definition is the *identity* of what we solve, so a binary definition is
- * hashed over its full content (`fnv1aBytes`) — a length-only or sampled key
- * would let two different `.gh` files collide and serve one's cached solve for
- * the other. `.gh` files are small enough that a single linear pass is
- * negligible. A {@link DefinitionRef} is keyed by its `key` alone — the
- * caller-declared identity of immutable bytes — so no bytes are materialized
- * or hashed at all.
- *
- * The key keeps the definition and tree hashes as separate parts rather than
- * collapsing them into one 32-bit hash: a single FNV pass over the pair would
- * birthday-collide quadratically in cache size, while requiring both 32-bit
- * parts (plus lengths) to collide at once makes that negligible.
- */
+/** The scheduler's solve-cache key for a definition and its input tree. */
 export function hashSolveInput(definition: SolveDefinition, dataTree: unknown): string {
 	return hashSolveInputForDefinition(hashDefinition(definition), dataTree);
 }
 
 /**
- * Build the solve cache key from an already-computed definition hash (a
- * {@link hashDefinition} result) plus the data tree. Split out so a caller
- * that needs the definition hash anyway (the scheduler keys its
- * server-cache-key map by it) computes it once at `solve()` entry and threads
- * it through, instead of paying a second linear FNV pass over a potentially
- * multi-MB base64 definition per solve.
+ * `hashSolveInput` from a precomputed {@link hashDefinition}, so the scheduler, which also keys its
+ * server-cache-key map by that hash, passes over a multi-MB definition once per solve.
  *
- * Invariant: `hashSolveInputForDefinition(hashDefinition(d), t)` produces the
- * exact same key as `hashSolveInput(d, t)` — cache-key semantics are unchanged.
+ * The definition and tree hashes stay separate key parts: one 32-bit hash over the pair would
+ * birthday-collide as the cache grows, while two must collide at once here.
  *
  * @internal
  */
@@ -150,18 +114,11 @@ export function hashSolveInputForDefinition(definitionHash: string, dataTree: un
 }
 
 /**
- * Stable identity of a definition alone (no inputs) — used to key the
- * server-cache-key map so the same definition reuses its `pointer` across solves
- * with different inputs. Same full-content hashing as {@link hashSolveInput}: a
- * binary definition is hashed over all its bytes so two distinct `.gh` files of
- * equal length can't share a cache key. A {@link DefinitionRef} is keyed by its
- * `key` verbatim (refs are short identities like UUIDs, safe as Map keys) —
- * its immutability contract makes the key equivalent to a content hash.
+ * A definition's identity, without its inputs. Strings and bytes are hashed over their full
+ * content, so two files of equal length never share a key; a `DefinitionRef` uses its `key`.
  */
 export function hashDefinition(definition: SolveDefinition): string {
 	if (isDefinitionRef(definition)) return `r:${definition.key}`;
-	// Hash strings too (don't return the raw definition): a multi-MB base64 `.gh`
-	// would otherwise become the literal Map key in serverCacheKeys / the cache.
 	return typeof definition === 'string'
 		? `s:${definition.length}:${fnv1a(definition)}`
 		: `u8:${definition.length}:${fnv1aBytes(definition)}`;

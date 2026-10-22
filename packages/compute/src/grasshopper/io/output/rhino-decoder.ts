@@ -1,41 +1,36 @@
 import type { RhinoModule } from 'rhino3dm';
 import { getLogger } from '@/core';
 
-// -----------------------------------------------------------------------------
-// Decoder Types
-// -----------------------------------------------------------------------------
+interface XYZ {
+	X: number;
+	Y: number;
+	Z: number;
+}
 
 type RhinoDecoder = (rhino: RhinoModule, data: unknown) => unknown;
 
-const decoderRegistry = new Map<string, RhinoDecoder>();
-
-// -----------------------------------------------------------------------------
-// Registration
-// -----------------------------------------------------------------------------
-
-export function registerDecoder(typeName: string, decoder: RhinoDecoder): void {
-	decoderRegistry.set(typeName, decoder);
-}
-
-registerDecoder('Rhino.Geometry.Point3d', (rhino, data) => {
-	const d = data as any;
-	if (!d || typeof d.X !== 'number') return null;
-	return new rhino.Point([d.X, d.Y, d.Z]);
-});
-
-registerDecoder('Rhino.Geometry.Line', (rhino, data) => {
-	const d = data as any;
-	if (!d || !d.From || !d.To) return null;
-	return new rhino.Line([d.From.X, d.From.Y, d.From.Z], [d.To.X, d.To.Y, d.To.Z]);
-});
-
-// -----------------------------------------------------------------------------
-// Utility Functions
-// -----------------------------------------------------------------------------
+const decoders = new Map<string, RhinoDecoder>([
+	[
+		'Rhino.Geometry.Point3d',
+		(rhino, data) => {
+			const d = data as Partial<XYZ> | null;
+			if (!d || typeof d.X !== 'number') return null;
+			return new rhino.Point([d.X, d.Y as number, d.Z as number]);
+		}
+	],
+	[
+		'Rhino.Geometry.Line',
+		(rhino, data) => {
+			const d = data as { From?: XYZ; To?: XYZ } | null;
+			if (!d || !d.From || !d.To) return null;
+			return new rhino.Line([d.From.X, d.From.Y, d.From.Z], [d.To.X, d.To.Y, d.To.Z]);
+		}
+	]
+]);
 
 function findDecoder(rhinoType: string): RhinoDecoder | undefined {
-	if (decoderRegistry.has(rhinoType)) return decoderRegistry.get(rhinoType);
-	for (const [key, dec] of decoderRegistry) {
+	if (decoders.has(rhinoType)) return decoders.get(rhinoType);
+	for (const [key, dec] of decoders) {
 		if (rhinoType.startsWith(key)) return dec;
 	}
 	return undefined;
@@ -49,13 +44,11 @@ function findDecoder(rhinoType: string): RhinoDecoder | undefined {
  */
 function isDecodableEnvelope(parsedData: unknown): parsedData is object {
 	return Boolean(
-		parsedData && typeof parsedData === 'object' && typeof (parsedData as any).data === 'string'
+		parsedData &&
+		typeof parsedData === 'object' &&
+		typeof (parsedData as { data?: unknown }).data === 'string'
 	);
 }
-
-// -----------------------------------------------------------------------------
-// Geometry Decoding
-// -----------------------------------------------------------------------------
 
 /**
  * Sentinel returned by {@link decodeRhinoGeometry} when a decode was attempted
@@ -87,8 +80,7 @@ function makeDecodeError(rhinoType: string, raw: unknown): RhinoDecodeError {
 /**
  * Decode one typed payload from a solve response into a rhino3dm object.
  *
- * Failure signaling is a single coherent scheme (issue 85) — every call yields
- * exactly one of three outcomes:
+ * Every call yields exactly one of three outcomes:
  *
  * 1. **Decoded value** — a registered decoder recognized the shape, or the
  *    payload was a rhino3dm serialization envelope and `CommonObject.decode`
@@ -139,16 +131,12 @@ export function decodeRhinoGeometry(
 	return decoderThrew ? makeDecodeError(rhinoType, parsedData) : parsedData;
 }
 
-// -----------------------------------------------------------------------------
-// Disposal
-// -----------------------------------------------------------------------------
-
 /**
  * Free every rhino3dm WASM object reachable from `value`.
  *
  * rhino3dm objects are emscripten bindings — JS GC never reclaims their WASM
  * heap allocation, so everything decoded from a solve response (`getValues`,
- * `getValue`, `decodeRhinoObject`) must be deleted explicitly or the heap
+ * `getValue`) must be deleted explicitly or the heap
  * grows monotonically across solves (e.g. a UI decoding per slider tick).
  *
  * Walks arrays and plain objects recursively; anything exposing a `delete()`
@@ -187,74 +175,4 @@ export function disposeRhinoObjects(value: unknown): void {
 	};
 
 	walk(value);
-}
-
-// -----------------------------------------------------------------------------
-// Object Decoder
-// -----------------------------------------------------------------------------
-
-export interface DecodeRhinoOptions {
-	keys?: string[];
-	skipKeys?: string[];
-	deep?: boolean;
-}
-
-export function decodeRhinoObject<T extends Record<string, unknown>>(
-	obj: T,
-	rhino: RhinoModule,
-	options: DecodeRhinoOptions = {}
-): T {
-	const { keys, skipKeys, deep } = options;
-	const out: Record<string, unknown> = { ...obj };
-
-	const shouldProcessKey = (k: string) => {
-		if (skipKeys?.includes(k)) return false;
-		if (keys && !keys.includes(k)) return false;
-		return true;
-	};
-
-	for (const [key, value] of Object.entries(obj)) {
-		if (!shouldProcessKey(key)) continue;
-		if (!value || typeof value !== 'object') continue;
-
-		const v: any = value;
-		const maybeType = !Array.isArray(v) && typeof v.type === 'string' ? v.type : undefined;
-
-		if (maybeType) {
-			out[key] = decodeRhinoGeometry(v, maybeType, rhino);
-			continue;
-		}
-
-		if (deep) {
-			// Arrays must stay arrays (issue 61): recursing into decodeRhinoObject
-			// would object-spread `[a, b]` into `{0: a, 1: b}`, breaking
-			// Array.isArray/.map downstream. Map over elements instead.
-			out[key] = Array.isArray(v)
-				? decodeDeepArray(v, rhino, options)
-				: decodeRhinoObject(v as any, rhino, options);
-		}
-	}
-
-	return out as T;
-}
-
-/**
- * Deep-mode helper: decode every element of an array while preserving the
- * array shape. Type-tagged elements decode via {@link decodeRhinoGeometry},
- * nested arrays recurse, plain objects recurse through
- * {@link decodeRhinoObject} (so `keys`/`skipKeys` filtering still applies to
- * their fields), and primitives pass through untouched.
- */
-function decodeDeepArray(
-	arr: unknown[],
-	rhino: RhinoModule,
-	options: DecodeRhinoOptions
-): unknown[] {
-	return arr.map((el) => {
-		if (!el || typeof el !== 'object') return el;
-		if (Array.isArray(el)) return decodeDeepArray(el, rhino, options);
-		const maybeType = typeof (el as any).type === 'string' ? (el as any).type : undefined;
-		if (maybeType) return decodeRhinoGeometry(el, maybeType, rhino);
-		return decodeRhinoObject(el as Record<string, unknown>, rhino, options);
-	});
 }

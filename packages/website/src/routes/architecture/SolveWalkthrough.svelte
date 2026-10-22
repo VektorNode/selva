@@ -37,7 +37,7 @@
 				'Grasshopper addresses inputs by parameter name, and every input is a tree even when it holds one item. So each bare value gets wrapped in the name it is wired to plus a tree with one branch, {0}. The server adds its own key here — the browser never holds it.',
 			headers: ['POST /grasshopper', 'Content-Type: application/json', 'RhinoComputeKey: ••••••'],
 			body: `{
-  "pointer": "md5:7ab3…",
+  "pointer": "md5_7ab3…",
   "values": [
     { "ParamName": "radius",
       "InnerTree": { "{0}": [{ "data": 12.5 }] } },

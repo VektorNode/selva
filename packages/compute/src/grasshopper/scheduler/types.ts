@@ -1,5 +1,3 @@
-// Public declarations for the solve scheduler. The class itself lives in `solve-scheduler.ts`.
-
 import type { ComputeError } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 
@@ -7,14 +5,13 @@ import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } f
 import type { SolveDefinition } from '@/core/definition-ref';
 
 /**
- * Scheduling mode — controls how concurrent `solve()` calls interact.
+ * How concurrent `solve()` calls interact.
  *
- * - `latest-wins`: One in flight at a time. New calls supersede any pending
- *   call (in-flight one is aborted). Optimal for slider scrubs / live UIs.
- * - `queue`: FIFO queue. Each solve runs to completion. Concurrency capped
- *   by `maxConcurrent`. Use for "submit job" flows where every request matters.
- * - `parallel`: No scheduling — calls run concurrently up to `maxConcurrent`.
- *   Closest to plain `client.solve()` but with shared cancel/state.
+ * - `latest-wins`: one in flight at a time. A new call supersedes the pending
+ *   one and aborts the one in flight. For slider scrubs and live UIs.
+ * - `queue`: FIFO, every call runs to completion, up to `maxConcurrent` at
+ *   once (default 1). For "submit job" flows where every request matters.
+ * - `parallel`: the same FIFO queue with `maxConcurrent` defaulting to 4.
  */
 export type SchedulerMode = 'latest-wins' | 'queue' | 'parallel';
 
@@ -83,15 +80,12 @@ export interface SolveSchedulerOptions {
 	 */
 	cache?: false | CacheOptions;
 	/**
-	 * Reuse the server's definition cache key so a large (base64/binary)
-	 * definition is uploaded once and subsequent solves reference it by
-	 * `pointer` instead of re-sending the full payload. Hugely cheaper for
-	 * multi-MB definitions on a live UI (slider scrubs, etc.).
-	 *
-	 * Requires a `cacheKeyExecutor` to be supplied (the client wires one). Has no
-	 * effect for URL-pointer definitions (already a reference). On a server-side
-	 * cache miss the executor transparently falls back to a full upload, so this
-	 * is safe to leave on. Default: `true` when a `cacheKeyExecutor` is present.
+	 * Upload a definition once, then solve it by the server's cache key (`pointer`)
+	 * instead of re-sending the bytes; a `DefinitionRef` also skips its `load()`.
+	 * When the server has evicted the key, the solve falls back to a full upload,
+	 * so this is safe to leave on. No effect for URL definitions, which are
+	 * already a reference. Needs a `cacheKeyExecutor` (the client wires one);
+	 * default `true` when one is present.
 	 */
 	reuseServerDefinitionCache?: boolean;
 	/** Lifecycle hooks — fired in order. Errors thrown by hooks are logged, not rethrown. */
@@ -133,16 +127,8 @@ export type SolveExecutor = (
 ) => Promise<GrasshopperComputeResponse>;
 
 /**
- * Cache-key-aware executor. When `cacheKey` is provided, the executor solves by
- * reference (`pointer: cacheKey`) and falls back to a full upload on a server
- * cache miss. Always reports the (possibly refreshed) `cacheKey` so the
- * scheduler can update its definition→key map, plus whether the full
- * definition was uploaded (`missed`). When `cacheKey` is null it's a first
- * solve: upload fully, report `missed: true`, and capture the key the server
- * assigns.
- *
- * Supplied by the client (which owns the solve primitives); the scheduler stays
- * decoupled from the transport.
+ * Solves by `cacheKey` when given one, otherwise uploads. Reports the server's
+ * (possibly new) key and whether the full definition was uploaded (`missed`).
  */
 export type CacheKeyExecutor = (
 	definition: SolveDefinition,

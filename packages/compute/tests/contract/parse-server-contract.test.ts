@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { flatten, parseServerContract } from './parse-server-contract';
+import { flatten, parseServerContract } from './parse-server-contract.mjs';
 
 const SCHEMA_CS = `
 using Newtonsoft.Json;

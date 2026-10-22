@@ -1,4 +1,4 @@
-import { downloadFileDataByRoot, type FileData } from '@selvajs/compute/core';
+import { decodeBase64ToBinary, downloadFileDataByRoot, type FileData } from '@selvajs/compute/core';
 import { SvelteMap } from 'svelte/reactivity';
 import { APP_DEFAULTS } from '../constants';
 
@@ -23,15 +23,9 @@ function saveSingleFile(file: FileData): void {
 	const ext = (file.fileType ?? '').toLowerCase();
 	const mime = MIME_BY_EXT[ext] ?? 'application/octet-stream';
 
-	let blob: Blob;
-	if (file.isBase64Encoded) {
-		const binary = atob(file.data);
-		const bytes = new Uint8Array(binary.length);
-		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-		blob = new Blob([bytes], { type: mime });
-	} else {
-		blob = new Blob([file.data], { type: mime });
-	}
+	const content = file.isBase64Encoded ? decodeBase64ToBinary(file.data) : file.data;
+	// decodeBase64ToBinary returns an ArrayBuffer-backed copy, never a SharedArrayBuffer view.
+	const blob = new Blob([content as BlobPart], { type: mime });
 
 	const fullName = `${file.fileName}${file.fileType ?? ''}`;
 	const a = document.createElement('a');

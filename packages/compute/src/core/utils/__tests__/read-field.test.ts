@@ -31,9 +31,6 @@ describe('readField', () => {
 		expect(readField({ x: null }, 'x')).toBeNull();
 	});
 
-	// Issue 91: the exact-match path used `name in record`, which walks the
-	// prototype chain — probing a payload for an Object.prototype-named field
-	// returned a function instead of undefined.
 	it('does not read inherited prototype keys', () => {
 		expect(readField({}, 'toString')).toBeUndefined();
 		expect(readField({}, 'constructor')).toBeUndefined();
@@ -46,9 +43,7 @@ describe('readField', () => {
 		expect(readField({ toString: 'own' }, 'ToString')).toBe('own');
 	});
 
-	// Issue 106: the lowered-key cache was built on first read and never
-	// refreshed, so keys added afterwards were invisible to cased lookups.
-	it('sees keys added after the first read (cache staleness)', () => {
+	it('sees keys added after the first read', () => {
 		const payload: Record<string, unknown> = { First: 1 };
 		expect(readField(payload, 'first')).toBe(1); // primes the cache
 		payload.Second = 2;
@@ -56,7 +51,16 @@ describe('readField', () => {
 		expect(hasField(payload, 'SECOND')).toBe(true);
 	});
 
-	it('still serves repeated cased reads of an unmutated object', () => {
+	it('sees a key replaced without changing the key count', () => {
+		const payload: Record<string, unknown> = { First: 1 };
+		expect(readField(payload, 'first')).toBe(1);
+		delete payload.First;
+		payload.Other = 2;
+		expect(readField(payload, 'first')).toBeUndefined();
+		expect(readField(payload, 'other')).toBe(2);
+	});
+
+	it('serves repeated cased reads of an unmutated object', () => {
 		const payload = { InnerTree: 1, ParamName: 'x' };
 		expect(readField(payload, 'innertree')).toBe(1);
 		expect(readField(payload, 'paramname')).toBe('x');
@@ -80,7 +84,6 @@ describe('hasField', () => {
 		expect(hasField(null, 'x')).toBe(false);
 	});
 
-	// Issue 91: `hasField({}, 'constructor')` returned true via the prototype chain.
 	it('is false for inherited prototype keys', () => {
 		expect(hasField({}, 'constructor')).toBe(false);
 		expect(hasField({}, 'toString')).toBe(false);

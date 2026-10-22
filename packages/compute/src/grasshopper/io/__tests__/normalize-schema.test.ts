@@ -1,14 +1,8 @@
-/**
- * Regression tests for `normalizeInputSchema` / `normalizeOutputSchema`
- * (issue 77): missing required wire fields get honest fallbacks instead of
- * `as string`/`as number` casts, a missing paramType surfaces as a per-input
- * parse error downstream, and `groupName` keeps its null-vs-'' distinction.
- */
 import { describe, expect, it } from 'vitest';
 import { normalizeInputSchema, normalizeOutputSchema } from '@/grasshopper/io/normalize-schema';
 import { processInputWithError } from '@/grasshopper/io/input/input-processors';
 
-describe('normalizeInputSchema — missing wire fields (issue 77)', () => {
+describe('normalizeInputSchema — missing wire fields', () => {
 	it('fills required fields with honest defaults instead of undefined-behind-a-cast', () => {
 		const schema = normalizeInputSchema({});
 		expect(schema.id).toBe('');
@@ -24,9 +18,8 @@ describe('normalizeInputSchema — missing wire fields (issue 77)', () => {
 	});
 
 	it('a missing paramType surfaces as a per-input parse error downstream', () => {
-		const { input, error } = processInputWithError(normalizeInputSchema({ name: 'X' }));
-		expect(error?.code).toBe('VALIDATION_ERROR');
-		expect(error?.inputName).toBe('X');
+		const { input, errors } = processInputWithError(normalizeInputSchema({ name: 'X' }));
+		expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR', inputName: 'X' }]);
 		// Safe fallback still produced (geometry-shaped, matching unknown types).
 		expect(input.paramType).toBe('Geometry');
 	});
@@ -62,7 +55,7 @@ describe('normalizeInputSchema — missing wire fields (issue 77)', () => {
 	});
 });
 
-describe('normalizeOutputSchema — missing wire fields (issue 77)', () => {
+describe('normalizeOutputSchema — missing wire fields', () => {
 	it('fills required fields with empty strings instead of undefined-behind-a-cast', () => {
 		const schema = normalizeOutputSchema({});
 		expect(schema.name).toBe('');

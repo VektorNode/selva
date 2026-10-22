@@ -1,6 +1,4 @@
 /**
- * Suite for `warnIfClientSide` (issue 110 — previously untested).
- *
  * The warning must fire in GENUINE browsers (API-key exposure is real there),
  * at most once per function, and must stay silent in Node and in jsdom test
  * environments (jsdom defines `window`, but `process.versions.node` and the
@@ -33,15 +31,6 @@ afterEach(() => {
 });
 
 describe('warnIfClientSide', () => {
-	it('does not warn in the Node test environment (tests/setup.ts stubs window={})', () => {
-		// This repo's own test setup defines a bare `window` in the node env —
-		// the exact false positive issue 110 describes. `process.versions.node`
-		// gives Node away.
-		expect(typeof window).not.toBe('undefined');
-		warnIfClientSide('solveGrasshopperDefinition');
-		expect(warn).not.toHaveBeenCalled();
-	});
-
 	it('does not warn when window is truly absent', () => {
 		vi.stubGlobal('window', undefined);
 		vi.stubGlobal('process', undefined);

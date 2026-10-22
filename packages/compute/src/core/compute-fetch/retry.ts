@@ -7,15 +7,14 @@ const DEFAULT_RETRY: Required<RetryPolicy> = {
 	retryOn429: true
 };
 
-export const RETRYABLE_STATUS = new Set([502, 503, 504]);
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
 
 /**
- * Absolute ceiling for a server-supplied `Retry-After` wait. The server's
- * stated window wins over `retryPolicy.maxDelayMs` (retrying earlier all but
- * guarantees another 429), but a bad/hostile header must not park the client
- * for minutes — anything above this cap is clamped.
+ * Ceiling on a server-sent `Retry-After` wait. The server's window outranks
+ * `RetryPolicy.maxDelayMs` (retrying sooner all but guarantees another 429), but a bad or hostile
+ * header must not park the client for minutes. A `maxDelayMs` above this cap raises it.
  */
-export const RETRY_AFTER_CAP_MS = 60_000;
+const RETRY_AFTER_CAP_MS = 60_000;
 
 export function resolveRetryPolicy(policy: RetryPolicy | undefined): Required<RetryPolicy> {
 	if (!policy) return DEFAULT_RETRY;
@@ -27,11 +26,24 @@ export function resolveRetryPolicy(policy: RetryPolicy | undefined): Required<Re
 	};
 }
 
-/**
- * Parse a Retry-After header value (seconds-int or HTTP-date) into ms.
- * Returns null if the header is missing or unparseable.
- */
-export function parseRetryAfter(headerValue: string | null): number | null {
+export function isRetryableStatus(status: number, policy: Required<RetryPolicy>): boolean {
+	return RETRYABLE_STATUS.has(status) || (policy.retryOn429 && status === 429);
+}
+
+/** Delay before the next attempt: the server's `Retry-After` when it sent one, else backoff. */
+export function retryDelay(
+	retryAfter: string | null,
+	attempt: number,
+	policy: Required<RetryPolicy>
+): number {
+	const retryAfterMs = parseRetryAfter(retryAfter);
+	return retryAfterMs === null
+		? backoffDelay(attempt, policy)
+		: Math.min(retryAfterMs, Math.max(policy.maxDelayMs, RETRY_AFTER_CAP_MS));
+}
+
+/** A `Retry-After` value (seconds or HTTP-date) in ms; null when missing or unparseable. */
+function parseRetryAfter(headerValue: string | null): number | null {
 	if (!headerValue) return null;
 	const seconds = Number(headerValue);
 	if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;

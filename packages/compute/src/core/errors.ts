@@ -1,65 +1,63 @@
 export const ErrorCodes = {
+	/** Connection failure, a gateway status (502/503/504), or a 2xx body cut off mid-stream. */
 	NETWORK_ERROR: 'NETWORK_ERROR',
+	/** HTTP 401 or 403: the server rejected the credentials. */
 	AUTH_ERROR: 'AUTH_ERROR',
+	/** The server rejected the request (HTTP 400, 413), or an input failed a client-side check. */
 	VALIDATION_ERROR: 'VALIDATION_ERROR',
+	/** The server failed the solve (HTTP 500), or the solve reported errors. */
 	COMPUTATION_ERROR: 'COMPUTATION_ERROR',
+	/** No response within `ComputeConfig.timeoutMs`. */
 	TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+	/** A browser fetch failed with no response: most often CORS, which the browser hides. */
 	CORS_ERROR: 'CORS_ERROR',
-	/** HTTP 404 — the endpoint path does not exist on the server (usually a typo'd route or wrong server). Never retried. */
+	/** HTTP 404: the endpoint doesn't exist on this server. Never retried. */
 	NOT_FOUND: 'NOT_FOUND',
-	/** HTTP 429 — the server is rate-limiting requests. Retried (honoring `Retry-After`) once a retry policy sets `attempts > 0`; opt out via `RetryPolicy.retryOn429`. */
+	/** HTTP 429. Retried, honouring `Retry-After`, when the policy allows (`RetryPolicy.retryOn429`). */
 	RATE_LIMIT: 'RATE_LIMIT',
-	/**
-	 * The server answered 2xx but the body is deterministically not JSON (the
-	 * response declared a non-JSON `Content-Type`, e.g. an HTML captive-portal or
-	 * proxy login page, or a misconfigured endpoint). Never retried — refetching
-	 * returns the same page.
-	 */
+	/** A 2xx that declared a non-JSON body, e.g. a captive portal or proxy login page. Never retried. */
 	INVALID_RESPONSE: 'INVALID_RESPONSE',
+	/** Any failure not classified by another code. */
 	UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+	/** An object was used after `dispose()`, or a file download failed part-way. */
 	INVALID_STATE: 'INVALID_STATE',
+	/** A caller-supplied argument is unusable: an empty definition, an unserializable body. */
 	INVALID_INPUT: 'INVALID_INPUT',
+	/** Bad configuration: an invalid `serverUrl`, an incomplete logger, an interval out of range. */
 	INVALID_CONFIG: 'INVALID_CONFIG',
+	/** A browser-only API (file download) was called outside a browser. */
 	BROWSER_ONLY: 'BROWSER_ONLY',
-	/** The runtime lacks a required capability (e.g. no base64 codec — neither `Buffer` nor `atob`/`btoa`). */
+	/** The runtime has no base64 codec: neither `Buffer` nor `atob`/`btoa`. */
 	ENVIRONMENT_ERROR: 'ENVIRONMENT_ERROR',
+	/** A string that should be base64 isn't. */
 	ENCODING_ERROR: 'ENCODING_ERROR',
-	/** An input's `default` had a shape the normalizer didn't recognize (no innerTree key). */
+	/** An input's `default` had a shape the normalizer didn't recognize. */
 	MALFORMED_DEFAULT: 'MALFORMED_DEFAULT',
-	/** Scheduler latest-wins: this call was replaced by a newer one. */
+	/** Latest-wins scheduling: a newer call replaced this one. */
 	SUPERSEDED: 'SUPERSEDED',
-	/** Scheduler / caller-supplied AbortSignal: this call was aborted. */
+	/** The scheduler or a caller-supplied `AbortSignal` aborted this call. */
 	ABORTED: 'ABORTED',
 	/**
-	 * Scheduler backpressure: the queue was already at `maxQueueDepth` when this
-	 * call arrived, so it was rejected immediately rather than queued. Retryable — the
-	 * caller (or an HTTP layer, as 503 + Retry-After) should back off and retry.
-	 * The error `context` carries `{ queueDepth, maxQueueDepth }`.
+	 * The queue was at `maxQueueDepth`, so the call was rejected without queueing. Retryable after a
+	 * back-off. `context` carries `{ queueDepth, maxQueueDepth }`.
 	 */
 	QUEUE_FULL: 'QUEUE_FULL',
 	/**
-	 * Scheduler backpressure: this call sat queued longer than `queueWaitMs`
-	 * without starting, so it was rejected before wasting compute on a stale request.
-	 * Retryable. The error `context` carries `{ waitedMs, queueWaitMs }`.
+	 * The call waited longer than `queueWaitMs` without starting, and was rejected rather than run
+	 * stale. Retryable. `context` carries `{ waitedMs, queueWaitMs }`.
 	 */
 	QUEUE_TIMEOUT: 'QUEUE_TIMEOUT',
 	/**
-	 * A solve referenced a definition by `pointer` (server-side cache key), but the
-	 * server no longer holds that definition (evicted / GC'd / a different child in
-	 * the pool / server restarted). The caller should retry with the full
-	 * definition. Surfaced when the server tags its error body with
-	 * `code: "definition_not_cached"`, so it survives production message-scrubbing.
+	 * The server no longer holds the definition a `pointer` named (evicted, restarted, another
+	 * child). Retry with the full definition. Read from the error body's
+	 * `code: "definition_not_cached"`.
 	 */
 	DEFINITION_NOT_CACHED: 'DEFINITION_NOT_CACHED'
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
 
-/**
- * Simplified error for Rhino Compute operations
- *
- * @public Use this for error handling with error codes and context.
- */
+/** Error with a typed `code`: switch on it rather than on the message. */
 export class ComputeError extends Error {
 	public readonly code: ErrorCode;
 	public readonly statusCode?: number;

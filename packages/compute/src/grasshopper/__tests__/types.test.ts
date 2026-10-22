@@ -1,5 +1,5 @@
 /**
- * Type-level pins for the Grasshopper wire types (issues 71 & 72).
+ * Type-level pins for the Grasshopper wire types.
  *
  * These run as no-ops at runtime; the assertions live in the type layer and
  * are enforced by `pnpm type-check` (this file is inside the tsconfig
@@ -9,7 +9,7 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 
 import type { DataTree, InnerTreeData, GrasshopperComputeResponse, OutputType } from '../types';
 
-describe('DataTree casing tolerance (issue 71)', () => {
+describe('DataTree casing tolerance', () => {
 	it('accepts PascalCase-only trees (stock mcneel servers / request shape)', () => {
 		const pascal: DataTree = { ParamName: 'out', InnerTree: {} as InnerTreeData };
 		expect(pascal.ParamName).toBe('out');
@@ -33,7 +33,7 @@ describe('DataTree casing tolerance (issue 71)', () => {
 	});
 });
 
-describe('GrasshopperComputeResponse honesty (issue 72)', () => {
+describe('GrasshopperComputeResponse honesty', () => {
 	it('does not expose pointer — runSolve strips it into cacheKey', () => {
 		expectTypeOf<GrasshopperComputeResponse>().not.toHaveProperty('pointer');
 	});
@@ -58,7 +58,7 @@ describe('GrasshopperComputeResponse honesty (issue 72)', () => {
 	});
 });
 
-describe('OutputType keeps its literals (issue 72)', () => {
+describe('OutputType keeps its literals', () => {
 	it('still accepts arbitrary server type names', () => {
 		const custom: OutputType = 'My.Plugin.CustomGoo';
 		expect(custom).toBe('My.Plugin.CustomGoo');

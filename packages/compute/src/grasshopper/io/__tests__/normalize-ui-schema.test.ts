@@ -73,9 +73,8 @@ describe('normalizeUISchemaCasing', () => {
 		expect(item.config).toEqual({ minimum: 1000, stepSize: 1 });
 	});
 
-	// The regression that killed the old global `camelcaseKeys` pass: these keys
-	// are the definition author's dropdown labels, and rewriting them changes what
-	// the definition solves with.
+	// These are the definition author's dropdown labels: rewriting them changes
+	// what the definition solves with.
 	it('leaves user-authored option labels untouched', () => {
 		const pascal = {
 			Layout: {

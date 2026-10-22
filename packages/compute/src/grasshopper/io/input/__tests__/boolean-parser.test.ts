@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { INPUT_TYPE_PARSERS } from '@/grasshopper/io/input/input-type-parsers';
 import { createBooleanInputSchema } from '@tests/helpers/test-data-builders';
 import { ComputeError } from '@/core';
-import type { BaseInputType, InputParamSchema } from '@/grasshopper/types';
+import type { BaseInputType, InputParamSchema, BooleanInputType } from '@/grasshopper/types';
 
 const base: BaseInputType = {
 	description: '',
@@ -13,7 +13,7 @@ const base: BaseInputType = {
 };
 
 function parseBoolean(schema: InputParamSchema) {
-	return INPUT_TYPE_PARSERS.get('Boolean')!.parse(schema, base) as any;
+	return INPUT_TYPE_PARSERS.get('Boolean')!.parse(schema, base) as BooleanInputType;
 }
 
 describe('boolean parser', () => {
@@ -37,7 +37,7 @@ describe('boolean parser', () => {
 
 		it('should filter non-boolean values', () => {
 			const result = parseBoolean(
-				createBooleanInputSchema({ default: [true, 123, 'false', null] as any[] })
+				createBooleanInputSchema({ default: [true, 123, 'false', null] })
 			);
 			expect(result.default).toEqual([true, false]);
 		});

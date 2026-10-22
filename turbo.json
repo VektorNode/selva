@@ -61,7 +61,7 @@
 		"type-check": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "tsconfig.json"]
+			"inputs": ["src/**", "tests/**", "examples/**", "tsconfig.json"]
 		},
 		"lint": {
 			"outputs": [],
@@ -70,6 +70,7 @@
 				"scripts/**",
 				"e2e/**",
 				"tests/**",
+				"examples/**",
 				"eslint.config.js",
 				"eslint.config.mjs",
 				"package.json"
@@ -83,7 +84,7 @@
 		"test": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "tests/**", "vitest.config.ts", ".env.test"]
+			"inputs": ["src/**", "tests/**", "scripts/**", "vitest.config.ts", ".env.test"]
 		},
 		"test:e2e": {
 			"dependsOn": ["build"],

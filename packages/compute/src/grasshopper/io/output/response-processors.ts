@@ -1,3 +1,5 @@
+import { isBase64Flag } from '@/core/files/handle-files';
+import type { RhinoModule } from 'rhino3dm';
 import { FileData } from '@/core/files/types';
 import { hasField, readField } from '@/core/utils/read-field';
 import { GrasshopperComputeResponse, DataItem } from '../../types';
@@ -29,10 +31,6 @@ export interface GetValuesResult<T = ParsedContext> {
 	dispose: () => void;
 }
 
-// -----------------------------------------------------------------------------
-// Constants
-// -----------------------------------------------------------------------------
-
 const SYSTEM_TYPES = {
 	STRING: 'System.String',
 	INT: 'System.Int32',
@@ -42,15 +40,14 @@ const SYSTEM_TYPES = {
 
 const RHINO_GEOMETRY_PREFIX = 'Rhino.Geometry.';
 
-const EXCLUDED_TYPES = ['WebDisplay'];
 const FILE_DATA_TYPE = 'FileData';
 
-/** Checks if a type is excluded by EXCLUDED_TYPES. */
-function isExcludedType(type: string): boolean {
-	return EXCLUDED_TYPES.some((t) => type.includes(t));
+/** WebDisplay items are skipped entirely: kept, they would write `null` into the result. */
+function skipItem(type: string, stringOnly: boolean): boolean {
+	return type.includes('WebDisplay') || (stringOnly && type !== SYSTEM_TYPES.STRING);
 }
 
-function tryDecodeJSON(value: string): any {
+function tryDecodeJSON(value: string): unknown {
 	if (typeof value !== 'string') return value;
 
 	const trimmed = value.trim();
@@ -72,17 +69,17 @@ function tryDecodeJSON(value: string): any {
 	}
 }
 
-function decodeBySystemType(raw: any, type: string, rhino?: any): any {
+function decodeBySystemType(raw: unknown, type: string, rhino?: RhinoModule): unknown {
 	switch (type) {
 		case SYSTEM_TYPES.STRING:
 			if (typeof raw !== 'string') return raw;
 			return raw.replace(/^"(.*)"$/, '$1');
 
 		case SYSTEM_TYPES.INT:
-			return Number.parseInt(raw, 10);
+			return Number.parseInt(String(raw), 10);
 
 		case SYSTEM_TYPES.DOUBLE:
-			return Number.parseFloat(raw);
+			return Number.parseFloat(String(raw));
 
 		case SYSTEM_TYPES.BOOL: {
 			const str = String(raw).toLowerCase();
@@ -98,17 +95,9 @@ function decodeBySystemType(raw: any, type: string, rhino?: any): any {
 }
 
 /**
- * Per-item memo of the (potentially double) JSON.parse in {@link tryDecodeJSON}
- * (issue 84). Response items are immutable wire data, so the parse result is
- * stable; repeated `getValues()`/`getValue()` calls over the same response — a
- * common pattern (read one param, then another) — otherwise re-run up to two
- * full `JSON.parse` passes per item over potentially multi-MB envelope strings.
- *
- * Keyed weakly on the item object, so the cache lives exactly as long as the
- * response it belongs to. Consequence: parsed JSON *objects* are shared across
- * reads of the same response — callers must treat them as read-only. Rhino
- * geometry is NOT shared: `decodeRhinoGeometry` constructs a fresh WASM object
- * per call, so `dispose()` on one read never invalidates another.
+ * Per-item memo of {@link tryDecodeJSON}, which can run two `JSON.parse` passes
+ * over a multi-MB string. Parsed objects are therefore shared across reads of one
+ * response; rhino geometry is not (`decodeRhinoGeometry` builds a fresh object).
  */
 const decodedJsonCache = new WeakMap<DataItem, unknown>();
 
@@ -119,10 +108,12 @@ function decodeItemJSON(item: DataItem): unknown {
 	return parsed;
 }
 
-// Main extractor — assumes type has already been filtered through isExcludedType
-// at the call site. Returning a sentinel from here would pollute the aggregated
-// arrays in getValues / getValue when multiple branches are mixed.
-function extractItemValue(item: DataItem, type: string, parseValues: boolean, rhino?: any): any {
+function extractItemValue(
+	item: DataItem,
+	type: string,
+	parseValues: boolean,
+	rhino?: RhinoModule
+): unknown {
 	if (typeof item.data !== 'string') return item.data;
 
 	const raw = parseValues ? decodeItemJSON(item) : item.data;
@@ -134,29 +125,9 @@ function extractItemValue(item: DataItem, type: string, parseValues: boolean, rh
 }
 
 /**
- * Lenient read of the `isBase64Encoded` wire flag: some server branches
- * serialize booleans as strings (`"true"`/`"True"`), which must still count as
- * base64 rather than silently dropping the file (issue 95). Mirrors the check
- * in `handle-files.ts` — the two must agree, or a file accepted here decodes
- * wrongly there.
- */
-const isBase64Flag = (flag: unknown): boolean =>
-	flag === true || (typeof flag === 'string' && flag.trim().toLowerCase() === 'true');
-
-/**
- * Normalizing type guard for {@link FileData}. The Compute server emits these
- * as JSON blobs inside `FileData`-typed values; this checks that the parsed
- * shape has every required field before we trust it, then returns it in the
- * camelCase shape {@link FileData} documents.
- *
- * Fields are read case-insensitively via {@link readField}: mcneel-branch
- * servers serialize PascalCase (`FileName`, `Data`, `IsBase64Encoded`, …)
- * while the VektorNode fork uses camelCase — both must survive (issue 95).
- * Reading them strictly here dropped every file from a PascalCase response
- * *before* the tolerant decoder in `handle-files.ts` ever saw it, so downloads
- * silently produced an empty archive.
- *
- * @returns The normalized file, or `null` when the shape is not a `FileData`.
+ * A parsed `FileData` blob in the camelCase shape {@link FileData} documents, or
+ * `null` when a required field is missing. Fields are read with `readField`,
+ * since their casing varies by server branch.
  */
 function asFileData(value: unknown): FileData | null {
 	if (!value || typeof value !== 'object') return null;
@@ -186,14 +157,7 @@ function asFileData(value: unknown): FileData | null {
 	};
 }
 
-// Traversal helpers
-
-/**
- * The response's params array, read case-insensitively (`values` vs `Values`
- * across server branches) with a null guard. Partial-success and warnings-only
- * responses can arrive with `values` missing entirely — treat that as "no
- * params" instead of crashing (issue 62), mirroring the defense in solve.ts.
- */
+/** Partial-success and warnings-only responses can arrive with no `values` at all. */
 function getResponseParams(response: GrasshopperComputeResponse): unknown[] {
 	const values = readField<unknown[]>(response, 'values');
 	return Array.isArray(values) ? values : [];
@@ -204,16 +168,7 @@ function itemType(item: DataItem): string {
 	return typeof item.type === 'string' ? item.type : '';
 }
 
-/**
- * Iterates over every data item within a Grasshopper tree structure.
- *
- * Tolerates a missing/null tree (params in warnings-only partial successes and
- * the e2e fixtures ship without `InnerTree` — issue 62) and skips non-object
- * items so handlers never see `null`.
- *
- * @param tree - The Grasshopper tree structure containing branches of items.
- * @param handler - A callback function invoked for each {@link DataItem} found within the tree branches.
- */
+/** Tolerates a missing tree (warnings-only partial successes) and skips non-object items. */
 function forEachTreeItem(tree: unknown, handler: (item: DataItem) => void) {
 	if (!tree || typeof tree !== 'object') return;
 	for (const list of Object.values(tree)) {
@@ -225,21 +180,13 @@ function forEachTreeItem(tree: unknown, handler: (item: DataItem) => void) {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Public API
-// -----------------------------------------------------------------------------
-
 /**
  * Read all output values from a Grasshopper Compute response, keyed by parameter
  * name (or ID when `byId`). Duplicate keys aggregate into an array.
  *
- * `ParamName`/`InnerTree` are read case-insensitively (server branches differ in
- * casing) and params without an `InnerTree` are skipped rather than crashing.
- *
- * Parsed (non-geometry) JSON values are memoized per response item — repeated
- * reads of the same response return the same object identity, so treat parsed
- * values as read-only. Geometry decoded via `rhino` is always freshly
- * constructed; free it with `dispose()`.
+ * Parsed (non-geometry) JSON values are memoized per response item: repeated
+ * reads of the same response return the same object, so treat them as
+ * read-only. Geometry decoded via `rhino` is always fresh; free it with `dispose()`.
  *
  * @param options.parseValues - Parse complex data types into JS objects (default true).
  * @param options.rhino - Rhino3dm instance for geometry decoding.
@@ -260,11 +207,7 @@ export function getValues<T = ParsedContext>(
 		const paramName = readField<string>(param, 'paramName');
 		forEachTreeItem(readField(param, 'innerTree'), (item) => {
 			const type = itemType(item);
-			// Skip excluded types (e.g. WebDisplay) entirely — leaving them in
-			// would write null into the aggregated result.
-			if (isExcludedType(type)) return;
-			// Skip non-string types if stringOnly is enabled
-			if (stringOnly && type !== SYSTEM_TYPES.STRING) return;
+			if (skipItem(type, stringOnly)) return;
 
 			const key = byId ? item.id : paramName;
 			if (!key) return;
@@ -308,13 +251,9 @@ export function extractFileData(response: GrasshopperComputeResponse): FileData[
  * `byId` matches an item ID. Returns `undefined` if absent, a single value for one
  * match, or an array for several.
  *
- * `ParamName`/`InnerTree` are read case-insensitively with null guards, and the
- * scan is a single pass that stops at the first matching parameter (issue 84 —
- * previously `byId` walked every tree twice). Parsed non-geometry JSON values
- * are memoized per response item; treat them as read-only.
- *
- * When a `rhino` instance is passed, decoded geometry lives on the WASM heap —
- * free it with {@link disposeRhinoObjects} once consumed.
+ * Parsed non-geometry JSON values are memoized per response item; treat them as
+ * read-only. Geometry decoded via `rhino` lives on the WASM heap: free it with
+ * `disposeRhinoObjects` once consumed.
  *
  * @param parseOptions.parseValues - Parse raw data into formatted values (default true).
  * @param parseOptions.rhino - Rhino3dm instance for geometry decoding.
@@ -327,9 +266,7 @@ export function getValue(
 ): any {
 	const { parseValues = true, rhino, stringOnly = false } = parseOptions;
 
-	// Single pass with early exit: the first param that matches (by name, or by
-	// containing an item with the target id) is THE target — collect from it and
-	// return without scanning the remaining trees.
+	// The first param that matches, by name or by holding the target id, is the target.
 	for (const param of getResponseParams(response)) {
 		const tree = readField(param, 'innerTree');
 
@@ -339,20 +276,15 @@ export function getValue(
 			matched = true;
 		}
 
-		const collected: any[] = [];
+		const collected: unknown[] = [];
 		forEachTreeItem(tree, (item) => {
 			if ('byId' in options) {
 				if (item.id !== options.byId) return;
-				// The param owning this id is the target even if every matching
-				// item is filtered out below (preserves the previous two-pass
-				// semantics: found-but-filtered → undefined, not keep-scanning).
+				// Found but filtered out below still ends the scan, returning undefined.
 				matched = true;
 			}
 			const type = itemType(item);
-			// Skip excluded types (e.g. WebDisplay) entirely.
-			if (isExcludedType(type)) return;
-			// Skip non-string types if stringOnly is enabled
-			if (stringOnly && type !== SYSTEM_TYPES.STRING) return;
+			if (skipItem(type, stringOnly)) return;
 			collected.push(extractItemValue(item, type, parseValues, rhino));
 		});
 

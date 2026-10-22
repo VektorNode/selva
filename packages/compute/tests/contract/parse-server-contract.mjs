@@ -24,17 +24,10 @@
  *
  * Plain ESM + pure string parsing on purpose: no C# toolchain and no TS loader,
  * so the same module runs under both vitest and a bare `node scripts/...` call.
- * The `.ts` sibling re-exports this with type annotations for the test files.
+ * Its types live in the sibling `.d.mts`.
  *
- * @typedef {Object} ParsedClass
- * @property {string} name            C# class name, e.g. `InputParamSchema`.
- * @property {string|null} base       Base class name (`class A : B`) or null.
- * @property {string[]} properties    Wire property names declared directly on
- *                                     this class (not inherited), in source order.
- *
- * @typedef {Object} ServerContract
- * @property {string} ref                         git ref the source came from.
- * @property {Record<string, ParsedClass>} classes  relevant classes by C# name.
+ * @typedef {import('./parse-server-contract.d.mts').ParsedClass} ParsedClass
+ * @typedef {import('./parse-server-contract.d.mts').ServerContract} ServerContract
  */
 
 /**

@@ -1,15 +1,8 @@
-/**
- * Scheduler-level server-definition-cache reuse.
- *
- * The scheduler learns a definition's server cache key from one solve and uses
- * it (`pointer: cacheKey`) on the next solve of the SAME definition, so a large
- * payload is uploaded once. These pin: first-solve learns the key, second-solve
- * reuses it, a refreshed key is recorded, URL definitions skip the fast path,
- * and the feature is off without a cacheKeyExecutor.
- */
+/** Scheduler-level server-definition-cache reuse (`reuseServerDefinitionCache`). */
 import { describe, it, expect } from 'vitest';
 
-import { SolveScheduler, type SolveExecutor, type CacheKeyExecutor } from '../solve-scheduler';
+import { SolveScheduler } from '../solve-scheduler';
+import type { SolveExecutor, CacheKeyExecutor } from '../types';
 import type { SolveDefinition } from '@/core/definition-ref';
 import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
 

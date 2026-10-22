@@ -1,11 +1,8 @@
 import { ComputeError, ErrorCodes } from '@/core/errors';
 
 /**
- * The public McNeel endpoint's host — the default blocked host; users must point at
- * their own server. Compared against the parsed hostname lowercased and with any
- * trailing dot stripped, so the FQDN form (`compute.rhino3d.com.`) can't bypass it.
- * Known limitation: the endpoint's raw IP is not blocked — it sits behind a load
- * balancer with no single stable, verifiable address to pin.
+ * The public McNeel endpoint, blocked by default: users must point at their own server. Its raw IP
+ * isn't blocked: it sits behind a load balancer with no stable address to pin.
  */
 export const DEFAULT_BLOCKED_HOST = 'compute.rhino3d.com';
 
@@ -19,30 +16,11 @@ export interface ValidateServerUrlOptions {
 }
 
 /**
- * Validate and normalize a compute `serverUrl`.
+ * Validate a compute `serverUrl` and return it trimmed, without trailing slashes. Every entry point
+ * that takes a server URL calls this, so a URL is accepted or rejected the same way everywhere.
  *
- * This is the single source of truth for "is this a usable server URL?" — both
- * `GrasshopperClient` (via `normalizeComputeConfig`) and the standalone-exported
- * `ComputeServerStats` constructor delegate here, so a given URL is accepted or
- * rejected identically no matter which entry point a caller uses.
- *
- * Rules (all enforced, on the *trimmed* input — the trimmed form is what's
- * returned, so no stray whitespace survives into later `fetch` calls):
- * - non-empty (after trim)
- * - `http://` or `https://` scheme (case-insensitive, per RFC 3986)
- * - parseable by `new URL()`
- * - no embedded credentials (`http://user:pass@host`) — `fetch`/`new Request`
- *   reject credentialed URLs at runtime, so they must fail here instead
- * - no query string or fragment — endpoint paths are appended to this URL
- *   (`${serverUrl}/version`), which a `?…` or `#…` suffix would corrupt
- * - not a blocked host (by default the public McNeel endpoint) — compared by
- *   parsed hostname (lowercased, trailing dot stripped), so scheme, casing, port,
- *   path, trailing-slash, or FQDN-dot variants can't slip past the block
- *
- * @param raw - The candidate server URL.
- * @param options - Override the blocked-host list for a non-Rhino backend.
- * @returns The trimmed, normalized URL with any trailing slashes removed.
- * @throws {ComputeError} `INVALID_CONFIG` if any rule fails.
+ * @throws {ComputeError} `INVALID_CONFIG` when the URL is empty, isn't http(s), doesn't parse,
+ *   embeds credentials, has a query or fragment, or names a blocked host.
  */
 export function validateServerUrl(raw: string, options?: ValidateServerUrlOptions): string {
 	const trimmed = raw?.trim() ?? '';
@@ -52,12 +30,16 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 		});
 	}
 
+	const invalid = (reason: string, originalError?: Error) =>
+		new ComputeError(`Invalid serverUrl: "${trimmed}". ${reason}`, ErrorCodes.INVALID_CONFIG, {
+			context: { receivedServerUrl: raw },
+			originalError
+		});
+
 	if (!/^https?:\/\//i.test(trimmed)) {
-		throw new ComputeError(
-			`Invalid serverUrl: "${trimmed}". Must start with "http://" or "https://". ` +
-				`For example: "http://localhost:6500" or "https://example.com"`,
-			ErrorCodes.INVALID_CONFIG,
-			{ context: { receivedServerUrl: raw } }
+		throw invalid(
+			'Must start with "http://" or "https://". ' +
+				'For example: "http://localhost:6500" or "https://example.com"'
 		);
 	}
 
@@ -65,35 +47,26 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	try {
 		parsed = new URL(trimmed);
 	} catch (err) {
-		throw new ComputeError(
-			`Invalid serverUrl: "${trimmed}". Must be a valid URL. ` +
-				`Received error: ${err instanceof Error ? err.message : String(err)}`,
-			ErrorCodes.INVALID_CONFIG,
-			{
-				context: { receivedServerUrl: raw },
-				originalError: err instanceof Error ? err : undefined
-			}
+		throw invalid(
+			`Must be a valid URL. Received error: ${err instanceof Error ? err.message : String(err)}`,
+			err instanceof Error ? err : undefined
 		);
 	}
 
 	if (parsed.username !== '' || parsed.password !== '') {
-		throw new ComputeError(
-			`Invalid serverUrl: "${trimmed}". Must not embed credentials (user:pass@host) — ` +
-				`fetch rejects credentialed URLs at request time. Pass the API key separately.`,
-			ErrorCodes.INVALID_CONFIG,
-			{ context: { receivedServerUrl: raw } }
+		throw invalid(
+			'Must not embed credentials (user:pass@host) — ' +
+				'fetch rejects credentialed URLs at request time. Pass the API key separately.'
 		);
 	}
 
-	// String check rather than parsed.search/hash: a bare trailing "?" or "#"
-	// parses to an empty search/hash but still corrupts endpoint concatenation.
+	// A string check: a bare trailing "?" or "#" parses to an empty search/hash but still corrupts
+	// the endpoint paths appended to this URL.
 	if (trimmed.includes('?') || trimmed.includes('#')) {
-		throw new ComputeError(
-			`Invalid serverUrl: "${trimmed}". Must not contain a query string or fragment — ` +
-				`endpoint paths are appended to this URL (e.g. "\${serverUrl}/version"), ` +
-				`and a "?" or "#" suffix would corrupt every request path.`,
-			ErrorCodes.INVALID_CONFIG,
-			{ context: { receivedServerUrl: raw } }
+		throw invalid(
+			'Must not contain a query string or fragment — ' +
+				'endpoint paths are appended to this URL (e.g. "${serverUrl}/version"), ' +
+				'and a "?" or "#" suffix would corrupt every request path.'
 		);
 	}
 

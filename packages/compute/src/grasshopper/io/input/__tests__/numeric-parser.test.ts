@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { INPUT_TYPE_PARSERS } from '@/grasshopper/io/input/input-type-parsers';
 import { createNumericInputSchema } from '@tests/helpers/test-data-builders';
-import type { BaseInputType, InputParamSchema } from '@/grasshopper/types';
+import type { BaseInputType, InputParamSchema, NumericInputType } from '@/grasshopper/types';
 
 const base: BaseInputType = {
 	description: '',
@@ -16,7 +16,7 @@ const base: BaseInputType = {
 // scalar/array defaults, not innerTree).
 function parseNumeric(schema: InputParamSchema) {
 	const parser = INPUT_TYPE_PARSERS.get(schema.paramType === 'Integer' ? 'Integer' : 'Number')!;
-	return parser.parse(schema, base) as any;
+	return parser.parse(schema, base) as NumericInputType;
 }
 
 describe('numeric parser', () => {
@@ -37,7 +37,7 @@ describe('numeric parser', () => {
 
 		it('should filter invalid values from arrays', () => {
 			const result = parseNumeric(
-				createNumericInputSchema({ default: ['1', 'invalid', '3', null] as any[] })
+				createNumericInputSchema({ default: ['1', 'invalid', '3', null] })
 			);
 			expect(result.default).toEqual([1, 3]);
 		});

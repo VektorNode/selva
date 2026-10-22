@@ -11,12 +11,12 @@ describe('paramType casing normalization', () => {
 		const input = createInputSchema({
 			paramType: 'valueList',
 			values: { Abstand: '0', Länge: '1' },
-			default: '0'
+			default: 'Abstand'
 		});
 
-		const { input: result, error } = processInputWithError(input);
+		const { input: result, errors } = processInputWithError(input);
 
-		expect(error).toBeUndefined();
+		expect(errors).toEqual([]);
 		expect(result.paramType).toBe('ValueList');
 	});
 
@@ -27,15 +27,15 @@ describe('paramType casing normalization', () => {
 		['color', 'Color']
 	])('canonicalizes "%s" to "%s"', (given, expected) => {
 		const input = createInputSchema({ paramType: given });
-		const { input: result, error } = processInputWithError(input);
-		expect(error).toBeUndefined();
+		const { input: result, errors } = processInputWithError(input);
+		expect(errors).toEqual([]);
 		expect(result.paramType).toBe(expected);
 	});
 
 	it('still reports genuinely unknown paramTypes', () => {
 		const input = createInputSchema({ paramType: 'definitelyNotAType' });
-		const { error } = processInputWithError(input);
-		expect(error?.code).toBe('VALIDATION_ERROR');
-		expect(error?.message).toContain('definitelyNotAType');
+		const { errors } = processInputWithError(input);
+		expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
+		expect(errors[0].message).toContain('definitelyNotAType');
 	});
 });

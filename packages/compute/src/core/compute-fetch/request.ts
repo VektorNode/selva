@@ -8,7 +8,7 @@ export function buildUrl(endpoint: string, serverUrl: string): string {
 	return `${base}/${path}`;
 }
 
-export function isLocalhost(serverUrl: string): boolean {
+function isLocalhost(serverUrl: string): boolean {
 	try {
 		// `hostname` (not `host`) strips the port; IPv6 hostnames keep their
 		// brackets, so `http://[::1]:6500` yields `[::1]`.
@@ -22,8 +22,7 @@ export function isLocalhost(serverUrl: string): boolean {
 /** Server URLs already warned about missing auth — warn once per server, not per request. */
 const warnedNoAuth = new Set<string>();
 
-/** Header name rhino.compute reads the API key from. Override via `ComputeConfig.apiKeyHeader`. */
-export const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
+const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
 
 /**
  * Caller headers plus credentials. Every request to the server builds its headers here,

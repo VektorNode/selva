@@ -8,9 +8,10 @@
  *   node scripts/fetch-server-contract.mjs --check   # fail if GitHub differs
  *                                                     # from the committed snapshot
  *
- * `--check` is the live drift alarm: run it in CI (and/or on a schedule) so a
- * rename/recasing on the server branch fails loudly instead of silently
- * breaking the client at runtime. It does NOT modify the snapshot.
+ * `--check` is the live drift alarm: run it by hand before a release, or before
+ * trusting the snapshot, so a rename/recasing on the server branch fails loudly
+ * instead of silently breaking the client at runtime. It does NOT modify the
+ * snapshot.
  *
  * The actual parsing lives in tests/contract/parse-server-contract.mjs and is
  * imported directly here, so the script and the tests share one parser (no

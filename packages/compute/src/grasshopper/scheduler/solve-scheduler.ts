@@ -10,11 +10,10 @@ import type {
 	GrasshopperComputeConfig,
 	SelvaEventTarget
 } from '../types';
-import type { SolveDefinition } from '@/core/definition-ref';
+import { isDefinitionUrl, type SolveDefinition } from '@/core/definition-ref';
 import { hashSolveInputForDefinition, hashDefinition } from './stable-hash';
 
 import type {
-	CacheOptions,
 	CacheKeyExecutor,
 	SchedulerMode,
 	SolveContext,
@@ -23,16 +22,6 @@ import type {
 	SolveSchedulerOptions
 } from './types';
 
-export type {
-	CacheOptions,
-	CacheKeyExecutor,
-	SchedulerMode,
-	SolveContext,
-	SolveExecutor,
-	SolveResult,
-	SolveSchedulerOptions
-};
-
 interface CacheEntry {
 	response: GrasshopperComputeResponse;
 	insertedAt: number;
@@ -40,40 +29,23 @@ interface CacheEntry {
 	sizeBytes: number;
 }
 
-/** Cap on the definition→server-cache-key map so it can't grow without bound. */
 const SERVER_CACHE_KEYS_MAX = 100;
 
 interface PendingItem {
 	definition: SolveDefinition;
 	dataTree: DataTree[];
-	/**
-	 * Definition hash computed once at `solve()` entry ({@link hashDefinition})
-	 * and threaded through to {@link SolveScheduler.runExecutor}, so the
-	 * (potentially multi-MB) definition is never linearly hashed a second time
-	 * for the server-cache-key map.
-	 */
 	definitionHash: string;
 	ctx: SolveContext;
-	/** Monotonic solve() ordinal — used to keep older items' late settles from overwriting newer state. */
+	/** Monotonic solve() ordinal, so an older item's late settle can't overwrite newer state. */
 	seq: number;
 	resolve: (response: GrasshopperComputeResponse) => void;
 	reject: (error: ComputeError) => void;
 	externalSignal?: AbortSignal;
 	/** Per-solve live-event callback. Not part of the cache key: it names where events go, not what is solved. */
 	selvaevents?: SelvaEventTarget;
-	/**
-	 * Abort listener attached while the item waits in a queue, so a signal
-	 * firing pre-execution settles it instead of being silently ignored.
-	 * Removed when execution starts (the in-flight controller takes over) or
-	 * when the item settles by any other path.
-	 */
+	/** Settles the item as ABORTED if its signal fires while it waits in a queue. */
 	queuedAbortHandler?: () => void;
-	/**
-	 * Queue-wait deadline timer ({@link SolveSchedulerOptions.queueWaitMs}).
-	 * Cleared when the item starts executing or settles by any other path.
-	 */
 	queueWaitTimer?: ReturnType<typeof setTimeout>;
-	/** Set once the promise has been settled, so a late executor rejection becomes a no-op. */
 	settled?: { error: ComputeError } | { ok: true };
 }
 
@@ -81,30 +53,25 @@ interface InFlightItem extends PendingItem {
 	controller: AbortController;
 }
 
-/**
- * Adapter for the underlying solve function. Lets the scheduler be tested
- * without a real Compute server, and decouples it from the client class.
- */
+const u8DefinitionHashes = new WeakMap<Uint8Array, string>();
 
 /**
- * Whether a definition is worth solving by server cache key. Binary and
- * base64/plain-string definitions are uploaded in full, so referencing them by
- * key on later solves saves the (potentially huge) payload — and a
- * `DefinitionRef` additionally saves the `load()` itself on a pointer hit. An
- * `http(s)://` URL is already a reference — the server keys it by URL and
- * there's nothing to re-upload — so the fast path adds no value there.
+ * Remembers a buffer's hash by identity: a buffer mutated after its first solve keeps its old
+ * hash and is served the old content's cached solves.
  */
-function isReusableDefinition(definition: SolveDefinition): boolean {
-	if (typeof definition !== 'string') return true;
-	return !/^https?:\/\//i.test(definition);
+function hashDefinitionOnce(definition: SolveDefinition): string {
+	if (!(definition instanceof Uint8Array)) return hashDefinition(definition);
+	let hash = u8DefinitionHashes.get(definition);
+	if (hash === undefined) {
+		hash = hashDefinition(definition);
+		u8DefinitionHashes.set(definition, hash);
+	}
+	return hash;
 }
 
 /**
- * Fallback sizing for a response that never crossed the fetch boundary (custom
- * executor, hand-built test responses) and so carries no wire-size hint. A full
- * stringify — linear, once per cache write, never on the hit path. Responses
- * are JSON-derived, but guard anyway: an unserializable one is sized 0 (cached
- * under the count bound only) rather than failing the solve.
+ * For a response that never crossed the fetch boundary (custom executor), so carries no
+ * wire-size hint. An unserializable response is sized 0 rather than failing the solve.
  */
 function estimateResponseSize(response: GrasshopperComputeResponse): number {
 	try {
@@ -115,19 +82,12 @@ function estimateResponseSize(response: GrasshopperComputeResponse): number {
 }
 
 /**
- * Robust scheduler for Grasshopper solves.
- *
- * Sits between your application code and the underlying compute call,
- * adding:
- * - Configurable scheduling (latest-wins for sliders, queue for jobs)
- * - Backpressure (bounded queue depth + queue-wait deadline) for the miss path
- * - In-flight cancellation (per-call signal + cancelAll)
+ * Adds to a plain solve call:
+ * - Scheduling (latest-wins for sliders, queue for jobs)
+ * - Backpressure (bounded queue depth + queue-wait deadline)
+ * - Cancellation (per-call signal + cancelAll)
  * - Optional response caching for repeated inputs
- * - Lifecycle hooks for UI indicators (start / settle / superseded)
- * - State observability via subscribe()
- *
- * Multiple schedulers can share a single GrasshopperClient — typically one
- * per UI surface (e.g. one for slider scrubs, one for long-running submits).
+ * - Lifecycle hooks (start / settle / superseded) and state via subscribe()
  *
  * @example
  * ```ts
@@ -151,11 +111,6 @@ export class SolveScheduler {
 	private readonly baseConfig: GrasshopperComputeConfig;
 
 	private readonly mode: SchedulerMode;
-	/**
-	 * Mutable via {@link setMaxConcurrent}: the compute server's worker pool can grow
-	 * or shrink while this scheduler is alive, and the dispatch loops re-read this on
-	 * every pass rather than capturing it.
-	 */
 	private maxConcurrent: number;
 	private readonly maxQueueDepth: number | undefined;
 	private readonly queueWaitMs: number | undefined;
@@ -167,22 +122,14 @@ export class SolveScheduler {
 	private readonly cacheTtl: number;
 	private readonly cacheErroredSolves: boolean;
 	private readonly cache = new Map<string, CacheEntry>();
-	/** Sum of `sizeBytes` across retained cache entries. */
 	private cacheBytes = 0;
-	/**
-	 * Cumulative hit/miss/eviction counters for {@link cacheStats}. Deliberately
-	 * NOT reset by `clearCache()` — they measure this scheduler's whole lifetime,
-	 * so a hit rate stays comparable across a session rather than restarting at
-	 * every clear.
-	 */
 	private cacheHits = 0;
 	private cacheMisses = 0;
 	private cacheEvictions = 0;
 
-	/** Optional cache-key-aware executor and whether server-def-cache reuse is on. */
 	private readonly cacheKeyExecutor?: CacheKeyExecutor;
 	private readonly reuseServerDefinitionCache: boolean;
-	/** definition identity → server cache key (`pointer`) learned from past solves. */
+	/** Definition hash → the server's cache key (`pointer`) for it. */
 	private readonly serverCacheKeys = new Map<string, string>();
 
 	private readonly onStart?: SolveSchedulerOptions['onStart'];
@@ -199,9 +146,8 @@ export class SolveScheduler {
 	private _lastError: ComputeError | null = null;
 	private _lastDurationMs: number | null = null;
 
-	/** Ordinal handed to each solve() call. */
 	private solveSeq = 0;
-	/** seq of the solve that last wrote _lastResult/_lastError — see writeLastState. */
+	/** seq of the solve that last wrote `_lastResult`/`_lastError`. */
 	private lastStateSeq = 0;
 
 	private disposed = false;
@@ -217,9 +163,7 @@ export class SolveScheduler {
 		this.baseConfig = baseConfig;
 		this.mode = options.mode ?? 'latest-wins';
 		this.maxConcurrent = Math.max(1, options.maxConcurrent ?? (this.mode === 'parallel' ? 4 : 1));
-		// Backpressure bounds — only meaningful for queue/parallel (latest-wins has
-		// depth 1). A non-positive maxQueueDepth is treated as unbounded rather than
-		// "reject everything", which would silently break the scheduler.
+		// A non-positive maxQueueDepth means unbounded, not "reject everything".
 		this.maxQueueDepth =
 			options.maxQueueDepth !== undefined && options.maxQueueDepth > 0
 				? Math.floor(options.maxQueueDepth)
@@ -240,8 +184,6 @@ export class SolveScheduler {
 		this.cacheTtl = cacheConfig?.ttlMs ?? 0;
 		this.cacheErroredSolves = cacheConfig?.cacheErroredSolves ?? true;
 
-		// On by default when the client wired a cache-key executor — it's a pure
-		// win for reusable definitions and falls back safely on a miss.
 		this.reuseServerDefinitionCache =
 			!!cacheKeyExecutor && (options.reuseServerDefinitionCache ?? true);
 
@@ -322,23 +264,16 @@ export class SolveScheduler {
 	 * - Rejects with `code: ErrorCodes.SUPERSEDED` when the call was canceled because
 	 *   newer values arrived (latest-wins mode).
 	 * - Rejects with `code: ErrorCodes.ABORTED` when the call was canceled via
-	 *   caller-supplied signal or `cancelAll()`.
+	 *   its own `signal` (queued or running) or `cancelAll()`.
 	 * - Rejects with `code: ErrorCodes.QUEUE_FULL` when `maxQueueDepth` is set and
 	 *   the queue was already full (backpressure; `statusCode: 503`).
 	 * - Rejects with `code: ErrorCodes.QUEUE_TIMEOUT` when `queueWaitMs` is set and
 	 *   the call sat queued longer than that before starting (`statusCode: 503`).
 	 *
-	 * Caller-supplied `signal` cancels just this call (rejects with `ABORTED`) —
-	 * including while the call is still queued, before execution starts.
-	 *
-	 * A {@link DefinitionRef} definition is keyed by its `key` (result cache and
-	 * server-pointer map alike) without materializing bytes — `load()` runs only
-	 * when an upload is unavoidable. Its immutability contract is trusted here:
-	 * a reused key serves the other content's cached solve.
-	 *
-	 * Responses served from the cache (and via `lastResult`) are shared objects,
-	 * not copies — treat them as immutable. Mutating one poisons every later
-	 * cache hit for that key.
+	 * Don't mutate a `Uint8Array` definition after solving it. Responses served
+	 * from the cache (and via `lastResult`) are shared objects, not copies —
+	 * treat them as immutable. Mutating one poisons every later cache hit for
+	 * that key.
 	 *
 	 * Partial-success contract: unlike `GrasshopperClient.solve()`, which throws
 	 * `COMPUTATION_ERROR` when the response carries solver errors, this RESOLVES
@@ -360,10 +295,7 @@ export class SolveScheduler {
 			);
 		}
 
-		// Hash the definition once here; the hash is both part of the solve key
-		// and (threaded via the pending item) the server-cache-key map's key, so
-		// runExecutor never re-hashes the potentially multi-MB definition.
-		const definitionHash = hashDefinition(definition);
+		const definitionHash = hashDefinitionOnce(definition);
 		const key = hashSolveInputForDefinition(definitionHash, dataTree);
 		const seq = ++this.solveSeq;
 		const ctx: SolveContext = {
@@ -378,28 +310,24 @@ export class SolveScheduler {
 			return Promise.reject(this.makeAbortError(ctx));
 		}
 
-		// Cache hit — return synchronously-resolved promise
-		if (this.cacheEnabled) {
-			const cached = this.readCache(key);
-			if (cached) {
-				// This call is now the newest result. In latest-wins mode that means
-				// any older in-flight/pending solve is stale — supersede it, or its
-				// later completion would overwrite this hit and snap the UI back.
-				if (this.mode === 'latest-wins') {
-					this.supersedeCurrent();
-				}
-				const result: SolveResult = {
-					status: 'success',
-					response: cached,
-					durationMs: 0,
-					fromCache: true
-				};
-				this.writeLastState(seq, { result: cached, durationMs: 0 });
-				this.runHook(this.onStart, ctx);
-				this.runHook(this.onSettle, ctx, result);
-				this.notify();
-				return Promise.resolve(cached);
+		const cached = this.readCache(key);
+		if (cached) {
+			// In latest-wins an older in-flight solve is now stale: left running, its
+			// completion would overwrite this hit and snap the UI back.
+			if (this.mode === 'latest-wins') {
+				this.supersedeCurrent();
 			}
+			const result: SolveResult = {
+				status: 'success',
+				response: cached,
+				durationMs: 0,
+				fromCache: true
+			};
+			this.writeLastState(seq, { result: cached, durationMs: 0 });
+			this.runHook(this.onStart, ctx);
+			this.runHook(this.onSettle, ctx, result);
+			this.notify();
+			return Promise.resolve(cached);
 		}
 
 		return new Promise<GrasshopperComputeResponse>((resolve, reject) => {
@@ -415,9 +343,6 @@ export class SolveScheduler {
 				selvaevents: options?.selvaevents
 			};
 
-			// A signal firing while the item waits in a queue must settle it as
-			// ABORTED and drop it — not leave it to run a full solve anyway. The
-			// listener is removed when execution starts or the item settles.
 			if (item.externalSignal) {
 				item.queuedAbortHandler = () => this.abortQueuedItem(item);
 				item.externalSignal.addEventListener('abort', item.queuedAbortHandler, { once: true });
@@ -427,18 +352,14 @@ export class SolveScheduler {
 		});
 	}
 
-	/**
-	 * Record last-result state, but only if no newer solve has written since —
-	 * a slow solve settling late must not overwrite the state a newer solve
-	 * (or cache hit) already published.
-	 */
+	/** A slow solve settling late must not overwrite state a newer solve or cache hit published. */
 	private writeLastState(
 		seq: number,
 		state:
 			| { result: GrasshopperComputeResponse; durationMs: number }
 			| { error: ComputeError; durationMs: number }
-	): boolean {
-		if (seq < this.lastStateSeq) return false;
+	): void {
+		if (seq < this.lastStateSeq) return;
 		this.lastStateSeq = seq;
 		if ('result' in state) {
 			this._lastResult = state.result;
@@ -447,7 +368,6 @@ export class SolveScheduler {
 			this._lastError = state.error;
 		}
 		this._lastDurationMs = state.durationMs;
-		return true;
 	}
 
 	/** latest-wins: supersede the pending item and abort everything in flight. */
@@ -462,22 +382,19 @@ export class SolveScheduler {
 		}
 	}
 
-	/** Settle a still-queued item as ABORTED and remove it from its queue. */
-	private abortQueuedItem(item: PendingItem): void {
-		if (this.pendingForLatestWins === item) {
-			this.pendingForLatestWins = null;
-		}
+	private dequeue(item: PendingItem): void {
+		if (this.pendingForLatestWins === item) this.pendingForLatestWins = null;
 		const queued = this.fifoQueue.indexOf(item);
 		if (queued >= 0) this.fifoQueue.splice(queued, 1);
+	}
 
-		this.rejectAsAborted(item);
+	private abortQueuedItem(item: PendingItem): void {
+		this.dequeue(item);
+		this.fail(item, this.makeAbortError(item.ctx));
 		this.notify();
 	}
 
-	/**
-	 * Backpressure: settle an incoming item as QUEUE_FULL without ever enqueuing
-	 * it. The structured context lets an HTTP layer map it to 503 + Retry-After.
-	 */
+	/** The structured context lets an HTTP layer map QUEUE_FULL to 503 + Retry-After. */
 	private shedAsQueueFull(item: PendingItem): void {
 		const err = new ComputeError(
 			'Solve queue is full; request rejected (backpressure)',
@@ -491,25 +408,16 @@ export class SolveScheduler {
 				}
 			}
 		);
-		if (this.settleError(item, err)) {
-			this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs: 0 });
-		}
+		this.fail(item, err);
 		this.notify();
 	}
 
-	/**
-	 * Arm the queue-wait deadline for an item about to be queued. If the item is
-	 * still waiting when it fires, it's rejected as QUEUE_TIMEOUT and removed from
-	 * the queue. Cleared on execute/settle via {@link clearQueueWaitTimer}.
-	 */
 	private armQueueWaitTimer(item: PendingItem): void {
 		if (this.queueWaitMs === undefined) return;
 		const waitMs = this.queueWaitMs;
 		item.queueWaitTimer = setTimeout(() => {
-			// Only meaningful if it's still queued and unsettled.
 			if (item.settled) return;
-			const queued = this.fifoQueue.indexOf(item);
-			if (queued >= 0) this.fifoQueue.splice(queued, 1);
+			this.dequeue(item);
 
 			const err = new ComputeError(
 				`Solve waited longer than ${waitMs}ms in queue; rejected (backpressure)`,
@@ -523,14 +431,11 @@ export class SolveScheduler {
 					}
 				}
 			);
-			if (this.settleError(item, err)) {
-				this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs: 0 });
-			}
+			this.fail(item, err);
 			this.notify();
 		}, waitMs);
 	}
 
-	/** Clear a queued item's wait-deadline timer, if one is pending. */
 	private clearQueueWaitTimer(item: PendingItem): void {
 		if (item.queueWaitTimer !== undefined) {
 			clearTimeout(item.queueWaitTimer);
@@ -541,9 +446,7 @@ export class SolveScheduler {
 	private enqueue(item: PendingItem): void {
 		switch (this.mode) {
 			case 'latest-wins': {
-				// Reject any pending / abort any in-flight one as superseded
 				this.supersedeCurrent();
-				// Run immediately if no slot is taken
 				if (this.inFlight.size === 0) {
 					this.execute(item);
 				} else {
@@ -552,19 +455,16 @@ export class SolveScheduler {
 				break;
 			}
 
+			// The two modes differ only in `maxConcurrent`'s default.
 			case 'queue':
 			case 'parallel': {
-				// Same dispatch logic — the modes differ only in `maxConcurrent`'s
-				// default (1 for queue, 4 for parallel), set in the constructor.
 				if (this.inFlight.size < this.maxConcurrent) {
 					this.execute(item);
 				} else if (
 					this.maxQueueDepth !== undefined &&
 					this.fifoQueue.length >= this.maxQueueDepth
 				) {
-					// Backpressure: the queue is full. Shed the *newest* call (this one)
-					// so already-accepted work keeps its place, and give the caller an
-					// immediate, honest QUEUE_FULL rather than an unbounded wait.
+					// Shed the newest call, so already-accepted work keeps its place.
 					this.shedAsQueueFull(item);
 				} else {
 					this.armQueueWaitTimer(item);
@@ -578,18 +478,13 @@ export class SolveScheduler {
 
 	private async execute(item: PendingItem): Promise<void> {
 		const controller = new AbortController();
-		// Attach the controller to the SAME object (not a spread copy) so every
-		// settle path — supersede, cancelAll, executor success/error — shares one
-		// `settled` slot. A copy would split that state and fire onSettle twice.
+		// Mutate, don't copy: every settle path must share the one `settled` slot.
 		const inflight = item as InFlightItem;
 		inflight.controller = controller;
 		this.inFlight.add(inflight);
 		item.ctx.startedAt = Date.now();
 
-		// The item is now running: it can no longer time out in the queue.
 		this.clearQueueWaitTimer(item);
-		// Hand abort handling over from the queued-phase listener to the
-		// in-flight controller.
 		this.removeQueuedAbortHandler(item);
 		const externalAbortHandler = () => controller.abort();
 		item.externalSignal?.addEventListener('abort', externalAbortHandler, { once: true });
@@ -615,9 +510,8 @@ export class SolveScheduler {
 			);
 			const durationMs = performance.now() - startTime;
 
-			if (this.cacheEnabled) this.writeCache(item.ctx.key, response);
+			this.writeCache(item.ctx.key, response);
 
-			// Already superseded mid-flight — drop the late success silently.
 			if (!this.settleSuccess(item, response)) return;
 
 			this.writeLastState(item.seq, { result: response, durationMs });
@@ -631,18 +525,9 @@ export class SolveScheduler {
 			});
 		} catch (error) {
 			const durationMs = performance.now() - startTime;
-			// Resolve the error against the (possibly already-settled) item *before*
-			// settling: if this was superseded mid-flight, normalizeExecutionError
-			// returns the original cause, and _lastError should reflect it — unless
-			// a newer solve already published state, which this late settle must
-			// not clobber (writeLastState's seq guard).
 			const err = this.normalizeExecutionError(error, inflight);
-
 			this.writeLastState(item.seq, { error: err, durationMs });
-
-			if (this.settleError(item, err)) {
-				this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs });
-			}
+			this.fail(item, err, durationMs);
 		} finally {
 			item.externalSignal?.removeEventListener('abort', externalAbortHandler);
 			this.inFlight.delete(inflight);
@@ -651,47 +536,26 @@ export class SolveScheduler {
 		}
 	}
 
-	/**
-	 * Run the solve, using the server-definition-cache fast path when it's
-	 * enabled and the definition is reusable. Learns/updates the definition's
-	 * server cache key from the result so later solves can reference it.
-	 *
-	 * `definitionHash` is the {@link hashDefinition} result already computed at
-	 * `solve()` entry — threaded through rather than recomputed, so each solve
-	 * pays exactly one linear pass over the definition (issue 57).
-	 */
 	private async runExecutor(
 		definition: SolveDefinition,
 		dataTree: DataTree[],
 		definitionHash: string,
 		config: GrasshopperComputeConfig
 	): Promise<{ response: GrasshopperComputeResponse; definitionReuploaded?: boolean }> {
-		if (
-			!this.cacheKeyExecutor ||
-			!this.reuseServerDefinitionCache ||
-			!isReusableDefinition(definition)
-		) {
+		if (!this.cacheKeyExecutor || !this.reuseServerDefinitionCache || isDefinitionUrl(definition)) {
 			return { response: await this.executor(definition, dataTree, config) };
 		}
 
-		const defKey = definitionHash;
-		const knownKey = this.serverCacheKeys.get(defKey) ?? null;
-
+		const knownKey = this.serverCacheKeys.get(definitionHash) ?? null;
 		const result = await this.cacheKeyExecutor(definition, dataTree, knownKey, config);
 
-		// Record the server's (possibly refreshed) key for next time; drop a stale
-		// one if the server stopped returning a key. Re-set on a hit to refresh
-		// insertion order so the bounded eviction below is LRU-ish.
+		// Delete before set so a hit moves to the back of the eviction order.
+		this.serverCacheKeys.delete(definitionHash);
 		if (result.cacheKey) {
-			this.serverCacheKeys.delete(defKey);
-			this.serverCacheKeys.set(defKey, result.cacheKey);
-			while (this.serverCacheKeys.size > SERVER_CACHE_KEYS_MAX) {
-				const oldest = this.serverCacheKeys.keys().next().value;
-				if (oldest === undefined) break;
-				this.serverCacheKeys.delete(oldest);
+			this.serverCacheKeys.set(definitionHash, result.cacheKey);
+			if (this.serverCacheKeys.size > SERVER_CACHE_KEYS_MAX) {
+				this.serverCacheKeys.delete(this.serverCacheKeys.keys().next().value!);
 			}
-		} else {
-			this.serverCacheKeys.delete(defKey);
 		}
 
 		return { response: result.response, definitionReuploaded: result.missed };
@@ -700,7 +564,6 @@ export class SolveScheduler {
 	private drainNext(): void {
 		if (this.disposed) return;
 
-		// latest-wins: promote pending if no in-flight
 		if (this.mode === 'latest-wins') {
 			if (this.pendingForLatestWins && this.inFlight.size === 0) {
 				const next = this.pendingForLatestWins;
@@ -710,7 +573,6 @@ export class SolveScheduler {
 			return;
 		}
 
-		// queue / parallel: pull from FIFO until at capacity
 		while (this.fifoQueue.length > 0 && this.inFlight.size < this.maxConcurrent) {
 			const next = this.fifoQueue.shift()!;
 			this.execute(next);
@@ -733,17 +595,10 @@ export class SolveScheduler {
 	}
 
 	/**
-	 * Settle a pending/in-flight item exactly once with an error.
-	 *
-	 * A solve promise can be settled from four concurrent sources — the executor
-	 * resolving, the executor rejecting, `supersede`, and `cancelAll` — and a JS
-	 * promise silently ignores a second settle. This guard is the single place the
-	 * settle-once invariant lives: it makes the *first* settle win and reports
-	 * whether this call was that winner, so callers fire their own hook only when
-	 * they actually settled. Any new settle path must go through here (or
-	 * {@link settleSuccess}) so the guard can't be forgotten.
-	 *
-	 * @returns `true` if this call settled the item; `false` if it was already settled.
+	 * The executor, `supersede`, `cancelAll`, abort and the queue limits can all race to settle one
+	 * item, and a promise ignores a second settle silently. The first settle wins; the return value
+	 * says whether this call won, so only the winner fires its hook. Every settle path goes through
+	 * here or {@link settleSuccess}.
 	 */
 	private settleError(item: PendingItem, err: ComputeError): boolean {
 		if (item.settled) return false;
@@ -755,11 +610,15 @@ export class SolveScheduler {
 	}
 
 	/**
-	 * Settle a pending/in-flight item exactly once with a successful response.
-	 * The success counterpart to {@link settleError}; see it for the invariant.
-	 *
-	 * @returns `true` if this call settled the item; `false` if it was already settled.
+	 * Fires `onSettle` for queued items too, so a consumer counting solves in progress doesn't
+	 * leak one. A supersede settles through {@link settleError} and fires `onSuperseded` instead.
 	 */
+	private fail(item: PendingItem, err: ComputeError, durationMs = 0): void {
+		if (this.settleError(item, err)) {
+			this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs });
+		}
+	}
+
 	private settleSuccess(item: PendingItem, response: GrasshopperComputeResponse): boolean {
 		if (item.settled) return false;
 		item.settled = { ok: true };
@@ -769,7 +628,6 @@ export class SolveScheduler {
 		return true;
 	}
 
-	/** Detach the queued-phase abort listener, if one is still attached. */
 	private removeQueuedAbortHandler(item: PendingItem): void {
 		if (item.queuedAbortHandler && item.externalSignal) {
 			item.externalSignal.removeEventListener('abort', item.queuedAbortHandler);
@@ -777,26 +635,15 @@ export class SolveScheduler {
 		item.queuedAbortHandler = undefined;
 	}
 
-	private isAbortLikeError(error: unknown): boolean {
-		if (error instanceof Error) {
-			if (error.name === 'AbortError') return true;
-			if (typeof DOMException !== 'undefined' && error instanceof DOMException) {
-				return error.name === 'AbortError';
-			}
-		}
-		return false;
-	}
-
 	private normalizeExecutionError(error: unknown, item: InFlightItem): ComputeError {
-		// If the item was already settled (e.g. by supersede), return that error so
-		// _lastError reflects the original cause rather than the downstream abort.
+		// Already settled (superseded, cancelled): keep the original cause, not the abort it caused.
 		if (item.settled && 'error' in item.settled) {
 			return item.settled.error;
 		}
 
 		if (error instanceof ComputeError) return error;
 
-		if (this.isAbortLikeError(error)) {
+		if (error instanceof Error && error.name === 'AbortError') {
 			return this.makeAbortError(item.ctx);
 		}
 
@@ -807,49 +654,32 @@ export class SolveScheduler {
 		);
 	}
 
-	// --------------------------------------------------------------------------
+	// ============================================================================
 	// Cancellation
-	// --------------------------------------------------------------------------
+	// ============================================================================
 
 	/** Cancel everything — in-flight and pending. */
 	cancelAll(): void {
-		// Reject pending
 		if (this.pendingForLatestWins) {
-			this.rejectAsAborted(this.pendingForLatestWins);
+			this.fail(this.pendingForLatestWins, this.makeAbortError(this.pendingForLatestWins.ctx));
 			this.pendingForLatestWins = null;
 		}
 		while (this.fifoQueue.length > 0) {
 			const item = this.fifoQueue.shift()!;
-			this.rejectAsAborted(item);
+			this.fail(item, this.makeAbortError(item.ctx));
 		}
-		// Abort in-flight — their finally blocks will reject their promises
 		for (const inflight of this.inFlight) {
-			const err = this.makeAbortError(inflight.ctx);
-			if (this.settleError(inflight, err)) {
-				this.runHook(this.onSettle, inflight.ctx, {
-					status: 'error',
-					error: err,
-					// startedAt is a Date.now() timestamp — measure with the same clock.
-					durationMs: inflight.ctx.startedAt ? Date.now() - inflight.ctx.startedAt : 0
-				});
-			}
+			// startedAt is a Date.now() timestamp, so measure with the same clock.
+			const durationMs = inflight.ctx.startedAt ? Date.now() - inflight.ctx.startedAt : 0;
+			this.fail(inflight, this.makeAbortError(inflight.ctx), durationMs);
 			inflight.controller.abort();
 		}
 		this.notify();
 	}
 
-	private rejectAsAborted(item: PendingItem): void {
-		const err = this.makeAbortError(item.ctx);
-		// Queued items get the same settle hook as in-flight ones, so consumers
-		// pairing solve() calls with settles don't leak "in progress" indicators.
-		if (this.settleError(item, err)) {
-			this.runHook(this.onSettle, item.ctx, { status: 'error', error: err, durationMs: 0 });
-		}
-	}
-
-	// --------------------------------------------------------------------------
+	// ============================================================================
 	// Cache
-	// --------------------------------------------------------------------------
+	// ============================================================================
 
 	private readCache(key: string): GrasshopperComputeResponse | null {
 		if (!this.cacheEnabled) return null;
@@ -860,8 +690,6 @@ export class SolveScheduler {
 		}
 		if (this.cacheTtl > 0 && Date.now() - entry.insertedAt > this.cacheTtl) {
 			this.dropCacheEntry(key);
-			// An expired entry is a miss, not a separate outcome — the solve runs
-			// either way, which is what a hit rate is measuring.
 			this.cacheMisses += 1;
 			return null;
 		}
@@ -874,16 +702,10 @@ export class SolveScheduler {
 
 	private writeCache(key: string, response: GrasshopperComputeResponse): void {
 		if (!this.cacheEnabled) return;
-		// Case-insensitive read: stock mcneel servers serialize `Errors`, and a
-		// casing miss here would cache errored solves despite the opt-out.
 		const solveErrors = readField<unknown[]>(response, 'errors');
 		if (!this.cacheErroredSolves && Array.isArray(solveErrors) && solveErrors.length > 0) return;
-		// Prefer the wire-size hint recorded at the fetch boundary; a response
-		// that never crossed the fetch layer (custom executor, tests) pays a
-		// one-off stringify here — once per fresh solve, never per hit.
 		const sizeBytes = getResponseWireSize(response) ?? estimateResponseSize(response);
-		// An entry larger than the whole byte budget would evict everything
-		// (including itself) — serve it through, retain nothing.
+		// Retaining it would evict everything else and then itself.
 		if (sizeBytes > this.cacheMaxBytes) return;
 		this.dropCacheEntry(key); // replace-in-place: release the old copy's bytes
 		this.cache.set(key, { response, insertedAt: Date.now(), sizeBytes });
@@ -896,7 +718,6 @@ export class SolveScheduler {
 		}
 	}
 
-	/** Remove one cache entry and release its bytes from the running total. */
 	private dropCacheEntry(key: string): void {
 		const entry = this.cache.get(key);
 		if (!entry) return;
@@ -935,9 +756,9 @@ export class SolveScheduler {
 		};
 	}
 
-	// --------------------------------------------------------------------------
+	// ============================================================================
 	// Lifecycle
-	// --------------------------------------------------------------------------
+	// ============================================================================
 
 	dispose(): void {
 		if (this.disposed) return;
@@ -947,7 +768,7 @@ export class SolveScheduler {
 		this.clearCache();
 	}
 
-	private runHook<H extends (...args: any[]) => void>(
+	private runHook<H extends (...args: never[]) => void>(
 		hook: H | undefined,
 		...args: Parameters<H>
 	): void {

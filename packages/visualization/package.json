@@ -90,7 +90,7 @@
 		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"fflate": "^0.8.2"
+		"fflate": "catalog:"
 	},
 	"peerDependencies": {
 		"three": ">=0.179.0"

@@ -16,8 +16,8 @@ Selva uses [Turborepo](https://turborepo.com) to run workspace tasks in dependen
 `build`, `check`, and `type-check` all filter out `@selvajs/website`; it has its own
 `build:website` / `check:website` scripts.
 
-`pnpm lint` does **not** go through turbo; it runs ESLint at the repo root, then the separate
-`@selvajs/compute` and `@selvajs/visualization` configs. `dev:*` scripts also run directly.
+`pnpm lint` runs each package's own `lint` script through turbo, again without `website`
+(`lint:website` covers it). `dev:*` scripts run directly.
 
 ## Key behaviors
 

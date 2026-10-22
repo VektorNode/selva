@@ -98,9 +98,9 @@ Two JSON schemas in `packages/schemas/` generate both TypeScript and C# types. `
 
 ### `@selvajs/compute`
 
-`packages/compute`, published to npm. Modular exports for tree-shaking: main (utilities and types), `/grasshopper` (Rhino Compute client, data trees, input/output parsers), `/core` (low-level fetch and error handling). Discriminated unions for type-safe error handling; browser and Node compatible.
+`packages/compute`, published to npm. Two entrypoints: `/grasshopper` (Rhino Compute client, scheduler, data trees, input/output parsers) and `/core` (low-level fetch, errors, config). The root entry exports nothing; import a subpath. Errors are one `ComputeError` class with a typed `code` from `ErrorCodes`. Browser and Node compatible.
 
-Pure solve/data: see the `three` prohibition above. Anything that turns a response into Three.js objects, sets up a viewer, or drives a solve session belongs in `@selvajs/visualization`.
+Pure solve/data: see the `three` prohibition above. Anything that turns a response into Three.js objects or sets up a viewer belongs in `@selvajs/visualization`.
 
 ### `@selvajs/visualization`
 
@@ -122,7 +122,7 @@ Two traps, both of which produce correct values that never re-render:
 
 The Svelte shells stay in `@selvajs/ui`: `Viewer.svelte`, `SceneManager.svelte`, `useSolveSession.svelte.ts`, `solving.svelte.ts`, plus the design system. **Whoever owns the scene owns the outliner:** `Viewer.svelte` creates it and calls `applyTo()` after a solve; the panel only renders it.
 
-The solve session used to be a fifth layer here; it now lives in `@selvajs/solve/client`.
+The solve session is not a layer here: it lives in `@selvajs/solve/client`.
 
 ### `@selvajs/platform`
 
@@ -153,7 +153,7 @@ the Rhino-free `Plugin/Selva.Slva/` library ([README](./Plugin/Selva.Slva/README
 
 ## Commands
 
-`pnpm install` first. Builds are orchestrated by Turborepo (see `docs/contributing/turborepo.md`); most scripts run through it, with the exceptions noted.
+`pnpm install` first. Builds are orchestrated by Turborepo (see `docs/contributing/turborepo.md`); most scripts run through it; `dev:*`, `format` and `clean` run directly.
 
 ### Searching the repo
 
@@ -188,7 +188,7 @@ pnpm run build:plugin       # production .gha with embedded web assets
 
 pnpm check                  # svelte-check
 pnpm type-check             # tsc --noEmit
-pnpm lint                   # ESLint, repo root, NOT via turbo
+pnpm lint                   # ESLint, each package's own config
 pnpm format                 # Prettier
 pnpm test                   # vitest across packages that have tests
 pnpm generate               # regenerate TS + C# from ui-schema.json and wire-schema.json

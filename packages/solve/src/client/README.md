@@ -52,8 +52,7 @@ session.subscribe(() => {
 
 `values` is the current input map for the active definition. In a real app it usually comes from the
 form state or from a Grasshopper input tree. If you need to build or edit that tree first, see
-[`packages/compute/src/grasshopper/README.md`](../../../compute/src/grasshopper/README.md#data-trees)
-and [`packages/compute/src/grasshopper/data-tree/README.md`](../../../compute/src/grasshopper/data-tree/README.md).
+[Data trees](../../../compute/README.md#data-trees) in the `@selvajs/compute` README.
 
 ## How the session updates the UI
 

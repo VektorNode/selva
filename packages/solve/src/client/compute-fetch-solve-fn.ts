@@ -9,7 +9,7 @@
  * for free instead of re-deriving it by hand. Mesh decoding is NOT built in:
  * this package stays renderer-agnostic (see `shared/solve-fn.ts`), so a
  * viewer-enabled consumer supplies its own `meshes.extract` hook (typically
- * `getThreeMeshesFromComputeResponse` from `@selvajs/visualization/parse`).
+ * `getThreeObjectsFromComputeResponse` from `@selvajs/visualization/parse`).
  */
 
 import {

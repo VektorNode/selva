@@ -1,9 +1,6 @@
-/**
- * IO load-diagnostics seam: the server reports definition-LOAD errors/warnings
- * (missing plugin, obsolete component, …) on the `/io` response. The client used
- * to drop them, so a degraded input list looked mysteriously empty. These pin
- * that `loadErrors` / `loadWarnings` now surface — and stay absent on a clean load.
- */
+// The server reports definition-load errors/warnings (missing plugin, obsolete
+// component) on the `/io` response: they surface as `loadErrors`/`loadWarnings`,
+// and stay absent on a clean load.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { fetchDefinitionIO, fetchParsedDefinitionIO } from '../definition-io';
@@ -68,9 +65,7 @@ describe('fetchDefinitionIO load diagnostics', () => {
 		expect(res.loadErrors).toEqual(['real', '42']);
 	});
 
-	it('coerces object diagnostics to their message field (issue 78)', async () => {
-		// A server fork reporting errors as { message } objects used to yield an
-		// empty inputs list with NO explanation — the diagnostics were all dropped.
+	it('coerces object diagnostics to their message field', async () => {
 		fetchMock.mockResolvedValue(
 			createMockResponse(
 				ioResponse({
