@@ -1,6 +1,7 @@
 # `@selvajs/compute` cleanup audit
 
-> **Tracked in:** unfiled.
+> **Tracked in:** unfiled. Defects (except D7) and the no-API cleanup are done; the
+> [Public API](#public-api) major and `transform-input.ts` remain.
 >
 > Five read-only audits of `packages/compute` (core, solve path, IO/data trees/types/stats, docs,
 > config and exports) against the tree on 2026-10-21. That tree included the uncommitted
@@ -493,6 +494,8 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
 - **Missing exports:** `ColorInputType` (member of the exported `InputParam` union),
   `InputParseError` (in `GrasshopperParsedIO.parseErrors`), plus D7's `disposeRhinoObjects`,
   `isRhinoDecodeError`, `RhinoDecodeError`, and the `ServerVersion` / `ServerStats` interfaces.
+- **`ComputeError` accepts `originalError: unknown`** and normalizes it in the constructor, so the
+  eight `e instanceof Error ? e : new Error(String(e))` call sites go.
 - **`TreeBuilder.getTree(trees, paramName)`** returning `Map<path, DataTreeValue[]>`, the whole
   Grasshopper tree with branch paths (`'{0;1}'` → items), from a solve result.
 
@@ -512,6 +515,10 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
   naming `getTree`. Today it silently returns only the first branch.
 - Remove `TreeBuilder.appendSingle`, `getInnerTree`, `fromInputParam` (no caller anywhere), and
   `getPaths` / `getPath` (tests and README only).
+- Remove `ComputeError.missingValues` / `unknownParamType` (public statics carrying Grasshopper
+  input semantics into core); inline them at their one caller each in `/io/input`.
+- Delete `decodedJsonCache`: repeated `getValue` reads of one response return fresh objects.
+- `rhino3dm` → devDependencies: a consumer that relied on the transitive install must add it.
 - Remove from `/core`: `getResponseWireSize`, `setResponseWireSize` (internal side channel; the
   setter lets a consumer corrupt the scheduler's byte budget).
 - Remove from `/grasshopper`: `OutputType` (unused even inside the package),
