@@ -1,5 +1,11 @@
 # @selvajs/visualization
 
+## 1.6.0-beta.0
+
+### Minor Changes
+
+- 3890e17: With `enableDoubleClickZoom` on, double-clicking empty background frames all content, animated. It is the way back after framing a small part, which on touch otherwise takes many pinches.
+
 ## 1.5.0
 
 ### Minor Changes
