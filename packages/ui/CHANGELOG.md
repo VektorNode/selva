@@ -1,5 +1,21 @@
 # @selvajs/ui
 
+## 6.6.0-beta.8
+
+### Patch Changes
+
+- 7304b28: Internal cleanup of `@selvajs/compute` with no API change. Two things are visible:
+
+  - Transport errors share one `context` shape (`serverUrl`, `url`, `endpoint`, `requestId`, `requestSize`, plus `timeoutMs` on a timeout), so some errors carry more keys than before. Input parse messages name an unnamed input `"unknown"`.
+  - `@selvajs/ui`'s file download decodes base64 with `decodeBase64ToBinary`, so invalid base64 throws a `ComputeError` with code `ENCODING_ERROR` instead of a `DOMException`.
+
+- Updated dependencies [7304b28]
+- Updated dependencies [414e9bc]
+- Updated dependencies [9a7d371]
+- Updated dependencies [9a7d371]
+  - @selvajs/compute@5.0.0-beta.2
+  - @selvajs/solve@2.0.0-beta.4
+
 ## 6.6.0-beta.7
 
 ### Minor Changes

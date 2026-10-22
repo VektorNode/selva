@@ -1,5 +1,53 @@
 # @selvajs/compute
 
+## 5.0.0-beta.2
+
+### Major Changes
+
+- 9a7d371: The public API changes in one major. Migration:
+
+  - **No root entry.** `import '@selvajs/compute'` fails; import `@selvajs/compute/core` or `@selvajs/compute/grasshopper`.
+  - **`/grasshopper` no longer re-exports `/core`.** Import `extractFilesFromComputeResponse`, `downloadFileData`, `ProcessedFile`, `FileData`, `FileBaseInfo`, `isDefinitionRef`, `DefinitionRef` and `SolveDefinition` from `/core`. `OutputType` and `GrasshopperRequestSchema` are gone.
+  - **`/core` no longer exports `getResponseWireSize` / `setResponseWireSize`.**
+  - **`new GrasshopperResponseProcessor(response)`** takes no `debug` argument, and the `debug` property is gone.
+  - **`'parallel'` scheduler mode is gone.** Use `{ mode: 'queue', maxConcurrent: 4 }`; an unknown mode throws `INVALID_CONFIG`.
+  - **`new SolveScheduler(executor, config, options)`** takes one executor, `(definition, tree, cacheKey | null, config) => { response, cacheKey, missed }`. `GrasshopperClient.createScheduler()` is unchanged.
+  - **`GrasshopperClient.create(config, { probe })`**: the liveness probe has its own ladder (defaults 2 retries, 250 ms, 1000 ms). `config.retry` no longer shortens it.
+  - **`TreeBuilder`**:
+    - `getTreeValue` and `replaceTreeValue` take `DataTree[]` only, and match `ParamName` in any casing.
+    - `getTreeValue` throws `INVALID_INPUT` when the param has more than one branch; read those with the new `getTree`.
+    - `appendSingle`, `getInnerTree`, `fromInputParam`, `getPaths` and `getPath` are removed.
+    - `fromInputParams` coerces defaults by the same rules as the new `fromValues`: `paramType` matches in any casing, Integer defaults round, and an item that fails coercion is dropped with a warning instead of sent as-is.
+  - **The scheduler remembers a `Uint8Array` definition's hash by identity.** Don't mutate a buffer after solving it: the scheduler keeps the old hash and serves the old content's cached responses. Pass a new buffer instead.
+  - **`ComputeError.missingValues` / `unknownParamType` are removed.** `originalError` accepts any thrown value.
+  - **Repeated `getValue` / `getValues` reads of one response return fresh objects**; they were shared.
+  - **`rhino3dm` is no longer a dependency.** Install it yourself to decode geometry.
+
+  Added:
+
+  - `scheduler.solveDetailed()` resolves `{ response, fromCache, definitionReuploaded, durationMs }` for that call and takes a per-call `onServerTiming(timing, requestId)`.
+  - `TreeBuilder.getTree(trees, paramName)` returns the whole tree as a `Map` from branch path to items.
+  - `TreeBuilder.fromValues(entries)` builds trees from plain values: Number, Integer and Boolean items are coerced and clamped, values it can't coerce are dropped, every other type passes through.
+  - Exports: `disposeRhinoObjects`, `isRhinoDecodeError`, `RhinoDecodeError`, `ColorInputType`, `InputParseError`, `ServerVersion`, `ServerStats`, `TreeValueEntry`, `SolveDetail`, `SchedulerSolveOptions`, `SolveExecutor`, `CreateClientOptions`.
+
+### Patch Changes
+
+- 7304b28: Internal cleanup of `@selvajs/compute` with no API change. Two things are visible:
+
+  - Transport errors share one `context` shape (`serverUrl`, `url`, `endpoint`, `requestId`, `requestSize`, plus `timeoutMs` on a timeout), so some errors carry more keys than before. Input parse messages name an unnamed input `"unknown"`.
+  - `@selvajs/ui`'s file download decodes base64 with `decodeBase64ToBinary`, so invalid base64 throws a `ComputeError` with code `ENCODING_ERROR` instead of a `DOMException`.
+
+- 414e9bc: Defect fixes:
+
+  - A definition's first solve through `createScheduler()` now reports `definitionReuploaded: true`. It uploads the full definition, but was reported as a server cache hit.
+  - A server error `code` that names an `Object.prototype` member (`"constructor"`) no longer resolves to a prototype function. It is ignored like any undeclared code.
+  - `config.headers` can no longer double a transport header by using different casing. A caller `rhinocomputekey`, `authorization`, `content-type` or `x-request-id` is dropped instead of being sent next to the real one.
+  - `fetchDefinitionIO` errors no longer carry the whole definition in `context`.
+  - An input default that is already a branch-path map (`{ '{0}': [1, 2] }`) is kept, not dropped as malformed.
+  - Numeric step sizes come from one decimal count that ignores float noise and handles exponent notation: `3.3000000000000003` gives step `0.1` (was `1e-12`), `1.5e21` gives `1` (was `0.00001`).
+  - `fetchDefinitionIO` warns when it runs in a browser, as `fetchParsedDefinitionIO` already did. A 504 is labelled "Gateway timeout".
+  - README, the example and JSDoc examples fixed: `cache` takes `maxBytes`, a definition is a URL or bytes rather than a file name, cancellations are matched by `err.code`, the liveness probe is `GET /`, and the default port is 6500.
+
 ## 4.3.0-beta.1
 
 ### Minor Changes
