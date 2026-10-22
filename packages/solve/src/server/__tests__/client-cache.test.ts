@@ -326,7 +326,7 @@ describe('createClientCache — X-Selva-Definition (ADR 0004 D2)', () => {
 	});
 });
 
-describe('createClientCache — scheduler concurrency (audit B6)', () => {
+describe('createClientCache — scheduler concurrency', () => {
 	it('forwards the probed child count as the scheduler maxConcurrent in queue mode', async () => {
 		activeChildren = 7;
 		const cache = createClientCache(baseConfig());
@@ -339,7 +339,7 @@ describe('createClientCache — scheduler concurrency (audit B6)', () => {
 	});
 });
 
-describe('createClientCache — scheduler backpressure (audit B7)', () => {
+describe('createClientCache — scheduler backpressure', () => {
 	it('forwards non-zero queue bounds to the scheduler', async () => {
 		const cache = createClientCache({ ...baseConfig(), maxQueueDepth: 12, queueWaitMs: 90_000 });
 		await cache.getClient(server('s1'));
@@ -357,7 +357,7 @@ describe('createClientCache — scheduler backpressure (audit B7)', () => {
 	});
 });
 
-describe('createClientCache — L1 response cache byte budget (audit C2)', () => {
+describe('createClientCache — L1 response cache byte budget', () => {
 	it('forwards responseCacheMaxBytes as the scheduler cache maxBytes', async () => {
 		const cache = createClientCache({ ...baseConfig(), responseCacheMaxBytes: 64 * 1024 * 1024 });
 		await cache.getClient(server('s1'));

@@ -1,9 +1,9 @@
 import { TreeBuilder, type DataTree } from '@selvajs/compute/grasshopper';
-import type { SchemaInput } from '@selvajs/schemas';
+import type { SolveInput } from '../shared/solve-input.js';
 
 /** The input tree a solve sends: each input's value, or its schema default when it has none. */
 export function buildSolveInputTree(
-	inputs: (SchemaInput & { minimum?: number; maximum?: number })[],
+	inputs: SolveInput[],
 	values: Record<string, unknown>
 ): DataTree[] {
 	return TreeBuilder.fromValues(

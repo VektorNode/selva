@@ -42,7 +42,7 @@ async function bundleForBrowser(entry: string): Promise<string> {
 	return result.outputFiles.map((f) => f.text).join('\n');
 }
 
-describe.skipIf(!hasBuild)('client bundle boundary (plan Phase 4, guard 3)', () => {
+describe.skipIf(!hasBuild)('client bundle boundary', () => {
 	let bundled: string;
 
 	beforeAll(async () => {

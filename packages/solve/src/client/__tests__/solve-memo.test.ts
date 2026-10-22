@@ -136,7 +136,7 @@ describe('createSolveMemo', () => {
 // The memo caches whole SolveResults, including meshes a viewer disposes on the next
 // scene update. Every test above used mesh-free results, so nothing caught that. These
 // pin the memo's use of the injected ownership policy.
-describe('createSolveMemo — mesh ownership (audit C1)', () => {
+describe('createSolveMemo — mesh ownership', () => {
 	it('serves a usable mesh after the viewer disposed the one it was given', () => {
 		const memo = createSolveMemo<FakeMesh>({ meshPolicy: trackingPolicy() });
 		memo.set({ k: 1 }, meshResult('a'));

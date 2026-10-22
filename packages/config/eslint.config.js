@@ -106,6 +106,13 @@ export const config = [
 			'no-useless-assignment': 'warn',
 			'preserve-caught-error': 'warn'
 		}
+	},
+	{
+		// Package maintenance scripts: console output is their interface.
+		files: ['scripts/**/*.mjs'],
+		rules: {
+			'no-console': 'off'
+		}
 	}
 ];
 

@@ -4,7 +4,7 @@ Releases and changesets: [publishing.md](./publishing.md).
 
 ## Export rules
 
-The barrels (`src/index.ts`, `src/core/index.ts`, `src/grasshopper/index.ts`) are the published
+The barrels (`src/core/index.ts`, `src/grasshopper/index.ts`) are the published
 surface, so every line in them is a compatibility promise. Keep them readable:
 
 - **Name every export.** No `export *`: a wildcard makes the public surface unreadable and

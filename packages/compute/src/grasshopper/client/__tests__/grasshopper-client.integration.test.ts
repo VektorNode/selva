@@ -313,7 +313,8 @@ describe('GrasshopperClient.createScheduler', () => {
 
 		expect(detail).toMatchObject({ fromCache: false, definitionReuploaded: true });
 		expect(onServerTiming).toHaveBeenCalledExactlyOnceWith(
-			expect.objectContaining({ decode: 4, solve: 20, encode: 2 })
+			expect.objectContaining({ decode: 4, solve: 20, encode: 2 }),
+			expect.any(String)
 		);
 		scheduler.dispose();
 		await client.dispose();

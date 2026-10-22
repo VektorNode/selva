@@ -520,7 +520,7 @@ export class SolveScheduler {
 					try {
 						baseTiming?.(timing, requestId);
 					} finally {
-						callTiming(timing);
+						callTiming(timing, requestId);
 					}
 				};
 			}
@@ -671,6 +671,7 @@ export class SolveScheduler {
 
 		if (error instanceof ComputeError) return error;
 
+		// Not `isAbortError`: a raw `TimeoutError` is a timeout, and must not read as a caller abort.
 		if (error instanceof Error && error.name === 'AbortError') {
 			return this.makeAbortError(item.ctx);
 		}

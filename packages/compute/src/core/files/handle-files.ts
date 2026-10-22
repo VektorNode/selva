@@ -68,7 +68,7 @@ export const downloadFileData = async (
 			ErrorCodes.INVALID_STATE,
 			{
 				context: { originalError: err instanceof Error ? err.message : String(err) },
-				originalError: err instanceof Error ? err : undefined
+				originalError: err
 			}
 		);
 	}

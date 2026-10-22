@@ -164,8 +164,6 @@ describe('fetchCompute — request shape', () => {
 	});
 
 	it('does not warn about missing credentials when an auth token is configured', async () => {
-		// Regression: the warning only checked apiKey, so authToken-authenticated
-		// requests to remote servers logged a spurious "no API key" warning.
 		const warn = vi.fn();
 		setLogger({ debug: () => {}, info: () => {}, warn, error: () => {} });
 		try {

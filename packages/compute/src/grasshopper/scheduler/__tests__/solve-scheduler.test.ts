@@ -1059,8 +1059,8 @@ describe('SolveScheduler', () => {
 			releases[0]();
 			await Promise.all([a, b]);
 
-			expect(timingA).toHaveBeenCalledExactlyOnceWith({ solve: 1, raw: 'solve;dur=1' });
-			expect(timingB).toHaveBeenCalledExactlyOnceWith({ solve: 2, raw: 'solve;dur=2' });
+			expect(timingA).toHaveBeenCalledExactlyOnceWith({ solve: 1, raw: 'solve;dur=1' }, 'req-1');
+			expect(timingB).toHaveBeenCalledExactlyOnceWith({ solve: 2, raw: 'solve;dur=2' }, 'req-2');
 			expect(baseTiming.mock.calls.map((c) => c[1])).toEqual(['req-2', 'req-1']);
 		});
 

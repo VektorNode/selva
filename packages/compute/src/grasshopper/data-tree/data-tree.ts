@@ -110,38 +110,18 @@ export class TreeBuilder {
 	}
 
 	/**
-	 * One tree per input that has a default, keyed by its nickname. Numeric values
-	 * are clamped to the input's minimum/maximum.
+	 * One tree per input that has a default, keyed by its nickname. Defaults are coerced and
+	 * clamped by the same rules as {@link TreeBuilder.fromValues}.
 	 */
 	public static fromInputParams(inputs: InputParam[]): DataTree[] {
-		return inputs
-			.filter((input) => TreeBuilder.hasValidValue(input.default))
-			.map((input) => {
-				const name = input.nickname || 'unnamed';
-				const tree = new TreeBuilder(name);
-				const value = input.default;
-				const isNumeric = input.paramType === 'Number' || input.paramType === 'Integer';
-
-				// Dispatch on shape, not `treeAccess`: normalizeDefault also keeps list-access
-				// (`atMost > 1`) defaults as trees, which would otherwise ship as one JSON string.
-				if (isDataTreeDefault(value)) {
-					tree.fromDataTreeDefault(value);
-					if (isNumeric) tree.applyNumericConstraints(input.minimum, input.maximum, name);
-				} else {
-					const values = Array.isArray(value) ? value : [value];
-					tree.appendFlat(
-						values
-							.map((val) =>
-								isNumeric && typeof val === 'number'
-									? TreeBuilder.clampValue(val, input.minimum, input.maximum, name)
-									: val
-							)
-							.filter((v) => v !== null && v !== undefined)
-					);
-				}
-
-				return tree.toComputeFormat();
-			});
+		return TreeBuilder.fromValues(
+			inputs.map((input) => ({
+				paramName: input.nickname || 'unnamed',
+				paramType: input.paramType,
+				value: input.default,
+				...('minimum' in input && { minimum: input.minimum, maximum: input.maximum })
+			}))
+		);
 	}
 
 	/**
@@ -149,7 +129,7 @@ export class TreeBuilder {
 	 * items go through the numeric coercion (Integer rounds) and are clamped to
 	 * `minimum`/`maximum`; Boolean items also accept `'true'`/`'false'`; every other type passes
 	 * through. An item that fails coercion is dropped with a warning. An entry left with no items
-	 * is omitted, so Grasshopper uses its own value.
+	 * is omitted, so Grasshopper uses its own value; `''` is an item, not an empty value.
 	 */
 	public static fromValues(entries: TreeValueEntry[]): DataTree[] {
 		const trees: DataTree[] = [];
@@ -314,24 +294,6 @@ export class TreeBuilder {
 	/** `[0, 1, 2]` → `"{0;1;2}"`. */
 	public static formatPathString(path: number[]): DataTreePath {
 		return `{${path.join(';')}}` as DataTreePath;
-	}
-
-	private applyNumericConstraints(
-		min: number | null | undefined,
-		max: number | null | undefined,
-		inputName: string
-	): void {
-		for (const items of Object.values(this.innerTree)) {
-			if (!Array.isArray(items)) continue;
-
-			for (const item of items) {
-				const value = TreeBuilder.deserializeValue(item.data);
-				if (typeof value === 'number') {
-					const clamped = TreeBuilder.clampValue(value, min, max, inputName);
-					item.data = TreeBuilder.serializeValue(clamped);
-				}
-			}
-		}
 	}
 
 	/** Booleans and numbers stay primitives: Grasshopper reads them typed. */

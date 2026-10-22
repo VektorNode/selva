@@ -30,7 +30,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 		});
 	}
 
-	const invalid = (reason: string, originalError?: Error) =>
+	const invalid = (reason: string, originalError?: unknown) =>
 		new ComputeError(`Invalid serverUrl: "${trimmed}". ${reason}`, ErrorCodes.INVALID_CONFIG, {
 			context: { receivedServerUrl: raw },
 			originalError
@@ -49,7 +49,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	} catch (err) {
 		throw invalid(
 			`Must be a valid URL. Received error: ${err instanceof Error ? err.message : String(err)}`,
-			err instanceof Error ? err : undefined
+			err
 		);
 	}
 

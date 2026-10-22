@@ -23,7 +23,7 @@ interface NormalizedDefault {
 }
 
 function dropDefault(input: InputParamSchema, message: string): NormalizedDefault {
-	getLogger().warn(message, input.default);
+	getLogger().warn(message);
 	return {
 		schema: { ...input, default: null },
 		warning: { code: ErrorCodes.MALFORMED_DEFAULT, message }

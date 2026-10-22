@@ -84,6 +84,9 @@ ladder: pass `{ probe: { attempts, baseDelayMs, maxDelayMs } }` as its second ar
 for that one call, and takes a per-call `onServerTiming`. Use it to record how each solve went;
 `onSettle` fires for every solve on the scheduler.
 
+Don't mutate a `Uint8Array` definition after solving it. The scheduler hashes a buffer once and
+remembers the hash by identity, so a changed buffer is served the old content's cached responses.
+
 ### Cancellation
 
 A superseded or cancelled solve rejects. Filter those by code:

@@ -457,7 +457,7 @@ timeoutMs)` plus `tryParseJson`. Keep `getVersion`'s non-JSON fallback, JSON `nu
 
 | File                                  | Lines | Action                                                                                                                                                                                                                                                                                              |
 | ------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `README.md`                           | 204   | Keep, ~130. Apply D8; add short "Errors" (`client.solve` throws on definition errors, `scheduler.solve` resolves), "Data trees" (copy-on-write) and "File outputs" (Sub Folder table) sections.                                                                                                     |
+| `README.md`                           | 204   | Keep. Apply D8; add short "Errors" (`client.solve` throws on definition errors, `scheduler.solve` resolves), "Data trees" (copy-on-write) and "File outputs" (Sub Folder table) sections.                                                                                                           |
 | `CONTEXT.md`                          | 179   | ~50. Keep the vocabulary and the three core seams. Delete Mesh batch (visualization's, wrong today), every Invariant (each has its code home), Display-pipeline performance (visualization's, stale paths and numbers), Known follow-ups (plugin backlog; two items shipped, one has its own plan). |
 | `src/core/README.md`                  | 74    | Delete. Wrong directory tree, an unverifiable example endpoint, and copies of `CONTEXT.md`.                                                                                                                                                                                                         |
 | `src/core/files/README.md`            | 31    | Merge the corrected table into `README.md`. A single-segment Sub Folder is a root: `Panels` → `model.3dm` inside `Panels.zip`, not `Panels/model.3dm`.                                                                                                                                              |
@@ -495,8 +495,8 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
   branch-path map. Number/Integer items go through the numeric transformer (Integer rounds) and
   are clamped; Boolean items through the boolean transformer; every other type, including
   ValueList, File, Color and generic, passes through. An item a transformer rejects is dropped
-  with a warning; an entry left with no items, or with a `null`/`undefined`/empty value, is
-  omitted, so Grasshopper uses its own value. `transform-input.ts` is replaced by it in the same
+  with a warning; an entry left with no items, or with a `null`/`undefined`/empty array or map
+  value, is omitted (`''` is a Text item and is sent), so Grasshopper uses its own value. `transform-input.ts` is replaced by it in the same
   change, which fixes `generic` inputs too.
 - **A probe option for `GrasshopperClient.create()`** separate from `config.retry`. Today
   `retry: { attempts: 0 }`, set to stop solve retries, also cuts `create()` to one probe. Shape:
@@ -603,7 +603,10 @@ in the app, not here.
 - Preset load calls `TreeBuilder.getTreeValue` on trees it saved with `replaceTreeValue`. A preset
   that stored a tree-access input as a branch map with more than one branch now throws instead of
   silently loading the first branch: read those with `getTree`.
-- Not hit: it builds input trees through its own `processInput` path, not `fromValues`;
+- Its compute route builds trees with `fromInputParams`, which now coerces by `fromValues`' rules.
+  Its inputs come out of `processInput` already parsed, so only a value `processInput` passed but
+  the numeric or boolean transformer rejects changes: it is dropped instead of sent.
+- Not hit:
   `createScheduler({ mode: 'queue' })`, `GrasshopperClient.create` without `retry`,
   `normalizeUISchemaCasing`, and `rhino3dm`, which it depends on directly.
 

@@ -69,7 +69,7 @@ Each package README covers its own imports and setup. [`@selvajs/ui`](https://ww
 - Reading and writing Grasshopper **data trees**.
 - The same API in the browser and in Node.
 
-Import from `/grasshopper` or `/core`, whichever you need, so a bundler drops the rest. The root export is empty on purpose, so importing from the bare package name gets you nothing.
+Import from `/grasshopper` or `/core`, whichever you need, so a bundler drops the rest. There is no root entry, so importing the bare package name fails.
 
 Turning a solve response into Three.js objects is a separate job, and [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization) does it. Import from `/scene`, `/render`, or `/parse`.
 

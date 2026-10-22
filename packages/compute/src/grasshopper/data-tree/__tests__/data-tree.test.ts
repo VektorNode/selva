@@ -5,9 +5,9 @@ import { processInput } from '../../io/input/input-processors';
 import type { DataTree, InnerTreeData, InputParam } from '../../types';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // Helpers — build the InputParam shapes that fetchParsedDefinitionIO produces
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 function numericInput(name: string, def: number, opts: Partial<InputParam> = {}): InputParam {
 	return {
@@ -45,7 +45,9 @@ function textInput(name: string, def: string): InputParam {
 	} as InputParam;
 }
 
-// ---------------------------------------------------------------------------
+// ============================================================================
+// Basic building
+// ============================================================================
 
 describe('TreeBuilder — basic building', () => {
 	it('builds a flat tree at path [0]', () => {
@@ -122,6 +124,25 @@ describe('TreeBuilder.fromInputParams — definition IO -> trees', () => {
 		expect(trees[2].InnerTree['{0}'][0].data).toBe(50);
 	});
 
+	it('clamps a tree default and an Integer default whatever the paramType casing', () => {
+		const trees = TreeBuilder.fromInputParams([
+			numericInput('grid', 0, {
+				paramType: 'number' as 'Number',
+				treeAccess: true,
+				minimum: 0,
+				maximum: 10,
+				default: { '{0}': [-1, 5], '{1}': [20] }
+			}),
+			numericInput('count', 2.6, { paramType: 'Integer', minimum: 0, maximum: 2 })
+		]);
+
+		expect(trees[0].InnerTree).toEqual({
+			'{0}': [{ data: 0 }, { data: 5 }],
+			'{1}': [{ data: 10 }]
+		});
+		expect(trees[1].InnerTree).toEqual({ '{0}': [{ data: 2 }] });
+	});
+
 	it('keeps text values as-is (no clamping)', () => {
 		const trees = TreeBuilder.fromInputParams([textInput('label', 'hello')]);
 		expect(trees[0].InnerTree['{0}'][0].data).toBe('hello');
@@ -163,9 +184,9 @@ describe('TreeBuilder.fromInputParams — definition IO -> trees', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // replaceTreeValue
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 describe('TreeBuilder.replaceTreeValue', () => {
 	it('replaces an existing parameter in compiled InnerTree array', () => {
@@ -233,9 +254,9 @@ describe('TreeBuilder.replaceTreeValue', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // getTree / getTreeValue
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 describe('TreeBuilder.getTree', () => {
 	it('returns every branch keyed by path, deserializing each item', () => {
@@ -372,9 +393,9 @@ describe('TreeBuilder.getTreeValue', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // fromValues
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 describe('TreeBuilder.fromValues', () => {
 	const warn = vi.fn();
@@ -533,9 +554,9 @@ describe('TreeBuilder.fromValues', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // End-to-end: the slider scrub flow
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 describe('TreeBuilder — slider scrub end-to-end flow', () => {
 	it('build trees from inputs, override one value, read it back', () => {
@@ -555,9 +576,9 @@ describe('TreeBuilder — slider scrub end-to-end flow', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // Path string round-trip
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 describe('TreeBuilder — path string parsing', () => {
 	it('round-trips simple and nested paths', () => {

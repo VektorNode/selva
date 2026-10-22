@@ -1,4 +1,4 @@
-import { config } from '../config/eslint.config.js';
+import { config } from '@selvajs/config/eslint';
 
 export default [
 	...config,

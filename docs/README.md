@@ -43,7 +43,7 @@ Workflow:
 - [turborepo.md](./contributing/turborepo.md): how the monorepo builds and caches
 - [testing.md](./contributing/testing.md): test layout and the shared vitest config
 - [publishing.md](./contributing/publishing.md): releasing npm packages and the Grasshopper plugin
-- [compute-contributing.md](./contributing/compute-contributing.md): export-barrel rules and changeset conventions for `@selvajs/compute`
+- [compute-contributing.md](./contributing/compute-contributing.md): export-barrel rules, error handling and adding an input param type for `@selvajs/compute`
 
 Design references (check code against intent before changing it):
 

@@ -191,7 +191,7 @@ export default class ComputeServerStats {
 		// Strict: `parseInt` would read an error page starting "302 Found" as 302 children.
 		const text = body.trim();
 		if (!/^\d+$/.test(text)) {
-			getLogger().warn('[ComputeServerStats] Invalid active children response:', text);
+			getLogger().warn('[ComputeServerStats] /activechildren answered with a non-numeric body');
 			return null;
 		}
 		return parseInt(text, 10);

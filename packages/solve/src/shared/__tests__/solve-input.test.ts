@@ -46,11 +46,10 @@ describe('SolveFn', () => {
 });
 
 describe('SolveInput', () => {
-	it('is a SchemaInput widened with the optional numeric bounds the transform reads', () => {
+	it('is a SchemaInput widened with the optional numeric bounds tree building clamps to', () => {
 		expectTypeOf<SolveInput>().toExtend<SchemaInput>();
 		expectTypeOf<SolveInput['minimum']>().toEqualTypeOf<number | undefined>();
 		expectTypeOf<SolveInput['maximum']>().toEqualTypeOf<number | undefined>();
-		expectTypeOf<SolveInput['stepSize']>().toEqualTypeOf<number | undefined>();
 	});
 
 	it('accepts an input carrying no bounds (non-numeric params carry none)', () => {

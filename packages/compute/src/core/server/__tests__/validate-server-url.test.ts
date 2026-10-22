@@ -31,16 +31,12 @@ describe('validateServerUrl', () => {
 		expectInvalidConfig(() => validateServerUrl(undefined as unknown as string));
 	});
 
-	// Scheme check — previously enforced by ComputeServerStats but MISSING from the
-	// client's validator. Unifying must enforce it on both paths.
 	it('rejects URLs without an http(s):// scheme', () => {
 		expectInvalidConfig(() => validateServerUrl('ftp://example.com'));
 		expectInvalidConfig(() => validateServerUrl('example.com'));
 		expectInvalidConfig(() => validateServerUrl('ws://localhost:6500'));
 	});
 
-	// Public-endpoint check — previously enforced by the client but MISSING from
-	// ComputeServerStats. Unifying must enforce it on both paths.
 	it('rejects the default public McNeel endpoint', () => {
 		expectInvalidConfig(() => validateServerUrl('https://compute.rhino3d.com/'));
 	});

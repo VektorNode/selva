@@ -15,13 +15,15 @@ The public API changes in one major. Migration:
   - `getTreeValue` and `replaceTreeValue` take `DataTree[]` only, and match `ParamName` in any casing.
   - `getTreeValue` throws `INVALID_INPUT` when the param has more than one branch; read those with the new `getTree`.
   - `appendSingle`, `getInnerTree`, `fromInputParam`, `getPaths` and `getPath` are removed.
+  - `fromInputParams` coerces defaults by the same rules as the new `fromValues`: `paramType` matches in any casing, Integer defaults round, and an item that fails coercion is dropped with a warning instead of sent as-is.
+- **The scheduler remembers a `Uint8Array` definition's hash by identity.** Don't mutate a buffer after solving it: the scheduler keeps the old hash and serves the old content's cached responses. Pass a new buffer instead.
 - **`ComputeError.missingValues` / `unknownParamType` are removed.** `originalError` accepts any thrown value.
 - **Repeated `getValue` / `getValues` reads of one response return fresh objects**; they were shared.
 - **`rhino3dm` is no longer a dependency.** Install it yourself to decode geometry.
 
 Added:
 
-- `scheduler.solveDetailed()` resolves `{ response, fromCache, definitionReuploaded, durationMs }` for that call and takes a per-call `onServerTiming`.
+- `scheduler.solveDetailed()` resolves `{ response, fromCache, definitionReuploaded, durationMs }` for that call and takes a per-call `onServerTiming(timing, requestId)`.
 - `TreeBuilder.getTree(trees, paramName)` returns the whole tree as a `Map` from branch path to items.
 - `TreeBuilder.fromValues(entries)` builds trees from plain values: Number, Integer and Boolean items are coerced and clamped, values it can't coerce are dropped, every other type passes through.
 - Exports: `disposeRhinoObjects`, `isRhinoDecodeError`, `RhinoDecodeError`, `ColorInputType`, `InputParseError`, `ServerVersion`, `ServerStats`, `TreeValueEntry`, `SolveDetail`, `SchedulerSolveOptions`, `SolveExecutor`, `CreateClientOptions`.

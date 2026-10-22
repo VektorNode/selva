@@ -12,7 +12,7 @@ import type {
 	GrasshopperComputeResponse,
 	SelvaEventTarget
 } from '@selvajs/compute/grasshopper';
-import type { SchemaInput } from '@selvajs/schemas';
+import type { SolveInput } from '../shared/solve-input.js';
 import { gzip, gunzipSync } from 'node:zlib';
 import { promisify } from 'node:util';
 import { buildSolveInputTree } from './transform-input.js';
@@ -34,11 +34,7 @@ export const COMPUTE_VERSION_HEADER = 'X-Selva-Compute-Version';
 // Inputs & outcomes
 // ============================================================================
 
-export type PipelineInput = SchemaInput & {
-	minimum?: number;
-	maximum?: number;
-	stepSize?: number;
-};
+export type PipelineInput = SolveInput;
 
 export interface SolvePipelineArgs {
 	/**

@@ -142,7 +142,7 @@ export interface SchedulerSolveOptions {
 	 * This call's `Server-Timing` breakdown, after the client config's own `onServerTiming`.
 	 * Never fires for a `fromCache` hit, which sends no request.
 	 */
-	onServerTiming?: (timing: ServerTiming) => void;
+	onServerTiming?: (timing: ServerTiming, requestId: string) => void;
 }
 
 /** What `solveDetailed()` resolves with: the response plus how this call got it. */
