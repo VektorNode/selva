@@ -580,17 +580,32 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
 
 ## Before release
 
-- Check Consumer A and Consumer B against the breaking list. That check happens outside this repo.
-- The main downstream app imports only `/core` and `/grasshopper`, never the root. Two items on
-  the breaking list hit it:
-  - It constructs `new GrasshopperResponseProcessor(solved, false)` and passes `processor.debug`
-    on to `getThreeObjectsFromComputeResponse`. Removing the parameter must also remove the
-    `debug` property, so that call site changes.
-  - It imports `extractFilesFromComputeResponse` and `type FileData` from `/grasshopper`; it
-    moves to `/core`. Keep `extractFilesFromComputeResponse` exported from `/core`: it is used.
+Both downstream apps were checked against the breaking list on 2026-10-22. Each change below is
+in the app, not here.
+
+**The main downstream app** imports only `/core` and `/grasshopper`, and solves through
+`SolveEngine`.
+
+- `new GrasshopperResponseProcessor(solved, false)` and `processor.debug` (passed on to
+  `getThreeObjectsFromComputeResponse`): drop the argument and pass `debug: false` or nothing.
+- `extractFilesFromComputeResponse` and `type FileData` move from `/grasshopper` to `/core`.
 - It pins `@selvajs/compute` exactly and overrides every engine package's copy to match, so
-  `@selvajs/solve`, `server`, `ui` and `visualization` must ship releases built against the
-  major together with it.
-- It solves through `SolveEngine`, so replacing `processInput` in `transform-input.ts` with
-  `TreeBuilder.fromValues` changes what its solves send: values compute rejects stop reaching
-  the tree. Run its solve e2e suite against the release.
+  `@selvajs/solve`, `server`, `ui` and `visualization` ship together with the major.
+- Its solves change through `buildSolveInputTree`: see the `@selvajs/solve` changeset. Run its
+  solve e2e suite against the release.
+- Not hit: `GrasshopperClient.create` (no `retry`, so the probe is unchanged), `ComputeServerStats`,
+  `fetchCompute`, `ComputeError`/`ErrorCodes`, and `rhino3dm`, which it depends on directly.
+
+**Consumer B** pins `^4.1.3` in both packages, so it stays on 4.x until it bumps. On bumping:
+
+- `new GrasshopperResponseProcessor(solved, false)` in the compute page and the autosolve
+  emulator test fails type-check: drop the argument.
+- Preset load calls `TreeBuilder.getTreeValue` on trees it saved with `replaceTreeValue`. A preset
+  that stored a tree-access input as a branch map with more than one branch now throws instead of
+  silently loading the first branch: read those with `getTree`.
+- Not hit: it builds input trees through its own `processInput` path, not `fromValues`;
+  `createScheduler({ mode: 'queue' })`, `GrasshopperClient.create` without `retry`,
+  `normalizeUISchemaCasing`, and `rhino3dm`, which it depends on directly.
+
+**Consumer A** (exact pin on `3.1.0`, root imports) has no checkout on this machine; check it
+wherever it lives, or confirm it is the main downstream app at an earlier stage.
