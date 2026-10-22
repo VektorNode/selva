@@ -1,5 +1,11 @@
 # @selvajs/visualization
 
+## 1.6.0-beta.1
+
+### Patch Changes
+
+- 2322937: Decoding a base64 payload in Node is about 4× faster on large inputs, and accepts and rejects exactly the same strings as before.
+
 ## 1.6.0-beta.0
 
 ### Minor Changes

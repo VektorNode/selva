@@ -1,5 +1,13 @@
 # @selvajs/solve
 
+## 2.0.0-beta.5
+
+### Patch Changes
+
+- 2322937: `SolveEngine` stops downloading a compute response once it passes `computeResponseMaxBytes`, and returns `too_large`. It used to read and parse the whole body before checking its size. `ClientCacheConfig` takes the cap as an optional `maxResponseBytes`.
+- Updated dependencies [2322937]
+  - @selvajs/compute@5.0.0-beta.3
+
 ## 2.0.0-beta.4
 
 ### Major Changes
