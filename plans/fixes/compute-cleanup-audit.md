@@ -12,10 +12,10 @@
 
 - **Behaviour stays identical** except for the defects listed below, each fixed with a test that
   fails before the fix.
-- **The public API stays identical** outside [Public API](#public-api). `@selvajs/compute` is
-  published and has two consumers outside this monorepo (Consumer A and Consumer B in
-  [compute-package-cleanup](../archive/compute-package-cleanup.md)). Additive exports are free;
-  every removal goes into one major, after checking both consumers.
+- **The public API changes only as listed in [Public API](#public-api)**, all in one major.
+  `@selvajs/compute` is published and has two consumers outside this monorepo (Consumer A and
+  Consumer B in [compute-package-cleanup](../archive/compute-package-cleanup.md)): check both
+  before the release.
 - **Comments follow the repo rules:** default to none; one or two lines for a non-obvious why, a
   footgun, or a suppression; never history, ticket or audit pointers; one fact, one place, at the
   narrowest scope. JSDoc on public API stays where it adds information beyond the name. Wire
@@ -71,7 +71,8 @@ already-flattened `DataTreeDefault` like `{ '{0}': [1, 2] }`, the exact shape th
 pass-through branches for (`input-type-parsers.ts:79, 218`). `processInput` is public. Through
 `packages/solve/src/server/transform-input.ts`, a `number` input with `inputStructure: 'tree'` and
 that value gives `default: null`, and `TreeBuilder.fromInputParams` returns `[]`: the value never
-reaches the solve. Check what the UI sends for tree inputs before calling it an app bug. Fix:
+reaches the solve. No app code sends this shape today, so it only bites direct `processInput`
+callers. Fix:
 `if (Array.isArray(input.default) || isDataTreeDefault(input.default)) return { schema: input };`.
 
 **D6 — Step size inferred four different ways.** "Count decimals from `String(x)`" exists at
@@ -127,8 +128,8 @@ No runtime effect. Evidence for each is a `git ls-files` / `rg` miss.
   `globals`, `typescript-eslint` (only `packages/config/eslint.config.js` imports them, resolved
   from the root), `lint-staged` (run from the root), `prettier-plugin-svelte`,
   `prettier-plugin-tailwindcss`, `svelte` (0 `.svelte` files), `typedoc-plugin-extras` (none of
-  its options is set). Optional: `eslint`, `prettier`, `vite` (only satisfy `@selvajs/config`
-  peers; mark those peers optional instead).
+  its options is set), and `eslint`, `prettier`, `vite` (they only satisfy `@selvajs/config`
+  peers; mark those peers optional).
 - **`rhino3dm` → devDependencies.** Only `import type` uses it (`rhino-decoder.ts:1`); nothing in
   `dist` references it. Consumers stop installing 6.4 MB. A consumer that relied on the
   transitive install must add it.
@@ -141,11 +142,11 @@ No runtime effect. Evidence for each is a `git ls-files` / `rg` miss.
 - **Scripts to delete:** `bench` (no bench files), `lint:fix` (root passes `--fix`), `format`,
   `format:check`, `test:seams:live` and `tests/contract/server-contract.live.test.ts` (it runs
   `contract:check` with a tautological marker test), `test:stats:live` (skips without
-  `COMPUTE_LIVE_URL`). Optional: `test:seams`, `build-docs`, and `build: tsdown` without the
+  `COMPUTE_LIVE_URL`), `test:seams`, `build-docs`. `build` becomes plain `tsdown`, without the
   duplicate type-check.
 - **`scripts/make-demo-hdr.mjs`** writes `packages/compute/examples/baseHDR.hdr`, which doesn't
   exist; its output matches `packages/visualization/examples/baseHDR.hdr` byte for byte. `git mv`
-  it to `packages/visualization/scripts/` (the relative path then resolves) or delete it.
+  it to `packages/visualization/scripts/` (the relative path then resolves).
 - **`turbo.json`:** `type-check` inputs miss `tests/**` (compute's tsconfig includes it); `test`
   inputs miss `scripts/**` (`resolve-ref.test.ts` imports one).
 - **ESLint:** import `@selvajs/config/eslint` instead of `../config/eslint.config.js`; delete the
@@ -244,7 +245,7 @@ Paths under `src/core/`.
 **`compute-fetch/request.ts`** — D3; unexport `isLocalhost` and `DEFAULT_API_KEY_HEADER` (used
 only here).
 
-**`compute-fetch/signal.ts`** — optional: drop the fallbacks for runtimes without
+**`compute-fetch/signal.ts`** — drop the fallbacks for runtimes without
 `AbortSignal.timeout` (`:26-29, :42-46`, and `handle-files.ts:226-229`); `engines` is `node >= 24`
 and only Safari < 16 lacks it. The fallback tests in `compose-signal.test.ts:13-60` go with them.
 That test file's header says the code uses `AbortSignal.any`; it deliberately doesn't.
@@ -409,8 +410,8 @@ rejected scalars, not empty values). This is internal, so not an API rename.
 - `decodedJsonCache` (`:100-120`) never hits for the one in-repo consumer
   (`packages/solve/src/client/compute-fetch-solve-fn.ts` reads each output once via
   `getValue({ byId })`). It costs a WeakMap write per item and makes parsed objects shared across
-  reads, which is why two docs warn about mutation. Deleting it changes object identity across
-  repeated reads only. See [Open decisions](#open-decisions).
+  reads, which is why two docs warn about mutation. Delete it and both warnings; repeated reads
+  of one response then return fresh objects. Note that in the major's changeset.
 - `EXCLUDED_TYPES` is a one-entry array; the same item filter is written twice.
 
 **`io/output/rhino-decoder.ts`** (260 → ~140) — `decodeRhinoObject`, `decodeDeepArray`,
@@ -449,7 +450,7 @@ timeoutMs)` plus `tryParseJson`. Keep `getVersion`'s non-JSON fallback, JSON `nu
 - `process-inputs.characterization.test.ts:4-9` pins behaviour for an "upcoming" refactor that has
   shipped and points at a `CONTEXT.md` section that doesn't exist.
 - `data-tree.test.ts:11, 53` say they mirror README examples that this cleanup deletes.
-- Optional: `grasshopper-client.e2e.test.ts` → `*.integration.test.ts` ("e2e" means Playwright
+- Rename `grasshopper-client.e2e.test.ts` → `*.integration.test.ts` ("e2e" means Playwright
   elsewhere in the repo).
 
 ## Docs
@@ -463,7 +464,7 @@ timeoutMs)` plus `tryParseJson`. Keep `getVersion`'s non-JSON fallback, JSON `nu
 | `src/grasshopper/README.md`           | 131   | Delete. Its one useful fact (the error contract) moves to `README.md`.                                                                                                                                                                                                                              |
 | `src/grasshopper/data-tree/README.md` | 78    | Delete. Its two gotchas move to `README.md`.                                                                                                                                                                                                                                                        |
 | `src/grasshopper/io/input/README.md`  | 164   | Move to `docs/contributing/compute-contributing.md` § "Adding an input param type", ~50 lines, plus the missing step "export the new type from `grasshopper/index.ts`". `STRUCTURE.md` puts package developer notes in `docs/contributing/`.                                                        |
-| `examples/simple_example.ts`          | 138   | See [Open decisions](#open-decisions).                                                                                                                                                                                                                                                              |
+| `examples/simple_example.ts`          | 138   | Keep. Apply D8, load the `.gh` with `readFile`, and add `examples/` to type-check and lint.                                                                                                                                                                                                         |
 
 README details beyond D8: delete the TypeScript-version badge (nothing enforces it), the
 duplicated "behind your own queue" paragraph (`:29-31`), the "every solve goes through a
@@ -472,7 +473,9 @@ third-party proxy timeout numbers, and "code adapted from McNeel is marked" (not
 
 ## Public API
 
-### Additive (a minor)
+Additive and breaking changes ship together in one major.
+
+### Additive
 
 - **`scheduler.solveDetailed()`** resolving `{ response, fromCache, definitionReuploaded,
 durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a per-call
@@ -489,9 +492,11 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
   `retry: { attempts: 0 }`, set to stop solve retries, also cuts `create()` to one probe.
 - **Missing exports:** `ColorInputType` (member of the exported `InputParam` union),
   `InputParseError` (in `GrasshopperParsedIO.parseErrors`), plus D7's `disposeRhinoObjects`,
-  `isRhinoDecodeError`, `RhinoDecodeError`. Optionally `ServerVersion` / `ServerStats` interfaces.
+  `isRhinoDecodeError`, `RhinoDecodeError`, and the `ServerVersion` / `ServerStats` interfaces.
+- **`TreeBuilder.getTree(trees, paramName)`** returning `Map<path, DataTreeValue[]>`, the whole
+  Grasshopper tree with branch paths (`'{0;1}'` → items), from a solve result.
 
-### Breaking (one major, after checking Consumer A and B)
+### Breaking
 
 - `GrasshopperResponseProcessor`'s `debug` parameter: never read. One in-repo caller passes
   `false` (`packages/solve/src/client/compute-fetch-solve-fn.ts:183`).
@@ -501,10 +506,12 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
 - `TreeBuilder.replaceTreeValue` / `getTreeValue` lose the `TreeBuilder[]` mode. The two modes
   disagree: builders flatten every branch, `DataTree[]` reads only the first; an empty
   `TreeBuilder[]` returns `DataTree`s typed as builders; `DataTree[]` matches only PascalCase
-  `ParamName`. No consumer outside compute. Decide whether `getTreeValue` should read every branch
-  (behaviour change) or keep first-branch reads with a correct doc.
-- Remove `TreeBuilder.appendSingle`, `getInnerTree`, `fromInputParam` (no caller anywhere).
-  Optionally `getPaths` / `getPath` (tests and README only).
+  `ParamName`. No consumer outside compute.
+- `getTreeValue` becomes the single-branch convenience over `getTree`: it returns the branch's
+  value (unwrapped when it holds one item) and throws when the param has more than one branch,
+  naming `getTree`. Today it silently returns only the first branch.
+- Remove `TreeBuilder.appendSingle`, `getInnerTree`, `fromInputParam` (no caller anywhere), and
+  `getPaths` / `getPath` (tests and README only).
 - Remove from `/core`: `getResponseWireSize`, `setResponseWireSize` (internal side channel; the
   setter lets a consumer corrupt the scheduler's byte budget).
 - Remove from `/grasshopper`: `OutputType` (unused even inside the package),
@@ -531,7 +538,9 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
 - **`CLAUDE.md`** compute section: the root entry exports nothing (it says "utilities and types");
   errors are one `ComputeError` class with a typed `code` (it says "discriminated unions"); the
   solve session lives in `@selvajs/solve/client` (it says visualization). The "pnpm lint, NOT via
-  turbo" note is stale too: root `lint` is `turbo run lint`.
+  turbo" note is stale too: root `lint` is `turbo run lint`. In the visualization section,
+  replace "The solve session used to be a fifth layer here; it now lives in…" with a plain
+  statement of where it lives.
 - **`packages/solve/src/server/transform-input.ts`**: `generic` inputs become `Geometry` with a
   null default and never reach a solve. Its comment at `:31-35` says arrays are rejected as
   malformed, which stopped being true.
@@ -543,14 +552,23 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
   (`extractMeshesFromResponse`, `getValueByParamId`); `0004…:157` has a version literal.
 - **`packages/ui/src/lib/utils/file-download.ts:27-30`** hand-rolls the base64 decode
   `decodeBase64ToBinary` already provides.
-- **`packages/website/src/lib/architecture.ts:519`** writes the cache key as `md5:…`; the server
-  and docs say `md5_…` (low confidence).
+- **`packages/website/src/lib/architecture.ts:524`** and
+  **`routes/architecture/SolveWalkthrough.svelte:40`** write the cache key as `md5:…`; Rhino.Compute
+  returns `md5_…` (see `solve-cachekey.test.ts`).
 
-## Open decisions
+## Before release
 
-1. Do the additive public-API changes now, and is one major acceptable for the removals? Checking
-   Consumer A and B has to happen outside this repo.
-2. `examples/simple_example.ts`: fix it, add `examples/` to the type-check and lint, and load the
-   `.gh` with `readFile`; or delete it and the README link.
-3. Remove `decodedJsonCache` (repeated reads of one response stop returning the same object)?
-4. Correct the three wrong claims in `CLAUDE.md`'s compute section?
+- Check Consumer A and Consumer B against the breaking list. That check happens outside this repo.
+- The main downstream app imports only `/core` and `/grasshopper`, never the root. Two items on
+  the breaking list hit it:
+  - It constructs `new GrasshopperResponseProcessor(solved, false)` and passes `processor.debug`
+    on to `getThreeObjectsFromComputeResponse`. Removing the parameter must also remove the
+    `debug` property, so that call site changes.
+  - It imports `extractFilesFromComputeResponse` and `type FileData` from `/grasshopper`; it
+    moves to `/core`. Keep `extractFilesFromComputeResponse` exported from `/core`: it is used.
+- It pins `@selvajs/compute` exactly and overrides every engine package's copy to match, so
+  `@selvajs/solve`, `server`, `ui` and `visualization` must ship releases built against the
+  major together with it.
+- It solves through `SolveEngine`, so replacing `processInput` in `transform-input.ts` with
+  `TreeBuilder.fromValues` changes what its solves send: values compute rejects stop reaching
+  the tree. Run its solve e2e suite against the release.
