@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, expectTypeOf } from 'vitest';
 
-import type { DataTree, InnerTreeData, GrasshopperComputeResponse, OutputType } from '../types';
+import type { DataTree, InnerTreeData, GrasshopperComputeResponse } from '../types';
 
 describe('DataTree casing tolerance', () => {
 	it('accepts PascalCase-only trees (stock mcneel servers / request shape)', () => {
@@ -55,21 +55,5 @@ describe('GrasshopperComputeResponse honesty', () => {
 			values: []
 		};
 		expect(minimal.values).toEqual([]);
-	});
-});
-
-describe('OutputType keeps its literals', () => {
-	it('still accepts arbitrary server type names', () => {
-		const custom: OutputType = 'My.Plugin.CustomGoo';
-		expect(custom).toBe('My.Plugin.CustomGoo');
-	});
-
-	it('does not collapse to string — literals survive Extract/narrowing', () => {
-		// With the old trailing `| string` the union eagerly collapsed to
-		// `string`, so Extract over a known literal produced `never`.
-		expectTypeOf<
-			Extract<OutputType, 'Rhino.Geometry.Mesh'>
-		>().toEqualTypeOf<'Rhino.Geometry.Mesh'>();
-		expectTypeOf<Extract<OutputType, 'System.String'>>().toEqualTypeOf<'System.String'>();
 	});
 });

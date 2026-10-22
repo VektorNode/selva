@@ -2,15 +2,16 @@
  * Tests for `runSolvePipeline` — the transport-agnostic solve core (K3).
  *
  * `@selvajs/compute` is mocked so the pipeline runs without a live compute
- * server: `TreeBuilder.fromInputParams` returns a marker tree and the scheduler
- * is a stub whose `solve` we script per test (resolve a response, throw an
+ * server: `TreeBuilder.fromValues` returns a marker tree and the scheduler
+ * is a stub whose `solveDetailed` we script per test (resolve a response, throw an
  * AbortError, etc.). That isolates the pipeline's own behavior — outcome
  * classification, size cap, gzip, and the Server-Timing / version envelope.
  */
 
 import { describe, it, expect, vi } from 'vitest';
 import { gunzipSync } from 'node:zlib';
-import type { GrasshopperClient, InputParam, SolveScheduler } from '@selvajs/compute/grasshopper';
+import type { GrasshopperClient, SolveScheduler } from '@selvajs/compute/grasshopper';
+import type { ServerTiming } from '@selvajs/compute/core';
 
 // vi.mock factories are hoisted above module top-level, so ComputeError is
 // declared INSIDE this one. The pipeline classifies shed outcomes with
@@ -19,9 +20,8 @@ import type { GrasshopperClient, InputParam, SolveScheduler } from '@selvajs/com
 vi.mock('@selvajs/compute/grasshopper', () => {
 	return {
 		TreeBuilder: {
-			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
+			fromValues: (entries: unknown[]) => ({ __tree: true, count: entries.length })
 		},
-		processInput: (raw: InputParam) => raw,
 		stableStringify: (value: unknown) => JSON.stringify(value)
 	};
 });
@@ -87,16 +87,22 @@ import {
 type SolveStub = (
 	def: string | Uint8Array,
 	tree: unknown,
-	opts: { signal?: AbortSignal }
+	opts: { signal?: AbortSignal; onServerTiming?: (timing: ServerTiming) => void }
 ) => Promise<Record<string, unknown>>;
 
-/** A CachedClient stub whose scheduler.solve is scripted per test. */
-function fakeClient(solve: SolveStub): CachedClient {
+/** A CachedClient stub whose scheduler.solveDetailed resolves `solve`'s response with `verdict`. */
+function fakeClient(
+	solve: SolveStub,
+	verdict: { fromCache: boolean; definitionReuploaded?: boolean } = { fromCache: false }
+): CachedClient {
+	const solveDetailed = async (...args: Parameters<SolveStub>) => ({
+		response: await solve(...args),
+		durationMs: 0,
+		...verdict
+	});
 	return {
 		client: {} as GrasshopperClient,
-		scheduler: { solve } as unknown as SolveScheduler,
-		rhinoTiming: { last: null, seq: 0 },
-		solveMeta: { last: null, seq: 0 }
+		scheduler: { solveDetailed } as unknown as SolveScheduler
 	};
 }
 
@@ -496,16 +502,9 @@ describe('runSolvePipeline — Server-Timing', () => {
 		expect(st).toContain('p_client;dur=3.1');
 	});
 
-	it('splits solve into rhino_* + compute_link when the client reported server timing', async () => {
-		// The real callbacks fire DURING the solve: onServerTiming per compute
-		// call, onSettle per settle — each bumps its seq. Mimic both so the
-		// pipeline's attribution guard (exactly one write since the snapshot,
-		// settle not fromCache) sees this request's own telemetry.
-		const client: CachedClient = fakeClient(async () => {
-			client.rhinoTiming.seq += 1;
-			client.rhinoTiming.last = { decode: 5, solve: 20, encode: 3 };
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: false, definitionReuploaded: false };
+	it('splits solve into rhino_* + compute_link when the call reported server timing', async () => {
+		const client = fakeClient(async (_d, _t, opts) => {
+			opts.onServerTiming?.({ decode: 5, solve: 20, encode: 3, raw: '' });
 			return { errors: [], warnings: [] };
 		});
 		const outcome = await runSolvePipeline(baseArgs({ client }));
@@ -519,10 +518,9 @@ describe('runSolvePipeline — Server-Timing', () => {
 	});
 
 	it('surfaces selva_cache + def_reupload verdicts as 0/1 flags', async () => {
-		const client: CachedClient = fakeClient(async () => {
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: true, definitionReuploaded: false };
-			return { errors: [], warnings: [] };
+		const client = fakeClient(async () => ({ errors: [], warnings: [] }), {
+			fromCache: true,
+			definitionReuploaded: false
 		});
 		const outcome = await runSolvePipeline(baseArgs({ client }));
 		expect(outcome.kind).toBe('ok');
@@ -532,44 +530,39 @@ describe('runSolvePipeline — Server-Timing', () => {
 		expect(st).toContain('def_reupload;dur=0');
 	});
 
-	it('does not attribute stale telemetry a previous request left on the warm client', async () => {
-		// The holders are shared per-server. Data written before this solve's
-		// snapshot (seq unchanged during the solve) must not leak into this
-		// request's Server-Timing.
-		const client = fakeClient(async () => ({ errors: [], warnings: [] }));
-		client.rhinoTiming = { last: { decode: 99, solve: 99, encode: 99 }, seq: 3 };
-		client.solveMeta = { last: { fromCache: true }, seq: 5 };
-		const outcome = await runSolvePipeline(baseArgs({ client }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.headers['Server-Timing']).not.toContain('rhino_decode');
-		expect(outcome.envelope.headers['Server-Timing']).not.toContain('selva_cache');
-	});
-
-	it('drops telemetry when a concurrent request also settled in the window (audit B6)', async () => {
-		// With the scheduler's maxConcurrent > 1 two solves can interleave. More than one
-		// settle since this request's snapshot makes the shared slots ambiguous —
-		// the pipeline must omit the segments rather than report another
-		// request's cache verdict / rhino timing as ours.
-		const client: CachedClient = fakeClient(async () => {
-			// Our own solve's callbacks…
-			client.rhinoTiming.seq += 1;
-			client.rhinoTiming.last = { decode: 5, solve: 20, encode: 3 };
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: false, definitionReuploaded: false };
-			// …then a concurrent request settles before we read.
-			client.rhinoTiming.seq += 1;
-			client.rhinoTiming.last = { decode: 1, solve: 1, encode: 1 };
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: true };
-			return { errors: [], warnings: [] };
-		});
-		const outcome = await runSolvePipeline(baseArgs({ client }));
+	it('omits def_reupload when reuse is off or the definition is not reusable', async () => {
+		const outcome = await runSolvePipeline(baseArgs());
 		expect(outcome.kind).toBe('ok');
 		if (outcome.kind !== 'ok') return;
 		const st = outcome.envelope.headers['Server-Timing'];
-		expect(st).not.toContain('selva_cache');
+		expect(st).toContain('selva_cache;dur=0');
+		expect(st).not.toContain('def_reupload');
 		expect(st).not.toContain('rhino_decode');
+	});
+
+	it('keeps overlapping solves on one warm client apart', async () => {
+		// Each call reports through its own callback, so a concurrent solve on the same
+		// client can't leak its timing or verdict into this request's Server-Timing.
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		const timings = [
+			{ decode: 5, solve: 20, encode: 3, raw: '' },
+			{ decode: 1, solve: 1, encode: 1, raw: '' }
+		];
+		let n = 0;
+		const client = fakeClient(async (_d, _t, opts) => {
+			const timing = timings[n++];
+			await gate;
+			opts.onServerTiming?.(timing);
+			return { errors: [], warnings: [] };
+		});
+		const a = runSolvePipeline(baseArgs({ client }));
+		const b = runSolvePipeline(baseArgs({ client }));
+		release();
+		const [outA, outB] = await Promise.all([a, b]);
+		if (outA.kind !== 'ok' || outB.kind !== 'ok') throw new Error('expected ok');
+		expect(outA.envelope.headers['Server-Timing']).toContain('rhino_solve;dur=20.0');
+		expect(outB.envelope.headers['Server-Timing']).toContain('rhino_solve;dur=1.0');
 	});
 
 	it('emits def_bytes=skipped when the byteRefOutcome shows load() never ran (pointer solve)', async () => {
@@ -615,24 +608,6 @@ describe('runSolvePipeline — Server-Timing', () => {
 		expect(outcome.kind).toBe('ok');
 		if (outcome.kind !== 'ok') return;
 		expect(outcome.envelope.headers['Server-Timing']).not.toContain('def_bytes');
-	});
-
-	it('never attributes rhino timing to a Selva-cache hit (no compute call of ours)', async () => {
-		// Our request was served from the in-process cache while a concurrent
-		// request's compute call produced the only rhino timing in the window.
-		const client: CachedClient = fakeClient(async () => {
-			client.rhinoTiming.seq += 1; // the OTHER request's compute call
-			client.rhinoTiming.last = { decode: 7, solve: 70, encode: 7 };
-			client.solveMeta.seq += 1; // our own settle — a cache hit
-			client.solveMeta.last = { fromCache: true };
-			return { errors: [], warnings: [] };
-		});
-		const outcome = await runSolvePipeline(baseArgs({ client }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		const st = outcome.envelope.headers['Server-Timing'];
-		expect(st).toContain('selva_cache;dur=1');
-		expect(st).not.toContain('rhino_decode');
 	});
 });
 

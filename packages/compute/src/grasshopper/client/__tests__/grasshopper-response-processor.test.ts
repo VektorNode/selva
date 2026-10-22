@@ -101,9 +101,4 @@ describe('GrasshopperResponseProcessor — renderer hand-off', () => {
 
 		expect(proc.response).toBe(res);
 	});
-
-	it('exposes the debug flag it was constructed with', () => {
-		expect(new GrasshopperResponseProcessor(response(param('m', []))).debug).toBe(false);
-		expect(new GrasshopperResponseProcessor(response(param('m', [])), true).debug).toBe(true);
-	});
 });

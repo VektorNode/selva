@@ -143,7 +143,7 @@ async function materializeDefinition(definition: SolveDefinition): Promise<strin
 			ErrorCodes.INVALID_INPUT,
 			{
 				context: { definitionKey: definition.key },
-				originalError: error instanceof Error ? error : new Error(String(error))
+				originalError: error
 			}
 		);
 	}

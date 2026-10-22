@@ -10,7 +10,6 @@
  */
 
 export { fetchCompute } from './compute-fetch/compute-fetch';
-export { getResponseWireSize, setResponseWireSize } from './compute-fetch/wire-size';
 
 export { ComputeError, ErrorCodes } from './errors';
 export type { ErrorCode } from './errors';

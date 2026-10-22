@@ -1,8 +1,21 @@
 import { DataTreeDefault, DataTreePath, InputParam, DataTree, InnerTreeData } from '../types';
 import { ComputeError, ErrorCodes, getLogger } from '@/core';
+import { readField } from '@/core/utils/read-field';
+import { booleanTransformer, numericTransformer } from '../io/input/transformers';
 import { isDataTreeDefault, TREE_PATH_RE } from './tree-path';
 
 export type DataTreeValue = string | number | boolean | object | null;
+
+/** One input's value for {@link TreeBuilder.fromValues}. */
+export interface TreeValueEntry {
+	paramName: string;
+	/** Matched case-insensitively. */
+	paramType: string;
+	/** A scalar, an array (branch `{0}`), or a branch-path map like `{ '{0;1}': [1, 2] }`. */
+	value: unknown;
+	minimum?: number | null;
+	maximum?: number | null;
+}
 
 /** A request item. Unlike a response `DataItem`, Rhino Compute takes boolean/number primitives here. */
 interface ComputeDataItem {
@@ -49,10 +62,6 @@ export class TreeBuilder {
 		return this;
 	}
 
-	public appendSingle(path: number[], item: DataTreeValue): this {
-		return this.append(path, [item]);
-	}
-
 	/** Replace the tree with a branch-path map like `{ '{0;1}': [1, 2] }`. */
 	public fromDataTreeDefault(treeData: DataTreeDefault): this {
 		this.innerTree = {} as ComputeInnerTreeData;
@@ -87,18 +96,6 @@ export class TreeBuilder {
 		return result;
 	}
 
-	public getPaths(): DataTreePath[] {
-		return Object.keys(this.innerTree) as DataTreePath[];
-	}
-
-	/** The values at `path`, or `undefined` when the branch doesn't exist. */
-	public getPath(path: number[]): DataTreeValue[] | undefined {
-		const pathKey = TreeBuilder.formatPathString(path);
-		const items = this.innerTree[pathKey];
-		if (!items) return undefined;
-		return items.map((item: ComputeDataItem) => TreeBuilder.deserializeValue(item.data));
-	}
-
 	/** The tree in the shape a solve request sends. */
 	public toComputeFormat(): DataTree {
 		return {
@@ -106,10 +103,6 @@ export class TreeBuilder {
 			// `DataTree` types the response item shape; a request item is looser.
 			InnerTree: this.innerTree as unknown as InnerTreeData
 		};
-	}
-
-	public getInnerTree(): ComputeInnerTreeData {
-		return this.innerTree;
 	}
 
 	public getParamName(): string {
@@ -151,73 +144,86 @@ export class TreeBuilder {
 			});
 	}
 
-	public static fromInputParam(input: InputParam): DataTree | undefined {
-		if (!TreeBuilder.hasValidValue(input.default)) return undefined;
+	/**
+	 * One tree per entry, coercing UI values the way Grasshopper reads them. Number and Integer
+	 * items go through the numeric coercion (Integer rounds) and are clamped to
+	 * `minimum`/`maximum`; Boolean items also accept `'true'`/`'false'`; every other type passes
+	 * through. An item that fails coercion is dropped with a warning. An entry left with no items
+	 * is omitted, so Grasshopper uses its own value.
+	 */
+	public static fromValues(entries: TreeValueEntry[]): DataTree[] {
+		const trees: DataTree[] = [];
 
-		const trees = TreeBuilder.fromInputParams([input]);
-		return trees[0];
+		for (const entry of entries) {
+			const tree = new TreeBuilder(entry.paramName);
+			const coerce = TreeBuilder.itemCoercer(entry);
+
+			for (const [path, items] of TreeBuilder.branchesOf(entry.value)) {
+				const kept: DataTreeValue[] = [];
+				for (const item of items) {
+					if (item === null || item === undefined) continue;
+					const coerced = coerce(item);
+					if (coerced === null) {
+						getLogger().warn(
+							`${entry.paramName}: dropped an item that is not a valid ${entry.paramType}`
+						);
+					} else {
+						kept.push(coerced);
+					}
+				}
+				if (kept.length > 0) tree.append(path, kept);
+			}
+
+			if (Object.keys(tree.innerTree).length > 0) trees.push(tree.toComputeFormat());
+		}
+
+		return trees;
+	}
+
+	private static branchesOf(value: unknown): [number[], unknown[]][] {
+		if (!TreeBuilder.hasValidValue(value)) return [];
+		if (isDataTreeDefault(value)) {
+			return Object.entries(value).map(([path, items]) => [
+				TreeBuilder.parsePathString(path),
+				items as unknown[]
+			]);
+		}
+		return [[[0], Array.isArray(value) ? value : [value]]];
+	}
+
+	/** `null` means the item was rejected. */
+	private static itemCoercer(entry: TreeValueEntry): (item: unknown) => DataTreeValue | null {
+		const { paramName, minimum, maximum } = entry;
+		const paramType = entry.paramType.toLowerCase();
+
+		if (paramType === 'number' || paramType === 'integer') {
+			return (item) => {
+				const n = numericTransformer(item);
+				if (n === null) return null;
+				const value = paramType === 'integer' ? Math.round(n) : n;
+				return TreeBuilder.clampValue(value, minimum, maximum, paramName);
+			};
+		}
+		if (paramType === 'boolean') return booleanTransformer;
+		return (item) => item as DataTreeValue;
 	}
 
 	/**
-	 * Set or add `paramName`'s tree to `newValue` (a scalar, an array, or a
-	 * branch-path map), in an array of builders or of compiled `DataTree`s.
-	 *
-	 * Copy-on-write: returns a new array and never mutates the caller's, so assign
-	 * the result.
-	 *
-	 * @example
-	 * ```ts
-	 * // With TreeBuilder instances (high-level)
-	 * let trees = [new TreeBuilder('X'), new TreeBuilder('Y')];
-	 * trees = TreeBuilder.replaceTreeValue(trees, 'X', 42);
-	 * const result = await client.solve(definitionUrl,
-	 *   trees.map(t => t.toComputeFormat())
-	 * );
-	 * ```
-	 *
-	 * @example
-	 * ```ts
-	 * // With InnerTree format (low-level, from API)
-	 * let trees = TreeBuilder.fromInputParams(io.inputs);
-	 * trees = TreeBuilder.replaceTreeValue(trees, 'X', 42);
-	 * trees = TreeBuilder.replaceTreeValue(trees, 'Y', [1, 2, 3]);
-	 * ```
+	 * Set or add `paramName`'s tree to `newValue`: a scalar, an array (branch `{0}`), or a
+	 * branch-path map. Copy-on-write: returns a new array and leaves the caller's untouched, so
+	 * assign the result.
 	 */
-	public static replaceTreeValue(
-		trees: TreeBuilder[],
-		paramName: string,
-		newValue: DataTreeValue
-	): TreeBuilder[];
 	public static replaceTreeValue(
 		trees: DataTree[],
 		paramName: string,
 		newValue: DataTreeValue
-	): DataTree[];
-	public static replaceTreeValue(
-		trees: TreeBuilder[] | DataTree[],
-		paramName: string,
-		newValue: DataTreeValue
-	): TreeBuilder[] | DataTree[] {
-		const isBuilderArray = trees.length > 0 && trees[0] instanceof TreeBuilder;
-		const builder = TreeBuilder.buildFromValue(paramName, newValue);
-
-		if (isBuilderArray) {
-			// Copy-on-write: never mutate the caller's array (e.g. pristine
-			// defaults from fromInputParams must survive slider updates).
-			const builders = (trees as TreeBuilder[]).slice();
-			const idx = builders.findIndex((t) => t.getParamName() === paramName);
-			if (idx !== -1) builders[idx] = builder;
-			else builders.push(builder);
-			return builders;
-		}
-
-		// An empty array lands here too, so it gets a `DataTree` back, not a builder.
-		const dataTrees = (trees as DataTree[]).slice();
-		const compiled = builder.toComputeFormat();
-		const idx = dataTrees.findIndex((t) => t.ParamName === paramName);
-		if (idx !== -1) dataTrees[idx] = compiled;
-		else dataTrees.push(compiled);
-		return dataTrees;
+	): DataTree[] {
+		const compiled = TreeBuilder.buildFromValue(paramName, newValue).toComputeFormat();
+		const result = trees.slice();
+		const idx = result.findIndex((t) => TreeBuilder.paramNameOf(t) === paramName);
+		if (idx === -1) result.push(compiled);
+		else result[idx] = compiled;
+		return result;
 	}
 
 	private static buildFromValue(paramName: string, value: DataTreeValue): TreeBuilder {
@@ -231,77 +237,58 @@ export class TreeBuilder {
 	}
 
 	/**
-	 * Read `paramName`'s value from an array of builders or of compiled
-	 * `DataTree`s (e.g. a solve response's `values`). One value comes back
-	 * unwrapped (`5`, not `[5]`), several as an array, a missing param as `null`.
-	 * A builder reads every branch; a `DataTree` only its first branch.
-	 *
-	 * @example
-	 * ```ts
-	 * // With TreeBuilder instances
-	 * const trees = [new TreeBuilder('X'), new TreeBuilder('Y')];
-	 * trees[0].appendFlat(42);
-	 * const x = TreeBuilder.getTreeValue(trees, 'X'); // Returns 42
-	 * ```
-	 *
-	 * @example
-	 * ```ts
-	 * // With InnerTree from compute results
-	 * const result = await client.solve(definitionUrl, inputs);
-	 * const x = TreeBuilder.getTreeValue(result.values, 'X'); // Returns 42 (not [42])
-	 * const points = TreeBuilder.getTreeValue(result.values, 'Points'); // Returns [point1, point2, ...]
-	 * ```
+	 * `paramName`'s whole tree from a solve result's `values`, keyed by branch path (`'{0;1}'`).
+	 * `null` when no tree has that param, an empty `Map` when it has no branches. An item without
+	 * `data` reads as `null` in place, so indices don't shift.
 	 */
-	public static getTreeValue(trees: TreeBuilder[], paramName: string): DataTreeValue | null;
-	public static getTreeValue(trees: DataTree[], paramName: string): DataTreeValue | null;
-	public static getTreeValue(
-		trees: TreeBuilder[] | DataTree[],
+	public static getTree(
+		trees: DataTree[],
 		paramName: string
-	): DataTreeValue | null {
-		const isBuilderArray = trees.length > 0 && trees[0] instanceof TreeBuilder;
+	): Map<DataTreePath, DataTreeValue[]> | null {
+		const tree = trees.find((t) => TreeBuilder.paramNameOf(t) === paramName);
+		if (!tree) return null;
 
-		const values = isBuilderArray
-			? TreeBuilder.readFromBuilders(trees as TreeBuilder[], paramName)
-			: TreeBuilder.readFromDataTrees(trees as DataTree[], paramName);
+		const branches = new Map<DataTreePath, DataTreeValue[]>();
+		const inner = readField(tree, 'InnerTree');
+		if (!inner || typeof inner !== 'object') return branches;
 
-		if (values === null) return null;
-		if (values.length === 0) return null;
-		if (values.length === 1) return values[0];
-		return values;
+		for (const [path, items] of Object.entries(inner)) {
+			if (!Array.isArray(items)) continue;
+			branches.set(
+				path as DataTreePath,
+				items.map((item) =>
+					item?.data !== undefined ? TreeBuilder.deserializeValue(item.data) : null
+				)
+			);
+		}
+		return branches;
 	}
 
-	private static readFromBuilders(
-		builders: TreeBuilder[],
-		paramName: string
-	): DataTreeValue[] | null {
-		const tree = builders.find((t) => t.getParamName() === paramName);
-		return tree ? tree.flatten() : null;
-	}
-
-	private static readFromDataTrees(
-		dataTrees: DataTree[],
-		paramName: string
-	): DataTreeValue[] | null {
-		const tree = dataTrees.find((t) => t.ParamName === paramName);
-		if (!tree?.InnerTree) return null;
-
-		const firstKey = Object.keys(tree.InnerTree)[0];
-		if (!firstKey) return null;
-
-		// @ts-expect-error - Dynamic key access on innerTree
-		const items = tree.InnerTree[firstKey];
-
-		if (Array.isArray(items)) {
-			// Preserve nulls (legitimate GH items) so indices don't shift; an
-			// item without `data` deserializes to null in place. "Param not
-			// found" is signalled only by a missing/empty tree, never by nulls.
-			return items.map((item) =>
-				item?.data !== undefined ? TreeBuilder.deserializeValue(item.data) : null
+	/**
+	 * `paramName`'s value when its tree has a single branch: one item unwrapped (`5`, not `[5]`),
+	 * several as an array. `null` for a missing param or an empty tree.
+	 *
+	 * @throws {ComputeError} `INVALID_INPUT` when the tree has more than one branch; read those
+	 *   with {@link TreeBuilder.getTree}.
+	 */
+	public static getTreeValue(trees: DataTree[], paramName: string): DataTreeValue | null {
+		const tree = TreeBuilder.getTree(trees, paramName);
+		if (!tree || tree.size === 0) return null;
+		if (tree.size > 1) {
+			throw new ComputeError(
+				`"${paramName}" has ${tree.size} branches; read it with TreeBuilder.getTree`,
+				ErrorCodes.INVALID_INPUT,
+				{ context: { paramName, branchCount: tree.size } }
 			);
 		}
 
-		if (items?.data !== undefined) return [TreeBuilder.deserializeValue(items.data)];
-		return items !== undefined ? [items as DataTreeValue] : null;
+		const [items] = tree.values();
+		if (items.length === 0) return null;
+		return items.length === 1 ? items[0] : items;
+	}
+
+	private static paramNameOf(tree: DataTree): unknown {
+		return readField(tree, 'ParamName');
 	}
 
 	/**
@@ -358,8 +345,8 @@ export class TreeBuilder {
 		return String(value);
 	}
 
-	private static deserializeValue(data: string | boolean | number): DataTreeValue {
-		if (typeof data !== 'string') return data;
+	private static deserializeValue(data: unknown): DataTreeValue {
+		if (typeof data !== 'string') return data as DataTreeValue;
 
 		if (data.startsWith('{') || data.startsWith('[')) {
 			try {

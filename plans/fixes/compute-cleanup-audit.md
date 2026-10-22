@@ -1,7 +1,6 @@
 # `@selvajs/compute` cleanup audit
 
-> **Tracked in:** unfiled. Defects (except D7) and the no-API cleanup are done; the
-> [Public API](#public-api) major and `transform-input.ts` remain.
+> **Tracked in:** unfiled. Implemented; what's left is [Before release](#before-release).
 >
 > Five read-only audits of `packages/compute` (core, solve path, IO/data trees/types/stats, docs,
 > config and exports) against the tree on 2026-10-21. That tree included the uncommitted
@@ -483,21 +482,35 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
   `onServerTiming`. Today `packages/solve` recovers the per-solve verdict through a shared
   `onSettle` hook and a sequence counter (`solve-pipeline.ts:162-170, 253-260`,
   `client-cache.ts:47-64`). It drops the data whenever solves overlap, which happens in production
-  because `maxConcurrent` follows the server's child count.
+  because `maxConcurrent` follows the server's child count. `packages/solve` switches to it in the
+  same change and drops `solveMeta` / `rhinoTiming` and their sequence counters. The per-call
+  `onServerTiming` fires only for the call that reached the server, never on a `fromCache` hit.
 - **`TreeBuilder.fromValues(entries)`**: coerce UI values to data trees without `/io` parsing.
   `transform-input.ts` builds a fake IO schema to push values through `processInput`, then patches
   two cases where it drops the default. The root cause is that `valueListParser.parse` throws with
   no `values` map, which `SchemaInput` never carries. The patch also re-ships values compute
-  rejected (`['abc']` for a number reaches the tree as `"abc"`).
+  rejected (`['abc']` for a number reaches the tree as `"abc"`). Shape:
+  `fromValues(entries: { paramName, paramType, value, minimum?, maximum? }[]): DataTree[]`.
+  `paramType` matches case-insensitively. A value is a scalar, an array (branch `{0}`) or a
+  branch-path map. Number/Integer items go through the numeric transformer (Integer rounds) and
+  are clamped; Boolean items through the boolean transformer; every other type, including
+  ValueList, File, Color and generic, passes through. An item a transformer rejects is dropped
+  with a warning; an entry left with no items, or with a `null`/`undefined`/empty value, is
+  omitted, so Grasshopper uses its own value. `transform-input.ts` is replaced by it in the same
+  change, which fixes `generic` inputs too.
 - **A probe option for `GrasshopperClient.create()`** separate from `config.retry`. Today
-  `retry: { attempts: 0 }`, set to stop solve retries, also cuts `create()` to one probe.
+  `retry: { attempts: 0 }`, set to stop solve retries, also cuts `create()` to one probe. Shape:
+  `create(config, { probe?: { attempts?, baseDelayMs?, maxDelayMs? } })`, defaults 2 / 250 / 1000;
+  `config.retry` no longer affects the probe.
 - **Missing exports:** `ColorInputType` (member of the exported `InputParam` union),
   `InputParseError` (in `GrasshopperParsedIO.parseErrors`), plus D7's `disposeRhinoObjects`,
   `isRhinoDecodeError`, `RhinoDecodeError`, and the `ServerVersion` / `ServerStats` interfaces.
 - **`ComputeError` accepts `originalError: unknown`** and normalizes it in the constructor, so the
   eight `e instanceof Error ? e : new Error(String(e))` call sites go.
 - **`TreeBuilder.getTree(trees, paramName)`** returning `Map<path, DataTreeValue[]>`, the whole
-  Grasshopper tree with branch paths (`'{0;1}'` → items), from a solve result.
+  Grasshopper tree with branch paths (`'{0;1}'` → items), from a solve result. Keys are the
+  `DataTreePath` strings Grasshopper uses. A missing param gives `null`; a param with no branches
+  an empty `Map`. `ParamName` and `InnerTree` are read in any casing.
 
 ### Breaking
 
@@ -505,14 +518,16 @@ durationMs }`, with `solve()` as `solveDetailed().then(r => r.response)`, plus a
   `false` (`packages/solve/src/client/compute-fetch-solve-fn.ts:183`).
 - `SolveScheduler` takes one executor (`(definition, tree, cacheKey | null, config)`) instead of
   `SolveExecutor` + `CacheKeyExecutor`. No workspace package constructs it.
-- Fold `'parallel'` into `'queue'`.
+- Fold `'parallel'` into `'queue'`: `SchedulerMode` loses `'parallel'`, and passing it at runtime
+  throws `INVALID_CONFIG` naming `{ mode: 'queue', maxConcurrent: 4 }`.
 - `TreeBuilder.replaceTreeValue` / `getTreeValue` lose the `TreeBuilder[]` mode. The two modes
   disagree: builders flatten every branch, `DataTree[]` reads only the first; an empty
   `TreeBuilder[]` returns `DataTree`s typed as builders; `DataTree[]` matches only PascalCase
   `ParamName`. No consumer outside compute.
 - `getTreeValue` becomes the single-branch convenience over `getTree`: it returns the branch's
   value (unwrapped when it holds one item) and throws when the param has more than one branch,
-  naming `getTree`. Today it silently returns only the first branch.
+  naming `getTree`. A missing param or an empty tree gives `null`. Today it silently returns only
+  the first branch.
 - Remove `TreeBuilder.appendSingle`, `getInnerTree`, `fromInputParam` (no caller anywhere), and
   `getPaths` / `getPath` (tests and README only).
 - Remove `ComputeError.missingValues` / `unknownParamType` (public statics carrying Grasshopper

@@ -198,7 +198,12 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			typeof schema.values !== 'object' ||
 			Object.keys(schema.values).length === 0
 		) {
-			throw ComputeError.missingValues(schema.nickname || 'unnamed', 'ValueList');
+			const inputName = schema.nickname || 'unnamed';
+			throw new ComputeError(
+				`Input "${inputName}" has no values defined (expected ValueList)`,
+				ErrorCodes.INVALID_INPUT,
+				{ context: { inputName, expectedType: 'ValueList' } }
+			);
 		}
 
 		let defaultValue = schema.default as string | undefined;

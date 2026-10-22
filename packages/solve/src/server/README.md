@@ -13,13 +13,13 @@ failures do not throw. The route decides how they become HTTP responses.
 
 ## What is in here
 
-| File                           | What it does                                            |
-| ------------------------------ | ------------------------------------------------------- |
-| `solve-pipeline.ts`            | Runs the full solve pipeline                            |
-| `transform-input.ts`           | Turns one schema input and one value into an input tree |
-| `client-cache.ts`              | Keeps a warm Compute client and scheduler               |
-| `definition-byte-cache.ts`     | Caches `.gh` bytes by version                           |
-| `solve-cache-single-flight.ts` | Shares one solve when many requests are identical       |
+| File                           | What it does                                                      |
+| ------------------------------ | ----------------------------------------------------------------- |
+| `solve-pipeline.ts`            | Runs the full solve pipeline                                      |
+| `transform-input.ts`           | Builds the solve's input tree from schema inputs and their values |
+| `client-cache.ts`              | Keeps a warm Compute client and scheduler                         |
+| `definition-byte-cache.ts`     | Caches `.gh` bytes by version                                     |
+| `solve-cache-single-flight.ts` | Shares one solve when many requests are identical                 |
 
 ## Real-world flow
 

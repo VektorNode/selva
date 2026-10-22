@@ -180,7 +180,7 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 				}
 			);
 		}
-		const processor = new GrasshopperResponseProcessor(solved, false);
+		const processor = new GrasshopperResponseProcessor(solved);
 
 		// The plugin's own verdict when the fork returned one; otherwise recovered from the
 		// markers in Compute's flattened strings (stock server, or a plugin that predates it).

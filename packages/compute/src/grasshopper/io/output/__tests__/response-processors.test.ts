@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getValues, getValue, extractFileData } from '@/grasshopper/io/output/response-processors';
-import { disposeRhinoObjects } from '@/grasshopper/io/output/rhino-decoder';
+import { disposeRhinoObjects } from '@/grasshopper/io/output/rhino-objects';
 import type { DataItem, GrasshopperComputeResponse } from '@/grasshopper/types';
 
 // --- local builders ---------------------------------------------------------
@@ -221,37 +221,18 @@ describe('resilience to missing or alternate-cased response fields', () => {
 	});
 });
 
-// --- memoization --------------------------------------------------------------
+// --- repeated reads -----------------------------------------------------------
 
-describe('parsed-JSON memoization', () => {
-	it('does not re-run JSON.parse on repeated reads of the same response', () => {
-		const res = response(
-			param('o', [item('SomeType', '{"a":1}')]),
-			param('n', [item('System.Int32', '5')])
-		);
+describe('repeated reads of one response', () => {
+	it('return fresh objects, so mutating one read leaves the next untouched', () => {
+		const res = response(param('o', [item('SomeType', '{"a":1}')]));
 
-		const parseSpy = vi.spyOn(JSON, 'parse');
-		try {
-			const first = getValues(res).values;
-			const callsAfterFirst = parseSpy.mock.calls.length;
-			expect(callsAfterFirst).toBeGreaterThan(0);
+		const first = getValues(res).values.o;
+		first.a = 2;
 
-			const second = getValues(res).values;
-			expect(parseSpy.mock.calls.length).toBe(callsAfterFirst); // no re-parse
-			expect(second).toEqual(first);
-
-			// getValue over the same response reuses the memo too.
-			expect(getValue(res, { byName: 'o' })).toEqual({ a: 1 });
-			expect(parseSpy.mock.calls.length).toBe(callsAfterFirst);
-		} finally {
-			parseSpy.mockRestore();
-		}
-	});
-
-	it('a fresh (structurally identical) response is parsed independently', () => {
-		const make = () => response(param('o', [item('SomeType', '{"a":1}')]));
-		expect(getValues(make()).values.o).toEqual({ a: 1 });
-		expect(getValues(make()).values.o).toEqual({ a: 1 });
+		expect(getValues(res).values.o).toEqual({ a: 1 });
+		expect(getValue(res, { byName: 'o' })).toEqual({ a: 1 });
+		expect(getValue(res, { byName: 'o' })).not.toBe(getValue(res, { byName: 'o' }));
 	});
 });
 

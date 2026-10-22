@@ -125,7 +125,7 @@ function classifyFetchError(error: unknown, ctx: AttemptContext): AttemptOutcome
 			ErrorCodes.UNKNOWN_ERROR,
 			{
 				context: ctx.errorContext,
-				originalError: error instanceof Error ? error : new Error(String(error))
+				originalError: error
 			}
 		)
 	};
@@ -162,7 +162,7 @@ export async function fetchCompute<R = unknown>(
 			ErrorCodes.INVALID_INPUT,
 			{
 				context: { endpoint, requestId },
-				originalError: error instanceof Error ? error : new Error(String(error))
+				originalError: error
 			}
 		);
 	}

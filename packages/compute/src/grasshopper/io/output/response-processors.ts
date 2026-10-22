@@ -3,7 +3,8 @@ import type { RhinoModule } from 'rhino3dm';
 import { FileData } from '@/core/files/types';
 import { hasField, readField } from '@/core/utils/read-field';
 import { GrasshopperComputeResponse, DataItem } from '../../types';
-import { decodeRhinoGeometry, disposeRhinoObjects } from './rhino-decoder';
+import { decodeRhinoGeometry } from './rhino-decoder';
+import { disposeRhinoObjects } from './rhino-objects';
 
 export interface ParsedContext {
 	[key: string]: any;
@@ -94,20 +95,6 @@ function decodeBySystemType(raw: unknown, type: string, rhino?: RhinoModule): un
 	}
 }
 
-/**
- * Per-item memo of {@link tryDecodeJSON}, which can run two `JSON.parse` passes
- * over a multi-MB string. Parsed objects are therefore shared across reads of one
- * response; rhino geometry is not (`decodeRhinoGeometry` builds a fresh object).
- */
-const decodedJsonCache = new WeakMap<DataItem, unknown>();
-
-function decodeItemJSON(item: DataItem): unknown {
-	if (decodedJsonCache.has(item)) return decodedJsonCache.get(item);
-	const parsed = tryDecodeJSON(item.data);
-	decodedJsonCache.set(item, parsed);
-	return parsed;
-}
-
 function extractItemValue(
 	item: DataItem,
 	type: string,
@@ -116,7 +103,7 @@ function extractItemValue(
 ): unknown {
 	if (typeof item.data !== 'string') return item.data;
 
-	const raw = parseValues ? decodeItemJSON(item) : item.data;
+	const raw = parseValues ? tryDecodeJSON(item.data) : item.data;
 	if (parseValues && type.includes(FILE_DATA_TYPE)) {
 		return asFileData(raw) ?? raw;
 	}
@@ -184,9 +171,7 @@ function forEachTreeItem(tree: unknown, handler: (item: DataItem) => void) {
  * Read all output values from a Grasshopper Compute response, keyed by parameter
  * name (or ID when `byId`). Duplicate keys aggregate into an array.
  *
- * Parsed (non-geometry) JSON values are memoized per response item: repeated
- * reads of the same response return the same object, so treat them as
- * read-only. Geometry decoded via `rhino` is always fresh; free it with `dispose()`.
+ * Geometry decoded via `rhino` lives on the WASM heap: free it with `dispose()`.
  *
  * @param options.parseValues - Parse complex data types into JS objects (default true).
  * @param options.rhino - Rhino3dm instance for geometry decoding.
@@ -236,7 +221,7 @@ export function extractFileData(response: GrasshopperComputeResponse): FileData[
 		forEachTreeItem(readField(param, 'innerTree'), (item) => {
 			if (!itemType(item).includes(FILE_DATA_TYPE)) return;
 
-			const file = asFileData(decodeItemJSON(item));
+			const file = asFileData(tryDecodeJSON(item.data));
 			if (file) {
 				output.push(file);
 			}
@@ -251,9 +236,8 @@ export function extractFileData(response: GrasshopperComputeResponse): FileData[
  * `byId` matches an item ID. Returns `undefined` if absent, a single value for one
  * match, or an array for several.
  *
- * Parsed non-geometry JSON values are memoized per response item; treat them as
- * read-only. Geometry decoded via `rhino` lives on the WASM heap: free it with
- * `disposeRhinoObjects` once consumed.
+ * Geometry decoded via `rhino` lives on the WASM heap: free it with
+ * {@link disposeRhinoObjects} once consumed.
  *
  * @param parseOptions.parseValues - Parse raw data into formatted values (default true).
  * @param parseOptions.rhino - Rhino3dm instance for geometry decoding.

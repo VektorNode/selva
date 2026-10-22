@@ -6,7 +6,6 @@ export type {
 	DataTreeDefault,
 	InnerTreeData,
 	DataTree,
-	OutputType,
 	DefaultValue,
 	BaseInputType,
 	NumericInputType,

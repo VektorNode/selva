@@ -7,17 +7,15 @@
  */
 
 import { ErrorCodes, ComputeError, type SolveDefinition } from '@selvajs/compute/core';
-import {
-	TreeBuilder,
-	type DataTree,
-	type GrasshopperComputeResponse,
-	type InputParam,
-	type SelvaEventTarget
+import type {
+	DataTree,
+	GrasshopperComputeResponse,
+	SelvaEventTarget
 } from '@selvajs/compute/grasshopper';
 import type { SchemaInput } from '@selvajs/schemas';
 import { gzip, gunzipSync } from 'node:zlib';
 import { promisify } from 'node:util';
-import { transformInputParameter } from './transform-input.js';
+import { buildSolveInputTree } from './transform-input.js';
 import type { CachedClient } from './client-cache.js';
 import type { ByteRefOutcome } from './definition-byte-cache.js';
 
@@ -140,18 +138,6 @@ export type SolveOutcome =
 // Pipeline
 // ============================================================================
 
-/** The transformed input tree exactly as handed to the scheduler; `runSolvePipeline` calls this itself unless the caller supplies {@link SolvePipelineArgs.inputTree}. */
-export function buildSolveInputTree(
-	inputs: PipelineInput[],
-	values: Record<string, unknown>
-): DataTree[] {
-	return TreeBuilder.fromInputParams(
-		inputs
-			.filter((input) => input.paramType)
-			.map((input): InputParam => transformInputParameter(input, values[input.id]))
-	);
-}
-
 export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOutcome> {
 	const { client, signal } = args;
 
@@ -159,23 +145,20 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	const inputTree = args.inputTree ?? buildSolveInputTree(args.inputs, args.values);
 	const treeBuildMs = performance.now() - treeBuildStart;
 
-	// client.solveMeta/rhinoTiming live on the warm client and are written by
-	// every request on this server; with scheduler maxConcurrent > 1, another
-	// request can write them mid-flight. A slot is attributed to THIS request
-	// only if exactly one write happened since this snapshot — for solveMeta
-	// that single settle is necessarily ours, since onSettle fires before
-	// scheduler.solve() resolves. Anything ambiguous is dropped from
-	// Server-Timing rather than misattributed.
-	const settleSeqBefore = client.solveMeta.seq;
-	const rhinoSeqBefore = client.rhinoTiming.seq;
-
+	let rhino: RhinoTiming | null = null;
 	let result: GrasshopperComputeResponse;
+	let settle: CacheVerdict;
 	const solveStart = performance.now();
 	try {
-		result = await client.scheduler.solve(args.definitionSource, inputTree, {
+		const detail = await client.scheduler.solveDetailed(args.definitionSource, inputTree, {
 			signal,
-			selvaevents: args.selvaEvents
+			selvaevents: args.selvaEvents,
+			onServerTiming: (t) => {
+				rhino = { decode: t.decode ?? 0, solve: t.solve ?? 0, encode: t.encode ?? 0 };
+			}
 		});
+		result = detail.response;
+		settle = { fromCache: detail.fromCache, definitionReuploaded: detail.definitionReuploaded };
 	} catch (err) {
 		const durationMs = performance.now() - solveStart;
 		// Abort with the request signal NOT aborted means the scheduler's own
@@ -249,15 +232,6 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	}
 
 	const serverTotalMs = performance.now() - args.loadStartMs;
-
-	// rhino is only meaningful when settle is ours AND it was a real compute call
-	// (a Selva-cache hit never reaches the server), and only unambiguous when
-	// exactly one Server-Timing callback fired in the window.
-	const settle = client.solveMeta.seq === settleSeqBefore + 1 ? client.solveMeta.last : null;
-	const rhino =
-		settle && !settle.fromCache && client.rhinoTiming.seq === rhinoSeqBefore + 1
-			? client.rhinoTiming.last
-			: null;
 
 	const serverTiming = buildServerTiming({
 		defLoadMs: args.defLoadMs,
@@ -360,6 +334,17 @@ export function adaptEnvelopeToEncoding(
 // Server-Timing assembly
 // ============================================================================
 
+interface RhinoTiming {
+	decode: number;
+	solve: number;
+	encode: number;
+}
+
+interface CacheVerdict {
+	fromCache: boolean;
+	definitionReuploaded?: boolean;
+}
+
 interface ServerTimingParts {
 	defLoadMs: number;
 	treeBuildMs: number;
@@ -367,8 +352,8 @@ interface ServerTimingParts {
 	serializeMs: number;
 	gzipMs: number;
 	serverTotalMs: number;
-	rhino: CachedClient['rhinoTiming']['last'];
-	settle: CachedClient['solveMeta']['last'];
+	rhino: RhinoTiming | null;
+	settle: CacheVerdict;
 	byteRefOutcome?: ByteRefOutcome;
 	prepMarks: [string, number][];
 }
@@ -404,11 +389,9 @@ function buildServerTiming(parts: ServerTimingParts): string {
 	}
 
 	const settle = parts.settle;
-	if (settle) {
-		header += `, selva_cache;dur=${settle.fromCache ? 1 : 0}`;
-		if (settle.definitionReuploaded !== undefined) {
-			header += `, def_reupload;dur=${settle.definitionReuploaded ? 1 : 0}`;
-		}
+	header += `, selva_cache;dur=${settle.fromCache ? 1 : 0}`;
+	if (settle.definitionReuploaded !== undefined) {
+		header += `, def_reupload;dur=${settle.definitionReuploaded ? 1 : 0}`;
 	}
 
 	// skipped = scheduler never materialized bytes (pointer-known solve, the

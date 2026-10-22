@@ -1,7 +1,12 @@
 import type { ComputeError } from '@/core/errors';
-import type { RetryPolicy } from '@/core/types';
+import type { RetryPolicy, ServerTiming } from '@/core/types';
 
-import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
+import type {
+	DataTree,
+	GrasshopperComputeResponse,
+	GrasshopperComputeConfig,
+	SelvaEventTarget
+} from '../types';
 import type { SolveDefinition } from '@/core/definition-ref';
 
 /**
@@ -11,9 +16,8 @@ import type { SolveDefinition } from '@/core/definition-ref';
  *   one and aborts the one in flight. For slider scrubs and live UIs.
  * - `queue`: FIFO, every call runs to completion, up to `maxConcurrent` at
  *   once (default 1). For "submit job" flows where every request matters.
- * - `parallel`: the same FIFO queue with `maxConcurrent` defaulting to 4.
  */
-export type SchedulerMode = 'latest-wins' | 'queue' | 'parallel';
+export type SchedulerMode = 'latest-wins' | 'queue';
 
 export interface CacheOptions {
 	/**
@@ -59,7 +63,7 @@ export interface SolveSchedulerOptions {
 	 * excluding the ones already in flight). When the queue is full, a new
 	 * `solve()` is rejected immediately with `code: QUEUE_FULL` (retryable, meant to
 	 * map to HTTP 503 + Retry-After) instead of piling up unbounded. Bounds the
-	 * miss path under load. Only applies to `queue` / `parallel` modes —
+	 * miss path under load. Only applies to `queue` mode —
 	 * `latest-wins` has an intrinsic depth of 1. Default: unbounded.
 	 */
 	maxQueueDepth?: number;
@@ -67,8 +71,7 @@ export interface SolveSchedulerOptions {
 	 * Backpressure — max time (ms) a call may sit queued before it starts
 	 * executing. If it's still waiting after this long it's rejected with
 	 * `code: QUEUE_TIMEOUT` rather than burning compute on a stale request.
-	 * Bounds tail latency. Only applies to `queue` / `parallel` modes. Default:
-	 * no deadline.
+	 * Bounds tail latency. Only applies to `queue` mode. Default: no deadline.
 	 */
 	queueWaitMs?: number;
 	timeoutMs?: number;
@@ -84,8 +87,7 @@ export interface SolveSchedulerOptions {
 	 * instead of re-sending the bytes; a `DefinitionRef` also skips its `load()`.
 	 * When the server has evicted the key, the solve falls back to a full upload,
 	 * so this is safe to leave on. No effect for URL definitions, which are
-	 * already a reference. Needs a `cacheKeyExecutor` (the client wires one);
-	 * default `true` when one is present.
+	 * already a reference. Default `true`.
 	 */
 	reuseServerDefinitionCache?: boolean;
 	/** Lifecycle hooks — fired in order. Errors thrown by hooks are logged, not rethrown. */
@@ -120,19 +122,36 @@ export type SolveResult =
 	| { status: 'error'; error: ComputeError; durationMs: number }
 	| { status: 'superseded' };
 
-export type SolveExecutor = (
-	definition: SolveDefinition,
-	dataTree: DataTree[],
-	config: GrasshopperComputeConfig
-) => Promise<GrasshopperComputeResponse>;
-
 /**
  * Solves by `cacheKey` when given one, otherwise uploads. Reports the server's
  * (possibly new) key and whether the full definition was uploaded (`missed`).
+ * The scheduler passes `null` whenever server-definition reuse is off.
  */
-export type CacheKeyExecutor = (
+export type SolveExecutor = (
 	definition: SolveDefinition,
 	dataTree: DataTree[],
 	cacheKey: string | null,
 	config: GrasshopperComputeConfig
 ) => Promise<{ response: GrasshopperComputeResponse; cacheKey: string | null; missed: boolean }>;
+
+export interface SchedulerSolveOptions {
+	signal?: AbortSignal;
+	/** Per-solve live-event callback. Not part of the cache key: it names where events go, not what is solved. */
+	selvaevents?: SelvaEventTarget;
+	/**
+	 * This call's `Server-Timing` breakdown, after the client config's own `onServerTiming`.
+	 * Never fires for a `fromCache` hit, which sends no request.
+	 */
+	onServerTiming?: (timing: ServerTiming) => void;
+}
+
+/** What `solveDetailed()` resolves with: the response plus how this call got it. */
+export interface SolveDetail {
+	response: GrasshopperComputeResponse;
+	/** Served from the scheduler's response cache without a request. */
+	fromCache: boolean;
+	/** Same meaning as on {@link SolveResult}. */
+	definitionReuploaded?: boolean;
+	/** Executor wall time; `0` for a `fromCache` hit. */
+	durationMs: number;
+}

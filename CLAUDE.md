@@ -98,7 +98,7 @@ Two JSON schemas in `packages/schemas/` generate both TypeScript and C# types. `
 
 ### `@selvajs/compute`
 
-`packages/compute`, published to npm. Two entrypoints: `/grasshopper` (Rhino Compute client, scheduler, data trees, input/output parsers) and `/core` (low-level fetch, errors, config). The root entry exports nothing; import a subpath. Errors are one `ComputeError` class with a typed `code` from `ErrorCodes`. Browser and Node compatible.
+`packages/compute`, published to npm. Two entrypoints: `/grasshopper` (Rhino Compute client, scheduler, data trees, input/output parsers) and `/core` (low-level fetch, errors, config). There is no root entry; import a subpath. Errors are one `ComputeError` class with a typed `code` from `ErrorCodes`. Browser and Node compatible.
 
 Pure solve/data: see the `three` prohibition above. Anything that turns a response into Three.js objects or sets up a viewer belongs in `@selvajs/visualization`.
 

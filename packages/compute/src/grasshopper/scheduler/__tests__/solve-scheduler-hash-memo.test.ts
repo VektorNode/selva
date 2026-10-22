@@ -13,7 +13,7 @@ vi.mock('../stable-hash', async (importOriginal) => {
 });
 
 import { SolveScheduler } from '../solve-scheduler';
-import type { SolveExecutor, CacheKeyExecutor } from '../types';
+import type { SolveExecutor } from '../types';
 import { hashDefinition } from '../stable-hash';
 import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
 
@@ -24,14 +24,18 @@ function makeResponse(): GrasshopperComputeResponse {
 	return { values: [] } as unknown as GrasshopperComputeResponse;
 }
 
-const plainExecutor: SolveExecutor = async () => makeResponse();
+const plainExecutor: SolveExecutor = async () => ({
+	response: makeResponse(),
+	cacheKey: null,
+	missed: false
+});
 
 beforeEach(() => {
 	hashDefinitionSpy.mockClear();
 });
 
 describe('definition hashing in the scheduler', () => {
-	it('plain executor path: one hashDefinition call per solve()', async () => {
+	it('without a learned key: one hashDefinition call per solve()', async () => {
 		const s = new SolveScheduler(plainExecutor, baseConfig, { mode: 'queue' });
 
 		await s.solve('big-base64-definition', []);
@@ -44,11 +48,11 @@ describe('definition hashing in the scheduler', () => {
 
 	it('server-cache-key fast path: still one hashDefinition call per solve()', async () => {
 		const seenKeys: Array<string | null> = [];
-		const ck: CacheKeyExecutor = async (_def, _tree, cacheKey) => {
+		const ck: SolveExecutor = async (_def, _tree, cacheKey) => {
 			seenKeys.push(cacheKey);
 			return { response: makeResponse(), cacheKey: 'md5_LEARNED', missed: false };
 		};
-		const s = new SolveScheduler(plainExecutor, baseConfig, { mode: 'queue' }, ck);
+		const s = new SolveScheduler(ck, baseConfig, { mode: 'queue' });
 
 		await s.solve('big-base64-definition', []);
 		await s.solve('big-base64-definition', []);
@@ -76,7 +80,7 @@ describe('definition hashing in the scheduler', () => {
 		let calls = 0;
 		const counting: SolveExecutor = async () => {
 			calls++;
-			return makeResponse();
+			return { response: makeResponse(), cacheKey: null, missed: false };
 		};
 		const s = new SolveScheduler(counting, baseConfig, {
 			mode: 'queue',

@@ -44,24 +44,6 @@ export function serverIdentity(server: Pick<ResolvedServer, 'id'>): ServerIdenti
 export interface CachedClient {
 	client: GrasshopperClient;
 	scheduler: SolveScheduler;
-	/**
-	 * Last Server-Timing decode/solve/encode, written by `onServerTiming`. The
-	 * scheduler runs up to `maxConcurrent` solves at once, so `last` alone can't
-	 * be trusted per-request: callers snapshot `seq` before their solve and only
-	 * attribute `last` to themselves if exactly one write happened since (see
-	 * the guard in `runSolvePipeline`), dropping it otherwise rather than risk
-	 * misattributing another request's timing.
-	 */
-	rhinoTiming: { last: { decode: number; solve: number; encode: number } | null; seq: number };
-	/**
-	 * Same snapshot-and-attribute pattern as `rhinoTiming`, for the scheduler's
-	 * `onSettle` cache verdict. `seq` increments on every settle (success or
-	 * error); `last` is written only on success.
-	 */
-	solveMeta: {
-		last: { fromCache: boolean; definitionReuploaded?: boolean } | null;
-		seq: number;
-	};
 }
 
 /**
@@ -195,8 +177,6 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 	};
 
 	async function build(server: ResolvedServer, definitionGuid?: string): Promise<CachedClient> {
-		const rhinoTiming: CachedClient['rhinoTiming'] = { last: null, seq: 0 };
-		const solveMeta: CachedClient['solveMeta'] = { last: null, seq: 0 };
 		const debugVerbose = config.debug === 'verbose';
 
 		const clientConfig: GrasshopperComputeConfig = {
@@ -206,14 +186,14 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// verbose flag so the concise cache logs can run without the noise.
 			debug: debugVerbose,
 			cachesolve: config.cachesolve,
-			cacheerroredsolves: config.cacheerroredsolves,
-			onServerTiming: (t) => {
+			cacheerroredsolves: config.cacheerroredsolves
+		};
+
+		if (config.debug) {
+			clientConfig.onServerTiming = (t) => {
 				const decode = t.decode ?? 0;
 				const solve = t.solve ?? 0;
 				const encode = t.encode ?? 0;
-				rhinoTiming.seq += 1;
-				rhinoTiming.last = { decode, solve, encode };
-				if (!config.debug) return;
 				// Heuristic thresholds: a genuine parse/solve is many ms; a cache hit
 				// is sub-millisecond. Only meaningful relative to the first (cold) solve.
 				const defCache =
@@ -228,8 +208,8 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 					`[Compute/rhino-cache] decode=${decode}ms solve=${solve}ms encode=${encode}ms ` +
 						`| definition-cache: ${defCache} | solve-cache (cachesolve): ${solveCache}`
 				);
-			}
-		};
+			};
+		}
 
 		// Baked at client-create time because the scheduler has no per-request
 		// header hook.
@@ -304,7 +284,6 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			cache: config.responseCacheMaxBytes > 0 ? { maxBytes: config.responseCacheMaxBytes } : false,
 			reuseServerDefinitionCache: config.reuseServerDefinitionCache,
 			onSettle: (_ctx, result) => {
-				solveMeta.seq += 1;
 				if (result.status !== 'success') return;
 				// Piggyback the pool re-read on real traffic: only servers actually
 				// being used get probed, at most once per window, and never on the
@@ -318,10 +297,6 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 					// onSettle only ever fires during a solve, long after binding.
 					void refreshConcurrency(scheduler);
 				}
-				solveMeta.last = {
-					fromCache: result.fromCache === true,
-					definitionReuploaded: result.definitionReuploaded
-				};
 				if (!config.debug) return;
 				debugLog(
 					`[Compute/selva-cache] ${result.fromCache ? 'HIT  — served from cache (no compute call)' : 'miss — went to Rhino.Compute'} (${Math.round(result.durationMs)}ms)`
@@ -349,7 +324,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				}
 			}
 		});
-		return { client, scheduler, rhinoTiming, solveMeta };
+		return { client, scheduler };
 	}
 
 	return {

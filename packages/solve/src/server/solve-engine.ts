@@ -12,13 +12,8 @@
  * `SolveEngineSolveArgs.server`.
  */
 
-import {
-	isDefinitionRef,
-	stableStringify,
-	type DefinitionRef,
-	type SelvaEventTarget,
-	type SolveDefinition
-} from '@selvajs/compute/grasshopper';
+import { isDefinitionRef, type DefinitionRef, type SolveDefinition } from '@selvajs/compute/core';
+import { stableStringify, type SelvaEventTarget } from '@selvajs/compute/grasshopper';
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 import {
 	createClientCache,
@@ -38,9 +33,9 @@ import {
 	createSolveCacheSingleFlight,
 	type SolveCacheSingleFlight
 } from './solve-cache-single-flight.js';
+import { buildSolveInputTree } from './transform-input.js';
 import {
 	adaptEnvelopeToEncoding,
-	buildSolveInputTree,
 	runSolvePipeline,
 	type PipelineInput,
 	type SolveOutcome

@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 
 import { SolveScheduler } from '../solve-scheduler';
-import type { SolveExecutor, CacheKeyExecutor } from '../types';
+import type { SolveExecutor } from '../types';
 import type { DefinitionRef } from '@/core/definition-ref';
 import { ErrorCodes } from '@/core/errors';
 import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
@@ -31,7 +31,11 @@ const makeRef = (key: string): DefinitionRef & { load: ReturnType<typeof vi.fn> 
 
 describe('scheduler + DefinitionRef', () => {
 	it('serves an L1 hit for the same (ref.key, tree) across distinct ref objects, never calling load()', async () => {
-		const executor = vi.fn<SolveExecutor>(async () => makeResponse());
+		const executor = vi.fn<SolveExecutor>(async () => ({
+			response: makeResponse(),
+			cacheKey: null,
+			missed: false
+		}));
 		const s = new SolveScheduler(executor, baseConfig, {
 			mode: 'queue',
 			cache: { maxBytes: 100_000 }
@@ -49,14 +53,13 @@ describe('scheduler + DefinitionRef', () => {
 	});
 
 	it('keys the server-pointer map by ref.key and re-learns on a miss, without materializing', async () => {
-		const executor = vi.fn<SolveExecutor>(async () => makeResponse());
 		const calls: Array<{ cacheKey: string | null }> = [];
 		let next: { cacheKey: string; missed: boolean } = { cacheKey: 'md5_FIRST', missed: false };
-		const ck: CacheKeyExecutor = async (_def, _tree, cacheKey) => {
+		const executor: SolveExecutor = async (_def, _tree, cacheKey) => {
 			calls.push({ cacheKey });
 			return { response: makeResponse(), ...next };
 		};
-		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' }, ck);
+		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
 
 		const refA = makeRef('version-1');
 		const refB = makeRef('version-1');
@@ -72,7 +75,6 @@ describe('scheduler + DefinitionRef', () => {
 		expect(calls.map((c) => c.cacheKey)).toEqual([null, 'md5_FIRST', 'md5_RELEARNED']);
 		expect(refA.load).not.toHaveBeenCalled();
 		expect(refB.load).not.toHaveBeenCalled();
-		expect(executor).not.toHaveBeenCalled(); // fast path took every solve
 	});
 
 	it('settles as ABORTED when the signal fires while load() is pending', async () => {
@@ -86,10 +88,10 @@ describe('scheduler + DefinitionRef', () => {
 		};
 		// Mimics the real executors: materialize, then hit the transport, which
 		// rejects immediately when the solve's signal is already aborted.
-		const executor: SolveExecutor = async (def, _tree, config) => {
+		const executor: SolveExecutor = async (def, _tree, _cacheKey, config) => {
 			await (def as DefinitionRef).load();
 			if (config.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-			return makeResponse();
+			return { response: makeResponse(), cacheKey: null, missed: true };
 		};
 		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
 
@@ -110,7 +112,7 @@ describe('scheduler + DefinitionRef', () => {
 		const seen: unknown[] = [];
 		const executor: SolveExecutor = async (def) => {
 			seen.push(def);
-			return makeResponse();
+			return { response: makeResponse(), cacheKey: null, missed: true };
 		};
 		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
 

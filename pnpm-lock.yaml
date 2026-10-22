@@ -246,9 +246,6 @@ importers:
       fflate:
         specifier: 'catalog:'
         version: 0.8.3
-      rhino3dm:
-        specifier: 'catalog:'
-        version: 8.35.0
     devDependencies:
       '@selvajs/config':
         specifier: workspace:*
@@ -256,6 +253,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 26.6.2
+      rhino3dm:
+        specifier: 'catalog:'
+        version: 8.35.0
       tsdown:
         specifier: 'catalog:'
         version: 0.23.0(publint@0.3.24)(typescript@6.0.3)

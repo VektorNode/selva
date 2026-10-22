@@ -21,7 +21,7 @@ concept, it is the concept named here.
 - **Transport**: `fetchCompute`, the HTTP layer. Owns retries, backoff, timeout and abort, and
   the status-to-`ErrorCodes` mapping. The caller names the response type (`fetchCompute<R>`), so
   `core/` never imports a feature.
-- **Scheduler**: runs solves over time (`latest-wins`, `queue`, `parallel`) with cancellation,
+- **Scheduler**: runs solves over time (`latest-wins`, `queue`) with cancellation,
   retries, a response cache and observable state.
 - **Server definition-cache reuse**: the server answers an uploaded definition with an `md5_…`
   cache key, and the scheduler sends that key as `pointer` instead of the bytes on later solves of

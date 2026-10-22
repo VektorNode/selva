@@ -14,9 +14,10 @@ import { isDefinitionUrl, type SolveDefinition } from '@/core/definition-ref';
 import { hashSolveInputForDefinition, hashDefinition } from './stable-hash';
 
 import type {
-	CacheKeyExecutor,
 	SchedulerMode,
+	SchedulerSolveOptions,
 	SolveContext,
+	SolveDetail,
 	SolveExecutor,
 	SolveResult,
 	SolveSchedulerOptions
@@ -38,11 +39,11 @@ interface PendingItem {
 	ctx: SolveContext;
 	/** Monotonic solve() ordinal, so an older item's late settle can't overwrite newer state. */
 	seq: number;
-	resolve: (response: GrasshopperComputeResponse) => void;
+	resolve: (detail: SolveDetail) => void;
 	reject: (error: ComputeError) => void;
 	externalSignal?: AbortSignal;
-	/** Per-solve live-event callback. Not part of the cache key: it names where events go, not what is solved. */
 	selvaevents?: SelvaEventTarget;
+	onServerTiming?: SchedulerSolveOptions['onServerTiming'];
 	/** Settles the item as ABORTED if its signal fires while it waits in a queue. */
 	queuedAbortHandler?: () => void;
 	queueWaitTimer?: ReturnType<typeof setTimeout>;
@@ -127,7 +128,6 @@ export class SolveScheduler {
 	private cacheMisses = 0;
 	private cacheEvictions = 0;
 
-	private readonly cacheKeyExecutor?: CacheKeyExecutor;
 	private readonly reuseServerDefinitionCache: boolean;
 	/** Definition hash → the server's cache key (`pointer`) for it. */
 	private readonly serverCacheKeys = new Map<string, string>();
@@ -155,14 +155,19 @@ export class SolveScheduler {
 	constructor(
 		executor: SolveExecutor,
 		baseConfig: GrasshopperComputeConfig,
-		options: SolveSchedulerOptions = {},
-		cacheKeyExecutor?: CacheKeyExecutor
+		options: SolveSchedulerOptions = {}
 	) {
 		this.executor = executor;
-		this.cacheKeyExecutor = cacheKeyExecutor;
 		this.baseConfig = baseConfig;
 		this.mode = options.mode ?? 'latest-wins';
-		this.maxConcurrent = Math.max(1, options.maxConcurrent ?? (this.mode === 'parallel' ? 4 : 1));
+		if (this.mode !== 'latest-wins' && this.mode !== 'queue') {
+			throw new ComputeError(
+				`Unknown scheduler mode '${String(this.mode)}'. For concurrent solves use { mode: 'queue', maxConcurrent: 4 }.`,
+				ErrorCodes.INVALID_CONFIG,
+				{ context: { mode: this.mode } }
+			);
+		}
+		this.maxConcurrent = Math.max(1, options.maxConcurrent ?? 1);
 		// A non-positive maxQueueDepth means unbounded, not "reject everything".
 		this.maxQueueDepth =
 			options.maxQueueDepth !== undefined && options.maxQueueDepth > 0
@@ -184,8 +189,7 @@ export class SolveScheduler {
 		this.cacheTtl = cacheConfig?.ttlMs ?? 0;
 		this.cacheErroredSolves = cacheConfig?.cacheErroredSolves ?? true;
 
-		this.reuseServerDefinitionCache =
-			!!cacheKeyExecutor && (options.reuseServerDefinitionCache ?? true);
+		this.reuseServerDefinitionCache = options.reuseServerDefinitionCache ?? true;
 
 		this.onStart = options.onStart;
 		this.onSettle = options.onSettle;
@@ -284,8 +288,17 @@ export class SolveScheduler {
 	solve(
 		definition: SolveDefinition,
 		dataTree: DataTree[],
-		options?: { signal?: AbortSignal; selvaevents?: SelvaEventTarget }
+		options?: SchedulerSolveOptions
 	): Promise<GrasshopperComputeResponse> {
+		return this.solveDetailed(definition, dataTree, options).then((detail) => detail.response);
+	}
+
+	/** {@link solve}, also resolving with whether this call hit the cache and how long it took. */
+	solveDetailed(
+		definition: SolveDefinition,
+		dataTree: DataTree[],
+		options?: SchedulerSolveOptions
+	): Promise<SolveDetail> {
 		if (this.disposed) {
 			return Promise.reject(
 				new ComputeError(
@@ -327,10 +340,10 @@ export class SolveScheduler {
 			this.runHook(this.onStart, ctx);
 			this.runHook(this.onSettle, ctx, result);
 			this.notify();
-			return Promise.resolve(cached);
+			return Promise.resolve({ response: cached, fromCache: true, durationMs: 0 });
 		}
 
-		return new Promise<GrasshopperComputeResponse>((resolve, reject) => {
+		return new Promise<SolveDetail>((resolve, reject) => {
 			const item: PendingItem = {
 				definition,
 				dataTree,
@@ -340,7 +353,8 @@ export class SolveScheduler {
 				resolve,
 				reject,
 				externalSignal: options?.signal,
-				selvaevents: options?.selvaevents
+				selvaevents: options?.selvaevents,
+				onServerTiming: options?.onServerTiming
 			};
 
 			if (item.externalSignal) {
@@ -455,9 +469,7 @@ export class SolveScheduler {
 				break;
 			}
 
-			// The two modes differ only in `maxConcurrent`'s default.
-			case 'queue':
-			case 'parallel': {
+			case 'queue': {
 				if (this.inFlight.size < this.maxConcurrent) {
 					this.execute(item);
 				} else if (
@@ -501,6 +513,17 @@ export class SolveScheduler {
 				...(this.retry !== undefined && { retry: this.retry }),
 				...(item.selvaevents !== undefined && { selvaevents: item.selvaevents })
 			};
+			const callTiming = item.onServerTiming;
+			if (callTiming) {
+				const baseTiming = this.baseConfig.onServerTiming;
+				config.onServerTiming = (timing, requestId) => {
+					try {
+						baseTiming?.(timing, requestId);
+					} finally {
+						callTiming(timing);
+					}
+				};
+			}
 
 			const { response, definitionReuploaded } = await this.runExecutor(
 				item.definition,
@@ -512,7 +535,11 @@ export class SolveScheduler {
 
 			this.writeCache(item.ctx.key, response);
 
-			if (!this.settleSuccess(item, response)) return;
+			if (
+				!this.settleSuccess(item, { response, fromCache: false, definitionReuploaded, durationMs })
+			) {
+				return;
+			}
 
 			this.writeLastState(item.seq, { result: response, durationMs });
 
@@ -542,12 +569,13 @@ export class SolveScheduler {
 		definitionHash: string,
 		config: GrasshopperComputeConfig
 	): Promise<{ response: GrasshopperComputeResponse; definitionReuploaded?: boolean }> {
-		if (!this.cacheKeyExecutor || !this.reuseServerDefinitionCache || isDefinitionUrl(definition)) {
-			return { response: await this.executor(definition, dataTree, config) };
+		if (!this.reuseServerDefinitionCache || isDefinitionUrl(definition)) {
+			const { response } = await this.executor(definition, dataTree, null, config);
+			return { response };
 		}
 
 		const knownKey = this.serverCacheKeys.get(definitionHash) ?? null;
-		const result = await this.cacheKeyExecutor(definition, dataTree, knownKey, config);
+		const result = await this.executor(definition, dataTree, knownKey, config);
 
 		// Delete before set so a hit moves to the back of the eviction order.
 		this.serverCacheKeys.delete(definitionHash);
@@ -619,12 +647,12 @@ export class SolveScheduler {
 		}
 	}
 
-	private settleSuccess(item: PendingItem, response: GrasshopperComputeResponse): boolean {
+	private settleSuccess(item: PendingItem, detail: SolveDetail): boolean {
 		if (item.settled) return false;
 		item.settled = { ok: true };
 		this.clearQueueWaitTimer(item);
 		this.removeQueuedAbortHandler(item);
-		item.resolve(response);
+		item.resolve(detail);
 		return true;
 	}
 
@@ -650,7 +678,7 @@ export class SolveScheduler {
 		return new ComputeError(
 			error instanceof Error ? error.message : String(error),
 			ErrorCodes.UNKNOWN_ERROR,
-			{ originalError: error instanceof Error ? error : new Error(String(error)) }
+			{ originalError: error }
 		);
 	}
 

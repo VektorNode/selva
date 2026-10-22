@@ -73,7 +73,11 @@ export function processInputWithError(rawInput: InputParamSchema): {
 
 	const parser = INPUT_TYPE_PARSERS.get(paramType);
 	try {
-		if (!parser) throw ComputeError.unknownParamType(paramType, rawInput.name);
+		if (!parser) {
+			throw new ComputeError(`Unknown paramType: ${paramType}`, ErrorCodes.VALIDATION_ERROR, {
+				context: { receivedParamType: paramType, paramName: rawInput.name }
+			});
+		}
 		return { input: parser.parse(schema, baseInput, report), errors };
 	} catch (error) {
 		if (!(error instanceof ComputeError)) {
@@ -82,7 +86,7 @@ export function processInputWithError(rawInput: InputParamSchema): {
 				ErrorCodes.VALIDATION_ERROR,
 				{
 					context: { paramName: rawInput.name, paramType },
-					originalError: error instanceof Error ? error : new Error(String(error))
+					originalError: error
 				}
 			);
 		}

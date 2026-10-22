@@ -1,7 +1,6 @@
 import { defineConfig } from 'tsdown';
 
 const entries = {
-	index: 'src/index.ts',
 	grasshopper: 'src/grasshopper/index.ts',
 	core: 'src/core/index.ts'
 };

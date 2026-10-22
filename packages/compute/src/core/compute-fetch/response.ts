@@ -213,14 +213,14 @@ export async function handleResponse(
 				{
 					statusCode: response.status,
 					context: { url: ctx.fullUrl, requestId, contentType },
-					originalError: error instanceof Error ? error : new Error(String(error))
+					originalError: error
 				}
 			);
 		}
 		throw new ComputeError('Failed to parse JSON response', ErrorCodes.NETWORK_ERROR, {
 			statusCode: response.status,
 			context: { url: ctx.fullUrl, requestId },
-			originalError: error instanceof Error ? error : new Error(String(error))
+			originalError: error
 		});
 	}
 }

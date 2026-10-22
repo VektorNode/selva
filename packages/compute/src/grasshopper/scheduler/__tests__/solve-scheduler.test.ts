@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { SolveScheduler } from '../solve-scheduler';
-import type { SolveExecutor } from '../types';
+import type { SchedulerMode, SolveExecutor } from '../types';
 import { ComputeError, ErrorCodes } from '@/core/errors';
 import { setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import type { SolveDefinition } from '@/core/definition-ref';
@@ -40,7 +40,7 @@ function deferredExecutor() {
 		fail: (error: Error) => void;
 	}> = [];
 
-	const executor: SolveExecutor = (definition, dataTree, config) => {
+	const executor: SolveExecutor = (definition, dataTree, _cacheKey, config) => {
 		return new Promise((resolve, reject) => {
 			const signal = config.signal;
 			const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
@@ -52,7 +52,7 @@ function deferredExecutor() {
 				signal,
 				release: (r) => {
 					signal?.removeEventListener('abort', onAbort);
-					resolve(r);
+					resolve({ response: r, cacheKey: null, missed: false });
 				},
 				fail: (e) => {
 					signal?.removeEventListener('abort', onAbort);
@@ -493,9 +493,14 @@ describe('SolveScheduler', () => {
 				fail: (e: Error) => void;
 			}> = [];
 			const executor: SolveExecutor = () =>
-				new Promise((resolve, reject) => pending.push({ release: resolve, fail: reject }));
+				new Promise((resolve, reject) =>
+					pending.push({
+						release: (response) => resolve({ response, cacheKey: null, missed: false }),
+						fail: reject
+					})
+				);
 			const scheduler = new SolveScheduler(executor, baseConfig, {
-				mode: 'parallel',
+				mode: 'queue',
 				maxConcurrent: 2
 			});
 
@@ -964,6 +969,138 @@ describe('SolveScheduler', () => {
 
 			expect(onSettle).toHaveBeenCalledTimes(1);
 			expect(onSettle.mock.calls[0][1]).toMatchObject({ status: 'success', fromCache: false });
+		});
+	});
+
+	describe('mode validation', () => {
+		it("rejects the removed 'parallel' mode, naming the queue equivalent", () => {
+			const { executor } = deferredExecutor();
+			const make = () =>
+				new SolveScheduler(executor, baseConfig, {
+					mode: 'parallel' as unknown as SchedulerMode
+				});
+			expect(make).toThrow(ComputeError);
+			expect(make).toThrow("{ mode: 'queue', maxConcurrent: 4 }");
+			try {
+				make();
+			} catch (err) {
+				expect((err as ComputeError).code).toBe(ErrorCodes.INVALID_CONFIG);
+			}
+		});
+	});
+
+	describe('solveDetailed', () => {
+		it('reports a server solve, then a cache hit for the same input', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { maxBytes: 1024 * 1024 }
+			});
+
+			const first = scheduler.solveDetailed('def', [tree('a')]);
+			queue[0].release(makeResponse('a'));
+			const miss = await first;
+			expect(miss).toMatchObject({ fromCache: false, definitionReuploaded: false });
+			expect(miss.response.filename).toBe('a');
+			expect(miss.durationMs).toBeGreaterThanOrEqual(0);
+
+			const hit = await scheduler.solveDetailed('def', [tree('a')]);
+			expect(hit).toEqual({ response: miss.response, fromCache: true, durationMs: 0 });
+			expect(queue).toHaveLength(1);
+		});
+
+		it('solve() resolves with the bare response', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
+
+			const p = scheduler.solve('def', [tree('a')]);
+			const response = makeResponse('a');
+			queue[0].release(response);
+			await expect(p).resolves.toBe(response);
+		});
+	});
+
+	describe('per-call onServerTiming', () => {
+		/** Fires `config.onServerTiming` with a timing tagged by call order, swallowing a throw like the fetch layer. */
+		function timingExecutor() {
+			let n = 0;
+			const releases: Array<() => void> = [];
+			const executor: SolveExecutor = (_def, _tree, _cacheKey, config) => {
+				const call = ++n;
+				return new Promise((resolve) => {
+					releases.push(() => {
+						try {
+							config.onServerTiming?.({ solve: call, raw: `solve;dur=${call}` }, `req-${call}`);
+						} catch {
+							// swallowed, as in fireServerTiming
+						}
+						resolve({ response: makeResponse(`r${call}`), cacheKey: null, missed: false });
+					});
+				});
+			};
+			return { executor, releases };
+		}
+
+		it('gives each overlapping call its own timing, identical inputs included', async () => {
+			const { executor, releases } = timingExecutor();
+			const baseTiming = vi.fn();
+			const scheduler = new SolveScheduler(
+				executor,
+				{ ...baseConfig, onServerTiming: baseTiming },
+				{ mode: 'queue', maxConcurrent: 2 }
+			);
+			const timingA = vi.fn();
+			const timingB = vi.fn();
+
+			const a = scheduler.solveDetailed('def', [tree('x')], { onServerTiming: timingA });
+			const b = scheduler.solveDetailed('def', [tree('x')], { onServerTiming: timingB });
+			await vi.waitFor(() => expect(releases).toHaveLength(2));
+			releases[1]();
+			releases[0]();
+			await Promise.all([a, b]);
+
+			expect(timingA).toHaveBeenCalledExactlyOnceWith({ solve: 1, raw: 'solve;dur=1' });
+			expect(timingB).toHaveBeenCalledExactlyOnceWith({ solve: 2, raw: 'solve;dur=2' });
+			expect(baseTiming.mock.calls.map((c) => c[1])).toEqual(['req-2', 'req-1']);
+		});
+
+		it('still fires when the client-level callback throws', async () => {
+			const { executor, releases } = timingExecutor();
+			const scheduler = new SolveScheduler(
+				executor,
+				{
+					...baseConfig,
+					onServerTiming: () => {
+						throw new Error('boom');
+					}
+				},
+				{ mode: 'queue' }
+			);
+			const timing = vi.fn();
+
+			const p = scheduler.solve('def', [tree('x')], { onServerTiming: timing });
+			await vi.waitFor(() => expect(releases).toHaveLength(1));
+			releases[0]();
+			await p;
+			expect(timing).toHaveBeenCalledOnce();
+		});
+
+		it('never fires for a fromCache hit', async () => {
+			const { executor, releases } = timingExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { maxBytes: 1024 * 1024 }
+			});
+
+			const first = scheduler.solve('def', [tree('x')]);
+			await vi.waitFor(() => expect(releases).toHaveLength(1));
+			releases[0]();
+			await first;
+
+			const timing = vi.fn();
+			const hit = await scheduler.solveDetailed('def', [tree('x')], { onServerTiming: timing });
+			expect(hit.fromCache).toBe(true);
+			expect(timing).not.toHaveBeenCalled();
 		});
 	});
 

@@ -69,8 +69,7 @@ describe.skipIf(!hasBuild)('client bundle boundary (plan Phase 4, guard 3)', () 
 			'createClientCache',
 			'createDefinitionByteCache',
 			'createSolveCacheSingleFlight',
-			'buildSolveInputTree',
-			'transformInputParameter'
+			'buildSolveInputTree'
 		];
 		expect(serverOnly.filter((name) => bundled.includes(name))).toEqual([]);
 	});

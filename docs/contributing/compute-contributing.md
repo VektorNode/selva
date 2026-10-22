@@ -16,8 +16,8 @@ surface, so every line in them is a compatibility promise. Keep them readable:
   `./compute-fetch/compute-fetch` directly.
 - **Don't export a symbol just because it exists.** Add it when a consumer needs it.
 
-`src/index.ts` is deliberately empty: the root would promise Rhino and Grasshopper to every
-consumer. Import from `/core` or `/grasshopper`.
+The package has no root entry: one would promise Rhino and Grasshopper to every consumer.
+Consumers import from `/core` or `/grasshopper`.
 
 ## Error handling
 

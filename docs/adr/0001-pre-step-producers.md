@@ -56,7 +56,7 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ### How values reach Grasshopper
 
-`values[paramId]` is set from sessionStorage, then `transformInputParameter` wraps it per `paramType` (text/number/boolean), then `TreeBuilder.fromInputParams` builds the GH data tree server-side in [api/v1/compute/+server.ts](../../packages/selva/src/routes/api/v1/compute/+server.ts). For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write a JSON-stringified payload: the GH definition parses it via a script component.
+`values[paramId]` is set from sessionStorage, then `buildSolveInputTree` (`@selvajs/solve/server`) builds the GH data tree server-side through `TreeBuilder.fromValues`, which coerces number and boolean values and passes every other type through. For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write the payload: an object is sent as its JSON string, and the GH definition parses it via a script component.
 
 ### What's intentionally absent in v1
 
@@ -109,8 +109,7 @@ Land it in `packages/plugin-ui/src/lib/producers/line-drawer/LineDrawerApp.svelt
 	const targetInputId = $derived(page.url.searchParams.get('for') ?? '');
 
 	function handleDone(payload: unknown) {
-		// For text inputs that hold JSON, stringify here so values[paramId] is a string
-		// when ComputeApp's transformInputParameter casts to text.
+		// For text inputs that hold JSON, stringify here so values[paramId] is a string.
 		writeExternalValue({
 			scopeKey: sessionId,
 			inputId: targetInputId,
@@ -166,7 +165,7 @@ In the schema builder, add a text input, toggle "External value" on. Save. The s
 
 ### Things to remember
 
-- **For text inputs holding JSON**, the producer should `writeExternalValue({ value: JSON.stringify(payload) })`, keeping `values[paramId]` a string so the selva-app's `transformInputParameter` doesn't fight you. (Or improve `transformInputParameter` to stringify objects when `paramType === 'text'`: see "future improvements" below.)
+- **For text inputs holding JSON**, writing `JSON.stringify(payload)` keeps `values[paramId]` a string everywhere. An object value also works: `TreeBuilder.fromValues` sends it as its JSON string.
 - **Persistence across reloads**: sessionStorage scope is per-tab. Want survival across tabs/devices? Add a backend store. The storage helpers in `@selvajs/ui` are pluggable: swap `sessionStorage` for an `IPlatformDataStore` call without changing callers.
 - **The component should default to "no saved state"** unless you explicitly load it. For a clean start, skip loading from any cache; you can re-add saved-state loading later.
 - **One producer route, many entry points.** The solver renders a link, but a "Tools" menu, an external link, an email: anyone can deep-link to `/preview/producer/line-drawer?session=X&for=Y`. The producer doesn't care where the user came from.
@@ -175,10 +174,9 @@ In the schema builder, add a text input, toggle "External value" on. Save. The s
 
 When you have the line drawer working, these become natural next steps:
 
-1. **Smarter `transformInputParameter`**: cast to JSON.stringify when paramType is text and value is an object. Removes the "remember to stringify" footgun for producer authors.
-2. **`source.producer` field**: schema declares which producer fills the input. Solver can render links generically without per-route hardcoding. This is the bridge to the full producer-registry design below.
-3. **Lifetime semantics**: when a schema changes (an input gets removed), the orphaned sessionStorage entry leaks. Add a cleanup pass in `ComputeApp` / `usePreviewState`.
-4. **"Edit" affordance**: today the panel only shows when the value is missing. After a value is provided, you can't get back to the producer to change it. Add an "Edit" link next to filled external inputs.
+1. **`source.producer` field**: schema declares which producer fills the input. Solver can render links generically without per-route hardcoding. This is the bridge to the full producer-registry design below.
+2. **Lifetime semantics**: when a schema changes (an input gets removed), the orphaned sessionStorage entry leaks. Add a cleanup pass in `ComputeApp` / `usePreviewState`.
+3. **"Edit" affordance**: today the panel only shows when the value is missing. After a value is provided, you can't get back to the producer to change it. Add an "Edit" link next to filled external inputs.
 
 ## Problem
 

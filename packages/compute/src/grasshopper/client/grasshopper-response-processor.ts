@@ -16,9 +16,7 @@ import {
 export default class GrasshopperResponseProcessor {
 	constructor(
 		/** Hand it to a mesh parser such as `@selvajs/visualization/parse`. */
-		public readonly response: GrasshopperComputeResponse,
-		/** Not read by this class; pass `debug` to the `@selvajs/visualization/parse` parser instead. */
-		public readonly debug: boolean = false
+		public readonly response: GrasshopperComputeResponse
 	) {}
 
 	/**

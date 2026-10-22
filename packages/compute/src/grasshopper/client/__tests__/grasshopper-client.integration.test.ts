@@ -38,7 +38,7 @@ describe('GrasshopperClient.create', () => {
 			'/': () => createMockResponse({}, { ok: false, status: 503, statusText: 'down' })
 		});
 		await expect(
-			GrasshopperClient.create({ serverUrl: SERVER, retry: { attempts: 0 } })
+			GrasshopperClient.create({ serverUrl: SERVER }, { probe: { attempts: 0 } })
 		).rejects.toMatchObject({
 			code: 'NETWORK_ERROR'
 		});
@@ -53,7 +53,7 @@ describe('GrasshopperClient.create', () => {
 			return Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:6500'));
 		});
 		await expect(
-			GrasshopperClient.create({ serverUrl: SERVER, retry: { attempts: 5 } })
+			GrasshopperClient.create({ serverUrl: SERVER }, { probe: { attempts: 5 } })
 		).rejects.toMatchObject({
 			code: 'NETWORK_ERROR',
 			context: { probeVerdict: 'refused', probeRetryable: false, attempts: 1 }
@@ -68,7 +68,7 @@ describe('GrasshopperClient.create', () => {
 			return Promise.resolve(createMockResponse({}, { ok: false, status: 401 }));
 		});
 		await expect(
-			GrasshopperClient.create({ serverUrl: SERVER, retry: { attempts: 5 } })
+			GrasshopperClient.create({ serverUrl: SERVER }, { probe: { attempts: 5 } })
 		).rejects.toMatchObject({
 			code: 'NETWORK_ERROR',
 			context: { probeVerdict: 'unauthorized' }
@@ -104,10 +104,10 @@ describe('GrasshopperClient.create', () => {
 			return Promise.resolve(createMockResponse({}, { ok: false, status: 503 }));
 		});
 		await expect(
-			GrasshopperClient.create({
-				serverUrl: SERVER,
-				retry: { attempts: 2, baseDelayMs: 1, maxDelayMs: 2 }
-			})
+			GrasshopperClient.create(
+				{ serverUrl: SERVER },
+				{ probe: { attempts: 2, baseDelayMs: 1, maxDelayMs: 2 } }
+			)
 		).rejects.toMatchObject({ code: 'NETWORK_ERROR', context: { probeVerdict: 'http_error' } });
 		expect(probes).toBe(3);
 	});
@@ -127,11 +127,28 @@ describe('GrasshopperClient.create', () => {
 			return Promise.reject(new Error(`unrouted fetch: ${url}`));
 		});
 
-		const client = await GrasshopperClient.create({
-			serverUrl: SERVER,
-			retry: { baseDelayMs: 1 }
-		});
+		const client = await GrasshopperClient.create(
+			{ serverUrl: SERVER },
+			{ probe: { baseDelayMs: 1 } }
+		);
 		expect(client).toBeInstanceOf(GrasshopperClient);
+		expect(calls).toBe(2);
+		await client.dispose();
+	});
+
+	it('keeps the probe ladder when config.retry turns solve retries off', async () => {
+		let calls = 0;
+		fetchMock.mockImplementation(() => {
+			calls += 1;
+			return Promise.resolve(
+				calls === 1 ? createMockResponse({}, { ok: false, status: 503 }) : onlineServer()
+			);
+		});
+
+		const client = await GrasshopperClient.create(
+			{ serverUrl: SERVER, retry: { attempts: 0 } },
+			{ probe: { baseDelayMs: 1 } }
+		);
 		expect(calls).toBe(2);
 		await client.dispose();
 	});
@@ -273,6 +290,31 @@ describe('GrasshopperClient.createScheduler', () => {
 		await scheduler.solve(definition, []);
 
 		expect(settled).toEqual([true, false]);
+		scheduler.dispose();
+		await client.dispose();
+	});
+
+	it("hands solveDetailed's per-call onServerTiming the response's Server-Timing", async () => {
+		route({
+			'/': onlineServer,
+			'/grasshopper': () =>
+				createMockResponse(
+					{ values: [], pointer: 'md5_ABC' },
+					{ headers: { 'Server-Timing': 'decode;dur=4, solve;dur=20, encode;dur=2' } }
+				)
+		});
+		const client = await GrasshopperClient.create({ serverUrl: SERVER });
+		const scheduler = client.createScheduler({ mode: 'queue' });
+		const onServerTiming = vi.fn();
+
+		const detail = await scheduler.solveDetailed(new TextEncoder().encode('definition'), [], {
+			onServerTiming
+		});
+
+		expect(detail).toMatchObject({ fromCache: false, definitionReuploaded: true });
+		expect(onServerTiming).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({ decode: 4, solve: 20, encode: 2 })
+		);
 		scheduler.dispose();
 		await client.dispose();
 	});

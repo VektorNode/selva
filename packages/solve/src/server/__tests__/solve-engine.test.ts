@@ -5,7 +5,6 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import type { InputParam } from '@selvajs/compute/grasshopper';
 
 type Recorded = Record<string, unknown>;
 
@@ -26,8 +25,11 @@ vi.mock('@selvajs/compute/grasshopper', () => {
 		createScheduler(options: Recorded) {
 			return {
 				maxConcurrent: options.maxConcurrent as number,
-				solve: (def: unknown, tree: unknown, opts: { signal?: AbortSignal }) =>
-					scriptedSolve(def, tree, opts),
+				solveDetailed: async (def: unknown, tree: unknown, opts: { signal?: AbortSignal }) => ({
+					response: await scriptedSolve(def, tree, opts),
+					fromCache: false,
+					durationMs: 0
+				}),
 				cacheStats: () => ({ entries: 0, bytes: 0, hits: 0, misses: 0, evictions: 0 }),
 				setMaxConcurrent() {},
 				dispose() {}
@@ -37,16 +39,9 @@ vi.mock('@selvajs/compute/grasshopper', () => {
 	return {
 		GrasshopperClient,
 		TreeBuilder: {
-			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
+			fromValues: (entries: unknown[]) => ({ __tree: true, count: entries.length })
 		},
-		processInput: (raw: InputParam) => raw,
-		stableStringify: (value: unknown) => JSON.stringify(value),
-		isDefinitionRef: (d: unknown) =>
-			typeof d === 'object' &&
-			d !== null &&
-			!(d instanceof Uint8Array) &&
-			typeof (d as Recorded).key === 'string' &&
-			typeof (d as Recorded).load === 'function'
+		stableStringify: (value: unknown) => JSON.stringify(value)
 	};
 });
 
@@ -60,6 +55,12 @@ vi.mock('@selvajs/compute/core', () => {
 	}
 	return {
 		enableDebugLogging: vi.fn(),
+		isDefinitionRef: (d: unknown) =>
+			typeof d === 'object' &&
+			d !== null &&
+			!(d instanceof Uint8Array) &&
+			typeof (d as Recorded).key === 'string' &&
+			typeof (d as Recorded).load === 'function',
 		ComputeError: MockComputeError,
 		ErrorCodes: { QUEUE_FULL: 'QUEUE_FULL', QUEUE_TIMEOUT: 'QUEUE_TIMEOUT' }
 	};

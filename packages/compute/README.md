@@ -22,7 +22,7 @@ npm install @selvajs/compute
 ```
 
 Two entrypoints: `@selvajs/compute/grasshopper` (client, scheduler, data trees, IO parsing) and
-`@selvajs/compute/core` (low-level fetch, errors, config). The root is empty on purpose: import a
+`@selvajs/compute/core` (low-level fetch, errors, config). There is no root entry: import a
 subpath.
 
 ## Quickstart
@@ -73,9 +73,16 @@ Pick the row that matches what the user is doing:
 | --------------------------------- | --------------- | ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **Slider scrubs / live previews** | `'latest-wins'` | `30_000`         | default           | Aborts in-flight solves when newer values arrive. Add `cache: { maxBytes: 64 * 1024 * 1024 }` for instant repeats.       |
 | **Submit / long-running jobs**    | `'queue'`       | `0` (no timeout) | `{ attempts: 1 }` | Serial queue. Pass a caller `signal` so users can hit Cancel. See [Long jobs behind a proxy](#long-jobs-behind-a-proxy). |
-| **Background / batch parallel**   | `'parallel'`    | `60_000`         | `{ attempts: 2 }` | Runs solves concurrently up to `maxConcurrent` (default 4).                                                              |
+| **Background / batch parallel**   | `'queue'`       | `60_000`         | `{ attempts: 2 }` | Set `maxConcurrent` (e.g. 4) to run that many solves at once; queue mode defaults to 1.                                  |
 
 Create one scheduler per UI surface: their queues, cancel scopes and caches are independent.
+
+`config.retry` covers solves. The liveness probe `GrasshopperClient.create` runs has its own
+ladder: pass `{ probe: { attempts, baseDelayMs, maxDelayMs } }` as its second argument.
+
+`scheduler.solveDetailed()` resolves `{ response, fromCache, definitionReuploaded, durationMs }`
+for that one call, and takes a per-call `onServerTiming`. Use it to record how each solve went;
+`onSettle` fires for every solve on the scheduler.
 
 ### Cancellation
 
@@ -120,8 +127,11 @@ if (solveErrors?.length) showError(solveErrors.join('\n'));
 ## Data trees
 
 `TreeBuilder.fromInputParams` builds one tree per input from its default, keyed by the input's
-**nickname**. `replaceTreeValue` is copy-on-write: it returns a new array and leaves yours
-untouched, so assign the result or the solve sends the defaults.
+**nickname**. `TreeBuilder.fromValues` builds them from your own values instead: it coerces
+Number, Integer and Boolean items, clamps numbers to `minimum`/`maximum`, and drops what it can't
+coerce, so Grasshopper keeps its own value for that input. `replaceTreeValue` is copy-on-write: it
+returns a new array and leaves yours untouched, so assign the result or the solve sends the
+defaults.
 
 ```ts
 let inputTree = TreeBuilder.fromInputParams(io.inputs);
@@ -129,8 +139,14 @@ inputTree = TreeBuilder.replaceTreeValue(inputTree, 'Radius', 10);
 inputTree = TreeBuilder.replaceTreeValue(inputTree, 'Counts', { '{0}': [1, 2], '{0;1}': [3] });
 ```
 
-Read outputs through `GrasshopperResponseProcessor`. `TreeBuilder.getTreeValue` on a solve
-result returns only the param's first branch.
+Read outputs through `GrasshopperResponseProcessor`, or a whole tree with
+`TreeBuilder.getTree(response.values, 'Points')`: a `Map` from branch path (`'{0;1}'`) to items.
+`getTreeValue` is the shortcut for a one-branch param: it unwraps a single item and throws when
+the param has more than one branch.
+
+Pass a rhino3dm module as `{ rhino }` in the `getValues` / `getValue` options to decode geometry. Its objects live on the WASM
+heap, which garbage collection never frees: release them with `disposeRhinoObjects`. Install
+`rhino3dm` yourself; this package doesn't depend on it.
 
 ## File outputs
 

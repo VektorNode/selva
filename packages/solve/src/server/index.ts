@@ -20,7 +20,6 @@
 
 export {
 	runSolvePipeline,
-	buildSolveInputTree,
 	adaptEnvelopeToEncoding,
 	COMPUTE_CONTRACT_VERSION,
 	COMPUTE_VERSION_HEADER,
@@ -30,8 +29,7 @@ export {
 	type SolvePhaseMetrics,
 	type PipelineInput
 } from './solve-pipeline.js';
-
-export { transformInputParameter } from './transform-input.js';
+export { buildSolveInputTree } from './transform-input.js';
 
 // ============================================================================
 // Caches

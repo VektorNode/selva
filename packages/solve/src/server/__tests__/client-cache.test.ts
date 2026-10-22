@@ -379,56 +379,28 @@ describe('createClientCache — L1 response cache byte budget (audit C2)', () =>
 	});
 });
 
-describe('createClientCache — per-request telemetry sequence counters', () => {
-	it('onServerTiming bumps rhinoTiming.seq on every write', async () => {
+describe('createClientCache — client-level Server-Timing', () => {
+	it('sets no onServerTiming when debug is off', async () => {
 		const cache = createClientCache(baseConfig());
-		const entry = await cache.getClient(server('s1'));
-		expect(entry.rhinoTiming).toEqual({ last: null, seq: 0 });
-		prop<(t: Record<string, number>) => void>(
-			createdConfigs[0],
-			'onServerTiming'
-		)({ decode: 5, solve: 100, encode: 3 });
-		expect(entry.rhinoTiming.seq).toBe(1);
-		expect(entry.rhinoTiming.last).toEqual({ decode: 5, solve: 100, encode: 3 });
-		prop<(t: Record<string, number>) => void>(
-			createdConfigs[0],
-			'onServerTiming'
-		)({ decode: 1, solve: 2, encode: 3 });
-		expect(entry.rhinoTiming.seq).toBe(2);
-		expect(entry.rhinoTiming.last).toEqual({ decode: 1, solve: 2, encode: 3 });
+		await cache.getClient(server('s1'));
+		expect(createdConfigs[0].onServerTiming).toBeUndefined();
 	});
 
-	it('onSettle bumps solveMeta.seq on every settle but writes last only on success', async () => {
-		const cache = createClientCache(baseConfig());
-		const entry = await cache.getClient(server('s1'));
-		const onSettle = prop<(key: Record<string, unknown>, outcome: Record<string, unknown>) => void>(
-			createdSchedulerOptions[0],
-			'onSettle'
+	it('logs the rhino cache verdict when debug is on', async () => {
+		const lines: string[] = [];
+		const cache = createClientCache({
+			...baseConfig(),
+			debug: true,
+			onDebugLog: (m) => lines.push(m)
+		});
+		await cache.getClient(server('s1'));
+		prop<(t: Record<string, number>) => void>(
+			createdConfigs[0],
+			'onServerTiming'
+		)({ decode: 0, solve: 100, encode: 3 });
+		expect(lines.some((l) => l.startsWith('[Compute/rhino-cache] decode=0ms solve=100ms'))).toBe(
+			true
 		);
-		expect(entry.solveMeta).toEqual({ last: null, seq: 0 });
-
-		onSettle(
-			{ key: 'k' },
-			{
-				status: 'success',
-				fromCache: false,
-				definitionReuploaded: false,
-				durationMs: 10,
-				response: {}
-			}
-		);
-		expect(entry.solveMeta.seq).toBe(1);
-		expect(entry.solveMeta.last).toEqual({ fromCache: false, definitionReuploaded: false });
-
-		// An error settle must still count toward seq (the attribution guard in
-		// the pipeline needs to see ALL concurrent activity) without clobbering last.
-		onSettle({ key: 'k' }, { status: 'error', error: new Error('x'), durationMs: 5 });
-		expect(entry.solveMeta.seq).toBe(2);
-		expect(entry.solveMeta.last).toEqual({ fromCache: false, definitionReuploaded: false });
-
-		onSettle({ key: 'k' }, { status: 'success', fromCache: true, durationMs: 0, response: {} });
-		expect(entry.solveMeta.seq).toBe(3);
-		expect(entry.solveMeta.last).toEqual({ fromCache: true, definitionReuploaded: undefined });
 	});
 });
 

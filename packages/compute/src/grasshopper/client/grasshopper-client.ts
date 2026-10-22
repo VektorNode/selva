@@ -34,6 +34,16 @@ export interface SolveOptions {
 	selvaevents?: SelvaEventTarget;
 }
 
+/** Options for {@link GrasshopperClient.create} that shape construction, not the solves. */
+export interface CreateClientOptions {
+	/**
+	 * Retry ladder for the liveness probe: `attempts` retries after the first probe (default 2),
+	 * with exponential backoff from `baseDelayMs` (default 250) capped at `maxDelayMs` (default 1000).
+	 * Independent of `config.retry`, which governs solves only.
+	 */
+	probe?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number };
+}
+
 function describeDefinition(definition: SolveDefinition): string {
 	if (isDefinitionRef(definition)) return `ref:${definition.key}`;
 	if (typeof definition === 'string' && definition.length < 200) return definition;
@@ -138,12 +148,15 @@ export default class GrasshopperClient {
 	 *   {@link ProbeVerdict} so callers can render a specific cause.
 	 * @throws {ComputeError} with code INVALID_CONFIG if configuration is invalid
 	 */
-	static async create(config: GrasshopperComputeConfig): Promise<GrasshopperClient> {
+	static async create(
+		config: GrasshopperComputeConfig,
+		options: CreateClientOptions = {}
+	): Promise<GrasshopperClient> {
 		const client = new GrasshopperClient(config);
 
-		const attempts = Math.max(1, (config.retry?.attempts ?? 2) + 1);
-		const baseDelayMs = config.retry?.baseDelayMs ?? 250;
-		const maxDelayMs = config.retry?.maxDelayMs ?? 1000;
+		const attempts = Math.max(1, (options.probe?.attempts ?? 2) + 1);
+		const baseDelayMs = options.probe?.baseDelayMs ?? 250;
+		const maxDelayMs = options.probe?.maxDelayMs ?? 1000;
 
 		let lastProbe: Awaited<ReturnType<ComputeServerStats['probeServer']>> | undefined;
 		let failure: ProbeFailure | null = null;
@@ -285,7 +298,7 @@ export default class GrasshopperClient {
 						definition: describeDefinition(definition),
 						inputSummary: summarizeDataTree(dataTree)
 					},
-					originalError: error instanceof Error ? error : new Error(String(error))
+					originalError: error
 				}
 			);
 		}
@@ -308,11 +321,10 @@ export default class GrasshopperClient {
 	public createScheduler(options?: SolveSchedulerOptions): SolveScheduler {
 		this.ensureNotDisposed();
 		return new SolveScheduler(
-			(definition, dataTree, config) => solveGrasshopperDefinition(dataTree, definition, config),
-			this.config,
-			options,
 			(definition, dataTree, cacheKey, config) =>
-				solveWithServerCacheKey(dataTree, cacheKey, definition, config)
+				solveWithServerCacheKey(dataTree, cacheKey, definition, config),
+			this.config,
+			options
 		);
 	}
 

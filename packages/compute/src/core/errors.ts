@@ -67,44 +67,17 @@ export class ComputeError extends Error {
 	constructor(
 		message: string,
 		code: ErrorCode = ErrorCodes.UNKNOWN_ERROR,
-		options?: { statusCode?: number; context?: Record<string, unknown>; originalError?: Error }
+		options?: { statusCode?: number; context?: Record<string, unknown>; originalError?: unknown }
 	) {
 		super(message);
 		this.name = 'ComputeError';
 		this.code = code;
 		this.statusCode = options?.statusCode;
 		this.context = options?.context;
-		this.originalError = options?.originalError;
-		if (options?.originalError) {
-			(this as { cause?: unknown }).cause = options.originalError;
+		if (options?.originalError !== undefined) {
+			const original = options.originalError;
+			this.originalError = original instanceof Error ? original : new Error(String(original));
+			(this as { cause?: unknown }).cause = this.originalError;
 		}
-	}
-
-	/**
-	 * Create an error for missing/empty values
-	 */
-	static missingValues(
-		inputName: string,
-		expectedType?: string,
-		context?: Record<string, unknown>
-	) {
-		return new ComputeError(
-			`Input "${inputName}" has no values defined${expectedType ? ` (expected ${expectedType})` : ''}`,
-			ErrorCodes.INVALID_INPUT,
-			{ context: { inputName, expectedType, ...context } }
-		);
-	}
-
-	/**
-	 * Create an error for unknown parameter type
-	 */
-	static unknownParamType(
-		paramType: string,
-		paramName?: string,
-		context?: Record<string, unknown>
-	) {
-		return new ComputeError(`Unknown paramType: ${paramType}`, ErrorCodes.VALIDATION_ERROR, {
-			context: { receivedParamType: paramType, paramName, ...context }
-		});
 	}
 }

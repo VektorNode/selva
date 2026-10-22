@@ -4,6 +4,18 @@ import { validateServerUrl } from '@/core/server/validate-server-url';
 import { buildAuthHeaders } from '@/core/compute-fetch/request';
 import type { ComputeAuth } from '@/core/types';
 
+export interface ServerVersion {
+	rhino: string;
+	compute: string;
+	git_sha: string | null;
+}
+
+export interface ServerStats {
+	isOnline: boolean;
+	version?: ServerVersion;
+	activeChildren?: number;
+}
+
 /**
  * ComputeServerStats provides methods to query Rhino Compute server statistics.
  *
@@ -190,11 +202,7 @@ export default class ComputeServerStats {
 	 *
 	 * @returns Version object with rhino, compute, and git_sha, or null if unavailable
 	 */
-	public async getVersion(): Promise<{
-		rhino: string;
-		compute: string;
-		git_sha: string | null;
-	} | null> {
+	public async getVersion(): Promise<ServerVersion | null> {
 		const text = await this.getText('/version');
 		if (text === null) return null;
 
@@ -241,11 +249,7 @@ export default class ComputeServerStats {
 	 *
 	 * @returns Object containing server status and available stats
 	 */
-	public async getServerStats(): Promise<{
-		isOnline: boolean;
-		version?: { rhino: string; compute: string; git_sha: string | null };
-		activeChildren?: number;
-	}> {
+	public async getServerStats(): Promise<ServerStats> {
 		this.ensureNotDisposed();
 
 		const isOnline = await this.isServerOnline();
@@ -494,10 +498,7 @@ export default class ComputeServerStats {
 	 * stopMonitoring();
 	 * ```
 	 */
-	public monitor(
-		callback: (stats: Awaited<ReturnType<typeof this.getServerStats>>) => void,
-		intervalMs: number = 5000
-	): () => void {
+	public monitor(callback: (stats: ServerStats) => void, intervalMs: number = 5000): () => void {
 		this.ensureNotDisposed();
 
 		if (!Number.isFinite(intervalMs) || intervalMs < ComputeServerStats.MIN_MONITOR_INTERVAL_MS) {

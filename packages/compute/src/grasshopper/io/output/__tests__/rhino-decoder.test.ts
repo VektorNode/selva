@@ -3,7 +3,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { RhinoModule } from 'rhino3dm';
 
-import { decodeRhinoGeometry, isRhinoDecodeError } from '../rhino-decoder';
+import { decodeRhinoGeometry } from '../rhino-decoder';
+import { isRhinoDecodeError } from '../rhino-objects';
 
 /** `Point`/`Line` record their args so we can assert on them. */
 function fakeRhino(

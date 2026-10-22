@@ -42,25 +42,6 @@ export interface DataTree {
 
 // INPUT / OUTPUT PARAMETER TYPES
 
-// Output types from Grasshopper/Rhino Compute.
-// `(string & {})` keeps union open for unknown GOO types while preserving autocomplete.
-export type OutputType =
-	| 'System.String'
-	| 'System.Double'
-	| 'System.Int32'
-	| 'System.Boolean'
-	| 'Rhino.Geometry.Point3d'
-	| 'Rhino.Geometry.Line'
-	| 'Rhino.Geometry.Circle'
-	| 'Rhino.Geometry.Arc'
-	| 'Rhino.Geometry.NurbsCurve'
-	| 'Rhino.Geometry.Brep'
-	| 'Rhino.Geometry.Mesh'
-	| 'Rhino.Geometry.Vector3d'
-	| 'Rhino.Geometry.Plane'
-	| 'Rhino.Geometry.Box'
-	| (string & {});
-
 /**
  * Union type for all possible default value types
  */

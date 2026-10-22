@@ -30,20 +30,7 @@
 		"rhino.compute",
 		"computational-design"
 	],
-	"main": "./dist/index.cjs",
-	"module": "./dist/index.js",
-	"types": "./dist/index.d.ts",
 	"exports": {
-		".": {
-			"import": {
-				"types": "./dist/index.d.ts",
-				"default": "./dist/index.js"
-			},
-			"require": {
-				"types": "./dist/index.d.cts",
-				"default": "./dist/index.cjs"
-			}
-		},
 		"./grasshopper": {
 			"import": {
 				"types": "./dist/grasshopper.d.ts",
@@ -94,12 +81,12 @@
 		"prepack": "publint --strict"
 	},
 	"dependencies": {
-		"fflate": "catalog:",
-		"rhino3dm": "catalog:"
+		"fflate": "catalog:"
 	},
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
+		"rhino3dm": "catalog:",
 		"tsdown": "catalog:",
 		"typedoc": "^0.28.17",
 		"typedoc-plugin-missing-exports": "^4.1.2",

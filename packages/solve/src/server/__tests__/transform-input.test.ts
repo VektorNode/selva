@@ -1,154 +1,91 @@
-/**
- * Tests `transformInputParameter` — the adapter turning a persisted `SchemaInput` plus the
- * user's chosen value into the `@selvajs/compute` `InputParam` that `TreeBuilder.fromInputParams`
- * serializes for the solve.
- *
- * The adapter delegates to the package's `processInput`, so these assert the package-aligned
- * behavior: correct `paramType` for every type (not the old coerce-everything-to-Text), and
- * `default` carrying the user's value. Where a value/default is absent, `processInput` leaves
- * `default` undefined and `fromInputParams` omits the input entirely — letting Grasshopper use
- * its own internal default rather than forcing `''`/`false`.
- */
-
 import { describe, it, expect } from 'vitest';
-import { transformInputParameter } from '../transform-input.js';
+import type { DataTree } from '@selvajs/compute/grasshopper';
+import { buildSolveInputTree } from '../transform-input.js';
 import type { SchemaInput } from '@selvajs/schemas';
 
-type Input = SchemaInput & { minimum?: number; maximum?: number; stepSize?: number };
+type Input = SchemaInput & { minimum?: number; maximum?: number };
 
 function input(partial: Partial<Input>): Input {
-	return {
-		id: 'id-1',
-		nickname: 'Param',
-		paramType: 'text',
-		...partial
-	} as Input;
+	return { id: 'id-1', nickname: 'Param', paramType: 'text', ...partial } as Input;
 }
 
-describe('transformInputParameter — identity fields', () => {
-	it('carries id, name, nickname, description through', () => {
-		const out = transformInputParameter(
-			input({ id: 'guid-x', nickname: 'Width', description: 'the width' }),
-			5
+/** The items of the one tree built from `input` and `value`, or `undefined` when it was omitted. */
+function itemsOf(partial: Partial<Input>, value?: unknown): unknown[] | undefined {
+	const trees = buildSolveInputTree([input(partial)], value === undefined ? {} : { 'id-1': value });
+	expect(trees.length).toBeLessThanOrEqual(1);
+	return trees[0]?.InnerTree['{0}']?.map((item) => item.data);
+}
+
+describe('buildSolveInputTree', () => {
+	it('names each tree by the input nickname', () => {
+		const trees: DataTree[] = buildSolveInputTree(
+			[input({ id: 'a', nickname: 'Width' }), input({ id: 'b', nickname: 'Label' })],
+			{ a: 'x', b: 'y' }
 		);
-		expect(out.id).toBe('guid-x');
-		expect(out.name).toBe('Width');
-		expect(out.nickname).toBe('Width');
-		expect(out.description).toBe('the width');
+		expect(trees.map((t) => t.ParamName)).toEqual(['Width', 'Label']);
 	});
 
-	it('defaults a blank nickname to null and an absent description to empty string', () => {
-		const out = transformInputParameter(input({ nickname: '', description: undefined }), 'v');
-		expect(out.nickname).toBeNull();
-		expect(out.description).toBe('');
+	it('skips an input without a paramType', () => {
+		expect(buildSolveInputTree([input({ paramType: undefined })], { 'id-1': 'v' })).toEqual([]);
 	});
-});
 
-describe('transformInputParameter — number / integer', () => {
-	it('maps number with the user value winning over the schema default', () => {
-		const out = transformInputParameter(
-			input({ paramType: 'number', default: 1, minimum: 0, maximum: 10, stepSize: 0.5 }),
-			7
-		);
-		expect(out).toMatchObject({ paramType: 'Number', default: 7, minimum: 0, maximum: 10 });
+	it('lets the value win over the schema default', () => {
+		expect(itemsOf({ paramType: 'number', default: 1, minimum: 0, maximum: 10 }, 7)).toEqual([7]);
 	});
 
 	it('falls back to the schema default when no value is supplied', () => {
-		const out = transformInputParameter(input({ paramType: 'number', default: 3 }), undefined);
-		expect(out.default).toBe(3);
+		expect(itemsOf({ paramType: 'number', default: 3 })).toEqual([3]);
+		expect(itemsOf({ paramType: 'text', default: 'd' })).toEqual(['d']);
+		expect(itemsOf({ paramType: 'boolean', default: true })).toEqual([true]);
 	});
 
-	it('honors a schema-authored stepSize verbatim for integers (compute ≥3.1.0-beta.5)', () => {
-		const out = transformInputParameter(
-			input({ paramType: 'integer', stepSize: 0.5, default: 2 }),
-			4
-		);
-		expect(out).toMatchObject({ paramType: 'Integer', stepSize: 0.5, default: 4 });
+	it('omits an input with neither value nor default, so Grasshopper uses its own', () => {
+		expect(itemsOf({ paramType: 'text', default: undefined })).toBeUndefined();
+		expect(itemsOf({ paramType: 'boolean', default: undefined })).toBeUndefined();
 	});
 
-	it('falls back to stepSize 1 for integers without an authored stepSize', () => {
-		const out = transformInputParameter(input({ paramType: 'integer', default: 2 }), 4);
-		expect(out).toMatchObject({ paramType: 'Integer', stepSize: 1, default: 4 });
-	});
-});
-
-describe('transformInputParameter — text', () => {
-	it('maps text and keeps the user value', () => {
-		const out = transformInputParameter(input({ paramType: 'text', default: 'd' }), 'hello');
-		expect(out).toMatchObject({ paramType: 'Text', default: 'hello' });
+	it('keeps an explicit false over a true default', () => {
+		expect(itemsOf({ paramType: 'boolean', default: true }, false)).toEqual([false]);
 	});
 
-	it('falls back to the schema default when no value is supplied', () => {
-		expect(
-			transformInputParameter(input({ paramType: 'text', default: 'd' }), undefined).default
-		).toBe('d');
+	it('clamps a number to its minimum and maximum', () => {
+		expect(itemsOf({ paramType: 'number', minimum: 0, maximum: 10 }, 50)).toEqual([10]);
 	});
 
-	it('leaves default undefined when neither value nor schema default exist (input is then omitted)', () => {
-		expect(
-			transformInputParameter(input({ paramType: 'text', default: undefined }), undefined).default
-		).toBeUndefined();
-	});
-});
-
-describe('transformInputParameter — boolean', () => {
-	it('maps boolean and preserves an explicit false (the bug-prone case)', () => {
-		const out = transformInputParameter(input({ paramType: 'boolean', default: true }), false);
-		expect(out).toMatchObject({ paramType: 'Boolean', default: false });
+	it('rounds an integer', () => {
+		expect(itemsOf({ paramType: 'integer' }, 4.6)).toEqual([5]);
 	});
 
-	it('falls back to the schema default when no value is supplied', () => {
-		expect(
-			transformInputParameter(input({ paramType: 'boolean', default: true }), undefined).default
-		).toBe(true);
+	it('drops a number item that is not a number', () => {
+		expect(itemsOf({ paramType: 'number' }, [1, 'abc', 2])).toEqual([1, 2]);
+		expect(itemsOf({ paramType: 'number' }, 'abc')).toBeUndefined();
 	});
 
-	it('leaves default undefined when neither value nor schema default exist (input is then omitted)', () => {
-		expect(
-			transformInputParameter(input({ paramType: 'boolean', default: undefined }), undefined)
-				.default
-		).toBeUndefined();
-	});
-});
-
-describe('transformInputParameter — value-list / file / color / generic', () => {
-	// ValueList's options map isn't carried on SchemaInput, so `values` is empty and the
-	// selected value rides on `default` — the string a contextual ValueList param consumes.
-	it('maps valueList to ValueList, carrying the selected value', () => {
-		const out = transformInputParameter(input({ paramType: 'valueList', default: '0' }), '1');
-		expect(out).toMatchObject({ paramType: 'ValueList', default: '1' });
+	it('carries a valueList selection', () => {
+		expect(itemsOf({ paramType: 'valueList', default: '0' }, '1')).toEqual(['1']);
 	});
 
-	// processInput has no dynamicValueList handler, so without the explicit mapping below
-	// it falls to the Geometry fallback with a null default, and fromInputParams then drops
-	// the input — the user's selection never reaches the definition. ValueList is correct
-	// here because the plugin's GetDynamicValueListParameter reuses the ValueList wire contract.
-	it('maps dynamicValueList to ValueList, carrying the selected value', () => {
-		const out = transformInputParameter(
-			input({ paramType: 'dynamicValueList', default: '0' }),
-			'3.5'
-		);
-		expect(out).toMatchObject({ paramType: 'ValueList', default: '3.5' });
+	it('carries a dynamicValueList selection, scalar or checklist', () => {
+		expect(itemsOf({ paramType: 'dynamicValueList', default: '0' }, '3.5')).toEqual(['3.5']);
+		expect(itemsOf({ paramType: 'dynamicValueList' }, ['a', 'b'])).toEqual(['a', 'b']);
 	});
 
-	it('maps dynamicValueList checklist (array value) to ValueList, carrying all selections', () => {
-		const out = transformInputParameter(input({ paramType: 'dynamicValueList' }), ['a', 'b']);
-		expect(out.paramType).toBe('ValueList');
-		expect(out.default).toEqual(['a', 'b']);
+	it('carries a color', () => {
+		expect(itemsOf({ paramType: 'color' }, '255,0,0')).toEqual(['255,0,0']);
 	});
 
-	it('maps file to File', () => {
-		const out = transformInputParameter(input({ paramType: 'file' }), { fileName: 'a.3dm' });
-		expect(out.paramType).toBe('File');
+	it('carries a file as JSON', () => {
+		expect(itemsOf({ paramType: 'file' }, { fileName: 'a.3dm' })).toEqual(['{"fileName":"a.3dm"}']);
 	});
 
-	it('maps color to Color, carrying the value', () => {
-		const out = transformInputParameter(input({ paramType: 'color' }), '255,0,0');
-		expect(out).toMatchObject({ paramType: 'Color', default: '255,0,0' });
+	it('carries a generic default to the tree', () => {
+		expect(itemsOf({ paramType: 'generic', default: 'd' })).toEqual(['d']);
 	});
 
-	it('maps generic to the package fallback type (Geometry), not Text', () => {
-		const out = transformInputParameter(input({ paramType: 'generic', default: 'd' }), undefined);
-		expect(out.paramType).toBe('Geometry');
+	it('keeps a branch-path value as branches', () => {
+		const [tree] = buildSolveInputTree([input({ paramType: 'number' })], {
+			'id-1': { '{0;0}': [1], '{0;1}': [2] }
+		});
+		expect(tree.InnerTree).toEqual({ '{0;0}': [{ data: 1 }], '{0;1}': [{ data: 2 }] });
 	});
 });
