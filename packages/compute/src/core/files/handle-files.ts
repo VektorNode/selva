@@ -3,7 +3,7 @@ import { getLogger } from '@/core/utils/logger';
 import { decodeBase64ToBinary } from '@/core/utils/encoding';
 import { readField } from '@/core/utils/read-field';
 
-import { FileBaseInfo, FileData, ProcessedFile } from './types';
+import { DownloadOptions, FileBaseInfo, FileData, ProcessedFile } from './types';
 import { groupFilesByRoot, pathBelowRoot, subFolderSegments, toArchiveName } from './sub-folder';
 
 /**
@@ -37,7 +37,8 @@ export const extractFilesFromComputeResponse = async (
 export const downloadFileData = async (
 	downloadableFiles: FileData[],
 	fileFoldername: string,
-	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
+	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null,
+	options: DownloadOptions = {}
 ): Promise<void> => {
 	if (typeof document === 'undefined' || typeof Blob === 'undefined') {
 		throw new ComputeError(
@@ -58,7 +59,7 @@ export const downloadFileData = async (
 			downloadableFiles,
 			additionalFiles
 		);
-		await createAndDownloadZip(processedFiles, fileFoldername);
+		await createAndDownloadZip(processedFiles, fileFoldername, options.saveBlob ?? saveFile);
 	} catch (err) {
 		if (err instanceof ComputeError) {
 			throw err;
@@ -84,17 +85,19 @@ export const downloadFileData = async (
  * @param downloadableFiles - `FileData` items from the compute response.
  * @param fallbackName - Archive name for files with no `Sub Folder` root.
  * @param additionalFiles - Extra files to package; they carry no root and join the fallback archive.
+ * @param options - `saveBlob` replaces the anchor download for every archive.
  */
 export const downloadFileDataByRoot = async (
 	downloadableFiles: FileData[],
 	fallbackName: string,
-	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null
+	additionalFiles: FileBaseInfo[] | FileBaseInfo | null = null,
+	options: DownloadOptions = {}
 ): Promise<void> => {
 	const groups = groupFilesByRoot(downloadableFiles);
 
 	// Extras alone still deserve an archive; without this they'd be dropped for having no root.
 	if (groups.length === 0) {
-		await downloadFileData([], fallbackName, additionalFiles);
+		await downloadFileData([], fallbackName, additionalFiles, options);
 		return;
 	}
 
@@ -106,7 +109,8 @@ export const downloadFileDataByRoot = async (
 		await downloadFileData(
 			root === '' ? files : files.map((file) => ({ ...file, subFolder: pathBelowRoot(file) })),
 			root === '' ? fallbackName : toArchiveName(root),
-			root === extrasRoot ? additionalFiles : null
+			root === extrasRoot ? additionalFiles : null,
+			options
 		);
 	}
 };
@@ -213,7 +217,11 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 	return fetched.filter((f): f is ProcessedFile => f !== null);
 };
 
-async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Promise<void> {
+async function createAndDownloadZip(
+	files: ProcessedFile[],
+	zipName: string,
+	save: (blob: Blob, fileName: string) => unknown
+): Promise<void> {
 	const { zip, strToU8 } = await import('fflate');
 
 	// Paths are already unique: extractFilesFromComputeResponse renames collisions. fflate
@@ -232,7 +240,7 @@ async function createAndDownloadZip(files: ProcessedFile[], zipName: string): Pr
 	});
 
 	const blob = new Blob([zipped as BlobPart], { type: 'application/zip' });
-	saveFile(blob, `${zipName}.zip`);
+	await save(blob, `${zipName}.zip`);
 }
 
 /**

@@ -40,3 +40,12 @@ export type FileBaseInfo = {
 	/** Optional directory path for archive organization (e.g., "extras/docs"). When omitted, file lands at archive root */
 	subFolder?: string;
 };
+
+export type DownloadOptions = {
+	/**
+	 * Saves each finished archive instead of the default `<a download>` click. For hosts where an
+	 * anchor download doesn't work, such as an embedded WebView that hands saves to native code.
+	 * Awaited when it returns a promise, so archives still save one at a time.
+	 */
+	saveBlob?: (blob: Blob, fileName: string) => unknown;
+};

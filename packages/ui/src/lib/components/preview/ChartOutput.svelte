@@ -54,6 +54,9 @@
 		return window.Plotly;
 	}
 
+	// Some embedded WebViews (WKWebView in the Rhino panel) ship without the Fullscreen API at all.
+	const fullscreenSupported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
+
 	function toggleFullscreen() {
 		if (!wrapperEl) return;
 		if (!document.fullscreenElement) {
@@ -211,19 +214,21 @@
 				</div>
 			{/if}
 
-			<button
-				onclick={toggleFullscreen}
-				disabled={loading}
-				title={isFullscreen ? t.exitFullscreen : t.fullscreen}
-				aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
-				class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
-			>
-				{#if isFullscreen}
-					<Minimize size={14} />
-				{:else}
-					<Maximize size={14} />
-				{/if}
-			</button>
+			{#if fullscreenSupported}
+				<button
+					onclick={toggleFullscreen}
+					disabled={loading}
+					title={isFullscreen ? t.exitFullscreen : t.fullscreen}
+					aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
+					class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					{#if isFullscreen}
+						<Minimize size={14} />
+					{:else}
+						<Maximize size={14} />
+					{/if}
+				</button>
+			{/if}
 		</div>
 	{/if}
 </div>

@@ -32,7 +32,7 @@ public class UIBuilderService : IDisposable
 
     /// <summary>
     ///     What a page must send before the bridge talks to it. Travels only in the fragment of the
-    ///     page URL (the URL output and Open UI in Browser); never logged.
+    ///     page URL (the URL output and the Open UI menu items); never logged.
     /// </summary>
     public string BridgeSecret { get; } = BridgeAccess.NewSecret();
 

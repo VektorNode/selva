@@ -54,6 +54,19 @@ public static class OutboundEnvelopes
     public static object SelvaUploadResult(string sessionId, SelvaUploadResult result) =>
         new { type = "selvaUploadResult", sessionId, result };
 
+    // The host-file replies go only to the Rhino panel socket that asked. `error` is shown to the
+    // user and is null unless the outcome is `failed`.
+
+    public static object HostSaveFileResult(string sessionId, string requestId, string outcome, string error) =>
+        new { type = "hostSaveFileResult", sessionId, requestId, outcome, error };
+
+    public static object HostPickFileResult(string sessionId, string requestId, string outcome, string error) =>
+        new { type = "hostPickFileResult", sessionId, requestId, outcome, error };
+
+    /// <summary>The header of a picked file's <see cref="HostFileFrame" />; the file follows it in the same frame.</summary>
+    public static object HostPickedFile(string sessionId, string requestId, string name) =>
+        new { type = "hostPickedFile", sessionId, requestId, name };
+
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };
 

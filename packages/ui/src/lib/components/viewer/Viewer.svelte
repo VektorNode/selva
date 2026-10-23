@@ -40,6 +40,7 @@
 	import { Button } from '$lib/components/primitives/button/index.js';
 	import type { Locale } from '$lib/i18n/messages';
 	import { layerLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { saveBlob } from '$lib/utils/host-files';
 
 	export interface ViewerConfig {
 		showScreenshotButton?: boolean;
@@ -433,15 +434,8 @@
 		const blob = await captureImage?.();
 		if (!blob) return;
 
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement('a');
 		const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-		link.href = url;
-		link.download = `viewer-${timestamp}.png`;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		URL.revokeObjectURL(url);
+		await saveBlob(blob, `viewer-${timestamp}.png`);
 	}
 </script>
 

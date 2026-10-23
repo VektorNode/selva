@@ -187,6 +187,52 @@ public sealed class InboundMessageParser
                 case "selvaCancel":
                     return InboundMessage.Of(InboundKind.SelvaCancel, msgType);
 
+                case "hostSaveFile":
+                    {
+                        var requestId = RequestIdOf(jObj);
+                        var fileName = jObj["fileName"]?.Type == JTokenType.String
+                            ? BareFileName((string)jObj["fileName"])
+                            : null;
+                        if (requestId == null || fileName == null)
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.HostSaveFile,
+                            MessageType = msgType,
+                            RequestId = requestId,
+                            FileName = fileName
+                        };
+                    }
+
+                case "hostPickFile":
+                    {
+                        var requestId = RequestIdOf(jObj);
+                        if (requestId == null || !(jObj["accept"] is JArray acceptArray))
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        var accept = new List<string>();
+                        foreach (var entry in acceptArray)
+                        {
+                            if (entry.Type == JTokenType.String)
+                            {
+                                accept.Add((string)entry);
+                            }
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.HostPickFile,
+                            MessageType = msgType,
+                            RequestId = requestId,
+                            Accept = accept
+                        };
+                    }
+
                 default:
                     return InboundMessage.Of(InboundKind.Unknown, msgType);
             }
@@ -197,5 +243,27 @@ public sealed class InboundMessageParser
             // contract violation, not a crash — surface it as a missing/invalid field.
             return InboundMessage.Of(InboundKind.MissingField, msgType);
         }
+    }
+
+    private const int MaxRequestIdLength = 64;
+    private const int MaxFileNameLength = 255;
+
+    private static string RequestIdOf(JObject jObj)
+    {
+        var requestId = jObj["requestId"]?.Type == JTokenType.String ? (string)jObj["requestId"] : null;
+        return string.IsNullOrEmpty(requestId) || requestId.Length > MaxRequestIdLength ? null : requestId;
+    }
+
+    // Both separators on every platform: Path.GetFileName on macOS keeps a backslash as part of
+    // the name.
+    private static string BareFileName(string fileName)
+    {
+        var name = fileName.Substring(fileName.LastIndexOfAny(new[] { '/', '\\' }) + 1).Trim();
+        if (name.Length == 0 || name == "." || name == "..")
+        {
+            return "download";
+        }
+
+        return name.Length > MaxFileNameLength ? name.Substring(0, MaxFileNameLength) : name;
     }
 }

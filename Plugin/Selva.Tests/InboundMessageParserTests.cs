@@ -247,4 +247,75 @@ public class InboundMessageParserTests
     {
         Assert.Equal(InboundKind.MissingField, Parse(json).Kind);
     }
+
+    // -------------------------------------------------------------------------
+    // hostSaveFile / hostPickFile
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void HostSaveFile_BindsRequestIdAndFileName()
+    {
+        var msg = Parse(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"",
+                           ""requestId"": ""7"", ""fileName"": ""facade.zip"" }");
+
+        Assert.Equal(InboundKind.HostSaveFile, msg.Kind);
+        Assert.Equal("7", msg.RequestId);
+        Assert.Equal("facade.zip", msg.FileName);
+    }
+
+    // The name is only a suggestion in the Save dialog, but it must never steer the folder.
+    [Theory]
+    [InlineData("../../etc/facade.zip", "facade.zip")]
+    [InlineData("C:\\Users\\x\\facade.zip", "facade.zip")]
+    [InlineData("  facade.zip  ", "facade.zip")]
+    [InlineData("folder/", "download")]
+    [InlineData("..", "download")]
+    public void HostSaveFile_KeepsOnlyTheBareFileName(string fileName, string expected)
+    {
+        var msg = Parse(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"", ""requestId"": ""7"",
+                           ""fileName"": " + Newtonsoft.Json.JsonConvert.ToString(fileName) + " }");
+
+        Assert.Equal(expected, msg.FileName);
+    }
+
+    [Theory]
+    [InlineData(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"", ""fileName"": ""a.zip"" }")]
+    [InlineData(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"", ""requestId"": """", ""fileName"": ""a.zip"" }")]
+    [InlineData(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"", ""requestId"": 7, ""fileName"": ""a.zip"" }")]
+    [InlineData(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"", ""requestId"": ""7"" }")]
+    [InlineData(@"{ ""type"": ""hostPickFile"", ""sessionId"": ""session-1"", ""requestId"": ""7"" }")]
+    [InlineData(@"{ ""type"": ""hostPickFile"", ""sessionId"": ""session-1"", ""accept"": [] }")]
+    public void HostMessages_WithoutTheirFields_AreMissingField(string json)
+    {
+        Assert.Equal(InboundKind.MissingField, Parse(json).Kind);
+    }
+
+    [Fact]
+    public void HostSaveFile_WithAnOverlongRequestId_IsMissingField()
+    {
+        var msg = Parse(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"",
+                           ""requestId"": """ + new string('x', 65) + @""", ""fileName"": ""a.zip"" }");
+
+        Assert.Equal(InboundKind.MissingField, msg.Kind);
+    }
+
+    [Fact]
+    public void HostPickFile_BindsTheStringAcceptEntries()
+    {
+        var msg = Parse(@"{ ""type"": ""hostPickFile"", ""sessionId"": ""session-1"",
+                           ""requestId"": ""8"", ""accept"": ["".slvp"", 3, "".sps""] }");
+
+        Assert.Equal(InboundKind.HostPickFile, msg.Kind);
+        Assert.Equal("8", msg.RequestId);
+        Assert.Equal(new[] { ".slvp", ".sps" }, msg.Accept);
+    }
+
+    [Fact]
+    public void HostPickFile_FromAnotherSession_IsSessionMismatch()
+    {
+        var msg = Parse(@"{ ""type"": ""hostPickFile"", ""sessionId"": ""other"",
+                           ""requestId"": ""8"", ""accept"": [] }");
+
+        Assert.Equal(InboundKind.SessionMismatch, msg.Kind);
+    }
 }

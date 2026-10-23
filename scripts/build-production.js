@@ -340,7 +340,7 @@ async function build() {
 		log('  1. Test the plugin by copying to Grasshopper Libraries folder');
 		log('  2. Restart Rhino');
 		log('  3. Add UIBuilderComponent and enable it');
-		log('  4. Right-click the component and select "Open UI in Browser"');
+		log('  4. The UI opens in the Selva panel (right-click the component → "Open UI" to reopen)');
 		log('');
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);

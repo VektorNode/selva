@@ -335,14 +335,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
-                    // Only post the URL remark on an actual cold start, not a no-op re-confirm.
-                    // No URL here: it carries the bridge secret, and a balloon ends up in screenshots.
-                    if (started && !wasRunning && _service.ServerManager.HttpPort.HasValue)
+                    // Only on an actual cold start, not a no-op re-confirm. No URL in the remark: it
+                    // carries the bridge secret, and a balloon ends up in screenshots.
+                    if (started && !wasRunning)
                     {
                         RhinoApp.InvokeOnUiThread(new Action(() =>
                         {
-                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                                "Web UI running. Right-click the component and choose Open UI in Browser.");
+                            var refusal = ShowInPanel();
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, refusal ??
+                                "Web UI open in the Selva panel. Right-click the component and choose Open UI to bring it back.");
                         }));
                     }
 
@@ -382,7 +383,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     /// <summary>Null while the WebSocket transport isn't running yet.</summary>
-    private string TryBuildSessionUrl()
+    private string TryBuildSessionUrl(string host = null)
     {
         if (_service?.WebSocketTransport?.IsRunning != true)
         {
@@ -393,7 +394,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             ? _service.WebServer.BaseUrl
             : $"http://localhost:{AppConfig.UIBuilder.DevServerPort}";
         return BridgeAccess.SessionUrl(
-            baseUrl, _sessionId, _service.WebSocketTransport.WebSocketPort, _service.BridgeSecret);
+            baseUrl, _sessionId, _service.WebSocketTransport.WebSocketPort, _service.BridgeSecret, host);
     }
 
     /// <summary>Skipped when absent — the obsolete subclass registers only the Schema output.</summary>
@@ -415,6 +416,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     private void HandleDisablingState(GH_Document document)
     {
+        RhinoPanelHost.Clear(_sessionId);
         CleanupCommunication();
         _service?.EventManager?.UnregisterEvents();
 
@@ -465,24 +467,58 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
+    /// <summary>Null when the panel took the session; otherwise why not, for the user.</summary>
+    private string ShowInPanel()
+    {
+        var url = TryBuildSessionUrl("rhino");
+        if (url == null)
+        {
+            return "The web UI isn't running yet.";
+        }
+
+        try
+        {
+            return RhinoPanelHost.TryShow(url, _sessionId);
+        }
+        catch (Exception ex)
+        {
+            return $"Could not open the Selva panel: {ex.Message}";
+        }
+    }
+
+    private void OpenUIInPanel()
+    {
+        var refusal = ShowInPanel();
+        if (refusal != null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal + " Opened the browser instead.");
+            OpenUI();
+        }
+    }
+
     public override bool AppendMenuItems(ToolStripDropDown menu)
     {
         base.AppendMenuItems(menu);
 
         menu.Items.Add(new ToolStripSeparator());
 
-        var openUIItem = new ToolStripMenuItem(
-            "Open UI in Browser",
-            null,
-            (s, e) => OpenUI()
-        )
+        var running = _service?.StateManager != null && IsConnected;
+        menu.Items.Add(new ToolStripMenuItem("Open UI", null, (s, e) => OpenUIInPanel())
         {
-            ToolTipText = "Open the interactive UI preview in your default web browser"
-        };
+            ToolTipText = "Show the interactive UI in the Selva panel",
+            Enabled = running
+        });
 
-        openUIItem.Enabled = _service?.StateManager != null && IsConnected;
-
-        menu.Items.Add(openUIItem);
+        // Shift-only: the browser stays live during a solve, which the panel can't, so it's the
+        // escape hatch for long solves and for a Rhino where the panel misbehaves.
+        if ((Eto.Forms.Keyboard.Modifiers & Eto.Forms.Keys.Shift) != 0)
+        {
+            menu.Items.Add(new ToolStripMenuItem("Open UI in Browser", null, (s, e) => OpenUI())
+            {
+                ToolTipText = "Open the interactive UI in your default web browser",
+                Enabled = running
+            });
+        }
 
         return true;
     }
@@ -491,6 +527,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         base.RemovedFromDocument(document);
         Cleanup();
+    }
+
+    public override void DocumentContextChanged(GH_Document document, GH_DocumentContext context)
+    {
+        base.DocumentContextChanged(document, context);
+        if (context == GH_DocumentContext.Close && _sessionId != null)
+        {
+            RhinoPanelHost.Clear(_sessionId);
+        }
     }
 
     private static readonly Guid BooleanToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
@@ -703,6 +748,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     private void Cleanup()
     {
+        if (_sessionId != null)
+        {
+            RhinoPanelHost.Clear(_sessionId);
+        }
+
         CleanupCommunication();
 
         if (_service?.EventManager != null)

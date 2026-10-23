@@ -15,6 +15,8 @@ import type {
 } from './schema-source';
 import { createWebSocketSolveDriver } from './websocket-solve-driver';
 import { bridgeSecretForPage } from '$lib/websocket/bridge-secret';
+import { isRhinoPanel } from '$lib/utils/session';
+import { RHINO_PANEL_HOST } from '$lib/app.config';
 import type {
 	WsSchemaSavedMessage,
 	WsSchemaSaveRejectedMessage,
@@ -24,7 +26,7 @@ import type {
 const SAVE_TIMEOUT_MS = 10000;
 
 const NOT_OPENED_FROM_GRASSHOPPER =
-	'Open this page from Grasshopper: right-click the UI Bridge component and choose Open UI in Browser.';
+	'Open this page from Grasshopper: right-click the UI Bridge component and choose Open UI.';
 const LINK_REFUSED =
 	'Grasshopper refused this link. It belongs to an earlier session: reopen the UI from the UI Bridge component.';
 
@@ -46,7 +48,7 @@ export function createGrasshopperSource(wsState: WebSocketState, port: number): 
 			if (!sessionId) return { ok: false, error: 'No session ID provided' };
 			const secret = bridgeSecretForPage(sessionId);
 			if (!secret) return { ok: false, error: NOT_OPENED_FROM_GRASSHOPPER };
-			wsState.setAuthSecret(secret);
+			wsState.setAuthSecret(secret, isRhinoPanel() ? RHINO_PANEL_HOST : undefined);
 
 			const connected = await wsState.connect();
 			if (!connected) {

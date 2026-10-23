@@ -49,4 +49,4 @@ export {
 // rootOf/pathBelowRoot/toArchiveName stay internal: they're the grouping's mechanics, and
 // groupFilesByRoot is the whole convention a consumer needs.
 export { groupFilesByRoot, subFolderSegments } from './files/sub-folder';
-export type { ProcessedFile, FileData, FileBaseInfo } from './files/types';
+export type { ProcessedFile, FileData, FileBaseInfo, DownloadOptions } from './files/types';

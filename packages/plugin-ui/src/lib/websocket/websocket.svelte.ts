@@ -17,6 +17,7 @@ import {
 	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
 	isAuthenticatedMessage
 } from './bridge-handshake';
+import { decodeHostFrame, isHostFrame } from './host-frame';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type MessageHandler = (data: any) => void;
@@ -169,6 +170,7 @@ export class WebSocketState {
 	private currentSessionId: string | null = null;
 	private _hasConnectedBefore = false;
 	private authSecret: string | null = null;
+	private authHost: string | undefined;
 	private readonly BATCH_DELAY_MS = 50; // Batch updates within 50ms window
 
 	// Reactive state using Svelte 5 runes
@@ -227,9 +229,13 @@ export class WebSocketState {
 		});
 	}
 
-	/** Must be set before `connect()`; the socket sends it as its first message. */
-	setAuthSecret(secret: string) {
+	/**
+	 * Must be set before `connect()`; the socket sends it as its first message. `host` is `rhino`
+	 * in the Rhino panel, the only page the plugin opens file dialogs for.
+	 */
+	setAuthSecret(secret: string, host?: string) {
 		this.authSecret = secret;
+		this.authHost = host;
 		this.authRejected = false;
 	}
 
@@ -273,7 +279,7 @@ export class WebSocketState {
 						window.location.reload();
 						return;
 					}
-					socket.send(JSON.stringify(authenticateMessage(secret)));
+					socket.send(JSON.stringify(authenticateMessage(secret, this.authHost)));
 				};
 
 				const onAuthenticated = () => {
@@ -295,6 +301,15 @@ export class WebSocketState {
 				this.socket.onmessage = (event) => {
 					try {
 						if (event.data instanceof ArrayBuffer) {
+							// A host file names itself. It must not reach the mesh collector below,
+							// which takes every binary frame it sees as a mesh blob.
+							if (isHostFrame(event.data)) {
+								const frame = decodeHostFrame(event.data);
+								if (frame) this.handleMessage({ ...frame.header, body: frame.body });
+								else console.error('[WebSocket] Dropped a malformed host file frame.');
+								return;
+							}
+
 							const handlers = this.messageHandlers.get('binaryFrame');
 							if (handlers) {
 								handlers.forEach((handler) => handler(event.data as ArrayBuffer));
@@ -330,6 +345,8 @@ export class WebSocketState {
 					}
 					// If we closed before authenticating, settle false; otherwise this is a no-op.
 					settle(false);
+					// A reply to a request on this socket can no longer arrive.
+					this.messageHandlers.get('socketClosed')?.forEach((handler) => handler(undefined));
 					if (!this.authRejected) this.attemptReconnect();
 				};
 			} catch (error) {
@@ -392,6 +409,14 @@ export class WebSocketState {
 			}
 		} else {
 			console.warn('[WebSocket] Cannot send message - not connected');
+		}
+	}
+
+	sendBinary(data: Blob) {
+		if (this.socket?.readyState === WebSocket.OPEN) {
+			this.socket.send(data);
+		} else {
+			console.warn('[WebSocket] Cannot send binary frame - not connected');
 		}
 	}
 

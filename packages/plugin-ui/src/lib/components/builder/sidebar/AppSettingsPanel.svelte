@@ -6,7 +6,7 @@
 		ViewerOptions
 	} from '@selvajs/schemas';
 	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
-	import { Input, Textarea, Switch, Button, toast } from '@selvajs/ui';
+	import { Input, Textarea, Switch, Button, toast, pickFile } from '@selvajs/ui';
 	import { Download, Upload } from '@lucide/svelte';
 	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';
 	import type { ExportedSchema } from '$lib/utils/schema-exporter';
@@ -26,7 +26,6 @@
 
 	let { schema, onSchemaChange, liveInputs, liveOutputs }: Props = $props();
 
-	let fileInput: HTMLInputElement;
 	let pendingImport: ExportedSchema | null = $state(null);
 
 	const DEFAULT_BACKGROUND = '#E0E0E0';
@@ -46,26 +45,22 @@
 		updateSchema({ tags: next.length > 0 ? next : undefined });
 	}
 
-	function handleExport() {
+	async function handleExport() {
 		try {
-			exportSchemaAsFile(schema);
-			toast.success('Schema exported');
+			if (await exportSchemaAsFile(schema)) toast.success('Schema exported');
 		} catch (error) {
 			toast.error(`Export failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
 		}
 	}
 
-	async function handleFileSelected(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
+	async function handleImport() {
+		const file = await pickFile({ accept: '.sls' });
 		if (!file) return;
 
 		try {
 			pendingImport = await importSchemaFromFile(file);
 		} catch (error) {
 			toast.error(`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
-		} finally {
-			input.value = '';
 		}
 	}
 
@@ -179,20 +174,12 @@
 			<Download />
 			Export
 		</Button>
-		<Button variant="outline" size="sm" onclick={() => fileInput?.click()}>
+		<Button variant="outline" size="sm" onclick={handleImport}>
 			<Upload />
 			Import
 		</Button>
 	</div>
 </SettingsSection>
-
-<input
-	type="file"
-	accept=".sls"
-	bind:this={fileInput}
-	onchange={handleFileSelected}
-	class="hidden"
-/>
 
 {#if pendingImport}
 	<SchemaImportDialog

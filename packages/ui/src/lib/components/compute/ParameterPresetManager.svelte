@@ -10,6 +10,7 @@
 	} from '../../schema/param-exporter';
 	import { Button, Input, Label, Textarea, Dialog, Callout, IssueList, toast } from '../primitives';
 	import { DEFAULT_PRESET_LABELS, type PresetLabels } from '../../types/presetLabels';
+	import { pickFile } from '../../utils/host-files';
 
 	interface Props {
 		schema: UISchema;
@@ -37,7 +38,6 @@
 	let showLoadDialog = $state(false);
 	let loadResult = $state<PresetLoadResult | null>(null);
 	let loadingPresetName = $state('');
-	let fileInputRef = $state<HTMLInputElement | null>(null);
 
 	let listedStates = $state<ParameterPreset[]>([]);
 	let isLoadingList = $state(false);
@@ -69,7 +69,7 @@
 		});
 
 		if (onSaveState) await onSaveState(state);
-		else exportStateAsJson(state);
+		else await exportStateAsJson(state);
 		showExportDialog = false;
 	}
 
@@ -86,19 +86,16 @@
 		}
 	}
 
-	async function handleImport(event: Event) {
-		const input = event.target as HTMLInputElement;
-		if (!input.files || input.files.length === 0) return;
+	async function importFromFile() {
+		// .sps is the pre-rename extension; files with it exist on users' drives, so keep accepting it.
+		const file = await pickFile({ accept: '.slvp,.sps' });
+		if (!file) return;
 
 		try {
-			const imported = await importStateFromJson(input.files[0]);
-			tryLoad(imported);
+			tryLoad(await importStateFromJson(file));
 		} catch (error) {
 			toast.error(t.loadImportError + (error as Error).message);
 		}
-
-		// Reset so re-picking the same file fires `change` again.
-		input.value = '';
 	}
 
 	function confirmLoad() {
@@ -132,8 +129,8 @@
 	}
 
 	function handleLoadClick() {
-		fileInputRef?.click();
 		showLoadDialog = false;
+		void importFromFile();
 	}
 
 	function selectListedState(preset: ParameterPreset) {
@@ -141,15 +138,6 @@
 		showLoadDialog = false;
 	}
 </script>
-
-<!-- .sps is the pre-rename extension; files with it exist on users' drives, so keep accepting it. -->
-<input
-	bind:this={fileInputRef}
-	type="file"
-	accept=".slvp,.sps"
-	onchange={handleImport}
-	class="hidden"
-/>
 
 <!-- Save Dialog -->
 <Dialog.Root bind:open={showExportDialog}>

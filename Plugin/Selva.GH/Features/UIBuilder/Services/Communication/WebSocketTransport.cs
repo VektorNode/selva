@@ -49,6 +49,8 @@ public class WebSocketTransport : IDisposable
     // this class owns only the socket, thread marshalling, and event raising.
     private readonly InboundMessageParser _inboundParser = new InboundMessageParser(SecureSerializer);
 
+    private readonly HostFileCoordinator _hostFiles;
+
     // Guards all mutable state touched from multiple threads.
     private readonly object _stateLock = new object();
 
@@ -69,6 +71,8 @@ public class WebSocketTransport : IDisposable
         _sessionId = sessionId;
         _bridgeSecret = bridgeSecret ?? throw new ArgumentNullException(nameof(bridgeSecret));
         _port = port;
+        _hostFiles = new HostFileCoordinator(new EtoHostFileDialogs(), MarshalToMainThread, sessionId,
+            AppConfig.ValueLimits.MaxFileSizeBytes);
     }
 
     public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -484,25 +488,77 @@ public class WebSocketTransport : IDisposable
 #endif
     }
 
-    private void HandleMessageReceived(object sender, string message)
+    private void HandleMessageReceived(object sender, ClientFrame frame)
     {
         // Process on a thread-pool thread so we never block the receive loop, but chain
         // messages so they are handled strictly in arrival order.
         lock (_dispatchLock)
         {
             _dispatchChain = _dispatchChain.ContinueWith(
-                _ => ProcessInboundMessage(message),
+                _ =>
+                {
+                    if (frame.Data != null)
+                    {
+                        ProcessHostFileFrame(frame);
+                    }
+                    else
+                    {
+                        ProcessInboundMessage(frame);
+                    }
+                },
                 CancellationToken.None,
                 TaskContinuationOptions.None,
                 TaskScheduler.Default);
         }
     }
 
-    private void ProcessInboundMessage(string message)
+    // The only binary frame a page sends is a file to save.
+    private void ProcessHostFileFrame(ClientFrame frame)
     {
         try
         {
-            var inbound = _inboundParser.Parse(message, _sessionId);
+            if (!IsFromPanel(frame))
+            {
+                return;
+            }
+
+            if (!HostFileFrame.TryDecode(frame.Data, out var headerJson, out var body))
+            {
+                Logger.Warn("[WebSocketTransport] Dropped a binary frame that isn't a host file frame.");
+                return;
+            }
+
+            var inbound = _inboundParser.Parse(headerJson, _sessionId);
+            if (inbound.Kind != InboundKind.HostSaveFile)
+            {
+                Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
+                return;
+            }
+
+            _hostFiles.HandleSave(inbound.RequestId, inbound.FileName, body, new SocketReply(this, frame.Client));
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[WebSocketTransport] Host file frame error: {ex.Message}");
+        }
+    }
+
+    private static bool IsFromPanel(ClientFrame frame)
+    {
+        if (frame.Host == BridgeAccess.PanelHost)
+        {
+            return true;
+        }
+
+        Logger.Warn("[WebSocketTransport] Refused a file dialog request from a browser tab.");
+        return false;
+    }
+
+    private void ProcessInboundMessage(ClientFrame frame)
+    {
+        try
+        {
+            var inbound = _inboundParser.Parse(frame.Text, _sessionId);
 
             switch (inbound.Kind)
             {
@@ -571,6 +627,18 @@ public class WebSocketTransport : IDisposable
                     OnSelvaCommand?.Invoke(this, inbound);
                     break;
 
+                case InboundKind.HostPickFile:
+                    if (IsFromPanel(frame))
+                    {
+                        _hostFiles.HandlePick(inbound.RequestId, inbound.Accept, new SocketReply(this, frame.Client));
+                    }
+
+                    break;
+
+                case InboundKind.HostSaveFile:
+                    Logger.Warn("[WebSocketTransport] Dropped a hostSaveFile sent as text; it travels as a binary frame.");
+                    break;
+
                 case InboundKind.SessionMismatch:
                     Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");
                     break;
@@ -591,6 +659,36 @@ public class WebSocketTransport : IDisposable
         catch (Exception ex)
         {
             Logger.Warn($"[WebSocketTransport] Message error: {ex.Message}");
+        }
+    }
+
+    /// <summary>Sends to the socket the request came from, through whichever server is running at reply time.</summary>
+    private sealed class SocketReply : IHostFileReply
+    {
+        private readonly WebSocket _client;
+        private readonly WebSocketTransport _transport;
+
+        public SocketReply(WebSocketTransport transport, WebSocket client)
+        {
+            _transport = transport;
+            _client = client;
+        }
+
+        public Task SendAsync(object envelope)
+        {
+            var server = _transport._webSocketServer;
+            return server == null
+                ? Task.CompletedTask
+                : server.SendAsync(_client, JsonConvert.SerializeObject(envelope, SecureSerializerSettings));
+        }
+
+        public Task SendFileAsync(object header, byte[] body)
+        {
+            var server = _transport._webSocketServer;
+            return server == null
+                ? Task.CompletedTask
+                : server.SendBinaryAsync(_client,
+                    HostFileFrame.Encode(JsonConvert.SerializeObject(header, SecureSerializerSettings), body));
         }
     }
 

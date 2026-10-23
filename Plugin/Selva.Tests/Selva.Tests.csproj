@@ -56,6 +56,7 @@
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\WebSocketServer.cs"
 		         Link="Linked\WebSocketServer.cs"/>
 		<Compile Include="..\Selva.GH\Config\AppConfig.cs" Link="Linked\AppConfig.cs"/>
+		<Compile Include="..\Selva.Panel\NavigationPolicy.cs" Link="Linked\NavigationPolicy.cs"/>
 		<!-- The Selva client's Rhino-free parts: everything but the bridge handler and its dialog. -->
 		<Compile Include="..\Selva.GH\Features\SelvaUpload\Services\*.cs" Link="Linked\SelvaUpload\%(Filename)%(Extension)"/>
 		<Compile Include="..\Selva.GH\Utilities\Helpers\Logger.cs" Link="Linked\Logger.cs"/>
@@ -92,6 +93,11 @@
 		         Link="Linked\InboundMessageParser.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\OutboundEnvelopes.cs"
 		         Link="Linked\OutboundEnvelopes.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\HostFileFrame.cs"
+		         Link="Linked\HostFileFrame.cs"/>
+		<!-- Rhino-free: the Eto dialogs sit behind IHostFileDialogs in EtoHostFileDialogs.cs. -->
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\HostFileCoordinator.cs"
+		         Link="Linked\HostFileCoordinator.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ComponentStateManager.cs"
 		         Link="Linked\ComponentStateManager.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\SolveDiagnostics.cs"

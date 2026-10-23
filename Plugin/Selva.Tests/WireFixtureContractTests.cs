@@ -235,6 +235,14 @@ public class WireFixtureContractTests
                     Url = "https://selva.example.com/library/44444444-4444-4444-8444-444444444444"
                 })),
 
+            ["host-save-file-result.json"] = ("HostSaveFileResult",
+                OutboundEnvelopes.HostSaveFileResult(Session, "7", "failed", "The file is larger than 150 MB.")),
+
+            ["host-pick-file-result.json"] = ("HostPickFileResult",
+                OutboundEnvelopes.HostPickFileResult(Session, "8", "cancelled", null)),
+
+            ["host-picked-file.json"] = ("HostPickedFile", HostFileFrameTests.SampleHeader()),
+
             ["outputs.json"] = ("Outputs",
                 OutboundEnvelopes.Outputs(
                     Session,

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- Same split as Selva.GH: the .rhp ships in each TFM folder beside Selva.gha. -->
+		<TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net48;net7.0;net9.0</TargetFrameworks>
+		<TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net7.0</TargetFrameworks>
+		<Nullable>enable</Nullable>
+		<TargetExt>.rhp</TargetExt>
+		<EnableDynamicLoading>true</EnableDynamicLoading>
+		<NoWarn>NU1701</NoWarn>
+		<!-- Not Selva.Panel: inside Selva.GH's namespaces that would shadow every Eto/WinForms Panel. -->
+		<RootNamespace>Selva.RhinoPanel</RootNamespace>
+		<Title>Selva Panel</Title>
+		<Description>Hosts the Selva UI in a Rhino panel that floats or docks</Description>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!-- RhinoCommon only (Eto comes with it): this plug-in must load before Grasshopper does. -->
+		<PackageReference Include="RhinoCommon" VersionOverride="9.0.25266.10145-wip" Condition="'$(TargetFramework)' == 'net9.0'" ExcludeAssets="runtime"/>
+		<PackageReference Include="RhinoCommon" Condition="'$(TargetFramework)' != 'net9.0'" ExcludeAssets="runtime"/>
+	</ItemGroup>
+
+	<ItemGroup>
+		<EmbeddedResource Include="..\Selva.GH\Resources\Icons\UIBridge.png" LogicalName="Selva.Panel.Icon.png"/>
+	</ItemGroup>
+
+</Project>

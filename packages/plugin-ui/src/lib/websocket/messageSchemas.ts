@@ -268,6 +268,31 @@ const selvaUploadResultSchema = baseEnvelope.extend({
 // in. No schema needed.
 
 // ============================================================================
+// Rhino panel file dialogs (replies only ever reach the panel's own socket)
+// ============================================================================
+
+const hostSaveFileResultSchema = baseEnvelope.extend({
+	type: z.literal('hostSaveFileResult'),
+	requestId: z.string(),
+	outcome: z.enum(['saved', 'cancelled', 'failed']),
+	error: z.string().nullish()
+});
+
+const hostPickFileResultSchema = baseEnvelope.extend({
+	type: z.literal('hostPickFileResult'),
+	requestId: z.string(),
+	outcome: z.enum(['cancelled', 'failed']),
+	error: z.string().nullish()
+});
+
+// The header of a binary host-frame.ts frame; the dispatcher adds the file as `body`.
+const hostPickedFileSchema = baseEnvelope.extend({
+	type: z.literal('hostPickedFile'),
+	requestId: z.string(),
+	name: z.string()
+});
+
+// ============================================================================
 // Dispatcher entry point
 // ============================================================================
 
@@ -295,7 +320,10 @@ const schemasByType = {
 	selvaAccount: selvaAccountSchema,
 	selvaTargets: selvaTargetsSchema,
 	selvaUploadProgress: selvaUploadProgressSchema,
-	selvaUploadResult: selvaUploadResultSchema
+	selvaUploadResult: selvaUploadResultSchema,
+	hostSaveFileResult: hostSaveFileResultSchema,
+	hostPickFileResult: hostPickFileResultSchema,
+	hostPickedFile: hostPickedFileSchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

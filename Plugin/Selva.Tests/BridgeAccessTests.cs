@@ -72,9 +72,28 @@ public class BridgeAccessTests
     }
 
     [Fact]
-    public void Authenticate_WithTheSecret_IsAccepted()
+    public void Authenticate_WithTheSecret_IsAcceptedAsABrowserTab()
     {
-        Assert.True(BridgeAccess.IsValidAuthenticate("{\"type\":\"authenticate\",\"secret\":\"s3cret\"}", "s3cret"));
+        Assert.True(BridgeAccess.TryAuthenticate("{\"type\":\"authenticate\",\"secret\":\"s3cret\"}", "s3cret",
+            out var host));
+        Assert.Null(host);
+    }
+
+    [Fact]
+    public void Authenticate_FromTheRhinoPanel_CarriesItsHost()
+    {
+        Assert.True(BridgeAccess.TryAuthenticate(
+            "{\"type\":\"authenticate\",\"secret\":\"s3cret\",\"host\":\"rhino\"}", "s3cret", out var host));
+        Assert.Equal(BridgeAccess.PanelHost, host);
+    }
+
+    // A wrong secret must not leak the host it claimed.
+    [Fact]
+    public void Authenticate_WithAWrongSecret_DeclaresNoHost()
+    {
+        Assert.False(BridgeAccess.TryAuthenticate(
+            "{\"type\":\"authenticate\",\"secret\":\"guess\",\"host\":\"rhino\"}", "s3cret", out var host));
+        Assert.Null(host);
     }
 
     [Theory]
@@ -88,9 +107,12 @@ public class BridgeAccessTests
     [InlineData("[\"s3cret\"]")]
     [InlineData("s3cret")]
     [InlineData("")]
+    [InlineData("{\"type\":\"authenticate\",\"secret\":\"s3cret\",\"host\":\"chrome\"}")]
+    [InlineData("{\"type\":\"authenticate\",\"secret\":\"s3cret\",\"host\":\"RHINO\"}")]
+    [InlineData("{\"type\":\"authenticate\",\"secret\":\"s3cret\",\"host\":true}")]
     public void Authenticate_AnythingElse_IsRefused(string message)
     {
-        Assert.False(BridgeAccess.IsValidAuthenticate(message, "s3cret"));
+        Assert.False(BridgeAccess.TryAuthenticate(message, "s3cret", out _));
     }
 
     [Fact]
@@ -101,6 +123,14 @@ public class BridgeAccessTests
             BridgeAccess.SessionUrl("http://localhost:51234", "abc", 8765, "SECRET"));
     }
 
+    [Fact]
+    public void SessionUrl_NamesANonBrowserHostInTheQuery()
+    {
+        Assert.Equal(
+            "http://localhost:51234/?session=abc&wsPort=8765&host=rhino#s=SECRET",
+            BridgeAccess.SessionUrl("http://localhost:51234", "abc", 8765, "SECRET", "rhino"));
+    }
+
     // The page reads the same file (bridge-handshake.test.ts), so the two sides can't drift.
     [Fact]
     public void Handshake_MatchesTheSharedFixture()
@@ -108,9 +138,13 @@ public class BridgeAccessTests
         var fixture = JObject.Parse(File.ReadAllText(
             Path.Combine(TestPaths.RepoRoot(), "packages", "schemas", "fixtures", "bridge-handshake.json")));
         var authenticate = (JObject)fixture["authenticate"]!;
+        var fromPanel = (JObject)fixture["authenticateFromPanel"]!;
 
-        Assert.True(BridgeAccess.IsValidAuthenticate(authenticate.ToString(), (string)authenticate["secret"]!));
+        Assert.True(BridgeAccess.TryAuthenticate(authenticate.ToString(), (string)authenticate["secret"]!, out _));
+        Assert.True(BridgeAccess.TryAuthenticate(fromPanel.ToString(), (string)fromPanel["secret"]!, out var host));
+        Assert.Equal(BridgeAccess.PanelHost, host);
         Assert.True(JToken.DeepEquals(fixture["authenticated"], JObject.Parse(BridgeAccess.AuthenticatedMessage)));
         Assert.Equal((int)fixture["unauthorizedCloseCode"]!, BridgeAccess.UnauthorizedCloseCode);
+        Assert.Equal((long)fixture["maxHostFileBytes"]!, Selva.GH.Config.AppConfig.ValueLimits.MaxFileSizeBytes);
     }
 }

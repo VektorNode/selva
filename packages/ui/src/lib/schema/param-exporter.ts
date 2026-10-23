@@ -1,4 +1,5 @@
 import { randomId } from '../utils/randomId';
+import { saveBlob } from '../utils/host-files';
 import { getGroups } from '@selvajs/schemas';
 import type {
 	UISchema,
@@ -147,18 +148,15 @@ export function loadPreset(savedState: ParameterPreset, currentSchema: UISchema)
 	};
 }
 
-export function exportStateAsJson(savedState: ParameterPreset): void {
+/** Resolves false when the user cancelled the save. */
+export function exportStateAsJson(savedState: ParameterPreset): Promise<boolean> {
 	const blob = new Blob([JSON.stringify(savedState, null, 2)], { type: 'application/json' });
 	const safeName = savedState.name.replace(/[^a-z0-9]/gi, '_');
 	const date = savedState.timestamp.split('T')[0].replace(/-/g, '_');
 
-	const link = document.createElement('a');
-	link.href = URL.createObjectURL(blob);
 	// .slvp = Selva parameter preset. Import still accepts the pre-rename .sps — same JSON,
 	// only the writer's extension changed.
-	link.download = `${safeName}_${date}.slvp`;
-	link.click();
-	URL.revokeObjectURL(link.href);
+	return saveBlob(blob, `${safeName}_${date}.slvp`);
 }
 
 export async function importStateFromJson(file: File): Promise<ParameterPreset> {

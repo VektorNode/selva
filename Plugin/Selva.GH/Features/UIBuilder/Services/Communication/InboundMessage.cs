@@ -61,6 +61,12 @@ public enum InboundKind
     /// <summary>`selvaCancel` — no payload. Stops a sign-in or upload in flight.</summary>
     SelvaCancel,
 
+    /// <summary>`hostSaveFile` with a request id and file name. Only valid as a binary frame's header.</summary>
+    HostSaveFile,
+
+    /// <summary>`hostPickFile` with a request id and the page's accept list. Answered with one file or a result.</summary>
+    HostPickFile,
+
     /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
@@ -97,6 +103,14 @@ public sealed class InboundMessage
     public string Origin { get; init; }
 
     public SelvaUploadRequest UploadRequest { get; init; }
+
+    /// <summary>Echoed in the reply so the page can match it to its request.</summary>
+    public string RequestId { get; init; }
+
+    /// <summary>The name to suggest in the Save dialog: a bare file name, never a path.</summary>
+    public string FileName { get; init; }
+
+    public List<string> Accept { get; init; }
 
     // Populated per-Kind, so most instances leave several of these null. The plugin compiles
     // without a nullable context; the test project links this file in under one, hence the

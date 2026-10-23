@@ -20,13 +20,13 @@ public sealed class BridgeServerTests : IAsyncLifetime
     private const string PageOrigin = "http://localhost:4242";
     private const int AppConfigClientLimit = Selva.GH.Config.AppConfig.WebSocket.MaxConcurrentClients;
 
-    private readonly ConcurrentQueue<string> _received = new();
+    private readonly ConcurrentQueue<ClientFrame> _received = new();
     private WebSocketServer _server = null!;
 
     public async Task InitializeAsync()
     {
         _server = new WebSocketServer(Secret, BridgeAccess.LoopbackOrigins(4242), port: 0);
-        _server.OnMessageReceived += (_, message) => _received.Enqueue(message);
+        _server.OnMessageReceived += (_, frame) => _received.Enqueue(frame);
         await _server.StartAsync();
     }
 
@@ -69,7 +69,53 @@ public sealed class BridgeServerTests : IAsyncLifetime
 
         await SendAsync(socket, "{\"type\":\"requestInitialData\",\"sessionId\":\"s\"}");
         await WaitUntilAsync(() => !_received.IsEmpty);
-        Assert.Equal(new[] { "{\"type\":\"requestInitialData\",\"sessionId\":\"s\"}" }, _received.ToArray());
+        var frame = Assert.Single(_received);
+        Assert.Equal("{\"type\":\"requestInitialData\",\"sessionId\":\"s\"}", frame.Text);
+        Assert.Null(frame.Host);
+    }
+
+    [Fact]
+    public async Task Socket_FromTheRhinoPanel_CarriesItsHostOnEveryFrame()
+    {
+        using var socket = await ConnectAsync();
+        await SendAsync(socket, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\",\"host\":\"rhino\"}");
+        await ReceiveTextAsync(socket);
+
+        await SendAsync(socket, "{\"type\":\"requestInitialData\",\"sessionId\":\"s\"}");
+        await socket.SendAsync(new ArraySegment<byte>(new byte[] { 1, 2, 3 }), WebSocketMessageType.Binary, true,
+            Timeout());
+        await WaitUntilAsync(() => _received.Count == 2);
+
+        var frames = _received.ToArray();
+        Assert.All(frames, f => Assert.Equal(BridgeAccess.PanelHost, f.Host));
+        Assert.NotNull(frames[0].Text);
+        Assert.Equal(new byte[] { 1, 2, 3 }, frames[1].Data);
+        Assert.Null(frames[1].Text);
+    }
+
+    [Fact]
+    public async Task Send_ReachesOnlyTheSocketItNames()
+    {
+        using var asker = await ConnectAsync();
+        await SendAsync(asker, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
+        await ReceiveTextAsync(asker);
+        using var bystander = await ConnectAsync();
+        await SendAsync(bystander, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
+        await ReceiveTextAsync(bystander);
+
+        await SendAsync(asker, "{\"type\":\"hostPickFile\"}");
+        await WaitUntilAsync(() => !_received.IsEmpty);
+        var askerOnServer = Assert.Single(_received).Client;
+
+        await _server.SendAsync(askerOnServer, "{\"type\":\"hostPickFileResult\"}");
+        await _server.SendBinaryAsync(askerOnServer, new byte[] { 9 });
+        await _server.BroadcastAsync("{\"type\":\"solvingState\"}");
+
+        Assert.Equal("{\"type\":\"hostPickFileResult\"}", await ReceiveTextAsync(asker));
+        var binary = await asker.ReceiveAsync(new ArraySegment<byte>(new byte[16]), Timeout());
+        Assert.Equal(WebSocketMessageType.Binary, binary.MessageType);
+        Assert.Equal("{\"type\":\"solvingState\"}", await ReceiveTextAsync(asker));
+        Assert.Equal("{\"type\":\"solvingState\"}", await ReceiveTextAsync(bystander));
     }
 
     [Fact]

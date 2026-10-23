@@ -58,6 +58,14 @@ export * from './composables/useFooterItem.svelte';
 
 export * from './utils';
 export { randomId } from './utils/randomId';
+export {
+	saveBlob,
+	pickFile,
+	setBlobSaver,
+	setFilePicker,
+	type BlobSaver,
+	type FilePicker
+} from './utils/host-files';
 
 // UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';

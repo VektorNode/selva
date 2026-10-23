@@ -62,7 +62,9 @@
 
 	const cfg = $derived(item.config ?? {});
 	const allowDownload = $derived(cfg.allowDownload ?? true);
-	const allowFullscreen = $derived(cfg.allowFullscreen ?? true);
+	// Some embedded WebViews (WKWebView in the Rhino panel) ship without the Fullscreen API at all.
+	const fullscreenSupported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
+	const allowFullscreen = $derived((cfg.allowFullscreen ?? true) && fullscreenSupported);
 	const backgroundColor = $derived(cfg.backgroundColor);
 
 	let wrapperEl = $state<HTMLDivElement | null>(null);

@@ -1,4 +1,5 @@
 import type { UISchema, ValidationIssueMessage } from '@selvajs/schemas';
+import { saveBlob } from '@selvajs/ui';
 
 export interface SchemaExportMetadata {
 	exportedAt: string;
@@ -129,7 +130,8 @@ export function validateImportedSchema(
 	};
 }
 
-export function exportSchemaAsFile(schema: UISchema, exportedBy?: string): void {
+/** Resolves false when the user cancelled the save. */
+export function exportSchemaAsFile(schema: UISchema, exportedBy?: string): Promise<boolean> {
 	const exportedSchema: ExportedSchema = {
 		metadata: {
 			exportedAt: new Date().toISOString(),
@@ -141,19 +143,10 @@ export function exportSchemaAsFile(schema: UISchema, exportedBy?: string): void 
 
 	const json = JSON.stringify(exportedSchema, null, 2);
 	const blob = new Blob([json], { type: 'application/json' });
-	const url = URL.createObjectURL(blob);
 
 	const sanitizedName = schema.name.replace(/[^a-z0-9]/gi, '_');
 	const timestamp = new Date().toISOString().split('T')[0].replace(/-/g, '_');
-	const fileName = `${sanitizedName}_${timestamp}.sls`;
-
-	const a = document.createElement('a');
-	a.href = url;
-	a.download = fileName;
-	document.body.appendChild(a);
-	a.click();
-	document.body.removeChild(a);
-	URL.revokeObjectURL(url);
+	return saveBlob(blob, `${sanitizedName}_${timestamp}.sls`);
 }
 
 /**

@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	authenticateMessage,
 	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
-	isAuthenticatedMessage
+	isAuthenticatedMessage,
+	MAX_HOST_FILE_BYTES
 } from '../bridge-handshake';
 
 const fixture = JSON.parse(
@@ -18,6 +19,15 @@ const fixture = JSON.parse(
 describe('bridge handshake (cross-stack with BridgeAccessTests)', () => {
 	it('sends the authenticate message the plugin expects', () => {
 		expect(authenticateMessage(fixture.authenticate.secret)).toEqual(fixture.authenticate);
+	});
+
+	it('declares the Rhino panel host the way the plugin expects', () => {
+		const { secret, host } = fixture.authenticateFromPanel;
+		expect(authenticateMessage(secret, host)).toEqual(fixture.authenticateFromPanel);
+	});
+
+	it('refuses a save over the size the plugin accepts', () => {
+		expect(MAX_HOST_FILE_BYTES).toBe(fixture.maxHostFileBytes);
 	});
 
 	it('recognises the plugin acknowledgement', () => {

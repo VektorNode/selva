@@ -67,6 +67,11 @@
 		<Folder Include="Features/"/>
 	</ItemGroup>
 
+	<!-- Compiled into both plug-ins rather than referenced: only BCL types may cross between them. -->
+	<ItemGroup>
+		<Compile Include="..\Selva.Panel\PanelContract.cs" Link="Features\UIBuilder\Services\PanelContract.cs"/>
+	</ItemGroup>
+
 	<!--
 		Release-only ILRepack: merge Newtonsoft.Json + Selva.Schema into Selva.dll and
 		internalize them.

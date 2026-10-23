@@ -78,7 +78,12 @@ public class WebSocketServer : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public event EventHandler<string> OnMessageReceived;
+    /// <summary>
+    ///     Raised on the socket's receive thread, which waits for the handler: hand the frame off
+    ///     rather than processing it inline.
+    /// </summary>
+    public event EventHandler<ClientFrame> OnMessageReceived;
+
     public event EventHandler<WebSocket> OnClientConnected;
 
     // -------------------------------------------------------------------------
@@ -256,6 +261,46 @@ public class WebSocketServer : IDisposable
         }
 
         return BroadcastSegmentAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary);
+    }
+
+    // -------------------------------------------------------------------------
+    // Reply to one socket
+    // -------------------------------------------------------------------------
+
+    public Task SendAsync(WebSocket client, string message)
+    {
+        return SendDirectAsync(client, new ArraySegment<byte>(Encoding.UTF8.GetBytes(message)),
+            WebSocketMessageType.Text);
+    }
+
+    public Task SendBinaryAsync(WebSocket client, byte[] data)
+    {
+        return SendDirectAsync(client, new ArraySegment<byte>(data), WebSocketMessageType.Binary);
+    }
+
+    // Skips the MAX_SEND_QUEUE drop that broadcasts take: the page is waiting on this reply, and
+    // a dropped one would leave it waiting forever. It still queues behind the socket's send lock.
+    private async Task SendDirectAsync(WebSocket client, ArraySegment<byte> segment,
+        WebSocketMessageType messageType)
+    {
+        if (!IsRunning)
+        {
+            return;
+        }
+
+        lock (_clientsLock)
+        {
+            if (!_clientState.TryGetValue(client, out var state))
+            {
+                return;
+            }
+
+            state.PendingCount++;
+        }
+
+        var clientsToRemove = new List<WebSocket>();
+        await SendToClientAsync(client, segment, messageType, clientsToRemove).ConfigureAwait(false);
+        RemoveDeadClients(clientsToRemove);
     }
 
     private async Task BroadcastSegmentAsync(ArraySegment<byte> segment, WebSocketMessageType messageType)
@@ -554,7 +599,8 @@ public class WebSocketServer : IDisposable
     /// </summary>
     private async Task ServeClientAsync(WebSocket webSocket, CancellationToken cancellationToken)
     {
-        if (!await AuthenticateAsync(webSocket, cancellationToken).ConfigureAwait(false))
+        var (authenticated, host) = await AuthenticateAsync(webSocket, cancellationToken).ConfigureAwait(false);
+        if (!authenticated)
         {
             Logger.Warn("[WebSocket] Closed a socket that did not authenticate.");
             await CloseOutputQuietlyAsync(
@@ -600,11 +646,13 @@ public class WebSocketServer : IDisposable
         }
 
         OnClientConnected?.Invoke(this, webSocket);
-        await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
+        await ReceiveMessagesAsync(webSocket, host, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<bool> AuthenticateAsync(WebSocket webSocket, CancellationToken cancellationToken)
+    private async Task<(bool Authenticated, string Host)> AuthenticateAsync(WebSocket webSocket,
+        CancellationToken cancellationToken)
     {
+        var refused = (false, (string)null);
         var buffer = new byte[BridgeAccess.MaxAuthenticateBytes];
         var count = 0;
 
@@ -618,7 +666,7 @@ public class WebSocketServer : IDisposable
             {
                 if (count == buffer.Length)
                 {
-                    return false;
+                    return refused;
                 }
 
                 result = await webSocket
@@ -627,7 +675,7 @@ public class WebSocketServer : IDisposable
 
                 if (result.MessageType != WebSocketMessageType.Text)
                 {
-                    return false;
+                    return refused;
                 }
 
                 count += result.Count;
@@ -635,14 +683,16 @@ public class WebSocketServer : IDisposable
         }
         catch (OperationCanceledException)
         {
-            return false;
+            return refused;
         }
         catch (WebSocketException)
         {
-            return false;
+            return refused;
         }
 
-        return BridgeAccess.IsValidAuthenticate(Encoding.UTF8.GetString(buffer, 0, count), _secret);
+        var authenticated = BridgeAccess.TryAuthenticate(Encoding.UTF8.GetString(buffer, 0, count), _secret,
+            out var host);
+        return (authenticated, host);
     }
 
     // A cancelled receive leaves the socket Aborted, with nothing left to close.
@@ -713,7 +763,7 @@ public class WebSocketServer : IDisposable
         }
     }
 
-    private async Task ReceiveMessagesAsync(WebSocket webSocket, CancellationToken cancellationToken)
+    private async Task ReceiveMessagesAsync(WebSocket webSocket, string host, CancellationToken cancellationToken)
     {
         var buffer = new byte[BUFFER_SIZE];
 
@@ -783,7 +833,12 @@ public class WebSocketServer : IDisposable
                     var message = Encoding.UTF8.GetString(
                         messageBuffer.GetBuffer(), 0, (int)messageBuffer.Length);
 
-                    OnMessageReceived?.Invoke(this, message);
+                    OnMessageReceived?.Invoke(this, new ClientFrame(webSocket, host, message, null));
+                }
+                else if (result.MessageType == WebSocketMessageType.Binary)
+                {
+                    // Copied out: the buffer is reused for the next frame.
+                    OnMessageReceived?.Invoke(this, new ClientFrame(webSocket, host, null, messageBuffer.ToArray()));
                 }
             }
             catch (WebSocketException ex)
@@ -914,4 +969,25 @@ public class WebSocketServer : IDisposable
         public readonly SemaphoreSlim SendLock = new SemaphoreSlim(1, 1);
         public int PendingCount;
     }
+}
+
+/// <summary>
+///     One whole frame from an authenticated socket: <see cref="Text" /> or <see cref="Data" />,
+///     never both. <see cref="Host" /> is what the socket declared when it authenticated, null for a
+///     browser tab.
+/// </summary>
+public sealed class ClientFrame
+{
+    public ClientFrame(WebSocket client, string host, string text, byte[] data)
+    {
+        Client = client;
+        Host = host;
+        Text = text;
+        Data = data;
+    }
+
+    public WebSocket Client { get; }
+    public string Host { get; }
+    public string Text { get; }
+    public byte[] Data { get; }
 }

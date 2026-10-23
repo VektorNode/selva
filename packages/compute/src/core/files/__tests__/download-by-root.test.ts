@@ -133,4 +133,18 @@ describe('downloadFileDataByRoot', () => {
 
 		expect(saved[0].entries).toContain('notes.txt');
 	});
+
+	it('hands every archive to a supplied saveBlob instead of clicking an anchor', async () => {
+		const anchorSaves = captureDownloads();
+		const handed: string[] = [];
+
+		await downloadFileDataByRoot([fd('a', 'ROOT/Panels'), fd('b', '')], 'files', null, {
+			saveBlob: async (_blob, fileName) => {
+				handed.push(fileName);
+			}
+		});
+
+		expect(handed.sort()).toEqual(['ROOT.zip', 'files.zip']);
+		expect(anchorSaves).toEqual([]);
+	});
 });

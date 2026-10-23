@@ -7,6 +7,7 @@
 	import { APP_DEFAULTS } from '$lib/constants';
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 	import { formatMessage } from '$lib/i18n/messages';
+	import { pickFile } from '$lib/utils/host-files';
 
 	interface Props {
 		value?: string;
@@ -40,7 +41,6 @@
 		activeMode = effectiveModes.includes(preferred) ? preferred : effectiveModes[0];
 	});
 
-	let fileInput: HTMLInputElement | null = $state(null);
 	let uploadedFileName = $state('');
 	let urlInput = $state('');
 	let isDragging = $state(false);
@@ -206,11 +206,7 @@
 		}
 	}
 
-	function handleFileUpload(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
-		if (!file) return;
-
+	function handleFile(file: File) {
 		const fileEnding = getFileExtension(file.name);
 
 		if (!isValidFileExtension(fileEnding)) {
@@ -246,8 +242,9 @@
 		reader.readAsDataURL(file);
 	}
 
-	function openFilePicker() {
-		fileInput?.click();
+	async function openFilePicker() {
+		const file = await pickFile({ accept: acceptAttribute });
+		if (file) handleFile(file);
 	}
 
 	function handleDragOver(e: DragEvent) {
@@ -263,27 +260,14 @@
 		e.preventDefault();
 		isDragging = false;
 
-		const files = e.dataTransfer?.files;
-		if (files?.[0]) {
-			const fakeEvent = new Event('change');
-			const fakeTarget = { files: files } as HTMLInputElement;
-			Object.defineProperty(fakeEvent, 'target', { value: fakeTarget });
-			handleFileUpload(fakeEvent);
-		}
+		const file = e.dataTransfer?.files?.[0];
+		if (file) handleFile(file);
 	}
 
 	const acceptAttribute = $derived(acceptedFormats.length > 0 ? acceptedFormats.join(',') : '*');
 </script>
 
 <div class="gap-2.5 flex w-full flex-col">
-	<input
-		bind:this={fileInput}
-		type="file"
-		accept={acceptAttribute}
-		onchange={handleFileUpload}
-		class="hidden"
-	/>
-
 	{#if showToggle}
 		<div class="p-0.5 text-xs flex rounded-md bg-muted">
 			{#each effectiveModes as mode (mode)}
