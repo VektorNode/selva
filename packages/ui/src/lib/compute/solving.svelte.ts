@@ -9,8 +9,23 @@ import { APP_DEFAULTS } from '../constants';
  * - Average over SLOW_THRESHOLD_MS: shown immediately
  * - Between the two: shown after a proportional slice of ANIMATION_DELAY
  * - First solve: shown immediately, there is no history yet
+ *
+ * `freezesDuringSolve` is for a host that can't paint while it solves (an embedded WebView on
+ * the solver's thread). There the indicator has to be on screen before the solve starts, when its
+ * length is still unknown, so it follows `isSolving` exactly: no history, no delay.
  */
-export function createSolvingIndicator(isSolving: () => boolean): { readonly show: boolean } {
+export function createSolvingIndicator(
+	isSolving: () => boolean,
+	options: { freezesDuringSolve?: boolean } = {}
+): { readonly show: boolean } {
+	if (options.freezesDuringSolve) {
+		return {
+			get show() {
+				return isSolving();
+			}
+		};
+	}
+
 	const { FAST_THRESHOLD_MS, SLOW_THRESHOLD_MS, HISTORY_SIZE, ANIMATION_DELAY } =
 		APP_DEFAULTS.SOLVING_INDICATOR;
 

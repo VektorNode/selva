@@ -6,16 +6,19 @@
 		StateDisplay,
 		Button,
 		Dialog,
+		DropdownMenu,
 		Resizable,
 		toast,
 		useFooterItem
 	} from '@selvajs/ui';
-	import { Save, RefreshCw, CloudUpload } from '@lucide/svelte';
+	import { Save, RefreshCw, CloudUpload, Ellipsis, SlidersHorizontal } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import ModeHeader from '$lib/components/ModeHeader.svelte';
+	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import SelvaUploadDialog from '$lib/components/selva-upload/SelvaUploadDialog.svelte';
 	import { buildSessionParams } from '$lib/utils/session';
+	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
 	import { onMount, tick } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
@@ -70,6 +73,26 @@
 	}
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
+
+	// Side by side under 1024px, the sidebar's quarter is too narrow to read a parameter name, and
+	// a docked Rhino panel is narrower still. Stacked, a parameter can still be dragged from the
+	// sidebar onto a group. The two arrangements save their sizes separately.
+	const stacked = new MediaQuery('width < 64rem');
+	const split = $derived(
+		stacked.current
+			? {
+					direction: 'vertical' as const,
+					autoSaveId: 'builder-sidebar-layout-stacked',
+					sidebar: { defaultSize: 40, minSize: 20, maxSize: 75 },
+					canvas: { defaultSize: 60, minSize: 25 }
+				}
+			: {
+					direction: 'horizontal' as const,
+					autoSaveId: 'builder-sidebar-layout',
+					sidebar: { defaultSize: 25, minSize: 18, maxSize: 42 },
+					canvas: { defaultSize: 75, minSize: 40 }
+				}
+	);
 
 	// An upload already running can still be watched; a new one waits for the save.
 	const uploadNeedsSave = $derived(!!builderState?.state.isDirty && !selvaUpload?.state.uploading);
@@ -198,55 +221,104 @@
 	});
 </script>
 
-<AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
-	{#snippet navItems()}
-		<Button variant="default" size="sm">Schema Builder</Button>
-		<Button variant="ghost" size="sm" onclick={() => navigateTo('/preview')}>
-			Interactive Preview
+{#snippet headerActions()}
+	{#if builderState?.state.syncNeeded}
+		<Button
+			variant="default"
+			size="sm"
+			onclick={() => builderState?.syncParameters()}
+			class="animate-pulse bg-amber-500 hover:bg-amber-600"
+			title="Sync Parameters"
+		>
+			⚡ <span class="max-md:sr-only">Sync Parameters</span>
 		</Button>
-	{/snippet}
-	{#snippet rightContent()}
-		{#if builderState?.state.syncNeeded}
-			<Button
-				variant="default"
-				size="sm"
-				onclick={() => builderState?.syncParameters()}
-				class="animate-pulse bg-amber-500 hover:bg-amber-600"
-			>
-				⚡ Sync Parameters
-			</Button>
-		{/if}
+	{/if}
+	<!-- Below lg the full row crowds out the schema name: Save stays, the rest goes in a menu. -->
+	<Button
+		variant="outline"
+		size="sm"
+		class="max-lg:hidden"
+		onclick={() => builderState?.requestSyncPreview()}
+		disabled={!builderState?.state.draft}
+	>
+		Sync with Grasshopper
+	</Button>
+	<Button
+		variant="outline"
+		size="sm"
+		class="max-lg:hidden"
+		onclick={() => (showBatchProcessor = !showBatchProcessor)}
+	>
+		Batch Processors
+	</Button>
+	<Button
+		variant={builderState?.state.isDirty ? 'default' : 'outline'}
+		size="sm"
+		onclick={() => saveSchema().catch(() => {})}
+		disabled={!builderState?.state.draft}
+		title="Save schema (Ctrl+S / ⌘S)"
+	>
+		<Save class="h-4 w-4" /><span class="max-sm:sr-only">Save</span>
+	</Button>
+	<!-- The title sits on a wrapper: a disabled button gets no hover, so its own title never shows. -->
+	<span class="max-lg:hidden" title={uploadNeedsSave ? 'Save the schema first' : undefined}>
 		<Button
 			variant="outline"
 			size="sm"
-			onclick={() => builderState?.requestSyncPreview()}
-			disabled={!builderState?.state.draft}
+			onclick={() => selvaUpload?.open()}
+			disabled={!builderState?.state.draft || !selvaUpload || uploadNeedsSave}
 		>
-			Sync with Grasshopper
+			<CloudUpload class="h-4 w-4" />Upload to Selva
 		</Button>
-		<Button variant="outline" size="sm" onclick={() => (showBatchProcessor = !showBatchProcessor)}>
-			Batch Processors
-		</Button>
-		<Button
-			variant={builderState?.state.isDirty ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => saveSchema().catch(() => {})}
-			disabled={!builderState?.state.draft}
-			title="Save schema (Ctrl+S / ⌘S)"
-		>
-			<Save class="h-4 w-4" />Save
-		</Button>
-		<!-- The title sits on a wrapper: a disabled button gets no hover, so its own title never shows. -->
-		<span title={uploadNeedsSave ? 'Save the schema first' : undefined}>
-			<Button
-				variant="outline"
-				size="sm"
-				onclick={() => selvaUpload?.open()}
-				disabled={!builderState?.state.draft || !selvaUpload || uploadNeedsSave}
+	</span>
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					variant="outline"
+					size="icon-sm"
+					class="lg:hidden"
+					aria-label="More actions"
+					title="More actions"
+				>
+					<Ellipsis />
+				</Button>
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<DropdownMenu.Content align="end" class="w-56">
+			<DropdownMenu.Item
+				disabled={!builderState?.state.draft}
+				onSelect={() => builderState?.requestSyncPreview()}
 			>
-				<CloudUpload class="h-4 w-4" />Upload to Selva
-			</Button>
-		</span>
+				<RefreshCw />Sync with Grasshopper
+			</DropdownMenu.Item>
+			<DropdownMenu.Item onSelect={() => (showBatchProcessor = true)}>
+				<SlidersHorizontal />Batch Processors
+			</DropdownMenu.Item>
+			<DropdownMenu.Item
+				disabled={!builderState?.state.draft || !selvaUpload || uploadNeedsSave}
+				onSelect={() => selvaUpload?.open()}
+			>
+				<CloudUpload />
+				<span class="flex-1">Upload to Selva</span>
+				{#if uploadNeedsSave}
+					<span class="text-muted-foreground text-xs">Save first</span>
+				{/if}
+			</DropdownMenu.Item>
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+{/snippet}
+
+<AppShell {...rhinoShellProps()} mode="fixed" showFooter>
+	{#snippet header()}
+		<ModeHeader
+			{homeUrl}
+			current="builder"
+			onSwitch={() => navigateTo('/preview')}
+			title={builderState?.state.draft?.name ?? null}
+			actions={headerActions}
+		/>
 	{/snippet}
 
 	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -269,71 +341,75 @@
 				</div>
 			{/if}
 
-			<Resizable.PaneGroup
-				direction="horizontal"
-				autoSaveId="builder-sidebar-layout"
-				class="min-h-0 flex-1"
-			>
-				<Resizable.Pane defaultSize={25} minSize={18} maxSize={42}>
-					<div class="h-full px-(--page-px) py-(--page-py)">
-						<BuilderSidebar
-							schema={builderState.state.draft}
-							{availableInputs}
-							availableOutputs={availableOutputsUnplaced}
-							placedIds={placedInLayoutIds}
-							syncNeeded={builderState.state.syncNeeded}
-							onSchemaChange={(updatedSchema) => {
-								if (builderState && builderState.state.draft) {
-									builderState.history.push($state.snapshot(builderState.state.draft));
-									builderState.state.draft = updatedSchema;
-									builderState.markDirty();
-									if (
-										updatedSchema.layout?.type === 'tabbed' &&
-										updatedSchema.layout.tabs.length > 0
-									) {
-										builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
+			{#key stacked.current}
+				<Resizable.PaneGroup
+					direction={split.direction}
+					autoSaveId={split.autoSaveId}
+					class="min-h-0 flex-1"
+				>
+					<Resizable.Pane {...split.sidebar}>
+						<div class="h-full px-(--page-px) py-(--page-py) max-lg:py-2">
+							<BuilderSidebar
+								schema={builderState.state.draft}
+								{availableInputs}
+								availableOutputs={availableOutputsUnplaced}
+								placedIds={placedInLayoutIds}
+								syncNeeded={builderState.state.syncNeeded}
+								onSchemaChange={(updatedSchema) => {
+									if (builderState && builderState.state.draft) {
+										builderState.history.push($state.snapshot(builderState.state.draft));
+										builderState.state.draft = updatedSchema;
+										builderState.markDirty();
+										if (
+											updatedSchema.layout?.type === 'tabbed' &&
+											updatedSchema.layout.tabs.length > 0
+										) {
+											builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
+										}
 									}
-								}
-							}}
-							onSync={() => builderState?.syncParameters()}
-							onAddToGroup={actions.onAddToGroup}
-							onAddToNewGroup={actions.onAddToNewGroup}
-							onImportGhGroups={actions.onImportGhGroups}
-							onRevealItem={revealItem}
-						/>
-					</div>
-				</Resizable.Pane>
-
-				<Resizable.Handle withHandle />
-
-				<Resizable.Pane defaultSize={75} minSize={40}>
-					<main class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py)">
-						{#if builderState.state.draft.layout?.type === 'tabbed'}
-							<TabEditor
-								bind:tabs={builderState.state.draft.layout.tabs}
-								activeTabId={builderState.state.activeTabId}
-								onTabChange={handleTabChange}
-								onAddTab={actions.onAddTab}
-								onRemoveTab={actions.onRemoveTab}
-								onReorderTabs={actions.onReorderTabs}
-								onAddGroup={actions.onAddGroup}
-								onRemoveGroup={actions.onRemoveGroup}
-								onReorderGroups={actions.onReorderGroups}
-								onMoveGroupToTab={actions.onMoveGroupToTab}
-								onParameterDrop={actions.onParameterDrop}
-								onReorder={actions.onReorder}
-								onRemoveItem={actions.onRemoveItem}
-								onAddLineBreak={actions.onAddLineBreak}
-								onEdit={(apply, coalesceKey) => builderState?.editDraft(apply, coalesceKey)}
-								availableInputs={allAvailableInputs}
-								{getParameterInfo}
-								outputValues={builderState.state.outputValues}
-								{expandedItems}
+								}}
+								onSync={() => builderState?.syncParameters()}
+								onAddToGroup={actions.onAddToGroup}
+								onAddToNewGroup={actions.onAddToNewGroup}
+								onImportGhGroups={actions.onImportGhGroups}
+								onRevealItem={revealItem}
 							/>
-						{/if}
-					</main>
-				</Resizable.Pane>
-			</Resizable.PaneGroup>
+						</div>
+					</Resizable.Pane>
+
+					<Resizable.Handle withHandle />
+
+					<Resizable.Pane {...split.canvas}>
+						<main
+							class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py) max-lg:py-3"
+						>
+							{#if builderState.state.draft.layout?.type === 'tabbed'}
+								<TabEditor
+									bind:tabs={builderState.state.draft.layout.tabs}
+									activeTabId={builderState.state.activeTabId}
+									onTabChange={handleTabChange}
+									onAddTab={actions.onAddTab}
+									onRemoveTab={actions.onRemoveTab}
+									onReorderTabs={actions.onReorderTabs}
+									onAddGroup={actions.onAddGroup}
+									onRemoveGroup={actions.onRemoveGroup}
+									onReorderGroups={actions.onReorderGroups}
+									onMoveGroupToTab={actions.onMoveGroupToTab}
+									onParameterDrop={actions.onParameterDrop}
+									onReorder={actions.onReorder}
+									onRemoveItem={actions.onRemoveItem}
+									onAddLineBreak={actions.onAddLineBreak}
+									onEdit={(apply, coalesceKey) => builderState?.editDraft(apply, coalesceKey)}
+									availableInputs={allAvailableInputs}
+									{getParameterInfo}
+									outputValues={builderState.state.outputValues}
+									{expandedItems}
+								/>
+							{/if}
+						</main>
+					</Resizable.Pane>
+				</Resizable.PaneGroup>
+			{/key}
 		{:else if builderState?.state.error}
 			<div class="flex min-h-100 items-center justify-center px-6">
 				<StateDisplay type="error" size="large" message={builderState.state.error} />

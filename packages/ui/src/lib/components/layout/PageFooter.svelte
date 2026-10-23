@@ -136,6 +136,8 @@
 			<FooterItemRenderer {item} />
 		{/each}
 
-		<p class="truncate">{copyrightLine}</p>
+		{#if copyrightLine}
+			<p class="truncate">{copyrightLine}</p>
+		{/if}
 	</div>
 </footer>

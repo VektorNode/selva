@@ -31,6 +31,17 @@
 		onabort: () => void;
 		onconfirm: () => void;
 		ondiscard: () => void;
+		/**
+		 * The host can't paint while it solves (an embedded WebView on the solver's thread). The
+		 * live panel would only appear once the solve is over, so it is never shown; the result's
+		 * messages still are.
+		 */
+		freezesDuringSolve?: boolean;
+		/**
+		 * `floating` overlays the bottom of the page. `inline` sits in the flow wherever the host
+		 * renders it, for a narrow host whose bottom edge is already its action row.
+		 */
+		placement?: 'floating' | 'inline';
 	}
 
 	let {
@@ -39,7 +50,9 @@
 		diagnostics = [],
 		onabort,
 		onconfirm,
-		ondiscard
+		ondiscard,
+		freezesDuringSolve = false,
+		placement = 'floating'
 	}: Props = $props();
 
 	const locale = getLocaleContext();
@@ -145,6 +158,7 @@
 	$effect(() => {
 		if (phase === 'live') {
 			finishing = false;
+			if (freezesDuringSolve) return;
 			const timer = setTimeout(() => {
 				revealed = true;
 				revealedAt = performance.now();
@@ -249,7 +263,9 @@
 
 {#if visible}
 	<div
-		class="bottom-4 p-3 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg border bg-background {view ===
+		class="p-3 border {placement === 'inline'
+			? 'mt-3 rounded-md bg-muted/40'
+			: 'bottom-4 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg bg-background'} {view ===
 		'blocked'
 			? 'border-destructive/50'
 			: ''}"

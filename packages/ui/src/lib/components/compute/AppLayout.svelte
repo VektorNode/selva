@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { UISchema, SupportedTypes, ParameterPreset } from '@selvajs/schemas';
 	import type { SolveSettlement } from '@selvajs/solve/client';
 	import type { ActionButton } from '../../types/actionButton';
@@ -34,6 +35,13 @@
 		meshes?: any[];
 		isSolving: boolean;
 		showSolvingIndicator?: boolean;
+		/**
+		 * `inline` puts the solving indicator in the action row instead of floating it over the
+		 * bottom-left corner, where a narrow host has its content and that row.
+		 */
+		solvingIndicatorPlacement?: 'floating' | 'inline';
+		/** Rendered above the action row, for a host that keeps the solve's messages in the flow. */
+		solveMessages?: Snippet;
 		hasPendingChanges?: boolean;
 		hasNeverSolved?: boolean;
 		isViewerFullscreen?: boolean;
@@ -63,6 +71,8 @@
 		meshes = [],
 		isSolving,
 		showSolvingIndicator = false,
+		solvingIndicatorPlacement = 'floating',
+		solveMessages,
 		hasPendingChanges = false,
 		hasNeverSolved = false,
 		isViewerFullscreen = $bindable(false),
@@ -248,6 +258,9 @@
 <!-- One primary action and one menu. A definition that solves on every change has no Calculate,
      so the menu sits alone at the end of the row. -->
 {#snippet footer()}
+	{#if solveMessages}
+		<div class="px-2">{@render solveMessages()}</div>
+	{/if}
 	{#if schema.instanceSolve === false}
 		<CalculateButton
 			{hasPendingChanges}
@@ -256,9 +269,14 @@
 			{oncalculate}
 			trailing={hasMenu ? actionsMenu : undefined}
 		/>
-	{:else if hasMenu}
-		<div class="mt-3 pb-3 pt-2 px-2 flex justify-end border-t border-border/50">
-			{@render actionsMenu()}
+	{:else if hasMenu || solvingIndicatorPlacement === 'inline'}
+		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border/50">
+			{#if solvingIndicatorPlacement === 'inline'}
+				<SolvingIndicator show={showSolvingIndicator} placement="inline" />
+			{/if}
+			{#if hasMenu}
+				<div class="ml-auto">{@render actionsMenu()}</div>
+			{/if}
 		</div>
 	{/if}
 {/snippet}
@@ -509,7 +527,9 @@
 		</div>
 	{/if}
 
-	<SolvingIndicator show={showSolvingIndicator} />
+	{#if solvingIndicatorPlacement === 'floating'}
+		<SolvingIndicator show={showSolvingIndicator} />
+	{/if}
 </main>
 
 <!-- The save, load and validation dialogs; the footer's menu opens them. -->

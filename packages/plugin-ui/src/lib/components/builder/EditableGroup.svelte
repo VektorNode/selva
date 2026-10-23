@@ -191,8 +191,26 @@
 		return chrome.reduce((sum, key) => sum + parseFloat(style[key]), header.offsetHeight);
 	}
 
+	// Below this an item card's header row no longer fits, so a narrow canvas shows fewer columns
+	// than the group has, the way the app itself sheds them.
+	const MIN_ITEM_WIDTH = 240;
+	const ITEM_GAP = 12;
+
+	let gridWidth = $state(0);
+	const shownColumns = $derived(
+		gridWidth === 0
+			? (group.columns ?? 1)
+			: Math.max(
+					1,
+					Math.min(
+						group.columns ?? 1,
+						Math.floor((gridWidth + ITEM_GAP) / (MIN_ITEM_WIDTH + ITEM_GAP))
+					)
+				)
+	);
+
 	function gridColumnFor(item: ZoneItem): string {
-		const columns = group.columns ?? 1;
+		const columns = shownColumns;
 		if (item[SHADOW_ITEM_MARKER_PROPERTY_NAME]) {
 			return draggedSpan >= columns ? '1 / -1' : `span ${draggedSpan}`;
 		}
@@ -214,7 +232,7 @@
 	class="group bg-muted gap-0 overflow-hidden border-2 py-0 {isDndTarget ? 'border-primary' : ''}"
 >
 	<Card.Header
-		class="border-border bg-card flex flex-row items-center justify-between gap-2 space-y-0 border-b px-3 py-3 transition-colors"
+		class="border-border bg-card flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 border-b px-3 py-3 transition-colors"
 	>
 		<!-- Drag Handle (group-level) — TabEditor declares the dragHandleZone. -->
 		<div
@@ -226,8 +244,8 @@
 		>
 			<GripVertical size={16} />
 		</div>
-		<div class="flex flex-1 items-center gap-1.5">
-			<div class="flex flex-1 flex-col gap-0.5">
+		<div class="flex min-w-40 flex-1 items-center gap-1.5">
+			<div class="flex min-w-0 flex-1 flex-col gap-0.5">
 				<div class="flex items-center gap-1">
 					<button
 						type="button"
@@ -245,7 +263,7 @@
 							() => group.label,
 							(label) => onEdit(() => (group.label = label), `group-label:${group.id}`)
 						}
-						class="text-foreground hover:border-border focus:border-primary flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
+						class="text-foreground hover:border-border focus:border-primary min-w-0 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
 						placeholder="Group name"
 					/>
 				</div>
@@ -257,12 +275,12 @@
 						(description) =>
 							onEdit(() => (group.description = description), `group-description:${group.id}`)
 					}
-					class="text-muted-foreground hover:border-border focus:border-primary ml-7 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
+					class="text-muted-foreground hover:border-border focus:border-primary ml-7 min-w-0 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
 					placeholder="Description"
 				/>
 			</div>
 		</div>
-		<div class="flex items-center gap-2">
+		<div class="ml-auto flex items-center gap-2">
 			{#if !group.collapsed}
 				<label class="text-muted-foreground flex items-center gap-1 text-xs">
 					Col:
@@ -345,7 +363,8 @@
 					onfinalize={handleFinalize}
 					class="grid min-h-14 content-start items-start gap-3 rounded-lg transition-all
 						{group.items.length === 0 ? 'border-border min-h-15 border-2 border-dashed p-3' : ''}"
-					style="grid-template-columns: repeat({group.columns}, 1fr);"
+					style="grid-template-columns: repeat({shownColumns}, minmax(0, 1fr));"
+					bind:clientWidth={gridWidth}
 				>
 					{#each localItems as item (item.id)}
 						<div

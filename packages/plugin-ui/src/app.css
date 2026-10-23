@@ -5,6 +5,12 @@
 /* Import base theme styles from @selvajs/ui */
 @import '@selvajs/ui/styles/base.css';
 
+/* The Rhino panel can't paint while Grasshopper solves, so an entrance animation caught by a
+   solve freezes at its first, nearly transparent frame. Things appear at once instead. */
+[data-host='rhino'] .animate-in {
+	animation: none;
+}
+
 /* Builder scope marks. Local and Compute differ in lightness as well as hue, and each mark
    carries an icon and a label, so neither is told apart by colour alone. Text in these
    colours holds 4.5:1 on their own 10% tint. */

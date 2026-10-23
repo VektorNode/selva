@@ -4,6 +4,7 @@
 	import { AppShell, PageContent, StateDisplay, Card } from '@selvajs/ui';
 	import { Wrench, Play } from '@lucide/svelte';
 	import { buildSessionParams } from '$lib/utils/session';
+	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
 
 	const sessionId = page.url.searchParams.get('session');
 
@@ -14,7 +15,7 @@
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
 </script>
 
-<AppShell {homeUrl} mode="fixed" showFooter>
+<AppShell {...rhinoShellProps()} {homeUrl} mode="fixed" showFooter>
 	{#if !sessionId}
 		<div class="flex flex-1 items-center justify-center">
 			<StateDisplay

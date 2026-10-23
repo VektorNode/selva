@@ -14,15 +14,19 @@
 		readExternalValue,
 		type ExternalInput
 	} from '@selvajs/ui';
-	import { buildSessionParams } from '$lib/utils/session';
+	import { buildSessionParams, isRhinoPanel } from '$lib/utils/session';
+	import { isInRhinoPanel, rhinoShellProps } from '$lib/utils/rhino-host.svelte';
 	import { usePreviewState } from '$lib/composables/usePreviewState.svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
+	import ModeHeader from '$lib/components/ModeHeader.svelte';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');
 	let isViewerFullscreen = $state(false);
 
 	const preview = usePreviewState(() => sessionId);
-	const solvingIndicator = createSolvingIndicator(() => preview.isSolving);
+	const solvingIndicator = createSolvingIndicator(() => preview.isSolving, {
+		freezesDuringSolve: isRhinoPanel()
+	});
 
 	$effect(() => {
 		if (sessionId) {
@@ -78,30 +82,49 @@
 	});
 </script>
 
+{#snippet solveMessages()}
+	<SolveMessages
+		live={preview.live}
+		phase={preview.phase}
+		diagnostics={preview.diagnostics}
+		onabort={() => preview.abort()}
+		onconfirm={() => preview.acknowledge()}
+		ondiscard={() => preview.discard()}
+		freezesDuringSolve={isRhinoPanel()}
+		placement={isRhinoPanel() ? 'inline' : 'floating'}
+	/>
+{/snippet}
+
+{#snippet headerActions()}
+	{#if preview.state.syncNeeded}
+		<Button
+			variant="default"
+			size="sm"
+			onclick={() => preview.syncParameters()}
+			class="animate-pulse bg-amber-500 hover:bg-amber-600"
+			title="Sync Parameters"
+		>
+			⚡ <span class="max-md:sr-only">Sync Parameters</span>
+		</Button>
+	{/if}
+{/snippet}
+
 <AppShell
-	{homeUrl}
-	title={preview.state.schema?.name ?? null}
+	{...rhinoShellProps()}
 	mode="fixed"
 	showFooter
 	errors={preview.computeErrors}
 	warnings={preview.computeWarnings}
 	diagnostics={preview.diagnostics}
 >
-	{#snippet navItems()}
-		<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>Schema Builder</Button>
-		<Button variant="default" size="sm">Interactive Preview</Button>
-	{/snippet}
-	{#snippet rightContent()}
-		{#if preview.state.syncNeeded}
-			<Button
-				variant="default"
-				size="sm"
-				onclick={() => preview.syncParameters()}
-				class="animate-pulse bg-amber-500 hover:bg-amber-600"
-			>
-				⚡ Sync Parameters
-			</Button>
-		{/if}
+	{#snippet header()}
+		<ModeHeader
+			{homeUrl}
+			current="preview"
+			onSwitch={() => navigateTo('/builder')}
+			title={preview.state.schema?.name ?? null}
+			actions={headerActions}
+		/>
 	{/snippet}
 
 	<div class="relative flex flex-1 flex-col overflow-hidden">
@@ -117,11 +140,13 @@
 			{#key preview.state.schema}
 				<AppLayout
 					schema={preview.state.schema}
-					showViewer={!!preview.state.schema.viewerOptions?.enableLocal}
+					showViewer={!!preview.state.schema.viewerOptions?.enableLocal && !isInRhinoPanel()}
 					meshes={preview.displayMeshes}
 					isSolving={preview.isSolving}
 					showSolvingIndicator={preview.state.schema.instanceSolve !== false &&
 						solvingIndicator.show}
+					solvingIndicatorPlacement={isRhinoPanel() ? 'inline' : 'floating'}
+					solveMessages={isRhinoPanel() ? solveMessages : undefined}
 					hasPendingChanges={preview.hasPendingChanges}
 					bind:isViewerFullscreen
 					values={preview.values}
@@ -150,14 +175,9 @@
 	{/if}
 </AppShell>
 
-<SolveMessages
-	live={preview.live}
-	phase={preview.phase}
-	diagnostics={preview.diagnostics}
-	onabort={() => preview.abort()}
-	onconfirm={() => preview.acknowledge()}
-	ondiscard={() => preview.discard()}
-/>
+{#if !isRhinoPanel()}
+	{@render solveMessages()}
+{/if}
 
 <style>
 	@keyframes slideInRight {

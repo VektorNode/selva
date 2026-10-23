@@ -6,7 +6,8 @@
 import {
 	WEBSOCKET_MAX_RECONNECT_ATTEMPTS,
 	WEBSOCKET_RECONNECT_INTERVAL,
-	DEFAULT_WEBSOCKET_PORT
+	DEFAULT_WEBSOCKET_PORT,
+	RHINO_PANEL_HOST
 } from '$lib/app.config';
 import type { UISchema } from '@selvajs/schemas';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -172,10 +173,20 @@ export class WebSocketState {
 	private authSecret: string | null = null;
 	private authHost: string | undefined;
 	private readonly BATCH_DELAY_MS = 50; // Batch updates within 50ms window
+	// A value update that changes nothing starts no solve, so no solvingState ever clears it.
+	private readonly AWAITING_SOLVE_TIMEOUT_MS = 2000;
+	private awaitingSolveTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Reactive state using Svelte 5 runes
 	connected = $state(false);
 	isSolving = $state(false);
+	/**
+	 * In the Rhino panel nothing repaints while Grasshopper solves: both run on Rhino's UI thread.
+	 * The plugin's solvingState arrives once the solve already holds that thread, too late to be
+	 * seen. This is true from the moment values are queued until the plugin reports, so the page
+	 * can show the solve while it can still paint.
+	 */
+	awaitingSolve = $state(false);
 	/** The plugin refused this page's secret: it belongs to another session. Reconnecting won't help. */
 	authRejected = $state(false);
 
@@ -183,6 +194,7 @@ export class WebSocketState {
 		this.on('solvingState', (data) => {
 			if (data && typeof data === 'object' && 'isSolving' in data) {
 				const newState = Boolean(data.isSolving);
+				this.clearAwaitingSolve();
 
 				if (newState !== this.isSolving) {
 					this.isSolving = newState;
@@ -377,6 +389,8 @@ export class WebSocketState {
 			this.solvingTimeout = null;
 		}
 
+		this.clearAwaitingSolve();
+
 		if (this.socket) {
 			this.socket.close();
 			this.socket = null;
@@ -440,6 +454,8 @@ export class WebSocketState {
 			return;
 		}
 
+		if (this.authHost === RHINO_PANEL_HOST) this.markAwaitingSolve();
+
 		// Batch updates within the time window
 		this.currentSessionId = sessionId;
 		Object.assign(this.batchedValues, values);
@@ -452,6 +468,23 @@ export class WebSocketState {
 		this.batchTimer = setTimeout(() => {
 			this.flushBatchedUpdates();
 		}, this.BATCH_DELAY_MS);
+	}
+
+	private markAwaitingSolve() {
+		this.awaitingSolve = true;
+		if (this.awaitingSolveTimer) clearTimeout(this.awaitingSolveTimer);
+		this.awaitingSolveTimer = setTimeout(
+			() => this.clearAwaitingSolve(),
+			this.AWAITING_SOLVE_TIMEOUT_MS
+		);
+	}
+
+	private clearAwaitingSolve() {
+		if (this.awaitingSolveTimer) {
+			clearTimeout(this.awaitingSolveTimer);
+			this.awaitingSolveTimer = null;
+		}
+		this.awaitingSolve = false;
 	}
 
 	/**

@@ -236,7 +236,7 @@ export function createWebSocketSolveDriver(
 			};
 		},
 		get isSolving() {
-			return wsState.isSolving;
+			return wsState.isSolving || wsState.awaitingSolve;
 		},
 		primeFromInitialData(message) {
 			// Same parse-and-report path as a live frame; initialData carries the same

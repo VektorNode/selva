@@ -1,6 +1,6 @@
 <script lang="ts">
 	import '../app.css';
-	import { ModeWatcher } from 'mode-watcher';
+	import { ModeWatcher, setMode } from 'mode-watcher';
 	import {
 		Toaster,
 		toast,
@@ -17,21 +17,28 @@
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
 	import HostWindowToggle from '$lib/components/HostWindowToggle.svelte';
+	import { RHINO_PANEL_HOST } from '$lib/app.config';
 
 	const footer = initializeFooterContext();
 
 	let { children } = $props();
 
-	// Not in onMount: the router can't replace history until hydration has finished.
+	// Not in onMount: the router can't replace history until hydration has finished. Even here the
+	// first call runs just before the router counts as started, and a dev build throws then, which
+	// aborts startup and makes the next navigation mount a second copy of the app. Hence the microtask.
 	afterNavigate(() => {
 		const sessionId = getSessionIdFromUrl();
 		if (sessionId && rememberBridgeSecret(sessionId)) {
-			replaceState(page.url.pathname + page.url.search, page.state);
+			queueMicrotask(() => replaceState(page.url.pathname + page.url.search, page.state));
 		}
 	});
 
 	onMount(() => {
 		if (isRhinoPanel()) {
+			// The WebView reports Rhino's appearance as the system colour scheme.
+			setMode('system');
+			document.documentElement.dataset.host = RHINO_PANEL_HOST;
+
 			footer.register({
 				id: 'host-window-toggle',
 				component: HostWindowToggle,

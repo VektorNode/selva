@@ -262,9 +262,10 @@
 <div class="relative" data-builder-item-id={item.id}>
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
-			class="group bg-background hover:border-border border-border/60 overflow-hidden rounded-lg py-1.5 transition-all hover:shadow-sm"
+			class="group bg-background hover:border-border border-border/60 @container overflow-hidden rounded-lg py-1.5 transition-all hover:shadow-sm"
 		>
-			<!-- Compact header row (always visible) -->
+			<!-- Compact header row (always visible). In a card under 20rem the type badge drops its
+			     label and the name gives up width first, so the controls stay in view. -->
 			<div data-builder-item-header class="flex items-center gap-2 px-3 py-1.5">
 				<div
 					use:dragHandle
@@ -277,25 +278,27 @@
 				</div>
 				{#if item.type === 'input'}
 					<span
+						title={typeLabel}
 						class="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase"
 					>
 						<ArrowUpFromLine size={10} strokeWidth={2.5} />
-						{typeLabel}
+						<span class="@max-[20rem]:sr-only">{typeLabel}</span>
 					</span>
 				{:else}
 					<span
+						title={typeLabel}
 						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-600 uppercase dark:text-orange-400"
 					>
 						<ArrowDownToLine size={10} strokeWidth={2.5} />
-						{typeLabel}
+						<span class="@max-[20rem]:sr-only">{typeLabel}</span>
 					</span>
 				{/if}
 				<input
 					type="text"
 					bind:value={item.displayName}
 					title={paramInfo ? `GH: ${paramInfo.nickname}` : undefined}
-					class="hover:border-border focus:border-primary min-w-0 rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium focus:outline-none"
-					style="field-sizing: content; min-width: 7rem; max-width: 18rem;"
+					class="hover:border-border focus:border-primary min-w-16 rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium focus:outline-none @[20rem]:min-w-28"
+					style="field-sizing: content; max-width: 18rem;"
 					placeholder="Display Name"
 				/>
 				{#if isInput && sourceKind !== 'user'}
@@ -307,7 +310,7 @@
 				{/if}
 				{#if detectedChartType}
 					<span
-						class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize"
+						class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize @max-[20rem]:hidden"
 					>
 						{detectedChartType}
 					</span>

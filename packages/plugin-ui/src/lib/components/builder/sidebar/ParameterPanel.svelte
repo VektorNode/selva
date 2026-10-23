@@ -101,7 +101,7 @@
 				onValueChange={(v) => (groupBy.value = v as GroupBy)}
 			>
 				<Select.Trigger size="sm" class="w-full" aria-label="Group parameters">
-					{GROUP_BY_LABELS[activeGroupBy]}
+					<span class="truncate">{GROUP_BY_LABELS[activeGroupBy]}</span>
 				</Select.Trigger>
 				<Select.Content>
 					{#each Object.entries(GROUP_BY_LABELS) as [value, label] (value)}
@@ -113,7 +113,7 @@
 			</Select.Root>
 			<Select.Root type="multiple" bind:value={types.value}>
 				<Select.Trigger size="sm" class="w-full" aria-label="Filter by type">
-					{typesLabel}
+					<span class="truncate">{typesLabel}</span>
 				</Select.Trigger>
 				<Select.Content>
 					{#each allTypes as type (type)}
@@ -125,7 +125,7 @@
 		{#if hasGhGroups}
 			<Button variant="outline" size="sm" onclick={() => (importDialogOpen = true)}>
 				<Layers />
-				Add a Grasshopper group
+				<span class="truncate">Add a Grasshopper group</span>
 			</Button>
 		{/if}
 	</div>
