@@ -18,6 +18,7 @@
 	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
 	import SelvaUploadDialog from '$lib/components/selva-upload/SelvaUploadDialog.svelte';
 	import { buildSessionParams } from '$lib/utils/session';
+	import { currentRole } from '$lib/utils/session-role.svelte';
 	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
 	import { onMount, tick } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
@@ -166,7 +167,15 @@
 		}
 	}
 
+	// A player session has no builder: the plugin would refuse its saves anyway.
+	$effect(() => {
+		if (currentRole() === 'player') {
+			goto(`/preview?${buildSessionParams()}`, { replaceState: true }).catch(() => {});
+		}
+	});
+
 	onMount(() => {
+		if (currentRole() === 'player') return;
 		const urlSessionId = page.url.searchParams.get('session') || '';
 		sessionId = urlSessionId;
 
@@ -467,7 +476,7 @@
 	</Dialog.Root>
 
 	{#if selvaUpload}
-		<SelvaUploadDialog upload={selvaUpload} />
+		<SelvaUploadDialog upload={selvaUpload} schema={builderState?.state.draft} />
 	{/if}
 
 	{#if builderState}

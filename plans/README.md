@@ -47,6 +47,8 @@ Each plan below links to its tracking issue at the top of the file.
 | [publish-from-plugin](./features/publish-from-plugin.md)                        | **unfiled** — built; the bridge lockdown landed first, in its own commit        |
 | [compute-cleanup-audit](./fixes/compute-cleanup-audit.md)                       | **unfiled** — being worked through directly                                     |
 | [rhino-panel](./features/rhino-panel.md)                                        | **unfiled** — design only; a test branch proves the gates first                 |
+| [rhino-player](./features/rhino-player.md)                                      | **unfiled** — built on `test/rhino-panel`; live gates still open                |
+| [host-aware-elements](./features/host-aware-elements.md)                        | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |
 
 The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until

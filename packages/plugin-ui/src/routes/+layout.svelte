@@ -6,13 +6,15 @@
 		toast,
 		initializeFooterContext,
 		setBlobSaver,
-		setFilePicker
+		setFilePicker,
+		setHostContext
 	} from '@selvajs/ui';
 	import { onMount } from 'svelte';
 	import { getSessionIdFromUrl, getWebSocketPortFromUrl, isRhinoPanel } from '$lib/utils/session';
 	import { rememberBridgeSecret } from '$lib/websocket/bridge-secret';
 	import { MAX_HOST_FILE_BYTES } from '$lib/websocket/bridge-handshake';
 	import { createHostFilesClient } from '$lib/websocket/host-files-client';
+	import { createGeometryPicksClient } from '$lib/websocket/geometry-picks-client';
 	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
@@ -20,6 +22,18 @@
 	import { RHINO_PANEL_HOST } from '$lib/app.config';
 
 	const footer = initializeFooterContext();
+
+	// This page always solves in the user's own Grasshopper, in a browser tab too, so geometry
+	// inputs and buttons render. Picks and presses go to the plugin; their results never come
+	// back as form values.
+	const hostSocket = getWebSocketState(getWebSocketPortFromUrl());
+	const geometryPicks = createGeometryPicksClient(hostSocket, getSessionIdFromUrl);
+	setHostContext({
+		host: 'rhino',
+		pickGeometry: geometryPicks.pickGeometry,
+		clearGeometry: geometryPicks.clearGeometry,
+		trigger: (paramId) => hostSocket.sendTrigger(getSessionIdFromUrl(), paramId)
+	});
 
 	let { children } = $props();
 
@@ -48,11 +62,7 @@
 
 			// The panel's WebView replaces the app with a downloaded file and can crash Rhino
 			// from a file picker, so saves and picks go to the plugin's native dialogs instead.
-			const hostFiles = createHostFilesClient(
-				getWebSocketState(getWebSocketPortFromUrl()),
-				getSessionIdFromUrl,
-				MAX_HOST_FILE_BYTES
-			);
+			const hostFiles = createHostFilesClient(hostSocket, getSessionIdFromUrl, MAX_HOST_FILE_BYTES);
 			setBlobSaver((blob, fileName) =>
 				hostFiles.saveBlob(blob, fileName).catch((error: Error) => {
 					toast.error(error.message);

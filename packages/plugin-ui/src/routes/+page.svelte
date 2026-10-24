@@ -1,71 +1,77 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
-	import { AppShell, PageContent, StateDisplay, Card } from '@selvajs/ui';
-	import { Wrench, Play } from '@lucide/svelte';
-	import { buildSessionParams } from '$lib/utils/session';
+	import { AppShell, StateDisplay } from '@selvajs/ui';
+	import { getGroups, type UISchema } from '@selvajs/schemas';
+	import { buildSessionParams, getWebSocketPortFromUrl, isPlayerUrl } from '$lib/utils/session';
+	import { currentRole } from '$lib/utils/session-role.svelte';
 	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
+	import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
+	import { rememberBridgeSecret } from '$lib/websocket/bridge-secret';
+	import type { WsInitialDataMessage } from '$lib/websocket/websocket.svelte';
 
 	const sessionId = page.url.searchParams.get('session');
+	let error = $state<string | null>(null);
 
-	function navigateTo(path: string) {
-		goto(`/${path}?${buildSessionParams()}`, { noScroll: true }).catch(() => {});
+	// The redirect drops the URL fragment, and can run before the layout has stored the secret it
+	// carries, so store it here first.
+	function go(route: 'builder' | 'preview') {
+		if (sessionId) rememberBridgeSecret(sessionId);
+		goto(`/${route}?${buildSessionParams()}`, { replaceState: true, noScroll: true }).catch(
+			() => {}
+		);
 	}
 
-	const homeUrl = $derived(`/?${buildSessionParams()}`);
+	function hasLayoutItems(schema: UISchema | undefined): boolean {
+		return !!schema && getGroups(schema).some((group) => (group.items?.length ?? 0) > 0);
+	}
+
+	// A player lands on the preview. An author lands on the builder until the UI has something
+	// in it, then on the preview.
+	onMount(() => {
+		if (!sessionId) return;
+		if (isPlayerUrl()) {
+			go('preview');
+			return;
+		}
+
+		const source = getGrasshopperSource(getWebSocketPortFromUrl());
+		const onInitialData = (message: WsInitialDataMessage) => {
+			source.off('initialData', onInitialData);
+			go(hasLayoutItems(message.schema) ? 'preview' : 'builder');
+		};
+		source.on('initialData', onInitialData);
+
+		source.connect(sessionId).then((result) => {
+			if (!result.ok) {
+				source.off('initialData', onInitialData);
+				error = result.error;
+			} else if (currentRole() === 'player') {
+				source.off('initialData', onInitialData);
+				go('preview');
+			} else {
+				source.requestInitialData(sessionId);
+			}
+		});
+
+		return () => source.off('initialData', onInitialData);
+	});
 </script>
 
-<AppShell {...rhinoShellProps()} {homeUrl} mode="fixed" showFooter>
-	{#if !sessionId}
-		<div class="flex flex-1 items-center justify-center">
+<AppShell {...rhinoShellProps()} homeUrl={`/?${buildSessionParams()}`} mode="fixed" showFooter>
+	<div class="flex flex-1 items-center justify-center">
+		{#if !sessionId}
 			<StateDisplay
 				type="error"
 				size="large"
 				title="No Session ID"
 				message="No session ID provided in URL. Please start from the Grasshopper component."
 			/>
-		</div>
-	{:else}
-		<PageContent class="mx-auto w-full max-w-4xl flex-1">
-			<h2 class="text-foreground mb-4 text-4xl font-bold">Welcome to Selva</h2>
-			<p class="text-muted-foreground mb-8 text-lg">Choose a mode to get started:</p>
-
-			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
-				<button onclick={() => navigateTo('builder')} class="text-left">
-					<Card.Root
-						class="hover:border-primary h-full transform border-2 p-8 transition-all hover:-translate-y-1 hover:shadow-lg"
-					>
-						<Card.Header class="mb-3 p-0">
-							<Card.Title class="flex items-center gap-2 text-2xl">
-								<Wrench class="h-6 w-6" />Schema Builder
-							</Card.Title>
-						</Card.Header>
-						<Card.Content class="p-0">
-							<p class="text-muted-foreground leading-relaxed">
-								Configure your UI schema by selecting inputs and outputs from your Grasshopper
-								definition
-							</p>
-						</Card.Content>
-					</Card.Root>
-				</button>
-
-				<button onclick={() => navigateTo('preview')} class="text-left">
-					<Card.Root
-						class="hover:border-primary h-full transform border-2 p-8 transition-all hover:-translate-y-1 hover:shadow-lg"
-					>
-						<Card.Header class="mb-3 p-0">
-							<Card.Title class="flex items-center gap-2 text-2xl">
-								<Play class="h-6 w-6" />Interactive Preview
-							</Card.Title>
-						</Card.Header>
-						<Card.Content class="p-0">
-							<p class="text-muted-foreground leading-relaxed">
-								Interact with your Grasshopper definition in real-time with live parameter updates
-							</p>
-						</Card.Content>
-					</Card.Root>
-				</button>
-			</div>
-		</PageContent>
-	{/if}
+		{:else if error}
+			<StateDisplay type="error" size="large" message={error} />
+		{:else}
+			<StateDisplay type="loading" size="large" message="Connecting to Grasshopper..." />
+		{/if}
+	</div>
 </AppShell>

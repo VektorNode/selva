@@ -577,6 +577,35 @@ ${discriminatorOverrides}${propsSection}
 }
 
 /**
+ * The variant a converter falls back to for a discriminator this build doesn't know. Throwing
+ * there would lose the whole schema: the component's Read() carries on without one, and the next
+ * save writes none.
+ */
+function generateUnknownVariantClass(unionName, config) {
+	const { discriminators, baseClassName } = config;
+	const overrides = discriminators
+		.map((d) => `        public override string ${pascalCase(d)} => Raw["${d}"]?.Value<string>();`)
+		.join('\n');
+
+	return `/// <summary>
+    /// A ${unionName} variant from a newer schema than this build knows. Kept as its raw JSON and
+    /// written back unchanged, so an older plugin re-saving the schema doesn't drop it.
+    /// </summary>
+    public sealed class Unknown${unionName} : ${baseClassName}
+    {
+        public Unknown${unionName}(JObject raw)
+        {
+            Raw = raw;
+        }
+
+        [JsonIgnore]
+        public JObject Raw { get; }
+
+${overrides}
+    }`;
+}
+
+/**
  * Generate JSON converter for a discriminated union
  */
 function generateUnionConverter(unionName, config) {
@@ -625,7 +654,7 @@ ${varDeclarations}
             ${baseClassName} item;
 ${conditions}
             else
-                throw new JsonSerializationException($"Unknown ${unionName} variant: ${discriminators.map((d) => `{${d}}`).join('/')}. JSON: {jsonObject.ToString()}");
+                item = new Unknown${unionName}(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
@@ -633,6 +662,14 @@ ${conditions}
 
         public override void WriteJson(JsonWriter writer, ${baseClassName} value, JsonSerializer serializer)
         {
+            // The explicit array matters: Rhino 8 loads its own Newtonsoft, which lacks the
+            // one-argument WriteTo, and a missing overload fails this whole method at JIT time.
+            if (value is Unknown${unionName} unknown)
+            {
+                unknown.Raw.WriteTo(writer, Array.Empty<JsonConverter>());
+                return;
+            }
+
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 
@@ -703,6 +740,8 @@ for (const [unionName, config] of Object.entries(discriminatedUnions)) {
 ${generateUnionBaseClass(unionName, config)}
 
 ${config.variants.map((v) => generateUnionVariantClass(v, config)).join('\n\n')}
+
+${generateUnknownVariantClass(unionName, config)}
 
 `;
 }

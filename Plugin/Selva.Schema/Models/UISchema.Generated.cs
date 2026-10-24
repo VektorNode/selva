@@ -26,7 +26,7 @@ namespace Selva.Schema.Models
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
-    // ParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic"
+    // ParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic", "geometry", "point", "line", "plane"
     // InputStructure valid values: "item", "list", "tree"
 
 // ============================================================================
@@ -234,6 +234,12 @@ namespace Selva.Schema.Models
 
     public class CheckboxWidgetConfig
     {
+
+/// <summary>
+/// 'checkbox' = a toggle whose value is sent with every solve. 'button' = a trigger: a press solves once with true, then the input goes back to false. A button holds no value in the form, so presets and value updates skip it.
+/// </summary>
+        [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string DisplayAs { get; set; } = "checkbox";
     }
 
     public class FileWidgetConfig
@@ -732,6 +738,24 @@ public override string Type => "linebreak";
 public override string WidgetType => null;
     }
 
+/// <summary>
+    /// A LayoutItem variant from a newer schema than this build knows. Kept as its raw JSON and
+    /// written back unchanged, so an older plugin re-saving the schema doesn't drop it.
+    /// </summary>
+    public sealed class UnknownLayoutItem : LayoutItemBase
+    {
+        public UnknownLayoutItem(JObject raw)
+        {
+            Raw = raw;
+        }
+
+        [JsonIgnore]
+        public JObject Raw { get; }
+
+        public override string Type => Raw["type"]?.Value<string>();
+        public override string WidgetType => Raw["widgetType"]?.Value<string>();
+    }
+
 // ============================================================================
     // LAYOUTCONFIG (Discriminated Union)
     // ============================================================================
@@ -764,6 +788,23 @@ public override string Type => "flat";
 
         [JsonProperty("groups")]
         public List<GroupConfig> Groups { get; set; } = new List<GroupConfig>();
+    }
+
+/// <summary>
+    /// A LayoutConfig variant from a newer schema than this build knows. Kept as its raw JSON and
+    /// written back unchanged, so an older plugin re-saving the schema doesn't drop it.
+    /// </summary>
+    public sealed class UnknownLayoutConfig : LayoutConfigBase
+    {
+        public UnknownLayoutConfig(JObject raw)
+        {
+            Raw = raw;
+        }
+
+        [JsonIgnore]
+        public JObject Raw { get; }
+
+        public override string Type => Raw["type"]?.Value<string>();
     }
 
 // ============================================================================
@@ -819,7 +860,7 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
             else if (type == "linebreak")
                 item = new LineBreakLayoutItem();
             else
-                throw new JsonSerializationException($"Unknown LayoutItem variant: {type}/{widgetType}. JSON: {jsonObject.ToString()}");
+                item = new UnknownLayoutItem(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
@@ -827,6 +868,14 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
 
         public override void WriteJson(JsonWriter writer, LayoutItemBase value, JsonSerializer serializer)
         {
+            // The explicit array matters: Rhino 8 loads its own Newtonsoft, which lacks the
+            // one-argument WriteTo, and a missing overload fails this whole method at JIT time.
+            if (value is UnknownLayoutItem unknown)
+            {
+                unknown.Raw.WriteTo(writer, Array.Empty<JsonConverter>());
+                return;
+            }
+
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 
@@ -897,7 +946,7 @@ var type = jsonObject["type"]?.Value<string>();
             else if (type == "flat")
                 item = new FlatLayoutConfig();
             else
-                throw new JsonSerializationException($"Unknown LayoutConfig variant: {type}. JSON: {jsonObject.ToString()}");
+                item = new UnknownLayoutConfig(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
@@ -905,6 +954,14 @@ var type = jsonObject["type"]?.Value<string>();
 
         public override void WriteJson(JsonWriter writer, LayoutConfigBase value, JsonSerializer serializer)
         {
+            // The explicit array matters: Rhino 8 loads its own Newtonsoft, which lacks the
+            // one-argument WriteTo, and a missing overload fails this whole method at JIT time.
+            if (value is UnknownLayoutConfig unknown)
+            {
+                unknown.Raw.WriteTo(writer, Array.Empty<JsonConverter>());
+                return;
+            }
+
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 

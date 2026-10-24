@@ -22,10 +22,20 @@ import type * as THREE from 'three';
 
 const CLEAN_OUTCOME = { diagnostics: [], blocked: false, aborted: false };
 
-/** Strip file metadata objects — Grasshopper already has the file. */
-function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
+const NO_INPUTS: ReadonlySet<string> = new Set();
+
+/**
+ * Strip file metadata objects — Grasshopper already has the file — and the inputs Grasshopper
+ * fills itself: a picked geometry stays on its param, and resending a button's `true` would press
+ * it again.
+ */
+function prepareValuesForSend(
+	values: Record<string, unknown>,
+	valueless: ReadonlySet<string>
+): Record<string, unknown> {
 	const prepared: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(values)) {
+		if (valueless.has(key)) continue;
 		let parsed = value;
 		if (typeof value === 'string' && value.trim().startsWith('{')) {
 			try {
@@ -49,7 +59,8 @@ function prepareValuesForSend(values: Record<string, unknown>): Record<string, u
 export function createWebSocketSolveDriver(
 	wsState: WebSocketState,
 	sessionId: string,
-	getReporter: () => SolveReporter
+	getReporter: () => SolveReporter,
+	getValuelessInputs: () => ReadonlySet<string> = () => NO_INPUTS
 ): PreviewSolveDriver {
 	let modelUnits = 'Meters';
 
@@ -222,7 +233,7 @@ export function createWebSocketSolveDriver(
 				getReporter().reportError('Not connected to Grasshopper.');
 				return;
 			}
-			wsState.sendValueUpdate(sessionId, prepareValuesForSend(values));
+			wsState.sendValueUpdate(sessionId, prepareValuesForSend(values, getValuelessInputs()));
 		},
 		cancel() {
 			// Nothing to drop client-side (the latest values simply win); the plugin is asked to

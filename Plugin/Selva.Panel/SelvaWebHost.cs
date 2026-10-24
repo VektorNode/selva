@@ -23,9 +23,17 @@ internal sealed class SelvaWebHost
     // browser process, and disposing WebView2 mid-initialisation throws E_ABORT on older Eto.
     private WebView? _webView;
 
+    private readonly Action _showOpenDialog;
+
     private Form? _window;
     private Rectangle? _lastWindowBounds;
     private bool _shuttingDown;
+
+    /// <param name="showOpenDialog">What the page's Open another… link does.</param>
+    public SelvaWebHost(Action showOpenDialog)
+    {
+        _showOpenDialog = showOpenDialog;
+    }
 
     /// <summary>The panel re-reads <see cref="View" /> and <see cref="InWindow" />.</summary>
     public event Action? Changed;
@@ -171,11 +179,18 @@ internal sealed class SelvaWebHost
             {
                 OpenInBrowser(e.Uri);
             }
-            else if (decision == NavigationDecision.HostCommand &&
-                     e.Uri.Host == NavigationPolicy.ToggleWindowCommand)
+            else if (decision == NavigationDecision.HostCommand)
             {
-                // Not inside the navigation callback: moving the WebView mid-decision is unsafe.
-                Application.Instance.AsyncInvoke(ToggleWindow);
+                // Not inside the navigation callback: moving the WebView, or opening a modal
+                // dialog, mid-decision is unsafe.
+                if (e.Uri.Host == NavigationPolicy.ToggleWindowCommand)
+                {
+                    Application.Instance.AsyncInvoke(ToggleWindow);
+                }
+                else if (e.Uri.Host == NavigationPolicy.OpenCommand)
+                {
+                    Application.Instance.AsyncInvoke(_showOpenDialog);
+                }
             }
         };
 

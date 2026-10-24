@@ -19,6 +19,7 @@ export { default as Viewer } from './components/viewer/Viewer.svelte';
 export * from './schema/defaults';
 export * from './schema/dynamic-value-list';
 export * from './schema/traversal';
+export * from './schema/host-support';
 export * from './compute/solving.svelte';
 
 // Solve Session seam. Re-exported so transports outside this package — e.g.
@@ -54,6 +55,7 @@ export {
 
 export * from './contexts/footerContext.svelte';
 export * from './contexts/clientSlotContext.svelte';
+export * from './contexts/hostContext.svelte';
 export * from './composables/useFooterItem.svelte';
 
 export * from './utils';

@@ -124,11 +124,50 @@ public class BridgeAccessTests
     }
 
     [Fact]
+    public void SessionUrl_MarksAPlayerSession()
+    {
+        Assert.Equal(
+            "http://localhost:51234/?session=abc&wsPort=8765&host=rhino&mode=player#s=SECRET",
+            BridgeAccess.SessionUrl("http://localhost:51234", "abc", 8765, "SECRET", "rhino", BridgeRole.Player));
+    }
+
+    [Fact]
     public void SessionUrl_NamesANonBrowserHostInTheQuery()
     {
         Assert.Equal(
             "http://localhost:51234/?session=abc&wsPort=8765&host=rhino#s=SECRET",
             BridgeAccess.SessionUrl("http://localhost:51234", "abc", 8765, "SECRET", "rhino"));
+    }
+
+    [Theory]
+    [InlineData(InboundKind.SaveSchema)]
+    [InlineData(InboundKind.ApplySyncChanges)]
+    [InlineData(InboundKind.SelvaUpload)]
+    [InlineData(InboundKind.SelvaSignIn)]
+    public void PlayerSession_MayNotWriteTheSchema(InboundKind kind)
+    {
+        Assert.True(BridgeAccess.IsRefused(kind, BridgeRole.Player));
+        Assert.False(BridgeAccess.IsRefused(kind, BridgeRole.Author));
+    }
+
+    [Theory]
+    [InlineData(InboundKind.ValueUpdate)]
+    [InlineData(InboundKind.RequestSyncPreview)]
+    [InlineData(InboundKind.PickGeometry)]
+    [InlineData(InboundKind.Trigger)]
+    [InlineData(InboundKind.CancelSolve)]
+    public void PlayerSession_MaySetValuesAndRead(InboundKind kind)
+    {
+        Assert.False(BridgeAccess.IsRefused(kind, BridgeRole.Player));
+    }
+
+    [Theory]
+    [InlineData(InboundKind.CloseDefinition)]
+    [InlineData(InboundKind.EditInGrasshopper)]
+    public void AuthorSession_HasNoPlayerCommands(InboundKind kind)
+    {
+        Assert.True(BridgeAccess.IsRefused(kind, BridgeRole.Author));
+        Assert.False(BridgeAccess.IsRefused(kind, BridgeRole.Player));
     }
 
     // The page reads the same file (bridge-handshake.test.ts), so the two sides can't drift.
@@ -143,7 +182,10 @@ public class BridgeAccessTests
         Assert.True(BridgeAccess.TryAuthenticate(authenticate.ToString(), (string)authenticate["secret"]!, out _));
         Assert.True(BridgeAccess.TryAuthenticate(fromPanel.ToString(), (string)fromPanel["secret"]!, out var host));
         Assert.Equal(BridgeAccess.PanelHost, host);
-        Assert.True(JToken.DeepEquals(fixture["authenticated"], JObject.Parse(BridgeAccess.AuthenticatedMessage)));
+        Assert.True(JToken.DeepEquals(fixture["authenticated"],
+            JObject.Parse(BridgeAccess.AuthenticatedMessage(BridgeRole.Author))));
+        Assert.True(JToken.DeepEquals(fixture["authenticatedAsPlayer"],
+            JObject.Parse(BridgeAccess.AuthenticatedMessage(BridgeRole.Player))));
         Assert.Equal((int)fixture["unauthorizedCloseCode"]!, BridgeAccess.UnauthorizedCloseCode);
         Assert.Equal((long)fixture["maxHostFileBytes"]!, Selva.GH.Config.AppConfig.ValueLimits.MaxFileSizeBytes);
     }

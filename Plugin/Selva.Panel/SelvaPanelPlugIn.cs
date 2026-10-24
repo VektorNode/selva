@@ -27,10 +27,16 @@ public class SelvaPanelPlugIn : PlugIn
     /// <summary>Rhino restores a docked panel at startup, before Grasshopper has loaded.</summary>
     public override PlugInLoadTime LoadTime => PlugInLoadTime.WhenNeededOrTabbedDockBar;
 
-    internal SelvaWebHost Host { get; } = new SelvaWebHost();
+    internal SelvaWebHost Host { get; private set; } = null!;
+
+    internal DefinitionLauncherClient Launcher { get; private set; } = null!;
 
     protected override LoadReturnCode OnLoad(ref string errorMessage)
     {
+        Launcher = new DefinitionLauncherClient(Settings);
+        Host = new SelvaWebHost(Launcher.ShowOpenDialog);
+        Launcher.IsShowingSession = () => Host.View != null;
+
         // System, not the PerDoc default: on Mac PerDoc gives every document window its own panel.
         Panels.RegisterPanel(this, typeof(SelvaPanel), "Selva", typeof(SelvaPanelPlugIn).Assembly,
             "Selva.Panel.Icon.png", PanelType.System);
@@ -44,13 +50,15 @@ public class SelvaPanelPlugIn : PlugIn
         {
             [PanelContract.VersionKey] = PanelContract.Version,
             [PanelContract.ShowKey] = (Action<string, string>)Show,
-            [PanelContract.ClearKey] = (Action<string>)Clear
+            [PanelContract.ClearKey] = (Action<string>)Clear,
+            [PanelContract.NotifyKey] = (Action<string>)Launcher.Notify
         };
     }
 
     private void Show(string url, string sessionId)
     {
         Host.Show(new PanelTarget(new Uri(url), sessionId));
+        Launcher.SessionShown();
     }
 
     private void Clear(string sessionId)

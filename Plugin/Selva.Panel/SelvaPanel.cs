@@ -16,16 +16,16 @@ public class SelvaPanel : Eto.Forms.Panel
     private const int DefaultFloatWidth = 220;
     private static readonly Size FirstFloatSize = new Size(460, 780);
 
-    private readonly Label _idleLabel = CenteredLabel("Enable a UI Bridge, or right-click one and choose Open UI.");
     private readonly Label _inWindowLabel = CenteredLabel("The Selva UI is in its own window. Close that window to bring it back here.");
 
     public SelvaPanel()
     {
         Padding = new Padding(0);
-        var host = SelvaPanelPlugIn.Instance?.Host;
-        if (host != null)
+        var plugIn = SelvaPanelPlugIn.Instance;
+        if (plugIn != null)
         {
-            host.Changed += ShowHostState;
+            plugIn.Host.Changed += ShowHostState;
+            plugIn.Launcher.Changed += ShowHostState;
         }
 
         ShowHostState();
@@ -33,10 +33,11 @@ public class SelvaPanel : Eto.Forms.Panel
 
     private void ShowHostState()
     {
-        var host = SelvaPanelPlugIn.Instance?.Host;
+        var plugIn = SelvaPanelPlugIn.Instance;
+        var host = plugIn?.Host;
         if (host?.View == null)
         {
-            Content = _idleLabel;
+            Content = plugIn == null ? null : LauncherView(plugIn.Launcher);
         }
         else if (host.InWindow)
         {
@@ -46,6 +47,65 @@ public class SelvaPanel : Eto.Forms.Panel
         {
             Content = host.View;
         }
+    }
+
+    /// <summary>
+    ///     The idle panel. Native, so an idle panel starts no browser process, and nothing loads
+    ///     Grasshopper until the user picks a file.
+    /// </summary>
+    private static Control LauncherView(DefinitionLauncherClient launcher)
+    {
+        var busy = launcher.Status != null;
+        var layout = new StackLayout
+        {
+            Padding = new Padding(16),
+            Spacing = 10,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch
+        };
+
+        layout.Items.Add(WrappedLabel("Open a Grasshopper definition to use its Selva UI."));
+
+        var open = new Button { Text = "Open…", Enabled = !busy };
+        open.Click += (_, _) => launcher.ShowOpenDialog();
+        layout.Items.Add(new StackLayoutItem(open, HorizontalAlignment.Left));
+
+        if (launcher.Status != null)
+        {
+            layout.Items.Add(WrappedLabel(launcher.Status));
+        }
+
+        if (launcher.Error != null)
+        {
+            layout.Items.Add(WrappedLabel(launcher.Error, Colors.IndianRed));
+        }
+
+        var recent = launcher.Recent;
+        if (recent.Count > 0)
+        {
+            layout.Items.Add(new Label { Text = "Recent", Font = SystemFonts.Bold() });
+            foreach (var path in recent)
+            {
+                var link = new LinkButton { Text = System.IO.Path.GetFileName(path), ToolTip = path, Enabled = !busy };
+                link.Click += (_, _) => launcher.Open(path);
+                layout.Items.Add(new StackLayoutItem(link, HorizontalAlignment.Left));
+            }
+        }
+
+        layout.Items.Add(new StackLayoutItem(null, true));
+        layout.Items.Add(WrappedLabel("To build a UI, enable a UI Bridge in Grasshopper.", SystemColors.DisabledText));
+
+        return new Scrollable { Content = layout, Border = BorderType.None };
+    }
+
+    private static Label WrappedLabel(string text, Color? color = null)
+    {
+        var label = new Label { Text = text, Wrap = WrapMode.Word };
+        if (color is Color c)
+        {
+            label.TextColor = c;
+        }
+
+        return label;
     }
 
     private static Label CenteredLabel(string text)
@@ -86,10 +146,12 @@ public class SelvaPanel : Eto.Forms.Panel
 
     protected override void Dispose(bool disposing)
     {
-        var host = SelvaPanelPlugIn.Instance?.Host;
+        var plugIn = SelvaPanelPlugIn.Instance;
+        var host = plugIn?.Host;
         if (disposing && host != null)
         {
             host.Changed -= ShowHostState;
+            plugIn!.Launcher.Changed -= ShowHostState;
             // Rhino may dispose a panel at any time; the WebView belongs to the host, not to it.
             if (Content == host.View)
             {

@@ -11,6 +11,7 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Goos;
@@ -70,8 +71,9 @@ public class ValueApplicator
             {
                 var inputKey = input.Id.ToString();
 
-                // Check the payload before the expensive FindObject lookup.
-                if (!values.TryGetValue(inputKey, out var value))
+                // Check the payload before the expensive FindObject lookup. A geometry input's
+                // data comes from a viewport pick, never from the form.
+                if (!values.TryGetValue(inputKey, out var value) || GeometryParamTypes.Contains(input.ParamType))
                 {
                     continue;
                 }

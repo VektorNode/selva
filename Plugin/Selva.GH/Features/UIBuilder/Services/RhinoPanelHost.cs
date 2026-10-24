@@ -37,13 +37,26 @@ internal static class RhinoPanelHost
 
     public static void Clear(string sessionId)
     {
-        // Find, not GetPlugInObject: clearing must not load the .rhp.
-        var contract = PlugIn.Find(PlugInId)?.GetPlugInObject() as IDictionary<string, object>;
-        if (contract != null &&
-            contract.TryGetValue(PanelContract.ClearKey, out var clearValue) &&
+        if (LoadedContract()?.TryGetValue(PanelContract.ClearKey, out var clearValue) == true &&
             clearValue is Action<string> clear)
         {
             clear(sessionId);
         }
+    }
+
+    /// <summary>Shows a player session's failure in the panel's launcher.</summary>
+    public static void Notify(string message)
+    {
+        if (LoadedContract()?.TryGetValue(PanelContract.NotifyKey, out var notifyValue) == true &&
+            notifyValue is Action<string> notify)
+        {
+            notify(message);
+        }
+    }
+
+    // Find, not GetPlugInObject: clearing or notifying must not load the .rhp.
+    private static IDictionary<string, object>? LoadedContract()
+    {
+        return PlugIn.Find(PlugInId)?.GetPlugInObject() as IDictionary<string, object>;
     }
 }

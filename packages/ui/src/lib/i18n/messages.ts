@@ -131,6 +131,35 @@ export interface ViewerMessages {
 	invalidFormat: string;
 	invalidPattern: string;
 
+	// Geometry input (Rhino only)
+	/** The pick button when the input takes several kinds of object. */
+	geometryPick: string;
+	geometryPickAgain: string;
+	geometryClear: string;
+	// The pick button when the input takes one kind: `One` picks a single object, `Other` several.
+	geometryPickPointOne: string;
+	geometryPickPointOther: string;
+	geometryPickPointCloudOne: string;
+	geometryPickPointCloudOther: string;
+	geometryPickCurveOne: string;
+	geometryPickCurveOther: string;
+	geometryPickLineOne: string;
+	geometryPickLineOther: string;
+	geometryPickPlaneOne: string;
+	geometryPickPlaneOther: string;
+	geometryPickSurfaceOne: string;
+	geometryPickSurfaceOther: string;
+	geometryPickPolysurfaceOne: string;
+	geometryPickPolysurfaceOther: string;
+	geometryPickExtrusionOne: string;
+	geometryPickExtrusionOther: string;
+	geometryPickMeshOne: string;
+	geometryPickMeshOther: string;
+	geometryPickSubdOne: string;
+	geometryPickSubdOther: string;
+	geometryPickBlockOne: string;
+	geometryPickBlockOther: string;
+
 	// File input
 	fileModeUpload: string;
 	fileModeUrl: string;
@@ -305,6 +334,32 @@ const en: ViewerMessages = {
 	invalidFormat: 'Invalid format',
 	invalidPattern: 'Invalid validation pattern configured',
 
+	geometryPick: 'Pick in Rhino',
+	geometryPickAgain: 'Pick again',
+	geometryClear: 'Clear',
+	geometryPickPointOne: 'Pick a point',
+	geometryPickPointOther: 'Pick points',
+	geometryPickPointCloudOne: 'Pick a point cloud',
+	geometryPickPointCloudOther: 'Pick point clouds',
+	geometryPickCurveOne: 'Pick a curve',
+	geometryPickCurveOther: 'Pick curves',
+	geometryPickLineOne: 'Pick a line',
+	geometryPickLineOther: 'Pick lines',
+	geometryPickPlaneOne: 'Pick a plane',
+	geometryPickPlaneOther: 'Pick planes',
+	geometryPickSurfaceOne: 'Pick a surface',
+	geometryPickSurfaceOther: 'Pick surfaces',
+	geometryPickPolysurfaceOne: 'Pick a polysurface',
+	geometryPickPolysurfaceOther: 'Pick polysurfaces',
+	geometryPickExtrusionOne: 'Pick an extrusion',
+	geometryPickExtrusionOther: 'Pick extrusions',
+	geometryPickMeshOne: 'Pick a mesh',
+	geometryPickMeshOther: 'Pick meshes',
+	geometryPickSubdOne: 'Pick a SubD',
+	geometryPickSubdOther: 'Pick SubDs',
+	geometryPickBlockOne: 'Pick a block',
+	geometryPickBlockOther: 'Pick blocks',
+
 	fileModeUpload: 'Upload',
 	fileModeUrl: 'URL',
 	fileUrlLabel: 'File URL',
@@ -468,6 +523,32 @@ const de: ViewerMessages = {
 	maxLength: 'Höchstens {max} Zeichen erlaubt',
 	invalidFormat: 'Ungültiges Format',
 	invalidPattern: 'Ungültiges Prüfmuster hinterlegt',
+
+	geometryPick: 'In Rhino wählen',
+	geometryPickAgain: 'Neu wählen',
+	geometryClear: 'Leeren',
+	geometryPickPointOne: 'Punkt wählen',
+	geometryPickPointOther: 'Punkte wählen',
+	geometryPickPointCloudOne: 'Punktwolke wählen',
+	geometryPickPointCloudOther: 'Punktwolken wählen',
+	geometryPickCurveOne: 'Kurve wählen',
+	geometryPickCurveOther: 'Kurven wählen',
+	geometryPickLineOne: 'Linie wählen',
+	geometryPickLineOther: 'Linien wählen',
+	geometryPickPlaneOne: 'Ebene wählen',
+	geometryPickPlaneOther: 'Ebenen wählen',
+	geometryPickSurfaceOne: 'Fläche wählen',
+	geometryPickSurfaceOther: 'Flächen wählen',
+	geometryPickPolysurfaceOne: 'Flächenverband wählen',
+	geometryPickPolysurfaceOther: 'Flächenverbände wählen',
+	geometryPickExtrusionOne: 'Extrusion wählen',
+	geometryPickExtrusionOther: 'Extrusionen wählen',
+	geometryPickMeshOne: 'Netz wählen',
+	geometryPickMeshOther: 'Netze wählen',
+	geometryPickSubdOne: 'SubD wählen',
+	geometryPickSubdOther: 'SubDs wählen',
+	geometryPickBlockOne: 'Block wählen',
+	geometryPickBlockOther: 'Blöcke wählen',
 
 	fileModeUpload: 'Hochladen',
 	fileModeUrl: 'URL',

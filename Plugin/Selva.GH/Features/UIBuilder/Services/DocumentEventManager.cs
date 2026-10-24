@@ -127,12 +127,13 @@ public class DocumentEventManager : IDisposable
             return;
         }
 
-        if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID)
+        // By reference, not DocumentID: two open copies of one file share their persisted id.
+        if (_currentDocument != null && _currentDocument != document)
         {
             UnregisterEvents();
         }
 
-        if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID)
+        if (_eventsRegistered && _currentDocument == document)
         {
             return;
         }
@@ -212,7 +213,7 @@ public class DocumentEventManager : IDisposable
 
     private void OnDocumentRemoved(GH_DocumentServer sender, GH_Document doc)
     {
-        if (_currentDocument != null && doc != null && doc.DocumentID == _currentDocument.DocumentID)
+        if (_currentDocument != null && doc == _currentDocument)
         {
             UnregisterEvents();
             _currentDocument = null;

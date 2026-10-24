@@ -24,9 +24,12 @@
 		onRemove
 	}: RuleRowProps = $props();
 
-	// Exclude the parameter this rule lives on, so it can't reference itself.
+	// Exclude the parameter this rule lives on, so it can't reference itself, and inputs with no
+	// operators: there is no value to compare.
 	let filteredInputs = $derived(
-		availableInputs.filter((input) => input.id !== currentParamInfo?.id)
+		availableInputs.filter(
+			(input) => input.id !== currentParamInfo?.id && getOperatorsForType(input.type).length > 0
+		)
 	);
 
 	let selectedParamInfo = $derived(rule.paramId ? getParameterInfo(rule.paramId) : undefined);

@@ -70,8 +70,11 @@ output entry is invisible to both and survives indefinitely.
 
 ### 4. `paramType` is camelCase, is never validated, and is never repaired
 
-Valid values ([ui-schema.json:13-23](../../packages/schemas/ui-schema.json#L13-L23)): `number`,
-`integer`, `boolean`, `text`, `valueList`, `dynamicValueList`, `file`, `color`, `generic`.
+Valid values: the `ParamType` enum in [ui-schema.json](../../packages/schemas/ui-schema.json).
+`geometry`, `point`, `line` and `plane` come from Rhino's own Get Geometry, Get Point, Get Line and
+Get Plane. The hosts pick their control from `paramType` and ignore the saved `widgetType`, which
+is the placeholder `text`; the page never sends a value for them, and the bridge reports only what a
+viewport pick holds.
 
 `valueList` and `dynamicValueList` are **different types**. There is no case normalization anywhere
 in the plugin, and `ParameterValidationRule` only checks for emptiness, so `"ValueList"` or

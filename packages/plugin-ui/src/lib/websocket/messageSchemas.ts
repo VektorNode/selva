@@ -293,6 +293,19 @@ const hostPickedFileSchema = baseEnvelope.extend({
 });
 
 // ============================================================================
+// Geometry inputs (answers go to every socket; the page matches its requestId)
+// ============================================================================
+
+const pickGeometryResultSchema = baseEnvelope.extend({
+	type: z.literal('pickGeometryResult'),
+	requestId: z.string(),
+	paramId: z.string(),
+	outcome: z.enum(['picked', 'cancelled', 'failed']),
+	summary: z.string().nullish(),
+	error: z.string().nullish()
+});
+
+// ============================================================================
 // Dispatcher entry point
 // ============================================================================
 
@@ -323,7 +336,8 @@ const schemasByType = {
 	selvaUploadResult: selvaUploadResultSchema,
 	hostSaveFileResult: hostSaveFileResultSchema,
 	hostPickFileResult: hostPickFileResultSchema,
-	hostPickedFile: hostPickedFileSchema
+	hostPickedFile: hostPickedFileSchema,
+	pickGeometryResult: pickGeometryResultSchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

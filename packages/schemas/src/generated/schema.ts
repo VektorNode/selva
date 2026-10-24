@@ -14,7 +14,11 @@ export type ParamType =
 	| 'dynamicValueList'
 	| 'file'
 	| 'color'
-	| 'generic';
+	| 'generic'
+	| 'geometry'
+	| 'point'
+	| 'line'
+	| 'plane';
 export type InputNumberLayoutItem = LayoutItemBase & {
 	type: 'input';
 	widgetType: 'number';
@@ -249,7 +253,12 @@ export interface DynamicValueListOutputConfig {
 	 */
 	targetInputId: string;
 }
-export interface CheckboxWidgetConfig {}
+export interface CheckboxWidgetConfig {
+	/**
+	 * 'checkbox' = a toggle whose value is sent with every solve. 'button' = a trigger: a press solves once with true, then the input goes back to false. A button holds no value in the form, so presets and value updates skip it.
+	 */
+	displayAs?: 'checkbox' | 'button';
+}
 export interface FileWidgetConfig {
 	buttonLabel?: string;
 	/**
@@ -505,7 +514,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.15.0';
+export const UI_SCHEMA_VERSION = '2.16.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

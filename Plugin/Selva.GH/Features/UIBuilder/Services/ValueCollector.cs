@@ -5,6 +5,7 @@ using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.ComputeIO.Goos;
@@ -20,6 +21,14 @@ namespace Selva.GH.Features.UIBuilder.Services;
 
 public class ValueCollector
 {
+    private readonly GeometryPicks _geometryPicks;
+
+    /// <param name="geometryPicks">What the bridge's geometry inputs hold; reported in place of their data.</param>
+    public ValueCollector(GeometryPicks geometryPicks = null)
+    {
+        _geometryPicks = geometryPicks;
+    }
+
     public Dictionary<string, object> CollectInputValues(GH_Document document, UISchema schema,
         Action<GH_RuntimeMessageLevel, string> addMessage = null)
     {
@@ -34,6 +43,19 @@ public class ValueCollector
         {
             try
             {
+                // A Rhino object's ToString() means nothing on the page, and the page never sends
+                // a geometry value back. Only a pick has something to show.
+                if (GeometryParamTypes.Contains(input.ParamType))
+                {
+                    var summary = _geometryPicks?.SummaryOf(input.Id);
+                    if (summary != null)
+                    {
+                        currentValues[input.Id.ToString()] = summary;
+                    }
+
+                    continue;
+                }
+
                 var paramObject = document.FindObject(input.Id, false);
                 if (paramObject == null)
                 {

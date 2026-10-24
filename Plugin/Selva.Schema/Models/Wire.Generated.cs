@@ -17,6 +17,7 @@ namespace Selva.Schema.Models
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
+    // GeometryKind valid values: "point", "pointCloud", "curve", "surface", "polysurface", "extrusion", "mesh", "subd", "block"
     // SolveEndedKind valid values: "ok", "blocked", "aborted", "error"
 
 // ============================================================================
@@ -83,6 +84,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("groupName")]
         public string GroupName { get; set; }
+
+/// <summary>
+/// What a Get Geometry's type filter lets the user pick, read from the param on every scan, so it follows the filter. Empty for every other input, and for a filter that allows everything.
+/// </summary>
+        [JsonProperty("geometryTypes")]
+        public List<string> GeometryTypes { get; set; } = new List<string>();
     }
 
     public class DiscoveredOutput

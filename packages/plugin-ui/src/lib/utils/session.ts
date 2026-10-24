@@ -3,6 +3,8 @@ import { SvelteURLSearchParams } from 'svelte/reactivity';
 import {
 	DEFAULT_WEBSOCKET_PORT,
 	HOST_QUERY_PARAM,
+	MODE_QUERY_PARAM,
+	PLAYER_MODE,
 	RHINO_PANEL_HOST,
 	WEBSOCKET_PORT_QUERY_PARAM
 } from '$lib/app.config';
@@ -23,11 +25,11 @@ export function getSessionIdFromUrl(): string {
 }
 
 /**
- * Build URL query params string preserving session, wsPort and host from the current page URL.
+ * Build URL query params string preserving session, wsPort, host and mode from the current page URL.
  */
 export function buildSessionParams(): string {
 	const params = new SvelteURLSearchParams();
-	for (const key of ['session', WEBSOCKET_PORT_QUERY_PARAM, HOST_QUERY_PARAM]) {
+	for (const key of ['session', WEBSOCKET_PORT_QUERY_PARAM, HOST_QUERY_PARAM, MODE_QUERY_PARAM]) {
 		const value = page.url.searchParams.get(key);
 		if (value) params.set(key, value);
 	}
@@ -36,6 +38,11 @@ export function buildSessionParams(): string {
 
 export function isRhinoPanel(): boolean {
 	return page.url.searchParams.get(HOST_QUERY_PARAM) === RHINO_PANEL_HOST;
+}
+
+/** What the URL says; the socket's acknowledged role overrides it once connected. */
+export function isPlayerUrl(): boolean {
+	return page.url.searchParams.get(MODE_QUERY_PARAM) === PLAYER_MODE;
 }
 
 /**

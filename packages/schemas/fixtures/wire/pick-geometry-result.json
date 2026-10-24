@@ -1,0 +1,9 @@
+{
+	"type": "pickGeometryResult",
+	"sessionId": "session-fixture",
+	"requestId": "3",
+	"paramId": "11111111-1111-4111-8111-111111111111",
+	"outcome": "picked",
+	"summary": "2 curves",
+	"error": null
+}

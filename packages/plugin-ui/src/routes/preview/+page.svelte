@@ -12,9 +12,13 @@
 		useFooterItem,
 		getExternalInputs,
 		readExternalValue,
+		getHostContext,
+		setHostContext,
 		type ExternalInput
 	} from '@selvajs/ui';
-	import { buildSessionParams, isRhinoPanel } from '$lib/utils/session';
+	import { buildSessionParams, getWebSocketPortFromUrl, isRhinoPanel } from '$lib/utils/session';
+	import { currentRole } from '$lib/utils/session-role.svelte';
+	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
 	import { isInRhinoPanel, rhinoShellProps } from '$lib/utils/rhino-host.svelte';
 	import { usePreviewState } from '$lib/composables/usePreviewState.svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
@@ -24,6 +28,16 @@
 	let isViewerFullscreen = $state(false);
 
 	const preview = usePreviewState(() => sessionId);
+
+	// The layout's host actions, plus what each geometry input lets the user pick. Read from the
+	// canvas on every initialData, so a changed filter shows on the next load.
+	setHostContext({
+		...getHostContext(),
+		describeGeometry: (paramId) => {
+			const input = preview.state.discoveredInputs.find((i) => i.id === paramId);
+			return input && { kinds: input.geometryTypes, atMost: input.atMost };
+		}
+	});
 	const solvingIndicator = createSolvingIndicator(() => preview.isSolving, {
 		freezesDuringSolve: isRhinoPanel()
 	});
@@ -73,6 +87,9 @@
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
 
+	const player = $derived(currentRole() === 'player');
+	const wsState = getWebSocketState(getWebSocketPortFromUrl());
+
 	useFooterItem({
 		id: 'ws-status',
 		component: WsStatusFooter,
@@ -121,7 +138,10 @@
 		<ModeHeader
 			{homeUrl}
 			current="preview"
+			{player}
 			onSwitch={() => navigateTo('/builder')}
+			onClose={() => wsState.closeDefinition(sessionId)}
+			onEdit={() => wsState.editInGrasshopper(sessionId)}
 			title={preview.state.schema?.name ?? null}
 			actions={headerActions}
 		/>

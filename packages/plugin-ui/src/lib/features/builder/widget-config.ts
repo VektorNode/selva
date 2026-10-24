@@ -99,6 +99,13 @@ export function mapParamTypeToWidgetType(
 				return 'file';
 			case 'color':
 				return 'color';
+			// No geometry widget exists: the host renders these from paramType. 'text' is the
+			// placeholder because every plugin version can read it back.
+			case 'geometry':
+			case 'point':
+			case 'line':
+			case 'plane':
+				return 'text';
 			default:
 				return 'text';
 		}

@@ -14,6 +14,8 @@
 	import InputControl from './InputControl.svelte';
 	import OutputDisplay from './OutputDisplay.svelte';
 	import { evaluateGroupVisibility } from '$lib/schema/visibility-rules';
+	import { isSupportedOn, layoutItemKind } from '$lib/schema/host-support';
+	import { getHostContext } from '$lib/contexts/hostContext.svelte';
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 
 	const locale = getLocaleContext();
@@ -42,8 +44,19 @@
 		dynamicOptions = {}
 	}: Props = $props();
 
+	const { host } = getHostContext();
+
+	// An element this host can't render is left out, not shown broken: its input still solves with
+	// the definition's own default. A group left with nothing to show goes too.
 	const visibleGroups = $derived(
-		tab.groups.filter((group) => evaluateGroupVisibility(group, values))
+		tab.groups
+			.filter((group) => evaluateGroupVisibility(group, values))
+			.flatMap((group) => {
+				const items = group.items.filter((item) =>
+					isSupportedOn(host, layoutItemKind(item, inputs))
+				);
+				return items.length > 0 || group.items.length === 0 ? [{ ...group, items }] : [];
+			})
 	);
 
 	function getInputById(paramId: string): SchemaInput | undefined {
@@ -68,6 +81,7 @@
 			onChange={onValueChange}
 			disabled={visibility.disabled}
 			dynamicOptions={dynamicOptions[input.id]}
+			paramType={input.paramType}
 		/>
 	{/if}
 {/snippet}

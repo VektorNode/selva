@@ -8,6 +8,7 @@ using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Special;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.UIBuilder.Helpers;
@@ -357,6 +358,10 @@ public class SchemaSynchronizer
             ExtractTreeAccess(param, input);
             ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, input);
             PopulateAcceptedFormats(param, input);
+            if (input.Type == "geometry")
+            {
+                input.GeometryTypes = GeometryFilter.KindsOf(param);
+            }
 
             inputs.Add(input);
         }
@@ -390,6 +395,13 @@ public class SchemaSynchronizer
         if (param is GetDynamicValueListParameter dynamicValueList)
         {
             PopulateDynamicValueListDefault(dynamicValueList, input);
+            return;
+        }
+
+        // A Rhino object's ScriptVariable serialises as a whole 3dm archive, and after a pick the
+        // volatile data is the picked geometry, which would come back as the "default".
+        if (GeometryParamTypes.Contains(input.Type))
+        {
             return;
         }
 

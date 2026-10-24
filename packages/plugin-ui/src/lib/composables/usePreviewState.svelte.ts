@@ -8,6 +8,7 @@ import type { SupportedTypes } from '@selvajs/schemas';
 import type { WsOutputsMessage } from '$lib/websocket/websocket.svelte';
 import {
 	createSolveSession,
+	valuelessInputIds,
 	EMPTY_LIVE_SOLVE,
 	type SolvePhase,
 	type SolveSession,
@@ -37,6 +38,7 @@ const EMPTY_MESHES: unknown[] = [];
 // every $derived that reads it.
 const EMPTY_MESSAGES: string[] = [];
 const EMPTY_DIAGNOSTICS: SolveDiagnostic[] = [];
+const NO_INPUTS: ReadonlySet<string> = new Set();
 
 /**
  * @param source Defaults to the Grasshopper WebSocket source bound to the URL's wsPort.
@@ -75,7 +77,11 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	function getOrBuildSession(): SolveSession {
 		if (!session) {
 			const schema = state.schema!; // set by the core before it touches the session
-			driver = schemaSource.makeSolveDriver(getSessionId(), () => reporter);
+			driver = schemaSource.makeSolveDriver(
+				getSessionId(),
+				() => reporter,
+				() => (state.schema ? valuelessInputIds(state.schema) : NO_INPUTS)
+			);
 			session = createSolveSession({ schema, scopeKey: getSessionId(), driver });
 			unsubscribeSession = session.subscribe(() => {
 				sessionVersion += 1;

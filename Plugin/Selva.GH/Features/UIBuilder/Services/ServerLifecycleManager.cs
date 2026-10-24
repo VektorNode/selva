@@ -3,6 +3,8 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Grasshopper.Kernel;
+using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
@@ -24,17 +26,25 @@ public class ServerLifecycleManager : IDisposable
     private readonly WebSocketTransport _webSocketTransport;
     private readonly SemaphoreSlim _transitionGate = new SemaphoreSlim(1, 1);
     private readonly LocalWebServer _webServer;
+    private readonly Func<GH_Document> _document;
     private bool _disposed;
+
+    // The document's runtime this bridge's live events come from, and the sender it attached.
+    private DocumentSolveRuntime _attachedRuntime;
+    private Action<SolveEvent> _attachedSend;
 
     // Latest intent: set true at the top of StartServersAsync, false at the top of the stop
     // entry points — before either takes the gate. Transitions re-check it under the gate so the
     // most recent request wins regardless of execution order.
     private volatile bool _desiredRunning;
 
-    public ServerLifecycleManager(LocalWebServer webServer, WebSocketTransport webSocketTransport)
+    /// <param name="document">The document whose solves this bridge reports.</param>
+    public ServerLifecycleManager(LocalWebServer webServer, WebSocketTransport webSocketTransport,
+        Func<GH_Document> document)
     {
         _webServer = webServer ?? throw new ArgumentNullException(nameof(webServer));
         _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
+        _document = document ?? throw new ArgumentNullException(nameof(document));
     }
 
     public bool IsRunning => _webSocketTransport.IsRunning;
@@ -112,8 +122,10 @@ public class ServerLifecycleManager : IDisposable
 
             // Discarded deliberately: this runs on the solver's thread and must never wait on the
             // socket.
-            SolveRuntimes.SetLocalTransport(solveEvent =>
-                _ = _webSocketTransport.BroadcastSolveEvent(solveEvent));
+            Action<SolveEvent> send = solveEvent => _ = _webSocketTransport.BroadcastSolveEvent(solveEvent);
+            _attachedRuntime = SolveRuntimes.For(_document());
+            _attachedSend = send;
+            _attachedRuntime?.AttachLocalTransport(send);
 
             Logger.Log(
                 $"[ServerLifecycleManager] WebSocket server started on port {_webSocketTransport.WebSocketPort}");
@@ -185,7 +197,9 @@ public class ServerLifecycleManager : IDisposable
     {
         // Before the socket closes: a message raised after this point has nowhere to go, and the
         // definition must keep solving in plain Grasshopper.
-        SolveRuntimes.SetLocalTransport(null);
+        _attachedRuntime?.DetachLocalTransport(_attachedSend);
+        _attachedRuntime = null;
+        _attachedSend = null;
 
         try
         {

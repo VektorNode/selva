@@ -1,5 +1,15 @@
 <script lang="ts">
-	import { Button, Callout, Dialog, Label, Separator, Spinner, Switch } from '@selvajs/ui';
+	import {
+		Button,
+		Callout,
+		Dialog,
+		Label,
+		Separator,
+		Spinner,
+		Switch,
+		unsupportedItems
+	} from '@selvajs/ui';
+	import type { UISchema } from '@selvajs/schemas';
 	import { CloudUpload, FileText, RefreshCw } from '@lucide/svelte';
 	import type { SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
 	import { nowhereToUpload, selectedVersionTarget } from '$lib/composables/selva-upload-core';
@@ -10,9 +20,13 @@
 
 	interface Props {
 		upload: SelvaUpload;
+		/** The schema being uploaded: what Selva will render of it. */
+		schema?: UISchema | null;
 	}
 
-	let { upload }: Props = $props();
+	let { upload, schema = null }: Props = $props();
+
+	const leftOutOnSelva = $derived(schema ? unsupportedItems(schema, 'selva').length : 0);
 
 	const uploadState = $derived(upload.state);
 	const signedIn = $derived(uploadState.account?.status === 'signedIn');
@@ -75,6 +89,14 @@
 			{#if !upload.connected}
 				<Callout tone="warning">
 					Not connected to Grasshopper. Check that the UI Bridge component is enabled.
+				</Callout>
+			{/if}
+
+			{#if leftOutOnSelva > 0}
+				<Callout tone="warning">
+					{leftOutOnSelva === 1 ? '1 element' : `${leftOutOnSelva} elements`} of this UI only work in
+					Rhino for now. Selva leaves {leftOutOnSelva === 1 ? 'it' : 'them'} out, and the definition solves
+					with its own values there.
 				</Callout>
 			{/if}
 

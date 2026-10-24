@@ -65,7 +65,7 @@ public sealed class BridgeServerTests : IAsyncLifetime
     {
         using var socket = await ConnectAsync();
         await SendAsync(socket, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
-        Assert.Equal("{\"type\":\"authenticated\"}", await ReceiveTextAsync(socket));
+        Assert.Equal("{\"type\":\"authenticated\",\"role\":\"author\"}", await ReceiveTextAsync(socket));
 
         await SendAsync(socket, "{\"type\":\"requestInitialData\",\"sessionId\":\"s\"}");
         await WaitUntilAsync(() => !_received.IsEmpty);

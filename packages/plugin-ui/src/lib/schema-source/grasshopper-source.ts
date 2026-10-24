@@ -121,8 +121,12 @@ export function createGrasshopperSource(wsState: WebSocketState, port: number): 
 			wsState.applySyncChanges(sessionId, changes);
 		},
 
-		makeSolveDriver(sessionId: string, getReporter: () => SolveReporter): PreviewSolveDriver {
-			return createWebSocketSolveDriver(wsState, sessionId, getReporter);
+		makeSolveDriver(
+			sessionId: string,
+			getReporter: () => SolveReporter,
+			getValuelessInputs?: () => ReadonlySet<string>
+		): PreviewSolveDriver {
+			return createWebSocketSolveDriver(wsState, sessionId, getReporter, getValuelessInputs);
 		}
 	};
 }

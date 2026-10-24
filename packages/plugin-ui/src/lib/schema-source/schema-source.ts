@@ -96,9 +96,14 @@ export interface SchemaSource {
 	 * The driver sends values on solve() and, as outputs + binary mesh frames arrive, reports
 	 * them back through the reporter. All WebSocket solve quirks — value preparation, the
 	 * monotonic-token mesh-blob streaming, the in-flight `isSolving` mirror — stay inside the
-	 * adapter; the Solve Session never learns them.
+	 * adapter; the Solve Session never learns them. `getValuelessInputs` names the inputs whose
+	 * values never go out: geometry and buttons, which the plugin fills itself.
 	 */
-	makeSolveDriver(sessionId: string, getReporter: () => SolveReporter): PreviewSolveDriver;
+	makeSolveDriver(
+		sessionId: string,
+		getReporter: () => SolveReporter,
+		getValuelessInputs?: () => ReadonlySet<string>
+	): PreviewSolveDriver;
 }
 
 /**

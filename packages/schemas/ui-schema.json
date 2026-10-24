@@ -21,9 +21,13 @@
 				"dynamicValueList",
 				"file",
 				"color",
-				"generic"
+				"generic",
+				"geometry",
+				"point",
+				"line",
+				"plane"
 			],
-			"description": "Contextual parameter data types"
+			"description": "Contextual parameter data types. 'geometry', 'point', 'line' and 'plane' come from Rhino's Get Geometry, Get Point, Get Line and Get Plane: the host picks their control from this type, whatever the layout item's widgetType says, and they carry no value from the form."
 		},
 
 		"//_VISIBILITY_RULES": "--- VISIBILITY RULES --- Visibility conditions define when to show/hide/disable parameters based on other parameter values. Can be applied to individual items or entire groups. Ex1: action='disable'+defaultValue=2 when Leg Type='Square'. Ex2: action='hide' when Height>120. Ex3: mode='all'+action='hide'+defaultValue=5 when Width>100 AND Length<100. Ex4: hide entire 'Advanced Options' group when Mode='Basic'",
@@ -216,7 +220,14 @@
 		},
 		"CheckboxWidgetConfig": {
 			"type": "object",
-			"properties": {},
+			"properties": {
+				"displayAs": {
+					"type": "string",
+					"enum": ["checkbox", "button"],
+					"default": "checkbox",
+					"description": "'checkbox' = a toggle whose value is sent with every solve. 'button' = a trigger: a press solves once with true, then the input goes back to false. A button holds no value in the form, so presets and value updates skip it."
+				}
+			},
 			"additionalProperties": false
 		},
 		"FileWidgetConfig": {
@@ -763,7 +774,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.15.0",
+					"default": "2.16.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

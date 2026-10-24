@@ -14,6 +14,8 @@ public class UIBuilderService : IDisposable
     }
 
     public SchemaSynchronizer SchemaSynchronizer { get; private set; }
+    public GeometryPicks GeometryPicks { get; private set; }
+    public TriggerPresses TriggerPresses { get; private set; }
     public ValueApplicator ValueApplicator { get; private set; }
     public ValueCollector ValueCollector { get; private set; }
     public ComponentStateManager StateManager { get; private set; }
@@ -53,7 +55,9 @@ public class UIBuilderService : IDisposable
     {
         SchemaSynchronizer = new SchemaSynchronizer(SessionId);
         ValueApplicator = new ValueApplicator();
-        ValueCollector = new ValueCollector();
+        GeometryPicks = new GeometryPicks();
+        TriggerPresses = new TriggerPresses();
+        ValueCollector = new ValueCollector(GeometryPicks);
         StateManager = new ComponentStateManager();
         WebSocketTransport = new WebSocketTransport(SessionId, BridgeSecret);
 
@@ -63,7 +67,7 @@ public class UIBuilderService : IDisposable
         CleanupService = new SchemaCleanupService();
 
         PersistenceService = new SchemaArchiveSerializer(PluginVersion);
-        ServerManager = new ServerLifecycleManager(WebServer, WebSocketTransport);
+        ServerManager = new ServerLifecycleManager(WebServer, WebSocketTransport, () => EventManager.CurrentDocument);
         BridgeService = new BridgeOrchestrator(
             WebSocketTransport,
             SchemaSynchronizer,
@@ -71,6 +75,8 @@ public class UIBuilderService : IDisposable
             ValueCollector,
             StateManager,
             EventManager,
+            GeometryPicks,
+            TriggerPresses,
             PluginVersion,
             SessionId
         );

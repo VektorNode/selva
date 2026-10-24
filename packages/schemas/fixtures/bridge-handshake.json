@@ -5,7 +5,8 @@
 		"secret": "SECRET-FROM-THE-URL-FRAGMENT",
 		"host": "rhino"
 	},
-	"authenticated": { "type": "authenticated" },
+	"authenticated": { "type": "authenticated", "role": "author" },
+	"authenticatedAsPlayer": { "type": "authenticated", "role": "player" },
 	"unauthorizedCloseCode": 4401,
 	"maxHostFileBytes": 157286400
 }

@@ -1,0 +1,227 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Grasshopper;
+using Grasshopper.Kernel;
+using Grasshopper.Plugin;
+using Rhino;
+using Selva.GH.Features.UIBuilder.Components;
+using Selva.GH.Utilities.Helpers;
+using Selva.RhinoPanel;
+
+namespace Selva.GH.Features.UIBuilder.Services;
+
+/// <summary>
+///     Opens a definition from the Selva panel as a player session: preview only, Grasshopper's
+///     editor stays hidden, nothing is written back to the file. One player document at a time;
+///     documents the user opened in Grasshopper are never touched. UI thread only.
+/// </summary>
+internal static class DefinitionLauncher
+{
+    private sealed class PlayerSession
+    {
+        public PlayerSession(GH_Document document, GH_Document? previous, GH_UIBuilderComponent bridge,
+            List<GH_UIBuilderComponent> suppressed)
+        {
+            Document = document;
+            Previous = previous;
+            Bridge = bridge;
+            Suppressed = suppressed;
+        }
+
+        public GH_Document Document { get; }
+
+        /// <summary>The canvas's document before this one: only the canvas's document solves.</summary>
+        public GH_Document? Previous { get; }
+
+        public GH_UIBuilderComponent Bridge { get; }
+
+        /// <summary>The document's other bridges, kept off while it's a player document.</summary>
+        public List<GH_UIBuilderComponent> Suppressed { get; }
+    }
+
+    private static PlayerSession? _current;
+
+    /// <summary>Fills <see cref="PanelContract.LauncherSlot" /> for the .rhp's launcher.</summary>
+    public static void Register()
+    {
+        AppDomain.CurrentDomain.SetData(PanelContract.LauncherSlot, new Dictionary<string, object>
+        {
+            [PanelContract.VersionKey] = PanelContract.Version,
+            [PanelContract.OpenDefinitionKey] = (Func<string, string?>)Open
+        });
+    }
+
+    /// <returns>Null when the definition opened; otherwise why not, for the user.</returns>
+    public static string? Open(string path)
+    {
+        try
+        {
+            return OpenCore(path);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[DefinitionLauncher] Could not open {Path.GetFileName(path)}", ex);
+            return $"Could not open {Path.GetFileName(path)}: {ex.Message}";
+        }
+    }
+
+    private static string? OpenCore(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return $"{Path.GetFileName(path)} doesn't exist any more.";
+        }
+
+        // A second copy would carry the same persisted DocumentID as the one already open, and
+        // closing it would reach that document's bridge.
+        var fullPath = Path.GetFullPath(path);
+        if (Instances.DocumentServer.Any(d => d != _current?.Document && IsSameFile(d.FilePath, fullPath)))
+        {
+            return $"{Path.GetFileName(path)} is already open in Grasshopper. Use its UI Bridge instead.";
+        }
+
+        // Read without solving: the document isn't in the document server yet, so nothing runs
+        // before the bridges are marked. A file saved with Enable on would otherwise cold-start
+        // as an author session.
+        var io = new GH_DocumentIO();
+        if (!io.Open(fullPath) || io.Document == null)
+        {
+            return $"Grasshopper couldn't read {Path.GetFileName(path)}.";
+        }
+
+        var document = io.Document;
+        var bridges = document.Objects.OfType<GH_UIBuilderComponent>().ToList();
+        var player = bridges.FirstOrDefault(HasSelvaUI);
+        if (player == null)
+        {
+            return $"{Path.GetFileName(path)} has no Selva UI. Open it in Grasshopper to add one.";
+        }
+
+        Close();
+
+        player.HostAsPlayer();
+        var others = bridges.Where(b => b != player).ToList();
+        foreach (var other in others)
+        {
+            other.Suppress();
+        }
+
+        var canvas = Instances.ActiveCanvas;
+        var previous = canvas?.Document;
+        Instances.DocumentServer.AddDocument(document);
+        if (canvas != null)
+        {
+            canvas.Document = document;
+        }
+
+        document.Enabled = true;
+        // Grasshopper draws no preview while its editor is hidden, unless it's forced.
+        document.ForcePreview(true);
+        document.ModifiedChanged += KeepUnmodified;
+        _current = new PlayerSession(document, previous, player, others);
+
+        document.NewSolution(false);
+        return null;
+    }
+
+    /// <summary>
+    ///     Closes the player definition, if there is one, and gives the canvas back to the
+    ///     document it showed before. Removing a document reaches none of the paths that stop a
+    ///     bridge's servers, so the bridge is torn down first.
+    /// </summary>
+    public static void Close()
+    {
+        var session = _current;
+        if (session == null)
+        {
+            return;
+        }
+
+        _current = null;
+        session.Document.ModifiedChanged -= KeepUnmodified;
+        session.Bridge.Dispose();
+
+        session.Document.Enabled = false;
+        session.Document.ForcePreview(false);
+        session.Document.IsModified = false;
+        Instances.DocumentServer.RemoveDocument(session.Document);
+
+        var canvas = Instances.ActiveCanvas;
+        if (canvas != null && canvas.Document == session.Document)
+        {
+            canvas.Document = session.Previous;
+        }
+
+        if (session.Previous != null && Instances.DocumentServer.Contains(session.Previous))
+        {
+            session.Previous.Enabled = true;
+            session.Previous.NewSolution(false);
+        }
+    }
+
+    /// <summary>
+    ///     Shows the editor with the player document and hands it over: from here it's the user's
+    ///     document like any other, and the next schema sync marks it modified.
+    /// </summary>
+    public static void EditInGrasshopper()
+    {
+        var session = _current;
+        if (session == null)
+        {
+            return;
+        }
+
+        _current = null;
+        session.Document.ModifiedChanged -= KeepUnmodified;
+        session.Document.ForcePreview(false);
+
+        if (RhinoApp.GetPlugInObject("Grasshopper") is GH_RhinoScriptInterface grasshopper)
+        {
+            grasshopper.ShowEditor();
+        }
+
+        session.Bridge.BecomeAuthor();
+        foreach (var other in session.Suppressed)
+        {
+            other.ReleaseSuppression();
+        }
+    }
+
+    /// <summary>
+    ///     Selva's post-solve schema sync calls <c>Modified()</c>, and Grasshopper asks to save
+    ///     modified documents on close and when Rhino quits. A player document is never saved.
+    /// </summary>
+    private static void KeepUnmodified(object sender, GH_DocModifiedEventArgs e)
+    {
+        if (e.Modified && sender is GH_Document document)
+        {
+            document.IsModified = false;
+        }
+    }
+
+    /// <summary>The same check the bridge makes before it serves a UI.</summary>
+    private static bool HasSelvaUI(GH_UIBuilderComponent bridge)
+    {
+        return bridge.Schema != null && BridgeOrchestrator.FindWiredContextBake(bridge) != null;
+    }
+
+    private static bool IsSameFile(string? candidate, string fullPath)
+    {
+        if (string.IsNullOrEmpty(candidate))
+        {
+            return false;
+        }
+
+        try
+        {
+            return string.Equals(Path.GetFullPath(candidate), fullPath, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+}

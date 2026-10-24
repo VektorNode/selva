@@ -9,10 +9,21 @@
 		DropdownWidgetConfig,
 		DynamicValueListOutputConfig,
 		ImageWidgetConfig,
+		CheckboxWidgetConfig,
 		InputSource
 	} from '@selvajs/schemas';
 	type LayoutItem = InputLayoutItem | OutputLayoutItem;
-	import { Button, Card, Collapsible, Switch } from '@selvajs/ui';
+	import {
+		Button,
+		Card,
+		Collapsible,
+		Switch,
+		HOST_LABELS,
+		hostsFor,
+		isGeometryParamType,
+		isSupportedOn,
+		layoutItemKind
+	} from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
@@ -60,8 +71,29 @@
 	let typeLabel = $derived(paramInfo?.type ?? item.widgetType);
 	let isNumberInput = $derived(item.type === 'input' && item.widgetType === 'number');
 
+	// The host picks a geometry input's control from its paramType; the saved widget is a
+	// placeholder, so its text options don't apply.
+	let isGeometryInput = $derived(item.type === 'input' && isGeometryParamType(paramInfo?.type));
+	let elementKind = $derived(
+		layoutItemKind(
+			item,
+			paramInfo
+				? [{ id: paramInfo.id, nickname: paramInfo.nickname, paramType: paramInfo.type }]
+				: []
+		)
+	);
+	let notOnSelva = $derived(!isSupportedOn('selva', elementKind));
+	let runsOnLabel = $derived(
+		hostsFor(elementKind)
+			.map((host) => HOST_LABELS[host])
+			.join(', ')
+	);
+
+	let isCheckboxInput = $derived(item.type === 'input' && item.widgetType === 'checkbox');
 	let isFileInput = $derived(item.type === 'input' && item.widgetType === 'file');
-	let isTextInput = $derived(item.type === 'input' && item.widgetType === 'text');
+	let isTextInput = $derived(
+		item.type === 'input' && item.widgetType === 'text' && !isGeometryInput
+	);
 	let isDropdownInput = $derived(item.type === 'input' && item.widgetType === 'dropdown');
 	let isFileOutput = $derived(item.type === 'output' && item.widgetType === 'file');
 	let isImageOutput = $derived(item.type === 'output' && item.widgetType === 'image');
@@ -95,6 +127,7 @@
 	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
 	let hasAdvancedOptions = $derived(
 		isNumberInput ||
+			isCheckboxInput ||
 			isFileInput ||
 			isTextInput ||
 			isDropdownInput ||
@@ -109,6 +142,9 @@
 		}
 		if (isDropdownInput && dropdownConfig) {
 			return dropdownConfig.displayAs === 'checklist';
+		}
+		if (isCheckboxInput) {
+			return (item.config as CheckboxWidgetConfig | undefined)?.displayAs === 'button';
 		}
 		if (isFileInput && fileInputConfig) {
 			if (fileInputConfig.defaultInputMode) return true;
@@ -158,6 +194,13 @@
 		if (!isNumberInput) return;
 		const config = item.config as NumberWidgetConfig;
 		config.renderAsSlider = !config.renderAsSlider;
+	}
+
+	function toggleButtonMode() {
+		if (!isCheckboxInput) return;
+		const config = (item.config ?? {}) as CheckboxWidgetConfig;
+		config.displayAs = config.displayAs === 'button' ? 'checkbox' : 'button';
+		(item as InputLayoutItem).config = config as never;
 	}
 
 	function toggleChecklistMode() {
@@ -301,6 +344,15 @@
 					style="field-sizing: content; max-width: 18rem;"
 					placeholder="Display Name"
 				/>
+				{#if notOnSelva}
+					<ScopeChip
+						scope="local"
+						label="Not on Selva yet"
+						title={runsOnLabel
+							? `Shows in ${runsOnLabel} only. On Selva it is left out, and the definition uses its own value.`
+							: 'This plugin does not know this element. It is kept in the schema, but no host shows it.'}
+					/>
+				{/if}
 				{#if isInput && sourceKind !== 'user'}
 					<ScopeChip
 						scope="compute"
@@ -460,6 +512,23 @@
 										<Switch
 											checked={config.renderAsSlider ?? true}
 											onCheckedChange={toggleSliderMode}
+											class="scale-75"
+										/>
+									</div>
+								{/if}
+
+								{#if isCheckboxInput}
+									<div class="flex items-center justify-between text-[11px]">
+										<div class="flex flex-col">
+											<span class="text-muted-foreground">Button</span>
+											<span class="text-muted-foreground/70 text-[9px]">
+												A press solves once with true, then goes back to false. Rhino only.
+											</span>
+										</div>
+										<Switch
+											checked={(item.config as CheckboxWidgetConfig | undefined)?.displayAs ===
+												'button'}
+											onCheckedChange={toggleButtonMode}
 											class="scale-75"
 										/>
 									</div>

@@ -233,6 +233,47 @@ public sealed class InboundMessageParser
                         };
                     }
 
+                case "pickGeometry":
+                    {
+                        var requestId = RequestIdOf(jObj);
+                        var paramId = ParamIdOf(jObj);
+                        if (requestId == null || paramId == null)
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.PickGeometry,
+                            MessageType = msgType,
+                            RequestId = requestId,
+                            ParamId = paramId.Value
+                        };
+                    }
+
+                case "clearGeometry":
+                case "trigger":
+                    {
+                        var paramId = ParamIdOf(jObj);
+                        if (paramId == null)
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = msgType == "trigger" ? InboundKind.Trigger : InboundKind.ClearGeometry,
+                            MessageType = msgType,
+                            ParamId = paramId.Value
+                        };
+                    }
+
+                case "closeDefinition":
+                    return InboundMessage.Of(InboundKind.CloseDefinition, msgType);
+
+                case "editInGrasshopper":
+                    return InboundMessage.Of(InboundKind.EditInGrasshopper, msgType);
+
                 default:
                     return InboundMessage.Of(InboundKind.Unknown, msgType);
             }
@@ -247,6 +288,13 @@ public sealed class InboundMessageParser
 
     private const int MaxRequestIdLength = 64;
     private const int MaxFileNameLength = 255;
+
+    private static Guid? ParamIdOf(JObject jObj)
+    {
+        return jObj["paramId"]?.Type == JTokenType.String && Guid.TryParse((string)jObj["paramId"], out var id)
+            ? id
+            : null;
+    }
 
     private static string RequestIdOf(JObject jObj)
     {

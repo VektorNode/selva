@@ -1,6 +1,7 @@
 import { randomId } from '../utils/randomId';
 import { saveBlob } from '../utils/host-files';
 import { getGroups } from '@selvajs/schemas';
+import { isValuelessInput } from './host-support';
 import type {
 	UISchema,
 	ParameterPreset,
@@ -25,6 +26,7 @@ export function createSavedState(
 			if (item.type !== 'input') continue;
 			const value = currentValues[item.paramId];
 			const inputDef = schema.inputs.find((i) => i.id === item.paramId);
+			if (isValuelessInput(item, inputDef)) continue;
 			if (value !== undefined && inputDef) {
 				parameters.push({
 					paramId: item.paramId,

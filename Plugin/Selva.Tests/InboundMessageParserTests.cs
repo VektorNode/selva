@@ -299,6 +299,53 @@ public class InboundMessageParserTests
         Assert.Equal(InboundKind.MissingField, msg.Kind);
     }
 
+    // -------------------------------------------------------------------------
+    // pickGeometry / clearGeometry / trigger / closeDefinition / editInGrasshopper
+    // -------------------------------------------------------------------------
+
+    private const string CurveParam = "11111111-1111-4111-8111-111111111111";
+
+    [Fact]
+    public void PickGeometry_BindsRequestIdAndParamId()
+    {
+        var msg = Parse(@"{ ""type"": ""pickGeometry"", ""sessionId"": ""session-1"",
+                           ""requestId"": ""3"", ""paramId"": """ + CurveParam + @""" }");
+
+        Assert.Equal(InboundKind.PickGeometry, msg.Kind);
+        Assert.Equal("3", msg.RequestId);
+        Assert.Equal(System.Guid.Parse(CurveParam), msg.ParamId);
+    }
+
+    [Theory]
+    [InlineData("clearGeometry", InboundKind.ClearGeometry)]
+    [InlineData("trigger", InboundKind.Trigger)]
+    public void ParamMessages_BindTheParamId(string type, InboundKind kind)
+    {
+        var msg = Parse(@"{ ""type"": """ + type + @""", ""sessionId"": ""session-1"", ""paramId"": """ +
+                        CurveParam + @""" }");
+
+        Assert.Equal(kind, msg.Kind);
+        Assert.Equal(System.Guid.Parse(CurveParam), msg.ParamId);
+    }
+
+    [Theory]
+    [InlineData(@"{ ""type"": ""pickGeometry"", ""sessionId"": ""session-1"", ""paramId"": ""11111111-1111-4111-8111-111111111111"" }")]
+    [InlineData(@"{ ""type"": ""pickGeometry"", ""sessionId"": ""session-1"", ""requestId"": ""3"" }")]
+    [InlineData(@"{ ""type"": ""trigger"", ""sessionId"": ""session-1"", ""paramId"": ""not-a-guid"" }")]
+    [InlineData(@"{ ""type"": ""clearGeometry"", ""sessionId"": ""session-1"" }")]
+    public void ParamMessages_WithoutAParamOrRequestId_AreMissingField(string json)
+    {
+        Assert.Equal(InboundKind.MissingField, Parse(json).Kind);
+    }
+
+    [Theory]
+    [InlineData("closeDefinition", InboundKind.CloseDefinition)]
+    [InlineData("editInGrasshopper", InboundKind.EditInGrasshopper)]
+    public void PlayerMessages_Classify(string type, InboundKind kind)
+    {
+        Assert.Equal(kind, Parse(@"{ ""type"": """ + type + @""", ""sessionId"": ""session-1"" }").Kind);
+    }
+
     [Fact]
     public void HostPickFile_BindsTheStringAcceptEntries()
     {

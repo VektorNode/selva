@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.SolveRuntime.Services;
@@ -32,6 +33,8 @@ public class BridgeOrchestrator : IDisposable
     private readonly ComponentStateManager _stateManager;
     private readonly ValueApplicator _valueApplicator;
     private readonly ValueCollector _valueCollector;
+    private readonly GeometryPicks _geometryPicks;
+    private readonly TriggerPresses _triggerPresses;
 
     private GH_Component _component;
     private bool _disposed;
@@ -45,9 +48,13 @@ public class BridgeOrchestrator : IDisposable
         ValueCollector valueCollector,
         ComponentStateManager stateManager,
         DocumentEventManager eventManager,
+        GeometryPicks geometryPicks,
+        TriggerPresses triggerPresses,
         Version pluginVersion,
         string sessionId)
     {
+        _geometryPicks = geometryPicks ?? throw new ArgumentNullException(nameof(geometryPicks));
+        _triggerPresses = triggerPresses ?? throw new ArgumentNullException(nameof(triggerPresses));
         _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
         _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueApplicator = valueApplicator ?? throw new ArgumentNullException(nameof(valueApplicator));
@@ -74,6 +81,9 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply -= HandleApplySyncChanges;
         _webSocketTransport.OnCancelSolveRequested -= HandleCancelSolve;
+        _webSocketTransport.OnPickGeometryRequested -= HandlePickGeometry;
+        _webSocketTransport.OnClearGeometryRequested -= HandleClearGeometry;
+        _webSocketTransport.OnTriggerRequested -= HandleTrigger;
     }
 
     // -------------------------------------------------------------------------
@@ -96,6 +106,9 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnSyncPreviewRequested += HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply += HandleApplySyncChanges;
         _webSocketTransport.OnCancelSolveRequested += HandleCancelSolve;
+        _webSocketTransport.OnPickGeometryRequested += HandlePickGeometry;
+        _webSocketTransport.OnClearGeometryRequested += HandleClearGeometry;
+        _webSocketTransport.OnTriggerRequested += HandleTrigger;
     }
 
     // -------------------------------------------------------------------------
@@ -113,6 +126,94 @@ public class BridgeOrchestrator : IDisposable
         {
             Logger.Warn($"[BridgeOrchestrator] Cancel solve failed: {ex.Message}");
         }
+    }
+
+    private void HandlePickGeometry(object sender, InboundMessage request)
+    {
+        GeometryPickOutcome outcome;
+        try
+        {
+            outcome = PickGeometry(request.ParamId);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] Geometry pick failed: {ex.Message}", ex);
+            outcome = GeometryPickOutcome.Failed($"Could not pick: {ex.Message}");
+        }
+
+        _ = _webSocketTransport.BroadcastPickGeometryResult(request.RequestId, request.ParamId, outcome);
+    }
+
+    private GeometryPickOutcome PickGeometry(Guid paramId)
+    {
+        // The param's prompt runs a modal pick on the UI thread the solver needs.
+        if (_stateManager.IsBusy)
+        {
+            return GeometryPickOutcome.Failed("Grasshopper is still solving. Pick again when it has finished.");
+        }
+
+        if (!IsSchemaInput(paramId, input => GeometryParamTypes.Contains(input.ParamType)))
+        {
+            return GeometryPickOutcome.Failed("That input doesn't take geometry.");
+        }
+
+        var outcome = _geometryPicks.Pick(_component.OnPingDocument(), paramId);
+        if (outcome.Kind == "picked")
+        {
+            _stateManager.MarkSolveScheduled();
+        }
+
+        return outcome;
+    }
+
+    private void HandleClearGeometry(object sender, Guid paramId)
+    {
+        try
+        {
+            if (!_geometryPicks.IsPicked(paramId))
+            {
+                return;
+            }
+
+            _geometryPicks.Clear(_component.OnPingDocument(), paramId);
+            _stateManager.MarkSolveScheduled();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] Clearing a geometry input failed: {ex.Message}", ex);
+        }
+    }
+
+    private void HandleTrigger(object sender, Guid paramId)
+    {
+        try
+        {
+            if (_stateManager.IsBusy)
+            {
+                _ = _webSocketTransport.BroadcastRuntimeMessage("warning",
+                    "Grasshopper is still solving. Press the button again when it has finished.");
+                return;
+            }
+
+            if (!IsSchemaInput(paramId, input => input.ParamType == "boolean") ||
+                !_triggerPresses.Press(_component.OnPingDocument(), paramId))
+            {
+                _ = _webSocketTransport.BroadcastRuntimeMessage("error", "That button's input is no longer in the definition.");
+                return;
+            }
+
+            _stateManager.MarkSolveScheduled();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] Button press failed: {ex.Message}", ex);
+            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Button press failed: {ex.Message}");
+        }
+    }
+
+    private bool IsSchemaInput(Guid paramId, Func<SchemaInput, bool> predicate)
+    {
+        return _getSchema()?.Inputs?.Any(input => input.Id == paramId && predicate(input)) == true;
     }
 
     private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
@@ -449,9 +550,12 @@ public class BridgeOrchestrator : IDisposable
     // ContextBake helpers — single traversal, used by both connect and save
     // -------------------------------------------------------------------------
 
-    private GH_Component FindWiredContextBake()
+    private GH_Component FindWiredContextBake() => FindWiredContextBake(_component);
+
+    /// <summary>The Context Bake nicknamed "Schema" that a bridge's Schema output feeds; null when unwired.</summary>
+    internal static GH_Component FindWiredContextBake(GH_Component bridge)
     {
-        var schemaOutput = _component?.Params.Output.FirstOrDefault(p => p.Name == "Schema");
+        var schemaOutput = bridge?.Params.Output.FirstOrDefault(p => p.Name == "Schema");
         if (schemaOutput == null)
         {
             return null;

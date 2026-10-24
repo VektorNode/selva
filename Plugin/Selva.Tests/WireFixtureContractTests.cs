@@ -243,6 +243,9 @@ public class WireFixtureContractTests
 
             ["host-picked-file.json"] = ("HostPickedFile", HostFileFrameTests.SampleHeader()),
 
+            ["pick-geometry-result.json"] = ("PickGeometryResult",
+                OutboundEnvelopes.PickGeometryResult(Session, "3", ParamA, "picked", "2 curves", null)),
+
             ["outputs.json"] = ("Outputs",
                 OutboundEnvelopes.Outputs(
                     Session,

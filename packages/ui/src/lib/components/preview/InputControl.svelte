@@ -16,6 +16,8 @@
 		isColorWidget
 	} from '@selvajs/schemas';
 	import * as Field from '$lib/components/primitives/field';
+	import { Button } from '$lib/components/primitives/button';
+	import { toast } from '$lib/components/primitives/sonner';
 	import HelpButton from './HelpButton.svelte';
 	import {
 		CheckboxInput,
@@ -23,11 +25,14 @@
 		ColorInput,
 		DropdownInput,
 		FileInput,
+		GeometryInput,
 		NumberInput,
 		TextInput
 	} from '$lib/components/preview/inputs';
 	import { getClientSlot } from '$lib/contexts/clientSlotContext.svelte';
+	import { getHostContext } from '$lib/contexts/hostContext.svelte';
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { isGeometryParamType, isTriggerItem } from '$lib/schema/host-support';
 
 	interface Props {
 		item: InputLayoutItem;
@@ -42,6 +47,8 @@
 		disabled?: boolean;
 		/** Runtime-computed options for a dynamic value list input (name -> value). */
 		dynamicOptions?: Record<string, string>;
+		/** The input's paramType: a geometry input gets its control from this, not from the widget type. */
+		paramType?: string;
 	}
 
 	let {
@@ -50,10 +57,14 @@
 		displayName,
 		onChange,
 		disabled = false,
-		dynamicOptions
+		dynamicOptions,
+		paramType
 	}: Props = $props();
 
 	const locale = getLocaleContext();
+	const hostActions = getHostContext();
+	const isGeometry = $derived(isGeometryParamType(paramType));
+	const isTrigger = $derived(isTriggerItem(item));
 
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
@@ -218,6 +229,39 @@
 			})}
 		</div>
 	{/if}
+{:else if isGeometry}
+	<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
+		{@render fieldHeader(inputId)}
+		{#if hostActions.pickGeometry && hostActions.clearGeometry}
+			{@const pickGeometry = hostActions.pickGeometry}
+			{@const clearGeometry = hostActions.clearGeometry}
+			{@const target = hostActions.describeGeometry?.(item.paramId)}
+			<GeometryInput
+				{inputId}
+				kinds={paramType === 'geometry' ? target?.kinds : [paramType ?? 'geometry']}
+				atMost={target?.atMost}
+				summary={typeof value === 'string' ? value : undefined}
+				onPick={() => pickGeometry(item.paramId)}
+				onClear={() => clearGeometry(item.paramId)}
+				onError={(message) => toast.error(message)}
+				{disabled}
+			/>
+		{/if}
+	</div>
+{:else if isTrigger}
+	<div role="group" class="group/field gap-1.5 min-w-0 flex items-center">
+		<Button
+			id={inputId}
+			variant="outline"
+			size="sm"
+			class="min-w-0 max-w-full"
+			onclick={() => hostActions.trigger?.(item.paramId)}
+			disabled={disabled || !hostActions.trigger}
+		>
+			<span class="truncate">{label}</span>
+		</Button>
+		{@render helpButton()}
+	</div>
 {:else if !hideDynamicListWhenEmpty}
 	<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
 		{#if !isCheckboxWidget(item)}

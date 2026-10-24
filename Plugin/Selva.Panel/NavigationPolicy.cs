@@ -28,6 +28,9 @@ internal static class NavigationPolicy
     /// <summary>Moves the UI from the docked panel into its own window, or back.</summary>
     public const string ToggleWindowCommand = "toggle-window";
 
+    /// <summary>Shows Rhino's Open dialog and opens the pick as a player session, closing the current one.</summary>
+    public const string OpenCommand = "open";
+
     public static NavigationDecision Decide(Uri target, Uri requested)
     {
         if (requested.Scheme == CommandScheme)

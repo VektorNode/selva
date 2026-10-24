@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Schema;
@@ -67,6 +68,21 @@ public enum InboundKind
     /// <summary>`hostPickFile` with a request id and the page's accept list. Answered with one file or a result.</summary>
     HostPickFile,
 
+    /// <summary>`pickGeometry` with a request id and a param id. Answered with `pickGeometryResult`.</summary>
+    PickGeometry,
+
+    /// <summary>`clearGeometry` with a param id: drops what a pick put on that param.</summary>
+    ClearGeometry,
+
+    /// <summary>`trigger` with a param id: a button press, one solve with true.</summary>
+    Trigger,
+
+    /// <summary>`closeDefinition` — no payload. Closes the definition a player session opened.</summary>
+    CloseDefinition,
+
+    /// <summary>`editInGrasshopper` — no payload. Shows the editor and turns a player session into an author one.</summary>
+    EditInGrasshopper,
+
     /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
@@ -111,6 +127,9 @@ public sealed class InboundMessage
     public string FileName { get; init; }
 
     public List<string> Accept { get; init; }
+
+    /// <summary>The input a geometry pick or a button press is for.</summary>
+    public Guid ParamId { get; init; }
 
     // Populated per-Kind, so most instances leave several of these null. The plugin compiles
     // without a nullable context; the test project links this file in under one, hence the

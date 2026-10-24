@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using System.Reflection;
 using Grasshopper.Kernel;
+using Rhino;
+using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Properties;
 using Instances = Grasshopper.Instances;
 
@@ -15,6 +17,13 @@ public class SelvaTabProperties : GH_AssemblyPriority
         server.AddCategoryIcon("Selva", Resources.Icon);
         server.AddCategorySymbolName("Selva", 'S');
         server.AddCategoryShortName("Selva", "SV");
+
+        // Rhino.Compute loads Selva too, and has no panel to launch from. RhinoApp, not
+        // HeadlessGuard: there may be no Rhino document yet while Grasshopper loads.
+        if (!RhinoApp.IsRunningHeadless)
+        {
+            DefinitionLauncher.Register();
+        }
 
 #if !NETCOREAPP
         // net48's fusion loader can refuse to load a strong-named assembly from a private

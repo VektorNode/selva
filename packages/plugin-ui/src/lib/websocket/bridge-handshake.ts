@@ -22,3 +22,15 @@ export function isAuthenticatedMessage(message: unknown): boolean {
 		(message as { type?: unknown }).type === 'authenticated'
 	);
 }
+
+/**
+ * `author` started from the canvas and may edit the schema; `player` opened the definition from
+ * the Selva panel and may only set values. The plugin refuses a player's schema writes; the page
+ * only hides them.
+ */
+export type BridgeRole = 'author' | 'player';
+
+/** The role in an `authenticated` reply. A plugin from before roles sends none: an author. */
+export function roleOf(message: unknown): BridgeRole {
+	return (message as { role?: unknown }).role === 'player' ? 'player' : 'author';
+}

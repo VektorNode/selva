@@ -16,7 +16,9 @@ import { validateInboundMessage } from './messageSchemas';
 import {
 	authenticateMessage,
 	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
-	isAuthenticatedMessage
+	isAuthenticatedMessage,
+	roleOf,
+	type BridgeRole
 } from './bridge-handshake';
 import { decodeHostFrame, isHostFrame } from './host-frame';
 
@@ -189,6 +191,8 @@ export class WebSocketState {
 	awaitingSolve = $state(false);
 	/** The plugin refused this page's secret: it belongs to another session. Reconnecting won't help. */
 	authRejected = $state(false);
+	/** What the plugin acknowledged this socket as; null until it has. */
+	role = $state<BridgeRole | null>(null);
 
 	constructor(private url: string) {
 		this.on('solvingState', (data) => {
@@ -294,7 +298,8 @@ export class WebSocketState {
 					socket.send(JSON.stringify(authenticateMessage(secret, this.authHost)));
 				};
 
-				const onAuthenticated = () => {
+				const onAuthenticated = (role: BridgeRole) => {
+					this.role = role;
 					this.reconnectAttempts = 0;
 					this._serverDisconnected = false;
 					this.connected = true;
@@ -335,7 +340,7 @@ export class WebSocketState {
 
 						const message = JSON.parse(event.data);
 						if (isAuthenticatedMessage(message)) {
-							onAuthenticated();
+							onAuthenticated(roleOf(message));
 							return;
 						}
 						this.handleMessage(message);
@@ -516,6 +521,22 @@ export class WebSocketState {
 			}
 			this.solvingTimeout = null;
 		}, 30000); // 30 second timeout
+	}
+
+	/** Closes the definition this player session opened; the panel goes back to its launcher. */
+	closeDefinition(sessionId: string) {
+		this.send('closeDefinition', { sessionId });
+	}
+
+	/** Shows Grasshopper's editor and turns this player session into an author one. */
+	editInGrasshopper(sessionId: string) {
+		this.send('editInGrasshopper', { sessionId });
+	}
+
+	/** One button press: a solve with `true`, after which the plugin puts `false` back. */
+	sendTrigger(sessionId: string, paramId: string) {
+		if (this.authHost === RHINO_PANEL_HOST) this.markAwaitingSolve();
+		this.send('trigger', { sessionId, paramId });
 	}
 
 	/**

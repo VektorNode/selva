@@ -89,12 +89,13 @@ A thin host with no Selva logic of its own:
 
 States:
 
-- **No target:** the panel shows a native Eto label telling the user to enable a UI Bridge. No
-  WebView is created, so an idle panel doesn't start a browser process.
+- **No target:** the panel shows a native Eto launcher: Open… and the recent definitions, from
+  [rhino-player](./rhino-player.md). No WebView is created, so an idle panel doesn't start a
+  browser process.
 - **Docked:** the panel shows the WebView. A new target navigates the same WebView.
 - **In its own window:** the WebView sits in a normal Eto `Form` and the panel shows a label
   saying so.
-- **Target cleared:** the window closes, and the panel goes back to the idle label.
+- **Target cleared:** the window closes, and the panel goes back to the launcher.
 
 The WebView is created once and kept for the life of the plug-in. Disposing it while WebView2 is
 still initialising throws an unhandled `E_ABORT` in Eto builds before the Rhino 9 beta.
@@ -111,7 +112,8 @@ host tells the page which container it's in, through `ExecuteScriptAsync`. The s
 
 **The page reaches the host by navigation.** A `selva-panel://<command>` link is cancelled and
 run by the host. That works on every Eto build; `WebView.MessageReceived` only exists from Rhino
-8.18. `toggle-window` is the only command. Anything with a payload goes over the WebSocket.
+8.18. The commands are `toggle-window` and `open`, the player's Open another…. Anything with a
+payload goes over the WebSocket.
 
 **First float size.** Rhino for Mac first floats a panel at 200×200. When the panel finds itself
 in a floating window that small, it grows the window to 460×780.

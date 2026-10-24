@@ -28,8 +28,15 @@ internal static class BridgeAccess
     /// </summary>
     public const string PanelHost = "rhino";
 
-    /// <summary>Sent to that one socket once it has authenticated; the page waits for it before sending.</summary>
-    public const string AuthenticatedMessage = "{\"type\":\"authenticated\"}";
+    /// <summary>
+    ///     Sent to that one socket once it has authenticated; the page waits for it before sending.
+    ///     It carries the session's role, read when the socket authenticates, so a page reloaded
+    ///     after Edit in Grasshopper learns it is now an author.
+    /// </summary>
+    public static string AuthenticatedMessage(BridgeRole role) =>
+        "{\"type\":\"authenticated\",\"role\":\"" + RoleName(role) + "\"}";
+
+    public static string RoleName(BridgeRole role) => role == BridgeRole.Player ? "player" : "author";
 
     /// <summary>
     ///     Close code for a socket that failed to authenticate, from the 4000–4999 range RFC 6455
@@ -56,11 +63,16 @@ internal static class BridgeAccess
     ///     Referer; the page moves it into sessionStorage. <paramref name="host" /> names the page's
     ///     host when it isn't a browser tab (<c>rhino</c> for the Rhino panel).
     /// </summary>
+    /// <param name="role">
+    ///     A player session's URL says so, so the page's first paint has no builder. The page only
+    ///     renders this; the bridge enforces the role it acknowledges with.
+    /// </param>
     public static string SessionUrl(string baseUrl, string sessionId, int wsPort, string secret,
-        string? host = null)
+        string? host = null, BridgeRole role = BridgeRole.Author)
     {
         var hostParam = host == null ? "" : $"&host={Uri.EscapeDataString(host)}";
-        return $"{baseUrl}/?session={Uri.EscapeDataString(sessionId)}&wsPort={wsPort}{hostParam}" +
+        var modeParam = role == BridgeRole.Player ? "&mode=player" : "";
+        return $"{baseUrl}/?session={Uri.EscapeDataString(sessionId)}&wsPort={wsPort}{hostParam}{modeParam}" +
                $"#s={Uri.EscapeDataString(secret)}";
     }
 
@@ -151,6 +163,33 @@ internal static class BridgeAccess
         return true;
     }
 
+    /// <summary>
+    ///     The messages a role may not send. Only these write the schema (`requestSyncPreview` only
+    ///     reads), and the Selva commands upload it. The player commands mean nothing to an author.
+    /// </summary>
+    public static bool IsRefused(InboundKind kind, BridgeRole role)
+    {
+        switch (kind)
+        {
+            case InboundKind.SaveSchema:
+            case InboundKind.ApplySyncChanges:
+            case InboundKind.SelvaGetAccount:
+            case InboundKind.SelvaConnect:
+            case InboundKind.SelvaSignIn:
+            case InboundKind.SelvaUseApiKey:
+            case InboundKind.SelvaSignOut:
+            case InboundKind.SelvaListTargets:
+            case InboundKind.SelvaUpload:
+            case InboundKind.SelvaCancel:
+                return role == BridgeRole.Player;
+            case InboundKind.CloseDefinition:
+            case InboundKind.EditInGrasshopper:
+                return role != BridgeRole.Player;
+            default:
+                return false;
+        }
+    }
+
     // CryptographicOperations.FixedTimeEquals isn't in net48.
     private static bool FixedTimeEquals(string presented, string expected)
     {
@@ -164,4 +203,15 @@ internal static class BridgeAccess
 
         return diff == 0;
     }
+}
+
+/// <summary>
+///     What a session may do. An author session started from the canvas and may edit the schema.
+///     A player session started from the Selva panel: it sets values, and nothing it sends may
+///     write the schema back.
+/// </summary>
+public enum BridgeRole
+{
+    Author,
+    Player
 }

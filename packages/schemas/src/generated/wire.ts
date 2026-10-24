@@ -7,6 +7,16 @@
 
 import type { ParamType } from './schema.js';
 
+export type GeometryKind =
+	| 'point'
+	| 'pointCloud'
+	| 'curve'
+	| 'surface'
+	| 'polysurface'
+	| 'extrusion'
+	| 'mesh'
+	| 'subd'
+	| 'block';
 export type SolveEndedKind = 'ok' | 'blocked' | 'aborted' | 'error';
 
 /**
@@ -45,6 +55,10 @@ export interface DiscoveredInput {
 	 * Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import.
 	 */
 	groupName?: string;
+	/**
+	 * What a Get Geometry's type filter lets the user pick, read from the param on every scan, so it follows the filter. Empty for every other input, and for a filter that allows everything.
+	 */
+	geometryTypes?: GeometryKind[];
 	[k: string]: unknown | undefined;
 }
 export interface DiscoveredOutput {

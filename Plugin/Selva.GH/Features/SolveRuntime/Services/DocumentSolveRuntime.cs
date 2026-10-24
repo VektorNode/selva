@@ -39,6 +39,10 @@ public sealed class DocumentSolveRuntime
     private readonly GH_Document _document;
     private readonly ComputeCallbackTransport _compute;
 
+    // Per document, not per process: a player session runs a second bridge while the author's
+    // keeps serving its paused document, and each must keep its own live events.
+    private volatile Action<SolveEvent> _localTransport;
+
     private string _localSolveId = "local";
     private int _localSeq;
 
@@ -64,12 +68,27 @@ public sealed class DocumentSolveRuntime
     }
 
     /// <summary>
+    ///     Points this document's events at a local bridge. The bridge attaches when its WebSocket
+    ///     server starts and detaches before the socket closes.
+    /// </summary>
+    public void AttachLocalTransport(Action<SolveEvent> send) => _localTransport = send;
+
+    /// <summary>Only if <paramref name="send" /> is still the one attached: a newer bridge may have replaced it.</summary>
+    public void DetachLocalTransport(Action<SolveEvent> send)
+    {
+        if (_localTransport == send)
+        {
+            _localTransport = null;
+        }
+    }
+
+    /// <summary>
     ///     Starts the Compute-side session early (heartbeat, abort polling) without emitting
     ///     anything, so an abort can reach a definition that never emits. No-op outside Compute.
     /// </summary>
     public void EnsureHooked()
     {
-        if (SolveRuntimes.LocalTransport != null || !HeadlessGuard.IsHeadless) return;
+        if (_localTransport != null || !HeadlessGuard.IsHeadless) return;
         _compute.EnsureSession(ReadCallbackTarget());
     }
 
@@ -120,7 +139,7 @@ public sealed class DocumentSolveRuntime
     {
         if (string.IsNullOrEmpty(type)) return;
 
-        var local = SolveRuntimes.LocalTransport;
+        var local = _localTransport;
         if (local != null)
         {
             try
@@ -189,7 +208,7 @@ public sealed class DocumentSolveRuntime
 
         // On Compute the Selva server emits start and end itself: it knows about the solve
         // before Grasshopper does (queueing) and after (a failed request).
-        if (SolveRuntimes.LocalTransport != null)
+        if (_localTransport != null)
         {
             Emit(SolveEventKinds.SolveStarted, new Dictionary<string, object>());
         }
@@ -199,7 +218,7 @@ public sealed class DocumentSolveRuntime
     {
         _steps.End(_clock.ElapsedMilliseconds, learn: !_document.AbortRequested);
 
-        if (SolveRuntimes.LocalTransport != null)
+        if (_localTransport != null)
         {
             Emit(SolveEventKinds.SolveEnded, new Dictionary<string, object> { ["kind"] = Verdict().EndedKind });
             return;

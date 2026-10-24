@@ -66,6 +66,10 @@ public class WebSocketTransport : IDisposable
 
     private WebSocketServer _webSocketServer;
 
+    // Read at acknowledgement and at every filtered message, never captured: Edit in Grasshopper
+    // turns a running player session into an author one.
+    private Func<BridgeRole> _role = () => BridgeRole.Author;
+
     public WebSocketTransport(string sessionId, string bridgeSecret, int port = AppConfig.WebSocket.DefaultPort)
     {
         _sessionId = sessionId;
@@ -73,6 +77,12 @@ public class WebSocketTransport : IDisposable
         _port = port;
         _hostFiles = new HostFileCoordinator(new EtoHostFileDialogs(), MarshalToMainThread, sessionId,
             AppConfig.ValueLimits.MaxFileSizeBytes);
+    }
+
+    /// <summary>Where the session's role comes from: the component that owns this transport.</summary>
+    public void BindRole(Func<BridgeRole> role)
+    {
+        _role = role ?? throw new ArgumentNullException(nameof(role));
     }
 
     public bool IsRunning => _webSocketServer?.IsRunning ?? false;
@@ -111,6 +121,16 @@ public class WebSocketTransport : IDisposable
     /// </summary>
     public event EventHandler<InboundMessage> OnSelvaCommand;
 
+    /// <summary>`pickGeometry`, on the UI thread. Answered with <see cref="BroadcastPickGeometryResult" />.</summary>
+    public event EventHandler<InboundMessage> OnPickGeometryRequested;
+
+    public event EventHandler<Guid> OnClearGeometryRequested;
+
+    public event EventHandler<Guid> OnTriggerRequested;
+
+    /// <summary>`closeDefinition` and `editInGrasshopper`, on the UI thread, from a player session only.</summary>
+    public event EventHandler<InboundKind> OnPlayerCommand;
+
     protected virtual void Dispose(bool disposing)
     {
         if (_disposed)
@@ -136,7 +156,8 @@ public class WebSocketTransport : IDisposable
 
         try
         {
-            _webSocketServer = new WebSocketServer(_bridgeSecret, allowedOrigins, _port);
+            _webSocketServer = new WebSocketServer(_bridgeSecret, allowedOrigins, _port,
+                () => BridgeAccess.AuthenticatedMessage(_role()));
             _webSocketServer.OnClientConnected += HandleClientConnected;
             _webSocketServer.OnMessageReceived += HandleMessageReceived;
 
@@ -443,6 +464,12 @@ public class WebSocketTransport : IDisposable
         return BroadcastAsync(OutboundEnvelopes.SyncApplied(_sessionId, success, message));
     }
 
+    public Task BroadcastPickGeometryResult(string requestId, Guid paramId, GeometryPickOutcome outcome)
+    {
+        return BroadcastAsync(OutboundEnvelopes.PickGeometryResult(_sessionId, requestId, paramId,
+            outcome.Kind, outcome.Summary, outcome.Error));
+    }
+
     public Task BroadcastSelvaAccount(SelvaAccount account)
     {
         return BroadcastAsync(OutboundEnvelopes.SelvaAccount(_sessionId, account));
@@ -560,6 +587,13 @@ public class WebSocketTransport : IDisposable
         {
             var inbound = _inboundParser.Parse(frame.Text, _sessionId);
 
+            // Hiding the builder on the page isn't enough: the socket itself must not write.
+            if (BridgeAccess.IsRefused(inbound.Kind, _role()))
+            {
+                Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' in a {BridgeAccess.RoleName(_role())} session.");
+                return;
+            }
+
             switch (inbound.Kind)
             {
                 case InboundKind.ValueUpdate:
@@ -637,6 +671,23 @@ public class WebSocketTransport : IDisposable
 
                 case InboundKind.HostSaveFile:
                     Logger.Warn("[WebSocketTransport] Dropped a hostSaveFile sent as text; it travels as a binary frame.");
+                    break;
+
+                case InboundKind.PickGeometry:
+                    MarshalToMainThread(() => OnPickGeometryRequested?.Invoke(this, inbound));
+                    break;
+
+                case InboundKind.ClearGeometry:
+                    MarshalToMainThread(() => OnClearGeometryRequested?.Invoke(this, inbound.ParamId));
+                    break;
+
+                case InboundKind.Trigger:
+                    MarshalToMainThread(() => OnTriggerRequested?.Invoke(this, inbound.ParamId));
+                    break;
+
+                case InboundKind.CloseDefinition:
+                case InboundKind.EditInGrasshopper:
+                    MarshalToMainThread(() => OnPlayerCommand?.Invoke(this, inbound.Kind));
                     break;
 
                 case InboundKind.SessionMismatch:

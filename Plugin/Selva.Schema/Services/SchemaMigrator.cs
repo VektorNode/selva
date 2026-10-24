@@ -32,14 +32,24 @@ public static class SchemaMigrator
             { new Version(2, 12, 0), MigrateTo_2_12_0 },
             { new Version(2, 13, 0), MigrateTo_2_13_0 },
             { new Version(2, 14, 0), MigrateTo_2_14_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_15_0 }
+            { new Version(2, 15, 0), MigrateTo_2_15_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_16_0 }
         };
 
     /// <summary>
     ///     Migrates raw JSON before deserialization, for structural changes the C# model can't handle on its own.
     /// </summary>
-    public static JObject MigrateJson(JObject json)
+    /// <param name="currentPluginVersion">
+    ///     When set, a schema whose <c>minPluginVersion</c> is newer is refused here, before typed
+    ///     deserialization can trip over a shape this plugin doesn't know.
+    /// </param>
+    public static JObject MigrateJson(JObject json, Version currentPluginVersion = null)
     {
+        if (currentPluginVersion != null)
+        {
+            EnsurePluginVersionSupported(json["minPluginVersion"]?.Value<string>(), currentPluginVersion);
+        }
+
         var versionStr = json["schemaVersion"]?.Value<string>();
         if (string.IsNullOrEmpty(versionStr))
         {
@@ -342,10 +352,22 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_15_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.15.0";
 
         // Optional 'visible' on TabConfig (default true). Absent = visible, so saved
         // tabs need no transform.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_16_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // ParamType gains 'geometry', 'point', 'line' and 'plane', and CheckboxWidgetConfig an
+        // optional 'displayAs' (default 'checkbox'). Saved inputs keep the paramType they were
+        // discovered with, and their saved widgetType is ignored for the geometry types, so
+        // nothing is rewritten.
 
         return schema;
     }
@@ -383,25 +405,7 @@ public static class SchemaMigrator
                 $"Invalid schema version format '{schema.SchemaVersion}': {ex.Message}");
         }
 
-        if (!string.IsNullOrEmpty(schema.MinPluginVersion))
-        {
-            Version minVersion;
-            try
-            {
-                minVersion = Version.Parse(schema.MinPluginVersion);
-            }
-            catch (Exception ex)
-            {
-                throw new IncompatibleSchemaException(
-                    $"Invalid minimum plugin version format '{schema.MinPluginVersion}': {ex.Message}");
-            }
-
-            if (currentPluginVersion < minVersion)
-            {
-                throw new IncompatibleSchemaException(
-                    $"This schema requires plugin version {minVersion} or higher. Current version: {currentPluginVersion}");
-            }
-        }
+        EnsurePluginVersionSupported(schema.MinPluginVersion, currentPluginVersion);
 
         if (schemaVersion >= SchemaVersion.CURRENT)
         {
@@ -437,6 +441,31 @@ public static class SchemaMigrator
         migratedSchema.LastModified = DateTime.UtcNow;
 
         return (migratedSchema, changes);
+    }
+
+    private static void EnsurePluginVersionSupported(string minPluginVersion, Version currentPluginVersion)
+    {
+        if (string.IsNullOrEmpty(minPluginVersion))
+        {
+            return;
+        }
+
+        Version minVersion;
+        try
+        {
+            minVersion = Version.Parse(minPluginVersion);
+        }
+        catch (Exception ex)
+        {
+            throw new IncompatibleSchemaException(
+                $"Invalid minimum plugin version format '{minPluginVersion}': {ex.Message}");
+        }
+
+        if (currentPluginVersion < minVersion)
+        {
+            throw new IncompatibleSchemaException(
+                $"This schema requires plugin version {minVersion} or higher. Current version: {currentPluginVersion}");
+        }
     }
 
     public static List<Version> GetMigrationPath(Version from, Version to)

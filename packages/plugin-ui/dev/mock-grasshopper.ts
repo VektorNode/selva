@@ -7,7 +7,7 @@
 // don't shift whenever this demo data grows.
 //
 //   pnpm dev:plugin:mock                               mock + Vite dev server
-//   node dev/mock-grasshopper.ts [--port 8765] [--latency 250]   mock only
+//   node dev/mock-grasshopper.ts [--port 8765] [--latency 250] [--player]   mock only
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -38,6 +38,8 @@ function readFlag(name: string, fallback: number): number {
 
 const PORT = readFlag('port', 8765);
 const SOLVE_LATENCY_MS = readFlag('latency', 250);
+// --player acknowledges sockets as a player session, the way a definition opened from the panel is.
+const PLAYER = process.argv.includes('--player');
 
 // ============================================================================
 // Discovered parameters (what Grasshopper would report)
@@ -222,6 +224,15 @@ const INPUTS: DiscoveredInput[] = [
 
 	// Site
 	input({
+		id: 'site-boundary',
+		nickname: 'Site Boundary',
+		type: 'geometry',
+		geometryTypes: ['curve'],
+		atMost: 1,
+		groupName: 'Site',
+		description: 'The plot outline: pick a closed curve in Rhino'
+	}),
+	input({
 		id: 'site-file',
 		nickname: 'Site Model',
 		type: 'file',
@@ -282,6 +293,13 @@ const INPUTS: DiscoveredInput[] = [
 		minimum: 0,
 		maximum: 12,
 		stepSize: 1,
+		groupName: 'Analysis'
+	}),
+	input({
+		id: 'bake-massing',
+		nickname: 'Bake Massing',
+		type: 'boolean',
+		default: false,
 		groupName: 'Analysis'
 	}),
 	input({
@@ -425,6 +443,12 @@ function placeInput(paramId: string, extra: Record<string, unknown> = {}): Layou
 			};
 		case 'color':
 			return { ...base, type: 'input', widgetType: 'color' };
+		// Same placeholder the builder uses: the page picks the control from paramType.
+		case 'geometry':
+		case 'point':
+		case 'line':
+		case 'plane':
+			return { ...base, type: 'input', widgetType: 'text' };
 		default:
 			return { ...base, type: 'input', widgetType: 'text' };
 	}
@@ -521,6 +545,7 @@ const TABS: TabConfig[] = [
 		groups: [
 			group('g-project', 'Project', 1, [placeInput('project-name'), placeInput('address')]),
 			group('g-context', 'Context', 2, [
+				placeInput('site-boundary', { span: 2 }),
 				placeInput('site-file', { span: 2 }),
 				placeInput('north'),
 				placeInput('setback')
@@ -537,6 +562,7 @@ const TABS: TabConfig[] = [
 				'Sun Study',
 				2,
 				[
+					placeInput('bake-massing', { span: 2, config: { displayAs: 'button' } }),
 					placeInput('run-analysis', { span: 2 }),
 					placeInput('analysis'),
 					placeInput('grid-size'),
@@ -994,7 +1020,8 @@ wss.on('connection', (ws) => {
 				return;
 			}
 			authenticated.add(ws);
-			send(ws, { type: 'authenticated' });
+			// `?mode=player` on the page URL only picks the first paint; this is the role that counts.
+			send(ws, { type: 'authenticated', role: PLAYER ? 'player' : 'author' });
 			return;
 		}
 
@@ -1049,6 +1076,42 @@ wss.on('connection', (ws) => {
 
 			case 'requestSyncPreview':
 				send(ws, { type: 'syncPreview', sessionId, fromGH: [], toGH: [] });
+				break;
+
+			// A pick takes a moment in Rhino; the mock always "picks" two curves.
+			case 'pickGeometry':
+				setTimeout(() => {
+					values[msg.paramId as string] = '2 curves';
+					send(ws, {
+						type: 'pickGeometryResult',
+						sessionId,
+						requestId: msg.requestId,
+						paramId: msg.paramId,
+						outcome: 'picked',
+						summary: '2 curves',
+						error: null
+					});
+					send(ws, { type: 'outputs', sessionId, outputs: solve(), modelUnits: 'Meters' });
+				}, 600);
+				break;
+
+			case 'clearGeometry':
+				delete values[msg.paramId as string];
+				break;
+
+			case 'trigger':
+				send(ws, {
+					type: 'runtimeMessage',
+					sessionId,
+					level: 'info',
+					message: `Pressed ${String(msg.paramId)}`,
+					timestamp: new Date().toISOString()
+				});
+				break;
+
+			case 'closeDefinition':
+			case 'editInGrasshopper':
+				console.info(`[mock-grasshopper] ${msg.type}`);
 				break;
 
 			case 'applySyncChanges':

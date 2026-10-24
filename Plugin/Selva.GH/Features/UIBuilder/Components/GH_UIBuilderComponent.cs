@@ -58,6 +58,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private UIBuilderService _service;
     private string _sessionId;
 
+    // Player sessions: set by DefinitionLauncher before the document's first solve. Hosted keeps
+    // the bridge running whatever Enable says, until the document closes or the user changes
+    // Enable. The role says what the session may do, and Edit in Grasshopper flips it while
+    // hosted stays set: clearing hosted there would be a falling edge on a file saved with Enable
+    // off, and stop the servers under the page that is about to reload as an author.
+    private bool _hosted;
+    private bool? _enableWhenHosted;
+    private bool _suppressed;
+    private BridgeRole _role = BridgeRole.Author;
+
     public GH_UIBuilderComponent()
         : base("UI Bridge", "UIBridge",
             "Build and interact with your UI - WebSocket-only communication",
@@ -152,8 +162,19 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        var enable = false;
-        DA.GetData(0, ref enable);
+        var enableInput = false;
+        DA.GetData(0, ref enableInput);
+
+        if (_hosted)
+        {
+            _enableWhenHosted ??= enableInput;
+            if (_enableWhenHosted != enableInput)
+            {
+                _hosted = false;
+            }
+        }
+
+        var enable = !_suppressed && (enableInput || _hosted);
 
         InitializeDependencies();
 
@@ -244,6 +265,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             links => _selvaLinks = links
         );
 
+        _service.WebSocketTransport.BindRole(() => _role);
+        _service.WebSocketTransport.OnPlayerCommand += HandlePlayerCommand;
+
         _service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
         // Keep watched set in sync when new params are merged into the schema
@@ -298,6 +322,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
             ClearAllContextualParameters();
 
+            // After the clear, and on a fresh tick outside the solution: the reset expires without
+            // scheduling. Posted before the drain below, so a drained solve already sees false.
+            RhinoApp.InvokeOnUiThread((Action)(() => _service?.TriggerPresses.ResetPressed(OnPingDocument())));
+
             // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
             // a solve from inside the end of this one — under a slider drag that's a non-draining
             // loop. By the time the posted callback runs, IsBusy is false and the drain is safe.
@@ -344,6 +372,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                             var refusal = ShowInPanel();
                             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, refusal ??
                                 "Web UI open in the Selva panel. Right-click the component and choose Open UI to bring it back.");
+                            if (refusal != null)
+                            {
+                                NotifyIfHosted(refusal);
+                            }
                         }));
                     }
 
@@ -359,6 +391,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     RhinoApp.InvokeOnUiThread(new Action(() =>
                     {
                         AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to start servers: {ex.Message}");
+                        NotifyIfHosted($"Could not start the Selva UI: {ex.Message}");
                     }));
                 }
             });
@@ -394,7 +427,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             ? _service.WebServer.BaseUrl
             : $"http://localhost:{AppConfig.UIBuilder.DevServerPort}";
         return BridgeAccess.SessionUrl(
-            baseUrl, _sessionId, _service.WebSocketTransport.WebSocketPort, _service.BridgeSecret, host);
+            baseUrl, _sessionId, _service.WebSocketTransport.WebSocketPort, _service.BridgeSecret, host, _role);
     }
 
     /// <summary>Skipped when absent — the obsolete subclass registers only the Schema output.</summary>
@@ -423,6 +456,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
         ParameterTypeHelper.ClearContextualParameters(contextualParams, this);
         _service?.ValueApplicator?.Clear();
+        _service?.GeometryPicks.Forget();
     }
 
     private void HandleDisabledState(IGH_DataAccess DA, GH_Document document)
@@ -442,6 +476,80 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             document,
             AddRuntimeMessage
         );
+    }
+
+    // =========================================================================
+    // Player sessions
+    // =========================================================================
+
+    /// <summary>Called by DefinitionLauncher before the document's first solve.</summary>
+    internal void HostAsPlayer()
+    {
+        _hosted = true;
+        _enableWhenHosted = null;
+        _role = BridgeRole.Player;
+    }
+
+    /// <summary>
+    ///     Another bridge in a player document: kept off whatever its Enable says, so it can't
+    ///     cold-start and retarget the panel to an author URL.
+    /// </summary>
+    internal void Suppress()
+    {
+        _suppressed = true;
+    }
+
+    /// <summary>After Edit in Grasshopper the document is the user's, and Enable counts again.</summary>
+    internal void ReleaseSuppression()
+    {
+        if (!_suppressed)
+        {
+            return;
+        }
+
+        _suppressed = false;
+        ExpireSolution(true);
+    }
+
+    internal bool IsPlayer => _role == BridgeRole.Player;
+
+    /// <summary>The page reloads on the new URL, re-authenticates and is acknowledged as an author.</summary>
+    internal void BecomeAuthor()
+    {
+        _role = BridgeRole.Author;
+        var refusal = ShowInPanel();
+        if (refusal != null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal);
+        }
+    }
+
+    private void HandlePlayerCommand(object sender, InboundKind command)
+    {
+        // Already refused by the transport outside a player session; checked again because a
+        // command can sit in the queue while Edit in Grasshopper flips the role.
+        if (!IsPlayer)
+        {
+            return;
+        }
+
+        if (command == InboundKind.CloseDefinition)
+        {
+            DefinitionLauncher.Close();
+        }
+        else if (command == InboundKind.EditInGrasshopper)
+        {
+            DefinitionLauncher.EditInGrasshopper();
+        }
+    }
+
+    /// <summary>A hosted bridge's canvas is hidden, so its runtime messages reach nobody.</summary>
+    private void NotifyIfHosted(string message)
+    {
+        if (_hosted)
+        {
+            RhinoPanelHost.Notify(message);
+        }
     }
 
     private void OpenUI()
@@ -714,7 +822,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 if (obj is IGH_ContextualParameter contextParam)
                 {
-                    ParameterTypeHelper.TryInvokeClearContextualData(contextParam);
+                    if (!_service.GeometryPicks.IsPicked(obj.InstanceGuid))
+                    {
+                        ParameterTypeHelper.TryInvokeClearContextualData(contextParam);
+                    }
+
                     continue;
                 }
 
@@ -754,6 +866,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         CleanupCommunication();
+
+        if (_service?.WebSocketTransport != null)
+        {
+            _service.WebSocketTransport.OnPlayerCommand -= HandlePlayerCommand;
+        }
 
         if (_service?.EventManager != null)
         {

@@ -67,6 +67,15 @@ public static class OutboundEnvelopes
     public static object HostPickedFile(string sessionId, string requestId, string name) =>
         new { type = "hostPickedFile", sessionId, requestId, name };
 
+    /// <summary>
+    ///     The answer to a `pickGeometry`. `outcome` is `picked`, `cancelled` or `failed`; `summary`
+    ///     ("2 curves") is set when picked, `error` when failed. The geometry itself never leaves
+    ///     Grasshopper.
+    /// </summary>
+    public static object PickGeometryResult(string sessionId, string requestId, Guid paramId, string outcome,
+        string summary, string error) =>
+        new { type = "pickGeometryResult", sessionId, requestId, paramId, outcome, summary, error };
+
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };
 

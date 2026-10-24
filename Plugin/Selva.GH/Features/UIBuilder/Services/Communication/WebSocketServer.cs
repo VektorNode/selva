@@ -35,6 +35,7 @@ public class WebSocketServer : IDisposable
 
     private readonly string _secret;
     private readonly IReadOnlyCollection<string> _allowedOrigins;
+    private readonly Func<string> _acknowledgement;
 
     private CancellationTokenSource _cancellationTokenSource;
     private bool _disposed;
@@ -50,13 +51,16 @@ public class WebSocketServer : IDisposable
     private TcpListener _tcpListener;
 #endif
 
+    /// <param name="acknowledgement">The reply to a socket that authenticated, built when it does.</param>
     public WebSocketServer(
         string secret,
         IReadOnlyCollection<string> allowedOrigins,
-        int port = AppConfig.WebSocket.DefaultPort)
+        int port = AppConfig.WebSocket.DefaultPort,
+        Func<string> acknowledgement = null)
     {
         _secret = secret ?? throw new ArgumentNullException(nameof(secret));
         _allowedOrigins = allowedOrigins ?? throw new ArgumentNullException(nameof(allowedOrigins));
+        _acknowledgement = acknowledgement ?? (() => BridgeAccess.AuthenticatedMessage(BridgeRole.Author));
         Port = port;
     }
 
@@ -636,7 +640,7 @@ public class WebSocketServer : IDisposable
         {
             using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             sendTimeout.CancelAfter(BROADCAST_TIMEOUT);
-            var ack = Encoding.UTF8.GetBytes(BridgeAccess.AuthenticatedMessage);
+            var ack = Encoding.UTF8.GetBytes(_acknowledgement());
             await webSocket.SendAsync(new ArraySegment<byte>(ack), WebSocketMessageType.Text, true,
                 sendTimeout.Token).ConfigureAwait(false);
         }

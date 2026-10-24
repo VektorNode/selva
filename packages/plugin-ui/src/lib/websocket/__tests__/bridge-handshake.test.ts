@@ -6,7 +6,8 @@ import {
 	authenticateMessage,
 	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
 	isAuthenticatedMessage,
-	MAX_HOST_FILE_BYTES
+	MAX_HOST_FILE_BYTES,
+	roleOf
 } from '../bridge-handshake';
 
 const fixture = JSON.parse(
@@ -34,6 +35,12 @@ describe('bridge handshake (cross-stack with BridgeAccessTests)', () => {
 		expect(isAuthenticatedMessage(fixture.authenticated)).toBe(true);
 		expect(isAuthenticatedMessage({ type: 'initialData' })).toBe(false);
 		expect(isAuthenticatedMessage(null)).toBe(false);
+	});
+
+	it('reads the role the plugin acknowledges the socket with', () => {
+		expect(roleOf(fixture.authenticated)).toBe('author');
+		expect(roleOf(fixture.authenticatedAsPlayer)).toBe('player');
+		expect(roleOf({ type: 'authenticated' })).toBe('author');
 	});
 
 	it('stops retrying on the close code the plugin refuses with', () => {

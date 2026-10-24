@@ -37,9 +37,29 @@
 				"groupName": {
 					"type": "string",
 					"description": "Nickname of the directly enclosing Grasshopper group, if any. Used by the builder to offer 'Add by GH group' bulk import."
+				},
+				"geometryTypes": {
+					"type": "array",
+					"items": { "$ref": "#/definitions/GeometryKind" },
+					"description": "What a Get Geometry's type filter lets the user pick, read from the param on every scan, so it follows the filter. Empty for every other input, and for a filter that allows everything."
 				}
 			},
 			"required": ["id", "name", "nickname", "description", "type"]
+		},
+		"GeometryKind": {
+			"type": "string",
+			"enum": [
+				"point",
+				"pointCloud",
+				"curve",
+				"surface",
+				"polysurface",
+				"extrusion",
+				"mesh",
+				"subd",
+				"block"
+			],
+			"description": "A kind of Rhino object a geometry input can take, in Rhino's own terms: a surface has one face, a polysurface several."
 		},
 		"DiscoveredOutput": {
 			"type": "object",
