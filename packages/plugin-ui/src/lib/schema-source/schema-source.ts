@@ -78,8 +78,11 @@ export interface SchemaSource {
 	 */
 	connect(sessionId: string): Promise<ConnectResult>;
 
-	/** Ask the source to (re)emit `initialData` for this session. */
-	requestInitialData(sessionId: string): void;
+	/**
+	 * Ask the source to (re)emit `initialData` for this session. `schemaOnly` skips the outputs
+	 * and display data that otherwise follow it, which cost Grasshopper a pass over every bake.
+	 */
+	requestInitialData(sessionId: string, options?: { schemaOnly?: boolean }): void;
 
 	/**
 	 * Persist a draft. Resolves once the source acknowledges (ack) or rejects (stale base /

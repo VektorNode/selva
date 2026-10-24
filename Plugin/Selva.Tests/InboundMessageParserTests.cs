@@ -50,7 +50,7 @@ public class InboundMessageParserTests
     }
 
     // -------------------------------------------------------------------------
-    // requestCurrentValues / requestInitialData (no payload)
+    // requestCurrentValues / requestInitialData
     // -------------------------------------------------------------------------
 
     [Fact]
@@ -65,6 +65,18 @@ public class InboundMessageParserTests
     {
         var msg = Parse(@"{ ""type"": ""requestInitialData"", ""sessionId"": ""session-1"" }");
         Assert.Equal(InboundKind.RequestInitialData, msg.Kind);
+        Assert.False(msg.SchemaOnly);
+    }
+
+    [Theory]
+    [InlineData(@"true", true)]
+    [InlineData(@"false", false)]
+    [InlineData(@"""yes""", false)]
+    public void RequestInitialData_ReadsSchemaOnly(string value, bool expected)
+    {
+        var msg = Parse(@"{ ""type"": ""requestInitialData"", ""sessionId"": ""session-1"", ""schemaOnly"": " + value + " }");
+        Assert.Equal(InboundKind.RequestInitialData, msg.Kind);
+        Assert.Equal(expected, msg.SchemaOnly);
     }
 
     // initialData carries the whole schema and the current values, so it is session-checked like

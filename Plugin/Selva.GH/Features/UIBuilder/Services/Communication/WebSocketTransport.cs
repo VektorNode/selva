@@ -75,8 +75,8 @@ public class WebSocketTransport : IDisposable
         _sessionId = sessionId;
         _bridgeSecret = bridgeSecret ?? throw new ArgumentNullException(nameof(bridgeSecret));
         _port = port;
-        _hostFiles = new HostFileCoordinator(new EtoHostFileDialogs(), MarshalToMainThread, sessionId,
-            AppConfig.ValueLimits.MaxFileSizeBytes);
+        _hostFiles = new HostFileCoordinator(new EtoHostFileDialogs(), ModalGate.Shared, MarshalToMainThread,
+            sessionId, AppConfig.ValueLimits.MaxFileSizeBytes);
     }
 
     /// <summary>Where the session's role comes from: the component that owns this transport.</summary>
@@ -104,7 +104,8 @@ public class WebSocketTransport : IDisposable
 
     public event EventHandler<Dictionary<string, object>> OnValuesReceived;
     public event EventHandler OnCurrentValuesRequested;
-    public event EventHandler OnClientConnected;
+    /// <summary>`requestInitialData`, on the UI thread.</summary>
+    public event EventHandler<InboundMessage> OnClientConnected;
     public event EventHandler<SchemaSaveRequest> OnSchemaSaveRequested;
     public event EventHandler<UISchema> OnSyncPreviewRequested;
     public event EventHandler<List<SyncChange>> OnSyncChangesApply;
@@ -615,7 +616,7 @@ public class WebSocketTransport : IDisposable
                     {
                         try
                         {
-                            OnClientConnected?.Invoke(this, EventArgs.Empty);
+                            OnClientConnected?.Invoke(this, inbound);
                         }
                         finally
                         {

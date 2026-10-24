@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Utilities.Helpers;
@@ -39,23 +38,23 @@ internal sealed class HostFileCoordinator
     public const string Cancelled = "cancelled";
     public const string Failed = "failed";
 
-    private const string BusyMessage = "Close the open file dialog first.";
+    private const string BusyMessage = "Close the open file dialog, or finish picking in Rhino, first.";
 
     private static readonly string[] ImageExtensions =
         { "png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "svg" };
 
     private readonly IHostFileDialogs _dialogs;
+    private readonly ModalGate _gate;
     private readonly long _maxFileBytes;
     private readonly Action<Action> _onUiThread;
     private readonly string _sessionId;
 
-    private int _dialogOpen;
-
     /// <param name="onUiThread">Queues the action on Rhino's UI thread and returns without waiting for it.</param>
-    public HostFileCoordinator(IHostFileDialogs dialogs, Action<Action> onUiThread, string sessionId,
-        long maxFileBytes)
+    public HostFileCoordinator(IHostFileDialogs dialogs, ModalGate gate, Action<Action> onUiThread,
+        string sessionId, long maxFileBytes)
     {
         _dialogs = dialogs;
+        _gate = gate;
         _onUiThread = onUiThread;
         _sessionId = sessionId;
         _maxFileBytes = maxFileBytes;
@@ -73,7 +72,7 @@ internal sealed class HostFileCoordinator
             return;
         }
 
-        if (!TryOpenDialog())
+        if (!_gate.TryEnter())
         {
             Send(reply, SaveResult(requestId, Failed, BusyMessage));
             return;
@@ -94,7 +93,7 @@ internal sealed class HostFileCoordinator
             }
             finally
             {
-                CloseDialog();
+                _gate.Exit();
             }
 
             if (path == null)
@@ -109,7 +108,7 @@ internal sealed class HostFileCoordinator
 
     public void HandlePick(string requestId, IEnumerable<string> accept, IHostFileReply reply)
     {
-        if (!TryOpenDialog())
+        if (!_gate.TryEnter())
         {
             Send(reply, PickResult(requestId, Failed, BusyMessage));
             return;
@@ -131,7 +130,7 @@ internal sealed class HostFileCoordinator
             }
             finally
             {
-                CloseDialog();
+                _gate.Exit();
             }
 
             if (path == null)
@@ -171,17 +170,6 @@ internal sealed class HostFileCoordinator
         }
 
         return extensions;
-    }
-
-    // A second dialog would open inside the first one's modal loop.
-    private bool TryOpenDialog()
-    {
-        return Interlocked.CompareExchange(ref _dialogOpen, 1, 0) == 0;
-    }
-
-    private void CloseDialog()
-    {
-        Interlocked.Exchange(ref _dialogOpen, 0);
     }
 
     private async Task WriteAsync(string requestId, string path, ArraySegment<byte> body, IHostFileReply reply)

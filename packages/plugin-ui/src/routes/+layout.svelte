@@ -98,9 +98,12 @@
 
 		// In the Rhino panel an Esc the page leaves unhandled goes on to Rhino, which moves focus
 		// out of the panel. Marking it handled keeps focus here. Grasshopper's solve abort reads
-		// the key's state rather than the event, so Esc still aborts a solve.
+		// the key's state rather than the event, so Esc still aborts a solve. A viewport pick
+		// cancels on the event, so during one Esc goes on to Rhino.
 		const keepEscapeInPanel = (event: KeyboardEvent) => {
-			if (event.key === 'Escape' && isRhinoPanel()) event.preventDefault();
+			if (event.key === 'Escape' && isRhinoPanel() && !geometryPicks.picking) {
+				event.preventDefault();
+			}
 		};
 
 		window.addEventListener('grasshopper-runtime-message', handleRuntimeMessage as EventListener);

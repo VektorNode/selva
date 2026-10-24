@@ -1,6 +1,7 @@
 // Viewport picks for geometry inputs. The plugin prompts on Rhino's command line with the param's
 // own filter and count, keeps the geometry on the param, and answers with a summary only. Every
-// request gets exactly one reply, matched by requestId.
+// request gets exactly one reply, matched by requestId. The reply goes to every page on the
+// bridge, so a requestId must be unique across pages and reloads, not just within this one.
 
 import type { GeometryPickResult } from '@selvajs/ui';
 
@@ -22,7 +23,6 @@ const NOT_CONNECTED = 'Not connected to Grasshopper.';
 const CONNECTION_LOST = 'Lost the connection to Grasshopper before the pick finished.';
 
 export function createGeometryPicksClient(socket: GeometryPickSocket, getSessionId: () => string) {
-	let lastRequestId = 0;
 	const pending = new Map<string, (result: GeometryPickResult) => void>();
 
 	// The dispatcher has validated each reply against messageSchemas.ts.
@@ -42,9 +42,14 @@ export function createGeometryPicksClient(socket: GeometryPickSocket, getSession
 	});
 
 	return {
+		/** True while Rhino is prompting for a pick this page asked for. */
+		get picking() {
+			return pending.size > 0;
+		},
+
 		pickGeometry(paramId: string): Promise<GeometryPickResult> {
 			if (!socket.connected) return Promise.resolve({ outcome: 'failed', error: NOT_CONNECTED });
-			const requestId = String(++lastRequestId);
+			const requestId = crypto.randomUUID();
 			return new Promise((resolve) => {
 				pending.set(requestId, resolve);
 				socket.send('pickGeometry', { sessionId: getSessionId(), requestId, paramId });

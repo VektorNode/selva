@@ -13,6 +13,7 @@ public sealed class HostFileCoordinatorTests : IDisposable
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "selva-hostfiles-" + Guid.NewGuid().ToString("N"));
     private readonly FakeDialogs _dialogs = new();
+    private readonly ModalGate _gate = new();
     private readonly RecordingReply _reply = new();
 
     public HostFileCoordinatorTests()
@@ -27,7 +28,7 @@ public sealed class HostFileCoordinatorTests : IDisposable
 
     private HostFileCoordinator Coordinator(long maxFileBytes = 1024, Action<Action>? onUiThread = null)
     {
-        return new HostFileCoordinator(_dialogs, onUiThread ?? (a => a()), Session, maxFileBytes);
+        return new HostFileCoordinator(_dialogs, _gate, onUiThread ?? (a => a()), Session, maxFileBytes);
     }
 
     // -------------------------------------------------------------------------
@@ -101,6 +102,18 @@ public sealed class HostFileCoordinatorTests : IDisposable
         coordinator.HandlePick("9", new[] { ".slvp" }, _reply);
         queued[1]();
         Assert.Equal("cancelled", (string?)(await _reply.Next())["outcome"]);
+    }
+
+    [Fact]
+    public async Task Request_WhileAViewportPickIsOpen_FailsBusy()
+    {
+        Assert.True(_gate.TryEnter());
+
+        Coordinator().HandlePick("8", new[] { ".slvp" }, _reply);
+
+        var busy = await _reply.Next();
+        Assert.Equal("failed", (string?)busy["outcome"]);
+        Assert.Null(_dialogs.Extensions);
     }
 
     // -------------------------------------------------------------------------

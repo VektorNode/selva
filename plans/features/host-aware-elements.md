@@ -164,12 +164,13 @@ definition does the action itself: a Rhino 8 Model Object bake, Bake Files, an e
 - **A press is a message, not a value.** The page sends `trigger { paramId }` and keeps no value
   for the input. Holding `true` in the page's values would resend it on every solve and fire the
   action again on the next slider move. Presets skip button inputs for the same reason.
-- **The reset has to land in the param's data.** The plugin assigns `true`, solves, then assigns
-  `false` and expires the param without scheduling a solution, so the next solve recomputes that
-  branch with `false`. Clearing the contextual data isn't enough: the param's volatile data stays
-  `true` until it's expired, and the action would fire again the next time anything downstream
-  recomputes. A second solve straight away, like Grasshopper's Button, would cost a full solve to
-  undo nothing.
+- **The reset has to land in the param's data.** The plugin assigns `true` and solves. At that
+  solve's end it swaps the param's volatile data for `false` in place, without expiring anything.
+  Clearing the contextual data isn't enough: the param's volatile data stays `true`, and the action
+  would fire again the next time anything downstream recomputes. Expiring the param is too much:
+  that clears everything downstream, so the press's own results leave the viewport and the Context
+  Bakes. A second solve straight away, like Grasshopper's Button, would cost a full solve to undo
+  nothing.
 - **Rhino only for now.** On Selva a press is a solve with `true` in it. Three caches can answer a
   repeat press without solving: the request-response driver's memo, the server's cache, and
   Compute's `cachesolve`. And a side effect on the Compute server isn't something the user can get

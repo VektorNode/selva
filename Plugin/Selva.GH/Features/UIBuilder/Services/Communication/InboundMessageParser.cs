@@ -83,7 +83,12 @@ public sealed class InboundMessageParser
                     return InboundMessage.Of(InboundKind.CancelSolve, msgType);
 
                 case "requestInitialData":
-                    return InboundMessage.Of(InboundKind.RequestInitialData, msgType);
+                    return new InboundMessage
+                    {
+                        Kind = InboundKind.RequestInitialData,
+                        MessageType = msgType,
+                        SchemaOnly = jObj["schemaOnly"]?.Type == JTokenType.Boolean && (bool)jObj["schemaOnly"]
+                    };
 
                 case "saveSchema":
                     {

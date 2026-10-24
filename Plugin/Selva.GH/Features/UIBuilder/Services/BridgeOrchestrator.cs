@@ -170,13 +170,10 @@ public class BridgeOrchestrator : IDisposable
     {
         try
         {
-            if (!_geometryPicks.IsPicked(paramId))
+            if (_geometryPicks.Clear(_component.OnPingDocument(), paramId))
             {
-                return;
+                _stateManager.MarkSolveScheduled();
             }
-
-            _geometryPicks.Clear(_component.OnPingDocument(), paramId);
-            _stateManager.MarkSolveScheduled();
         }
         catch (Exception ex)
         {
@@ -305,7 +302,7 @@ public class BridgeOrchestrator : IDisposable
         }
     }
 
-    private void HandleClientConnected(object sender, EventArgs e)
+    private void HandleClientConnected(object sender, InboundMessage request)
     {
         try
         {
@@ -353,7 +350,8 @@ public class BridgeOrchestrator : IDisposable
             // Also broadcast when the schema declares no outputs but the 3D viewer is on: the
             // meshes come from ContextBakes, not from declared outputs, so gating on Outputs
             // alone leaves a display-only definition with an empty viewer.
-            if (validatedSchema.Outputs?.Count > 0 || (validatedSchema.ViewerOptions?.EnableLocal ?? false))
+            if (!request.SchemaOnly &&
+                (validatedSchema.Outputs?.Count > 0 || (validatedSchema.ViewerOptions?.EnableLocal ?? false)))
             {
                 ScheduleOutputBroadcast(validatedSchema);
             }

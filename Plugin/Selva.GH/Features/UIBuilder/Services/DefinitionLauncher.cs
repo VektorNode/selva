@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Windows.Forms;
 using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Plugin;
@@ -18,6 +19,11 @@ namespace Selva.GH.Features.UIBuilder.Services;
 ///     editor stays hidden, nothing is written back to the file. One player document at a time;
 ///     documents the user opened in Grasshopper are never touched. UI thread only.
 /// </summary>
+/// <remarks>
+///     A player document is the canvas's document, so whenever the editor is on screen the user
+///     can edit it. The session hands the document over then, as Edit in Grasshopper does: a
+///     player document never asks to be saved, and the edits would be dropped without a word.
+/// </remarks>
 internal static class DefinitionLauncher
 {
     private sealed class PlayerSession
@@ -100,8 +106,6 @@ internal static class DefinitionLauncher
             return $"{Path.GetFileName(path)} has no Selva UI. Open it in Grasshopper to add one.";
         }
 
-        Close();
-
         player.HostAsPlayer();
         var others = bridges.Where(b => b != player).ToList();
         foreach (var other in others)
@@ -109,8 +113,18 @@ internal static class DefinitionLauncher
             other.Suppress();
         }
 
+        // From one player definition to the next, the user's document stays disabled: it gets the
+        // canvas back when the last one closes.
+        var replaced = _current;
         var canvas = Instances.ActiveCanvas;
-        var previous = canvas?.Document;
+        var previous = replaced != null ? replaced.Previous : canvas?.Document;
+
+        // Set up before the canvas switch, which solves the document. Grasshopper draws no preview
+        // while its editor is hidden, unless it's forced.
+        document.ForcePreview(true);
+        document.ModifiedChanged += KeepUnmodified;
+        _current = new PlayerSession(document, previous, player, others);
+
         Instances.DocumentServer.AddDocument(document);
         if (canvas != null)
         {
@@ -118,10 +132,19 @@ internal static class DefinitionLauncher
         }
 
         document.Enabled = true;
-        // Grasshopper draws no preview while its editor is hidden, unless it's forced.
-        document.ForcePreview(true);
-        document.ModifiedChanged += KeepUnmodified;
-        _current = new PlayerSession(document, previous, player, others);
+
+        // After the switch: removing a document the canvas still shows hands the canvas to
+        // whichever document is next, and solves that one.
+        if (replaced != null)
+        {
+            Remove(replaced);
+        }
+
+        WatchEditor();
+        if (IsEditorVisible())
+        {
+            EditInGrasshopper();
+        }
 
         document.NewSolution(false);
         return null;
@@ -129,8 +152,7 @@ internal static class DefinitionLauncher
 
     /// <summary>
     ///     Closes the player definition, if there is one, and gives the canvas back to the
-    ///     document it showed before. Removing a document reaches none of the paths that stop a
-    ///     bridge's servers, so the bridge is torn down first.
+    ///     document it showed before.
     /// </summary>
     public static void Close()
     {
@@ -141,25 +163,37 @@ internal static class DefinitionLauncher
         }
 
         _current = null;
-        session.Document.ModifiedChanged -= KeepUnmodified;
-        session.Bridge.Dispose();
+        UnwatchEditor();
 
-        session.Document.Enabled = false;
-        session.Document.ForcePreview(false);
-        session.Document.IsModified = false;
-        Instances.DocumentServer.RemoveDocument(session.Document);
-
+        var previous = session.Previous != null && Instances.DocumentServer.Contains(session.Previous)
+            ? session.Previous
+            : null;
         var canvas = Instances.ActiveCanvas;
         if (canvas != null && canvas.Document == session.Document)
         {
-            canvas.Document = session.Previous;
+            // The canvas enables and solves the document it's given.
+            canvas.Document = previous;
+        }
+        else if (canvas == null && previous != null)
+        {
+            previous.Enabled = true;
+            previous.NewSolution(false);
         }
 
-        if (session.Previous != null && Instances.DocumentServer.Contains(session.Previous))
-        {
-            session.Previous.Enabled = true;
-            session.Previous.NewSolution(false);
-        }
+        Remove(session);
+    }
+
+    /// <summary>
+    ///     Removing a document reaches none of the paths that stop a bridge's servers, so the
+    ///     bridge is torn down first. The canvas must not be showing the document.
+    /// </summary>
+    private static void Remove(PlayerSession session)
+    {
+        session.Document.ModifiedChanged -= KeepUnmodified;
+        session.Bridge.Dispose();
+        session.Document.ForcePreview(false);
+        session.Document.IsModified = false;
+        Instances.DocumentServer.RemoveDocument(session.Document);
     }
 
     /// <summary>
@@ -175,6 +209,7 @@ internal static class DefinitionLauncher
         }
 
         _current = null;
+        UnwatchEditor();
         session.Document.ModifiedChanged -= KeepUnmodified;
         session.Document.ForcePreview(false);
 
@@ -200,6 +235,36 @@ internal static class DefinitionLauncher
         {
             document.IsModified = false;
         }
+    }
+
+    private static void WatchEditor()
+    {
+        if (Instances.DocumentEditor is Control editor)
+        {
+            editor.VisibleChanged -= HandOverWhenShown;
+            editor.VisibleChanged += HandOverWhenShown;
+        }
+    }
+
+    private static void UnwatchEditor()
+    {
+        if (Instances.DocumentEditor is Control editor)
+        {
+            editor.VisibleChanged -= HandOverWhenShown;
+        }
+    }
+
+    private static void HandOverWhenShown(object? sender, EventArgs e)
+    {
+        if (IsEditorVisible() && Instances.ActiveCanvas?.Document == _current?.Document)
+        {
+            EditInGrasshopper();
+        }
+    }
+
+    private static bool IsEditorVisible()
+    {
+        return (Instances.DocumentEditor as Control)?.Visible == true;
     }
 
     /// <summary>The same check the bridge makes before it serves a UI.</summary>

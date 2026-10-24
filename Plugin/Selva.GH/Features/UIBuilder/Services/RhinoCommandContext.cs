@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.ExceptionServices;
 using Rhino;
 using Rhino.Commands;
 using Selva.RhinoPanel;
@@ -17,10 +18,19 @@ internal static class RhinoCommandContext
         if (!Command.InCommand())
         {
             var ran = false;
+            ExceptionDispatchInfo failure = null;
+            // Caught here: Rhino's command dispatcher swallows what a command throws.
             AppDomain.CurrentDomain.SetData(PanelContract.CommandActionSlot, (Action)(() =>
             {
                 ran = true;
-                action();
+                try
+                {
+                    action();
+                }
+                catch (Exception ex)
+                {
+                    failure = ExceptionDispatchInfo.Capture(ex);
+                }
             }));
 
             // Synchronous outside a command. Without the .rhp the command is unknown and nothing ran.
@@ -28,6 +38,7 @@ internal static class RhinoCommandContext
             AppDomain.CurrentDomain.SetData(PanelContract.CommandActionSlot, null);
             if (ran)
             {
+                failure?.Throw();
                 return;
             }
         }

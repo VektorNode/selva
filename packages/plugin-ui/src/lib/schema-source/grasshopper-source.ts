@@ -62,8 +62,8 @@ export function createGrasshopperSource(wsState: WebSocketState, port: number): 
 			return { ok: true };
 		},
 
-		requestInitialData(sessionId: string) {
-			wsState.requestInitialData(sessionId);
+		requestInitialData(sessionId: string, options?: { schemaOnly?: boolean }) {
+			wsState.requestInitialData(sessionId, options);
 		},
 
 		save(sessionId: string, draft: UISchema, baseHash: string | null): Promise<SaveResult> {

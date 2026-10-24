@@ -68,6 +68,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private bool _suppressed;
     private BridgeRole _role = BridgeRole.Author;
 
+    // A bridge released by Edit in Grasshopper starts without taking the panel from the one the
+    // user was playing. Read by the first solve after the release only.
+    private bool _startOutOfPanel;
+
     public GH_UIBuilderComponent()
         : base("UI Bridge", "UIBridge",
             "Build and interact with your UI - WebSocket-only communication",
@@ -175,6 +179,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         var enable = !_suppressed && (enableInput || _hosted);
+        var startOutOfPanel = _startOutOfPanel;
+        _startOutOfPanel = false;
 
         InitializeDependencies();
 
@@ -226,7 +232,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         // Handle current state
         if (enable)
         {
-            HandleEnabledState(DA, document, rebind);
+            HandleEnabledState(DA, document, rebind, startOutOfPanel);
         }
         else
         {
@@ -321,10 +327,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             }
 
             ClearAllContextualParameters();
-
-            // After the clear, and on a fresh tick outside the solution: the reset expires without
-            // scheduling. Posted before the drain below, so a drained solve already sees false.
-            RhinoApp.InvokeOnUiThread((Action)(() => _service?.TriggerPresses.ResetPressed(OnPingDocument())));
+            _service.TriggerPresses.ResetPressed(OnPingDocument());
 
             // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
             // a solve from inside the end of this one — under a slider drag that's a non-draining
@@ -348,7 +351,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
 
-    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind)
+    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind, bool startOutOfPanel)
     {
         var wasRunning = _service.ServerManager.IsRunning;
 
@@ -369,6 +372,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     {
                         RhinoApp.InvokeOnUiThread(new Action(() =>
                         {
+                            if (startOutOfPanel)
+                            {
+                                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                                    "Web UI running. Right-click the component and choose Open UI to show it.");
+                                return;
+                            }
+
                             var refusal = ShowInPanel();
                             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, refusal ??
                                 "Web UI open in the Selva panel. Right-click the component and choose Open UI to bring it back.");
@@ -478,9 +488,9 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         );
     }
 
-    // =========================================================================
+    // ============================================================================
     // Player sessions
-    // =========================================================================
+    // ============================================================================
 
     /// <summary>Called by DefinitionLauncher before the document's first solve.</summary>
     internal void HostAsPlayer()
@@ -508,6 +518,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
 
         _suppressed = false;
+        _startOutOfPanel = true;
         ExpireSolution(true);
     }
 
@@ -517,6 +528,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     internal void BecomeAuthor()
     {
         _role = BridgeRole.Author;
+
+        // Not running yet: the cold start shows the panel, and reads the role then.
+        if (!IsConnected)
+        {
+            return;
+        }
+
         var refusal = ShowInPanel();
         if (refusal != null)
         {

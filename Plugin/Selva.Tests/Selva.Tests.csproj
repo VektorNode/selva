@@ -98,6 +98,8 @@
 		<!-- Rhino-free: the Eto dialogs sit behind IHostFileDialogs in EtoHostFileDialogs.cs. -->
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\HostFileCoordinator.cs"
 		         Link="Linked\HostFileCoordinator.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ModalGate.cs"
+		         Link="Linked\ModalGate.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ComponentStateManager.cs"
 		         Link="Linked\ComponentStateManager.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\SolveDiagnostics.cs"

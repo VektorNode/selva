@@ -51,7 +51,8 @@
 				source.off('initialData', onInitialData);
 				go('preview');
 			} else {
-				source.requestInitialData(sessionId);
+				// The route needs only the schema; the page it opens asks for the rest.
+				source.requestInitialData(sessionId, { schemaOnly: true });
 			}
 		});
 

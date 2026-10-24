@@ -23,7 +23,7 @@ public enum InboundKind
     /// <summary>`requestCurrentValues` — no payload.</summary>
     RequestCurrentValues,
 
-    /// <summary>`requestInitialData` — no payload.</summary>
+    /// <summary>`requestInitialData`, optionally with `schemaOnly`.</summary>
     RequestInitialData,
 
     /// <summary>`saveSchema` with a non-null schema.</summary>
@@ -130,6 +130,9 @@ public sealed class InboundMessage
 
     /// <summary>The input a geometry pick or a button press is for.</summary>
     public Guid ParamId { get; init; }
+
+    /// <summary>`requestInitialData` from a page that only reads the schema: no outputs or display data follow.</summary>
+    public bool SchemaOnly { get; init; }
 
     // Populated per-Kind, so most instances leave several of these null. The plugin compiles
     // without a nullable context; the test project links this file in under one, hence the

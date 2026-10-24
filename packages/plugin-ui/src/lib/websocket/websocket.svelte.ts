@@ -549,9 +549,12 @@ export class WebSocketState {
 	/**
 	 * Request initial data (schema, available params, current values) from Grasshopper
 	 */
-	requestInitialData(sessionId: string) {
+	requestInitialData(sessionId: string, options?: { schemaOnly?: boolean }) {
 		this.currentSessionId = sessionId;
-		this.send('requestInitialData', { sessionId });
+		this.send(
+			'requestInitialData',
+			options?.schemaOnly ? { sessionId, schemaOnly: true } : { sessionId }
+		);
 	}
 
 	/**

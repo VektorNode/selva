@@ -51,6 +51,29 @@ describe('geometry picks client', () => {
 		await expect(result).resolves.toEqual({ outcome: 'cancelled' });
 	});
 
+	it('reports a pick in flight until its reply arrives', () => {
+		const socket = fakeSocket();
+		const client = createGeometryPicksClient(socket, () => 's1');
+
+		expect(client.picking).toBe(false);
+		client.pickGeometry('param-1');
+		expect(client.picking).toBe(true);
+		socket.emit('pickGeometryResult', {
+			requestId: socket.sent[0].data.requestId,
+			outcome: 'cancelled'
+		});
+		expect(client.picking).toBe(false);
+	});
+
+	it('gives each pick a requestId another page cannot reuse', () => {
+		const panel = fakeSocket();
+		const tab = fakeSocket();
+		createGeometryPicksClient(panel, () => 's1').pickGeometry('param-1');
+		createGeometryPicksClient(tab, () => 's1').pickGeometry('param-2');
+
+		expect(panel.sent[0].data.requestId).not.toEqual(tab.sent[0].data.requestId);
+	});
+
 	it('fails a pick in flight when the socket closes', async () => {
 		const socket = fakeSocket();
 		const client = createGeometryPicksClient(socket, () => 's1');

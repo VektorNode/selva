@@ -64,10 +64,23 @@ public sealed class GeometryPicks
             return GeometryPickOutcome.Failed("No Rhino document is open to pick from.");
         }
 
+        if (!ModalGate.Shared.TryEnter())
+        {
+            return GeometryPickOutcome.Failed("Rhino is already asking for something. Finish or cancel that first.");
+        }
+
         var name = (param as IGH_DocumentObject)?.NickName ?? "Geometry";
         var assigned = false;
-        RhinoCommandContext.Run(() =>
-            assigned = param.AutoAssignContextualData(new GH_ParameterContext(name, rhinoDoc, RunMode.Interactive)));
+        try
+        {
+            RhinoCommandContext.Run(() =>
+                assigned = param.AutoAssignContextualData(new GH_ParameterContext(name, rhinoDoc, RunMode.Interactive)));
+        }
+        finally
+        {
+            ModalGate.Shared.Exit();
+        }
+
         if (!assigned)
         {
             return GeometryPickOutcome.Cancelled;
@@ -79,25 +92,28 @@ public sealed class GeometryPicks
             return GeometryPickOutcome.Cancelled;
         }
 
+        if (!ScheduleExpire(document, param))
+        {
+            return GeometryPickOutcome.Failed("That input can't be picked into.");
+        }
+
         var summary = Summarize(picked);
         _summaries[paramId] = summary;
-        ScheduleExpire(document, param);
         return GeometryPickOutcome.Picked(summary);
     }
 
     /// <summary>The param goes back to the definition's own geometry.</summary>
-    public void Clear(GH_Document document, Guid paramId)
+    /// <returns>True when a solve was scheduled for it.</returns>
+    public bool Clear(GH_Document document, Guid paramId)
     {
-        if (!_summaries.Remove(paramId))
+        if (!_summaries.Remove(paramId) ||
+            !(document?.FindObject(paramId, false) is IGH_ContextualParameter param))
         {
-            return;
+            return false;
         }
 
-        if (document?.FindObject(paramId, false) is IGH_ContextualParameter param)
-        {
-            ParameterTypeHelper.TryInvokeClearContextualData(param);
-            ScheduleExpire(document, param);
-        }
+        ParameterTypeHelper.TryInvokeClearContextualData(param);
+        return ScheduleExpire(document, param);
     }
 
     /// <summary>The session ended; the component clears every contextual param itself.</summary>
@@ -106,13 +122,16 @@ public sealed class GeometryPicks
         _summaries.Clear();
     }
 
-    private static void ScheduleExpire(GH_Document document, IGH_ContextualParameter param)
+    private static bool ScheduleExpire(GH_Document document, IGH_ContextualParameter param)
     {
-        if (param is IGH_ActiveObject active)
+        if (!(param is IGH_ActiveObject active))
         {
-            document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs,
-                _ => active.ExpireSolution(false));
+            return false;
         }
+
+        document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs,
+            _ => active.ExpireSolution(false));
+        return true;
     }
 
     /// <summary>"2 curves", "1 point", "3 objects" when the kinds differ.</summary>

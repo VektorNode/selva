@@ -1,7 +1,7 @@
 import { randomId } from '../utils/randomId';
 import { saveBlob } from '../utils/host-files';
 import { getGroups } from '@selvajs/schemas';
-import { isValuelessInput } from './host-support';
+import { isValuelessInput, valuelessInputIds } from './host-support';
 import type {
 	UISchema,
 	ParameterPreset,
@@ -113,15 +113,18 @@ export function validateSavedState(
  * Params the current schema no longer has are dropped. That's the same condition
  * `validateSavedState` flags as an error, but the rule is re-derived from the schema here
  * rather than read back off the issue list — nothing couples to how sentinel ids are encoded.
+ * Valueless inputs are dropped too: a preset saved before an input became a button or a
+ * geometry input still holds a value for it.
  */
 export function extractLoadableValues(
 	savedState: ParameterPreset,
 	currentSchema: UISchema
 ): Record<string, unknown> {
 	const values: Record<string, unknown> = {};
+	const valueless = valuelessInputIds(currentSchema);
 	for (const paramState of savedState.parameters) {
 		const exists = currentSchema.inputs.some((i) => i.id === paramState.paramId);
-		if (exists) {
+		if (exists && !valueless.has(paramState.paramId)) {
 			values[paramState.paramId] = paramState.value;
 		}
 	}

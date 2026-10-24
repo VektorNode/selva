@@ -177,6 +177,37 @@ async function build() {
 			process.exit(1);
 		}
 
+		// Selva.gha hosts its panel and viewport-pick command through Selva.Panel.rhp, so the
+		// .rhp ships beside it in every TFM folder.
+		log('Building Selva.Panel.rhp...');
+		try {
+			execSync('dotnet build Selva.Panel/Selva.Panel.csproj --configuration Release', {
+				cwd: join(projectRoot, 'Plugin'),
+				stdio: 'inherit'
+			});
+		} catch {
+			logError('Selva.Panel build failed');
+			process.exit(1);
+		}
+		const ghaReleaseDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release');
+		const panelReleaseDir = join(projectRoot, 'Plugin/Selva.Panel/bin/Release');
+		for (const tfm of ['net48', 'net7.0', 'net9.0']) {
+			try {
+				statSync(join(ghaReleaseDir, tfm, 'Selva.gha'));
+			} catch {
+				continue;
+			}
+			const rhpPath = join(panelReleaseDir, tfm, 'Selva.Panel.rhp');
+			try {
+				statSync(rhpPath);
+			} catch {
+				logError(`${tfm}: Selva.gha was built but ${rhpPath} was not`);
+				process.exit(1);
+			}
+			cpSync(rhpPath, join(ghaReleaseDir, tfm, 'Selva.Panel.rhp'));
+			logSuccess(`${tfm}: Selva.Panel.rhp staged beside Selva.gha`);
+		}
+
 		// Step 3: Verify the merged assemblies actually bind.
 		// Selva.PluginVerifier force-JITs every method of the merged output on each
 		// Rhino runtime family; a corrupted merge fails here instead of inside a

@@ -46,7 +46,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [viewer-hotspots](./features/viewer-hotspots.md)                                | **unfiled** — design only; wire-walk verified live in Rhino                     |
 | [publish-from-plugin](./features/publish-from-plugin.md)                        | **unfiled** — built; the bridge lockdown landed first, in its own commit        |
 | [compute-cleanup-audit](./fixes/compute-cleanup-audit.md)                       | **unfiled** — being worked through directly                                     |
-| [rhino-panel](./features/rhino-panel.md)                                        | **unfiled** — design only; a test branch proves the gates first                 |
+| [rhino-panel](./features/rhino-panel.md)                                        | **unfiled** — built on `test/rhino-panel`; live gates still open                |
 | [rhino-player](./features/rhino-player.md)                                      | **unfiled** — built on `test/rhino-panel`; live gates still open                |
 | [host-aware-elements](./features/host-aware-elements.md)                        | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |
 
