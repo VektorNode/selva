@@ -33,6 +33,7 @@ import type {
 } from '@selvajs/schemas';
 import {
 	iconNodeToPath,
+	lucideName,
 	putAsset,
 	type IconNode
 } from '../src/lib/features/builder/option-assets.ts';
@@ -419,10 +420,7 @@ function withIcons(
 	const optionMedia = Object.fromEntries(
 		Object.entries(iconByOption).map(([option, name]) => {
 			const id = putAsset(MOCK_ASSETS, { d: iconNodeToPath(icons[name] as unknown as IconNode) });
-			const kebab = String(name)
-				.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-				.toLowerCase();
-			return [option, { icon: id, iconName: `lucide:${kebab}` }];
+			return [option, { icon: id, iconName: `lucide:${lucideName(String(name))}` }];
 		})
 	);
 	const config = (item as { config?: object }).config ?? {};

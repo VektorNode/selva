@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Input } from '@selvajs/ui';
-	import { iconNodeToPath, type IconNode } from '$lib/features/builder/option-assets';
+	import { iconNodeToPath, listIcons, type IconNode } from '$lib/features/builder/option-assets';
 
 	interface Props {
 		/** The `lucide:<name>` the option already uses, highlighted in the grid. */
@@ -19,12 +19,7 @@
 	let query = $state('');
 
 	$effect(() => {
-		import('lucide').then(({ icons: all }) => {
-			icons = Object.entries(all).map(([pascal, node]) => ({
-				name: pascal.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase(),
-				node: node as unknown as IconNode
-			}));
-		});
+		import('lucide').then(({ icons: all }) => (icons = listIcons(all)));
 	});
 
 	const matches = $derived.by(() => {

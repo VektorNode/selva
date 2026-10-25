@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UISchema } from '@selvajs/schemas';
-import { assetId, iconNodeToPath, putAsset } from '../option-assets';
+import { assetId, iconNodeToPath, listIcons, putAsset } from '../option-assets';
 import { assetBytes, pruneUnusedMedia } from '../option-media';
 
 describe('iconNodeToPath', () => {
@@ -171,5 +171,16 @@ describe('assetBytes', () => {
 		expect(assetBytes(schemaWithMedia().assets)).toBe(
 			'M1 1'.length + 'M2 2'.length + 'M3 3'.length + 'data:image/png;base64,AA=='.length
 		);
+	});
+});
+
+describe('listIcons', () => {
+	it('names icons the way Lucide does, once each, even when an alias collides', () => {
+		const square = [['rect', { x: '3', y: '3', width: '18', height: '18' }]];
+		const arrow = [['path', { d: 'M3 3h18' }]];
+
+		const list = listIcons({ ArrowDownAZ: arrow, ArrowDownAz: arrow, Square: square });
+
+		expect(list.map((icon) => icon.name)).toEqual(['arrow-down-az', 'square']);
 	});
 });

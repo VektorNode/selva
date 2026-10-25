@@ -103,3 +103,21 @@ export function putAsset(schema: UISchema, asset: OptionAsset): string {
 	schema.assets[id] ??= asset;
 	return id;
 }
+
+/** Lucide's export name as the kebab-case name its site and the picker use. */
+export function lucideName(exportName: string): string {
+	return exportName.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+/**
+ * Every icon once, by name. Lucide also exports aliases (`ArrowDownAZ` beside `ArrowDownAz`)
+ * that name the same icon, and a picker listing both repeats it.
+ */
+export function listIcons(all: Record<string, unknown>): { name: string; node: IconNode }[] {
+	const byName = new Map<string, IconNode>();
+	for (const [exportName, node] of Object.entries(all)) {
+		const name = lucideName(exportName);
+		if (!byName.has(name)) byName.set(name, node as IconNode);
+	}
+	return [...byName].map(([name, node]) => ({ name, node }));
+}
