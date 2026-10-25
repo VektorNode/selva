@@ -578,6 +578,12 @@
 		--drawer-half-h: 60%;
 	}
 
+	/* On a phone the panels stack in one scroller. Held at the scroller's height, a long left
+	   panel would spill over the right panel below it. */
+	.mobile-root .panel-content-wrapper {
+		height: auto;
+	}
+
 	.viewer-region {
 		position: absolute;
 		inset: 0 0 var(--drawer-closed-h) 0;
