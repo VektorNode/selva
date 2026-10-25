@@ -5,6 +5,23 @@ import { assetBytes, assetId, pruneUnusedMedia, iconNodeToPath, putAsset } from 
 describe('iconNodeToPath', () => {
 	it('keeps path data as it is', () => {
 		expect(iconNodeToPath([['path', { d: 'M15 21v-8' }]])).toBe('M15 21v-8');
+		// After an absolute M the extra pairs are absolute line-tos already.
+		expect(iconNodeToPath([['path', { d: 'M2 2 5 5' }]])).toBe('M2 2 5 5');
+	});
+
+	// Lucide's own paths open with a relative `m`. Joined into one path, a later `m` would be read
+	// relative to where the previous shape ended, so each one is made absolute.
+	it('keeps every path where Lucide draws it once they are joined', () => {
+		expect(
+			iconNodeToPath([
+				['path', { d: 'm16 18 6-6-6-6' }],
+				['path', { d: 'm8 6-6 6 6 6' }]
+			])
+		).toBe('M16 18l6-6-6-6 M8 6l-6 6 6 6');
+	});
+
+	it('leaves a relative start alone when a command follows it', () => {
+		expect(iconNodeToPath([['path', { d: 'm2 3h4' }]])).toBe('M2 3h4');
 	});
 
 	it('draws a circle as two arcs', () => {

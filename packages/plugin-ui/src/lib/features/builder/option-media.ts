@@ -8,6 +8,22 @@ export type IconNode = [tag: string, attrs: Record<string, string | number>][];
 
 const num = (v: string | number | undefined): number => Number(v ?? 0);
 
+const NUMBER = String.raw`[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?`;
+const RELATIVE_START = new RegExp(`^\\s*m\\s*(${NUMBER})[\\s,]*(${NUMBER})[\\s,]*(.*)$`, 's');
+
+/**
+ * A path's opening `m` is absolute only at the very start of a `d`. Joined after another shape
+ * it would be read from where that shape ended, so it becomes `M`, and the pairs after it, which
+ * `m` reads as relative line-tos, get their `l`.
+ */
+function absoluteStart(d: string): string {
+	const match = RELATIVE_START.exec(d);
+	if (!match) return d;
+	const [, x, y, rest] = match;
+	const implicitLine = rest !== '' && !/^[a-z]/i.test(rest);
+	return `M${x} ${y}${implicitLine ? 'l' : ''}${rest}`;
+}
+
 function pointsToPath(points: string, close: boolean): string {
 	const coords = points
 		.trim()
@@ -40,7 +56,7 @@ export function iconNodeToPath(node: IconNode): string {
 		.map(([tag, a]) => {
 			switch (tag) {
 				case 'path':
-					return String(a.d ?? '');
+					return absoluteStart(String(a.d ?? ''));
 				case 'circle':
 					return ellipseToPath(num(a.cx), num(a.cy), num(a.r), num(a.r));
 				case 'ellipse':
