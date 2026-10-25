@@ -59,6 +59,18 @@ public class WebSocketTransport : IDisposable
     private readonly object _dispatchLock = new object();
     private Task _dispatchChain = Task.CompletedTask;
 
+    // UI-thread work leaves the dispatch chain through a queue of its own, in the same order. On
+    // Mac, InvokeOnUiThread waits until the main thread has run the callback, and the main thread
+    // can sit in a viewport prompt or a long solve: called on the dispatch chain, it would hold up
+    // every later message, cancelSolve and the busy refusals included.
+    private readonly object _uiLock = new object();
+    private Task _uiChain = Task.CompletedTask;
+
+    // The value update at the tail of _uiChain, still waiting for the UI thread; later ones merge
+    // into it, latest wins. On Mac a queued update only reaches the UI thread after the solve in
+    // front of it, when the bridge looks idle, so unmerged a slider drag costs a solve per step.
+    private Dictionary<string, object> _queuedValues;
+
     private bool _disposed;
     private int _initialDataInFlight;
     private bool? _lastBroadcastedSolvingState;
@@ -309,10 +321,12 @@ public class WebSocketTransport : IDisposable
         }
 
         // `displayItems` is null when empty so mesh-only solves stay unchanged on the wire.
+        // ConfigureAwait(false) on both awaits: this starts on Rhino's UI thread, and resuming there
+        // queues the mesh frames behind the viewport redraw and the next scheduled solve.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
             _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
             displayItems.Count > 0 ? displayItems : null,
-            (diagnostics ?? new SolveDiagnostics()).ToOutcome()));
+            (diagnostics ?? new SolveDiagnostics()).ToOutcome())).ConfigureAwait(false);
 
         // WebSocket preserves order, so these binary frames always arrive after the JSON envelope.
         // Capture the server field once: Stop() can null it from another thread mid-loop.
@@ -321,7 +335,7 @@ public class WebSocketTransport : IDisposable
         {
             foreach (var blob in binaryBlobs)
             {
-                await server.BroadcastBinaryAsync(blob);
+                await server.BroadcastBinaryAsync(blob).ConfigureAwait(false);
             }
         }
     }
@@ -598,7 +612,7 @@ public class WebSocketTransport : IDisposable
             switch (inbound.Kind)
             {
                 case InboundKind.ValueUpdate:
-                    MarshalToMainThread(() => OnValuesReceived?.Invoke(this, inbound.Values));
+                    QueueValues(inbound.Values);
                     break;
 
                 case InboundKind.RequestCurrentValues:
@@ -675,7 +689,27 @@ public class WebSocketTransport : IDisposable
                     break;
 
                 case InboundKind.PickGeometry:
-                    MarshalToMainThread(() => OnPickGeometryRequested?.Invoke(this, inbound));
+                    // Taken here, not on the UI thread: on Mac, Rhino runs no queued UI-thread work
+                    // while a prompt is open, so a second pick would wait and open its own prompt
+                    // once the first one closes.
+                    if (!ModalGate.Shared.TryEnter())
+                    {
+                        _ = BroadcastPickGeometryResult(inbound.RequestId, inbound.ParamId,
+                            GeometryPickOutcome.Failed("Rhino is already asking for something. Finish or cancel that first."));
+                        break;
+                    }
+
+                    MarshalToMainThread(() =>
+                    {
+                        try
+                        {
+                            OnPickGeometryRequested?.Invoke(this, inbound);
+                        }
+                        finally
+                        {
+                            ModalGate.Shared.Exit();
+                        }
+                    });
                     break;
 
                 case InboundKind.ClearGeometry:
@@ -744,8 +778,59 @@ public class WebSocketTransport : IDisposable
         }
     }
 
+    private void QueueValues(Dictionary<string, object> values)
+    {
+        lock (_uiLock)
+        {
+            if (_queuedValues != null)
+            {
+                foreach (var kvp in values)
+                {
+                    _queuedValues[kvp.Key] = kvp.Value;
+                }
+
+                return;
+            }
+
+            var queued = new Dictionary<string, object>(values);
+            _queuedValues = queued;
+            Enqueue(() =>
+            {
+                lock (_uiLock)
+                {
+                    if (_queuedValues == queued)
+                    {
+                        _queuedValues = null;
+                    }
+                }
+
+                OnValuesReceived?.Invoke(this, queued);
+            });
+        }
+    }
+
+    private void MarshalToMainThread(Action callback)
+    {
+        lock (_uiLock)
+        {
+            // Anything queued behind a value update ends the merge: later values must not jump it.
+            _queuedValues = null;
+            Enqueue(callback);
+        }
+    }
+
+    // Caller holds _uiLock.
+    private void Enqueue(Action callback)
+    {
+        _uiChain = _uiChain.ContinueWith(
+            _ => InvokeOnUiThread(callback),
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
+    }
+
     // RhinoApp.InvokeOnUiThread is always safe to call — no thread-ID check needed.
-    private static void MarshalToMainThread(Action callback)
+    private static void InvokeOnUiThread(Action callback)
     {
         try
         {

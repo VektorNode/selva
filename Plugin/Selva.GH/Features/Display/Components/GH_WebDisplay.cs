@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,6 +18,7 @@ using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.Drawing.Components;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
+using Selva.GH.Utilities.Helpers;
 using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
@@ -52,8 +54,9 @@ public sealed class SolveResult
     public SolveResult(List<BranchResult> branches, List<Mesh> previewMeshes,
         List<ThreeMaterial> previewMaterials, List<Curve> previewCurves, List<Color> curveColors,
         List<Point3d> previewPoints, List<Color> pointColors, BoundingBox previewBounds,
-        int skipped = 0)
+        int skipped = 0, DisplayPerf perf = null)
     {
+        Perf = perf;
         Branches = branches;
         PreviewMeshes = previewMeshes;
         PreviewMaterials = previewMaterials;
@@ -80,6 +83,9 @@ public sealed class SolveResult
     public BoundingBox PreviewBounds { get; }
 
     public int Skipped { get; }
+
+    /// <summary>Null unless <see cref="PerfLog" /> is on.</summary>
+    public DisplayPerf Perf { get; }
 
     public int Count => Branches.Sum(b => b.Count);
 }
@@ -164,20 +170,23 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         DA.GetData(5, ref ghMeshParams);
 
         var meshSettings = ghMeshParams?.Value ?? MeshingParameters.FastRenderMesh;
+        var defaultMeshing = ghMeshParams?.Value == null;
         var componentId = InstanceGuid.ToString();
         var mmPerUnit = DrawingUnits.ActiveDocMmPerUnit();
 
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
-                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit),
+                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, defaultMeshing,
+                        componentId, mmPerUnit),
                 CancelToken));
             return;
         }
 
         if (!GetSolveResults(DA, out var result))
         {
-            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit);
+            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, defaultMeshing,
+                componentId, mmPerUnit);
         }
 
         if (result == null)
@@ -215,6 +224,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         DA.SetDataTree(0, output);
+
+        var previewStart = Stopwatch.GetTimestamp();
 
         // Build preview items on the main thread (Rhino display API requirement); clipping box was
         // already unioned in the background pass.
@@ -263,6 +274,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         {
             _previewPoints.Add((result.PreviewPoints[i], result.PointColors[i]));
         }
+
+        result.Perf?.Write(NickName, result.Skipped, PerfLog.MsSince(previewStart));
     }
 
     private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
@@ -354,9 +367,12 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<GH_String> metaTree,
         GH_Structure<ThreeMaterialGoo> matTree,
         MeshingParameters meshSettings,
+        bool defaultMeshing,
         string componentId,
         double mmPerUnit)
     {
+        var perf = DisplayPerf.StartIfEnabled();
+
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
         // attributes, minted identity, and owning branch. Geometry extraction touches GH_Goo
         // wrappers and must not race with the parallel pass, so it stays here; invalid geometry is
@@ -415,6 +431,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
         }
 
+        perf?.EndPass("extract");
+
         // Pass 2 (expensive, parallel): mesh breps/surfaces and build curve/point items. Each slot
         // writes only its own index, so no locking is needed. Rhino meshing is thread-safe per
         // geometry; meshSettings is read-only here.
@@ -449,18 +467,24 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
+            var stageStart = Stopwatch.GetTimestamp();
             var mesh = ConvertSingleGeometry(w.Geom, meshSettings);
+            perf?.AddMesh(Stopwatch.GetTimestamp() - stageStart);
             if (mesh == null || !mesh.IsValid)
             {
                 results[idx] = new WorkResult { Skipped = true };
                 return;
             }
 
+            stageStart = Stopwatch.GetTimestamp();
             mesh.Normals.ComputeNormals();
+            perf?.AddNormals(Stopwatch.GetTimestamp() - stageStart);
             // Only Authored vouches for an input mesh's UVs: a converted Brep carries surface parameters.
             var authoredUvs = w.Material?.ResolvedMapping == UvMapping.Authored
                               && w.Geom is Mesh input && input.TextureCoordinates.Count == input.Vertices.Count;
+            stageStart = Stopwatch.GetTimestamp();
             DisplayUvs.Apply(mesh, w.Material, w.Id, mmPerUnit, authoredUvs);
+            perf?.AddUvs(Stopwatch.GetTimestamp() - stageStart);
 
             // UVs are only worth carrying when the material needs them (a texture, anisotropy or a finish) —
             // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
@@ -493,6 +517,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             // with different UVs/colors would merge and smear texture seams / color boundaries.
             // Channels NOT being exported are cleared first so stale auto-generated data (brep TCs,
             // partial color sets) can't block the weld.
+            stageStart = Stopwatch.GetTimestamp();
             if (wantUvs || wantColors)
             {
                 if (!wantUvs && mesh.TextureCoordinates.Count > 0)
@@ -513,10 +538,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
 
             mesh.Compact();
+            perf?.AddWeld(Stopwatch.GetTimestamp() - stageStart);
 
             // Extract the arrays now, off the main thread — the per-vertex copy CreateBatch would
             // otherwise do serially for every mesh in the batch.
+            stageStart = Stopwatch.GetTimestamp();
             var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
+            perf?.AddArrays(Stopwatch.GetTimestamp() - stageStart);
 
             results[idx] = new WorkResult
             {
@@ -530,6 +558,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 Bounds = mesh.GetBoundingBox(false)
             };
         });
+
+        perf?.EndPass("mesh");
 
         // Pass 3 (cheap, sequential): gather each slot back into its branch in tree order for
         // deterministic output. Preview lists are global (one component draws everything).
@@ -605,6 +635,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             return null;
         }
 
+        perf?.EndPass("gather");
+
         // Pass 4 (expensive, parallel across branches): encode each branch's batch — combined-array
         // merge, quantization, deflate — still inside the background task, so the solver thread never
         // pays for the encode.
@@ -624,8 +656,16 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             b.Batch = batch;
         });
 
+        if (perf != null)
+        {
+            perf.EndPass("encode");
+            perf.BatchesDone(componentId, work.Select(w => w.Geom).ToList(),
+                branches.Where(b => b.Batch != null).Select(b => (b.Path.ToString(), b.Batch)).ToList(),
+                meshSettings, defaultMeshing);
+        }
+
         return new SolveResult(branches, previewMeshes, previewMaterials, previewCurves, curveColors,
-            previewPoints, pointColors, previewBounds, skipped);
+            previewPoints, pointColors, previewBounds, skipped, perf);
     }
 
     /// <summary>

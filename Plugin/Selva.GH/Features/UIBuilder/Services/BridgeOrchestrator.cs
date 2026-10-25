@@ -215,6 +215,7 @@ public class BridgeOrchestrator : IDisposable
 
     private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
     {
+        _eventManager.Perf.ValuesArrived();
         try
         {
             // A solve is running or scheduled-but-not-started: coalesce (latest wins) instead of
@@ -224,6 +225,7 @@ public class BridgeOrchestrator : IDisposable
             if (_stateManager.IsBusy)
             {
                 _stateManager.MergePendingValues(values);
+                _eventManager.Perf.ValuesCoalesced();
                 return;
             }
 

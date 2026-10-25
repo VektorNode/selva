@@ -33,6 +33,15 @@ public static class SlvzCompressor
     private const int MinCompressBytes = 4 * 1024;
 
     /// <summary>
+    ///     Optimal by default: Rhino.Compute's blobs cross a network, and on delta-filtered meshes
+    ///     Fastest is 16-36% larger. A desktop Rhino sets Fastest when Selva loads, since its blobs
+    ///     only reach the local web UI over loopback and the deflate runs inside every live solve:
+    ///     Fastest took 35 ms where Optimal took 80 ms on an 11 MB batch. Process-wide, so a plugin
+    ///     building batches through <see cref="MeshBatchAssembler" /> follows the host too.
+    /// </summary>
+    public static CompressionLevel Level { get; set; } = CompressionLevel.Optimal;
+
+    /// <summary>
     ///     Returns the SLVZ-wrapped blob when compression helps, otherwise the original bytes.
     ///     The result is self-describing: callers don't track whether it was compressed — the
     ///     decoder reads the leading magic.
@@ -101,11 +110,8 @@ public static class SlvzCompressor
             writer.Write(CompressedMagic);
             writer.Write((uint)length);
 
-            // Optimal, measured against the alternatives on delta-filtered mesh payloads (2.7 MB
-            // welded grid): Fastest is ~7x quicker (4 ms vs 30 ms) but 36% larger on the wire;
-            // SmallestSize doubles the time for <1% size. Encoding runs inside the component's
-            // background task, so Optimal's CPU cost doesn't block the solver thread.
-            using (var deflate = new DeflateStream(ms, CompressionLevel.Optimal, leaveOpen: true))
+            // SmallestSize doubles Optimal's time for <1% size, so it is never worth offering.
+            using (var deflate = new DeflateStream(ms, Level, leaveOpen: true))
             {
                 deflate.Write(buffer, 0, length);
             }

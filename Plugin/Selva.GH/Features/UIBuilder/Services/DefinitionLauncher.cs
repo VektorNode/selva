@@ -119,6 +119,10 @@ internal static class DefinitionLauncher
         var canvas = Instances.ActiveCanvas;
         var previous = replaced != null ? replaced.Previous : canvas?.Document;
 
+        // Its servers stop before the canvas switch starts the new bridge's, which would otherwise
+        // find the WebSocket port taken.
+        replaced?.Bridge.Dispose();
+
         // Set up before the canvas switch, which solves the document. Grasshopper draws no preview
         // while its editor is hidden, unless it's forced.
         document.ForcePreview(true);

@@ -101,6 +101,14 @@ describe('isClosedSolid', () => {
 		expect(check(merged)).toBe(false);
 	});
 
+	it('welds each member on its own even when members index the same vertices', () => {
+		const box = new THREE.BoxGeometry(1, 1, 1);
+		const { positions, indices } = buffersOf(box);
+		const twice = new Uint32Array([...indices, ...indices]);
+
+		expect(isClosedSolid(positions, twice, [indices.length, indices.length])).toBe(true);
+	});
+
 	it('is false when any member is open', () => {
 		const open = new THREE.PlaneGeometry(1, 1);
 		const merged = mergeGeometries([new THREE.BoxGeometry(1, 1, 1), open]);

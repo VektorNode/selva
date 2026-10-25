@@ -116,7 +116,8 @@ public sealed class SelvaUploadCoordinator : IDisposable
                 RunAccount(ct => Accounts().SignInAsync(ct));
                 break;
             case InboundKind.SelvaUseApiKey:
-                RhinoApp.InvokeOnUiThread(new Action(PromptForApiKey));
+                // Off the dispatch chain: on Mac, InvokeOnUiThread waits for the modal dialog to close.
+                _ = Task.Run(() => RhinoApp.InvokeOnUiThread(new Action(PromptForApiKey)));
                 break;
             case InboundKind.SelvaSignOut:
                 RunAccount(ct => Accounts().SignOutAsync(ct));

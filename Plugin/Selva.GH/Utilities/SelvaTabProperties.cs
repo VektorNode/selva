@@ -1,10 +1,12 @@
 using System;
 using System.IO;
+using System.IO.Compression;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Rhino;
 using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Properties;
+using Selva.Slva;
 using Instances = Grasshopper.Instances;
 
 namespace Selva.GH.Utilities;
@@ -23,6 +25,7 @@ public class SelvaTabProperties : GH_AssemblyPriority
         if (!RhinoApp.IsRunningHeadless)
         {
             DefinitionLauncher.Register();
+            SlvzCompressor.Level = CompressionLevel.Fastest;
         }
 
 #if !NETCOREAPP

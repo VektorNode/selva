@@ -32,30 +32,45 @@ export function isClosedSolid(
 		return size;
 	};
 
-	const memberIsClosed = (start: number, count: number): boolean => {
+	// Welding works per vertex, not per corner: a vertex is shared by ~6 corners, and welding each
+	// corner on its own could also map one vertex to two different canonicals. Member m tags a
+	// vertex 2m+1 once seen and 2m+2 once welded, so `canonicalOf` needs no reset between members.
+	// Canonicals are numbered per member (0, 1, …), which keeps the edge arrays member-sized.
+	const vertexCount = positions.length / 3;
+	const tag = new Int32Array(vertexCount);
+	const canonicalOf = new Int32Array(vertexCount);
+
+	const memberIsClosed = (member: number, start: number, count: number): boolean => {
 		// A tetrahedron is the smallest closed surface.
 		if (count < 12 || count % 3 !== 0) return false;
 
-		// --- Weld: map each corner to the first vertex at (nearly) its position ------------------
+		const seen = 2 * member + 1;
+		const done = seen + 1;
+
+		// --- Weld: map each vertex to the first vertex at (nearly) its position ------------------
 		// Rhino meshes each Brep face on its own and stores float32 vertices, so the two copies of a
 		// seam point can round one or two float32 steps apart. Snap to a grid two steps wide at the
 		// part's largest coordinate: wide enough for that, far below its real features (sliver
 		// triangles along a fillet run down to ~1 µm, which a wider weld collapses).
 		let magnitude = 0;
+		let uniqueVertices = 0;
 		for (let i = 0; i < count; i++) {
-			const v = indices[start + i]! * 3;
+			const v = indices[start + i]!;
+			if (tag[v] === seen) continue;
+			tag[v] = seen;
+			uniqueVertices++;
 			magnitude = Math.max(
 				magnitude,
-				Math.abs(positions[v]!),
-				Math.abs(positions[v + 1]!),
-				Math.abs(positions[v + 2]!)
+				Math.abs(positions[v * 3]!),
+				Math.abs(positions[v * 3 + 1]!),
+				Math.abs(positions[v * 3 + 2]!)
 			);
 		}
 		if (!(magnitude > 0) || !Number.isFinite(magnitude)) return false;
 		const step = 2 * Math.pow(2, Math.floor(Math.log2(magnitude)) - 23);
 		const inverseCell = 1 / step;
 
-		const weldSize = tableSizeFor(count);
+		const weldSize = tableSizeFor(uniqueVertices);
 		const weldMask = weldSize - 1;
 		const weldVertex = new Int32Array(weldSize).fill(-1);
 		const cellX = new Int32Array(weldSize);
@@ -77,8 +92,15 @@ export function isClosedSolid(
 		};
 
 		const welded = new Int32Array(count);
+		// The vertex each canonical stands for, to read its position.
+		const vertexOf = new Int32Array(uniqueVertices);
+		let canonicals = 0;
 		for (let i = 0; i < count; i++) {
 			const v = indices[start + i]!;
+			if (tag[v] === done) {
+				welded[i] = canonicalOf[v]!;
+				continue;
+			}
 			const sx = positions[v * 3]! * inverseCell;
 			const sy = positions[v * 3 + 1]! * inverseCell;
 			const sz = positions[v * 3 + 2]! * inverseCell;
@@ -97,38 +119,23 @@ export function isClosedSolid(
 			}
 			if (canonical === -1) {
 				const h = cellSlot(x, y, z);
-				weldVertex[h] = v;
+				canonical = canonicals++;
+				weldVertex[h] = canonical;
 				cellX[h] = x;
 				cellY[h] = y;
 				cellZ[h] = z;
-				canonical = v;
+				vertexOf[canonical] = v;
 			}
+			tag[v] = done;
+			canonicalOf[v] = canonical;
 			welded[i] = canonical;
 		}
 
 		// --- Directed edges: each must occur once, and its reverse once -------------------------
 		// That is exactly "every edge joins two triangles that agree on winding", i.e. closed and
-		// consistently oriented.
-		const edgeSize = tableSizeFor(count);
-		const edgeMask = edgeSize - 1;
-		const edgeFrom = new Int32Array(edgeSize).fill(-1);
-		const edgeTo = new Int32Array(edgeSize);
-		const slotOf = (a: number, b: number): number => {
-			let h = (Math.imul(a, 0x9e3779b1) ^ Math.imul(b, 0x85ebca77)) & edgeMask;
-			while (edgeFrom[h] !== -1 && (edgeFrom[h] !== a || edgeTo[h] !== b)) {
-				h = (h + 1) & edgeMask;
-			}
-			return h;
-		};
-		const insert = (a: number, b: number): boolean => {
-			const h = slotOf(a, b);
-			if (edgeFrom[h] !== -1) return false; // second use of one directed edge
-			edgeFrom[h] = a;
-			edgeTo[h] = b;
-			return true;
-		};
-		const has = (a: number, b: number): boolean => edgeFrom[slotOf(a, b)] !== -1;
-
+		// consistently oriented. Each canonical's outgoing edges sit together, so both checks scan
+		// its handful of neighbours rather than hashing every edge.
+		const outStart = new Int32Array(canonicals + 1);
 		let triangles = 0;
 		for (let i = 0; i < count; i += 3) {
 			const a = welded[i]!;
@@ -136,28 +143,53 @@ export function isClosedSolid(
 			const c = welded[i + 2]!;
 			// Collapsed by welding (or authored that way): no area, nothing to see from either side.
 			if (a === b || b === c || c === a) continue;
-			if (!insert(a, b) || !insert(b, c) || !insert(c, a)) return false;
+			outStart[a + 1] += 1;
+			outStart[b + 1] += 1;
+			outStart[c + 1] += 1;
 			triangles++;
 		}
 		if (triangles < 4) return false;
+		for (let k = 0; k < canonicals; k++) outStart[k + 1] += outStart[k]!;
+		const outTo = new Int32Array(outStart[canonicals]!);
+		const cursor = outStart.slice(0, canonicals);
 		for (let i = 0; i < count; i += 3) {
 			const a = welded[i]!;
 			const b = welded[i + 1]!;
 			const c = welded[i + 2]!;
 			if (a === b || b === c || c === a) continue;
-			if (!has(b, a) || !has(c, b) || !has(a, c)) return false;
+			outTo[cursor[a]!] = b;
+			cursor[a] += 1;
+			outTo[cursor[b]!] = c;
+			cursor[b] += 1;
+			outTo[cursor[c]!] = a;
+			cursor[c] += 1;
+		}
+		for (let a = 0; a < canonicals; a++) {
+			const first = outStart[a]!;
+			const end = outStart[a + 1]!;
+			for (let k = first; k < end; k++) {
+				const b = outTo[k]!;
+				for (let j = first; j < k; j++) {
+					if (outTo[j] === b) return false; // second use of one directed edge
+				}
+				let reversed = false;
+				for (let j = outStart[b]!, bEnd = outStart[b + 1]!; j < bEnd && !reversed; j++) {
+					reversed = outTo[j] === a;
+				}
+				if (!reversed) return false;
+			}
 		}
 
 		// --- Outward: counter-clockwise winding seen from outside encloses positive volume -------
-		const o = welded[0]! * 3;
+		const o = vertexOf[welded[0]!]! * 3;
 		const ox = positions[o]!;
 		const oy = positions[o + 1]!;
 		const oz = positions[o + 2]!;
 		let volume = 0;
 		for (let i = 0; i < count; i += 3) {
-			const a = welded[i]! * 3;
-			const b = welded[i + 1]! * 3;
-			const c = welded[i + 2]! * 3;
+			const a = vertexOf[welded[i]!]! * 3;
+			const b = vertexOf[welded[i + 1]!]! * 3;
+			const c = vertexOf[welded[i + 2]!]! * 3;
 			const ax = positions[a]! - ox;
 			const ay = positions[a + 1]! - oy;
 			const az = positions[a + 2]! - oz;
@@ -173,8 +205,9 @@ export function isClosedSolid(
 	};
 
 	let start = 0;
-	for (const count of memberIndexCounts) {
-		if (!memberIsClosed(start, count)) return false;
+	for (let member = 0; member < memberIndexCounts.length; member++) {
+		const count = memberIndexCounts[member]!;
+		if (!memberIsClosed(member, start, count)) return false;
 		start += count;
 	}
 	return true;

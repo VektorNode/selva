@@ -21,6 +21,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public class DocumentEventManager : IDisposable
 {
     private const int DOCUMENT_MODIFIED_DEBOUNCE_MS = 600;
+    private readonly BridgePerf _perf = new BridgePerf();
     private readonly WebSocketTransport _webSocketTransport;
     private readonly SchemaSynchronizer _schemaSynchronizer;
     private readonly ValueCollector _valueCollector;
@@ -42,6 +43,8 @@ public class DocumentEventManager : IDisposable
 
     /// <summary>The document events are attached to; null while unregistered.</summary>
     public GH_Document CurrentDocument => _currentDocument;
+
+    public BridgePerf Perf => _perf;
 
     private Timer _documentModifiedTimer;
     private bool _eventsRegistered;
@@ -222,6 +225,7 @@ public class DocumentEventManager : IDisposable
 
     private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
     {
+        _perf.SolveStarted();
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
         if (_webSocketTransport.IsRunning)
@@ -233,7 +237,9 @@ public class DocumentEventManager : IDisposable
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
+        _perf.SolveEnded();
         SolutionEnded?.Invoke(this, EventArgs.Empty);
+        _perf.SolveHandled();
 
         if (!_webSocketTransport.IsRunning)
         {
@@ -407,8 +413,9 @@ public class DocumentEventManager : IDisposable
             return false;
         }
 
-        _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
+        var send = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
             includeDisplayData, diagnostics);
+        _perf.Sending(send, displayData);
 
         // Reports whether OUTPUTS went out, not whether anything did: ScheduleOutputBroadcast
         // regenerates display data on a false, and a diagnostics-only broadcast must not pass for

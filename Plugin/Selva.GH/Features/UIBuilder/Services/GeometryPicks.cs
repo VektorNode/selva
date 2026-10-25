@@ -42,14 +42,22 @@ public sealed class GeometryPickOutcome
 public sealed class GeometryPicks
 {
     private readonly Dictionary<Guid, string> _summaries = new Dictionary<Guid, string>();
+    private Guid _picking;
 
-    public bool IsPicked(Guid paramId) => _summaries.ContainsKey(paramId);
+    /// <summary>
+    ///     The post-solve clear skips these: params holding a pick, and the one being picked now.
+    ///     Rhino's Get Geometry solves after each selection while its prompt is still open, and
+    ///     clearing it then empties the list its prompt loop counts: the loop never finishes, and
+    ///     with the selection still preselected it solves again at once, without end.
+    /// </summary>
+    public bool KeepsContextualData(Guid paramId) => paramId == _picking || _summaries.ContainsKey(paramId);
 
     public string SummaryOf(Guid paramId) => _summaries.TryGetValue(paramId, out var summary) ? summary : null;
 
     /// <summary>
     ///     The param prompts on Rhino's command line with its own filter, prompt and count, inside a
     ///     command the way Grasshopper Player asks for it. Blocks until the user picks or presses Esc.
+    ///     The caller holds <see cref="ModalGate.Shared" />.
     /// </summary>
     public GeometryPickOutcome Pick(GH_Document document, Guid paramId)
     {
@@ -64,13 +72,9 @@ public sealed class GeometryPicks
             return GeometryPickOutcome.Failed("No Rhino document is open to pick from.");
         }
 
-        if (!ModalGate.Shared.TryEnter())
-        {
-            return GeometryPickOutcome.Failed("Rhino is already asking for something. Finish or cancel that first.");
-        }
-
         var name = (param as IGH_DocumentObject)?.NickName ?? "Geometry";
         var assigned = false;
+        _picking = paramId;
         try
         {
             RhinoCommandContext.Run(() =>
@@ -78,7 +82,7 @@ public sealed class GeometryPicks
         }
         finally
         {
-            ModalGate.Shared.Exit();
+            _picking = Guid.Empty;
         }
 
         if (!assigned)

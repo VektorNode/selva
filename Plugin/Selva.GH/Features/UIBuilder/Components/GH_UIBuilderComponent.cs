@@ -840,7 +840,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 if (obj is IGH_ContextualParameter contextParam)
                 {
-                    if (!_service.GeometryPicks.IsPicked(obj.InstanceGuid))
+                    if (!_service.GeometryPicks.KeepsContextualData(obj.InstanceGuid))
                     {
                         ParameterTypeHelper.TryInvokeClearContextualData(contextParam);
                     }

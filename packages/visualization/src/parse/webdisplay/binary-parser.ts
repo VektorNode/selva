@@ -73,8 +73,11 @@ export type { BinaryMeshMetadata, ParsedBinaryMeshBatch } from './binary/header.
 export function parseBinaryMeshBatch(
 	input: ArrayBuffer | Uint8Array | string
 ): ParsedBinaryMeshBatch {
-	const raw = parseBinaryMeshBatchRaw(input);
+	return decodeRawMeshBatch(parseBinaryMeshBatchRaw(input));
+}
 
+/** Second half of {@link parseBinaryMeshBatch}, for a caller that already holds the raw view. */
+export function decodeRawMeshBatch(raw: RawBinaryMeshBatch): ParsedBinaryMeshBatch {
 	let vertices: Int16Array | Float32Array;
 	if (raw.isFloat32) {
 		vertices = raw.vertexData as Float32Array;

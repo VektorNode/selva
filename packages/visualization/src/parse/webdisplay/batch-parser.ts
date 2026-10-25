@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 import { getLogger } from '../../shared/index.js';
 
-import { FLAG_FLOAT32, parseBinaryMeshBatch, parseBinaryMeshBatchRaw } from './binary-parser.js';
+import { decodeRawMeshBatch, FLAG_FLOAT32, parseBinaryMeshBatchRaw } from './binary-parser.js';
 
 import {
 	ASSEMBLY_WORKER_MIN_TRIANGLES,
@@ -21,7 +21,7 @@ import {
 import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
 
 import type { AssemblyJob, AssemblyWindow, FinishedGeometry } from './mesh-assembly.js';
-import type { ParsedBinaryMeshBatch } from './binary-parser.js';
+import type { ParsedBinaryMeshBatch, RawBinaryMeshBatch } from './binary-parser.js';
 import type {
 	DisplayBatch,
 	MaterialAppearanceOptions,
@@ -92,8 +92,11 @@ export async function parseMeshBatchObject(
 		return [];
 	}
 
+	const decodeStart = performance.now();
+	const raw = parseBinaryMeshBatchRaw(batch.compressedData);
+
 	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
-	const workerMeshes = await tryBuildViaWorker(batch.compressedData, {
+	const workerMeshes = await tryBuildViaWorker(raw, {
 		mergeByMaterial,
 		debug,
 		material,
@@ -104,8 +107,7 @@ export async function parseMeshBatchObject(
 	});
 	if (workerMeshes) return workerMeshes;
 
-	const decodeStart = performance.now();
-	const parsed = parseBinaryMeshBatch(batch.compressedData);
+	const parsed = decodeRawMeshBatch(raw);
 	const decodeTime = performance.now() - decodeStart;
 
 	const blobBytes = debug ? approximateBase64DecodedBytes(batch.compressedData) : 0;
@@ -142,16 +144,18 @@ export async function parseMeshBatchBlob(
 
 	const perfStart = debug ? performance.now() : 0;
 
+	const decodeStart = performance.now();
+	const raw = parseBinaryMeshBatchRaw(blob);
+
 	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
-	const workerMeshes = await tryBuildViaWorker(blob, {
+	const workerMeshes = await tryBuildViaWorker(raw, {
 		mergeByMaterial,
 		debug,
 		material
 	});
 	if (workerMeshes) return workerMeshes;
 
-	const decodeStart = performance.now();
-	const parsed = parseBinaryMeshBatch(blob);
+	const parsed = decodeRawMeshBatch(raw);
 	const decodeTime = performance.now() - decodeStart;
 
 	const blobBytes = blob.byteLength;
@@ -343,12 +347,11 @@ interface WorkerPathOptions {
  * the GPU re-upload, so the wasted worker CPU is off the critical path by definition.
  */
 async function tryBuildViaWorker(
-	input: ArrayBuffer | Uint8Array | string,
+	raw: RawBinaryMeshBatch,
 	opts: WorkerPathOptions
 ): Promise<THREE.Mesh[] | null> {
 	if (typeof Worker === 'undefined') return null;
 
-	const raw = parseBinaryMeshBatchRaw(input);
 	// Planar (v4) indexData is a bare byte stream — divide by the element width for a count.
 	const indexCount = raw.planarByteSplit
 		? raw.indexData.length / (raw.uint16Indices ? 2 : 4)
@@ -389,13 +392,15 @@ async function tryBuildViaWorker(
 		}
 	}
 
-	// vertexData/indexData alias the caller's blob buffer — copy before transferring so the
-	// transfer can't detach it. UV/color arrays are already fresh copies and transfer directly.
+	// Copies go to the worker, never `raw`'s own arrays: vertexData/indexData alias the caller's
+	// blob, and the caller parses `raw` itself if the worker fails, so nothing of it may detach.
 	const vertexData = raw.vertexData.slice();
 	const indexData = raw.indexData.slice();
+	const uvs = raw.uvs?.slice() ?? null;
+	const colors = raw.colors?.slice() ?? null;
 	const transfer: Transferable[] = [vertexData.buffer, indexData.buffer];
-	if (raw.uvs) transfer.push(raw.uvs.buffer);
-	if (raw.colors) transfer.push(raw.colors.buffer);
+	if (uvs) transfer.push(uvs.buffer);
+	if (colors) transfer.push(colors.buffer);
 
 	let assembled: FinishedGeometry[];
 	try {
@@ -410,8 +415,8 @@ async function tryBuildViaWorker(
 				origin: raw.origin,
 				scale: raw.scale,
 				indexData,
-				uvs: raw.uvs,
-				colors: raw.colors,
+				uvs,
+				colors,
 				jobs
 			},
 			transfer
