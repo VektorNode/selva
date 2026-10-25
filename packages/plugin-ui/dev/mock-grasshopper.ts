@@ -12,6 +12,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { icons } from 'lucide';
 import { UI_SCHEMA_VERSION } from '@selvajs/schemas';
 import type {
 	DiscoveredInput,
@@ -30,6 +31,11 @@ import type {
 	UISchema,
 	VisibilityRule
 } from '@selvajs/schemas';
+import {
+	iconNodeToPath,
+	putAsset,
+	type IconNode
+} from '../src/lib/features/builder/option-assets.ts';
 
 function readFlag(name: string, fallback: number): number {
 	const i = process.argv.indexOf(`--${name}`);
@@ -401,6 +407,28 @@ const OUTPUTS: DiscoveredOutput[] = [
 const inputById = new Map(INPUTS.map((p) => [p.id, p]));
 const outputById = new Map(OUTPUTS.map((p) => [p.id, p]));
 
+// Icons go through the builder's own conversion, so the mock's schema matches what an author
+// would save. The assets land on `schema` once it exists, below.
+const MOCK_ASSETS: UISchema = { assets: {} } as UISchema;
+
+function withIcons(
+	item: LayoutItem,
+	displayAs: 'segmented' | 'tiles',
+	iconByOption: Record<string, keyof typeof icons>
+): LayoutItem {
+	const optionMedia = Object.fromEntries(
+		Object.entries(iconByOption).map(([option, name]) => {
+			const id = putAsset(MOCK_ASSETS, { d: iconNodeToPath(icons[name] as unknown as IconNode) });
+			const kebab = String(name)
+				.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+				.toLowerCase();
+			return [option, { icon: id, iconName: `lucide:${kebab}` }];
+		})
+	);
+	const config = (item as { config?: object }).config ?? {};
+	return { ...item, config: { ...config, displayAs, optionMedia } } as LayoutItem;
+}
+
 function placeInput(paramId: string, extra: Record<string, unknown> = {}): LayoutItem {
 	const p = inputById.get(paramId)!;
 	const base = { id: `item-${paramId}`, paramId, displayName: p.nickname, ...extra };
@@ -511,7 +539,11 @@ const TABS: TabConfig[] = [
 			),
 			group('g-form', 'Form', 1, [
 				placeInput('taper'),
-				placeInput('core'),
+				withIcons(placeInput('core'), 'segmented', {
+					central: 'SquareDot',
+					offset: 'PanelLeft',
+					split: 'Columns2'
+				}),
 				placeInput('rounded'),
 				placeInput('corner-radius', { visibilityCondition: showWhenTrue('rounded') })
 			])
@@ -524,7 +556,11 @@ const TABS: TabConfig[] = [
 		groups: [
 			group('g-panels', 'Panels', 3, [
 				placeInput('panel-width'),
-				placeInput('panel-type'),
+				withIcons(placeInput('panel-type', { span: 3 }), 'tiles', {
+					unitized: 'LayoutGrid',
+					stick: 'Grid3x3',
+					precast: 'Blocks'
+				}),
 				placeInput('glazing'),
 				placeInput('mullion-depth', { span: 3 })
 			]),
@@ -620,7 +656,8 @@ let schema: UISchema = {
 		type: p.type,
 		targetInputId: p.targetInputId
 	})),
-	layout: { type: 'tabbed', gap: 16, tabs: TABS }
+	layout: { type: 'tabbed', gap: 16, tabs: TABS },
+	assets: MOCK_ASSETS.assets
 };
 let schemaRevision = 1;
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { UISchema } from '@selvajs/schemas';
-import { assetBytes, assetId, pruneUnusedMedia, iconNodeToPath, putAsset } from '../option-media';
+import { assetId, iconNodeToPath, putAsset } from '../option-assets';
+import { assetBytes, pruneUnusedMedia } from '../option-media';
 
 describe('iconNodeToPath', () => {
 	it('keeps path data as it is', () => {

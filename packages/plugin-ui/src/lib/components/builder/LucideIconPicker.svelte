@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Input } from '@selvajs/ui';
-	import { iconNodeToPath, type IconNode } from '$lib/features/builder/option-media';
+	import { iconNodeToPath, type IconNode } from '$lib/features/builder/option-assets';
 
 	interface Props {
 		/** The `lucide:<name>` the option already uses, highlighted in the grid. */

@@ -24,7 +24,7 @@
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
 	import { setBuilderDraft } from '$lib/components/builder/draft-context';
-	import { putAsset } from '$lib/features/builder/option-media';
+	import { putAsset } from '$lib/features/builder/option-assets';
 	import { useSelvaUpload, type SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
 
 	let sessionId = $state('');
