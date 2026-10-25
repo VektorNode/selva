@@ -290,7 +290,7 @@
 )}
 	<div class="panel-content-wrapper">
 		{#if schema.layout.type === 'tabbed'}
-			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} />
+			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} bare={isMobile} />
 		{/if}
 		{#if hostsFooter && !isMobile}
 			<div class="panel-footer px-1">
@@ -362,7 +362,7 @@
 				<!-- Inert while closed: the fields are clipped out of view, and tabbing into them
 				     would scroll the drawer's insides around behind the handle. -->
 				<div class="drawer-content" inert={drawer === 'closed'}>
-					<div class="px-3 pb-6">
+					<div class="px-2 pb-4">
 						{#if hasLeftPanel}
 							{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
 						{/if}
@@ -575,7 +575,7 @@
 
 	.mobile-root {
 		--drawer-closed-h: 60px;
-		--drawer-half-h: 50%;
+		--drawer-half-h: 60%;
 	}
 
 	.viewer-region {
@@ -651,6 +651,13 @@
 	.drawer-footer {
 		flex-shrink: 0;
 		padding: 0rem 1rem;
+	}
+
+	/* The sheet's top edge already separates it from the model; the desktop footer's extra
+	   spacing only takes rows from the fields. */
+	.drawer-footer :global(> div) {
+		margin-top: 0;
+		padding-block: 0.5rem;
 	}
 
 	/* Touch gets 44px targets on the panel's controls; a fine pointer keeps the denser sizes. */

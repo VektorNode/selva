@@ -16,11 +16,15 @@
 	let { labelId, value, config, assets, onChange, disabled = false }: Props = $props();
 
 	const options = $derived(Object.entries(config.options ?? {}));
+	const hasIcons = $derived(
+		options.some(([name]) => optionGlyph(config.optionMedia?.[name], assets, 'icon'))
+	);
 </script>
 
 <ToggleGroup.Root
 	type="single"
 	variant="outline"
+	size={hasIcons ? 'stacked' : 'default'}
 	class="w-full"
 	aria-labelledby={labelId}
 	value={value ?? ''}
@@ -33,10 +37,8 @@
 	{#each options as [name, expr] (name)}
 		{@const glyph = optionGlyph(config.optionMedia?.[name], assets, 'icon')}
 		<ToggleGroup.Item value={expr ?? name} class="min-w-0 flex-1" title={name}>
-			<span class="gap-1.5 min-w-0 flex items-center">
-				{#if glyph}<OptionGlyph {glyph} />{/if}
-				<span class="truncate">{name}</span>
-			</span>
+			{#if glyph}<OptionGlyph {glyph} />{/if}
+			<span class="max-w-full truncate">{name}</span>
 		</ToggleGroup.Item>
 	{/each}
 </ToggleGroup.Root>

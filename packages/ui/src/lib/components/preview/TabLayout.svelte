@@ -15,9 +15,21 @@
 		panelFilter?: 'left' | 'right';
 		/** Externally request a specific tab to be active (e.g. from collapsed strip click) */
 		requestedTabId?: string | null;
+		/**
+		 * Drops the card frame and the tab's own scroll area, for a container that already frames
+		 * and scrolls it (the phone drawer). Nested, the inner scroll gets only a sliver of height.
+		 */
+		bare?: boolean;
 	}
 
-	let { schema, values, onValueChange, panelFilter, requestedTabId = null }: Props = $props();
+	let {
+		schema,
+		values,
+		onValueChange,
+		panelFilter,
+		requestedTabId = null,
+		bare = false
+	}: Props = $props();
 
 	let activeTabId = $state('');
 	let collapsedGroups = $state<Record<string, boolean>>({});
@@ -66,7 +78,7 @@
 	}
 </script>
 
-<Card.Root variant="flush" class="min-h-0 mx-1 flex-1">
+{#snippet tabs()}
 	<Tabs.Root value={activeTabId} variant="line" class="min-h-0 flex-1">
 		{#if showTabBar}
 			<TabBar tabs={visibleTabs} {activeTabId} onTabChange={handleTabChange} />
@@ -83,7 +95,16 @@
 				outputs={schema.outputs}
 				{dynamicOptions}
 				assets={schema.assets}
+				{bare}
 			/>
 		{/each}
 	</Tabs.Root>
-</Card.Root>
+{/snippet}
+
+{#if bare}
+	{@render tabs()}
+{:else}
+	<Card.Root variant="flush" class="min-h-0 mx-1 flex-1">
+		{@render tabs()}
+	</Card.Root>
+{/if}

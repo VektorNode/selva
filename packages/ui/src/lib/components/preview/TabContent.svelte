@@ -34,6 +34,8 @@
 		dynamicOptions?: Record<string, Record<string, string>>;
 		/** The schema's icons and thumbnails, which value-list options point into. */
 		assets?: UISchema['assets'];
+		/** No tinted backdrop and no scroll area of its own: the container scrolls. */
+		bare?: boolean;
 	}
 
 	let {
@@ -45,7 +47,8 @@
 		inputs,
 		outputs,
 		dynamicOptions = {},
-		assets
+		assets,
+		bare = false
 	}: Props = $props();
 
 	const { host } = getHostContext();
@@ -102,34 +105,42 @@
 	{/if}
 {/snippet}
 
-<Tabs.Content value={tab.id} class="min-h-0">
-	<div class="h-full bg-muted dark:bg-background">
-		<ScrollArea class="h-full" orientation="vertical">
-			<div class="px-3">
-				<!-- A heading per panel lets a screen reader jump between them; the tab, when shown,
+{#snippet body()}
+	<div class={bare ? 'px-1' : 'px-3'}>
+		<!-- A heading per panel lets a screen reader jump between them; the tab, when shown,
 				     already names it on screen. -->
-				<h2 class="sr-only">{tab.label}</h2>
-				{#if visibleGroups.length === 0}
-					<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
-				{:else}
-					<div class="gap-3 py-3 flex flex-col">
-						{#each visibleGroups as group (group.id)}
-							<Group
-								label={group.label}
-								description={group.description}
-								items={group.items}
-								columns={group.columns ?? 1}
-								collapsed={collapsedGroups[group.id] ?? false}
-								{values}
-								onToggle={() => onToggleGroup(group.id)}
-								inputSnippet={renderInput}
-								outputSnippet={renderOutput}
-								flat={visibleGroups.length === 1}
-							/>
-						{/each}
-					</div>
-				{/if}
+		<h2 class="sr-only">{tab.label}</h2>
+		{#if visibleGroups.length === 0}
+			<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
+		{:else}
+			<div class="gap-3 py-3 flex flex-col">
+				{#each visibleGroups as group (group.id)}
+					<Group
+						label={group.label}
+						description={group.description}
+						items={group.items}
+						columns={group.columns ?? 1}
+						collapsed={collapsedGroups[group.id] ?? false}
+						{values}
+						onToggle={() => onToggleGroup(group.id)}
+						inputSnippet={renderInput}
+						outputSnippet={renderOutput}
+						flat={visibleGroups.length === 1}
+					/>
+				{/each}
 			</div>
-		</ScrollArea>
+		{/if}
 	</div>
+{/snippet}
+
+<Tabs.Content value={tab.id} class="min-h-0">
+	{#if bare}
+		{@render body()}
+	{:else}
+		<div class="h-full bg-muted dark:bg-background">
+			<ScrollArea class="h-full" orientation="vertical">
+				{@render body()}
+			</ScrollArea>
+		</div>
+	{/if}
 </Tabs.Content>
