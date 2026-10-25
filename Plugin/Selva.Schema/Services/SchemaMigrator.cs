@@ -33,7 +33,8 @@ public static class SchemaMigrator
             { new Version(2, 13, 0), MigrateTo_2_13_0 },
             { new Version(2, 14, 0), MigrateTo_2_14_0 },
             { new Version(2, 15, 0), MigrateTo_2_15_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_16_0 }
+            { new Version(2, 16, 0), MigrateTo_2_16_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_17_0 }
         };
 
     /// <summary>
@@ -362,12 +363,23 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_16_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.16.0";
 
         // ParamType gains 'geometry', 'point', 'line' and 'plane', and CheckboxWidgetConfig an
         // optional 'displayAs' (default 'checkbox'). Saved inputs keep the paramType they were
         // discovered with, and their saved widgetType is ignored for the geometry types, so
         // nothing is rewritten.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_17_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // Value lists gain an optional 'optionMedia' and the 'segmented' and 'tiles' displayAs
+        // modes, and the schema an optional 'assets' table. All absent means text options, as
+        // before, so nothing is rewritten.
 
         return schema;
     }

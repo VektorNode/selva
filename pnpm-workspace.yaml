@@ -20,6 +20,7 @@ catalogs:
     clsx: ^2.1.1
     eslint: ^10.11.0
     fflate: ^0.8.2
+    lucide: ^1.48.0
     mode-watcher: ^1.1.0
     prettier: ^3.9.9
     rhino3dm: 8.35.0

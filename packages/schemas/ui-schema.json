@@ -162,6 +162,43 @@
 			},
 			"additionalProperties": false
 		},
+		"OptionMedia": {
+			"type": "object",
+			"description": "What an option shows besides its name. Each field is the key of an entry in the schema's assets table.",
+			"properties": {
+				"icon": {
+					"type": "string",
+					"description": "Asset holding the option's icon (an OptionAsset with d)."
+				},
+				"image": {
+					"type": "string",
+					"description": "Asset holding the option's thumbnail (an OptionAsset with img). Only 'tiles' shows it."
+				},
+				"iconName": {
+					"type": "string",
+					"description": "Iconify name the icon was picked as (e.g. 'lucide:house'), so the builder can reopen the picker on it. Never rendered."
+				}
+			},
+			"additionalProperties": false
+		},
+		"OptionAsset": {
+			"type": "object",
+			"description": "An icon or thumbnail shared by any number of options. Exactly one of d and img is set. Stored inline in the .gh, so the builder keeps each one small.",
+			"properties": {
+				"d": {
+					"type": "string",
+					"description": "SVG path data on a 24x24 grid, drawn as a stroke (width 2, round caps and joins, no fill). Rendered as a path's d attribute, never as markup."
+				},
+				"img": {
+					"type": "string",
+					"pattern": "^data:image/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$",
+					"description": "Thumbnail as a base64 data URI. Only WebP, JPEG and PNG are accepted."
+				},
+				"w": { "type": "integer", "description": "Thumbnail width in pixels" },
+				"h": { "type": "integer", "description": "Thumbnail height in pixels" }
+			},
+			"additionalProperties": false
+		},
 		"DropdownWidgetConfig": {
 			"type": "object",
 			"properties": {
@@ -173,9 +210,14 @@
 				"required": { "type": "boolean" },
 				"displayAs": {
 					"type": "string",
-					"enum": ["dropdown", "checklist"],
+					"enum": ["dropdown", "checklist", "segmented", "tiles"],
 					"default": "dropdown",
-					"description": "How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter."
+					"description": "How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter. 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails."
+				},
+				"optionMedia": {
+					"type": "object",
+					"additionalProperties": { "$ref": "#/definitions/OptionMedia" },
+					"description": "Icon and thumbnail per option, keyed by option name. Grasshopper owns options; this map is the author's and survives a re-sync."
 				}
 			},
 			"required": ["options"],
@@ -198,9 +240,14 @@
 				},
 				"displayAs": {
 					"type": "string",
-					"enum": ["dropdown", "checklist"],
+					"enum": ["dropdown", "checklist", "segmented", "tiles"],
 					"default": "dropdown",
-					"description": "How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[])."
+					"description": "How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]). 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails."
+				},
+				"optionMedia": {
+					"type": "object",
+					"additionalProperties": { "$ref": "#/definitions/OptionMedia" },
+					"description": "Icon and thumbnail per option, keyed by option name. Names without an entry show text only."
 				}
 			},
 			"additionalProperties": false
@@ -774,7 +821,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.16.0",
+					"default": "2.17.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -806,7 +853,12 @@
 					"items": { "$ref": "#/definitions/SchemaOutput" },
 					"description": "All output components (print, bake, file download)"
 				},
-				"layout": { "$ref": "#/definitions/LayoutConfig" }
+				"layout": { "$ref": "#/definitions/LayoutConfig" },
+				"assets": {
+					"type": "object",
+					"additionalProperties": { "$ref": "#/definitions/OptionAsset" },
+					"description": "Icons and thumbnails referenced by optionMedia, keyed by a hash of their content so a shared one is stored once."
+				}
 			},
 			"required": ["id", "name", "schemaVersion", "inputs", "outputs", "layout"],
 			"additionalProperties": false

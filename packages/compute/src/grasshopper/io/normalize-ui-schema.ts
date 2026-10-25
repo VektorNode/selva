@@ -18,6 +18,9 @@ import { setOwnField } from '@/core/utils/set-own-field';
 /** Maps keyed by the definition's author (dropdown labels): copied verbatim. */
 const USER_AUTHORED_MAPS = new Set(['options', 'defaultOptions', 'values']);
 
+/** Maps with author or hash keys whose entries are schema objects: keys verbatim, entries normalized. */
+const USER_KEYED_OBJECT_MAPS = new Set(['optionMedia', 'assets']);
+
 const isUpper = (ch: string): boolean => ch >= 'A' && ch <= 'Z';
 
 /**
@@ -52,7 +55,22 @@ function normalizeValue(value: unknown): unknown {
 	const out: Record<string, unknown> = {};
 	for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
 		const canonical = toCamelCase(key);
-		setOwnField(out, canonical, USER_AUTHORED_MAPS.has(canonical) ? child : normalizeValue(child));
+		const normalized = USER_AUTHORED_MAPS.has(canonical)
+			? child
+			: USER_KEYED_OBJECT_MAPS.has(canonical)
+				? normalizeEntries(child)
+				: normalizeValue(child);
+		setOwnField(out, canonical, normalized);
+	}
+	return out;
+}
+
+function normalizeEntries(value: unknown): unknown {
+	if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+
+	const out: Record<string, unknown> = {};
+	for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+		setOwnField(out, key, normalizeValue(child));
 	}
 	return out;
 }

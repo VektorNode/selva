@@ -27,6 +27,8 @@
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import OptionMediaEditor from './OptionMediaEditor.svelte';
+	import { getBuilderDraft } from './draft-context';
 	import ScopeChip from './scope/ScopeChip.svelte';
 	import ScopeSection from './scope/ScopeSection.svelte';
 	import { SOURCE_KIND_LABELS, type SourceKind } from '$lib/features/builder';
@@ -141,7 +143,9 @@
 			return c.renderAsSlider === false;
 		}
 		if (isDropdownInput && dropdownConfig) {
-			return dropdownConfig.displayAs === 'checklist';
+			return (
+				(dropdownConfig.displayAs ?? 'dropdown') !== 'dropdown' || !!dropdownConfig.optionMedia
+			);
 		}
 		if (isCheckboxInput) {
 			return (item.config as CheckboxWidgetConfig | undefined)?.displayAs === 'button';
@@ -203,10 +207,27 @@
 		(item as InputLayoutItem).config = config as never;
 	}
 
-	function toggleChecklistMode() {
+	const draft = getBuilderDraft();
+
+	const VALUE_LIST_MODES = [
+		{ value: 'dropdown', label: 'Dropdown', hint: 'One choice from a menu.' },
+		{
+			value: 'segmented',
+			label: 'Buttons',
+			hint: 'One choice from a row of buttons; a list too long for one row shows as a menu.'
+		},
+		{ value: 'tiles', label: 'Tiles', hint: 'One choice from a grid of thumbnails.' },
+		{
+			value: 'checklist',
+			label: 'Checklist',
+			hint: 'Several choices; emits a list to Grasshopper.'
+		}
+	] as const;
+
+	function setValueListMode(mode: NonNullable<DropdownWidgetConfig['displayAs']>) {
 		if (!isDropdownInput) return;
 		const config = item.config as DropdownWidgetConfig;
-		config.displayAs = config.displayAs === 'checklist' ? 'dropdown' : 'checklist';
+		draft?.edit(() => (config.displayAs = mode === 'dropdown' ? undefined : mode));
 	}
 
 	function setFileInputMode(mode: 'upload' | 'url') {
@@ -535,20 +556,29 @@
 								{/if}
 
 								{#if isDropdownInput && dropdownConfig}
-									<div class="flex flex-col gap-2">
-										<div class="flex items-center justify-between text-[11px]">
-											<div class="flex flex-col">
-												<span class="text-muted-foreground">Multi-select (checklist)</span>
-												<span class="text-muted-foreground/70 text-[9px]">
-													Renders as checkboxes; emits a list to Grasshopper.
-												</span>
+									{@const mode = dropdownConfig.displayAs ?? 'dropdown'}
+									<div class="flex flex-col gap-2 pb-2">
+										<div class="flex flex-col gap-1">
+											<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
+											<div class="grid grid-cols-4 gap-1">
+												{#each VALUE_LIST_MODES as option (option.value)}
+													<button
+														onclick={() => setValueListMode(option.value)}
+														class={`rounded-sm border px-1 py-1 text-[10px] transition-colors ${
+															mode === option.value
+																? 'bg-primary text-primary-foreground border-primary'
+																: 'border-border/70 hover:border-border hover:bg-accent'
+														}`}
+													>
+														{option.label}
+													</button>
+												{/each}
 											</div>
-											<Switch
-												checked={dropdownConfig.displayAs === 'checklist'}
-												onCheckedChange={toggleChecklistMode}
-												class="scale-75"
-											/>
+											<span class="text-muted-foreground/70 text-[9px]">
+												{VALUE_LIST_MODES.find((m) => m.value === mode)?.hint}
+											</span>
 										</div>
+										<OptionMediaEditor config={dropdownConfig} showsImages={mode === 'tiles'} />
 									</div>
 								{/if}
 

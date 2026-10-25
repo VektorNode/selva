@@ -47,6 +47,7 @@ public class SchemaArchiveSerializer
                 }
 
                 schema.LastModified = DateTime.UtcNow;
+                MinPluginVersionStamp.Apply(schema);
 
                 var schemaJson = JsonConvert.SerializeObject(schema, SchemaSerializationSettings);
                 writer.SetString("Schema", schemaJson);

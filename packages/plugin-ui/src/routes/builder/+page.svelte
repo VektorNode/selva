@@ -23,6 +23,8 @@
 	import { onMount, tick } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
+	import { setBuilderDraft } from '$lib/components/builder/draft-context';
+	import { putAsset } from '$lib/features/builder/option-media';
 	import { useSelvaUpload, type SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
 
 	let sessionId = $state('');
@@ -37,6 +39,17 @@
 	let pendingNavRoute = $state<'/preview' | null>(null);
 
 	const actions = useBuilderActions(() => builderState);
+	setBuilderDraft({
+		edit: (apply) => builderState?.editDraft(apply),
+		get assets() {
+			return builderState?.state.draft?.assets;
+		},
+		putAsset: (asset) => {
+			const draft = builderState?.state.draft;
+			if (!draft) throw new Error('No schema to add the asset to');
+			return putAsset(draft, asset);
+		}
+	});
 
 	async function navigateTo(route: '/' | '/preview') {
 		if (route === '/preview' && builderState?.state.isDirty) {

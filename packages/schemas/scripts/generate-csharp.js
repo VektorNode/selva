@@ -131,6 +131,9 @@ function jsonTypeToCSharp(prop, propName, required) {
 			return `List<${itemType}>`;
 		}
 		case 'object':
+			if (prop.additionalProperties?.$ref) {
+				return `Dictionary<string, ${jsonTypeToCSharp(prop.additionalProperties, propName, true)}>`;
+			}
 			if (prop.additionalProperties) {
 				return 'Dictionary<string, object>';
 			}

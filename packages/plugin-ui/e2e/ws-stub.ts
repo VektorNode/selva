@@ -25,9 +25,17 @@ function fixture(name: string, sessionId: string): Record<string, unknown> {
 	return { ...message, sessionId };
 }
 
-// A minimal but valid UISchema: one number input placed in one tab/group, one output. Layout
-// defaults are filled by the app, but a tab is provided so the builder shows a real editor
-// and the preview renders an input control.
+// A minimal but valid UISchema: a number input and a value list shown as buttons with icons,
+// placed in one tab/group, and one output. Layout defaults are filled by the app, but a tab is
+// provided so the builder shows a real editor and the preview renders input controls.
+const TIMBER_INPUT = {
+	id: 'in-timber',
+	nickname: 'Timber',
+	paramType: 'valueList',
+	default: 'Oak',
+	options: { Oak: '0', Larch: '1' }
+};
+
 function sampleSchema() {
 	return {
 		id: 'e2e-schema',
@@ -42,9 +50,11 @@ function sampleSchema() {
 				default: 3,
 				minimum: 0,
 				maximum: 10
-			}
+			},
+			TIMBER_INPUT
 		],
 		outputs: [{ id: 'out-area', nickname: 'Area', paramType: 'number' }],
+		assets: { a1b2c3d4e5f6: { d: 'M3 21V8l9-5 9 5v13' } },
 		layout: {
 			type: 'tabbed',
 			gap: 16,
@@ -65,6 +75,18 @@ function sampleSchema() {
 									displayName: 'Count',
 									widgetType: 'number',
 									config: { minimum: 0, maximum: 10, stepSize: 1 }
+								},
+								{
+									id: 'item-2',
+									type: 'input',
+									paramId: 'in-timber',
+									displayName: 'Timber',
+									widgetType: 'dropdown',
+									config: {
+										options: { Oak: '0', Larch: '1' },
+										displayAs: 'segmented',
+										optionMedia: { Oak: { icon: 'a1b2c3d4e5f6' } }
+									}
 								}
 							]
 						}
@@ -85,7 +107,8 @@ function availableParams() {
 				default: 3,
 				minimum: 0,
 				maximum: 10
-			}
+			},
+			TIMBER_INPUT
 		],
 		outputs: [{ id: 'out-area', nickname: 'Area', paramType: 'number' }]
 	};

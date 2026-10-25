@@ -22,4 +22,14 @@ test.describe('/preview', () => {
 		// The schema's input renders.
 		await expect(page.getByText('Count').first()).toBeVisible();
 	});
+
+	test('shows a value list as buttons with the option icon from the schema', async ({ page }) => {
+		await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
+		await expect(page.getByText('Loading preview...')).toBeHidden({ timeout: 15_000 });
+
+		const oak = page.getByRole('radio', { name: 'Oak' });
+		await expect(oak).toBeVisible();
+		await expect(oak.locator('svg path')).toHaveAttribute('d', 'M3 21V8l9-5 9 5v13');
+		await expect(page.getByRole('radio', { name: 'Larch' }).locator('svg')).toHaveCount(0);
+	});
 });

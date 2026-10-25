@@ -29,6 +29,7 @@
 		"svelte-check": "catalog:",
 		"@types/three": "catalog:",
 		"@types/ws": "catalog:",
+		"lucide": "catalog:",
 		"tw-animate-css": "catalog:",
 		"vitest": "catalog:",
 		"ws": "catalog:"

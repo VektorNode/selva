@@ -6,6 +6,7 @@
 
 import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
 import { getAllLayoutItems } from '$lib/features/builder/operations';
+import { pruneUnusedMedia } from '$lib/features/builder/option-media';
 import { updateParameterMetadata } from '$lib/features/preview/handlers';
 import { processInitialDataSchema } from '$lib/utils/schema-defaults';
 import type { SchemaSource } from '$lib/schema-source/schema-source';
@@ -456,11 +457,10 @@ export async function saveDraft(state: BuilderState, deps: BuilderDeps): Promise
 	}
 
 	const savedRevision = state.editRevision;
-	const result = await deps.source.save(
-		deps.sessionId,
-		deps.clone(state.draft),
-		state.canonicalHash
-	);
+	const toSave = deps.clone(state.draft);
+	// Every byte of an orphaned icon is carried in the .gh and its backups.
+	pruneUnusedMedia(toSave);
+	const result = await deps.source.save(deps.sessionId, toSave, state.canonicalHash);
 
 	if (result.ok) {
 		// The schemaUpdated broadcast that precedes the ack carries the just-saved state.

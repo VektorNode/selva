@@ -128,6 +128,10 @@ survive one solve.
 To label outputs, name the **bake's input param** distinctly, or set `DisplayName` on a layout item;
 `ApplyMetadataChangesToSchema` deliberately leaves `DisplayName` alone as user-controlled.
 
+A value list's `options` belong to Grasshopper and are replaced on every sync; its `optionMedia`
+belongs to the author, and both syncs merge `options` into the config without touching it. Media
+is keyed by option name, so renaming an option in Grasshopper drops its icon.
+
 `targetInputId` lives in three places, and the **Grasshopper component is the real source of
 truth**. On schema save, `ApplyParameterAccessFromSchema` walks each
 `OutputDynamicValueListLayoutItem`, resolves its `ParamId` → the ContextBake → up to the Set

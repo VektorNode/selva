@@ -132,6 +132,41 @@ describe('normalizeUISchemaCasing', () => {
 		expect(result.inputs[1].config?.defaultOptions).toEqual({ 'Seed Label': '9' });
 	});
 
+	// Option media is keyed by the author's option labels, but each entry is a
+	// structural object: the keys stay verbatim, the entries get camelCased.
+	it('keeps optionMedia and asset keys but camelCases their entries', () => {
+		const pascal = {
+			Assets: { a1b2c3: { D: 'M3 3h18' }, Ff00aa: { Img: 'data:image/webp;base64,AA==', W: 192 } },
+			Layout: {
+				Groups: [
+					{
+						Items: [
+							{
+								Config: {
+									Options: { Oak: '0' },
+									OptionMedia: { Oak: { Icon: 'a1b2c3', IconName: 'lucide:tree-deciduous' } }
+								}
+							}
+						]
+					}
+				]
+			}
+		};
+
+		const result = normalizeUISchemaCasing(pascal) as unknown as {
+			assets: Record<string, object>;
+			layout: { groups: Array<{ items: Array<{ config: { optionMedia: object } }> }> };
+		};
+
+		expect(result.assets).toEqual({
+			a1b2c3: { d: 'M3 3h18' },
+			Ff00aa: { img: 'data:image/webp;base64,AA==', w: 192 }
+		});
+		expect(result.layout.groups[0].items[0].config.optionMedia).toEqual({
+			Oak: { icon: 'a1b2c3', iconName: 'lucide:tree-deciduous' }
+		});
+	});
+
 	// A dynamic value list is the case where a careless normalizer does real
 	// damage: `defaultOptions` holds the author's seed labels, and `targetInputId`
 	// is the routing link from the output back to the input it fills. Mangle

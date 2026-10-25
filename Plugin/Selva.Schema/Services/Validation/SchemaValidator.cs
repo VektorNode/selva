@@ -30,6 +30,7 @@ public class SchemaValidator
             new ParameterValidationRule(),
             new LayoutValidationRule(),
             new WidgetConfigRule(),
+            new OptionMediaRule(),
             new VersioningRule(),
             new ConstraintsRule()
         };

@@ -51,6 +51,9 @@ catalogs:
     fflate:
       specifier: ^0.8.2
       version: 0.8.3
+    lucide:
+      specifier: ^1.48.0
+      version: 1.61.0
     mode-watcher:
       specifier: ^1.1.0
       version: 1.1.0
@@ -407,6 +410,9 @@ importers:
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.1
+      lucide:
+        specifier: 'catalog:'
+        version: 1.61.0
       svelte-check:
         specifier: 'catalog:'
         version: 4.7.6(picomatch@4.0.7)(svelte@5.57.1(@typescript-eslint/types@8.70.1))(typescript@6.0.3)
@@ -5397,6 +5403,9 @@ packages:
   lsofi@2.0.0:
     resolution: {integrity: sha512-XTFlOBHeuXnUGuUQI0kBb4O4oQW7qCV7MRGQja1xNpxgrI/jptlly+/5126RiRold1zgyxY520qOZUZ31V0I2A==}
     engines: {node: '>=20.0.0'}
+
+  lucide@1.61.0:
+    resolution: {integrity: sha512-RPNMBgej6WjPKuCNEODg83CF8lnraCeDOsZ3HZ7KvUYf0O5hdJBzer/Ax/meBHl3xvrp5NmKX0IDA5myyzlvGw==}
 
   lunr@2.3.9:
     resolution: {integrity: sha512-zTU3DaZaF3Rt9rhN3uBMGQD3dD2/vFQqnvZCDv4dl5iOzq2IZQqTxu90r4E5J+nP70J3ilqVCrbho2eWaeW8Ow==}
@@ -11702,6 +11711,8 @@ snapshots:
   lru-cache@7.18.3: {}
 
   lsofi@2.0.0: {}
+
+  lucide@1.61.0: {}
 
   lunr@2.3.9: {}
 

@@ -4,6 +4,7 @@
 		FileInputWidgetConfig,
 		DynamicValueListWidgetConfig,
 		DropdownWidgetConfig,
+		UISchema,
 		SupportedTypes
 	} from '@selvajs/schemas';
 	import {
@@ -27,12 +28,15 @@
 		FileInput,
 		GeometryInput,
 		NumberInput,
-		TextInput
+		SegmentedInput,
+		TextInput,
+		TileInput
 	} from '$lib/components/preview/inputs';
 	import { getClientSlot } from '$lib/contexts/clientSlotContext.svelte';
 	import { getHostContext } from '$lib/contexts/hostContext.svelte';
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 	import { isGeometryParamType, isTriggerItem } from '$lib/schema/host-support';
+	import { resolveOptionDisplay } from '$lib/schema/option-display';
 
 	interface Props {
 		item: InputLayoutItem;
@@ -49,6 +53,8 @@
 		dynamicOptions?: Record<string, string>;
 		/** The input's paramType: a geometry input gets its control from this, not from the widget type. */
 		paramType?: string;
+		/** The schema's icons and thumbnails, which value-list options point into. */
+		assets?: UISchema['assets'];
 	}
 
 	let {
@@ -58,7 +64,8 @@
 		onChange,
 		disabled = false,
 		dynamicOptions,
-		paramType
+		paramType,
+		assets
 	}: Props = $props();
 
 	const locale = getLocaleContext();
@@ -113,7 +120,8 @@
 	// As a dropdown config so DropdownInput/ChecklistInput can consume it unchanged.
 	const dynamicListAsDropdownConfig = $derived<DropdownWidgetConfig>({
 		options: dynamicListOptions,
-		displayAs: dynamicListConfig?.displayAs ?? 'dropdown'
+		displayAs: dynamicListConfig?.displayAs ?? 'dropdown',
+		optionMedia: dynamicListConfig?.optionMedia
 	});
 	const hideDynamicListWhenEmpty = $derived(
 		isDynamicValueListWidget(item) &&
@@ -183,6 +191,48 @@
 		onChange(item.paramId, newValue);
 	}
 </script>
+
+{#snippet valueList(config: DropdownWidgetConfig)}
+	{@const display = resolveOptionDisplay(
+		config.displayAs,
+		Object.keys(config.options ?? {}).length
+	)}
+	{@const single = typeof value === 'string' ? value : ''}
+	{#if display === 'checklist'}
+		<ChecklistInput
+			{inputId}
+			value={Array.isArray(value)
+				? (value as string[])
+				: typeof value === 'string' && value
+					? [value]
+					: []}
+			{config}
+			{assets}
+			onChange={commit}
+			{disabled}
+		/>
+	{:else if display === 'segmented'}
+		<SegmentedInput
+			labelId="{inputId}-label"
+			value={single}
+			{config}
+			{assets}
+			onChange={commit}
+			{disabled}
+		/>
+	{:else if display === 'tiles'}
+		<TileInput
+			labelId="{inputId}-label"
+			value={single}
+			{config}
+			{assets}
+			onChange={commit}
+			{disabled}
+		/>
+	{:else}
+		<DropdownInput value={single} {config} {assets} onChange={commit} {disabled} />
+	{/if}
+{/snippet}
 
 {#snippet labelText(forId?: string, tone: 'quiet' | 'strong' = 'quiet')}
 	<Field.Label
@@ -298,49 +348,10 @@
 				{disabled}
 			/>
 		{:else if isDropdownWidget(item)}
-			{@const config = item.config}
-			{#if config.displayAs === 'checklist'}
-				<ChecklistInput
-					{inputId}
-					value={Array.isArray(value)
-						? (value as string[])
-						: typeof value === 'string' && value
-							? [value]
-							: []}
-					{config}
-					onChange={commit}
-					{disabled}
-				/>
-			{:else}
-				<DropdownInput
-					value={typeof value === 'string' ? value : ''}
-					{config}
-					onChange={commit}
-					{disabled}
-				/>
-			{/if}
+			{@render valueList(item.config)}
 		{:else if isDynamicValueListWidget(item)}
 			{#if dynamicListHasOptions}
-				{#if dynamicListAsDropdownConfig.displayAs === 'checklist'}
-					<ChecklistInput
-						{inputId}
-						value={Array.isArray(value)
-							? (value as string[])
-							: typeof value === 'string' && value
-								? [value]
-								: []}
-						config={dynamicListAsDropdownConfig}
-						onChange={commit}
-						{disabled}
-					/>
-				{:else}
-					<DropdownInput
-						value={typeof value === 'string' ? value : ''}
-						config={dynamicListAsDropdownConfig}
-						onChange={commit}
-						{disabled}
-					/>
-				{/if}
+				{@render valueList(dynamicListAsDropdownConfig)}
 			{:else}
 				<p class="text-sm text-muted-foreground">{locale.messages.noOptionsYet}</p>
 			{/if}

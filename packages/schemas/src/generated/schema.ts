@@ -218,6 +218,38 @@ export interface TextWidgetConfig {
 	 */
 	customErrorMessage?: string;
 }
+export interface OptionMedia {
+	/**
+	 * Asset holding the option's icon (an OptionAsset with d).
+	 */
+	icon?: string;
+	/**
+	 * Asset holding the option's thumbnail (an OptionAsset with img). Only 'tiles' shows it.
+	 */
+	image?: string;
+	/**
+	 * Iconify name the icon was picked as (e.g. 'lucide:house'), so the builder can reopen the picker on it. Never rendered.
+	 */
+	iconName?: string;
+}
+export interface OptionAsset {
+	/**
+	 * SVG path data on a 24x24 grid, drawn as a stroke (width 2, round caps and joins, no fill). Rendered as a path's d attribute, never as markup.
+	 */
+	d?: string;
+	/**
+	 * Thumbnail as a base64 data URI. Only WebP, JPEG and PNG are accepted.
+	 */
+	img?: string;
+	/**
+	 * Thumbnail width in pixels
+	 */
+	w?: number;
+	/**
+	 * Thumbnail height in pixels
+	 */
+	h?: number;
+}
 export interface DropdownWidgetConfig {
 	/**
 	 * Key-value pairs for dropdown options
@@ -227,9 +259,15 @@ export interface DropdownWidgetConfig {
 	};
 	required?: boolean;
 	/**
-	 * How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter.
+	 * How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter. 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails.
 	 */
-	displayAs?: 'dropdown' | 'checklist';
+	displayAs?: 'dropdown' | 'checklist' | 'segmented' | 'tiles';
+	/**
+	 * Icon and thumbnail per option, keyed by option name. Grasshopper owns options; this map is the author's and survives a re-sync.
+	 */
+	optionMedia?: {
+		[k: string]: OptionMedia | undefined;
+	};
 }
 export interface DynamicValueListWidgetConfig {
 	/**
@@ -243,9 +281,15 @@ export interface DynamicValueListWidgetConfig {
 	 */
 	emptyBehavior?: 'hide' | 'show-empty';
 	/**
-	 * How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]).
+	 * How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]). 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails.
 	 */
-	displayAs?: 'dropdown' | 'checklist';
+	displayAs?: 'dropdown' | 'checklist' | 'segmented' | 'tiles';
+	/**
+	 * Icon and thumbnail per option, keyed by option name. Names without an entry show text only.
+	 */
+	optionMedia?: {
+		[k: string]: OptionMedia | undefined;
+	};
 }
 export interface DynamicValueListOutputConfig {
 	/**
@@ -478,6 +522,12 @@ export interface UISchema {
 	 */
 	outputs: SchemaOutput[];
 	layout: LayoutConfig;
+	/**
+	 * Icons and thumbnails referenced by optionMedia, keyed by a hash of their content so a shared one is stored once.
+	 */
+	assets?: {
+		[k: string]: OptionAsset | undefined;
+	};
 }
 /**
  * Configuration for the 3D viewer
@@ -514,7 +564,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.16.0';
+export const UI_SCHEMA_VERSION = '2.17.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

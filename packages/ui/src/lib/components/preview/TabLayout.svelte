@@ -82,6 +82,7 @@
 				inputs={schema.inputs}
 				outputs={schema.outputs}
 				{dynamicOptions}
+				assets={schema.assets}
 			/>
 		{/each}
 	</Tabs.Root>

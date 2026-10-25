@@ -55,4 +55,25 @@ test.describe('/builder', () => {
 		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=stale`);
 		await expect(page.getByText(/Grasshopper refused this link/)).toBeVisible({ timeout: 15_000 });
 	});
+
+	test('gives a value-list option an icon from the bundled set', async ({ page }) => {
+		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
+		await expect(page.getByText('Loading schema...')).toBeHidden({ timeout: 15_000 });
+
+		const card = page.locator('[data-builder-item-id="item-2"]');
+		await card.getByRole('button', { name: 'Expand details' }).click();
+		await card.getByRole('button', { name: 'Advanced' }).click();
+		await expect(card.getByRole('button', { name: 'Buttons' })).toHaveClass(/bg-primary/);
+
+		await card.getByRole('button', { name: 'Icon for Larch' }).click();
+		await page.getByRole('textbox', { name: 'Search icons' }).fill('trees');
+		await page.getByRole('button', { name: 'trees', exact: true }).click();
+
+		await expect(
+			card.getByRole('button', { name: 'Icon for Larch' }).locator('svg path')
+		).toHaveAttribute('d', /.+/);
+		await expect(
+			card.getByRole('button', { name: 'Remove icon and image from Larch' })
+		).toBeVisible();
+	});
 });

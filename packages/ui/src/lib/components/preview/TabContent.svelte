@@ -3,6 +3,7 @@
 		TabConfig,
 		SchemaInput,
 		DiscoveredOutput,
+		UISchema,
 		SupportedTypes,
 		InputLayoutItem,
 		OutputLayoutItem
@@ -31,6 +32,8 @@
 		outputs: DiscoveredOutput[];
 		/** Computed value list options keyed by the target dynamic-value-list input id. */
 		dynamicOptions?: Record<string, Record<string, string>>;
+		/** The schema's icons and thumbnails, which value-list options point into. */
+		assets?: UISchema['assets'];
 	}
 
 	let {
@@ -41,7 +44,8 @@
 		onValueChange,
 		inputs,
 		outputs,
-		dynamicOptions = {}
+		dynamicOptions = {},
+		assets
 	}: Props = $props();
 
 	const { host } = getHostContext();
@@ -82,6 +86,7 @@
 			disabled={visibility.disabled}
 			dynamicOptions={dynamicOptions[input.id]}
 			paramType={input.paramType}
+			{assets}
 		/>
 	{/if}
 {/snippet}

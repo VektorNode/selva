@@ -5,4 +5,6 @@ export { default as DropdownInput } from './DropdownInput.svelte';
 export { default as FileInput } from './FileInput.svelte';
 export { default as GeometryInput } from './GeometryInput.svelte';
 export { default as NumberInput } from './NumberInput.svelte';
+export { default as SegmentedInput } from './SegmentedInput.svelte';
 export { default as TextInput } from './TextInput.svelte';
+export { default as TileInput } from './TileInput.svelte';

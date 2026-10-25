@@ -132,6 +132,12 @@ namespace Selva.Schema.Models
 
         [JsonProperty("layout")]
         public LayoutConfigBase Layout { get; set; }
+
+/// <summary>
+/// Icons and thumbnails referenced by optionMedia, keyed by a hash of their content so a shared one is stored once.
+/// </summary>
+        [JsonProperty("assets")]
+        public Dictionary<string, OptionAsset> Assets { get; set; }
     }
 
 // ============================================================================
@@ -204,10 +210,16 @@ namespace Selva.Schema.Models
         public bool? Required { get; set; }
 
 /// <summary>
-/// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter.
+/// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter. 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails.
 /// </summary>
         [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string DisplayAs { get; set; } = "dropdown";
+
+/// <summary>
+/// Icon and thumbnail per option, keyed by option name. Grasshopper owns options; this map is the author's and survives a re-sync.
+/// </summary>
+        [JsonProperty("optionMedia")]
+        public Dictionary<string, OptionMedia> OptionMedia { get; set; }
     }
 
     public class DynamicValueListWidgetConfig
@@ -226,10 +238,16 @@ namespace Selva.Schema.Models
         public string EmptyBehavior { get; set; } = "hide";
 
 /// <summary>
-/// How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]).
+/// How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]). 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails.
 /// </summary>
         [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string DisplayAs { get; set; } = "dropdown";
+
+/// <summary>
+/// Icon and thumbnail per option, keyed by option name. Names without an entry show text only.
+/// </summary>
+        [JsonProperty("optionMedia")]
+        public Dictionary<string, OptionMedia> OptionMedia { get; set; }
     }
 
     public class CheckboxWidgetConfig
@@ -450,6 +468,56 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("defaultValue", NullValueHandling = NullValueHandling.Ignore)]
         public object DefaultValue { get; set; }
+    }
+
+    public class OptionMedia
+    {
+
+/// <summary>
+/// Asset holding the option's icon (an OptionAsset with d).
+/// </summary>
+        [JsonProperty("icon")]
+        public string Icon { get; set; }
+
+/// <summary>
+/// Asset holding the option's thumbnail (an OptionAsset with img). Only 'tiles' shows it.
+/// </summary>
+        [JsonProperty("image")]
+        public string Image { get; set; }
+
+/// <summary>
+/// Iconify name the icon was picked as (e.g. 'lucide:house'), so the builder can reopen the picker on it. Never rendered.
+/// </summary>
+        [JsonProperty("iconName")]
+        public string IconName { get; set; }
+    }
+
+    public class OptionAsset
+    {
+
+/// <summary>
+/// SVG path data on a 24x24 grid, drawn as a stroke (width 2, round caps and joins, no fill). Rendered as a path's d attribute, never as markup.
+/// </summary>
+        [JsonProperty("d")]
+        public string D { get; set; }
+
+/// <summary>
+/// Thumbnail as a base64 data URI. Only WebP, JPEG and PNG are accepted.
+/// </summary>
+        [JsonProperty("img")]
+        public string Img { get; set; }
+
+/// <summary>
+/// Thumbnail width in pixels
+/// </summary>
+        [JsonProperty("w")]
+        public int? W { get; set; }
+
+/// <summary>
+/// Thumbnail height in pixels
+/// </summary>
+        [JsonProperty("h")]
+        public int? H { get; set; }
     }
 
     public class DynamicValueListOutputConfig
