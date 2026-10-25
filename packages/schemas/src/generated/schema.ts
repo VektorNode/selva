@@ -224,7 +224,7 @@ export interface OptionMedia {
 	 */
 	icon?: string;
 	/**
-	 * Asset holding the option's thumbnail (an OptionAsset with img). Only 'tiles' shows it.
+	 * Asset holding the option's thumbnail (an OptionAsset with img).
 	 */
 	image?: string;
 	/**

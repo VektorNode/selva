@@ -480,7 +480,7 @@ namespace Selva.Schema.Models
         public string Icon { get; set; }
 
 /// <summary>
-/// Asset holding the option's thumbnail (an OptionAsset with img). Only 'tiles' shows it.
+/// Asset holding the option's thumbnail (an OptionAsset with img).
 /// </summary>
         [JsonProperty("image")]
         public string Image { get; set; }

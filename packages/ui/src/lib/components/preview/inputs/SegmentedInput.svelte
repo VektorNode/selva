@@ -17,7 +17,7 @@
 
 	const options = $derived(Object.entries(config.options ?? {}));
 	const hasIcons = $derived(
-		options.some(([name]) => optionGlyph(config.optionMedia?.[name], assets, 'icon'))
+		options.some(([name]) => optionGlyph(config.optionMedia?.[name], assets))
 	);
 </script>
 
@@ -35,7 +35,7 @@
 	{disabled}
 >
 	{#each options as [name, expr] (name)}
-		{@const glyph = optionGlyph(config.optionMedia?.[name], assets, 'icon')}
+		{@const glyph = optionGlyph(config.optionMedia?.[name], assets)}
 		<ToggleGroup.Item value={expr ?? name} class="min-w-0 flex-1" title={name}>
 			{#if glyph}<OptionGlyph {glyph} />{/if}
 			<span class="max-w-full truncate">{name}</span>

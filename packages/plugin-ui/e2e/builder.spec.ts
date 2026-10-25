@@ -65,15 +65,13 @@ test.describe('/builder', () => {
 		await card.getByRole('button', { name: 'Advanced' }).click();
 		await expect(card.getByRole('button', { name: 'Buttons' })).toHaveClass(/bg-primary/);
 
-		await card.getByRole('button', { name: 'Icon for Larch' }).click();
+		await card.getByRole('button', { name: 'Picture for Larch' }).click();
 		await page.getByRole('textbox', { name: 'Search icons' }).fill('trees');
 		await page.getByRole('button', { name: 'trees', exact: true }).click();
 
 		await expect(
-			card.getByRole('button', { name: 'Icon for Larch' }).locator('svg path')
+			card.getByRole('button', { name: 'Picture for Larch' }).locator('svg path')
 		).toHaveAttribute('d', /.+/);
-		await expect(
-			card.getByRole('button', { name: 'Remove icon and image from Larch' })
-		).toBeVisible();
+		await expect(card.getByRole('button', { name: 'Remove the picture from Larch' })).toBeVisible();
 	});
 });

@@ -25,5 +25,5 @@
 		<path d={glyph.d} />
 	</svg>
 {:else}
-	<img src={glyph.src} alt="" class={cn('object-cover', className)} />
+	<img src={glyph.src} alt="" class={cn('size-4 shrink-0 rounded-sm object-cover', className)} />
 {/if}

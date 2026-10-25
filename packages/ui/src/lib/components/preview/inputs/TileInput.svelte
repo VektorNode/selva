@@ -39,7 +39,7 @@
 
 <div role="radiogroup" aria-labelledby={labelId} class="gap-2 tile-grid grid">
 	{#each options as option, index (option.name)}
-		{@const glyph = optionGlyph(config.optionMedia?.[option.name], assets, 'image')}
+		{@const glyph = optionGlyph(config.optionMedia?.[option.name], assets)}
 		{@const selected = option.value === value}
 		<button
 			bind:this={tiles[index]}

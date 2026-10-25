@@ -30,28 +30,30 @@ describe('optionGlyph', () => {
 	};
 
 	it('gives the icon path for an option with an icon', () => {
-		expect(optionGlyph({ icon: 'icon1' }, assets, 'icon')).toEqual({ kind: 'icon', d: 'M3 3h18' });
+		expect(optionGlyph({ icon: 'icon1' }, assets)).toEqual({ kind: 'icon', d: 'M3 3h18' });
 	});
 
-	it('prefers the image where images are wanted, and falls back to the icon', () => {
-		expect(optionGlyph({ icon: 'icon1', image: 'img1' }, assets, 'image')).toEqual({
+	it('gives the thumbnail for an option with an image', () => {
+		expect(optionGlyph({ image: 'img1' }, assets)).toEqual({
 			kind: 'image',
 			src: 'data:image/webp;base64,UklGRg=='
 		});
-		expect(optionGlyph({ icon: 'icon1' }, assets, 'image')).toEqual({ kind: 'icon', d: 'M3 3h18' });
 	});
 
-	it('ignores an image where only icons are shown', () => {
-		expect(optionGlyph({ image: 'img1' }, assets, 'icon')).toBeUndefined();
+	it('prefers the thumbnail when an option has both', () => {
+		expect(optionGlyph({ icon: 'icon1', image: 'img1' }, assets)).toEqual({
+			kind: 'image',
+			src: 'data:image/webp;base64,UklGRg=='
+		});
 	});
 
 	it('never hands out an image that is not a raster data URI', () => {
-		expect(optionGlyph({ image: 'svg1' }, assets, 'image')).toBeUndefined();
+		expect(optionGlyph({ image: 'svg1' }, assets)).toBeUndefined();
 	});
 
 	it('gives nothing for a missing entry or a dangling asset', () => {
-		expect(optionGlyph(undefined, assets, 'icon')).toBeUndefined();
-		expect(optionGlyph({ icon: 'gone' }, assets, 'icon')).toBeUndefined();
-		expect(optionGlyph({ icon: 'icon1' }, undefined, 'icon')).toBeUndefined();
+		expect(optionGlyph(undefined, assets)).toBeUndefined();
+		expect(optionGlyph({ icon: 'gone' }, assets)).toBeUndefined();
+		expect(optionGlyph({ icon: 'icon1' }, undefined)).toBeUndefined();
 	});
 });

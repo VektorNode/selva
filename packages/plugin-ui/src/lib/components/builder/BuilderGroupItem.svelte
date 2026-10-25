@@ -578,7 +578,7 @@
 												{VALUE_LIST_MODES.find((m) => m.value === mode)?.hint}
 											</span>
 										</div>
-										<OptionMediaEditor config={dropdownConfig} showsImages={mode === 'tiles'} />
+										<OptionMediaEditor config={dropdownConfig} />
 									</div>
 								{/if}
 

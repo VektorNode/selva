@@ -35,7 +35,7 @@
 		{@const optionValue = expr ?? name}
 		{@const optionId = `${inputId}-${optionValue}`}
 		{@const isSelected = selected.has(optionValue)}
-		{@const glyph = optionGlyph(config?.optionMedia?.[name], assets, 'icon')}
+		{@const glyph = optionGlyph(config?.optionMedia?.[name], assets)}
 		<label
 			for={optionId}
 			class="gap-3 px-3 py-2 text-sm flex items-center transition-colors select-none hover:bg-accent/50 {isSelected

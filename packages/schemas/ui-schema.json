@@ -164,7 +164,7 @@
 		},
 		"OptionMedia": {
 			"type": "object",
-			"description": "What an option shows besides its name. Each field is the key of an entry in the schema's assets table.",
+			"description": "The picture an option shows besides its name: an icon or a thumbnail. The builder sets one; if both are set, the thumbnail wins. Each field is the key of an entry in the schema's assets table.",
 			"properties": {
 				"icon": {
 					"type": "string",
@@ -172,7 +172,7 @@
 				},
 				"image": {
 					"type": "string",
-					"description": "Asset holding the option's thumbnail (an OptionAsset with img). Only 'tiles' shows it."
+					"description": "Asset holding the option's thumbnail (an OptionAsset with img)."
 				},
 				"iconName": {
 					"type": "string",

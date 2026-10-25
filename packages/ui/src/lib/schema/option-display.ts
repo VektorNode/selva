@@ -27,15 +27,14 @@ export type GlyphSource = { kind: 'icon'; d: string } | { kind: 'image'; src: st
 // Anything else could be a URL that makes every viewer's browser call wherever the file points.
 const RASTER_DATA_URI = /^data:image\/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$/;
 
-/** What to draw beside an option. `want: 'image'` takes a thumbnail first, then the icon. */
+/** What to draw beside an option: its thumbnail, else its icon. */
 export function optionGlyph(
 	media: OptionMedia | undefined,
-	assets: UISchema['assets'] | undefined,
-	want: 'icon' | 'image'
+	assets: UISchema['assets'] | undefined
 ): GlyphSource | undefined {
 	if (!media || !assets) return undefined;
 
-	if (want === 'image' && media.image) {
+	if (media.image) {
 		const src = assets[media.image]?.img;
 		if (src && RASTER_DATA_URI.test(src)) return { kind: 'image', src };
 	}

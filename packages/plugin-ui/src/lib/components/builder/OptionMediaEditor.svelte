@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, OptionMedia } from '@selvajs/schemas';
-	import { Button, Popover, pickFile, toast } from '@selvajs/ui';
-	import { ImagePlus, Smile, X } from '@lucide/svelte';
+	import { Button, Popover, ToggleGroup, pickFile, toast } from '@selvajs/ui';
+	import { ImagePlus, Smile, Upload, X } from '@lucide/svelte';
 	import { getBuilderDraft } from './draft-context';
 	import LucideIconPicker from './LucideIconPicker.svelte';
 	import { assetBytes } from '$lib/features/builder/option-media';
@@ -15,11 +15,9 @@
 
 	interface Props {
 		config: DropdownWidgetConfig;
-		/** Whether this mode shows thumbnails; only 'tiles' does. */
-		showsImages: boolean;
 	}
 
-	let { config, showsImages }: Props = $props();
+	let { config }: Props = $props();
 
 	const draft = getBuilderDraft();
 
@@ -32,8 +30,9 @@
 			media?.iconName ? [media.iconName] : []
 		)
 	);
-	// One picker open at a time, closed again once an icon is chosen.
+	// One picker open at a time, closed again once a picture is chosen.
 	let pickerFor = $state<string | null>(null);
+	let pickerKind = $state<'icon' | 'image'>('icon');
 	const totalBytes = $derived(assetBytes(draft?.assets));
 
 	function setMedia(name: string, patch: Partial<OptionMedia>) {
@@ -50,7 +49,7 @@
 	function pickIcon(name: string, icon: { name: string; path: string }) {
 		draft?.edit(() => {
 			const id = draft.putAsset({ d: icon.path });
-			setMedia(name, { icon: id, iconName: `lucide:${icon.name}` });
+			setMedia(name, { icon: id, iconName: `lucide:${icon.name}`, image: undefined });
 		});
 	}
 
@@ -72,8 +71,9 @@
 			const img = await blobToDataUri(result.blob);
 			draft.edit(() => {
 				const id = draft.putAsset({ img, w: THUMBNAIL_PX, h: THUMBNAIL_PX });
-				setMedia(name, { image: id });
+				setMedia(name, { image: id, icon: undefined, iconName: undefined });
 			});
+			pickerFor = null;
 		} catch {
 			toast.error(`${file.name} could not be read as an image.`);
 		}
@@ -90,17 +90,33 @@
 	}
 </script>
 
+{#snippet iconGlyph(path: string)}
+	<svg
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		class="size-4"
+		aria-hidden="true"><path d={path} /></svg
+	>
+{/snippet}
+
 {#if draft}
 	<div class="flex flex-col gap-1">
-		<span class="text-muted-foreground text-2xs font-medium">Option icons</span>
+		<span class="text-muted-foreground text-2xs font-medium">Option pictures</span>
 		<ul class="border-border/70 divide-border/60 divide-y rounded-sm border">
 			{#each names as name (name)}
-				{@const path = iconPath(name)}
-				{@const src = showsImages ? imageSrc(name) : undefined}
+				{@const src = imageSrc(name)}
+				{@const path = src ? undefined : iconPath(name)}
 				<li class="flex items-center gap-1.5 px-1.5 py-1 text-xs">
 					<Popover.Root
 						open={pickerFor === name}
-						onOpenChange={(open) => (pickerFor = open ? name : null)}
+						onOpenChange={(open) => {
+							pickerFor = open ? name : null;
+							if (open) pickerKind = src ? 'image' : 'icon';
+						}}
 					>
 						<Popover.Trigger>
 							{#snippet child({ props })}
@@ -108,20 +124,14 @@
 									{...props}
 									variant="outline"
 									size="icon-sm"
-									aria-label={`Icon for ${name}`}
-									title="Pick an icon"
+									aria-label={`Picture for ${name}`}
+									title="Pick an icon or image"
+									class="overflow-hidden"
 								>
-									{#if path}
-										<svg
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="2"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											class="size-4"
-											aria-hidden="true"><path d={path} /></svg
-										>
+									{#if src}
+										<img {src} alt="" class="size-full object-cover" />
+									{:else if path}
+										{@render iconGlyph(path)}
 									{:else}
 										<Smile class="text-muted-foreground/60" />
 									{/if}
@@ -129,36 +139,76 @@
 							{/snippet}
 						</Popover.Trigger>
 						<Popover.Content align="start">
-							<LucideIconPicker
-								current={config.optionMedia?.[name]?.iconName}
-								used={usedIconNames}
-								onPick={(icon) => {
-									pickIcon(name, icon);
-									pickerFor = null;
-								}}
-								onClear={() => {
-									draft.edit(() => setMedia(name, { icon: undefined, iconName: undefined }));
-									pickerFor = null;
-								}}
-							/>
+							<div class="flex flex-col gap-3">
+								<ToggleGroup.Root
+									type="single"
+									variant="outline"
+									size="sm"
+									bind:value={
+										() => pickerKind,
+										(kind) => {
+											if (kind === 'icon' || kind === 'image') pickerKind = kind;
+										}
+									}
+									aria-label="Picture type"
+									class="w-full"
+								>
+									<ToggleGroup.Item value="icon" class="flex-1"><Smile />Icon</ToggleGroup.Item>
+									<ToggleGroup.Item value="image" class="flex-1"
+										><ImagePlus />Image</ToggleGroup.Item
+									>
+								</ToggleGroup.Root>
+
+								{#if pickerKind === 'icon'}
+									<LucideIconPicker
+										current={config.optionMedia?.[name]?.iconName}
+										used={usedIconNames}
+										onPick={(icon) => {
+											pickIcon(name, icon);
+											pickerFor = null;
+										}}
+										onClear={() => {
+											draft.edit(() => setMedia(name, { icon: undefined, iconName: undefined }));
+											pickerFor = null;
+										}}
+									/>
+								{:else}
+									<div class="flex flex-col items-center gap-3 py-2">
+										<div
+											class="border-border bg-muted/40 flex size-24 items-center justify-center overflow-hidden rounded-md border"
+										>
+											{#if src}
+												<img {src} alt="" class="size-full object-cover" />
+											{:else}
+												<ImagePlus class="text-muted-foreground/50 size-6" />
+											{/if}
+										</div>
+										<div class="flex gap-2">
+											<Button variant="outline" size="sm" onclick={() => addImage(name)}>
+												<Upload />
+												{src ? 'Replace image' : 'Upload image'}
+											</Button>
+											{#if src}
+												<Button
+													variant="ghost"
+													size="sm"
+													onclick={() => {
+														draft.edit(() => setMedia(name, { image: undefined }));
+														pickerFor = null;
+													}}
+												>
+													Remove
+												</Button>
+											{/if}
+										</div>
+										<p class="text-muted-foreground text-center text-xs">
+											Cropped to a square and shrunk to {THUMBNAIL_PX} px. Replaces the icon.
+										</p>
+									</div>
+								{/if}
+							</div>
 						</Popover.Content>
 					</Popover.Root>
-
-					{#if showsImages}
-						<Button
-							variant="outline"
-							size="icon-sm"
-							aria-label={`Image for ${name}`}
-							title="Add a thumbnail"
-							onclick={() => addImage(name)}
-						>
-							{#if src}
-								<img {src} alt="" class="size-full rounded-sm object-cover" />
-							{:else}
-								<ImagePlus class="text-muted-foreground/60" />
-							{/if}
-						</Button>
-					{/if}
 
 					<span class="min-w-0 flex-1 truncate">{name}</span>
 
@@ -166,7 +216,7 @@
 						<Button
 							variant="ghost"
 							size="icon-sm"
-							aria-label={`Remove icon and image from ${name}`}
+							aria-label={`Remove the picture from ${name}`}
 							title="Remove"
 							onclick={() =>
 								draft.edit(() =>

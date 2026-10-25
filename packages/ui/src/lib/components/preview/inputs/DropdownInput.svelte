@@ -22,7 +22,7 @@
 	const currentLabel = $derived(
 		Object.entries(options).find(([_, expr]) => expr === currentValue)?.[0] ?? currentValue
 	);
-	const glyphOf = (name: string) => optionGlyph(config?.optionMedia?.[name], assets, 'icon');
+	const glyphOf = (name: string) => optionGlyph(config?.optionMedia?.[name], assets);
 	const currentGlyph = $derived(glyphOf(currentLabel));
 </script>
 
