@@ -67,7 +67,7 @@
 					</span>
 				{:else}
 					<span
-						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-600 uppercase dark:text-orange-400"
+						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-800 uppercase dark:text-orange-400"
 					>
 						<ArrowDownToLine size={10} strokeWidth={2.5} />
 						{item.type || 'unknown'}

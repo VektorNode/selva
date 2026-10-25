@@ -13,11 +13,14 @@
 
 <div
 	class="group/lb relative flex items-center gap-2 rounded-sm px-1 py-2 transition-all select-none"
-	role="separator"
-	aria-label="Line break — drag to reorder"
+	role="group"
+	aria-label="Line break"
 >
 	<div
 		use:dragHandle
+		role="button"
+		tabindex="0"
+		aria-label="Drag line break to reorder"
 		class="text-muted-foreground cursor-grab opacity-0 transition-opacity group-hover/lb:opacity-100 active:cursor-grabbing"
 	>
 		<GripVertical size={14} />

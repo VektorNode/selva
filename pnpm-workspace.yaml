@@ -4,6 +4,7 @@ packages:
 
 catalogs:
   default:
+    '@axe-core/playwright': 4.13.0
     '@floating-ui/dom': ^1.8.0
     '@iconify/svelte': ^5.2.1
     '@lucide/svelte': ^1.48.0

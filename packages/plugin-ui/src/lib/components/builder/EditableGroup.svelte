@@ -265,6 +265,7 @@
 						}
 						class="text-foreground hover:border-border focus:border-primary min-w-0 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
 						placeholder="Group name"
+						aria-label="Group name"
 					/>
 				</div>
 
@@ -277,6 +278,7 @@
 					}
 					class="text-muted-foreground hover:border-border focus:border-primary ml-7 min-w-0 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-xs focus:outline-none"
 					placeholder="Description"
+					aria-label="Group description"
 				/>
 			</div>
 		</div>
@@ -308,7 +310,7 @@
 					{group.items.length}
 				</span>
 			{/if}
-			<Button variant="ghost" size="icon-lg" onclick={onRemove}>
+			<Button variant="ghost" size="icon-lg" onclick={onRemove} aria-label="Delete group">
 				<Trash2 size={16} />
 			</Button>
 		</div>

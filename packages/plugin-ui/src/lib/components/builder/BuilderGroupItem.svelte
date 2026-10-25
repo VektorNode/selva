@@ -351,7 +351,7 @@
 				{:else}
 					<span
 						title={typeLabel}
-						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-600 uppercase dark:text-orange-400"
+						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-800 uppercase dark:text-orange-400"
 					>
 						<ArrowDownToLine size={10} strokeWidth={2.5} />
 						<span class="@max-[20rem]:sr-only">{typeLabel}</span>
@@ -364,6 +364,7 @@
 					class="hover:border-border focus:border-primary min-w-16 rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium focus:outline-none @[20rem]:min-w-28"
 					style="field-sizing: content; max-width: 18rem;"
 					placeholder="Display Name"
+					aria-label="Display name"
 				/>
 				{#if notOnSelva}
 					<ScopeChip

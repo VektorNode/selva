@@ -21,6 +21,7 @@
 		"lint:types": "eslint . --config eslint.typed.config.js"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "catalog:",
 		"@lucide/svelte": "catalog:",
 		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",

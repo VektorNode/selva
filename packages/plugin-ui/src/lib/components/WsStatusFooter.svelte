@@ -22,13 +22,13 @@
 	>
 		<Circle
 			class="h-2.5 w-2.5 shrink-0 fill-current {connected
-				? 'text-green-600 dark:text-green-400'
+				? 'text-green-700 dark:text-green-400'
 				: 'text-red-600 dark:text-red-400'}"
 		/>
 		{#if !compact || !connected}
 			<span
 				class="text-xs {connected
-					? 'text-green-600 dark:text-green-400'
+					? 'text-green-700 dark:text-green-400'
 					: 'text-red-600 dark:text-red-400'}"
 			>
 				{connected ? 'Connected' : 'Disconnected'}

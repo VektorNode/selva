@@ -69,7 +69,7 @@
 	</div>
 {/snippet}
 
-<section class="shadow-xs rounded-xl bg-card">
+<section class="shadow-xs rounded-xl border bg-card">
 	{#if flat}
 		<div class="p-4">
 			{@render grid()}
