@@ -4,7 +4,7 @@
 	import { iconNodeToPath, listIcons, type IconNode } from '$lib/features/builder/option-assets';
 
 	interface Props {
-		/** The `lucide:<name>` the option already uses, ringed in the grid. */
+		/** The icon already in use; a `lucide:<name>` is ringed in the grid. */
 		current?: string;
 		/** `lucide:<name>`s other options of this list use, offered first. */
 		used?: string[];

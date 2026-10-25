@@ -3,6 +3,7 @@
 	import { Button, Input, Label, Popover, Switch, ToggleGroup } from '@selvajs/ui';
 	import { ImageIcon, PanelLeft, PanelRight, Plus, Trash2 } from '@lucide/svelte';
 	import TabIcon from './TabIcon.svelte';
+	import LucideIconPicker from './LucideIconPicker.svelte';
 
 	interface Props {
 		tab: TabConfig;
@@ -14,13 +15,15 @@
 
 	let { tab, onEdit, onRemove, onAddGroup }: Props = $props();
 
+	let iconOpen = $state(false);
+
 	function setIcon(icon: string | undefined) {
 		onEdit(() => (tab.icon = icon), `tab-icon:${tab.id}`);
 	}
 </script>
 
 <div class="border-border bg-muted/40 flex flex-wrap items-center gap-2 border-b px-4 py-2">
-	<Popover.Root>
+	<Popover.Root bind:open={iconOpen}>
 		<Popover.Trigger>
 			{#snippet child({ props })}
 				<Button {...props} variant="outline" size="icon-sm" aria-label="Tab icon" title="Tab icon">
@@ -29,29 +32,37 @@
 			{/snippet}
 		</Popover.Trigger>
 		<Popover.Content align="start">
-			<div class="flex flex-col gap-2">
-				<Label for="tab-icon">Icon</Label>
-				<div class="flex gap-2">
+			<div class="flex flex-col gap-3">
+				<LucideIconPicker
+					current={tab.icon}
+					onPick={(icon) => {
+						setIcon(`lucide:${icon.name}`);
+						iconOpen = false;
+					}}
+					onClear={() => {
+						setIcon(undefined);
+						iconOpen = false;
+					}}
+				/>
+				<div class="flex flex-col gap-1.5">
+					<label for="tab-icon" class="text-muted-foreground text-xs">
+						Or type one or two letters, or any
+						<a
+							href="https://icon-sets.iconify.design/"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="text-primary underline">Iconify</a
+						>
+						id
+					</label>
 					<Input
 						id="tab-icon"
 						value={tab.icon ?? ''}
 						oninput={(e) => setIcon(e.currentTarget.value.trim() || undefined)}
 						placeholder="AB or mdi:home"
+						class="h-8"
 					/>
-					{#if tab.icon}
-						<Button variant="ghost" size="sm" onclick={() => setIcon(undefined)}>Clear</Button>
-					{/if}
 				</div>
-				<p class="text-muted-foreground text-xs">
-					One or two letters, or an
-					<a
-						href="https://icon-sets.iconify.design/"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="text-primary underline">Iconify</a
-					>
-					id such as <code>mdi:home</code>.
-				</p>
 			</div>
 		</Popover.Content>
 	</Popover.Root>
