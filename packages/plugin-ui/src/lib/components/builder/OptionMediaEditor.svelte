@@ -27,6 +27,13 @@
 	const WARN_TOTAL_BYTES = 256 * 1024;
 
 	const names = $derived(Object.keys(config.options ?? {}));
+	const usedIconNames = $derived(
+		Object.values(config.optionMedia ?? {}).flatMap((media) =>
+			media?.iconName ? [media.iconName] : []
+		)
+	);
+	// One picker open at a time, closed again once an icon is chosen.
+	let pickerFor = $state<string | null>(null);
 	const totalBytes = $derived(assetBytes(draft?.assets));
 
 	function setMedia(name: string, patch: Partial<OptionMedia>) {
@@ -91,7 +98,10 @@
 				{@const path = iconPath(name)}
 				{@const src = showsImages ? imageSrc(name) : undefined}
 				<li class="flex items-center gap-1.5 px-1.5 py-1 text-xs">
-					<Popover.Root>
+					<Popover.Root
+						open={pickerFor === name}
+						onOpenChange={(open) => (pickerFor = open ? name : null)}
+					>
 						<Popover.Trigger>
 							{#snippet child({ props })}
 								<Button
@@ -121,7 +131,15 @@
 						<Popover.Content align="start">
 							<LucideIconPicker
 								current={config.optionMedia?.[name]?.iconName}
-								onPick={(icon) => pickIcon(name, icon)}
+								used={usedIconNames}
+								onPick={(icon) => {
+									pickIcon(name, icon);
+									pickerFor = null;
+								}}
+								onClear={() => {
+									draft.edit(() => setMedia(name, { icon: undefined, iconName: undefined }));
+									pickerFor = null;
+								}}
 							/>
 						</Popover.Content>
 					</Popover.Root>

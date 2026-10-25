@@ -106,7 +106,10 @@ export function putAsset(schema: UISchema, asset: OptionAsset): string {
 
 /** Lucide's export name as the kebab-case name its site and the picker use. */
 export function lucideName(exportName: string): string {
-	return exportName.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+	return exportName
+		.replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+		.replace(/([a-zA-Z]{2})(\d)/g, '$1-$2')
+		.toLowerCase();
 }
 
 /**

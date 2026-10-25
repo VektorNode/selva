@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { UISchema } from '@selvajs/schemas';
-import { assetId, iconNodeToPath, listIcons, putAsset } from '../option-assets';
+import { assetId, iconNodeToPath, listIcons, lucideName, putAsset } from '../option-assets';
 import { assetBytes, pruneUnusedMedia } from '../option-media';
 
 describe('iconNodeToPath', () => {
@@ -182,5 +182,13 @@ describe('listIcons', () => {
 		const list = listIcons({ ArrowDownAZ: arrow, ArrowDownAz: arrow, Square: square });
 
 		expect(list.map((icon) => icon.name)).toEqual(['arrow-down-az', 'square']);
+	});
+});
+
+describe('lucideName', () => {
+	it('splits words and the numbers after them as Lucide names them', () => {
+		expect(lucideName('TreeDeciduous')).toBe('tree-deciduous');
+		expect(lucideName('Grid3x3')).toBe('grid-3x3');
+		expect(lucideName('Building2')).toBe('building-2');
 	});
 });
