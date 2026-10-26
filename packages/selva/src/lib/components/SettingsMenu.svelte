@@ -3,7 +3,7 @@
 	import { Button } from '@selvajs/ui';
 	import { Settings } from '@lucide/svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
-	import { settingsLinks } from './navItems';
+	import { settingsLinks, isActiveLink } from './nav-items';
 
 	interface Props {
 		platformPermissions?: PlatformPermission[];
@@ -19,10 +19,6 @@
 
 	const items = $derived(settingsLinks({ platformPermissions, orgPermissions, mayHoldApiTokens }));
 	const hasAny = $derived(items.length > 0);
-
-	function isActive(href: string): boolean {
-		return page.url.pathname.startsWith(href);
-	}
 
 	function handleClickOutside(event: MouseEvent) {
 		if (!open) return;
@@ -61,7 +57,7 @@
 				<div class="p-1">
 					{#each items as item (item.href)}
 						{@const Icon = item.icon}
-						{@const active = isActive(item.href)}
+						{@const active = isActiveLink(item, page.url.pathname)}
 						<a
 							href={item.href}
 							role="menuitem"

@@ -106,4 +106,22 @@ public class PdfImageTests
         Assert.True(ImageObjects(WithLogo()) > 0);
         Assert.Equal(ImageObjects(WithLogo()), ImageObjects(WithLogo(), WithLogo(), WithLogo()));
     }
+
+    [Fact]
+    public void An_svg_only_image_is_not_embedded()
+    {
+        var bytes = RenderScene(new ImageElement
+        {
+            Data = RedPng,
+            Format = ImageFormat.Png,
+            SvgOnly = true,
+            Width = 10,
+            Height = 10,
+        });
+
+        using var ms = new MemoryStream(bytes);
+        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
+        Assert.DoesNotContain(reopened.Internals.GetAllObjects().OfType<PdfDictionary>(),
+            d => d.Elements.GetName("/Subtype") == "/Image");
+    }
 }

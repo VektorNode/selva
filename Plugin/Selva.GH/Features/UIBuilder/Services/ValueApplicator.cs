@@ -58,9 +58,10 @@ public class ValueApplicator
 
     private ConcurrentDictionary<string, object> _lastAppliedValues = new ConcurrentDictionary<string, object>();
 
+    /// <param name="scheduleDelayMs">How long the solve waits to start.</param>
     /// <returns>Number of parameters updated</returns>
     public int ApplyValuesAndSchedule(GH_Document document, UISchema schema, Dictionary<string, object> values,
-        Action<GH_RuntimeMessageLevel, string> addMessage)
+        Action<GH_RuntimeMessageLevel, string> addMessage, int scheduleDelayMs)
     {
         var updateCount = 0;
         var pendingExpirations = new HashSet<IGH_ActiveObject>();
@@ -146,7 +147,7 @@ public class ValueApplicator
         if (pendingExpirations.Count > 0)
         {
             var toExpire = pendingExpirations;
-            document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+            document.ScheduleSolution(scheduleDelayMs, doc =>
             {
                 foreach (var obj in toExpire)
                 {

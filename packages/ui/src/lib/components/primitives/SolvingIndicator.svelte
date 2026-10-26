@@ -5,7 +5,8 @@
 		show: boolean;
 		/**
 		 * `floating` overlays the bottom-left corner. `inline` is a compact chip the size of an
-		 * icon button, for a row that already reserves its place.
+		 * icon button, for a narrow host whose corner holds its content and whose action row
+		 * already reserves the chip's place.
 		 */
 		placement?: 'floating' | 'inline';
 	}

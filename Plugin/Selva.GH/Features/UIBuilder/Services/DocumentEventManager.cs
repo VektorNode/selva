@@ -21,7 +21,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public class DocumentEventManager : IDisposable
 {
     private const int DOCUMENT_MODIFIED_DEBOUNCE_MS = 600;
-    private readonly BridgePerf _perf = new BridgePerf();
+    private readonly BridgePerf _perf;
     private readonly WebSocketTransport _webSocketTransport;
     private readonly SchemaSynchronizer _schemaSynchronizer;
     private readonly ValueCollector _valueCollector;
@@ -44,14 +44,13 @@ public class DocumentEventManager : IDisposable
     /// <summary>The document events are attached to; null while unregistered.</summary>
     public GH_Document CurrentDocument => _currentDocument;
 
-    public BridgePerf Perf => _perf;
-
     private Timer _documentModifiedTimer;
     private bool _eventsRegistered;
 
     public DocumentEventManager(SchemaSynchronizer schemaSynchronizer, ValueCollector valueCollector,
-        WebSocketTransport webSocketTransport)
+        WebSocketTransport webSocketTransport, BridgePerf perf)
     {
+        _perf = perf ?? throw new ArgumentNullException(nameof(perf));
         _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
         _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));

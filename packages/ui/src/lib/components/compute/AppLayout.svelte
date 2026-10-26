@@ -35,10 +35,7 @@
 		meshes?: any[];
 		isSolving: boolean;
 		showSolvingIndicator?: boolean;
-		/**
-		 * `inline` puts the solving indicator in the action row instead of floating it over the
-		 * bottom-left corner, where a narrow host has its content and that row.
-		 */
+		/** `SolvingIndicator`'s `placement`; `inline` puts it in the action row. */
 		solvingIndicatorPlacement?: 'floating' | 'inline';
 		/** Rendered above the action row, for a host that keeps the solve's messages in the flow. */
 		solveMessages?: Snippet;

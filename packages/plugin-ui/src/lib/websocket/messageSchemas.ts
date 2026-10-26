@@ -305,6 +305,13 @@ const pickGeometryResultSchema = baseEnvelope.extend({
 	error: z.string().nullish()
 });
 
+// Sent after every clear, refused or not; null when nothing is picked into the param.
+const geometrySummarySchema = baseEnvelope.extend({
+	type: z.literal('geometrySummary'),
+	paramId: z.string(),
+	summary: z.string().nullable()
+});
+
 // ============================================================================
 // Dispatcher entry point
 // ============================================================================
@@ -337,7 +344,8 @@ const schemasByType = {
 	hostSaveFileResult: hostSaveFileResultSchema,
 	hostPickFileResult: hostPickFileResultSchema,
 	hostPickedFile: hostPickedFileSchema,
-	pickGeometryResult: pickGeometryResultSchema
+	pickGeometryResult: pickGeometryResultSchema,
+	geometrySummary: geometrySummarySchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

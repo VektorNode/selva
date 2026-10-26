@@ -5,8 +5,8 @@
 	import { Menu, LogOut, Sun, Moon, Check } from '@lucide/svelte';
 	import { mode, toggleMode } from 'mode-watcher';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
-	import { mainNavLinks, settingsLinks, isActiveLink, type NavLink } from './navItems';
-	import { userLabel, canLogOut, type IdentityPageData } from './userIdentity';
+	import { mainNavLinks, settingsLinks, isActiveLink, type NavLink } from './nav-items';
+	import { userLabel, canLogOut, type IdentityPageData } from './user-identity';
 
 	interface Props {
 		platformPermissions?: PlatformPermission[];

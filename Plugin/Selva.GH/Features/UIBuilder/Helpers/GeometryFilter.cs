@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Rhino.DocObjects;
@@ -13,32 +12,25 @@ internal static class GeometryFilter
     // Private on Rhino's param; saved in the .gh as its "Filter" item.
     private const string FilterProperty = "ObjectTypeFilter";
 
-    private static readonly (ObjectType Flag, string Kind)[] Kinds =
+    private static readonly (uint Flag, string Kind)[] Kinds =
     {
-        (ObjectType.Point, "point"),
-        (ObjectType.PointSet, "pointCloud"),
-        (ObjectType.Curve, "curve"),
-        (ObjectType.Surface, "surface"),
-        (ObjectType.Brep, "polysurface"),
-        (ObjectType.Extrusion, "extrusion"),
-        (ObjectType.Mesh, "mesh"),
-        (ObjectType.SubD, "subd"),
-        (ObjectType.InstanceReference, "block")
+        ((uint)ObjectType.Point, "point"),
+        ((uint)ObjectType.PointSet, "pointCloud"),
+        ((uint)ObjectType.Curve, "curve"),
+        ((uint)ObjectType.Surface, "surface"),
+        ((uint)ObjectType.Brep, "polysurface"),
+        ((uint)ObjectType.Extrusion, "extrusion"),
+        ((uint)ObjectType.Mesh, "mesh"),
+        ((uint)ObjectType.SubD, "subd"),
+        ((uint)ObjectType.InstanceReference, "block")
     };
 
-    /// <summary>
-    ///     Empty when the param has no filter, or its filter allows every kind above, which is
-    ///     what a fresh Get Geometry allows.
-    /// </summary>
+    /// <summary>Empty when the param has no filter, or one that allows every kind above.</summary>
     public static List<string> KindsOf(IGH_ContextualParameter param)
     {
-        if (!(ReadFilter(param) is ObjectType filter))
-        {
-            return new List<string>();
-        }
-
-        var kinds = Kinds.Where(k => (filter & k.Flag) != 0).Select(k => k.Kind).ToList();
-        return kinds.Count == Kinds.Length ? new List<string>() : kinds;
+        return ReadFilter(param) is ObjectType filter
+            ? FilterKinds.Allowed((uint)filter, Kinds)
+            : new List<string>();
     }
 
     private static ObjectType? ReadFilter(IGH_ContextualParameter param)

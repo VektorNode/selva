@@ -63,7 +63,8 @@ public class UIBuilderService : IDisposable
 
         WebServer = new LocalWebServer();
 
-        EventManager = new DocumentEventManager(SchemaSynchronizer, ValueCollector, WebSocketTransport);
+        var perf = new BridgePerf();
+        EventManager = new DocumentEventManager(SchemaSynchronizer, ValueCollector, WebSocketTransport, perf);
         CleanupService = new SchemaCleanupService();
 
         PersistenceService = new SchemaArchiveSerializer(PluginVersion);
@@ -77,6 +78,7 @@ public class UIBuilderService : IDisposable
             EventManager,
             GeometryPicks,
             TriggerPresses,
+            perf,
             PluginVersion,
             SessionId
         );

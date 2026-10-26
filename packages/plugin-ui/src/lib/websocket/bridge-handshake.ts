@@ -1,16 +1,21 @@
 // The first exchange on every socket. The plugin's BridgeAccess speaks the other side; both are
 // pinned to packages/schemas/fixtures/bridge-handshake.json.
 
+import { RHINO_PANEL_HOST } from '$lib/app.config';
+
 /** The plugin closes a socket with this code when it didn't send the right secret first. */
 export const BRIDGE_UNAUTHORIZED_CLOSE_CODE = 4401;
 
 /** The largest file the plugin saves or picks for the Rhino panel (AppConfig.ValueLimits.MaxFileSizeBytes). */
 export const MAX_HOST_FILE_BYTES = 157_286_400;
 
-type AuthenticateMessage = { type: 'authenticate'; secret: string; host?: string };
+type AuthenticateMessage = { type: 'authenticate'; secret: string; host?: typeof RHINO_PANEL_HOST };
 
 /** `host` is `rhino` from the Rhino panel: only that socket may ask the plugin for a file dialog. */
-export function authenticateMessage(secret: string, host?: string): AuthenticateMessage {
+export function authenticateMessage(
+	secret: string,
+	host?: typeof RHINO_PANEL_HOST
+): AuthenticateMessage {
 	return host ? { type: 'authenticate', secret, host } : { type: 'authenticate', secret };
 }
 

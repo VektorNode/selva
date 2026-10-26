@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeHostFrame } from '../host-frame';
 import { createHostFilesClient, HostFileError, type HostFileSocket } from '../host-files-client';
 
@@ -27,6 +27,15 @@ const client = (fake: ReturnType<typeof fakeSocket>, maxFileBytes = 1024) =>
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('host files client', () => {
+	// Sequential ids keep the replies below readable; uniqueness is pending-requests' to test.
+	beforeEach(() => {
+		let next = 0;
+		vi.spyOn(crypto, 'randomUUID').mockImplementation(
+			() => String(++next) as ReturnType<typeof crypto.randomUUID>
+		);
+	});
+	afterEach(() => vi.restoreAllMocks());
+
 	it('sends a save as one host frame and resolves true when saved', async () => {
 		const fake = fakeSocket();
 		const saving = client(fake).saveBlob(new Blob(['abc']), 'facade.zip');

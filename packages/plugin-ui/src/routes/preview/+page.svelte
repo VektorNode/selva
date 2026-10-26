@@ -5,7 +5,6 @@
 	import {
 		AppShell,
 		StateDisplay,
-		Button,
 		AppLayout,
 		SolveMessages,
 		createSolvingIndicator,
@@ -25,6 +24,7 @@
 	import ModeHeader from '$lib/components/ModeHeader.svelte';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');
+	const panel = isRhinoPanel();
 	let isViewerFullscreen = $state(false);
 
 	const preview = usePreviewState(() => sessionId);
@@ -39,7 +39,7 @@
 		}
 	});
 	const solvingIndicator = createSolvingIndicator(() => preview.isSolving, {
-		freezesDuringSolve: isRhinoPanel()
+		freezesDuringSolve: panel
 	});
 
 	$effect(() => {
@@ -107,23 +107,9 @@
 		onabort={() => preview.abort()}
 		onconfirm={() => preview.acknowledge()}
 		ondiscard={() => preview.discard()}
-		freezesDuringSolve={isRhinoPanel()}
-		placement={isRhinoPanel() ? 'inline' : 'floating'}
+		freezesDuringSolve={panel}
+		placement={panel ? 'inline' : 'floating'}
 	/>
-{/snippet}
-
-{#snippet headerActions()}
-	{#if preview.state.syncNeeded}
-		<Button
-			variant="default"
-			size="sm"
-			onclick={() => preview.syncParameters()}
-			class="animate-pulse bg-amber-500 hover:bg-amber-600"
-			title="Sync Parameters"
-		>
-			⚡ <span class="max-md:sr-only">Sync Parameters</span>
-		</Button>
-	{/if}
 {/snippet}
 
 <AppShell
@@ -143,7 +129,8 @@
 			onClose={() => wsState.closeDefinition(sessionId)}
 			onEdit={() => wsState.editInGrasshopper(sessionId)}
 			title={preview.state.schema?.name ?? null}
-			actions={headerActions}
+			syncNeeded={preview.state.syncNeeded}
+			onSync={() => preview.syncParameters()}
 		/>
 	{/snippet}
 
@@ -165,8 +152,8 @@
 					isSolving={preview.isSolving}
 					showSolvingIndicator={preview.state.schema.instanceSolve !== false &&
 						solvingIndicator.show}
-					solvingIndicatorPlacement={isRhinoPanel() ? 'inline' : 'floating'}
-					solveMessages={isRhinoPanel() ? solveMessages : undefined}
+					solvingIndicatorPlacement={panel ? 'inline' : 'floating'}
+					solveMessages={panel ? solveMessages : undefined}
 					hasPendingChanges={preview.hasPendingChanges}
 					bind:isViewerFullscreen
 					values={preview.values}
@@ -195,7 +182,7 @@
 	{/if}
 </AppShell>
 
-{#if !isRhinoPanel()}
+{#if !panel}
 	{@render solveMessages()}
 {/if}
 

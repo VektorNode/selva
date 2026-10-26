@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using Rhino.Geometry;
@@ -23,8 +24,9 @@ public sealed class DisplayPerf
     private static readonly ConcurrentDictionary<string, HashSet<string>> PreviousGeometry =
         new ConcurrentDictionary<string, HashSet<string>>();
 
-    private static readonly ConcurrentDictionary<string, Dictionary<string, byte[]>> PreviousBatches =
-        new ConcurrentDictionary<string, Dictionary<string, byte[]>>();
+    // Branch path -> SHA-256 of its blob. Hashes, not blobs: entries live as long as the process.
+    private static readonly ConcurrentDictionary<string, Dictionary<string, string>> PreviousBatches =
+        new ConcurrentDictionary<string, Dictionary<string, string>>();
 
     private readonly Dictionary<string, object> _passMs = new Dictionary<string, object>();
     private readonly long _start = Stopwatch.GetTimestamp();
@@ -46,6 +48,12 @@ public sealed class DisplayPerf
 
     public static DisplayPerf StartIfEnabled() => PerfLog.Enabled ? new DisplayPerf() : null;
 
+    public static void Forget(string componentId)
+    {
+        PreviousGeometry.TryRemove(componentId, out _);
+        PreviousBatches.TryRemove(componentId, out _);
+    }
+
     public void EndPass(string name)
     {
         var now = Stopwatch.GetTimestamp();
@@ -64,7 +72,7 @@ public sealed class DisplayPerf
     ///     so the comparisons stay off the UI thread and out of every stage timing.
     /// </summary>
     public void BatchesDone(string componentId, IReadOnlyList<GeometryBase> geometry,
-        IReadOnlyList<(string path, DisplayBatch batch)> branches, MeshingParameters meshing, bool defaultMeshing)
+        IReadOnlyList<(string path, DisplayBatch batch)> branches, MeshingParameters meshing)
     {
         var backgroundMs = PerfLog.MsSince(_start);
 
@@ -86,7 +94,6 @@ public sealed class DisplayPerf
         _record = new Dictionary<string, object>
         {
             ["component"] = componentId,
-            ["meshing"] = defaultMeshing ? "FastRenderMesh (default)" : "custom",
             ["inputs"] = geometry.GroupBy(g => g.GetType().Name).ToDictionary(g => g.Key, g => g.Count()),
             ["branches"] = branches.Count,
             ["vertices"] = vertices,
@@ -113,7 +120,7 @@ public sealed class DisplayPerf
     }
 
     /// <param name="previewMs">The UI-thread preview setup that follows the background task.</param>
-    public void Write(string nickname, int skipped, double previewMs)
+    public void Write(string nickname, int skipped, double previewMs, bool defaultMeshing)
     {
         if (_record == null)
         {
@@ -121,6 +128,7 @@ public sealed class DisplayPerf
         }
 
         _record["nickname"] = nickname;
+        _record["meshing"] = defaultMeshing ? "FastRenderMesh (default)" : "custom";
         _record["skipped"] = skipped;
         ((Dictionary<string, object>)_record["ms"])["preview"] = Math.Round(previewMs, 2);
         PerfLog.Write("display", _record);
@@ -161,10 +169,11 @@ public sealed class DisplayPerf
     private static Dictionary<string, object> CompareBatches(string componentId,
         IReadOnlyList<(string path, DisplayBatch batch)> branches)
     {
-        var current = new Dictionary<string, byte[]>();
+        var current = new Dictionary<string, string>();
         var unchanged = 0;
         var unchangedBytes = 0L;
         PreviousBatches.TryGetValue(componentId, out var previous);
+        using var sha = SHA256.Create();
         foreach (var (path, batch) in branches)
         {
             var blob = batch.CompressedData;
@@ -173,9 +182,9 @@ public sealed class DisplayPerf
                 continue;
             }
 
-            current[path] = blob;
-            if (previous != null && previous.TryGetValue(path, out var before) &&
-                before.AsSpan().SequenceEqual(blob))
+            var hash = Convert.ToBase64String(sha.ComputeHash(blob));
+            current[path] = hash;
+            if (previous != null && previous.TryGetValue(path, out var before) && before == hash)
             {
                 unchanged++;
                 unchangedBytes += blob.Length;

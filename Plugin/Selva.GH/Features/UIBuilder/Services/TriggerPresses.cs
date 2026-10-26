@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
-using Selva.GH.Config;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
@@ -23,10 +22,12 @@ public sealed class TriggerPresses
 {
     private readonly HashSet<Guid> _pressed = new HashSet<Guid>();
 
+    /// <param name="scheduleDelayMs">How long the press's solve waits to start.</param>
     /// <returns>False when the param isn't a boolean input any more.</returns>
-    public bool Press(GH_Document document, Guid paramId)
+    public bool Press(GH_Document document, Guid paramId, int scheduleDelayMs)
     {
         if (!(document?.FindObject(paramId, false) is IGH_ContextualParameter param) ||
+            !(param is IGH_Param ghParam) || ghParam.Type != typeof(GH_Boolean) ||
             !(param is IGH_ActiveObject active))
         {
             return false;
@@ -34,8 +35,7 @@ public sealed class TriggerPresses
 
         param.AssignContextualData(new[] { new GH_Boolean(true) });
         _pressed.Add(paramId);
-        document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs,
-            _ => active.ExpireSolution(false));
+        document.ScheduleSolution(scheduleDelayMs, _ => active.ExpireSolution(false));
         return true;
     }
 

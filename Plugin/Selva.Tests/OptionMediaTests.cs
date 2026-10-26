@@ -60,7 +60,7 @@ public class OptionMediaTests
 
         MinPluginVersionStamp.Apply(schema);
 
-        Assert.Equal("0.23.0", schema.MinPluginVersion);
+        Assert.Equal("0.24.0", schema.MinPluginVersion);
     }
 
     [Fact]
@@ -178,7 +178,7 @@ public class OptionMediaTests
         var schema = SchemaWithDropdown(Timber());
         schema.SchemaVersion = "2.16.0";
 
-        var migrated = SchemaMigrator.MigrateToCurrentVersion(schema, new Version(0, 23, 0));
+        var migrated = SchemaMigrator.MigrateToCurrentVersion(schema, new Version(0, 24, 0));
 
         Assert.Equal(SchemaVersion.CURRENT_STRING, migrated.SchemaVersion);
         var item = (InputDropdownLayoutItem)((FlatLayoutConfig)migrated.Layout).Groups[0].Items[0];

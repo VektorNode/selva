@@ -67,6 +67,23 @@ public class WebSocketServer : IDisposable
     public bool IsRunning { get; private set; }
     public int Port { get; private set; }
 
+    /// <summary>Whether an authenticated socket that declared <paramref name="host" /> is connected.</summary>
+    public bool HasClientFrom(string host)
+    {
+        lock (_clientsLock)
+        {
+            foreach (var state in _clientState.Values)
+            {
+                if (state.Host == host)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -615,7 +632,7 @@ public class WebSocketServer : IDisposable
 
         // Registered before the acknowledgement, so a full server refuses instead of acknowledging
         // and then dropping the socket.
-        if (!TryRegisterClient(webSocket))
+        if (!TryRegisterClient(webSocket, host))
         {
             await CloseOutputQuietlyAsync(
                 webSocket, WebSocketCloseStatus.PolicyViolation, "Maximum client connections reached")
@@ -720,7 +737,7 @@ public class WebSocketServer : IDisposable
     }
 
     // Returns false if MAX_CLIENTS is reached; caller closes the socket in that case.
-    private bool TryRegisterClient(WebSocket webSocket)
+    private bool TryRegisterClient(WebSocket webSocket, string host)
     {
         lock (_clientsLock)
         {
@@ -730,7 +747,7 @@ public class WebSocketServer : IDisposable
             }
 
             _connectedClients.Add(webSocket);
-            _clientState[webSocket] = new ClientSendState();
+            _clientState[webSocket] = new ClientSendState(host);
             return true;
         }
     }
@@ -972,6 +989,14 @@ public class WebSocketServer : IDisposable
     {
         public readonly SemaphoreSlim SendLock = new SemaphoreSlim(1, 1);
         public int PendingCount;
+
+        public ClientSendState(string host)
+        {
+            Host = host;
+        }
+
+        /// <summary>What the socket declared when it authenticated; null for a browser tab.</summary>
+        public string Host { get; }
     }
 }
 

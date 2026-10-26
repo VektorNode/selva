@@ -8,7 +8,7 @@
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 	import { formatMessage } from '$lib/i18n/messages';
 	import { pickFile } from '$lib/utils/host-files';
-	import { shouldConvertWebp, webpToPng } from '$lib/utils/webp-to-png';
+	import { acceptsFileEnding, isWebp, shouldConvertWebp, webpToPng } from '$lib/utils/webp-to-png';
 
 	interface Props {
 		value?: string;
@@ -95,11 +95,6 @@
 		return ext.toLowerCase();
 	}
 
-	function isValidFileExtension(fileEnding: string): boolean {
-		if (acceptedFormats.length === 0) return true;
-		return acceptedFormats.includes(fileEnding.toLowerCase());
-	}
-
 	// Runs before the size cap: the PNG is larger than the WebP it came from. A WebP already over
 	// the cap is passed through unconverted, so the cap rejects it without a full decode.
 	async function prepare(
@@ -163,9 +158,9 @@
 			}
 
 			const fetched = await response.blob();
-			const requestedEnding = getFileExtension(urlInput);
+			const requestedEnding = (await isWebp(fetched)) ? '.webp' : getFileExtension(urlInput);
 
-			if (!isValidFileExtension(requestedEnding)) {
+			if (!acceptsFileEnding(requestedEnding, acceptedFormats)) {
 				urlError = { message: formatNotAccepted(requestedEnding), isCors: false };
 				return;
 			}
@@ -227,7 +222,7 @@
 	async function handleFile(file: File) {
 		const requestedEnding = getFileExtension(file.name);
 
-		if (!isValidFileExtension(requestedEnding)) {
+		if (!acceptsFileEnding(requestedEnding, acceptedFormats)) {
 			toast.error(formatNotAccepted(requestedEnding));
 			return;
 		}

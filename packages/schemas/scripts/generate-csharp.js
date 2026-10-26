@@ -445,7 +445,7 @@ ${sectionClasses.join('\n\n')}
  * Generate base class for a discriminated union
  */
 function generateUnionBaseClass(unionName, config) {
-	const { commonProps, discriminators, baseClassName } = config;
+	const { discriminators, baseClassName } = config;
 
 	let baseProps = '';
 
@@ -456,6 +456,25 @@ function generateUnionBaseClass(unionName, config) {
         public abstract string ${pascalCase(disc)} { get; }
 `;
 	}
+
+	for (const { name, prop, required } of unionBaseProperties(config)) {
+		baseProps += `${generateProperty(name, prop, required)}
+`;
+	}
+
+	return `/// <summary>
+    /// Base class for ${unionName} discriminated union
+    /// </summary>
+    [JsonConverter(typeof(${baseClassName}Converter))]
+    public abstract class ${baseClassName}
+    {${baseProps}
+    }`;
+}
+
+/** The properties a union's base class declares, discriminators excluded. */
+function unionBaseProperties(config) {
+	const { commonProps, discriminators } = config;
+	const result = [];
 
 	// Extract base class from variants that use allOf with a base class
 	// (e.g., InputNumberLayoutItem references LayoutItemBase)
@@ -491,9 +510,7 @@ function generateUnionBaseClass(unionName, config) {
 	}
 	for (const [propName, prop] of Object.entries(baseClassProps)) {
 		if (!discriminators.includes(propName)) {
-			const required = baseClassRequired.includes(propName);
-			baseProps += `${generateProperty(propName, prop, required)}
-`;
+			result.push({ name: propName, prop, required: baseClassRequired.includes(propName) });
 		}
 	}
 
@@ -508,9 +525,7 @@ function generateUnionBaseClass(unionName, config) {
 					const { properties, required: requiredFields } = resolveDefinition(variant);
 					const prop = properties[propName];
 					if (prop) {
-						const required = requiredFields.includes(propName);
-						baseProps += `${generateProperty(propName, prop, required)}
-`;
+						result.push({ name: propName, prop, required: requiredFields.includes(propName) });
 						break;
 					}
 				}
@@ -518,13 +533,7 @@ function generateUnionBaseClass(unionName, config) {
 		}
 	}
 
-	return `/// <summary>
-    /// Base class for ${unionName} discriminated union
-    /// </summary>
-    [JsonConverter(typeof(${baseClassName}Converter))]
-    public abstract class ${baseClassName}
-    {${baseProps}
-    }`;
+	return result;
 }
 
 /**
@@ -587,7 +596,30 @@ ${discriminatorOverrides}${propsSection}
 function generateUnknownVariantClass(unionName, config) {
 	const { discriminators, baseClassName } = config;
 	const overrides = discriminators
-		.map((d) => `        public override string ${pascalCase(d)} => Raw["${d}"]?.Value<string>();`)
+		.map(
+			(d) => `        public override string ${pascalCase(d)} => LenientJson.String(Raw, "${d}");`
+		)
+		.join('\n');
+
+	// Only scalar base fields are read, and each one leniently: a newer variant may give a base
+	// field another type, and a serializer Populate would throw on it.
+	const readers = {
+		string: 'String',
+		Guid: 'Guid',
+		int: 'Int',
+		'int?': 'Int',
+		double: 'Double',
+		'double?': 'Double',
+		bool: 'Bool',
+		'bool?': 'Bool'
+	};
+	const reads = unionBaseProperties(config)
+		.map(({ name, prop, required }) => {
+			const reader = readers[jsonTypeToCSharp(prop, name, required)];
+			const field = pascalCase(name);
+			return reader && `            ${field} = LenientJson.${reader}(raw, "${name}") ?? ${field};`;
+		})
+		.filter(Boolean)
 		.join('\n');
 
 	return `/// <summary>
@@ -599,6 +631,7 @@ function generateUnknownVariantClass(unionName, config) {
         public Unknown${unionName}(JObject raw)
         {
             Raw = raw;
+${reads}
         }
 
         [JsonIgnore]
@@ -633,7 +666,7 @@ function generateUnionConverter(unionName, config) {
 
 	// Build the variable declarations
 	const varDeclarations = discriminators
-		.map((disc) => `var ${disc} = jsonObject["${disc}"]?.Value<string>();`)
+		.map((disc) => `var ${disc} = LenientJson.String(jsonObject, "${disc}");`)
 		.join('\n');
 
 	return `
@@ -657,7 +690,7 @@ ${varDeclarations}
             ${baseClassName} item;
 ${conditions}
             else
-                item = new Unknown${unionName}(jsonObject);
+                return new Unknown${unionName}(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;

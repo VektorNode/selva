@@ -1,21 +1,24 @@
 using System.Collections.Generic;
 using Grasshopper.Kernel;
 using Rhino;
-using Selva.GH.Config;
 
 namespace Selva.GH.Utilities.Helpers;
 
 public static class GHDocumentMutator
 {
-    /// <summary>Delay comes from AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs.</summary>
-    public static void ScheduleComponentExpire(GH_Document document, GH_Component component, bool immediate = false)
+    /// <param name="delayMs">
+    ///     <see cref="Features.UIBuilder.Services.Communication.WebSocketTransport.ScheduleSolutionDelayMs" />
+    ///     where a page is listening, so the panel paints "Solving…" before the solve takes the UI thread.
+    /// </param>
+    public static void ScheduleComponentExpire(GH_Document document, GH_Component component, int delayMs,
+        bool immediate = false)
     {
         if (document == null)
         {
             return;
         }
 
-        document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs,
+        document.ScheduleSolution(delayMs,
             _ => { component?.ExpireSolution(immediate); });
     }
 

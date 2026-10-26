@@ -55,6 +55,8 @@
 		         Link="Linked\WebSocketHandshake.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\BridgeAccess.cs"
 		         Link="Linked\BridgeAccess.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\BridgeRole.cs"
+		         Link="Linked\BridgeRole.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\WebSocketServer.cs"
 		         Link="Linked\WebSocketServer.cs"/>
 		<Compile Include="..\Selva.GH\Config\AppConfig.cs" Link="Linked\AppConfig.cs"/>
@@ -103,6 +105,16 @@
 		         Link="Linked\HostFileCoordinator.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ModalGate.cs"
 		         Link="Linked\ModalGate.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\PromptOutcome.cs"
+		         Link="Linked\PromptOutcome.cs"/>
+		<!-- The pure decisions behind viewport picks and button presses; their Rhino halves stay in
+		     GeometryPicks, GeometryFilter and TriggerPresses. -->
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\PickSummary.cs"
+		         Link="Linked\PickSummary.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Helpers\FilterKinds.cs"
+		         Link="Linked\FilterKinds.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\TriggerButtons.cs"
+		         Link="Linked\TriggerButtons.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ComponentStateManager.cs"
 		         Link="Linked\ComponentStateManager.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\SolveDiagnostics.cs"

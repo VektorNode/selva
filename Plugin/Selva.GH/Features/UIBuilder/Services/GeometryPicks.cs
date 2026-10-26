@@ -5,28 +5,30 @@ using Grasshopper.Kernel;
 using Rhino;
 using Rhino.Commands;
 using Rhino.Geometry;
-using Selva.GH.Config;
 using Selva.GH.Features.UIBuilder.Helpers;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
-/// <summary>The answer to one pick: `picked` with a summary, `cancelled`, or `failed` with a reason.</summary>
+/// <summary>The answer to one pick: picked with a summary, cancelled, or failed with a reason.</summary>
 public sealed class GeometryPickOutcome
 {
-    private GeometryPickOutcome(string kind, string summary, string error)
+    private GeometryPickOutcome(PromptOutcome kind, string summary, string error)
     {
         Kind = kind;
         Summary = summary;
         Error = error;
     }
 
-    public string Kind { get; }
+    public PromptOutcome Kind { get; }
     public string Summary { get; }
     public string Error { get; }
 
-    public static GeometryPickOutcome Picked(string summary) => new GeometryPickOutcome("picked", summary, null);
-    public static readonly GeometryPickOutcome Cancelled = new GeometryPickOutcome("cancelled", null, null);
-    public static GeometryPickOutcome Failed(string error) => new GeometryPickOutcome("failed", null, error);
+    public static GeometryPickOutcome Picked(string summary) =>
+        new GeometryPickOutcome(PromptOutcome.Picked, summary, null);
+
+    public static readonly GeometryPickOutcome Cancelled = new GeometryPickOutcome(PromptOutcome.Cancelled, null, null);
+
+    public static GeometryPickOutcome Failed(string error) => new GeometryPickOutcome(PromptOutcome.Failed, null, error);
 }
 
 /// <summary>
@@ -59,7 +61,8 @@ public sealed class GeometryPicks
     ///     command the way Grasshopper Player asks for it. Blocks until the user picks or presses Esc.
     ///     The caller holds <see cref="ModalGate.Shared" />.
     /// </summary>
-    public GeometryPickOutcome Pick(GH_Document document, Guid paramId)
+    /// <param name="scheduleDelayMs">How long the solve after a pick waits to start.</param>
+    public GeometryPickOutcome Pick(GH_Document document, Guid paramId, int scheduleDelayMs)
     {
         if (!(document?.FindObject(paramId, false) is IGH_ContextualParameter param))
         {
@@ -96,19 +99,19 @@ public sealed class GeometryPicks
             return GeometryPickOutcome.Cancelled;
         }
 
-        if (!ScheduleExpire(document, param))
+        if (!ScheduleExpire(document, param, scheduleDelayMs))
         {
             return GeometryPickOutcome.Failed("That input can't be picked into.");
         }
 
-        var summary = Summarize(picked);
+        var summary = PickSummary.Of(picked.Select(KindOf).ToList());
         _summaries[paramId] = summary;
         return GeometryPickOutcome.Picked(summary);
     }
 
     /// <summary>The param goes back to the definition's own geometry.</summary>
     /// <returns>True when a solve was scheduled for it.</returns>
-    public bool Clear(GH_Document document, Guid paramId)
+    public bool Clear(GH_Document document, Guid paramId, int scheduleDelayMs)
     {
         if (!_summaries.Remove(paramId) ||
             !(document?.FindObject(paramId, false) is IGH_ContextualParameter param))
@@ -117,7 +120,7 @@ public sealed class GeometryPicks
         }
 
         ParameterTypeHelper.TryInvokeClearContextualData(param);
-        return ScheduleExpire(document, param);
+        return ScheduleExpire(document, param, scheduleDelayMs);
     }
 
     /// <summary>The session ended; the component clears every contextual param itself.</summary>
@@ -126,24 +129,15 @@ public sealed class GeometryPicks
         _summaries.Clear();
     }
 
-    private static bool ScheduleExpire(GH_Document document, IGH_ContextualParameter param)
+    private static bool ScheduleExpire(GH_Document document, IGH_ContextualParameter param, int scheduleDelayMs)
     {
         if (!(param is IGH_ActiveObject active))
         {
             return false;
         }
 
-        document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs,
-            _ => active.ExpireSolution(false));
+        document.ScheduleSolution(scheduleDelayMs, _ => active.ExpireSolution(false));
         return true;
-    }
-
-    /// <summary>"2 curves", "1 point", "3 objects" when the kinds differ.</summary>
-    internal static string Summarize(IReadOnlyCollection<object> picked)
-    {
-        var kinds = picked.Select(KindOf).Distinct().ToList();
-        var (singular, plural) = kinds.Count == 1 ? kinds[0] : ("object", "objects");
-        return picked.Count == 1 ? $"1 {singular}" : $"{picked.Count} {plural}";
     }
 
     // ContextualData hands back Rhino's own types (LineCurve, Point3d), so name them the way

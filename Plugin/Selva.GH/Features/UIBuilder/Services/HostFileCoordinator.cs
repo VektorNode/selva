@@ -34,10 +34,6 @@ internal interface IHostFileReply
 /// </summary>
 internal sealed class HostFileCoordinator
 {
-    public const string Saved = "saved";
-    public const string Cancelled = "cancelled";
-    public const string Failed = "failed";
-
     private const string BusyMessage = "Close the open file dialog, or finish picking in Rhino, first.";
 
     private static readonly string[] ImageExtensions =
@@ -68,13 +64,13 @@ internal sealed class HostFileCoordinator
     {
         if (body.Count > _maxFileBytes)
         {
-            Send(reply, SaveResult(requestId, Failed, TooLarge));
+            Send(reply, SaveResult(requestId, PromptOutcome.Failed, TooLarge));
             return;
         }
 
         if (!_gate.TryEnter())
         {
-            Send(reply, SaveResult(requestId, Failed, BusyMessage));
+            Send(reply, SaveResult(requestId, PromptOutcome.Failed, BusyMessage));
             return;
         }
 
@@ -88,7 +84,7 @@ internal sealed class HostFileCoordinator
             catch (Exception ex)
             {
                 Logger.Warn($"[HostFiles] Save dialog for {requestId} failed: {ex.GetType().Name}");
-                Send(reply, SaveResult(requestId, Failed, "Could not open the Save dialog."));
+                Send(reply, SaveResult(requestId, PromptOutcome.Failed, "Could not open the Save dialog."));
                 return;
             }
             finally
@@ -98,7 +94,7 @@ internal sealed class HostFileCoordinator
 
             if (path == null)
             {
-                Send(reply, SaveResult(requestId, Cancelled, null));
+                Send(reply, SaveResult(requestId, PromptOutcome.Cancelled, null));
                 return;
             }
 
@@ -110,7 +106,7 @@ internal sealed class HostFileCoordinator
     {
         if (!_gate.TryEnter())
         {
-            Send(reply, PickResult(requestId, Failed, BusyMessage));
+            Send(reply, PickResult(requestId, PromptOutcome.Failed, BusyMessage));
             return;
         }
 
@@ -125,7 +121,7 @@ internal sealed class HostFileCoordinator
             catch (Exception ex)
             {
                 Logger.Warn($"[HostFiles] Open dialog for {requestId} failed: {ex.GetType().Name}");
-                Send(reply, PickResult(requestId, Failed, "Could not open the Open dialog."));
+                Send(reply, PickResult(requestId, PromptOutcome.Failed, "Could not open the Open dialog."));
                 return;
             }
             finally
@@ -135,7 +131,7 @@ internal sealed class HostFileCoordinator
 
             if (path == null)
             {
-                Send(reply, PickResult(requestId, Cancelled, null));
+                Send(reply, PickResult(requestId, PromptOutcome.Cancelled, null));
                 return;
             }
 
@@ -181,13 +177,13 @@ internal sealed class HostFileCoordinator
                 using var stream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None);
                 stream.Write(body.Array!, body.Offset, body.Count);
             }).ConfigureAwait(false);
-            await reply.SendAsync(SaveResult(requestId, Saved, null)).ConfigureAwait(false);
+            await reply.SendAsync(SaveResult(requestId, PromptOutcome.Saved, null)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             // The message may hold the path, so it goes to the user only, never the log.
             Logger.Warn($"[HostFiles] Writing {body.Count} bytes for {requestId} failed: {ex.GetType().Name}");
-            Send(reply, SaveResult(requestId, Failed, $"Could not save the file: {ex.Message}"));
+            Send(reply, SaveResult(requestId, PromptOutcome.Failed, $"Could not save the file: {ex.Message}"));
         }
     }
 
@@ -199,7 +195,7 @@ internal sealed class HostFileCoordinator
                 new FileInfo(path).Length > _maxFileBytes ? null : File.ReadAllBytes(path)).ConfigureAwait(false);
             if (bytes == null)
             {
-                Send(reply, PickResult(requestId, Failed, TooLarge));
+                Send(reply, PickResult(requestId, PromptOutcome.Failed, TooLarge));
                 return;
             }
 
@@ -209,16 +205,16 @@ internal sealed class HostFileCoordinator
         catch (Exception ex)
         {
             Logger.Warn($"[HostFiles] Reading the file for {requestId} failed: {ex.GetType().Name}");
-            Send(reply, PickResult(requestId, Failed, $"Could not read the file: {ex.Message}"));
+            Send(reply, PickResult(requestId, PromptOutcome.Failed, $"Could not read the file: {ex.Message}"));
         }
     }
 
-    private object SaveResult(string requestId, string outcome, string? error)
+    private object SaveResult(string requestId, PromptOutcome outcome, string? error)
     {
         return OutboundEnvelopes.HostSaveFileResult(_sessionId, requestId, outcome, error);
     }
 
-    private object PickResult(string requestId, string outcome, string? error)
+    private object PickResult(string requestId, PromptOutcome outcome, string? error)
     {
         return OutboundEnvelopes.HostPickFileResult(_sessionId, requestId, outcome, error);
     }

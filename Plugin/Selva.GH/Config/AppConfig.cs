@@ -37,6 +37,11 @@ public static class AppConfig
     public static class ComponentLifecycle
     {
         public const int ScheduleSolutionDelayMs = 10;
+
+        // While the Rhino panel is connected. A solve holds the UI thread the panel's WebView paints
+        // on, so the page's "Solving…" must reach the screen before it starts: two 60 Hz frames, one
+        // to paint and one to present.
+        public const int PanelScheduleSolutionDelayMs = 35;
         public const int SchemaCleanupBroadcastTimeoutMs = 100;
     }
 

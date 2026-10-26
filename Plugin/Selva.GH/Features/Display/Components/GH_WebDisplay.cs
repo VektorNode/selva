@@ -121,6 +121,12 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         _previewBB = BoundingBox.Empty;
     }
 
+    public override void RemovedFromDocument(Grasshopper.Kernel.GH_Document document)
+    {
+        DisplayPerf.Forget(InstanceGuid.ToString());
+        base.RemovedFromDocument(document);
+    }
+
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddGeometryParameter("Geo", "G", "Geometry to display", GH_ParamAccess.tree);
@@ -170,23 +176,20 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         DA.GetData(5, ref ghMeshParams);
 
         var meshSettings = ghMeshParams?.Value ?? MeshingParameters.FastRenderMesh;
-        var defaultMeshing = ghMeshParams?.Value == null;
         var componentId = InstanceGuid.ToString();
         var mmPerUnit = DrawingUnits.ActiveDocMmPerUnit();
 
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
-                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, defaultMeshing,
-                        componentId, mmPerUnit),
+                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit),
                 CancelToken));
             return;
         }
 
         if (!GetSolveResults(DA, out var result))
         {
-            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, defaultMeshing,
-                componentId, mmPerUnit);
+            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit);
         }
 
         if (result == null)
@@ -275,7 +278,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             _previewPoints.Add((result.PreviewPoints[i], result.PointColors[i]));
         }
 
-        result.Perf?.Write(NickName, result.Skipped, PerfLog.MsSince(previewStart));
+        result.Perf?.Write(NickName, result.Skipped, PerfLog.MsSince(previewStart), ghMeshParams?.Value == null);
     }
 
     private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
@@ -367,7 +370,6 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<GH_String> metaTree,
         GH_Structure<ThreeMaterialGoo> matTree,
         MeshingParameters meshSettings,
-        bool defaultMeshing,
         string componentId,
         double mmPerUnit)
     {
@@ -661,7 +663,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             perf.EndPass("encode");
             perf.BatchesDone(componentId, work.Select(w => w.Geom).ToList(),
                 branches.Where(b => b.Batch != null).Select(b => (b.Path.ToString(), b.Batch)).ToList(),
-                meshSettings, defaultMeshing);
+                meshSettings);
         }
 
         return new SolveResult(branches, previewMeshes, previewMaterials, previewCurves, curveColors,

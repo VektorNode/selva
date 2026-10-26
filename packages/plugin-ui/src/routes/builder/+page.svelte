@@ -9,6 +9,7 @@
 		DropdownMenu,
 		Resizable,
 		toast,
+		unsupportedItems,
 		useFooterItem
 	} from '@selvajs/ui';
 	import { Save, RefreshCw, CloudUpload, Ellipsis, SlidersHorizontal } from '@lucide/svelte';
@@ -87,6 +88,10 @@
 	}
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
+
+	const leftOutOnSelva = $derived(
+		builderState?.state.draft ? unsupportedItems(builderState.state.draft, 'selva').length : 0
+	);
 
 	// Side by side under 1024px, the sidebar's quarter is too narrow to read a parameter name, and
 	// a docked Rhino panel is narrower still. Stacked, a parameter can still be dragged from the
@@ -244,17 +249,6 @@
 </script>
 
 {#snippet headerActions()}
-	{#if builderState?.state.syncNeeded}
-		<Button
-			variant="default"
-			size="sm"
-			onclick={() => builderState?.syncParameters()}
-			class="animate-pulse bg-amber-500 hover:bg-amber-600"
-			title="Sync Parameters"
-		>
-			⚡ <span class="max-md:sr-only">Sync Parameters</span>
-		</Button>
-	{/if}
 	<!-- Below lg the full row crowds out the schema name: Save stays, the rest goes in a menu. -->
 	<Button
 		variant="outline"
@@ -339,6 +333,8 @@
 			current="builder"
 			onSwitch={() => navigateTo('/preview')}
 			title={builderState?.state.draft?.name ?? null}
+			syncNeeded={builderState?.state.syncNeeded}
+			onSync={() => builderState?.syncParameters()}
 			actions={headerActions}
 		/>
 	{/snippet}
@@ -405,6 +401,16 @@
 						<main
 							class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py) max-lg:py-3"
 						>
+							<p class="text-muted-foreground -mb-3 text-xs" data-testid="host-summary">
+								{#if leftOutOnSelva === 0}
+									Runs in Rhino and on Selva.
+								{:else}
+									Runs in Rhino. On Selva, {leftOutOnSelva === 1
+										? '1 element is'
+										: `${leftOutOnSelva} elements are`} left out for now, and the definition solves with
+									its own values there.
+								{/if}
+							</p>
 							{#if builderState.state.draft.layout?.type === 'tabbed'}
 								<TabEditor
 									bind:tabs={builderState.state.draft.layout.tabs}

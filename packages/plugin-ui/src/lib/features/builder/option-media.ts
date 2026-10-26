@@ -2,8 +2,8 @@ import type { UISchema } from '@selvajs/schemas';
 import { getAllLayoutItems } from './operations';
 
 /**
- * Drops what no longer reaches the screen: media for options a static list no longer has, and
- * assets nothing points at. A dynamic list's options exist only at runtime, so its media stays.
+ * Drops assets no option points at. Media for an option the list doesn't have right now stays:
+ * Grasshopper owns the options, and a renamed or briefly removed one gets its picture back.
  */
 export function pruneUnusedMedia(schema: UISchema): void {
 	const used = new Set<string>();
@@ -11,18 +11,7 @@ export function pruneUnusedMedia(schema: UISchema): void {
 	for (const item of getAllLayoutItems(schema)) {
 		if (item.type !== 'input') continue;
 		if (item.widgetType !== 'dropdown' && item.widgetType !== 'dynamicValueList') continue;
-		const config = item.config;
-		const media = config?.optionMedia;
-		if (!media) continue;
-
-		if (item.widgetType === 'dropdown') {
-			const options = item.config.options ?? {};
-			for (const name of Object.keys(media)) {
-				if (!(name in options)) delete media[name];
-			}
-		}
-
-		for (const entry of Object.values(media)) {
+		for (const entry of Object.values(item.config?.optionMedia ?? {})) {
 			if (entry?.icon) used.add(entry.icon);
 			if (entry?.image) used.add(entry.image);
 		}

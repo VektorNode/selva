@@ -19,6 +19,9 @@
 		onEdit?: () => void;
 		/** The schema's name; null while it loads. */
 		title: string | null;
+		/** The canvas's params differ from the schema's. A player can't sync, so it never sees this. */
+		syncNeeded?: boolean;
+		onSync?: () => void;
 		actions?: Snippet;
 	}
 
@@ -30,6 +33,8 @@
 		onClose,
 		onEdit,
 		title,
+		syncNeeded = false,
+		onSync,
 		actions
 	}: Props = $props();
 
@@ -80,6 +85,17 @@
 	<span class="text-muted-foreground min-w-0 truncate text-sm font-medium">{title ?? ''}</span>
 
 	<div class="ml-auto flex shrink-0 items-center gap-2">
+		{#if syncNeeded && !player}
+			<Button
+				variant="default"
+				size="sm"
+				onclick={() => onSync?.()}
+				class="animate-pulse bg-amber-500 hover:bg-amber-600"
+				title="Sync Parameters"
+			>
+				⚡ <span class="max-md:sr-only">Sync Parameters</span>
+			</Button>
+		{/if}
 		{@render actions?.()}
 		{#if player}
 			<DropdownMenu.Root>

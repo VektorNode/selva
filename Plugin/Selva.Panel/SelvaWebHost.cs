@@ -48,12 +48,15 @@ internal sealed class SelvaWebHost
     public void Show(PanelTarget target)
     {
         _webView ??= CreateWebView();
-        if (_shown?.Url != target.Url)
+        var previous = _shown;
+
+        // Before navigating: the navigation policy judges the request against _shown.
+        _shown = target;
+        if (previous?.Url != target.Url)
         {
             _webView.Url = target.Url;
         }
 
-        _shown = target;
         Changed?.Invoke();
 
         if (_window != null)
@@ -66,7 +69,11 @@ internal sealed class SelvaWebHost
         }
     }
 
-    public void Clear()
+    /// <param name="keepWindow">
+    ///     Leaves the pop-out up, blank, for the next <see cref="Show" />: Open another… clears the
+    ///     old session before the new one shows.
+    /// </param>
+    public void Clear(bool keepWindow = false)
     {
         if (_webView != null && _shown != null)
         {
@@ -74,7 +81,11 @@ internal sealed class SelvaWebHost
         }
 
         _shown = null;
-        CloseWindow();
+        if (!keepWindow)
+        {
+            CloseWindow();
+        }
+
         Changed?.Invoke();
     }
 
@@ -147,7 +158,10 @@ internal sealed class SelvaWebHost
         _lastWindowBounds = window.Bounds;
         window.Content = null;
         _window = null;
-        if (_shuttingDown)
+
+        // Only a window the user closed docks back into an opened panel. Clear drops the target
+        // first, and the panel shows the launcher wherever it already is.
+        if (_shuttingDown || _shown == null)
         {
             return;
         }
@@ -198,7 +212,7 @@ internal sealed class SelvaWebHost
         {
             e.Cancel = true;
             if (_shown != null &&
-                NavigationPolicy.Decide(_shown.Url, e.Uri) is NavigationDecision.Allow or NavigationDecision.OpenInBrowser)
+                NavigationPolicy.DecideNewWindow(_shown.Url, e.Uri) == NavigationDecision.OpenInBrowser)
             {
                 OpenInBrowser(e.Uri);
             }

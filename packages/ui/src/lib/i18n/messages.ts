@@ -73,6 +73,8 @@ export interface ViewerMessages {
 	solveMessagesConfirm: string;
 	solveMessagesDiscard: string;
 	solveMessagesAbort: string;
+	/** Stands in for Abort where the page can't take a click mid-solve. */
+	solveMessagesEscHint: string;
 	solveMessagesDismiss: string;
 	solveSolving: string;
 	parametersTab: string;
@@ -133,7 +135,12 @@ export interface ViewerMessages {
 
 	// Geometry input (Rhino only)
 	/** The pick button when the input takes several kinds of object. */
-	geometryPick: string;
+	geometryPickAnyOne: string;
+	geometryPickAnyOther: string;
+	/** Shown while Rhino's viewport prompt for a pick is open. */
+	geometryPicking: string;
+	/** Where this page may not pick, such as a browser tab beside the Rhino panel. */
+	geometryPickInPanel: string;
 	geometryPickAgain: string;
 	geometryClear: string;
 	// The pick button when the input takes one kind: `One` picks a single object, `Other` several.
@@ -290,6 +297,7 @@ const en: ViewerMessages = {
 	solveMessagesConfirm: 'Continue',
 	solveMessagesDiscard: 'Discard',
 	solveMessagesAbort: 'Abort',
+	solveMessagesEscHint: 'Esc aborts the solve',
 	solveMessagesDismiss: 'Dismiss',
 	solveSolving: 'Solving…',
 	parametersTab: 'Parameters',
@@ -334,7 +342,10 @@ const en: ViewerMessages = {
 	invalidFormat: 'Invalid format',
 	invalidPattern: 'Invalid validation pattern configured',
 
-	geometryPick: 'Pick in Rhino',
+	geometryPickAnyOne: 'Pick an object',
+	geometryPickAnyOther: 'Pick objects',
+	geometryPicking: 'Pick in the viewport, Esc to cancel',
+	geometryPickInPanel: 'Pick in the Rhino panel',
 	geometryPickAgain: 'Pick again',
 	geometryClear: 'Clear',
 	geometryPickPointOne: 'Pick a point',
@@ -480,6 +491,7 @@ const de: ViewerMessages = {
 	solveMessagesConfirm: 'Weiter',
 	solveMessagesDiscard: 'Verwerfen',
 	solveMessagesAbort: 'Abbrechen',
+	solveMessagesEscHint: 'Esc bricht die Berechnung ab',
 	solveMessagesDismiss: 'Schliessen',
 	solveSolving: 'Berechnung läuft…',
 	parametersTab: 'Parameter',
@@ -524,7 +536,10 @@ const de: ViewerMessages = {
 	invalidFormat: 'Ungültiges Format',
 	invalidPattern: 'Ungültiges Prüfmuster hinterlegt',
 
-	geometryPick: 'In Rhino wählen',
+	geometryPickAnyOne: 'Objekt wählen',
+	geometryPickAnyOther: 'Objekte wählen',
+	geometryPicking: 'Im Ansichtsfenster wählen, Esc bricht ab',
+	geometryPickInPanel: 'Im Rhino-Panel wählen',
 	geometryPickAgain: 'Neu wählen',
 	geometryClear: 'Leeren',
 	geometryPickPointOne: 'Punkt wählen',

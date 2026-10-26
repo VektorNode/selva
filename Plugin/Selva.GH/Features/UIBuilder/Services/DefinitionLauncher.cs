@@ -69,7 +69,8 @@ internal static class DefinitionLauncher
         }
         catch (Exception ex)
         {
-            Logger.Error($"[DefinitionLauncher] Could not open {Path.GetFileName(path)}", ex);
+            // The message may hold the path, so it goes to the user only, never the log.
+            Logger.Error($"[DefinitionLauncher] Opening a definition failed: {ex.GetType().Name}");
             return $"Could not open {Path.GetFileName(path)}: {ex.Message}";
         }
     }

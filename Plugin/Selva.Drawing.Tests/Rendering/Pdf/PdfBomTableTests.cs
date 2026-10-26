@@ -9,9 +9,7 @@ using Selva.Drawing.Rendering.Svg;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// A 5-row x 4-column BOM table rendered to a one-page PDF. We assert the PDF reopens
-// rather than snapshotting bytes — PDFsharp stamps creation dates that drift
-// between runs.
+// A 5-row x 4-column BOM table rendered to a one-page PDF.
 public class PdfBomTableTests
 {
 	[Fact]

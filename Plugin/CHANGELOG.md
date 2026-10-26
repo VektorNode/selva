@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+**Requirements:** Rhino 8.12 or later. On Rhino 8 the plugin targets .NET Framework 4.8 and .NET 8 (was .NET 7), and on Rhino 9 it targets .NET 10.
+
+**Older plugins and new schemas:** a schema with geometry inputs or button-style checkboxes loses them when saved by a plugin older than this release. A schema with option icons or thumbnails needs plugin 0.24.0, so 0.23.0 betas refuse it and don't strip the pictures. Update the plugin on every machine that edits these files.
+
 ### Added
+
+- Selva panel: the web UI opens in a Rhino panel that docks or floats, instead of the browser. Enabling the UI Bridge opens it. The component's Open UI item brings it back, and Shift shows Open UI in Browser.
+- Player sessions: the panel's launcher, the `SelvaOpen` command (it takes a path, for toolbars and scripts) and Open another… open a definition with Grasshopper's editor hidden. The definition runs from its UI and nothing is written back to the file. Edit in Grasshopper, or showing the editor, turns the session into an author session. The launcher lists recent definitions.
+- Get Geometry, Get Point, Get Line and Get Plane inputs (schema 2.16.0): in the Selva panel, the UI picks objects in the Rhino viewport, and Esc cancels the pick. Selva leaves these inputs out and solves with the definition's own values.
+- A boolean input can show as a button (`displayAs: 'button'`). Pressing it sets the toggle for one solve.
+- Value lists show as a button row or as image tiles, and each option can carry an icon or a thumbnail (schema 2.17.0). The `.gh` stores each picture once.
+- In the panel, file inputs, presets and downloads use Rhino's own open and save dialogs.
 
 - Upload to Selva: the builder signs in to a hosted Selva instance through your browser, or with a pasted API key, and uploads the open definition as a new definition or as a new version of the one this file went to before. The key stays in your system's credential store (Credential Manager on Windows, the keychain on macOS) and never reaches the web UI. An upload lands as the draft unless Make live is on.
 - Builder: the App panel sets the definition's category and tags next to its name and description, marked Compute since only Selva uses them. Selva copies all four in when the definition is uploaded.
@@ -16,8 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Builder: the sidebar splits into Parameters, App, Local and Compute panels that remember their folds and filters, each tab gets a settings bar (icon, name, panel side, visibility), and a Save button highlights while there are unsaved edits. App holds what applies everywhere, Local what only this plugin's preview uses (Local render), Compute what only Selva uses (Compute render, and a list of inputs filled by something other than the form). The panel tabs shrink to icons when the sidebar is narrow.
 - Builder: an input's value source sits in a Compute only section at the end of its card, picked with Form, Client app or Server buttons, and a collapsed card shows a chip when its value comes from a client app or the server.
-- PDF export runs on PDFsharp 6.2.4 instead of PdfSharpCore and ImageSharp, and renders about twice as fast on large drawings. Rendering the same drawing twice still gives identical bytes. A JPEG from Draw Image now embeds at quality 92 instead of being re-compressed to quality 75, so photos look sharper and files with many photos get somewhat larger.
-- Draw Image: WebP images are skipped in PDF output, with a warning; SVG output still embeds them. Images from the Selva web UI arrive as PNG or JPEG.
+- PDF export runs on PDFsharp 6.2.4 instead of PdfSharpCore and ImageSharp, and renders about twice as fast on large drawings. Rendering the same drawing twice on the same machine gives identical bytes. Windows and Mac re-encode images differently, so the same drawing gives different bytes on each. A JPEG from Draw Image now embeds at quality 92 instead of being re-compressed to quality 75, so photos look sharper and files with many photos get somewhat larger.
+- Draw Image: WebP images are skipped in PDF output, with a warning; SVG output still embeds them. The same goes for PNG and JPEG on a machine without System.Drawing. Images from the Selva web UI arrive as PNG or JPEG.
+- Render PDF warns when it can't make the file deterministic, instead of writing a dated file without saying so.
+- UI Bridge: Open UI in Browser is now Open UI and shows the Selva panel. The browser option appears when you hold Shift.
 - Local render and Compute render each drive one host: the plugin's preview shows the 3D viewer only with Local render on, Selva only with Compute render on. Either switch used to turn the viewer on in both.
 
 ### Fixed

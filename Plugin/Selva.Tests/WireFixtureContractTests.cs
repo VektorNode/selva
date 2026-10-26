@@ -6,6 +6,7 @@ using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Selva.Schema.Models;
+using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 
@@ -236,15 +237,18 @@ public class WireFixtureContractTests
                 })),
 
             ["host-save-file-result.json"] = ("HostSaveFileResult",
-                OutboundEnvelopes.HostSaveFileResult(Session, "7", "failed", "The file is larger than 150 MB.")),
+                OutboundEnvelopes.HostSaveFileResult(Session, "7", PromptOutcome.Failed, "The file is larger than 150 MB.")),
 
             ["host-pick-file-result.json"] = ("HostPickFileResult",
-                OutboundEnvelopes.HostPickFileResult(Session, "8", "cancelled", null)),
+                OutboundEnvelopes.HostPickFileResult(Session, "8", PromptOutcome.Cancelled, null)),
 
             ["host-picked-file.json"] = ("HostPickedFile", HostFileFrameTests.SampleHeader()),
 
             ["pick-geometry-result.json"] = ("PickGeometryResult",
-                OutboundEnvelopes.PickGeometryResult(Session, "3", ParamA, "picked", "2 curves", null)),
+                OutboundEnvelopes.PickGeometryResult(Session, "3", ParamA, PromptOutcome.Picked, "2 curves", null)),
+
+            ["geometry-summary.json"] = ("GeometrySummary",
+                OutboundEnvelopes.GeometrySummary(Session, ParamA, null)),
 
             ["outputs.json"] = ("Outputs",
                 OutboundEnvelopes.Outputs(

@@ -28,6 +28,7 @@ namespace Selva.Drawing.Rendering.Pdf;
 public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 {
 	private readonly PdfRenderOptions _options;
+	private readonly List<string> _warnings = new List<string>();
 	private XGraphics _gfx;
 	private double _pageHeightMm;
 
@@ -82,9 +83,13 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		_options = options ?? new PdfRenderOptions();
 	}
 
+	// Problems from the last Render that still produced a usable file.
+	public IReadOnlyList<string> Warnings => _warnings;
+
 	public byte[] Render(Document document)
 	{
 		if (document == null) throw new ArgumentNullException(nameof(document));
+		_warnings.Clear();
 		PdfFontEmbedder.EnsureInstalled();
 		using var layoutScope = LayoutCache.Begin();
 
@@ -131,7 +136,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var xmp = _options.EmitXmpMetadata
 			? System.Text.Encoding.UTF8.GetBytes(PdfXmpMetadata.BuildPacket(document.Metadata ?? new DocumentMetadata()))
 			: null;
-		var bytes = PdfObjectRewriter.ReplaceInfoAndMetadata(ms.ToArray(), PdfInfo.Build(document.Metadata), xmp);
+		var bytes = PdfObjectRewriter.ReplaceInfoAndMetadata(ms.ToArray(), PdfInfo.Build(document.Metadata), xmp, _warnings);
 		PdfDeterminism.Apply(bytes);
 		return bytes;
 	}
@@ -582,7 +587,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	public void Visit(ImageElement element)
 	{
-		if (element?.Data == null || element.Data.Length == 0) return;
+		if (element?.Data == null || element.Data.Length == 0 || element.SvgOnly) return;
 		if (element.Width <= 0 || element.Height <= 0) return;
 
 		// PDFsharp embeds PNG and JPEG only. SVG and WEBP are skipped rather than thrown on; the

@@ -328,4 +328,24 @@ public class SchemaMigratorTests
         var savedItem = saved["layout"]!["groups"]![0]!["items"]![1];
         Assert.True(JToken.DeepEquals(originalItem, savedItem), savedItem!.ToString());
     }
+
+    [Fact]
+    public void UnknownLayoutItem_WithBaseFieldsOfAnotherType_StillRoundTrips()
+    {
+        var original = JObject.Parse(SchemaWithFutureItem);
+        var item = (JObject)original["layout"]!["groups"]![0]!["items"]![1]!;
+        item["visible"] = "when-hovered";
+        item["visibilityCondition"] = 7;
+        item["order"] = "first";
+        item["displayName"] = new JObject { ["en"] = "Hologram" };
+
+        var schema = original.ToObject<UISchema>()!;
+        var unknown = Assert.IsType<UnknownLayoutItem>(((FlatLayoutConfig)schema.Layout).Groups[0].Items[1]);
+        Assert.Equal(Guid.Parse("22222222-2222-4222-8222-222222222222"), unknown.ParamId);
+        Assert.Equal(0, unknown.Order);
+
+        var saved = JObject.Parse(JsonConvert.SerializeObject(schema, SchemaSerializationSettings.Settings));
+        var savedItem = saved["layout"]!["groups"]![0]!["items"]![1];
+        Assert.True(JToken.DeepEquals(item, savedItem), savedItem!.ToString());
+    }
 }

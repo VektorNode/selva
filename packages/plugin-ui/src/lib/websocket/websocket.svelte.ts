@@ -173,7 +173,7 @@ export class WebSocketState {
 	private currentSessionId: string | null = null;
 	private _hasConnectedBefore = false;
 	private authSecret: string | null = null;
-	private authHost: string | undefined;
+	private inRhinoPanel = false;
 	private readonly BATCH_DELAY_MS = 50; // Batch updates within 50ms window
 	// A value update that changes nothing starts no solve, so no solvingState ever clears it.
 	private readonly AWAITING_SOLVE_TIMEOUT_MS = 2000;
@@ -246,12 +246,12 @@ export class WebSocketState {
 	}
 
 	/**
-	 * Must be set before `connect()`; the socket sends it as its first message. `host` is `rhino`
-	 * in the Rhino panel, the only page the plugin opens file dialogs for.
+	 * Must be set before `connect()`; the socket sends it as its first message. The Rhino panel says
+	 * so: it is the only page the plugin opens file dialogs and viewport picks for.
 	 */
-	setAuthSecret(secret: string, host?: string) {
+	setAuthSecret(secret: string, inRhinoPanel: boolean) {
 		this.authSecret = secret;
-		this.authHost = host;
+		this.inRhinoPanel = inRhinoPanel;
 		this.authRejected = false;
 	}
 
@@ -295,7 +295,11 @@ export class WebSocketState {
 						window.location.reload();
 						return;
 					}
-					socket.send(JSON.stringify(authenticateMessage(secret, this.authHost)));
+					socket.send(
+						JSON.stringify(
+							authenticateMessage(secret, this.inRhinoPanel ? RHINO_PANEL_HOST : undefined)
+						)
+					);
 				};
 
 				const onAuthenticated = (role: BridgeRole) => {
@@ -459,7 +463,7 @@ export class WebSocketState {
 			return;
 		}
 
-		if (this.authHost === RHINO_PANEL_HOST) this.markAwaitingSolve();
+		if (this.inRhinoPanel) this.markAwaitingSolve();
 
 		// Batch updates within the time window
 		this.currentSessionId = sessionId;
@@ -535,7 +539,7 @@ export class WebSocketState {
 
 	/** One button press: a solve with `true`, after which the plugin puts `false` back. */
 	sendTrigger(sessionId: string, paramId: string) {
-		if (this.authHost === RHINO_PANEL_HOST) this.markAwaitingSolve();
+		if (this.inRhinoPanel) this.markAwaitingSolve();
 		this.send('trigger', { sessionId, paramId });
 	}
 

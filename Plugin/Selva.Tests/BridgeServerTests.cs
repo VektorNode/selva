@@ -93,6 +93,25 @@ public sealed class BridgeServerTests : IAsyncLifetime
         Assert.Null(frames[1].Text);
     }
 
+    // The bridge lengthens its schedule delay only while the panel is connected.
+    [Fact]
+    public async Task HasClientFrom_SeesTheRhinoPanelOnlyWhileItIsConnected()
+    {
+        using var tab = await ConnectAsync();
+        await SendAsync(tab, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
+        await ReceiveTextAsync(tab);
+        Assert.False(_server.HasClientFrom(BridgeAccess.PanelHost));
+
+        using var panel = await ConnectAsync();
+        await SendAsync(panel, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\",\"host\":\"rhino\"}");
+        await ReceiveTextAsync(panel);
+        Assert.True(_server.HasClientFrom(BridgeAccess.PanelHost));
+
+        await panel.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "", Timeout());
+        await WaitUntilAsync(() => !_server.HasClientFrom(BridgeAccess.PanelHost));
+        Assert.False(_server.HasClientFrom(BridgeAccess.PanelHost));
+    }
+
     [Fact]
     public async Task Send_ReachesOnlyTheSocketItNames()
     {

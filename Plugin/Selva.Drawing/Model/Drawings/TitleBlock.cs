@@ -236,6 +236,7 @@ public sealed class TitleBlock : LayoutElement
 		{
 			Data = logo.Data,
 			Format = logo.Format,
+			SvgOnly = logo.SvgOnly,
 			Position = new Point2D(x, y),
 			Width = drawW,
 			Height = drawH,

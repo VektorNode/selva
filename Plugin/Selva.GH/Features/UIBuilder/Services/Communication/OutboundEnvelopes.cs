@@ -57,11 +57,11 @@ public static class OutboundEnvelopes
     // The host-file replies go only to the Rhino panel socket that asked. `error` is shown to the
     // user and is null unless the outcome is `failed`.
 
-    public static object HostSaveFileResult(string sessionId, string requestId, string outcome, string error) =>
-        new { type = "hostSaveFileResult", sessionId, requestId, outcome, error };
+    public static object HostSaveFileResult(string sessionId, string requestId, PromptOutcome outcome, string error) =>
+        new { type = "hostSaveFileResult", sessionId, requestId, outcome = outcome.WireName(), error };
 
-    public static object HostPickFileResult(string sessionId, string requestId, string outcome, string error) =>
-        new { type = "hostPickFileResult", sessionId, requestId, outcome, error };
+    public static object HostPickFileResult(string sessionId, string requestId, PromptOutcome outcome, string error) =>
+        new { type = "hostPickFileResult", sessionId, requestId, outcome = outcome.WireName(), error };
 
     /// <summary>The header of a picked file's <see cref="HostFileFrame" />; the file follows it in the same frame.</summary>
     public static object HostPickedFile(string sessionId, string requestId, string name) =>
@@ -72,9 +72,16 @@ public static class OutboundEnvelopes
     ///     ("2 curves") is set when picked, `error` when failed. The geometry itself never leaves
     ///     Grasshopper.
     /// </summary>
-    public static object PickGeometryResult(string sessionId, string requestId, Guid paramId, string outcome,
-        string summary, string error) =>
-        new { type = "pickGeometryResult", sessionId, requestId, paramId, outcome, summary, error };
+    public static object PickGeometryResult(string sessionId, string requestId, Guid paramId,
+        PromptOutcome outcome, string summary, string error) =>
+        new { type = "pickGeometryResult", sessionId, requestId, paramId, outcome = outcome.WireName(), summary, error };
+
+    /// <summary>
+    ///     What a geometry input holds after a clear, sent whether or not the clear went through, so
+    ///     every page shows what Grasshopper has. `summary` is null when nothing is picked into it.
+    /// </summary>
+    public static object GeometrySummary(string sessionId, Guid paramId, string summary) =>
+        new { type = "geometrySummary", sessionId, paramId, summary };
 
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };

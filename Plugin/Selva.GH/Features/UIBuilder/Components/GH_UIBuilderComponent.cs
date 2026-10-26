@@ -321,7 +321,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                                         t.Exception);
                                 }
                             });
-                        GHDocumentMutator.ScheduleComponentExpire(document, this, true);
+                        GHDocumentMutator.ScheduleComponentExpire(document, this,
+                            _service.WebSocketTransport.ScheduleSolutionDelayMs, true);
                     }
                 }
             }
@@ -393,7 +394,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     if (started && !wasRunning)
                     {
                         RhinoApp.InvokeOnUiThread(new Action(() =>
-                            GHDocumentMutator.ScheduleComponentExpire(document, this, true)));
+                            GHDocumentMutator.ScheduleComponentExpire(document, this,
+                                AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, true)));
                     }
                 }
                 catch (Exception ex)

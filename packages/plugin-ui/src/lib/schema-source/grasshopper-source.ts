@@ -16,7 +16,6 @@ import type {
 import { createWebSocketSolveDriver } from './websocket-solve-driver';
 import { bridgeSecretForPage } from '$lib/websocket/bridge-secret';
 import { isRhinoPanel } from '$lib/utils/session';
-import { RHINO_PANEL_HOST } from '$lib/app.config';
 import type {
 	WsSchemaSavedMessage,
 	WsSchemaSaveRejectedMessage,
@@ -48,7 +47,7 @@ export function createGrasshopperSource(wsState: WebSocketState, port: number): 
 			if (!sessionId) return { ok: false, error: 'No session ID provided' };
 			const secret = bridgeSecretForPage(sessionId);
 			if (!secret) return { ok: false, error: NOT_OPENED_FROM_GRASSHOPPER };
-			wsState.setAuthSecret(secret, isRhinoPanel() ? RHINO_PANEL_HOST : undefined);
+			wsState.setAuthSecret(secret, isRhinoPanel());
 
 			const connected = await wsState.connect();
 			if (!connected) {

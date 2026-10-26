@@ -45,8 +45,14 @@ internal sealed class DefinitionLauncherClient
         .Where(File.Exists)
         .ToList();
 
+    /// <summary>From the start of an open until its session shows or it fails.</summary>
+    public bool IsOpening => Status != null;
+
     /// <summary>Set by the plug-in: true while the panel shows a session rather than the launcher.</summary>
     public Func<bool> IsShowingSession { get; set; } = () => false;
+
+    /// <summary>Set by the plug-in: true while the UI is popped out of the panel.</summary>
+    public Func<bool> IsInWindow { get; set; } = () => false;
 
     public void ShowOpenDialog()
     {
@@ -60,7 +66,12 @@ internal sealed class DefinitionLauncherClient
 
     public void Open(string path)
     {
-        Panels.OpenPanel(typeof(SelvaPanel).GUID);
+        // Popped out, the panel would only show the in-window label; the new session lands in the window.
+        if (!IsInWindow())
+        {
+            Panels.OpenPanel(typeof(SelvaPanel).GUID);
+        }
+
         Error = null;
         SetStatus("Loading Grasshopper…");
 

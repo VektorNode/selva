@@ -60,8 +60,9 @@ selva/
 | `Selva.FileIO`         | `netstandard2.0`   | none          | File in/out contract + its rules; referenced by other repos      |
 | `Selva.Rhino`          | `net48/net8/net10` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
 | `Selva.GH`             | `net48/net8/net10` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
-| `Selva.PluginVerifier` | `net48/net8/net10` | yes           | Loads the merged `.gha` after a Release build; Windows-only      |
-| `Selva.Tests`          | `net8.0` (xUnit)   | none          | Tests for `Selva.GH` + `Selva.Schema`                            |
+| `Selva.Panel`          | `net48/net8/net10` | RhinoCommon   | `.rhp` hosting the UI in a Rhino panel; loads before Grasshopper |
+| `Selva.PluginVerifier` | `net48/net8/net10` | yes           | Loads the merged `.gha` and the `.rhp` after a Release build     |
+| `Selva.Tests`          | `net8.0` (xUnit)   | none          | Tests for `Selva.GH`, `Selva.Schema` and the panel's nav policy  |
 | `Selva.Slva.Tests`     | `net8.0` (xUnit)   | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
 | `Selva.Drawing.Tests`  | `net8.0` (xUnit)   | none          | Tests for `Selva.Drawing`                                        |
 
@@ -70,6 +71,11 @@ The Rhino-coupled TFMs and Rhino SDK versions live once in `Plugin/Directory.Bui
 (`SelvaTargetFrameworks`, `Rhino8RefVersion`, `Rhino9RefVersion`); the SDK is pinned to .NET 10 in
 `global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. On
 non-Windows, the Rhino-coupled projects build `net8.0` only.
+
+`Selva.Panel` references RhinoCommon only, because it must load before Grasshopper. Its root
+namespace is `Selva.RhinoPanel`: `Selva.Panel` would shadow every Eto/WinForms `Panel` inside
+`Selva.GH`. The `.gha` and the `.rhp` never reference each other. They share one file,
+`PanelContract.cs`, which `Selva.GH` compiles in as a link.
 
 ### NuGet versions live in one file
 

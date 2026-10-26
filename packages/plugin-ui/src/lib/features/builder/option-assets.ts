@@ -86,11 +86,13 @@ const MASK_64 = (1n << 64n) - 1n;
 
 /**
  * FNV-1a over the asset's content, 48 bits. Not a security hash: it only has to tell a few dozen
- * assets in one schema apart, and it needs no secure context, which `crypto.subtle` does.
+ * assets in one schema apart, and it needs no secure context, which `crypto.subtle` does. A
+ * nonzero `salt` gives content another id when its own is held by different content.
  */
-export function assetId(asset: OptionAsset): string {
+export function assetId(asset: OptionAsset, salt = 0): string {
+	const content = asset.d ?? asset.img ?? '';
 	let hash = FNV_OFFSET;
-	for (const byte of new TextEncoder().encode(asset.d ?? asset.img ?? '')) {
+	for (const byte of new TextEncoder().encode(salt ? `${content}#${salt}` : content)) {
 		hash = ((hash ^ BigInt(byte)) * FNV_PRIME) & MASK_64;
 	}
 	return hash.toString(16).padStart(16, '0').slice(0, 12);
@@ -98,10 +100,19 @@ export function assetId(asset: OptionAsset): string {
 
 /** Adds an asset to the schema unless the same content is already there; returns its id. */
 export function putAsset(schema: UISchema, asset: OptionAsset): string {
-	const id = assetId(asset);
 	schema.assets ??= {};
-	schema.assets[id] ??= asset;
-	return id;
+	// Searched by content, not along the salt chain: pruning the content that held salt 0 leaves
+	// a gap in front of what went in under salt 1.
+	for (const [id, existing] of Object.entries(schema.assets)) {
+		if (existing.d === asset.d && existing.img === asset.img) return id;
+	}
+	for (let salt = 0; ; salt++) {
+		const id = assetId(asset, salt);
+		if (!schema.assets[id]) {
+			schema.assets[id] = asset;
+			return id;
+		}
+	}
 }
 
 /** Lucide's export name as the kebab-case name its site and the picker use. */

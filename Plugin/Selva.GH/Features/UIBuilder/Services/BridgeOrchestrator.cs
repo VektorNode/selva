@@ -35,6 +35,7 @@ public class BridgeOrchestrator : IDisposable
     private readonly ValueCollector _valueCollector;
     private readonly GeometryPicks _geometryPicks;
     private readonly TriggerPresses _triggerPresses;
+    private readonly BridgePerf _perf;
 
     private GH_Component _component;
     private bool _disposed;
@@ -50,11 +51,13 @@ public class BridgeOrchestrator : IDisposable
         DocumentEventManager eventManager,
         GeometryPicks geometryPicks,
         TriggerPresses triggerPresses,
+        BridgePerf perf,
         Version pluginVersion,
         string sessionId)
     {
         _geometryPicks = geometryPicks ?? throw new ArgumentNullException(nameof(geometryPicks));
         _triggerPresses = triggerPresses ?? throw new ArgumentNullException(nameof(triggerPresses));
+        _perf = perf ?? throw new ArgumentNullException(nameof(perf));
         _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
         _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueApplicator = valueApplicator ?? throw new ArgumentNullException(nameof(valueApplicator));
@@ -83,6 +86,7 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnCancelSolveRequested -= HandleCancelSolve;
         _webSocketTransport.OnPickGeometryRequested -= HandlePickGeometry;
         _webSocketTransport.OnClearGeometryRequested -= HandleClearGeometry;
+        _webSocketTransport.OnClearGeometryRefused -= BroadcastGeometrySummary;
         _webSocketTransport.OnTriggerRequested -= HandleTrigger;
     }
 
@@ -108,6 +112,7 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnCancelSolveRequested += HandleCancelSolve;
         _webSocketTransport.OnPickGeometryRequested += HandlePickGeometry;
         _webSocketTransport.OnClearGeometryRequested += HandleClearGeometry;
+        _webSocketTransport.OnClearGeometryRefused += BroadcastGeometrySummary;
         _webSocketTransport.OnTriggerRequested += HandleTrigger;
     }
 
@@ -157,8 +162,9 @@ public class BridgeOrchestrator : IDisposable
             return GeometryPickOutcome.Failed("That input doesn't take geometry.");
         }
 
-        var outcome = _geometryPicks.Pick(_component.OnPingDocument(), paramId);
-        if (outcome.Kind == "picked")
+        var outcome = _geometryPicks.Pick(_component.OnPingDocument(), paramId,
+            _webSocketTransport.ScheduleSolutionDelayMs);
+        if (outcome.Kind == PromptOutcome.Picked)
         {
             _stateManager.MarkSolveScheduled();
         }
@@ -170,7 +176,15 @@ public class BridgeOrchestrator : IDisposable
     {
         try
         {
-            if (_geometryPicks.Clear(_component.OnPingDocument(), paramId))
+            if (_stateManager.IsBusy)
+            {
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    "Grasshopper is still solving. Clear the input again when it has finished.");
+                return;
+            }
+
+            if (_geometryPicks.Clear(_component.OnPingDocument(), paramId,
+                    _webSocketTransport.ScheduleSolutionDelayMs))
             {
                 _stateManager.MarkSolveScheduled();
             }
@@ -179,6 +193,15 @@ public class BridgeOrchestrator : IDisposable
         {
             Logger.Error($"[BridgeOrchestrator] Clearing a geometry input failed: {ex.Message}", ex);
         }
+        finally
+        {
+            BroadcastGeometrySummary(this, paramId);
+        }
+    }
+
+    private void BroadcastGeometrySummary(object sender, Guid paramId)
+    {
+        _ = _webSocketTransport.BroadcastGeometrySummary(paramId, _geometryPicks.SummaryOf(paramId));
     }
 
     private void HandleTrigger(object sender, Guid paramId)
@@ -187,15 +210,17 @@ public class BridgeOrchestrator : IDisposable
         {
             if (_stateManager.IsBusy)
             {
-                _ = _webSocketTransport.BroadcastRuntimeMessage("warning",
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Warning,
                     "Grasshopper is still solving. Press the button again when it has finished.");
                 return;
             }
 
-            if (!IsSchemaInput(paramId, input => input.ParamType == "boolean") ||
-                !_triggerPresses.Press(_component.OnPingDocument(), paramId))
+            if (!TriggerButtons.IsButton(_getSchema(), paramId) ||
+                !_triggerPresses.Press(_component.OnPingDocument(), paramId,
+                    _webSocketTransport.ScheduleSolutionDelayMs))
             {
-                _ = _webSocketTransport.BroadcastRuntimeMessage("error", "That button's input is no longer in the definition.");
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    "That button's input is no longer in the definition.");
                 return;
             }
 
@@ -204,7 +229,8 @@ public class BridgeOrchestrator : IDisposable
         catch (Exception ex)
         {
             Logger.Error($"[BridgeOrchestrator] Button press failed: {ex.Message}", ex);
-            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Button press failed: {ex.Message}");
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                $"Button press failed: {ex.Message}");
         }
     }
 
@@ -215,7 +241,7 @@ public class BridgeOrchestrator : IDisposable
 
     private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
     {
-        _eventManager.Perf.ValuesArrived();
+        _perf.ValuesArrived();
         try
         {
             // A solve is running or scheduled-but-not-started: coalesce (latest wins) instead of
@@ -225,7 +251,7 @@ public class BridgeOrchestrator : IDisposable
             if (_stateManager.IsBusy)
             {
                 _stateManager.MergePendingValues(values);
-                _eventManager.Perf.ValuesCoalesced();
+                _perf.ValuesCoalesced();
                 return;
             }
 
@@ -235,13 +261,13 @@ public class BridgeOrchestrator : IDisposable
         {
             Logger.Error($"[BridgeOrchestrator] Error handling value update: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
-            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Error handling value update: {ex.Message}");
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
         }
     }
 
     /// <summary>
     ///     Apply a set of values to the live document and schedule a solve. Marks the solve as scheduled
-    ///     (synchronously, before ScheduleSolution's ~10ms defer elapses) so a value update arriving in
+    ///     (synchronously, before ScheduleSolution's delay elapses) so a value update arriving in
     ///     the schedule→start gap coalesces instead of scheduling a competing solve. Re-reads the current
     ///     schema each call — it may have changed via a save mid-drag.
     /// </summary>
@@ -253,7 +279,7 @@ public class BridgeOrchestrator : IDisposable
         if (!DocumentGuards.DocumentAndSchemaValid(document, schema, out _))
         {
             Logger.Warn("[BridgeOrchestrator] Document or schema invalid, skipping value update.");
-            _ = _webSocketTransport.BroadcastRuntimeMessage("error", "Document or schema invalid.");
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, "Document or schema invalid.");
             return;
         }
 
@@ -263,9 +289,9 @@ public class BridgeOrchestrator : IDisposable
 
             if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
             {
-                _ = _webSocketTransport.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
+                _ = _webSocketTransport.BroadcastRuntimeMessage(level, msg);
             }
-        });
+        }, _webSocketTransport.ScheduleSolutionDelayMs);
 
         // A non-zero count means a solution was scheduled (ApplyValuesAndSchedule schedules iff at
         // least one parameter expired). Close the schedule→start window before it opens.
@@ -321,7 +347,7 @@ public class BridgeOrchestrator : IDisposable
             {
                 if (contextBake == null)
                 {
-                    _ = _webSocketTransport.BroadcastRuntimeMessage("error",
+                    _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error,
                         "UIBridge Schema output is not connected to a Context Bake component " +
                         "with param name \"Schema\". Wire it up in Grasshopper first.");
                     _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -444,7 +470,7 @@ public class BridgeOrchestrator : IDisposable
             _ = _webSocketTransport.BroadcastSchemaUpdate(validatedSchema);
             _ = _webSocketTransport.BroadcastSchemaSaved(true);
 
-            GHDocumentMutator.ScheduleComponentExpire(document, _component);
+            GHDocumentMutator.ScheduleComponentExpire(document, _component, _webSocketTransport.ScheduleSolutionDelayMs);
 #if DEBUG
             Logger.Log("[UIBuilder] Save complete — component expire scheduled.");
 #endif
@@ -486,7 +512,7 @@ public class BridgeOrchestrator : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _webSocketTransport.BroadcastRuntimeMessage("error", "No document available.");
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, "No document available.");
                 return;
             }
 
@@ -496,7 +522,7 @@ public class BridgeOrchestrator : IDisposable
         catch (Exception ex)
         {
             Logger.Error($"[BridgeOrchestrator] Error computing sync preview: {ex.Message}", ex);
-            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Error computing sync preview: {ex.Message}");
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error computing sync preview: {ex.Message}");
         }
     }
 
@@ -533,7 +559,8 @@ public class BridgeOrchestrator : IDisposable
                 .ToList();
 
             GHDocumentMutator.RefreshObjectsOnCanvas(document, changedObjects);
-            GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
+            GHDocumentMutator.ScheduleComponentExpire(document, _component, _webSocketTransport.ScheduleSolutionDelayMs,
+                true);
 
             _ = _webSocketTransport.BroadcastSyncApplied(true);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Sync changes applied successfully.");
@@ -641,7 +668,7 @@ public class BridgeOrchestrator : IDisposable
             return;
         }
 
-        document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+        document.ScheduleSolution(_webSocketTransport.ScheduleSolutionDelayMs, doc =>
         {
             foreach (var bake in bakes)
             {
@@ -716,16 +743,5 @@ public class BridgeOrchestrator : IDisposable
                     .ToList();
             }
         }
-    }
-
-    private static string ConvertMessageLevel(GH_RuntimeMessageLevel level)
-    {
-        return level switch
-        {
-            GH_RuntimeMessageLevel.Error => "error",
-            GH_RuntimeMessageLevel.Warning => "warning",
-            GH_RuntimeMessageLevel.Remark => "info",
-            _ => "info"
-        };
     }
 }

@@ -25,13 +25,17 @@
 
 	// This page always solves in the user's own Grasshopper, in a browser tab too, so geometry
 	// inputs and buttons render. Picks and presses go to the plugin; their results never come
-	// back as form values.
+	// back as form values. Only the panel may pick: the plugin refuses a pick from a browser tab,
+	// which still shows what the panel picked.
 	const hostSocket = getWebSocketState(getWebSocketPortFromUrl());
 	const geometryPicks = createGeometryPicksClient(hostSocket, getSessionIdFromUrl);
 	setHostContext({
 		host: 'rhino',
-		pickGeometry: geometryPicks.pickGeometry,
-		clearGeometry: geometryPicks.clearGeometry,
+		...(isRhinoPanel() && {
+			pickGeometry: geometryPicks.pickGeometry,
+			clearGeometry: geometryPicks.clearGeometry
+		}),
+		onGeometrySummary: geometryPicks.onGeometrySummary,
 		trigger: (paramId) => hostSocket.sendTrigger(getSessionIdFromUrl(), paramId)
 	});
 

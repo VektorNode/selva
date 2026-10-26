@@ -3,7 +3,7 @@
 	import { enhance } from '$app/forms';
 
 	import { LogIn, LogOut } from '@lucide/svelte';
-	import { userLabel, canLogOut, type IdentityPageData } from './userIdentity';
+	import { userLabel, canLogOut, type IdentityPageData } from './user-identity';
 
 	const pageData = $derived(page.data as IdentityPageData);
 	const user = $derived(pageData.user ?? null);

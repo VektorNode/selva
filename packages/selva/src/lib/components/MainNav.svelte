@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { mainNavLinks, isActiveLink } from './navItems';
+	import { mainNavLinks, isActiveLink } from './nav-items';
 
 	const items = $derived(
 		mainNavLinks(

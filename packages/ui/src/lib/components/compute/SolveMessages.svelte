@@ -32,15 +32,11 @@
 		onconfirm: () => void;
 		ondiscard: () => void;
 		/**
-		 * The host can't paint while it solves (an embedded WebView on the solver's thread). The
-		 * live panel would only appear once the solve is over, so it is never shown; the result's
-		 * messages still are.
+		 * See `createSolvingIndicator`. The live panel would only paint once the solve is over, so
+		 * an Esc hint stands in for it; the result's messages still show.
 		 */
 		freezesDuringSolve?: boolean;
-		/**
-		 * `floating` overlays the bottom of the page. `inline` sits in the flow wherever the host
-		 * renders it, for a narrow host whose bottom edge is already its action row.
-		 */
+		/** `floating` overlays the bottom centre; `inline` sits in the flow below the host's content. */
 		placement?: 'floating' | 'inline';
 	}
 
@@ -261,7 +257,17 @@
 
 <div class="sr-only" role="status" aria-live="polite">{announcement}</div>
 
-{#if visible}
+{#if freezesDuringSolve && view === 'live'}
+	<!-- Painted before the solve takes the thread; Abort could not be clicked until it ends. -->
+	<p
+		class="text-xs text-muted-foreground {placement === 'inline'
+			? 'mt-3 px-1'
+			: 'bottom-4 fixed left-1/2 z-50 -translate-x-1/2'}"
+		data-testid="solve-esc-hint"
+	>
+		{t.solveMessagesEscHint}
+	</p>
+{:else if visible}
 	<div
 		class="p-3 border {placement === 'inline'
 			? 'mt-3 rounded-md bg-muted/40'

@@ -132,10 +132,36 @@ describe('putAsset', () => {
 		expect(second).toBe(first);
 		expect(Object.keys(schema.assets ?? {})).toEqual([first]);
 	});
+
+	it('gives content a new id when its own is held by different content', () => {
+		const taken = { d: 'M9 9' };
+		const schema = {
+			layout: { type: 'flat', groups: [] },
+			assets: { [assetId({ d: 'M3 3h18' })]: taken }
+		} as unknown as UISchema;
+
+		const id = putAsset(schema, { d: 'M3 3h18' });
+
+		expect(id).toBe(assetId({ d: 'M3 3h18' }, 1));
+		expect(schema.assets?.[id]).toEqual({ d: 'M3 3h18' });
+		expect(schema.assets?.[assetId({ d: 'M3 3h18' })]).toBe(taken);
+		expect(putAsset(schema, { d: 'M3 3h18' })).toBe(id);
+	});
+
+	it('finds content stored under a salt after the content ahead of it was pruned', () => {
+		const salted = assetId({ d: 'M3 3h18' }, 1);
+		const schema = {
+			layout: { type: 'flat', groups: [] },
+			assets: { [salted]: { d: 'M3 3h18' } }
+		} as unknown as UISchema;
+
+		expect(putAsset(schema, { d: 'M3 3h18' })).toBe(salted);
+		expect(Object.keys(schema.assets ?? {})).toEqual([salted]);
+	});
 });
 
 describe('pruneUnusedMedia', () => {
-	it('drops media for options Grasshopper no longer has, and assets nothing points at', () => {
+	it('keeps media for options the list lacks now, and drops assets nothing points at', () => {
 		const schema = schemaWithMedia();
 
 		pruneUnusedMedia(schema);
@@ -144,13 +170,13 @@ describe('pruneUnusedMedia', () => {
 			schema.layout as unknown as { groups: { items: { config: unknown }[] }[] }
 		).groups[0].items;
 		expect((dropdown.config as { optionMedia: object }).optionMedia).toEqual({
-			Oak: { icon: 'i1' }
+			Oak: { icon: 'i1' },
+			Pine: { icon: 'i2' }
 		});
-		// A dynamic list's options exist only at runtime, so its media is kept as authored.
 		expect((dynamic.config as { optionMedia: object }).optionMedia).toEqual({
 			'Zone 20': { image: 'i4' }
 		});
-		expect(Object.keys(schema.assets ?? {}).sort()).toEqual(['i1', 'i4']);
+		expect(Object.keys(schema.assets ?? {}).sort()).toEqual(['i1', 'i2', 'i4']);
 	});
 
 	it('removes the assets table once it is empty', () => {

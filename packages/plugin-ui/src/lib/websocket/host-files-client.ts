@@ -1,24 +1,25 @@
 // Saves and picks for the Rhino panel, whose WebView can't download a file or show a file picker
 // safely. The plugin shows the native dialog, and the file travels in one binary frame
-// (host-frame.ts). Every request gets exactly one reply, matched by requestId.
+// (host-frame.ts).
 
 import { encodeHostFrame } from './host-frame';
+import { createPendingRequests, type ReplySocket } from './pending-requests';
 
 /** The slice of WebSocketState this needs; a fake stands in for it in tests. */
-export interface HostFileSocket {
+export interface HostFileSocket extends ReplySocket {
 	readonly connected: boolean;
 	send(type: string, data: Record<string, unknown>): void;
 	sendBinary(data: Blob): void;
-	on(type: string, handler: (data: unknown) => void): void;
 }
 
 /** Failures worth showing the user as they are: the plugin's reason, or why it was never asked. */
 export class HostFileError extends Error {}
 
-type Reply =
+type Reply = { requestId: string } & (
 	| { type: 'hostSaveFileResult'; outcome: 'saved' | 'cancelled' | 'failed'; error?: string | null }
 	| { type: 'hostPickFileResult'; outcome: 'cancelled' | 'failed'; error?: string | null }
-	| { type: 'hostPickedFile'; name: string; body: ArrayBuffer };
+	| { type: 'hostPickedFile'; name: string; body: ArrayBuffer }
+);
 
 const NOT_CONNECTED = 'Not connected to Grasshopper.';
 const CONNECTION_LOST = 'Lost the connection to Grasshopper before the file dialog answered.';
@@ -28,36 +29,14 @@ export function createHostFilesClient(
 	getSessionId: () => string,
 	maxFileBytes: number
 ) {
-	let lastRequestId = 0;
-	const pending = new Map<
-		string,
-		{ resolve: (reply: Reply) => void; reject: (e: Error) => void }
-	>();
-
-	// The dispatcher has validated each reply against messageSchemas.ts.
-	const settle = (data: unknown) => {
-		const reply = data as Reply & { requestId: string };
-		const request = pending.get(reply.requestId);
-		if (!request) return;
-		pending.delete(reply.requestId);
-		request.resolve(reply);
-	};
-
-	socket.on('hostSaveFileResult', settle);
-	socket.on('hostPickFileResult', settle);
-	socket.on('hostPickedFile', settle);
-	socket.on('socketClosed', () => {
-		for (const request of pending.values()) request.reject(new HostFileError(CONNECTION_LOST));
-		pending.clear();
+	const pending = createPendingRequests<Reply>(socket, {
+		replyTypes: ['hostSaveFileResult', 'hostPickFileResult', 'hostPickedFile'],
+		connectionLost: () => new HostFileError(CONNECTION_LOST)
 	});
 
 	function request(send: (requestId: string) => void): Promise<Reply> {
 		if (!socket.connected) return Promise.reject(new HostFileError(NOT_CONNECTED));
-		const requestId = String(++lastRequestId);
-		return new Promise<Reply>((resolve, reject) => {
-			pending.set(requestId, { resolve, reject });
-			send(requestId);
-		});
+		return pending.request(send);
 	}
 
 	return {

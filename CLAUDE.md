@@ -29,6 +29,8 @@ Monorepo: `packages/` (TypeScript/Svelte workspace) and `Plugin/` (.NET / Grassh
 
 The web app runs in two modes: **Local** (`@selvajs/plugin-ui`, the drag-and-drop schema designer, embedded into `Selva.gha` and served from the plugin's local HTTP port) and **Cloud** (`@selvajs/selva`, standalone, solves through Rhino.Compute, installed via `@selvajs/cli`).
 
+In Rhino, Local runs inside a docked or floating Rhino panel (`Plugin/Selva.Panel`, a `.rhp`) by default. Shift opens it in the browser instead. In the panel, a solve freezes the page, because the WebView shares the UI thread with the solver. The panel also serves player sessions: a definition opened from the panel with the Grasshopper editor hidden. Specs: [rhino-panel](./plans/features/rhino-panel.md), [rhino-player](./plans/features/rhino-player.md).
+
 ## Code Style
 
 - Write self-documenting code. Keep it simple; avoid premature abstractions.

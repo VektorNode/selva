@@ -815,13 +815,20 @@ public override string WidgetType => null;
         public UnknownLayoutItem(JObject raw)
         {
             Raw = raw;
+            Id = LenientJson.String(raw, "id") ?? Id;
+            ParamId = LenientJson.Guid(raw, "paramId") ?? ParamId;
+            DisplayName = LenientJson.String(raw, "displayName") ?? DisplayName;
+            Description = LenientJson.String(raw, "description") ?? Description;
+            Order = LenientJson.Int(raw, "order") ?? Order;
+            Span = LenientJson.Int(raw, "span") ?? Span;
+            Visible = LenientJson.Bool(raw, "visible") ?? Visible;
         }
 
         [JsonIgnore]
         public JObject Raw { get; }
 
-        public override string Type => Raw["type"]?.Value<string>();
-        public override string WidgetType => Raw["widgetType"]?.Value<string>();
+        public override string Type => LenientJson.String(Raw, "type");
+        public override string WidgetType => LenientJson.String(Raw, "widgetType");
     }
 
 // ============================================================================
@@ -867,12 +874,13 @@ public override string Type => "flat";
         public UnknownLayoutConfig(JObject raw)
         {
             Raw = raw;
+            Gap = LenientJson.Int(raw, "gap") ?? Gap;
         }
 
         [JsonIgnore]
         public JObject Raw { get; }
 
-        public override string Type => Raw["type"]?.Value<string>();
+        public override string Type => LenientJson.String(Raw, "type");
     }
 
 // ============================================================================
@@ -888,8 +896,8 @@ public override string Type => "flat";
         public override LayoutItemBase ReadJson(JsonReader reader, Type objectType, LayoutItemBase existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var jsonObject = JObject.Load(reader);
-var type = jsonObject["type"]?.Value<string>();
-var widgetType = jsonObject["widgetType"]?.Value<string>();
+var type = LenientJson.String(jsonObject, "type");
+var widgetType = LenientJson.String(jsonObject, "widgetType");
 
             // Check if all discriminators are null or empty
             var allEmpty = string.IsNullOrEmpty(type) && string.IsNullOrEmpty(widgetType);
@@ -928,7 +936,7 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
             else if (type == "linebreak")
                 item = new LineBreakLayoutItem();
             else
-                item = new UnknownLayoutItem(jsonObject);
+                return new UnknownLayoutItem(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
@@ -999,7 +1007,7 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
         public override LayoutConfigBase ReadJson(JsonReader reader, Type objectType, LayoutConfigBase existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var jsonObject = JObject.Load(reader);
-var type = jsonObject["type"]?.Value<string>();
+var type = LenientJson.String(jsonObject, "type");
 
             // Check if all discriminators are null or empty
             var allEmpty = string.IsNullOrEmpty(type);
@@ -1014,7 +1022,7 @@ var type = jsonObject["type"]?.Value<string>();
             else if (type == "flat")
                 item = new FlatLayoutConfig();
             else
-                item = new UnknownLayoutConfig(jsonObject);
+                return new UnknownLayoutConfig(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;

@@ -120,7 +120,7 @@ public class DocumentSynchronizationService : IDisposable
             {
                 // Deletes and adds can't coexist in one event, so handle the delete and stop.
                 OnParameterDeletionRequired?.Invoke(removedIds, e.Document);
-                GHDocumentMutator.ScheduleComponentExpire(e.Document, _component);
+                GHDocumentMutator.ScheduleComponentExpire(e.Document, _component, _webSocketTransport.ScheduleSolutionDelayMs);
                 return;
             }
 
@@ -145,7 +145,7 @@ public class DocumentSynchronizationService : IDisposable
                 });
 
             // Expire so downstream components (GH_EvaluateSchema etc.) re-solve with the updated schema.
-            GHDocumentMutator.ScheduleComponentExpire(e.Document, _component);
+            GHDocumentMutator.ScheduleComponentExpire(e.Document, _component, _webSocketTransport.ScheduleSolutionDelayMs);
 
             _component?.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
                 $"New items added: {addedInputs.Count} param(s), {addedOutputs.Count} output(s).");
@@ -176,7 +176,8 @@ public class DocumentSynchronizationService : IDisposable
 
             // Schema already updated in memory — full expire so this component and downstream
             // ones (GH_EvaluateSchema etc.) re-solve with it.
-            GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
+            GHDocumentMutator.ScheduleComponentExpire(document, _component, _webSocketTransport.ScheduleSolutionDelayMs,
+                true);
 #if DEBUG
             Logger.Log("[UIBuilder] MetadataChanged — scheduling full expire");
 #endif

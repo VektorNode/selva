@@ -10,7 +10,7 @@ namespace Selva.Schema.Services;
 /// </summary>
 public static class MinPluginVersionStamp
 {
-    private static readonly Version OptionAssets = new Version(0, 23, 0);
+    private static readonly Version OptionAssets = new Version(0, 24, 0);
 
     public static void Apply(UISchema schema)
     {

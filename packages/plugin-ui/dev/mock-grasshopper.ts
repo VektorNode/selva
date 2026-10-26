@@ -1132,6 +1132,7 @@ wss.on('connection', (ws) => {
 
 			case 'clearGeometry':
 				delete values[msg.paramId as string];
+				send(ws, { type: 'geometrySummary', sessionId, paramId: msg.paramId, summary: null });
 				break;
 
 			case 'trigger':

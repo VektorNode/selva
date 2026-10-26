@@ -1,4 +1,5 @@
 import { getContext, setContext } from 'svelte';
+import type { GeometryKind } from '@selvajs/schemas';
 import type { UIHost } from '$lib/schema/host-support';
 
 // Tells InputControl which host it renders in and how to reach the host's own actions, without
@@ -9,10 +10,13 @@ export type GeometryPickResult =
 	| { outcome: 'cancelled' }
 	| { outcome: 'failed'; error: string };
 
+/** What a pick button can ask for: a Get Geometry filter's kinds, or Get Point/Line/Plane's own. */
+export type PickKind = GeometryKind | 'line' | 'plane';
+
 /** What a geometry input lets the user pick, as the host discovered it on the canvas. */
 export interface GeometryPickTarget {
 	/** The kinds its filter allows; absent when it takes anything. */
-	kinds?: readonly string[];
+	kinds?: readonly GeometryKind[];
 	/** 1 picks a single object. */
 	atMost?: number;
 }
@@ -23,6 +27,11 @@ export interface HostActions {
 	pickGeometry?: (paramId: string) => Promise<GeometryPickResult>;
 	/** Empties a geometry input again, back to the definition's own value. */
 	clearGeometry?: (paramId: string) => void;
+	/**
+	 * Reports what the param holds after every pick or clear, including those another page asked
+	 * for; null when nothing is picked into it. Returns an unsubscribe.
+	 */
+	onGeometrySummary?: (paramId: string, listener: (summary: string | null) => void) => () => void;
 	describeGeometry?: (paramId: string) => GeometryPickTarget | undefined;
 	/** Presses a button input: one solve with `true`, then it goes back to `false`. */
 	trigger?: (paramId: string) => void;

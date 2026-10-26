@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Grasshopper.Kernel;
 using Newtonsoft.Json;
 using Rhino;
 using Selva.Schema.Models;
@@ -40,6 +41,8 @@ public class WebSocketTransport : IDisposable
 
     private static readonly JsonSerializer SecureSerializer =
         JsonSerializer.Create(SecureSerializerSettings);
+
+    private const string PromptOpenMessage = "Rhino is already asking for something. Finish or cancel that first.";
 
     private readonly int _port;
     private readonly string _sessionId;
@@ -100,6 +103,21 @@ public class WebSocketTransport : IDisposable
     public bool IsRunning => _webSocketServer?.IsRunning ?? false;
     public int WebSocketPort => _webSocketServer?.Port ?? _port;
 
+    /// <summary>
+    ///     How long a solve the page asked for waits to start. Longer while the Rhino panel is
+    ///     connected: its WebView paints on the UI thread the solve takes.
+    /// </summary>
+    public int ScheduleSolutionDelayMs
+    {
+        get
+        {
+            var server = _webSocketServer;
+            return server != null && server.HasClientFrom(BridgeAccess.PanelHost)
+                ? AppConfig.ComponentLifecycle.PanelScheduleSolutionDelayMs
+                : AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs;
+        }
+    }
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
@@ -137,7 +155,11 @@ public class WebSocketTransport : IDisposable
     /// <summary>`pickGeometry`, on the UI thread. Answered with <see cref="BroadcastPickGeometryResult" />.</summary>
     public event EventHandler<InboundMessage> OnPickGeometryRequested;
 
+    /// <summary>`clearGeometry`, on the UI thread. Answered with <see cref="BroadcastGeometrySummary" />.</summary>
     public event EventHandler<Guid> OnClearGeometryRequested;
+
+    /// <summary>A `clearGeometry` refused because a prompt is open, on the UI thread.</summary>
+    public event EventHandler<Guid> OnClearGeometryRefused;
 
     public event EventHandler<Guid> OnTriggerRequested;
 
@@ -430,10 +452,20 @@ public class WebSocketTransport : IDisposable
         return envelope == null ? Task.CompletedTask : BroadcastAsync(envelope);
     }
 
-    public Task BroadcastRuntimeMessage(string level, string messageText)
+    public Task BroadcastRuntimeMessage(GH_RuntimeMessageLevel level, string messageText)
     {
         return BroadcastAsync(OutboundEnvelopes.RuntimeMessage(
-            _sessionId, level, messageText, DateTime.UtcNow));
+            _sessionId, LevelName(level), messageText, DateTime.UtcNow));
+    }
+
+    private static string LevelName(GH_RuntimeMessageLevel level)
+    {
+        return level switch
+        {
+            GH_RuntimeMessageLevel.Error => "error",
+            GH_RuntimeMessageLevel.Warning => "warning",
+            _ => "info"
+        };
     }
 
     /// <summary>
@@ -483,6 +515,12 @@ public class WebSocketTransport : IDisposable
     {
         return BroadcastAsync(OutboundEnvelopes.PickGeometryResult(_sessionId, requestId, paramId,
             outcome.Kind, outcome.Summary, outcome.Error));
+    }
+
+    /// <summary>What `paramId` holds now, null when nothing is picked into it.</summary>
+    public Task BroadcastGeometrySummary(Guid paramId, string summary)
+    {
+        return BroadcastAsync(OutboundEnvelopes.GeometrySummary(_sessionId, paramId, summary));
     }
 
     public Task BroadcastSelvaAccount(SelvaAccount account)
@@ -559,8 +597,9 @@ public class WebSocketTransport : IDisposable
     {
         try
         {
-            if (!IsFromPanel(frame))
+            if (BridgeAccess.IsRefusedFrom(InboundKind.HostSaveFile, frame.Host))
             {
+                Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
                 return;
             }
 
@@ -585,17 +624,6 @@ public class WebSocketTransport : IDisposable
         }
     }
 
-    private static bool IsFromPanel(ClientFrame frame)
-    {
-        if (frame.Host == BridgeAccess.PanelHost)
-        {
-            return true;
-        }
-
-        Logger.Warn("[WebSocketTransport] Refused a file dialog request from a browser tab.");
-        return false;
-    }
-
     private void ProcessInboundMessage(ClientFrame frame)
     {
         try
@@ -606,6 +634,12 @@ public class WebSocketTransport : IDisposable
             if (BridgeAccess.IsRefused(inbound.Kind, _role()))
             {
                 Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' in a {BridgeAccess.RoleName(_role())} session.");
+                return;
+            }
+
+            if (BridgeAccess.IsRefusedFrom(inbound.Kind, frame.Host))
+            {
+                Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' from a browser tab.");
                 return;
             }
 
@@ -677,11 +711,7 @@ public class WebSocketTransport : IDisposable
                     break;
 
                 case InboundKind.HostPickFile:
-                    if (IsFromPanel(frame))
-                    {
-                        _hostFiles.HandlePick(inbound.RequestId, inbound.Accept, new SocketReply(this, frame.Client));
-                    }
-
+                    _hostFiles.HandlePick(inbound.RequestId, inbound.Accept, new SocketReply(this, frame.Client));
                     break;
 
                 case InboundKind.HostSaveFile:
@@ -695,7 +725,7 @@ public class WebSocketTransport : IDisposable
                     if (!ModalGate.Shared.TryEnter())
                     {
                         _ = BroadcastPickGeometryResult(inbound.RequestId, inbound.ParamId,
-                            GeometryPickOutcome.Failed("Rhino is already asking for something. Finish or cancel that first."));
+                            GeometryPickOutcome.Failed(PromptOpenMessage));
                         break;
                     }
 
@@ -713,7 +743,26 @@ public class WebSocketTransport : IDisposable
                     break;
 
                 case InboundKind.ClearGeometry:
-                    MarshalToMainThread(() => OnClearGeometryRequested?.Invoke(this, inbound.ParamId));
+                    // Gated like a pick: on Windows, Rhino runs queued UI-thread work inside an
+                    // open prompt, and the clear would land in the middle of a pick.
+                    if (!ModalGate.Shared.TryEnter())
+                    {
+                        _ = BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Warning, PromptOpenMessage);
+                        MarshalToMainThread(() => OnClearGeometryRefused?.Invoke(this, inbound.ParamId));
+                        break;
+                    }
+
+                    MarshalToMainThread(() =>
+                    {
+                        try
+                        {
+                            OnClearGeometryRequested?.Invoke(this, inbound.ParamId);
+                        }
+                        finally
+                        {
+                            ModalGate.Shared.Exit();
+                        }
+                    });
                     break;
 
                 case InboundKind.Trigger:

@@ -36,9 +36,31 @@ export const HOST_LABELS: Record<UIHost, string> = { rhino: 'Rhino', selva: 'Sel
 
 const GEOMETRY_PARAM_TYPES: ReadonlySet<string> = new Set(['geometry', 'point', 'line', 'plane']);
 
+type WidgetTypeOf<T extends 'input' | 'output'> = Extract<LayoutItem, { type: T }>['widgetType'];
+
+// Keyed by the schema's own widget unions, so a widget added to the schema fails to compile here
+// until someone decides which hosts render it.
+const INPUT_WIDGETS = {
+	number: true,
+	text: true,
+	dropdown: true,
+	dynamicValueList: true,
+	checkbox: true,
+	file: true,
+	color: true
+} as const satisfies Record<WidgetTypeOf<'input'>, true>;
+const OUTPUT_WIDGETS = {
+	text: true,
+	number: true,
+	file: true,
+	chart: true,
+	image: true,
+	dynamicValueList: true
+} as const satisfies Record<WidgetTypeOf<'output'>, true>;
+
 const KNOWN_WIDGETS: Record<'input' | 'output', ReadonlySet<string>> = {
-	input: new Set(['number', 'text', 'dropdown', 'dynamicValueList', 'checkbox', 'file', 'color']),
-	output: new Set(['text', 'number', 'file', 'chart', 'image', 'dynamicValueList'])
+	input: new Set(Object.keys(INPUT_WIDGETS)),
+	output: new Set(Object.keys(OUTPUT_WIDGETS))
 };
 
 /** The control comes from this, whatever the saved widgetType says: saved ones hold `text`. */

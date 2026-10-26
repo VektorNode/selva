@@ -170,6 +170,29 @@ public class BridgeAccessTests
         Assert.False(BridgeAccess.IsRefused(kind, BridgeRole.Player));
     }
 
+    // A browser tab on the same bridge must not open a dialog or a viewport prompt inside Rhino.
+    [Theory]
+    [InlineData(InboundKind.HostPickFile)]
+    [InlineData(InboundKind.HostSaveFile)]
+    [InlineData(InboundKind.PickGeometry)]
+    [InlineData(InboundKind.ClearGeometry)]
+    public void PromptMessages_AreTheRhinoPanelsOnly(InboundKind kind)
+    {
+        Assert.True(BridgeAccess.IsRefusedFrom(kind, null));
+        Assert.False(BridgeAccess.IsRefusedFrom(kind, BridgeAccess.PanelHost));
+    }
+
+    [Theory]
+    [InlineData(InboundKind.ValueUpdate)]
+    [InlineData(InboundKind.Trigger)]
+    [InlineData(InboundKind.RequestInitialData)]
+    [InlineData(InboundKind.CancelSolve)]
+    public void EverythingElse_ComesFromAnyHost(InboundKind kind)
+    {
+        Assert.False(BridgeAccess.IsRefusedFrom(kind, null));
+        Assert.False(BridgeAccess.IsRefusedFrom(kind, BridgeAccess.PanelHost));
+    }
+
     // The page reads the same file (bridge-handshake.test.ts), so the two sides can't drift.
     [Fact]
     public void Handshake_MatchesTheSharedFixture()

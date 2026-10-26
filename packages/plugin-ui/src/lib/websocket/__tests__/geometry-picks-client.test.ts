@@ -83,4 +83,46 @@ describe('geometry picks client', () => {
 
 		await expect(result).resolves.toMatchObject({ outcome: 'failed' });
 	});
+
+	it('tells every page showing the param about a pick, whichever page asked', () => {
+		const socket = fakeSocket();
+		const client = createGeometryPicksClient(socket, () => 's1');
+		const seen: Array<string | null> = [];
+		const stop = client.onGeometrySummary('param-1', (summary) => seen.push(summary));
+		client.onGeometrySummary('param-2', () => seen.push('wrong param'));
+
+		socket.emit('pickGeometryResult', {
+			requestId: 'asked-by-another-page',
+			paramId: 'param-1',
+			outcome: 'picked',
+			summary: '2 curves'
+		});
+		socket.emit('pickGeometryResult', {
+			requestId: 'x',
+			paramId: 'param-1',
+			outcome: 'cancelled'
+		});
+		stop();
+		socket.emit('pickGeometryResult', {
+			requestId: 'y',
+			paramId: 'param-1',
+			outcome: 'picked',
+			summary: 'after unsubscribe'
+		});
+
+		expect(seen).toEqual(['2 curves']);
+	});
+
+	it('tells every page what the param holds after a clear, refused or not', () => {
+		const socket = fakeSocket();
+		const client = createGeometryPicksClient(socket, () => 's1');
+		const seen: Array<string | null> = [];
+		client.onGeometrySummary('param-1', (summary) => seen.push(summary));
+		client.onGeometrySummary('param-2', () => seen.push('wrong param'));
+
+		socket.emit('geometrySummary', { paramId: 'param-1', summary: null });
+		socket.emit('geometrySummary', { paramId: 'param-1', summary: '2 curves' });
+
+		expect(seen).toEqual([null, '2 curves']);
+	});
 });

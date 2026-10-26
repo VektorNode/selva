@@ -36,6 +36,8 @@ public class SelvaPanelPlugIn : PlugIn
         Launcher = new DefinitionLauncherClient(Settings);
         Host = new SelvaWebHost(Launcher.ShowOpenDialog);
         Launcher.IsShowingSession = () => Host.View != null;
+        Launcher.IsInWindow = () => Host.InWindow;
+        Launcher.Changed += CloseWindowAfterFailedOpen;
 
         // System, not the PerDoc default: on Mac PerDoc gives every document window its own panel.
         Panels.RegisterPanel(this, typeof(SelvaPanel), "Selva", typeof(SelvaPanelPlugIn).Assembly,
@@ -65,7 +67,18 @@ public class SelvaPanelPlugIn : PlugIn
     {
         if (Host.Shown?.SessionId == sessionId)
         {
+            // Opening another definition clears the old session first; a pop-out waits for the new one.
+            Host.Clear(keepWindow: Launcher.IsOpening);
+        }
+    }
+
+    /// <summary>A pop-out kept for an open that then failed: the error shows in the panel's launcher.</summary>
+    private void CloseWindowAfterFailedOpen()
+    {
+        if (!Launcher.IsOpening && Host.Shown == null && Host.InWindow)
+        {
             Host.Clear();
+            Panels.OpenPanel(typeof(SelvaPanel).GUID);
         }
     }
 }

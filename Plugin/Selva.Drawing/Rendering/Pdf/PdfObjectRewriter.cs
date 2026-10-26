@@ -11,41 +11,57 @@ namespace Selva.Drawing.Rendering.Pdf;
 // replaced after the save: objects are located through PDFsharp's own cross-reference table,
 // copied in order with the two swapped, and the table rebuilt. This relies on the classic xref
 // layout PDFsharp writes (no object streams, no incremental updates); PDFsharp is pinned at 6.2.4,
-// so that layout cannot change under us. Any surprise returns the input untouched.
+// so that layout cannot change under us. Any surprise returns the input untouched and adds a
+// warning, rather than failing a render over metadata.
 internal static class PdfObjectRewriter
 {
+	internal const string UnrecognisedLayout =
+		"PDF: PDFsharp's file layout was not recognised, so its own metadata was kept. It carries the render date "
+		+ "and a random ID: the same drawing will not give the same bytes.";
+
+	internal const string NoMetadataObject =
+		"PDF: PDFsharp wrote no XMP metadata object, so the XMP metadata was not embedded.";
+
 	private static readonly Encoding Latin1 = Encoding.GetEncoding("ISO-8859-1");
 	private static readonly Regex TrailerInfo = new(@"/Info\s*(\d+)\s+0\s+R");
 	private static readonly Regex TrailerRoot = new(@"/Root\s*(\d+)\s+0\s+R");
 	private static readonly Regex CatalogMetadata = new(@"/Metadata\s*(\d+)\s+0\s+R");
 
 	// xmp == null drops /Metadata from the catalog; the object it pointed at becomes null.
-	public static byte[] ReplaceInfoAndMetadata(byte[] pdf, string info, byte[] xmp)
+	public static byte[] ReplaceInfoAndMetadata(byte[] pdf, string info, byte[] xmp, ICollection<string> warnings)
+	{
+		var rewritten = Rewrite(pdf, info, xmp, warnings);
+		if (rewritten != null) return rewritten;
+		warnings.Add(UnrecognisedLayout);
+		return pdf;
+	}
+
+	private static byte[] Rewrite(byte[] pdf, string info, byte[] xmp, ICollection<string> warnings)
 	{
 		var tailFrom = Math.Max(0, pdf.Length - 64);
 		var tail = Latin1.GetString(pdf, tailFrom, pdf.Length - tailFrom);
 		var startxref = tail.LastIndexOf("startxref", StringComparison.Ordinal);
-		if (startxref < 0) return pdf;
+		if (startxref < 0) return null;
 		var xrefAt = ParseInt(tail, startxref + "startxref".Length);
-		if (xrefAt <= 0 || xrefAt >= pdf.Length) return pdf;
+		if (xrefAt <= 0 || xrefAt >= pdf.Length) return null;
 
 		// The table and trailer: 20 bytes per object, small next to the content.
 		var table = Latin1.GetString(pdf, xrefAt, pdf.Length - xrefAt);
-		if (!table.StartsWith("xref", StringComparison.Ordinal)) return pdf;
+		if (!table.StartsWith("xref", StringComparison.Ordinal)) return null;
 		var trailerAt = table.IndexOf("trailer", StringComparison.Ordinal);
 		var dictStart = trailerAt < 0 ? -1 : table.IndexOf("<<", trailerAt, StringComparison.Ordinal);
 		var dictEnd = table.LastIndexOf(">>", StringComparison.Ordinal);
-		if (dictStart < 0 || dictEnd < dictStart) return pdf;
+		if (dictStart < 0 || dictEnd < dictStart) return null;
 		var trailer = table.Substring(dictStart, dictEnd + 2 - dictStart);
 
 		var offsets = ReadXref(table.Substring(0, trailerAt));
 		var infoMatch = TrailerInfo.Match(trailer);
 		var rootMatch = TrailerRoot.Match(trailer);
-		if (offsets == null || !infoMatch.Success || !rootMatch.Success) return pdf;
+		if (offsets == null || !infoMatch.Success || !rootMatch.Success) return null;
 		var infoObj = int.Parse(infoMatch.Groups[1].Value, CultureInfo.InvariantCulture);
 		var rootObj = int.Parse(rootMatch.Groups[1].Value, CultureInfo.InvariantCulture);
 		if (infoObj >= offsets.Length || rootObj >= offsets.Length || offsets[infoObj] == 0 || offsets[rootObj] == 0)
-			return pdf;
+			return null;
 
 		// Each object runs from its offset to the next object's, the last one to the table.
 		var order = new List<int>();
@@ -59,6 +75,8 @@ internal static class PdfObjectRewriter
 		var catalog = Latin1.GetString(pdf, offsets[rootObj], ends[rootObj] - offsets[rootObj]);
 		var metadataMatch = CatalogMetadata.Match(catalog);
 		var metadataObj = metadataMatch.Success ? int.Parse(metadataMatch.Groups[1].Value, CultureInfo.InvariantCulture) : -1;
+		if (metadataObj >= offsets.Length || metadataObj > 0 && offsets[metadataObj] == 0) return null;
+		if (metadataObj < 0 && xmp != null) warnings.Add(NoMetadataObject);
 
 		var output = new MemoryStream(pdf.Length + (xmp?.Length ?? 0) + info.Length);
 		var moved = new long[offsets.Length];

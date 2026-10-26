@@ -33,7 +33,11 @@
 		TileInput
 	} from '$lib/components/preview/inputs';
 	import { getClientSlot } from '$lib/contexts/clientSlotContext.svelte';
-	import { getHostContext } from '$lib/contexts/hostContext.svelte';
+	import {
+		getHostContext,
+		type GeometryPickTarget,
+		type PickKind
+	} from '$lib/contexts/hostContext.svelte';
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 	import { isGeometryParamType, isTriggerItem } from '$lib/schema/host-support';
 	import { resolveOptionDisplay } from '$lib/schema/option-display';
@@ -70,8 +74,18 @@
 
 	const locale = getLocaleContext();
 	const hostActions = getHostContext();
+	const { pickGeometry, clearGeometry, onGeometrySummary } = hostActions;
 	const isGeometry = $derived(isGeometryParamType(paramType));
 	const isTrigger = $derived(isTriggerItem(item));
+	const pickTarget = $derived(
+		isGeometry ? hostActions.describeGeometry?.(item.paramId) : undefined
+	);
+
+	// Get Point/Line/Plane take their own kind; Get Geometry takes what its filter allows.
+	function pickKinds(target: GeometryPickTarget | undefined): readonly PickKind[] | undefined {
+		if (paramType === 'point' || paramType === 'line' || paramType === 'plane') return [paramType];
+		return target?.kinds;
+	}
 
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
@@ -282,21 +296,17 @@
 {:else if isGeometry}
 	<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
 		{@render fieldHeader(inputId)}
-		{#if hostActions.pickGeometry && hostActions.clearGeometry}
-			{@const pickGeometry = hostActions.pickGeometry}
-			{@const clearGeometry = hostActions.clearGeometry}
-			{@const target = hostActions.describeGeometry?.(item.paramId)}
-			<GeometryInput
-				{inputId}
-				kinds={paramType === 'geometry' ? target?.kinds : [paramType ?? 'geometry']}
-				atMost={target?.atMost}
-				summary={typeof value === 'string' ? value : undefined}
-				onPick={() => pickGeometry(item.paramId)}
-				onClear={() => clearGeometry(item.paramId)}
-				onError={(message) => toast.error(message)}
-				{disabled}
-			/>
-		{/if}
+		<GeometryInput
+			{inputId}
+			kinds={pickKinds(pickTarget)}
+			atMost={pickTarget?.atMost}
+			summary={typeof value === 'string' ? value : undefined}
+			onPick={pickGeometry && (() => pickGeometry(item.paramId))}
+			onClear={clearGeometry && (() => clearGeometry(item.paramId))}
+			watchSummary={onGeometrySummary && ((listener) => onGeometrySummary(item.paramId, listener))}
+			onError={(message) => toast.error(message)}
+			{disabled}
+		/>
 	</div>
 {:else if isTrigger}
 	<div role="group" class="group/field gap-1.5 min-w-0 flex items-center">

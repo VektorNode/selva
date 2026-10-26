@@ -147,6 +147,10 @@ fires for a player document.
     `IsModified`, flips the role to author, and re-shows the panel with an author URL. The page
     reloads, re-authenticates and gets `role: author`. Hosted stays set, so the session survives a
     file saved with Enable off.
+  - **Showing the editor any other way** does the same. If the Grasshopper editor is visible when
+    the player opens, or becomes visible while the canvas shows the player's document, the
+    session hands over to author: the user can now edit the definition, so a player page would
+    misreport what they can do.
 
 **Three ways in:**
 

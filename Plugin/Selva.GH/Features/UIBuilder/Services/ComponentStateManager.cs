@@ -36,7 +36,7 @@ public class ComponentStateManager
     private bool _solveStartedSinceLastEnd;
 
     // A solve was scheduled (via document.ScheduleSolution) but its SolutionStart hasn't fired yet.
-    // ScheduleSolution defers ~10ms, during which IsSolving is still false — so a second value update
+    // ScheduleSolution defers 10-35 ms, during which IsSolving is still false — so a second value update
     // arriving in that gap would otherwise schedule a *second* solve. This flag, set synchronously the
     // moment we schedule, makes IsBusy true across the whole schedule→start→end cycle so the second
     // update coalesces (see _pendingValues) instead of double-scheduling. Cleared when a real solve ends.

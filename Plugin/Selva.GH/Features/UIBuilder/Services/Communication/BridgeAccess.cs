@@ -22,9 +22,10 @@ internal static class BridgeAccess
     public const string AuthenticateType = "authenticate";
 
     /// <summary>
-    ///     The only host a page may declare. Only that socket may ask for a native file dialog, so a
-    ///     browser tab on the same bridge can't open one inside Rhino. This is routing, not a
-    ///     boundary: the secret is the boundary, and every holder of it is the user's own page.
+    ///     The only host a page may declare. Only that socket may ask for a native file dialog or a
+    ///     viewport pick (see <see cref="IsRefusedFrom" />), so a browser tab on the same bridge can't
+    ///     open one inside Rhino. This is routing, not a boundary: the secret is the boundary, and
+    ///     every holder of it is the user's own page.
     /// </summary>
     public const string PanelHost = "rhino";
 
@@ -190,6 +191,25 @@ internal static class BridgeAccess
         }
     }
 
+    /// <summary>
+    ///     The messages only the Rhino panel may send: each opens a native prompt inside Rhino, or,
+    ///     for <c>clearGeometry</c>, undoes a viewport pick only the panel can make.
+    /// </summary>
+    /// <param name="host">What the socket declared when it authenticated; null for a browser tab.</param>
+    public static bool IsRefusedFrom(InboundKind kind, string? host)
+    {
+        switch (kind)
+        {
+            case InboundKind.HostPickFile:
+            case InboundKind.HostSaveFile:
+            case InboundKind.PickGeometry:
+            case InboundKind.ClearGeometry:
+                return host != PanelHost;
+            default:
+                return false;
+        }
+    }
+
     // CryptographicOperations.FixedTimeEquals isn't in net48.
     private static bool FixedTimeEquals(string presented, string expected)
     {
@@ -203,15 +223,4 @@ internal static class BridgeAccess
 
         return diff == 0;
     }
-}
-
-/// <summary>
-///     What a session may do. An author session started from the canvas and may edit the schema.
-///     A player session started from the Selva panel: it sets values, and nothing it sends may
-///     write the schema back.
-/// </summary>
-public enum BridgeRole
-{
-    Author,
-    Player
 }

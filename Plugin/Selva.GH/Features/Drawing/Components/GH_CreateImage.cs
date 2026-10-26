@@ -21,8 +21,9 @@ namespace Selva.GH.Features.Drawing.Components;
 // Places an image (from a Get Image input, or a path/url/base64 string) into the drawing,
 // sized in document units, and flows into Render PDF / Render SVG like any other DrawElement.
 // PNG/JPEG embed as a raster ImageElement (both targets), re-encoded by RasterSanitizer first;
-// WEBP embeds in SVG output only (PDFsharp can't read it). SVG is translated into native
-// drawing geometry (paths/shapes/groups) so it renders losslessly to both PDF and SVG —
+// on a host without System.Drawing they can't be, so they embed in SVG output only, as WEBP
+// does (PDFsharp can't read it). SVG is translated into native drawing geometry
+// (paths/shapes/groups) so it renders losslessly to both PDF and SVG —
 // unsupported SVG features (gradients, filters, text) are skipped with a warning.
 public class GH_CreateImage : GH_Component
 {
@@ -131,6 +132,7 @@ public class GH_CreateImage : GH_Component
             return null;
         }
 
+        var svgOnly = false;
         if (format == ImageFormat.Webp)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -144,9 +146,10 @@ public class GH_CreateImage : GH_Component
                     data = clean;
                     break;
                 case SanitizeResult.PlatformUnsupported:
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
-                        "Images can't be validated on this platform (System.Drawing is unavailable), so PNG/JPEG are not embedded.");
-                    return null;
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        "Images can't be validated on this platform (System.Drawing is unavailable), so this image is skipped in PDF output; SVG output keeps it.");
+                    svgOnly = true;
+                    break;
                 default:
                     AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not decode the image; the file may be corrupt.");
                     return null;
@@ -157,6 +160,7 @@ public class GH_CreateImage : GH_Component
         {
             Data = data,
             Format = format,
+            SvgOnly = svgOnly,
             Position = new DrawPoint(position.X, position.Y),
             Width = width,
             Height = height,

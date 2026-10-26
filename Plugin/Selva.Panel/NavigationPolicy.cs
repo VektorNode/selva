@@ -55,6 +55,18 @@ internal static class NavigationPolicy
         return NavigationDecision.Block;
     }
 
+    /// <summary>
+    ///     A <c>target="_blank"</c> link. The WebView opens no second window, so only what would
+    ///     leave for the browser anyway goes there. A same-origin link is refused: it can carry the
+    ///     session, and the browser would get the bridge's secret with it.
+    /// </summary>
+    public static NavigationDecision DecideNewWindow(Uri target, Uri requested)
+    {
+        return Decide(target, requested) == NavigationDecision.OpenInBrowser
+            ? NavigationDecision.OpenInBrowser
+            : NavigationDecision.Block;
+    }
+
     private static bool IsSameOrigin(Uri a, Uri b)
     {
         return a.Scheme == b.Scheme &&
