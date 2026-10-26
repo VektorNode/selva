@@ -41,6 +41,8 @@
 		<RhinoMajor Condition="'$(RhinoMajor)' == ''">8</RhinoMajor>
 		<RhinoRefVersion Condition="'$(RhinoMajor)' == '9'">$(Rhino9RefVersion)</RhinoRefVersion>
 		<RhinoRefVersion Condition="'$(RhinoMajor)' == '8'">$(Rhino8RefVersion)</RhinoRefVersion>
+		<DrawingCommonRefVersion Condition="'$(RhinoMajor)' == '9'">10.0.10</DrawingCommonRefVersion>
+		<DrawingCommonRefVersion Condition="'$(RhinoMajor)' == '8'">8.0.0</DrawingCommonRefVersion>
 	</PropertyGroup>
 
 	<PropertyGroup>
