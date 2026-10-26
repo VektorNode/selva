@@ -223,7 +223,9 @@ export function createComputeFetchSolveFn<TMesh = unknown>(
 			if (serverTiming.selva_cache !== undefined) {
 				const cacheMsg = serverTiming.selva_cache
 					? 'HIT — served without calling compute'
-					: 'miss — solved on Rhino.Compute';
+					: serverTiming.rhino_cache
+						? "HIT — Rhino.Compute's result cache, solved nothing"
+						: 'miss — solved on Rhino.Compute';
 				log(`[Compute]   └─ cache: ${cacheMsg}`);
 			}
 		}

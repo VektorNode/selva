@@ -76,10 +76,16 @@ export interface ComputeConfig {
 /** The config fields that decide how a request authenticates. */
 export type ComputeAuth = Pick<ComputeConfig, 'apiKey' | 'apiKeyHeader' | 'authToken' | 'headers'>;
 
-/** `Server-Timing` durations in ms. `raw` keeps the whole header, unrecognised metrics included. */
+/** The solve endpoint's `Server-Timing`, durations in ms. `raw` keeps the whole header, unrecognised metrics included. */
 export interface ServerTiming {
 	decode?: number;
 	solve?: number;
 	encode?: number;
+	/** The part of `solve` spent inside Grasshopper; the rest collects the outputs. */
+	gh?: number;
+	/** Objects the solve ran out of all it holds. Few ran when only a downstream input changed. */
+	recomputed?: { ran: number; total: number };
+	/** The server answered from its result cache and solved nothing. */
+	cacheHit?: boolean;
 	raw: string;
 }

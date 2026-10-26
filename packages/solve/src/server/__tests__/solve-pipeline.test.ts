@@ -535,6 +535,28 @@ describe('runSolvePipeline — Server-Timing', () => {
 		expect(st).toContain('compute_link;dur=');
 	});
 
+	it("forwards the compute server's gh time, recomputed count and result-cache verdict", async () => {
+		const solved = fakeClient(async (_d, _t, opts) => {
+			opts.onServerTiming?.({ solve: 20, gh: 18, recomputed: { ran: 4, total: 97 }, raw: '' });
+			return { errors: [], warnings: [] };
+		});
+		const solvedOut = await runSolvePipeline(baseArgs({ client: solved }));
+		if (solvedOut.kind !== 'ok') throw new Error(solvedOut.kind);
+		const st = solvedOut.envelope.headers['Server-Timing'];
+		expect(st).toContain('rhino_gh;dur=18.0');
+		expect(st).toContain('rhino_recomputed;desc="4/97"');
+		expect(st).toContain('rhino_cache;dur=0');
+
+		const hit = fakeClient(async (_d, _t, opts) => {
+			opts.onServerTiming?.({ cacheHit: true, raw: '' });
+			return { errors: [], warnings: [] };
+		});
+		const hitOut = await runSolvePipeline(baseArgs({ client: hit }));
+		if (hitOut.kind !== 'ok') throw new Error(hitOut.kind);
+		expect(hitOut.envelope.headers['Server-Timing']).toContain('rhino_cache;dur=1');
+		expect(hitOut.envelope.headers['Server-Timing']).toContain('rhino_solve;dur=0.0');
+	});
+
 	it('surfaces selva_cache + def_reupload verdicts as 0/1 flags', async () => {
 		const client = fakeClient(async () => ({ errors: [], warnings: [] }), {
 			fromCache: true,
