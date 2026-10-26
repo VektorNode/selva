@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
@@ -26,7 +26,7 @@ public class PdfSheetIntegrationTests
 		Assert.Equal((byte)'%', bytes[0]);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 		var page = reopened.Pages[0];
 		var landscape = PaperSize.A2.Landscape();

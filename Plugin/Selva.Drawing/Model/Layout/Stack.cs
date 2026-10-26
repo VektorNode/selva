@@ -28,7 +28,7 @@ public sealed class Stack : LayoutElement
 	// box). Defaults to (0,0).
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		if (Children.Count == 0)
 			return new GroupElement { Id = Id, CssClass = CssClass, Metadata = Metadata };

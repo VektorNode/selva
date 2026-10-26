@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -13,7 +13,7 @@ using Path = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
-// PdfSharpCore stamps dates and a trailer ID into every produced file, so byte-level
+// PDFsharp stamps dates and a trailer ID into every produced file, so byte-level
 // snapshotting is impractical; these tests check structural validity instead — header
 // magic, parseable through PdfReader, expected pages/sizes, metadata round-trips.
 public class PdfRendererTests
@@ -45,7 +45,7 @@ public class PdfRendererTests
 	{
 		var bytes = RenderScene(new GroupElement());
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 
@@ -57,7 +57,7 @@ public class PdfRendererTests
 		var bytes = RenderScene(new PathElement { Path = path });
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 
@@ -74,7 +74,7 @@ public class PdfRendererTests
 		});
 		Assert.NotEmpty(bytes);
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 
@@ -90,7 +90,7 @@ public class PdfRendererTests
 		};
 		var bytes = RenderScene(text);
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 
@@ -107,7 +107,7 @@ public class PdfRendererTests
 		});
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 
@@ -124,7 +124,7 @@ public class PdfRendererTests
 		});
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 
@@ -159,7 +159,7 @@ public class PdfRendererTests
 		var bytes = RenderScene(content);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 
@@ -179,7 +179,7 @@ public class PdfRendererTests
 		var bytes = RenderScene(new GroupElement(), metadata: meta);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal("Bracket Assembly", reopened.Info.Title);
 		Assert.Equal("Felix", reopened.Info.Author);
 		Assert.Equal("Mechanical drawing", reopened.Info.Subject);
@@ -196,7 +196,7 @@ public class PdfRendererTests
 		var bytes = RenderScene(new PathElement { Path = path });
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		var page = reopened.Pages[0];
 
 		// 1 mm = 72/25.4 pt ≈ 2.83465 pt. Allow 0.1 pt slack.
@@ -219,7 +219,7 @@ public class PdfRendererTests
 		var bytes = renderer.Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		var page = reopened.Pages[0];
 
 		const double mmToPt = 72.0 / 25.4;

@@ -20,6 +20,7 @@ public static class PaginationPass
 
 	public static IReadOnlyList<Page> Paginate(DrawElement content, PaperSize paper, Margins margins, PageTemplate template)
 	{
+		using var layoutScope = LayoutCache.Begin();
 		template = template ?? new PageTemplate();
 
 		var bandWidth = BandWidth(paper, margins);
@@ -90,6 +91,7 @@ public static class PaginationPass
 	// double.PositiveInfinity as the available height.
 	internal static SectionLayout PaginateBody(DrawElement content, PaperSize paper, Margins margins, BandConfig bands, double? availableHeightOverride)
 	{
+		using var layoutScope = LayoutCache.Begin();
 		var pageRect = ContentRect(paper, margins);
 
 		// Content: band sits at the content rect edge, body shrinks by band height.

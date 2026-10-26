@@ -15,6 +15,7 @@ public static class DocumentLayoutPass
 	public static IReadOnlyList<Page> Paginate(DocumentLayout layout)
 	{
 		if (layout == null) throw new ArgumentNullException(nameof(layout));
+		using var layoutScope = LayoutCache.Begin();
 
 		var sections = layout.Sections ?? Array.Empty<Section>();
 

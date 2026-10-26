@@ -17,10 +17,44 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
+		<!-- Rhino-coupled projects only. net48 is Rhino 8's .NET Framework fallback, net8.0
+		     Rhino 8, net10.0 Rhino 9. net48 (WindowsForms) and the Rhino 9 Grasshopper
+		     (transitive WindowsForms) don't resolve on the macOS SDK, so non-Windows builds
+		     net8.0 only (Rhino 8 for Mac). scripts/build-production.js reads these two
+		     elements by regex; keep them literal. -->
+		<SelvaRhino9TargetFramework>net10.0</SelvaRhino9TargetFramework>
+		<SelvaTargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net48;net8.0;$(SelvaRhino9TargetFramework)</SelvaTargetFrameworks>
+		<SelvaTargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net8.0</SelvaTargetFrameworks>
+
+		<!-- Yak derives the package's minimum Rhino from the highest RhinoCommon any shipped
+		     assembly references, so raising one of these raises the floor for every user.
+		     8.12 is the first Rhino 8 on .NET 8. -->
+		<Rhino8RefVersion>8.12.24282.7001</Rhino8RefVersion>
+		<!-- First Rhino 9 beta. Ships net8.0 reference assemblies only; net10.0 consumes them fine. -->
+		<Rhino9RefVersion>9.0.26209.18303-beta</Rhino9RefVersion>
+	</PropertyGroup>
+
+	<!-- Inner builds get TargetFramework as a global property, so it is already set here.
+	     The fallback covers the outer multi-target pass and the -windows TFMs' Rhino 8 legs. -->
+	<PropertyGroup>
+		<RhinoMajor Condition="$(TargetFramework.StartsWith('$(SelvaRhino9TargetFramework)'))">9</RhinoMajor>
+		<RhinoMajor Condition="'$(RhinoMajor)' == ''">8</RhinoMajor>
+		<RhinoRefVersion Condition="'$(RhinoMajor)' == '9'">$(Rhino9RefVersion)</RhinoRefVersion>
+		<RhinoRefVersion Condition="'$(RhinoMajor)' == '8'">$(Rhino8RefVersion)</RhinoRefVersion>
+	</PropertyGroup>
+
+	<PropertyGroup>
 		<Company>VektorNode</Company>
 		<Authors>Felix Brunold, VektorNode</Authors>
 		<Copyright>Copyright © 2025 Selva VektorNode AG</Copyright>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 	</PropertyGroup>
+
+	<!-- Opt-in, not blanket: Selva.Schema and Selva.Slva are ILRepack-merged into Selva.gha,
+	     where a second copy of the type would collide. Items evaluate after every property,
+	     so the csproj's flag and the SDK's TargetFrameworkIdentifier are both visible here. -->
+	<ItemGroup Condition="'$(SelvaIsExternalInit)' == 'true' AND '$(TargetFrameworkIdentifier)' != '.NETCoreApp'">
+		<Compile Include="$(MSBuildThisFileDirectory)Shared\IsExternalInit.cs" Link="Compat\IsExternalInit.cs"/>
+	</ItemGroup>
 
 </Project>

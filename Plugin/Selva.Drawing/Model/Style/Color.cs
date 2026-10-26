@@ -5,7 +5,7 @@ namespace Selva.Drawing.Model.Style;
 
 public enum ColorSpace { Rgb, Cmyk, Named }
 
-// Immutable color value. RGB is in [0..1] linear-sRGB-ish floats (PdfSharpCore + SVG both
+// Immutable color value. RGB is in [0..1] linear-sRGB-ish floats (PDFsharp + SVG both
 // accept that range). CMYK lives alongside so print PDFs can emit native CMYK ink values
 // without going through an RGB round-trip. Named exists so palette literals like
 // "currentColor" or future spot-color slots survive untouched into the renderer.

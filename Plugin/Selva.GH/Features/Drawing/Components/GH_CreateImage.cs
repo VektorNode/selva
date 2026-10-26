@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
+using System.Security.Cryptography;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
@@ -18,7 +20,8 @@ namespace Selva.GH.Features.Drawing.Components;
 
 // Places an image (from a Get Image input, or a path/url/base64 string) into the drawing,
 // sized in document units, and flows into Render PDF / Render SVG like any other DrawElement.
-// PNG/JPEG/WEBP embed as a raster ImageElement (both targets). SVG is translated into native
+// PNG/JPEG embed as a raster ImageElement (both targets), re-encoded by RasterSanitizer first;
+// WEBP embeds in SVG output only (PDFsharp can't read it). SVG is translated into native
 // drawing geometry (paths/shapes/groups) so it renders losslessly to both PDF and SVG —
 // unsupported SVG features (gradients, filters, text) are skipped with a warning.
 public class GH_CreateImage : GH_Component
@@ -128,6 +131,28 @@ public class GH_CreateImage : GH_Component
             return null;
         }
 
+        if (format == ImageFormat.Webp)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                "WebP can't be embedded in PDF output and is skipped there; SVG output keeps it. Use PNG or JPEG for PDF.");
+        }
+        else
+        {
+            switch (Sanitize(data, format, out var clean))
+            {
+                case SanitizeResult.Ok:
+                    data = clean;
+                    break;
+                case SanitizeResult.PlatformUnsupported:
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                        "Images can't be validated on this platform (System.Drawing is unavailable), so PNG/JPEG are not embedded.");
+                    return null;
+                default:
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Could not decode the image; the file may be corrupt.");
+                    return null;
+            }
+        }
+
         return new ImageElement
         {
             Data = data,
@@ -136,6 +161,43 @@ public class GH_CreateImage : GH_Component
             Width = width,
             Height = height,
         };
+    }
+
+    // Re-encoding a large photo costs a full decode + encode, so moving Position or Width must
+    // not repeat it. Keyed by content hash, never by path, so undo/paste or an edited file on
+    // the same path can't serve stale bytes. Only entries used by the last solve are kept.
+    private Dictionary<string, byte[]> _sanitized = new Dictionary<string, byte[]>();
+    private Dictionary<string, byte[]> _sanitizedThisSolve = new Dictionary<string, byte[]>();
+
+    protected override void BeforeSolveInstance()
+    {
+        base.BeforeSolveInstance();
+        _sanitizedThisSolve = new Dictionary<string, byte[]>();
+    }
+
+    protected override void AfterSolveInstance()
+    {
+        base.AfterSolveInstance();
+        _sanitized = _sanitizedThisSolve;
+    }
+
+    private SanitizeResult Sanitize(byte[] data, ImageFormat format, out byte[] clean)
+    {
+        string key;
+        using (var sha = SHA256.Create())
+        {
+            key = format + ":" + Convert.ToBase64String(sha.ComputeHash(data));
+        }
+
+        if (_sanitizedThisSolve.TryGetValue(key, out clean) || _sanitized.TryGetValue(key, out clean))
+        {
+            _sanitizedThisSolve[key] = clean;
+            return SanitizeResult.Ok;
+        }
+
+        var result = RasterSanitizer.TryReencode(data, format, out clean);
+        if (result == SanitizeResult.Ok) _sanitizedThisSolve[key] = clean;
+        return result;
     }
 
     private DrawElement BuildSvgElement(byte[] data, Point3d position,

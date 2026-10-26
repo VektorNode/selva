@@ -1,6 +1,6 @@
 using System.IO;
-using PdfSharpCore.Drawing;
-using PdfSharpCore.Pdf;
+using PdfSharp.Drawing;
+using PdfSharp.Pdf;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Rendering.Pdf;
 using Path = Selva.Drawing.Model.Geometry.Path;
@@ -9,7 +9,7 @@ namespace Selva.Drawing.Tests.Rendering.Pdf;
 
 // Smoke + sanity checks for the model Path → XGraphicsPath converter. The arc-flattening
 // algorithm is the only non-trivial piece; "sanity" here means the resulting XGraphicsPath
-// can be drawn through PdfSharpCore without throwing and produces a non-zero-area page.
+// can be drawn through PDFsharp without throwing and produces a non-zero-area page.
 public class PdfPathBuilderTests
 {
 	[Fact]

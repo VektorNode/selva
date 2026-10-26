@@ -1,5 +1,5 @@
 using System.IO;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Layout;
@@ -10,7 +10,7 @@ using Selva.Drawing.Rendering.Svg;
 namespace Selva.Drawing.Tests.Rendering.Pdf;
 
 // A 5-row x 4-column BOM table rendered to a one-page PDF. We assert the PDF reopens
-// rather than snapshotting bytes — PdfSharpCore stamps creation dates that drift
+// rather than snapshotting bytes — PDFsharp stamps creation dates that drift
 // between runs.
 public class PdfBomTableTests
 {
@@ -24,7 +24,7 @@ public class PdfBomTableTests
 		Assert.Equal((byte)'%', bytes[0]);  // %PDF- header
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 

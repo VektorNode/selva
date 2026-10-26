@@ -8,6 +8,7 @@
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
 	import { formatMessage } from '$lib/i18n/messages';
 	import { pickFile } from '$lib/utils/host-files';
+	import { shouldConvertWebp, webpToPng } from '$lib/utils/webp-to-png';
 
 	interface Props {
 		value?: string;
@@ -99,6 +100,29 @@
 		return acceptedFormats.includes(fileEnding.toLowerCase());
 	}
 
+	// Runs before the size cap: the PNG is larger than the WebP it came from. A WebP already over
+	// the cap is passed through unconverted, so the cap rejects it without a full decode.
+	async function prepare(
+		blob: Blob,
+		fileEnding: string
+	): Promise<{ blob: Blob; fileEnding: string }> {
+		if (blob.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) return { blob, fileEnding };
+		if (!shouldConvertWebp(fileEnding, acceptedFormats)) return { blob, fileEnding };
+		return { blob: await webpToPng(blob), fileEnding: '.png' };
+	}
+
+	function readBase64(blob: Blob): Promise<string> {
+		return new Promise<string>((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				const result = e.target?.result as string;
+				resolve(result.includes(',') ? result.split(',')[1] : result);
+			};
+			reader.onerror = () => reject(new Error(t.fileReadFailed));
+			reader.readAsDataURL(blob);
+		});
+	}
+
 	function isCorsError(error: unknown): boolean {
 		// The browser blocks the response entirely, so this is all we get — no status code.
 		if (error instanceof TypeError && error.message === 'Failed to fetch') return true;
@@ -138,13 +162,15 @@
 				return;
 			}
 
-			const blob = await response.blob();
-			const fileEnding = getFileExtension(urlInput);
+			const fetched = await response.blob();
+			const requestedEnding = getFileExtension(urlInput);
 
-			if (!isValidFileExtension(fileEnding)) {
-				urlError = { message: formatNotAccepted(fileEnding), isCors: false };
+			if (!isValidFileExtension(requestedEnding)) {
+				urlError = { message: formatNotAccepted(requestedEnding), isCors: false };
 				return;
 			}
+
+			const { blob, fileEnding } = await prepare(fetched, requestedEnding);
 
 			const maxSize = APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES;
 			if (blob.size > maxSize) {
@@ -155,15 +181,7 @@
 				return;
 			}
 
-			const base64Data = await new Promise<string>((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = (e) => {
-					const result = e.target?.result as string;
-					resolve(result.includes(',') ? result.split(',')[1] : result);
-				};
-				reader.onerror = () => reject(new Error(t.fileReadFailed));
-				reader.readAsDataURL(blob);
-			});
+			const base64Data = await readBase64(blob);
 			const data = JSON.stringify({ file: base64Data, type: 'base64', fileEnding });
 			value = data;
 			urlSuccess = formatMessage(t.fileLoaded, {
@@ -206,40 +224,34 @@
 		}
 	}
 
-	function handleFile(file: File) {
-		const fileEnding = getFileExtension(file.name);
+	async function handleFile(file: File) {
+		const requestedEnding = getFileExtension(file.name);
 
-		if (!isValidFileExtension(fileEnding)) {
-			toast.error(formatNotAccepted(fileEnding));
+		if (!isValidFileExtension(requestedEnding)) {
+			toast.error(formatNotAccepted(requestedEnding));
 			return;
 		}
 
-		// The file is base64-embedded into the compute request body, so without a
-		// client-side cap an oversize file comes back as an opaque 413. This cap is
-		// currently LOOSER than the server's COMPUTE_REQUEST_MAX_BYTES (see the TEMP
-		// note in constants.ts) — some files pass here and still 413. The URL import
-		// path applies the same cap.
-		if (file.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
-			toast.error(formatTooLarge(file.size));
-			return;
-		}
+		try {
+			const { blob, fileEnding } = await prepare(file, requestedEnding);
 
-		uploadedFileName = file.name;
+			// The file is base64-embedded into the compute request body, so without a
+			// client-side cap an oversize file comes back as an opaque 413. This cap is
+			// currently LOOSER than the server's COMPUTE_REQUEST_MAX_BYTES (see the TEMP
+			// note in constants.ts) — some files pass here and still 413. The URL import
+			// path applies the same cap.
+			if (blob.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
+				toast.error(formatTooLarge(blob.size));
+				return;
+			}
 
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			const base64 = e.target?.result as string;
-			const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
-
-			const data = JSON.stringify({
-				file: base64Data,
-				type: 'base64',
-				fileEnding
-			});
+			uploadedFileName = file.name;
+			const data = JSON.stringify({ file: await readBase64(blob), type: 'base64', fileEnding });
 			value = data;
 			onChange(data);
-		};
-		reader.readAsDataURL(file);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : t.fileReadFailed);
+		}
 	}
 
 	async function openFilePicker() {

@@ -12,6 +12,8 @@
 		     workaround below double-compiles Selva.GH files (CS0436) and pulls
 		     nullable-oblivious sources into this nullable-enabled project. -->
 		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<!-- CA1416: linked RasterSanitizer uses System.Drawing; its tests return early off Windows. -->
+		<NoWarn>$(NoWarn);CA1416</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -56,6 +58,7 @@
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Communication\WebSocketServer.cs"
 		         Link="Linked\WebSocketServer.cs"/>
 		<Compile Include="..\Selva.GH\Config\AppConfig.cs" Link="Linked\AppConfig.cs"/>
+		<Compile Include="..\Selva.GH\Features\FileIO\Services\RasterSanitizer.cs" Link="Linked\RasterSanitizer.cs"/>
 		<Compile Include="..\Selva.Panel\NavigationPolicy.cs" Link="Linked\NavigationPolicy.cs"/>
 		<!-- The Selva client's Rhino-free parts: everything but the bridge handler and its dialog. -->
 		<Compile Include="..\Selva.GH\Features\SelvaUpload\Services\*.cs" Link="Linked\SelvaUpload\%(Filename)%(Extension)"/>

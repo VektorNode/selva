@@ -35,8 +35,8 @@ pnpm build:plugin
 ```
 
 Builds the web assets, embeds them, and multi-targets:
-`Selva.GH/bin/Release/{net48,net7.0,net9.0}/Selva.gha`. Rhino 8 loads net48 + net7.0; Rhino 9 loads
-net9.0.
+`Selva.GH/bin/Release/{net48,net8.0,net10.0}/Selva.gha`. Rhino 8 loads net48 + net8.0; Rhino 9 loads
+net10.0.
 
 For a debug loop, `cd Plugin && dotnet build` and run from your IDE alongside `pnpm dev:plugin` — the
 plugin opens the dev-server URL and connects back over WebSocket.

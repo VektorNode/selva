@@ -53,7 +53,7 @@ public sealed class Table : LayoutElement
 
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var columnCount = InferColumnCount();
 		if (columnCount == 0)

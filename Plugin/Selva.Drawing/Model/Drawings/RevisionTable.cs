@@ -37,7 +37,7 @@ public sealed class RevisionTable : LayoutElement
 
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var descWidth = Math.Max(10, Width - RevisionColumnWidth - DateColumnWidth - ByColumnWidth);
 

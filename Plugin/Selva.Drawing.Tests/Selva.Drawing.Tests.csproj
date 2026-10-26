@@ -9,23 +9,21 @@
 		<IsTestProject>true</IsTestProject>
 	</PropertyGroup>
 
+	<!-- Release merges PDFsharp into Selva.Drawing.dll, and InternalsVisibleTo then exposes its
+	     internal RuntimeHelpers polyfill here beside the BCL's. The compiler picks the BCL one. -->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<NoWarn>$(NoWarn);CS1685</NoWarn>
+	</PropertyGroup>
+
 	<ItemGroup>
 		<PackageReference Include="coverlet.collector"/>
 		<PackageReference Include="Microsoft.NET.Test.Sdk"/>
 		<PackageReference Include="Verify.Xunit"/>
 		<PackageReference Include="xunit"/>
 		<PackageReference Include="xunit.runner.visualstudio"/>
-		<!--
-			Selva.Drawing marks PdfSharpCore + SharpZipLib as PrivateAssets="all" so they
-			don't flow to Selva.GH (they're ILRepack-merged into Selva.Drawing.dll in Release).
-			Tests need direct access to the public PdfSharpCore API for assertion helpers, so
-			re-pull them here as plain references.
-		-->
-		<!-- Debug only: in Release these types are ILRepack-internalized into
-		     Selva.Drawing.dll and visible here via InternalsVisibleTo, so a direct
-		     package reference would make every type ambiguous (CS0433). -->
-		<PackageReference Include="PdfSharpCore" Condition="'$(Configuration)' == 'Debug'"/>
-		<PackageReference Include="SharpZipLib" Condition="'$(Configuration)' == 'Debug'"/>
+		<!-- No PDFsharp reference: in Debug it flows from Selva.Drawing; in Release it is
+		     internalized there and visible through InternalsVisibleTo, so a direct reference
+		     would make every type ambiguous (CS0433). -->
 	</ItemGroup>
 
 	<ItemGroup>

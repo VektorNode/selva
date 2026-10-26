@@ -1,10 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<!-- net48 (WindowsForms) and net9.0 Grasshopper (transitive WindowsForms) don't
-		     resolve on the macOS SDK; on non-Windows build only net7.0 (Rhino 8 for Mac). -->
-		<TargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net48;net7.0;net9.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net7.0</TargetFrameworks>
+		<TargetFrameworks>$(SelvaTargetFrameworks)</TargetFrameworks>
+		<SelvaIsExternalInit>true</SelvaIsExternalInit>
 		<AssemblyName>Selva</AssemblyName>
 		<EnableDynamicLoading>true</EnableDynamicLoading>
 		<TargetExt>.gha</TargetExt>
@@ -27,16 +25,13 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<!-- Rhino 9 ships a different Grasshopper SDK; versions live in Directory.Packages.props. -->
-		<PackageReference Include="Grasshopper" VersionOverride="9.0.25266.10145-wip" Condition="'$(TargetFramework)' == 'net9.0'" ExcludeAssets="runtime"/>
-		<PackageReference Include="Grasshopper" Condition="'$(TargetFramework)' == 'net7.0'" ExcludeAssets="runtime"/>
-		<PackageReference Include="Grasshopper" Condition="'$(TargetFramework)' == 'net48'" ExcludeAssets="runtime"/>
+		<PackageReference Include="Grasshopper" VersionOverride="$(RhinoRefVersion)" ExcludeAssets="runtime"/>
 		<!--
 			Release: PrivateAssets="all" keeps Newtonsoft.Json out of the .gha's output as a
 			sibling DLL — it's merged and internalized into Selva.dll by the target below.
 			GeneratePathProperty exposes $(PkgNewtonsoft_Json) so that target can find it.
 			Debug: a plain reference, so the DLL sits next to the .gha and the AssemblyResolve
-			hook (net48) or the ALC (net7/9) can find it; the merge is Release-only.
+			hook (net48) or the ALC (net8/net10) can find it; the merge is Release-only.
 		-->
 		<PackageReference Include="Newtonsoft.Json" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
 		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
@@ -146,14 +141,8 @@
 		<Delete Files="$(_RepackOutDir)Selva.Schema.dll;$(_RepackOutDir)Selva.Slva.dll;$(_RepackOutDir)Newtonsoft.Json.dll" />
 	</Target>
 
-	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-		<None Update="Resources\manifest-rh9.yml">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-			<Link>manifest.yml</Link>
-		</None>
-	</ItemGroup>
-	<ItemGroup Condition="'$(TargetFramework)' != 'net9.0'">
-		<None Update="Resources\manifest-rh8.yml">
+	<ItemGroup>
+		<None Update="Resources\manifest-rh$(RhinoMajor).yml">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 			<Link>manifest.yml</Link>
 		</None>

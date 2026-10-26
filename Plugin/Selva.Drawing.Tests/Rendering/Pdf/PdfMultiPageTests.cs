@@ -1,5 +1,5 @@
 using System.IO;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -30,7 +30,7 @@ public class PdfMultiPageTests
 		var bytes = new PdfRenderer(new PdfRenderOptions { AutoFitToContent = false }).Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(4, reopened.PageCount);
 	}
 
@@ -50,7 +50,7 @@ public class PdfMultiPageTests
 		var bytes = new PdfRenderer(new PdfRenderOptions { AutoFitToContent = false }).Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(3, reopened.PageCount);
 
 		const double mmToPt = 72.0 / 25.4;
@@ -65,7 +65,7 @@ public class PdfMultiPageTests
 		var bytes = new PdfRenderer().Render(new Document());
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 	}
 

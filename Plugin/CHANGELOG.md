@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Builder: the sidebar splits into Parameters, App, Local and Compute panels that remember their folds and filters, each tab gets a settings bar (icon, name, panel side, visibility), and a Save button highlights while there are unsaved edits. App holds what applies everywhere, Local what only this plugin's preview uses (Local render), Compute what only Selva uses (Compute render, and a list of inputs filled by something other than the form). The panel tabs shrink to icons when the sidebar is narrow.
 - Builder: an input's value source sits in a Compute only section at the end of its card, picked with Form, Client app or Server buttons, and a collapsed card shows a chip when its value comes from a client app or the server.
+- PDF export runs on PDFsharp 6.2.4 instead of PdfSharpCore and ImageSharp, and renders about twice as fast on large drawings. Rendering the same drawing twice still gives identical bytes. A JPEG from Draw Image now embeds at quality 92 instead of being re-compressed to quality 75, so photos look sharper and files with many photos get somewhat larger.
+- Draw Image: WebP images are skipped in PDF output, with a warning; SVG output still embeds them. Images from the Selva web UI arrive as PNG or JPEG.
 - Local render and Compute render each drive one host: the plugin's preview shows the 3D viewer only with Local render on, Selva only with Compute render on. Either switch used to turn the viewer on in both.
 
 ### Fixed
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- PDF export no longer bundles ImageSharp, which had five unfixed advisories on the version PdfSharpCore could use. Draw Image decodes PNG and JPEG with System.Drawing and re-encodes them, so the PDF library only ever reads images that encoder wrote.
 - UI Bridge: the local WebSocket only talks to the page the component opened. It refuses connections from any other origin or with a forged `Host`, and a socket must first send the secret the plugin puts in the page URL's fragment. Until now any web page open in the same browser could connect while the bridge was enabled, read the schema and values, and change inputs, the saved schema and parameter names. A browser tab opened before this update has to be reopened from the component.
 
 ## [0.23.0-beta.3] - 2026-10-13

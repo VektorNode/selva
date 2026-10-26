@@ -1,6 +1,6 @@
 using System.IO;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
@@ -31,7 +31,7 @@ public class PdfOutlinesTests
 		var bytes = new PdfRenderer().Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(3, reopened.Outlines.Count);
 		Assert.Equal("Cover", reopened.Outlines[0].Title);
 		Assert.Equal("Details", reopened.Outlines[1].Title);
@@ -77,7 +77,7 @@ public class PdfOutlinesTests
 		var bytes = new PdfRenderer().Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		var top = Assert.Single(reopened.Outlines);
 		Assert.Equal("Sheet 1", top.Title);
 		Assert.Collection(top.Outlines,
@@ -101,7 +101,7 @@ public class PdfOutlinesTests
 		var bytes = new PdfRenderer().Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Collection(reopened.Outlines,
 			o => Assert.Equal("Cover", o.Title),
 			o =>
@@ -128,7 +128,7 @@ public class PdfOutlinesTests
 		var bytes = new PdfRenderer(new PdfRenderOptions { EmitOutlines = false }).Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Empty(reopened.Outlines);
 	}
 }

@@ -2,74 +2,35 @@
 
 	<PropertyGroup>
 		<TargetFramework>netstandard2.0</TargetFramework>
+		<SelvaIsExternalInit>true</SelvaIsExternalInit>
 		<RootNamespace>Selva.Drawing</RootNamespace>
 	</PropertyGroup>
 
 	<ItemGroup>
 		<!--
-                        Release: PrivateAssets="all" stops PdfSharpCore + SharpZipLib + SixLabors.* from
-                        flowing to consumers as separate sibling DLLs — they're merged into
-                        Selva.Drawing.dll by the ILRepack target below. GeneratePathProperty exposes
-                        $(Pkg…) so the merge target can locate the source DLLs in the NuGet cache.
-
-                        Debug: no PrivateAssets, so the DLLs flow through the project reference to
-                        Selva.GH's output and are available when Grasshopper loads the plugin. ILRepack is
-                        skipped in Debug, so the separate DLLs must be present at runtime.
-                        Note: on net48 (Rhino 8) a SharpZipLib version conflict with Rhino's bundled
-                        v1.3.3.11 may surface in Debug — this is accepted for development builds.
-                -->
-                <PackageReference Include="PdfSharpCore" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
-                <PackageReference Include="SharpZipLib" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
-                <PackageReference Include="PdfSharpCore" Condition="'$(Configuration)' == 'Debug'" />
-                <PackageReference Include="SharpZipLib" Condition="'$(Configuration)' == 'Debug'" />
-                <!--
-                        SixLabors.* arrive transitively via PdfSharpCore, but referencing them directly
-                        does two things the transitive path can't:
-
-                        1. Release: PdfSharpCore is PrivateAssets="all", which severs its transitive deps
-                           too — nothing copied SixLabors next to the .gha, so PDF raster embedding threw
-                           FileNotFoundException. The merge target below needs $(Pkg…) to stage them.
-                        2. Both configs: PdfSharpCore asks for ImageSharp 1.x, which carries known CVEs
-                           including use-after-free and out-of-bounds write in the PNG and GIF decoders —
-                           exactly what PdfRenderer feeds user-supplied images to. NuGet audit only flags
-                           direct references, so a transitive one hides them. The direct reference takes
-                           the patched 2.x pinned in Directory.Packages.props; PdfSharpCore's dependency
-                           is a minimum, not a pin, and its image path is exercised by PdfImageTests.
-
-                        GeneratePathProperty is Release-only because only the merge target reads $(Pkg…).
-                -->
-                <PackageReference Include="SixLabors.ImageSharp" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
-                <PackageReference Include="SixLabors.Fonts" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
-                <PackageReference Include="SixLabors.ImageSharp" Condition="'$(Configuration)' != 'Release'" />
-                <PackageReference Include="SixLabors.Fonts" Condition="'$(Configuration)' != 'Release'" />
-                <!--
-                        ImageSharp 2.x needs Unsafe >= 5.0 (Unsafe.SkipInit) and CodePages,
-                        but PrivateAssets="all" severs those transitive deps, and Selva.GH's own
-                        net48 graph resolves an older Unsafe (4.x, via System.Memory) that lacks
-                        SkipInit — MissingMethodException on JPEG decode in netfx Rhino. Merging
-                        both alongside ImageSharp removes the runtime version dance entirely.
-                        Debug needs nothing: the plain ImageSharp reference flows them normally.
-                -->
-                <PackageReference Include="System.Runtime.CompilerServices.Unsafe" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
-                <PackageReference Include="System.Text.Encoding.CodePages" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
-                <PackageReference Include="System.Drawing.Common" />
-                <!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
-                <PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'" />
-	</ItemGroup>
-
-	<!--
-		ImageSharp advisories with no fix on the 2.x line: the patched releases target only modern
-		.NET, which neither this netstandard2.0 target nor PdfSharpCore (ImageSharp 1.x/2.x API) can take.
-		Unreachable: histogram equalization and TIFF encoding are never called, PdfRenderer only lets
-		PNG/JPEG/WEBP bytes reach the decoder. Remaining: ICC CLUT allocation (DoS) via a crafted image.
-		Drop these once PdfSharpCore is replaced.
-	-->
-	<ItemGroup>
-		<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
-		<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
-		<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
-		<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
-		<NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+			Release: PrivateAssets="all" keeps PDFsharp and its closure out of consumers as sibling
+			DLLs; the ILRepack target below merges them into Selva.Drawing.dll. GeneratePathProperty
+			exposes $(Pkg…) so the merge can find them in the NuGet cache. The closure is referenced
+			directly because PrivateAssets severs transitive deps, and the merge needs their paths.
+			Debug: plain references, so the DLLs flow to Selva.GH's output unmerged.
+		-->
+		<PackageReference Include="PDFsharp" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="Microsoft.Bcl.AsyncInterfaces" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="PDFsharp" Condition="'$(Configuration)' != 'Release'"/>
+		<!-- PDFsharp's package depends on Pkcs 8.0.1, which has advisories, for PdfSharp.Cryptography
+		     (signing), which is neither merged nor loaded. Referencing a patched Pkcs lifts the resolved
+		     version; ExcludeAssets keeps it out of the build. In Debug PDFsharp flows to consumers, so
+		     this must flow too, or their restore resolves 8.0.1 again. -->
+		<PackageReference Include="System.Security.Cryptography.Pkcs" ExcludeAssets="all" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
+		<PackageReference Include="System.Security.Cryptography.Pkcs" Condition="'$(Configuration)' != 'Release'"/>
+		<!-- Not merged: PDFsharp needs System.Memory, which net48 hosts get from Selva.GH's own
+		     reference and .NET hosts from the framework. -->
+		<PackageReference Include="System.Memory"/>
+		<PackageReference Include="System.Drawing.Common"/>
+		<!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
+		<PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
 	</ItemGroup>
 
 	<ItemGroup>
@@ -81,15 +42,13 @@
 	</ItemGroup>
 
 	<!--
-		Release-only ILRepack: merge PdfSharpCore + ICSharpCode.SharpZipLib into
-		Selva.Drawing.dll and internalize them. Rhino 8 ships an older SharpZipLib
-		(v1.3.3.11) in its app base which collides with PdfSharpCore's required
-		v1.4.2.13, producing intermittent FileLoadException (0x80131621) at runtime.
-		Internalized types live in this assembly under their original namespaces but
-		are inaccessible to other plugins, so the assembly-identity match never fires.
-		Debug builds skip the merge so tests/iteration stay fast.
+		Release-only ILRepack: merge PDFsharp and its closure into Selva.Drawing.dll and internalize
+		them. Internalized types keep their namespaces but are invisible to other plugins, so a
+		different Microsoft.Extensions.Logging.Abstractions (or an older PdfSharp) loaded by Rhino or
+		another plugin can never bind against ours. Debug skips the merge so iteration stays fast.
+		PdfSharp.Cryptography (signing) is left out: PdfSharp.dll doesn't reference it.
 	-->
-	<Target Name="ILRepackMergePdfSharpCore"
+	<Target Name="ILRepackMergePdfSharp"
 	        AfterTargets="Build"
 	        Condition="'$(Configuration)' == 'Release'">
 		<PropertyGroup>
@@ -97,43 +56,35 @@
 			<_RepackStageDir>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ilrepack-stage'))\</_RepackStageDir>
 			<_RepackOutput>$(_RepackOutDir)$(AssemblyName).dll</_RepackOutput>
 		</PropertyGroup>
-		<!--
-			Stage only what we want merged. Anything in the stage dir is available to
-			ILRepack as both an input and a search target; nothing from the broader NuGet
-			cache leaks in, so the merge stays tight: our primary + PdfSharpCore +
-			SharpZipLib + SixLabors.*. The remaining PdfSharpCore dependencies
-			(System.Memory, System.Drawing.Common, etc.) ship in the framework or as
-			ordinary references, so consumers resolve them the normal way.
-		-->
+		<!-- Only what is staged gets merged; nothing else from the NuGet cache leaks in. -->
 		<ItemGroup>
-			<_RepackToStage Include="$(_RepackOutDir)$(AssemblyName).dll" />
-			<_RepackToStage Include="$(PkgPdfSharpCore)\lib\netstandard2.0\PdfSharpCore.dll" />
-			<_RepackToStage Include="$(PkgSharpZipLib)\lib\netstandard2.0\ICSharpCode.SharpZipLib.dll" />
-			<_RepackToStage Include="$(PkgSixLabors_ImageSharp)\lib\netstandard2.0\SixLabors.ImageSharp.dll" />
-			<_RepackToStage Include="$(PkgSixLabors_Fonts)\lib\netstandard2.0\SixLabors.Fonts.dll" />
-			<_RepackToStage Include="$(PkgSystem_Runtime_CompilerServices_Unsafe)\lib\netstandard2.0\System.Runtime.CompilerServices.Unsafe.dll" />
-			<_RepackToStage Include="$(PkgSystem_Text_Encoding_CodePages)\lib\netstandard2.0\System.Text.Encoding.CodePages.dll" />
+			<_RepackMerge Include="$(PkgPDFsharp)\lib\netstandard2.0\PdfSharp.dll" />
+			<_RepackMerge Include="$(PkgPDFsharp)\lib\netstandard2.0\PdfSharp.System.dll" />
+			<_RepackMerge Include="$(PkgPDFsharp)\lib\netstandard2.0\PdfSharp.Shared.dll" />
+			<_RepackMerge Include="$(PkgMicrosoft_Extensions_Logging_Abstractions)\lib\netstandard2.0\Microsoft.Extensions.Logging.Abstractions.dll" />
+			<_RepackMerge Include="$(PkgMicrosoft_Extensions_DependencyInjection_Abstractions)\lib\netstandard2.0\Microsoft.Extensions.DependencyInjection.Abstractions.dll" />
+			<_RepackMerge Include="$(PkgMicrosoft_Bcl_AsyncInterfaces)\lib\netstandard2.0\Microsoft.Bcl.AsyncInterfaces.dll" />
 		</ItemGroup>
 
 		<RemoveDir Directories="$(_RepackStageDir)" />
 		<MakeDir Directories="$(_RepackStageDir)" />
-		<Copy SourceFiles="@(_RepackToStage)" DestinationFolder="$(_RepackStageDir)" />
+		<Copy SourceFiles="$(_RepackOutDir)$(AssemblyName).dll;@(_RepackMerge)" DestinationFolder="$(_RepackStageDir)" />
 
 		<ItemGroup>
 			<_RepackInputPrimary Include="$(_RepackStageDir)$(AssemblyName).dll" />
-			<_RepackInputMerge Include="$(_RepackStageDir)PdfSharpCore.dll" />
-			<_RepackInputMerge Include="$(_RepackStageDir)ICSharpCode.SharpZipLib.dll" />
-			<_RepackInputMerge Include="$(_RepackStageDir)SixLabors.ImageSharp.dll" />
-			<_RepackInputMerge Include="$(_RepackStageDir)SixLabors.Fonts.dll" />
-			<_RepackInputMerge Include="$(_RepackStageDir)System.Runtime.CompilerServices.Unsafe.dll" />
-			<_RepackInputMerge Include="$(_RepackStageDir)System.Text.Encoding.CodePages.dll" />
+			<_RepackInputMerge Include="@(_RepackMerge->'$(_RepackStageDir)%(Filename)%(Extension)')" />
 			<!-- Search the stage dir first; fall back to the main bin/ for sibling reference assemblies. -->
 			<_RepackSearchDirs Include="$(_RepackStageDir);$(_RepackOutDir)" />
 		</ItemGroup>
 
+		<!-- PdfSharp.dll and PdfSharp.Shared carry their own IsExternalInit polyfill. Left alone,
+		     ILRepack renames our copy, every init setter's modreq then names an unknown type, and
+		     consumers fail with CS0570. Allowing duplicates in this namespace merges the copies into
+		     one; everything else in it is compiler polyfill too. -->
 		<ILRepack
 			Parallel="true"
 			Internalize="true"
+			AllowedDuplicateNamespaces="System.Runtime.CompilerServices"
 			InputAssemblies="@(_RepackInputPrimary);@(_RepackInputMerge)"
 			LibraryPath="@(_RepackSearchDirs)"
 			TargetKind="Dll"

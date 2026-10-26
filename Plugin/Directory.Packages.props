@@ -20,22 +20,16 @@
 
 	<ItemGroup>
 		<!--
-			Rhino 8 (net48/net7.0) and Rhino 9 (net9.0) ship different Grasshopper SDKs, so
-			this is the one package with a legitimate per-TFM split. The default here is the
-			Rhino 8 SDK; the net9.0 references carry VersionOverride for the 9.x wip build.
+			Rhino 8 and Rhino 9 ship different SDKs, so these are the packages with a
+			legitimate per-TFM split. References carry VersionOverride="$(RhinoRefVersion)",
+			which Directory.Build.props resolves per TFM; the default here is the Rhino 8 SDK.
 		-->
-		<PackageVersion Include="Grasshopper" Version="8.0.23304.9001"/>
-		<!-- Direct reference only in Selva.PluginVerifier (elsewhere it flows
-		     transitively via Grasshopper); must stay in lockstep with it. -->
-		<PackageVersion Include="RhinoCommon" Version="8.0.23304.9001"/>
+		<PackageVersion Include="Grasshopper" Version="$(Rhino8RefVersion)"/>
+		<!-- Direct reference in Selva.Panel and Selva.PluginVerifier (elsewhere it flows
+		     transitively via Grasshopper). -->
+		<PackageVersion Include="RhinoCommon" Version="$(Rhino8RefVersion)"/>
 
-		<!--
-			Pinned to 8.0.0, NOT the latest. Consumers target net7.0, where 10.x ships a
-			System.Drawing.Common that duplicates types already in the framework's
-			System.Drawing.Primitives — every ColorTranslator/Color use then fails to compile
-			with CS0433. Raising this requires dropping net7.0 (Rhino 8) support first.
-		-->
-		<PackageVersion Include="System.Drawing.Common" Version="8.0.0"/>
+		<PackageVersion Include="System.Drawing.Common" Version="10.0.10"/>
 
 		<PackageVersion Include="Newtonsoft.Json" Version="13.0.4"/>
 		<PackageVersion Include="System.Memory" Version="4.6.3"/>
@@ -43,20 +37,19 @@
 		<PackageVersion Include="System.Resources.Extensions" Version="7.0.0"/>
 		<PackageVersion Include="System.Windows.Forms" Version="4.0.0"/>
 
-		<PackageVersion Include="PdfSharpCore" Version="1.3.67"/>
-		<PackageVersion Include="SharpZipLib" Version="1.4.2"/>
-
 		<!--
-			Transitive deps of PdfSharpCore, declared explicitly so Selva.Drawing can merge them
-			(see the ILRepack target there). These versions are what PdfSharpCore 1.3.67 resolves
-			to — raising either independently risks handing it an API it wasn't built against.
+			6.2.4 is the last MIT release: 6.5.0 relicensed to AGPL-3.0, which would force the whole
+			plugin onto AGPL. Pinned and on Dependabot's ignore list; never raise it past 6.2.x.
 		-->
-		<PackageVersion Include="SixLabors.ImageSharp" Version="2.1.13"/>
-		<PackageVersion Include="SixLabors.Fonts" Version="1.0.1"/>
-		<!-- ImageSharp needs Unsafe >= 5.0 (SkipInit) and CodePages; both are merged
-		     into Selva.Drawing.dll in Release because PrivateAssets severs them. -->
-		<PackageVersion Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0"/>
-		<PackageVersion Include="System.Text.Encoding.CodePages" Version="5.0.0"/>
+		<PackageVersion Include="PDFsharp" Version="6.2.4"/>
+		<!-- PDFsharp's netstandard2.0 closure, declared so Selva.Drawing can stage and merge it
+		     (see the ILRepack target there). Versions are what PDFsharp 6.2.4 resolves to. -->
+		<PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.3"/>
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2"/>
+		<PackageVersion Include="Microsoft.Bcl.AsyncInterfaces" Version="8.0.0"/>
+		<!-- Not shipped: lifts PDFsharp's transitive 8.0.1 (two advisories) to a patched release.
+		     See the reference in Selva.Drawing.csproj. -->
+		<PackageVersion Include="System.Security.Cryptography.Pkcs" Version="8.0.2"/>
 		<PackageVersion Include="ILRepack.Lib.MSBuild.Task" Version="2.0.34"/>
 
 		<PackageVersion Include="coverlet.collector" Version="10.1.0"/>

@@ -52,22 +52,24 @@ selva/
 
 ### Project boundaries
 
-| Project                | Target            | Rhino/GH deps | Purpose                                                          |
-| ---------------------- | ----------------- | ------------- | ---------------------------------------------------------------- |
-| `Selva.Schema`         | `netstandard2.0`  | none          | Generated schema, validation, migration, shared constants        |
-| `Selva.Slva`           | `netstandard2.0`  | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
-| `Selva.Drawing`        | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                               |
-| `Selva.FileIO`         | `netstandard2.0`  | none          | File in/out contract + its rules; referenced by other repos      |
-| `Selva.Rhino`          | `net48/net7/net9` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
-| `Selva.GH`             | `net48/net7/net9` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
-| `Selva.PluginVerifier` | `net48/net7/net9` | yes           | Loads the merged `.gha` after a Release build; Windows-only      |
-| `Selva.Tests`          | `net8.0` (xUnit)  | none          | Tests for `Selva.GH` + `Selva.Schema`                            |
-| `Selva.Slva.Tests`     | `net8.0` (xUnit)  | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
-| `Selva.Drawing.Tests`  | `net8.0` (xUnit)  | none          | Tests for `Selva.Drawing`                                        |
+| Project                | Target             | Rhino/GH deps | Purpose                                                          |
+| ---------------------- | ------------------ | ------------- | ---------------------------------------------------------------- |
+| `Selva.Schema`         | `netstandard2.0`   | none          | Generated schema, validation, migration, shared constants        |
+| `Selva.Slva`           | `netstandard2.0`   | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
+| `Selva.Drawing`        | `netstandard2.0`   | none          | Document model + SVG/PDF renderers                               |
+| `Selva.FileIO`         | `netstandard2.0`   | none          | File in/out contract + its rules; referenced by other repos      |
+| `Selva.Rhino`          | `net48/net8/net10` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
+| `Selva.GH`             | `net48/net8/net10` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
+| `Selva.PluginVerifier` | `net48/net8/net10` | yes           | Loads the merged `.gha` after a Release build; Windows-only      |
+| `Selva.Tests`          | `net8.0` (xUnit)   | none          | Tests for `Selva.GH` + `Selva.Schema`                            |
+| `Selva.Slva.Tests`     | `net8.0` (xUnit)   | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
+| `Selva.Drawing.Tests`  | `net8.0` (xUnit)   | none          | Tests for `Selva.Drawing`                                        |
 
-Rhino 8 loads `net48` + `net7.0`; Rhino 9 loads `net9.0`. Rhino 7 is not supported.
-`Selva.Rhino` and `Selva.PluginVerifier` use the `-windows` variants (`net7.0-windows`,
-`net9.0-windows`) since they pull in WinForms. On non-Windows, `Selva.GH` builds `net7.0` only.
+Rhino 8 loads `net48` + `net8.0`; Rhino 9 loads `net10.0`. Rhino 7 is not supported.
+The Rhino-coupled TFMs and Rhino SDK versions live once in `Plugin/Directory.Build.props`
+(`SelvaTargetFrameworks`, `Rhino8RefVersion`, `Rhino9RefVersion`); the SDK is pinned to .NET 10 in
+`global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. On
+non-Windows, the Rhino-coupled projects build `net8.0` only.
 
 ### NuGet versions live in one file
 
@@ -80,15 +82,15 @@ This is central package management, adopted because a split version is invisible
 bump once landed in `Selva.Drawing` alone and left `Selva.GH`/`Selva.Rhino` behind, and the solution
 stopped restoring entirely with NU1605. One declaration per package makes that unrepresentable.
 
-Two packages are deliberately held back, each with the reason inline in the props file, and both are
-in `dependabot.yml`'s ignore list so the bump is not re-proposed weekly:
+**`Grasshopper`** and **`RhinoCommon`** are held back and both sit in `dependabot.yml`'s ignore list:
+they share `Rhino8RefVersion`, and raising it raises the minimum Rhino for every user. References
+carry `VersionOverride="$(RhinoRefVersion)"`, which picks the Rhino 9 `-beta` line on `net10.0`. This
+is the only legitimate per-TFM split; use `VersionOverride` on the reference rather than a second
+`<PackageVersion>` entry.
 
-- **`System.Drawing.Common`**: 8.0.0. On `net7.0`, 10.x duplicates types already in the framework's
-  `System.Drawing.Primitives`, so every `ColorTranslator` use fails with CS0433. Gated on dropping
-  Rhino 8.
-- **`Grasshopper`**: the Rhino 8 SDK by default, with `VersionOverride` on the `net9.0` references
-  for the Rhino 9 `-wip` line. This is the one package with a legitimate per-TFM split; use
-  `VersionOverride` on the reference rather than a second `<PackageVersion>` entry.
+**`PDFsharp`** is pinned at 6.2.4 and ignored by Dependabot: 6.5.0 relicensed to AGPL-3.0, which would
+put the whole plugin under AGPL. It gets no fixes, so it must only parse bytes Selva wrote: user images
+reach it re-encoded by `RasterSanitizer` in Selva.GH.
 
 ### Naming rules
 

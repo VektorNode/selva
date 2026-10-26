@@ -286,8 +286,8 @@ Edit the schema, run `pnpm generate`. CI fails on drift.
 
 **Plugin + plugin UI.** `pnpm dev:plugin` runs the schema designer on `:5173`; the plugin is built
 with `dotnet build` and connects back over WebSocket. `pnpm build:plugin` builds the web assets,
-embeds them as `EmbeddedResource`, and produces one self-contained `.gha` (net48 + net7.0 for
-Rhino 8, net9.0 for Rhino 9). The plugin allocates a local HTTP port at runtime to serve them.
+embeds them as `EmbeddedResource`, and produces one self-contained `.gha` (net48 + net8.0 for
+Rhino 8, net10.0 for Rhino 9). The plugin allocates a local HTTP port at runtime to serve them.
 
 **Compute app.** Standalone SvelteKit deployment. Provider selection, tenancy, feature flags, and
 secrets are all env vars: [.env.example](../../packages/selva/.env.example) is authoritative. `PORT` defaults to 3000.

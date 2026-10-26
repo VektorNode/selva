@@ -48,7 +48,7 @@ public sealed class DrawingView : LayoutElement
 	public TextStyle CaptionStyle { get; init; } = new TextStyle { FontSize = 2.5 };
 	public double CaptionGap { get; init; } = 1.5;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		// Flatten the whole geometry subtree, not just a LayoutElement sitting at its root.
 		// Counter-scaling below rewrites primitives; an unresolved Frame/Stack/Grid one level

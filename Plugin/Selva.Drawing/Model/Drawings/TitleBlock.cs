@@ -98,7 +98,7 @@ public sealed class TitleBlock : LayoutElement
 
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var totalWidth = ResolveWidth(context);
 		var totalHeight = Size.Height;

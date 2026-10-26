@@ -21,7 +21,7 @@ Each of these is silent: nothing fails at build time, and the damage shows up la
 
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building Grasshopper-driven web applications. Dual stack:
 
-- **Backend**: C# (.NET multi-target: net48/net7.0/net9.0), Grasshopper plugin
+- **Backend**: C# (.NET multi-target: net48/net8.0/net10.0), Grasshopper plugin
 - **Frontend**: SvelteKit with TypeScript + Tailwind CSS
 - **Communication**: WebSocket served by the plugin on loopback (8765 by default, a free port if taken) + embedded HTTP server
 
@@ -149,7 +149,7 @@ the Rhino-free `Plugin/Selva.Slva/` library ([README](./Plugin/Selva.Slva/README
 
 ### Production build
 
-`pnpm run build:plugin` produces a **fully self-contained** `.gha`: builds `@selvajs/plugin-ui` assets → copies to `Plugin/Selva.GH/EmbeddedAssets/web/` → embeds them as `EmbeddedResource` → builds multi-target (net48 + net7.0 for Rhino 8, net9.0 for Rhino 9). No external dependencies; LocalWebServer auto-allocates an HTTP port at runtime.
+`pnpm run build:plugin` produces a **fully self-contained** `.gha`: builds `@selvajs/plugin-ui` assets → copies to `Plugin/Selva.GH/EmbeddedAssets/web/` → embeds them as `EmbeddedResource` → builds multi-target (net48 + net8.0 for Rhino 8, net10.0 for Rhino 9). No external dependencies; LocalWebServer auto-allocates an HTTP port at runtime.
 
 ## Commands
 
@@ -217,10 +217,10 @@ Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build`
 
 ```bash
 # Windows (Rhino 8)
-copy "Plugin\bin\Release\net7.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
+copy "Plugin\bin\Release\net8.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
 
 # macOS (Rhino 8)
-cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
+cp Plugin/bin/Release/net8.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
 ```
 
 Restart Rhino completely afterwards.
@@ -242,7 +242,7 @@ The plugin UI needs none (WebSocket port comes from the `wsPort` query param, 87
 
 - [pnpm](https://pnpm.io) >= 11.0.0 (pinned in `packageManager`, activated via Corepack)
 - Node.js >= 24.0.0
-- .NET SDK 7.0+ (plugin development)
+- .NET SDK 10 (plugin development; pinned in `global.json`)
 - Rhino 8 or 9 (Rhino 7 is not supported)
 - Rhino.Compute: the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support
 

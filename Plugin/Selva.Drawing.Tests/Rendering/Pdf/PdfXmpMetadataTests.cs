@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Text;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.Advanced;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.Advanced;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Rendering.Pdf;
@@ -62,7 +62,7 @@ public class PdfXmpMetadataTests
 		var bytes = new PdfRenderer().Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		var catalog = reopened.Internals.Catalog;
 		var metadataItem = catalog.Elements["/Metadata"];
 		Assert.NotNull(metadataItem);
@@ -91,7 +91,7 @@ public class PdfXmpMetadataTests
 		var bytes = new PdfRenderer(new PdfRenderOptions { EmitXmpMetadata = false }).Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.False(reopened.Internals.Catalog.Elements.ContainsKey("/Metadata"));
 	}
 }

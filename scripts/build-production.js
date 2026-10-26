@@ -29,6 +29,29 @@ function readPluginVersion() {
 	return match[1].trim();
 }
 
+// Rhino-coupled TFMs and the one Rhino 9 loads, read from Plugin/Directory.Build.props so a
+// Rhino/.NET bump stays a single edit there. Uses the Windows list: releases are cut on Windows.
+function readTargetFrameworks() {
+	const propsPath = join(projectRoot, 'Plugin/Directory.Build.props');
+	const props = readFileSync(propsPath, 'utf-8');
+	const rhino9 = props.match(/<SelvaRhino9TargetFramework>([^<]+)<\/SelvaRhino9TargetFramework>/);
+	const all = props.match(
+		/<SelvaTargetFrameworks Condition="'\$\(OS\)' == 'Windows_NT'">([^<]+)<\/SelvaTargetFrameworks>/
+	);
+	if (!rhino9 || !all) {
+		throw new Error(
+			`Could not find SelvaTargetFrameworks / SelvaRhino9TargetFramework in ${propsPath}`
+		);
+	}
+	const rhino9Tfm = rhino9[1].trim();
+	const tfms = all[1]
+		.replace('$(SelvaRhino9TargetFramework)', rhino9Tfm)
+		.split(';')
+		.map((t) => t.trim())
+		.filter(Boolean);
+	return { tfms, rhino9Tfm };
+}
+
 // Colors for output
 const COLORS = {
 	RESET: '\x1b[0m',
@@ -141,12 +164,9 @@ async function build() {
 		log('');
 
 		// Step 2: Build C# plugin with embedded assets
-		// Build the .gha project directly (not the whole solution) so the test projects
-		// — which re-pull PdfSharpCore for their own use — don't get compiled against the
-		// ILRepack-merged Release Selva.Drawing.dll. Compiling them in that context produces
-		// duplicate-type errors because the internalized PdfSharpCore types inside
-		// Selva.Drawing become visible via InternalsVisibleTo and collide with the public
-		// PdfSharpCore package reference. Tests run separately in Debug.
+		// Build the .gha project directly, not the whole solution: the test projects don't
+		// need to compile against the ILRepack-merged Release Selva.Drawing.dll, and tests
+		// run separately in Debug.
 		log('[2/5] Building C# plugin...');
 		let buildOutput;
 		try {
@@ -189,9 +209,10 @@ async function build() {
 			logError('Selva.Panel build failed');
 			process.exit(1);
 		}
+		const { tfms, rhino9Tfm } = readTargetFrameworks();
 		const ghaReleaseDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release');
 		const panelReleaseDir = join(projectRoot, 'Plugin/Selva.Panel/bin/Release');
-		for (const tfm of ['net48', 'net7.0', 'net9.0']) {
+		for (const tfm of tfms) {
 			try {
 				statSync(join(ghaReleaseDir, tfm, 'Selva.gha'));
 			} catch {
@@ -229,17 +250,12 @@ async function build() {
 			}
 
 			const verifierDir = join(projectRoot, 'Plugin/Selva.PluginVerifier/bin/Release');
-			const verifyLegs = [
-				{ tfm: 'net48', cmd: `"${join(verifierDir, 'net48/Selva.PluginVerifier.exe')}"` },
-				{
-					tfm: 'net7.0',
-					cmd: `dotnet "${join(verifierDir, 'net7.0-windows/Selva.PluginVerifier.dll')}"`
-				},
-				{
-					tfm: 'net9.0',
-					cmd: `dotnet "${join(verifierDir, 'net9.0-windows/Selva.PluginVerifier.dll')}"`
-				}
-			];
+			// The verifier builds .NET Framework as an exe and the .NET legs as -windows dlls.
+			const verifyLegs = tfms.map((tfm) =>
+				tfm.includes('.')
+					? { tfm, cmd: `dotnet "${join(verifierDir, `${tfm}-windows/Selva.PluginVerifier.dll`)}"` }
+					: { tfm, cmd: `"${join(verifierDir, tfm, 'Selva.PluginVerifier.exe')}"` }
+			);
 			for (const leg of verifyLegs) {
 				const outDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release', leg.tfm);
 				try {
@@ -262,8 +278,7 @@ async function build() {
 		log('');
 
 		// Step 3: Stage yak packages.
-		// Rhino 8 yak bundles net48 + net7.0 (both target Grasshopper 8.0.x).
-		// Rhino 9 yak bundles net9.0.
+		// Rhino 9 yak bundles its one TFM; Rhino 8 yak bundles the rest (net48 + net8.0).
 		// Each TFM's output folder (containing Selva.gha and deps) is copied
 		// into the yak staging dir as a TFM-named subfolder, alongside the
 		// manifest and icon. `yak build` is then run in each staging dir.
@@ -277,13 +292,13 @@ async function build() {
 			{
 				label: 'Rhino 8',
 				stageDir: join(yakStagingRoot, 'rh-8'),
-				tfms: ['net48', 'net7.0'],
+				tfms: tfms.filter((tfm) => tfm !== rhino9Tfm),
 				manifest: join(resourcesDir, 'manifest-rh8.yml')
 			},
 			{
 				label: 'Rhino 9',
 				stageDir: join(yakStagingRoot, 'rh-9'),
-				tfms: ['net9.0'],
+				tfms: [rhino9Tfm],
 				manifest: join(resourcesDir, 'manifest-rh9.yml')
 			}
 		];
@@ -355,7 +370,7 @@ async function build() {
 		}
 		log('');
 		log('Plugin binaries:');
-		for (const tfm of ['net48', 'net7.0', 'net9.0']) {
+		for (const tfm of tfms) {
 			const ghaPath = join(releaseDir, tfm, 'Selva.gha');
 			try {
 				statSync(ghaPath);

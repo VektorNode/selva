@@ -3,28 +3,25 @@
 	<PropertyGroup>
 		<!--
 			Post-merge smoke test for the .gha (see Program.cs). One TFM per Rhino
-			runtime the plugin ships for: net48 (Rhino 8 netfx mode), net7.0-windows
-			(Rhino 8 default), net9.0-windows (Rhino 9). Windows-only — release builds
+			runtime the plugin ships for: net48 (Rhino 8 netfx mode), net8.0-windows
+			(Rhino 8 default), net10.0-windows (Rhino 9). Windows-only — release builds
 			are cut on Windows CI; macOS dev builds skip verification.
 		-->
-		<TargetFrameworks>net48;net7.0-windows;net9.0-windows</TargetFrameworks>
+		<TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
 		<OutputType>Exe</OutputType>
 		<UseWindowsForms>true</UseWindowsForms>
 		<Nullable>enable</Nullable>
-		<!-- NU1701: Grasshopper/RhinoCommon are net48 packages consumed from net7/net9 —
+		<!-- NU1701: Grasshopper/RhinoCommon are net48 packages consumed from net8/net10 —
 		     exactly what Rhino's core host does at runtime. -->
 		<NoWarn>NU1701;CA1416</NoWarn>
 		<!-- Run on a newer runtime when the exact one isn't installed (dev machines
-		     without the net7 runtime); CI installs the exact runtimes anyway. -->
+		     without the net8 runtime); CI installs the exact runtimes anyway. -->
 		<RollForward>LatestMajor</RollForward>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Grasshopper" VersionOverride="9.0.25266.10145-wip" Condition="'$(TargetFramework)' == 'net9.0-windows'" GeneratePathProperty="true"/>
-		<PackageReference Include="Grasshopper" Condition="'$(TargetFramework)' != 'net9.0-windows'" GeneratePathProperty="true"/>
-		<PackageReference Include="RhinoCommon" VersionOverride="9.0.25266.10145-wip" Condition="'$(TargetFramework)' == 'net9.0-windows'" GeneratePathProperty="true"/>
-		<PackageReference Include="RhinoCommon" Condition="'$(TargetFramework)' != 'net9.0-windows'" GeneratePathProperty="true"/>
-		<PackageReference Include="System.Drawing.Common" Condition="'$(TargetFramework)' != 'net48'"/>
+		<PackageReference Include="Grasshopper" VersionOverride="$(RhinoRefVersion)" GeneratePathProperty="true"/>
+		<PackageReference Include="RhinoCommon" VersionOverride="$(RhinoRefVersion)" GeneratePathProperty="true"/>
 	</ItemGroup>
 
 	<!--
@@ -36,8 +33,8 @@
 	-->
 	<Target Name="CopyRhinoSdkLocal" AfterTargets="Build">
 		<PropertyGroup>
-			<_RhinoSdkLibDir Condition="'$(TargetFramework)' == 'net9.0-windows'">net8.0</_RhinoSdkLibDir>
-			<_RhinoSdkLibDir Condition="'$(TargetFramework)' != 'net9.0-windows'">net48</_RhinoSdkLibDir>
+			<_RhinoSdkLibDir Condition="'$(TargetFramework)' == 'net10.0-windows'">net8.0</_RhinoSdkLibDir>
+			<_RhinoSdkLibDir Condition="'$(TargetFramework)' != 'net10.0-windows'">net48</_RhinoSdkLibDir>
 		</PropertyGroup>
 		<ItemGroup>
 			<_RhinoSdkFiles Include="$(PkgGrasshopper)\lib\$(_RhinoSdkLibDir)\*.dll"/>

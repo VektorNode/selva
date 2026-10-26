@@ -12,7 +12,7 @@ namespace Selva.PluginVerifier;
 // ============================================================================
 //
 // The Release build ILRepack-merges Newtonsoft.Json + Selva.Schema into
-// Selva.gha (and PdfSharpCore/SharpZipLib/SixLabors into Selva.Drawing.dll).
+// Selva.gha (and PDFsharp with its dependencies into Selva.Drawing.dll).
 // A merge that goes wrong does not fail the build — it produces an assembly
 // whose method references no longer bind, and the first symptom is a
 // MissingMethodException inside a user's Rhino (0.17.1 shipped exactly that).
@@ -36,7 +36,7 @@ internal static class Program
     {
         "Selva", "Grasshopper", "GH_IO", "RhinoCommon",
         "Newtonsoft.Json", "System.Drawing.Common", "System.Windows.Forms",
-        "SixLabors", "PdfSharpCore", "ICSharpCode.SharpZipLib",
+        "PdfSharp", "Microsoft.Extensions", "Microsoft.Bcl.AsyncInterfaces",
     };
 
     // References that must NOT survive in the merged assemblies — their
@@ -47,8 +47,10 @@ internal static class Program
         ["Selva"] = new[] { "Newtonsoft.Json", "Selva.Schema" },
         ["Selva.Drawing"] = new[]
         {
-            "PdfSharpCore", "ICSharpCode.SharpZipLib",
-            "SixLabors.ImageSharp", "SixLabors.Fonts",
+            "PdfSharp", "PdfSharp.System", "PdfSharp.Shared",
+            "Microsoft.Extensions.Logging.Abstractions",
+            "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Bcl.AsyncInterfaces",
         },
     };
 

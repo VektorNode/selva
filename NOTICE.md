@@ -11,27 +11,19 @@ texts ship alongside the components where noted.
   Authors (https://github.com/rsms/inter)
 - **License text:** [Plugin/Selva.Drawing/Fonts/Resources/LICENSE.txt](Plugin/Selva.Drawing/Fonts/Resources/LICENSE.txt)
 
-## SharpZipLib
+## PDFsharp
 
-- **What:** `ICSharpCode.SharpZipLib` is merged (internalized via ILRepack) into
-  `Selva.Drawing.dll` in Release builds to avoid an assembly-version collision
-  with the copy Rhino ships.
-- **License:** MIT, Copyright © 2000-2022 SharpZipLib Contributors
-  (https://github.com/icsharpcode/SharpZipLib)
+- **What:** `PDFsharp` 6.2.4 (`PdfSharp`, `PdfSharp.System`, `PdfSharp.Shared`) is merged
+  (internalized via ILRepack) into `Selva.Drawing.dll` in Release builds.
+- **License:** MIT, Copyright (c) 2001-2026 empira Software GmbH
+  (https://github.com/empira/PDFsharp). Releases from 6.5.0 on are AGPL-3.0 and are not used.
 
-## PdfSharpCore
+## Microsoft.Extensions.Logging.Abstractions / DependencyInjection.Abstractions, Microsoft.Bcl.AsyncInterfaces
 
-- **What:** `PdfSharpCore` is merged (internalized via ILRepack) into
+- **What:** PDFsharp's dependencies, merged (internalized via ILRepack) into
   `Selva.Drawing.dll` in Release builds.
-- **License:** MIT, empira Software GmbH and contributors
-  (https://github.com/ststeiger/PdfSharpCore)
-
-## SixLabors.ImageSharp / SixLabors.Fonts
-
-- **What:** Both arrive via PdfSharpCore and are merged (internalized via
-  ILRepack) into `Selva.Drawing.dll` in Release builds.
-- **License:** Apache-2.0, Six Labors and contributors
-  (https://github.com/SixLabors/ImageSharp, https://github.com/SixLabors/Fonts)
+- **License:** MIT, Copyright (c) .NET Foundation and Contributors
+  (https://github.com/dotnet/runtime)
 
 All other dependencies are consumed as ordinary NuGet/npm packages under their
 respective licenses; see each package manifest for details.

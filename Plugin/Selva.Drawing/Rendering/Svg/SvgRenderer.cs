@@ -48,6 +48,7 @@ public sealed class SvgRenderer : IRenderer<string>, IElementVisitor
 	{
 		if (document == null) throw new ArgumentNullException(nameof(document));
 		if (document.Pages.Count == 0) return new[] { Render(document) };
+		using var layoutScope = LayoutCache.Begin();
 		var pages = new string[document.Pages.Count];
 		for (var i = 0; i < document.Pages.Count; i++)
 			pages[i] = RenderPage(document, document.Pages[i]);

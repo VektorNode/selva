@@ -1,6 +1,6 @@
 using System.IO;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Import.Svg;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
@@ -29,7 +29,7 @@ public class SvgToPdfIntegrationTests
 
         Assert.True(bytes.Length > 4);
         using var ms = new MemoryStream(bytes);
-        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
         Assert.Equal(1, reopened.PageCount);
     }
 }

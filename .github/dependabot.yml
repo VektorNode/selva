@@ -65,12 +65,13 @@ updates:
       nuget:
         patterns: ['*']
     ignore:
-      # Pinned per-target-framework to the Rhino 8 / Rhino 9 SDK line (net9
-      # rides a `-wip` prerelease). Bumping it changes the minimum Rhino the
+      # Pinned per-target-framework to the Rhino 8 / Rhino 9 SDK line (net10.0
+      # rides a `-beta` prerelease). Bumping it changes the minimum Rhino the
       # plugin loads in — a deliberate call, not a dependency chore.
+      # RhinoCommon shares Rhino8RefVersion with Grasshopper, so a bump to either
+      # moves both.
       - dependency-name: 'Grasshopper'
-      # Held at 8.0.0 by net7.0 (Rhino 8): 10.x duplicates types that are
-      # already in the framework's System.Drawing.Primitives, so every
-      # ColorTranslator use fails to compile with CS0433. Bumping it is gated on
-      # dropping net7.0, not on a version being available.
-      - dependency-name: 'System.Drawing.Common'
+      - dependency-name: 'RhinoCommon'
+      # 6.2.4 is the last MIT release; 6.5.0 and later are AGPL-3.0, which would
+      # put the whole plugin under AGPL. Never auto-bump it.
+      - dependency-name: 'PDFsharp'

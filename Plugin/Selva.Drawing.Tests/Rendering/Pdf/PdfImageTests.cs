@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -11,9 +11,9 @@ namespace Selva.Drawing.Tests.Rendering.Pdf;
 
 public class PdfImageTests
 {
-    // A valid 1x1 red PNG (decodable by ImageSharp, unlike a truncated header).
+    // A valid 2x2 red PNG with one half-transparent pixel, as GDI+ encodes it.
     private static readonly byte[] RedPng = Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAEUlEQVR42mP8z8BQz0AEYBxVSAUAB6oCAxELQVQAAAAASUVORK5CYII=");
+        "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAVSURBVBhXY/jPwPD/PwNDAwOU8R8AQtQHeuat4/kAAAAASUVORK5CYII=");
 
     private static byte[] RenderScene(DrawElement content)
     {
@@ -35,14 +35,14 @@ public class PdfImageTests
 
         Assert.True(bytes.Length > 4);
         using var ms = new MemoryStream(bytes);
-        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
         Assert.Equal(1, reopened.PageCount);
     }
 
     [Fact]
     public void Svg_format_is_skipped_without_throwing()
     {
-        // PdfSharpCore can't embed SVG; renderer skips it. Should still produce a valid PDF.
+        // PDFsharp can't embed SVG; renderer skips it. Should still produce a valid PDF.
         var bytes = RenderScene(new ImageElement
         {
             Data = new byte[] { 1, 2, 3 },
@@ -53,19 +53,19 @@ public class PdfImageTests
         });
 
         using var ms = new MemoryStream(bytes);
-        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
         Assert.Equal(1, reopened.PageCount);
     }
 
     [Fact]
-    public void Only_png_jpeg_and_webp_signatures_reach_the_decoder()
+    public void Only_png_and_jpeg_signatures_reach_the_decoder()
     {
-        Assert.True(PdfRenderer.IsPngJpegOrWebp(RedPng));
-        Assert.True(PdfRenderer.IsPngJpegOrWebp(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }));
-        Assert.True(PdfRenderer.IsPngJpegOrWebp("RIFF\0\0\0\0WEBPVP8 "u8.ToArray()));
-        Assert.False(PdfRenderer.IsPngJpegOrWebp("II*\0\b\0\0\0"u8.ToArray()));
-        Assert.False(PdfRenderer.IsPngJpegOrWebp("MM\0+\0\b\0\0"u8.ToArray()));
-        Assert.False(PdfRenderer.IsPngJpegOrWebp("GIF89a"u8.ToArray()));
+        Assert.True(PdfRenderer.IsPngOrJpeg(RedPng));
+        Assert.True(PdfRenderer.IsPngOrJpeg(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 }));
+        Assert.False(PdfRenderer.IsPngOrJpeg("RIFF\0\0\0\0WEBPVP8 "u8.ToArray()));
+        Assert.False(PdfRenderer.IsPngOrJpeg("II*\0\b\0\0\0"u8.ToArray()));
+        Assert.False(PdfRenderer.IsPngOrJpeg("MM\0+\0\b\0\0"u8.ToArray()));
+        Assert.False(PdfRenderer.IsPngOrJpeg("GIF89a"u8.ToArray()));
     }
 
     [Fact]
@@ -81,17 +81,14 @@ public class PdfImageTests
         });
 
         using var ms = new MemoryStream(bytes);
-        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+        using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
         Assert.Equal(1, reopened.PageCount);
     }
 
     [Fact]
     public void One_image_on_every_page_is_embedded_once()
     {
-        using var png = new MemoryStream();
-        using (var raster = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgba32>(4, 4))
-            SixLabors.ImageSharp.ImageExtensions.SaveAsPng(raster, png);
-        var logo = png.ToArray();
+        var logo = RedPng;
         Page WithLogo() => new Page
         {
             Content = new ImageElement { Data = logo, Format = ImageFormat.Png, Width = 10, Height = 10 },
