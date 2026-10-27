@@ -411,6 +411,23 @@ describe('createClientCache — client-level Server-Timing', () => {
 			true
 		);
 	});
+
+	it("logs a compute result-cache hit from the server's own verdict", async () => {
+		const lines: string[] = [];
+		const cache = createClientCache({
+			...baseConfig(),
+			debug: true,
+			onDebugLog: (m) => lines.push(m)
+		});
+		await cache.getClient(server('s1'));
+		prop<(t: Record<string, unknown>) => void>(
+			createdConfigs[0],
+			'onServerTiming'
+		)({
+			cacheHit: true
+		});
+		expect(lines.some((l) => l.includes('HIT (cached result, solve skipped)'))).toBe(true);
+	});
 });
 
 // Each warm client owns a separate solve cache, so an operator-facing hit rate

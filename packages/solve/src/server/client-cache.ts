@@ -197,22 +197,24 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 		if (config.debug) {
 			clientConfig.onServerTiming = (t) => {
+				if (t.cacheHit) {
+					debugLog(
+						'[Compute/rhino-cache] solve-cache (cachesolve): HIT (cached result, solve skipped)'
+					);
+					return;
+				}
 				const decode = t.decode ?? 0;
 				const solve = t.solve ?? 0;
 				const encode = t.encode ?? 0;
-				// Heuristic thresholds: a genuine parse/solve is many ms; a cache hit
-				// is sub-millisecond. Only meaningful relative to the first (cold) solve.
+				// Heuristic threshold: a genuine parse is many ms; a reused definition is
+				// sub-millisecond. Only meaningful relative to the first (cold) solve.
 				const defCache =
 					decode <= 1 ? 'HIT (definition reused, no re-upload/parse)' : 'miss (full parse)';
-				const solveCache =
-					config.cachesolve && solve <= 1
-						? 'HIT (cached result, solve skipped)'
-						: config.cachesolve
-							? 'miss (solved fresh)'
-							: 'off';
+				const solveCache = config.cachesolve ? 'miss (solved fresh)' : 'off';
+				const ran = t.recomputed ? ` | ran ${t.recomputed.ran}/${t.recomputed.total} objects` : '';
 				debugLog(
 					`[Compute/rhino-cache] decode=${decode}ms solve=${solve}ms encode=${encode}ms ` +
-						`| definition-cache: ${defCache} | solve-cache (cachesolve): ${solveCache}`
+						`| definition-cache: ${defCache} | solve-cache (cachesolve): ${solveCache}${ran}`
 				);
 			};
 		}

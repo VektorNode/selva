@@ -6,7 +6,12 @@
  * metric sinks are the calling route's job, not this file's.
  */
 
-import { ErrorCodes, ComputeError, type SolveDefinition } from '@selvajs/compute/core';
+import {
+	ErrorCodes,
+	ComputeError,
+	type ServerTiming,
+	type SolveDefinition
+} from '@selvajs/compute/core';
 import type {
 	DataTree,
 	GrasshopperComputeResponse,
@@ -141,7 +146,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	const inputTree = args.inputTree ?? buildSolveInputTree(args.inputs, args.values);
 	const treeBuildMs = performance.now() - treeBuildStart;
 
-	let rhino: RhinoTiming | null = null;
+	let rhino: ServerTiming | null = null;
 	let result: GrasshopperComputeResponse;
 	let settle: CacheVerdict;
 	const solveStart = performance.now();
@@ -150,7 +155,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 			signal,
 			selvaevents: args.selvaEvents,
 			onServerTiming: (t) => {
-				rhino = { decode: t.decode ?? 0, solve: t.solve ?? 0, encode: t.encode ?? 0 };
+				rhino = t;
 			}
 		});
 		result = detail.response;
@@ -331,12 +336,6 @@ export function adaptEnvelopeToEncoding(
 // Server-Timing assembly
 // ============================================================================
 
-interface RhinoTiming {
-	decode: number;
-	solve: number;
-	encode: number;
-}
-
 interface CacheVerdict {
 	fromCache: boolean;
 	definitionReuploaded?: boolean;
@@ -349,7 +348,7 @@ interface ServerTimingParts {
 	serializeMs: number;
 	gzipMs: number;
 	serverTotalMs: number;
-	rhino: RhinoTiming | null;
+	rhino: ServerTiming | null;
 	settle: CacheVerdict;
 	byteRefOutcome?: ByteRefOutcome;
 	prepMarks: [string, number][];
@@ -357,9 +356,10 @@ interface ServerTimingParts {
 
 /**
  * `total` is the server's headers-to-out wall time, so browser `ttfb − total`
- * ≈ network+send latency. When the compute server reports its own
- * decode/solve/encode (VektorNode fork), `rhino_*` is time on the compute
- * server and `compute_link` is everything between it (network + queue wait).
+ * ≈ network+send latency. When the compute server reports its own timing
+ * (VektorNode fork), `rhino_*` is time on the compute server and `compute_link`
+ * is everything between it (network + queue wait). `rhino_cache` is 1 when the
+ * compute server answered from its own result cache.
  */
 function buildServerTiming(parts: ServerTimingParts): string {
 	let header =
@@ -372,13 +372,20 @@ function buildServerTiming(parts: ServerTimingParts): string {
 
 	const rhino = parts.rhino;
 	if (rhino) {
-		const onRhinoMs = rhino.decode + rhino.solve + rhino.encode;
-		const computeLinkMs = Math.max(0, parts.solveMs - onRhinoMs);
+		const decode = rhino.decode ?? 0;
+		const solve = rhino.solve ?? 0;
+		const encode = rhino.encode ?? 0;
+		const computeLinkMs = Math.max(0, parts.solveMs - decode - solve - encode);
 		header +=
-			`, rhino_decode;dur=${rhino.decode.toFixed(1)}` +
-			`, rhino_solve;dur=${rhino.solve.toFixed(1)}` +
-			`, rhino_encode;dur=${rhino.encode.toFixed(1)}` +
-			`, compute_link;dur=${computeLinkMs.toFixed(1)}`;
+			`, rhino_decode;dur=${decode.toFixed(1)}` +
+			`, rhino_solve;dur=${solve.toFixed(1)}` +
+			`, rhino_encode;dur=${encode.toFixed(1)}` +
+			`, compute_link;dur=${computeLinkMs.toFixed(1)}` +
+			`, rhino_cache;dur=${rhino.cacheHit ? 1 : 0}`;
+		if (rhino.gh !== undefined) header += `, rhino_gh;dur=${rhino.gh.toFixed(1)}`;
+		if (rhino.recomputed) {
+			header += `, rhino_recomputed;desc="${rhino.recomputed.ran}/${rhino.recomputed.total}"`;
+		}
 	}
 
 	for (const [label, ms] of parts.prepMarks) {

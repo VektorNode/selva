@@ -49,6 +49,32 @@ describe('parseServerTiming', () => {
 	it('skips a non-numeric dur', () => {
 		expect(parseServerTiming('solve;dur=abc')).toBeNull();
 	});
+
+	it("reads the fork compute server's gh time and recomputed count through the proxy", () => {
+		expect(
+			parseServerTiming(
+				'decode;dur=2, solve;dur=900, gh;dur=870, harvest;dur=30, encode;dur=5, ' +
+					'recomputed;desc="4/97", proxy_wait;dur=0, proxy_child;dur=910'
+			)
+		).toMatchObject({
+			decode: 2,
+			solve: 900,
+			gh: 870,
+			encode: 5,
+			recomputed: { ran: 4, total: 97 }
+		});
+	});
+
+	it('reads a result-cache hit, which carries no durations', () => {
+		expect(parseServerTiming('cache;desc="hit", proxy_child;dur=12')).toEqual({
+			cacheHit: true,
+			raw: 'cache;desc="hit", proxy_child;dur=12'
+		});
+	});
+
+	it('skips a malformed recomputed count', () => {
+		expect(parseServerTiming('recomputed;desc="n/a"')).toBeNull();
+	});
 });
 
 describe('onServerTiming callback', () => {
