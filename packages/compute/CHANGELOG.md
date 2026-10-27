@@ -1,5 +1,11 @@
 # @selvajs/compute
 
+## 5.0.0-beta.6
+
+### Patch Changes
+
+- e39d929: chore(deps): bump the npm group across 1 directory with 34 updates
+
 ## 5.0.0-beta.5
 
 ### Minor Changes

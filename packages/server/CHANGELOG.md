@@ -1,5 +1,13 @@
 # @selvajs/server
 
+## 1.5.0-beta.10
+
+### Patch Changes
+
+- e39d929: chore(deps): bump the npm group across 1 directory with 34 updates
+- Updated dependencies [e39d929]
+  - @selvajs/compute@5.0.0-beta.6
+
 ## 1.5.0-beta.9
 
 ### Patch Changes
