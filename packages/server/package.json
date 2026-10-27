@@ -151,6 +151,7 @@
 		"@selvajs/local-provider": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/nodemailer": "catalog:",
+		"fast-check": "catalog:",
 		"nodemailer": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"

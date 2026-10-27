@@ -22,6 +22,7 @@ catalogs:
     bits-ui: ^2.20.2
     clsx: ^2.1.1
     eslint: ^10.13.0
+    fast-check: ^4.10.2
     fflate: ^0.8.2
     lucide: ^1.48.0
     mode-watcher: ^1.1.0

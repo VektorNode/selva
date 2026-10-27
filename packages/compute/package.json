@@ -86,6 +86,7 @@
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
+		"fast-check": "catalog:",
 		"rhino3dm": "catalog:",
 		"tsdown": "catalog:",
 		"typedoc": "^0.28.17",

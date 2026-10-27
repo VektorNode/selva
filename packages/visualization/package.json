@@ -102,6 +102,7 @@
 		"@types/three": "catalog:",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
+		"fast-check": "catalog:",
 		"globals": "^17.13.0",
 		"prettier": "catalog:",
 		"three": "catalog:",

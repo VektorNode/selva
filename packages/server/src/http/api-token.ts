@@ -212,7 +212,8 @@ export function createHolderVerdictCache(ttlMs = 30_000, maxEntries = 10_000): H
 	};
 }
 
-function bearerOf(request: Request): string | null {
+/** The bearer credential, or null. CSRF's exemption reads it here too: the two must agree. */
+export function bearerOf(request: Request): string | null {
 	const header = request.headers.get('authorization');
 	if (!header) return null;
 	const match = /^Bearer\s+(\S+)\s*$/i.exec(header);

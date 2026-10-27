@@ -12,6 +12,7 @@
  */
 
 import { API_TOKEN_PREFIX } from '../tokens/index.js';
+import { bearerOf } from './api-token.js';
 
 const UNSAFE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // The content types a browser form can send without a CORS preflight, plus
@@ -32,10 +33,9 @@ export function isCrossSiteFormSubmission(request: Request, options: CsrfOptions
 	if (!UNSAFE_METHODS.has(request.method)) return false;
 	const type = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
 	if (!FORM_TYPES.includes(type)) return false;
-	// Anchored like `resolveApiToken`'s parse: a header that one reads as a key and the
-	// other doesn't would skip this check and still run as the cookie session.
-	const bearer = /^Bearer\s+(\S+)\s*$/i.exec(request.headers.get('authorization') ?? '')?.[1];
-	if (bearer?.startsWith(API_TOKEN_PREFIX)) return false;
+	// The same parse `resolveApiToken` uses: a header one read as a key and the
+	// other didn't would skip this check and still run as the cookie session.
+	if (bearerOf(request)?.startsWith(API_TOKEN_PREFIX)) return false;
 	const url = new URL(request.url);
 	if (options.exemptPaths?.includes(url.pathname)) return false;
 	return request.headers.get('origin') !== url.origin;
