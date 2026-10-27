@@ -72,6 +72,8 @@ export {
 	consentOffer,
 	consentOrgs,
 	mintConsentToken,
+	revokeUnredeemedConsentToken,
+	type ConsentLevel,
 	type ConsentOffer,
 	type ConsentOrg
 } from './oauthConsent.js';

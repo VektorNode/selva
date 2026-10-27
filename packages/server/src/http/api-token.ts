@@ -39,6 +39,11 @@ export interface ResolveApiTokenDeps {
 	 * rule's project scan. Absent: every flag off, which only ever refuses more.
 	 */
 	flag?: (name: keyof SelvaFlags) => boolean;
+	/**
+	 * Skips the holder check for a token that passed it within the cache's TTL.
+	 * Absent: checked on every request.
+	 */
+	holderVerdicts?: HolderVerdictCache;
 	/** Receives background failures (the `lastUsedAt` write). Logs the token id only. */
 	log?: ILogger;
 	now?: () => number;
@@ -138,17 +143,21 @@ export async function resolveApiToken(
 		{ user, platformPermissions, membership: member, pinOrg: true },
 		{ orgs: deps.data.orgs }
 	);
-	const holds = await canHoldApiTokens(live, token.scopes, {
-		policy: deps.mayHoldApiTokens,
-		deps: {
-			orgs: deps.data.orgs,
-			projects: deps.data.projects,
-			platformProjectGrants: deps.data.platformProjectGrants,
-			definitionMeta: deps.data.definitions,
-			flag: deps.flag ?? (() => false)
-		}
-	});
-	if (!holds) return HOLDER_REFUSED;
+	const now = deps.now?.() ?? Date.now();
+	if (!deps.holderVerdicts?.passed(token.id, now)) {
+		const holds = await canHoldApiTokens(live, token.scopes, {
+			policy: deps.mayHoldApiTokens,
+			deps: {
+				orgs: deps.data.orgs,
+				projects: deps.data.projects,
+				platformProjectGrants: deps.data.platformProjectGrants,
+				definitionMeta: deps.data.definitions,
+				flag: deps.flag ?? (() => false)
+			}
+		});
+		if (!holds) return HOLDER_REFUSED;
+		deps.holderVerdicts?.remember(token.id, now);
+	}
 	let ctx = narrowApiTokenContext(live, token);
 
 	// Signed only after the user check above: a minted session can't be
@@ -158,7 +167,6 @@ export async function resolveApiToken(
 		ctx = { ...ctx, adapterContext: { sessionToken } };
 	}
 
-	const now = deps.now?.() ?? Date.now();
 	if (!token.lastUsedAt || now - Date.parse(token.lastUsedAt) >= LAST_USED_WRITE_INTERVAL_MS) {
 		store.touchLastUsed(SYSTEM_CONTEXT, token.id, new Date(now).toISOString()).catch((err) => {
 			deps.log?.warn('Failed to record API token use', {
@@ -170,6 +178,38 @@ export async function resolveApiToken(
 	}
 
 	return { kind: 'ok', user, ctx, token };
+}
+
+export interface HolderVerdictCache {
+	passed(tokenId: string, now: number): boolean;
+	remember(tokenId: string, now: number): void;
+}
+
+/**
+ * Remembers passed holder checks for `ttlMs`, so a busy upload key doesn't
+ * re-scan its org's projects on every request. A withdrawn right takes effect
+ * within the TTL; a disabled owner or a removed member is still refused at once.
+ */
+export function createHolderVerdictCache(ttlMs = 30_000, maxEntries = 10_000): HolderVerdictCache {
+	const until = new Map<string, number>();
+	return {
+		passed(tokenId, now) {
+			const expiry = until.get(tokenId);
+			if (expiry === undefined) return false;
+			if (expiry > now) return true;
+			until.delete(tokenId);
+			return false;
+		},
+		remember(tokenId, now) {
+			if (until.size >= maxEntries) {
+				for (const [id, expiry] of until) if (expiry <= now) until.delete(id);
+				// Still full of live entries: drop the oldest insert.
+				if (until.size >= maxEntries) until.delete(until.keys().next().value!);
+			}
+			until.delete(tokenId);
+			until.set(tokenId, now + ttlMs);
+		}
+	};
 }
 
 function bearerOf(request: Request): string | null {

@@ -226,7 +226,7 @@ describe('consent', () => {
 		const data = await load(
 			event(`/oauth/authorize?${query}`, { locals: await actAs(tp, w.dana.id) }) as AnyEvent
 		);
-		expect(data).toMatchObject({ ok: true, choices: ['read'] });
+		expect(data).toMatchObject({ ok: true, levels: [{ access: 'read' }] });
 	});
 
 	it('never grants upload to a registered client', async () => {
@@ -236,7 +236,10 @@ describe('consent', () => {
 		const data = await load(
 			event(`/oauth/authorize?${query}`, { locals: await actAs(tp, w.alice.id) }) as AnyEvent
 		);
-		expect(data).toMatchObject({ ok: true, choices: ['read', 'solve'] });
+		expect(data).toMatchObject({
+			ok: true,
+			levels: [{ access: 'read' }, { access: 'solve' }]
+		});
 		// A forged form field can't pick an access level the page didn't offer.
 		const forged = await approve(query, await actAs(tp, w.alice.id), {
 			access: 'upload',
@@ -256,8 +259,7 @@ describe('the Grasshopper plugin', () => {
 			clientName: 'Selva for Grasshopper',
 			builtIn: true,
 			loopback: true,
-			choices: ['upload'],
-			orgs: [{ id: w.acme.id, name: 'Acme' }]
+			levels: [{ access: 'upload', orgs: [{ id: w.acme.id, name: 'Acme' }] }]
 		});
 
 		const back = await redirected(() =>
@@ -319,9 +321,11 @@ describe('the org picker', () => {
 	it('offers every org the user may hold the key in, and mints in the one they pick', async () => {
 		const w = await twoOrgs();
 		const locals = await actAs(tp, w.dana.id);
-		const data = (await load(
-			event(`/oauth/authorize?${pluginQuery()}`, { locals }) as AnyEvent
-		)) as { orgs: { id: string }[]; orgId: string };
+		const {
+			levels: [data]
+		} = (await load(event(`/oauth/authorize?${pluginQuery()}`, { locals }) as AnyEvent)) as {
+			levels: { orgs: { id: string }[]; orgId: string }[];
+		};
 		expect(data.orgs.map((o) => o.id).sort()).toEqual([w.acme.id, w.big.bigClient.id].sort());
 		expect(data.orgId).toBe(locals.ctx.actingOrgId);
 

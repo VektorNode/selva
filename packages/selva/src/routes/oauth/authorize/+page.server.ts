@@ -1,9 +1,13 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { apiScopesFor, isLoopbackRedirect, OAuthError } from '@selvajs/server/oauth';
-import { consentOffer, mintConsentToken } from '@selvajs/server/handlers';
+import {
+	consentOffer,
+	mintConsentToken,
+	revokeUnredeemedConsentToken
+} from '@selvajs/server/handlers';
 import { isApiError } from '@selvajs/server/api';
 import { toApiRequest } from '$lib/server/api/sveltekit';
-import { oauthServer } from '$lib/server/oauth/server';
+import { expectRedemption, oauthServer } from '$lib/server/oauth/server';
 import type { Actions, PageServerLoad } from './$types';
 
 // The shortest lifetime the token page offers. No refresh tokens: on expiry
@@ -52,7 +56,7 @@ export const load: PageServerLoad = async (event) => {
 			problem: 'Your account can’t give an app this access in any of your organizations.'
 		};
 	}
-	const acting = offer.orgs.find((o) => o.id === locals.ctx?.actingOrgId);
+	const actingOrgId = locals.ctx?.actingOrgId;
 
 	return {
 		ok: true as const,
@@ -61,9 +65,11 @@ export const load: PageServerLoad = async (event) => {
 		builtIn: request.client.builtIn,
 		redirectHost: new URL(request.redirectUri).host,
 		loopback: isLoopbackRedirect(request.redirectUri),
-		choices: offer.choices.map((c) => c.access),
-		orgs: offer.orgs,
-		orgId: (acting ?? offer.orgs[0]!).id,
+		levels: offer.levels.map(({ choice, orgs }) => ({
+			access: choice.access,
+			orgs,
+			orgId: (orgs.find((o) => o.id === actingOrgId) ?? orgs[0]!).id
+		})),
 		days: TOKEN_DAYS
 	};
 };
@@ -77,7 +83,7 @@ export const actions: Actions = {
 
 		const api = toApiRequest(event);
 		const offer = await consentOffer(api, request.scopes);
-		const choice = offer?.choices.find((c) => c.access === form.get('access'));
+		const choice = offer?.levels.find((l) => l.choice.access === form.get('access'))?.choice;
 		if (!choice) return fail(400, { error: 'That access isn’t available to you.' });
 		let minted;
 		try {
@@ -90,6 +96,7 @@ export const actions: Actions = {
 			if (isApiError(err)) return fail(err.status, { error: err.message });
 			throw err;
 		}
+		expectRedemption(minted.token.id, () => revokeUnredeemedConsentToken(api, minted.token.id));
 		redirect(
 			303,
 			serverFor(event.url.origin).approve(request, {

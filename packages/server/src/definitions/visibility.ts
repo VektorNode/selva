@@ -133,6 +133,8 @@ export async function canCreateDefinitionInOrg(
 	orgId: string,
 	deps: VisibilityDeps
 ): Promise<boolean> {
+	const orgMember =
+		(await deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [orgId], ctx.userId)).get(orgId) ?? null;
 	let cursor: string | undefined;
 	do {
 		const page = await deps.projects.listProjects(SYSTEM_CONTEXT, orgId, {
@@ -140,8 +142,7 @@ export async function canCreateDefinitionInOrg(
 			cursor
 		});
 		const platformIds = page.items.filter((p) => p.visibility === 'platform').map((p) => p.id);
-		const [orgMembers, members, grants] = await Promise.all([
-			deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [orgId], ctx.userId),
+		const [members, grants] = await Promise.all([
 			deps.projects.getProjectMembersFor(
 				SYSTEM_CONTEXT,
 				page.items.map((p) => p.id),
@@ -155,7 +156,7 @@ export async function canCreateDefinitionInOrg(
 			canCreateDefinition(
 				projectAccessInputFromRowsWith({ deps }, ctx, project, {
 					member: members.get(project.id) ?? null,
-					orgMember: orgMembers.get(orgId) ?? null,
+					orgMember,
 					platformGrants: grants.get(project.id) ?? []
 				})
 			)

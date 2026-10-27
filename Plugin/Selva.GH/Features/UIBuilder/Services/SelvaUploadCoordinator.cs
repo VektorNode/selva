@@ -44,6 +44,9 @@ public sealed class SelvaUploadCoordinator : IDisposable
     private Func<List<SelvaDefinitionLink>> _getLinks;
     private Func<UISchema> _getSchema;
     private Action<List<SelvaDefinitionLink>> _setLinks;
+    // Touched on the UI thread only, inside CaptureDocument.
+    private (string Key, int Size)? _sizeCache;
+    private CancellationTokenSource _signIn;
     private CancellationTokenSource _upload;
 
     public SelvaUploadCoordinator(WebSocketTransport transport)
@@ -67,6 +70,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
 
         lock (_uploadLock)
         {
+            _signIn?.Cancel();
             _upload?.Cancel();
         }
     }
@@ -113,7 +117,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
                 RunAccount(ct => Accounts().ConnectAsync(message.Origin, ct));
                 break;
             case InboundKind.SelvaSignIn:
-                RunAccount(ct => Accounts().SignInAsync(ct));
+                StartSignIn();
                 break;
             case InboundKind.SelvaUseApiKey:
                 // Off the dispatch chain: on Mac, InvokeOnUiThread waits for the modal dialog to close.
@@ -129,14 +133,45 @@ public sealed class SelvaUploadCoordinator : IDisposable
                 StartUpload(message.UploadRequest);
                 break;
             case InboundKind.SelvaCancel:
-                Accounts().Cancel();
+                // Only what this bridge started: the account manager is shared by every bridge.
                 lock (_uploadLock)
                 {
+                    _signIn?.Cancel();
                     _upload?.Cancel();
                 }
 
                 break;
         }
+    }
+
+    private void StartSignIn()
+    {
+        var signIn = new CancellationTokenSource();
+        lock (_uploadLock)
+        {
+            _signIn?.Cancel();
+            _signIn = signIn;
+        }
+
+        RunAccount(async _ =>
+        {
+            try
+            {
+                await Accounts().SignInAsync(signIn.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (_uploadLock)
+                {
+                    if (_signIn == signIn)
+                    {
+                        _signIn = null;
+                    }
+                }
+
+                signIn.Dispose();
+            }
+        });
     }
 
     private void PromptForApiKey()
@@ -165,9 +200,9 @@ public sealed class SelvaUploadCoordinator : IDisposable
             return;
         }
 
-        var capture = await OnUiThread(CaptureDocument).ConfigureAwait(false);
+        var capture = await OnUiThread(() => CaptureDocument(false)).ConfigureAwait(false);
         var defaults = Defaults(capture);
-        var file = new SelvaUploadFile { Name = capture.FileName, SizeBytes = capture.Bytes?.Length ?? 0 };
+        var file = new SelvaUploadFile { Name = capture.FileName, SizeBytes = capture.SizeBytes };
 
         SelvaTargets targets;
         try
@@ -249,7 +284,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
         }
 
         _ = _transport.BroadcastSelvaUploadProgress("preparing");
-        var capture = await OnUiThread(CaptureDocument).ConfigureAwait(false);
+        var capture = await OnUiThread(() => CaptureDocument(true)).ConfigureAwait(false);
         if (capture.BlockedReason != null)
         {
             return new SelvaUploadResult { Ok = false, Error = capture.BlockedReason };
@@ -289,6 +324,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
     private sealed class DocumentCapture
     {
         public byte[] Bytes;
+        public int SizeBytes;
         public string FileName = "definition.gh";
         public string DocumentId;
         public UISchema Schema;
@@ -300,7 +336,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
     ///     Runs on the UI thread: the document is serialised in memory, so unsaved canvas changes go
     ///     up and the file on disk isn't touched.
     /// </summary>
-    private DocumentCapture CaptureDocument()
+    private DocumentCapture CaptureDocument(bool forUpload)
     {
         var capture = new DocumentCapture { Links = _getLinks() ?? new List<SelvaDefinitionLink>() };
         var document = _component.OnPingDocument();
@@ -319,8 +355,26 @@ public sealed class SelvaUploadCoordinator : IDisposable
             return capture;
         }
 
+        // Listing targets only shows the size, so an unchanged document isn't serialised again.
+        var key = DocumentStateKey(document) + "|" + capture.Schema.LastModified.Ticks;
+        if (!forUpload && _sizeCache?.Key == key)
+        {
+            capture.SizeBytes = _sizeCache.Value.Size;
+            return capture;
+        }
+
         capture.Bytes = Serialize(document);
+        capture.SizeBytes = capture.Bytes.Length;
+        _sizeCache = (key, capture.SizeBytes);
         return capture;
+    }
+
+    // Any recorded edit moves the undo stack. A display hint only: the upload always serialises afresh.
+    private static string DocumentStateKey(GH_Document document)
+    {
+        var undo = document.UndoServer;
+        return $"{document.DocumentID}|{document.ObjectCount}|{undo.UndoCount}|{undo.RedoCount}|" +
+               $"{undo.FirstUndoName}|{undo.FirstRedoName}|{document.IsModified}";
     }
 
     /// <summary>

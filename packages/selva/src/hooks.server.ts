@@ -6,6 +6,7 @@ import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
 import {
 	applySecurityHeaders,
 	buildRequestContext,
+	createHolderVerdictCache,
 	createRouteClassifier,
 	isCrossSiteFormSubmission,
 	resolveApiToken
@@ -22,6 +23,7 @@ import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
 import { MCP_PATH } from '$lib/server/mcp/server';
 
 const OAUTH_TOKEN_PATH = '/oauth/token';
+const holderVerdicts = createHolderVerdictCache();
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
@@ -251,6 +253,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					auth: providers.auth,
 					data: providers.data,
 					flag,
+					holderVerdicts,
 					log: event.locals.log
 				});
 	if (tokenResult.kind === 'rejected') {

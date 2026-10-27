@@ -17,8 +17,10 @@ export {
 } from './login-rate-limit.js';
 export { buildRequestContext, type BuildRequestContextInput } from './request-context.js';
 export {
+	createHolderVerdictCache,
 	resolveApiToken,
 	type ApiTokenResolution,
+	type HolderVerdictCache,
 	type ResolveApiTokenDeps,
 	type ResolveApiTokenOptions
 } from './api-token.js';

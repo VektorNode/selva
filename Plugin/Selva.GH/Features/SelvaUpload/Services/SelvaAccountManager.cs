@@ -34,6 +34,7 @@ public sealed class SelvaSession
 public sealed class SelvaAccountManager
 {
     private static readonly TimeSpan SignInTimeout = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan RevokeTimeout = TimeSpan.FromSeconds(10);
 
     private readonly string _accountsPath;
     private readonly SelvaAccountsFile _file;
@@ -182,7 +183,23 @@ public sealed class SelvaAccountManager
     /// </summary>
     public async Task SignInAsync(CancellationToken cancellationToken)
     {
-        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // Cleared before the gate, not after: a Cancel pressed while another command holds it
+        // must still stop this sign-in.
+        lock (_stateLock)
+        {
+            _cancelRequested = false;
+        }
+
+        try
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            SetMessage("Sign-in was cancelled.");
+            return;
+        }
+
         var origin = ActiveOrigin();
         using var inFlight = BeginInFlight(cancellationToken);
         try
@@ -233,7 +250,16 @@ public sealed class SelvaAccountManager
 
             var token = await anonymous.RedeemCodeAsync(metadata.TokenEndpoint, callback.Code!,
                 listener.RedirectUri, verifier, inFlight.Token).ConfigureAwait(false);
-            await CompleteAsync(origin, token, inFlight.Token).ConfigureAwait(false);
+            try
+            {
+                await CompleteAsync(origin, token, inFlight.Token).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is SelvaApiException || ex is OperationCanceledException)
+            {
+                // The key was minted for this sign-in and nobody else holds it.
+                await RevokeQuietlyAsync(origin, token).ConfigureAwait(false);
+                throw;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -427,6 +453,20 @@ public sealed class SelvaAccountManager
         }
     }
 
+    private async Task RevokeQuietlyAsync(string origin, string token)
+    {
+        try
+        {
+            using var timeout = new CancellationTokenSource(RevokeTimeout);
+            using var client = new SelvaApiClient(origin, token, _userAgent, _handlers());
+            await client.DeleteAsync("/api/v1/me/token", timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is SelvaApiException || ex is OperationCanceledException)
+        {
+            // It expires on its own; the sign-in error is what the user needs to see.
+        }
+    }
+
     private static async Task<AuthServerMetadata> ReadMetadataAsync(SelvaApiClient client,
         CancellationToken cancellationToken)
     {
@@ -504,8 +544,12 @@ public sealed class SelvaAccountManager
     {
         lock (_stateLock)
         {
-            _cancelRequested = false;
             _inFlight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            if (_cancelRequested)
+            {
+                _inFlight.Cancel();
+            }
+
             return _inFlight;
         }
     }

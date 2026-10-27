@@ -62,11 +62,18 @@ export async function consentOrgs(
 		.map(({ org }) => ({ id: org.id, name: org.name }));
 }
 
-export interface ConsentOffer {
-	/** Narrowest first. Only levels the user may hold in at least one of their orgs. */
-	choices: ConsentChoice[];
-	/** Where the widest choice, the one the page preselects, may be granted. */
+export interface ConsentLevel {
+	choice: ConsentChoice;
+	/** Where this level may be granted. Never empty. */
 	orgs: ConsentOrg[];
+}
+
+export interface ConsentOffer {
+	/**
+	 * Narrowest first. Only levels the user may hold in at least one of their
+	 * orgs; each carries its own orgs, since a narrower level can reach more.
+	 */
+	levels: ConsentLevel[];
 }
 
 /**
@@ -84,8 +91,7 @@ export async function consentOffer(
 		}))
 	);
 	const offered = levels.filter((l) => l.orgs.length > 0);
-	if (!offered.length) return null;
-	return { choices: offered.map((l) => l.choice), orgs: offered[offered.length - 1]!.orgs };
+	return offered.length ? { levels: offered } : null;
 }
 
 /**
@@ -105,4 +111,21 @@ export async function mintConsentToken(
 		apiError(403, ApiErrorCode.FORBIDDEN, 'You aren’t a member of that organization.');
 	}
 	return mintApiToken({ ...req, ctx: await contextIn(req, picked.member) }, input);
+}
+
+/**
+ * Revoke a consent key whose code was never redeemed, so an abandoned sign-in
+ * doesn't leave a live key nobody holds. A used key is kept: its code may have
+ * been redeemed on another replica.
+ */
+export async function revokeUnredeemedConsentToken(
+	req: ApiRequest,
+	tokenId: string
+): Promise<void> {
+	const store = req.deps.data.apiTokens;
+	if (!store) return;
+	const { ctx } = requireCaller(req);
+	const token = await store.get(ctx, tokenId);
+	if (!token || token.revokedAt || token.lastUsedAt) return;
+	await store.revoke(ctx, tokenId, 'owner');
 }

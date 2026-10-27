@@ -17,6 +17,7 @@ namespace Selva.GH.Features.SelvaUpload.Services;
 public sealed class LoopbackCallbackListener : IDisposable
 {
     private const int RequestReadTimeoutMs = 10_000;
+    private const int MaxConcurrentRequests = 8;
 
     private readonly TcpListener _listener;
     private readonly int _port;
@@ -54,30 +55,76 @@ public sealed class LoopbackCallbackListener : IDisposable
     ///     Requests for other paths, with another Host, or with another state get an answer and are
     ///     otherwise ignored.
     /// </summary>
+    /// <remarks>
+    ///     Connections are handled concurrently: browsers open speculative sockets and leave them idle,
+    ///     and a serial loop would hold the real redirect behind each one's read timeout.
+    /// </remarks>
     public async Task<OAuthCallbackResult> WaitAsync(string state, string issuer, CancellationToken cancellationToken)
     {
-        using var registration = cancellationToken.Register(Dispose);
+        using var done = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var registration = done.Token.Register(Dispose);
+        var found = new TaskCompletionSource<OAuthCallbackResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var slots = new SemaphoreSlim(MaxConcurrentRequests);
 
-        while (true)
+        var accepting = AcceptAsync();
+        var first = await Task.WhenAny(found.Task, accepting).ConfigureAwait(false);
+        done.Cancel();
+        if (first == found.Task)
         {
-            TcpClient client;
-            try
-            {
-                client = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is ObjectDisposedException || ex is SocketException)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                throw;
-            }
+            // The stopped listener fails the accept loop; observe it so it isn't reported as unobserved.
+            _ = accepting.ContinueWith(t => _ = t.Exception, TaskContinuationOptions.OnlyOnFaulted);
+            return found.Task.Result;
+        }
 
-            using (client)
+        cancellationToken.ThrowIfCancellationRequested();
+        await accepting.ConfigureAwait(false);
+        throw new InvalidOperationException("The callback listener stopped.");
+
+        async Task AcceptAsync()
+        {
+            while (true)
             {
-                var result = await HandleAsync(client, state, issuer, cancellationToken).ConfigureAwait(false);
-                if (result != null)
+                await slots.WaitAsync(done.Token).ConfigureAwait(false);
+                TcpClient client;
+                try
                 {
-                    return result;
+                    client = await _listener.AcceptTcpClientAsync().ConfigureAwait(false);
                 }
+                catch (Exception ex) when (ex is ObjectDisposedException || ex is SocketException)
+                {
+                    done.Token.ThrowIfCancellationRequested();
+                    throw;
+                }
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        using (client)
+                        {
+                            var result = await HandleAsync(client, state, issuer, done.Token).ConfigureAwait(false);
+                            if (result != null)
+                            {
+                                found.TrySetResult(result);
+                            }
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // One bad connection never ends the wait; cancellation ends it in the accept loop.
+                    }
+                    finally
+                    {
+                        try
+                        {
+                            slots.Release();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // The wait already returned.
+                        }
+                    }
+                });
             }
         }
     }

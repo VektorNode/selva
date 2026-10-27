@@ -50,7 +50,7 @@ const GRASSHOPPER_CLIENT: OAuthClient = {
 
 export const MCP_PATH = '/mcp';
 
-const CODE_TTL_MS = 60_000;
+export const CODE_TTL_MS = 60_000;
 const CLIENT_NAME_MAX = 100;
 const REDIRECT_URIS_MAX = 10;
 const CIMD_TTL_MS = 60 * 60_000;
@@ -120,6 +120,8 @@ export interface OAuthServerOptions {
 	 * rebuilt server (a new origin, a rotated secret) still refuses a replay.
 	 */
 	redeemedCodes?: Map<string, number>;
+	/** Called once a code is exchanged, with the token its grant carries. */
+	onRedeemed?: (tokenId: string) => void;
 	now?: () => number;
 }
 
@@ -360,6 +362,7 @@ export function createOAuthServer(options: OAuthServerOptions) {
 				throw new OAuthError('invalid_grant', 'The code was already used.');
 			}
 			const { g } = sealed;
+			options.onRedeemed?.(g.tokenId);
 			return {
 				status: 200,
 				body: {

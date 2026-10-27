@@ -11,7 +11,7 @@ import {
 	createComputeRateLimiter,
 	readBodyWithCap
 } from '@selvajs/server/compute';
-import { createOAuthServer, type OAuthServer } from '@selvajs/server/oauth';
+import { CODE_TTL_MS, createOAuthServer, type OAuthServer } from '@selvajs/server/oauth';
 import { MIN_TOKEN_SECRET_LENGTH } from '@selvajs/server/tokens';
 
 const METADATA_TIMEOUT_MS = 5_000;
@@ -23,6 +23,27 @@ let cached: { origin: string; secret: string; server: OAuthServer } | null = nul
 // Outlives `cached`, so rebuilding the server for another origin can't forget a redeemed code.
 const redeemedCodes = new Map<string, number>();
 
+// The key is minted at consent, before its code is redeemed. A client that never
+// exchanges the code would leave a live key nobody holds, so it is revoked once
+// the code can no longer be redeemed. Lost on restart: best effort.
+const ABANDON_AFTER_MS = CODE_TTL_MS + 60_000;
+const unredeemed = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Revoke `tokenId` with `revoke` unless its code is redeemed in time. */
+export function expectRedemption(tokenId: string, revoke: () => Promise<void>): void {
+	const timer = setTimeout(() => {
+		unredeemed.delete(tokenId);
+		revoke().catch(() => {});
+	}, ABANDON_AFTER_MS);
+	timer.unref?.();
+	unredeemed.set(tokenId, timer);
+}
+
+function onRedeemed(tokenId: string): void {
+	clearTimeout(unredeemed.get(tokenId));
+	unredeemed.delete(tokenId);
+}
+
 /** Undefined without a usable SELVA_HMAC_KEY: the endpoints then answer 503. */
 export function oauthServer(origin: string): OAuthServer | undefined {
 	const secret = env.SELVA_HMAC_KEY;
@@ -31,7 +52,13 @@ export function oauthServer(origin: string): OAuthServer | undefined {
 		cached = {
 			origin,
 			secret,
-			server: createOAuthServer({ origin, secret, fetchClientMetadata, redeemedCodes })
+			server: createOAuthServer({
+				origin,
+				secret,
+				fetchClientMetadata,
+				redeemedCodes,
+				onRedeemed
+			})
 		};
 	}
 	return cached.server;
