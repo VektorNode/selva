@@ -47,6 +47,7 @@ export {
 } from './idempotency.js';
 export {
 	assertScope,
+	assertScopeAnywhere,
 	actionForMethod,
 	scopeRefusalsToday,
 	projectScopeTarget,

@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { NoopLogger, narrowApiTokenContext, type RequestContext } from '@selvajs/platform';
 import { runHandler } from '../respond.js';
 import { apiError, ApiErrorCode } from '../errors.js';
-import { createApiIdempotencyStore, type ApiIdempotencyStore } from '../idempotency.js';
+import {
+	createApiIdempotencyStore,
+	runIdempotent,
+	type ApiIdempotencyStore
+} from '../idempotency.js';
 import { readForm } from '../request.js';
 import type { ApiHandler, ApiRequest } from '../types.js';
 import type { SelvaDeps } from '../deps.js';
@@ -144,5 +148,33 @@ describe('runHandler idempotency', () => {
 		expect((await run(request(session(), {}, ''))).status).toBe(400);
 		expect((await run(request(session(), {}, 'x'.repeat(256)))).status).toBe(400);
 		expect(created).toBe(0);
+	});
+});
+
+describe('runIdempotent and a client that hung up', () => {
+	// 499 is the first client disconnecting; the retry that joined it is the
+	// case the store exists for, so it must not inherit that failure.
+	it('runs a joined retry again when the first attempt ended in 499', async () => {
+		const joined = createApiIdempotencyStore(60_000);
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		let calls = 0;
+		const solve = async () => {
+			calls++;
+			if (calls === 1) {
+				await gate;
+				return new Response(null, { status: 499 });
+			}
+			return new Response('{"ok":true}', { status: 200 });
+		};
+		const opts = { store: joined, callerId: 'u1', clientKey: 'k', fingerprint: 'f' };
+
+		const first = runIdempotent(opts, solve);
+		const retry = runIdempotent(opts, solve);
+		release();
+
+		expect((await first).status).toBe(499);
+		expect((await retry).status).toBe(200);
+		expect(calls).toBe(2);
 	});
 });

@@ -154,6 +154,10 @@ describe('authorize', () => {
 		expect((await authorized()).request.scopes).toEqual(['read', 'solve']);
 	});
 
+	it('grants only read when no scope asked for is one the client may have', async () => {
+		expect((await authorized(server(), { scope: 'foo bar' })).request.scopes).toEqual(['read']);
+	});
+
 	it('redirects a denial with access_denied, the state and the issuer', async () => {
 		const { oauth, request } = await authorized();
 		const url = new URL(oauth.deny(request));
@@ -375,10 +379,7 @@ describe('the built-in Grasshopper client', () => {
 
 describe('registered clients and upload', () => {
 	it('drops upload for a DCR client: it gets read and solve at most', async () => {
-		expect((await authorized(server(), { scope: 'upload' })).request.scopes).toEqual([
-			'read',
-			'solve'
-		]);
+		expect((await authorized(server(), { scope: 'upload' })).request.scopes).toEqual(['read']);
 		expect((await authorized(server(), { scope: 'read upload' })).request.scopes).toEqual(['read']);
 		expect((await authorized(server(), { scope: 'read solve upload' })).request.scopes).toEqual([
 			'read',

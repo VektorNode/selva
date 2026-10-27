@@ -92,6 +92,11 @@ export interface SolveParams {
 	 * definition, and a 403 is the more useful answer.
 	 */
 	concealAccessFailure?: boolean;
+	/**
+	 * The route already charged the key's request bucket, ahead of any idempotent
+	 * replay that would skip this function, so it must not be charged twice.
+	 */
+	tokenCharged?: boolean;
 }
 
 /**
@@ -114,7 +119,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		loadStart,
 		prepMarks,
 		concealAccessFailure = false,
-		streamId = null
+		streamId = null,
+		tokenCharged = false
 	} = params;
 	const storage = getStorageProvider();
 	const sharedAccess = access.kind === 'share' ? access : null;
@@ -178,7 +184,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// Both limits run before DB reads so throttled callers don't burn quota. A
 	// token pays its own request bucket and its owner's compute bucket, so ten
 	// keys of one user never buy ten times the compute.
-	const tokenVerdict = await chargeApiRateLimit(access.ctx, apiRateLimiter);
+	const tokenVerdict = tokenCharged
+		? undefined
+		: await chargeApiRateLimit(access.ctx, apiRateLimiter);
 	if (tokenVerdict && !tokenVerdict.allowed) {
 		recordMetric('rate_limited');
 		return rateLimitedResponse(tokenVerdict);

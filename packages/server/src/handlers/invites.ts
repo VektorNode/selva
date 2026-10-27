@@ -82,8 +82,21 @@ export const listInvites: ApiHandler = async (req) => {
 	);
 };
 
+// An accepted invite is an account that outlives the key: revoking a leaked
+// key must end the access it gave.
+function requireSession(req: ApiRequest): void {
+	if (req.ctx?.apiScope) {
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'Invites are sent from the web app, not with an API key.'
+		);
+	}
+}
+
 /** Create an invite and return the accept URL. */
 export const createInvite: ApiHandler = async (req) => {
+	requireSession(req);
 	requireManageOrgMembers(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 	const { user } = requireCaller(req);
@@ -166,11 +179,13 @@ export const revokeInvite: ApiHandler = async (req) => {
  * stops working the moment this returns, which is also what an admin wants
  * after mailing an invite to the wrong address.
  *
- * Grants are copied verbatim from the original. The role and permission gates
- * ran when it was minted; re-deriving them here would let a since-demoted admin
- * silently change what the invite carries.
+ * Grants are copied verbatim from the original: re-deriving them here would let
+ * a since-demoted admin silently change what the invite carries. The resender
+ * still passes the gates the original's minter did, because the response hands
+ * them a working link: an admin resending an owner invite could accept it.
  */
 export const resendInvite: ApiHandler = async (req) => {
+	requireSession(req);
 	requireManageOrgMembers(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 	const { id } = requireParams(req.params, 'id');
@@ -179,6 +194,14 @@ export const resendInvite: ApiHandler = async (req) => {
 	if (!existing) apiError(404, ApiErrorCode.NOT_FOUND, 'Invite not found');
 	if (existing.acceptedAt) {
 		apiError(409, ApiErrorCode.CONFLICT, 'This invite has already been accepted.');
+	}
+	assertCanGrantPlatformPermissions(ctx, existing.platformPermissions ?? []);
+	if (!(await canActorChangeOrgRole(ctx, orgId, existing.orgRole, req))) {
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'Only the org owner can resend an invite for an owner or admin.'
+		);
 	}
 
 	const codec = tokenCodec(req.deps, 'invites');

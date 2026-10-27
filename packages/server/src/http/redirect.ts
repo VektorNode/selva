@@ -9,6 +9,10 @@ export function safeRedirectTarget(raw: string | null | undefined, fallback: str
 	if (typeof raw !== 'string' || raw.length < 2) return fallback;
 	// Absolute URLs (`https://evil.com`) leave this origin.
 	if (raw[0] !== '/') return fallback;
+	// Browsers drop tab, CR and LF anywhere in a URL, so `/\t/evil.com` lands
+	// as `//evil.com` after the check below has passed it.
+	// eslint-disable-next-line no-control-regex -- matching control characters is the point
+	if (/[\u0000-\u001f\u007f]/.test(raw)) return fallback;
 	// `//evil.com` is protocol-relative — a browser treats it as cross-origin —
 	// and some browsers normalize `/\evil.com` into the same thing.
 	if (raw[1] === '/' || raw[1] === '\\') return fallback;

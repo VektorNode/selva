@@ -204,7 +204,7 @@ describe('every route is in the registry, and every registry entry is a route', 
 				const segment = next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
 				const scope =
 					/action:\s*'(\w+)'/.exec(segment)?.[1] ??
-					/assertScope\(\s*locals\.ctx,\s*'(\w+)'/.exec(segment)?.[1] ??
+					/assertScope(?:Anywhere)?\(\s*locals\.ctx,\s*'(\w+)'/.exec(segment)?.[1] ??
 					// Open to every key, so it documents the action every key holds.
 					(/anyScope:\s*true/.test(segment) ? 'read' : undefined) ??
 					// `runSolve` asserts `solve` itself.

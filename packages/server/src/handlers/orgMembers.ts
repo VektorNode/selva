@@ -33,6 +33,25 @@ import {
 import { requireManageOrgMembers, requireActingOrg } from '../access/index.js';
 import { revokeUserApiTokens } from './apiTokens.js';
 
+const ownerChangeQueues = new Map<string, Promise<unknown>>();
+
+/**
+ * Runs one org's member changes one at a time. The sole-owner check reads, then
+ * writes: two owners removing each other at once would each see the other as
+ * the survivor and leave the org with none. Per process only; replicas still
+ * need an atomic store write to close it.
+ */
+function serializeOwnerChanges<T>(orgId: string, run: () => Promise<T>): Promise<T> {
+	const previous = ownerChangeQueues.get(orgId) ?? Promise.resolve();
+	const next = previous.catch(() => {}).then(run);
+	const tail = next.catch(() => {});
+	ownerChangeQueues.set(orgId, tail);
+	void tail.then(() => {
+		if (ownerChangeQueues.get(orgId) === tail) ownerChangeQueues.delete(orgId);
+	});
+	return next;
+}
+
 const ROSTER_PAGE_LIMIT = 200;
 // Runaway guard against an adapter returning a non-advancing cursor. Matches
 // `listAllOrgMembers`; 100 pages is 20k members, past any real org here.
@@ -134,57 +153,72 @@ export const updateOrgMember: ApiHandler = async (req) => {
 	const patch = await parseBody(req.request, UpdateOrgMemberBodySchema);
 	const orgs = req.deps.orgs;
 
-	const [actorMember, target] = await Promise.all([
-		orgs.getOrgMember(ctx, orgId, ctx.userId),
-		orgs.getOrgMember(ctx, orgId, userId)
-	]);
-	if (!target) apiError(404, ApiErrorCode.NOT_FOUND, 'Member not found in this organization.');
-	if (!actorMember) {
-		apiError(403, ApiErrorCode.FORBIDDEN, 'You are not a member of this organization.');
-	}
-
-	if (patch.role !== undefined && patch.role !== target.role) {
-		// Gated on both the role being granted and the one being taken away —
-		// demoting an owner is an owner-only act even though `member` is not.
-		if (
-			!canChangeOrgRole({ actorMember, role: patch.role }) ||
-			!canChangeOrgRole({ actorMember, role: target.role })
-		) {
-			apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can change roles.');
+	return serializeOwnerChanges(orgId, async () => {
+		const [actorMember, target] = await Promise.all([
+			orgs.getOrgMember(ctx, orgId, ctx.userId),
+			orgs.getOrgMember(ctx, orgId, userId)
+		]);
+		if (!target) apiError(404, ApiErrorCode.NOT_FOUND, 'Member not found in this organization.');
+		if (!actorMember) {
+			apiError(403, ApiErrorCode.FORBIDDEN, 'You are not a member of this organization.');
 		}
-		if (
-			target.role === 'owner' &&
-			patch.role !== 'owner' &&
-			!(await hasAnotherOwner(req, ctx, orgId, target.userId))
-		) {
-			apiError(
-				409,
-				ApiErrorCode.CONFLICT,
-				'Cannot demote the sole owner of this organization. Promote another member to owner first.'
-			);
-		}
-		await orgs.updateOrgMemberRole(ctx, orgId, userId, patch.role as OrgRole);
-	}
 
-	if (patch.permissions !== undefined) {
-		// Validate against the role the member will have, not the one they had.
-		const effectiveRole: OrgRole = patch.role ?? target.role;
-		const valid =
-			effectiveRole === 'member'
-				? new Set<OrgPermission>(MEMBER_ASSIGNABLE_PERMISSIONS)
-				: new Set<OrgPermission>(ALL_ORG_PERMISSIONS);
-		const invalid = patch.permissions.filter((p) => !valid.has(p));
-		if (invalid.length > 0) {
-			apiError(
-				400,
-				ApiErrorCode.VALIDATION_FAILED,
-				`Permissions [${invalid.join(', ')}] cannot be assigned to a ${effectiveRole}.`
-			);
+		const roleChange = patch.role !== undefined && patch.role !== target.role;
+		if (roleChange) {
+			// Gated on both the role being granted and the one being taken away —
+			// demoting an owner is an owner-only act even though `member` is not.
+			if (
+				!canChangeOrgRole({ actorMember, role: patch.role! }) ||
+				!canChangeOrgRole({ actorMember, role: target.role })
+			) {
+				apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can change roles.');
+			}
+			if (
+				target.role === 'owner' &&
+				patch.role !== 'owner' &&
+				!(await hasAnotherOwner(req, ctx, orgId, target.userId))
+			) {
+				apiError(
+					409,
+					ApiErrorCode.CONFLICT,
+					'Cannot demote the sole owner of this organization. Promote another member to owner first.'
+				);
+			}
 		}
-		await orgs.updateOrgMemberPermissions(ctx, orgId, userId, patch.permissions);
-	}
 
-	return noContent();
+		if (patch.permissions !== undefined) {
+			// Emptying an owner's or admin's set demotes them in all but name.
+			if (!canChangeOrgRole({ actorMember, role: target.role })) {
+				apiError(
+					403,
+					ApiErrorCode.FORBIDDEN,
+					'Only the org owner can change an owner’s or admin’s permissions.'
+				);
+			}
+			// Validate against the role the member will have, not the one they had.
+			const effectiveRole: OrgRole = patch.role ?? target.role;
+			const valid =
+				effectiveRole === 'member'
+					? new Set<OrgPermission>(MEMBER_ASSIGNABLE_PERMISSIONS)
+					: new Set<OrgPermission>(ALL_ORG_PERMISSIONS);
+			const invalid = patch.permissions.filter((p) => !valid.has(p));
+			if (invalid.length > 0) {
+				apiError(
+					400,
+					ApiErrorCode.VALIDATION_FAILED,
+					`Permissions [${invalid.join(', ')}] cannot be assigned to a ${effectiveRole}.`
+				);
+			}
+		}
+
+		// Writes only after every check, so a refused permission set can't leave a
+		// role change behind.
+		if (roleChange) await orgs.updateOrgMemberRole(ctx, orgId, userId, patch.role as OrgRole);
+		if (patch.permissions !== undefined) {
+			await orgs.updateOrgMemberPermissions(ctx, orgId, userId, patch.permissions);
+		}
+		return noContent();
+	});
 };
 
 /**
@@ -198,32 +232,34 @@ export const removeOrgMember: ApiHandler = async (req) => {
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 
 	const orgs = req.deps.orgs;
-	const [actorMember, target] = await Promise.all([
-		orgs.getOrgMember(ctx, orgId, ctx.userId),
-		orgs.getOrgMember(ctx, orgId, userId)
-	]);
-	if (!target) apiError(404, ApiErrorCode.NOT_FOUND, 'Member not found in this organization.');
+	const orphaned = await serializeOwnerChanges(orgId, async () => {
+		const [actorMember, target] = await Promise.all([
+			orgs.getOrgMember(ctx, orgId, ctx.userId),
+			orgs.getOrgMember(ctx, orgId, userId)
+		]);
+		if (!target) apiError(404, ApiErrorCode.NOT_FOUND, 'Member not found in this organization.');
 
-	// Same owner-only gate PATCH applies to demotion. Removing an owner ends
-	// their role just as demoting them does, so an admin got 403 on the demote
-	// and 204 on the remove — the harder-to-reverse of the two.
-	if (!canChangeOrgRole({ actorMember, role: target.role })) {
-		apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can remove another owner.');
-	}
+		// Same owner-only gate PATCH applies to demotion. Removing an owner ends
+		// their role just as demoting them does, so an admin got 403 on the demote
+		// and 204 on the remove — the harder-to-reverse of the two.
+		if (!canChangeOrgRole({ actorMember, role: target.role })) {
+			apiError(403, ApiErrorCode.FORBIDDEN, 'Only the org owner can remove another owner.');
+		}
 
-	if (target.role === 'owner' && !(await hasAnotherOwner(req, ctx, orgId, target.userId))) {
-		apiError(
-			409,
-			ApiErrorCode.CONFLICT,
-			'Cannot remove the sole owner of this organization. Promote another member to owner first.'
-		);
-	}
+		if (target.role === 'owner' && !(await hasAnotherOwner(req, ctx, orgId, target.userId))) {
+			apiError(
+				409,
+				ApiErrorCode.CONFLICT,
+				'Cannot remove the sole owner of this organization. Promote another member to owner first.'
+			);
+		}
 
-	// Must run before the removal: the cascade soft-deletes the very rows this
-	// reads. Reported, not blocked — see the docblock on `findProjectsLosingSoleOwner`.
-	const orphaned = await findProjectsLosingSoleOwner(req, ctx, orgId, userId);
-
-	await orgs.removeOrgMember(ctx, orgId, userId);
+		// Must run before the removal: the cascade soft-deletes the very rows this
+		// reads. Reported, not blocked — see the docblock on `findProjectsLosingSoleOwner`.
+		const losing = await findProjectsLosingSoleOwner(req, ctx, orgId, userId);
+		await orgs.removeOrgMember(ctx, orgId, userId);
+		return losing;
+	});
 
 	if (orphaned.length > 0) {
 		await req.deps.events.emit({

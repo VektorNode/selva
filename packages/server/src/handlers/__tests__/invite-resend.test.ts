@@ -9,9 +9,16 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { SYSTEM_CONTEXT, narrowApiTokenContext } from '@selvajs/platform';
 import { freshHarness, type HandlerHarness } from '../../__tests__/local-harness.js';
-import { seedAcme, seedOrg, actAs, callHandler } from '../../testing/index.js';
+import {
+	seedAcme,
+	seedOrg,
+	seedOrgMember,
+	seedUser,
+	actAs,
+	callHandler
+} from '../../testing/index.js';
 import { createInvite, resendInvite } from '../invites.js';
 
 /**
@@ -124,5 +131,58 @@ describe('POST /api/v1/orgs/{orgId}/invites/{id}/resend', () => {
 			params: { orgId: other.id, id: original.id }
 		});
 		expect(res.status).toBeGreaterThanOrEqual(400);
+	});
+
+	// The response is a working link: an admin resending an owner invite could
+	// accept it themselves.
+	it('refuses an admin resending an owner invite', async () => {
+		tp = await freshHarness();
+		const { alice, acme } = await seedAcme(tp);
+		const owner = await seedUser(tp, 'owner@acme.test');
+		await seedOrgMember(tp, { orgId: acme.id, userId: owner.id, role: 'owner' });
+
+		const original = await mint(acme.id, await actAs(tp, owner.id), {
+			email: 'cofounder@acme.test',
+			orgRole: 'owner'
+		});
+
+		const res = await callHandler(resendInvite, {
+			locals: await actAs(tp, alice.id),
+			params: { orgId: acme.id, id: original.id }
+		});
+		expect(res.status).toBe(403);
+		expect(res.json).not.toHaveProperty('acceptUrl');
+	});
+
+	it('refuses an API key: an accepted invite outlives the key', async () => {
+		tp = await freshHarness();
+		const { alice, acme } = await seedAcme(tp);
+		const session = await actAs(tp, alice.id);
+		const keyed = {
+			...session,
+			ctx: narrowApiTokenContext(session.ctx, {
+				id: 'key-1',
+				orgId: acme.id,
+				scopes: ['write:all'],
+				expiresAt: '2099-01-01T00:00:00.000Z'
+			})
+		};
+
+		const created = await callHandler(createInvite, {
+			locals: keyed,
+			params: { orgId: acme.id },
+			body: { email: 'walkin@acme.test', orgRole: 'member' }
+		});
+		expect(created.status).toBe(403);
+
+		const original = await mint(acme.id, session, {
+			email: 'newhire@acme.test',
+			orgRole: 'member'
+		});
+		const resent = await callHandler(resendInvite, {
+			locals: keyed,
+			params: { orgId: acme.id, id: original.id }
+		});
+		expect(resent.status).toBe(403);
 	});
 });

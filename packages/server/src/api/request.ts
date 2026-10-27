@@ -111,19 +111,28 @@ export function parseParam<T>(value: string | undefined, schema: ZodType<T>, nam
 // ============================================================================
 
 /**
- * Parse and validate a JSON body. A malformed body becomes `null` rather than
- * throwing, so it fails the schema as a validation error — broken JSON gets a
- * 400 naming the problem, not a 500 from `request.json()`.
+ * Parse and validate a JSON body. Broken JSON is a 400, not a 500 from
+ * `request.json()`.
  *
  * `missingAs` covers endpoints whose fields are all optional: passing `{}` lets
- * an empty body mean "no changes" instead of a validation failure.
+ * an empty body mean "no changes" instead of a validation failure. Only an
+ * empty body: a truncated `{"versionId":…` read as "no changes" would publish
+ * the draft instead of rolling back.
  */
 export async function parseBody<T>(
 	request: Request,
 	schema: ZodType<T>,
 	{ missingAs }: { missingAs?: unknown } = {}
 ): Promise<T> {
-	const raw = await request.json().catch(() => null);
+	const text = await request.text().catch(() => '');
+	let raw: unknown = null;
+	if (text.trim()) {
+		try {
+			raw = JSON.parse(text);
+		} catch {
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'The request body is not valid JSON.');
+		}
+	}
 	const parsed = schema.safeParse(raw ?? missingAs ?? null);
 	if (!parsed.success) throwZodError(parsed.error);
 	return parsed.data;
@@ -139,10 +148,18 @@ const parsedForms = new WeakMap<Request, Promise<FormData>>();
  * The request's form body, parsed once: the idempotency fingerprint reads it
  * before the handler does, and a definition upload is too large to buffer twice.
  * On an idempotent route, `request.formData()` throws: the body is already used.
+ * A conformance test keeps handlers off it.
  */
 export function readForm(request: Request): Promise<FormData> {
 	let form = parsedForms.get(request);
-	if (!form) parsedForms.set(request, (form = request.formData()));
+	if (!form) {
+		form = request
+			.formData()
+			.catch(() =>
+				apiError(400, ApiErrorCode.VALIDATION_FAILED, 'The request body is not a valid form.')
+			);
+		parsedForms.set(request, form);
+	}
 	return form;
 }
 

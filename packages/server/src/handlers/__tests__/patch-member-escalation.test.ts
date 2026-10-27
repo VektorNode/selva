@@ -185,4 +185,35 @@ describe('PATCH member — what an admin legitimately may do (guards against ove
 		expect(after?.role).toBe('admin');
 		expect(after?.permissions).toEqual(expect.arrayContaining(['manage_org_members']));
 	});
+
+	// An owner with no permissions is demoted in all but name.
+	it('refuses an admin emptying the owner’s permissions', async () => {
+		tp = await freshHarness();
+		const { acme, owner, admin } = await seedOrgWithOwnerAndAdmin();
+
+		const res = await callHandler(updateOrgMember, {
+			locals: await actAs(tp, admin.id),
+			params: { orgId: acme.id, userId: owner.id },
+			body: { permissions: [] }
+		});
+
+		expect(res.status).toBe(403);
+		const after = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, owner.id);
+		expect(after?.permissions).toEqual(expect.arrayContaining(['manage_org_members']));
+	});
+
+	it('leaves the role alone when the permissions half of the request is refused', async () => {
+		tp = await freshHarness();
+		const { acme, owner, admin } = await seedOrgWithOwnerAndAdmin();
+
+		const res = await callHandler(updateOrgMember, {
+			locals: await actAs(tp, owner.id),
+			params: { orgId: acme.id, userId: admin.id },
+			body: { role: 'member', permissions: ['manage_org_members'] }
+		});
+
+		expect(res.status).toBe(400);
+		const after = await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, admin.id);
+		expect(after?.role).toBe('admin');
+	});
 });

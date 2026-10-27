@@ -28,6 +28,14 @@ export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 export const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
 /** Covers a client's retry-on-timeout window without turning into a result cache. */
 export const DEFAULT_API_IDEMPOTENCY_TTL_MS = 5 * 60_000;
+/**
+ * Replayable response bytes one store keeps. A solve response can run to
+ * hundreds of MB, so the key cap alone would let a client that sends a fresh
+ * key per solve hold gigabytes for the whole TTL. Evicting costs a re-run.
+ */
+export const DEFAULT_API_IDEMPOTENCY_MAX_BYTES = 256 * 1024 * 1024;
+
+const CLIENT_CLOSED_REQUEST = 499;
 
 export interface IdempotentEntry {
 	fingerprint: string;
@@ -37,9 +45,13 @@ export interface IdempotentEntry {
 export type ApiIdempotencyStore = IdempotencyStore<IdempotentEntry>;
 
 export function createApiIdempotencyStore(
-	ttlMs = DEFAULT_API_IDEMPOTENCY_TTL_MS
+	ttlMs = DEFAULT_API_IDEMPOTENCY_TTL_MS,
+	maxBytes = DEFAULT_API_IDEMPOTENCY_MAX_BYTES
 ): ApiIdempotencyStore {
-	return createIdempotencyStore<IdempotentEntry>({ ttlMs });
+	return createIdempotencyStore<IdempotentEntry>(
+		{ ttlMs, maxWeight: maxBytes },
+		(entry) => entry.response.body.byteLength
+	);
 }
 
 let sharedDefault: ApiIdempotencyStore | undefined;
@@ -161,8 +173,10 @@ export async function runIdempotent(
 	fn: () => Promise<Response>
 ): Promise<Response> {
 	let outcome;
+	let ranHere = false;
 	try {
 		outcome = await store.run(idempotencyKey(callerId, clientKey), async () => {
+			ranHere = true;
 			const res = await fn();
 			const response = await toStoredResponse(res);
 			if (res.status >= 400) throw new NotReplayable(fingerprint, response);
@@ -170,8 +184,13 @@ export async function runIdempotent(
 		});
 	} catch (err) {
 		if (!(err instanceof NotReplayable)) throw err;
-		// A concurrent retry joining the failed attempt receives the same failure.
 		assertSameRequest(err.fingerprint, fingerprint);
+		// 499 is the first client hanging up, which says nothing about this one:
+		// its retry is the case the store exists for, so it runs on its own.
+		if (!ranHere && err.response.status === CLIENT_CLOSED_REQUEST) {
+			return runIdempotent({ store, callerId, clientKey, fingerprint }, fn);
+		}
+		// A concurrent retry joining the failed attempt receives the same failure.
 		return fromStoredResponse(err.response, false);
 	}
 	assertSameRequest(outcome.value.fingerprint, fingerprint);

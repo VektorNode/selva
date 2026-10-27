@@ -104,3 +104,24 @@ describe('createIdempotencyStore', () => {
 		expect(store.size()).toBe(1);
 	});
 });
+
+describe('createIdempotencyStore weight budget', () => {
+	// The key cap alone doesn't bound memory when one entry can be a 100 MB solve.
+	it('evicts the oldest completed entries once their total weight is over budget', async () => {
+		const store = createIdempotencyStore<number>({ ttlMs: 60_000, maxWeight: 10 }, (n) => n);
+
+		await store.run('a', async () => 6);
+		await store.run('b', async () => 6);
+
+		expect(store.size()).toBe(1);
+		expect((await store.run('b', async () => 0)).replayed).toBe(true);
+		expect((await store.run('a', async () => 6)).replayed).toBe(false);
+	});
+
+	it('keeps nothing too heavy to fit at all', async () => {
+		const store = createIdempotencyStore<number>({ ttlMs: 60_000, maxWeight: 10 }, (n) => n);
+
+		expect(await store.run('big', async () => 50)).toEqual({ value: 50, replayed: false });
+		expect(store.size()).toBe(0);
+	});
+});

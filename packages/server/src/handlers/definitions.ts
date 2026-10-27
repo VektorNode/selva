@@ -33,7 +33,7 @@ import {
 } from '@selvajs/platform/definitions';
 import type { DefinitionVersion } from '@selvajs/platform';
 import { requireCanCreateDefinition, requireEditableDefinition } from '../access/index.js';
-import { GH_EXTENSIONS } from '@selvajs/platform';
+import { COVER_IMAGE_CONTENT_TYPES, GH_EXTENSIONS } from '@selvajs/platform';
 import { resolveServerForOrg } from '../compute/index.js';
 import {
 	fetchSchemaFromCompute,
@@ -94,6 +94,16 @@ function parseTags(raw: string | undefined): string[] | undefined {
 	return tags.length ? tags : undefined;
 }
 
+const COVER_IMAGE_TYPES = {
+	allowed: new Set(Object.values(COVER_IMAGE_CONTENT_TYPES)),
+	message: 'Unsupported image type. Allowed: PNG, JPEG, WebP, GIF'
+};
+
+function requireCoverImage(form: FormData, maxBytes: number): File {
+	return requireUpload(form, 'image', { maxBytes, contentTypes: COVER_IMAGE_TYPES, label: 'Image' })
+		.file;
+}
+
 /** Create a definition — metadata and the Grasshopper file in one request. */
 export const createDefinition: ApiHandler = async (req) => {
 	const { ctx, user } = requireCaller(req);
@@ -105,15 +115,12 @@ export const createDefinition: ApiHandler = async (req) => {
 		label: 'Grasshopper (.gh or .ghx) file'
 	});
 
-	const imageFile = form.get('image');
-	const maxImageBytes = req.deps.uploadLimits.maxImageFileSize;
-	if (imageFile instanceof File && imageFile.size > maxImageBytes) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			`Image too large. Max size: ${maxImageBytes / (1024 * 1024)} MB`
-		);
-	}
+	// Checked before anything is written, like the file itself.
+	const imageField = form.get('image');
+	const imageFile =
+		imageField instanceof File && imageField.size > 0
+			? requireCoverImage(form, req.deps.uploadLimits.maxImageFileSize)
+			: undefined;
 
 	let projectId = formText(form, 'projectId');
 	if (!projectId) {
@@ -179,9 +186,19 @@ export const createDefinition: ApiHandler = async (req) => {
 	);
 
 	let coverImage = record.coverImage;
-	if (imageFile instanceof File && imageFile.size > 0) {
-		const imageData = new Uint8Array(await imageFile.arrayBuffer());
-		coverImage = await service.saveCoverImage(ctx, guid, imageData);
+	if (imageFile) {
+		try {
+			coverImage = await service.saveCoverImage(
+				ctx,
+				guid,
+				new Uint8Array(await imageFile.arrayBuffer())
+			);
+		} catch (err) {
+			// A failed request must leave nothing behind: the client's retry would
+			// create a second definition next to this one.
+			await service.delete(ctx, guid);
+			throw err;
+		}
 	}
 
 	return created({ guid, version, coverImage });
@@ -291,10 +308,10 @@ export const uploadDefinitionImage: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 	const { ctx } = await requireEditableDefinition(req, guid);
 
-	const { file } = requireUpload(await readForm(req.request), 'image', {
-		maxBytes: req.deps.uploadLimits.maxImageFileSize,
-		label: 'Image'
-	});
+	const file = requireCoverImage(
+		await readForm(req.request),
+		req.deps.uploadLimits.maxImageFileSize
+	);
 
 	const data = new Uint8Array(await file.arrayBuffer());
 	return {

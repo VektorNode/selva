@@ -33,7 +33,9 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, locals, u
 	// commons projects (`autoJoinOnUpload=true`) accept any authenticated user.
 	// Eliminates the random-authenticated-drain path the auth-only check left open.
 	await asHttpError(() => assertScope(locals.ctx, 'upload', { projectId }));
-	const { project } = await requireCanCreateDefinition(scoped(locals), projectId);
+	const { project } = await asHttpError(() =>
+		requireCanCreateDefinition(scoped(locals), projectId)
+	);
 
 	// Pin to the same server the upload will use, so schema extraction runs on
 	// the server that later solves the definition - not the org/global default.

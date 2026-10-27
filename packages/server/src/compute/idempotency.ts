@@ -31,6 +31,12 @@ export interface IdempotencyStoreConfig {
 	 * `ttlMs`. `0` disables the sweep, leaving only the cap (test seam).
 	 */
 	sweepIntervalMs?: number;
+	/**
+	 * Max total weight of completed entries, as measured by the store's `weigh`.
+	 * The key cap alone doesn't bound memory when one entry can be a 100 MB
+	 * solve. Over budget, the entries nearest expiry go first.
+	 */
+	maxWeight?: number;
 }
 
 /** Default {@link IdempotencyStoreConfig.maxKeys}. */
@@ -64,16 +70,23 @@ interface Entry<T> {
 	 * retries that are already awaiting it.
 	 */
 	expiresAt: number | null;
+	/** Counted against `maxWeight` once settled; 0 while in flight. */
+	weight: number;
 }
 
 /**
  * `T` is whatever the caller replays. It must not be a `Response` — a body can
  * only be read once, so the solve route stores a serialized snapshot instead.
+ * `weigh` measures a completed value for `maxWeight`.
  */
-export function createIdempotencyStore<T>(config: IdempotencyStoreConfig): IdempotencyStore<T> {
+export function createIdempotencyStore<T>(
+	config: IdempotencyStoreConfig,
+	weigh: (value: T) => number = () => 0
+): IdempotencyStore<T> {
 	const ttlMs = Math.max(0, Math.floor(config.ttlMs));
 	const maxKeys = Math.max(1, Math.floor(config.maxKeys ?? DEFAULT_IDEMPOTENCY_MAX_KEYS));
 	const sweepIntervalMs = Math.max(0, Math.floor(config.sweepIntervalMs ?? ttlMs));
+	const maxWeight = config.maxWeight ?? Number.POSITIVE_INFINITY;
 	const resolvedConfig: Readonly<IdempotencyStoreConfig> = Object.freeze({
 		...config,
 		ttlMs,
@@ -83,6 +96,26 @@ export function createIdempotencyStore<T>(config: IdempotencyStoreConfig): Idemp
 
 	const entries = new Map<string, Entry<T>>();
 	let nextSweepAt = Number.POSITIVE_INFINITY;
+	let totalWeight = 0;
+
+	function drop(key: string): void {
+		const entry = entries.get(key);
+		if (!entry) return;
+		totalWeight -= entry.weight;
+		entries.delete(key);
+	}
+
+	/** Settled entries only, nearest expiry first: in-flight ones have retries awaiting them. */
+	function shedWeight(): void {
+		if (totalWeight <= maxWeight) return;
+		const settled = [...entries.entries()]
+			.filter(([, e]) => e.expiresAt !== null)
+			.sort((a, b) => a[1].expiresAt! - b[1].expiresAt!);
+		for (const [key] of settled) {
+			if (totalWeight <= maxWeight) break;
+			drop(key);
+		}
+	}
 
 	function maybeSweep(now: number, headroom = 0): void {
 		const budget = Math.max(0, maxKeys - headroom);
@@ -90,7 +123,7 @@ export function createIdempotencyStore<T>(config: IdempotencyStoreConfig): Idemp
 		if (!dueForSweep && entries.size <= budget) return;
 
 		for (const [key, entry] of entries) {
-			if (entry.expiresAt !== null && now > entry.expiresAt) entries.delete(key);
+			if (entry.expiresAt !== null && now > entry.expiresAt) drop(key);
 		}
 		if (sweepIntervalMs > 0) nextSweepAt = now + sweepIntervalMs;
 
@@ -100,7 +133,7 @@ export function createIdempotencyStore<T>(config: IdempotencyStoreConfig): Idemp
 			const byExpiryAsc = [...entries.entries()].sort(
 				(a, b) => (a[1].expiresAt ?? Infinity) - (b[1].expiresAt ?? Infinity)
 			);
-			for (let i = 0; i < byExpiryAsc.length - budget; i++) entries.delete(byExpiryAsc[i][0]);
+			for (let i = 0; i < byExpiryAsc.length - budget; i++) drop(byExpiryAsc[i][0]);
 		}
 	}
 
@@ -116,7 +149,8 @@ export function createIdempotencyStore<T>(config: IdempotencyStoreConfig): Idemp
 			maybeSweep(now, entries.has(key) ? 0 : 1);
 
 			const promise = fn();
-			const entry: Entry<T> = { promise, expiresAt: null };
+			const entry: Entry<T> = { promise, expiresAt: null, weight: 0 };
+			drop(key);
 			entries.set(key, entry);
 			if (sweepIntervalMs > 0 && nextSweepAt === Number.POSITIVE_INFINITY) {
 				nextSweepAt = now + sweepIntervalMs;
@@ -125,17 +159,23 @@ export function createIdempotencyStore<T>(config: IdempotencyStoreConfig): Idemp
 			try {
 				const value = await promise;
 				entry.expiresAt = Date.now() + ttlMs;
+				if (entries.get(key) === entry) {
+					entry.weight = weigh(value);
+					totalWeight += entry.weight;
+					shedWeight();
+				}
 				return { value, replayed: false };
 			} catch (err) {
 				// A failed solve is retryable — drop the reservation rather than
 				// replaying the error to every retry for the whole TTL. Only drop our
 				// own entry: a later `run` may already have replaced it.
-				if (entries.get(key) === entry) entries.delete(key);
+				if (entries.get(key) === entry) drop(key);
 				throw err;
 			}
 		},
 		reset(): void {
 			entries.clear();
+			totalWeight = 0;
 			nextSweepAt = Number.POSITIVE_INFINITY;
 		},
 		size(): number {

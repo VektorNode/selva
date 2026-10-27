@@ -6,6 +6,7 @@ import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { runSolve, mapSolveError } from '$lib/server/compute/solve.server';
 import { solveIdempotencyStore } from '$lib/server/computeIdempotency.server';
+import { withApiRateLimit } from '$lib/server/api/sveltekit';
 import {
 	SolveBodySchema,
 	idempotencyCallerId,
@@ -24,7 +25,9 @@ import {
  * keeps the URL-addressed and share-token flows.
  */
 
-export const POST: RequestHandler = async ({ request, params, locals, url }) => {
+// Charged here, not in `runSolve`: an idempotent replay never reaches it, so a
+// key could replay one large solve without limit.
+export const POST: RequestHandler = withApiRateLimit(async ({ request, params, locals, url }) => {
 	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
 
 	const loadStart = performance.now();
@@ -73,18 +76,24 @@ export const POST: RequestHandler = async ({ request, params, locals, url }) => 
 			prepMarks,
 			// A guid is guessable, so an unreachable definition must read as
 			// missing rather than forbidden.
-			concealAccessFailure: true
+			concealAccessFailure: true,
+			tokenCharged: true
 		});
 
 	try {
 		const clientKey = readIdempotencyKey(request);
 		if (!clientKey) return await solve();
 
+		// The stored body is already encoded, so a gzip reply must never replay to
+		// a client that can't read it.
+		const encoding = /\bgzip\b/i.test(request.headers.get('accept-encoding') ?? '')
+			? 'gzip'
+			: 'identity';
 		// The body is already consumed, so the fingerprint hashes the parsed value.
 		return await runIdempotent(
 			{
 				store: solveIdempotencyStore,
-				callerId: idempotencyCallerId(ctx),
+				callerId: `${idempotencyCallerId(ctx)} ${encoding}`,
 				clientKey,
 				fingerprint: await requestFingerprint('POST', url, JSON.stringify(body))
 			},
@@ -93,4 +102,4 @@ export const POST: RequestHandler = async ({ request, params, locals, url }) => 
 	} catch (err) {
 		mapSolveError(err, locals);
 	}
-};
+});

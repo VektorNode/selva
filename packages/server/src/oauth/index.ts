@@ -443,15 +443,18 @@ async function readMetadata(
 /**
  * What the request asks for, within what its client may have. A scope outside
  * that is dropped, not refused, so a client that asks for every advertised
- * scope still signs in with what it may have. Asking for none of them means all
- * of them. `read` rides along with `solve`, which the consent page offers as
+ * scope still signs in with what it may have. No `scope` at all means all of
+ * them. Asking only for scopes it may not have gets `read`, never more than it
+ * asked for. `read` rides along with `solve`, which the consent page offers as
  * "read and run solves".
  */
 function parseScopes(raw: string | null, allowed: readonly OAuthScope[]): OAuthScope[] {
-	const asked = (raw ?? '')
-		.split(' ')
-		.filter((s): s is OAuthScope => (allowed as readonly string[]).includes(s));
-	if (!asked.length) return [...allowed];
+	const requested = (raw ?? '').split(' ').filter(Boolean);
+	if (!requested.length) return [...allowed];
+	const asked = requested.filter((s): s is OAuthScope =>
+		(allowed as readonly string[]).includes(s)
+	);
+	if (!asked.length) return allowed.includes('read') ? ['read'] : [];
 	return allowed.filter((s) => asked.includes(s) || (s === 'read' && asked.includes('solve')));
 }
 
