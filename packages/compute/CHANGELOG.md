@@ -1,5 +1,15 @@
 # @selvajs/compute
 
+## 5.0.0-beta.4
+
+### Minor Changes
+
+- 07e6808: `downloadFileData` and `downloadFileDataByRoot` take an optional `{ saveBlob }` as their last argument. When it's given, each finished archive goes to it instead of an `<a download>` click. Use it in an embedded WebView where anchor downloads don't work. Calls without it behave as before.
+
+### Patch Changes
+
+- 33ef891: Schema 2.17.0: value lists gain `segmented` and `tiles` display modes and an optional `optionMedia` map that gives an option an icon or a thumbnail. The icons and thumbnails live in a new root `assets` table, keyed by a hash of their content, so the `.gh` carries each one once. Icons are stored as SVG path data and thumbnails as small WebP, JPEG or PNG data URIs. Each option shows one picture, its thumbnail or else its icon, in every display mode. A button row with more than six options shows as a dropdown. The plugin marks a schema that has assets as needing plugin 0.24.0, so an older plugin refuses it instead of saving it without them. `normalizeUISchemaCasing` keeps option names in `optionMedia` and asset ids as they are.
+
 ## 5.0.0-beta.3
 
 ### Major Changes

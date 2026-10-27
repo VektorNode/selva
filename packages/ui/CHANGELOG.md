@@ -1,5 +1,20 @@
 # @selvajs/ui
 
+## 6.6.0-beta.9
+
+### Minor Changes
+
+- 0cb9545: Schema 2.16.0: `ParamType` gains `geometry`, `point`, `line` and `plane` for Rhino's Get Geometry, Get Point, Get Line and Get Plane, and `CheckboxWidgetConfig` an optional `displayAs: 'button'`. The UI picks a geometry input's control from its `paramType` and renders geometry inputs and buttons only where they work: in Rhino, picking in the viewport and pressing a button. Selva leaves them out for now, and the definition solves with its own values there. Presets skip both. Only the Rhino panel picks; a browser tab shows what the panel picked. While a pick runs, the input says to pick in the viewport, Esc to cancel.
+- 4125e70: A plugin older than this release saves a schema with geometry inputs or buttons without those elements: they are lost, the rest of the schema is kept. Update the plugin on every machine that edits the file.
+- 6b7f1a5: `createSolvingIndicator` and `SolveMessages` take `freezesDuringSolve` for a host that can't repaint while it solves, such as a WebView inside Rhino: the indicator shows for every solve with no delay, and the live progress panel, which could only appear after the solve, gives way to an "Esc aborts the solve" hint. An empty `footerText` now hides the footer's copyright line. `AppLayout` takes `solvingIndicatorPlacement: 'inline'` to show the solving state as a chip in its action row instead of floating it over the bottom-left corner; inline, the chip carries the Esc hint. `SolveMessages` takes `placement: 'inline'` to sit in the flow instead of floating over the page, and `AppLayout` renders it above the action row through its `solveMessages` snippet.
+- 07e6808: File inputs, preset import and every download (output files, archives, presets, viewer screenshots) now go through one save function and one pick function. In a browser nothing changes, except that picking the same file twice in a row now works. A host whose WebView can't download or show a file picker can install its own native dialogs.
+- 33ef891: Schema 2.17.0: value lists gain `segmented` and `tiles` display modes and an optional `optionMedia` map that gives an option an icon or a thumbnail. The icons and thumbnails live in a new root `assets` table, keyed by a hash of their content, so the `.gh` carries each one once. Icons are stored as SVG path data and thumbnails as small WebP, JPEG or PNG data URIs. Each option shows one picture, its thumbnail or else its icon, in every display mode. A button row with more than six options shows as a dropdown. The plugin marks a schema that has assets as needing plugin 0.24.0, so an older plugin refuses it instead of saving it without them. `normalizeUISchemaCasing` keeps option names in `optionMedia` and asset ids as they are.
+
+### Patch Changes
+
+- ee51327: Light theme: cards are white and each group of inputs has a border, so it stands apart from the page. The primary colour is a little darker, so it reaches 4.5:1 as text and under white text.
+- 8a60c6b: File inputs: a WebP picked or fetched for an input that also accepts PNG is sent as PNG. A fetched file counts as WebP by its content, so a URL with no extension or another one still converts. Grasshopper's PDF export can't read WebP; PNG keeps the transparency.
+
 ## 6.6.0-beta.8
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # Schema Changelog
 
+## 5.3.0-beta.1
+
+### Minor Changes
+
+- 0cb9545: Schema 2.16.0: `ParamType` gains `geometry`, `point`, `line` and `plane` for Rhino's Get Geometry, Get Point, Get Line and Get Plane, and `CheckboxWidgetConfig` an optional `displayAs: 'button'`. The UI picks a geometry input's control from its `paramType` and renders geometry inputs and buttons only where they work: in Rhino, picking in the viewport and pressing a button. Selva leaves them out for now, and the definition solves with its own values there. Presets skip both. Only the Rhino panel picks; a browser tab shows what the panel picked. While a pick runs, the input says to pick in the viewport, Esc to cancel.
+- 4125e70: A plugin older than this release saves a schema with geometry inputs or buttons without those elements: they are lost, the rest of the schema is kept. Update the plugin on every machine that edits the file.
+- aa0878a: Schema 2.18.0: an optional `localOptions.trackPickedObjects`. When it's on, geometry picked in the Rhino viewport follows the Rhino objects it came from: editing or moving one re-solves with its new shape, and deleting one drops it from the pick. Off, the default, a pick is a snapshot. Only the plugin's local preview reads it; Selva ignores it.
+- 33ef891: Schema 2.17.0: value lists gain `segmented` and `tiles` display modes and an optional `optionMedia` map that gives an option an icon or a thumbnail. The icons and thumbnails live in a new root `assets` table, keyed by a hash of their content, so the `.gh` carries each one once. Icons are stored as SVG path data and thumbnails as small WebP, JPEG or PNG data URIs. Each option shows one picture, its thumbnail or else its icon, in every display mode. A button row with more than six options shows as a dropdown. The plugin marks a schema that has assets as needing plugin 0.24.0, so an older plugin refuses it instead of saving it without them. `normalizeUISchemaCasing` keeps option names in `optionMedia` and asset ids as they are.
+
 ## 5.3.0-beta.0
 
 ### Minor Changes
