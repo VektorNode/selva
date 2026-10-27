@@ -466,6 +466,12 @@ export interface ViewerOptions {
 	 */
 	backgroundColor?: string;
 }
+export interface LocalOptions {
+	/**
+	 * If true, geometry picked in the Rhino viewport follows the Rhino objects it came from: editing or moving one re-solves with its new shape, deleting one drops it. If false, a pick is a snapshot.
+	 */
+	trackPickedObjects?: boolean;
+}
 export interface UISchema {
 	id: string;
 	name: string;
@@ -512,6 +518,7 @@ export interface UISchema {
 	 */
 	lastModified?: string;
 	viewerOptions?: ViewerOptions1;
+	localOptions?: LocalOptions;
 	/**
 	 * If true, changes trigger immediate solving. If false, user must press Calculate button.
 	 */
@@ -564,7 +571,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.17.0';
+export const UI_SCHEMA_VERSION = '2.18.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

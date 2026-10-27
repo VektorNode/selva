@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Grasshopper.Kernel;
 using Rhino;
+using Grasshopper.Kernel.Types;
 using Rhino.Commands;
+using Rhino.DocObjects;
 using Rhino.Geometry;
 using Selva.GH.Features.UIBuilder.Helpers;
 
@@ -121,6 +123,62 @@ public sealed class GeometryPicks
 
         ParameterTypeHelper.TryInvokeClearContextualData(param);
         return ScheduleExpire(document, param, scheduleDelayMs);
+    }
+
+    /// <summary>Picked params whose last solve holds geometry referenced from this Rhino object.</summary>
+    public List<Guid> ParamsReferencing(GH_Document document, Guid objectId)
+    {
+        return _summaries.Keys
+            .Where(paramId => ReferencesOf(document?.FindObject(paramId, false) as IGH_Param)?.Contains(objectId) == true)
+            .ToList();
+    }
+
+    /// <summary>
+    ///     Re-reads a pick from the Rhino objects it came from. An object that's gone drops out, and
+    ///     a pick left with none goes back to the definition's own geometry.
+    /// </summary>
+    /// <returns>True when a solve was scheduled for it.</returns>
+    public bool Refresh(GH_Document document, Guid paramId, RhinoDoc rhinoDoc, int scheduleDelayMs)
+    {
+        if (rhinoDoc == null || !_summaries.ContainsKey(paramId) ||
+            !(document?.FindObject(paramId, false) is IGH_ContextualParameter param))
+        {
+            return false;
+        }
+
+        var references = ReferencesOf(param as IGH_Param);
+        if (references == null)
+        {
+            return false;
+        }
+
+        // Referenced goo, so the next change to the object finds the pick again.
+        var current = references
+            .Select(id => GH_Convert.ObjRefToGeometry(new ObjRef(rhinoDoc, id)))
+            .Where(goo => goo != null)
+            .ToList();
+        if (current.Count == 0)
+        {
+            return Clear(document, paramId, scheduleDelayMs);
+        }
+
+        param.AssignContextualData(current);
+        _summaries[paramId] = PickSummary.Of(current.Select(goo => KindOf(goo.ScriptVariable())).ToList());
+        return ScheduleExpire(document, param, scheduleDelayMs);
+    }
+
+    // Null unless every item came from a Rhino object: a pick that mixes in anything else can't be
+    // rebuilt from references without losing that part.
+    private static List<Guid> ReferencesOf(IGH_Param param)
+    {
+        var items = param?.VolatileData?.AllData(true).ToList();
+        if (items == null || items.Count == 0 ||
+            !items.All(item => item is IGH_GeometricGoo { IsReferencedGeometry: true }))
+        {
+            return null;
+        }
+
+        return items.Cast<IGH_GeometricGoo>().Select(goo => goo.ReferenceID).ToList();
     }
 
     /// <summary>The session ended; the component clears every contextual param itself.</summary>

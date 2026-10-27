@@ -52,6 +52,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // Where this file was last uploaded, one link per Selva instance. Saved beside the schema, not
     // in it: the schema is shared with every host, a link belongs to one instance.
     private List<SelvaDefinitionLink> _selvaLinks = new List<SelvaDefinitionLink>();
+    private readonly EscapeAbortWatch _escapeAbort = new EscapeAbortWatch();
     private EventHandler _onDocumentModified;
     private EventHandler _onSolutionEnded;
     private EventHandler _onSolutionStarted;
@@ -286,9 +287,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             Logger.Log("[UIBuilder] SolutionStart");
 #endif
             _service.StateManager.SetSolving(true);
+            _escapeAbort.Start(OnPingDocument());
         };
         _onSolutionEnded = (s, e) =>
         {
+            _escapeAbort.Stop();
             var wasActuallySolving = _service.StateManager.SetSolving(false);
 #if DEBUG
             Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
@@ -328,7 +331,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             }
 
             ClearAllContextualParameters();
-            _service.TriggerPresses.ResetPressed(OnPingDocument());
+            if (_service.TriggerPresses.ResetPressed(OnPingDocument(),
+                    _service.WebSocketTransport.ScheduleSolutionDelayMs))
+            {
+                _service.StateManager.MarkSolveScheduled();
+            }
 
             // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
             // a solve from inside the end of this one — under a slider drag that's a non-draining
@@ -903,6 +910,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _service?.ValueApplicator?.Clear();
         _service?.SchemaSynchronizer?.ClearMetadataCache();
         _service?.StateManager?.Reset();
+        _escapeAbort.Stop();
         _currentDocument = null;
     }
 
@@ -917,6 +925,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
             Cleanup();
             _service?.Dispose();
+            _escapeAbort.Dispose();
         }
 
         _disposed = true;

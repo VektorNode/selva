@@ -782,6 +782,18 @@
 			},
 			"additionalProperties": false
 		},
+		"LocalOptions": {
+			"type": "object",
+			"description": "Settings only the plugin's local preview uses. Selva ignores them.",
+			"properties": {
+				"trackPickedObjects": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, geometry picked in the Rhino viewport follows the Rhino objects it came from: editing or moving one re-solves with its new shape, deleting one drops it. If false, a pick is a snapshot."
+				}
+			},
+			"additionalProperties": false
+		},
 		"UISchema": {
 			"type": "object",
 			"properties": {
@@ -821,7 +833,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.17.0",
+					"default": "2.18.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -838,6 +850,9 @@
 				"viewerOptions": {
 					"$ref": "#/definitions/ViewerOptions",
 					"description": "Configuration for the 3D viewer"
+				},
+				"localOptions": {
+					"$ref": "#/definitions/LocalOptions"
 				},
 				"instanceSolve": {
 					"type": "boolean",

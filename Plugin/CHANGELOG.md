@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Selva panel: the web UI opens in a Rhino panel that docks or floats, instead of the browser. Enabling the UI Bridge opens it. The component's Open UI item brings it back, and Shift shows Open UI in Browser.
 - Player sessions: the panel's launcher, the `SelvaOpen` command (it takes a path, for toolbars and scripts) and Open another… open a definition with Grasshopper's editor hidden. The definition runs from its UI and nothing is written back to the file. Edit in Grasshopper, or showing the editor, turns the session into an author session. The launcher lists recent definitions.
 - Get Geometry, Get Point, Get Line and Get Plane inputs (schema 2.16.0): in the Selva panel, the UI picks objects in the Rhino viewport, and Esc cancels the pick. Selva leaves these inputs out and solves with the definition's own values.
+- Track picked objects (schema 2.18.0), a switch in the builder's Local panel: geometry picked in the viewport follows its Rhino objects, so editing or moving one re-solves and deleting one drops it. Off, a pick is a snapshot, as before.
+- Esc aborts a bridged solve on a quick tap, not only when held. It still waits for the running component to finish.
 - A boolean input can show as a button (`displayAs: 'button'`). Pressing it sets the toggle for one solve.
 - Value lists show as a button row or as image tiles, and each option can carry an icon or a thumbnail (schema 2.17.0). The `.gh` stores each picture once.
 - In the panel, file inputs, presets and downloads use Rhino's own open and save dialogs.

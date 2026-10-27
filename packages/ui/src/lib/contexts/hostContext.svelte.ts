@@ -35,6 +35,8 @@ export interface HostActions {
 	describeGeometry?: (paramId: string) => GeometryPickTarget | undefined;
 	/** Presses a button input: one solve with `true`, then it goes back to `false`. */
 	trigger?: (paramId: string) => void;
+	/** Grasshopper refuses a press while it solves, so the button waits it out disabled. */
+	isSolving?: () => boolean;
 }
 
 const SELVA_HOST: HostActions = { host: 'selva' };

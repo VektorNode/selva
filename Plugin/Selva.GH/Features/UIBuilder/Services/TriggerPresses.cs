@@ -1,22 +1,19 @@
 using System;
 using System.Collections.Generic;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 
 namespace Selva.GH.Features.UIBuilder.Services;
 
 /// <summary>
-///     Button inputs: a press assigns true and solves; the end of that solve puts false back.
+///     Button inputs: a press assigns true and solves; the end of that solve assigns false and
+///     solves once more, the way Grasshopper's Button does on release.
 /// </summary>
 /// <remarks>
-///     The reset has to land in the param's data. Clearing its contextual data isn't enough: the
-///     param's volatile data stays true, and the action would fire again the next time anything
-///     downstream recomputes. Expiring the param is too much: that clears everything downstream,
-///     so the press's own results leave the viewport and the Context Bakes. The reset swaps the
-///     param's volatile data for false in place. Downstream keeps what the press produced and reads
-///     false the next time it recomputes. A second solve straight away, like Grasshopper's Button,
-///     would cost a full solve to undo nothing. UI thread only.
+///     Swapping the param's data for false without that second solve leaves everything downstream
+///     showing true (a Content Cache's Action, a Panel) until something else recomputes it. Like
+///     Grasshopper's Button, what a component produces only on true goes away with the release.
+///     UI thread only.
 /// </remarks>
 public sealed class TriggerPresses
 {
@@ -45,27 +42,41 @@ public sealed class TriggerPresses
     /// </summary>
     /// <remarks>
     ///     Every press here has had its solve: a press needs the bridge idle, and Grasshopper runs a
-    ///     schedule's callbacks at the start of whichever solve comes next.
+    ///     schedule's callbacks at the start of whichever solve comes next. The release's own
+    ///     SolutionEnd finds nothing pressed, so it doesn't release again.
     /// </remarks>
-    public void ResetPressed(GH_Document document)
+    /// <returns>True when the release scheduled a solve.</returns>
+    public bool ResetPressed(GH_Document document, int scheduleDelayMs)
     {
         if (_pressed.Count == 0 || document == null)
         {
-            return;
+            return false;
         }
 
+        var released = new List<IGH_ActiveObject>();
         foreach (var paramId in _pressed)
         {
-            if (document.FindObject(paramId, false) is IGH_Param param)
+            if (document.FindObject(paramId, false) is IGH_ContextualParameter param &&
+                param is IGH_ActiveObject active)
             {
-                var path = param.VolatileData.PathCount > 0 ? param.VolatileData.Paths[0] : new GH_Path(0);
-                param.ClearData();
-                param.AddVolatileData(path, 0, new GH_Boolean(false));
-                // ClearData marked the param expired, but the data it now holds is current.
-                param.Phase = GH_SolutionPhase.Computed;
+                param.AssignContextualData(new[] { new GH_Boolean(false) });
+                released.Add(active);
             }
         }
 
         _pressed.Clear();
+        if (released.Count == 0)
+        {
+            return false;
+        }
+
+        document.ScheduleSolution(scheduleDelayMs, _ =>
+        {
+            foreach (var active in released)
+            {
+                active.ExpireSolution(false);
+            }
+        });
+        return true;
     }
 }

@@ -309,14 +309,13 @@
 		/>
 	</div>
 {:else if isTrigger}
-	<div role="group" class="group/field gap-1.5 min-w-0 flex items-center">
+	<div role="group" class="group/field gap-1.5 min-w-0 flex items-center" data-control-line>
 		<Button
 			id={inputId}
 			variant="outline"
-			size="sm"
-			class="min-w-0 max-w-full"
+			class="min-w-0 flex-1"
 			onclick={() => hostActions.trigger?.(item.paramId)}
-			disabled={disabled || !hostActions.trigger}
+			disabled={disabled || !hostActions.trigger || hostActions.isSolving?.()}
 		>
 			<span class="truncate">{label}</span>
 		</Button>

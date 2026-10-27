@@ -115,6 +115,9 @@ namespace Selva.Schema.Models
         [JsonProperty("viewerOptions", NullValueHandling = NullValueHandling.Ignore)]
         public ViewerOptions ViewerOptions { get; set; }
 
+        [JsonProperty("localOptions", NullValueHandling = NullValueHandling.Ignore)]
+        public LocalOptions LocalOptions { get; set; }
+
 /// <summary>
 /// If true, changes trigger immediate solving. If false, user must press Calculate button.
 /// </summary>
@@ -632,6 +635,16 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("backgroundColor", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string BackgroundColor { get; set; } = "#ffffff";
+    }
+
+    public class LocalOptions
+    {
+
+/// <summary>
+/// If true, geometry picked in the Rhino viewport follows the Rhino objects it came from: editing or moving one re-solves with its new shape, deleting one drops it. If false, a pick is a snapshot.
+/// </summary>
+        [JsonProperty("trackPickedObjects", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? TrackPickedObjects { get; set; } = false;
     }
 
 // ============================================================================

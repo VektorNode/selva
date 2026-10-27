@@ -258,15 +258,16 @@
 <div class="sr-only" role="status" aria-live="polite">{announcement}</div>
 
 {#if freezesDuringSolve && view === 'live'}
-	<!-- Painted before the solve takes the thread; Abort could not be clicked until it ends. -->
-	<p
-		class="text-xs text-muted-foreground {placement === 'inline'
-			? 'mt-3 px-1'
-			: 'bottom-4 fixed left-1/2 z-50 -translate-x-1/2'}"
-		data-testid="solve-esc-hint"
-	>
-		{t.solveMessagesEscHint}
-	</p>
+	<!-- Painted before the solve takes the thread; Abort could not be clicked until it ends. Inline,
+	     the solving chip carries the hint instead: a line here would resize the footer mid-solve. -->
+	{#if placement === 'floating'}
+		<p
+			class="bottom-4 text-xs fixed left-1/2 z-50 -translate-x-1/2 text-muted-foreground"
+			data-testid="solve-esc-hint"
+		>
+			{t.solveMessagesEscHint}
+		</p>
+	{/if}
 {:else if visible}
 	<div
 		class="p-3 border {placement === 'inline'

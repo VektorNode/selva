@@ -36,7 +36,8 @@
 		describeGeometry: (paramId) => {
 			const input = preview.state.discoveredInputs.find((i) => i.id === paramId);
 			return input && { kinds: input.geometryTypes, atMost: input.atMost };
-		}
+		},
+		isSolving: () => preview.isSolving
 	});
 	const solvingIndicator = createSolvingIndicator(() => preview.isSolving, {
 		freezesDuringSolve: panel

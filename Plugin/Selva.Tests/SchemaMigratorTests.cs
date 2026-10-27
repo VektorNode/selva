@@ -154,6 +154,18 @@ public class SchemaMigratorTests
     }
 
     [Fact]
+    public void MigrateWithTracking_2_17_0_ReachesCurrentWithPicksStillSnapshots()
+    {
+        var schema = new UISchema { Id = "s", SchemaVersion = "2.17.0" };
+
+        var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(99, 0, 0));
+
+        Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
+        Assert.Contains(changes, c => c.Contains("Applied migration from 2.17.0 to 2.18.0"));
+        Assert.Null(migratedSchema.LocalOptions);
+    }
+
+    [Fact]
     public void MigrateWithTracking_LegacySchema_SetsVersion100ThenMigratesToCurrent()
     {
         var schema = new UISchema { Id = "s", SchemaVersion = null };

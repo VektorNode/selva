@@ -138,6 +138,14 @@ internal static class DefinitionLauncher
 
         document.Enabled = true;
 
+        // ScheduleSolution marshals its timer tick through the editor window. An editor that has
+        // never been shown has no handle, so every scheduled solve is dropped and the bridge stays
+        // busy forever. Creating the handle doesn't show the window.
+        if (Instances.DocumentEditor is Control { IsHandleCreated: false } hiddenEditor)
+        {
+            _ = hiddenEditor.Handle;
+        }
+
         // After the switch: removing a document the canvas still shows hands the canvas to
         // whichever document is next, and solves that one.
         if (replaced != null)

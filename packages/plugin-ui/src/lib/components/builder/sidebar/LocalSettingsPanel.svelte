@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
+	import type { LocalOptions, UISchema, ViewerOptions } from '@selvajs/schemas';
 	import { Switch } from '@selvajs/ui';
 	import ScopeNote from '../scope/ScopeNote.svelte';
 	import SettingsSection from './SettingsSection.svelte';
@@ -14,6 +14,10 @@
 
 	function updateViewerOptions(updates: Partial<ViewerOptions>) {
 		onSchemaChange({ ...schema, viewerOptions: { ...schema.viewerOptions, ...updates } });
+	}
+
+	function updateLocalOptions(updates: Partial<LocalOptions>) {
+		onSchemaChange({ ...schema, localOptions: { ...schema.localOptions, ...updates } });
 	}
 </script>
 
@@ -32,6 +36,21 @@
 			id="enable-local-rendering"
 			checked={schema.viewerOptions?.enableLocal ?? false}
 			onCheckedChange={(checked) => updateViewerOptions({ enableLocal: checked })}
+		/>
+	</SettingRow>
+</SettingsSection>
+
+<SettingsSection id="local.rhino" title="Rhino">
+	<SettingRow
+		label="Track picked objects"
+		for="track-picked-objects"
+		layout="inline"
+		hint="Geometry picked in the viewport follows its Rhino objects: editing one re-solves, deleting one drops it. Off, a pick is a snapshot."
+	>
+		<Switch
+			id="track-picked-objects"
+			checked={schema.localOptions?.trackPickedObjects ?? false}
+			onCheckedChange={(checked) => updateLocalOptions({ trackPickedObjects: checked })}
 		/>
 	</SettingRow>
 </SettingsSection>

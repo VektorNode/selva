@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
+using Rhino.DocObjects;
 using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Config;
@@ -36,11 +37,13 @@ public class BridgeOrchestrator : IDisposable
     private readonly GeometryPicks _geometryPicks;
     private readonly TriggerPresses _triggerPresses;
     private readonly BridgePerf _perf;
+    private readonly HashSet<Guid> _staleTrackedPicks = new HashSet<Guid>();
 
     private GH_Component _component;
     private bool _disposed;
     private Func<UISchema> _getSchema;
     private Action<UISchema> _setSchema;
+    private RhinoDoc _trackedRhinoDoc;
 
     public BridgeOrchestrator(
         WebSocketTransport webSocketTransport,
@@ -88,6 +91,10 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnClearGeometryRequested -= HandleClearGeometry;
         _webSocketTransport.OnClearGeometryRefused -= BroadcastGeometrySummary;
         _webSocketTransport.OnTriggerRequested -= HandleTrigger;
+
+        RhinoDoc.ReplaceRhinoObject -= HandleRhinoObjectReplaced;
+        RhinoDoc.DeleteRhinoObject -= HandleRhinoObjectDeleted;
+        RhinoApp.Idle -= RefreshTrackedPicks;
     }
 
     // -------------------------------------------------------------------------
@@ -114,6 +121,9 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnClearGeometryRequested += HandleClearGeometry;
         _webSocketTransport.OnClearGeometryRefused += BroadcastGeometrySummary;
         _webSocketTransport.OnTriggerRequested += HandleTrigger;
+
+        RhinoDoc.ReplaceRhinoObject += HandleRhinoObjectReplaced;
+        RhinoDoc.DeleteRhinoObject += HandleRhinoObjectDeleted;
     }
 
     // -------------------------------------------------------------------------
@@ -202,6 +212,71 @@ public class BridgeOrchestrator : IDisposable
     private void BroadcastGeometrySummary(object sender, Guid paramId)
     {
         _ = _webSocketTransport.BroadcastGeometrySummary(paramId, _geometryPicks.SummaryOf(paramId));
+    }
+
+    // -------------------------------------------------------------------------
+    // Tracked picks
+    // -------------------------------------------------------------------------
+
+    private void HandleRhinoObjectReplaced(object sender, RhinoReplaceObjectEventArgs e) =>
+        MarkTrackedPicksStale(e.Document, e.ObjectId);
+
+    private void HandleRhinoObjectDeleted(object sender, RhinoObjectEventArgs e) =>
+        MarkTrackedPicksStale(e.TheObject?.Document, e.ObjectId);
+
+    // One edit raises several events (a replace is also a delete and an add), and a solve can't
+    // start inside a document event, so the refresh waits for Rhino to go idle.
+    private void MarkTrackedPicksStale(RhinoDoc rhinoDoc, Guid objectId)
+    {
+        if (_getSchema?.Invoke()?.LocalOptions?.TrackPickedObjects != true)
+        {
+            return;
+        }
+
+        var stale = _geometryPicks.ParamsReferencing(_component?.OnPingDocument(), objectId);
+        if (stale.Count == 0)
+        {
+            return;
+        }
+
+        _trackedRhinoDoc = rhinoDoc;
+        if (_staleTrackedPicks.Count == 0)
+        {
+            RhinoApp.Idle += RefreshTrackedPicks;
+        }
+
+        _staleTrackedPicks.UnionWith(stale);
+    }
+
+    private void RefreshTrackedPicks(object sender, EventArgs e)
+    {
+        // Idle keeps firing; a solve in flight still holds the param's last data, so wait it out.
+        if (_stateManager.IsBusy)
+        {
+            return;
+        }
+
+        RhinoApp.Idle -= RefreshTrackedPicks;
+        var stale = _staleTrackedPicks.ToList();
+        _staleTrackedPicks.Clear();
+
+        foreach (var paramId in stale)
+        {
+            try
+            {
+                if (_geometryPicks.Refresh(_component.OnPingDocument(), paramId, _trackedRhinoDoc,
+                        _webSocketTransport.ScheduleSolutionDelayMs))
+                {
+                    _stateManager.MarkSolveScheduled();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[BridgeOrchestrator] Refreshing a tracked pick failed: {ex.Message}", ex);
+            }
+
+            BroadcastGeometrySummary(this, paramId);
+        }
     }
 
     private void HandleTrigger(object sender, Guid paramId)
