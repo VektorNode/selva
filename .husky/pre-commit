@@ -20,7 +20,10 @@ fi
 # from the lockfile. In a hook there is no TTY, so if that install wants to
 # purge node_modules it aborts and takes the commit with it. Formatting staged
 # files doesn't need fresh deps — run lint-staged against what's on disk.
-pnpm --config.verify-deps-before-run=false lint-staged
+# lint-staged chunks file lists at cmd.exe's 8191-char limit, but on Windows the
+# eslint.CMD/prettier.CMD shims re-expand the args with their own long node
+# command line, so a full chunk overflows. Leave headroom for the shim.
+pnpm --config.verify-deps-before-run=false lint-staged --max-arg-length 4000
 
 # A malformed changeset (mixing `ignore`d and publishable packages, naming a
 # package that doesn't exist) only surfaces when the release workflow runs
