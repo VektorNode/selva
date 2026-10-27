@@ -59,6 +59,19 @@ public class SelvaUploadServiceTests
     }
 
     [Fact]
+    public async Task Targets_SuggestADefinitionThatWasNeverPublished()
+    {
+        _selva.FacadeNeverPublished = true;
+        var link = new SelvaDefinitionLink
+            { Origin = Origin, DefinitionGuid = Facade, VersionId = "v3", VersionNumber = 3 };
+
+        var targets = await Service().ListTargetsAsync(link, null, Defaults(), File(), CancellationToken.None);
+
+        Assert.Null(targets.Suggestion!.LiveVersionNumber);
+        Assert.Equal(5, targets.Suggestion.LatestVersionNumber);
+    }
+
+    [Fact]
     public async Task Targets_DropALinkTheUserCanNoLongerEdit()
     {
         _selva.FacadeCanEdit = false;
@@ -229,6 +242,7 @@ public class SelvaUploadServiceTests
     private sealed class FakeSelva : HttpMessageHandler
     {
         public bool FacadeCanEdit = true;
+        public bool FacadeNeverPublished;
         public bool IgnoreDocumentFilter;
         public HttpStatusCode UploadStatus = HttpStatusCode.Created;
         public HttpStatusCode PublishStatus = HttpStatusCode.OK;
@@ -283,7 +297,8 @@ public class SelvaUploadServiceTests
                     });
 
                 case ("GET", "/api/v1/definitions/" + Facade):
-                    return Json(Definition(Facade, "Facade panel", FacadeCanEdit, live: 4, draft: 5));
+                    return Json(Definition(Facade, "Facade panel", FacadeCanEdit,
+                        live: FacadeNeverPublished ? null : 4, draft: 5));
 
                 case ("GET", "/api/v1/definitions/" + Roof):
                     return Json(Definition(Roof, "Roof", true, live: 2, draft: 2));
@@ -340,13 +355,15 @@ public class SelvaUploadServiceTests
             ["sourceDocumentId"] = documentId
         };
 
-        private static JObject Definition(string guid, string name, bool canEdit, int live, int draft) => new()
+        private static JObject Definition(string guid, string name, bool canEdit, int? live, int draft) => new()
         {
             ["guid"] = guid,
             ["displayName"] = name,
             ["projectId"] = "project-tower",
             ["canEdit"] = canEdit,
-            ["liveVersion"] = new JObject { ["id"] = "ver-" + live, ["versionNumber"] = live },
+            ["liveVersion"] = live == null
+                ? JValue.CreateNull()
+                : new JObject { ["id"] = "ver-" + live, ["versionNumber"] = live },
             ["draftVersion"] = new JObject { ["id"] = "ver-" + draft, ["versionNumber"] = draft }
         };
 

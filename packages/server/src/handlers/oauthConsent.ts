@@ -1,10 +1,10 @@
 /**
- * The server half of an OAuth consent screen: which access levels and orgs the
- * user may grant, and minting the key in the org they picked.
+ * The server half of an OAuth consent screen: which access levels the user may
+ * grant, and minting the key.
  *
- * A key is bound to one org at mint. The user's session acts in one org too,
- * but they may belong to several, so consent builds a context pinned to the
- * picked org rather than trusting the session's.
+ * A key is bound to one org at mint, and consent mints only in the session's
+ * acting org: the token page lists and revokes keys there alone, so a key
+ * minted elsewhere would be live with no way to see or revoke it.
  */
 
 import type { OrgMember, RequestContext } from '@selvajs/platform';
@@ -43,15 +43,17 @@ async function contextIn(req: ApiRequest, member: OrgMember): Promise<RequestCon
 }
 
 /**
- * The orgs the signed-in user may grant a key with `scopes` in: those they
- * belong to and may hold such a key in.
+ * The orgs the signed-in user may grant a key with `scopes` in: their acting
+ * org, when they may hold such a key there. At most one.
  */
 export async function consentOrgs(
 	req: ApiRequest,
 	scopes: readonly string[]
 ): Promise<ConsentOrg[]> {
 	const { ctx } = requireCaller(req);
-	const memberships = await listUserMemberships(req.deps.orgs, ctx.userId);
+	const memberships = (await listUserMemberships(req.deps.orgs, ctx.userId)).filter(
+		({ org }) => org.id === ctx.actingOrgId
+	);
 	const allowed = await Promise.all(
 		memberships.map(async ({ member }) =>
 			mayHoldApiTokens(req.deps, await contextIn(req, member), scopes)
@@ -95,8 +97,8 @@ export async function consentOffer(
 }
 
 /**
- * Mint the key a consent grants, acting in `orgId`. An org the user doesn't
- * belong to is refused here, whatever the form said.
+ * Mint the key a consent grants, in `orgId`. Anything but the acting org is
+ * refused here, whatever the form said.
  */
 export async function mintConsentToken(
 	req: ApiRequest,
@@ -104,6 +106,13 @@ export async function mintConsentToken(
 	input: MintApiTokenInput
 ): Promise<MintedApiToken> {
 	const { ctx } = requireCaller(req);
+	if (orgId !== ctx.actingOrgId) {
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'Apps can only be connected to your current organization.'
+		);
+	}
 	// Matched against the user's own memberships, so the posted id never reaches a store query.
 	const memberships = await listUserMemberships(req.deps.orgs, ctx.userId);
 	const picked = memberships.find(({ org }) => org.id === orgId);

@@ -18,6 +18,7 @@ import {
 	parseBody,
 	parseDefinitionListOptions,
 	parseParam,
+	readForm,
 	requireCaller,
 	requireUpload,
 	throwZodError
@@ -96,7 +97,7 @@ function parseTags(raw: string | undefined): string[] | undefined {
 /** Create a definition — metadata and the Grasshopper file in one request. */
 export const createDefinition: ApiHandler = async (req) => {
 	const { ctx, user } = requireCaller(req);
-	const form = await req.request.formData();
+	const form = await readForm(req.request);
 
 	const { file, extension } = requireUpload(form, 'file', {
 		maxBytes: req.deps.uploadLimits.maxDefinitionFileSize,
@@ -290,7 +291,7 @@ export const uploadDefinitionImage: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 	const { ctx } = await requireEditableDefinition(req, guid);
 
-	const { file } = requireUpload(await req.request.formData(), 'image', {
+	const { file } = requireUpload(await readForm(req.request), 'image', {
 		maxBytes: req.deps.uploadLimits.maxImageFileSize,
 		label: 'Image'
 	});

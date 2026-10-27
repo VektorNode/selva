@@ -73,6 +73,8 @@ describe('numeric parser', () => {
 			[123.456, 0.001],
 			[0.30000000000000004, 0.1],
 			[3.3000000000000003, 0.1],
+			[16384.2, 0.1],
+			[99999.99, 0.01],
 			[1.5e21, 1]
 		])('infers step %s → %s, ignoring float noise and exponent notation', (value, step) => {
 			expect(parseNumeric(createNumericInputSchema({ default: value })).stepSize).toBe(step);

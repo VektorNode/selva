@@ -558,7 +558,10 @@ function seal(key: Buffer, value: unknown): string {
 function open(key: Buffer, sealed: string): unknown {
 	try {
 		const raw = Buffer.from(sealed, 'base64url');
-		const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
+		// Without the length, a short code is checked against however many tag bytes it has.
+		const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12), {
+			authTagLength: 16
+		});
 		decipher.setAuthTag(raw.subarray(12, 28));
 		const body = Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]);
 		return JSON.parse(body.toString('utf8'));

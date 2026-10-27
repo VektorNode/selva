@@ -12,6 +12,7 @@ export {
 	formText,
 	parseBody,
 	parseParam,
+	readForm,
 	requireCaller,
 	requireParams,
 	requireUpload,

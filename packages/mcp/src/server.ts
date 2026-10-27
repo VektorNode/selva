@@ -60,6 +60,7 @@ export interface McpServerOptions extends Omit<ApiClientOptions, 'apiKey'> {
 	 * Browser origins `handle` accepts besides `baseUrl`'s, e.g. a web MCP inspector.
 	 * Native clients send no `Origin` and are unaffected. `baseUrl` must be the
 	 * configured origin, not one read from the request's `Host`, or a rebinding page passes.
+	 * A host that only has the request's origin screens with `refuseEarly` first.
 	 */
 	allowedOrigins?: string[];
 	/**
@@ -344,13 +345,12 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 			serveStdio(() => build(apiKey));
 		},
 		async handle(request, overrides) {
-			// DNS rebinding: a page on another origin that resolves to this host.
-			const origin = request.headers.get('Origin');
-			if (origin && !trusted.has(origin)) return originRefused();
-			const apiKey = bearerOf(request);
-			// Anything else would reach /api/v1 as "no key" and, on a host whose fetch
-			// forwards cookies, run as the browser session instead.
-			if (!apiKey?.startsWith(API_KEY_PREFIX)) return keyRequired(options.challenge);
+			const refused = refuseEarly(request, {
+				trustedOrigins: trusted,
+				challenge: options.challenge
+			});
+			if (refused) return refused;
+			const apiKey = bearerOf(request)!;
 			const fetch = overrides?.fetch ?? options.fetch;
 
 			let visible: Set<string> | undefined;
@@ -374,6 +374,25 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 			});
 		}
 	};
+}
+
+/**
+ * The refusals `handle` makes before any work: a browser origin outside
+ * `trustedOrigins`, or no Selva key. A host that builds a server per request
+ * origin calls this first, with its configured origins, so an anonymous request
+ * can't make it build one.
+ */
+export function refuseEarly(
+	request: Request,
+	{ trustedOrigins, challenge }: { trustedOrigins: ReadonlySet<string>; challenge?: Challenge }
+): Response | undefined {
+	// DNS rebinding: a page on another origin that resolves to this host.
+	const origin = request.headers.get('Origin');
+	if (origin && !trustedOrigins.has(origin)) return originRefused();
+	// Anything else would reach /api/v1 as "no key" and, on a host whose fetch
+	// forwards cookies, run as the browser session instead.
+	if (!bearerOf(request)?.startsWith(API_KEY_PREFIX)) return keyRequired(challenge);
+	return undefined;
 }
 
 function bearerOf(request: Request): string | undefined {

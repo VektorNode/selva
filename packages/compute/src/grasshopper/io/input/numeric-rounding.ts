@@ -7,18 +7,19 @@ export function applyRounding(value: number, decimalPlaces: number): number {
 }
 
 const MAX_DECIMALS = 12;
+// A double holds 15 significant digits exactly. Fixed places would not do: from 1e4 up,
+// `toFixed(12)` prints the float's own noise (`16384.200000000001`).
+const SIGNIFICANT_DIGITS = 15;
 
 /**
- * Decimal places `x` is written with, ignoring float noise past 12 places:
- * `0.30000000000000004` → 1, `1e-7` → 7, `1.5e21` → 0.
+ * Decimal places `x` is written with, ignoring float noise, at most 12:
+ * `0.30000000000000004` → 1, `16384.2` → 1, `1e-7` → 7, `1.5e21` → 0.
  */
 export function decimalsOf(x: number): number {
 	if (!Number.isFinite(x)) return 0;
-	const [mantissa, exponent] = String(Math.abs(x)).split('e');
-	const decimals =
-		exponent === undefined
-			? (Math.abs(x).toFixed(MAX_DECIMALS).replace(/0+$/, '').split('.')[1]?.length ?? 0)
-			: (mantissa.split('.')[1]?.length ?? 0) - Number(exponent);
+	const clean = Number(Math.abs(x).toPrecision(SIGNIFICANT_DIGITS));
+	const [mantissa, exponent = '0'] = String(clean).split('e');
+	const decimals = (mantissa.split('.')[1]?.length ?? 0) - Number(exponent);
 	return Math.min(Math.max(decimals, 0), MAX_DECIMALS);
 }
 

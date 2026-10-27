@@ -7,6 +7,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json.Linq;
+using Selva.GH.Utilities.Helpers;
 using Selva.Schema.Models;
 
 namespace Selva.GH.Features.SelvaUpload.Services;
@@ -383,7 +384,6 @@ public sealed class SelvaAccountManager
         {
             _tokens.Remove(origin);
             _memory.Delete(origin);
-            _osStore.Delete(origin);
 
             var record = _file.Find(origin);
             if (record != null)
@@ -393,6 +393,16 @@ public sealed class SelvaAccountManager
 
             _message = message;
             SaveFile();
+
+            // Last and best effort: with the email cleared, a key the OS store kept no longer signs anyone in.
+            try
+            {
+                _osStore.Delete(origin);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn($"[SelvaAccount] Couldn't delete the stored key: {ex.Message}");
+            }
         }
 
         RaiseChanged();

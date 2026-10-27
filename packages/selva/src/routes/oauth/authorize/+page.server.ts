@@ -53,7 +53,7 @@ export const load: PageServerLoad = async (event) => {
 	if (!offer) {
 		return {
 			ok: false as const,
-			problem: 'Your account can’t give an app this access in any of your organizations.'
+			problem: 'Your account can’t give an app this access in your current organization.'
 		};
 	}
 	const actingOrgId = locals.ctx?.actingOrgId;

@@ -9,6 +9,7 @@ catalogs:
     '@iconify/svelte': ^5.2.3
     '@lucide/svelte': ^1.61.0
     '@playwright/test': ^1.64.1
+    '@supabase/supabase-js': ^2.118.0
     '@sveltejs/adapter-auto': ^7.0.1
     '@sveltejs/kit': 2.70.3
     '@sveltejs/vite-plugin-svelte': ^7.3.1
@@ -16,6 +17,7 @@ catalogs:
     # Track the runtime (.nvmrc / engines.node), not the newest Node line —
     # types ahead of the runtime typecheck APIs the deployed Node doesn't have.
     '@types/node': ^26.6.5
+    '@types/nodemailer': ^8.0.2
     '@types/three': ^0.186.0
     bits-ui: ^2.20.2
     clsx: ^2.1.1
@@ -23,6 +25,7 @@ catalogs:
     fflate: ^0.8.2
     lucide: ^1.48.0
     mode-watcher: ^1.1.0
+    nodemailer: ^10.2.1
     prettier: ^3.9.10
     rhino3dm: 8.35.0
     rimraf: ^6.1.3

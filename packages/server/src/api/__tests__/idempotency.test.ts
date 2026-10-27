@@ -3,6 +3,7 @@ import { NoopLogger, narrowApiTokenContext, type RequestContext } from '@selvajs
 import { runHandler } from '../respond.js';
 import { apiError, ApiErrorCode } from '../errors.js';
 import { createApiIdempotencyStore, type ApiIdempotencyStore } from '../idempotency.js';
+import { readForm } from '../request.js';
 import type { ApiHandler, ApiRequest } from '../types.js';
 import type { SelvaDeps } from '../deps.js';
 
@@ -109,7 +110,7 @@ describe('runHandler idempotency', () => {
 	it('replays a multipart retry despite a fresh boundary, and refuses a different file', async () => {
 		const upload: ApiHandler = async (req) => {
 			created++;
-			const file = (await req.request.formData()).get('file') as File;
+			const file = (await readForm(req.request)).get('file') as File;
 			return { status: 201, body: { id: `d${created}`, size: file.size } };
 		};
 		const multipart = (contents: string, boundary: string): ApiRequest => {

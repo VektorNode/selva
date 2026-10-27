@@ -278,11 +278,8 @@ public sealed class SelvaUploadService
             .Where(v => v["versionNumber"]?.Type == JTokenType.Integer)
             .ToList();
 
-        var latest = new[]
-            {
-                (int?)definition["draftVersion"]?["versionNumber"],
-                (int?)definition["liveVersion"]?["versionNumber"]
-            }
+        var live = VersionNumberOf(definition["liveVersion"]);
+        var latest = new[] { VersionNumberOf(definition["draftVersion"]), live }
             .Concat(versions.Select(v => (int?)v["versionNumber"]))
             .Max() ?? 0;
 
@@ -293,7 +290,7 @@ public sealed class SelvaUploadService
             DisplayName = (string?)definition["displayName"] ?? guid,
             ProjectName = projectId != null && projectNames.TryGetValue(projectId, out var name) ? name : null,
             LatestVersionNumber = latest,
-            LiveVersionNumber = (int?)definition["liveVersion"]?["versionNumber"],
+            LiveVersionNumber = live,
             LinkedVersionNumber = linkedVersion,
             NewerVersions = linkedVersion == null
                 ? new List<SelvaVersionSummary>()
@@ -309,6 +306,13 @@ public sealed class SelvaUploadService
                     })
                     .ToList()
         };
+    }
+
+    // `liveVersion` is JSON null until the first publish, and indexing a JValue throws.
+    private static int? VersionNumberOf(JToken? version)
+    {
+        var number = (version as JObject)?["versionNumber"];
+        return number?.Type == JTokenType.Integer ? (int)number : null;
     }
 
     private static IEnumerable<JObject> Items(JObject collection)

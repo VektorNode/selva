@@ -8,7 +8,14 @@
  * HTTP gate; the rasterization is the security control.
  */
 
-import { apiError, ApiErrorCode, noContent, requireUpload, type ApiHandler } from '../api/index.js';
+import {
+	apiError,
+	ApiErrorCode,
+	noContent,
+	readForm,
+	requireUpload,
+	type ApiHandler
+} from '../api/index.js';
 import { OrgAssetKindSchema } from '@selvajs/platform';
 import { requireManageOrgMembers, requireActingOrg } from '../access/index.js';
 import { orgAssetService } from './services.js';
@@ -36,7 +43,7 @@ export const uploadOrgAsset: ApiHandler = async (req) => {
 	const org = await req.deps.orgs.getOrg(ctx, orgId);
 	if (!org) apiError(404, ApiErrorCode.NOT_FOUND, 'Organization not found');
 
-	const { file } = requireUpload(await req.request.formData(), 'image', {
+	const { file } = requireUpload(await readForm(req.request), 'image', {
 		maxBytes: req.deps.uploadLimits.maxImageFileSize,
 		contentTypes: {
 			allowed: ALLOWED_CONTENT_TYPES,

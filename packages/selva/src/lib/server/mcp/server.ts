@@ -1,8 +1,8 @@
-import { createMcpServer, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
+import { createMcpServer, refuseEarly, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
 import { ApiScopeActionSchema, apiScopeActionCovers, parseApiScope } from '@selvajs/platform';
 import { env } from '$env/dynamic/private';
 import { REGISTERED_CLIENT_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
-import { oauthServer } from '$lib/server/oauth/server';
+import { oauthConfigured } from '$lib/server/oauth/server';
 import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
@@ -29,8 +29,22 @@ function mcpAllowedOrigins(): string[] {
 		.filter(Boolean);
 }
 
-// Building a server indexes the OpenAPI document and resolves every tool, which
-// an unauthenticated POST must not be able to trigger per request. The origin
+// Configured origins only: `url.origin` follows the Host header unless ORIGIN is
+// set, and under DNS rebinding that is the attacker's name. Without ORIGIN, only
+// MCP_ALLOWED_ORIGINS may call from a browser.
+function trustedOrigins(): Set<string> {
+	return new Set([...(env.ORIGIN ? [new URL(env.ORIGIN).origin] : []), ...mcpAllowedOrigins()]);
+}
+
+// Only when OAuth can run: a challenge pointing at a 503 sends clients nowhere.
+function challengeFor(origin: string) {
+	return oauthConfigured()
+		? { resourceMetadataUrl: resourceMetadataUrl(origin), scopes: [...REGISTERED_CLIENT_SCOPES] }
+		: undefined;
+}
+
+// Building a server indexes the OpenAPI document and resolves every tool, so
+// `handleMcp` refuses an anonymous request before it gets here. The origin
 // comes from the Host header unless ORIGIN is set, so the cache is a small LRU:
 // a caller alternating hosts can't grow it, and an occasional rebuild reuses
 // the origin-free document.
@@ -55,13 +69,7 @@ function serverFor(origin: string): ReturnType<typeof createMcpServer> {
 		tools: selvaTools(origin),
 		grantedActions,
 		allowedOrigins: mcpAllowedOrigins(),
-		// Only when OAuth can run: a challenge pointing at a 503 sends clients nowhere.
-		...(oauthServer(origin) && {
-			challenge: {
-				resourceMetadataUrl: resourceMetadataUrl(origin),
-				scopes: [...REGISTERED_CLIENT_SCOPES]
-			}
-		})
+		challenge: challengeFor(origin)
 	});
 	if (servers.size >= MAX_CACHED_ORIGINS) servers.delete(servers.keys().next().value!);
 	servers.set(origin, server);
@@ -77,5 +85,9 @@ function serverFor(origin: string): ReturnType<typeof createMcpServer> {
  * instead of going back out through the proxy.
  */
 export function handleMcp(request: Request, origin: string, fetch: typeof globalThis.fetch) {
-	return serverFor(origin).handle(request, { fetch });
+	const refused = refuseEarly(request, {
+		trustedOrigins: trustedOrigins(),
+		challenge: challengeFor(origin)
+	});
+	return refused ?? serverFor(origin).handle(request, { fetch });
 }

@@ -597,12 +597,7 @@ public class WebSocketTransport : IDisposable
     {
         try
         {
-            if (BridgeAccess.IsRefusedFrom(InboundKind.HostSaveFile, frame.Host))
-            {
-                Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
-                return;
-            }
-
+            // No header means no requestId to answer.
             if (!HostFileFrame.TryDecode(frame.Data, out var headerJson, out var body))
             {
                 Logger.Warn("[WebSocketTransport] Dropped a binary frame that isn't a host file frame.");
@@ -610,13 +605,27 @@ public class WebSocketTransport : IDisposable
             }
 
             var inbound = _inboundParser.Parse(headerJson, _sessionId);
-            if (inbound.Kind != InboundKind.HostSaveFile)
+            var reply = new SocketReply(this, frame.Client);
+            if (BridgeAccess.IsRefusedFrom(InboundKind.HostSaveFile, frame.Host))
             {
-                Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
+                Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
+                _hostFiles.RefuseSave(inbound.RequestId, "Saving through Rhino works only in the Rhino panel.",
+                    reply);
                 return;
             }
 
-            _hostFiles.HandleSave(inbound.RequestId, inbound.FileName, body, new SocketReply(this, frame.Client));
+            if (inbound.Kind != InboundKind.HostSaveFile)
+            {
+                Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
+                _hostFiles.RefuseSave(inbound.RequestId,
+                    inbound.Kind == InboundKind.SessionMismatch
+                        ? "This page belongs to another Grasshopper session. Reload it and try again."
+                        : "Could not save the file.",
+                    reply);
+                return;
+            }
+
+            _hostFiles.HandleSave(inbound.RequestId, inbound.FileName, body, reply);
         }
         catch (Exception ex)
         {

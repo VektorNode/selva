@@ -1,4 +1,4 @@
-export { createMcpServer } from './server.js';
+export { createMcpServer, refuseEarly } from './server.js';
 export type {
 	McpServerOptions,
 	PromptDefinition,

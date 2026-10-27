@@ -392,7 +392,8 @@ describe('a key revoking itself', () => {
 // Consent
 // ============================================================================
 
-describe('consent in an org the user picks', () => {
+// The token page lists and revokes keys in the acting org only.
+describe('consent in the acting org', () => {
 	async function twoOrgs() {
 		const w = await world();
 		const big = await seedBigClient(w.h);
@@ -403,33 +404,35 @@ describe('consent in an org the user picks', () => {
 	const run = <T>(locals: ActingLocals, fn: (req: ApiRequest) => Promise<T>) =>
 		callHandler(async (req) => ({ body: await fn(req) }), { locals });
 
-	it('offers only the orgs where the user may hold the key', async () => {
+	it('offers the acting org, and only where the user may hold the key', async () => {
 		const w = await twoOrgs();
 		const locals = await actAs(w.h, w.dana.id);
+		expect(locals.ctx.actingOrgId).toBe(w.acme.id);
 		const upload = await run(locals, (req) => consentOrgs(req, ['upload:all']));
 		expect(upload.json).toEqual([{ id: w.acme.id, name: 'Acme' }]);
 
+		// May hold the key in both orgs, still offered only the acting one.
 		await grantPlatformPermissions(w.h, w.dana.id, ['manage_api_tokens']);
 		const broad = await run(await actAs(w.h, w.dana.id), (req) => consentOrgs(req, ['upload:all']));
-		expect((broad.json as { id: string }[]).map((o) => o.id).sort()).toEqual(
-			[w.acme.id, w.big.bigClient.id].sort()
-		);
+		expect(broad.json).toEqual([{ id: w.acme.id, name: 'Acme' }]);
 	});
 
-	it('mints in the picked org, not the session’s', async () => {
+	it('mints in the acting org and refuses another of the user’s orgs', async () => {
 		const w = await twoOrgs();
 		await grantPlatformPermissions(w.h, w.dana.id, ['manage_api_tokens']);
-		const locals = await actAs(w.h, w.dana.id);
-		const picked = locals.ctx.actingOrgId === w.acme.id ? w.big.bigClient.id : w.acme.id;
-		const res = await run(locals, (req) =>
-			mintConsentToken(req, picked, {
-				name: 'Selva for Grasshopper (OAuth)',
-				scopes: ['upload:all'],
-				expiresInDays: 30
-			})
-		);
+		const mint = async (orgId: string) =>
+			run(await actAs(w.h, w.dana.id), (req) =>
+				mintConsentToken(req, orgId, {
+					name: 'Selva for Grasshopper (OAuth)',
+					scopes: ['upload:all'],
+					expiresInDays: 30
+				})
+			);
+
+		const res = await mint(w.acme.id);
 		expect(res.status).toBe(200);
-		expect(res.json).toMatchObject({ token: { orgId: picked, scopes: ['upload:all'] } });
+		expect(res.json).toMatchObject({ token: { orgId: w.acme.id, scopes: ['upload:all'] } });
+		expect((await mint(w.big.bigClient.id)).status).toBe(403);
 	});
 
 	it('refuses an org the user doesn’t belong to', async () => {

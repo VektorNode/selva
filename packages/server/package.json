@@ -150,8 +150,8 @@
 		"@selvajs/config": "workspace:*",
 		"@selvajs/local-provider": "workspace:*",
 		"@types/node": "catalog:",
-		"@types/nodemailer": "^8.0.2",
-		"nodemailer": "^10.2.1",
+		"@types/nodemailer": "catalog:",
+		"nodemailer": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

@@ -32,7 +32,9 @@ export function isCrossSiteFormSubmission(request: Request, options: CsrfOptions
 	if (!UNSAFE_METHODS.has(request.method)) return false;
 	const type = (request.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
 	if (!FORM_TYPES.includes(type)) return false;
-	const bearer = /^Bearer\s+(\S+)/i.exec(request.headers.get('authorization') ?? '')?.[1];
+	// Anchored like `resolveApiToken`'s parse: a header that one reads as a key and the
+	// other doesn't would skip this check and still run as the cookie session.
+	const bearer = /^Bearer\s+(\S+)\s*$/i.exec(request.headers.get('authorization') ?? '')?.[1];
 	if (bearer?.startsWith(API_TOKEN_PREFIX)) return false;
 	const url = new URL(request.url);
 	if (options.exemptPaths?.includes(url.pathname)) return false;

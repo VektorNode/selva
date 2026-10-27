@@ -227,7 +227,9 @@ public sealed class SelvaApiClient : IDisposable
                 return ParseObject(body) ?? new JObject();
             }
 
-            var message = (string?)ParseObject(body)?["message"] ??
+            // The OAuth token endpoint answers RFC 6749's `error_description`, /api/v1 its `message`.
+            var error = ParseObject(body);
+            var message = StringOf(error?["message"]) ?? StringOf(error?["error_description"]) ??
                           $"Selva answered {status} {response.ReasonPhrase}.";
             var invalidToken = status == 401 && response.Headers.WwwAuthenticate.Any(h =>
                 h.Parameter != null && h.Parameter.Contains("invalid_token"));
@@ -284,5 +286,10 @@ public sealed class SelvaApiClient : IDisposable
         {
             return null;
         }
+    }
+
+    private static string? StringOf(JToken? token)
+    {
+        return token?.Type == JTokenType.String ? (string?)token : null;
     }
 }

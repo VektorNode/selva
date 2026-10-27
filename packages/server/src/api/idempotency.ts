@@ -12,6 +12,7 @@
  * a corrected retry can run.
  */
 
+import { createHash } from 'node:crypto';
 import type { RequestContext } from '@selvajs/platform';
 import { createIdempotencyStore, type IdempotencyStore } from '../compute/idempotency.js';
 import {
@@ -21,6 +22,7 @@ import {
 	type StoredResponse
 } from './idempotency-http.js';
 import { apiError, ApiErrorCode } from './errors.js';
+import { readForm } from './request.js';
 
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
 export const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
@@ -88,9 +90,16 @@ export async function requestFingerprint(
 	return sha256Hex(bytes);
 }
 
+async function fileSha256Hex(file: Blob): Promise<string> {
+	const hash = createHash('sha256');
+	for await (const chunk of file.stream()) hash.update(chunk);
+	return hash.digest('hex');
+}
+
 /**
- * The body `requestFingerprint` should hash, read from a clone so the handler
- * can still consume the original.
+ * The body `requestFingerprint` should hash. The handler can still read it: a
+ * JSON body comes from a clone, a form through `readForm`, which parses it once
+ * for both.
  *
  * Multipart is canonicalized to its fields and file contents: clients pick a
  * fresh random boundary per request, so the raw bytes of an identical retry
@@ -103,10 +112,10 @@ export async function fingerprintBody(request: Request): Promise<ArrayBuffer | s
 	}
 	let form: FormData;
 	try {
-		form = await request.clone().formData();
+		form = await readForm(request);
 	} catch {
-		// Malformed: hash the raw bytes and let the handler refuse it.
-		return request.clone().arrayBuffer();
+		// The handler's own read fails the same way, and a failure is never replayed.
+		return 'malformed multipart';
 	}
 	const parts: [string, string | { file: string; type: string; sha256: string }][] = [];
 	for (const [name, value] of form) {
@@ -114,7 +123,7 @@ export async function fingerprintBody(request: Request): Promise<ArrayBuffer | s
 			name,
 			typeof value === 'string'
 				? value
-				: { file: value.name, type: value.type, sha256: await sha256Hex(await value.arrayBuffer()) }
+				: { file: value.name, type: value.type, sha256: await fileSha256Hex(value) }
 		]);
 	}
 	return JSON.stringify(parts);

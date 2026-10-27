@@ -44,10 +44,16 @@ function onRedeemed(tokenId: string): void {
 	unredeemed.delete(tokenId);
 }
 
+/** Whether `oauthServer` would build one, without building it. */
+export function oauthConfigured(): boolean {
+	const secret = env.SELVA_HMAC_KEY;
+	return Boolean(secret && secret.length >= MIN_TOKEN_SECRET_LENGTH);
+}
+
 /** Undefined without a usable SELVA_HMAC_KEY: the endpoints then answer 503. */
 export function oauthServer(origin: string): OAuthServer | undefined {
-	const secret = env.SELVA_HMAC_KEY;
-	if (!secret || secret.length < MIN_TOKEN_SECRET_LENGTH) return undefined;
+	if (!oauthConfigured()) return undefined;
+	const secret = env.SELVA_HMAC_KEY!;
 	if (cached?.origin !== origin || cached.secret !== secret) {
 		cached = {
 			origin,

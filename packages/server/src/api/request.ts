@@ -133,6 +133,19 @@ export async function parseBody<T>(
 // Uploads
 // ============================================================================
 
+const parsedForms = new WeakMap<Request, Promise<FormData>>();
+
+/**
+ * The request's form body, parsed once: the idempotency fingerprint reads it
+ * before the handler does, and a definition upload is too large to buffer twice.
+ * On an idempotent route, `request.formData()` throws: the body is already used.
+ */
+export function readForm(request: Request): Promise<FormData> {
+	let form = parsedForms.get(request);
+	if (!form) parsedForms.set(request, (form = request.formData()));
+	return form;
+}
+
 /**
  * Pull a required file out of a multipart body and check its size and, where
  * given, its extension.

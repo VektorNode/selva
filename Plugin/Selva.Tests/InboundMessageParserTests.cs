@@ -311,6 +311,20 @@ public class InboundMessageParserTests
         Assert.Equal(InboundKind.MissingField, msg.Kind);
     }
 
+    // The transport fails these by requestId, or the page's save never settles.
+    [Theory]
+    [InlineData(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""other"", ""requestId"": ""7"", ""fileName"": ""a.zip"" }",
+        InboundKind.SessionMismatch)]
+    [InlineData(@"{ ""type"": ""hostSaveFile"", ""sessionId"": ""session-1"", ""requestId"": ""7"", ""fileName"": 3 }",
+        InboundKind.MissingField)]
+    public void HostSaveFile_ThatCannotRun_KeepsItsRequestId(string json, InboundKind kind)
+    {
+        var msg = Parse(json);
+
+        Assert.Equal(kind, msg.Kind);
+        Assert.Equal("7", msg.RequestId);
+    }
+
     // -------------------------------------------------------------------------
     // pickGeometry / clearGeometry / trigger / closeDefinition / editInGrasshopper
     // -------------------------------------------------------------------------
