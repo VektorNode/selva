@@ -151,7 +151,7 @@
 		"@selvajs/local-provider": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/nodemailer": "^8.0.2",
-		"nodemailer": "^10.0.10",
+		"nodemailer": "^10.2.1",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

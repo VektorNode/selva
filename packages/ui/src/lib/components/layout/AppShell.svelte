@@ -94,7 +94,7 @@
 	const sidenavWrapClass = $derived(
 		_mode === 'fixed'
 			? 'flex shrink-0'
-			: 'flex shrink-0 sm:self-start sm:sticky sm:top-(--header-h) sm:max-h-[calc(100svh-var(--header-h))]'
+			: 'flex shrink-0 sm:self-start sm:sticky sm:top-(--header-h) sm:max-h-(--below-header-h)'
 	);
 
 	// The sticky wrapper is only as tall as its content, so in scroll mode the divider comes

@@ -3,6 +3,7 @@
 :root {
 	--radius: 0.625rem;
 	--header-h: 3.5rem;
+	--below-header-h: calc(100svh - var(--header-h));
 	--page-px: 1rem;
 	--page-py: 1.75rem;
 	--background: oklch(0.99 0 0);
