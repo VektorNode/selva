@@ -139,57 +139,69 @@ public class BridgeAccessTests
             BridgeAccess.SessionUrl("http://localhost:51234", "abc", 8765, "SECRET", "rhino"));
     }
 
-    [Theory]
-    [InlineData(InboundKind.SaveSchema)]
-    [InlineData(InboundKind.ApplySyncChanges)]
-    [InlineData(InboundKind.SelvaUpload)]
-    [InlineData(InboundKind.SelvaSignIn)]
-    public void PlayerSession_MayNotWriteTheSchema(InboundKind kind)
+    private enum Gate
     {
-        Assert.True(BridgeAccess.IsRefused(kind, BridgeRole.Player));
-        Assert.False(BridgeAccess.IsRefused(kind, BridgeRole.Author));
+        Open,
+        AuthorOnly,
+        PlayerOnly,
+        RhinoPanelOnly
     }
 
-    [Theory]
-    [InlineData(InboundKind.ValueUpdate)]
-    [InlineData(InboundKind.RequestSyncPreview)]
-    [InlineData(InboundKind.PickGeometry)]
-    [InlineData(InboundKind.Trigger)]
-    [InlineData(InboundKind.CancelSolve)]
-    public void PlayerSession_MaySetValuesAndRead(InboundKind kind)
+    // Every kind is listed on purpose: IsRefused and IsRefusedFrom let through anything they don't
+    // name, so a new message would reach player sessions and browser tabs unless it lands here.
+    private static readonly Dictionary<InboundKind, Gate> Gates = new()
     {
-        Assert.False(BridgeAccess.IsRefused(kind, BridgeRole.Player));
+        [InboundKind.ValueUpdate] = Gate.Open,
+        [InboundKind.RequestCurrentValues] = Gate.Open,
+        [InboundKind.RequestInitialData] = Gate.Open,
+        [InboundKind.RequestSyncPreview] = Gate.Open,
+        [InboundKind.CancelSolve] = Gate.Open,
+        [InboundKind.Trigger] = Gate.Open,
+        [InboundKind.SaveSchema] = Gate.AuthorOnly,
+        [InboundKind.ApplySyncChanges] = Gate.AuthorOnly,
+        [InboundKind.SelvaGetAccount] = Gate.AuthorOnly,
+        [InboundKind.SelvaConnect] = Gate.AuthorOnly,
+        [InboundKind.SelvaSignIn] = Gate.AuthorOnly,
+        [InboundKind.SelvaUseApiKey] = Gate.AuthorOnly,
+        [InboundKind.SelvaSignOut] = Gate.AuthorOnly,
+        [InboundKind.SelvaListTargets] = Gate.AuthorOnly,
+        [InboundKind.SelvaUpload] = Gate.AuthorOnly,
+        [InboundKind.SelvaCancel] = Gate.AuthorOnly,
+        [InboundKind.CloseDefinition] = Gate.PlayerOnly,
+        [InboundKind.EditInGrasshopper] = Gate.PlayerOnly,
+        [InboundKind.HostSaveFile] = Gate.RhinoPanelOnly,
+        [InboundKind.HostPickFile] = Gate.RhinoPanelOnly,
+        [InboundKind.PickGeometry] = Gate.RhinoPanelOnly,
+        [InboundKind.ClearGeometry] = Gate.RhinoPanelOnly,
+        // Parser outcomes, not messages: the transport drops them before any gate.
+        [InboundKind.SessionMismatch] = Gate.Open,
+        [InboundKind.MissingField] = Gate.Open,
+        [InboundKind.Unknown] = Gate.Open,
+        [InboundKind.Malformed] = Gate.Open
+    };
+
+    [Fact]
+    public void EveryInboundKind_HasADecidedGate()
+    {
+        var missing = Enum.GetValues(typeof(InboundKind)).Cast<InboundKind>().Where(k => !Gates.ContainsKey(k));
+        Assert.Empty(missing);
     }
 
-    [Theory]
-    [InlineData(InboundKind.CloseDefinition)]
-    [InlineData(InboundKind.EditInGrasshopper)]
-    public void AuthorSession_HasNoPlayerCommands(InboundKind kind)
-    {
-        Assert.True(BridgeAccess.IsRefused(kind, BridgeRole.Author));
-        Assert.False(BridgeAccess.IsRefused(kind, BridgeRole.Player));
-    }
-
-    // A browser tab on the same bridge must not open a dialog or a viewport prompt inside Rhino.
-    [Theory]
-    [InlineData(InboundKind.HostPickFile)]
-    [InlineData(InboundKind.HostSaveFile)]
-    [InlineData(InboundKind.PickGeometry)]
-    [InlineData(InboundKind.ClearGeometry)]
-    public void PromptMessages_AreTheRhinoPanelsOnly(InboundKind kind)
-    {
-        Assert.True(BridgeAccess.IsRefusedFrom(kind, null));
-        Assert.False(BridgeAccess.IsRefusedFrom(kind, BridgeAccess.PanelHost));
-    }
+    public static IEnumerable<object[]> AllKinds() =>
+        Enum.GetValues(typeof(InboundKind)).Cast<InboundKind>().Select(k => new object[] { k });
 
     [Theory]
-    [InlineData(InboundKind.ValueUpdate)]
-    [InlineData(InboundKind.Trigger)]
-    [InlineData(InboundKind.RequestInitialData)]
-    [InlineData(InboundKind.CancelSolve)]
-    public void EverythingElse_ComesFromAnyHost(InboundKind kind)
+    [MemberData(nameof(AllKinds))]
+    public void Gates_MatchTheTable(InboundKind kind)
     {
-        Assert.False(BridgeAccess.IsRefusedFrom(kind, null));
+        if (!Gates.TryGetValue(kind, out var gate))
+        {
+            return;
+        }
+
+        Assert.Equal(gate == Gate.AuthorOnly, BridgeAccess.IsRefused(kind, BridgeRole.Player));
+        Assert.Equal(gate == Gate.PlayerOnly, BridgeAccess.IsRefused(kind, BridgeRole.Author));
+        Assert.Equal(gate == Gate.RhinoPanelOnly, BridgeAccess.IsRefusedFrom(kind, null));
         Assert.False(BridgeAccess.IsRefusedFrom(kind, BridgeAccess.PanelHost));
     }
 

@@ -104,7 +104,7 @@ export function putAsset(schema: UISchema, asset: OptionAsset): string {
 	// Searched by content, not along the salt chain: pruning the content that held salt 0 leaves
 	// a gap in front of what went in under salt 1.
 	for (const [id, existing] of Object.entries(schema.assets)) {
-		if (existing.d === asset.d && existing.img === asset.img) return id;
+		if (existing && existing.d === asset.d && existing.img === asset.img) return id;
 	}
 	for (let salt = 0; ; salt++) {
 		const id = assetId(asset, salt);
