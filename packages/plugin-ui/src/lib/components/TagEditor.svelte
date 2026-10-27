@@ -2,7 +2,7 @@
 	import { MAX_TAGS } from '@selvajs/schemas';
 	import { Badge, Input } from '@selvajs/ui';
 	import { X } from '@lucide/svelte';
-	import { addTags } from '$lib/features/builder';
+	import { addTags } from '#lib/features/builder/index.js';
 
 	interface Props {
 		/** Id of the text field, for a label's `for`. */

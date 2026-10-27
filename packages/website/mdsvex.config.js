@@ -1,6 +1,3 @@
-import adapter from '@sveltejs/adapter-static';
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
-import { mdsvex } from 'mdsvex';
 import rehypeSlug from 'rehype-slug';
 import rehypeAutolinkHeadings from 'rehype-autolink-headings';
 import rehypeMermaid from 'rehype-mermaid';
@@ -9,7 +6,7 @@ import remarkMermaidBlock from './remark-mermaid-block.js';
 import rehypeMermaidSvgHtml from './rehype-mermaid-svg-html.js';
 
 /** @type {import('mdsvex').MdsvexOptions} */
-const mdsvexOptions = {
+export const mdsvexOptions = {
 	extensions: ['.md'],
 	// remarkMermaidBlock turns ```mermaid fences into real HAST elements (bypassing
 	// the syntax highlighter); rehypeMermaid then renders them to inline SVG at build
@@ -70,33 +67,3 @@ const mdsvexOptions = {
 		}
 	}
 };
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-	// Treat .svelte and .md as components/pages so docs can render as routes.
-	extensions: ['.svelte', '.md'],
-
-	preprocess: [vitePreprocess(), mdsvex(mdsvexOptions)],
-
-	compilerOptions: {
-		runes: true
-	},
-
-	kit: {
-		// Fully static marketing site — every route is prerendered to HTML.
-		adapter: adapter({
-			pages: 'build',
-			assets: 'build',
-			fallback: undefined,
-			precompress: false,
-			strict: true
-		}),
-		prerender: {
-			// Docs may link to unpublished docs or anchors; warn instead of failing.
-			handleHttpError: 'warn',
-			handleMissingId: 'warn'
-		}
-	}
-};
-
-export default config;

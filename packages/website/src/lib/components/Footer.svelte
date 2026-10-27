@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { footerNav, VEKTORNODE_URL } from '$lib/nav';
-	import logo from '$lib/assets/selva-logo.svg';
+	import { footerNav, VEKTORNODE_URL } from '#lib/nav.js';
+	import logo from '#lib/assets/selva-logo.svg';
 
 	const year = new Date().getFullYear();
 </script>

@@ -8,14 +8,14 @@
 		formatFileSize,
 		getBase64FileSize,
 		isFileData
-	} from '$lib/utils/file-download';
+	} from '#lib/utils/file-download.js';
 	import { Button } from '../primitives';
 	import { Folder, FolderOpen, FileIcon, ChevronRight } from '@lucide/svelte';
 	import HelpButton from './HelpButton.svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { Label } from '$lib/components/primitives/label';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatCount, formatMessage } from '$lib/i18n/messages';
+	import { Label } from '#lib/components/primitives/label/index.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatCount, formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
 		item: OutputLayoutItem;

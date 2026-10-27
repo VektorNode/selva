@@ -3,13 +3,13 @@
 	import { page } from '$app/state';
 	import { FileDown } from '@lucide/svelte';
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-	import AppLayout from '$lib/components/compute/AppLayout.svelte';
+	import AppLayout from '#lib/components/compute/AppLayout.svelte';
 	import exampleSchema from '../demo/example-schema.json';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
 	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../demo/dummy-output-values';
-	import { APP_DEFAULTS } from '$lib/constants';
-	import type { ActionButton } from '$lib/types/actionButton';
-	import { setLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { APP_DEFAULTS } from '#lib/constants.js';
+	import type { ActionButton } from '#lib/types/actionButton.js';
+	import { setLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	// `?lang=de` switches the chrome; `?preview` swaps the right-hand tabs for one holding only the
 	// image output, which stays empty until Calculate, to show the pane closing while it waits.

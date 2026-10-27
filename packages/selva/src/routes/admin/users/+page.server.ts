@@ -8,15 +8,15 @@ import type {
 	PlatformPermission
 } from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
-import { getAuthProvider } from '$lib/server/providers.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
 import { listAllOrgMembers } from '@selvajs/server/organizations';
 import {
 	getLogger,
 	getOrganizationProvider,
 	getPermissionStore,
 	getUserProfileStore
-} from '$lib/server/providers.server';
-import { assertManageInstanceUsers } from '$lib/server/access.server';
+} from '#lib/server/providers.server.js';
+import { assertManageInstanceUsers } from '#lib/server/access.server.js';
 
 /**
  * `orgRole` and `orgPermissions` are the acting org's membership, shown here

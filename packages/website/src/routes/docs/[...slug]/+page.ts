@@ -5,7 +5,7 @@ import {
 	getUnpublishedTitle,
 	redirectSlugs,
 	unpublishedSlugs
-} from '$lib/docs';
+} from '#lib/docs.js';
 import { error } from '@sveltejs/kit';
 import type { EntryGenerator, PageLoad } from './$types';
 

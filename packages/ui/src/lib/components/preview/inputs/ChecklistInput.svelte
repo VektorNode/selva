@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, SupportedTypes, UISchema } from '@selvajs/schemas';
-	import { Checkbox } from '$lib/components/primitives/checkbox';
-	import { optionGlyph } from '$lib/schema/option-display';
+	import { Checkbox } from '#lib/components/primitives/checkbox/index.js';
+	import { optionGlyph } from '#lib/schema/option-display.js';
 	import OptionGlyph from './OptionGlyph.svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 

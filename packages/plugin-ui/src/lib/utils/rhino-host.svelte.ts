@@ -1,4 +1,4 @@
-import { RHINO_HOST_CONTAINER_EVENT } from '$lib/app.config';
+import { RHINO_HOST_CONTAINER_EVENT } from '#lib/app.config.js';
 import { isRhinoPanel } from './session';
 
 type HostWindow = Window & { __selvaHostContainer?: string };

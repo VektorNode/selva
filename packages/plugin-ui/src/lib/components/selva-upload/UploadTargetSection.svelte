@@ -2,13 +2,13 @@
 	import type { SelvaTargets, SelvaVersionTarget } from '@selvajs/schemas';
 	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
 	import { Badge, Callout, Input, Label, Select, Textarea } from '@selvajs/ui';
-	import TagEditor from '$lib/components/TagEditor.svelte';
-	import type { SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
+	import TagEditor from '#lib/components/TagEditor.svelte';
+	import type { SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
 	import {
 		canCreateDefinition,
 		selectedVersionTarget,
 		versionTargets
-	} from '$lib/composables/selva-upload-core';
+	} from '#lib/composables/selva-upload-core.js';
 
 	interface Props {
 		upload: SelvaUpload;

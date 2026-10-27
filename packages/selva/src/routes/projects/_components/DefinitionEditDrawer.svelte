@@ -17,7 +17,7 @@
 	} from '@selvajs/ui';
 	import { ArrowLeft, Circle, Image, Trash2, X } from '@lucide/svelte';
 	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
-	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
+	import ProjectPicker from '#lib/components/definitions/ProjectPicker.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selvajs/platform';
 	import VersionsSection from './VersionsSection.svelte';

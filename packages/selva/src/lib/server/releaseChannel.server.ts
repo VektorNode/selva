@@ -16,7 +16,7 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import type { ReleaseChannel } from '@selvajs/server/ops';
 
 export type { ReleaseChannel };

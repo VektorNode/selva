@@ -1,9 +1,9 @@
 import { fail } from '@sveltejs/kit';
 import { hasPermission } from '@selvajs/platform';
-import { flag } from '$lib/server/providers.server';
-import { checkForUpdate } from '$lib/server/updateCheck.server';
-import { readChannel, writeChannel } from '$lib/server/releaseChannel.server';
-import { asHttpError, requirePermission } from '$lib/server/access.server';
+import { flag } from '#lib/server/providers.server.js';
+import { checkForUpdate } from '#lib/server/updateCheck.server.js';
+import { readChannel, writeChannel } from '#lib/server/releaseChannel.server.js';
+import { asHttpError, requirePermission } from '#lib/server/access.server.js';
 import {
 	SOLVE_DEADLINE_MS,
 	RATE_LIMIT_WINDOW_MS,
@@ -17,7 +17,7 @@ import {
 	REMOTE_DEFINITION_CACHE_TTL_MS,
 	COMPUTE_DEFINITION_CACHE_BYTES,
 	COMPUTE_SOLVE_CACHE_BYTES
-} from '$lib/server/computeLimits';
+} from '#lib/server/computeLimits.js';
 import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
 

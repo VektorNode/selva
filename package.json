@@ -71,7 +71,7 @@
 		"@shadcn/lint": "^0.2.3",
 		"@sveltejs/adapter-auto": "catalog:",
 		"@sveltejs/kit": "catalog:",
-		"@sveltejs/package": "^2.5.7",
+		"@sveltejs/package": "catalog:",
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@tailwindcss/vite": "catalog:",
 		"@types/node": "catalog:",

@@ -1,10 +1,10 @@
 import type { RequestHandler } from './$types';
-import { withApiRateLimit } from '$lib/server/api/sveltekit';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getSolveEventBus } from '$lib/server/solveEvents/bus.server';
-import { liveOwnerKey } from '$lib/server/solveEvents/liveSolve.server';
-import { openSolveEventStream } from '$lib/server/solveEvents/sse.server';
-import { asHttpError } from '$lib/server/access.server';
+import { withApiRateLimit } from '#lib/server/api/sveltekit.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getSolveEventBus } from '#lib/server/solveEvents/bus.server.js';
+import { liveOwnerKey } from '#lib/server/solveEvents/liveSolve.server.js';
+import { openSolveEventStream } from '#lib/server/solveEvents/sse.server.js';
+import { asHttpError } from '#lib/server/access.server.js';
 import { assertScope } from '@selvajs/server/api';
 
 // One SSE stream per browser tab. The tab mints `streamId` and sends it with every

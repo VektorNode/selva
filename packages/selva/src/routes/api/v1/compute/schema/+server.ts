@@ -1,11 +1,11 @@
 import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
-import { asHttpError, requireCanCreateDefinition, scoped } from '$lib/server/access.server';
+import { asHttpError, requireCanCreateDefinition, scoped } from '#lib/server/access.server.js';
 import { assertScope } from '@selvajs/server/api';
 import type { RequestHandler } from './$types';
-import { withApiRateLimit } from '$lib/server/api/sveltekit';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { requireMaxBodySize } from '$lib/server/admin-auth.server';
-import { MAX_DEFINITION_FILE_SIZE } from '$lib/server/computeLimits';
+import { withApiRateLimit } from '#lib/server/api/sveltekit.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
+import { MAX_DEFINITION_FILE_SIZE } from '#lib/server/computeLimits.js';
 import {
 	assertCamelCaseSchema,
 	postSchemaFormData,

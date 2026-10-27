@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { mount } from '$lib/server/api/sveltekit';
+import { mount } from '#lib/server/api/sveltekit.js';
 import { definitionScopeTarget } from '@selvajs/server/api';
 import { getVersionSchema } from '@selvajs/server/handlers';
 

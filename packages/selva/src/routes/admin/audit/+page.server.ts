@@ -7,15 +7,15 @@ import type {
 	DomainEventType
 } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { assertPagePermission } from '$lib/server/access.server';
+import { assertPagePermission } from '#lib/server/access.server.js';
 import {
 	getAuditQuery,
 	getDefinitionMeta,
 	getOrganizationProvider,
 	getProjectProvider,
 	getUserProfileStore
-} from '$lib/server/providers.server';
-import { getAuthProvider } from '$lib/server/providers.server';
+} from '#lib/server/providers.server.js';
+import { getAuthProvider } from '#lib/server/providers.server.js';
 
 /**
  * Closed allowlist of event types — `searchParams` come from untrusted user

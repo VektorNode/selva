@@ -1,7 +1,7 @@
 import { redirect } from '@sveltejs/kit';
 import type { LayoutServerLoad } from './$types';
 import type { Organization } from '@selvajs/platform';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider } from '#lib/server/providers.server.js';
 
 /**
  * `/team` is the org-scoped admin surface — distinct from `/admin` (platform-

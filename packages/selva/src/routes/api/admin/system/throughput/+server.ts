@@ -1,8 +1,8 @@
 import type { RequestHandler } from './$types';
 import { randomFillSync } from 'node:crypto';
 import { json } from '@sveltejs/kit';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { requirePermission } from '$lib/server/access.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { requirePermission } from '#lib/server/access.server.js';
 
 /**
  * Network throughput probe for the /admin/system page. Measures the transport

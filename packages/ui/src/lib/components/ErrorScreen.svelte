@@ -3,7 +3,7 @@
 	import * as Card from './primitives/card/index.js';
 	import { Button } from './primitives/button/index.js';
 	import Callout from './primitives/Callout.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	interface Props {
 		status?: number;

@@ -8,7 +8,7 @@
 		CircleX,
 		ArrowUpCircle
 	} from '@lucide/svelte';
-	import { deriveOutcome, type OutcomeSeverity } from '$lib/update-outcome';
+	import { deriveOutcome, type OutcomeSeverity } from '#lib/update-outcome.js';
 
 	interface NodeCompatibility {
 		compatible: boolean | null;

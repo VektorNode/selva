@@ -6,12 +6,12 @@ import {
 	getInviteStore,
 	getOrganizationProvider,
 	getUserProfileStore
-} from '$lib/server/providers.server';
-import { getAuthProvider } from '$lib/server/providers.server';
+} from '#lib/server/providers.server.js';
+import { getAuthProvider } from '#lib/server/providers.server.js';
 import { findAuthUserByEmail } from '@selvajs/server/providers';
-import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { setSessionCookie } from '$lib/server/admin-auth.server';
-import { hashToken } from '$lib/server/invites/token.server';
+import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
+import { setSessionCookie } from '#lib/server/admin-auth.server.js';
+import { hashToken } from '#lib/server/invites/token.server.js';
 import { renderThrown } from '@selvajs/server/logging';
 
 /**

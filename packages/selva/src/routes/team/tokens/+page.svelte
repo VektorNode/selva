@@ -22,7 +22,7 @@
 		tokenWarnings,
 		type AccessPreset,
 		type TokenRow
-	} from '$lib/apiTokens';
+	} from '#lib/apiTokens.js';
 	import type { PageData } from './$types';
 	import type { RosterRow } from './+page.server';
 

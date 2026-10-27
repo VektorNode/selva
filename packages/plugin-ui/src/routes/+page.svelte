@@ -4,12 +4,12 @@
 	import { goto } from '$app/navigation';
 	import { AppShell, StateDisplay } from '@selvajs/ui';
 	import { getGroups, type UISchema } from '@selvajs/schemas';
-	import { buildSessionParams, getWebSocketPortFromUrl, isPlayerUrl } from '$lib/utils/session';
-	import { currentRole } from '$lib/utils/session-role.svelte';
-	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
-	import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
-	import { rememberBridgeSecret } from '$lib/websocket/bridge-secret';
-	import type { WsInitialDataMessage } from '$lib/websocket/websocket.svelte';
+	import { buildSessionParams, getWebSocketPortFromUrl, isPlayerUrl } from '#lib/utils/session.js';
+	import { currentRole } from '#lib/utils/session-role.svelte.js';
+	import { rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
+	import { getGrasshopperSource } from '#lib/schema-source/grasshopper-source.js';
+	import { rememberBridgeSecret } from '#lib/websocket/bridge-secret.js';
+	import type { WsInitialDataMessage } from '#lib/websocket/websocket.svelte.js';
 
 	const sessionId = page.url.searchParams.get('session');
 	let error = $state<string | null>(null);
@@ -18,9 +18,7 @@
 	// carries, so store it here first.
 	function go(route: 'builder' | 'preview') {
 		if (sessionId) rememberBridgeSecret(sessionId);
-		goto(`/${route}?${buildSessionParams()}`, { replaceState: true, noScroll: true }).catch(
-			() => {}
-		);
+		goto(`/${route}?${buildSessionParams()}`, { replace: true, reset: false }).catch(() => {});
 	}
 
 	function hasLayoutItems(schema: UISchema | undefined): boolean {

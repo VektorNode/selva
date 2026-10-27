@@ -2,7 +2,7 @@
 	import { ArrowRight } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import StarButton from './StarButton.svelte';
-	import { huesFor, monogram } from '$lib/components/definitions/cardStyles';
+	import { huesFor, monogram } from '#lib/components/definitions/cardStyles.js';
 
 	interface Props {
 		records: DefinitionRecord[];

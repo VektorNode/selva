@@ -11,7 +11,7 @@ import type {
 	WsSelvaTargetsMessage,
 	WsSelvaUploadProgressMessage,
 	WsSelvaUploadResultMessage
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 
 export interface SelvaSourceEvents {
 	selvaAccount: WsSelvaAccountMessage;

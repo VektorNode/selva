@@ -7,9 +7,9 @@ import {
 	clearRateLimit,
 	warnIfAddressKeysCollapse,
 	safeRedirectTarget
-} from '$lib/server/admin-auth.server';
-import { getAuthProvider } from '$lib/server/providers.server';
-import { getPermissionStore } from '$lib/server/providers.server';
+} from '#lib/server/admin-auth.server.js';
+import { getAuthProvider } from '#lib/server/providers.server.js';
+import { getPermissionStore } from '#lib/server/providers.server.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 
 /**

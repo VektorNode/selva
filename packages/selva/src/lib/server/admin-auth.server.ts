@@ -1,5 +1,5 @@
 import { error, type Cookies } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import {
 	addressKeysCollapsed,
 	createLoginRateLimiter,

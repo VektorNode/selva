@@ -23,7 +23,7 @@ import {
 	call,
 	grantPlatformPermissions,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { POST as MINT_INVITE } from '../../../routes/api/v1/orgs/[orgId]/invites/+server.js';
 import { POST as CREATE_USER } from '../../../routes/api/admin/users/+server.js';
 import { PATCH as EDIT_USER } from '../../../routes/api/admin/users/[id]/+server.js';

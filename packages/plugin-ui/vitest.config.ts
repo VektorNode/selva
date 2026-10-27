@@ -9,7 +9,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default createVitestConfig({
 	resolve: {
 		alias: {
-			$lib: path.resolve(__dirname, 'src/lib'),
 			// @selvajs/ui's barrel re-exports `.svelte` components this svelte-plugin-free vitest
 			// can't parse, and only publishes a `svelte` export condition the node-env resolver
 			// won't request. Logic under test reaches the barrel (via features/preview/handlers.ts)

@@ -4,7 +4,7 @@
  * `freshProviders()` builds a real LocalDataProvider stack rooted in a fresh
  * tmpdir per test — no mocks, no stubs. `setTestProviders()` from
  * ./test-providers makes that stack visible to the mocked
- * `$lib/server/providers.server` so route handlers and access helpers see
+ * `#lib/server/providers.server.js` so route handlers and access helpers see
  * this test's providers when they call `getProjectProvider()` etc.
  *
  * Workspace packages resolve through `dist/`, not source: tests import
@@ -272,7 +272,7 @@ export function installSessionRefreshShim(tp: TestProviders): { revoked: string[
 }
 
 /**
- * Set an env-stub key visible to code that imports `$env/dynamic/private`.
+ * Set an env-stub key visible to code that imports `#lib/server/env.js`.
  * Mutates the shared stub object — restore in afterEach if needed.
  */
 export async function setEnv(key: string, value: string | undefined): Promise<void> {

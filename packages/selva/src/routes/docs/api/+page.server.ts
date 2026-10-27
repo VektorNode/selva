@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
-import { V1_ENDPOINTS, type Endpoint } from '$lib/server/api/v1/registry';
-import { ApiErrorCode } from '$lib/server/api-errors';
+import { V1_ENDPOINTS, type Endpoint } from '#lib/server/api/v1/registry.js';
+import { ApiErrorCode } from '#lib/server/api-errors.js';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@selvajs/platform';
 
 /**

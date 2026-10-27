@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { FooterItem } from '$lib/contexts/footerContext.svelte';
+	import type { FooterItem } from '#lib/contexts/footerContext.svelte.js';
 
 	let { item }: { item: FooterItem } = $props();
 

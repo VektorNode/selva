@@ -8,7 +8,7 @@ import {
 	type Project
 } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
-import { getAuthProvider } from '$lib/server/providers.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
 import {
 	getDataProvider,
 	getOrganizationProvider,
@@ -16,11 +16,11 @@ import {
 	getProjectProvider,
 	getUserProfileStore,
 	getTenancy
-} from '$lib/server/providers.server';
-import { setSessionCookie } from '$lib/server/admin-auth.server';
-import { setUserPlatformPermissions } from '$lib/server/permissions.server';
+} from '#lib/server/providers.server.js';
+import { setSessionCookie } from '#lib/server/admin-auth.server.js';
+import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
 import { slugify } from '@selvajs/platform';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 
 // Redirect away if a platform admin already exists — setup is only for a
 // fresh install. Uses the permission store directly (works for OIDC providers

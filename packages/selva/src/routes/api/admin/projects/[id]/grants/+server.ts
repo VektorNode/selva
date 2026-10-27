@@ -8,10 +8,10 @@ import {
 	getPlatformProjectGrantStore,
 	getOrganizationProvider,
 	getUserProfileStore
-} from '$lib/server/providers.server';
-import { requireInstanceAdmin } from '$lib/server/access.server';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, created, parseBody, requireParams } from '$lib/server/api/http';
+} from '#lib/server/providers.server.js';
+import { requireInstanceAdmin } from '#lib/server/access.server.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, created, parseBody, requireParams } from '#lib/server/api/http.js';
 import { SYSTEM_CONTEXT, type PlatformProjectGrant } from '@selvajs/platform';
 
 const CreateGrantBody = z.object({

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SelvaAccount, SelvaTargets, SelvaVersionTarget } from '@selvajs/schemas';
-import { createFakeSelvaSource } from '$lib/selva-source/fake-selva-source';
+import { createFakeSelvaSource } from '#lib/selva-source/fake-selva-source.js';
 import {
 	buildUploadRequest,
 	cancel,

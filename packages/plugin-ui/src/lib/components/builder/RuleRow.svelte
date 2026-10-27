@@ -2,7 +2,7 @@
 	import type { VisibilityRule, DiscoveredInput } from '@selvajs/schemas';
 	import { Button, Badge, Input, Select } from '@selvajs/ui';
 	import { X } from '@lucide/svelte';
-	import { validateRuleValue, getOperatorsForType } from '$lib/utils/validation';
+	import { validateRuleValue, getOperatorsForType } from '#lib/utils/validation.js';
 
 	interface RuleRowProps {
 		rule: VisibilityRule;

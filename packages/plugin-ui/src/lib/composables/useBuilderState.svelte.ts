@@ -5,10 +5,10 @@
 
 import { toast } from '@selvajs/ui';
 import type { UISchema } from '@selvajs/schemas';
-import { getWebSocketPortFromUrl } from '$lib/utils/session';
-import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
-import type { SchemaSource } from '$lib/schema-source/schema-source';
-import type { SyncChange } from '$lib/websocket/websocket.svelte';
+import { getWebSocketPortFromUrl } from '#lib/utils/session.js';
+import { getGrasshopperSource } from '#lib/schema-source/grasshopper-source.js';
+import type { SchemaSource } from '#lib/schema-source/schema-source.js';
+import type { SyncChange } from '#lib/websocket/websocket.svelte.js';
 import { useSchemaHistory } from './useSchemaHistory.svelte';
 import {
 	createInitialBuilderState,

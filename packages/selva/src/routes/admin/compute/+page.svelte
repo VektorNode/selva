@@ -23,7 +23,7 @@
 	} from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
 	import type { TenancyMode } from '@selvajs/platform';
-	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
+	import { useServerHealth } from '#lib/composables/useServerHealth.svelte.js';
 	import { invalidateAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { untrack, onDestroy } from 'svelte';

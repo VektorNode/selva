@@ -1,7 +1,7 @@
 import type { PageServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { listVisibleDefinitions } from '@selvajs/server/definitions';
-import { accessDepsFromConfig } from '$lib/server/access.server';
+import { accessDepsFromConfig } from '#lib/server/access.server.js';
 import { renderThrown } from '@selvajs/server/logging';
 import type { DefinitionRecord, Project } from '@selvajs/platform';
 

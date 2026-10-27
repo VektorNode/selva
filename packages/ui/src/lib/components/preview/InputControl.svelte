@@ -16,9 +16,9 @@
 		isFileWidget,
 		isColorWidget
 	} from '@selvajs/schemas';
-	import * as Field from '$lib/components/primitives/field';
-	import { Button } from '$lib/components/primitives/button';
-	import { toast } from '$lib/components/primitives/sonner';
+	import * as Field from '#lib/components/primitives/field/index.js';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import { toast } from '#lib/components/primitives/sonner/index.js';
 	import HelpButton from './HelpButton.svelte';
 	import {
 		CheckboxInput,
@@ -31,16 +31,16 @@
 		SegmentedInput,
 		TextInput,
 		TileInput
-	} from '$lib/components/preview/inputs';
-	import { getClientSlot } from '$lib/contexts/clientSlotContext.svelte';
+	} from '#lib/components/preview/inputs/index.js';
+	import { getClientSlot } from '#lib/contexts/clientSlotContext.svelte.js';
 	import {
 		getHostContext,
 		type GeometryPickTarget,
 		type PickKind
-	} from '$lib/contexts/hostContext.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { isGeometryParamType, isTriggerItem } from '$lib/schema/host-support';
-	import { resolveOptionDisplay } from '$lib/schema/option-display';
+	} from '#lib/contexts/hostContext.svelte.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { isGeometryParamType, isTriggerItem } from '#lib/schema/host-support.js';
+	import { resolveOptionDisplay } from '#lib/schema/option-display.js';
 
 	interface Props {
 		item: InputLayoutItem;

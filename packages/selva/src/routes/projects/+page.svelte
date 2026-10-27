@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		AlertDialog,
@@ -12,10 +12,10 @@
 		toast
 	} from '@selvajs/ui';
 	import { Plus, Settings } from '@lucide/svelte';
-	import AddDefinitionDialog from '$lib/components/definitions/AddDefinitionDialog.svelte';
+	import AddDefinitionDialog from '#lib/components/definitions/AddDefinitionDialog.svelte';
 	import ProjectSidebar from './_components/ProjectSidebar.svelte';
 	import ProjectSettingsDialog from './_components/ProjectSettingsDialog.svelte';
-	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
+	import DefinitionCard from '#lib/components/definitions/DefinitionCard.svelte';
 	import DefinitionListView from './_components/DefinitionListView.svelte';
 	import DefinitionDetailDrawer from './_components/DefinitionDetailDrawer.svelte';
 	import DefinitionEditDrawer from './_components/DefinitionEditDrawer.svelte';
@@ -36,12 +36,13 @@
 		users: AuthUser[];
 		canManageProjects: boolean;
 	}
+
 	interface Props {
 		data: PageData;
 	}
-	let { data }: Props = $props();
 
-	const enableSharing = $derived(!!$page.data.flags?.enableSharing);
+	let { data }: Props = $props();
+	const enableSharing = $derived(!!page.data.flags?.enableSharing);
 
 	// View state
 	let searchQuery = $state('');
@@ -49,7 +50,7 @@
 	let viewMode = $state<'grid' | 'list'>('grid');
 
 	$effect(() => {
-		const projectSlug = $page.url.searchParams.get('project');
+		const projectSlug = page.url.searchParams.get('project');
 		if (projectSlug) {
 			const project = data.projects.find((p) => p.slug === projectSlug);
 			if (project) {
@@ -207,7 +208,7 @@
 		activeProjectId = id;
 		const project = data.projects.find((p) => p.id === id);
 		if (project) {
-			const params = new SvelteURLSearchParams($page.url.search);
+			const params = new SvelteURLSearchParams(page.url.search);
 			params.set('project', project.slug);
 			window.history.replaceState(null, '', `?${params}`);
 		}
@@ -349,10 +350,9 @@
 						</Button>
 					{/if}
 					{#if canAddDefinition}
-						<Button size="sm" onclick={() => (showAddModal = true)}>
-							<Plus class="mr-1.5 h-3.5 w-3.5" />
-							Add definition
-						</Button>
+						<Button size="sm" onclick={() => (showAddModal = true)}
+							><Plus class="mr-1.5 h-3.5 w-3.5" />Add definition</Button
+						>
 					{/if}
 				{/snippet}
 			</SectionHeader>

@@ -1,9 +1,9 @@
 import type { RequestHandler } from './$types';
-import { withApiRateLimit } from '$lib/server/api/sveltekit';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getSolveEventBus } from '$lib/server/solveEvents/bus.server';
-import { liveOwnerKey } from '$lib/server/solveEvents/liveSolve.server';
-import { asHttpError } from '$lib/server/access.server';
+import { withApiRateLimit } from '#lib/server/api/sveltekit.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getSolveEventBus } from '#lib/server/solveEvents/bus.server.js';
+import { liveOwnerKey } from '#lib/server/solveEvents/liveSolve.server.js';
+import { asHttpError } from '#lib/server/access.server.js';
 import { assertScope } from '@selvajs/server/api';
 
 // Flags a running solve for abort. The flag rides back to the plugin on its next callback

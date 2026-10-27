@@ -5,11 +5,11 @@
 // lives here and runs in the node-env vitest through a FakeSource.
 
 import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
-import { getAllLayoutItems } from '$lib/features/builder/operations';
-import { pruneUnusedMedia } from '$lib/features/builder/option-media';
-import { updateParameterMetadata } from '$lib/features/preview/handlers';
-import { processInitialDataSchema } from '$lib/utils/schema-defaults';
-import type { SchemaSource } from '$lib/schema-source/schema-source';
+import { getAllLayoutItems } from '#lib/features/builder/operations.js';
+import { pruneUnusedMedia } from '#lib/features/builder/option-media.js';
+import { updateParameterMetadata } from '#lib/features/preview/handlers.js';
+import { processInitialDataSchema } from '#lib/utils/schema-defaults.js';
+import type { SchemaSource } from '#lib/schema-source/schema-source.js';
 import type {
 	SyncDiff,
 	SyncChange,
@@ -21,7 +21,7 @@ import type {
 	WsParametersAddedMessage,
 	WsSyncPreviewMessage,
 	WsSyncAppliedMessage
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 
 export interface BuilderState {
 	availableInputs: DiscoveredInput[];

@@ -1,5 +1,5 @@
-import { getAuthProvider } from '$lib/server/providers.server';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
+import { getOrganizationProvider } from '#lib/server/providers.server.js';
 import { hasPermission, type ILogger, type PlatformPermission } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
 import pkg from '../../../package.json';

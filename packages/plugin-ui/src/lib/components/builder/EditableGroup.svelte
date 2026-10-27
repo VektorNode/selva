@@ -28,8 +28,8 @@
 		isDiscoveredInput,
 		isDiscoveredOutput,
 		liftDraggedElement
-	} from '$lib/dnd/dndzone-helpers';
-	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
+	} from '#lib/dnd/dndzone-helpers.js';
+	import { captureDragFootprint, dragFootprint } from '#lib/dnd/drag-footprint.svelte.js';
 
 	type ZoneItem = (LayoutItem | DiscoveredInput | DiscoveredOutput) & {
 		isDndShadowItem?: true;

@@ -54,7 +54,7 @@ describe('mount — error mapping', () => {
 		const { alice } = await seedAcme(tp);
 
 		const handler: ApiHandler = async () => {
-			throw error(403, { message: 'Nope', code: ApiErrorCode.FORBIDDEN });
+			throw error(403, 'Nope', { code: ApiErrorCode.FORBIDDEN });
 		};
 		const res = await mount('Failed', handler)(await eventFor(alice.id));
 

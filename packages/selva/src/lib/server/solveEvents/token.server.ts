@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 
 /**
  * Per-solve bearer for the Compute → Selva callback. Stateless on purpose: the

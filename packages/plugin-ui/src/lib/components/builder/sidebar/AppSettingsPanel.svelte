@@ -8,9 +8,9 @@
 	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
 	import { Input, Textarea, Switch, Button, toast, pickFile } from '@selvajs/ui';
 	import { Download, Upload } from '@lucide/svelte';
-	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';
-	import type { ExportedSchema } from '$lib/utils/schema-exporter';
-	import { remapImportedSchema } from '$lib/utils/schema-remap';
+	import { exportSchemaAsFile, importSchemaFromFile } from '#lib/utils/schema-exporter.js';
+	import type { ExportedSchema } from '#lib/utils/schema-exporter.js';
+	import { remapImportedSchema } from '#lib/utils/schema-remap.js';
 	import SchemaImportDialog from '../SchemaImportDialog.svelte';
 	import TagEditor from '../../TagEditor.svelte';
 	import ScopeNote from '../scope/ScopeNote.svelte';

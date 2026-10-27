@@ -23,6 +23,16 @@ test.describe('/preview', () => {
 		await expect(page.getByText('Count').first()).toBeVisible();
 	});
 
+	// How Rhino opens a player session: the start page, with the secret in the fragment. Stripping
+	// the fragment from the address bar must not cancel the start page's redirect.
+	test('a player opened at the start page lands on the preview', async ({ page }) => {
+		await page.goto(`/?session=${SESSION}&wsPort=${STUB_PORT}&mode=player#s=${STUB_SECRET}`);
+
+		await expect(page).toHaveURL(/\/preview\?/);
+		await expect(page.getByText('Loading preview...')).toBeHidden({ timeout: 15_000 });
+		await expect(page.getByText('Count').first()).toBeVisible();
+	});
+
 	test('shows a value list as buttons with the option icon from the schema', async ({ page }) => {
 		await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
 		await expect(page.getByText('Loading preview...')).toBeHidden({ timeout: 15_000 });

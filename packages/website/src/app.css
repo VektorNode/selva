@@ -65,7 +65,7 @@
 	margin-inline: auto;
 }
 
-/* Copy-to-clipboard button on Shiki code blocks (markup from svelte.config.js). */
+/* Copy-to-clipboard button on Shiki code blocks (markup from mdsvex.config.js). */
 .prose .code-block {
 	position: relative;
 }

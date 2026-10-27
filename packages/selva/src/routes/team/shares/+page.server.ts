@@ -2,7 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { OrgShareLink } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, hasPermission } from '@selvajs/platform';
-import { flag, getShareLinkStore, getUserProfileStore } from '$lib/server/providers.server';
+import { flag, getShareLinkStore, getUserProfileStore } from '#lib/server/providers.server.js';
 
 /**
  * Org-wide share-link roster.

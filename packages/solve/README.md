@@ -154,7 +154,7 @@ Both fail silently if you skip them. They are the only two client-side gotchas.
 if rebuilt per request.
 
 ```ts
-// $lib/server/compute/engine.server.ts
+// #lib/server/compute/engine.server.ts
 import { SolveEngine } from '@selvajs/solve/server';
 
 export const engine = new SolveEngine({ limits: computeLimits, logger });

@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { TabConfig } from '@selvajs/schemas';
-	import * as Tabs from '$lib/components/primitives/tabs';
+	import * as Tabs from '#lib/components/primitives/tabs/index.js';
 	import { ChevronLeft, ChevronRight } from '@lucide/svelte';
 	import Icon from '@iconify/svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);

@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { createTokenCodec, type TokenCodec } from '@selvajs/server/tokens';
 
 /**

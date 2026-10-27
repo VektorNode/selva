@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { DetailBlock } from '$lib/architecture';
+	import type { DetailBlock } from '#lib/architecture.js';
 	import DebounceDemo from './demos/DebounceDemo.svelte';
 	import LruDemo from './demos/LruDemo.svelte';
 	import ThrottleDemo from './demos/ThrottleDemo.svelte';

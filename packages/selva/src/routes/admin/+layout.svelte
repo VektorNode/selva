@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
 	import { Gauge, Building2, Folders, Users, Server, Settings, ScrollText } from '@lucide/svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppHeader from '#lib/components/AppHeader.svelte';
 	import type { OrgPermission, PlatformPermission, TenancyMode } from '@selvajs/platform';
 
 	interface LayoutData {

@@ -11,7 +11,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import type { ComputeServerConfig } from '@selvajs/platform';
-import { freshProviders, type TestProviders } from '$lib/server/__tests__/fixtures.js';
+import { freshProviders, type TestProviders } from '#lib/server/__tests__/fixtures.js';
 
 let tp: TestProviders | null = null;
 

@@ -1,11 +1,11 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-	import * as Card from '$lib/components/primitives/card';
-	import * as Tabs from '$lib/components/primitives/tabs';
+	import * as Card from '#lib/components/primitives/card/index.js';
+	import * as Tabs from '#lib/components/primitives/tabs/index.js';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
-	import { isTabVisible } from '$lib/schema/visibility-rules';
-	import { buildDynamicValueListOptions } from '$lib/schema/dynamic-value-list';
+	import { isTabVisible } from '#lib/schema/visibility-rules.js';
+	import { buildDynamicValueListOptions } from '#lib/schema/dynamic-value-list.js';
 
 	interface Props {
 		schema: UISchema;

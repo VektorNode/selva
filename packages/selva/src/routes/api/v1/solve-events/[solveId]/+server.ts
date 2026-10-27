@@ -1,10 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { requireMaxBodySize } from '$lib/server/admin-auth.server';
-import { getSolveEventBus } from '$lib/server/solveEvents/bus.server';
-import { parseCallbackEvents, readBearer } from '$lib/server/solveEvents/ingest.server';
-import { verifySolveToken } from '$lib/server/solveEvents/token.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
+import { getSolveEventBus } from '#lib/server/solveEvents/bus.server.js';
+import { parseCallbackEvents, readBearer } from '#lib/server/solveEvents/ingest.server.js';
+import { verifySolveToken } from '#lib/server/solveEvents/token.server.js';
 
 // The callback the Selva plugin POSTs to from inside a Rhino.Compute solve. No session:
 // the bearer is the per-solve token `runSolve` minted, scoped to this `solveId`. The reply

@@ -4,9 +4,9 @@
 	import { Button, PageContent, EmptyState } from '@selvajs/ui';
 	import { ArrowRight, LayoutGrid, Star } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
-	import AppHeader from '$lib/components/AppHeader.svelte';
-	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
-	import { formatRelative } from '$lib/format/relativeTime';
+	import AppHeader from '#lib/components/AppHeader.svelte';
+	import DefinitionCard from '#lib/components/definitions/DefinitionCard.svelte';
+	import { formatRelative } from '#lib/format/relativeTime.js';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

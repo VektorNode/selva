@@ -2,8 +2,8 @@
 	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/schemas';
 	import { Button, Callout, Search, Select } from '@selvajs/ui';
 	import { Layers, RefreshCw } from '@lucide/svelte';
-	import type { GroupBy } from '$lib/utils/paramGrouping';
-	import { usePersisted } from '$lib/composables/usePersisted.svelte';
+	import type { GroupBy } from '#lib/utils/paramGrouping.js';
+	import { usePersisted } from '#lib/composables/usePersisted.svelte.js';
 	import AvailableItemList from '../AvailableItemList.svelte';
 	import GhGroupImportDialog from '../GhGroupImportDialog.svelte';
 

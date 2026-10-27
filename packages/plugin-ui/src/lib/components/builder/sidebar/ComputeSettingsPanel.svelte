@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
 	import { Switch } from '@selvajs/ui';
-	import { listSourcedInputs, SOURCE_KIND_LABELS } from '$lib/features/builder';
+	import { listSourcedInputs, SOURCE_KIND_LABELS } from '#lib/features/builder/index.js';
 	import ScopeNote from '../scope/ScopeNote.svelte';
 	import ScopeChip from '../scope/ScopeChip.svelte';
 	import SettingsSection from './SettingsSection.svelte';

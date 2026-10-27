@@ -19,8 +19,8 @@
 	} from '@selvajs/platform';
 	import type { MemberRow } from './+page.server';
 	import { removalBlockReason } from './removal-gate';
-	import UserRowIdentity from '$lib/components/UserRowIdentity.svelte';
-	import { PERMISSION_LABELS, ROLE_TONE, ORG_ROLES } from '$lib/permission-labels';
+	import UserRowIdentity from '#lib/components/UserRowIdentity.svelte';
+	import { PERMISSION_LABELS, ROLE_TONE, ORG_ROLES } from '#lib/permission-labels.js';
 
 	interface PageData {
 		members: MemberRow[];

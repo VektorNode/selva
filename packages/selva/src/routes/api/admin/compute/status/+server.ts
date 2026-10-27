@@ -1,9 +1,9 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getComputeServerConfigStore } from '$lib/server/providers.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getComputeServerConfigStore } from '#lib/server/providers.server.js';
 import { findServerById } from '@selvajs/platform';
-import { requireManageCompute } from '$lib/server/access.server';
+import { requireManageCompute } from '#lib/server/access.server.js';
 import { ComputeServerStats } from '@selvajs/compute/grasshopper';
 import { classifyProbeFailure } from '@selvajs/compute/core';
 

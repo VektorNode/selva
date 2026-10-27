@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { themeStore, type Theme } from '$lib/theme/themeStore.svelte';
-	import * as Select from '$lib/components/primitives/select';
+	import { themeStore, type Theme } from '#lib/theme/themeStore.svelte.js';
+	import * as Select from '#lib/components/primitives/select/index.js';
 	import { Palette } from '@lucide/svelte';
 
 	const themes: { value: Theme; label: string; description: string }[] = [

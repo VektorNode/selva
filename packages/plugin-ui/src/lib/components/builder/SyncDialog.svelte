@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Dialog, Button, Badge, Checkbox, Label } from '@selvajs/ui';
-	import type { SyncChange, SyncDiff } from '$lib/websocket/websocket.svelte';
+	import type { SyncChange, SyncDiff } from '#lib/websocket/websocket.svelte.js';
 	import { ChevronDown, ChevronUp, ArrowRight } from '@lucide/svelte';
 
 	interface Props {

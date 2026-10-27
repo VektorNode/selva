@@ -1,22 +1,17 @@
 /**
- * Thin adapter over `@selvajs/server`'s `resolveComputeLimits`: reads SvelteKit's
- * dynamic private env once and re-exports the resolved values as named constants.
- *
- * Uses `$env/dynamic/private`, not bare `process.env`: under `vite dev`, Vite
- * loads `.env` into this module but does NOT mirror it into `process.env`, so a
- * raw `process.env[name]` is undefined in dev and every knob silently falls back
- * to its default regardless of `.env`.
+ * Thin adapter over `@selvajs/server`'s `resolveComputeLimits`: reads the server
+ * env once and re-exports the resolved values as named constants.
  *
  * Client-side counterparts (in-flight compute throttle, slider debounce) are
  * bundled into the client and can't read env — see `async-throttle.ts` in
  * `@selvajs/solve/client` and the input components.
  */
 
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { resolveComputeLimits } from '@selvajs/server/compute';
 // Limits resolve at module scope, before the pino swap — a captured logger
 // would pin the boot placeholder, so this needs the forwarding one.
-import { lazyLogger } from '$lib/server/providers.server';
+import { lazyLogger } from '#lib/server/providers.server.js';
 
 // The logger surfaces malformed env values (e.g. a non-numeric
 // COMPUTE_RATE_LIMIT_MAX silently falling back to its default).

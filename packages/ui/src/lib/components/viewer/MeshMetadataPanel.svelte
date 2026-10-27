@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { X } from '@lucide/svelte';
 	import { Button } from '../primitives/button/index.js';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);

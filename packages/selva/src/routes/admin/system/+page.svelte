@@ -5,7 +5,7 @@
 	import ChannelSection from './ChannelSection.svelte';
 	import HealthSection from './HealthSection.svelte';
 	import NetworkSection from './NetworkSection.svelte';
-	import { pollForRestart, type RestartHealth } from '$lib/update-restart-poll';
+	import { pollForRestart, type RestartHealth } from '#lib/update-restart-poll.js';
 
 	interface PageData {
 		canManageUpdates: boolean;
@@ -227,7 +227,7 @@
 	}
 
 	// Poll until the new process is serving. The loop itself lives in
-	// `$lib/update-restart-poll` so it can be tested against a clock and probes
+	// `#lib/update-restart-poll.js` so it can be tested against a clock and probes
 	// that misbehave on demand; this wrapper owns only the `$state` writes.
 	async function waitForAppRestart(previousInstanceId: string | null | undefined) {
 		// The daemonized runner never streams over SSE, so the SSE `restarting`

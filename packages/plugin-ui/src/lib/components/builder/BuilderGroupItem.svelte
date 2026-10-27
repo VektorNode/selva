@@ -31,7 +31,7 @@
 	import { getBuilderDraft } from './draft-context';
 	import ScopeChip from './scope/ScopeChip.svelte';
 	import ScopeSection from './scope/ScopeSection.svelte';
-	import { SOURCE_KIND_LABELS, type SourceKind } from '$lib/features/builder';
+	import { SOURCE_KIND_LABELS, type SourceKind } from '#lib/features/builder/index.js';
 	import { dragHandle } from 'svelte-dnd-action';
 
 	const SOURCE_KINDS = Object.keys(SOURCE_KIND_LABELS) as SourceKind[];

@@ -1,6 +1,6 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { mayHoldApiTokens } from '@selvajs/server/handlers';
-import { ACCESS_PRESETS, type AccessPreset } from '$lib/apiTokens';
+import { ACCESS_PRESETS, type AccessPreset } from '#lib/apiTokens.js';
 import { toApiRequest } from '../api/sveltekit';
 
 /**

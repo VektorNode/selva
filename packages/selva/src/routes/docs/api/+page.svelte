@@ -33,9 +33,11 @@
 			     otherwise try to render a page for it. -->
 			<a
 				class="underline underline-offset-4"
-				href={resolve('/docs/api/openapi.yaml')}
+				href={resolve('docs/api/openapi.yaml')}
 				data-sveltekit-reload>/docs/api/openapi.yaml</a
-			>.
+			>
+
+			.
 		</p>
 	</header>
 

@@ -1,28 +1,28 @@
 import { spawn } from 'child_process';
 import { join } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { json } from '@sveltejs/kit';
 import { actorFrom } from '@selvajs/platform';
 import type { RequestHandler } from './$types';
-import { requirePermission } from '$lib/server/access.server';
+import { requirePermission } from '#lib/server/access.server.js';
 import { renderThrown } from '@selvajs/server/logging';
-import { checkForUpdate } from '$lib/server/updateCheck.server';
-import { readChannel, channelTag } from '$lib/server/releaseChannel.server';
-import { getEventSink, getErrorReporter } from '$lib/server/providers.server';
+import { checkForUpdate } from '#lib/server/updateCheck.server.js';
+import { readChannel, channelTag } from '#lib/server/releaseChannel.server.js';
+import { getEventSink, getErrorReporter } from '#lib/server/providers.server.js';
 import {
 	findDeploymentDir,
 	startUpdateOutcomeReconciler,
 	updateLogPath,
 	updateStatePath,
 	type PendingUpdateState
-} from '$lib/server/selfUpdate.server';
+} from '#lib/server/selfUpdate.server.js';
 import {
 	readRuntimeVersion,
 	buildLauncher,
 	buildNpmRunnerScript,
 	detectUpdatePlan
-} from '$lib/server/updateRunner.server';
+} from '#lib/server/updateRunner.server.js';
 
 // Where the bash wrapper mirrors all script output (`updateLogPath` — in the
 // deployment dir so it survives reboots, audit O2). The SSE stream dies the

@@ -4,10 +4,10 @@
 	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
-	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
+	import DefinitionCard from '#lib/components/definitions/DefinitionCard.svelte';
 	import ToolListView from './_components/ToolListView.svelte';
-	import { formatRelative } from '$lib/format/relativeTime';
-	import AppHeader from '$lib/components/AppHeader.svelte';
+	import { formatRelative } from '#lib/format/relativeTime.js';
+	import AppHeader from '#lib/components/AppHeader.svelte';
 
 	type ViewMode = 'grid' | 'list';
 

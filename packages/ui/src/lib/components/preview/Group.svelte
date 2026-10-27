@@ -2,7 +2,7 @@
 	import type { LayoutItem, InputLayoutItem, OutputLayoutItem } from '@selvajs/schemas';
 	import type { Snippet } from 'svelte';
 	import { ChevronDown } from '@lucide/svelte';
-	import { buildVisibilityMap, itemKey } from '$lib/schema/visibility-rules';
+	import { buildVisibilityMap, itemKey } from '#lib/schema/visibility-rules.js';
 
 	interface Props {
 		label: string;

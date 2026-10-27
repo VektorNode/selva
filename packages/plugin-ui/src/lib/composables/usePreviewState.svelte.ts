@@ -5,7 +5,7 @@
 // push events to the pure core. All transport quirks live in the GrasshopperSource adapter.
 
 import type { SupportedTypes } from '@selvajs/schemas';
-import type { WsOutputsMessage } from '$lib/websocket/websocket.svelte';
+import type { WsOutputsMessage } from '#lib/websocket/websocket.svelte.js';
 import {
 	createSolveSession,
 	valuelessInputIds,
@@ -15,10 +15,10 @@ import {
 	type SolveReporter,
 	type SolveDiagnostic
 } from '@selvajs/ui';
-import { getWebSocketPortFromUrl } from '$lib/utils/session';
-import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
-import type { SchemaSource, PreviewSolveDriver } from '$lib/schema-source/schema-source';
-import { createNotificationManager } from '$lib/features/preview/notifications.svelte';
+import { getWebSocketPortFromUrl } from '#lib/utils/session.js';
+import { getGrasshopperSource } from '#lib/schema-source/grasshopper-source.js';
+import type { SchemaSource, PreviewSolveDriver } from '#lib/schema-source/schema-source.js';
+import { createNotificationManager } from '#lib/features/preview/notifications.svelte.js';
 import {
 	createInitialPreviewState,
 	handleInitialData as coreHandleInitialData,

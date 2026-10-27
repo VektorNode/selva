@@ -8,9 +8,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default createVitestConfig({
 	resolve: {
 		alias: {
-			// SvelteKit virtual modules — replicate just what server-side tests need.
-			$lib: path.resolve(__dirname, 'src/lib'),
-			'$env/dynamic/private': path.resolve(__dirname, 'src/lib/server/__tests__/env-stub.ts')
+			'#lib/server/env.js': path.resolve(__dirname, 'src/lib/server/__tests__/env-stub.ts')
 		}
 	},
 	test: {

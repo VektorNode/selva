@@ -3,12 +3,12 @@
 	import { Collapsible } from '@selvajs/ui';
 	import DraggableItem from './DraggableItem.svelte';
 	import { ChevronDown } from '@lucide/svelte';
-	import { clusterItems, type GroupBy, type GroupedItem } from '$lib/utils/paramGrouping';
+	import { clusterItems, type GroupBy, type GroupedItem } from '#lib/utils/paramGrouping.js';
 	import { dndzone, type DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
-	import { DND_FLIP_MS, DND_TYPE_PARAM, liftDraggedElement } from '$lib/dnd/dndzone-helpers';
-	import { captureDragFootprint } from '$lib/dnd/drag-footprint.svelte';
-	import { usePersisted } from '$lib/composables/usePersisted.svelte';
+	import { DND_FLIP_MS, DND_TYPE_PARAM, liftDraggedElement } from '#lib/dnd/dndzone-helpers.js';
+	import { captureDragFootprint } from '#lib/dnd/drag-footprint.svelte.js';
+	import { usePersisted } from '#lib/composables/usePersisted.svelte.js';
 
 	interface AvailableItemListProps {
 		items: GroupedItem[];

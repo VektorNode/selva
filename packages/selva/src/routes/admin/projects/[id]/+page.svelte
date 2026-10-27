@@ -16,7 +16,7 @@
 	import { goto, invalidateAll } from '$app/navigation';
 	import type { GrantRow, OrgOption, UserOption, DefinitionRow } from './+page.server';
 	import type { Project } from '@selvajs/platform';
-	import { primaryLabel, emailSubtitle } from '$lib/user-display';
+	import { primaryLabel, emailSubtitle } from '#lib/user-display.js';
 
 	interface PageData {
 		project: Project;

@@ -1,5 +1,5 @@
-import type { BridgeRole } from '$lib/websocket/bridge-handshake';
-import { getWebSocketState } from '$lib/websocket/websocket.svelte';
+import type { BridgeRole } from '#lib/websocket/bridge-handshake.js';
+import { getWebSocketState } from '#lib/websocket/websocket.svelte.js';
 import { getWebSocketPortFromUrl, isPlayerUrl } from './session';
 
 /**

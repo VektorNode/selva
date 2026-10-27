@@ -2,10 +2,10 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
 import { randomUUID } from 'node:crypto';
-import { flag, getProjectProvider, getOrganizationProvider } from '$lib/server/providers.server';
-import { requireInstanceAdmin } from '$lib/server/access.server';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, created, parseBody } from '$lib/server/api/http';
+import { flag, getProjectProvider, getOrganizationProvider } from '#lib/server/providers.server.js';
+import { requireInstanceAdmin } from '#lib/server/access.server.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, created, parseBody } from '#lib/server/api/http.js';
 import { createProjectWithUniqueSlug } from '@selvajs/server/projects';
 import { SYSTEM_CONTEXT, type Project } from '@selvajs/platform';
 

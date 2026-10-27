@@ -8,10 +8,10 @@ import {
 	REMOTE_DEFINITION_MAX_BYTES,
 	REMOTE_DEFINITION_FETCH_TIMEOUT_MS,
 	REMOTE_DEFINITION_CACHE_TTL_MS
-} from '$lib/server/computeLimits';
+} from '#lib/server/computeLimits.js';
 // Module-scope init runs before the root logger is fully swapped in, so this
 // needs the forwarding logger, not a snapshot that would pin the boot placeholder.
-import { lazyLogger } from '$lib/server/providers.server';
+import { lazyLogger } from '#lib/server/providers.server.js';
 
 const fetcher = createRemoteDefinitionFetcher({
 	maxBytes: REMOTE_DEFINITION_MAX_BYTES,

@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type { NumberWidgetConfig, SupportedTypes } from '@selvajs/schemas';
-	import { debounce } from '$lib/utils/debounce';
-	import { Input } from '$lib/components/primitives/input';
-	import { Slider } from '$lib/components/primitives/slider';
-	import * as InputGroup from '$lib/components/primitives/input-group';
-	import { Separator } from '$lib/components/primitives/separator';
-	import * as Field from '$lib/components/primitives/field';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatMessage } from '$lib/i18n/messages';
+	import { debounce } from '#lib/utils/debounce.js';
+	import { Input } from '#lib/components/primitives/input/index.js';
+	import { Slider } from '#lib/components/primitives/slider/index.js';
+	import * as InputGroup from '#lib/components/primitives/input-group/index.js';
+	import { Separator } from '#lib/components/primitives/separator/index.js';
+	import * as Field from '#lib/components/primitives/field/index.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
 		inputId: string;

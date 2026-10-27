@@ -4,9 +4,9 @@
  */
 
 import { SolveEngine, type CachedClient } from '@selvajs/solve/server';
-import { env } from '$env/dynamic/private';
-import { getLogger, lazyLogger } from '$lib/server/providers.server';
-import { computeLimits } from '$lib/server/computeLimits';
+import { env } from '#lib/server/env.js';
+import { getLogger, lazyLogger } from '#lib/server/providers.server.js';
+import { computeLimits } from '#lib/server/computeLimits.js';
 import type { ComputeServerConfig } from '@selvajs/platform';
 
 /**

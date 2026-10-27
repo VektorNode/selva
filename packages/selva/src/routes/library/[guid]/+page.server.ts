@@ -6,14 +6,14 @@ import {
 	getDefinitionMeta,
 	getProjectProvider,
 	getOrganizationProvider
-} from '$lib/server/providers.server';
-import { asHttpError, requireCanSolve, scoped } from '$lib/server/access.server';
-import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
-import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
+} from '#lib/server/providers.server.js';
+import { asHttpError, requireCanSolve, scoped } from '#lib/server/access.server.js';
+import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
+import { SOLVE_DEADLINE_MS } from '#lib/server/computeLimits.js';
 import {
 	loadDefinitionForRender,
 	DefinitionLoadError
-} from '$lib/server/definitions/loadForRender.server';
+} from '#lib/server/definitions/loadForRender.server.js';
 
 export const load = (async ({ params, locals, request, url }) => {
 	const meta = getDefinitionMeta();
@@ -52,7 +52,7 @@ export const load = (async ({ params, locals, request, url }) => {
 		// Draft channel and explicit-version picks require edit permission on top
 		// of solve.
 		if (channel === 'draft' || explicitVersionId) {
-			const { requireEditableDefinition } = await import('$lib/server/access.server');
+			const { requireEditableDefinition } = await import('#lib/server/access.server.js');
 			await asHttpError(() => requireEditableDefinition(scoped(locals), guid));
 		}
 

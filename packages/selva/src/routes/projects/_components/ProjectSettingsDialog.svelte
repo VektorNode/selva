@@ -12,7 +12,7 @@
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, UserListItem } from '../+page.server';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import UserAvatar from '#lib/components/UserAvatar.svelte';
 	import AddMemberPicker from './AddMemberPicker.svelte';
 
 	interface Props {

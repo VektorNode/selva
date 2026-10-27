@@ -8,7 +8,7 @@ import {
 	WEBSOCKET_RECONNECT_INTERVAL,
 	DEFAULT_WEBSOCKET_PORT,
 	RHINO_PANEL_HOST
-} from '$lib/app.config';
+} from '#lib/app.config.js';
 import type { UISchema } from '@selvajs/schemas';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from '@selvajs/ui';

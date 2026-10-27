@@ -13,7 +13,7 @@ const hasInstanceAdmin = vi.fn();
 
 // One factory for both getters: `vi.mock` is keyed by module, so a second call
 // for the same path replaces the first rather than merging into it.
-vi.mock('$lib/server/providers.server', () => ({
+vi.mock('#lib/server/providers.server.js', () => ({
 	getPermissionStore: () => ({ hasInstanceAdmin }),
 	getAuthProvider: () => ({
 		passwordAuth: { verifyLogin: vi.fn() },
@@ -23,7 +23,7 @@ vi.mock('$lib/server/providers.server', () => ({
 	})
 }));
 
-vi.mock('$lib/server/admin-auth.server', () => ({
+vi.mock('#lib/server/admin-auth.server.js', () => ({
 	setSessionCookie: vi.fn(),
 	checkRateLimit: vi.fn(() => ({ allowed: true })),
 	recordFailedAttempt: vi.fn(),
@@ -77,7 +77,7 @@ describe('/login on an uninitialized instance', () => {
 		// running. Answering "Invalid credentials" there blames the operator for a
 		// password that cannot exist yet, and spends a rate-limit slot doing it.
 		hasInstanceAdmin.mockResolvedValue(false);
-		const { checkRateLimit } = await import('$lib/server/admin-auth.server');
+		const { checkRateLimit } = await import('#lib/server/admin-auth.server.js');
 
 		const redirected = await captureRedirect(() =>
 			actions.default({

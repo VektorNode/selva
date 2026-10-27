@@ -4,14 +4,14 @@
 	import { ImagePlus, Smile, Upload, X } from '@lucide/svelte';
 	import { getBuilderDraft } from './draft-context';
 	import LucideIconPicker from './LucideIconPicker.svelte';
-	import { assetBytes } from '$lib/features/builder/option-media';
+	import { assetBytes } from '#lib/features/builder/option-media.js';
 	import {
 		blobToDataUri,
 		drawThumbnail,
 		encodeThumbnail,
 		MAX_THUMBNAIL_BYTES,
 		THUMBNAIL_PX
-	} from '$lib/features/builder/image-encode';
+	} from '#lib/features/builder/image-encode.js';
 
 	interface Props {
 		config: DropdownWidgetConfig;

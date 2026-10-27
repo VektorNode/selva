@@ -16,7 +16,7 @@
 	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
 	import UserListItem from './UserListItem.svelte';
-	import { PERMISSION_LABELS, ORG_ROLES } from '$lib/permission-labels';
+	import { PERMISSION_LABELS, ORG_ROLES } from '#lib/permission-labels.js';
 
 	interface PageData {
 		users: UserRow[] | null;

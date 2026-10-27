@@ -15,13 +15,13 @@
 		setHostContext,
 		type ExternalInput
 	} from '@selvajs/ui';
-	import { buildSessionParams, getWebSocketPortFromUrl, isRhinoPanel } from '$lib/utils/session';
-	import { currentRole } from '$lib/utils/session-role.svelte';
-	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
-	import { isInRhinoPanel, rhinoShellProps } from '$lib/utils/rhino-host.svelte';
-	import { usePreviewState } from '$lib/composables/usePreviewState.svelte';
-	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import ModeHeader from '$lib/components/ModeHeader.svelte';
+	import { buildSessionParams, getWebSocketPortFromUrl, isRhinoPanel } from '#lib/utils/session.js';
+	import { currentRole } from '#lib/utils/session-role.svelte.js';
+	import { getWebSocketState } from '#lib/websocket/websocket.svelte.js';
+	import { isInRhinoPanel, rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
+	import { usePreviewState } from '#lib/composables/usePreviewState.svelte.js';
+	import WsStatusFooter from '#lib/components/WsStatusFooter.svelte';
+	import ModeHeader from '#lib/components/ModeHeader.svelte';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');
 	const panel = isRhinoPanel();

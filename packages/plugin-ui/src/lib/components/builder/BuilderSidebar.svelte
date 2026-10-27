@@ -2,7 +2,7 @@
 	import { ScrollArea, Tabs } from '@selvajs/ui';
 	import { ListTree } from '@lucide/svelte';
 	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
-	import { usePersisted } from '$lib/composables/usePersisted.svelte';
+	import { usePersisted } from '#lib/composables/usePersisted.svelte.js';
 	import { SCOPES } from './scope/scopes';
 	import ParameterPanel from './sidebar/ParameterPanel.svelte';
 	import AppSettingsPanel from './sidebar/AppSettingsPanel.svelte';

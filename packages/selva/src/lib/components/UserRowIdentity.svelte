@@ -2,8 +2,8 @@
 	import type { Snippet } from 'svelte';
 	import type { OrgRole } from '@selvajs/platform';
 	import UserAvatar from './UserAvatar.svelte';
-	import { primaryLabel, emailSubtitle } from '$lib/user-display';
-	import { ROLE_TONE } from '$lib/permission-labels';
+	import { primaryLabel, emailSubtitle } from '#lib/user-display.js';
+	import { ROLE_TONE } from '#lib/permission-labels.js';
 
 	interface Props {
 		user: { displayName?: string | null; email?: string | null };

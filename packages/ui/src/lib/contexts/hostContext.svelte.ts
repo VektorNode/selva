@@ -1,6 +1,6 @@
 import { getContext, setContext } from 'svelte';
 import type { GeometryKind } from '@selvajs/schemas';
-import type { UIHost } from '$lib/schema/host-support';
+import type { UIHost } from '#lib/schema/host-support.js';
 
 // Tells InputControl which host it renders in and how to reach the host's own actions, without
 // threading a prop through every layout layer. Without a provider the host is Selva.

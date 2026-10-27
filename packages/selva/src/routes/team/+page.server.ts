@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider, getProjectProvider } from '#lib/server/providers.server.js';
 
 export const load: PageServerLoad = async ({ locals, parent }) => {
 	const ctx = locals.ctx;

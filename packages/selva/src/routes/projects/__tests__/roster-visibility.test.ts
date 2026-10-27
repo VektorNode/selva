@@ -24,7 +24,7 @@ import {
 	seedProjectMember,
 	actAs,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { load, type ProjectWithMembers } from '../+page.server.js';
 
 let tp: TestProviders | null = null;

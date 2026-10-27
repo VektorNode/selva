@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { PictureInPicture2, PanelRight } from '@lucide/svelte';
-	import { RHINO_TOGGLE_WINDOW_URL } from '$lib/app.config';
-	import { rhinoHostContainer } from '$lib/utils/rhino-host.svelte';
+	import { RHINO_TOGGLE_WINDOW_URL } from '#lib/app.config.js';
+	import { rhinoHostContainer } from '#lib/utils/rhino-host.svelte.js';
 
 	const inWindow = $derived(rhinoHostContainer.current === 'window');
 	const label = $derived(

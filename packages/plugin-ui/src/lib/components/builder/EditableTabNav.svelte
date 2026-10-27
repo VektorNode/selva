@@ -16,8 +16,8 @@
 		DND_TYPE_TAB,
 		draggedItemMove,
 		liftDraggedElement
-	} from '$lib/dnd/dndzone-helpers';
-	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
+	} from '#lib/dnd/dndzone-helpers.js';
+	import { captureDragFootprint, dragFootprint } from '#lib/dnd/drag-footprint.svelte.js';
 
 	interface EditableTabNavProps {
 		tabs: TabConfig[];

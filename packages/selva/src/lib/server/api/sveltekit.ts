@@ -8,6 +8,7 @@
  */
 
 import { isHttpError, json, type RequestEvent } from '@sveltejs/kit';
+import { publicUrl } from '#lib/server/origin.js';
 import {
 	ApiError,
 	ApiErrorCode,
@@ -116,7 +117,7 @@ export function toApiRequest(event: RequestEvent): ApiRequest {
 		profile: event.locals.profile,
 		log: event.locals.log,
 		params: event.params,
-		url: event.url,
+		url: publicUrl(event.url),
 		request: event.request,
 		deps: buildDeps(event)
 	};

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getDoc, getDocsIndex } from '$lib/docs';
+	import { getDoc, getDocsIndex } from '#lib/docs.js';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 
 	// Only shown below `md`, where the layout's sidebar is hidden — without it the

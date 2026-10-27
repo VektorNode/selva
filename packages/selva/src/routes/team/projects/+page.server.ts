@@ -2,9 +2,9 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Project } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, hasPermission } from '@selvajs/platform';
-import { getProjectProvider } from '$lib/server/providers.server';
+import { getProjectProvider } from '#lib/server/providers.server.js';
 import { resolveAccessibleProjects } from '@selvajs/server/definitions';
-import { accessDepsFromConfig } from '$lib/server/access.server';
+import { accessDepsFromConfig } from '#lib/server/access.server.js';
 
 export interface ProjectRow extends Project {
 	memberCount: number;

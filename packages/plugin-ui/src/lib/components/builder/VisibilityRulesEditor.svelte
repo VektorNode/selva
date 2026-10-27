@@ -8,7 +8,7 @@
 	import { Button, Select } from '@selvajs/ui';
 	import RuleRow from './RuleRow.svelte';
 	import DefaultValueInput from './DefaultValueInput.svelte';
-	import { validateRuleValue, validateDefaultValue } from '$lib/utils/validation';
+	import { validateRuleValue, validateDefaultValue } from '#lib/utils/validation.js';
 
 	interface VisibilityRulesEditorProps {
 		visibilityCondition: VisibilityCondition | GroupVisibilityCondition | undefined;

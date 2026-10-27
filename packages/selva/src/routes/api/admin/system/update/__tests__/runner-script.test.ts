@@ -25,8 +25,8 @@ import {
 	buildLauncher,
 	npmInstallArgs,
 	shellQuote
-} from '$lib/server/updateRunner.server';
-import { deriveOutcome, TIMED_OUT } from '$lib/update-outcome';
+} from '#lib/server/updateRunner.server.js';
+import { deriveOutcome, TIMED_OUT } from '#lib/update-outcome.js';
 
 const ECOSYSTEM = '/srv/selva/ecosystem.config.cjs';
 

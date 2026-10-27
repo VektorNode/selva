@@ -18,7 +18,7 @@
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import type { Cookies } from '@sveltejs/kit';
 
 const STATE_COOKIE_NAME = 'oauth_state';

@@ -1,16 +1,9 @@
 {
-	"extends": "./.svelte-kit/tsconfig.json",
+	"extends": "$app/tsconfig",
 	"compilerOptions": {
 		"rewriteRelativeImportExtensions": true,
-		"allowJs": true,
-		"checkJs": true,
-		"esModuleInterop": true,
-		"forceConsistentCasingInFileNames": true,
-		"resolveJsonModule": true,
-		"skipLibCheck": true,
 		"sourceMap": true,
 		"strict": true,
-		"moduleResolution": "bundler",
 		// NOTE: vitest reads workspace-package source directly via the
 		// `"selva-source"` export condition (see vitest.config.ts). `tsc` here
 		// continues to read dist so each package's type errors surface in its
@@ -21,36 +14,12 @@
 		// @selvajs/ui's published "." entry is the curated public SDK (dist/public);
 		// internally we use its full barrel (primitives, layout, toast), so map it
 		// to the full declarations. Scoped here for the same reason customConditions
-		// is avoided above. Overriding `paths` replaces the extended config's, so the
-		// generated $lib/$app entries are re-stated.
+		// is avoided above.
 		"paths": {
-			"@selvajs/ui": ["../ui/dist/index.d.ts"],
-			"$lib": ["./src/lib"],
-			"$lib/*": ["./src/lib/*"],
-			"$app/types": ["./.svelte-kit/types/index.d.ts"]
+			"@selvajs/ui": ["../ui/dist/index.d.ts"]
 		}
 	},
-	// The extended SvelteKit `include` only covers src/ and test{,s}/. Re-state
-	// it here (paths relative to this file) and add the root-level
-	// playwright.config.ts so ESLint's typed-lint project service owns it. The
-	// e2e/*.ts specs are covered by e2e/tsconfig.json.
-	"include": [
-		".svelte-kit/ambient.d.ts",
-		".svelte-kit/non-ambient.d.ts",
-		".svelte-kit/types/**/$types.d.ts",
-		"vite.config.js",
-		"vite.config.ts",
-		"src/**/*.js",
-		"src/**/*.ts",
-		"src/**/*.svelte",
-		"test/**/*.js",
-		"test/**/*.ts",
-		"test/**/*.svelte",
-		"tests/**/*.js",
-		"tests/**/*.ts",
-		"tests/**/*.svelte",
-		"playwright.config.ts"
-	]
-	// Path aliases are handled by https://svelte.dev/docs/kit/configuration#alias
-	// except $lib which is handled by https://svelte.dev/docs/kit/configuration#files
+	// playwright.config.ts is here so ESLint's typed-lint project service owns it.
+	// The e2e/*.ts specs are covered by e2e/tsconfig.json.
+	"include": ["src", "vite.config.ts", "playwright.config.ts"]
 }

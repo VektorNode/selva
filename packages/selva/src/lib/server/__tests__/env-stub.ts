@@ -1,5 +1,5 @@
 /**
- * Stub for SvelteKit's `$env/dynamic/private`, wired via `resolve.alias` in
+ * Stub for `#lib/server/env.js`, wired via `resolve.alias` in
  * vitest.config.ts. Tests can mutate `env` directly to override per-scenario.
  *
  * `SELVA_HMAC_KEY` defaults here so token.server.ts (share-link HMAC) runs

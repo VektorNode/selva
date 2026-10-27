@@ -14,7 +14,7 @@
  * who the caller is.
  */
 
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import {
 	ApiError,
 	assertScope,
@@ -28,26 +28,26 @@ import { isHttpError } from '@sveltejs/kit';
 import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
 import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
 import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
-import { engine, COMPUTE_DEBUG } from '$lib/server/compute/engine.server';
-import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
+import { engine, COMPUTE_DEBUG } from '#lib/server/compute/engine.server.js';
+import { loadRemoteDefinition } from '#lib/server/compute/remoteDefinition.server.js';
 import type {
 	ByteCacheRef,
 	PipelineInput,
 	SolveDefinition,
 	SolveEnvelope
 } from '@selvajs/solve/server';
-import { apiRateLimiter, checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
-import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
-import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/access.server';
+import { apiRateLimiter, checkComputeRateLimit } from '#lib/server/computeRateLimit.server.js';
+import { getStorageProvider, getSolveMetricSink, providers } from '#lib/server/providers.server.js';
+import { requireCanSolve, requireCanEditDefinition, scoped } from '#lib/server/access.server.js';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ShareLink } from '@selvajs/platform';
-import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
+import { SOLVE_DEADLINE_MS } from '#lib/server/computeLimits.js';
 import {
 	bindLiveSolve,
 	liveOwnerKey,
 	solveEndedKind
-} from '$lib/server/solveEvents/liveSolve.server';
+} from '#lib/server/solveEvents/liveSolve.server.js';
 
 export type SolveChannel = 'live' | 'draft';
 

@@ -1,11 +1,12 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { getAuthProvider } from '$lib/server/providers.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
+import { publicUrl } from '#lib/server/origin.js';
 import {
 	checkRateLimit,
 	recordFailedAttempt,
 	safeRedirectTarget
-} from '$lib/server/admin-auth.server';
+} from '#lib/server/admin-auth.server.js';
 
 /**
  * POST /auth/email/start (form action)
@@ -53,7 +54,7 @@ export const actions = {
 
 		// Forward `redirectTo` through to the callback so the user lands on
 		// their destination after clicking the link.
-		const callbackUrl = new URL('/auth/email/callback', url.origin);
+		const callbackUrl = new URL('/auth/email/callback', publicUrl(url).origin);
 		const fromForm = typeof redirectTo === 'string' ? redirectTo : null;
 		const fromQuery = url.searchParams.get('redirectTo');
 		const safeDest = safeRedirectTarget(fromForm, '') || safeRedirectTarget(fromQuery, '');

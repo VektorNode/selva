@@ -1,5 +1,4 @@
 import { redirect, type RequestEvent } from '@sveltejs/kit';
-import { isHttpError } from '@sveltejs/kit';
 import { isApiError } from '@selvajs/server/api';
 import type { AuthUser } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
@@ -17,21 +16,25 @@ import {
 	getErrorReporter,
 	getEventSink,
 	getLogger
-} from '$lib/server/providers.server';
-import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
-import { MCP_PATH } from '$lib/server/mcp/server';
+} from '#lib/server/providers.server.js';
+import { apiTokenCodec } from '#lib/server/apiTokens/token.server.js';
+import { MCP_PATH } from '#lib/server/mcp/server.js';
 
 const OAUTH_TOKEN_PATH = '/oauth/token';
-import { getBootHealth } from '$lib/server/bootHealth.server';
-import { env } from '$env/dynamic/private';
-import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
-import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
+import { getBootHealth } from '#lib/server/bootHealth.server.js';
+import { env } from '#lib/server/env.js';
+import { publicUrl } from '#lib/server/origin.js';
+import { findDeploymentDir, startUpdateOutcomeReconciler } from '#lib/server/selfUpdate.server.js';
+import {
+	bootstrapUserSession,
+	wireHeaderAuthBootstrap
+} from '#lib/server/auth-bootstrap.server.js';
 import {
 	getRefreshToken,
 	setSessionCookie,
 	setRefreshCookie,
 	clearRefreshCookie
-} from '$lib/server/admin-auth.server';
+} from '#lib/server/admin-auth.server.js';
 
 // Wired lazily on first real request, not at module import, so test files
 // that import helpers from this module don't trigger provider lookups
@@ -176,7 +179,7 @@ const routeClassifier = createRouteClassifier({
 // bug in either is security-relevant.
 export const { isStaticAsset, isSelfGatingApiRoute, isPublicRoute } = routeClassifier;
 
-export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
+export const handle: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
 
 	// Bound once per request; every downstream `locals.log` record inherits
@@ -213,11 +216,14 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	const { pathname } = event.url;
 
-	// SvelteKit's own check is off (svelte.config.js) because it can't exempt the
+	// SvelteKit's own check is off (vite.config.ts) because it can't exempt the
 	// token endpoint or bearer requests; this is the same check with those exemptions.
 	if (
 		!import.meta.env.DEV &&
-		isCrossSiteFormSubmission(event.request, { exemptPaths: [OAUTH_TOKEN_PATH] })
+		isCrossSiteFormSubmission(event.request, {
+			exemptPaths: [OAUTH_TOKEN_PATH],
+			origin: publicUrl(event.url).origin
+		})
 	) {
 		return applyResponseHeaders(
 			new Response(`Cross-site ${event.request.method} form submissions are forbidden`, {
@@ -271,6 +277,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		event.locals.profile =
 			(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
 			emptyProfile(user.id);
+
 		return applyResponseHeaders(await resolve(event), pathname, requestId);
 	}
 
@@ -447,32 +454,26 @@ function applyResponseHeaders(response: Response, pathname: string, requestId: s
 	return response;
 }
 
-export const handleError: import('@sveltejs/kit').HandleServerError = ({
+export const handleError: import('@sveltejs/kit/hooks').HandleServerError = ({
+	kind,
 	error,
-	status,
 	event
 }) => {
-	// Expected HTTP errors (thrown via error(4xx, body)) pass their structured
-	// body through unchanged so `code`/`fields` reach the client. Unexpected
-	// errors get a generic message to avoid leaking internals.
-	if (isHttpError(error)) {
-		const body = error.body as App.Error;
-		return { message: body.message, code: body.code, fields: body.fields, details: body.details };
+	// `error(...)` bodies already carry `code`/`fields`, so they reach the client as thrown.
+	if (kind === 'app') return error;
+	if (kind !== 'unknown') {
+		return error.status === 404 ? { message: 'Page not found.', code: 'NOT_FOUND' } : error;
 	}
 	// Backstop only. `ApiError` reaching here means a page load called a guard
-	// without going through `asHttpError()` — SvelteKit's `get_status` returns 500
-	// for anything that isn't its own `HttpError`, and `handleError` cannot
-	// change the status, so the message below is right but the status is not.
+	// without going through `asHttpError()`.
 	if (isApiError(error)) {
 		return {
+			status: error.status,
 			message: error.message,
 			code: error.code,
 			fields: error.fields,
 			details: error.details
 		};
-	}
-	if (status === 404) {
-		return { message: 'Page not found.', code: 'NOT_FOUND' };
 	}
 	// SvelteKit's default logging drops `cause`, which is where provider
 	// adapters tend to stash the real reason (Supabase network error, fs
@@ -487,7 +488,6 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 		getLogger().child({ method: event.request.method, route: event.url.pathname });
 	log.error('Unhandled error', {
 		component: 'handleError',
-		status,
 		err: renderThrown(error),
 		cause: error instanceof Error && error.cause ? String(error.cause) : undefined
 	});

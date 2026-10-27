@@ -2,7 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { Collapsible } from '@selvajs/ui';
 	import { ChevronDown } from '@lucide/svelte';
-	import { usePersisted } from '$lib/composables/usePersisted.svelte';
+	import { usePersisted } from '#lib/composables/usePersisted.svelte.js';
 
 	interface Props {
 		/** Stable id; the open/closed state is remembered under it. */

@@ -1,11 +1,11 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode, handleApiError } from '$lib/server/api-errors';
-import { parseBody, requireCaller, requireParams } from '$lib/server/api/http';
+import { apiError, ApiErrorCode, handleApiError } from '#lib/server/api-errors.js';
+import { parseBody, requireCaller, requireParams } from '#lib/server/api/http.js';
 import type { PipelineInput } from '@selvajs/solve/server';
-import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
-import { requireMaxBodySize } from '$lib/server/admin-auth.server';
-import { runSolve, mapSolveError } from '$lib/server/compute/solve.server';
-import { solveIdempotencyStore } from '$lib/server/computeIdempotency.server';
+import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
+import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
+import { runSolve, mapSolveError } from '#lib/server/compute/solve.server.js';
+import { solveIdempotencyStore } from '#lib/server/computeIdempotency.server.js';
 import {
 	SolveBodySchema,
 	idempotencyCallerId,

@@ -222,7 +222,7 @@ the `ensureUser` / `onUserDeleted` lifecycle methods.
 
 Cross-store orchestration lives outside platform: the definition service, render loader, and
 schema extraction are in [`@selvajs/server/definitions`](../../packages/server/src/definitions), wired to the
-app's providers by [`$lib/server/definitions/`](../../packages/selva/src/lib/server/definitions).
+app's providers by [`#lib/server/definitions/`](../../packages/selva/src/lib/server/definitions).
 
 **Conformance:** `@selvajs/platform/testing` exports framework-agnostic suites every provider runs
 against. A new provider must pass them to be drop-in.

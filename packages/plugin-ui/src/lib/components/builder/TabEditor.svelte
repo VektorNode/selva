@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Card, Button, StateDisplay } from '@selvajs/ui';
-	import { EditableTabNav, EditableGroup } from '$lib/components/builder';
+	import { EditableTabNav, EditableGroup } from '#lib/components/builder/index.js';
 	import TabSettingsBar from './TabSettingsBar.svelte';
 	import { Plus } from '@lucide/svelte';
 	import type { TabConfig, GroupConfig, DiscoveredInput, LayoutItem } from '@selvajs/schemas';
@@ -13,8 +13,8 @@
 		DND_TYPE_GROUP,
 		draggedItemMove,
 		liftDraggedGroup
-	} from '$lib/dnd/dndzone-helpers';
-	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
+	} from '#lib/dnd/dndzone-helpers.js';
+	import { captureDragFootprint, dragFootprint } from '#lib/dnd/drag-footprint.svelte.js';
 
 	interface Props {
 		tabs: TabConfig[];

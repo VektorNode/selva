@@ -15,7 +15,7 @@ import {
 	getPlatformProjectGrantStore,
 	getProjectProvider,
 	getUserProfileStore
-} from '$lib/server/providers.server';
+} from '#lib/server/providers.server.js';
 
 export interface OrgOption {
 	id: string;

@@ -34,8 +34,7 @@ export async function asHttpError<T>(run: () => T | Promise<T>): Promise<T> {
 		return await run();
 	} catch (err) {
 		if (isApiError(err)) {
-			throw error(err.status, {
-				message: err.message,
+			throw error(err.status, err.message, {
 				code: err.code,
 				fields: err.fields,
 				details: err.details

@@ -9,7 +9,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { freshProviders, seedUser, type TestProviders } from '$lib/server/__tests__/fixtures.js';
+import { freshProviders, seedUser, type TestProviders } from '#lib/server/__tests__/fixtures.js';
 import { actions } from '../+page.server.js';
 
 let tp: TestProviders | null = null;

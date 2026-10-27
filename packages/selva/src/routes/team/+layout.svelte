@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { SideNav, type SideNavItem } from '@selvajs/ui';
 	import {
 		Gauge,
@@ -12,7 +12,7 @@
 		Server,
 		KeyRound
 	} from '@lucide/svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppHeader from '#lib/components/AppHeader.svelte';
 	import type { Organization, OrgPermission } from '@selvajs/platform';
 
 	interface LayoutProps {
@@ -26,7 +26,7 @@
 
 	const orgPerms = $derived<OrgPermission[]>(data.ctx?.orgPermissions ?? []);
 	const can = (p: OrgPermission) => orgPerms.includes(p);
-	const enableSharing = $derived(!!$page.data.flags?.enableSharing);
+	const enableSharing = $derived(!!page.data.flags?.enableSharing);
 
 	const items = $derived(
 		[

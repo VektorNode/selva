@@ -22,7 +22,7 @@ import {
 	actAs,
 	call,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { DELETE } from '../+server.js';
 import { POST as DISABLE } from '../disable/+server.js';
 

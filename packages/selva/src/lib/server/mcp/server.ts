@@ -1,9 +1,9 @@
 import { createMcpServer, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
 import { ApiScopeActionSchema, apiScopeActionCovers, parseApiScope } from '@selvajs/platform';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { REGISTERED_CLIENT_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
-import { oauthServer } from '$lib/server/oauth/server';
-import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
+import { oauthServer } from '#lib/server/oauth/server.js';
+import { buildOpenApiDocument } from '#lib/server/api/v1/openapi.js';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
 export const MCP_PATH = '/mcp';

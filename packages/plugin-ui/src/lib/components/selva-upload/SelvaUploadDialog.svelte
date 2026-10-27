@@ -11,9 +11,9 @@
 	} from '@selvajs/ui';
 	import type { UISchema } from '@selvajs/schemas';
 	import { CloudUpload, FileText, RefreshCw } from '@lucide/svelte';
-	import type { SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
-	import { nowhereToUpload, selectedVersionTarget } from '$lib/composables/selva-upload-core';
-	import { formatFileSize } from '$lib/utils/file-size';
+	import type { SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
+	import { nowhereToUpload, selectedVersionTarget } from '#lib/composables/selva-upload-core.js';
+	import { formatFileSize } from '#lib/utils/file-size.js';
 	import SelvaAccountSection from './SelvaAccountSection.svelte';
 	import UploadTargetSection from './UploadTargetSection.svelte';
 	import UploadOutcome from './UploadOutcome.svelte';

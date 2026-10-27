@@ -5,8 +5,8 @@ import {
 	getComputeServerConfigStore,
 	getAuthProvider,
 	getUserProfileStore
-} from '$lib/server/providers.server';
-import { accessDepsFromConfig, projectAccessInputFromRowsWith } from '$lib/server/access.server';
+} from '#lib/server/providers.server.js';
+import { accessDepsFromConfig, projectAccessInputFromRowsWith } from '#lib/server/access.server.js';
 import { renderThrown } from '@selvajs/server/logging';
 import {
 	hasPermission,

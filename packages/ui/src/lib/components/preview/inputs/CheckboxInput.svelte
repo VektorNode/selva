@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { SupportedTypes } from '@selvajs/schemas';
-	import { Checkbox } from '$lib/components/primitives/checkbox';
+	import { Checkbox } from '#lib/components/primitives/checkbox/index.js';
 
 	interface Props {
 		inputId: string;

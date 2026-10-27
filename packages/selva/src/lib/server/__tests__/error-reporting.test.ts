@@ -8,7 +8,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { error } from '@sveltejs/kit';
 import type { IErrorReporter, ErrorContext } from '@selvajs/platform';
 import { handleError } from '../../../hooks.server.js';
 import * as providersServer from '../providers.server.js';
@@ -43,10 +42,9 @@ describe('handleError — error reporting', () => {
 	it('reports a genuinely unexpected (non-HTTP) error with route context', () => {
 		const boom = new Error('kaboom');
 		const result = handleError({
+			kind: 'unknown',
 			error: boom,
-			status: 500,
-			event: fakeEvent('/api/definitions', 'POST', { userId: 'u1', actingOrgId: 'o1' }),
-			message: 'Internal Error'
+			event: fakeEvent('/api/definitions', 'POST', { userId: 'u1', actingOrgId: 'o1' })
 		});
 
 		expect(reporter.calls).toHaveLength(1);
@@ -63,19 +61,11 @@ describe('handleError — error reporting', () => {
 
 	it('does NOT report an intentional HTTP 500 (e.g. a failed compute solve)', () => {
 		// The compute route surfaces solve failures via `apiError(500, …)`, which
-		// throws exactly this shape of HttpError.
-		let httpErr: unknown;
-		try {
-			throw error(500, { message: 'Compute solve failed', code: 'INTERNAL' });
-		} catch (e) {
-			httpErr = e;
-		}
-
+		// SvelteKit hands to handleError as an `app` error with this body.
 		handleError({
-			error: httpErr,
-			status: 500,
-			event: fakeEvent('/api/compute', 'POST'),
-			message: 'Internal Error'
+			kind: 'app',
+			error: { status: 500, message: 'Compute solve failed', code: 'INTERNAL' },
+			event: fakeEvent('/api/compute', 'POST')
 		});
 
 		expect(reporter.calls).toHaveLength(0);
@@ -83,10 +73,9 @@ describe('handleError — error reporting', () => {
 
 	it('does NOT report a 404', () => {
 		handleError({
-			error: new Error('not found'),
-			status: 404,
-			event: fakeEvent('/nope'),
-			message: 'Not Found'
+			kind: 'framework',
+			error: { status: 404, message: 'Not Found' },
+			event: fakeEvent('/nope')
 		});
 		expect(reporter.calls).toHaveLength(0);
 	});

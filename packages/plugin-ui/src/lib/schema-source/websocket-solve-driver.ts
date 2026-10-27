@@ -12,7 +12,7 @@ import type {
 	WebSocketState,
 	WsOutputsMessage,
 	WsSolveEventMessage
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 import type { SolveEvent } from '@selvajs/schemas';
 import { decodeOutcome, finalizeResult, type SolveReporter } from '@selvajs/ui';
 import type { PreviewSolveDriver } from './schema-source';

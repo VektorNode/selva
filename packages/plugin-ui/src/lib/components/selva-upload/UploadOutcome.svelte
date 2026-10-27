@@ -2,7 +2,7 @@
 	import type { SelvaUploadResult } from '@selvajs/schemas';
 	import { Button, Callout, Spinner } from '@selvajs/ui';
 	import { Check, Circle, CircleCheck, ExternalLink } from '@lucide/svelte';
-	import { safeHttpUrl, type UploadStage } from '$lib/composables/selva-upload-core';
+	import { safeHttpUrl, type UploadStage } from '#lib/composables/selva-upload-core.js';
 
 	interface Props {
 		/** Set while uploading. */

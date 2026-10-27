@@ -1,14 +1,14 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getComputeServerConfigStore } from '$lib/server/providers.server';
-import { requireManageCompute } from '$lib/server/access.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getComputeServerConfigStore } from '#lib/server/providers.server.js';
+import { requireManageCompute } from '#lib/server/access.server.js';
 import {
 	platformServers,
 	type ComputeServerConfig,
 	type PlatformComputeServer
 } from '@selvajs/platform';
-import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
+import { evictChangedServers } from '#lib/server/compute/evictChangedServers.js';
 import {
 	validateIncomingServers,
 	resolveApiKey,

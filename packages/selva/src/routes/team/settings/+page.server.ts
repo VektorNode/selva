@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Organization, OrgMember } from '@selvajs/platform';
 import { hasPermission } from '@selvajs/platform';
-import { getOrganizationProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider } from '#lib/server/providers.server.js';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const ctx = locals.ctx;

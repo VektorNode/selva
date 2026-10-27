@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types';
 import { listVisibleDefinitions } from '@selvajs/server/definitions';
-import { accessDepsFromConfig } from '$lib/server/access.server';
+import { accessDepsFromConfig } from '#lib/server/access.server.js';
 import { renderThrown } from '@selvajs/server/logging';
 import type { DefinitionRecord } from '@selvajs/platform';
 

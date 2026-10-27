@@ -14,8 +14,8 @@ import {
 	moveGroupToTab,
 	batchSetNumberWidgetType,
 	isInputItem
-} from '$lib/features/builder/operations';
-import { mapParamTypeToWidgetType } from '$lib/features/builder/widget-config';
+} from '#lib/features/builder/operations.js';
+import { mapParamTypeToWidgetType } from '#lib/features/builder/widget-config.js';
 import type { useBuilderState } from './useBuilderState.svelte';
 
 // Map a discovered output's type to its layout widgetType (file/chart/dynamicValueList/text...).

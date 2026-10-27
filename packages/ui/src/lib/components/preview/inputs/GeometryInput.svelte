@@ -1,8 +1,8 @@
 <script lang="ts">
-	import { Button } from '$lib/components/primitives/button';
-	import type { GeometryPickResult, PickKind } from '$lib/contexts/hostContext.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import type { ViewerMessages } from '$lib/i18n/messages';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import type { GeometryPickResult, PickKind } from '#lib/contexts/hostContext.svelte.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import type { ViewerMessages } from '#lib/i18n/messages.js';
 
 	interface Props {
 		inputId: string;

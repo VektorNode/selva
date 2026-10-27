@@ -3,8 +3,8 @@
 	import { Search, X } from '@lucide/svelte';
 	import type { ProjectRole } from '@selvajs/platform/projects';
 	import type { UserListItem } from '../+page.server';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import { primaryLabel, emailSubtitle } from '$lib/user-display';
+	import UserAvatar from '#lib/components/UserAvatar.svelte';
+	import { primaryLabel, emailSubtitle } from '#lib/user-display.js';
 
 	interface Props {
 		availableUsers: UserListItem[];
