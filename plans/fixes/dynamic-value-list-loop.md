@@ -79,6 +79,11 @@ rules the fixture violated and now satisfies.
 
 ## Design
 
+> [dynamic-value-list-resolution.md](../features/dynamic-value-list-resolution.md) proposes
+> resolving the selection inside Grasshopper when the options are wired into the Get param. That
+> undercuts two decisions below: "not adding a `selected` field" and Phase 3. The reconciler here
+> remains the path for unwired lists.
+
 Two moves, everything else follows:
 
 1. **Reconciliation moves from `InputControl.svelte` into the session** (`@selvajs/solve/client`),

@@ -7,13 +7,14 @@ using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.GH.Properties;
+using Selva.GH.Utilities;
 using BBox = Selva.Drawing.Model.Geometry.BoundingBox;
 
 namespace Selva.GH.Features.Drawing.Components;
 
 // Every field accepts a literal or a {token} resolved from the Document's Info values, so
 // the same block wired into many Grasshopper files renders each file's own data.
-public class GH_TitleBlock : GH_Component
+public class GH_TitleBlock : SelvaZuiComponent
 {
     public GH_TitleBlock()
         : base("Title Block", "Title",
@@ -24,7 +25,10 @@ public class GH_TitleBlock : GH_Component
 
     protected override Bitmap Icon => Resources.TitleBlock;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
-    public override Guid ComponentGuid => new Guid("A2501A92-E5D1-4646-A3D0-4368CE879BFC");
+    public override Guid ComponentGuid => new Guid("B0FA5F7E-9B4C-47F1-904D-052FEB7C9098");
+
+    protected override IReadOnlyCollection<string> PrimaryInputs =>
+        new[] { "Variant", "Project", "Title", "Drawing No", "Revision", "Scale", "Sheet", "Date", "Logo" };
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -78,23 +82,23 @@ public class GH_TitleBlock : GH_Component
         var height = 0.0;
         var labelsIndex = 0;
 
-        DA.GetData(0, ref variant);
-        DA.GetData(1, ref project);
-        DA.GetData(2, ref owner);
-        DA.GetData(3, ref title);
-        DA.GetData(4, ref drawingNo);
-        DA.GetData(5, ref revision);
-        DA.GetData(6, ref scale);
-        DA.GetData(7, ref sheet);
-        DA.GetData(8, ref author);
-        DA.GetData(9, ref approver);
-        DA.GetData(10, ref date);
-        DA.GetData(11, ref logo);
-        DA.GetData(12, ref logoMaxW);
-        DA.GetData(13, ref logoMaxH);
-        DA.GetData(14, ref width);
-        DA.GetData(15, ref height);
-        DA.GetData(16, ref labelsIndex);
+        GetInput(DA, "Variant", ref variant);
+        GetInput(DA, "Project", ref project);
+        GetInput(DA, "Owner", ref owner);
+        GetInput(DA, "Title", ref title);
+        GetInput(DA, "Drawing No", ref drawingNo);
+        GetInput(DA, "Revision", ref revision);
+        GetInput(DA, "Scale", ref scale);
+        GetInput(DA, "Sheet", ref sheet);
+        GetInput(DA, "Created By", ref author);
+        GetInput(DA, "Approved By", ref approver);
+        GetInput(DA, "Date", ref date);
+        GetInput(DA, "Logo", ref logo);
+        GetInput(DA, "Logo Max W", ref logoMaxW);
+        GetInput(DA, "Logo Max H", ref logoMaxH);
+        GetInput(DA, "Width", ref width);
+        GetInput(DA, "Height", ref height);
+        GetInput(DA, "Labels", ref labelsIndex);
 
         var isContinuation = variant == 1;
         var labels = labelsIndex == 1 ? TitleBlockLabels.German : TitleBlockLabels.English;

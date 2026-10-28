@@ -1,10 +1,8 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using GH_IO.Serialization;
-using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Special;
@@ -19,27 +17,21 @@ namespace Selva.GH.Features.ComputeIO.Components;
 
 // Captures value list data (options + selected default) as a contextual parameter. The connected
 // GH_ValueList is the single source of truth — data is read directly from it, never cached.
-public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_ContextualParameter
+public class GetValueListParameter : SelvaContextualParameter<GH_ValueListDataGoo>
 {
     private Guid _connectedValueListGuid = Guid.Empty;
-    private GH_ValueListDataGoo[] _contextual;
-    private DataTree<GH_ValueListDataGoo> _contextualDataTree;
 
     private List<(string Name, string Expression)> _storedItems = new List<(string Name, string Expression)>();
 
     public GetValueListParameter()
-        : base("Get Value List", "Get VL", "Get from ValueList", "Params", "Util", GH_ParamAccess.item)
+        : base("Get Value List", "Get VL", "Get from ValueList", GH_ParamAccess.item)
     {
     }
-
-    public override GH_Exposure Exposure => GH_Exposure.quinary;
 
     public override string TypeName => "ValueList";
     public override Guid ComponentGuid => new Guid("0CC81276-5DB7-4306-9968-086524EC0C6E");
 
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetValueList);
-
-    public bool TreeAccess { get; set; }
 
     private GH_ValueList ConnectedValueList
     {
@@ -107,12 +99,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         }
     }
 
-    // IGH_ContextualParameter properties
-    public string Prompt { get; set; } = string.Empty;
-    public int AtLeast { get; set; } = 1;
-    public int AtMost { get; set; } = 1;
-    public bool Immediate { get; set; } = true;
-
     // AtMost is raised to allow multiple selections in list mode, restored to 1 when switching back.
     public void SetListAccess(bool listAccess)
     {
@@ -127,67 +113,23 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         }
     }
 
-    public IEnumerable<object> ContextualData
+    public override bool AutoAssignContextualData(GH_ParameterContext context)
     {
-        get
+        var names = GetItemTuples().Select(item => item.Name).ToList();
+        if (names.Count == 0)
         {
-            var items = GetItemTuples();
-            foreach (var selected in SelectedItems)
-            {
-                var index = ListItems.ToList().IndexOf(selected);
-                yield return new GH_ValueListDataGoo(selected.Expression, items, index);
-            }
-        }
-    }
-
-    public void AssignContextualData(IEnumerable data)
-    {
-        var list = new List<GH_ValueListDataGoo>();
-        var items = GetItemTuples();
-        var currentSelectedIndex = SelectedIndex;
-
-        foreach (var item in data)
-        {
-            var stringValue = ExtractStringValue(item);
-            if (stringValue == null)
-            {
-                continue;
-            }
-
-            var matchIndex = FindMatchingIndex(stringValue);
-            var selectedIndex = matchIndex >= 0 ? matchIndex : currentSelectedIndex;
-
-            var expressionValue = matchIndex >= 0 && matchIndex < items.Count
-                ? items[matchIndex].Expression
-                : stringValue;
-
-            list.Add(new GH_ValueListDataGoo(expressionValue, items, selectedIndex));
+            return true;
         }
 
-        _contextual = list.ToArray();
-
-        var vl = ConnectedValueList;
-        if (vl != null && _contextual.Length > 0)
+        var picked = Utils.PickOptions(ImpliedPrompt, names, AtMost);
+        if (picked == null || picked.Count == 0)
         {
-            var firstValue = _contextual[0].Value;
-            for (var i = 0; i < vl.ListItems.Count; i++)
-            {
-                if (vl.ListItems[i].Expression == firstValue)
-                {
-                    SelectWithoutSolving(vl, i);
-                    break;
-                }
-            }
+            return false;
         }
 
-        ExpireSolution(false);
+        AssignContextualData(picked);
+        return true;
     }
-
-    public bool AutoAssignContextualData(GH_ParameterContext context)
-    {
-        return ConnectedValueList != null;
-    }
-
 
     public string GetDefaultValue()
     {
@@ -301,48 +243,15 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         vl.ExpireSolution(false);
     }
 
-    public void ClearContextualData()
-    {
-        _contextual = null;
-        _contextualDataTree = null;
-    }
-
-    public void AssignContextualDataTree(DataTree<GH_ValueListDataGoo> data)
-    {
-        _contextualDataTree = data;
-        ExpireSolution(false);
-    }
-
-    // Called from Rhino Compute via reflection when only a plain string is available
-    // (AssignContextualData needs richer objects).
+    // Rhino.Compute builds without the generic contextual handler call these by reflection.
     public void SetValue(string value)
     {
-        var items = GetItemTuples();
-        var matchIndex = FindMatchingIndex(value);
-        var expressionValue = matchIndex >= 0 && matchIndex < items.Count
-            ? items[matchIndex].Expression
-            : value;
-        _contextual = new[] { new GH_ValueListDataGoo(expressionValue, items, matchIndex) };
-        ExpireSolution(false);
+        AssignContextualData(new[] { value });
     }
 
-    // Same as SetValue, for multiple values.
     public void SetValues(IEnumerable<string> values)
     {
-        var items = GetItemTuples();
-        var list = new List<GH_ValueListDataGoo>();
-
-        foreach (var value in values)
-        {
-            var matchIndex = FindMatchingIndex(value);
-            var expressionValue = matchIndex >= 0 && matchIndex < items.Count
-                ? items[matchIndex].Expression
-                : value;
-            list.Add(new GH_ValueListDataGoo(expressionValue, items, matchIndex));
-        }
-
-        _contextual = list.ToArray();
-        ExpireSolution(false);
+        AssignContextualData(values.ToList());
     }
 
     // Call before SetValues/SetValue when solving via Rhino Compute, where no GH_ValueList is connected.
@@ -351,33 +260,17 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
         _storedItems = options.Select(kvp => (kvp.Key, kvp.Value)).ToList();
     }
 
-    protected override void CollectVolatileData_FromSources()
+    protected override IEnumerable<GH_ValueListDataGoo> FromContextual(object value)
     {
-        if (_contextual != null)
+        var stringValue = ExtractStringValue(value);
+        if (stringValue != null)
         {
-            m_data.Clear();
-            m_data.AppendRange(_contextual, new GH_Path(0));
-            return;
+            yield return ToGoo(stringValue);
         }
+    }
 
-        if (_contextualDataTree != null)
-        {
-            m_data.Clear();
-            for (var i = 0; i < _contextualDataTree.BranchCount; i++)
-            {
-                m_data.AppendRange(_contextualDataTree.Branches[i], _contextualDataTree.Paths[i]);
-            }
-
-            return;
-        }
-
-        m_data.Clear();
-
-        if (Sources == null || Sources.Count == 0)
-        {
-            return;
-        }
-
+    protected override void CollectFromSources()
+    {
         foreach (var source in Sources)
         {
             if (source is GH_ValueList vl)
@@ -416,8 +309,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             return;
         }
 
-        var items = GetItemTuples();
-
         foreach (var path in sourceData.Paths)
         {
             var branch = sourceData.get_Branch(path);
@@ -430,16 +321,10 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             foreach (var item in branch)
             {
                 var stringValue = ExtractStringValue(item);
-                if (stringValue == null)
+                if (stringValue != null)
                 {
-                    continue;
+                    converted.Add(ToGoo(stringValue));
                 }
-
-                var matchIndex = FindMatchingIndex(stringValue);
-                var expressionValue = matchIndex >= 0 && matchIndex < items.Count
-                    ? items[matchIndex].Expression
-                    : stringValue;
-                converted.Add(new GH_ValueListDataGoo(expressionValue, items, matchIndex));
             }
 
             if (converted.Count > 0)
@@ -447,6 +332,15 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
                 m_data.AppendRange(converted, path);
             }
         }
+    }
+
+    // Maps a name or expression to a known option's expression; an unknown value passes through.
+    private GH_ValueListDataGoo ToGoo(string value)
+    {
+        var items = GetItemTuples();
+        var matchIndex = FindMatchingIndex(value);
+        var expression = matchIndex >= 0 && matchIndex < items.Count ? items[matchIndex].Expression : value;
+        return new GH_ValueListDataGoo(expression, items, matchIndex);
     }
 
     private List<(string Name, string Expression)> GetItemTuples()
@@ -492,12 +386,7 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
     public override bool Write(GH_IWriter writer)
     {
-        writer.SetString("Prompt", Prompt ?? string.Empty);
-        writer.SetInt32("AtLeast", AtLeast);
-        writer.SetInt32("AtMost", AtMost);
-        writer.SetBoolean("TreeAccess", TreeAccess);
         writer.SetBoolean("ListAccess", Access == GH_ParamAccess.list);
-        writer.SetBoolean("Immediate", Immediate);
         writer.SetString("ConnectedValueListGuid", _connectedValueListGuid.ToString());
 
         var items = GetItemTuples();
@@ -518,36 +407,13 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
 
     public override bool Read(GH_IReader reader)
     {
-        Prompt = reader.GetString("Prompt");
-
-        var atLeast = 1;
-        if (reader.TryGetInt32("AtLeast", ref atLeast))
-        {
-            AtLeast = atLeast;
-        }
-
-        var atMost = 1;
-        if (reader.TryGetInt32("AtMost", ref atMost))
-        {
-            AtMost = atMost;
-        }
-
-        var treeAccess = false;
-        if (reader.TryGetBoolean("TreeAccess", ref treeAccess))
-        {
-            TreeAccess = treeAccess;
-        }
+        // Settings first: SetListAccess below adjusts the AtMost they restore.
+        var result = base.Read(reader);
 
         var listAccess = false;
         if (reader.TryGetBoolean("ListAccess", ref listAccess))
         {
             SetListAccess(listAccess);
-        }
-
-        var immediate = true;
-        if (reader.TryGetBoolean("Immediate", ref immediate))
-        {
-            Immediate = immediate;
         }
 
         string guidStr = null;
@@ -577,6 +443,6 @@ public class GetValueListParameter : GH_Param<GH_ValueListDataGoo>, IGH_Contextu
             }
         }
 
-        return base.Read(reader);
+        return result;
     }
 }

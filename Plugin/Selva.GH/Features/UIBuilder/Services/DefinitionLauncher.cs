@@ -224,7 +224,6 @@ internal static class DefinitionLauncher
         _current = null;
         UnwatchEditor();
         session.Document.ModifiedChanged -= KeepUnmodified;
-        session.Document.ForcePreview(false);
 
         if (RhinoApp.GetPlugInObject("Grasshopper") is GH_RhinoScriptInterface grasshopper)
         {

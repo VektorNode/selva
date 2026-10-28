@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
@@ -6,13 +7,14 @@ using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Goos;
 using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
+using Selva.GH.Utilities;
 using Color = System.Drawing.Color;
 using ModelColor = Selva.Drawing.Model.Style.Color;
 using ModelFontStyle = Selva.Drawing.Model.Style.FontStyle;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-public class GH_TextStyle : GH_Component
+public class GH_TextStyle : SelvaZuiComponent
 {
     public GH_TextStyle()
         : base("Text Style", "TStyle",
@@ -23,7 +25,10 @@ public class GH_TextStyle : GH_Component
 
     protected override Bitmap Icon => Resources.PathStlye;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
-    public override Guid ComponentGuid => new Guid("d37b61db-4fc4-4f01-9a76-95da5d719eea");
+    public override Guid ComponentGuid => new Guid("6D5CCE51-0B0D-4936-B076-E7D0DD1B820D");
+
+    protected override IReadOnlyCollection<string> PrimaryInputs =>
+        new[] { "Font Family", "Font Size", "Color", "Weight", "Horizontal Anchor" };
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -93,16 +98,16 @@ public class GH_TextStyle : GH_Component
         var lineHeight = 1.2;
         var letterSpacing = 0.0;
 
-        DA.GetData(0, ref fontFamily);
-        DA.GetData(1, ref fontSize);
-        DA.GetData(2, ref color);
-        DA.GetData(3, ref weightInt);
-        DA.GetData(4, ref styleInt);
-        DA.GetData(5, ref decorationInt);
-        DA.GetData(6, ref hAnchorInt);
-        DA.GetData(7, ref vAnchorInt);
-        DA.GetData(8, ref lineHeight);
-        DA.GetData(9, ref letterSpacing);
+        GetInput(DA, "Font Family", ref fontFamily);
+        GetInput(DA, "Font Size", ref fontSize);
+        GetInput(DA, "Color", ref color);
+        GetInput(DA, "Weight", ref weightInt);
+        GetInput(DA, "Style", ref styleInt);
+        GetInput(DA, "Decoration", ref decorationInt);
+        GetInput(DA, "Horizontal Anchor", ref hAnchorInt);
+        GetInput(DA, "Vertical Anchor", ref vAnchorInt);
+        GetInput(DA, "Line Height", ref lineHeight);
+        GetInput(DA, "Letter Spacing", ref letterSpacing);
 
         var textStyle = new TextStyle
         {

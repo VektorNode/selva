@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
@@ -6,10 +7,11 @@ using Rhino.Geometry;
 using Selva.Drawing;
 using Selva.Drawing.Model.Elements;
 using Selva.GH.Properties;
+using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-public class GH_AngularDimension : GH_Component
+public class GH_AngularDimension : SelvaZuiComponent
 {
     public GH_AngularDimension()
         : base("Angular Dimension", "ADim",
@@ -20,7 +22,10 @@ public class GH_AngularDimension : GH_Component
 
     protected override Bitmap Icon => Resources.AngularDimension;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
-    public override Guid ComponentGuid => new Guid("A90C4D76-9482-4501-A905-F9221656B6C8");
+    public override Guid ComponentGuid => new Guid("2D0CD233-7615-4DF5-8057-46DD7FD4ECBE");
+
+    protected override IReadOnlyCollection<string> PrimaryInputs =>
+        new[] { "Vertex", "Point A", "Point B", "Label", "Text Size", "Reflex" };
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -66,16 +71,16 @@ public class GH_AngularDimension : GH_Component
         var tickSize = 4.0;
         var reflex = false;
 
-        if (!DA.GetData(0, ref v)) return;
-        if (!DA.GetData(1, ref a)) return;
-        if (!DA.GetData(2, ref b)) return;
-        DA.GetData(3, ref label);
-        DA.GetData(4, ref textSize);
-        DA.GetData(5, ref color);
-        DA.GetData(6, ref stroke);
-        DA.GetData(7, ref tickStyle);
-        DA.GetData(8, ref tickSize);
-        DA.GetData(9, ref reflex);
+        if (!GetInput(DA, "Vertex", ref v)) return;
+        if (!GetInput(DA, "Point A", ref a)) return;
+        if (!GetInput(DA, "Point B", ref b)) return;
+        GetInput(DA, "Label", ref label);
+        GetInput(DA, "Text Size", ref textSize);
+        GetInput(DA, "Color", ref color);
+        GetInput(DA, "Stroke Width", ref stroke);
+        GetInput(DA, "Tick Style", ref tickStyle);
+        GetInput(DA, "Tick Size", ref tickSize);
+        GetInput(DA, "Reflex", ref reflex);
 
         var style = new DimensionStyle
         {

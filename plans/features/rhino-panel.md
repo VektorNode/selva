@@ -29,9 +29,10 @@ The panel is the only visible entry:
 - **"Open UI in Browser" appears only with Shift held** while opening the component menu. The
   browser stays live during a solve, so it's the tool for definitions that solve for seconds,
   and the fallback for a Rhino where the panel misbehaves or sits below the version floor.
-- **No web viewer by default.** Rhino's own viewport shows the geometry. The schema's
-  `viewerOptions.enableLocal` ("Local render") already gates both the preview's 3D viewer and
-  whether the plugin streams display meshes at all, and it defaults to off. It stays as an opt-in
+- **No web viewer by default.** Rhino's own viewport shows the geometry, also with the
+  Grasshopper editor hidden or minimized: the document the panel shows keeps a forced preview while
+  it's the canvas's document. The schema's `viewerOptions.enableLocal` ("Local render") already
+  gates both the preview's 3D viewer and whether the plugin streams display meshes at all, and it defaults to off. It stays as an opt-in
   for checking web materials or hotspots.
 - **Pop out** moves the UI into its own window (see below), for a second display or fullscreen.
 

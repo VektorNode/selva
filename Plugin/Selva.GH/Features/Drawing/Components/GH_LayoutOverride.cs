@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
@@ -6,6 +7,7 @@ using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Layout;
 using Selva.GH.Properties;
+using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Drawing.Components;
 
@@ -16,7 +18,7 @@ namespace Selva.GH.Features.Drawing.Components;
 // Every input is optional: leave a field at its inherit sentinel (-1 for ints/doubles, no
 // connection for chrome elements) and it falls back to the Document's default, or the built-in
 // default at Document scope.
-public class GH_LayoutOverride : GH_Component
+public class GH_LayoutOverride : SelvaZuiComponent
 {
     public GH_LayoutOverride()
         : base("Layout Override", "LOver",
@@ -27,7 +29,10 @@ public class GH_LayoutOverride : GH_Component
 
     protected override Bitmap Icon => Resources.SectionSettings;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
-    public override Guid ComponentGuid => new Guid("3F5F0E10-2A21-4F0E-9F25-7B0F2C7C5E91");
+    public override Guid ComponentGuid => new Guid("6B443A70-1C56-464B-BBAE-E0AE2E420789");
+
+    protected override IReadOnlyCollection<string> PrimaryInputs =>
+        new[] { "Paper Size", "Landscape", "Margin", "Header", "Footer" };
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -125,20 +130,20 @@ public class GH_LayoutOverride : GH_Component
         var footerEdgeOffset = -1.0;
         var unitsIndex = 0;
 
-        DA.GetData(0, ref paperIndex);
-        DA.GetData(1, ref landscape);
-        DA.GetData(2, ref margin);
-        DA.GetData(3, ref header);
-        DA.GetData(4, ref footer);
-        DA.GetData(5, ref headerHeight);
-        DA.GetData(6, ref footerHeight);
-        DA.GetData(7, ref headerAlignIndex);
-        DA.GetData(8, ref footerAlignIndex);
-        DA.GetData(9, ref headerPlacementIndex);
-        DA.GetData(10, ref footerPlacementIndex);
-        DA.GetData(11, ref headerEdgeOffset);
-        DA.GetData(12, ref footerEdgeOffset);
-        DA.GetData(13, ref unitsIndex);
+        GetInput(DA, "Paper Size", ref paperIndex);
+        GetInput(DA, "Landscape", ref landscape);
+        GetInput(DA, "Margin", ref margin);
+        GetInput(DA, "Header", ref header);
+        GetInput(DA, "Footer", ref footer);
+        GetInput(DA, "Header Height", ref headerHeight);
+        GetInput(DA, "Footer Height", ref footerHeight);
+        GetInput(DA, "Header Align", ref headerAlignIndex);
+        GetInput(DA, "Footer Align", ref footerAlignIndex);
+        GetInput(DA, "Header Placement", ref headerPlacementIndex);
+        GetInput(DA, "Footer Placement", ref footerPlacementIndex);
+        GetInput(DA, "Header Edge Offset", ref headerEdgeOffset);
+        GetInput(DA, "Footer Edge Offset", ref footerEdgeOffset);
+        GetInput(DA, "Units", ref unitsIndex);
 
         var mmPerUnit = DrawingUnits.MmPerUnit(unitsIndex);
 

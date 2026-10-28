@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using Grasshopper.Kernel;
 using Rhino;
 using Rhino.PlugIns;
 using Selva.RhinoPanel;
@@ -13,7 +14,7 @@ internal static class RhinoPanelHost
     private static readonly Guid PlugInId = new Guid(PanelContract.PlugInId);
 
     /// <summary>Null when the panel took the session; otherwise why it couldn't, for the user.</summary>
-    public static string? TryShow(string url, string sessionId)
+    public static string? TryShow(string url, string sessionId, GH_Document document)
     {
         // Loads the .rhp if it isn't yet.
         var contract = RhinoApp.GetPlugInObject(PlugInId) as IDictionary<string, object>;
@@ -32,11 +33,14 @@ internal static class RhinoPanelHost
         }
 
         show(url, sessionId);
+        PanelPreview.Show(document, sessionId);
         return null;
     }
 
     public static void Clear(string sessionId)
     {
+        PanelPreview.Clear(sessionId);
+
         if (LoadedContract()?.TryGetValue(PanelContract.ClearKey, out var clearValue) == true &&
             clearValue is Action<string> clear)
         {

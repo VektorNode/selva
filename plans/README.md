@@ -40,6 +40,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [presolve-bundle](./features/presolve-bundle.md)                                | **unfiled** — parked on a storage decision                                      |
 | [mcp-next](./features/mcp-next.md)                                              | **unfiled**: transport, tool surface, SDK v2, OAuth, evals, apps                |
 | [cloud-binary-transport](./features/cloud-binary-transport.md)                  | **unfiled** — deliberately deferred                                             |
+| [incremental-display](./features/incremental-display.md)                        | **unfiled** — §1 and input-order streams built; §2–4 design only                |
 | [slva-identity](./features/slva-identity.md)                                    | **unfiled** — in flight on `feat/mesh-compression`                              |
 | [live-solve-channel](./features/live-solve-channel.md)                          | **unfiled** — design only; builds on solve-diagnostics                          |
 | [solve-events-structure](./features/solve-events-structure.md)                  | **unfiled** — review defects + event-kind catalog; builds on live-solve-channel |
@@ -49,6 +50,8 @@ Each plan below links to its tracking issue at the top of the file.
 | [rhino-panel](./features/rhino-panel.md)                                        | **unfiled** — built on `test/rhino-panel`; live gates still open                |
 | [rhino-player](./features/rhino-player.md)                                      | **unfiled** — built on `test/rhino-panel`; live gates still open                |
 | [host-aware-elements](./features/host-aware-elements.md)                        | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |
+| [compute-sessions](./features/compute-sessions.md)                              | **unfiled** — design only; spans the compute fork and Selva                     |
+| [dynamic-value-list-resolution](./features/dynamic-value-list-resolution.md)    | **unfiled** — design only; revises two decisions in dynamic-value-list-loop     |
 
 The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until

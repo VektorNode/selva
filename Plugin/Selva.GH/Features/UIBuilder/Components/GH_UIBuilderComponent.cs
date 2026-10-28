@@ -606,14 +606,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     private string ShowInPanel()
     {
         var url = TryBuildSessionUrl("rhino");
-        if (url == null)
+        var document = OnPingDocument();
+        if (url == null || document == null)
         {
             return "The web UI isn't running yet.";
         }
 
         try
         {
-            return RhinoPanelHost.TryShow(url, _sessionId);
+            return RhinoPanelHost.TryShow(url, _sessionId, document);
         }
         catch (Exception ex)
         {

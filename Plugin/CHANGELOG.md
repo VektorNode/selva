@@ -34,17 +34,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Render PDF warns when it can't make the file deterministic, instead of writing a dated file without saying so.
 - UI Bridge: Open UI in Browser is now Open UI and shows the Selva panel. The browser option appears when you hold Shift.
 - Local render and Compute render each drive one host: the plugin's preview shows the 3D viewer only with Local render on, Selva only with Compute render on. Either switch used to turn the viewer on in both.
+- Get Color, Get File, Get Image, Get Server File, Get Value List and Get Dynamic Value List behave like Rhino's own Get params. Right-clicking one sets Prompt, At least, At most and Tree Access. They pass on as many values as At most allows instead of only the first, and keep the branches Rhino.Compute sends. In Grasshopper Player each asks for its value (a color picker, an open-file dialog, or a pick from the list's options) instead of ending the command. Saved files open unchanged.
+- Get Image passes on every item of a wired source instead of only the first.
+- Three Material, Title Block, Path Style, Layout Override, Table, Text Style, Linear Dimension and Angular Dimension show only their common inputs when placed, like Rhino 8's Model components. Zoom in and click the chevron under the inputs, Shift + double-click, or right-click > Show all parameters for the rest; the chevron above, Ctrl + double-click or Hide unused parameters hides every input that is neither wired nor changed from its default. A hidden input keeps its default. The zoomed-in + and − between inputs add or remove one at a time.
 
 ### Fixed
 
 - Builder: dragging a tab or group two or more places forward drops it where you let go, instead of only one place forward.
 - Builder: an item card's Span field shows 1 when the item has no span saved, instead of an empty box.
 - Builder: tab and group edits mark the draft unsaved and can be undone, so the unsaved-changes prompt fires and a Grasshopper broadcast no longer drops them. Edits made while a save is in flight stay unsaved.
+- Get Image receives its value on Rhino.Compute. It solved on its wired fallback, because Compute had no handler for it. Needs a Rhino.Compute fork build with the generic contextual handler; value lists keep working on older fork builds.
 
 ### Security
 
 - PDF export no longer bundles ImageSharp, which had five unfixed advisories on the version PdfSharpCore could use. Draw Image decodes PNG and JPEG with System.Drawing and re-encodes them, so the PDF library only ever reads images that encoder wrote.
 - UI Bridge: the local WebSocket only talks to the page the component opened. It refuses connections from any other origin or with a forged `Host`, and a socket must first send the secret the plugin puts in the page URL's fragment. Until now any web page open in the same browser could connect while the bridge was enabled, read the schema and values, and change inputs, the saved schema and parameter names. A browser tab opened before this update has to be reopened from the component.
+
+### Obsolete components
+
+- **Three Material** (`31100A9A` → `8313D290`), **Title Block** (`A2501A92` → `B0FA5F7E`), **Path Style** (`3F5C21A9` → `4CEFA814`), **Layout Override** (`3F5F0E10` → `6B443A70`), **Table** (`2B7C8D3E` → `2CF47AC1`), **Text Style** (`D37B61DB` → `6D5CCE51`), **Linear Dimension** (`90160C4E` → `1F0FE0F9`) and **Angular Dimension** (`A90C4D76` → `2D0CD233`): same inputs in the same order, rarely used ones hidden until asked for. Old definitions keep working and upgrade on request; the upgrade keeps every wire and value and hides the unused inputs.
+
+### Upgraders
+
+- `GH_ThreeMaterialUpgrader_To_0_24`, `GH_TitleBlockUpgrader_To_0_24`, `GH_PathStyleUpgrader_To_0_24`, `GH_LayoutOverrideUpgrader_To_0_24`, `GH_TableUpgrader_To_0_24`, `GH_TextStyleUpgrader_To_0_24`, `GH_LinearDimensionUpgrader_To_0_24`, `GH_AngularDimensionUpgrader_To_0_24`: one hop each to the hiding version.
 
 ## [0.23.0-beta.3] - 2026-10-13
 

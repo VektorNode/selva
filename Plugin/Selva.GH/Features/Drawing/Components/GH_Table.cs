@@ -9,12 +9,13 @@ using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
+using Selva.GH.Utilities;
 using DrawColor = Selva.Drawing.Model.Style.Color;
 
 namespace Selva.GH.Features.Drawing.Components;
 
 // Body cells arrive as a data tree: one branch per row, each item in the branch a cell value.
-public class GH_Table : GH_Component
+public class GH_Table : SelvaZuiComponent
 {
     public GH_Table()
         : base("Table", "Table",
@@ -25,7 +26,10 @@ public class GH_Table : GH_Component
 
     protected override Bitmap Icon => Resources.Table;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
-    public override Guid ComponentGuid => new Guid("2B7C8D3E-4F5A-4B6C-8D9E-1F2A3B4C5D62");
+    public override Guid ComponentGuid => new Guid("2CF47AC1-C52E-4E86-8495-30B86969232B");
+
+    protected override IReadOnlyCollection<string> PrimaryInputs =>
+        new[] { "Headers", "Rows", "Column Widths", "Default Style", "Border Style" };
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -80,22 +84,22 @@ public class GH_Table : GH_Component
         var borderStyleIndex = 0;
         var rowColors = new List<System.Drawing.Color>();
 
-        DA.GetDataList(0, headers);
-        if (!DA.GetDataTree(1, out GH_Structure<GH_String> rowTree))
+        GetInputList(DA, "Headers", headers);
+        if (!GetInputTree(DA, "Rows", out GH_Structure<GH_String> rowTree))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No rows provided");
             return;
         }
-        DA.GetDataList(2, columnSizes);
-        DA.GetData(3, ref rowHeight);
-        DA.GetData(4, ref border);
-        DA.GetData(5, ref style);
-        DA.GetData(6, ref headerStyle);
+        GetInputList(DA, "Column Widths", columnSizes);
+        GetInput(DA, "Row Height", ref rowHeight);
+        GetInput(DA, "Border", ref border);
+        GetInput(DA, "Default Style", ref style);
+        GetInput(DA, "Header Style", ref headerStyle);
         var headerColorValue = System.Drawing.Color.Empty;
-        if (DA.GetData(7, ref headerColorValue)) headerColor = headerColorValue;
-        DA.GetDataList(8, alignTokens);
-        DA.GetData(9, ref borderStyleIndex);
-        DA.GetDataList(10, rowColors);
+        if (GetInput(DA, "Header Color", ref headerColorValue)) headerColor = headerColorValue;
+        GetInputList(DA, "Column Align", alignTokens);
+        GetInput(DA, "Border Style", ref borderStyleIndex);
+        GetInputList(DA, "Row Colors", rowColors);
 
         Fill headerFill = headerColor.HasValue ? ToFill(headerColor.Value) : null;
         IReadOnlyList<Fill> rowStripeFills = null;

@@ -57,11 +57,7 @@ internal sealed class LauncherView : Scrollable
                     : step == current ? StepState.Active : StepState.Pending));
                 if (step == current)
                 {
-                    steps.Items.Add(new Panel
-                    {
-                        Padding = new Padding(StepRow.TextLeft, 0, 8, 10),
-                        Content = Text(stepHint, SmallFont, Dim)
-                    });
+                    steps.Items.Add(new StepHint(stepHint));
                 }
             }
 
@@ -603,6 +599,61 @@ internal sealed class LauncherView : Scrollable
             var font = _state == StepState.Active ? BoldFont : BodyFont;
             g.DrawText(font, _state == StepState.Pending ? Dim : Fore, TextLeft, (Height - font.LineHeight) / 2,
                 Fit(g, font, _label, Width - TextLeft - 8, keepEnd: false));
+        }
+    }
+
+    /// <summary>
+    ///     Painted rather than a wrapping Label: Rhino for Mac lays wrapped labels out at unbounded
+    ///     width and right-aligns them, which pushes the text off the card. Two lines, the second elided.
+    /// </summary>
+    private sealed class StepHint : Drawable
+    {
+        private const int Lines = 2;
+        private const int Bottom = 10;
+        private readonly string _text;
+
+        public StepHint(string text)
+        {
+            _text = text;
+            Height = (int)Math.Ceiling(SmallFont.LineHeight * Lines + Bottom);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            var width = Width - StepRow.TextLeft - 8;
+            var top = 0f;
+            var rest = _text;
+            for (var line = 0; line < Lines && rest.Length > 0; line++)
+            {
+                var last = line == Lines - 1;
+                var take = last ? rest : FirstLine(g, rest, width);
+                g.DrawText(SmallFont, Dim, StepRow.TextLeft, top, last ? Fit(g, SmallFont, take, width, keepEnd: false) : take);
+                rest = rest.Substring(take.Length).TrimStart();
+                top += SmallFont.LineHeight;
+            }
+        }
+
+        /// <summary>The longest run of whole words that fits <paramref name="width" />; one word if none does.</summary>
+        private static string FirstLine(Graphics g, string text, float width)
+        {
+            var end = 0;
+            for (var next = text.IndexOf(' '); ; next = text.IndexOf(' ', next + 1))
+            {
+                var candidate = next < 0 ? text : text.Substring(0, next);
+                if (end > 0 && g.MeasureString(SmallFont, candidate).Width > width)
+                {
+                    break;
+                }
+
+                end = candidate.Length;
+                if (next < 0)
+                {
+                    break;
+                }
+            }
+
+            return text.Substring(0, end);
         }
     }
 

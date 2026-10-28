@@ -145,8 +145,8 @@ fires for a player document.
   there and authenticated. Inbound messages have parser tests, not wire fixtures: the fixtures are
   one per outbound envelope.
   - **Close** runs the closing steps above.
-  - **Edit in Grasshopper** calls `ShowEditor()`, turns the forced preview off, stops clearing
-    `IsModified`, flips the role to author, and re-shows the panel with an author URL. The page
+  - **Edit in Grasshopper** calls `ShowEditor()`, stops clearing `IsModified`, flips the
+    role to author, and re-shows the panel with an author URL. The page
     reloads, re-authenticates and gets `role: author`. Hosted stays set, so the session survives a
     file saved with Enable off.
   - **Showing the editor any other way** does the same. If the Grasshopper editor is visible when
@@ -207,7 +207,8 @@ Checked live on Rhino 8.27 with the editor hidden, through the Rhino MCP tools:
 4. **Quitting Rhino** with a player document open doesn't prompt and doesn't hang.
 5. **Edit in Grasshopper hands over cleanly**, including on a file saved with Enable off:
    - the editor shows;
-   - the preview is no longer forced;
+   - the preview stays forced while the panel shows the document, so minimizing the editor
+     keeps the geometry;
    - the next schema sync marks the document modified;
    - the page reloads as an author.
 

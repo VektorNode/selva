@@ -175,6 +175,12 @@ must keep `DynamicValueList` ahead of `ValueList` or every dynamic list resolves
 Rhino.Compute fork **by simple name, never assembly identity**, so a new output goo needs no fork
 change.
 
+Inputs have the mirror contract. Every Selva Get param derives from `SelvaContextualParameter<T>`,
+whose `AssignContextualDataTree` takes `DataTree<GH_String>`. The fork hands any contextual param
+whose `TypeName` it doesn't list the request's values as text through that method, and the param
+parses them. Change that method's tree type and Compute silently stops assigning the param; add an
+overload and the fork's by-name lookup throws.
+
 ## Two names the code depends on that no compiler checks
 
 Rhino.Compute reflects on the literal class name `GH_UIBuilderComponent` and the private field name
@@ -268,7 +274,7 @@ field" never runs.
 
 Two traps that cost a save cycle here:
 
-- **`_selectedValues` is wiped by any solve.** `ClearAllContextualParameters` runs at every
+- **The applied selection is wiped by any solve.** `ClearAllContextualParameters` runs at every
   solve-end, so a fixture whose saved selections matter must have them re-applied
   (`SelectItemByName`) immediately before writing the archive, with no solve in between.
 - The `Could not write schema history: Method not found: JToken.ToString` warning on save is a

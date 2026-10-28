@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
@@ -7,19 +8,13 @@ using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Params;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Properties;
+using Selva.GH.Utilities;
 using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
 
-public class GH_ThreeMaterial : GH_Component
+public class GH_ThreeMaterial : SelvaZuiComponent
 {
-    private const int BaseInput = 13;
-    private const int MappingInput = 14;
-    private const int TextureSizeInput = 15;
-    private const int FinishInput = 16;
-    private const int TransmissionInput = 17;
-    private const int IorInput = 18;
-
     // Index = the Finish input's value, so append only: a saved definition holds the number.
     private static readonly (string label, string wire)[] Finishes =
     {
@@ -35,9 +30,12 @@ public class GH_ThreeMaterial : GH_Component
     {
     }
 
-    public override Guid ComponentGuid => new Guid("31100A9A-AA13-43EF-9C2C-8F3C56BC6D68");
+    public override Guid ComponentGuid => new Guid("8313D290-839F-489C-A86D-DD2A2ED3237B");
 
     protected override Bitmap Icon => Resources.ThreeMaterial;
+
+    protected override IReadOnlyCollection<string> PrimaryInputs =>
+        new[] { "Color", "Metalness", "Roughness", "Opacity", "Transparent", "Texture", "Base" };
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -109,13 +107,13 @@ public class GH_ThreeMaterial : GH_Component
             pManager[i].Optional = true;
         }
 
-        var mapping = (Param_Integer)pManager[MappingInput];
+        var mapping = (Param_Integer)pManager[14];
         foreach (UvMapping value in Enum.GetValues(typeof(UvMapping)))
         {
             mapping.AddNamedValue(value.ToString(), (int)value);
         }
 
-        var finish = (Param_Integer)pManager[FinishInput];
+        var finish = (Param_Integer)pManager[16];
         for (var i = 0; i < Finishes.Length; i++)
         {
             finish.AddNamedValue(Finishes[i].label, i);
@@ -132,26 +130,26 @@ public class GH_ThreeMaterial : GH_Component
     protected override void SolveInstance(IGH_DataAccess DA)
     {
         ThreeMaterialGoo baseGoo = null;
-        DA.GetData(BaseInput, ref baseGoo);
+        GetInput(DA, "Base", ref baseGoo);
         var material = baseGoo?.Value?.Clone() ?? ThreeMaterial.Default();
 
-        if (TryGet(DA, 0, out Color color)) material.Color = color;
-        if (TryGet(DA, 1, out double metalness)) material.Metalness = metalness;
-        if (TryGet(DA, 2, out double roughness)) material.Roughness = roughness;
-        if (TryGet(DA, 3, out double opacity)) material.Opacity = opacity;
-        if (TryGet(DA, 4, out bool transparent)) material.Transparent = transparent;
-        if (TryGet(DA, 5, out IGH_Goo map)) material.Map = TextureInput.Resolve(map, this);
-        if (TryGet(DA, 6, out double reflection)) material.EnvMapIntensity = reflection;
-        if (TryGet(DA, 7, out double clearcoat)) material.Clearcoat = clearcoat;
-        if (TryGet(DA, 8, out double clearcoatRoughness)) material.ClearcoatRoughness = clearcoatRoughness;
-        if (TryGet(DA, 9, out double anisotropy)) material.Anisotropy = anisotropy;
-        if (TryGet(DA, 10, out double rotation)) material.AnisotropyRotation = rotation;
-        if (TryGet(DA, 11, out IGH_Goo roughnessMap)) material.RoughnessMap = TextureInput.Resolve(roughnessMap, this);
-        if (TryGet(DA, 12, out IGH_Goo normalMap)) material.NormalMap = TextureInput.Resolve(normalMap, this);
-        if (TryGet(DA, TransmissionInput, out double transmission)) material.Transmission = transmission;
-        if (TryGet(DA, IorInput, out double ior)) material.Ior = ior;
+        if (TryGet(DA, "Color", out Color color)) material.Color = color;
+        if (TryGet(DA, "Metalness", out double metalness)) material.Metalness = metalness;
+        if (TryGet(DA, "Roughness", out double roughness)) material.Roughness = roughness;
+        if (TryGet(DA, "Opacity", out double opacity)) material.Opacity = opacity;
+        if (TryGet(DA, "Transparent", out bool transparent)) material.Transparent = transparent;
+        if (TryGet(DA, "Texture", out IGH_Goo map)) material.Map = TextureInput.Resolve(map, this);
+        if (TryGet(DA, "Reflection", out double reflection)) material.EnvMapIntensity = reflection;
+        if (TryGet(DA, "Clearcoat", out double clearcoat)) material.Clearcoat = clearcoat;
+        if (TryGet(DA, "Clearcoat Roughness", out double clearcoatRoughness)) material.ClearcoatRoughness = clearcoatRoughness;
+        if (TryGet(DA, "Anisotropy", out double anisotropy)) material.Anisotropy = anisotropy;
+        if (TryGet(DA, "Anisotropy Rotation", out double rotation)) material.AnisotropyRotation = rotation;
+        if (TryGet(DA, "Roughness Map", out IGH_Goo roughnessMap)) material.RoughnessMap = TextureInput.Resolve(roughnessMap, this);
+        if (TryGet(DA, "Normal Map", out IGH_Goo normalMap)) material.NormalMap = TextureInput.Resolve(normalMap, this);
+        if (TryGet(DA, "Transmission", out double transmission)) material.Transmission = transmission;
+        if (TryGet(DA, "IOR", out double ior)) material.Ior = ior;
 
-        if (TryGet(DA, FinishInput, out int finish))
+        if (TryGet(DA, "Finish", out int finish))
         {
             if (finish >= 0 && finish < Finishes.Length)
             {
@@ -163,7 +161,7 @@ public class GH_ThreeMaterial : GH_Component
             }
         }
 
-        if (TryGet(DA, TextureSizeInput, out double mapSize))
+        if (TryGet(DA, "Texture Size", out double mapSize))
         {
             if (mapSize > 0)
             {
@@ -175,7 +173,7 @@ public class GH_ThreeMaterial : GH_Component
             }
         }
 
-        var mappingWired = TryGet(DA, MappingInput, out int mappingValue);
+        var mappingWired = TryGet(DA, "Mapping", out int mappingValue);
         if (mappingWired)
         {
             if (Enum.IsDefined(typeof(UvMapping), mappingValue))
@@ -207,9 +205,9 @@ public class GH_ThreeMaterial : GH_Component
     }
 
     // False when unwired, so the base's value (or the wire's omission) stands.
-    private static bool TryGet<T>(IGH_DataAccess DA, int index, out T value)
+    private bool TryGet<T>(IGH_DataAccess DA, string name, out T value)
     {
         value = default;
-        return DA.GetData(index, ref value);
+        return GetInput(DA, name, ref value);
     }
 }

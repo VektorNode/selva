@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using Grasshopper.Kernel;
+using Grasshopper.Kernel.Types;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.FileIO;
@@ -83,6 +85,46 @@ public static class FileImporter
                 }
             }
         }
+    }
+
+    /// <summary>Imports a file as Grasshopper geometry, reporting failures through <paramref name="report" />.</summary>
+    public static List<IGH_GeometricGoo> ImportAsGoo(FileInputData fileData,
+        Action<GH_RuntimeMessageLevel, string> report)
+    {
+        var ghGeometry = new List<IGH_GeometricGoo>();
+        var result = ImportFromFileInputData(fileData);
+        if (!result.Success)
+        {
+            report(GH_RuntimeMessageLevel.Error, result.ErrorMessage);
+            return ghGeometry;
+        }
+
+        foreach (var item in result.Geometry)
+        {
+            IGH_GeometricGoo goo = item.Geometry switch
+            {
+                Curve curve => new GH_Curve(curve),
+                Brep brep => new GH_Brep(brep),
+                Mesh mesh => new GH_Mesh(mesh),
+                Surface surface => new GH_Surface(surface),
+                Point point => new GH_Point(point.Location),
+                _ => null
+            };
+
+            if (goo != null)
+            {
+                ghGeometry.Add(goo);
+            }
+        }
+
+        if (ghGeometry.Count == 0)
+        {
+            report(GH_RuntimeMessageLevel.Warning, "No geometry found in file");
+            return ghGeometry;
+        }
+
+        report(GH_RuntimeMessageLevel.Remark, $"Imported {ghGeometry.Count} objects from {result.DetectedFormat}");
+        return ghGeometry;
     }
 
     public static (bool Success, List<GeometryWithName> Geometry, string DetectedFormat, string ErrorMessage)

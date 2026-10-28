@@ -539,6 +539,13 @@ public static class ParameterTypeHelper
             return false;
         }
 
+        if (obj is IGH_ContextualParameter2 contextual)
+        {
+            contextual.ClearContextualData();
+            return true;
+        }
+
+        // Contextual components (not params) declare the method without the interface.
         var method = GetCachedMethod(obj.GetType(), "ClearContextualData", ClearContextualDataMethodCache);
         if (method == null)
         {

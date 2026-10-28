@@ -101,6 +101,70 @@
 			]
 		},
 		{
+			"guid": "1F0FE0F9-C2A9-4BED-AD91-7A16E9F63364",
+			"class": "GH_LinearDimension",
+			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_LinearDimension.cs",
+			"inputs": [
+				{
+					"kind": "AddPointParameter",
+					"name": "Point A",
+					"access": "item"
+				},
+				{
+					"kind": "AddPointParameter",
+					"name": "Point B",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Offset",
+					"access": "item"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Label",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Text Size",
+					"access": "item"
+				},
+				{
+					"kind": "AddColourParameter",
+					"name": "Color",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Stroke Width",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Tick Style",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Tick Size",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Text Placement",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Drawing",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "29735748-B215-42FB-85D0-85549F26F28E",
 			"class": "GH_CreateSurface",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_CreateSurface.cs",
@@ -125,7 +189,7 @@
 			]
 		},
 		{
-			"guid": "2B7C8D3E-4F5A-4B6C-8D9E-1F2A3B4C5D62",
+			"guid": "2CF47AC1-C52E-4E86-8495-30B86969232B",
 			"class": "GH_Table",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_Table.cs",
 			"inputs": [
@@ -194,10 +258,35 @@
 			]
 		},
 		{
-			"guid": "31100A9A-AA13-43EF-9C2C-8F3C56BC6D68",
-			"class": "GH_ThreeMaterial",
-			"file": "Plugin/Selva.GH/Features/Display/Components/GH_ThreeMaterial.cs",
+			"guid": "2D0CD233-7615-4DF5-8057-46DD7FD4ECBE",
+			"class": "GH_AngularDimension",
+			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_AngularDimension.cs",
 			"inputs": [
+				{
+					"kind": "AddPointParameter",
+					"name": "Vertex",
+					"access": "item"
+				},
+				{
+					"kind": "AddPointParameter",
+					"name": "Point A",
+					"access": "item"
+				},
+				{
+					"kind": "AddPointParameter",
+					"name": "Point B",
+					"access": "item"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Label",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Text Size",
+					"access": "item"
+				},
 				{
 					"kind": "AddColourParameter",
 					"name": "Color",
@@ -205,99 +294,29 @@
 				},
 				{
 					"kind": "AddNumberParameter",
-					"name": "Metalness",
+					"name": "Stroke Width",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Tick Style",
 					"access": "item"
 				},
 				{
 					"kind": "AddNumberParameter",
-					"name": "Roughness",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Opacity",
+					"name": "Tick Size",
 					"access": "item"
 				},
 				{
 					"kind": "AddBooleanParameter",
-					"name": "Transparent",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Texture",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Reflection",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Clearcoat",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Clearcoat Roughness",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Anisotropy",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Anisotropy Rotation",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Roughness Map",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Normal Map",
-					"access": "item"
-				},
-				{
-					"kind": "AddParameter:Param_ThreeMaterial",
-					"name": "Base",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Mapping",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Texture Size",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Finish",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Transmission",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "IOR",
+					"name": "Reflex",
 					"access": "item"
 				}
 			],
 			"outputs": [
 				{
-					"kind": "AddParameter:Param_ThreeMaterial",
-					"name": "Material",
+					"kind": "AddGenericParameter",
+					"name": "Drawing",
 					"access": "item"
 				}
 			]
@@ -441,179 +460,6 @@
 			]
 		},
 		{
-			"guid": "3F5C21A9-7D64-4E18-9B02-6C1A4D8E5F37",
-			"class": "GH_PathStyle",
-			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_PathStyle.cs",
-			"inputs": [
-				{
-					"kind": "AddColourParameter",
-					"name": "Stroke Color",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Stroke Width",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Stroke Opacity",
-					"access": "item"
-				},
-				{
-					"kind": "AddColourParameter",
-					"name": "Fill Color",
-					"access": "item"
-				},
-				{
-					"kind": "AddBooleanParameter",
-					"name": "Fill",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Fill Opacity",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Line Cap",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Line Join",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Dash Pattern",
-					"access": "list"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Fill Rule",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Hatch Pattern",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Pattern Scale",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Pattern Angle",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Pattern Spacing",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Pattern Line Width",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddParameter:Param_PathStyle",
-					"name": "Style",
-					"access": "item"
-				}
-			]
-		},
-		{
-			"guid": "3F5F0E10-2A21-4F0E-9F25-7B0F2C7C5E91",
-			"class": "GH_LayoutOverride",
-			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_LayoutOverride.cs",
-			"inputs": [
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Paper Size",
-					"access": "item"
-				},
-				{
-					"kind": "AddBooleanParameter",
-					"name": "Landscape",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Margin",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Header",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Footer",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Header Height",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Footer Height",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Header Align",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Footer Align",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Header Placement",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Footer Placement",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Header Edge Offset",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Footer Edge Offset",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Units",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "Override",
-					"access": "item"
-				}
-			]
-		},
-		{
 			"guid": "4A845B41-30E7-4DC7-BD47-0AC4C44E4F46",
 			"class": "GH_DataToFileGeneric",
 			"file": "Plugin/Selva.GH/Features/FileIO/Components/GH_DataToFileGeneric.cs",
@@ -703,6 +549,95 @@
 					"kind": "AddGenericParameter",
 					"name": "File",
 					"access": "list"
+				}
+			]
+		},
+		{
+			"guid": "4CEFA814-76BC-4BC5-AF7D-0BA6F3B48C4E",
+			"class": "GH_PathStyle",
+			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_PathStyle.cs",
+			"inputs": [
+				{
+					"kind": "AddColourParameter",
+					"name": "Stroke Color",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Stroke Width",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Stroke Opacity",
+					"access": "item"
+				},
+				{
+					"kind": "AddColourParameter",
+					"name": "Fill Color",
+					"access": "item"
+				},
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Fill",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Fill Opacity",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Line Cap",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Line Join",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Dash Pattern",
+					"access": "list"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Fill Rule",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Hatch Pattern",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Pattern Scale",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Pattern Angle",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Pattern Spacing",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Pattern Line Width",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_PathStyle",
+					"name": "Style",
+					"access": "item"
 				}
 			]
 		},
@@ -954,6 +889,90 @@
 			]
 		},
 		{
+			"guid": "6B443A70-1C56-464B-BBAE-E0AE2E420789",
+			"class": "GH_LayoutOverride",
+			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_LayoutOverride.cs",
+			"inputs": [
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Paper Size",
+					"access": "item"
+				},
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Landscape",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Margin",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Header",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Footer",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Header Height",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Footer Height",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Header Align",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Footer Align",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Header Placement",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Footer Placement",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Header Edge Offset",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Footer Edge Offset",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Units",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Override",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "6B9D20CC-5566-47CF-9364-F65F9283396F",
 			"class": "GH_CreateText",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_CreateText.cs",
@@ -998,6 +1017,70 @@
 				{
 					"kind": "AddGenericParameter",
 					"name": "Drawing",
+					"access": "item"
+				}
+			]
+		},
+		{
+			"guid": "6D5CCE51-0B0D-4936-B076-E7D0DD1B820D",
+			"class": "GH_TextStyle",
+			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_TextStyle.cs",
+			"inputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Font Family",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Font Size",
+					"access": "item"
+				},
+				{
+					"kind": "AddColourParameter",
+					"name": "Color",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Weight",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Style",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Decoration",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Horizontal Anchor",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Vertical Anchor",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Line Height",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Letter Spacing",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_TextStyle",
+					"name": "Style",
 					"access": "item"
 				}
 			]
@@ -1061,6 +1144,115 @@
 			]
 		},
 		{
+			"guid": "8313D290-839F-489C-A86D-DD2A2ED3237B",
+			"class": "GH_ThreeMaterial",
+			"file": "Plugin/Selva.GH/Features/Display/Components/GH_ThreeMaterial.cs",
+			"inputs": [
+				{
+					"kind": "AddColourParameter",
+					"name": "Color",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Metalness",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Roughness",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Opacity",
+					"access": "item"
+				},
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Transparent",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Texture",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Reflection",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Clearcoat",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Clearcoat Roughness",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Anisotropy",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Anisotropy Rotation",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Roughness Map",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Normal Map",
+					"access": "item"
+				},
+				{
+					"kind": "AddParameter:Param_ThreeMaterial",
+					"name": "Base",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Mapping",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Texture Size",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Finish",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Transmission",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "IOR",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_ThreeMaterial",
+					"name": "Material",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "887D0B52-B94D-4E4C-8150-587802E9977E",
 			"class": "Param_PathStyle",
 			"file": "Plugin/Selva.GH/Features/Drawing/Params/Param_PathStyle.cs",
@@ -1112,70 +1304,6 @@
 			]
 		},
 		{
-			"guid": "90160C4E-C8C8-4777-BD42-53347E115120",
-			"class": "GH_LinearDimension",
-			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_LinearDimension.cs",
-			"inputs": [
-				{
-					"kind": "AddPointParameter",
-					"name": "Point A",
-					"access": "item"
-				},
-				{
-					"kind": "AddPointParameter",
-					"name": "Point B",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Offset",
-					"access": "item"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Label",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Text Size",
-					"access": "item"
-				},
-				{
-					"kind": "AddColourParameter",
-					"name": "Color",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Stroke Width",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Tick Style",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Tick Size",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Text Placement",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "Drawing",
-					"access": "item"
-				}
-			]
-		},
-		{
 			"guid": "9A941065-E00F-439A-86DE-CE58A39C287D",
 			"class": "Param_TextStyle",
 			"file": "Plugin/Selva.GH/Features/Drawing/Params/Param_TextStyle.cs",
@@ -1197,7 +1325,141 @@
 			"outputs": []
 		},
 		{
-			"guid": "A2501A92-E5D1-4646-A3D0-4368CE879BFC",
+			"guid": "A4CD58ED-35CA-47AC-8505-F1DCAB1FBCD2",
+			"class": "GH_RevisionTable",
+			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_RevisionTable.cs",
+			"inputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Revisions",
+					"access": "list"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Dates",
+					"access": "list"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Descriptions",
+					"access": "list"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "By",
+					"access": "list"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Width",
+					"access": "item"
+				},
+				{
+					"kind": "AddParameter:Param_Stroke",
+					"name": "Border",
+					"access": "item"
+				},
+				{
+					"kind": "AddPointParameter",
+					"name": "Origin",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Element",
+					"access": "item"
+				}
+			]
+		},
+		{
+			"guid": "A66F2DA2-800B-460D-9996-7C13BDEE4553",
+			"class": "GH_FileFromPath",
+			"file": "Plugin/Selva.GH/Features/FileIO/Components/GH_FileFromPath.cs",
+			"inputs": [
+				{
+					"kind": "AddTextParameter",
+					"name": "Path",
+					"access": "item"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Name",
+					"access": "item"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Sub Folder",
+					"access": "item"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Metadata",
+					"access": "list"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "File",
+					"access": "item"
+				}
+			]
+		},
+		{
+			"guid": "AA5EAA20-2AD8-4ECE-8DA5-BB275BF36456",
+			"class": "GH_Page",
+			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_Page.cs",
+			"inputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Drawings",
+					"access": "tree"
+				},
+				{
+					"kind": "AddTextParameter",
+					"name": "Title",
+					"access": "item"
+				},
+				{
+					"kind": "AddGenericParameter",
+					"name": "Override",
+					"access": "item"
+				},
+				{
+					"kind": "AddBooleanParameter",
+					"name": "Keep Together",
+					"access": "item"
+				},
+				{
+					"kind": "AddIntegerParameter",
+					"name": "Arrange",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Spacing",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddGenericParameter",
+					"name": "Page",
+					"access": "item"
+				}
+			]
+		},
+		{
+			"guid": "ACBCC8DD-9B2E-4A5D-8BE3-25FBE2B1CABA",
+			"class": "Param_FileData",
+			"file": "Plugin/Selva.GH/Features/FileIO/Params/Param_FileData.cs",
+			"inputs": [],
+			"outputs": []
+		},
+		{
+			"guid": "B0FA5F7E-9B4C-47F1-904D-052FEB7C9098",
 			"class": "GH_TitleBlock",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_TitleBlock.cs",
 			"inputs": [
@@ -1294,204 +1556,6 @@
 					"access": "item"
 				}
 			]
-		},
-		{
-			"guid": "A4CD58ED-35CA-47AC-8505-F1DCAB1FBCD2",
-			"class": "GH_RevisionTable",
-			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_RevisionTable.cs",
-			"inputs": [
-				{
-					"kind": "AddTextParameter",
-					"name": "Revisions",
-					"access": "list"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Dates",
-					"access": "list"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Descriptions",
-					"access": "list"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "By",
-					"access": "list"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Width",
-					"access": "item"
-				},
-				{
-					"kind": "AddParameter:Param_Stroke",
-					"name": "Border",
-					"access": "item"
-				},
-				{
-					"kind": "AddPointParameter",
-					"name": "Origin",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "Element",
-					"access": "item"
-				}
-			]
-		},
-		{
-			"guid": "A66F2DA2-800B-460D-9996-7C13BDEE4553",
-			"class": "GH_FileFromPath",
-			"file": "Plugin/Selva.GH/Features/FileIO/Components/GH_FileFromPath.cs",
-			"inputs": [
-				{
-					"kind": "AddTextParameter",
-					"name": "Path",
-					"access": "item"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Name",
-					"access": "item"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Sub Folder",
-					"access": "item"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Metadata",
-					"access": "list"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "File",
-					"access": "item"
-				}
-			]
-		},
-		{
-			"guid": "A90C4D76-9482-4501-A905-F9221656B6C8",
-			"class": "GH_AngularDimension",
-			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_AngularDimension.cs",
-			"inputs": [
-				{
-					"kind": "AddPointParameter",
-					"name": "Vertex",
-					"access": "item"
-				},
-				{
-					"kind": "AddPointParameter",
-					"name": "Point A",
-					"access": "item"
-				},
-				{
-					"kind": "AddPointParameter",
-					"name": "Point B",
-					"access": "item"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Label",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Text Size",
-					"access": "item"
-				},
-				{
-					"kind": "AddColourParameter",
-					"name": "Color",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Stroke Width",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Tick Style",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Tick Size",
-					"access": "item"
-				},
-				{
-					"kind": "AddBooleanParameter",
-					"name": "Reflex",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "Drawing",
-					"access": "item"
-				}
-			]
-		},
-		{
-			"guid": "AA5EAA20-2AD8-4ECE-8DA5-BB275BF36456",
-			"class": "GH_Page",
-			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_Page.cs",
-			"inputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "Drawings",
-					"access": "tree"
-				},
-				{
-					"kind": "AddTextParameter",
-					"name": "Title",
-					"access": "item"
-				},
-				{
-					"kind": "AddGenericParameter",
-					"name": "Override",
-					"access": "item"
-				},
-				{
-					"kind": "AddBooleanParameter",
-					"name": "Keep Together",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Arrange",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Spacing",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddGenericParameter",
-					"name": "Page",
-					"access": "item"
-				}
-			]
-		},
-		{
-			"guid": "ACBCC8DD-9B2E-4A5D-8BE3-25FBE2B1CABA",
-			"class": "Param_FileData",
-			"file": "Plugin/Selva.GH/Features/FileIO/Params/Param_FileData.cs",
-			"inputs": [],
-			"outputs": []
 		},
 		{
 			"guid": "B2F6D3A1-7C84-4E29-9A5B-1D0E8C7F2A63",
@@ -1780,70 +1844,6 @@
 			"file": "Plugin/Selva.GH/Features/ComputeIO/Components/GH_GetServerFile.cs",
 			"inputs": [],
 			"outputs": []
-		},
-		{
-			"guid": "D37B61DB-4FC4-4F01-9A76-95DA5D719EEA",
-			"class": "GH_TextStyle",
-			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_TextStyle.cs",
-			"inputs": [
-				{
-					"kind": "AddTextParameter",
-					"name": "Font Family",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Font Size",
-					"access": "item"
-				},
-				{
-					"kind": "AddColourParameter",
-					"name": "Color",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Weight",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Style",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Decoration",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Horizontal Anchor",
-					"access": "item"
-				},
-				{
-					"kind": "AddIntegerParameter",
-					"name": "Vertical Anchor",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Line Height",
-					"access": "item"
-				},
-				{
-					"kind": "AddNumberParameter",
-					"name": "Letter Spacing",
-					"access": "item"
-				}
-			],
-			"outputs": [
-				{
-					"kind": "AddParameter:Param_TextStyle",
-					"name": "Style",
-					"access": "item"
-				}
-			]
 		},
 		{
 			"guid": "D5E8F1A3-6B7C-4D2E-9F01-2A3B4C5D6E7F",
