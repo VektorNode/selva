@@ -89,10 +89,11 @@ A thin host with no Selva logic of its own:
 
 States:
 
-- **No target:** the panel shows a native Eto launcher: Open… and the recent definitions, from
+- **No target:** the panel shows a native Eto launcher: a file picker and the recent definitions, from
   [rhino-player](./rhino-player.md). No WebView is created, so an idle panel doesn't start a
   browser process.
-- **Docked:** the panel shows the WebView. A new target navigates the same WebView.
+- **Docked:** the panel shows the WebView. A new target navigates the same WebView. During an
+  open from the launcher, the launcher's progress stays up until the page has loaded.
 - **In its own window:** the WebView sits in a normal Eto `Form` and the panel shows a label
   saying so.
 - **Target cleared:** the window closes, and the panel goes back to the launcher.

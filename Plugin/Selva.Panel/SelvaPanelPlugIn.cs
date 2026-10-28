@@ -38,6 +38,7 @@ public class SelvaPanelPlugIn : PlugIn
         Launcher.IsShowingSession = () => Host.View != null;
         Launcher.IsInWindow = () => Host.InWindow;
         Launcher.Changed += CloseWindowAfterFailedOpen;
+        Host.PageLoaded += Launcher.SessionShown;
 
         // System, not the PerDoc default: on Mac PerDoc gives every document window its own panel.
         Panels.RegisterPanel(this, typeof(SelvaPanel), "Selva", typeof(SelvaPanelPlugIn).Assembly,
@@ -60,7 +61,6 @@ public class SelvaPanelPlugIn : PlugIn
     private void Show(string url, string sessionId)
     {
         Host.Show(new PanelTarget(new Uri(url), sessionId));
-        Launcher.SessionShown();
     }
 
     private void Clear(string sessionId)

@@ -18,6 +18,7 @@ internal sealed class SelvaWebHost
     private static readonly Size DefaultWindowSize = new Size(1100, 800);
 
     private PanelTarget? _shown;
+    private bool _pageLoaded;
 
     // Created on the first target and kept for the life of the plug-in: an idle panel starts no
     // browser process, and disposing WebView2 mid-initialisation throws E_ABORT on older Eto.
@@ -38,6 +39,9 @@ internal sealed class SelvaWebHost
     /// <summary>The panel re-reads <see cref="View" /> and <see cref="InWindow" />.</summary>
     public event Action? Changed;
 
+    /// <summary>The shown target's page has loaded, or was already loaded when shown again.</summary>
+    public event Action? PageLoaded;
+
     public PanelTarget? Shown => _shown;
 
     /// <summary>The WebView to display, or null while there's no session.</summary>
@@ -52,12 +56,18 @@ internal sealed class SelvaWebHost
 
         // Before navigating: the navigation policy judges the request against _shown.
         _shown = target;
-        if (previous?.Url != target.Url)
+        var navigate = previous?.Url != target.Url;
+        if (navigate)
         {
+            _pageLoaded = false;
             _webView.Url = target.Url;
         }
 
         Changed?.Invoke();
+        if (!navigate && _pageLoaded)
+        {
+            PageLoaded?.Invoke();
+        }
 
         if (_window != null)
         {
@@ -81,6 +91,7 @@ internal sealed class SelvaWebHost
         }
 
         _shown = null;
+        _pageLoaded = false;
         if (!keepWindow)
         {
             CloseWindow();
@@ -218,8 +229,16 @@ internal sealed class SelvaWebHost
             }
         };
 
-        // A reload forgets what NotifyPage told the previous document.
-        webView.DocumentLoaded += (_, _) => NotifyPage();
+        webView.DocumentLoaded += (_, e) =>
+        {
+            // A reload forgets what NotifyPage told the previous document.
+            NotifyPage();
+            if (_shown != null && e.Uri != null && e.Uri.Scheme != Blank.Scheme)
+            {
+                _pageLoaded = true;
+                PageLoaded?.Invoke();
+            }
+        };
 
         EnableWebInspector(webView);
         return webView;

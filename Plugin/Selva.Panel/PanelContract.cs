@@ -36,7 +36,7 @@ internal static class PanelContract
     /// <summary>
     ///     <c>Action&lt;string message&gt;</c>: a player session failed after the launcher handed
     ///     the file over, where its runtime messages would land on a hidden canvas. The panel
-    ///     shows the message in place of "Loading…". UI thread only.
+    ///     shows the message in place of its progress. UI thread only.
     /// </summary>
     public const string NotifyKey = "notify";
 

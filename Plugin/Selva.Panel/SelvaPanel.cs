@@ -35,77 +35,29 @@ public class SelvaPanel : Eto.Forms.Panel
     {
         var plugIn = SelvaPanelPlugIn.Instance;
         var host = plugIn?.Host;
+
+        // An Eto control has one parent: the launcher lets go of the WebView before anything else
+        // takes it.
+        (Content as LauncherView)?.ReleasePage();
+
         if (host?.View == null)
         {
-            Content = plugIn == null ? null : LauncherView(plugIn.Launcher);
+            Content = plugIn == null ? null : new LauncherView(plugIn.Launcher);
         }
         else if (host.InWindow)
         {
             Content = _inWindowLabel;
         }
+        else if (plugIn!.Launcher.IsOpening)
+        {
+            // The launcher's progress stays up until the page has loaded: the WebView is blank
+            // before that.
+            Content = new LauncherView(plugIn.Launcher, host.View);
+        }
         else
         {
             Content = host.View;
         }
-    }
-
-    /// <summary>
-    ///     The idle panel. Native, so an idle panel starts no browser process, and nothing loads
-    ///     Grasshopper until the user picks a file.
-    /// </summary>
-    private static Control LauncherView(DefinitionLauncherClient launcher)
-    {
-        var busy = launcher.Status != null;
-        var layout = new StackLayout
-        {
-            Padding = new Padding(16),
-            Spacing = 10,
-            HorizontalContentAlignment = HorizontalAlignment.Stretch
-        };
-
-        layout.Items.Add(WrappedLabel("Open a Grasshopper definition to use its Selva UI."));
-
-        var open = new Button { Text = "Open…", Enabled = !busy };
-        open.Click += (_, _) => launcher.ShowOpenDialog();
-        layout.Items.Add(new StackLayoutItem(open, HorizontalAlignment.Left));
-
-        if (launcher.Status != null)
-        {
-            layout.Items.Add(WrappedLabel(launcher.Status));
-        }
-
-        if (launcher.Error != null)
-        {
-            layout.Items.Add(WrappedLabel(launcher.Error, Colors.IndianRed));
-        }
-
-        var recent = launcher.Recent;
-        if (recent.Count > 0)
-        {
-            layout.Items.Add(new Label { Text = "Recent", Font = SystemFonts.Bold() });
-            foreach (var path in recent)
-            {
-                var link = new LinkButton { Text = System.IO.Path.GetFileName(path), ToolTip = path, Enabled = !busy };
-                link.Click += (_, _) => launcher.Open(path);
-                layout.Items.Add(new StackLayoutItem(link, HorizontalAlignment.Left));
-            }
-        }
-
-        layout.Items.Add(new StackLayoutItem(null, true));
-        layout.Items.Add(WrappedLabel("To build a UI, enable a UI Bridge in Grasshopper.", SystemColors.DisabledText));
-
-        return new Scrollable { Content = layout, Border = BorderType.None };
-    }
-
-    private static Label WrappedLabel(string text, Color? color = null)
-    {
-        var label = new Label { Text = text, Wrap = WrapMode.Word };
-        if (color is Color c)
-        {
-            label.TextColor = c;
-        }
-
-        return label;
     }
 
     private static Label CenteredLabel(string text)
@@ -153,6 +105,7 @@ public class SelvaPanel : Eto.Forms.Panel
             host.Changed -= ShowHostState;
             plugIn!.Launcher.Changed -= ShowHostState;
             // Rhino may dispose a panel at any time; the WebView belongs to the host, not to it.
+            (Content as LauncherView)?.ReleasePage();
             if (Content == host.View)
             {
                 Content = null;
