@@ -12,26 +12,40 @@ internal static class SlvmChunks
 {
     public static byte[] Write(List<(uint type, byte[] payload)> chunks)
     {
-        using (var ms = new MemoryStream())
-        using (var w = new BinaryWriter(ms))
+        // Sized up front and written once: the geometry chunk runs to megabytes, and a growing
+        // buffer would copy it on every resize and again to trim.
+        var size = 12L;
+        foreach (var (_, payload) in chunks)
         {
-            w.Write(SlvmDocument.Magic);
-            w.Write(SlvmDocument.Version);
-            w.Write((uint)chunks.Count);
-            foreach (var (type, payload) in chunks)
-            {
-                var body = payload ?? Array.Empty<byte>();
-                w.Write(type);
-                w.Write((uint)body.Length);
-                w.Write(body);
-                for (var pad = (4 - body.Length % 4) % 4; pad > 0; pad--)
-                {
-                    w.Write((byte)0);
-                }
-            }
-
-            return ms.ToArray();
+            size += 8 + Padded(payload?.Length ?? 0);
         }
+
+        var bytes = new byte[size];
+        var offset = 0;
+        WriteUInt32(bytes, ref offset, SlvmDocument.Magic);
+        WriteUInt32(bytes, ref offset, SlvmDocument.Version);
+        WriteUInt32(bytes, ref offset, (uint)chunks.Count);
+        foreach (var (type, payload) in chunks)
+        {
+            var body = payload ?? Array.Empty<byte>();
+            WriteUInt32(bytes, ref offset, type);
+            WriteUInt32(bytes, ref offset, (uint)body.Length);
+            Buffer.BlockCopy(body, 0, bytes, offset, body.Length);
+            offset += Padded(body.Length); // the array is zeroed, so the pad is already there
+        }
+
+        return bytes;
+    }
+
+    private static int Padded(int length) => length + (4 - length % 4) % 4;
+
+    private static void WriteUInt32(byte[] bytes, ref int offset, uint value)
+    {
+        bytes[offset] = (byte)value;
+        bytes[offset + 1] = (byte)(value >> 8);
+        bytes[offset + 2] = (byte)(value >> 16);
+        bytes[offset + 3] = (byte)(value >> 24);
+        offset += 4;
     }
 
     public static List<(uint type, byte[] payload)> Read(byte[] bytes)

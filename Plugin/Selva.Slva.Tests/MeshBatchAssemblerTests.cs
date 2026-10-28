@@ -150,44 +150,38 @@ public class MeshBatchAssemblerTests
     // ========================================================================
 
     [Fact]
-    public void CreateBatch_GroupsByMaterialAndDedupesIdenticalOnes()
+    public void CreateBatch_KeepsInputOrder_GroupingConsecutiveMeshesByMaterial()
     {
-        // Meshes arrive interleaved by material; grouping must gather them without losing the
-        // minted id that ties each back to its GH input slot.
+        // Interleaved materials stay interleaved: each run of one material is a group, so the
+        // geometry never moves when a mesh changes material. Identical materials still dedupe.
         var red = Material(Color.Red);
         var blue = Material(Color.Blue);
         var redAgain = Material(Color.Red); // distinct instance, identical values
 
         var quads = new List<float[]>();
         var faces = new List<int[]>();
-        for (var i = 0; i < 4; i++)
+        for (var i = 0; i < 5; i++)
         {
             var (v, f) = Quad(i * 10f);
             quads.Add(v);
             faces.Add(f);
         }
 
-        var batch = Build(quads, faces, new List<ThreeMaterial> { red, blue, redAgain, blue });
+        var batch = Build(quads, faces, new List<ThreeMaterial> { red, blue, redAgain, redAgain, blue });
 
-        // Two unique materials despite three red/blue instances.
         Assert.Equal(2, batch.Materials.Count);
-        Assert.Equal(2, batch.Groups.Count);
-
-        var redGroup = batch.Groups.Find(g => g.MaterialId == 0);
-        var blueGroup = batch.Groups.Find(g => g.MaterialId == 1);
-        Assert.Equal(new[] { "component-1/{0}/0", "component-1/{0}/2" },
-            redGroup.Meshes.ConvertAll(m => m.Id).ToArray());
-        Assert.Equal(new[] { "component-1/{0}/1", "component-1/{0}/3" },
-            blueGroup.Meshes.ConvertAll(m => m.Id).ToArray());
+        Assert.Equal(new[] { 0, 1, 0, 1 }, batch.Groups.ConvertAll(g => g.MaterialId).ToArray());
+        Assert.Equal(new[] { "component-1/{0}/2", "component-1/{0}/3" },
+            batch.Groups[2].Meshes.ConvertAll(m => m.Id).ToArray());
+        Assert.Equal(new[] { 0, 4, 8, 16 }, batch.Groups.ConvertAll(g => g.Meshes[0].VertexStart).ToArray());
     }
 
     [Fact]
-    public void CreateBatch_OrdersMeshesDeterministicallyWithinAMaterial()
+    public void CreateBatch_GeometryDoesNotDependOnMaterialAssignment()
     {
-        // List.Sort is unstable, so the comparer breaks ties on input order. Without that, two
-        // runs over identical input could emit different byte streams — which would also defeat
-        // the blob cache.
-        var mat = Material(Color.Red);
+        // What lets a geometry cache hit when parts change material: only the table moves.
+        var red = Material(Color.Red);
+        var blue = Material(Color.Blue);
         var quads = new List<float[]>();
         var faces = new List<int[]>();
         for (var i = 0; i < 40; i++)
@@ -197,17 +191,12 @@ public class MeshBatchAssemblerTests
             faces.Add(f);
         }
 
-        var materials = quads.ConvertAll(_ => mat);
-        var first = Build(quads, faces, materials);
-        var second = Build(quads, faces, materials);
+        var allRed = Build(quads, faces, quads.ConvertAll(_ => red));
+        var mixed = Build(quads, faces, quads.ConvertAll(q => quads.IndexOf(q) % 3 == 0 ? blue : red));
 
-        Assert.Equal(first.CompressedData, second.CompressedData);
-
-        var order = first.Groups[0].Meshes.ConvertAll(m => m.Id);
-        for (var i = 0; i < order.Count; i++)
-        {
-            Assert.Equal($"component-1/{{0}}/{i}", order[i]);
-        }
+        Assert.Equal(SlvmDocument.Read(allRed.CompressedData).GeometryBlob,
+            SlvmDocument.Read(mixed.CompressedData).GeometryBlob);
+        Assert.NotEqual(allRed.CompressedData, mixed.CompressedData);
     }
 
     // ========================================================================

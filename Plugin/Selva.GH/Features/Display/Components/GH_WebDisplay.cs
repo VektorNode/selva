@@ -345,6 +345,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public string MeshName;
         public float[] MeshVertices;
         public int[] MeshFaces;
+        public MeshItemKey MeshKey;
 
         // Optional per-vertex channels (UVs additionally require ThreeMaterial.NeedsUvs).
         // Null = mesh contributes none.
@@ -437,7 +438,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         // Pass 2 (expensive, parallel): mesh breps/surfaces and build curve/point items. Each slot
         // writes only its own index, so no locking is needed. Rhino meshing is thread-safe per
-        // geometry; meshSettings is read-only here.
+        // geometry; meshSettings is read-only here. An item whose MeshItemKey matches an earlier
+        // solve's skips all of it.
+        var meshingKey = MeshItemCache.MeshingKey(meshSettings);
         var results = new WorkResult[work.Count];
         Parallel.For(0, work.Count, idx =>
         {
@@ -469,95 +472,52 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var stageStart = Stopwatch.GetTimestamp();
-            var mesh = ConvertSingleGeometry(w.Geom, meshSettings);
-            perf?.AddMesh(Stopwatch.GetTimestamp() - stageStart);
-            if (mesh == null || !mesh.IsValid)
-            {
-                results[idx] = new WorkResult { Skipped = true };
-                return;
-            }
-
-            stageStart = Stopwatch.GetTimestamp();
-            mesh.Normals.ComputeNormals();
-            perf?.AddNormals(Stopwatch.GetTimestamp() - stageStart);
             // Only Authored vouches for an input mesh's UVs: a converted Brep carries surface parameters.
             var authoredUvs = w.Material?.ResolvedMapping == UvMapping.Authored
                               && w.Geom is Mesh input && input.TextureCoordinates.Count == input.Vertices.Count;
-            stageStart = Stopwatch.GetTimestamp();
-            DisplayUvs.Apply(mesh, w.Material, w.Id, mmPerUnit, authoredUvs);
-            perf?.AddUvs(Stopwatch.GetTimestamp() - stageStart);
 
-            // UVs are only worth carrying when the material needs them (a texture, anisotropy or a finish) —
-            // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
-            // every plain mesh would inflate the payload for nothing. Vertex colors only exist when
-            // something explicitly set them, so presence alone is the gate.
-            var hasUvs = mesh.TextureCoordinates.Count == mesh.Vertices.Count;
-            var wantUvs = w.Material != null && w.Material.NeedsUvs && hasUvs;
-            var wantColors = mesh.VertexColors.Count == mesh.Vertices.Count
-                             && mesh.VertexColors.Count > 0;
+            var stageStart = Stopwatch.GetTimestamp();
+            var key = MeshItemCache.KeyFor(w.Geom, meshingKey, mmPerUnit, w.Material, authoredUvs, w.Id);
+            perf?.AddKey(Stopwatch.GetTimestamp() - stageStart);
+
+            if (MeshItemCache.TryGet(key, out var meshed))
+            {
+                perf?.MeshCache.Hit();
+            }
+            else
+            {
+                perf?.MeshCache.Miss();
+                meshed = MeshOne(w, meshSettings, mmPerUnit, authoredUvs, perf);
+                if (meshed == null)
+                {
+                    results[idx] = new WorkResult { Skipped = true };
+                    return;
+                }
+
+                MeshItemCache.Add(key, meshed);
+            }
 
             // The batch zero-fills UVs for meshes that lack them, and the viewer builds the grain
             // tangent from UVs: zero UVs give it no direction. Drop anisotropy for this mesh.
             ThreeMaterial material = null;
-            if (!hasUvs && w.Material?.Anisotropy > 0)
+            if (!meshed.HasUvs && w.Material?.Anisotropy > 0)
             {
                 material = w.Material.Clone();
                 material.Anisotropy = null;
                 material.AnisotropyRotation = null;
             }
 
-            // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
-            // vertices it needs. Weld coincident vertices to shrink the payload, but respect normals
-            // (ignoreNormals: false): both the web and the C# preview recompute smooth normals via
-            // computeVertexNormals, which averages across every shared vertex, so welding across hard
-            // edges would smear them. Computing normals first lets the weld keep hard-edge vertices
-            // split (different normals) while merging smooth-surface interiors — preserving shading
-            // while still cutting most duplication.
-            //
-            // The weld must also respect any exported channel (ignoreAdditional: false), or vertices
-            // with different UVs/colors would merge and smear texture seams / color boundaries.
-            // Channels NOT being exported are cleared first so stale auto-generated data (brep TCs,
-            // partial color sets) can't block the weld.
-            stageStart = Stopwatch.GetTimestamp();
-            if (wantUvs || wantColors)
-            {
-                if (!wantUvs && mesh.TextureCoordinates.Count > 0)
-                {
-                    mesh.TextureCoordinates.Clear();
-                }
-
-                if (!wantColors && mesh.VertexColors.Count > 0)
-                {
-                    mesh.VertexColors.Clear();
-                }
-
-                mesh.Vertices.CombineIdentical(false, false);
-            }
-            else
-            {
-                mesh.Vertices.CombineIdentical(false, true);
-            }
-
-            mesh.Compact();
-            perf?.AddWeld(Stopwatch.GetTimestamp() - stageStart);
-
-            // Extract the arrays now, off the main thread — the per-vertex copy CreateBatch would
-            // otherwise do serially for every mesh in the batch.
-            stageStart = Stopwatch.GetTimestamp();
-            var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
-            perf?.AddArrays(Stopwatch.GetTimestamp() - stageStart);
-
             results[idx] = new WorkResult
             {
-                Mesh = mesh,
+                Mesh = meshed.Mesh,
                 MeshName = w.Name,
-                MeshVertices = vertices,
-                MeshFaces = faces,
-                MeshUvs = uvs,
-                MeshColors = colors,
+                MeshVertices = meshed.Vertices,
+                MeshFaces = meshed.Faces,
+                MeshKey = key,
+                MeshUvs = meshed.Uvs,
+                MeshColors = meshed.Colors,
                 Material = material,
-                Bounds = mesh.GetBoundingBox(false)
+                Bounds = meshed.Bounds
             };
         });
 
@@ -618,6 +578,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 Faces = r.MeshFaces,
                 Uvs = r.MeshUvs,
                 Colors = r.MeshColors,
+                ContentKey = r.MeshKey,
                 Name = !string.IsNullOrWhiteSpace(r.MeshName)
                     ? r.MeshName
                     : (branch.Meshes.Count + 1).ToString(),
@@ -641,7 +602,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         // Pass 4 (expensive, parallel across branches): encode each branch's batch — combined-array
         // merge, quantization, deflate — still inside the background task, so the solver thread never
-        // pays for the encode.
+        // pays for the encode. A branch whose meshes and grouping match an earlier solve's skips it.
+        var blobStore = new GeometryBlobStore(perf?.BlobCache);
         Parallel.ForEach(branches, b =>
         {
             if (b.Count == 0)
@@ -649,7 +611,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var batch = MeshBatchAssembler.CreateBatch(b.Meshes);
+            var batch = MeshBatchAssembler.CreateBatch(b.Meshes, blobStore);
             if (b.Items.Count > 0)
             {
                 batch.Items = b.Items;
@@ -668,6 +630,91 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
         return new SolveResult(branches, previewMeshes, previewMaterials, previewCurves, curveColors,
             previewPoints, pointColors, previewBounds, skipped, perf);
+    }
+
+    /// <summary>
+    ///     Meshes, welds and extracts one item. Null when the geometry doesn't mesh. The result goes
+    ///     into <see cref="MeshItemCache" />, so everything it depends on must be in
+    ///     <see cref="MeshItemKey" />.
+    /// </summary>
+    private static MeshItem MeshOne(WorkItem w, MeshingParameters meshSettings, double mmPerUnit,
+        bool authoredUvs, DisplayPerf perf)
+    {
+        var stageStart = Stopwatch.GetTimestamp();
+        var mesh = ConvertSingleGeometry(w.Geom, meshSettings);
+        perf?.AddMesh(Stopwatch.GetTimestamp() - stageStart);
+        if (mesh == null || !mesh.IsValid)
+        {
+            return null;
+        }
+
+        stageStart = Stopwatch.GetTimestamp();
+        mesh.Normals.ComputeNormals();
+        perf?.AddNormals(Stopwatch.GetTimestamp() - stageStart);
+        stageStart = Stopwatch.GetTimestamp();
+        DisplayUvs.Apply(mesh, w.Material, w.Id, mmPerUnit, authoredUvs);
+        perf?.AddUvs(Stopwatch.GetTimestamp() - stageStart);
+
+        // UVs are only worth carrying when the material needs them (a texture, anisotropy or a finish) —
+        // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
+        // every plain mesh would inflate the payload for nothing. Vertex colors only exist when
+        // something explicitly set them, so presence alone is the gate.
+        var hasUvs = mesh.TextureCoordinates.Count == mesh.Vertices.Count;
+        var wantUvs = w.Material != null && w.Material.NeedsUvs && hasUvs;
+        var wantColors = mesh.VertexColors.Count == mesh.Vertices.Count
+                         && mesh.VertexColors.Count > 0;
+
+        // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
+        // vertices it needs. Weld coincident vertices to shrink the payload, but respect normals
+        // (ignoreNormals: false): both the web and the C# preview recompute smooth normals via
+        // computeVertexNormals, which averages across every shared vertex, so welding across hard
+        // edges would smear them. Computing normals first lets the weld keep hard-edge vertices
+        // split (different normals) while merging smooth-surface interiors — preserving shading
+        // while still cutting most duplication.
+        //
+        // The weld must also respect any exported channel (ignoreAdditional: false), or vertices
+        // with different UVs/colors would merge and smear texture seams / color boundaries.
+        // Channels NOT being exported are cleared first so stale auto-generated data (brep TCs,
+        // partial color sets) can't block the weld.
+        stageStart = Stopwatch.GetTimestamp();
+        if (wantUvs || wantColors)
+        {
+            if (!wantUvs && mesh.TextureCoordinates.Count > 0)
+            {
+                mesh.TextureCoordinates.Clear();
+            }
+
+            if (!wantColors && mesh.VertexColors.Count > 0)
+            {
+                mesh.VertexColors.Clear();
+            }
+
+            mesh.Vertices.CombineIdentical(false, false);
+        }
+        else
+        {
+            mesh.Vertices.CombineIdentical(false, true);
+        }
+
+        mesh.Compact();
+        perf?.AddWeld(Stopwatch.GetTimestamp() - stageStart);
+
+        // Extract the arrays now, off the main thread — the per-vertex copy CreateBatch would
+        // otherwise do serially for every mesh in the batch.
+        stageStart = Stopwatch.GetTimestamp();
+        var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
+        perf?.AddArrays(Stopwatch.GetTimestamp() - stageStart);
+
+        return new MeshItem
+        {
+            Mesh = mesh,
+            Vertices = vertices,
+            Faces = faces,
+            Uvs = uvs,
+            Colors = colors,
+            HasUvs = hasUvs,
+            Bounds = mesh.GetBoundingBox(false)
+        };
     }
 
     /// <summary>

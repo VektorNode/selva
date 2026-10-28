@@ -106,11 +106,10 @@ public class SlvmDocumentTests
     }
 
     [Fact]
-    public void Ids_SurviveTheMaterialSortReorder()
+    public void Ids_SurviveAnyTableOrder()
     {
-        // The assembler sorts meshes by material id, so table order diverges from GH input order
-        // on any multi-material batch. The id attr rides each object row, so the reorder cannot
-        // rewire web pick identity.
+        // Table order is the writer's choice and need not follow GH slot order. The id attr rides
+        // each object row, so no order can rewire web pick identity.
         var decoded = RoundTrip(BatchWithMeshes(
             (0, "m2", "", "src/2", null), (0, "m0", "", "src/0", null), (1, "m1", "", "src/1", null)));
 

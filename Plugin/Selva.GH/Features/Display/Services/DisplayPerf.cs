@@ -13,9 +13,10 @@ using Selva.Slva;
 namespace Selva.GH.Features.Display.Services;
 
 /// <summary>
-///     One Display solve's cost for <see cref="PerfLog" />, stage by stage, plus what two caches
-///     would have saved: items whose geometry is unchanged since the component's previous solve
-///     (a mesh cache), and branches whose batch came out byte-identical (not resending them).
+///     One Display solve's cost for <see cref="PerfLog" />, stage by stage, plus reuse:
+///     <see cref="MeshItemCache" /> and <see cref="GeometryBlobStore" /> hits, items whose geometry is unchanged since the component's
+///     previous solve (the most the cache could hit), and branches whose batch came out
+///     byte-identical (what not resending them would save).
 ///     Exists only while the log is on; every caller holds it as a nullable.
 /// </summary>
 public sealed class DisplayPerf
@@ -38,6 +39,7 @@ public sealed class DisplayPerf
     private long _uvTicks;
     private long _weldTicks;
     private long _arrayTicks;
+    private long _keyTicks;
 
     private Dictionary<string, object> _record;
 
@@ -45,6 +47,9 @@ public sealed class DisplayPerf
     {
         _lastPass = _start;
     }
+
+    public CacheCounter MeshCache { get; } = new CacheCounter();
+    public CacheCounter BlobCache { get; } = new CacheCounter();
 
     public static DisplayPerf StartIfEnabled() => PerfLog.Enabled ? new DisplayPerf() : null;
 
@@ -66,6 +71,7 @@ public sealed class DisplayPerf
     public void AddUvs(long ticks) => Interlocked.Add(ref _uvTicks, ticks);
     public void AddWeld(long ticks) => Interlocked.Add(ref _weldTicks, ticks);
     public void AddArrays(long ticks) => Interlocked.Add(ref _arrayTicks, ticks);
+    public void AddKey(long ticks) => Interlocked.Add(ref _keyTicks, ticks);
 
     /// <summary>
     ///     Ends the timed stages and runs the comparisons. Called at the end of the background task,
@@ -107,8 +113,11 @@ public sealed class DisplayPerf
                 ["normals"] = PerfLog.Ms(_normalsTicks),
                 ["uvs"] = PerfLog.Ms(_uvTicks),
                 ["weld"] = PerfLog.Ms(_weldTicks),
-                ["arrays"] = PerfLog.Ms(_arrayTicks)
+                ["arrays"] = PerfLog.Ms(_arrayTicks),
+                ["key"] = PerfLog.Ms(_keyTicks)
             },
+            ["meshCache"] = MeshCache.Record(MeshItemCache.Stats),
+            ["blobCache"] = BlobCache.Record(GeometryBlobStore.Stats),
             ["reuse"] = CompareGeometry(componentId, geometry),
             ["resend"] = CompareBatches(componentId, branches)
         };
@@ -135,14 +144,12 @@ public sealed class DisplayPerf
     }
 
     /// <summary>
-    ///     How many inputs are geometrically identical to one in the previous solve. A geometry's
-    ///     <see cref="GeometryBase.DataCRC" /> is what a mesh cache would key on, so its cost is
-    ///     reported too: the cache would pay it on every item, hit or miss.
+    ///     How many inputs are geometrically identical to one in the previous solve: the most
+    ///     <see cref="MeshItemCache" /> can hit, since its key adds the meshing and UV inputs.
     /// </summary>
     private static Dictionary<string, object> CompareGeometry(string componentId,
         IReadOnlyList<GeometryBase> geometry)
     {
-        var start = Stopwatch.GetTimestamp();
         var current = new HashSet<string>();
         var unchanged = 0;
         PreviousGeometry.TryGetValue(componentId, out var previous);
@@ -161,8 +168,7 @@ public sealed class DisplayPerf
         {
             ["comparedToPrevious"] = previous != null,
             ["unchangedItems"] = unchanged,
-            ["items"] = geometry.Count,
-            ["fingerprintMs"] = PerfLog.MsSince(start)
+            ["items"] = geometry.Count
         };
     }
 
@@ -246,6 +252,27 @@ public sealed class DisplayPerf
             ["breps"] = breps.Count,
             ["current"] = Measure(current),
             ["default"] = Measure(MeshingParameters.Default)
+        };
+    }
+}
+
+/// <summary>One cache's hits and misses over a solve. Thread-safe: the parallel passes share it.</summary>
+public sealed class CacheCounter
+{
+    private int _hits;
+    private int _misses;
+
+    public void Hit() => Interlocked.Increment(ref _hits);
+    public void Miss() => Interlocked.Increment(ref _misses);
+
+    internal Dictionary<string, object> Record((int count, long bytes) stats)
+    {
+        return new Dictionary<string, object>
+        {
+            ["hits"] = _hits,
+            ["misses"] = _misses,
+            ["entries"] = stats.count,
+            ["bytes"] = stats.bytes
         };
     }
 }

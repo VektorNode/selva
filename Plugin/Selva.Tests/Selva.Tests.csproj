@@ -129,6 +129,13 @@
 		     carries no Curve evaluation and can be tested here. -->
 		<Compile Include="..\Selva.GH\Features\Display\Services\CurveFlatness.cs"
 		         Link="Linked\CurveFlatness.cs"/>
+		<!-- The mesh cache's Rhino-free halves; MeshItemCache fingerprints the geometry. -->
+		<Compile Include="..\Selva.GH\Features\Display\Services\ByteBoundedLru.cs"
+		         Link="Linked\ByteBoundedLru.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\MeshItemKey.cs"
+		         Link="Linked\MeshItemKey.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\UvStep.cs"
+		         Link="Linked\UvStep.cs"/>
 	</ItemGroup>
 
 	<ItemGroup>

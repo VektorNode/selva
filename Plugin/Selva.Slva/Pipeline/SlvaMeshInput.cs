@@ -36,4 +36,11 @@ public sealed class SlvaMeshInput
 
     /// <summary>Optional r,g,b bytes per vertex (vertexCount * 3); null = this mesh has none.</summary>
     public byte[] Colors { get; set; }
+
+    /// <summary>
+    ///     Optional. Two inputs with equal keys (by <see cref="object.Equals(object)" />) must carry
+    ///     identical vertex, face, UV and colour arrays: a <see cref="IGeometryBlobCache" /> serves
+    ///     the cached geometry without looking at them. Null opts the batch out of the cache.
+    /// </summary>
+    public object ContentKey { get; set; }
 }

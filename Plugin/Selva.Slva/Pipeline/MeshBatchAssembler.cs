@@ -22,14 +22,18 @@ public static class MeshBatchAssembler
     ///     Assembles a batch from per-mesh inputs whose vertex/face arrays are already extracted
     ///     from the meshes, so the component's parallel meshing pass does that extraction and this
     ///     assembly pass stays free of per-vertex copying. A null entry (or one with null
-    ///     vertices/faces) marks an invalid mesh's slot and is skipped; its position still counts
-    ///     for <see cref="MeshMetadata.OriginalIndex" />.
+    ///     vertices/faces) marks an invalid mesh's slot and is skipped.
     ///
     ///     If ANY mesh carries a UV or color channel, the whole batch carries it and meshes
     ///     without it get neutral fill (UV 0,0 / color white) — renders identically to no channel
     ///     and compresses to almost nothing. If NO mesh has it, nothing is written.
+    ///
+    ///     <paramref name="geometryCache" /> skips the combined-array merge and the geometry
+    ///     encode when every mesh carries a <see cref="SlvaMeshInput.ContentKey" /> and the same
+    ///     keys arrived in the same order before.
     /// </summary>
-    public static DisplayBatch CreateBatch(IReadOnlyList<SlvaMeshInput> meshes)
+    public static DisplayBatch CreateBatch(IReadOnlyList<SlvaMeshInput> meshes,
+        IGeometryBlobCache geometryCache = null)
     {
         // Zero meshes is valid: an items-only batch (curves/points, no meshable geometry) still
         // produces a well-formed batch with an empty blob (vertexCount = 0).
@@ -65,24 +69,19 @@ public static class MeshBatchAssembler
                 Id = input.Id,
                 Name = input.Name,
                 Layer = input.Layer ?? "",
-                InputIndex = i,
                 Vertices = input.Vertices,
                 Faces = input.Faces,
                 Uvs = input.Uvs,
                 Colors = input.Colors,
                 MaterialId = materialId,
-                Metadata = input.Metadata
+                Metadata = input.Metadata,
+                ContentKey = input.ContentKey
             });
         }
 
-        // Order by material id for batching; List.Sort isn't stable, so break ties on input order
-        // to keep a deterministic order within a material.
-        processedMeshes.Sort((a, b) =>
-        {
-            var byMat = a.MaterialId.CompareTo(b.MaterialId);
-            return byMat != 0 ? byMat : a.InputIndex.CompareTo(b.InputIndex);
-        });
-
+        // Meshes stay in input order, so the geometry blob never depends on which material a
+        // mesh has: a material change that regroups parts writes the same bytes. Readers merge
+        // groups that share a material, so interleaving costs no draw calls.
         var batch = new DisplayBatch
         {
             Materials = materialCache.GetAllMaterials()
@@ -91,21 +90,7 @@ public static class MeshBatchAssembler
             Groups = new List<MaterialGroup>()
         };
 
-        var allVertices = new float[totalComponentCount];
-        var allIndices = new int[totalIndexCount];
-
-        // Combined channels, allocated only when some mesh carries them. UV fill defaults to
-        // (0,0) via array zeroing; colors need an explicit white fill (byte default is black).
-        var totalVertexCount = totalComponentCount / 3;
-        var allUvs = anyUvs ? new float[totalVertexCount * 2] : null;
-        byte[] allColors = null;
-        if (anyColors)
-        {
-            allColors = new byte[totalVertexCount * 3];
-            allColors.AsSpan().Fill(255); // vectorized white fill (a byte loop was measurable here)
-        }
-
-        // Pass A (serial, cheap): walk the sorted meshes once to open material groups, emit
+        // Pass A (serial, cheap): walk the meshes once to open material groups, emit
         // per-mesh metadata, and record each mesh's write offsets into the combined arrays. Every
         // offset is a running total, so this pass is inherently sequential — but it only touches
         // per-mesh scalars, never a vertex.
@@ -114,7 +99,7 @@ public static class MeshBatchAssembler
         var indexCursor = 0;             // write head into allIndices, in indices
         var vertexBaseForIndices = 0;    // vertices already in the combined array; rebases per-mesh local indices
 
-        // processedMeshes is sorted by MaterialId, so a new group starts whenever the id changes.
+        // A group is a run of consecutive meshes on one material; a material can head several.
         MaterialGroup materialGroup = null;
         for (var m = 0; m < processedMeshes.Count; m++)
         {
@@ -157,6 +142,44 @@ public static class MeshBatchAssembler
             vertexBaseForIndices += meshVertexCount;
         }
 
+        // The geometry blob is a pure function of the arrays in input order, so the mesh keys in
+        // that order identify it.
+        var cacheKey = geometryCache != null ? GeometryBlobKey.From(processedMeshes.Select(m => m.ContentKey))
+            : null;
+        if (cacheKey == null || !geometryCache.TryGet(cacheKey, out var geometryBlob))
+        {
+            geometryBlob = EncodeGeometry(processedMeshes, offsets, totalComponentCount, totalIndexCount,
+                anyUvs, anyColors);
+            if (cacheKey != null)
+            {
+                geometryCache.Add(cacheKey, geometryBlob);
+            }
+        }
+
+        // The blob is a self-contained SLVM container: geometry as a nested bare SLVA/SLVZ blob,
+        // the object table/materials as binary chunks. The same bytes travel inside a JSON values
+        // message or a binary WebSocket frame; items ride the container only in .slvm files.
+        batch.CompressedData = SlvmDocument.Write(batch, geometryBlob, includeItems: false);
+        return batch;
+    }
+
+    private static byte[] EncodeGeometry(List<ProcessedMesh> processedMeshes, MeshOffsets[] offsets,
+        int totalComponentCount, int totalIndexCount, bool anyUvs, bool anyColors)
+    {
+        var allVertices = new float[totalComponentCount];
+        var allIndices = new int[totalIndexCount];
+
+        // Combined channels, allocated only when some mesh carries them. UV fill defaults to
+        // (0,0) via array zeroing; colors need an explicit white fill (byte default is black).
+        var totalVertexCount = totalComponentCount / 3;
+        var allUvs = anyUvs ? new float[totalVertexCount * 2] : null;
+        byte[] allColors = null;
+        if (anyColors)
+        {
+            allColors = new byte[totalVertexCount * 3];
+            allColors.AsSpan().Fill(255); // vectorized white fill (a byte loop was measurable here)
+        }
+
         // Pass B (expensive, parallel across meshes): the actual per-vertex copying. Pass A gave
         // every mesh a disjoint destination span, so copies never overlap and no locking is
         // needed. This is the intra-branch parallelism that matters when a definition emits a
@@ -164,9 +187,6 @@ public static class MeshBatchAssembler
         // with nothing to spread.
         CopyMeshData(processedMeshes, offsets, allVertices, allIndices, allUvs, allColors);
 
-        // The blob is a self-contained SLVM container: geometry as a nested bare SLVA/SLVZ blob,
-        // the object table/materials as binary chunks. The same bytes travel inside a JSON values
-        // message or a binary WebSocket frame; items ride the container only in .slvm files.
         using (var ms = new MemoryStream())
         {
             SlvaWriter.Write(ms, "", allVertices, allIndices,
@@ -175,11 +195,8 @@ public static class MeshBatchAssembler
             // local WS), so this applies an optional deflate pass; Compress returns the original
             // bytes unchanged when it doesn't help, and the decoder sniffs the leading magic
             // either way. GetBuffer + length avoids a full ToArray copy of the stream.
-            var geometryBlob = SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
-            batch.CompressedData = SlvmDocument.Write(batch, geometryBlob, includeItems: false);
+            return SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
         }
-
-        return batch;
     }
 
     /// <summary>
@@ -275,9 +292,6 @@ public static class MeshBatchAssembler
         public string Name { get; set; }
         public string Layer { get; set; }
 
-        /// <summary>Position in the input list — sort tie-break only, never serialized.</summary>
-        public int InputIndex { get; set; }
-
         public float[] Vertices { get; set; }
         public int[] Faces { get; set; }
 
@@ -288,6 +302,8 @@ public static class MeshBatchAssembler
         public byte[] Colors { get; set; }
 
         public int MaterialId { get; set; }
+
+        public object ContentKey { get; set; }
         public Dictionary<string, string> Metadata { get; set; }
     }
 }

@@ -60,9 +60,9 @@ public class SlvmFixtureContractTests
                 new SlvaMeshInput { Vertices = QuadAt(2, 0, 0), Faces = QuadFaces, Name = "2", Material = red }
             }));
 
-        // Materials interleaved in input order (red, blue, red): the assembler's material sort
-        // reorders the table, and only the per-object id attr keeps identity attached. Names,
-        // layers, ids and per-mesh metadata exercise the pool and the sparse attr columns.
+        // Materials interleaved in input order (red, blue, red): three material runs, red twice,
+        // with meshes left in input order. Names, layers, ids and per-mesh metadata exercise the
+        // pool and the sparse attr columns.
         var blue = Material(Color.Blue);
         yield return ("multi-material.slvm", MeshBatchAssembler.CreateBatch(
             new List<SlvaMeshInput>
