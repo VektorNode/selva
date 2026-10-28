@@ -33,6 +33,7 @@
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { createSceneOutliner, type SceneOutliner } from '@selvajs/visualization/scene';
+	import { clearGeometryCache } from '@selvajs/visualization/parse';
 	import SceneManager from './SceneManager.svelte';
 	import MeshMetadataPanel from './MeshMetadataPanel.svelte';
 	import * as Resizable from '$lib/components/primitives/resizable/index.js';
@@ -246,6 +247,8 @@
 			// on every definition switch; browsers cap live contexts (~16). Explicitly
 			// drop this one so the GPU-side context is released now rather than at GC.
 			renderer.forceContextLoss();
+			// Parsed geometry outlives the viewer otherwise: the cache is page-wide.
+			clearGeometryCache();
 		};
 	});
 

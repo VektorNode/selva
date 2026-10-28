@@ -22,6 +22,7 @@ export {
 } from './webdisplay/webdisplay-parser.js';
 
 export { parseMeshBatchObject, parseMeshBatchBlob } from './webdisplay/batch-parser.js';
+export { clearGeometryCache } from './webdisplay/batch/finished-cache.js';
 
 // apply-texture.ts self-subscribes via shared's observeMaxAnisotropy — render/ never imports this layer.
 export { setTextureAnisotropy } from './webdisplay/apply-texture.js';

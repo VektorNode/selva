@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-import { computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
+import { cachedSourceOf, computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
 import { isHostOwned } from './scene-ownership.js';
 import { applyReflectionEnvironment } from './scene-setup/reflection-environment.js';
 import { isoOffset } from './up-axis';
@@ -31,7 +31,7 @@ export function updateScene(
 	controls: OrbitControls,
 	initialPositionSet: boolean
 ) {
-	clearScene(scene);
+	clearScene(scene, cachedGeometriesOf(meshes));
 
 	if (meshes.length === 0) return;
 
@@ -116,9 +116,25 @@ export function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
 	return box;
 }
 
+function cachedGeometriesOf(objects: THREE.Object3D[]): Set<THREE.BufferGeometry> {
+	const cached = new Set<THREE.BufferGeometry>();
+	for (const root of objects) {
+		root.traverse((object) => {
+			const geometry = (object as Partial<THREE.Mesh>).geometry;
+			const source = geometry && cachedSourceOf(geometry);
+			if (source) cached.add(source);
+		});
+	}
+	return cached;
+}
+
 const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
 
-export function clearScene(scene: THREE.Scene): void {
+/** Frees the solve content. `keepUploaded` names the cached geometries the next content draws. */
+export function clearScene(
+	scene: THREE.Scene,
+	keepUploaded: ReadonlySet<THREE.BufferGeometry> = new Set()
+): void {
 	// Snapshot — removeFromParent below mutates scene.children during iteration.
 	const topLevel = [...scene.children];
 
@@ -133,7 +149,7 @@ export function clearScene(scene: THREE.Scene): void {
 
 		// Edge overlays are children of the meshes they outline, so this traversal disposes their
 		// line geometries too — each overlay owns its geometry outright.
-		disposeObjectTree(object);
+		disposeObjectTree(object, { keepUploaded });
 
 		object.removeFromParent();
 	});

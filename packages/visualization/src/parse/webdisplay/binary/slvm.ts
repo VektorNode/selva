@@ -21,9 +21,9 @@ import type { MaterialGroup, MeshMetadata, SerializableMaterial } from '../types
 export const SLVM_MAGIC = 0x4d564c53;
 export const SLVM_VERSION = 3;
 
-const CHUNK_GEOM = 0x4d4f4547; // "GEOM"
-const CHUNK_TABL = 0x4c424154; // "TABL"
-const CHUNK_MATL = 0x4c54414d; // "MATL"
+export const CHUNK_GEOM = 0x4d4f4547; // "GEOM"
+export const CHUNK_TABL = 0x4c424154; // "TABL"
+export const CHUNK_MATL = 0x4c54414d; // "MATL"
 const CHUNK_TEXR = 0x52584554; // "TEXR"
 
 /** Reserved attr key carrying each object's identity — split out of the attr dict on read. */

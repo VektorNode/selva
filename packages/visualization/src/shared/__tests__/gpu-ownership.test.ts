@@ -1,7 +1,15 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import { canDisposeMaterial, disposeObjectTree, protectMaterials } from '../index.js';
+import {
+	cachedSourceOf,
+	canDisposeMaterial,
+	disposeObjectTree,
+	protectMaterials,
+	shareGeometry,
+	unshareGeometry
+} from '../index.js';
+import { borrowGeometry } from '../gpu-ownership.js';
 
 function countingTexture(): { texture: THREE.Texture; disposals: () => number } {
 	const texture = new THREE.Texture();
@@ -64,5 +72,82 @@ describe('disposeObjectTree honours every claim', () => {
 
 		expect(geometryDisposed).toBe(true);
 		expect(disposals()).toBe(0);
+	});
+});
+
+describe('cached geometries', () => {
+	const disposals = (geometry: THREE.BufferGeometry) => {
+		const spy = vi.fn();
+		geometry.addEventListener('dispose', spy);
+		return spy;
+	};
+	const meshOf = (geometry: THREE.BufferGeometry) => {
+		const root = new THREE.Group();
+		root.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial()));
+		return root;
+	};
+
+	it('a plain walk leaves a cached geometry alone', () => {
+		const cached = new THREE.BoxGeometry();
+		shareGeometry(cached);
+		const disposed = disposals(cached);
+
+		disposeObjectTree(meshOf(cached));
+
+		expect(disposed).not.toHaveBeenCalled();
+	});
+
+	it('teardown frees the GPU copy unless the next scene draws it, and the cache keeps it', () => {
+		const shown = new THREE.BoxGeometry();
+		const dropped = new THREE.BoxGeometry();
+		shareGeometry(shown);
+		shareGeometry(dropped);
+		const shownDisposed = disposals(shown);
+		const droppedDisposed = disposals(dropped);
+
+		const root = meshOf(shown);
+		root.add(new THREE.Mesh(dropped, new THREE.MeshBasicMaterial()));
+		disposeObjectTree(root, { keepUploaded: new Set([shown]) });
+
+		expect(shownDisposed).not.toHaveBeenCalled();
+		expect(droppedDisposed).toHaveBeenCalledOnce();
+		expect(cachedSourceOf(dropped)).toBe(dropped);
+	});
+
+	it("a borrower lets go of the cache's attributes before it is disposed", () => {
+		const cached = new THREE.BoxGeometry();
+		shareGeometry(cached);
+		const borrower = new THREE.BufferGeometry();
+		borrower.setIndex(cached.index);
+		borrower.setAttribute('position', cached.getAttribute('position'));
+		borrowGeometry(borrower, cached);
+		let attachedAtDispose: string[] = [];
+		borrower.addEventListener('dispose', () => {
+			attachedAtDispose = Object.keys(borrower.attributes);
+			if (borrower.index) attachedAtDispose.push('index');
+		});
+
+		disposeObjectTree(meshOf(borrower), { keepUploaded: new Set([cached]) });
+
+		expect(attachedAtDispose).toEqual([]);
+		expect(cached.getAttribute('position')).toBeDefined();
+	});
+
+	it('a borrower of an evicted geometry frees the buffers itself', () => {
+		const evicted = new THREE.BoxGeometry();
+		shareGeometry(evicted);
+		const borrower = new THREE.BufferGeometry();
+		borrower.setAttribute('position', evicted.getAttribute('position'));
+		borrowGeometry(borrower, evicted);
+		unshareGeometry(evicted);
+		let attachedAtDispose: string[] = [];
+		borrower.addEventListener(
+			'dispose',
+			() => (attachedAtDispose = Object.keys(borrower.attributes))
+		);
+
+		disposeObjectTree(meshOf(borrower));
+
+		expect(attachedAtDispose).toEqual(['position']);
 	});
 });

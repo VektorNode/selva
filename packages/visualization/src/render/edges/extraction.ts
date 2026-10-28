@@ -26,6 +26,8 @@ export interface ExtractedEdges {
 interface FastPathData {
 	positions: Float32Array;
 	index: Uint32Array | Uint16Array | null;
+	/** Bumped by `needsUpdate`: an array edited in place keeps its identity but not its edges. */
+	version: string;
 }
 
 // Fast extractor needs plain non-interleaved float32 xyz + typed index arrays. Anything exotic
@@ -47,7 +49,8 @@ function fastPathData(geometry: THREE.BufferGeometry): FastPathData | null {
 	}
 	return {
 		positions: position.array,
-		index: index ? (index.array as Uint32Array | Uint16Array) : null
+		index: index ? (index.array as Uint32Array | Uint16Array) : null,
+		version: `${(position as THREE.BufferAttribute).version}:${index?.version ?? 0}`
 	};
 }
 
@@ -92,6 +95,37 @@ function extractViaThree(geometry: THREE.BufferGeometry, thresholdAngle: number)
 	return { segments: positions, faces: null };
 }
 
+// A re-solve whose geometry the parser served from its cache hands back the very same position and
+// index arrays, so identity is an exact key that needs no hashing, and entries go with the arrays.
+// Results are shared by every overlay built from them: read-only, like the arrays they came from.
+// Only the latest version per angle is kept: an array edited in place never returns to an old one.
+const extracted = new WeakMap<
+	Float32Array,
+	WeakMap<object, Map<number, { version: string; edges: ExtractedEdges }>>
+>();
+const NO_INDEX = {};
+
+function recall(data: FastPathData, thresholdAngle: number): ExtractedEdges | undefined {
+	const known = extracted
+		.get(data.positions)
+		?.get(data.index ?? NO_INDEX)
+		?.get(thresholdAngle);
+	return known?.version === data.version ? known.edges : undefined;
+}
+
+function remember(
+	data: FastPathData,
+	thresholdAngle: number,
+	edges: ExtractedEdges
+): ExtractedEdges {
+	let byIndex = extracted.get(data.positions);
+	if (!byIndex) extracted.set(data.positions, (byIndex = new WeakMap()));
+	let byAngle = byIndex.get(data.index ?? NO_INDEX);
+	if (!byAngle) byIndex.set(data.index ?? NO_INDEX, (byAngle = new Map()));
+	byAngle.set(thresholdAngle, { version: data.version, edges });
+	return edges;
+}
+
 export function extractSegmentsSync(
 	geometry: THREE.BufferGeometry,
 	thresholdAngle: number
@@ -99,7 +133,10 @@ export function extractSegmentsSync(
 	const data = fastPathData(geometry);
 	if (!data) return extractViaThree(geometry, thresholdAngle);
 
-	return extractEdgeSegments(data.positions, data.index, thresholdAngle);
+	return (
+		recall(data, thresholdAngle) ??
+		remember(data, thresholdAngle, extractEdgeSegments(data.positions, data.index, thresholdAngle))
+	);
 }
 
 // --- Worker offload -----------------------------------------------------------------------------
@@ -191,6 +228,9 @@ export function extractSegmentsAsync(
 		return Promise.resolve(extractSegmentsSync(geometry, thresholdAngle));
 	}
 
+	const known = recall(data, thresholdAngle);
+	if (known) return Promise.resolve(known);
+
 	const key = contentKey(data, thresholdAngle);
 	const inFlight = inFlightExtractions.get(key);
 	if (inFlight) return inFlight;
@@ -200,6 +240,7 @@ export function extractSegmentsAsync(
 
 	const request = extractInWorker(worker, data, thresholdAngle)
 		.catch(() => extractEdgeSegments(data.positions, data.index, thresholdAngle))
+		.then((edges) => remember(data, thresholdAngle, edges))
 		.finally(() => {
 			inFlightExtractions.delete(key);
 		});

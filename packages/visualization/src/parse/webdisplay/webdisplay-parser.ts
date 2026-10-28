@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 
-import { applyOffset, computeCombinedBoundingBox, getLogger } from '../../shared/index.js';
+import {
+	applyOffset,
+	computeCombinedBoundingBox,
+	disposeObjectTree,
+	getLogger
+} from '../../shared/index.js';
 
 import { parseDisplayItems } from '../display-items/display-items-parser.js';
 
@@ -222,20 +227,7 @@ function handleError(error: unknown, meshes: THREE.Object3D[]): void {
 }
 
 function disposeMeshes(meshes: THREE.Object3D[]): void {
-	for (const obj of meshes) {
-		const mesh = obj as Partial<THREE.Mesh> & THREE.Object3D;
-		if (mesh.geometry) {
-			mesh.geometry.dispose();
-		}
-
-		if (mesh.material) {
-			if (Array.isArray(mesh.material)) {
-				mesh.material.forEach((material) => material.dispose());
-			} else {
-				mesh.material.dispose();
-			}
-		}
-	}
+	for (const mesh of meshes) disposeObjectTree(mesh);
 }
 
 function logProcessingTime(startTime: number): void {

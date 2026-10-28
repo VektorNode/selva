@@ -3,6 +3,9 @@ import * as THREE from 'three';
 import { getLogger } from '../../shared/index.js';
 
 import { decodeRawMeshBatch, FLAG_FLOAT32, parseBinaryMeshBatchRaw } from './binary-parser.js';
+import { toUint8Array } from './binary/geometry.js';
+import { isSlvmContainer, parseSlvmContainer, type SlvmContainer } from './binary/slvm.js';
+import { assembleGeometries, finishGeometry } from './mesh-assembly.js';
 
 import {
 	ASSEMBLY_WORKER_MIN_TRIANGLES,
@@ -15,9 +18,15 @@ import {
 	createMergedMesh,
 	finalizeMergedMesh,
 	finalizeSingleMesh,
-	geometryFrom,
-	splitGroupByLayer
+	mergeGroupsOf
 } from './batch/merge.js';
+import {
+	buildBatch,
+	getFinishedBatch,
+	storeFinishedBatch,
+	type BuiltBatch,
+	type FinishedBatch
+} from './batch/finished-cache.js';
 import { dequantizeInt16, validateGroupMetadata } from './batch/metadata.js';
 
 import type { AssemblyJob, AssemblyWindow, FinishedGeometry } from './mesh-assembly.js';
@@ -93,10 +102,7 @@ export async function parseMeshBatchObject(
 	}
 
 	const decodeStart = performance.now();
-	const raw = parseBinaryMeshBatchRaw(batch.compressedData);
-
-	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
-	const workerMeshes = await tryBuildViaWorker(raw, {
+	const assemblyOptions: AssemblyPathOptions = {
 		mergeByMaterial,
 		debug,
 		material,
@@ -104,8 +110,14 @@ export async function parseMeshBatchObject(
 			materials: batch.materials,
 			groups: batch.groups
 		}
-	});
-	if (workerMeshes) return workerMeshes;
+	};
+	const opened = openBatch(batch.compressedData, assemblyOptions);
+	if (opened.meshes) return opened.meshes;
+	const raw = opened.raw;
+
+	// Heavy batches decode+assemble in a worker; null → do it here (small batch).
+	const assembledMeshes = await tryBuildViaAssembly(raw, assemblyOptions, opened.geometryBytes);
+	if (assembledMeshes) return assembledMeshes;
 
 	const parsed = decodeRawMeshBatch(raw);
 	const decodeTime = performance.now() - decodeStart;
@@ -145,15 +157,14 @@ export async function parseMeshBatchBlob(
 	const perfStart = debug ? performance.now() : 0;
 
 	const decodeStart = performance.now();
-	const raw = parseBinaryMeshBatchRaw(blob);
+	const assemblyOptions: AssemblyPathOptions = { mergeByMaterial, debug, material };
+	const opened = openBatch(blob, assemblyOptions);
+	if (opened.meshes) return opened.meshes;
+	const raw = opened.raw;
 
-	// Heavy batches decode+assemble in a worker; null → do it here (small batch or no worker support).
-	const workerMeshes = await tryBuildViaWorker(raw, {
-		mergeByMaterial,
-		debug,
-		material
-	});
-	if (workerMeshes) return workerMeshes;
+	// Heavy batches decode+assemble in a worker; null → do it here (small batch).
+	const assembledMeshes = await tryBuildViaAssembly(raw, assemblyOptions, opened.geometryBytes);
+	if (assembledMeshes) return assembledMeshes;
 
 	const parsed = decodeRawMeshBatch(raw);
 	const decodeTime = performance.now() - decodeStart;
@@ -285,8 +296,7 @@ function buildMeshesFromParsed(
 
 	const meshes: THREE.Mesh[] = [];
 
-	// Merge within a layer, never across one: see `splitGroupByLayer`.
-	const mergeGroups = mergeByMaterial ? groups.flatMap(splitGroupByLayer) : groups;
+	const mergeGroups = mergeByMaterial ? mergeGroupsOf(groups) : groups;
 
 	for (const group of mergeGroups) {
 		if (mergeByMaterial && group.meshes.length > 1) {
@@ -327,49 +337,67 @@ function buildMeshesFromParsed(
 }
 
 // ============================================================================
-// OFF-THREAD ASSEMBLY
+// ASSEMBLY PATH: worker or inline, cached by geometry bytes
 // ============================================================================
 
-interface WorkerPathOptions {
+interface AssemblyPathOptions {
 	mergeByMaterial: boolean;
 	debug: boolean;
 	material?: MaterialAppearanceOptions;
 	fallback?: BuildOptions['fallback'];
 }
 
+interface JobRef {
+	kind: 'merged' | 'single';
+	group: MaterialGroup;
+	meshMeta?: MeshMetadata;
+}
+
+type OpenedBatch =
+	| { meshes: THREE.Mesh[]; raw?: never; geometryBytes?: never }
+	| { meshes?: never; raw: RawBinaryMeshBatch; geometryBytes: Uint8Array | null };
+
 /**
- * Attempts the off-thread build. Returns the finished meshes, or `null` when the worker path
- * doesn't apply (no Worker, small batch, worker crashed) — the caller then runs the synchronous
- * path. Malformed-blob/metadata errors throw either way, matching the entry points' contract.
- *
- * The worker always assembles and fingerprints every geometry, even when the main thread ends up
- * preferring an existing cached geometry over the returned buffers. That's fine: cache hits skip
- * the GPU re-upload, so the wasted worker CPU is off the critical path by definition.
+ * Unwraps an SLVM container only as far as its table and materials, and answers from the
+ * finished-geometry cache before paying for the inflate. A bare SLVA/SLVZ blob (old `.gh` files)
+ * keeps its metadata inside the compressed geometry, so it always decodes.
  */
-async function tryBuildViaWorker(
-	raw: RawBinaryMeshBatch,
-	opts: WorkerPathOptions
-): Promise<THREE.Mesh[] | null> {
-	if (typeof Worker === 'undefined') return null;
+function openBatch(
+	input: ArrayBuffer | Uint8Array | string,
+	opts: AssemblyPathOptions
+): OpenedBatch {
+	const bytes = toUint8Array(input);
+	if (!isSlvmContainer(bytes)) return { raw: parseBinaryMeshBatchRaw(bytes), geometryBytes: null };
 
-	// Planar (v4) indexData is a bare byte stream — divide by the element width for a count.
-	const indexCount = raw.planarByteSplit
-		? raw.indexData.length / (raw.uint16Indices ? 2 : 4)
-		: raw.indexData.length;
-	if (indexCount / 3 < ASSEMBLY_WORKER_MIN_TRIANGLES) return null;
-	const worker = getAssemblyWorker();
-	if (!worker) return null;
+	const container = parseSlvmContainer(bytes);
+	const cached = buildFromFinishedCache(container, opts);
+	if (cached) return { meshes: cached };
 
-	const materialsSrc = raw.metadata.materials ?? opts.fallback?.materials ?? [];
-	const groups = raw.metadata.groups ?? opts.fallback?.groups ?? [];
-	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, indexCount);
+	const raw = parseBinaryMeshBatchRaw(container.geometryBlob);
+	raw.metadata = container.metadata;
+	return { raw, geometryBytes: container.geometryBlob };
+}
 
-	// Same job branching as buildMeshesFromParsed, with a parallel ref list to unwrap results by index.
-	interface JobRef {
-		kind: 'merged' | 'single';
-		group: MaterialGroup;
-		meshMeta?: MeshMetadata;
-	}
+function buildFromFinishedCache(
+	container: SlvmContainer,
+	opts: AssemblyPathOptions
+): THREE.Mesh[] | null {
+	const materialsSrc = container.metadata.materials ?? opts.fallback?.materials ?? [];
+	const groups = container.metadata.groups ?? opts.fallback?.groups ?? [];
+	const { jobs, jobRefs } = planJobs(groups, opts.mergeByMaterial);
+	const cached = getFinishedBatch(container.geometryBlob, jobs);
+	if (!cached) return null;
+
+	// Equal jobs mean equal windows, but the material ids are this batch's own.
+	validateGroupMetadata(groups, materialsSrc.length, cached.vertexCount, cached.indexCount);
+	return meshesFromBuilt(cached, jobRefs, materialsSrc, opts.material);
+}
+
+/** One job per merged group or per unmerged mesh, with a parallel ref list to unwrap results by index. */
+function planJobs(
+	groups: MaterialGroup[],
+	mergeByMaterial: boolean
+): { jobs: AssemblyJob[]; jobRefs: JobRef[] } {
 	const windowOf = (m: MeshMetadata): AssemblyWindow => ({
 		vertexStart: m.vertexStart,
 		vertexCount: m.vertexCount,
@@ -379,9 +407,9 @@ async function tryBuildViaWorker(
 	const jobs: AssemblyJob[] = [];
 	const jobRefs: JobRef[] = [];
 	// Same layer-aware merge grouping as the synchronous path.
-	const mergeGroups = opts.mergeByMaterial ? groups.flatMap(splitGroupByLayer) : groups;
+	const mergeGroups = mergeByMaterial ? mergeGroupsOf(groups) : groups;
 	for (const group of mergeGroups) {
-		if (opts.mergeByMaterial && group.meshes.length > 1) {
+		if (mergeByMaterial && group.meshes.length > 1) {
 			jobs.push({ kind: 'merged', windows: group.meshes.map(windowOf) });
 			jobRefs.push({ kind: 'merged', group });
 		} else {
@@ -391,66 +419,115 @@ async function tryBuildViaWorker(
 			}
 		}
 	}
+	return { jobs, jobRefs };
+}
 
-	// Copies go to the worker, never `raw`'s own arrays: vertexData/indexData alias the caller's
-	// blob, and the caller parses `raw` itself if the worker fails, so nothing of it may detach.
-	const vertexData = raw.vertexData.slice();
-	const indexData = raw.indexData.slice();
-	const uvs = raw.uvs?.slice() ?? null;
-	const colors = raw.colors?.slice() ?? null;
-	const transfer: Transferable[] = [vertexData.buffer, indexData.buffer];
-	if (uvs) transfer.push(uvs.buffer);
-	if (colors) transfer.push(colors.buffer);
+/**
+ * Builds a heavy batch through the assembly functions, in the worker when there is one and inline
+ * otherwise, and caches the result under `geometryBytes`. Returns `null` for a small batch or a
+ * crashed worker, and the caller then runs the synchronous path. Malformed-blob/metadata errors
+ * throw either way, matching the entry points' contract.
+ */
+async function tryBuildViaAssembly(
+	raw: RawBinaryMeshBatch,
+	opts: AssemblyPathOptions,
+	geometryBytes: Uint8Array | null
+): Promise<THREE.Mesh[] | null> {
+	// Planar (v4) indexData is a bare byte stream — divide by the element width for a count.
+	const indexCount = raw.planarByteSplit
+		? raw.indexData.length / (raw.uint16Indices ? 2 : 4)
+		: raw.indexData.length;
+	if (indexCount / 3 < ASSEMBLY_WORKER_MIN_TRIANGLES) return null;
 
-	let assembled: FinishedGeometry[];
-	try {
-		assembled = await requestAssembly(
-			worker,
-			{
-				vertexData,
-				isFloat32: raw.isFloat32,
-				deltaEncoded: raw.deltaEncoded,
-				planarByteSplit: raw.planarByteSplit,
-				uint16Indices: raw.uint16Indices,
-				origin: raw.origin,
-				scale: raw.scale,
-				indexData,
-				uvs,
-				colors,
-				jobs
-			},
-			transfer
+	const materialsSrc = raw.metadata.materials ?? opts.fallback?.materials ?? [];
+	const groups = raw.metadata.groups ?? opts.fallback?.groups ?? [];
+	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, indexCount);
+
+	const { jobs, jobRefs } = planJobs(groups, opts.mergeByMaterial);
+	const assembled = await assemble(raw, jobs);
+	if (!assembled) return null;
+
+	const batch: FinishedBatch = {
+		geometries: assembled,
+		hasUvs: raw.uvs != null,
+		hasColors: raw.colors != null,
+		vertexCount: raw.vertexCount,
+		indexCount
+	};
+	const built = geometryBytes ? storeFinishedBatch(geometryBytes, jobs, batch) : buildBatch(batch);
+
+	if (opts.debug) {
+		getLogger().debug(
+			`Mesh batch assembled: ${assembled.length} geometries, ${indexCount / 3} triangles`
 		);
+	}
+	return meshesFromBuilt(built, jobRefs, materialsSrc, opts.material);
+}
+
+async function assemble(
+	raw: RawBinaryMeshBatch,
+	jobs: AssemblyJob[]
+): Promise<FinishedGeometry[] | null> {
+	// Copies, never `raw`'s own arrays: vertexData/indexData alias the caller's blob, the worker
+	// detaches what it is sent, and the crease split rewrites indices in place.
+	const input = {
+		vertexData: raw.vertexData.slice(),
+		isFloat32: raw.isFloat32,
+		deltaEncoded: raw.deltaEncoded,
+		planarByteSplit: raw.planarByteSplit,
+		uint16Indices: raw.uint16Indices,
+		origin: raw.origin,
+		scale: raw.scale,
+		indexData: raw.indexData.slice(),
+		uvs: raw.uvs?.slice() ?? null,
+		colors: raw.colors?.slice() ?? null,
+		jobs
+	};
+
+	const worker = getAssemblyWorker();
+	if (!worker) {
+		return assembleGeometries(input).map((geometry, i) =>
+			finishGeometry(
+				geometry,
+				jobs[i]!.windows.map((w) => w.indexCount)
+			)
+		);
+	}
+
+	const transfer: Transferable[] = [input.vertexData.buffer, input.indexData.buffer];
+	if (input.uvs) transfer.push(input.uvs.buffer);
+	if (input.colors) transfer.push(input.colors.buffer);
+	try {
+		const assembled = await requestAssembly(worker, input, transfer);
+		return assembled.length === jobs.length ? assembled : null; // protocol mismatch → sync path
 	} catch (error) {
 		getLogger().warn('Mesh assembly worker failed; falling back to main-thread parse.', error);
 		return null;
 	}
-	if (assembled.length !== jobs.length) return null; // protocol mismatch → fall back to sync path
+}
 
+function meshesFromBuilt(
+	built: BuiltBatch,
+	jobRefs: JobRef[],
+	materialsSrc: SerializableMaterial[],
+	appearance: MaterialAppearanceOptions | undefined
+): THREE.Mesh[] {
 	const pickMaterial = createMaterialPicker(materialsSrc, {
-		vertexColors: raw.colors != null,
-		hasUvs: raw.uvs != null,
-		appearance: opts.material
+		vertexColors: built.hasColors,
+		hasUvs: built.hasUvs,
+		appearance
 	});
 
 	const meshes: THREE.Mesh[] = [];
-	for (let i = 0; i < assembled.length; i++) {
-		const result = assembled[i]!;
+	for (let i = 0; i < built.buffers.length; i++) {
+		const geometry = built.buffers[i]!;
 		const ref = jobRefs[i]!;
-
-		const geometry = geometryFrom(result);
-		const material = pickMaterial(ref.group.materialId, result.closed);
+		const material = pickMaterial(ref.group.materialId, built.closed[i]!);
 		const mesh =
 			ref.kind === 'merged'
 				? finalizeMergedMesh(geometry, ref.group, material)
 				: finalizeSingleMesh(geometry, ref.meshMeta!, material);
 		meshes.push(mesh);
-	}
-
-	if (opts.debug) {
-		getLogger().debug(
-			`Mesh batch assembled off-thread: ${meshes.length} meshes, ${indexCount / 3} triangles`
-		);
 	}
 	return meshes;
 }

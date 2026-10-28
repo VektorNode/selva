@@ -27,7 +27,13 @@ export {
 
 export { parseColor, applyOffset, computeCombinedBoundingBox } from './geometry.js';
 
-export { canDisposeMaterial, protectMaterials } from './gpu-ownership.js';
+export {
+	cachedSourceOf,
+	canDisposeMaterial,
+	protectMaterials,
+	shareGeometry,
+	unshareGeometry
+} from './gpu-ownership.js';
 
 export { publishMaxAnisotropy, observeMaxAnisotropy } from './gpu-capabilities.js';
 

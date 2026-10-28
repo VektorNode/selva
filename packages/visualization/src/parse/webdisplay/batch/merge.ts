@@ -30,6 +30,23 @@ export function splitGroupByLayer(group: MaterialGroup): MaterialGroup[] {
 }
 
 /**
+ * The groups a merge-by-material draws: every group of one material gathered into one, in order of
+ * first appearance, then split by layer. The writer keeps meshes in input order, so one material
+ * can head several groups.
+ */
+export function mergeGroupsOf(groups: MaterialGroup[]): MaterialGroup[] {
+	const byMaterial = new Map<number, MeshMetadata[]>();
+	for (const group of groups) {
+		const meshes = byMaterial.get(group.materialId);
+		if (meshes) meshes.push(...group.meshes);
+		else byMaterial.set(group.materialId, [...group.meshes]);
+	}
+	return [...byMaterial].flatMap(([materialId, meshes]) =>
+		splitGroupByLayer({ materialId, meshes })
+	);
+}
+
+/**
  * Merges a material group's meshes into one BufferGeometry. Parser indices already address the
  * combined vertex array (rebased by the C# pipeline during batch assembly), so this copies each
  * mesh's vertex/index slices into a fresh contiguous buffer and shifts indices to match.

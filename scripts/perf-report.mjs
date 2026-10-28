@@ -37,6 +37,7 @@ const p50p90 = (values, unit = '') =>
 const groupBy = (items, key) =>
 	items.reduce((map, item) => map.set(key(item), [...(map.get(key(item)) ?? []), item]), new Map());
 const row = (label, value) => console.log(`  ${label.padEnd(34)} ${value}`);
+const hitRate = (cache) => (100 * cache.hits) / Math.max(1, cache.hits + cache.misses);
 
 console.log(`${records.length} records from ${files.length} file(s). Values are median / p90.\n`);
 
@@ -53,10 +54,31 @@ for (const [key, group] of groupBy(displays, (r) => `${r.host} · ${r.nickname} 
 	for (const pass of ['extract', 'mesh', 'gather', 'encode', 'preview']) {
 		row(`  ${pass} ms`, p50p90(group.map((r) => r.ms[pass])));
 	}
-	for (const stage of ['mesh', 'normals', 'uvs', 'weld', 'arrays']) {
+	for (const stage of ['key', 'mesh', 'normals', 'uvs', 'weld', 'arrays']) {
 		row(`  cpu ${stage} ms (all threads)`, p50p90(group.map((r) => r.cpuMs[stage])));
 	}
 
+	const cached = group.filter((r) => r.meshCache);
+	if (cached.length > 0) {
+		row(
+			'mesh cache hits',
+			p50p90(
+				cached.map((r) => hitRate(r.meshCache)),
+				'%'
+			)
+		);
+		row('  cache MB (process)', p50p90(cached.map((r) => r.meshCache.bytes / (1024 * 1024))));
+	}
+	const blobs = group.filter((r) => r.blobCache);
+	if (blobs.length > 0) {
+		row(
+			'geometry blob hits',
+			p50p90(
+				blobs.map((r) => hitRate(r.blobCache)),
+				'%'
+			)
+		);
+	}
 	const compared = group.filter((r) => r.reuse?.comparedToPrevious);
 	if (compared.length > 0) {
 		row(
@@ -66,7 +88,6 @@ for (const [key, group] of groupBy(displays, (r) => `${r.host} · ${r.nickname} 
 				'%'
 			)
 		);
-		row('  fingerprint cost ms', p50p90(compared.map((r) => r.reuse.fingerprintMs)));
 	}
 	const resent = group.filter((r) => r.resend?.comparedToPrevious);
 	if (resent.length > 0) {

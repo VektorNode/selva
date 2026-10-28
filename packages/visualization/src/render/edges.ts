@@ -113,7 +113,7 @@ export function addEdges(root: THREE.Object3D, options: EdgeOptions = {}): LineS
 	const created: LineSegments2[] = [];
 
 	for (const mesh of collectTargets(root, resolved)) {
-		// Extraction itself is cached by content (`extraction.ts`), which is where the savings are;
+		// Extraction is cached by source array (`extraction.ts`), which is where the savings are;
 		// the line geometry is per-overlay and owned by it.
 		const edges = extractSegmentsSync(mesh.geometry, resolved.thresholdAngle);
 		created.push(attachOverlay(mesh, edges, materials, resolved));

@@ -11,7 +11,9 @@
 // Members are addressed by their index in `userData.members`, which carries each member's window
 // into the index buffer (`finalizeMergedMesh`).
 
-import type * as THREE from 'three';
+import * as THREE from 'three';
+
+import { borrowGeometry, isCachedGeometry } from './gpu-ownership.js';
 
 interface MemberWindow {
 	indexStart?: number;
@@ -48,8 +50,25 @@ function stateOf(mesh: THREE.Mesh): DrawState {
 	return state;
 }
 
+// Groups live on the geometry, and a cached geometry can back two meshes at once (two identical
+// branches), so a mesh gets its own geometry over the same attributes before writing any.
+function ownGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
+	const shared = mesh.geometry;
+	if (!isCachedGeometry(shared)) return shared;
+
+	const own = new THREE.BufferGeometry();
+	own.setIndex(shared.index);
+	for (const [name, attribute] of Object.entries(shared.attributes))
+		own.setAttribute(name, attribute);
+	own.boundingBox = shared.boundingBox?.clone() ?? null;
+	own.boundingSphere = shared.boundingSphere?.clone() ?? null;
+	borrowGeometry(own, shared);
+	mesh.geometry = own;
+	return own;
+}
+
 function rebuild(mesh: THREE.Mesh, windows: Required<MemberWindow>[], state: DrawState): void {
-	const { geometry } = mesh;
+	const geometry = ownGeometry(mesh);
 	geometry.clearGroups();
 
 	if (state.hidden.size === 0 && !state.highlight) {
