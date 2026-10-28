@@ -807,6 +807,9 @@ export class SolveScheduler {
 		if (!this.cacheEnabled) return;
 		const solveErrors = readField<unknown[]>(response, 'errors');
 		if (!this.cacheErroredSolves && Array.isArray(solveErrors) && solveErrors.length > 0) return;
+		// An aborted solve stopped partway, so the same inputs must solve again. A blocked one is deterministic.
+		const outcome = readField(readField(response, 'selva'), 'outcome');
+		if (readField(outcome, 'aborted') === true) return;
 		const sizeBytes = getResponseWireSize(response) ?? estimateResponseSize(response);
 		// Retaining it would evict everything else and then itself.
 		if (sizeBytes > this.cacheMaxBytes) return;

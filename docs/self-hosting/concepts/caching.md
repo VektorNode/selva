@@ -211,7 +211,6 @@ caches:
 | -------------------------------- | -------- | ------------------------------------------------------------------ |
 | `COMPUTE_REUSE_DEFINITION_CACHE` | `true`   | Send a pointer instead of re-uploading the `.gh`.                  |
 | `COMPUTE_SERVER_CACHESOLVE`      | `true`   | Let Rhino.Compute cache and return solve results.                  |
-| `COMPUTE_CACHE_ERRORED_SOLVES`   | `false`  | Also cache solves that reported Grasshopper errors.                |
 | `REMOTE_DEFINITION_CACHE_TTL_MS` | `300000` | Freshness bound on `.gh` bytes fetched from a **remote URL** only. |
 
 Restart the Selva server after editing `.env`.

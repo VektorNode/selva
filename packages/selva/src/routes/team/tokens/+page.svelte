@@ -23,6 +23,7 @@
 		type AccessPreset,
 		type TokenRow
 	} from '$lib/apiTokens';
+	import McpConnectCard from '$lib/components/McpConnectCard.svelte';
 	import type { PageData } from './$types';
 	import type { RosterRow } from './+page.server';
 
@@ -246,6 +247,8 @@
 				{/if}
 			</Card.Content>
 		</Card.Root>
+
+		<McpConnectCard {secret} />
 	{/if}
 
 	{#if data.available && data.orgId}

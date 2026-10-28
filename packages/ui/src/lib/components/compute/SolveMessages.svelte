@@ -126,16 +126,30 @@
 	// Keyed on the diagnostics array's identity, which every report renews, rather than on a
 	// solve id: only the live channel has one, and on the Compute path remarks arrive with the
 	// result. Once per array, so remarks that sat behind a review do not reappear after Continue.
+	//
+	// A remark is shown once while it stays raised, not after every solve. Every report repeats
+	// it: Grasshopper keeps runtime messages on a Message component an input change did not
+	// reach, and Compute re-solves the whole definition. It shows again once a solve stops
+	// raising it and a later one raises it anew.
 	let lingering = $state(false);
 	let lingeredFor: SolveDiagnostic[] | null = null;
+	let shownRemarks: ReadonlySet<string> = new Set();
+	let freshRemarks = $state.raw<SolveDiagnostic[]>([]);
+	const remarkKey = (d: SolveDiagnostic) => `${d.source ?? ''}\u0000${d.message}`;
 	$effect(() => {
 		if (phase === 'live') {
 			lingering = false;
 			return;
 		}
-		if (authoredRemarks.length === 0 || lingeredFor === diagnostics) return;
+		if (lingeredFor === diagnostics) return;
 		lingeredFor = diagnostics;
-		if (phase !== 'idle') return;
+		const raised = authoredRemarks.map(remarkKey);
+		const stillShown = raised.filter((k) => shownRemarks.has(k));
+		const fresh = authoredRemarks.filter((d) => !shownRemarks.has(remarkKey(d)));
+		const showNow = phase === 'idle' && fresh.length > 0;
+		shownRemarks = new Set(showNow ? [...stillShown, ...fresh.map(remarkKey)] : stillShown);
+		if (!showNow) return;
+		freshRemarks = fresh;
 		lingering = true;
 		const timer = setTimeout(() => (lingering = false), REMARK_LINGER_MS);
 		return () => clearTimeout(timer);
@@ -181,7 +195,7 @@
 	// While solving, the live channel is all there is. Once the result lands it is authoritative
 	// — it carries remarks too — so the live list is dropped entirely and nothing is shown twice.
 	const rows = $derived<SolveDiagnostic[]>(
-		view === 'live' ? [...live.diagnostics] : view === 'idle' ? authoredRemarks : authoredGating
+		view === 'live' ? [...live.diagnostics] : view === 'idle' ? freshRemarks : authoredGating
 	);
 
 	// A remark states something without asking anything, so it reads as a quiet note.

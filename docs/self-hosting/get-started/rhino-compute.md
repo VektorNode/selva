@@ -30,6 +30,8 @@ The headless Rhino that solves definitions, on its own Windows machine separate 
 
 4. **Enable block instances.** Set `RHINO_COMPUTE_CREATE_HEADLESS_DOC=true` and restart the service.
 
+   Also set `RHINO_COMPUTE_ABORT_ON_HANGUP=true`. When a user moves a slider before the last solve finished, Selva drops that solve, and this setting makes Rhino Compute stop it instead of finishing it in the background while the solve the user wants waits behind it. It needs a fork build that knows the setting; an older one ignores it.
+
 5. **Install the Selva plugin.** Under the `rhino.compute` user account, open the Grasshopper Package Manager and install **Selva** plus any other plugins your definitions need. Restart afterwards. Plugins installed as a different user aren't found at solve time.
 
 ## Updating

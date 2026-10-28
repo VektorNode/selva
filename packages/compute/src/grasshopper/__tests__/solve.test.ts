@@ -92,27 +92,16 @@ describe('solve', () => {
 	describe('applyOptionalComputeSettings', () => {
 		const base = (): GrasshopperRequestSchema => ({ algo: null, pointer: null, values: [] });
 
-		it('forwards cacheerroredsolves when set', () => {
+		it('forwards cachesolve when set', () => {
 			const args = base();
-			applyOptionalComputeSettings(args, { serverUrl: 'http://x', cacheerroredsolves: true });
-			expect(args.cacheerroredsolves).toBe(true);
+			applyOptionalComputeSettings(args, { serverUrl: 'http://x', cachesolve: true });
+			expect(args.cachesolve).toBe(true);
 		});
 
-		it('omits cacheerroredsolves when unset (back-compat: older servers never see it)', () => {
+		it('omits cachesolve when unset', () => {
 			const args = base();
 			applyOptionalComputeSettings(args, { serverUrl: 'http://x' });
-			expect('cacheerroredsolves' in args).toBe(false);
-		});
-
-		it('forwards cachesolve and cacheerroredsolves independently', () => {
-			const args = base();
-			applyOptionalComputeSettings(args, {
-				serverUrl: 'http://x',
-				cachesolve: true,
-				cacheerroredsolves: false
-			});
-			expect(args.cachesolve).toBe(true);
-			expect(args.cacheerroredsolves).toBe(false);
+			expect('cachesolve' in args).toBe(false);
 		});
 	});
 });

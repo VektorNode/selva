@@ -442,8 +442,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 				kind: 'facts',
 				rows: [
 					['COMPUTE_SOLVE_CACHE_MB', 'budget in MB, default 256, PER warm client'],
-					['COMPUTE_SERVER_CACHESOLVE', 'also ask Rhino.Compute to cache, default true'],
-					['COMPUTE_CACHE_ERRORED_SOLVES', 'also cache Grasshopper-error results, default false']
+					['COMPUTE_SERVER_CACHESOLVE', 'also ask Rhino.Compute to cache, default true']
 				]
 			}
 		],
@@ -780,11 +779,6 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 				name: 'COMPUTE_SERVER_CACHESOLVE',
 				default: 'true',
 				text: 'Ask Rhino.Compute itself to cache solve results keyed on the full request, so an identical repeat skips solving. Server-wide — survives Selva restarts.'
-			},
-			{
-				name: 'COMPUTE_CACHE_ERRORED_SOLVES',
-				default: 'false',
-				text: 'Also cache solves that reported a Grasshopper error. Right for definitions that error by design (guarded Python, pruned branches) but still return valid geometry. Off by default, because most errors aren’t that.'
 			}
 		]
 	},

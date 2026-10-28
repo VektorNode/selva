@@ -50,7 +50,6 @@ export interface SolveEngineLimits {
 	computeResponseMaxBytes: number;
 	computeReuseDefinitionCache: boolean;
 	computeServerCachesolve: boolean;
-	computeCacheErroredSolves: boolean;
 	computeMaxQueueDepth: number;
 	computeQueueWaitMs: number;
 	computeDefinitionCacheBytes: number;
@@ -157,7 +156,6 @@ export class SolveEngine {
 		this.clientCache = createClientCache({
 			solveDeadlineMs: this.limits.solveDeadlineMs,
 			cachesolve: this.limits.computeServerCachesolve,
-			cacheerroredsolves: this.limits.computeCacheErroredSolves,
 			reuseServerDefinitionCache: this.limits.computeReuseDefinitionCache,
 			maxQueueDepth: this.limits.computeMaxQueueDepth,
 			queueWaitMs: this.limits.computeQueueWaitMs,

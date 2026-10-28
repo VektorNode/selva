@@ -58,8 +58,6 @@ export interface ClientCacheConfig {
 	/** Per-solve timeout forwarded to the scheduler (`ComputeLimits.solveDeadlineMs`). */
 	solveDeadlineMs: number;
 	cachesolve: boolean;
-	/** Only meaningful with `cachesolve`. */
-	cacheerroredsolves: boolean;
 	/** Reference large definitions by server cache key instead of re-uploading. */
 	reuseServerDefinitionCache: boolean;
 	/**
@@ -191,7 +189,6 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// verbose flag so the concise cache logs can run without the noise.
 			debug: debugVerbose,
 			cachesolve: config.cachesolve,
-			cacheerroredsolves: config.cacheerroredsolves,
 			maxResponseBytes: config.maxResponseBytes
 		};
 
@@ -322,11 +319,8 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 					const errs = (result.response as { errors?: unknown[] })?.errors;
 					const errCount = Array.isArray(errs) ? errs.length : 0;
 					if (errCount > 0) {
-						const cacheNote = config.cacheerroredsolves
-							? 'cached (cacheerroredsolves on)'
-							: 'not cached (cacheerroredsolves off) — re-run until fixed';
 						debugLog(
-							`[Compute/rhino-cache] ${errCount} GH error(s); ${cacheNote}. First: ${JSON.stringify((errs as unknown[])[0])}`
+							`[Compute/rhino-cache] ${errCount} GH error(s); not cached by Rhino.Compute. First: ${JSON.stringify((errs as unknown[])[0])}`
 						);
 					}
 				}

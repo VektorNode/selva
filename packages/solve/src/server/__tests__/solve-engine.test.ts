@@ -84,7 +84,6 @@ function baseLimits(over: Partial<SolveEngineLimits> = {}): SolveEngineLimits {
 		computeResponseMaxBytes: 10 * 1024 * 1024,
 		computeReuseDefinitionCache: true,
 		computeServerCachesolve: true,
-		computeCacheErroredSolves: false,
 		computeMaxQueueDepth: 0,
 		computeQueueWaitMs: 0,
 		computeDefinitionCacheBytes: 10 * 1024 * 1024,

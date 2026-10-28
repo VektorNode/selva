@@ -183,13 +183,6 @@ export interface ComputeLimits {
 	 */
 	computeServerCachesolve: boolean;
 	/**
-	 * Also cache solves that reported Grasshopper errors — correct for
-	 * error-by-design definitions (guarded Python, pruned branches) that still
-	 * produce valid geometry. Requires `computeServerCachesolve` and a server
-	 * honoring the flag. Conservative default off.
-	 */
-	computeCacheErroredSolves: boolean;
-	/**
 	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue. This
 	 * excludes in-flight solves, which the scheduler caps at `maxConcurrent`,
 	 * auto-detected from the compute server's active child count. A solve arriving
@@ -276,7 +269,6 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		),
 		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
-		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
 		// Both default to off — nothing is rejected until an operator who has measured
 		// their pool opts in. readNonNegativeInt throughout, so `0` reads as "disabled"
 		// rather than as an invalid value that falls back.

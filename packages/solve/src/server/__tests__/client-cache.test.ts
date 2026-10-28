@@ -89,7 +89,6 @@ function baseConfig() {
 		maxQueueDepth: 0,
 		queueWaitMs: 0,
 		cachesolve: true,
-		cacheerroredsolves: false,
 		reuseServerDefinitionCache: true,
 		responseCacheMaxBytes: 256 * 1024 * 1024,
 		maxResponseBytes: 300 * 1024 * 1024,

@@ -918,6 +918,28 @@ describe('SolveScheduler', () => {
 			queue[1].release(makeResponse('clean'));
 			await secondPromise;
 		});
+
+		it('never caches a solve the plugin aborted', async () => {
+			const { executor, queue } = deferredExecutor();
+			const scheduler = new SolveScheduler(executor, baseConfig, {
+				mode: 'queue',
+				cache: { maxBytes: 100_000 }
+			});
+
+			const inputs = [tree('x')];
+
+			const first = scheduler.solve('def', inputs);
+			queue[0].release({
+				...makeResponse('aborted'),
+				selva: { outcome: { aborted: true, blocked: false } }
+			});
+			await first;
+
+			const secondPromise = scheduler.solve('def', inputs);
+			await vi.waitFor(() => expect(queue.length).toBe(2));
+			queue[1].release(makeResponse('clean'));
+			expect((await secondPromise).filename).toBe('clean');
+		});
 	});
 
 	describe('observability', () => {

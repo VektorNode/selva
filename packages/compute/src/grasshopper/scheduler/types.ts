@@ -50,8 +50,7 @@ export interface CacheOptions {
 	 * Cache responses that carry Grasshopper `errors`. Default `true`: an
 	 * errored solve is a valid, deterministic result — definitions raise GH
 	 * errors by design (guarded components, validation branches), so replaying
-	 * one from cache is correct. Set `false` for parity with Rhino's opt-in
-	 * `cacheerroredsolves` server flag, e.g. when a definition's errors are
+	 * one from cache is correct. Set `false` when a definition's errors are
 	 * transient (external data sources) rather than functions of the inputs.
 	 */
 	cacheErroredSolves?: boolean;

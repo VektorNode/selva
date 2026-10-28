@@ -57,9 +57,8 @@ export const REMOTE_DEFINITION_CACHE_TTL_MS = limits.remoteDefinitionCacheTtlMs;
 // Server definition-cache reuse (pointer instead of re-uploading the binary).
 export const COMPUTE_REUSE_DEFINITION_CACHE = limits.computeReuseDefinitionCache;
 
-// Server-side solve-result cache (`cachesolve`) + errored-solve caching opt-in.
+// Server-side solve-result cache (`cachesolve`).
 export const COMPUTE_SERVER_CACHESOLVE = limits.computeServerCachesolve;
-export const COMPUTE_CACHE_ERRORED_SOLVES = limits.computeCacheErroredSolves;
 
 // Backpressure: queue-depth cap and queue-wait deadline. Both 0 = unbounded/off.
 export const COMPUTE_MAX_QUEUE_DEPTH = limits.computeMaxQueueDepth;
