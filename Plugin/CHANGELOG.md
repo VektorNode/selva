@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A boolean input can show as a button (`displayAs: 'button'`). Pressing it sets the toggle for one solve.
 - Value lists show as a button row or as image tiles, and each option can carry an icon or a thumbnail (schema 2.17.0). The `.gh` stores each picture once.
 - In the panel, file inputs, presets and downloads use Rhino's own open and save dialogs.
+- `SchemaLayout.Read` and `Apply` lay out a definition's form by parameter nickname, for scripts and AI agents: the whole layout as one JSON spec, ids kept for what survives, refused with every error named.
 
 - Upload to Selva: the builder signs in to a hosted Selva instance through your browser, or with a pasted API key, and uploads the open definition as a new definition or as a new version of the one this file went to before. The key stays in your system's credential store (Credential Manager on Windows, the keychain on macOS) and never reaches the web UI. An upload lands as the draft unless Make live is on.
 - Builder: the App panel sets the definition's category and tags next to its name and description, marked Compute since only Selva uses them. Selva copies all four in when the definition is uploaded.

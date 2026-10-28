@@ -99,6 +99,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
+    /// <summary>
+    ///     A scripted layout is the author's intent, as an editor save is: a widget it leaves out must
+    ///     not spring back from a tombstone.
+    /// </summary>
+    internal void ApplyAuthoredSchema(UISchema schema)
+    {
+        RecordUndoEvent("Apply Layout");
+        _service?.SchemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
+        _service?.SchemaSynchronizer.ClearMetadataCache();
+        Schema = schema;
+    }
+
     protected override Bitmap Icon => Resources.UIBridge;
 
     /// <summary>

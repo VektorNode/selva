@@ -88,6 +88,8 @@
 		         Link="Linked\OutputPayloadBuilder.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SchemaOutputCanonicalizer.cs"
 		         Link="Linked\SchemaOutputCanonicalizer.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\LayoutSpec.cs"
+		         Link="Linked\LayoutSpec.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SyncModels.cs"
 		         Link="Linked\SyncModels.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SyncDirection.cs"

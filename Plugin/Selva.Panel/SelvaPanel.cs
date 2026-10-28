@@ -57,6 +57,11 @@ public class SelvaPanel : Eto.Forms.Panel
         else
         {
             Content = host.View;
+            // Eto.Wpf sizes a reparented control before marking it loaded, so the WebView coming
+            // out of the launcher's strip keeps a fixed 100×100 and sits centred. WPF sends no
+            // second Loaded to correct it: removed and re-added in one pass. Resetting the size
+            // now, once loaded, lets it stretch.
+            host.View.Size = new Size(-1, -1);
         }
     }
 

@@ -217,6 +217,49 @@ pending buffer and applied later with **no log line at all**
 ([BridgeOrchestrator.cs:105-115](../../Plugin/Selva.GH/Features/UIBuilder/Services/BridgeOrchestrator.cs#L105-L115)).
 Values appearing to "not apply" often land one solve later.
 
+## Laying out a form from a script
+
+`SchemaLayout` lays the form out by parameter nickname, so a script or an agent never handles a
+GUID. Both calls take and return JSON text, so Rhino MCP's `run_csharp`, which cannot name Selva's
+types, reaches them by reflection:
+
+```csharp
+var layout = AppDomain.CurrentDomain.GetAssemblies().First(a => a.GetName().Name == "Selva")
+    .GetType("Selva.GH.Features.UIBuilder.Services.Schema.SchemaLayout");
+var spec = (string)layout.GetMethod("Read").Invoke(null, new object[] { doc });
+var result = (string)layout.GetMethod("Apply").Invoke(null, new object[] { doc, spec });
+```
+
+```jsonc
+{
+	"name": "Wall cap",
+	"tabs": [
+		{
+			"label": "General",
+			"groups": [
+				{
+					"label": "Size",
+					"items": [
+						"Width",
+						{ "param": "Angle", "label": "Slope", "config": { "minimum": 0, "maximum": 45 } },
+						{ "linebreak": true }
+					]
+				}
+			]
+		}
+	]
+}
+```
+
+- The spec is the whole layout. What it leaves out is dropped, and the inputs no item shows come
+  back as `unplaced`.
+- An item keeps whatever the spec does not give from the item already there (`config` merges key
+  by key), else takes it from the canvas: a value list's options, a getter's range. The widget
+  follows the param type unless `widget` names one.
+- `description` and `default` set the input's too. Visibility rules take `param` for `paramId`.
+- Any error refuses the whole spec, each one named, and nothing changes. Unknown keys are errors.
+- The document must have solved once, or Context Bake outputs are not known yet.
+
 ## Editing a fixture by hand
 
 `InstanceGuid`s are load-bearing: the embedded schema keys inputs and outputs on them. Re-placing a
