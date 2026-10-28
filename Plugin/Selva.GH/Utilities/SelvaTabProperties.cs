@@ -4,6 +4,8 @@ using System.IO.Compression;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Rhino;
+using Selva.GH.Features.Display.Services;
+using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Properties;
 using Selva.Slva;
@@ -25,6 +27,8 @@ public class SelvaTabProperties : GH_AssemblyPriority
         if (!RhinoApp.IsRunningHeadless)
         {
             DefinitionLauncher.Register();
+            DisplayCaches.ClearOnDocumentClose();
+            MacSolveActivity.Register();
             SlvzCompressor.Level = CompressionLevel.Fastest;
         }
 

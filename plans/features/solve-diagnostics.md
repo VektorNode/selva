@@ -29,7 +29,7 @@ component's. A downstream component erroring mid-solve is invisible to the web U
 
 Blocking on _any_ error-level runtime message anywhere in the document would break working
 definitions. Selva's own `ValueApplicator` emits `Error`-level messages for routine input-coercion
-problems, and `cacheerroredsolves` exists precisely because "some definitions throw GH errors by
+problems, and the solve cache keeps errored solves by default precisely because "some definitions throw GH errors by
 design (a guarded Python component, a filtered branch) while still producing correct geometry".
 
 An explicit component makes the blocking intent authored rather than inferred. It also gives the
