@@ -1,5 +1,17 @@
 # @selvajs/ui
 
+## 6.6.0-beta.11
+
+### Minor Changes
+
+- e0aa942: A solve that ends within 400 ms no longer shows a solving indicator. Once shown, the indicator stays for at least 500 ms so it never flashes. `createSolvingIndicator` replaces its averaged adaptive delay with this fixed rule, so a slow solve after a run of fast ones is no longer left without an indicator, and it now also returns `slow` (past 2 s). The viewer shows a thin progress bar along its top edge instead of blurring the model on every solve, and dims the stale result only while a solve is slow (`Viewer` `isSlow`, `AppLayout` `solveIsSlow`). `AppLayout` now hides the solving chip itself when the definition has a Calculate button, so hosts pass `createSolvingIndicator(...).show` without that check. In a host that freezes while it solves (the Rhino panel), the indicator shows on every solve, since a delay can't run there.
+
+### Patch Changes
+
+- e0aa942: Without a viewer, a layout narrower than 900px renders as one edge-to-edge column with the Calculate row pinned underneath, instead of a framed card in its own margins. Fixes the cramped look in a docked Rhino panel. Inline solve messages render as a footer row with their buttons beside the title, not as a framed card.
+- e0aa942: Esc aborts a running solve and says so the same way in every host: the Rhino panel, a browser tab and Rhino.Compute. Before, a browser tab ignored Esc and only the panel showed the hint, and only after a slow solve. The live panel's Abort button and the Calculate button while solving show an Esc key, and the floating solving indicator reads "Esc aborts the solve" instead of "This can take a moment…".
+- e0aa942: Closing a `Viewer` no longer logs "WebGL: INVALID_OPERATION: loseContext: context already lost". It released its WebGL context a second time after `dispose()` had already done so.
+
 ## 6.6.0-beta.10
 
 ### Patch Changes
