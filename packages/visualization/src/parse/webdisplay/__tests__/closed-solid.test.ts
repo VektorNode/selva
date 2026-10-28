@@ -109,6 +109,29 @@ describe('isClosedSolid', () => {
 		expect(isClosedSolid(positions, twice, [indices.length, indices.length])).toBe(true);
 	});
 
+	it('judges each member alone when a large one is followed by a small one and an open one', () => {
+		// The weld and edge tables are shared across members: a big member must leave nothing behind
+		// that makes a later, smaller one look closed or open.
+		const sphere = new THREE.SphereGeometry(1, 48, 32);
+		sphere.deleteAttribute('uv');
+		sphere.deleteAttribute('normal');
+		const big = mergeVertices(sphere);
+		const bare = (geometry: THREE.BufferGeometry) => {
+			geometry.deleteAttribute('uv');
+			geometry.deleteAttribute('normal');
+			return geometry;
+		};
+		const small = bare(new THREE.BoxGeometry(1, 1, 1).translate(5, 0, 0));
+		const open = bare(new THREE.PlaneGeometry(1, 1).translate(0, 9, 0));
+		const counts = [big, small, open].map((g) => g.getIndex()!.count);
+
+		expect(check(mergeGeometries([big, small]), counts.slice(0, 2))).toBe(true);
+		expect(check(mergeGeometries([big, small, open]), counts)).toBe(false);
+		expect(check(mergeGeometries([big, open, small]), [counts[0]!, counts[2]!, counts[1]!])).toBe(
+			false
+		);
+	});
+
 	it('is false when any member is open', () => {
 		const open = new THREE.PlaneGeometry(1, 1);
 		const merged = mergeGeometries([new THREE.BoxGeometry(1, 1, 1), open]);

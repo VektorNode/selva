@@ -34,6 +34,7 @@
 		"check:website": "turbo run check --filter=@selvajs/website",
 		"lint:website": "turbo run lint --filter=@selvajs/website",
 		"build:plugin": "turbo run build --filter=@selvajs/plugin-ui && node scripts/build-production.js",
+		"install:plugin": "node scripts/install-local.js",
 		"release:plugin": "node scripts/release-plugin.js",
 		"check": "turbo run check --concurrency=20 --filter=!@selvajs/website",
 		"type-check": "turbo run type-check --concurrency=20 --filter=!@selvajs/website",

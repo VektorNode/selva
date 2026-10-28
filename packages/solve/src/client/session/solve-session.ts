@@ -19,6 +19,7 @@ import {
 	applySolveResult,
 	blankOutputs,
 	commitSolveResult,
+	isRepeatOfLastSolve,
 	pickInputValues,
 	solvePhase,
 	type SolvePhase,
@@ -147,6 +148,8 @@ export interface SolveSessionArgs {
 
 export function createSolveSession(args: SolveSessionArgs): SolveSession {
 	let currentSchema = args.schema;
+	// The inputs the last dispatch sent; null after a failure or abort, so the same values retry.
+	let lastSent: Record<string, unknown> | null = null;
 
 	const flags = makeInitialFlags(currentSchema?.instanceSolve);
 	const state: SolveSessionState = {
@@ -215,7 +218,8 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 	function dispatch() {
 		// Copy: state.values is the live map, and a driver may hold the payload across an
 		// async solve — a later setValue must not mutate what's already in flight.
-		args.driver.solve({ ...pickInputValues(currentSchema, state.values) });
+		lastSent = { ...pickInputValues(currentSchema, state.values) };
+		args.driver.solve(lastSent);
 		emit();
 	}
 
@@ -288,6 +292,8 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		setValue(id, value, forceSolve = false) {
+			if (!forceSolve && isRepeatOfLastSolve(currentSchema, lastSent, state.values, id, value))
+				return;
 			const { shouldSolve } = applyValueChange(state, id, value, currentSchema?.instanceSolve);
 			if (shouldSolve || forceSolve) {
 				if (forceSolve && !shouldSolve) {
@@ -338,6 +344,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			// A caller waiting on the old definition's solve would otherwise get the new one's.
 			abandon();
 			currentSchema = schema;
+			lastSent = null;
 			// The new definition has its own input space; a matching input key from the prior
 			// one must not serve that definition's cached result.
 			args.driver.clearCache?.();
@@ -365,6 +372,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		report(result) {
+			if (result.aborted) lastSent = null;
 			// `finalizeResult` already dropped a rejected solve's outputs; this also nulls the
 			// ones still in `values` from the previous solve, which only the session can name.
 			applySolveResult(
@@ -380,12 +388,14 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		reportError(message) {
+			lastSent = null;
 			state.error = message;
 			emit();
 			if (!args.driver.hasQueued) settle({ status: 'failed', error: message });
 		},
 
 		reportAborted() {
+			lastSent = null;
 			emit();
 			if (!args.driver.hasQueued) settle(ABORTED);
 		},

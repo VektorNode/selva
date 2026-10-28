@@ -17,6 +17,10 @@ import { WebSocketServer, type WebSocket } from 'ws';
 export const STUB_PORT = Number(process.env.E2E_WS_PORT ?? 8765);
 export const STUB_SECRET = 'e2e-secret';
 
+/** A Count the stub takes SLOW_SOLVE_MS to "solve", long enough for any solving indicator. */
+export const SLOW_SOLVE_COUNT = 9;
+const SLOW_SOLVE_MS = 2000;
+
 const wireFixtures = new URL('../../schemas/fixtures/wire/', import.meta.url);
 
 /** A shared wire fixture, re-addressed to the page's session. */
@@ -173,15 +177,23 @@ export function startStub(port = STUB_PORT): WebSocketServer {
 					break;
 
 				case 'valueUpdate':
-					// Trivial "solve": area = count * count. No display payload (no meshes).
+					// Trivial "solve": area = count * count. No display payload (no meshes). Framed
+					// by solvingState in the plugin's order: true, outputs, false.
 					{
 						const count = Number(msg.values?.['in-count'] ?? 0);
-						send(ws, {
-							type: 'outputs',
-							sessionId,
-							outputs: { 'out-area': count * count },
-							modelUnits: 'Meters'
-						});
+						send(ws, { type: 'solvingState', sessionId, isSolving: true });
+						setTimeout(
+							() => {
+								send(ws, {
+									type: 'outputs',
+									sessionId,
+									outputs: { 'out-area': count * count },
+									modelUnits: 'Meters'
+								});
+								send(ws, { type: 'solvingState', sessionId, isSolving: false });
+							},
+							count === SLOW_SOLVE_COUNT ? SLOW_SOLVE_MS : 0
+						);
 					}
 					break;
 

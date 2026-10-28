@@ -51,33 +51,44 @@ export function splitCreases(
 		const uvBits = uvs ? new Uint32Array(uvs.buffer, uvs.byteOffset, uvs.length) : null;
 		// -0 and +0 are one position with two bit patterns.
 		const word = (bits: Uint32Array, i: number) => (bits[i] === 0x80000000 ? 0 : bits[i]!);
-		const same = (a: number, b: number): boolean => {
-			for (let k = 0; k < 3; k++) {
-				if (word(posBits, a * 3 + k) !== word(posBits, b * 3 + k)) return false;
-				if (colors && colors[a * 3 + k] !== colors[b * 3 + k]) return false;
-			}
-			if (uvBits) {
-				if (uvBits[a * 2] !== uvBits[b * 2] || uvBits[a * 2 + 1] !== uvBits[b * 2 + 1])
-					return false;
-			}
-			return true;
-		};
 		let size = 16;
 		while (size < vertexCount * 2) size *= 2;
 		const mask = size - 1;
 		const slots = new Int32Array(size).fill(-1);
 		const canonical = new Uint32Array(vertexCount);
+		let merged = false;
 		for (let v = 0; v < vertexCount; v++) {
-			let h =
-				Math.imul(word(posBits, v * 3), 0x9e3779b1) ^
-				Math.imul(word(posBits, v * 3 + 1), 0x85ebca77) ^
-				Math.imul(word(posBits, v * 3 + 2), 0xc2b2ae3d);
+			const x = word(posBits, v * 3);
+			const y = word(posBits, v * 3 + 1);
+			const z = word(posBits, v * 3 + 2);
+			let h = Math.imul(x, 0x9e3779b1) ^ Math.imul(y, 0x85ebca77) ^ Math.imul(z, 0xc2b2ae3d);
 			h = (h ^ (h >>> 15)) & mask;
-			while (slots[h] !== -1 && !same(slots[h]!, v)) h = (h + 1) & mask;
-			if (slots[h] === -1) slots[h] = v;
-			canonical[v] = slots[h]!;
+			for (;;) {
+				const other = slots[h]!;
+				if (other === -1) {
+					slots[h] = v;
+					canonical[v] = v;
+					break;
+				}
+				if (
+					word(posBits, other * 3) === x &&
+					word(posBits, other * 3 + 1) === y &&
+					word(posBits, other * 3 + 2) === z &&
+					(!colors ||
+						(colors[other * 3] === colors[v * 3] &&
+							colors[other * 3 + 1] === colors[v * 3 + 1] &&
+							colors[other * 3 + 2] === colors[v * 3 + 2])) &&
+					(!uvBits ||
+						(uvBits[other * 2] === uvBits[v * 2] && uvBits[other * 2 + 1] === uvBits[v * 2 + 1]))
+				) {
+					canonical[v] = other;
+					merged = true;
+					break;
+				}
+				h = (h + 1) & mask;
+			}
 		}
-		for (let i = 0; i < cornerCount; i++) indices[i] = canonical[indices[i]!]!;
+		if (merged) for (let i = 0; i < cornerCount; i++) indices[i] = canonical[indices[i]!]!;
 	}
 
 	// --- Unit face normals and areas ---------------------------------------------------------------
@@ -194,16 +205,22 @@ export function splitCreases(
 	}
 
 	const normals = new Float32Array(total * 3);
-	for (let corner = 0; corner < cornerCount; corner++) {
-		const v = indices[corner]!;
-		const g = groupOf[corner]!;
-		const target = g === 0 ? v : vertexCount + extraStart[v]! + g - 1;
-		indices[corner] = target;
-		const f = Math.floor(corner / 3) * 3;
-		const w = faceAreas[f / 3]!;
-		normals[target * 3] += faceNormals[f]! * w;
-		normals[target * 3 + 1] += faceNormals[f + 1]! * w;
-		normals[target * 3 + 2] += faceNormals[f + 2]! * w;
+	for (let t = 0; t < triangleCount; t++) {
+		const w = faceAreas[t]!;
+		const nx = faceNormals[t * 3]! * w;
+		const ny = faceNormals[t * 3 + 1]! * w;
+		const nz = faceNormals[t * 3 + 2]! * w;
+		for (let corner = t * 3; corner < t * 3 + 3; corner++) {
+			let target = indices[corner]!;
+			const g = groupOf[corner]!;
+			if (g !== 0) {
+				target = vertexCount + extraStart[target]! + g - 1;
+				indices[corner] = target;
+			}
+			normals[target * 3] += nx;
+			normals[target * 3 + 1] += ny;
+			normals[target * 3 + 2] += nz;
+		}
 	}
 	for (let i = 0; i < normals.length; i += 3) {
 		const x = normals[i]!;

@@ -296,45 +296,32 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 #if DEBUG
             Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
 #endif
-            if (wasActuallySolving)
+            // A throw escaping into Grasshopper would skip the cleanup below, leaving presses
+            // latched and pending values stranded, so each stage is contained.
+            try
             {
-                _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
-                _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
-
-                // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
-                if (_embeddedSchema != null)
+                if (wasActuallySolving)
                 {
-                    var document = OnPingDocument();
-                    var (addedIds, removedIds) =
-                        _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
-                    if (addedIds.Count > 0 || removedIds.Count > 0)
-                    {
-                        if (addedIds.Count > 0)
-                        {
-                            _service.EventManager.RegisterWatchedIds(addedIds);
-                        }
-
-                        _ = _service.WebSocketTransport
-                            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
-                            .ContinueWith(t =>
-                            {
-                                if (t.IsFaulted)
-                                {
-                                    Logger.Error("Failed to broadcast schema update after bake output sync",
-                                        t.Exception);
-                                }
-                            });
-                        GHDocumentMutator.ScheduleComponentExpire(document, this,
-                            _service.WebSocketTransport.ScheduleSolutionDelayMs, true);
-                    }
+                    PublishSolveResults();
                 }
             }
-
-            ClearAllContextualParameters();
-            if (_service.TriggerPresses.ResetPressed(OnPingDocument(),
-                    _service.WebSocketTransport.ScheduleSolutionDelayMs))
+            catch (Exception ex)
             {
-                _service.StateManager.MarkSolveScheduled();
+                Logger.Error("[UIBuilder] Publishing solve results failed", ex);
+            }
+
+            try
+            {
+                ClearAllContextualParameters();
+                if (_service.TriggerPresses.ResetPressed(OnPingDocument(),
+                        _service.WebSocketTransport.ScheduleSolutionDelayMs))
+                {
+                    _service.StateManager.MarkSolveScheduled();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("[UIBuilder] Resetting inputs after the solve failed", ex);
             }
 
             // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
@@ -358,6 +345,43 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _service.EventManager.DocumentModified += _onDocumentModified;
     }
 
+
+    private void PublishSolveResults()
+    {
+        _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
+        _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+
+        // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
+        if (_embeddedSchema == null)
+        {
+            return;
+        }
+
+        var document = OnPingDocument();
+        var (addedIds, removedIds) =
+            _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
+        if (addedIds.Count == 0 && removedIds.Count == 0)
+        {
+            return;
+        }
+
+        if (addedIds.Count > 0)
+        {
+            _service.EventManager.RegisterWatchedIds(addedIds);
+        }
+
+        _ = _service.WebSocketTransport
+            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
+            .ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    Logger.Error("Failed to broadcast schema update after bake output sync", t.Exception);
+                }
+            });
+        GHDocumentMutator.ScheduleComponentExpire(document, this,
+            _service.WebSocketTransport.ScheduleSolutionDelayMs, true);
+    }
 
     private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind, bool startOutOfPanel)
     {
@@ -560,13 +584,20 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        if (command == InboundKind.CloseDefinition)
+        try
         {
-            DefinitionLauncher.Close();
+            if (command == InboundKind.CloseDefinition)
+            {
+                DefinitionLauncher.Close();
+            }
+            else if (command == InboundKind.EditInGrasshopper)
+            {
+                DefinitionLauncher.EditInGrasshopper();
+            }
         }
-        else if (command == InboundKind.EditInGrasshopper)
+        catch (Exception ex)
         {
-            DefinitionLauncher.EditInGrasshopper();
+            Logger.Error($"[UIBuilder] Player command {command} failed", ex);
         }
     }
 

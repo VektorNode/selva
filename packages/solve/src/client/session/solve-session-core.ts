@@ -120,6 +120,30 @@ export function applyValueChange(
 	return { state, shouldSolve: true };
 }
 
+// Worth sending even unchanged: a dynamic list's options can change under the same selection, and
+// a file can be picked again after its parameter was cleared.
+const RESEND_UNCHANGED = new Set(['dynamicValueList', 'file']);
+
+/**
+ * Whether setting `value` would solve again for nothing: it is what the last solve sent and what
+ * the session holds, and nothing failed or aborted since (`lastSent` is null then). A field that
+ * reports on input and again on blur would otherwise solve twice, and Grasshopper re-applies every
+ * dynamic list on each update, so the repeat is a real solve. Objects never count as repeats.
+ */
+export function isRepeatOfLastSolve(
+	schema: UISchema | undefined,
+	lastSent: Record<string, unknown> | null,
+	values: Record<string, unknown>,
+	id: string,
+	value: unknown
+): boolean {
+	if (!lastSent || !(id in lastSent)) return false;
+	if (value !== null && typeof value === 'object') return false;
+	if (!Object.is(lastSent[id], value) || !Object.is(values[id], value)) return false;
+	const paramType = schema?.inputs?.find((input) => input.id === id)?.paramType;
+	return !RESEND_UNCHANGED.has(paramType ?? '');
+}
+
 /**
  * Solve outputs live in the same `values` map as inputs (so widgets like dynamic value
  * lists can read them) but must not be echoed back to the driver: a measured 6.4 MB

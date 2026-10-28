@@ -22,12 +22,10 @@ public class WebSocketServer : IDisposable
     private const int MAX_CLIENTS = AppConfig.WebSocket.MaxConcurrentClients;
     private const int HEARTBEAT_INTERVAL = AppConfig.WebSocket.HeartbeatIntervalMs;
     private const int BROADCAST_TIMEOUT = AppConfig.WebSocket.BroadcastTimeoutMs;
-    private const int MAX_SEND_QUEUE = 10;
+    private const long MAX_QUEUED_BYTES = AppConfig.WebSocket.MaxQueuedSendBytes;
 
     private readonly object _clientsLock = new object();
 
-    // Tracks per-client pending message count (for backpressure) and a semaphore (to serialize sends).
-    // WebSocket.SendAsync is NOT concurrent-safe: only one send may be in-flight at a time per socket.
     private readonly Dictionary<WebSocket, ClientSendState> _clientState =
         new Dictionary<WebSocket, ClientSendState>();
 
@@ -205,6 +203,11 @@ public class WebSocketServer : IDisposable
 
             clientsToClose = new List<WebSocket>(_connectedClients);
             _connectedClients.Clear();
+            foreach (var state in _clientState.Values)
+            {
+                state.Close();
+            }
+
             _clientState.Clear();
         }
 
@@ -263,15 +266,33 @@ public class WebSocketServer : IDisposable
     // Broadcast
     // -------------------------------------------------------------------------
 
-    public Task BroadcastAsync(string message)
+    public Task BroadcastAsync(string message) => BroadcastAsync(message, null);
+
+    /// <summary>
+    ///     Queues <paramref name="message" /> and the <paramref name="binaryFrames" /> after it as one
+    ///     unit per client, so no other broadcast lands between them: the page pairs mesh frames with
+    ///     the `outputs` envelope before them by arrival order.
+    /// </summary>
+    public Task BroadcastAsync(string message, IReadOnlyList<byte[]> binaryFrames)
     {
         if (!IsRunning)
         {
             return Task.CompletedTask;
         }
 
-        var buffer = Encoding.UTF8.GetBytes(message);
-        return BroadcastSegmentAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text);
+        var frames = new List<OutgoingFrame>(1 + (binaryFrames?.Count ?? 0))
+        {
+            new OutgoingFrame(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text)
+        };
+        if (binaryFrames != null)
+        {
+            foreach (var data in binaryFrames)
+            {
+                frames.Add(new OutgoingFrame(data, WebSocketMessageType.Binary));
+            }
+        }
+
+        return Broadcast(frames);
     }
 
     public Task BroadcastBinaryAsync(byte[] data)
@@ -281,7 +302,27 @@ public class WebSocketServer : IDisposable
             return Task.CompletedTask;
         }
 
-        return BroadcastSegmentAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary);
+        return Broadcast(new[] { new OutgoingFrame(data, WebSocketMessageType.Binary) });
+    }
+
+    // Completes once every client has sent the frames or dropped. Callers need not await it for
+    // ordering: each client sends in the order frames were queued.
+    private Task Broadcast(IReadOnlyList<OutgoingFrame> frames)
+    {
+        List<ClientSendState> states;
+        lock (_clientsLock)
+        {
+            states = new List<ClientSendState>(_clientState.Values);
+        }
+
+        // Outside the lock: an overflowing client drops itself, which takes it.
+        var sends = new List<Task>(states.Count);
+        foreach (var state in states)
+        {
+            sends.Add(state.Enqueue(frames));
+        }
+
+        return sends.Count == 0 ? Task.CompletedTask : Task.WhenAll(sends);
     }
 
     // -------------------------------------------------------------------------
@@ -290,143 +331,35 @@ public class WebSocketServer : IDisposable
 
     public Task SendAsync(WebSocket client, string message)
     {
-        return SendDirectAsync(client, new ArraySegment<byte>(Encoding.UTF8.GetBytes(message)),
-            WebSocketMessageType.Text);
+        return SendDirectAsync(client, new OutgoingFrame(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text));
     }
 
     public Task SendBinaryAsync(WebSocket client, byte[] data)
     {
-        return SendDirectAsync(client, new ArraySegment<byte>(data), WebSocketMessageType.Binary);
+        return SendDirectAsync(client, new OutgoingFrame(data, WebSocketMessageType.Binary));
     }
 
-    // Skips the MAX_SEND_QUEUE drop that broadcasts take: the page is waiting on this reply, and
-    // a dropped one would leave it waiting forever. It still queues behind the socket's send lock.
-    private async Task SendDirectAsync(WebSocket client, ArraySegment<byte> segment,
-        WebSocketMessageType messageType)
+    private Task SendDirectAsync(WebSocket client, OutgoingFrame frame)
     {
         if (!IsRunning)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        lock (_clientsLock)
-        {
-            if (!_clientState.TryGetValue(client, out var state))
-            {
-                return;
-            }
-
-            state.PendingCount++;
-        }
-
-        var clientsToRemove = new List<WebSocket>();
-        await SendToClientAsync(client, segment, messageType, clientsToRemove).ConfigureAwait(false);
-        RemoveDeadClients(clientsToRemove);
-    }
-
-    private async Task BroadcastSegmentAsync(ArraySegment<byte> segment, WebSocketMessageType messageType)
-    {
-        List<WebSocket> snapshot;
-        lock (_clientsLock)
-        {
-            snapshot = new List<WebSocket>(_connectedClients);
-        }
-
-        var tasks = new List<Task>(snapshot.Count);
-        var clientsToRemove = new List<WebSocket>();
-
-        foreach (var client in snapshot)
-        {
-            if (client.State != WebSocketState.Open)
-            {
-                // MarkForRemoval locks: in-flight SendToClientAsync tasks for earlier
-                // clients may append to this list concurrently.
-                MarkForRemoval(client, clientsToRemove);
-                continue;
-            }
-
-            // Single lock acquisition for the backpressure check + increment.
-            lock (_clientsLock)
-            {
-                if (!_clientState.TryGetValue(client, out var state))
-                {
-                    continue;
-                }
-
-                if (state.PendingCount >= MAX_SEND_QUEUE)
-                {
-                    Logger.Warn($"Client send queue full ({state.PendingCount} pending), dropping message.");
-                    continue;
-                }
-
-                state.PendingCount++;
-            }
-
-            tasks.Add(SendToClientAsync(client, segment, messageType, clientsToRemove));
-        }
-
-        if (tasks.Count > 0)
-        {
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-        }
-
-        RemoveDeadClients(clientsToRemove);
-    }
-
-    private async Task SendToClientAsync(
-        WebSocket client,
-        ArraySegment<byte> segment,
-        WebSocketMessageType messageType,
-        List<WebSocket> clientsToRemove)
-    {
-        // Acquire per-client send lock so concurrent broadcast calls never overlap
-        // on the same WebSocket (SendAsync is not concurrent-safe).
         ClientSendState state;
         lock (_clientsLock)
         {
             _clientState.TryGetValue(client, out state);
         }
 
-        if (state == null)
-        {
-            return;
-        }
+        return state == null ? Task.CompletedTask : state.Enqueue(new[] { frame });
+    }
 
-        await state.SendLock.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            if (client.State != WebSocketState.Open)
-            {
-                MarkForRemoval(client, clientsToRemove);
-                return;
-            }
-
-            using var cts = new CancellationTokenSource(BROADCAST_TIMEOUT);
-            await client.SendAsync(segment, messageType, true, cts.Token)
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            Logger.Warn("Broadcast timeout — removing slow client.");
-            MarkForRemoval(client, clientsToRemove);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Broadcast failed: {ex.Message}");
-            MarkForRemoval(client, clientsToRemove);
-        }
-        finally
-        {
-            state.SendLock.Release();
-
-            lock (_clientsLock)
-            {
-                if (_clientState.TryGetValue(client, out var s))
-                {
-                    s.PendingCount = Math.Max(0, s.PendingCount - 1);
-                }
-            }
-        }
+    // A failed or timed-out send leaves the socket unusable, and a client that stopped reading
+    // would hold everything queued behind it: drop the client, and it reconnects with a replay.
+    private void DropClient(WebSocket client)
+    {
+        RemoveDeadClients(new List<WebSocket> { client });
     }
 
     // -------------------------------------------------------------------------
@@ -632,7 +565,8 @@ public class WebSocketServer : IDisposable
 
         // Registered before the acknowledgement, so a full server refuses instead of acknowledging
         // and then dropping the socket.
-        if (!TryRegisterClient(webSocket, host))
+        var ack = new OutgoingFrame(Encoding.UTF8.GetBytes(_acknowledgement()), WebSocketMessageType.Text);
+        if (!TryRegisterClient(webSocket, host, ack, out var acknowledged))
         {
             await CloseOutputQuietlyAsync(
                 webSocket, WebSocketCloseStatus.PolicyViolation, "Maximum client connections reached")
@@ -640,30 +574,9 @@ public class WebSocketServer : IDisposable
             return;
         }
 
-        ClientSendState state;
-        lock (_clientsLock)
-        {
-            _clientState.TryGetValue(webSocket, out state);
-        }
-
-        if (state == null)
+        if (!await acknowledged.ConfigureAwait(false))
         {
             return;
-        }
-
-        // Under the socket's send lock: a broadcast may already be going to it.
-        await state.SendLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            using var sendTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            sendTimeout.CancelAfter(BROADCAST_TIMEOUT);
-            var ack = Encoding.UTF8.GetBytes(_acknowledgement());
-            await webSocket.SendAsync(new ArraySegment<byte>(ack), WebSocketMessageType.Text, true,
-                sendTimeout.Token).ConfigureAwait(false);
-        }
-        finally
-        {
-            state.SendLock.Release();
         }
 
         OnClientConnected?.Invoke(this, webSocket);
@@ -736,18 +649,24 @@ public class WebSocketServer : IDisposable
         }
     }
 
-    // Returns false if MAX_CLIENTS is reached; caller closes the socket in that case.
-    private bool TryRegisterClient(WebSocket webSocket, string host)
+    // Returns false if MAX_CLIENTS is reached; caller closes the socket in that case. The
+    // acknowledgement is queued under the same lock that registers the socket, so no broadcast
+    // reaches the page before it.
+    private bool TryRegisterClient(WebSocket webSocket, string host, OutgoingFrame acknowledgement,
+        out Task<bool> acknowledged)
     {
         lock (_clientsLock)
         {
             if (_connectedClients.Count >= MAX_CLIENTS)
             {
+                acknowledged = null;
                 return false;
             }
 
+            var state = new ClientSendState(webSocket, host, DropClient);
             _connectedClients.Add(webSocket);
-            _clientState[webSocket] = new ClientSendState(host);
+            _clientState[webSocket] = state;
+            acknowledged = state.Enqueue(new[] { acknowledgement });
             return true;
         }
     }
@@ -763,7 +682,11 @@ public class WebSocketServer : IDisposable
         lock (_clientsLock)
         {
             _connectedClients.Remove(webSocket);
-            _clientState.Remove(webSocket);
+            if (_clientState.TryGetValue(webSocket, out var state))
+            {
+                state.Close();
+                _clientState.Remove(webSocket);
+            }
         }
 
         try
@@ -923,17 +846,6 @@ public class WebSocketServer : IDisposable
     // Helpers
     // -------------------------------------------------------------------------
 
-    private void MarkForRemoval(WebSocket client, List<WebSocket> clientsToRemove)
-    {
-        lock (_clientsLock)
-        {
-            if (!clientsToRemove.Contains(client))
-            {
-                clientsToRemove.Add(client);
-            }
-        }
-    }
-
     private void RemoveDeadClients(List<WebSocket> clients)
     {
         if (clients.Count == 0)
@@ -946,7 +858,11 @@ public class WebSocketServer : IDisposable
             foreach (var client in clients)
             {
                 _connectedClients.Remove(client);
-                _clientState.Remove(client);
+                if (_clientState.TryGetValue(client, out var state))
+                {
+                    state.Close();
+                    _clientState.Remove(client);
+                }
 
                 try
                 {
@@ -975,28 +891,160 @@ public class WebSocketServer : IDisposable
         }
     }
 
+    private readonly struct OutgoingFrame
+    {
+        public OutgoingFrame(byte[] data, WebSocketMessageType type)
+        {
+            Data = data;
+            Type = type;
+        }
+
+        public byte[] Data { get; }
+        public WebSocketMessageType Type { get; }
+    }
+
     /// <summary>
-    ///     Per-client state: pending message count (backpressure) + send semaphore (serialization).
-    ///     WebSocket.SendAsync must never be called concurrently on the same socket.
-    ///
-    ///     Deliberately NOT IDisposable: the semaphore was previously disposed on client removal,
-    ///     which raced in-flight SendToClientAsync tasks — WaitAsync/Release on a disposed
-    ///     SemaphoreSlim throws ObjectDisposedException and faulted whole broadcasts whenever a
-    ///     client disconnected mid-send. A SemaphoreSlim whose AvailableWaitHandle is never touched
-    ///     holds no unmanaged resources, so dropping the reference and letting GC collect it is safe.
+    ///     One client's outgoing queue and the loop that drains it. Each client sends on its own, so
+    ///     a page that stops reading (the panel while Rhino solves) delays only itself, and a queued
+    ///     unit's frames go out back to back. WebSocket.SendAsync allows one send at a time per
+    ///     socket; only the drain loop calls it.
     /// </summary>
     private sealed class ClientSendState
     {
-        public readonly SemaphoreSlim SendLock = new SemaphoreSlim(1, 1);
-        public int PendingCount;
+        private readonly Action<WebSocket> _drop;
+        private readonly Queue<Outgoing> _queue = new Queue<Outgoing>();
+        private readonly WebSocket _socket;
+        private bool _closed;
+        private bool _draining;
+        private long _queuedBytes;
 
-        public ClientSendState(string host)
+        public ClientSendState(WebSocket socket, string host, Action<WebSocket> drop)
         {
+            _socket = socket;
+            _drop = drop;
             Host = host;
         }
 
         /// <summary>What the socket declared when it authenticated; null for a browser tab.</summary>
         public string Host { get; }
+
+        /// <summary>True once the frames are sent, false if the client was dropped first.</summary>
+        public Task<bool> Enqueue(IReadOnlyList<OutgoingFrame> frames)
+        {
+            var item = new Outgoing(frames);
+            var overflow = false;
+            var startDrain = false;
+            lock (_queue)
+            {
+                if (_closed)
+                {
+                    return Task.FromResult(false);
+                }
+
+                // One unit always fits, however large: only a backlog means the page stopped reading.
+                if (_queue.Count > 0 && _queuedBytes + item.Bytes > MAX_QUEUED_BYTES)
+                {
+                    overflow = true;
+                }
+                else
+                {
+                    _queue.Enqueue(item);
+                    _queuedBytes += item.Bytes;
+                    startDrain = !_draining;
+                    _draining = true;
+                }
+            }
+
+            if (overflow)
+            {
+                Logger.Warn($"[WebSocket] Dropped a client with {_queuedBytes / (1024 * 1024)} MB unsent.");
+                _drop(_socket);
+                return Task.FromResult(false);
+            }
+
+            if (startDrain)
+            {
+                _ = Task.Run(DrainAsync);
+            }
+
+            return item.Done.Task;
+        }
+
+        /// <summary>Fails everything still queued. The drain loop stops at its next unit.</summary>
+        public void Close()
+        {
+            Outgoing[] pending;
+            lock (_queue)
+            {
+                _closed = true;
+                pending = _queue.ToArray();
+                _queue.Clear();
+                _queuedBytes = 0;
+            }
+
+            foreach (var item in pending)
+            {
+                item.Done.TrySetResult(false);
+            }
+        }
+
+        private async Task DrainAsync()
+        {
+            while (true)
+            {
+                Outgoing item;
+                lock (_queue)
+                {
+                    if (_closed || _queue.Count == 0)
+                    {
+                        _draining = false;
+                        return;
+                    }
+
+                    item = _queue.Dequeue();
+                    _queuedBytes -= item.Bytes;
+                }
+
+                try
+                {
+                    foreach (var frame in item.Frames)
+                    {
+                        using var timeout = new CancellationTokenSource(BROADCAST_TIMEOUT);
+                        await _socket.SendAsync(new ArraySegment<byte>(frame.Data), frame.Type, true, timeout.Token)
+                            .ConfigureAwait(false);
+                    }
+
+                    item.Done.TrySetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    item.Done.TrySetResult(false);
+                    Logger.Warn(ex is OperationCanceledException
+                        ? "[WebSocket] Send timed out: dropping the client."
+                        : $"[WebSocket] Send failed: {ex.Message}");
+                    _drop(_socket);
+                    return;
+                }
+            }
+        }
+
+        private sealed class Outgoing
+        {
+            public Outgoing(IReadOnlyList<OutgoingFrame> frames)
+            {
+                Frames = frames;
+                foreach (var frame in frames)
+                {
+                    Bytes += frame.Data.Length;
+                }
+            }
+
+            public IReadOnlyList<OutgoingFrame> Frames { get; }
+            public long Bytes { get; }
+
+            public TaskCompletionSource<bool> Done { get; } =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
     }
 }
 

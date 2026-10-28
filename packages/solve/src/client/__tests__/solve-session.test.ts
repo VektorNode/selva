@@ -737,3 +737,67 @@ describe('createRequestResponseDriver — ending a solve', () => {
 		expect(seen).toEqual([true, false]);
 	});
 });
+
+describe('createSolveSession.setValue with an unchanged value', () => {
+	function typedSchema(paramType: string): UISchema {
+		return {
+			...schema(true),
+			inputs: [{ id: 'a', paramId: 'a', paramType, default: 'x' }]
+		} as unknown as UISchema;
+	}
+
+	function solvedWith(paramType: string, value: unknown) {
+		const driver = recordingDriver();
+		const session = createSolveSession({ schema: typedSchema(paramType), scopeKey: 's', driver });
+		session.setValue('a', value);
+		return { driver, session, solvesBefore: driver.solves.length };
+	}
+
+	// A field reporting on input and again on blur.
+	it('does not solve again for the value the last solve sent', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore);
+	});
+
+	it('solves a value changed and changed back', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'z');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 2);
+	});
+
+	it('retries the same value after a failed solve', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.reportError('boom');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('retries the same value after an aborted solve', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.reportAborted();
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('solves when forced', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'y', true);
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	// Options can change under the same selection; a file can be re-picked after a clear.
+	it.each(['dynamicValueList', 'file'])('re-sends an unchanged %s', (paramType) => {
+		const { driver, session, solvesBefore } = solvedWith(paramType, 'y');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('treats an object value as changed', () => {
+		const value = { name: 'f.txt' };
+		const { driver, session, solvesBefore } = solvedWith('text', value);
+		session.setValue('a', value);
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+});

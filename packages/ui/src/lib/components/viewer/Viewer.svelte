@@ -59,7 +59,10 @@
 	interface Props {
 		meshes: any[];
 		isFullscreen?: boolean;
+		/** Shows a progress bar along the top edge. Pass a delayed flag (`createSolvingIndicator`). */
 		isSolving?: boolean;
+		/** Dims the stale result while a long solve runs. */
+		isSlow?: boolean;
 		isBlurred?: boolean;
 		drawerOpen?: boolean;
 		viewerConfig?: ViewerConfig;
@@ -95,6 +98,7 @@
 		meshes,
 		isFullscreen = $bindable(false),
 		isSolving = false,
+		isSlow = false,
 		isBlurred = false,
 		drawerOpen = false,
 		viewerConfig = {},
@@ -234,19 +238,14 @@
 		clearSelection = init.clearSelection;
 		projection = init.cameraController.getProjection();
 
-		const renderer = init.renderer;
-
 		// Untracked so the host reading `meshes` or config inside its setup can't re-run onMount's teardown.
 		const hostCleanup = untrack(() => onViewerReady?.(init));
 
 		return () => {
 			// Before dispose, so the host can still remove its own objects from a live scene.
 			hostCleanup?.();
+			// Also frees the GL context: a second forceContextLoss() here hits an already-lost one.
 			init.dispose();
-			// `{#key definitionKey}` recreates the canvas + WebGLRenderer + GL context
-			// on every definition switch; browsers cap live contexts (~16). Explicitly
-			// drop this one so the GPU-side context is released now rather than at GC.
-			renderer.forceContextLoss();
 			// Parsed geometry outlives the viewer otherwise: the cache is page-wide.
 			clearGeometryCache();
 		};
@@ -471,8 +470,20 @@
 						: 'blur-overlay-inactive'}"
 				></div>
 
+				<!-- The last result stays sharp while the next one solves: blurring it on every
+				     solve hides the model the user is adjusting. -->
 				{#if isSolving}
-					<div class="inset-0 animate-in fade-in backdrop-blur-xs absolute z-10 duration-200"></div>
+					<div
+						class="inset-x-0 top-0 h-0.5 animate-in fade-in pointer-events-none absolute z-20 overflow-hidden bg-primary/20 duration-200"
+						aria-hidden="true"
+					>
+						<div class="solve-bar h-full w-1/3 bg-primary"></div>
+					</div>
+				{/if}
+				{#if isSlow}
+					<div
+						class="inset-0 animate-in fade-in pointer-events-none absolute z-10 bg-background/25 duration-500"
+					></div>
 				{/if}
 
 				{#if logoUrl}
@@ -667,6 +678,27 @@
 	.viewer-canvas {
 		-webkit-touch-callout: none;
 		-webkit-tap-highlight-color: transparent;
+	}
+
+	.solve-bar {
+		animation: solve-bar 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+	}
+
+	@keyframes solve-bar {
+		from {
+			transform: translateX(-100%);
+		}
+		to {
+			transform: translateX(300%);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.solve-bar {
+			animation: none;
+			width: 100%;
+			opacity: 0.6;
+		}
 	}
 
 	.blur-overlay {

@@ -137,7 +137,7 @@ public sealed class DisplayPerf
         }
 
         _record["nickname"] = nickname;
-        _record["meshing"] = defaultMeshing ? "FastRenderMesh (default)" : "custom";
+        _record["meshing"] = defaultMeshing ? "Default (fallback)" : "custom";
         _record["skipped"] = skipped;
         ((Dictionary<string, object>)_record["ms"])["preview"] = Math.Round(previewMs, 2);
         PerfLog.Write("display", _record);

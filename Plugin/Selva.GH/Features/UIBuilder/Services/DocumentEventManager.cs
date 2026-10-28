@@ -416,6 +416,13 @@ public class DocumentEventManager : IDisposable
             includeDisplayData, diagnostics);
         _perf.Sending(send, displayData);
 
+        // Not awaited, so a fault (serializing the outputs, say) would otherwise vanish with them.
+        send.ContinueWith(task =>
+        {
+            var error = task.Exception?.GetBaseException();
+            Logger.Error($"[DocumentEventManager] Broadcasting outputs failed: {error?.Message}", error);
+        }, TaskContinuationOptions.OnlyOnFaulted);
+
         // Reports whether OUTPUTS went out, not whether anything did: ScheduleOutputBroadcast
         // regenerates display data on a false, and a diagnostics-only broadcast must not pass for
         // a payload — that would leave a freshly-connected browser with no geometry.

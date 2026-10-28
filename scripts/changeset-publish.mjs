@@ -73,7 +73,9 @@ function publishablePackages() {
 async function publishedVersion(name, version) {
 	const url = `https://registry.npmjs.org/${name.replace('/', '%2f')}/${version}`;
 	try {
-		const res = await fetch(url, { headers: { accept: 'application/json' } });
+		const res = await fetch(url, {
+			headers: { accept: 'application/json', 'cache-control': 'no-cache' }
+		});
 		if (!res.ok) return '';
 		return (await res.json())?.version ?? '';
 	} catch {
@@ -83,10 +85,24 @@ async function publishedVersion(name, version) {
 
 console.info('\n── changeset publish failed; verifying the registry ──\n');
 
-const packages = publishablePackages();
-const checks = await Promise.all(
-	packages.map(async (pkg) => ({ ...pkg, found: await publishedVersion(pkg.name, pkg.version) }))
-);
+// A version published seconds ago can still 404 for a while, so a missing package is re-checked
+// before it counts. Without this, every package of a partly failed run reads as missing.
+// SELVA_VERIFY_WAIT_MS shortens the wait for tests.
+const WAIT_MS = Number(process.env.SELVA_VERIFY_WAIT_MS ?? 60_000);
+const POLL_MS = 10_000;
+
+const check = (pkgs) =>
+	Promise.all(
+		pkgs.map(async (pkg) => ({ ...pkg, found: await publishedVersion(pkg.name, pkg.version) }))
+	);
+
+let checks = await check(publishablePackages());
+const deadline = Date.now() + WAIT_MS;
+while (checks.some((c) => c.found !== c.version) && Date.now() < deadline) {
+	await new Promise((r) => setTimeout(r, Math.min(POLL_MS, deadline - Date.now())));
+	const rechecked = await check(checks.filter((c) => c.found !== c.version));
+	checks = checks.map((c) => rechecked.find((r) => r.name === c.name) ?? c);
+}
 
 const missing = [];
 

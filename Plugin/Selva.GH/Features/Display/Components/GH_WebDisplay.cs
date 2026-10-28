@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Components;
@@ -97,6 +98,13 @@ public sealed class SolveResult
 /// </summary>
 public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 {
+    private readonly CacheAdmission<MeshItemKey> _meshAdmission = new CacheAdmission<MeshItemKey>();
+
+    // Leaves a core for the UI thread, which the panel's WebView and the solver also need.
+    private static readonly ParallelOptions ParallelLimits = new ParallelOptions
+    {
+        MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
+    };
     private BoundingBox _previewBB;
     private List<GH_CustomPreviewItem> _previewItems;
     private List<(Curve curve, Color color)> _previewCurves;
@@ -137,7 +145,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         pManager.AddParameter(new Param_ThreeMaterial("Material", "M", "Material for web display", "Selva",
             "Display", GH_ParamAccess.tree));
         pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
-            "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
+            "Meshing settings to use. Default is Rhino's Default meshing.", GH_ParamAccess.item);
 
         pManager[2].Optional = true;
         pManager[3].Optional = true;
@@ -175,26 +183,36 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_MeshingParameters ghMeshParams = null;
         DA.GetData(5, ref ghMeshParams);
 
-        var meshSettings = ghMeshParams?.Value ?? MeshingParameters.FastRenderMesh;
+        // Not FastRenderMesh: on Rhino 9 it meshes a sphere to ~9,900 vertices against Default's ~560,
+        // which costs ~18x the meshing time, wire bytes and MeshItemCache memory.
+        var meshSettings = ghMeshParams?.Value ?? MeshingParameters.Default;
         var componentId = InstanceGuid.ToString();
         var mmPerUnit = DrawingUnits.ActiveDocMmPerUnit();
 
+        var cancel = CancelToken;
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
-                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit),
-                CancelToken));
+                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit,
+                    _meshAdmission, cancel),
+                cancel));
             return;
         }
 
         if (!GetSolveResults(DA, out var result))
         {
-            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit);
+            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit,
+                _meshAdmission, cancel);
         }
 
         if (result == null)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
+            // A cancelled pass returns null; the abort is the story, not a missing-geometry warning.
+            if (!cancel.IsCancellationRequested)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
+            }
+
             return;
         }
 
@@ -372,7 +390,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<ThreeMaterialGoo> matTree,
         MeshingParameters meshSettings,
         string componentId,
-        double mmPerUnit)
+        double mmPerUnit,
+        CacheAdmission<MeshItemKey> meshAdmission,
+        CancellationToken cancel)
     {
         var perf = DisplayPerf.StartIfEnabled();
 
@@ -442,8 +462,18 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         // solve's skips all of it.
         var meshingKey = MeshItemCache.MeshingKey(meshSettings);
         var results = new WorkResult[work.Count];
-        Parallel.For(0, work.Count, idx =>
+        var admission = meshAdmission.Begin();
+
+        // The token is checked per item rather than handed to Parallel: a cancelled loop throws
+        // OperationCanceledException out of the Task, which Grasshopper reads as a fault.
+        Parallel.For(0, work.Count, ParallelLimits, idx =>
         {
+            if (cancel.IsCancellationRequested)
+            {
+                results[idx] = new WorkResult { Skipped = true };
+                return;
+            }
+
             var w = work[idx];
 
             // Curves and points aren't meshable — they travel as JSON display items. Curves are
@@ -482,6 +512,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
             if (MeshItemCache.TryGet(key, out var meshed))
             {
+                admission.Hit(key);
                 perf?.MeshCache.Hit();
             }
             else
@@ -494,7 +525,10 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                     return;
                 }
 
-                MeshItemCache.Add(key, meshed);
+                if (admission.ShouldStore(key))
+                {
+                    MeshItemCache.Add(key, meshed);
+                }
             }
 
             // The batch zero-fills UVs for meshes that lack them, and the viewer builds the grain
@@ -521,6 +555,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             };
         });
 
+        // A partial pass would skew the admission's hit statistics.
+        if (cancel.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        admission.End();
         perf?.EndPass("mesh");
 
         // Pass 3 (cheap, sequential): gather each slot back into its branch in tree order for
@@ -604,9 +645,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         // merge, quantization, deflate — still inside the background task, so the solver thread never
         // pays for the encode. A branch whose meshes and grouping match an earlier solve's skips it.
         var blobStore = new GeometryBlobStore(perf?.BlobCache);
-        Parallel.ForEach(branches, b =>
+        Parallel.ForEach(branches, ParallelLimits, b =>
         {
-            if (b.Count == 0)
+            if (b.Count == 0 || cancel.IsCancellationRequested)
             {
                 return;
             }
@@ -619,6 +660,11 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 
             b.Batch = batch;
         });
+
+        if (cancel.IsCancellationRequested)
+        {
+            return null;
+        }
 
         if (perf != null)
         {

@@ -22,7 +22,7 @@ Five stages. The first two happen in Grasshopper, the last two in the browser.
 
 ## Stage 1: Meshing (Grasshopper)
 
-The **Display** component takes geometry as a tree and converts anything that isn't already a mesh into one, using the meshing settings on its `MS` input (default: `FastRenderMesh`).
+The **Display** component takes geometry as a tree and converts anything that isn't already a mesh into one, using the meshing settings on its `MS` input (default: Rhino's `MeshingParameters.Default`).
 
 Alongside the geometry it reads four parallel trees:
 

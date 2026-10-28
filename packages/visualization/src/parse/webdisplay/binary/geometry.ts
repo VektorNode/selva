@@ -1,4 +1,4 @@
-import { inflateSync } from 'fflate';
+import { inflate, inflateSync } from 'fflate';
 
 import { decodeBase64ToBinary, VisualizationError, ErrorCodes } from '../../../shared/index.js';
 
@@ -14,21 +14,25 @@ export function toUint8Array(input: ArrayBuffer | Uint8Array | string): Uint8Arr
 	return new Uint8Array(input);
 }
 
-/**
- * If the blob is a SLVZ compressed container, inflate it back to the raw SLVA bytes; otherwise
- * return the input untouched. Detection is by the leading 4-byte magic, so an uncompressed SLVA
- * blob (or any pre-v3 payload) flows through unchanged.
- */
-export function maybeDecompress(bytes: Uint8Array): Uint8Array {
-	if (bytes.byteLength < 8) {
-		return bytes;
-	}
+interface SlvzPayload {
+	deflated: Uint8Array;
+	uncompressedLen: number;
+}
 
+function isSlvz(bytes: Uint8Array): boolean {
+	return (
+		bytes.byteLength >= 8 &&
+		new DataView(bytes.buffer, bytes.byteOffset, 8).getUint32(0, true) === COMPRESSED_MESH_MAGIC
+	);
+}
+
+/** Size a SLVZ blob inflates to, as its header declares; 0 for anything else. Unvalidated. */
+export function slvzInflatedBytes(bytes: Uint8Array): number {
+	return isSlvz(bytes) ? new DataView(bytes.buffer, bytes.byteOffset, 8).getUint32(4, true) : 0;
+}
+
+function slvzPayload(bytes: Uint8Array): SlvzPayload {
 	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-	if (view.getUint32(0, true) !== COMPRESSED_MESH_MAGIC) {
-		return bytes;
-	}
-
 	const uncompressedLen = view.getUint32(4, true);
 	const deflated = bytes.subarray(8);
 
@@ -42,29 +46,74 @@ export function maybeDecompress(bytes: Uint8Array): Uint8Array {
 			maxPlausibleLen
 		});
 	}
+	return { deflated, uncompressedLen };
+}
 
+function inflateFailure(error: unknown, payload: SlvzPayload): VisualizationError {
+	return fail(
+		`Failed to inflate SLVZ blob: ${error instanceof Error ? error.message : String(error)}`,
+		{ uncompressedLen: payload.uncompressedLen, deflatedBytes: payload.deflated.byteLength }
+	);
+}
+
+function checkInflatedLength(out: Uint8Array, payload: SlvzPayload): Uint8Array {
+	if (out.byteLength !== payload.uncompressedLen) {
+		throw fail('SLVZ payload inflated to a different size than the header declares.', {
+			declaredLen: payload.uncompressedLen,
+			actualLen: out.byteLength,
+			deflatedBytes: payload.deflated.byteLength
+		});
+	}
+	return out;
+}
+
+/**
+ * If the blob is a SLVZ compressed container, inflate it back to the raw SLVA bytes; otherwise
+ * return the input untouched. Detection is by the leading 4-byte magic, so an uncompressed SLVA
+ * blob (or any pre-v3 payload) flows through unchanged.
+ */
+export function maybeDecompress(bytes: Uint8Array): Uint8Array {
+	if (!isSlvz(bytes)) return bytes;
+
+	const payload = slvzPayload(bytes);
 	let out: Uint8Array;
 	try {
 		// One byte of slack past the declared length: fflate trims its output to bytes actually
 		// written, so a mismatched header lands off `uncompressedLen` either way — caught below
 		// instead of silently decoding a zero-padded/truncated tail as geometry.
-		out = inflateSync(deflated, { out: new Uint8Array(uncompressedLen + 1) });
+		out = inflateSync(payload.deflated, { out: new Uint8Array(payload.uncompressedLen + 1) });
 	} catch (error) {
-		throw fail(
-			`Failed to inflate SLVZ blob: ${error instanceof Error ? error.message : String(error)}`,
-			{ uncompressedLen, deflatedBytes: deflated.byteLength }
-		);
+		throw inflateFailure(error, payload);
 	}
+	return checkInflatedLength(out, payload);
+}
 
-	if (out.byteLength !== uncompressedLen) {
-		throw fail('SLVZ payload inflated to a different size than the header declares.', {
-			declaredLen: uncompressedLen,
-			actualLen: out.byteLength,
-			deflatedBytes: deflated.byteLength
-		});
-	}
-
-	return out;
+/**
+ * {@link maybeDecompress} for a SLVZ blob, inflated in fflate's own worker so the calling thread
+ * stays free. The result owns its buffer. Rejects on any failure, including a worker that could not
+ * start: the caller falls back to {@link maybeDecompress}, which reports a corrupt blob properly.
+ */
+export function inflateSlvzAsync(bytes: Uint8Array): Promise<Uint8Array> {
+	return new Promise((resolve, reject) => {
+		const payload = slvzPayload(bytes);
+		try {
+			// One byte of slack, as in `maybeDecompress`: fflate truncates output that overruns `size`,
+			// which would hide an oversized payload instead of tripping the length check.
+			inflate(payload.deflated, { size: payload.uncompressedLen + 1 }, (error, out) => {
+				if (error) {
+					reject(inflateFailure(error, payload));
+					return;
+				}
+				try {
+					resolve(checkInflatedLength(out, payload));
+				} catch (mismatch) {
+					reject(mismatch);
+				}
+			});
+		} catch (error) {
+			reject(inflateFailure(error, payload));
+		}
+	});
 }
 
 export function decodeUtf8(bytes: Uint8Array): string {

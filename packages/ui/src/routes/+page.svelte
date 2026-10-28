@@ -8,6 +8,7 @@
 	import AppShell from '$lib/components/layout/AppShell.svelte';
 	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../demo/dummy-output-values';
 	import { APP_DEFAULTS } from '$lib/constants';
+	import { createSolvingIndicator } from '$lib/compute/solving.svelte';
 	import type { ActionButton } from '$lib/types/actionButton';
 	import { setLocaleContext } from '$lib/i18n/localeContext.svelte';
 
@@ -72,6 +73,7 @@
 		...(previewOnly ? { [IMAGE_OUTPUT_ID]: null } : {})
 	});
 	let isSolving = $state(false);
+	const solvingIndicator = createSolvingIndicator(() => isSolving);
 	let hasPendingChanges = $state(false);
 	let isViewerFullscreen = $state(false);
 
@@ -116,7 +118,8 @@
 			showViewer={!!schema.viewerOptions?.enableRemote}
 			{meshes}
 			{isSolving}
-			showSolvingIndicator={schema.instanceSolve !== false}
+			showSolvingIndicator={solvingIndicator.show}
+			solveIsSlow={solvingIndicator.slow}
 			{hasPendingChanges}
 			{panelActions}
 			bind:isViewerFullscreen

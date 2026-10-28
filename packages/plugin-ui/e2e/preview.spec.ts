@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { STUB_PORT, STUB_SECRET } from './ws-stub';
+import { SLOW_SOLVE_COUNT, STUB_PORT, STUB_SECRET } from './ws-stub';
 
 // Smoke: /preview loads the schema from the stub and renders the interactive UI. Proves the
 // preview route boots through GrasshopperSource + the Solve Session, and that the initial
@@ -21,6 +21,45 @@ test.describe('/preview', () => {
 
 		// The schema's input renders.
 		await expect(page.getByText('Count').first()).toBeVisible();
+	});
+
+	// Each request makes the plugin serialize and send the whole schema.
+	test('asks for initial data once', async ({ page }) => {
+		const requests: string[] = [];
+		page.on('websocket', (ws) =>
+			ws.on('framesent', (frame) => {
+				if (String(frame.payload).includes('"requestInitialData"'))
+					requests.push(String(frame.payload));
+			})
+		);
+
+		await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
+		await expect(page.getByText('Loading preview...')).toBeHidden({ timeout: 15_000 });
+		await page.waitForTimeout(500);
+
+		expect(requests).toHaveLength(1);
+	});
+
+	// The field reports on input and again on blur; the repeat would be a second solve.
+	test('sends an edited value once', async ({ page }) => {
+		const updates: string[] = [];
+		page.on('websocket', (ws) =>
+			ws.on('framesent', (frame) => {
+				if (String(frame.payload).includes('"valueUpdate"')) updates.push(String(frame.payload));
+			})
+		);
+
+		await page.goto(`/preview?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
+		await expect(page.getByText('Loading preview...')).toBeHidden({ timeout: 15_000 });
+		await page.waitForTimeout(500);
+		const before = updates.length;
+
+		const count = page.getByRole('spinbutton').first();
+		await count.fill(String(SLOW_SOLVE_COUNT));
+		await count.blur();
+		await page.waitForTimeout(3000);
+
+		expect(updates.slice(before)).toHaveLength(1);
 	});
 
 	test('shows a value list as buttons with the option icon from the schema', async ({ page }) => {

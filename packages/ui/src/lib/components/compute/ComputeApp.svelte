@@ -286,7 +286,8 @@
 					showViewer={!!schema.viewerOptions?.enableRemote}
 					meshes={session.meshes}
 					isSolving={session.isSolving}
-					showSolvingIndicator={schema.instanceSolve !== false && solvingIndicator.show}
+					showSolvingIndicator={solvingIndicator.show}
+					solveIsSlow={solvingIndicator.slow}
 					hasPendingChanges={session.hasPendingChanges}
 					hasNeverSolved={session.hasNeverSolved}
 					bind:isViewerFullscreen

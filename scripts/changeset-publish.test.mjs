@@ -63,7 +63,8 @@ test('fails when a workspace version is not on npm', () => {
 		env: {
 			...process.env,
 			SELVA_FAKE_CHANGESET_PUBLISH: fakePublisher('unpublished', 1),
-			SELVA_FAKE_PACKAGE_LIST: listStub
+			SELVA_FAKE_PACKAGE_LIST: listStub,
+			SELVA_VERIFY_WAIT_MS: '0'
 		}
 	});
 	assert(r.status !== 0, 'a version npm does not serve must keep the release red');

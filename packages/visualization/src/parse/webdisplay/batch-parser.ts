@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { getLogger } from '../../shared/index.js';
 
 import { decodeRawMeshBatch, FLAG_FLOAT32, parseBinaryMeshBatchRaw } from './binary-parser.js';
-import { toUint8Array } from './binary/geometry.js';
+import { inflateSlvzAsync, slvzInflatedBytes, toUint8Array } from './binary/geometry.js';
 import { isSlvmContainer, parseSlvmContainer, type SlvmContainer } from './binary/slvm.js';
 import { assembleGeometries, finishGeometry } from './mesh-assembly.js';
 
@@ -111,15 +111,14 @@ export async function parseMeshBatchObject(
 			groups: batch.groups
 		}
 	};
-	const opened = openBatch(batch.compressedData, assemblyOptions);
+	const opened = await openBatch(batch.compressedData, assemblyOptions);
 	if (opened.meshes) return opened.meshes;
-	const raw = opened.raw;
 
 	// Heavy batches decode+assemble in a worker; null → do it here (small batch).
-	const assembledMeshes = await tryBuildViaAssembly(raw, assemblyOptions, opened.geometryBytes);
+	const assembledMeshes = await tryBuildViaAssembly(opened, assemblyOptions);
 	if (assembledMeshes) return assembledMeshes;
 
-	const parsed = decodeRawMeshBatch(raw);
+	const parsed = decodeRawMeshBatch(opened.raw);
 	const decodeTime = performance.now() - decodeStart;
 
 	const blobBytes = debug ? approximateBase64DecodedBytes(batch.compressedData) : 0;
@@ -158,15 +157,14 @@ export async function parseMeshBatchBlob(
 
 	const decodeStart = performance.now();
 	const assemblyOptions: AssemblyPathOptions = { mergeByMaterial, debug, material };
-	const opened = openBatch(blob, assemblyOptions);
+	const opened = await openBatch(blob, assemblyOptions);
 	if (opened.meshes) return opened.meshes;
-	const raw = opened.raw;
 
 	// Heavy batches decode+assemble in a worker; null → do it here (small batch).
-	const assembledMeshes = await tryBuildViaAssembly(raw, assemblyOptions, opened.geometryBytes);
+	const assembledMeshes = await tryBuildViaAssembly(opened, assemblyOptions);
 	if (assembledMeshes) return assembledMeshes;
 
-	const parsed = decodeRawMeshBatch(raw);
+	const parsed = decodeRawMeshBatch(opened.raw);
 	const decodeTime = performance.now() - decodeStart;
 
 	const blobBytes = blob.byteLength;
@@ -353,29 +351,73 @@ interface JobRef {
 	meshMeta?: MeshMetadata;
 }
 
-type OpenedBatch =
-	| { meshes: THREE.Mesh[]; raw?: never; geometryBytes?: never }
-	| { meshes?: never; raw: RawBinaryMeshBatch; geometryBytes: Uint8Array | null };
+interface OpenedGeometry {
+	meshes?: never;
+	raw: RawBinaryMeshBatch;
+	/** The geometry chunk of an SLVM container: the finished-cache key. Null for a bare blob. */
+	geometryBytes: Uint8Array | null;
+	/** The bytes `raw` was parsed from, whose buffer `raw`'s arrays may still alias. */
+	source: Uint8Array;
+	/** Parses `source` again, for when `raw`'s arrays were transferred away. */
+	reparse: () => RawBinaryMeshBatch;
+}
+
+type OpenedBatch = { meshes: THREE.Mesh[]; raw?: never } | OpenedGeometry;
 
 /**
  * Unwraps an SLVM container only as far as its table and materials, and answers from the
  * finished-geometry cache before paying for the inflate. A bare SLVA/SLVZ blob (old `.gh` files)
  * keeps its metadata inside the compressed geometry, so it always decodes.
  */
-function openBatch(
+async function openBatch(
 	input: ArrayBuffer | Uint8Array | string,
 	opts: AssemblyPathOptions
-): OpenedBatch {
+): Promise<OpenedBatch> {
 	const bytes = toUint8Array(input);
-	if (!isSlvmContainer(bytes)) return { raw: parseBinaryMeshBatchRaw(bytes), geometryBytes: null };
+	if (!isSlvmContainer(bytes)) {
+		return {
+			raw: parseBinaryMeshBatchRaw(bytes),
+			geometryBytes: null,
+			source: bytes,
+			reparse: () => parseBinaryMeshBatchRaw(bytes)
+		};
+	}
 
 	const container = parseSlvmContainer(bytes);
 	const cached = buildFromFinishedCache(container, opts);
 	if (cached) return { meshes: cached };
 
-	const raw = parseBinaryMeshBatchRaw(container.geometryBlob);
+	const geometryBlob = container.geometryBlob;
+	const reparse = (): RawBinaryMeshBatch => {
+		const raw = parseBinaryMeshBatchRaw(geometryBlob);
+		raw.metadata = container.metadata;
+		return raw;
+	};
+	const inflated = await inflateInWorker(container);
+	const raw = inflated ? parseBinaryMeshBatchRaw(inflated) : reparse();
 	raw.metadata = container.metadata;
-	return { raw, geometryBytes: container.geometryBlob };
+	return { raw, geometryBytes: geometryBlob, source: geometryBlob, reparse };
+}
+
+// Below this the inflate takes under ~6 ms, less than the hop to a second worker costs.
+const INFLATE_IN_WORKER_MIN_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Inflates a large SLVZ geometry chunk off the calling thread. Null means inflate it here: a small
+ * or uncompressed chunk, no worker support, or a worker that failed.
+ */
+async function inflateInWorker(container: SlvmContainer): Promise<Uint8Array | null> {
+	if (
+		slvzInflatedBytes(container.geometryBlob) < INFLATE_IN_WORKER_MIN_BYTES ||
+		!getAssemblyWorker()
+	) {
+		return null;
+	}
+	try {
+		return await inflateSlvzAsync(container.geometryBlob);
+	} catch {
+		return null;
+	}
 }
 
 function buildFromFinishedCache(
@@ -429,10 +471,10 @@ function planJobs(
  * throw either way, matching the entry points' contract.
  */
 async function tryBuildViaAssembly(
-	raw: RawBinaryMeshBatch,
-	opts: AssemblyPathOptions,
-	geometryBytes: Uint8Array | null
+	opened: OpenedGeometry,
+	opts: AssemblyPathOptions
 ): Promise<THREE.Mesh[] | null> {
+	const { raw, geometryBytes } = opened;
 	// Planar (v4) indexData is a bare byte stream — divide by the element width for a count.
 	const indexCount = raw.planarByteSplit
 		? raw.indexData.length / (raw.uint16Indices ? 2 : 4)
@@ -444,8 +486,12 @@ async function tryBuildViaAssembly(
 	validateGroupMetadata(groups, materialsSrc.length, raw.vertexCount, indexCount);
 
 	const { jobs, jobRefs } = planJobs(groups, opts.mergeByMaterial);
-	const assembled = await assemble(raw, jobs);
-	if (!assembled) return null;
+	const assembled = await assemble(raw, jobs, opened.source);
+	if (!assembled) {
+		// A worker that failed already took the arrays: `decodeRawMeshBatch` needs fresh ones.
+		if (ownsBuffer(raw, opened.source)) opened.raw = opened.reparse();
+		return null;
+	}
 
 	const batch: FinishedBatch = {
 		geometries: assembled,
@@ -464,27 +510,34 @@ async function tryBuildViaAssembly(
 	return meshesFromBuilt(built, jobRefs, materialsSrc, opts.material);
 }
 
+/**
+ * True when `raw`'s geometry arrays live in a buffer nobody else reads: the buffer a SLVZ chunk
+ * was inflated into, not the WebSocket frame an uncompressed chunk still points into.
+ */
+function ownsBuffer(raw: RawBinaryMeshBatch, source: Uint8Array): boolean {
+	return raw.vertexData.buffer !== source.buffer && raw.indexData.buffer !== source.buffer;
+}
+
 async function assemble(
 	raw: RawBinaryMeshBatch,
-	jobs: AssemblyJob[]
+	jobs: AssemblyJob[],
+	source: Uint8Array
 ): Promise<FinishedGeometry[] | null> {
-	// Copies, never `raw`'s own arrays: vertexData/indexData alias the caller's blob, the worker
-	// detaches what it is sent, and the crease split rewrites indices in place.
+	const worker = getAssemblyWorker();
 	const input = {
-		vertexData: raw.vertexData.slice(),
+		vertexData: raw.vertexData,
 		isFloat32: raw.isFloat32,
 		deltaEncoded: raw.deltaEncoded,
 		planarByteSplit: raw.planarByteSplit,
 		uint16Indices: raw.uint16Indices,
 		origin: raw.origin,
 		scale: raw.scale,
-		indexData: raw.indexData.slice(),
-		uvs: raw.uvs?.slice() ?? null,
-		colors: raw.colors?.slice() ?? null,
+		indexData: raw.indexData,
+		uvs: raw.uvs,
+		colors: raw.colors,
 		jobs
 	};
 
-	const worker = getAssemblyWorker();
 	if (!worker) {
 		return assembleGeometries(input).map((geometry, i) =>
 			finishGeometry(
@@ -494,11 +547,20 @@ async function assemble(
 		);
 	}
 
-	const transfer: Transferable[] = [input.vertexData.buffer, input.indexData.buffer];
-	if (input.uvs) transfer.push(input.uvs.buffer);
-	if (input.colors) transfer.push(input.colors.buffer);
+	// Transferring detaches. An inflated buffer is ours to give away; an uncompressed chunk's arrays
+	// alias the WebSocket frame, which the finished cache still reads afterwards, so those are copied.
+	if (!ownsBuffer(raw, source)) {
+		input.vertexData = raw.vertexData.slice();
+		input.indexData = raw.indexData.slice();
+		input.uvs = raw.uvs?.slice() ?? null;
+		input.colors = raw.colors?.slice() ?? null;
+	}
+
+	const transfer = new Set<ArrayBufferLike>([input.vertexData.buffer, input.indexData.buffer]);
+	if (input.uvs) transfer.add(input.uvs.buffer);
+	if (input.colors) transfer.add(input.colors.buffer);
 	try {
-		const assembled = await requestAssembly(worker, input, transfer);
+		const assembled = await requestAssembly(worker, input, [...transfer] as Transferable[]);
 		return assembled.length === jobs.length ? assembled : null; // protocol mismatch → sync path
 	} catch (error) {
 		getLogger().warn('Mesh assembly worker failed; falling back to main-thread parse.', error);

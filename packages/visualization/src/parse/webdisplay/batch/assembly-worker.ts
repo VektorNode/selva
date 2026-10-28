@@ -3,8 +3,8 @@ import { meshAssemblyWorkerSource } from '../mesh-assembly.js';
 import type { FinishedGeometry } from '../mesh-assembly.js';
 
 /**
- * Below this triangle count the synchronous path finishes in ~10 ms — a worker round-trip (two
- * buffer copies + wake) isn't worth it. Above it, delta-decode + dequantize + merge + normals run
+ * Below this triangle count the synchronous path finishes in ~10 ms — a worker round-trip isn't
+ * worth it. Above it, delta-decode + dequantize + merge + normals run
  * in the worker and the main thread only wraps returned buffers (or reuses cached geometries).
  */
 export const ASSEMBLY_WORKER_MIN_TRIANGLES = 50_000;

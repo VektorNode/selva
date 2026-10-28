@@ -2,91 +2,92 @@ import { untrack } from 'svelte';
 import { APP_DEFAULTS } from '../constants';
 
 /**
- * Adaptive solving indicator: measures solve durations and adjusts its
- * visibility delay from the running average.
- *
- * - Average under FAST_THRESHOLD_MS: never shown, so quick solves don't flicker
- * - Average over SLOW_THRESHOLD_MS: shown immediately
- * - Between the two: shown after a proportional slice of ANIMATION_DELAY
- * - First solve: shown immediately, there is no history yet
+ * When to show that a solve is running. A solve that ends within `SHOW_AFTER_MS` shows nothing:
+ * the result updating is feedback enough, and a spinner that flashes for a frame reads as jank.
+ * Once shown, the indicator stays `MIN_VISIBLE_MS` for the same reason. `slow` turns on past
+ * `SLOW_AFTER_MS`, the case of a Rhino.Compute round trip or a heavy definition.
  *
  * `freezesDuringSolve` is for a host that can't paint while it solves (an embedded WebView on
- * the solver's thread). There the indicator has to be on screen before the solve starts, when its
- * length is still unknown, so it follows `isSolving` exactly: no history, no delay.
+ * the solver's thread). A delay can't run there, so the indicator shows on every solve, before
+ * the solve takes the thread: it is the only place that host can say Esc aborts.
  */
 export function createSolvingIndicator(
 	isSolving: () => boolean,
 	options: { freezesDuringSolve?: boolean } = {}
-): { readonly show: boolean } {
+): { readonly show: boolean; readonly slow: boolean } {
+	const { SHOW_AFTER_MS, MIN_VISIBLE_MS, SLOW_AFTER_MS } = APP_DEFAULTS.SOLVING_INDICATOR;
+
 	if (options.freezesDuringSolve) {
 		return {
+			// Read straight from `isSolving`, not through an effect: an effect would run a tick
+			// later, after the solve has already frozen the page.
 			get show() {
 				return isSolving();
-			}
+			},
+			slow: false
 		};
 	}
 
-	const { FAST_THRESHOLD_MS, SLOW_THRESHOLD_MS, HISTORY_SIZE, ANIMATION_DELAY } =
-		APP_DEFAULTS.SOLVING_INDICATOR;
-
 	let show = $state(false);
-	let timeout: ReturnType<typeof setTimeout> | null = null;
-	let solveStartTime: number | null = null;
-	const solveHistory: number[] = [];
+	let slow = $state(false);
+	let shownAt = 0;
+	let showTimer: ReturnType<typeof setTimeout> | null = null;
+	let slowTimer: ReturnType<typeof setTimeout> | null = null;
+	let hideTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function clear(timer: ReturnType<typeof setTimeout> | null) {
+		if (timer) clearTimeout(timer);
+		return null;
+	}
+
+	function hide() {
+		hideTimer = null;
+		show = false;
+		slow = false;
+	}
 
 	$effect(() => {
 		const solving = isSolving();
-
 		untrack(() => {
 			if (solving) {
-				solveStartTime = performance.now();
-
-				const avg =
-					solveHistory.length === 0
-						? Infinity
-						: solveHistory.reduce((a, b) => a + b, 0) / solveHistory.length;
-
-				if (solveHistory.length > 0 && avg < FAST_THRESHOLD_MS) return;
-
-				const delay =
-					avg === Infinity || avg >= SLOW_THRESHOLD_MS
-						? 0
-						: ((avg - FAST_THRESHOLD_MS) / (SLOW_THRESHOLD_MS - FAST_THRESHOLD_MS)) *
-							ANIMATION_DELAY;
-
-				if (!timeout) {
-					if (delay === 0) {
+				// A solve that starts while the last one's indicator is held keeps it up.
+				hideTimer = clear(hideTimer);
+				if (!show) {
+					showTimer ??= setTimeout(() => {
+						showTimer = null;
 						show = true;
-					} else {
-						timeout = setTimeout(() => {
-							show = true;
-							timeout = null;
-						}, delay);
-					}
+						shownAt = performance.now();
+					}, SHOW_AFTER_MS);
 				}
+				slowTimer ??= setTimeout(() => {
+					slowTimer = null;
+					slow = true;
+				}, SLOW_AFTER_MS);
 			} else {
-				if (solveStartTime !== null) {
-					solveHistory.push(performance.now() - solveStartTime);
-					if (solveHistory.length > HISTORY_SIZE) solveHistory.shift();
-					solveStartTime = null;
-				}
-
-				if (timeout) {
-					clearTimeout(timeout);
-					timeout = null;
-				}
-				show = false;
+				showTimer = clear(showTimer);
+				slowTimer = clear(slowTimer);
+				if (!show) return;
+				const remaining = MIN_VISIBLE_MS - (performance.now() - shownAt);
+				if (remaining > 0) hideTimer ??= setTimeout(hide, remaining);
+				else hide();
 			}
 		});
+	});
 
-		return () => {
-			if (timeout) clearTimeout(timeout);
-		};
+	// Separate from the effect above: a cleanup there would run on every `isSolving` flip and
+	// cancel the timers it just set.
+	$effect(() => () => {
+		clear(showTimer);
+		clear(slowTimer);
+		clear(hideTimer);
 	});
 
 	return {
 		get show() {
 			return show;
+		},
+		get slow() {
+			return slow;
 		}
 	};
 }

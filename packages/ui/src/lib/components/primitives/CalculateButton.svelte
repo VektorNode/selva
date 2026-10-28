@@ -54,6 +54,12 @@
 			{#if isSolving}
 				<Loader class="h-4 w-4 animate-spin" />
 				{t.solvingEllipsis}
+				<kbd
+					class="px-1 font-sans rounded border border-current/30 text-2xs opacity-70"
+					title={t.solveMessagesEscHint}
+				>
+					Esc
+				</kbd>
 			{:else if hasNeverSolved}
 				<Play class="h-4 w-4" />
 				{t.pressToCalculate}

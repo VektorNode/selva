@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Display meshes Breps and surfaces with Rhino's Default meshing when nothing is wired to Meshing Settings, instead of FastRenderMesh. On Rhino 9 a sphere drops from about 9,900 vertices to 560, so curved geometry meshes, sends and caches roughly 18 times faster and smaller, and looks slightly more faceted. Wire a Meshing Settings value to get the old density back.
+- Display stops filling the mesh cache with geometry that changes every solve. After three solves in which under a tenth of its items were reused (a slider moving every object, say), it stores only items that repeat from the solve before, so a drag no longer evicts meshes other solves would reuse. One solve that mostly reuses its meshes turns full caching back on.
 - Builder: the sidebar splits into Parameters, App, Local and Compute panels that remember their folds and filters, each tab gets a settings bar (icon, name, panel side, visibility), and a Save button highlights while there are unsaved edits. App holds what applies everywhere, Local what only this plugin's preview uses (Local render), Compute what only Selva uses (Compute render, and a list of inputs filled by something other than the form). The panel tabs shrink to icons when the sidebar is narrow.
 - Builder: an input's value source sits in a Compute only section at the end of its card, picked with Form, Client app or Server buttons, and a collapsed card shows a chip when its value comes from a client app or the server.
 - PDF export runs on PDFsharp 6.2.4 instead of PdfSharpCore and ImageSharp, and renders about twice as fast on large drawings. Rendering the same drawing twice on the same machine gives identical bytes. Windows and Mac re-encode images differently, so the same drawing gives different bytes on each. A JPEG from Draw Image now embeds at quality 92 instead of being re-compressed to quality 75, so photos look sharper and files with many photos get somewhat larger.
@@ -40,6 +42,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- With the panel and a browser tab both open, one page that stops reading (the panel while Rhino solves) no longer holds up the other, and no message is dropped for it: each page has its own send queue, and a page that falls hundreds of megabytes behind is disconnected and reconnects with the current state. A solve's result and its mesh frames go out back to back, so a following solve can no longer slip between them and show the previous solve's meshes as the new result.
+- A number or integer value outside its widget's min/max is clamped to the range before it reaches Grasshopper, with a warning. The page already clamped, but a stale page or a hand-written request didn't, and a sphere count of 9999 against a maximum of 250 froze Rhino for over a minute.
+- A rejected value (not a number, an unknown value-list item) no longer leaves an error on the UI Bridge that every later solve reported as its own until the bridge restarted. The page shows the rejection as a notification instead.
+- A cancel that arrives just after a value change, before the solve has started, now stops that solve. It used to be lost and the solve ran to the end.
+- The UI no longer goes dead when a scheduled solve never starts (a disabled solver, say). Updates held back for it apply after two seconds instead of waiting forever.
+- An error while collecting or sending a solve's results no longer leaves pressed buttons latched or drops the value updates held back during that solve.
+- Cancelling a solve stops Display from meshing the remaining items, and Display leaves a core free for Rhino while it works.
+- A cancelled solve no longer flashes full progress before it ends.
 - Builder: dragging a tab or group two or more places forward drops it where you let go, instead of only one place forward.
 - Builder: an item card's Span field shows 1 when the item has no span saved, instead of an empty box.
 - Builder: tab and group edits mark the draft unsaved and can be undone, so the unsaved-changes prompt fires and a Grasshopper broadcast no longer drops them. Edits made while a save is in flight stay unsaved.

@@ -115,12 +115,16 @@
 		         Link="Linked\FilterKinds.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\TriggerButtons.cs"
 		         Link="Linked\TriggerButtons.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\NumberRanges.cs"
+		         Link="Linked\NumberRanges.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\ComponentStateManager.cs"
 		         Link="Linked\ComponentStateManager.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\SolveDiagnostics.cs"
 		         Link="Linked\SolveDiagnostics.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\CallbackSession.cs"
 		         Link="Linked\CallbackSession.cs"/>
+		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\AbortArm.cs"
+		         Link="Linked\AbortArm.cs"/>
 		<Compile Include="..\Selva.GH\Features\SolveRuntime\Services\StepProgress.cs"
 		         Link="Linked\StepProgress.cs"/>
 		<Compile Include="..\Selva.GH\Features\Drawing\Goos\StyleJson.cs"
@@ -134,6 +138,8 @@
 		         Link="Linked\ByteBoundedLru.cs"/>
 		<Compile Include="..\Selva.GH\Features\Display\Services\MeshItemKey.cs"
 		         Link="Linked\MeshItemKey.cs"/>
+		<Compile Include="..\Selva.GH\Features\Display\Services\CacheAdmission.cs"
+		         Link="Linked\CacheAdmission.cs"/>
 		<Compile Include="..\Selva.GH\Features\Display\Services\UvStep.cs"
 		         Link="Linked\UvStep.cs"/>
 	</ItemGroup>

@@ -178,6 +178,91 @@ public sealed class BridgeServerTests : IAsyncLifetime
         Assert.Equal(WebSocketMessageType.Close, result.MessageType);
     }
 
+    // The page pairs mesh frames with the `outputs` envelope before them by arrival order.
+    [Fact]
+    public async Task Broadcast_WithFrames_ArrivesTogetherWhileOtherBroadcastsRace()
+    {
+        using var socket = await ConnectAsync();
+        await SendAsync(socket, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
+        await ReceiveTextAsync(socket);
+
+        const int groups = 40;
+        const int framesPerGroup = 3;
+        const int noise = 200;
+        var sends = new List<Task>();
+        for (var g = 0; g < groups; g++)
+        {
+            var id = g;
+            sends.Add(Task.Run(() => _server.BroadcastAsync($"outputs {id}",
+                new[] { new byte[] { (byte)id, 0 }, new byte[] { (byte)id, 1 }, new byte[] { (byte)id, 2 } })));
+        }
+
+        for (var n = 0; n < noise; n++)
+        {
+            sends.Add(Task.Run(() => _server.BroadcastAsync("progress")));
+        }
+
+        await Task.WhenAll(sends);
+
+        var buffer = new byte[4096];
+        for (var received = 0; received < groups * (1 + framesPerGroup) + noise;)
+        {
+            var result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), Timeout());
+            received++;
+            var text = Encoding.UTF8.GetString(buffer, 0, result.Count);
+            if (result.MessageType != WebSocketMessageType.Text || !text.StartsWith("outputs"))
+            {
+                Assert.Equal("progress", text);
+                continue;
+            }
+
+            var id = byte.Parse(text.Substring("outputs ".Length));
+            for (var f = 0; f < framesPerGroup; f++)
+            {
+                var frame = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), Timeout());
+                received++;
+                Assert.Equal(WebSocketMessageType.Binary, frame.MessageType);
+                Assert.Equal(new[] { id, (byte)f }, buffer.AsSpan(0, frame.Count).ToArray());
+            }
+        }
+    }
+
+    // The panel stops reading while Rhino solves; what was broadcast meanwhile must still arrive.
+    [Fact]
+    public async Task Broadcast_ToAClientThatStoppedReading_ArrivesInFullOnceItReadsAgain()
+    {
+        using var stalled = await ConnectAsync();
+        await SendAsync(stalled, "{\"type\":\"authenticate\",\"secret\":\"" + Secret + "\"}");
+        await ReceiveTextAsync(stalled);
+
+        // Well past the loopback socket buffers, so sends back up on the server.
+        const int count = 40;
+        var frame = new byte[1024 * 1024];
+        for (var i = 0; i < count; i++)
+        {
+            var data = (byte[])frame.Clone();
+            data[0] = (byte)i;
+            _ = _server.BroadcastBinaryAsync(data);
+        }
+
+        await Task.Delay(200);
+
+        var buffer = new byte[frame.Length];
+        for (var i = 0; i < count; i++)
+        {
+            var read = 0;
+            WebSocketReceiveResult result;
+            do
+            {
+                result = await stalled.ReceiveAsync(new ArraySegment<byte>(buffer, read, buffer.Length - read), Timeout());
+                read += result.Count;
+            } while (!result.EndOfMessage);
+
+            Assert.Equal(frame.Length, read);
+            Assert.Equal((byte)i, buffer[0]);
+        }
+    }
+
     // A page told it's connected and then dropped would reconnect forever.
     [Fact]
     public async Task Socket_OverTheClientLimit_IsRefusedWithoutAnAcknowledgement()

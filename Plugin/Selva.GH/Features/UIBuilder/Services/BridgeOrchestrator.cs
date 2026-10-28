@@ -135,7 +135,24 @@ public class BridgeOrchestrator : IDisposable
     {
         try
         {
-            SolveRuntimes.For(_eventManager.CurrentDocument)?.RequestAbort();
+            var runtime = SolveRuntimes.For(_eventManager.CurrentDocument);
+            if (runtime == null)
+            {
+                return;
+            }
+
+            // Grasshopper clears the abort flag when the scheduled solve starts, so an abort now would
+            // be lost. Re-checked after arming: if the solve started in between, abort it directly.
+            if (_stateManager.IsStartPending)
+            {
+                runtime.AbortAtNextStart();
+                if (_stateManager.IsStartPending)
+                {
+                    return;
+                }
+            }
+
+            runtime.RequestAbort();
         }
         catch (Exception ex)
         {
@@ -330,12 +347,25 @@ public class BridgeOrchestrator : IDisposable
                 return;
             }
 
+            // Not busy but values are still buffered: the solve they waited for never ended (its
+            // schedule went stale). Apply them beneath this update so the older value of a shared
+            // key can't land after the newer one.
+            var stalePending = _stateManager.TakePendingValues();
+            if (stalePending != null)
+            {
+                foreach (var kvp in values)
+                {
+                    stalePending[kvp.Key] = kvp.Value;
+                }
+
+                values = stalePending;
+            }
+
             ApplyValuesAndSchedule(values);
         }
         catch (Exception ex)
         {
             Logger.Error($"[BridgeOrchestrator] Error handling value update: {ex.Message}", ex);
-            _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
             _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
         }
     }
@@ -358,12 +388,14 @@ public class BridgeOrchestrator : IDisposable
             return;
         }
 
+        // Not a runtime message on the bridge: value solves don't recompute it, so the message would
+        // never clear, and SolveDiagnosticsCollector would report it (an error withholds the result)
+        // on every later solve.
         var updateCount = _valueApplicator.ApplyValuesAndSchedule(document, schema, values, (level, msg) =>
         {
-            _component.AddRuntimeMessage(level, msg);
-
             if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
             {
+                Logger.Warn($"[BridgeOrchestrator] {msg}");
                 _ = _webSocketTransport.BroadcastRuntimeMessage(level, msg);
             }
         }, _webSocketTransport.ScheduleSolutionDelayMs);

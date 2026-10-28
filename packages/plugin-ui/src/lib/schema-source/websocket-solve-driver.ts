@@ -148,6 +148,8 @@ export function createWebSocketSolveDriver(
 					if (myToken === outputsToken) {
 						const all: THREE.Object3D[] = [];
 						for (const blob of blobs) {
+							// A parse can't be stopped once running, but a newer solve means the rest of these never show.
+							if (myToken !== outputsToken) break;
 							// Merged by material (the parser's default): an imported building model arrives
 							// as thousands of small meshes, and per-object render cost, not triangle
 							// count, is what makes it unusable. Per-object identity survives the merge
