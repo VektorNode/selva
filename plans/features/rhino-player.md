@@ -69,13 +69,14 @@ What the page changes:
 
 ## Opening a definition
 
-1. **The idle panel becomes a launcher.** `SelvaPanel`'s idle label becomes an **Open…** button and
+1. **The idle panel becomes a launcher.** `SelvaPanel`'s idle label becomes a **Choose file…** button and
    a list of recent definitions. It stays native Eto: an idle panel still starts no browser
    process, and nothing loads Grasshopper until the user picks a file.
 2. **The `.rhp` loads Grasshopper if needed.** `RhinoApp.GetPlugInObject("Grasshopper")` returns a
    `GH_RhinoScriptInterface`; its `LoadEditor()` is called by reflection, so the `.rhp` still
-   references only RhinoCommon. The panel shows "Loading Grasshopper…" first: the first load blocks
-   Rhino's UI thread for seconds, so the label has to paint before the call.
+   references only RhinoCommon. While a definition opens, the launcher lists its steps (load
+   Grasshopper, run the first solve, start the UI) and paints each one before the call it names:
+   every step blocks Rhino's UI thread, the first Grasshopper load for seconds.
 3. **The `.rhp` finds the `.gha`'s open delegate in process-wide data.** When Grasshopper loads
    Selva, `SelvaTabProperties.PriorityLoad` (Selva's `GH_AssemblyPriority`) stores a contract
    dictionary with `AppDomain.CurrentDomain.SetData`, under a key named in `PanelContract`. It
@@ -111,7 +112,8 @@ What the page changes:
 5. **The bridge cold-starts and calls `ShowInPanel` as today**, with `mode=player` in the URL.
    Failures after that point would otherwise land as runtime messages on a hidden canvas, so the
    hosted bridge reports them through a `notify(message)` key in the panel contract. The launcher
-   leaves "Loading…" for an error state with that message, or after a timeout.
+   leaves its progress for an error state with that message, or after a timeout. Docked, it stays
+   up until the page has loaded, so the panel never shows an empty WebView.
 
 **Closing a player document** has to stop its bridge explicitly. `DocumentServer.RemoveDocument`
 reaches none of the paths that stop servers (Enable falling, Lock, `RemovedFromDocument`,
