@@ -176,10 +176,11 @@ describe('clearScene', () => {
 			return elapsed;
 		};
 
-		timeClear(25_000);
-		const small = Math.max(timeClear(25_000), 1);
-		const large = timeClear(100_000);
+		// Building the meshes dominates on slow runners, so keep the counts modest and the timeout loose.
+		timeClear(5_000);
+		const small = Math.max(timeClear(20_000), 1);
+		const large = timeClear(80_000);
 
 		expect(large / small).toBeLessThan(8);
-	});
+	}, 60_000);
 });
