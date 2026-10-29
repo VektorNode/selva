@@ -19,8 +19,9 @@ export interface CreasedGeometry {
  * tilt the wide flat face beside them. Weighting by corner angle instead let a bend facet's corner
  * tilt a flat band by up to 23°, enough to flip a metal's reflection from sky to ground.
  *
- * `indices` is rewritten in place to point split corners at their new vertices, which are appended
- * after the existing ones; the index count never changes, so index windows stay valid.
+ * `indices` is rewritten in place to point split corners at their new vertices, which take the
+ * slots of welded-away duplicates before any are appended; the index count never changes, so index
+ * windows stay valid.
  *
  * Self-contained (no outer captures besides `Math`) so the mesh-assembly worker can embed it via
  * `Function.prototype.toString`.
@@ -45,7 +46,8 @@ export function splitCreases(
 	// at the seam within a tolerance, so two identical strips can come out one welded, one split
 	// along the same tangent bend, and then reflect visibly differently. Welding every identical
 	// vertex (position, UV and colour alike) here makes the crease angle the only thing that
-	// decides. The orphaned duplicates stay in the buffers, unreferenced.
+	// decides. The orphaned duplicates are reused below as slots for split copies.
+	let orphans = new Uint32Array(0);
 	{
 		const posBits = new Uint32Array(positions.buffer, positions.byteOffset, positions.length);
 		const uvBits = uvs ? new Uint32Array(uvs.buffer, uvs.byteOffset, uvs.length) : null;
@@ -88,7 +90,13 @@ export function splitCreases(
 				h = (h + 1) & mask;
 			}
 		}
-		if (merged) for (let i = 0; i < cornerCount; i++) indices[i] = canonical[indices[i]!]!;
+		if (merged) {
+			for (let i = 0; i < cornerCount; i++) indices[i] = canonical[indices[i]!]!;
+			let orphanCount = 0;
+			for (let v = 0; v < vertexCount; v++) if (canonical[v] !== v) orphanCount++;
+			orphans = new Uint32Array(orphanCount);
+			for (let v = 0, k = 0; v < vertexCount; v++) if (canonical[v] !== v) orphans[k++] = v;
+		}
 	}
 
 	// --- Unit face normals and areas ---------------------------------------------------------------
@@ -169,11 +177,17 @@ export function splitCreases(
 		groupCount[v] = Math.max(1, groups);
 	}
 
-	// --- Split: group 0 keeps the vertex, later groups get appended copies ------------------------
+	// --- Split: group 0 keeps the vertex, later groups get copies -------------------------------
+	// Copies fill the weld's orphaned slots first and only then append. Appending every copy left
+	// a box scatter at 400k vertices for 240k used, a third of every attribute unreferenced.
 	const extraStart = new Uint32Array(vertexCount + 1);
 	for (let v = 0; v < vertexCount; v++) extraStart[v + 1] = extraStart[v]! + groupCount[v]! - 1;
 	const extra = extraStart[vertexCount]!;
-	const total = vertexCount + extra;
+	const total = vertexCount + Math.max(0, extra - orphans.length);
+	const copySlot = new Uint32Array(extra);
+	for (let k = 0; k < extra; k++) {
+		copySlot[k] = k < orphans.length ? orphans[k]! : vertexCount + k - orphans.length;
+	}
 
 	let outPositions = positions;
 	let outUvs = uvs;
@@ -187,7 +201,7 @@ export function splitCreases(
 		if (outColors && colors) outColors.set(colors);
 		for (let v = 0; v < vertexCount; v++) {
 			for (let g = 1; g < groupCount[v]!; g++) {
-				const copy = vertexCount + extraStart[v]! + g - 1;
+				const copy = copySlot[extraStart[v]! + g - 1]!;
 				outPositions[copy * 3] = positions[v * 3]!;
 				outPositions[copy * 3 + 1] = positions[v * 3 + 1]!;
 				outPositions[copy * 3 + 2] = positions[v * 3 + 2]!;
@@ -214,7 +228,7 @@ export function splitCreases(
 			let target = indices[corner]!;
 			const g = groupOf[corner]!;
 			if (g !== 0) {
-				target = vertexCount + extraStart[target]! + g - 1;
+				target = copySlot[extraStart[target]! + g - 1]!;
 				indices[corner] = target;
 			}
 			normals[target * 3] += nx;

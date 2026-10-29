@@ -85,7 +85,7 @@ public class GH_CombineDisplay : GH_Component
             DisplayBatchCombiner.Result combined;
             try
             {
-                combined = DisplayBatchCombiner.Combine(batches);
+                combined = DisplayBatchCombiner.Combine(batches, DisplayUnits.ActiveDocMetersPerUnit());
             }
             catch (Exception ex)
             {

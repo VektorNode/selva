@@ -38,8 +38,10 @@ export function mergeGroupsOf(groups: MaterialGroup[]): MaterialGroup[] {
 	const byMaterial = new Map<number, MeshMetadata[]>();
 	for (const group of groups) {
 		const meshes = byMaterial.get(group.materialId);
-		if (meshes) meshes.push(...group.meshes);
-		else byMaterial.set(group.materialId, [...group.meshes]);
+		// A loop, not push(...spread): spreading passes every mesh as an argument and overflows the
+		// stack past ~100k meshes.
+		if (meshes) for (const mesh of group.meshes) meshes.push(mesh);
+		else byMaterial.set(group.materialId, group.meshes.slice());
 	}
 	return [...byMaterial].flatMap(([materialId, meshes]) =>
 		splitGroupByLayer({ materialId, meshes })
@@ -118,7 +120,7 @@ export function createMergedMesh(
 
 	const finished = finishGeometry(
 		{ positions: mergedVertices, indices: mergedIndices, uvs: mergedUvs, colors: mergedColors },
-		group.meshes.map((m) => m.indexCount)
+		group.meshes
 	);
 	return finalizeMergedMesh(
 		geometryFrom(finished),
@@ -257,7 +259,7 @@ export function createIndividualMeshes(
 				uvs: allUvs ? allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2) : null,
 				colors: allColors ? allColors.slice(componentStart, componentStart + componentLen) : null
 			},
-			[rebasedIndices.length]
+			[meshMeta]
 		);
 		meshes.push(
 			finalizeSingleMesh(

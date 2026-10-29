@@ -47,10 +47,7 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 
 		const input = assemblyInputFor(built.batch, merge);
 		const assembled = assembleGeometries(input).map((g, i) =>
-			finishGeometry(
-				g,
-				input.jobs[i]!.windows.map((w) => w.indexCount)
-			)
+			finishGeometry(g, input.jobs[i]!.windows)
 		);
 		expect(assembled).toHaveLength(syncMeshes.length);
 
@@ -99,6 +96,37 @@ describe('assembleGeometries equivalence with the synchronous parse path', () =>
 	});
 });
 
+describe('finishGeometry closed-solid verdicts', () => {
+	// The builder's meshes are open: isClosedSolid says false, so `true` comes only from a verdict.
+	const geometryOf = () => {
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 2, vertsPerMesh: 30, seed: 26 });
+		const input = assemblyInputFor(built.batch, true);
+		return { geometry: assembleGeometries(input)[0]!, windows: input.jobs[0]!.windows };
+	};
+
+	it('trusts verdicts when every member has one', () => {
+		const { geometry, windows } = geometryOf();
+		expect(
+			finishGeometry(
+				geometry,
+				windows.map((w) => ({ ...w, closed: true }))
+			).closed
+		).toBe(true);
+	});
+
+	it('is open when any verdict says open', () => {
+		const { geometry, windows } = geometryOf();
+		const verdicts = windows.map((w, i) => ({ ...w, closed: i !== 0 }));
+		expect(finishGeometry(geometry, verdicts).closed).toBe(false);
+	});
+
+	it('computes it when any member has no verdict', () => {
+		const { geometry, windows } = geometryOf();
+		const partial = windows.map((w, i) => ({ ...w, closed: i === 0 ? undefined : true }));
+		expect(finishGeometry(geometry, partial).closed).toBe(false);
+	});
+});
+
 describe('meshAssemblyWorkerSource', () => {
 	it('stringifies to standalone code and round-trips a batch', () => {
 		const source = meshAssemblyWorkerSource();
@@ -124,6 +152,28 @@ describe('meshAssemblyWorkerSource', () => {
 		for (const geometry of reply.geometries as { closed?: unknown }[]) {
 			expect(geometry.closed).toBeTypeOf('boolean');
 		}
+	});
+
+	it.each([
+		[true, true],
+		[false, false]
+	])('takes the writer verdict when every member has one (all %s)', (verdict, expected) => {
+		const source = meshAssemblyWorkerSource();
+		const messages: unknown[] = [];
+		const self = {
+			onmessage: null as ((event: { data: unknown }) => void) | null,
+			postMessage: (message: unknown) => messages.push(message)
+		};
+		new Function('self', source)(self);
+
+		// The builder's meshes are open, so `true` can only come from the verdict.
+		const built = buildMeshBatch({ materialCount: 1, meshCount: 3, vertsPerMesh: 30, seed: 25 });
+		const input = assemblyInputFor(built.batch, true);
+		for (const job of input.jobs) for (const w of job.windows) w.closed = verdict;
+		self.onmessage!({ data: { id: 1, input } });
+
+		const reply = messages[0] as { geometries: { closed: boolean }[] };
+		expect(reply.geometries.map((g) => g.closed)).toEqual(input.jobs.map(() => expected));
 	});
 
 	it('reports errors instead of throwing', () => {

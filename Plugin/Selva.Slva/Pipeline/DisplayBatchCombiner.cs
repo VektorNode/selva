@@ -34,7 +34,7 @@ public static class DisplayBatchCombiner
     ///     Combines the batches into one. Returns null when nothing decodable was supplied.
     ///     Materials dedupe across inputs, so two batches sharing a material produce one group.
     /// </summary>
-    public static Result Combine(IReadOnlyList<DisplayBatch> batches)
+    public static Result Combine(IReadOnlyList<DisplayBatch> batches, double metersPerUnit = 1.0)
     {
         if (batches == null)
         {
@@ -97,7 +97,8 @@ public static class DisplayBatchCombiner
                         Material = material,
                         Metadata = meshMeta.Metadata,
                         Uvs = uvs,
-                        Colors = colors
+                        Colors = colors,
+                        Closed = meshMeta.Closed
                     });
                 }
             }
@@ -108,7 +109,7 @@ public static class DisplayBatchCombiner
             return null;
         }
 
-        var combined = MeshBatchAssembler.CreateBatch(meshInputs);
+        var combined = MeshBatchAssembler.CreateBatch(meshInputs, metersPerUnit: metersPerUnit);
 
         if (items.Count > 0)
         {

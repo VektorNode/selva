@@ -35,4 +35,16 @@ describe('mergeGroupsOf', () => {
 
 		expect(merged.map((g) => g.meshes.map((m) => m.name))).toEqual([['a'], ['c'], ['b']]);
 	});
+
+	it('gathers 200k meshes of one material without overflowing the stack', () => {
+		// Regression: push(...group.meshes) passed every mesh as an argument.
+		const many = Array.from({ length: 200_000 }, (_, i) => mesh(String(i)));
+		const merged = mergeGroupsOf([
+			{ materialId: 0, meshes: [mesh('first')] },
+			{ materialId: 0, meshes: many }
+		]);
+
+		expect(merged).toHaveLength(1);
+		expect(merged[0]!.meshes).toHaveLength(200_001);
+	});
 });

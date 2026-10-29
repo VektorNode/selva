@@ -188,13 +188,14 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         var meshSettings = ghMeshParams?.Value ?? MeshingParameters.Default;
         var componentId = InstanceGuid.ToString();
         var mmPerUnit = DrawingUnits.ActiveDocMmPerUnit();
+        var metersPerUnit = DisplayUnits.ActiveDocMetersPerUnit();
 
         var cancel = CancelToken;
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
                     ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit,
-                    _meshAdmission, cancel),
+                    metersPerUnit, _meshAdmission, cancel),
                 cancel));
             return;
         }
@@ -202,7 +203,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         if (!GetSolveResults(DA, out var result))
         {
             result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit,
-                _meshAdmission, cancel);
+                metersPerUnit, _meshAdmission, cancel);
         }
 
         if (result == null)
@@ -369,6 +370,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         // Null = mesh contributes none.
         public float[] MeshUvs;
         public byte[] MeshColors;
+        public bool MeshClosed;
 
         // Replaces the work item's material for this mesh only; null keeps it.
         public ThreeMaterial Material;
@@ -391,6 +393,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         MeshingParameters meshSettings,
         string componentId,
         double mmPerUnit,
+        double metersPerUnit,
         CacheAdmission<MeshItemKey> meshAdmission,
         CancellationToken cancel)
     {
@@ -550,6 +553,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 MeshKey = key,
                 MeshUvs = meshed.Uvs,
                 MeshColors = meshed.Colors,
+                MeshClosed = meshed.Closed,
                 Material = material,
                 Bounds = meshed.Bounds
             };
@@ -620,6 +624,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 Uvs = r.MeshUvs,
                 Colors = r.MeshColors,
                 ContentKey = r.MeshKey,
+                Closed = r.MeshClosed,
                 Name = !string.IsNullOrWhiteSpace(r.MeshName)
                     ? r.MeshName
                     : (branch.Meshes.Count + 1).ToString(),
@@ -652,7 +657,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var batch = MeshBatchAssembler.CreateBatch(b.Meshes, blobStore);
+            var batch = MeshBatchAssembler.CreateBatch(b.Meshes, blobStore, metersPerUnit);
             if (b.Items.Count > 0)
             {
                 batch.Items = b.Items;
@@ -749,6 +754,9 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         // otherwise do serially for every mesh in the batch.
         stageStart = Stopwatch.GetTimestamp();
         var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
+        // Counted with the extraction: it walks the same arrays, and every browser would otherwise
+        // run it on each solve (~600 ms on a 2M-vertex mesh).
+        var closed = ClosedSolid.IsClosed(vertices, faces);
         perf?.AddArrays(Stopwatch.GetTimestamp() - stageStart);
 
         return new MeshItem
@@ -759,7 +767,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             Uvs = uvs,
             Colors = colors,
             HasUvs = hasUvs,
-            Bounds = mesh.GetBoundingBox(false)
+            Bounds = mesh.GetBoundingBox(false),
+            Closed = closed
         };
     }
 

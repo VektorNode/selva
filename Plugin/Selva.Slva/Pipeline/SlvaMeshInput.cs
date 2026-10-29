@@ -43,4 +43,7 @@ public sealed class SlvaMeshInput
     ///     the cached geometry without looking at them. Null opts the batch out of the cache.
     /// </summary>
     public object ContentKey { get; set; }
+
+    /// <summary>The <see cref="ClosedSolid" /> verdict, or null to leave it to readers.</summary>
+    public bool? Closed { get; set; }
 }

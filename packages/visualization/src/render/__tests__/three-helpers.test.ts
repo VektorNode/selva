@@ -138,4 +138,39 @@ describe('clearScene', () => {
 
 		expect(scene.children).toEqual([grid]);
 	});
+
+	it('detaches removed objects the way Object3D.remove does', () => {
+		const scene = new THREE.Scene();
+		const kept = meshAt(0, 0, 0);
+		kept.userData.id = 'floor';
+		const gone = meshAt(1, 1, 1);
+		scene.add(gone, kept);
+		const removedEvents: THREE.Object3D[] = [];
+		const childRemovedEvents: THREE.Object3D[] = [];
+		gone.addEventListener('removed', () => removedEvents.push(gone));
+		scene.addEventListener('childremoved', (event) => childRemovedEvents.push(event.child));
+
+		clearScene(scene);
+
+		expect(scene.children).toEqual([kept]);
+		expect(gone.parent).toBeNull();
+		expect(kept.parent).toBe(scene);
+		expect(removedEvents).toEqual([gone]);
+		expect(childRemovedEvents).toEqual([gone]);
+	});
+
+	it('clears 100k meshes in linear time', () => {
+		// Regression: removeFromParent per child is indexOf + splice, O(n²): 3.5 s at 100k.
+		const scene = new THREE.Scene();
+		const geometry = new THREE.BufferGeometry();
+		const material = new THREE.MeshBasicMaterial();
+		for (let i = 0; i < 100_000; i++) scene.children.push(new THREE.Mesh(geometry, material));
+		for (const child of scene.children) child.parent = scene;
+
+		const start = performance.now();
+		clearScene(scene);
+
+		expect(scene.children).toHaveLength(0);
+		expect(performance.now() - start).toBeLessThan(1000);
+	});
 });

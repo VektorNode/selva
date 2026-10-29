@@ -88,6 +88,29 @@ public class SlvmFixtureContractTests
                 }
             }));
 
+        // CLSD: a closed tetrahedron, an open quad, and a mesh with no verdict (readers compute it).
+        var tetrahedron = new float[] { 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+        var tetrahedronFaces = new[] { 0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3 };
+        yield return ("closed-flags.slvm", MeshBatchAssembler.CreateBatch(
+            new List<SlvaMeshInput>
+            {
+                new SlvaMeshInput
+                {
+                    Id = "fixture-closed/{0}/0", Vertices = tetrahedron, Faces = tetrahedronFaces, Name = "solid",
+                    Material = red, Closed = ClosedSolid.IsClosed(tetrahedron, tetrahedronFaces)
+                },
+                new SlvaMeshInput
+                {
+                    Id = "fixture-closed/{0}/1", Vertices = QuadAt(2, 0, 0), Faces = QuadFaces, Name = "sheet",
+                    Material = red, Closed = ClosedSolid.IsClosed(QuadAt(2, 0, 0), QuadFaces)
+                },
+                new SlvaMeshInput
+                {
+                    Id = "fixture-closed/{0}/2", Vertices = QuadAt(4, 0, 0), Faces = QuadFaces, Name = "unknown",
+                    Material = red
+                }
+            }));
+
         // A data-URI texture: extracted into a TEXR chunk on write, reconstructed on read.
         var pngBytes = new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3, 4 };
         var textured = Material(Color.White, "data:image/png;base64," + Convert.ToBase64String(pngBytes));
@@ -174,6 +197,13 @@ public class SlvmFixtureContractTests
             if (!writtenIds.SequenceEqual(readIds))
             {
                 failures.Add($"{fileName}: reader lost object ids.");
+            }
+
+            var writtenClosed = batch.Groups.SelectMany(g => g.Meshes).Select(m => m.Closed);
+            var readClosed = decoded.Batch.Groups.SelectMany(g => g.Meshes).Select(m => m.Closed);
+            if (!writtenClosed.SequenceEqual(readClosed))
+            {
+                failures.Add($"{fileName}: reader lost closed-solid verdicts.");
             }
         }
 

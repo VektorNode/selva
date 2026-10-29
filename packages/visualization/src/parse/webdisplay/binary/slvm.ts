@@ -13,7 +13,7 @@ import type { MaterialGroup, MeshMetadata, SerializableMaterial } from '../types
 //
 // Unknown chunk types are skipped by length — that's the format's extension mechanism. This
 // decoder consumes GEOM (a nested bare SLVA/SLVZ blob), TABL (the columnar object table), MATL
-// (materials JSON) and TEXR (texture bytes); CRVS/PNTS (file-only item geometry) and EXTN
+// (materials JSON), TEXR (texture bytes) and CLSD (the writer's closed-solid verdict per mesh); CRVS/PNTS (file-only item geometry) and EXTN
 // (host extensions — the selva.gh one carries only Rhino curve JSON) are skipped because
 // items reach the web as JSON alongside the blob.
 
@@ -25,6 +25,8 @@ export const CHUNK_GEOM = 0x4d4f4547; // "GEOM"
 export const CHUNK_TABL = 0x4c424154; // "TABL"
 export const CHUNK_MATL = 0x4c54414d; // "MATL"
 const CHUNK_TEXR = 0x52584554; // "TEXR"
+/** One byte per mesh row: 0 = unknown, 1 = open, 2 = closed solid. */
+const CHUNK_CLSD = 0x44534c43; // "CLSD"
 
 /** Reserved attr key carrying each object's identity — split out of the attr dict on read. */
 const ID_ATTR = 'id';
@@ -64,6 +66,7 @@ export function parseSlvmContainer(bytes: Uint8Array): SlvmContainer {
 	let geometryBlob: Uint8Array | null = null;
 	let tableBytes: Uint8Array | null = null;
 	let materialsJson: string | null = null;
+	let closedFlags: Uint8Array | null = null;
 	const textures: Uint8Array[] = [];
 
 	for (const { type, payload } of chunks) {
@@ -80,6 +83,9 @@ export function parseSlvmContainer(bytes: Uint8Array): SlvmContainer {
 			case CHUNK_TEXR:
 				textures.push(payload);
 				break;
+			case CHUNK_CLSD:
+				closedFlags = maybeDecompress(payload);
+				break;
 			// CRVS/PNTS, EXTN and unknown chunks: skipped.
 		}
 	}
@@ -92,7 +98,7 @@ export function parseSlvmContainer(bytes: Uint8Array): SlvmContainer {
 		throw fail('SLVM container has no TABL chunk.', { chunkCount: chunks.length });
 	}
 
-	const { groups } = parseTable(tableBytes);
+	const { groups } = parseTable(tableBytes, closedFlags);
 	const materials = parseMaterials(materialsJson, textures);
 
 	return {
@@ -191,7 +197,10 @@ function readStringColumn(r: TableReader, objectCount: number, pool: string[]): 
 	return result;
 }
 
-function parseTable(bytes: Uint8Array): { groups: MaterialGroup[] } {
+function parseTable(
+	bytes: Uint8Array,
+	closedFlags: Uint8Array | null
+): { groups: MaterialGroup[] } {
 	const r: TableReader = { bytes, pos: 0 };
 
 	const meshCount = readVarint(r);
@@ -263,7 +272,7 @@ function parseTable(bytes: Uint8Array): { groups: MaterialGroup[] } {
 				delete meshAttrs[ID_ATTR];
 			}
 
-			meshes.push({
+			const mesh: MeshMetadata = {
 				id,
 				name: names[meshIndex]!,
 				layer: layers[meshIndex]!,
@@ -272,7 +281,10 @@ function parseTable(bytes: Uint8Array): { groups: MaterialGroup[] } {
 				vertexStart,
 				indexStart,
 				metadata: meshAttrs ?? {}
-			});
+			};
+			const verdict = closedFlags?.[meshIndex];
+			if (verdict === 1 || verdict === 2) mesh.closed = verdict === 2;
+			meshes.push(mesh);
 			vertexStart += vertexCounts[meshIndex]!;
 			indexStart += triCounts[meshIndex]! * 3;
 		}

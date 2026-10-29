@@ -186,7 +186,7 @@ async function processDataBranch(
 			}
 		}
 
-		objects.push(...batchObjects);
+		for (const object of batchObjects) objects.push(object);
 
 		if (debug) {
 			getLogger().debug(

@@ -117,7 +117,7 @@ export type EdgesConfig = {
 	thresholdAngle?: number;
 	/** Default true. */
 	distanceFade?: boolean;
-	/** Default 4M. */
+	/** Default 8M. */
 	maxTriangles?: number;
 	/** Default 2M. */
 	maxSegments?: number;

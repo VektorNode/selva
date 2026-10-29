@@ -316,7 +316,7 @@ function buildMeshesFromParsed(
 				parsed.uvs,
 				parsed.colors
 			);
-			meshes.push(...individualMeshes);
+			for (const mesh of individualMeshes) meshes.push(mesh);
 		}
 	}
 
@@ -444,7 +444,8 @@ function planJobs(
 		vertexStart: m.vertexStart,
 		vertexCount: m.vertexCount,
 		indexStart: m.indexStart,
-		indexCount: m.indexCount
+		indexCount: m.indexCount,
+		closed: m.closed
 	});
 	const jobs: AssemblyJob[] = [];
 	const jobRefs: JobRef[] = [];
@@ -540,10 +541,7 @@ async function assemble(
 
 	if (!worker) {
 		return assembleGeometries(input).map((geometry, i) =>
-			finishGeometry(
-				geometry,
-				jobs[i]!.windows.map((w) => w.indexCount)
-			)
+			finishGeometry(geometry, jobs[i]!.windows)
 		);
 	}
 

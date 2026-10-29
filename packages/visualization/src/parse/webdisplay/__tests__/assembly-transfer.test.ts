@@ -83,10 +83,7 @@ function stubWorker(behaviour: 'works' | 'fails') {
 					return;
 				}
 				const geometries = assembleGeometries(input).map((g, i) =>
-					finishGeometry(
-						g,
-						input.jobs[i]!.windows.map((w) => w.indexCount)
-					)
+					finishGeometry(g, input.jobs[i]!.windows)
 				);
 				this.onmessage?.({ data: { id, geometries } } as MessageEvent);
 			});

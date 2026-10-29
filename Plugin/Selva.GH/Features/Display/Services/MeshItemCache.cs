@@ -24,6 +24,9 @@ public sealed class MeshItem
     public bool HasUvs { get; set; }
 
     public BoundingBox Bounds { get; set; }
+
+    /// <summary><see cref="ClosedSolid" /> on the extracted arrays, sent so the browser skips it.</summary>
+    public bool Closed { get; set; }
 }
 
 /// <summary>

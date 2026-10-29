@@ -33,7 +33,7 @@ public static class MeshBatchAssembler
     ///     keys arrived in the same order before.
     /// </summary>
     public static DisplayBatch CreateBatch(IReadOnlyList<SlvaMeshInput> meshes,
-        IGeometryBlobCache geometryCache = null)
+        IGeometryBlobCache geometryCache = null, double metersPerUnit = 1.0)
     {
         // Zero meshes is valid: an items-only batch (curves/points, no meshable geometry) still
         // produces a well-formed batch with an empty blob (vertexCount = 0).
@@ -75,7 +75,8 @@ public static class MeshBatchAssembler
                 Colors = input.Colors,
                 MaterialId = materialId,
                 Metadata = input.Metadata,
-                ContentKey = input.ContentKey
+                ContentKey = input.ContentKey,
+                Closed = input.Closed
             });
         }
 
@@ -127,7 +128,8 @@ public static class MeshBatchAssembler
                 IndexCount = meshIndexCount,
                 VertexStart = vertexBaseForIndices,
                 IndexStart = indexCursor,
-                Metadata = mesh.Metadata
+                Metadata = mesh.Metadata,
+                Closed = mesh.Closed
             });
 
             offsets[m] = new MeshOffsets
@@ -144,12 +146,12 @@ public static class MeshBatchAssembler
 
         // The geometry blob is a pure function of the arrays in input order, so the mesh keys in
         // that order identify it.
-        var cacheKey = geometryCache != null ? GeometryBlobKey.From(processedMeshes.Select(m => m.ContentKey))
+        var cacheKey = geometryCache != null ? GeometryBlobKey.From(processedMeshes.Select(m => m.ContentKey), metersPerUnit)
             : null;
         if (cacheKey == null || !geometryCache.TryGet(cacheKey, out var geometryBlob))
         {
             geometryBlob = EncodeGeometry(processedMeshes, offsets, totalComponentCount, totalIndexCount,
-                anyUvs, anyColors);
+                anyUvs, anyColors, metersPerUnit);
             if (cacheKey != null)
             {
                 geometryCache.Add(cacheKey, geometryBlob);
@@ -164,7 +166,7 @@ public static class MeshBatchAssembler
     }
 
     private static byte[] EncodeGeometry(List<ProcessedMesh> processedMeshes, MeshOffsets[] offsets,
-        int totalComponentCount, int totalIndexCount, bool anyUvs, bool anyColors)
+        int totalComponentCount, int totalIndexCount, bool anyUvs, bool anyColors, double metersPerUnit)
     {
         var allVertices = new float[totalComponentCount];
         var allIndices = new int[totalIndexCount];
@@ -187,10 +189,11 @@ public static class MeshBatchAssembler
         // with nothing to spread.
         CopyMeshData(processedMeshes, offsets, allVertices, allIndices, allUvs, allColors);
 
-        using (var ms = new MemoryStream())
+        using (var ms = new MemoryStream(SlvaWriter.QuantizedLength(0, totalVertexCount, totalIndexCount,
+                   anyUvs, anyColors)))
         {
             SlvaWriter.Write(ms, "", allVertices, allIndices,
-                uvs: allUvs, colors: allColors);
+                uvs: allUvs, colors: allColors, metersPerUnit: metersPerUnit);
             // Nothing gzips the blob in transit (no transport gzip on dynamic responses or the
             // local WS), so this applies an optional deflate pass; Compress returns the original
             // bytes unchanged when it doesn't help, and the decoder sniffs the leading magic
@@ -305,5 +308,6 @@ public static class MeshBatchAssembler
 
         public object ContentKey { get; set; }
         public Dictionary<string, string> Metadata { get; set; }
+        public bool? Closed { get; set; }
     }
 }

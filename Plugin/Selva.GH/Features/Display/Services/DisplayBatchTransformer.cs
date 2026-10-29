@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Newtonsoft.Json;
 using Rhino.Geometry;
 using Selva.Slva;
@@ -30,9 +31,11 @@ public static class DisplayBatchTransformer
             return null;
         }
 
-        var meshBlob = TransformMeshBlob(batch, verts => ApplyTransform(verts, xform));
+        // A mirror flips every triangle's winding, so a closed solid now faces inward.
+        var keepClosed = xform.Determinant > 0;
+        var meshBlob = TransformMeshBlob(batch, verts => ApplyTransform(verts, xform), keepClosed);
         var items = TransformItems(batch.Items, c => c.Transform(xform), p => { p.Transform(xform); return p; });
-        return Rebuild(batch, meshBlob, items);
+        return Rebuild(batch, meshBlob, items, keepClosed);
     }
 
     public static DisplayBatch Morph(DisplayBatch batch, SpaceMorph morph)
@@ -42,11 +45,12 @@ public static class DisplayBatchTransformer
             return null;
         }
 
-        var meshBlob = TransformMeshBlob(batch, verts => ApplyMorph(verts, morph));
+        // A morph can fold or mirror any part, so no closed-solid verdict survives it.
+        var meshBlob = TransformMeshBlob(batch, verts => ApplyMorph(verts, morph), keepClosed: false);
         var items = TransformItems(batch.Items,
             c => { morph.Morph(c); return true; },
             p => morph.MorphPoint(p));
-        return Rebuild(batch, meshBlob, items);
+        return Rebuild(batch, meshBlob, items, keepClosed: false);
     }
 
     /// <summary>
@@ -54,7 +58,7 @@ public static class DisplayBatchTransformer
     ///     re-encodes with the original metadata envelope. Returns the bytes unchanged if the batch
     ///     has no mesh geometry.
     /// </summary>
-    private static byte[] TransformMeshBlob(DisplayBatch batch, System.Action<float[]> moveVerts)
+    private static byte[] TransformMeshBlob(DisplayBatch batch, System.Action<float[]> moveVerts, bool keepClosed)
     {
         if (batch.CompressedData == null || batch.CompressedData.Length == 0)
         {
@@ -93,12 +97,13 @@ public static class DisplayBatchTransformer
         using (var ms = new MemoryStream())
         {
             SlvaWriter.Write(ms, metadataJson, decoded.Vertices, decoded.Indices,
-                uvs: decoded.Uvs, colors: decoded.Colors);
+                uvs: decoded.Uvs, colors: decoded.Colors,
+                metersPerUnit: DisplayUnits.ActiveDocMetersPerUnit());
             var geometryBlob = SlvzCompressor.Compress(ms.GetBuffer(), (int)ms.Length);
 
             // SLVM keeps its metadata in chunks, so only the geometry payload is swapped.
             return isSlvm
-                ? SlvmDocument.ReplaceGeometry(batch.CompressedData, geometryBlob)
+                ? SlvmDocument.ReplaceGeometry(batch.CompressedData, geometryBlob, keepClosed)
                 : geometryBlob;
         }
     }
@@ -197,14 +202,35 @@ public static class DisplayBatchTransformer
     }
 
     /// <summary>Clones the batch envelope, swapping in the transformed blob and items.</summary>
-    private static DisplayBatch Rebuild(DisplayBatch source, byte[] meshBlob, List<DisplayItem> items)
+    private static DisplayBatch Rebuild(DisplayBatch source, byte[] meshBlob, List<DisplayItem> items,
+        bool keepClosed)
     {
         return new DisplayBatch
         {
             Materials = source.Materials,
-            Groups = source.Groups,
+            Groups = keepClosed ? source.Groups : WithoutClosed(source.Groups),
             CompressedData = meshBlob,
             Items = items
         };
+    }
+
+    // Copies: the source batch is GH data, which a transform must leave untouched.
+    private static List<MaterialGroup> WithoutClosed(List<MaterialGroup> groups)
+    {
+        return groups?.Select(g => new MaterialGroup
+        {
+            MaterialId = g.MaterialId,
+            Meshes = g.Meshes?.Select(m => new MeshMetadata
+            {
+                Id = m.Id,
+                Name = m.Name,
+                Layer = m.Layer,
+                VertexCount = m.VertexCount,
+                IndexCount = m.IndexCount,
+                VertexStart = m.VertexStart,
+                IndexStart = m.IndexStart,
+                Metadata = m.Metadata
+            }).ToList()
+        }).ToList();
     }
 }

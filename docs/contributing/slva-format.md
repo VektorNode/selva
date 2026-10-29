@@ -45,7 +45,7 @@ Two things worth knowing here:
 The meshes are packed into a compact binary format:
 
 1. **Group by material.** Identical materials dedupe to one. Meshes stay in input order, and each run of consecutive meshes on one material becomes a group, so a material can head several groups. Keeping input order means the geometry bytes never depend on which material a mesh has. The browser gathers every group of one material into one merged mesh, so interleaving costs no draw calls.
-2. **Quantize.** Vertex positions snap to a signed 16-bit grid spanning the geometry's bounding box: half the size of float32, with error far below anything visible. If the resulting step would exceed 5 cm per int16 unit (a very large model), the block falls back to raw float32 rather than degrade the preview. UVs quantize to unsigned 16 bits the same way, with their own fallback past 1/4096 (heavily tiled UVs). Vertex colours are 8-bit per channel and never fall back.
+2. **Quantize.** Vertex positions snap to a signed 16-bit grid spanning the geometry's bounding box: half the size of float32, with error far below anything visible. If the resulting step would exceed 5 cm per int16 unit (measured in metres via the document's unit scale, so ~3.3 km wide in any unit), the block falls back to raw float32 rather than degrade the preview. UVs quantize to unsigned 16 bits the same way, with their own fallback past 1/4096 (heavily tiled UVs). Vertex colours are 8-bit per channel and never fall back.
 3. **Delta filter.** Each vertex component is stored as the difference from the previous vertex, zigzag-mapped so small differences become small unsigned numbers. Welded meshes have spatially-local vertices, so the deltas cluster near zero. This is a PNG-style pre-filter: it exists purely to make the last step work better. A side effect worth knowing: it makes a part's vertex stream translation-invariant, so repeated parts (the same screw placed 500 times) become repeated byte runs that DEFLATE dedupes — instancing-like savings with no instancing in the format.
 4. **Byte layout, chosen per blob.** The filtered streams are written either interleaved (x,y,z per vertex) or planar byte-split (all X deltas, then Y, then Z, low bytes before high). Neither wins everywhere, so the writer deflates both and keeps the smaller, recording the choice in a flag bit:
    Which one wins turns on the vertex count of the individual repeated part, not on how many copies the batch holds:
@@ -63,15 +63,16 @@ The meshes are packed into a compact binary format:
    per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
    ```
 
-   | chunk  | payload                                                                                                |
-   | ------ | ------------------------------------------------------------------------------------------------------ |
-   | `GEOM` | the SLVA/SLVZ geometry blob from steps 1–5, its embedded metadata empty                                |
-   | `TABL` | the columnar object table (below), optionally SLVZ-wrapped                                             |
-   | `MATL` | materials JSON; a `map`, `roughnessMap` or `normalMap` of `slvm:tex:N` references the Nth `TEXR` chunk |
-   | `TEXR` | one texture: mime string + raw image bytes (extracted from data URIs)                                  |
-   | `CRVS` | polyline vertices for curve items — another bare SLVA blob, no indices                                 |
-   | `PNTS` | point positions, same encoding                                                                         |
-   | `EXTN` | namespaced host extension; readers skip namespaces they don't know                                     |
+   | chunk  | payload                                                                                                  |
+   | ------ | -------------------------------------------------------------------------------------------------------- |
+   | `GEOM` | the SLVA/SLVZ geometry blob from steps 1–5, its embedded metadata empty                                  |
+   | `TABL` | the columnar object table (below), optionally SLVZ-wrapped                                               |
+   | `MATL` | materials JSON; a `map`, `roughnessMap` or `normalMap` of `slvm:tex:N` references the Nth `TEXR` chunk   |
+   | `TEXR` | one texture: mime string + raw image bytes (extracted from data URIs)                                    |
+   | `CRVS` | polyline vertices for curve items — another bare SLVA blob, no indices                                   |
+   | `PNTS` | point positions, same encoding                                                                           |
+   | `CLSD` | optional, one byte per mesh: 0 unknown, 1 open, 2 closed solid; readers skip their own closed-solid test |
+   | `EXTN` | namespaced host extension; readers skip namespaces they don't know                                       |
 
    Readers skip unknown chunk types by length — that is the format's extension mechanism. The `TABL` object table is columnar and pays only for what's present: per-mesh vertex/triangle counts (vertex/index **starts are never stored** — geometry is concatenated in table order, so windows are prefix sums and can't overlap by construction), material run-lengths, names/layers as string-pool references (the auto-numbering default collapses to one mode byte), and sparse attr columns — the key stored once, then only the objects carrying it (`gh:branch`, `ifc:guid`, `style:color`, …). Selva's own host data (`sourceComponentId`, the Rhino NURBS JSON behind each curve) lives in `EXTN "selva.gh"`, so the core container stays free of Grasshopper concepts: a foreign reader gets every mesh, name, layer and material without knowing Selva exists.
 

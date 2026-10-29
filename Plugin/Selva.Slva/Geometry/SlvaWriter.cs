@@ -133,11 +133,11 @@ public static class SlvaWriter
     private const double ScaleEpsilon = 1e-12;
 
     /// <summary>
-    ///     Default int16 step threshold (in world units) above which we fall back to float32.
-    ///     Above this step the int16 grid is too coarse for visually-correct preview rendering.
-    ///     Tune with measurement; v1 is conservative.
+    ///     Int16 step above which we fall back to float32: coarser than this, the grid is visibly
+    ///     wrong in preview. In metres, not model units: against raw mm coordinates it would send
+    ///     every batch wider than ~3.3 m down the float32 path at twice the size.
     /// </summary>
-    private const double DefaultMaxInt16StepWorldUnits = 0.05; // 5 cm per int16 unit
+    private const double MaxInt16StepMeters = 0.05;
 
     /// <summary>
     ///     UV quantization step above which the UV chunk falls back to float32. A step of 1/4096
@@ -173,6 +173,7 @@ public static class SlvaWriter
     /// <param name="vertices">Flat array of x,y,z floats. Length must be divisible by 3.</param>
     /// <param name="indices">Flat array of vertex indices.</param>
     /// <param name="forceFloat32">If true, skip quantization and write float32 vertices.</param>
+    /// <param name="metersPerUnit">Length of one coordinate unit in metres (0.001 for a mm document).</param>
     /// <param name="uvs">
     ///     Optional flat array of u,v floats, one pair per vertex (length vertexCount * 2). Null
     ///     writes no UV chunk and leaves the blob byte-identical to a UV-less write.
@@ -188,7 +189,8 @@ public static class SlvaWriter
         int[] indices,
         bool forceFloat32 = false,
         float[] uvs = null,
-        byte[] colors = null)
+        byte[] colors = null,
+        double metersPerUnit = 1.0)
     {
         if (output == null)
         {
@@ -232,6 +234,12 @@ public static class SlvaWriter
                 nameof(colors));
         }
 
+        if (!(metersPerUnit > 0) || double.IsInfinity(metersPerUnit))
+        {
+            throw new ArgumentOutOfRangeException(nameof(metersPerUnit), metersPerUnit,
+                "metersPerUnit must be a positive finite number");
+        }
+
         var metadataBytes = Encoding.UTF8.GetBytes(metadataJson);
 
         // Compute bbox in a single pass. Unconditional even for float32, so the result struct can
@@ -245,7 +253,7 @@ public static class SlvaWriter
         {
             var maxExtent = Math.Max(maxX - minX, Math.Max(maxY - minY, maxZ - minZ));
             var step = maxExtent / 65534.0;
-            if (step > DefaultMaxInt16StepWorldUnits)
+            if (step * metersPerUnit > MaxInt16StepMeters)
             {
                 useFloat32 = true;
             }
@@ -412,6 +420,28 @@ public static class SlvaWriter
         };
     }
 
+    /// <summary>
+    ///     Exact blob length when the vertices quantize and UVs (if any) do too, for sizing the output
+    ///     stream once: a default MemoryStream doubles its way up and allocated 1.6x the blob. A float32
+    ///     batch outgrows it once.
+    /// </summary>
+    internal static int QuantizedLength(int metadataBytes, int vertexCount, int indexCount, bool uvs, bool colors)
+    {
+        var indexWidth = vertexCount > 0 && vertexCount - 1 <= MaxUint16Index ? sizeof(ushort) : sizeof(uint);
+        var length = 12L + metadataBytes + 4 + 48 + 4 + vertexCount * 6L + 4 + (long)indexCount * indexWidth;
+        if (uvs)
+        {
+            length += 4 + 32 + vertexCount * 4L;
+        }
+
+        if (colors)
+        {
+            length += vertexCount * 3L;
+        }
+
+        return (int)Math.Min(length, int.MaxValue);
+    }
+
     /// <summary>Rents a buffer, fills it via <paramref name="encode" />, and writes it out.</summary>
     private static void WriteFiltered(Stream output, int byteCount, Action<byte[]> encode)
     {
@@ -439,6 +469,9 @@ public static class SlvaWriter
     /// </summary>
     private const int MinVerticesForLayoutProbe = 4096;
 
+    /// <summary>Vertices per probe window; see <see cref="ChoosePlanarLayout" />.</summary>
+    private const int ProbeWindowVertices = 16_384;
+
     /// <summary>
     ///     Picks the byte layout for the filtered streams by trial-deflating both and keeping the
     ///     smaller. Neither layout wins universally, and which one does turns on the vertex count of
@@ -463,6 +496,11 @@ public static class SlvaWriter
     ///     drives the index stream's fate) at <see cref="CompressionLevel.Fastest" />, which ranks the
     ///     two layouts the same way Optimal does at a fraction of the cost. Encoding runs on the
     ///     component's background task, so this never blocks the solver thread.
+    ///
+    ///     Large batches probe three contiguous windows (start, middle, end) rather than the whole
+    ///     stream: the winner depends on per-part size, which a window of thousands of vertices
+    ///     already shows. Probing everything was 65-75% of the write; the sample picked the same
+    ///     layout on every benchmark shape.
     /// </summary>
     private static bool ChoosePlanarLayout(
         float[] vertices,
@@ -473,6 +511,19 @@ public static class SlvaWriter
         if (vertexCount < MinVerticesForLayoutProbe)
         {
             return true;
+        }
+
+        if (vertexCount > ProbeWindowVertices * 4)
+        {
+            var sample = new float[ProbeWindowVertices * 3 * 3];
+            var starts = new[] { 0, vertexCount / 2 - ProbeWindowVertices / 2, vertexCount - ProbeWindowVertices };
+            for (var w = 0; w < starts.Length; w++)
+            {
+                Array.Copy(vertices, starts[w] * 3, sample, w * ProbeWindowVertices * 3, ProbeWindowVertices * 3);
+            }
+
+            vertices = sample;
+            vertexCount = ProbeWindowVertices * 3;
         }
 
         var byteCount = vertexCount * 3 * sizeof(short);

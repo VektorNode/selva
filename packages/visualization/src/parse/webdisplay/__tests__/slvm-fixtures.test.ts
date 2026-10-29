@@ -84,6 +84,21 @@ describe('SLVM v3 fixtures (written by C#)', () => {
 		expect(parsed.uvs!.length).toBe(expected.totalVertexCount * 2);
 	});
 
+	it('closed-flags: the CLSD chunk carries the writer verdict per mesh, absent where unknown', () => {
+		const { parsed, expected } = loadFixture('closed-flags.slvm');
+
+		expect(parsed.metadata.groups).toEqual(expected.groups);
+		const meshes = parsed.metadata.groups.flatMap((g) => g.meshes);
+		expect(meshes.map((m) => m.closed)).toEqual([true, false, undefined]);
+		expect('closed' in meshes[2]!).toBe(false);
+	});
+
+	it('containers without CLSD carry no verdicts', () => {
+		const { parsed } = loadFixture('multi-material.slvm');
+
+		expect(parsed.metadata.groups.flatMap((g) => g.meshes).some((m) => 'closed' in m)).toBe(false);
+	});
+
 	it('geometry decodes through the nested blob with correct world positions', () => {
 		const { parsed, expected } = loadFixture('multi-material.slvm');
 

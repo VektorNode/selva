@@ -231,7 +231,7 @@ describe('applyDefaults — every EdgesConfig field survives resolution', () => 
 		expect(config.edges.screenSpaceFallback).toBe(false);
 	});
 
-	// Left undefined rather than restated here: the canonical 4M/2M defaults live in
+	// Left undefined rather than restated here: the canonical defaults live in
 	// `edges/options.ts` resolveOptions, and applyEdges forwards these straight to it.
 	it('leaves the caps undefined when unset so edges/options.ts owns the defaults', () => {
 		const config = applyDefaults({});

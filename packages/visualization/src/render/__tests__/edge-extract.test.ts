@@ -125,6 +125,45 @@ describe('extractEdgeSegments equivalence with THREE.EdgesGeometry', () => {
 		expect(box.index!.array).toBeInstanceOf(Uint16Array);
 		expectEquivalent(box, 44);
 	});
+
+	it.each([1, 2, 3, 4, 5])('random non-manifold, mixed-winding topology (seed %s)', (seed) => {
+		// Few vertices, many triangles: edges shared by 3+ faces in both windings, repeated
+		// triangles, degenerates, and duplicate positions that only welding joins.
+		let state = seed * 2654435761;
+		const next = (n: number) => {
+			state ^= state << 13;
+			state ^= state >>> 17;
+			state ^= state << 5;
+			return (state >>> 0) % n;
+		};
+		const vertexCount = 24;
+		const positions = new Float32Array(vertexCount * 3);
+		for (let v = 0; v < vertexCount; v++) {
+			const site = v % 16; // vertices 16..23 duplicate earlier positions
+			positions[v * 3] = site % 4;
+			positions[v * 3 + 1] = Math.floor(site / 4);
+			positions[v * 3 + 2] = (site * 7) % 3;
+		}
+		const index = new Uint32Array(3 * 400);
+		for (let i = 0; i < index.length; i++) index[i] = next(vertexCount);
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+		geometry.setIndex(new THREE.BufferAttribute(index, 1));
+
+		for (const angle of [1, 44, 89]) expectEquivalent(geometry, angle);
+
+		// Every segment's face is a triangle that has both endpoints among its corners.
+		const { segments, faces } = extractEdgeSegments(positions, index, 44);
+		for (let s = 0; s < faces.length; s++) {
+			const corners = [0, 1, 2].map((c) => index[3 * faces[s]! + c]!);
+			for (const end of [0, 1]) {
+				const p = [0, 1, 2].map((k) => segments[s * 6 + end * 3 + k]);
+				expect(corners.some((v) => [0, 1, 2].every((k) => positions[v * 3 + k] === p[k]))).toBe(
+					true
+				);
+			}
+		}
+	});
 });
 
 // ============================================================================

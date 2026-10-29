@@ -322,7 +322,11 @@ public class SlvaWriterBenchmarks
                  {
                      ("welded grid", WeldedGrid(128)),
                      ("part scatter", PartScatter(1500)),
-                     ("instanced parts", InstancedParts(2000))
+                     ("instanced parts", InstancedParts(2000)),
+                     // Past 4 probe windows: the layout is chosen from a sample, not the whole stream.
+                     ("welded grid, sampled", WeldedGrid(300)),
+                     ("part scatter, sampled", PartScatter(4000)),
+                     ("instanced parts, sampled", InstancedParts(4000))
                  })
         {
             var (vertices, indices) = mesh;

@@ -65,6 +65,8 @@ export interface MeshMetadata {
 	indexStart: number;
 	/** Arbitrary key-value pairs from the GH Metadata input. */
 	metadata?: Record<string, string>;
+	/** The writer's closed-solid verdict (see `isClosedSolid`); absent means compute it here. */
+	closed?: boolean;
 }
 
 export interface MaterialGroup {

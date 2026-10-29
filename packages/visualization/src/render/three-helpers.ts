@@ -135,22 +135,27 @@ export function clearScene(
 	scene: THREE.Scene,
 	keepUploaded: ReadonlySet<THREE.BufferGeometry> = new Set()
 ): void {
-	// Snapshot — removeFromParent below mutates scene.children during iteration.
-	const topLevel = [...scene.children];
-
-	topLevel.forEach((object) => {
+	const kept: THREE.Object3D[] = [];
+	const removed: THREE.Object3D[] = [];
+	for (const object of scene.children) {
 		// Removing the label-layer group here would orphan it: the CSS2D renderer only finds labels
 		// by walking the live scene, so labels added afterwards would never render.
-		if (PERSISTENT_SCENE_IDS.has(object.userData.id)) return;
-
 		// Host-added geometry (tagged by addUserGeometry, either plain 'user' or an app: scope)
 		// persists across solves so it isn't lost when compute content is replaced.
-		if (isHostOwned(object)) return;
+		if (PERSISTENT_SCENE_IDS.has(object.userData.id) || isHostOwned(object)) kept.push(object);
+		else removed.push(object);
+	}
 
+	// One rebuild of the child list, not removeFromParent per object: that is indexOf + splice
+	// each, O(n²), 3.5 s at 100k meshes. The events are the ones Object3D.remove dispatches.
+	scene.children.length = 0;
+	for (const object of kept) scene.children.push(object);
+	for (const object of removed) {
 		// Edge overlays are children of the meshes they outline, so this traversal disposes their
 		// line geometries too — each overlay owns its geometry outright.
 		disposeObjectTree(object, { keepUploaded });
-
-		object.removeFromParent();
-	});
+		object.parent = null;
+		object.dispatchEvent({ type: 'removed' });
+		scene.dispatchEvent({ type: 'childremoved', child: object });
+	}
 }

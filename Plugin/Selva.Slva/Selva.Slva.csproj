@@ -41,4 +41,8 @@
 		<PackageReference Include="System.Memory"/>
 	</ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="Selva.Slva.Tests"/>
+	</ItemGroup>
+
 </Project>

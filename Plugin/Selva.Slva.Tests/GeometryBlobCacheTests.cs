@@ -67,6 +67,19 @@ public class GeometryBlobCacheTests
     }
 
     [Fact]
+    public void UnitChange_Misses()
+    {
+        // The unit scale picks int16 vs float32, so a blob encoded for metres is wrong for mm.
+        var cache = new DictionaryCache();
+        var red = Material(Color.Red);
+        MeshBatchAssembler.CreateBatch(Quads(red, red), cache, metersPerUnit: 1.0);
+        MeshBatchAssembler.CreateBatch(Quads(red, red), cache, metersPerUnit: 0.001);
+
+        Assert.Equal(0, cache.Hits);
+        Assert.Equal(2, cache.Blobs.Count);
+    }
+
+    [Fact]
     public void Regrouping_KeepsTheGeometry_AndHits()
     {
         var cache = new DictionaryCache();
