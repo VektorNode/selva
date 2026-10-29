@@ -159,18 +159,27 @@ describe('clearScene', () => {
 		expect(childRemovedEvents).toEqual([gone]);
 	});
 
-	it('clears 100k meshes in linear time', () => {
-		// Regression: removeFromParent per child is indexOf + splice, O(n²): 3.5 s at 100k.
-		const scene = new THREE.Scene();
+	it('clears meshes in linear time', () => {
+		// Regression: removeFromParent per child is indexOf + splice, O(n²). A ratio, not a
+		// wall-clock budget, which varies too much across CI runners: 4x the meshes costs ~4x
+		// when linear, ~16x when quadratic.
 		const geometry = new THREE.BufferGeometry();
 		const material = new THREE.MeshBasicMaterial();
-		for (let i = 0; i < 100_000; i++) scene.children.push(new THREE.Mesh(geometry, material));
-		for (const child of scene.children) child.parent = scene;
+		const timeClear = (count: number) => {
+			const scene = new THREE.Scene();
+			for (let i = 0; i < count; i++) scene.children.push(new THREE.Mesh(geometry, material));
+			for (const child of scene.children) child.parent = scene;
+			const start = performance.now();
+			clearScene(scene);
+			const elapsed = performance.now() - start;
+			expect(scene.children).toHaveLength(0);
+			return elapsed;
+		};
 
-		const start = performance.now();
-		clearScene(scene);
+		timeClear(25_000);
+		const small = Math.max(timeClear(25_000), 1);
+		const large = timeClear(100_000);
 
-		expect(scene.children).toHaveLength(0);
-		expect(performance.now() - start).toBeLessThan(1000);
+		expect(large / small).toBeLessThan(8);
 	});
 });
