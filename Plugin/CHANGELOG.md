@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.0-beta.2] - 2026-10-30
+
 **Requirements:** Rhino 8.12 or later. On Rhino 8 the plugin targets .NET Framework 4.8 and .NET 8 (was .NET 7), and on Rhino 9 it targets .NET 10.
 
 **Older plugins and new schemas:** a schema with geometry inputs or button-style checkboxes loses them when saved by a plugin older than this release. A schema with option icons or thumbnails needs plugin 0.24.0, so 0.23.0 betas refuse it and don't strip the pictures. Update the plugin on every machine that edits these files.
