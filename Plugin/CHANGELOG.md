@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2-beta.2] - 2026-10-30
+
 ### Fixed
 
 - The release build's Rhino 8 verification found no Rhino SDK assemblies, which blocked 0.24.2-beta.1 from publishing. It has the same content as that release.
