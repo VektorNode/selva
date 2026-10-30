@@ -32,9 +32,19 @@
 		from the package cache explicitly.
 	-->
 	<Target Name="CopyRhinoSdkLocal" AfterTargets="Build">
+		<!-- Rhino 8 (8.21) packages have no lib\net8.0 (a glob on it copies nothing), and their
+		     lib\net7.0 holds reference assemblies the runtime refuses to execute. lib\net48 has
+		     the real ones, and they load on .NET 8. Rhino 9 ships real ones in lib\net8.0. -->
+		<PropertyGroup>
+			<_RhinoSdkLibDir Condition="'$(RhinoMajor)' == '9'">net8.0</_RhinoSdkLibDir>
+			<_RhinoSdkLibDir Condition="'$(RhinoMajor)' != '9'">net48</_RhinoSdkLibDir>
+		</PropertyGroup>
 		<ItemGroup>
-			<_RhinoSdkFiles Include="$(PkgGrasshopper)\lib\net8.0\*.dll"/>
-			<_RhinoSdkFiles Include="$(PkgRhinoCommon)\lib\net8.0\*.dll"/>
+			<_RhinoSdkFiles Include="$(PkgGrasshopper)\lib\$(_RhinoSdkLibDir)\*.dll"/>
+			<_RhinoSdkFiles Include="$(PkgRhinoCommon)\lib\$(_RhinoSdkLibDir)\*.dll"/>
+			<!-- Rhino 8's Rhino.UI won't execute here. Absent, its callers skip, as Program.cs
+			     intends for window code. -->
+			<_RhinoSdkFiles Remove="$(PkgRhinoCommon)\lib\$(_RhinoSdkLibDir)\Rhino.UI.dll" Condition="'$(RhinoMajor)' != '9'"/>
 		</ItemGroup>
 		<Copy SourceFiles="@(_RhinoSdkFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true"/>
 	</Target>
