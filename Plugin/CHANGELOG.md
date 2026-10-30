@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2-beta.1] - 2026-10-30
+
 ### Fixed
 
 - The Selva panel follows the Grasshopper canvas. Switching tabs or opening another definition moves the panel to that document's UI Bridge, or back to the launcher if it has none. Before, it stayed on the old document and its input went unanswered.
