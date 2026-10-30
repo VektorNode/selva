@@ -16,7 +16,7 @@ internal static class PanelContract
     /// <summary>The .rhp's plug-in id (its assembly Guid).</summary>
     public const string PlugInId = "7649CEEB-F498-4E01-B967-7902C427FDD7";
 
-    public const int Version = 3;
+    public const int Version = 4;
 
     /// <summary><see cref="int" />: the .rhp's <see cref="Version" />.</summary>
     public const string VersionKey = "version";
@@ -27,6 +27,12 @@ internal static class PanelContract
     ///     the z-order. UI thread only.
     /// </summary>
     public const string ShowKey = "show";
+
+    /// <summary>
+    ///     <c>Action&lt;string url, string sessionId&gt;</c>: point the panel at a session without
+    ///     opening or raising it, for a switch the user made on the canvas. UI thread only.
+    /// </summary>
+    public const string FollowKey = "follow";
 
     /// <summary>
     ///     <c>Action&lt;string sessionId&gt;</c>: empty the panel, only if it still shows that

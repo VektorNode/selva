@@ -274,7 +274,7 @@ internal static class DefinitionLauncher
         }
     }
 
-    private static bool IsEditorVisible()
+    internal static bool IsEditorVisible()
     {
         return (Instances.DocumentEditor as Control)?.Visible == true;
     }

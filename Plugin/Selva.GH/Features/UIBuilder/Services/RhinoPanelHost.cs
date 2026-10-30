@@ -37,6 +37,17 @@ internal static class RhinoPanelHost
         return null;
     }
 
+    /// <summary>Retargets a panel already in use. Never loads the .rhp or opens the panel.</summary>
+    public static void Follow(string url, string sessionId, GH_Document document)
+    {
+        if (LoadedContract()?.TryGetValue(PanelContract.FollowKey, out var followValue) == true &&
+            followValue is Action<string, string> follow)
+        {
+            follow(url, sessionId);
+            PanelPreview.Show(document, sessionId);
+        }
+    }
+
     public static void Clear(string sessionId)
     {
         PanelPreview.Clear(sessionId);

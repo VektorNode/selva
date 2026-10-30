@@ -156,6 +156,11 @@ the `.rhp` if it isn't loaded yet:
 document closes, or Grasshopper unloads. `Clear` only acts if that session is still the current
 target. Opening another bridge's UI retargets the panel.
 
+The panel follows the canvas, because only the canvas's document solves. Switching to a document
+with a running bridge retargets the panel without opening or raising it; switching to one without
+goes back to the launcher, and a pop-out closes. Player sessions are exempt: they move the canvas
+behind the hidden editor.
+
 ### Page host mode
 
 `host=rhino` in the session URL switches the page into panel mode. `buildSessionParams` carries it
@@ -310,7 +315,8 @@ the same way the spike was (see `.claude/skills/rhino-mcp/`). Keyboard items nee
 7. **Pop out and dock**, Mac and Windows. The page keeps its state and its socket through both
    moves, the window goes fullscreen from its green button, and closing it docks the UI back. On
    Mac this holds. On Windows, WebView2 has to survive being re-hosted between windows.
-8. **Retargeting.** Two bridges in two documents. **Open UI** on each switches the panel.
+8. **Retargeting.** Two bridges in two documents. **Open UI** on each switches the panel, and so
+   does switching canvas tabs. A document with no running bridge shows the launcher.
    Turning one bridge off clears the panel only if it was showing that one.
 9. **Viewer performance.** Orbiting the showcase scene in the panel feels the same as in the
    browser on the same machine.

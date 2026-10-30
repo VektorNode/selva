@@ -80,7 +80,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
     }
 
-    private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
+    internal bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
     public override Guid ComponentGuid => new Guid("593BC967-797A-4B1A-9B76-C2133F6B08E2");
 
@@ -662,6 +662,16 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         catch (Exception ex)
         {
             return $"Could not open the Selva panel: {ex.Message}";
+        }
+    }
+
+    internal void FollowCanvas()
+    {
+        var url = TryBuildSessionUrl("rhino");
+        var document = OnPingDocument();
+        if (url != null && document != null)
+        {
+            RhinoPanelHost.Follow(url, _sessionId, document);
         }
     }
 

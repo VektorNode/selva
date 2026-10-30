@@ -53,6 +53,7 @@ public class SelvaPanelPlugIn : PlugIn
         {
             [PanelContract.VersionKey] = PanelContract.Version,
             [PanelContract.ShowKey] = (Action<string, string, bool>)Show,
+            [PanelContract.FollowKey] = (Action<string, string>)Follow,
             [PanelContract.ClearKey] = (Action<string>)Clear,
             [PanelContract.NotifyKey] = (Action<string>)Launcher.Notify
         };
@@ -61,6 +62,11 @@ public class SelvaPanelPlugIn : PlugIn
     private void Show(string url, string sessionId, bool raise)
     {
         Host.Show(new PanelTarget(new Uri(url), sessionId), raise);
+    }
+
+    private void Follow(string url, string sessionId)
+    {
+        Host.Retarget(new PanelTarget(new Uri(url), sessionId));
     }
 
     private void Clear(string sessionId)

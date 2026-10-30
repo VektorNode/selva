@@ -18,6 +18,10 @@ internal static class PanelPreview
     private static GH_Document? _document;
     private static string? _sessionId;
 
+    public static GH_Document? Document => _document;
+
+    public static string? SessionId => _sessionId;
+
     public static void Show(GH_Document document, string sessionId)
     {
         if (_document != document)

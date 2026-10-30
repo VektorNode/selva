@@ -24,6 +24,7 @@ public class SelvaTabProperties : GH_AssemblyPriority
         if (!RhinoApp.IsRunningHeadless)
         {
             DefinitionLauncher.Register();
+            PanelCanvasFollower.Register();
             DisplayCaches.ClearOnDocumentClose();
             MacSolveActivity.Register();
             SlvzCompressor.Level = CompressionLevel.Fastest;

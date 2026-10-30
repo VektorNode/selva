@@ -56,6 +56,24 @@ internal sealed class SelvaWebHost
     /// </param>
     public void Show(PanelTarget target, bool raise)
     {
+        Retarget(target);
+
+        if (_window != null)
+        {
+            if (raise)
+            {
+                _window.BringToFront();
+            }
+        }
+        else if (raise || !Panels.IsPanelVisible(typeof(SelvaPanel).GUID))
+        {
+            Panels.OpenPanel(typeof(SelvaPanel).GUID);
+        }
+    }
+
+    /// <summary>Points the WebView at a session; a panel the user closed stays closed.</summary>
+    public void Retarget(PanelTarget target)
+    {
         _webView ??= CreateWebView();
         var previous = _shown;
 
@@ -72,18 +90,6 @@ internal sealed class SelvaWebHost
         if (!navigate && _pageLoaded)
         {
             PageLoaded?.Invoke();
-        }
-
-        if (_window != null)
-        {
-            if (raise)
-            {
-                _window.BringToFront();
-            }
-        }
-        else if (raise || !Panels.IsPanelVisible(typeof(SelvaPanel).GUID))
-        {
-            Panels.OpenPanel(typeof(SelvaPanel).GUID);
         }
     }
 
