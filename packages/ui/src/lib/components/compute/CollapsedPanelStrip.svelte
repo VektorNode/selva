@@ -20,12 +20,14 @@
 		[
 			'gap-1 py-2 lg:py-3 lg:flex-col lg:w-auto px-2 lg:px-0',
 			'flex w-full shrink-0 flex-row items-center',
-			'backdrop-blur-sm bg-background/90 cursor-pointer'
+			'backdrop-blur-sm bg-background/90 cursor-pointer',
+			side === 'left' ? 'lg:border-r' : 'lg:border-l',
+			'border-border'
 		].join(' ')
 	);
 
 	const tabButtonClass =
-		'w-8 h-8 rounded cursor-pointer flex shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
+		'w-8 h-8 rounded-md cursor-pointer flex shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
 </script>
 
 <div

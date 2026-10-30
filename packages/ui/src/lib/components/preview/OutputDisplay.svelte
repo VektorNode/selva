@@ -38,7 +38,7 @@
 	);
 	const hasValue = $derived(value != null);
 
-	const boxClass = 'min-h-12.5 rounded px-3 py-3 font-mono text-sm border border-border';
+	const boxClass = 'min-h-12.5 rounded-md px-3 py-3 text-sm border border-border/60';
 
 	async function copyToClipboard() {
 		try {
@@ -157,7 +157,11 @@
 
 {#snippet fieldHeader()}
 	<div class="gap-2 flex items-center">
-		<Label>{label}</Label>
+		<Label>
+			<span class={item.widgetType === 'number' ? 'text-xs font-normal text-muted-foreground' : ''}
+				>{label}</span
+			>
+		</Label>
 		{#if item.description}
 			<HelpButton {label} description={item.description} />
 		{/if}
@@ -213,12 +217,12 @@
 
 {#snippet fileDisplay()}
 	{#if fileCount === 0}
-		<div class="rounded px-3 py-3 text-sm border border-border bg-muted text-muted-foreground">
+		<div class="px-3 py-3 text-sm rounded-md border border-border bg-muted text-muted-foreground">
 			{t.waitingForFiles}
 		</div>
 	{:else}
 		<div class="gap-2 flex flex-col">
-			<div class="rounded px-3 py-2 border border-border bg-muted">
+			<div class="px-3 py-2 rounded-md border border-border bg-muted">
 				<div class="gap-2 flex items-center justify-between">
 					<span class="min-w-0 text-sm font-medium truncate text-foreground">
 						{fileCount === 1
@@ -248,7 +252,7 @@
 			</div>
 			{#if hasDuplicates}
 				<div
-					class="rounded px-3 py-2 text-sm border border-destructive bg-destructive/10 text-destructive"
+					class="px-3 py-2 text-sm rounded-md border border-destructive bg-destructive/10 text-destructive"
 				>
 					<div class="font-medium">{t.duplicateFilesTitle}</div>
 					<div class="mt-1 text-xs">
@@ -264,7 +268,7 @@
 			{/if}
 			{#if downloadError}
 				<div
-					class="rounded px-3 py-2 text-sm border border-destructive bg-destructive/10 text-destructive"
+					class="px-3 py-2 text-sm rounded-md border border-destructive bg-destructive/10 text-destructive"
 				>
 					{downloadError}
 				</div>
@@ -282,7 +286,10 @@
 
 <!-- Dynamic value list outputs are routing sinks (their options feed an input), not displayed. -->
 {#if item.widgetType !== 'dynamicValueList'}
-	<div role="group" class="group/field gap-2 flex flex-col">
+	<div
+		role="group"
+		class="group/field flex flex-col {item.widgetType === 'number' ? 'gap-0.5' : 'gap-2'}"
+	>
 		{@render fieldHeader()}
 
 		{#if item.widgetType === 'chart'}
@@ -295,18 +302,18 @@
 		{:else if item.widgetType === 'file'}
 			{@render fileDisplay()}
 		{:else if item.widgetType === 'number'}
-			<div class="{boxClass} flex items-center bg-muted/50 wrap-break-word">
+			<div class="min-h-8 text-2xl font-semibold wrap-break-word text-foreground tabular-nums">
 				{#if hasValue}
-					<span class="font-bold text-primary">{formattedValue}</span>
+					{formattedValue}
 				{:else}
-					{@render placeholder()}
+					<span class="text-base font-normal">{@render placeholder()}</span>
 				{/if}
 			</div>
 		{:else if item.widgetType === 'text'}
 			<div class="group relative">
 				{#if isObjectValue}
 					<pre
-						class="{boxClass} max-h-96 overflow-auto bg-muted/10 wrap-anywhere text-foreground">{formattedValue}</pre>
+						class="{boxClass} max-h-96 font-mono overflow-auto bg-muted/10 wrap-anywhere text-foreground">{formattedValue}</pre>
 				{:else}
 					<div
 						class="{boxClass} bg-muted/10 wrap-anywhere wrap-break-word whitespace-pre-wrap text-foreground"

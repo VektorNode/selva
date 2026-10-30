@@ -420,7 +420,7 @@
 		{/if}
 	{:else if !hasViewer && !isTwoPanelMode && hasLeftPanel !== hasRightPanel}
 		<!-- Single centered panel (left-only or right-only), no viewer -->
-		<div class="min-h-0 flex h-full flex-1 justify-center">
+		<div class="min-h-0 p-1 flex h-full flex-1 justify-center">
 			<div class="min-h-0 flex h-full w-4/5 flex-col">
 				{@render panelContent(
 					hasRightPanel ? 'right' : undefined,
@@ -447,7 +447,7 @@
 			<Resizable.PaneGroup
 				direction="horizontal"
 				autoSaveId="selva-layout-{layoutKey}"
-				class="min-h-0 flex-1"
+				class="min-h-0 m-1 flex-1"
 			>
 				{#if hasLeftPanel}
 					<Resizable.Pane
@@ -460,7 +460,6 @@
 						collapsedSize={0}
 						onCollapse={() => (leftCollapsed = true)}
 						onExpand={() => (leftCollapsed = false)}
-						class="ml-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
@@ -481,7 +480,7 @@
 				{/if}
 
 				{#if hasViewer}
-					<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
+					<Resizable.Pane order={2} minSize={20} class="min-h-0 flex flex-col">
 						<Viewer
 							{meshes}
 							bind:isFullscreen={isViewerFullscreen}
@@ -498,14 +497,16 @@
 				{/if}
 
 				{#if hasRightPanel}
-					<Resizable.Handle
-						withHandle
-						line={false}
-						data-collapsed={rightCollapsed}
-						onclick={() => {
-							if (rightCollapsed) rightPaneRef?.expand();
-						}}
-					/>
+					{#if hasViewer || !hasLeftPanel}
+						<Resizable.Handle
+							withHandle
+							line={false}
+							data-collapsed={rightCollapsed}
+							onclick={() => {
+								if (rightCollapsed) rightPaneRef?.expand();
+							}}
+						/>
+					{/if}
 					<Resizable.Pane
 						bind:this={rightPaneRef}
 						order={3}
@@ -516,7 +517,6 @@
 						collapsedSize={0}
 						onCollapse={() => (rightCollapsed = true)}
 						onExpand={() => (rightCollapsed = false)}
-						class="mr-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed

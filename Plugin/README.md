@@ -15,11 +15,11 @@ Features live under `Selva.GH/Features/`:
 
 Copy the `.gha` into the Grasshopper Libraries folder, then restart Rhino completely.
 
+- **Rhino 9 (Windows):** `%APPDATA%\Grasshopper\Libraries-9\`
 - **Rhino 8 (Windows):** `%APPDATA%\Grasshopper\Libraries-8\`
 - **Rhino 8 (macOS):** `~/Library/Application Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/`
-- **Rhino 9 (Windows):** `%APPDATA%\Grasshopper\Libraries-9\`
 
-Rhino 7 is not supported.
+Rhino 9 is the primary development and test platform. Rhino 8.21+ stays supported. Rhino 7 is not supported.
 
 ## Usage
 
@@ -35,8 +35,7 @@ pnpm build:plugin
 ```
 
 Builds the web assets, embeds them, and multi-targets:
-`Selva.GH/bin/Release/{net48,net8.0,net10.0}/Selva.gha`. Rhino 8 loads net48 + net8.0; Rhino 9 loads
-net10.0.
+`Selva.GH/bin/Release/{net8.0,net10.0}/Selva.gha`. Rhino 9 loads net10.0; Rhino 8 loads net8.0.
 
 For a debug loop, `cd Plugin && dotnet build` and run from your IDE alongside `pnpm dev:plugin` — the
 plugin opens the dev-server URL and connects back over WebSocket.

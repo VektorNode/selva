@@ -12,7 +12,7 @@ namespace Selva.GH.Features.SelvaUpload.Services;
 
 /// <summary>
 ///     Catches the OAuth redirect on 127.0.0.1 at a port the OS picks (RFC 8252 §7.3). A raw
-///     TcpListener, as LocalWebServer is, so net48 never needs a URL reservation.
+///     TcpListener, as LocalWebServer is, so it never needs a URL reservation.
 /// </summary>
 public sealed class LoopbackCallbackListener : IDisposable
 {

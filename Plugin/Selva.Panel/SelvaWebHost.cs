@@ -49,7 +49,12 @@ internal sealed class SelvaWebHost
 
     public bool InWindow => _window != null;
 
-    public void Show(PanelTarget target)
+    /// <param name="raise">
+    ///     Activates a panel or pop-out already on screen. Off for shows the user didn't ask for:
+    ///     the Grasshopper editor and a floating panel are sibling windows owned by Rhino's main
+    ///     window, so activating the panel lifts it over the editor.
+    /// </param>
+    public void Show(PanelTarget target, bool raise)
     {
         _webView ??= CreateWebView();
         var previous = _shown;
@@ -71,9 +76,12 @@ internal sealed class SelvaWebHost
 
         if (_window != null)
         {
-            _window.BringToFront();
+            if (raise)
+            {
+                _window.BringToFront();
+            }
         }
-        else
+        else if (raise || !Panels.IsPanelVisible(typeof(SelvaPanel).GUID))
         {
             Panels.OpenPanel(typeof(SelvaPanel).GUID);
         }

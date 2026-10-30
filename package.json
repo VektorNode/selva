@@ -24,7 +24,6 @@
 		"dev:header": "node scripts/dev-provider.mjs header",
 		"dev:ui": "pnpm --filter @selvajs/ui dev",
 		"dev:website": "pnpm --filter @selvajs/website dev",
-		"watch:ui": "pnpm --filter @selvajs/ui build:watch",
 		"generate": "turbo run generate",
 		"build": "turbo run build --concurrency=20 --filter=!@selvajs/website",
 		"build:ui": "pnpm --filter @selvajs/ui build",

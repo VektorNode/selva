@@ -423,7 +423,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                                 return;
                             }
 
-                            var refusal = ShowInPanel();
+                            var refusal = ShowInPanel(raise: false);
                             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, refusal ??
                                 "Web UI open in the Selva panel. Right-click the component and choose Open UI to bring it back.");
                             if (refusal != null)
@@ -580,7 +580,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        var refusal = ShowInPanel();
+        var refusal = ShowInPanel(raise: false);
         if (refusal != null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal);
@@ -646,7 +646,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     /// <summary>Null when the panel took the session; otherwise why not, for the user.</summary>
-    private string ShowInPanel()
+    private string ShowInPanel(bool raise)
     {
         var url = TryBuildSessionUrl("rhino");
         var document = OnPingDocument();
@@ -657,7 +657,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         try
         {
-            return RhinoPanelHost.TryShow(url, _sessionId, document);
+            return RhinoPanelHost.TryShow(url, _sessionId, document, raise);
         }
         catch (Exception ex)
         {
@@ -667,10 +667,10 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     private void OpenUIInPanel()
     {
-        var refusal = ShowInPanel();
+        var refusal = ShowInPanel(raise: true);
         if (refusal != null)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal + " Opened the browser instead.");
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal +" Opened the browser instead.");
             OpenUI();
         }
     }

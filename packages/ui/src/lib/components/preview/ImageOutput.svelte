@@ -65,7 +65,8 @@
 	// Some embedded WebViews (WKWebView in the Rhino panel) ship without the Fullscreen API at all.
 	const fullscreenSupported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
 	const allowFullscreen = $derived((cfg.allowFullscreen ?? true) && fullscreenSupported);
-	const backgroundColor = $derived(cfg.backgroundColor);
+	// SVGs are line drawings (often black on transparent), so a checkerboard hurts legibility.
+	const backgroundColor = $derived(cfg.backgroundColor ?? (isSvg ? '#ffffff' : undefined));
 
 	let wrapperEl = $state<HTMLDivElement | null>(null);
 	let stageEl = $state<HTMLDivElement | null>(null);
@@ -303,7 +304,7 @@
 {#if error || unsupported || current}
 	<div
 		bind:this={wrapperEl}
-		class="rounded flex flex-col overflow-hidden border border-border bg-background {isFullscreen
+		class="flex flex-col overflow-hidden rounded-lg border border-border bg-background {isFullscreen
 			? 'h-dvh'
 			: ''}"
 	>
@@ -319,6 +320,7 @@
 		{:else if current}
 			<!-- The stage is a pan/zoom surface with its own keyboard shortcuts; no native element fits. -->
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+			<!-- eslint-disable shadcn/no-inline-styles -- backgroundColor is the author's per-output color, not a theme token -->
 			<div
 				bind:this={stageEl}
 				role="application"
@@ -338,6 +340,7 @@
 				ondblclick={onDoubleClick}
 				onkeydown={onKeyDown}
 			>
+				<!-- eslint-enable shadcn/no-inline-styles -->
 				{#if decodeFailed}
 					<div class="inset-0 text-sm absolute flex items-center justify-center text-destructive">
 						{formatMessage(t.imageDecodeFailed, { file: `${current.fileName}${current.fileType}` })}

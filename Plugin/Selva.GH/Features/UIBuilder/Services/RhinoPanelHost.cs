@@ -14,7 +14,7 @@ internal static class RhinoPanelHost
     private static readonly Guid PlugInId = new Guid(PanelContract.PlugInId);
 
     /// <summary>Null when the panel took the session; otherwise why it couldn't, for the user.</summary>
-    public static string? TryShow(string url, string sessionId, GH_Document document)
+    public static string? TryShow(string url, string sessionId, GH_Document document, bool raise)
     {
         // Loads the .rhp if it isn't yet.
         var contract = RhinoApp.GetPlugInObject(PlugInId) as IDictionary<string, object>;
@@ -26,13 +26,13 @@ internal static class RhinoPanelHost
         if (!contract.TryGetValue(PanelContract.VersionKey, out var version) ||
             !(version is int v) || v != PanelContract.Version ||
             !contract.TryGetValue(PanelContract.ShowKey, out var showValue) ||
-            !(showValue is Action<string, string> show))
+            !(showValue is Action<string, string, bool> show))
         {
             return "Selva.Panel.rhp and Selva.gha come from different Selva versions. Reinstall Selva " +
                    "from the package manager.";
         }
 
-        show(url, sessionId);
+        show(url, sessionId, raise);
         PanelPreview.Show(document, sessionId);
         return null;
     }

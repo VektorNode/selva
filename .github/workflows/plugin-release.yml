@@ -10,7 +10,7 @@ name: Plugin Release
 # `credentials.token` from %APPDATA%\McNeel\yak.yml. yak reads the env var
 # directly — no yak.yml needs to exist on the runner.
 #
-# windows-latest is required: net48 needs the .NET Framework targeting pack.
+# windows-latest is required: the Rhino 9 leg and Selva.PluginVerifier need WindowsForms.
 # No Rhino install needed (builds against NuGet, ExcludeAssets=runtime).
 
 on:
@@ -88,12 +88,15 @@ jobs:
 
       # Standalone download (no Rhino required). Must be on PATH so
       # scripts/build-production.js can shell out to `yak build`.
+      # Pinned: tools/latest/ is frozen at 0.12.20, which throws a
+      # NullReferenceException in GetInspector on Selva.Panel.rhp. 0.19.1 runs on
+      # .NET 10 (installed above). Versions: developer.rhino3d.com/guides/yak/yak-cli-reference
       - name: Install Yak CLI
         shell: pwsh
         run: |
           $dir = "$env:RUNNER_TEMP\yak"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Invoke-WebRequest -Uri 'https://files.mcneel.com/yak/tools/latest/yak.exe' -OutFile "$dir\yak.exe"
+          Invoke-WebRequest -Uri 'https://files.mcneel.com/yak/tools/0.19.1/win-x64/yak.exe' -OutFile "$dir\yak.exe"
           Add-Content -Path $env:GITHUB_PATH -Value $dir
           & "$dir\yak.exe" version
 

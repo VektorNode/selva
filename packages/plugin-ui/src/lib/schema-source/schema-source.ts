@@ -116,10 +116,13 @@ export interface SchemaSource {
  */
 export interface PreviewSolveDriver extends SolveDriver {
 	/**
-	 * Ingest the outputs/meshes carried *on the initialData frame itself* (the server includes
-	 * the last solve's result so the preview can paint immediately, before any fresh solve).
-	 * Runs the same parse-and-report path as a live outputs frame. The message is the raw
-	 * initialData payload (which is shaped like an outputs envelope for these fields).
+	 * Ingest the output values carried on the initialData frame, so the preview paints those
+	 * before any fresh solve. Runs the same parse-and-report path as a live outputs frame; the
+	 * message is the raw initialData payload, shaped like an outputs envelope for these fields.
+	 *
+	 * Meshes never ride on initialData itself — BridgeOrchestrator.ClientConnected schedules a
+	 * normal outputs broadcast right after it whenever the schema has outputs or the viewer is
+	 * on, and that carries binaryBatchCount/displayItems the usual way.
 	 */
 	primeFromInitialData(message: WsOutputsMessage): void;
 	/** Detach the driver's transport subscriptions (outputs/binary frames). */

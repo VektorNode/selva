@@ -52,15 +52,15 @@ public class SelvaPanelPlugIn : PlugIn
         return new Dictionary<string, object>
         {
             [PanelContract.VersionKey] = PanelContract.Version,
-            [PanelContract.ShowKey] = (Action<string, string>)Show,
+            [PanelContract.ShowKey] = (Action<string, string, bool>)Show,
             [PanelContract.ClearKey] = (Action<string>)Clear,
             [PanelContract.NotifyKey] = (Action<string>)Launcher.Notify
         };
     }
 
-    private void Show(string url, string sessionId)
+    private void Show(string url, string sessionId, bool raise)
     {
-        Host.Show(new PanelTarget(new Uri(url), sessionId));
+        Host.Show(new PanelTarget(new Uri(url), sessionId), raise);
     }
 
     private void Clear(string sessionId)

@@ -11,8 +11,7 @@ namespace Selva.Tests;
 
 /// <summary>
 ///     The bridge over a real loopback socket: what a web page in the user's browser can and can't
-///     do. Runs the TcpListener path that Rhino 8 on macOS and Rhino 9 use; net48's HttpListener
-///     path shares everything after the handshake.
+///     do.
 /// </summary>
 public sealed class BridgeServerTests : IAsyncLifetime
 {

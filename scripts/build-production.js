@@ -250,12 +250,10 @@ async function build() {
 			}
 
 			const verifierDir = join(projectRoot, 'Plugin/Selva.PluginVerifier/bin/Release');
-			// The verifier builds .NET Framework as an exe and the .NET legs as -windows dlls.
-			const verifyLegs = tfms.map((tfm) =>
-				tfm.includes('.')
-					? { tfm, cmd: `dotnet "${join(verifierDir, `${tfm}-windows/Selva.PluginVerifier.dll`)}"` }
-					: { tfm, cmd: `"${join(verifierDir, tfm, 'Selva.PluginVerifier.exe')}"` }
-			);
+			const verifyLegs = tfms.map((tfm) => ({
+				tfm,
+				cmd: `dotnet "${join(verifierDir, `${tfm}-windows/Selva.PluginVerifier.dll`)}"`
+			}));
 			for (const leg of verifyLegs) {
 				const outDir = join(projectRoot, 'Plugin/Selva.GH/bin/Release', leg.tfm);
 				try {
@@ -278,7 +276,7 @@ async function build() {
 		log('');
 
 		// Step 3: Stage yak packages.
-		// Rhino 9 yak bundles its one TFM; Rhino 8 yak bundles the rest (net48 + net8.0).
+		// Rhino 9 yak bundles its one TFM; Rhino 8 yak bundles the rest (net8.0).
 		// Each TFM's output folder (containing Selva.gha and deps) is copied
 		// into the yak staging dir as a TFM-named subfolder, alongside the
 		// manifest and icon. `yak build` is then run in each staging dir.

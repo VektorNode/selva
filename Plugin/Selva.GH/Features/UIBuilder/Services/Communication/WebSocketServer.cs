@@ -39,15 +39,9 @@ public class WebSocketServer : IDisposable
     private bool _disposed;
     private Timer _heartbeatTimer;
 
-    // .NET Framework 4.8 ships only the HttpListener-based WebSocket flow; modern .NET
-    // (net7/net9, used by Mac/Linux Rhino) needs the manual TcpListener handshake because
-    // HttpListener depends on the Windows-only Http.sys driver. Both code paths produce a
-    // System.Net.WebSockets.WebSocket so the rest of this class is shared.
-#if NET48
-    private HttpListener _httpListener;
-#else
+    // TcpListener with a manual handshake, not HttpListener: HttpListener's WebSocket support
+    // needs the Windows-only Http.sys driver.
     private TcpListener _tcpListener;
-#endif
 
     /// <param name="acknowledgement">The reply to a socket that authenticated, built when it does.</param>
     public WebSocketServer(
@@ -151,23 +145,6 @@ public class WebSocketServer : IDisposable
 
     private bool TryBindListener(int port, out int boundPort)
     {
-#if NET48
-        var listener = new HttpListener();
-        listener.Prefixes.Add($"http://localhost:{port}/");
-        try
-        {
-            listener.Start();
-            _httpListener = listener;
-            boundPort = port;
-            return true;
-        }
-        catch
-        {
-            try { listener.Close(); } catch { /* ignore */ }
-            boundPort = 0;
-            return false;
-        }
-#else
         var listener = new TcpListener(IPAddress.Loopback, port);
         try
         {
@@ -182,7 +159,6 @@ public class WebSocketServer : IDisposable
             boundPort = 0;
             return false;
         }
-#endif
     }
 
     public void Stop()
@@ -236,12 +212,7 @@ public class WebSocketServer : IDisposable
 
         try
         {
-#if NET48
-            _httpListener?.Stop();
-            _httpListener?.Close();
-#else
             _tcpListener?.Stop();
-#endif
         }
         catch (Exception ex)
         {
@@ -249,11 +220,7 @@ public class WebSocketServer : IDisposable
         }
         finally
         {
-#if NET48
-            _httpListener = null;
-#else
             _tcpListener = null;
-#endif
         }
     }
 
@@ -368,41 +335,6 @@ public class WebSocketServer : IDisposable
 
     private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
     {
-#if NET48
-        while (!cancellationToken.IsCancellationRequested && IsRunning)
-        {
-            try
-            {
-                var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
-
-                if (!context.Request.IsWebSocketRequest)
-                {
-                    context.Response.StatusCode = 400;
-                    context.Response.Close();
-                }
-                else if (!IsAllowedUpgrade(context.Request.Headers["Host"], context.Request.Headers["Origin"]))
-                {
-                    context.Response.StatusCode = 403;
-                    context.Response.Close();
-                }
-                else
-                {
-                    _ = Task.Run(
-                        () => ProcessWebSocketRequestAsync(context, cancellationToken),
-                        cancellationToken);
-                }
-            }
-            catch (HttpListenerException ex)
-            {
-                Logger.Warn($"WebSocket listener stopped: {ex.Message}");
-                break;
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Error accepting WebSocket connection: {ex.Message}");
-            }
-        }
-#else
         while (!cancellationToken.IsCancellationRequested && IsRunning)
         {
             TcpClient tcpClient;
@@ -429,36 +361,9 @@ public class WebSocketServer : IDisposable
                 () => ProcessWebSocketRequestAsync(tcpClient, cancellationToken),
                 cancellationToken);
         }
-#endif
     }
 
-#if NET48
-    // HttpListener already negotiated the WebSocket upgrade; just take ownership and receive.
-    private async Task ProcessWebSocketRequestAsync(
-        HttpListenerContext context,
-        CancellationToken cancellationToken)
-    {
-        WebSocket webSocket = null;
-
-        try
-        {
-            var wsContext = await context.AcceptWebSocketAsync(null).ConfigureAwait(false);
-            webSocket = wsContext.WebSocket;
-
-            await ServeClientAsync(webSocket, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"WebSocket request processing error: {ex.Message}");
-        }
-        finally
-        {
-            await TeardownClientAsync(webSocket).ConfigureAwait(false);
-        }
-    }
-#else
-    // net7+/net9: HttpListener's WebSocket support is Windows-only, so do the RFC 6455
-    // handshake manually on the raw TCP connection and wrap the stream in a server-side WebSocket.
+    // RFC 6455 handshake on the raw TCP connection, then wrap the stream in a server-side WebSocket.
     private async Task ProcessWebSocketRequestAsync(
         TcpClient tcpClient,
         CancellationToken cancellationToken)
@@ -533,7 +438,6 @@ public class WebSocketServer : IDisposable
             }
         }
     }
-#endif
 
     private bool IsAllowedUpgrade(string host, string origin)
     {

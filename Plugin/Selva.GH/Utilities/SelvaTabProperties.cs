@@ -1,7 +1,4 @@
-using System;
-using System.IO;
 using System.IO.Compression;
-using System.Reflection;
 using Grasshopper.Kernel;
 using Rhino;
 using Selva.GH.Features.Display.Services;
@@ -32,27 +29,6 @@ public class SelvaTabProperties : GH_AssemblyPriority
             SlvzCompressor.Level = CompressionLevel.Fastest;
         }
 
-#if !NETCOREAPP
-        // net48's fusion loader can refuse to load a strong-named assembly from a private
-        // path if a different version is already loaded in the process. Resolve manually so
-        // Selva's own dependency copies win.
-        AppDomain.CurrentDomain.AssemblyResolve += ResolveFromPluginDirectory;
-#endif
-
         return GH_LoadingInstruction.Proceed;
     }
-
-#if !NETCOREAPP
-#nullable enable
-    private static readonly string PluginDirectory =
-        Path.GetDirectoryName(typeof(SelvaTabProperties).Assembly.Location) ?? "";
-
-    private static Assembly? ResolveFromPluginDirectory(object sender, ResolveEventArgs args)
-    {
-        var name = new AssemblyName(args.Name).Name;
-        var path = Path.Combine(PluginDirectory, name + ".dll");
-        return File.Exists(path) ? Assembly.LoadFrom(path) : null;
-    }
-#nullable disable
-#endif
 }

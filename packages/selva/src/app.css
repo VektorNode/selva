@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@source '../../ui/dist';
+@source '../../ui/src/lib';
 @import '@selvajs/ui/styles/base.css';
 
 /* Cover-image fallback for library tool cards. The hues come in as inline

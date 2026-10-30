@@ -31,12 +31,16 @@
 		".": {
 			"selva-source": {
 				"types": "./dist/index.d.ts",
-				"svelte": "./dist/index.js"
+				"svelte": "./src/lib/index.ts"
 			},
 			"types": "./dist/public.d.ts",
 			"svelte": "./dist/public.js"
 		},
 		"./external": {
+			"selva-source": {
+				"types": "./dist/external/storage.d.ts",
+				"svelte": "./src/lib/external/storage.ts"
+			},
 			"types": "./dist/external/storage.d.ts",
 			"svelte": "./dist/external/storage.js"
 		},

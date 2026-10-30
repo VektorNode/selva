@@ -104,7 +104,7 @@
 {#if bare}
 	{@render tabs()}
 {:else}
-	<Card.Root variant="flush" class="min-h-0 mx-1 flex-1">
+	<Card.Root variant="flush" class="min-h-0 flex-1">
 		{@render tabs()}
 	</Card.Root>
 {/if}

@@ -9,7 +9,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="Grasshopper" VersionOverride="$(RhinoRefVersion)" ExcludeAssets="runtime"/>
-		<PackageReference Include="System.Drawing.Common" VersionOverride="$(DrawingCommonRefVersion)" Condition="'$(TargetFramework)' != 'net48'"/>
+		<PackageReference Include="System.Drawing.Common" VersionOverride="$(DrawingCommonRefVersion)"/>
 		<ProjectReference Include="..\Selva.Drawing\Selva.Drawing.csproj"/>
 	</ItemGroup>
 

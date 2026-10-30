@@ -252,8 +252,10 @@ export function createWebSocketSolveDriver(
 			return wsState.isSolving || wsState.awaitingSolve;
 		},
 		primeFromInitialData(message) {
-			// Same parse-and-report path as a live frame; initialData carries the same
-			// outputs/binaryBatchCount/modelUnits fields.
+			// Same parse-and-report path as a live frame. initialData itself carries no mesh
+			// fields; a real binaryBatchCount only shows up on the outputs broadcast the server
+			// schedules right after connecting (BridgeOrchestrator.ClientConnected), caught by
+			// handleOutputs the normal way once it arrives.
 			void handleOutputs(message);
 		},
 		dispose() {

@@ -3,11 +3,11 @@
 	<PropertyGroup>
 		<!--
 			Post-merge smoke test for the .gha (see Program.cs). One TFM per Rhino
-			runtime the plugin ships for: net48 (Rhino 8 netfx mode), net8.0-windows
-			(Rhino 8 default), net10.0-windows (Rhino 9). Windows-only — release builds
-			are cut on Windows CI; macOS dev builds skip verification.
+			runtime the plugin ships for: net8.0-windows (Rhino 8), net10.0-windows
+			(Rhino 9). Windows-only — release builds are cut on Windows CI; macOS dev
+			builds skip verification.
 		-->
-		<TargetFrameworks>net48;net8.0-windows;net10.0-windows</TargetFrameworks>
+		<TargetFrameworks>net8.0-windows;net10.0-windows</TargetFrameworks>
 		<OutputType>Exe</OutputType>
 		<UseWindowsForms>true</UseWindowsForms>
 		<Nullable>enable</Nullable>
@@ -32,13 +32,9 @@
 		from the package cache explicitly.
 	-->
 	<Target Name="CopyRhinoSdkLocal" AfterTargets="Build">
-		<PropertyGroup>
-			<_RhinoSdkLibDir Condition="'$(TargetFramework)' == 'net10.0-windows'">net8.0</_RhinoSdkLibDir>
-			<_RhinoSdkLibDir Condition="'$(TargetFramework)' != 'net10.0-windows'">net48</_RhinoSdkLibDir>
-		</PropertyGroup>
 		<ItemGroup>
-			<_RhinoSdkFiles Include="$(PkgGrasshopper)\lib\$(_RhinoSdkLibDir)\*.dll"/>
-			<_RhinoSdkFiles Include="$(PkgRhinoCommon)\lib\$(_RhinoSdkLibDir)\*.dll"/>
+			<_RhinoSdkFiles Include="$(PkgGrasshopper)\lib\net8.0\*.dll"/>
+			<_RhinoSdkFiles Include="$(PkgRhinoCommon)\lib\net8.0\*.dll"/>
 		</ItemGroup>
 		<Copy SourceFiles="@(_RhinoSdkFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true"/>
 	</Target>

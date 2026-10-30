@@ -30,15 +30,14 @@
 			Release: PrivateAssets="all" keeps Newtonsoft.Json out of the .gha's output as a
 			sibling DLL — it's merged and internalized into Selva.dll by the target below.
 			GeneratePathProperty exposes $(PkgNewtonsoft_Json) so that target can find it.
-			Debug: a plain reference, so the DLL sits next to the .gha and the AssemblyResolve
-			hook (net48) or the ALC (net8/net10) can find it; the merge is Release-only.
+			Debug: a plain reference, so the DLL sits next to the .gha where the plugin's
+			AssemblyLoadContext finds it; the merge is Release-only.
 		-->
 		<PackageReference Include="Newtonsoft.Json" GeneratePathProperty="true" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
 		<PackageReference Include="Newtonsoft.Json" Condition="'$(Configuration)' != 'Release'"/>
 		<!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
 		<PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
-		<PackageReference Include="System.Drawing.Common" VersionOverride="$(DrawingCommonRefVersion)" Condition="'$(TargetFramework)' != 'net48'"/>
-		<PackageReference Include="System.Net.Http" Condition="'$(TargetFramework)' == 'net48'"/>
+		<PackageReference Include="System.Drawing.Common" VersionOverride="$(DrawingCommonRefVersion)"/>
 		<PackageReference Include="System.Resources.Extensions"/>
 		<PackageReference Include="System.Windows.Forms"/>
 		<ProjectReference Include="..\Selva.Schema\Selva.Schema.csproj"/>
@@ -91,7 +90,7 @@
 		TargetFramework != '' skips the outer dispatch pass of a multi-targeted build, which
 		runs Build once with no TFM set — there OutputPath is the bare bin\Release\ (empty)
 		and $(PkgNewtonsoft_Json) is undefined, so the copies fail. The real merges happen in
-		the three per-TFM inner builds.
+		the per-TFM inner builds.
 	-->
 	<Target Name="ILRepackMergeNewtonsoft"
 	        AfterTargets="Build"
@@ -100,9 +99,6 @@
 			<_RepackOutDir>$([System.IO.Path]::GetFullPath('$(OutputPath)'))</_RepackOutDir>
 			<_RepackStageDir>$([System.IO.Path]::GetFullPath('$(IntermediateOutputPath)ilrepack-stage'))\</_RepackStageDir>
 			<_RepackOutput>$(_RepackOutDir)$(AssemblyName)$(TargetExt)</_RepackOutput>
-			<!-- Newtonsoft ships net45 for net48 and netstandard2.0 for the .NET Core targets. -->
-			<_NewtonsoftLibDir Condition="'$(TargetFramework)' == 'net48'">net45</_NewtonsoftLibDir>
-			<_NewtonsoftLibDir Condition="'$(TargetFramework)' != 'net48'">netstandard2.0</_NewtonsoftLibDir>
 		</PropertyGroup>
 
 		<!--
@@ -113,7 +109,7 @@
 			<_RepackToStage Include="$(_RepackOutDir)$(AssemblyName)$(TargetExt)" />
 			<_RepackToStage Include="$(_RepackOutDir)Selva.Schema.dll" />
 			<_RepackToStage Include="$(_RepackOutDir)Selva.Slva.dll" />
-			<_RepackToStage Include="$(PkgNewtonsoft_Json)\lib\$(_NewtonsoftLibDir)\Newtonsoft.Json.dll" />
+			<_RepackToStage Include="$(PkgNewtonsoft_Json)\lib\netstandard2.0\Newtonsoft.Json.dll" />
 		</ItemGroup>
 
 		<RemoveDir Directories="$(_RepackStageDir)" />

@@ -1,8 +1,4 @@
 using System;
-#if !NETCOREAPP
-using System.Drawing;
-using Selva.GH.Properties;
-#endif
 using Grasshopper.Kernel;
 
 namespace Selva.GH;

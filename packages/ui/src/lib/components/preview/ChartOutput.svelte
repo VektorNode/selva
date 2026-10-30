@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { OutputChartLayoutItem } from '@selvajs/schemas';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { mode } from 'mode-watcher';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
 	import { loadScript } from '$lib/utils/loadScript';
 	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
@@ -57,6 +58,19 @@
 	// Some embedded WebViews (WKWebView in the Rhino panel) ship without the Fullscreen API at all.
 	const fullscreenSupported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
 
+	// `Plots.resize()`/`relayout({autosize: true})` ask Plotly to re-measure the container itself,
+	// which it silently fails to do across a Fullscreen transition — _fullLayout keeps the
+	// pre-toggle width/height even though clientWidth/clientHeight are already correct. Passing
+	// the measured size explicitly is the only call that actually takes.
+	function resizeChart() {
+		// @ts-expect-error — Plotly is loaded dynamically onto window
+		if (!containerEl || !window.Plotly) return;
+		const { width, height } = containerEl.getBoundingClientRect();
+		if (width === 0 || height === 0) return;
+		// @ts-expect-error — Plotly is loaded dynamically onto window
+		window.Plotly.relayout(containerEl, { width, height });
+	}
+
 	function toggleFullscreen() {
 		if (!wrapperEl) return;
 		if (!document.fullscreenElement) {
@@ -73,26 +87,41 @@
 	$effect(() => {
 		function onFullscreenChange() {
 			isFullscreen = !!document.fullscreenElement;
-			Promise.resolve().then(() => {
-				// @ts-expect-error — Plotly is loaded dynamically onto window
-				if (containerEl && window.Plotly) {
-					// @ts-expect-error — Plotly is loaded dynamically onto window
-					window.Plotly.Plots.resize(containerEl);
-				}
-			});
+			// `tick()` waits for the h-dvh/h-95 class swap this state drives to actually reach the
+			// DOM before resizeChart measures it.
+			tick().then(resizeChart);
 		}
 		document.addEventListener('fullscreenchange', onFullscreenChange);
 		return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
 	});
 
+	// Chromium's getComputedStyle returns color values in whatever function the CSS used to
+	// declare them — oklch() here, since base.css's theme tokens are oklch(). Plotly's own color
+	// parser doesn't recognize oklch() and silently falls back to its #444 default instead of
+	// erroring, so every chart read dark axis text even in dark mode. `fillStyle` alone just
+	// echoes the oklch() string back unconverted; actually rasterizing a pixel and reading its
+	// bytes is what forces a real rgb() value Plotly can parse.
+	function toRgb(cssColor: string): string {
+		const canvas = document.createElement('canvas');
+		canvas.width = 1;
+		canvas.height = 1;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return cssColor;
+		ctx.fillStyle = cssColor;
+		ctx.fillRect(0, 0, 1, 1);
+		const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+		return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+	}
+
 	function getThemeColors(): { textColor: string; gridColor: string } {
 		if (!containerEl) return { textColor: '#333', gridColor: '#eee' };
 		const style = getComputedStyle(containerEl);
-		const textColor = style.getPropertyValue('color').trim() || '#333';
-		const gridColor =
+		const textColor = toRgb(style.getPropertyValue('color').trim() || '#333');
+		const gridColor = toRgb(
 			style.getPropertyValue('--border')?.trim() ||
-			style.getPropertyValue('--color-border')?.trim() ||
-			'rgba(128,128,128,0.2)';
+				style.getPropertyValue('--color-border')?.trim() ||
+				'rgba(128,128,128,0.2)'
+		);
 		return { textColor, gridColor };
 	}
 
@@ -125,11 +154,15 @@
 				font: { color: textColor },
 				paper_bgcolor: layoutRest.paper_bgcolor ?? 'transparent',
 				plot_bgcolor: layoutRest.plot_bgcolor ?? 'transparent',
-				...(!isMapFigure && layoutRest.xaxis
-					? { xaxis: { ...(layoutRest.xaxis as object), gridcolor: gridColor, color: textColor } }
-					: {}),
-				...(!isMapFigure && layoutRest.yaxis
-					? { yaxis: { ...(layoutRest.yaxis as object), gridcolor: gridColor, color: textColor } }
+				// Plotly's axis tick/label color doesn't inherit the top-level `font.color`, so this
+				// has to be set even when the figure's own JSON never declared an xaxis/yaxis —
+				// which the mock's figures don't. Gating on `layoutRest.xaxis` existing left every
+				// axis on Plotly's built-in #444 default, light or dark mode.
+				...(!isMapFigure
+					? {
+							xaxis: { ...(layoutRest.xaxis as object), gridcolor: gridColor, color: textColor },
+							yaxis: { ...(layoutRest.yaxis as object), gridcolor: gridColor, color: textColor }
+						}
 					: {})
 			};
 
@@ -154,11 +187,7 @@
 		const ro = new ResizeObserver(() => {
 			if (resizeTimer) clearTimeout(resizeTimer);
 			resizeTimer = setTimeout(() => {
-				// @ts-expect-error — Plotly is loaded dynamically onto window
-				if (containerEl && window.Plotly) {
-					// @ts-expect-error — Plotly is loaded dynamically onto window
-					window.Plotly.Plots.resize(containerEl);
-				}
+				resizeChart();
 				resizeTimer = null;
 			}, 150);
 		});
@@ -175,6 +204,10 @@
 	let renderTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
+		// Re-reads mode.current so a theme toggle re-renders with the new axis/font colors —
+		// getThemeColors() only reads the DOM once, at render time, and nothing else repaints an
+		// already-drawn chart when the page's color scheme changes under it.
+		void mode.current;
 		if (!value || !mounted || !containerEl) return;
 		if (renderTimeout) clearTimeout(renderTimeout);
 		renderTimeout = setTimeout(() => {
@@ -189,7 +222,7 @@
 
 <div
 	bind:this={wrapperEl}
-	class="group rounded relative overflow-hidden border border-border {isFullscreen
+	class="group relative overflow-hidden rounded-lg border border-border {isFullscreen
 		? 'bg-background'
 		: ''}"
 >

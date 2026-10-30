@@ -17,21 +17,22 @@
 	</PropertyGroup>
 
 	<PropertyGroup>
-		<!-- Rhino-coupled projects only. net48 is Rhino 8's .NET Framework fallback, net8.0
-		     Rhino 8, net10.0 Rhino 9. net48 (WindowsForms) and the Rhino 9 Grasshopper
-		     (transitive WindowsForms) don't resolve on the macOS SDK, so non-Windows builds
-		     net8.0 only (Rhino 8 for Mac). scripts/build-production.js reads these two
-		     elements by regex; keep them literal. -->
+		<!-- Rhino-coupled projects only. net8.0 is Rhino 8, net10.0 Rhino 9. No net48, so no
+		     Rhino 8 .NET Framework mode. The Rhino 9 Grasshopper (transitive WindowsForms)
+		     doesn't resolve on the macOS SDK, so non-Windows builds net8.0 only (Rhino 8 for
+		     Mac). scripts/build-production.js reads these two elements by regex; keep them
+		     literal. -->
 		<SelvaRhino9TargetFramework>net10.0</SelvaRhino9TargetFramework>
-		<SelvaTargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net48;net8.0;$(SelvaRhino9TargetFramework)</SelvaTargetFrameworks>
+		<SelvaTargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net8.0;$(SelvaRhino9TargetFramework)</SelvaTargetFrameworks>
 		<SelvaTargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net8.0</SelvaTargetFrameworks>
 
 		<!-- Yak derives the package's minimum Rhino from the highest RhinoCommon any shipped
 		     assembly references, so raising one of these raises the floor for every user.
-		     8.12 is the first Rhino 8 on .NET 8. -->
-		<Rhino8RefVersion>8.12.24282.7001</Rhino8RefVersion>
-		<!-- First Rhino 9 beta. Ships net8.0 reference assemblies only; net10.0 consumes them fine. -->
-		<Rhino9RefVersion>9.0.26209.18303-beta</Rhino9RefVersion>
+		     Rhino 8.20 is the first Rhino 8 on .NET 8; older ones run .NET 7 and cannot load a
+		     net8.0 build. NuGet has no 8.20, so 8.21 is the floor. -->
+		<Rhino8RefVersion>8.21.25188.17001</Rhino8RefVersion>
+		<!-- First stable Rhino 9. Ships net8.0 reference assemblies only; net10.0 consumes them fine. -->
+		<Rhino9RefVersion>9.0.26300.9401</Rhino9RefVersion>
 	</PropertyGroup>
 
 	<!-- Inner builds get TargetFramework as a global property, so it is already set here.

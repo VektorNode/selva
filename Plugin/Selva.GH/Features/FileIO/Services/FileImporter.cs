@@ -20,11 +20,6 @@ public static class FileImporter
 {
     private static readonly int MAX_FILE_SIZE_BYTES = AppConfig.ValueLimits.MaxFileSizeBytes;
 
-    private static readonly HttpClient UrlDownloadClient = new HttpClient
-    {
-        Timeout = TimeSpan.FromSeconds(60)
-    };
-
     public static (bool Success, List<GeometryWithName> Geometry, string DetectedFormat, string ErrorMessage)
         ImportFromFileInputData(FileInputData fileData)
     {
@@ -281,11 +276,10 @@ public static class FileImporter
                 return (false, null, extensionError);
             }
 
-            var (client, ownsClient) = CreatePinnedClient(resolvedAddresses);
+            var client = CreatePinnedClient(resolvedAddresses);
             try
             {
-                // net48 has no sync HttpClient API; blocking here is safe since HttpClient
-                // internals use ConfigureAwait(false) throughout.
+                // Blocking is safe: HttpClient internals use ConfigureAwait(false) throughout.
                 using var response = client
                     .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead)
                     .GetAwaiter().GetResult();
@@ -330,7 +324,7 @@ public static class FileImporter
             }
             finally
             {
-                if (ownsClient) client.Dispose();
+                client.Dispose();
             }
         }
         catch (Exception ex)
@@ -348,13 +342,11 @@ public static class FileImporter
     }
 
     /// <summary>
-    ///     On net7+ pins outgoing connections to the already-validated IPs, so a DNS rebind
-    ///     between validation and fetch can't redirect the request to an internal host. net48
-    ///     has no ConnectCallback, so it falls back to the shared client with a narrow rebind window.
+    ///     Pins outgoing connections to the already-validated IPs, so a DNS rebind between
+    ///     validation and fetch can't redirect the request to an internal host.
     /// </summary>
-    private static (HttpClient client, bool ownsClient) CreatePinnedClient(IPAddress[] resolvedAddresses)
+    private static HttpClient CreatePinnedClient(IPAddress[] resolvedAddresses)
     {
-#if NET7_0_OR_GREATER
         var allowed = new HashSet<IPAddress>(resolvedAddresses);
         var handler = new SocketsHttpHandler
         {
@@ -379,13 +371,9 @@ public static class FileImporter
             }
         };
 
-        return (new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) }, true);
-#else
-        return (UrlDownloadClient, false);
-#endif
+        return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) };
     }
 
-#if NET7_0_OR_GREATER
     private static async System.Threading.Tasks.Task<Stream> OpenSocket(
         IPAddress address, int port, System.Threading.CancellationToken cancellationToken)
     {
@@ -402,7 +390,6 @@ public static class FileImporter
             throw;
         }
     }
-#endif
 
     /// <summary>
     ///     Checks the extension against the schema-driven allowlist and rejects path-traversal characters.

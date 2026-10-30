@@ -6,11 +6,13 @@
 // Separate from e2e/ws-stub.ts on purpose: the E2E stub stays minimal so its assertions
 // don't shift whenever this demo data grows.
 //
-//   pnpm dev:plugin:mock                               mock + Vite dev server
-//   node dev/mock-grasshopper.ts [--port 8765] [--latency 250] [--player]   mock only
+//   pnpm dev:plugin:mock                               mock + Vite dev server, opens the page
+//   node dev/mock-grasshopper.ts [--port 0] [--latency 250] [--player]   mock only
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { icons } from 'lucide';
 import { UI_SCHEMA_VERSION } from '@selvajs/schemas';
@@ -43,7 +45,9 @@ function readFlag(name: string, fallback: number): number {
 	return i > -1 ? Number(process.argv[i + 1]) : fallback;
 }
 
-const PORT = readFlag('port', 8765);
+// 0 asks the OS for a free port, so the mock never collides with a real Rhino+Selva
+// instance (or another mock) already on 8765.
+const PORT = readFlag('port', 0);
 const SOLVE_LATENCY_MS = readFlag('latency', 250);
 // --player acknowledges sockets as a player session, the way a definition opened from the panel is.
 const PLAYER = process.argv.includes('--player');
@@ -641,6 +645,7 @@ let schema: UISchema = {
 	tags: ['tower', 'residential'],
 	schemaVersion: UI_SCHEMA_VERSION,
 	instanceSolve: true,
+	viewerOptions: { enableLocal: true },
 	inputs: INPUTS.map((p) => ({
 		id: p.id,
 		nickname: p.nickname,
@@ -662,6 +667,34 @@ let schemaRevision = 1;
 const values: Record<string, unknown> = Object.fromEntries(
 	INPUTS.filter((p) => p.default !== undefined).map((p) => [p.id, p.default])
 );
+
+// ============================================================================
+// Mesh geometry (the UI demo's fixture, replayed over the wire)
+// ============================================================================
+
+// The same DisplayBatch @selvajs/ui's own demo page renders directly — here it goes through
+// the real wire instead: compressedData decodes to the binary mesh frame the client expects
+// after outputs' binaryBatchCount, items ride as outputs.displayItems JSON.
+const exampleMeshPath = fileURLToPath(
+	new URL('../../ui/src/demo/example-mesh.json', import.meta.url)
+);
+const exampleMesh = JSON.parse(readFileSync(exampleMeshPath, 'utf-8')) as {
+	compressedData: string;
+	items?: unknown[];
+};
+const meshFrame = Buffer.from(exampleMesh.compressedData, 'base64');
+
+function sendOutputsWithMesh(ws: WebSocket, sessionId: string) {
+	send(ws, {
+		type: 'outputs',
+		sessionId,
+		outputs: solve(),
+		modelUnits: 'Meters',
+		binaryBatchCount: 1,
+		displayItems: exampleMesh.items ?? []
+	});
+	ws.send(meshFrame);
+}
 
 // ============================================================================
 // Fake solve
@@ -1079,6 +1112,11 @@ wss.on('connection', (ws) => {
 					outputs: solve(),
 					isSolving: false
 				});
+				// The real plugin's initialData carries no geometry (Selva.GH/Features/UIBuilder/
+				// Services/Communication/OutboundEnvelopes.cs): the document already solved before
+				// any client connected, so it follows up with a normal outputs broadcast carrying
+				// that cached result. Mirrored here instead of folded into initialData above.
+				sendOutputsWithMesh(ws, sessionId);
 				break;
 
 			case 'requestCurrentValues':
@@ -1101,7 +1139,7 @@ wss.on('connection', (ws) => {
 				Object.assign(values, msg.values as Record<string, unknown>);
 				clearTimeout(pendingSolve);
 				pendingSolve = setTimeout(() => {
-					send(ws, { type: 'outputs', sessionId, outputs: solve(), modelUnits: 'Meters' });
+					sendOutputsWithMesh(ws, sessionId);
 				}, SOLVE_LATENCY_MS);
 				break;
 
@@ -1164,19 +1202,24 @@ wss.on('connection', (ws) => {
 });
 
 wss.on('listening', () => {
-	const pagePath = `/builder?session=dev&wsPort=${PORT}#s=${SECRET}`;
-	console.info(
-		`[mock-grasshopper] ws://localhost:${PORT}  ·  open http://localhost:5173${pagePath}`
-	);
+	const boundPort = (wss.address() as { port: number }).port;
+	const pagePath = `/builder?session=dev&wsPort=${boundPort}#s=${SECRET}`;
+	console.info(`[mock-grasshopper] ws://localhost:${boundPort}  ·  page ${pagePath}`);
 	if (process.argv.includes('--with-dev-server')) {
-		// Vite's own "Local:" link has no #s= fragment, so the page refuses to connect; open the
-		// full URL instead. Windows only resolves pnpm's .cmd shim through a shell, which would
-		// read the & and # in the path, hence the quoting there.
+		// Vite opens the page itself, on whatever port it lands on: its own "Local:" link has no
+		// #s= fragment, so the page would refuse to connect. Windows only resolves pnpm's .cmd
+		// shim through a shell, which would split the path at the &, hence the quoting there.
+		// vite.mock.config.ts has no strictPort: the mock checks no origin, so a second instance
+		// takes the next free port instead of failing like `pnpm dev:plugin` must.
 		const openArg = process.platform === 'win32' ? `"${pagePath}"` : pagePath;
-		const vite = spawn('pnpm', ['dev', '--open', openArg], {
-			stdio: 'inherit',
-			shell: process.platform === 'win32'
-		});
+		const vite = spawn(
+			'pnpm',
+			['exec', 'vite', 'dev', '--config', 'vite.mock.config.ts', '--open', openArg],
+			{
+				stdio: 'inherit',
+				shell: process.platform === 'win32'
+			}
+		);
 		vite.on('exit', (code) => process.exit(code ?? 0));
 	}
 });

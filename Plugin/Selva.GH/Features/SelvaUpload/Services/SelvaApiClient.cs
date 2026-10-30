@@ -69,16 +69,12 @@ public sealed class SelvaApiClient : IDisposable
     /// <summary>Redirects off, cookies off, the system proxy and certificate checks as they are.</summary>
     public static HttpMessageHandler CreateHandler()
     {
-#if NET7_0_OR_GREATER
         return new SocketsHttpHandler
         {
             AllowAutoRedirect = false,
             UseCookies = false,
             ConnectTimeout = TimeSpan.FromSeconds(15)
         };
-#else
-        return new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false };
-#endif
     }
 
     public Task<JObject> GetJsonAsync(string path, CancellationToken cancellationToken)

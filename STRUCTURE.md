@@ -52,21 +52,21 @@ selva/
 
 ### Project boundaries
 
-| Project                | Target             | Rhino/GH deps | Purpose                                                          |
-| ---------------------- | ------------------ | ------------- | ---------------------------------------------------------------- |
-| `Selva.Schema`         | `netstandard2.0`   | none          | Generated schema, validation, migration, shared constants        |
-| `Selva.Slva`           | `netstandard2.0`   | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
-| `Selva.Drawing`        | `netstandard2.0`   | none          | Document model + SVG/PDF renderers                               |
-| `Selva.FileIO`         | `netstandard2.0`   | none          | File in/out contract + its rules; referenced by other repos      |
-| `Selva.Rhino`          | `net48/net8/net10` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
-| `Selva.GH`             | `net48/net8/net10` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
-| `Selva.Panel`          | `net48/net8/net10` | RhinoCommon   | `.rhp` hosting the UI in a Rhino panel; loads before Grasshopper |
-| `Selva.PluginVerifier` | `net48/net8/net10` | yes           | Loads the merged `.gha` and the `.rhp` after a Release build     |
-| `Selva.Tests`          | `net8.0` (xUnit)   | none          | Tests for `Selva.GH`, `Selva.Schema` and the panel's nav policy  |
-| `Selva.Slva.Tests`     | `net8.0` (xUnit)   | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
-| `Selva.Drawing.Tests`  | `net8.0` (xUnit)   | none          | Tests for `Selva.Drawing`                                        |
+| Project                | Target            | Rhino/GH deps | Purpose                                                          |
+| ---------------------- | ----------------- | ------------- | ---------------------------------------------------------------- |
+| `Selva.Schema`         | `netstandard2.0`  | none          | Generated schema, validation, migration, shared constants        |
+| `Selva.Slva`           | `netstandard2.0`  | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
+| `Selva.Drawing`        | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                               |
+| `Selva.FileIO`         | `netstandard2.0`  | none          | File in/out contract + its rules; referenced by other repos      |
+| `Selva.Rhino`          | `net8/net10`      | yes           | Rhino interop adapter for `Selva.Drawing`                        |
+| `Selva.GH`             | `net8/net10`      | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
+| `Selva.Panel`          | `net8/net10`      | RhinoCommon   | `.rhp` hosting the UI in a Rhino panel; loads before Grasshopper |
+| `Selva.PluginVerifier` | `net8/net10`      | yes           | Loads the merged `.gha` and the `.rhp` after a Release build     |
+| `Selva.Tests`          | `net10.0` (xUnit) | none          | Tests for `Selva.GH`, `Selva.Schema` and the panel's nav policy  |
+| `Selva.Slva.Tests`     | `net10.0` (xUnit) | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
+| `Selva.Drawing.Tests`  | `net10.0` (xUnit) | none          | Tests for `Selva.Drawing`                                        |
 
-Rhino 8 loads `net48` + `net8.0`; Rhino 9 loads `net10.0`. Rhino 7 is not supported.
+Rhino 9 loads `net10.0`; Rhino 8.21+ loads `net8.0`. Rhino 9 is the primary development and test platform. Rhino 7 is not supported.
 The Rhino-coupled TFMs and Rhino SDK versions live once in `Plugin/Directory.Build.props`
 (`SelvaTargetFrameworks`, `Rhino8RefVersion`, `Rhino9RefVersion`); the SDK is pinned to .NET 10 in
 `global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. On
