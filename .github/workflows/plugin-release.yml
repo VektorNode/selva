@@ -31,6 +31,26 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the stable-from-main check needs main's history
+
+      # Backstop for scripts/release-plugin.js: a hand-pushed tag skips its checks. A stable
+      # version (no -suffix) must sit on main, so nothing on beta can publish one.
+      - name: Stable releases only from main
+        shell: pwsh
+        run: |
+          $ver = $env:GITHUB_REF_NAME -replace '^plugin-v', ''
+          if ($ver -notmatch '^\d+\.\d+\.\d+-beta\.\d+$' -and $ver -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Error "Version ($ver) is neither x.y.z nor x.y.z-beta.N."
+            exit 1
+          }
+          if ($ver -match '-') { exit 0 }
+          git fetch origin main
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Stable tag $env:GITHUB_REF_NAME is not on main. Merge to main first, or use a -beta.N version."
+            exit 1
+          }
 
       # The .yak version comes from the csproj, not the tag — a mismatch would
       # publish a package whose internal version disagrees with its tag.
