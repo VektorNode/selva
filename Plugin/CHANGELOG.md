@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-10-30
+
 **Requirements:** Rhino 9, or Rhino 8.21 or later. The plugin targets .NET 10 on Rhino 9 and .NET 8 on Rhino 8. The .NET Framework 4.8 build is gone, so Rhino 8 in .NET Framework mode and Rhino 8 before 8.21 can't load it. Earlier releases stay installable there.
 
 ### Changed
