@@ -30,7 +30,7 @@ function readPluginVersion() {
 }
 
 // Rhino-coupled TFMs and the one Rhino 9 loads, read from Plugin/Directory.Build.props so a
-// Rhino/.NET bump stays a single edit there. Uses the Windows list: releases are cut on Windows.
+// Rhino/.NET bump stays a single edit there. Both OS conditions list the same TFMs; the regex reads the Windows one.
 function readTargetFrameworks() {
 	const propsPath = join(projectRoot, 'Plugin/Directory.Build.props');
 	const props = readFileSync(propsPath, 'utf-8');

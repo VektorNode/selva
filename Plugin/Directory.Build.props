@@ -18,13 +18,14 @@
 
 	<PropertyGroup>
 		<!-- Rhino-coupled projects only. net8.0 is Rhino 8, net10.0 Rhino 9. No net48, so no
-		     Rhino 8 .NET Framework mode. The Rhino 9 Grasshopper (transitive WindowsForms)
-		     doesn't resolve on the macOS SDK, so non-Windows builds net8.0 only (Rhino 8 for
-		     Mac). scripts/build-production.js reads these two elements by regex; keep them
-		     literal. -->
+		     Rhino 8 .NET Framework mode. Both TFMs build on every OS; scripts/build-production.js
+		     reads these two elements by regex, so keep them literal. -->
 		<SelvaRhino9TargetFramework>net10.0</SelvaRhino9TargetFramework>
 		<SelvaTargetFrameworks Condition="'$(OS)' == 'Windows_NT'">net8.0;$(SelvaRhino9TargetFramework)</SelvaTargetFrameworks>
-		<SelvaTargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net8.0</SelvaTargetFrameworks>
+		<SelvaTargetFrameworks Condition="'$(OS)' != 'Windows_NT'">net8.0;$(SelvaRhino9TargetFramework)</SelvaTargetFrameworks>
+		<!-- The Grasshopper packages carry a WindowsForms FrameworkReference that non-Windows SDKs
+		     can't resolve without this. -->
+		<EnableWindowsTargeting>true</EnableWindowsTargeting>
 
 		<!-- Yak derives the package's minimum Rhino from the highest RhinoCommon any shipped
 		     assembly references, so raising one of these raises the floor for every user.

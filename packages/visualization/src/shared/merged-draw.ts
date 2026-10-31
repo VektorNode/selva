@@ -24,7 +24,7 @@ interface DrawState {
 	/** The mesh's own material, restored once nothing is hidden or highlighted. */
 	base: THREE.Material;
 	hidden: ReadonlySet<number>;
-	highlight: { index: number; material: THREE.Material } | null;
+	highlight: { members: ReadonlySet<number>; material: THREE.Material } | null;
 }
 
 const states = new WeakMap<THREE.Mesh, DrawState>();
@@ -91,7 +91,7 @@ function rebuild(mesh: THREE.Mesh, windows: Required<MemberWindow>[], state: Dra
 			continue;
 		}
 		const { indexStart, indexCount } = windows[i]!;
-		const material = state.highlight?.index === i ? 1 : 0;
+		const material = state.highlight?.members.has(i) ? 1 : 0;
 		if (runStart < 0 || material !== runMaterial || indexStart !== runEnd) {
 			flush();
 			runStart = indexStart;
@@ -133,14 +133,14 @@ export function getBaseMaterial(mesh: THREE.Mesh): THREE.Material {
 	);
 }
 
-/** Draws member `index` with `material`. The caller owns `material` and disposes it. */
+/** Draws `members` with `material`. The caller owns `material` and disposes it. */
 export function setMemberHighlight(
 	mesh: THREE.Mesh,
-	index: number,
+	members: ReadonlySet<number>,
 	material: THREE.Material
 ): void {
 	update(mesh, (state) => {
-		state.highlight = { index, material };
+		state.highlight = { members, material };
 	});
 }
 

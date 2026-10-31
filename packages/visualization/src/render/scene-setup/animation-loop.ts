@@ -7,6 +7,7 @@ import type { LabelLayer } from '../label-layer.js';
 import type { NearPlaneFitter } from '../near-plane.js';
 import type { RenderPipeline } from '../render-pipeline.js';
 import type { ViewGizmo } from '../view-gizmo.js';
+import type { HoverOutline } from './hover-outline.js';
 
 // Resize applied before render so buffer clear and draw happen in the same frame — avoids a
 // visible blank frame on resize.
@@ -26,7 +27,8 @@ export function createAnimationLoop(
 	labelLayer?: LabelLayer | null,
 	nearFitter?: NearPlaneFitter | null,
 	// false = render every frame regardless of invalidate()/camera movement.
-	onDemand: boolean = true
+	onDemand: boolean = true,
+	hoverOutline?: HoverOutline | null
 ): { animate: () => void; dispose: () => void; invalidate: () => void; renderNow: () => void } {
 	let animationId: number | null = null;
 	let lastTime = performance.now();
@@ -98,6 +100,9 @@ export function createAnimationLoop(
 		} else {
 			renderer.render(scene, activeCamera);
 		}
+
+		// After either branch above: it draws onto the finished image, composer or not.
+		if (hoverOutline) hoverOutline.render(activeCamera);
 
 		if (labelLayer) labelLayer.render(scene, activeCamera);
 

@@ -33,9 +33,11 @@
 		 * repaint, so the row updates instantly and the geometry lags behind.
 		 */
 		onVisibilityChange?: () => void;
+		/** The entry under the pointer, or null once it leaves. Drives the viewport preview tint. */
+		onHover?: (entry: SceneEntry | null) => void;
 	}
 
-	let { outliner, sceneVersion = 0, onVisibilityChange }: Props = $props();
+	let { outliner, sceneVersion = 0, onVisibilityChange, onHover }: Props = $props();
 
 	// A partially hidden layer hides the rest; only a fully hidden one comes back — the same rule
 	// `visibility.toggleLayer` applies to objects, restated over entries because a layer's rows are
@@ -50,6 +52,13 @@
 		outliner.toggleEntry(entry);
 		onVisibilityChange?.();
 	};
+
+	// A solve or closing the panel removes the row without a mouseleave, which would leave the
+	// preview tint stuck on the viewport.
+	$effect(() => {
+		void sceneVersion;
+		return () => onHover?.(null);
+	});
 
 	// Derived, not destructured: the prop is reassignable, and these must follow it.
 	const hidden = $derived(outliner.visibility.hidden);
@@ -331,6 +340,8 @@
 								class="gap-1.5 pl-5 pr-2 flex h-full cursor-pointer items-center transition-colors
 									{isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted'}
 									{isHidden ? 'opacity-40' : ''}"
+								onmouseenter={() => onHover?.(entry)}
+								onmouseleave={() => onHover?.(null)}
 								onmousedown={(e) => {
 									e.stopPropagation();
 									if (e.shiftKey) e.preventDefault();

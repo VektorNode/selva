@@ -85,17 +85,14 @@ export function memberBounds(mesh: THREE.Mesh, member: PickableMember): THREE.Bo
 }
 
 /**
- * Draws one member of a merged mesh with `highlight`. Returns a restore function; call it before
+ * Draws members of a merged mesh with `highlight`. Returns a restore function; call it before
  * applying a different highlight. Members hidden by the outliner stay hidden either way.
  */
-export function highlightMemberRange(
+export function highlightMembers(
 	mesh: THREE.Mesh,
-	member: PickableMember,
+	members: ReadonlySet<number>,
 	highlight: THREE.Material
 ): () => void {
-	const index = membersOf(mesh)?.indexOf(member) ?? -1;
-	if (index < 0 || member.indexStart == null || member.indexCount == null) return () => {};
-
-	setMemberHighlight(mesh, index, highlight);
+	setMemberHighlight(mesh, members, highlight);
 	return () => clearMemberHighlight(mesh);
 }

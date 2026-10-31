@@ -140,8 +140,32 @@ internal sealed class LauncherView : Scrollable
     protected override void OnSizeChanged(EventArgs e)
     {
         base.OnSizeChanged(e);
-        // A Scrollable measures its content at unbounded width, so wrapped labels would never wrap.
-        Content.Width = Math.Max(0, ClientSize.Width);
+        FitContent();
+    }
+
+    // A docked panel is sized after it loads and may report no size from OnSizeChanged until the
+    // user resizes the dock, so the width is also applied once loaded and once shown.
+    protected override void OnLoadComplete(EventArgs e)
+    {
+        base.OnLoadComplete(e);
+        FitContent();
+        Application.Instance.AsyncInvoke(FitContent);
+    }
+
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        FitContent();
+    }
+
+    // A Scrollable measures its content at unbounded width, so wrapped labels would never wrap.
+    private void FitContent()
+    {
+        var width = ClientSize.Width > 0 ? ClientSize.Width : Width;
+        if (width > 0 && Content != null)
+        {
+            Content.Width = width;
+        }
     }
 
     protected override void OnDragOver(DragEventArgs e)

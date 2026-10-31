@@ -130,6 +130,121 @@ describe('setupEventHandlers click vs double-click', () => {
 	});
 });
 
+describe('setupEventHandlers hover tint', () => {
+	const config = {
+		events: { enableClickToFocus: true, selectionColor: '#ff0000' }
+	} as unknown as ResolvedOptions;
+
+	it('tints the hovered object and restores its own material when hover moves on', () => {
+		const { canvas } = fakeCanvas();
+		const scene = sceneWithCube();
+		const other = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+		scene.add(other);
+		const cube = scene.children[0] as THREE.Mesh;
+		const original = cube.material;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		handlers.setHoverTint(cube);
+		expect(cube.material).not.toBe(original);
+
+		handlers.setHoverTint(other);
+		expect(cube.material).toBe(original);
+
+		handlers.setHoverTint(null);
+		handlers.dispose();
+	});
+
+	it('leaves the selected object alone', () => {
+		const { canvas, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		fire('mousedown', CENTRE);
+		fire('click', CENTRE);
+		const selected = cube.material;
+		handlers.setHoverTint(cube);
+
+		expect(cube.material).toBe(selected);
+		handlers.dispose();
+	});
+});
+
+describe('setupEventHandlers selectEntries', () => {
+	const config = {
+		events: { enableClickToFocus: true, selectionColor: '#ff0000' }
+	} as unknown as ResolvedOptions;
+
+	function mergedMesh() {
+		const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+		mesh.userData.members = [
+			{ name: 'a', layer: '', metadata: {}, indexStart: 0, indexCount: 12 },
+			{ name: 'b', layer: '', metadata: {}, indexStart: 12, indexCount: 12 },
+			{ name: 'c', layer: '', metadata: {}, indexStart: 24, indexCount: 12 }
+		];
+		return mesh;
+	}
+
+	it('tints every target and restores them when replaced', () => {
+		const { canvas } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const merged = mergedMesh();
+		scene.add(merged);
+		const cubeMaterial = cube.material;
+		const mergedMaterial = merged.material;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		handlers.selectEntries([
+			{ object: cube, memberIndex: null },
+			{ object: merged, memberIndex: 0 },
+			{ object: merged, memberIndex: 2 }
+		]);
+
+		expect(cube.material).not.toBe(cubeMaterial);
+		expect(merged.material).toHaveLength(2);
+		expect(merged.geometry.groups.filter((g) => g.materialIndex === 1)).toHaveLength(2);
+
+		handlers.selectEntries([]);
+
+		expect(cube.material).toBe(cubeMaterial);
+		expect(merged.material).toBe(mergedMaterial);
+		handlers.dispose();
+	});
+
+	it('leaves a canvas selection alone when told there is nothing to select', () => {
+		const { canvas, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		fire('mousedown', CENTRE);
+		fire('click', CENTRE);
+		const selected = cube.material;
+		handlers.selectEntries([]);
+
+		expect(cube.material).toBe(selected);
+		handlers.dispose();
+	});
+
+	it('treats a click on an entry-selected object as a fresh pick', () => {
+		const { canvas, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const onObjectSelected = vi.fn();
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), {
+			events: { enableClickToFocus: true, selectionColor: '#ff0000', onObjectSelected }
+		} as unknown as ResolvedOptions);
+
+		handlers.selectEntries([{ object: cube, memberIndex: null }]);
+		fire('mousedown', CENTRE);
+		fire('click', CENTRE);
+
+		expect(onObjectSelected).toHaveBeenCalledWith(cube);
+		handlers.dispose();
+	});
+});
+
 describe('setupEventHandlers viewer aids', () => {
 	it('never picks the grid, whose camera-sized box would fling the camera out', () => {
 		const { canvas, fire } = fakeCanvas();

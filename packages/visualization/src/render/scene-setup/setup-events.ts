@@ -4,13 +4,10 @@ import { getBaseMaterial, getLogger } from '../../shared/index.js';
 
 import type { CameraController } from '../camera-controller.js';
 import { computeContentBounds, isViewerAid } from '../three-helpers.js';
-import {
-	highlightMemberRange,
-	memberBounds,
-	resolveHitMember,
-	type PickableMember
-} from './merged-picking.js';
+import { highlightMembers, memberBounds, resolveHitMember } from './merged-picking.js';
 import type { ResolvedOptions } from './defaults.js';
+import { HOVER_COLOR } from './hover-outline.js';
+import type { SelectionTarget } from './viewer.js';
 
 // Tuned against the brightest look (`showcase`, exposure 1.15 + sun 2.6): the highlight has to stay
 // obvious there without blowing out to a flat silhouette under the dimmest one.
@@ -73,17 +70,20 @@ export function setupEventHandlers(
 	dispose: () => void;
 	fitToView: () => void;
 	clearSelection: () => void;
+	selectEntries: (targets: SelectionTarget[]) => void;
+	setHoverTint: (object: THREE.Object3D | null) => void;
 } {
 	const selectedObjects = new Set<THREE.Object3D>();
 	const originalMaterials = new Map<THREE.Object3D, THREE.Material | THREE.Material[]>();
-	// Set when the selection is one member inside a merged mesh: restores the geometry's groups and
-	// material array, which a plain material swap can't undo.
-	let restoreMemberHighlight: (() => void) | null = null;
+	// One per merged mesh with selected members: restores the geometry's groups and material array,
+	// which a plain material swap can't undo. Owns its highlight clone, which never becomes the
+	// mesh's `material` and so isn't reached by the clone disposal below.
+	const memberHighlights: { restore: () => void; material: THREE.Material }[] = [];
 	/** Which member of a merged mesh is selected, so a click on a sibling isn't a no-op. */
 	let selectedMemberIndex: number | null = null;
-	// The highlight clone owned by a member highlight — disposed with it, since it never becomes
-	// the mesh's `material` and so isn't reached by the clone disposal below.
-	let memberHighlightMaterial: THREE.Material | null = null;
+	// True while `selectEntries` drew the selection: a click on one of those objects is a fresh pick,
+	// not a re-click of what it already selected.
+	let selectedByEntries = false;
 	const raycaster = new THREE.Raycaster();
 	const mouse = new THREE.Vector2();
 	const mouseDownPosition = new THREE.Vector2();
@@ -120,13 +120,40 @@ export function setupEventHandlers(
 				? config.events.selectionColor
 				: new THREE.Color('#ff0000');
 
-	const clearSelection = () => {
-		if (restoreMemberHighlight) {
-			restoreMemberHighlight();
-			restoreMemberHighlight = null;
-			memberHighlightMaterial?.dispose();
-			memberHighlightMaterial = null;
+	const hoverColorObj = new THREE.Color(HOVER_COLOR);
+	let hoverObject: (THREE.Object3D & { material?: THREE.Material | THREE.Material[] }) | null =
+		null;
+	let hoverOriginal: THREE.Material | THREE.Material[] | null = null;
+
+	const clearHover = () => {
+		if (hoverObject && hoverOriginal) {
+			const clone = hoverObject.material;
+			if (clone instanceof THREE.Material) clone.dispose();
+			hoverObject.material = hoverOriginal;
 		}
+		hoverObject = null;
+		hoverOriginal = null;
+	};
+
+	/** Hover for what can't be outlined. Yields to a selection already tinting the same object. */
+	const setHoverTint = (object: THREE.Object3D | null) => {
+		clearHover();
+		if (!object || selectedObjects.has(object)) return;
+		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
+		if (!(target.material instanceof THREE.Material)) return;
+		const clone = target.material.clone();
+		tintForSelection(clone, hoverColorObj, object instanceof THREE.Mesh);
+		hoverObject = target;
+		hoverOriginal = target.material;
+		target.material = clone;
+	};
+
+	const clearSelection = () => {
+		for (const { restore, material } of memberHighlights) {
+			restore();
+			material.dispose();
+		}
+		memberHighlights.length = 0;
 		selectedObjects.forEach((obj) => {
 			const restorable = obj as THREE.Object3D & {
 				material?: THREE.Material | THREE.Material[];
@@ -152,20 +179,23 @@ export function setupEventHandlers(
 		});
 		selectedObjects.clear();
 		selectedMemberIndex = null;
+		selectedByEntries = false;
 	};
 
 	/**
-	 * Tints the picked object. On a merged mesh only the hit member's index range is tinted, so
-	 * clicking one wall doesn't light up every wall sharing its material — see `merged-picking.ts`.
+	 * Tints the picked object. On a merged mesh only the given members are tinted, so clicking one
+	 * wall doesn't light up every wall sharing its material — see `merged-picking.ts`.
 	 */
-	const applyHighlight = (object: THREE.Object3D, member: PickableMember | null): boolean => {
-		if (member && object instanceof THREE.Mesh) {
+	const applyHighlight = (object: THREE.Object3D, members: ReadonlySet<number> | null): boolean => {
+		if (members && object instanceof THREE.Mesh) {
 			// The material is an array while some members are hidden, so read the base through
 			// the draw-state owner rather than off the mesh.
 			const clone = getBaseMaterial(object).clone();
 			tintForSelection(clone, selectionColorObj, true);
-			memberHighlightMaterial = clone;
-			restoreMemberHighlight = highlightMemberRange(object, member, clone);
+			memberHighlights.push({
+				restore: highlightMembers(object, members, clone),
+				material: clone
+			});
 			return true;
 		}
 
@@ -178,6 +208,34 @@ export function setupEventHandlers(
 		originalMaterials.set(object, target.material);
 		target.material = clone;
 		return true;
+	};
+
+	/**
+	 * Selection made outside the viewport. An empty list only drops such a selection, so a host
+	 * syncing its own empty state can't wipe what a click on the canvas just selected.
+	 */
+	const selectEntries = (targets: SelectionTarget[]) => {
+		if (targets.length === 0 && !selectedByEntries) return;
+
+		clearHover();
+		clearSelection();
+
+		const membersByMesh = new Map<THREE.Object3D, Set<number>>();
+		for (const { object, memberIndex } of targets) {
+			if (memberIndex === null) {
+				selectedObjects.add(object);
+				applyHighlight(object, null);
+				continue;
+			}
+			let members = membersByMesh.get(object);
+			if (!members) membersByMesh.set(object, (members = new Set()));
+			members.add(memberIndex);
+		}
+		for (const [object, members] of membersByMesh) {
+			selectedObjects.add(object);
+			applyHighlight(object, members);
+		}
+		selectedByEntries = targets.length > 0;
 	};
 
 	// Points picking tolerance, scaled to scene size so it holds at any zoom. Fat Line2 uses its own
@@ -243,12 +301,19 @@ export function setupEventHandlers(
 
 		// A merged mesh stays one object across clicks, so object identity alone would treat a click
 		// on a different member as re-clicking the current selection and do nothing.
-		if (selectedObjects.has(clickedObject) && hitMemberIndex === selectedMemberIndex) return;
+		if (
+			!selectedByEntries &&
+			selectedObjects.has(clickedObject) &&
+			hitMemberIndex === selectedMemberIndex
+		) {
+			return;
+		}
 
+		clearHover();
 		clearSelection();
 		selectedObjects.add(clickedObject);
 		selectedMemberIndex = hitMemberIndex;
-		applyHighlight(clickedObject, resolved?.member ?? null);
+		applyHighlight(clickedObject, resolved ? new Set([resolved.index]) : null);
 
 		config.events?.onObjectSelected?.(clickedObject);
 
@@ -335,8 +400,9 @@ export function setupEventHandlers(
 		canvas.removeEventListener('click', handleCanvasClick);
 		canvas.removeEventListener('dblclick', handleDoubleClick);
 		canvas.removeEventListener('keydown', handleKeydown);
+		clearHover();
 		clearSelection();
 	};
 
-	return { dispose, fitToView, clearSelection };
+	return { dispose, fitToView, clearSelection, selectEntries, setHoverTint };
 }

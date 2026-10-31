@@ -10,6 +10,12 @@ import type { ToolRegistry } from '../tool-registry.js';
 import type { Look, MaterialAppearanceOptions } from '../types.js';
 import type { ViewGizmo } from '../view-gizmo.js';
 
+/** One thing to select: a whole object, or one member of a merged mesh. */
+export interface SelectionTarget {
+	object: THREE.Object3D;
+	memberIndex: number | null;
+}
+
 export interface ThreeViewer {
 	scene: THREE.Scene;
 	camera: THREE.PerspectiveCamera;
@@ -85,6 +91,16 @@ export interface ThreeViewer {
 	dispose: () => void;
 	fitToView: () => void;
 	clearSelection: () => void;
+	/**
+	 * Selects from outside the viewport (an outliner's rows), replacing any current selection and
+	 * firing no events. `[]` drops a selection made here and leaves one made by a canvas click.
+	 */
+	selectEntries: (targets: SelectionTarget[]) => void;
+	/**
+	 * Outlines one object, or one member of a merged mesh, as a preview (an outliner row under the
+	 * pointer). `null` clears it. Lines and points have no outline, so they tint instead.
+	 */
+	setHover: (object: THREE.Object3D | null, memberIndex?: number | null) => void;
 	/**
 	 * Adds host-owned geometry that survives `updateScene` solves and counts for fit-to-view.
 	 * Pass `appId` to scope it to one app (`userData.source = 'app:<id>'`) so `clearUserGeometry`

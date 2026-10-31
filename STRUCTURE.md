@@ -69,8 +69,9 @@ selva/
 Rhino 9 loads `net10.0`; Rhino 8.21+ loads `net8.0`. Rhino 9 is the primary development and test platform. Rhino 7 is not supported.
 The Rhino-coupled TFMs and Rhino SDK versions live once in `Plugin/Directory.Build.props`
 (`SelvaTargetFrameworks`, `Rhino8RefVersion`, `Rhino9RefVersion`); the SDK is pinned to .NET 10 in
-`global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. On
-non-Windows, the Rhino-coupled projects build `net8.0` only.
+`global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. Both TFMs build on
+macOS too (`EnableWindowsTargeting` resolves the WindowsForms reference); only loading and testing
+needs Rhino on the matching OS.
 
 `Selva.Panel` references RhinoCommon only, because it must load before Grasshopper. Its root
 namespace is `Selva.RhinoPanel`: `Selva.Panel` would shadow every Eto/WinForms `Panel` inside

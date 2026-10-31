@@ -61,13 +61,28 @@ describe('merged draw state', () => {
 		expect(hitMembers(mesh)).toEqual([]);
 	});
 
+	it('tints several members with one material', () => {
+		const mesh = mergedBoxes();
+		const base = mesh.material as THREE.Material;
+		const highlight = new THREE.MeshStandardMaterial();
+
+		setMemberHighlight(mesh, new Set([0, 2]), highlight);
+
+		expect(mesh.material).toEqual([base, highlight]);
+		expect(ranges(mesh)).toEqual([
+			[0, 36, 1],
+			[36, 36, 0],
+			[72, 36, 1]
+		]);
+	});
+
 	it('keeps hidden members hidden while another member is highlighted', () => {
 		const mesh = mergedBoxes();
 		const base = mesh.material as THREE.Material;
 		const highlight = new THREE.MeshStandardMaterial();
 
 		setHiddenMembers(mesh, new Set([0]));
-		setMemberHighlight(mesh, 2, highlight);
+		setMemberHighlight(mesh, new Set([2]), highlight);
 
 		expect(mesh.material).toEqual([base, highlight]);
 		expect(ranges(mesh)).toEqual([

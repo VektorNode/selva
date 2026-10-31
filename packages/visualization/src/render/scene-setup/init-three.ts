@@ -28,6 +28,7 @@ import { disposeObjectTree, disposeSceneResources } from './dispose.js';
 import { createPipelineController } from './pipeline-controller.js';
 import { setupControls } from './setup-controls.js';
 import { addFloor, setupEnvironment } from './setup-environment.js';
+import { createHoverOutline } from './hover-outline.js';
 import { setupEventHandlers } from './setup-events.js';
 import { fitShadowToContent, setupLighting } from './setup-lighting.js';
 import { setupRenderer } from './setup-renderer.js';
@@ -150,7 +151,15 @@ export const initThree = function (
 	const eventHandlers =
 		config.events.enableEventHandlers !== false
 			? setupEventHandlers(canvas, scene, cameraController, config)
-			: { dispose: () => {}, fitToView: () => {}, clearSelection: () => {} };
+			: {
+					dispose: () => {},
+					fitToView: () => {},
+					clearSelection: () => {},
+					selectEntries: () => {},
+					setHoverTint: () => {}
+				};
+
+	const hoverOutline = createHoverOutline(renderer);
 
 	// Built-ins register at the priorities documented on ToolRegistration, so a host tool can slot
 	// above or below them. Listeners are attached unconditionally — a tool can register at any time.
@@ -273,7 +282,8 @@ export const initThree = function (
 		() => pipeline.get(),
 		labelLayer,
 		nearFitter,
-		config.render.onDemand ?? true
+		config.render.onDemand ?? true,
+		hoverOutline
 	);
 	requestRender = invalidate;
 	animate();
@@ -326,6 +336,7 @@ export const initThree = function (
 		canvas.removeEventListener('mousemove', handleToolMove);
 		measureTool?.dispose();
 		labelLayer?.dispose();
+		hoverOutline.dispose();
 		gizmo?.dispose();
 		grid?.dispose();
 		pipeline.dispose();
@@ -372,6 +383,15 @@ export const initThree = function (
 		dispose,
 		fitToView: eventHandlers.fitToView,
 		clearSelection: eventHandlers.clearSelection,
+		selectEntries: (targets) => {
+			eventHandlers.selectEntries(targets);
+			invalidate();
+		},
+		setHover: (object, memberIndex = null) => {
+			const outlined = hoverOutline.show(object, memberIndex);
+			eventHandlers.setHoverTint(outlined ? null : object);
+			invalidate();
+		},
 		addUserGeometry,
 		removeUserGeometry,
 		clearUserGeometry

@@ -329,7 +329,7 @@
 			class="group bg-background hover:border-border border-border/60 @container overflow-hidden rounded-lg py-1.5 transition-all hover:shadow-sm"
 		>
 			<!-- Compact header row (always visible). In a card under 20rem the type badge drops its
-			     label and the name gives up width first, so the controls stay in view. -->
+			     label, and the name and chips wrap so the controls stay in view. -->
 			<div data-builder-item-header class="flex items-center gap-2 px-3 py-1.5">
 				<div
 					use:dragHandle
@@ -357,40 +357,44 @@
 						<span class="@max-[20rem]:sr-only">{typeLabel}</span>
 					</span>
 				{/if}
-				<input
-					type="text"
-					bind:value={item.displayName}
-					title={paramInfo ? `GH: ${paramInfo.nickname}` : undefined}
-					class="hover:border-border focus:border-primary min-w-16 rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium focus:outline-none @[20rem]:min-w-28"
-					style="field-sizing: content; max-width: 18rem;"
-					placeholder="Display Name"
-					aria-label="Display name"
-				/>
-				{#if notOnSelva}
-					<ScopeChip
-						scope="local"
-						label="Not on Selva yet"
-						title={runsOnLabel
-							? `Shows in ${runsOnLabel} only. On Selva it is left out, and the definition uses its own value.`
-							: 'This plugin does not know this element. It is kept in the schema, but no host shows it.'}
+				<!-- Name and chips wrap onto a second line in a narrow card instead of pushing the
+				     controls out of view. -->
+				<div class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+					<input
+						type="text"
+						bind:value={item.displayName}
+						title={paramInfo ? `GH: ${paramInfo.nickname}` : undefined}
+						class="hover:border-border focus:border-primary min-w-16 rounded-sm border border-transparent bg-transparent px-1.5 py-1 text-sm font-medium focus:outline-none @[20rem]:min-w-28"
+						style="field-sizing: content; max-width: min(18rem, 100%);"
+						placeholder="Display Name"
+						aria-label="Display name"
 					/>
-				{/if}
-				{#if isInput && sourceKind !== 'user'}
-					<ScopeChip
-						scope="compute"
-						label={SOURCE_KIND_LABELS[sourceKind]}
-						title="Value source: {SOURCE_KIND_LABELS[sourceKind]}"
-					/>
-				{/if}
-				{#if detectedChartType}
-					<span
-						class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize @max-[20rem]:hidden"
-					>
-						{detectedChartType}
-					</span>
-				{/if}
+					{#if notOnSelva}
+						<ScopeChip
+							scope="local"
+							label="Not on Selva yet"
+							title={runsOnLabel
+								? `Shows in ${runsOnLabel} only. On Selva it is left out, and the definition uses its own value.`
+								: 'This plugin does not know this element. It is kept in the schema, but no host shows it.'}
+						/>
+					{/if}
+					{#if isInput && sourceKind !== 'user'}
+						<ScopeChip
+							scope="compute"
+							label={SOURCE_KIND_LABELS[sourceKind]}
+							title="Value source: {SOURCE_KIND_LABELS[sourceKind]}"
+						/>
+					{/if}
+					{#if detectedChartType}
+						<span
+							class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize @max-[20rem]:hidden"
+						>
+							{detectedChartType}
+						</span>
+					{/if}
+				</div>
 				<Collapsible.Trigger
-					class="hover:bg-accent/50 relative ml-auto flex h-6 w-6 shrink-0 items-center justify-center rounded-sm {hasNonDefaultConfig
+					class="hover:bg-accent/50 relative flex h-6 w-6 shrink-0 items-center justify-center rounded-sm {hasNonDefaultConfig
 						? 'text-primary'
 						: 'text-muted-foreground hover:text-foreground'}"
 					aria-label={expanded ? 'Collapse details' : 'Expand details'}

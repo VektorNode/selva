@@ -129,6 +129,8 @@
 	let updateShadowBounds: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
 	let clearSelection: (() => void) | null = null;
+	let selectEntries: ThreeViewer['selectEntries'] | null = null;
+	let setHover: ThreeViewer['setHover'] | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
 	let hideButton = $state(false);
@@ -203,8 +205,8 @@
 			events: {
 				// Fires before onMeshMetadataClicked, so picking an object without metadata closes the
 				// previous object's panel instead of leaving it describing the wrong thing.
-				onObjectSelected: closeMetadata,
-				onBackgroundClicked: closeMetadata,
+				onObjectSelected: dropPanelSelection,
+				onBackgroundClicked: dropPanelSelection,
 				onMeshMetadataClicked: config.enableMeshClick
 					? (metadata: Record<string, unknown>) => {
 							if (hasUsefulMetadata(metadata)) {
@@ -236,6 +238,8 @@
 		updateShadowBounds = init.updateShadowBounds;
 		fitToView = init.fitToView;
 		clearSelection = init.clearSelection;
+		selectEntries = init.selectEntries;
+		setHover = init.setHover;
 		projection = init.cameraController.getProjection();
 
 		// Untracked so the host reading `meshes` or config inside its setup can't re-run onMount's teardown.
@@ -388,6 +392,24 @@
 		selectedMeshMetadata = null;
 		selectedMeshName = null;
 	}
+
+	// A click on the canvas replaces whatever the panel selected: one selection at a time.
+	function dropPanelSelection() {
+		closeMetadata();
+		selectedObjects.clear();
+	}
+
+	// Mirrors the panel's selection into the viewport. The size check skips walking the entries for
+	// the common empty case, which also keeps `has()` from subscribing to every key.
+	$effect(() => {
+		if (selectedObjects.size === 0) {
+			selectEntries?.([]);
+			return;
+		}
+		const chosen = outliner?.entries().filter((entry) => selectedObjects.has(entry.key)) ?? [];
+		closeMetadata();
+		selectEntries?.(chosen);
+	});
 
 	function dismissMetadata() {
 		closeMetadata();
@@ -655,7 +677,12 @@
 		{#if sceneManagerOpen && scene && outliner}
 			<Resizable.Handle withHandle />
 			<Resizable.Pane id="scene-manager" order={2} defaultSize={15} minSize={8} maxSize={30}>
-				<SceneManager {outliner} {sceneVersion} onVisibilityChange={() => invalidate?.()} />
+				<SceneManager
+					{outliner}
+					{sceneVersion}
+					onVisibilityChange={() => invalidate?.()}
+					onHover={(entry) => setHover?.(entry?.object ?? null, entry?.memberIndex ?? null)}
+				/>
 			</Resizable.Pane>
 		{/if}
 	</Resizable.PaneGroup>
