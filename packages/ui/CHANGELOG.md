@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 6.6.0-beta.13
+
+### Minor Changes
+
+- b500603: Scene manager: hovering a row outlines that object in the viewport, and selecting rows tints them. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
 ## 6.6.0-beta.12
 
 ### Patch Changes
