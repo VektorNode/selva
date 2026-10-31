@@ -1,6 +1,6 @@
 # Rhino player: open a definition from the panel, without Grasshopper
 
-Builds on [rhino-panel](./rhino-panel.md). Its sibling, [host-aware-elements](./host-aware-elements.md),
+Builds on [rhino-panel](./rhino-panel.md). Its sibling, [host-aware-elements](../features/host-aware-elements.md),
 covers what a UI can do in Rhino that it can't do on Selva yet.
 
 Selva has two audiences inside Rhino. Grasshopper users build a definition and its UI. Rhino users

@@ -1,6 +1,6 @@
 # MCP best practices, checked against Selva's `/mcp`
 
-**Feeds the [MCP package plan](../features/mcp-package.md).** Read 2026-10-19 from the MCP
+**Feeds the [MCP package plan](../archive/mcp-package.md).** Read 2026-10-19 from the MCP
 specification (revision `2026-07-28`), the TypeScript SDK v2 docs, Claude's connector docs and
 Anthropic's tool-design guidance. Sources are at the end.
 

@@ -27,38 +27,51 @@ worth starting. Issues labelled `good first issue` are the small, self-contained
 
 Each plan below links to its tracking issue at the top of the file.
 
-| Plan                                                                            | Tracked in                                                                      |
-| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [api-v1-residuals](./fixes/api-v1-residuals.md)                                 | [#201](https://github.com/VektorNode/selva/issues/201)                          |
-| [host-prerequisites-and-pm2-audit](./fixes/host-prerequisites-and-pm2-audit.md) | [#202](https://github.com/VektorNode/selva/issues/202)                          |
-| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)         | [#203](https://github.com/VektorNode/selva/issues/203) (cheap wins only)        |
-| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)                   | [#208](https://github.com/VektorNode/selva/issues/208) (5 phases)               |
-| [token-plan](./features/token-plan.md)                                          | [#97](https://github.com/VektorNode/selva/issues/97) (epic)                     |
-| [admin-updates-yak-management](./features/admin-updates-yak-management.md)      | [#217](https://github.com/VektorNode/selva/issues/217) — Track A only           |
-| [plugin-compat-gate](./features/plugin-compat-gate.md)                          | [#218](https://github.com/VektorNode/selva/issues/218)                          |
-| [mountable-api](./features/mountable-api.md)                                    | **unfiled** — in flight, handoff is in the plan itself                          |
-| [presolve-bundle](./features/presolve-bundle.md)                                | **unfiled** — parked on a storage decision                                      |
-| [mcp-next](./features/mcp-next.md)                                              | **unfiled**: transport, tool surface, SDK v2, OAuth, evals, apps                |
-| [cloud-binary-transport](./features/cloud-binary-transport.md)                  | **unfiled** — deliberately deferred                                             |
-| [incremental-display](./features/incremental-display.md)                        | **unfiled** — §1 and input-order streams built; §2–4 design only                |
-| [slva-identity](./features/slva-identity.md)                                    | **unfiled** — in flight on `feat/mesh-compression`                              |
-| [live-solve-channel](./features/live-solve-channel.md)                          | **unfiled** — design only; builds on solve-diagnostics                          |
-| [solve-events-structure](./features/solve-events-structure.md)                  | **unfiled** — review defects + event-kind catalog; builds on live-solve-channel |
-| [viewer-hotspots](./features/viewer-hotspots.md)                                | **unfiled** — design only; wire-walk verified live in Rhino                     |
-| [publish-from-plugin](./features/publish-from-plugin.md)                        | **unfiled** — built; the bridge lockdown landed first, in its own commit        |
-| [compute-cleanup-audit](./fixes/compute-cleanup-audit.md)                       | **unfiled** — being worked through directly                                     |
-| [rhino-panel](./features/rhino-panel.md)                                        | **unfiled** — built on `test/rhino-panel`; live gates still open                |
-| [rhino-player](./features/rhino-player.md)                                      | **unfiled** — built on `test/rhino-panel`; live gates still open                |
-| [host-aware-elements](./features/host-aware-elements.md)                        | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |
-| [compute-sessions](./features/compute-sessions.md)                              | **unfiled** — design only; spans the compute fork and Selva                     |
-| [dynamic-value-list-resolution](./features/dynamic-value-list-resolution.md)    | **unfiled** — design only; revises two decisions in dynamic-value-list-loop     |
+| Plan                                                                         | Tracked in                                                                      |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [api-v1-residuals](./fixes/api-v1-residuals.md)                              | [#201](https://github.com/VektorNode/selva/issues/201)                          |
+| [data-access-efficiency-audit](./fixes/data-access-efficiency-audit.md)      | [#203](https://github.com/VektorNode/selva/issues/203) (cheap wins only)        |
+| [dynamic-value-list-loop](./fixes/dynamic-value-list-loop.md)                | [#208](https://github.com/VektorNode/selva/issues/208) (5 phases)               |
+| [token-plan](./features/token-plan.md)                                       | [#97](https://github.com/VektorNode/selva/issues/97) (epic)                     |
+| [admin-updates-yak-management](./features/admin-updates-yak-management.md)   | [#217](https://github.com/VektorNode/selva/issues/217) — Track A only           |
+| [plugin-compat-gate](./features/plugin-compat-gate.md)                       | [#218](https://github.com/VektorNode/selva/issues/218)                          |
+| [presolve-bundle](./features/presolve-bundle.md)                             | **unfiled** — parked on a storage decision                                      |
+| [mcp-next](./features/mcp-next.md)                                           | **unfiled**: transport, tool surface, SDK v2, OAuth, evals, apps                |
+| [cloud-binary-transport](./features/cloud-binary-transport.md)               | **unfiled** — deliberately deferred                                             |
+| [incremental-display](./features/incremental-display.md)                     | **unfiled** — §1 and input-order streams built; §2–4 design only                |
+| [slva-identity](./features/slva-identity.md)                                 | **unfiled** — in flight on `feat/mesh-compression`                              |
+| [live-solve-channel](./features/live-solve-channel.md)                       | **unfiled** — design only; builds on solve-diagnostics                          |
+| [solve-events-structure](./features/solve-events-structure.md)               | **unfiled** — review defects + event-kind catalog; builds on live-solve-channel |
+| [viewer-hotspots](./features/viewer-hotspots.md)                             | **unfiled** — design only; wire-walk verified live in Rhino                     |
+| [publish-from-plugin](./features/publish-from-plugin.md)                     | **unfiled** — built; the bridge lockdown landed first, in its own commit        |
+| [compute-cleanup-audit](./fixes/compute-cleanup-audit.md)                    | **unfiled** — being worked through directly                                     |
+| [host-aware-elements](./features/host-aware-elements.md)                     | **unfiled** — steps 0–3 built; bake and `.3dm` upload not started               |
+| [compute-sessions](./features/compute-sessions.md)                           | **unfiled** — design only; spans the compute fork and Selva                     |
+| [dynamic-value-list-resolution](./features/dynamic-value-list-resolution.md) | **unfiled** — design only; revises two decisions in dynamic-value-list-loop     |
+| [triggers](./features/triggers.md)                                           | **unfiled** — design only                                                       |
+| [webhooks](./features/webhooks.md)                                           | **unfiled** — design only                                                       |
+| [service-accounts](./features/service-accounts.md)                           | **unfiled** — design only                                                       |
+| [notifications](./features/notifications.md)                                 | **unfiled** — package extracted; `notify()` and Selva-side magic links open     |
+| [local-bridge-perf-audit](./fixes/local-bridge-perf-audit.md)                | **unfiled**                                                                     |
 
 The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until
-something unblocks them. mountable-api and slva-identity are the opposite case — they are being
+something unblocks them. slva-identity is the opposite case — it is being
 worked through directly, so the handoff lives in the plan rather than in a tracker.
 
 ## Closed since the last index
+
+- **[rhino-panel](./archive/rhino-panel.md)**, **[rhino-player](./archive/rhino-player.md)**: built and
+  merged (`Plugin/Selva.Panel`).
+- **[host-prerequisites-and-pm2-audit](./archive/host-prerequisites-and-pm2-audit.md)**: items 1–5
+  landed. Still owed by hand: one staging test of admin self-update under pm2 7.
+
+- **[live-solve-channel](./archive/live-solve-channel.md)**, **[solve-events-structure](./archive/solve-events-structure.md)**,
+  **[solve-diagnostics](./archive/solve-diagnostics.md)**: built and verified live on the local bridge
+  and Rhino.Compute.
+- **[publish-from-plugin](./archive/publish-from-plugin.md)**: built, bridge lockdown included.
+- **[mcp-package](./archive/mcp-package.md)**: `@selvajs/mcp` and `/mcp` shipped; the follow-up work
+  is in [mcp-next](./features/mcp-next.md).
 
 Three plans were marked "not started" here while being substantially or entirely finished, and two
 more were listed at paths that no longer exist. All are now accounted for:

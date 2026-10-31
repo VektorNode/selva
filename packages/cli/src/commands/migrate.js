@@ -263,7 +263,7 @@ export async function runMigrate(
 	// here, once, instead of letting doctor nag forever. Deliberately NOT
 	// automated: `pm2 update` recycles the daemon, and doing that unattended
 	// inside a migration converts a mid-flight failure into an outage (see
-	// plans/fixes/host-prerequisites-and-pm2-audit.md).
+	// plans/archive/host-prerequisites-and-pm2-audit.md).
 	const pm2Notice = buildPm2UpgradeNotice(before.dependencies?.pm2, target.dependencies.pm2);
 	if (pm2Notice) p.log.warn(pm2Notice);
 

@@ -9,7 +9,7 @@ definition splits branches (see the unit of resend in §2). Same design locally 
 Rhino.Compute; only the mesh cache needs the Compute process to keep state between requests.
 
 Companions: [cloud-binary-transport](./cloud-binary-transport.md) (the manifest below replaces its
-"blob out of the values JSON" step) and [live-solve-channel](./live-solve-channel.md) (the facts
+"blob out of the values JSON" step) and [live-solve-channel](../archive/live-solve-channel.md) (the facts
 about Compute routing used here come from there).
 
 ## Where we stand

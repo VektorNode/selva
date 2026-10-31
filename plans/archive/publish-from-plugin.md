@@ -10,7 +10,7 @@ sees it.
 Most of the server side exists. `POST /api/v1/definitions` and
 `POST /api/v1/definitions/{guid}/versions` take a multipart upload, accept `selva_` keys and an
 `Idempotency-Key`, and check the file on Rhino.Compute before writing anything. Selva is already
-an OAuth authorization server for MCP clients ([mcp-next.md](./mcp-next.md) step 4), with PKCE
+an OAuth authorization server for MCP clients ([mcp-next.md](../features/mcp-next.md) step 4), with PKCE
 and loopback redirects on any port. What's missing is a scope that allows uploads and nothing
 else, a client identity for the plugin, and the whole plugin side.
 
@@ -149,7 +149,7 @@ anything else gets the usual 403 naming the missing scope.
 The three definition routes declare it in the registry the way solve routes declare `solve`;
 `/compute/schema` checks scope by hand with `assertScope`, so it asks for `upload` there.
 
-This amends [token-plan.md](./token-plan.md), which rejected new actions "as more engine surface
+This amends [token-plan.md](../features/token-plan.md), which rejected new actions "as more engine surface
 than anything needs today". Now something needs it; the decision is changed there, not restated
 here.
 
@@ -204,7 +204,7 @@ private addresses, and a company's Selva is often on one; here the user picked t
 - Default certificate validation, never overridden; the system proxy as it is.
 - A size cap on every JSON response, timeouts on everything, cancellation on upload.
 - `User-Agent: Selva-Grasshopper/<version> (Rhino <version>; <os>)`, so the server can refuse
-  plugin versions it knows are broken ([plugin-compat-gate.md](./plugin-compat-gate.md)).
+  plugin versions it knows are broken ([plugin-compat-gate.md](../features/plugin-compat-gate.md)).
 - Nothing opens in the system browser unless it's an `https` URL on the instance origin built by
   the plugin. A string from the server is never handed to the shell; on Windows that would run
   any registered protocol handler.
@@ -266,7 +266,7 @@ the file went to.
 
 ### Expiry and signing out
 
-Tokens live 30 days with no refresh token, the rule [mcp-next.md](./mcp-next.md) already set. The
+Tokens live 30 days with no refresh token, the rule [mcp-next.md](../features/mcp-next.md) already set. The
 account row shows when sign-in runs out. A 401 with `invalid_token` deletes the stored token and
 asks the user to sign in again.
 
@@ -283,7 +283,7 @@ valid until it expires or is revoked at `/team/tokens`.
 - **The holder rule** that lets upload-only keys go to anyone who can create a definition.
 - **The built-in client** and per-client scope allowlist in `@selvajs/server/oauth`; consent copy
   for `upload`; `upload` in `scopes_supported`.
-- **The org picker on the consent page**, designed in [mcp-next.md](./mcp-next.md) and built
+- **The org picker on the consent page**, designed in [mcp-next.md](../features/mcp-next.md) and built
   here. Consent used the acting org, which is the user's first membership, so a user in two
   orgs could only ever have uploaded to the first. It fixes MCP sign-in for them too.
 - **Consent mints through the core, not `event.fetch`.** The approve action posted to its own
@@ -345,7 +345,7 @@ definition until step 4 lands.
   before the body is parsed, so it has no `scopeTarget` and refuses project keys. A project
   picked at consent would also need a new sign-in for every new project.
 - **Refresh tokens.** The 30-day rule stands until monthly sign-in proves annoying, as in
-  [mcp-next.md](./mcp-next.md).
+  [mcp-next.md](../features/mcp-next.md).
 - **Plain HTTP to a non-loopback instance.** The bearer key would cross the network in clear.
   There's no override.
 - **The link in the UI schema.** The schema is shared with every host; the link belongs to one

@@ -1,7 +1,7 @@
 # ADR 0008: A Per-Document Solve Runtime Owns the Solve, Not the UI Builder
 
 > **Status: Accepted (2026-09-29).** Tracked in the plan
-> [solve-events-structure.md](../../plans/features/solve-events-structure.md). Builds on
+> [solve-events-structure.md](../../plans/archive/solve-events-structure.md). Builds on
 > [ADR 0002](./0002-grasshopper-bridge-seam.md): the solve runtime described here sits below the
 > bridge that ADR splits.
 

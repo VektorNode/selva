@@ -10,9 +10,6 @@
 > **Owed before release:** one staging test of admin self-update under pm2 7. Also unverifiable
 > from source, and worth confirming once by hand: that Dependabot alerts are enabled in the repo
 > settings — item 2's advisory watch depends entirely on that toggle.
->
-> This file stays out of `archive/` only because of that staging test. Archive it once the test
-> has run.
 
 _August 2026. Triggered by an operator question: "I installed the normal Debian
 packages on the server. If Selva brings its own packages, that's duplication —
