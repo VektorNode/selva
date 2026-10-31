@@ -74,7 +74,8 @@ any sender and in front of any consumer without Selva learning about either.
     learns to read a request.
 - **Two auth modes,** set by the trigger's [sender profile](#sender-profiles):
   - **`bearer`** (default): `Authorization: Bearer selvahook_…`. For n8n, Make, Zapier, Power
-    Automate, scripts, and anything else that can set a header. Built on `createTokenCodec`: shown
+    Automate, scripts, Notion's `Send webhook` automation action, and anything else that can set a
+    header. Built on `createTokenCodec`: shown
     once, stored as `HMAC(SELVA_HMAC_KEY, secret)`. The `selvahook_` prefix lets secret scanners
     match it. It must not start with `selva_`: the request hook resolves every `selva_` bearer as
     an API token before any route runs, and refuses it outside `/api/v1/`.
@@ -133,12 +134,29 @@ vendor's own docs, because a preset that verifies nothing is worse than none:
   often carries one, and the preset points `timestamp` at it where it does.
 - **Timestamped HMAC** (Stripe's `t=…,v1=…`, Slack's `v0:{timestamp}:{body}`).
 
+A profile also says where the signing secret comes from. Either Selva makes it and shows it once,
+and the editor pastes it into the sender, or the sender makes it and the editor pastes it into
+Selva, which encrypts it on save. Either way it travels once, by hand, and never in a request. A
+capture handshake is the exception: the sender posts its token once.
+
+A profile needs at least one replay defence, a timestamp or a delivery id. The custom form refuses a
+profile with neither, because a captured request could then be replayed indefinitely.
+
+The verifier is one function driven by the profile, not a branch per vendor. A profile can describe
+any HMAC-SHA256 scheme: the header, how its value is formatted and encoded (`sha256=<hex>`,
+`v1,<base64>`, `t=…,v1=…`), how the key is decoded, the signed content as a template
+(`{timestamp}.{body}`, `{id}.{timestamp}.{body}`), and where the timestamp and delivery id come from.
+A scheme outside that family is new code: a different algorithm, such as HMAC-SHA1 for older senders,
+Ed25519 public-key signatures or signed JWTs, or a different input, such as a signature over the URL
+and form fields. Selva does not detect a sender's scheme, so the editor picks a preset or fills in
+the form.
+
 **Handshakes** are where an unauthenticated request touches a trigger, so they stay narrow. They are
 matched first, and only when the profile declares one:
 
 - **Echo** (Slack's `url_verification`, Microsoft Graph's `validationToken`): the response returns
   the challenge value as `text/plain`, capped in length and charset. Nothing is stored.
-- **Capture** (Notion posts a `verification_token` once; the user pastes it back into Notion, and
+- **Capture** (Notion's integration webhooks post a `verification_token` once; the user pastes it back into Notion, and
   it signs every later delivery): an editor arms the capture from the trigger page, it stays open
   for a few minutes, and it accepts only the handshake's shape. The token becomes the signing secret
   only when the editor confirms it. If more than one arrives, the page shows them all; an injected
@@ -153,7 +171,7 @@ matched first, and only when the profile declares one:
   	"v": 1,
   	"mode": "map",
   	"inputs": {
-  		"<inputId>": { "from": "$.page.properties.Width.number" },
+  		"<inputId>": { "from": "$.order.width_mm" },
   		"<inputId>": {
   			"from": "$.size",
   			"lookup": { "S": "small", "L": "large" },
@@ -187,12 +205,15 @@ matched first, and only when the profile declares one:
   joins, conditionals) belongs in the sender's own tooling, which is built for it. A transform
   language here would be a second product to maintain and a code-execution surface. This is the line
   that keeps the system small without limiting what can be put in front of it: any tool that can
-  emit JSON can drive a definition.
+  emit JSON can drive a definition. The format leaves room to add them without a breaking change;
+  see [Room to grow](#room-to-grow).
 - **Thin payloads need an enrichment step in front.** Many event webhooks carry ids and an event
-  type, not the record: Notion's carries the page id, not its properties. A trigger mapped straight
-  to such a sender can only supply what the event carries. To drive a definition from the record
-  itself, put n8n (or any fetch-then-forward tool) between them: it receives the event, reads the
-  record, and posts flat JSON to the trigger. A fetch step inside Selva would need stored third-party
+  type, not the record: Notion's integration webhooks carry the page id and the ids of the changed
+  properties, not their values. A trigger mapped straight to such a sender can only supply what the
+  event carries. To drive a definition from the record itself, put n8n (or any fetch-then-forward
+  tool) between them: it receives the event, reads the record, and posts flat JSON to the trigger.
+  Notion also has a way round the problem: a database automation's `Send webhook` action posts the
+  properties you pick, with custom headers, so it can call a bearer trigger directly. A fetch step inside Selva would need stored third-party
   credentials and an outbound HTTP surface; it is not in v1.
 - **Values are coerced and validated against the contract:** `ParamType`, min/max, value-list
   options. `"12"` becomes `12` for a number; `"abc"` fails. Failure is a `failed` run with the input
@@ -202,6 +223,60 @@ matched first, and only when the profile declares one:
   when the live version changes is in [Versions and migration](#versions-and-migration).
 - **Typed ports will grow into this.** When inputs gain a `dataType`, the mapping gets a type check
   at save time instead of at run time. The mapping shape does not change.
+
+### Room to grow
+
+A visual mapper, a closed set of transforms, file and geometry inputs and, much later, flows are not
+part of this plan. The format and the API keep them additive, so none of them needs a breaking
+change:
+
+- **A mapping is a versioned document read through one function.** `mapping.v` selects the Zod
+  schema. The server reads every `v` it has shipped, upgrades on read and writes the current one.
+  Management routes accept any supported `v`, so an older client keeps working.
+- **An unknown `v`, `mode` or rule key is refused, never ignored.** The trigger pauses as `broken`
+  with the reason "mapping format not supported". Ignoring a key could widen what a sender controls,
+  and the case is real: a server rolled back after a newer one saved a mapping.
+- **A rule is evaluated in a fixed order:** pick (`from` or `value`), `default` when the pick finds
+  nothing, `lookup`, then coercion and validation against the contract. Transforms would slot in
+  between, and the order would become explicit data in a new `v`. Existing mappings migrate
+  mechanically.
+- **`resolveInputs` is the only evaluator and its result shape is fixed:** resolved inputs, each
+  with where it came from (`payload`, `default` or `constant`), or errors. An error carries the input
+  id, a stable code and a `path` into the mapping document. Codes are append-only, never reused and
+  never contain a value. A mapper UI attaches errors to fields from that path, and a richer
+  evaluator replaces the body without touching a caller.
+- **Response enums are open.** Run `status` and `source`, trigger `status`, error codes and event
+  types can gain values, and the API reference tells clients to tolerate unknown ones.
+- **The hook URL names a trigger and carries no format.** A trigger is the entry point and what it
+  does with a payload sits behind it. A flow would be a new `mode` behind the same URL and secret.
+- **A sample payload is never stored.** A mapper holds it in the browser. If "capture the next
+  delivery" is ever added, it is armed by an editor and deletes itself after minutes, the same
+  pattern as the Notion token capture.
+- **An unsupported type is a missing row in one table.** The table maps each supported `ParamType`
+  to its JSON shape (as JSON Schema), its coercion, and whether resolving it is pure or deferred
+  because it needs I/O. Enabling a type adds a row. A mapping rule keeps its `from` and `value`
+  form, so a saved mapping never changes, and the contract already lists the unsupported inputs, so
+  enabling one fills in a shape and moves nothing.
+- **Files arrive as references, never as bytes in the JSON.** `resolveInputs` stays pure and returns
+  a reference for a `file` input. A deferred step after the run is claimed, under its lease and
+  before the solve, turns the reference into bytes within its own byte and time budget, and fails
+  with an append-only code and the input id. The test action and the save-time check validate a
+  reference's shape and host and never fetch. A reference is a URL, or the id of a file the sender
+  uploaded through an authenticated route, and neither changes the mapping. Multipart is the other
+  candidate. It would need `/api/hooks/` exempted from the form-submission CSRF check, which exempts
+  only `selva_` bearers today.
+- **A fetch from a sender-chosen URL needs more than today's check.**
+  `assertSafeRemoteDefinitionUrl` returns the URL and the fetch resolves the name again, so it can
+  rebind between the two. The fetch has to pin the connection to the validated address, allow only
+  hosts on a per-trigger allowlist, use https only, refuse redirects, and stop at a byte and time cap
+  (`readBodyWithCap` already counts streamed bytes). Accepted formats come from the input, which
+  depends on the saved-schema gap under Typing inputs.
+- **Geometry follows the solve path.** `geometry`, `point`, `line` and `plane` carry no value from
+  the form today, so there is no established value format for a trigger to reuse. Once the solve
+  path takes one, the simple types get small closed JSON shapes in the table, such as a point as
+  `[x, y, z]`, a line as two points, and a plane as an origin and two axes, with finite-number
+  checks. General `geometry` has no sensible inline form and arrives as a file reference in an
+  accepted format, through the same deferred step.
 
 ### Typing inputs from the stored schema
 
@@ -233,9 +308,10 @@ what the trigger types against. No new discovery or plugin work.
   value reaches the cached schema as saved. The validator is a closed table keyed on the exact
   `ParamType` values, and an input whose type isn't in it is unmappable, never coerced as text.
 - **Types that map cleanly:** `number`, `integer`, `boolean`, `text`, `color`, `valueList` (value
-  must be one of the options). `file` takes a URL (see open questions). `geometry`, `point`, `line`,
-  `plane`, `dynamicValueList` and `generic` have no defined JSON form: `map` mode rejects them when
-  the mapping is saved, and `passthrough` can't set them.
+  must be one of the options). Every other type is unsupported: `file`, `geometry`, `point`, `line`,
+  `plane`, `dynamicValueList` and `generic`. `map` mode rejects a rule for one when the mapping is
+  saved, with the code `unsupported_param_type` and the input id, and `passthrough` can't set it.
+  [Room to grow](#room-to-grow) covers adding `file`, `geometry`, `point`, `line` and `plane`.
 - **The effective input contract is `SchemaInput` plus its layout item.** The MCP tools already
   build it: `describeInputs` in `mcp/tools.ts` joins each input to its layout item by `paramId` and
   reads range, step, options and the display name from the widget config. That join moves into
@@ -304,7 +380,13 @@ what the trigger types against. No new discovery or plugin work.
   and the engine doesn't run solves of its own. Same shape and reasoning as the webhook dispatcher:
   no module-level timer, and multi-instance safe by claiming due rows with `for update skip locked`
   on Supabase. One tick claims due schedules, reclaims expired leases, and prunes runs and results.
-- **Missed ticks run once, not once per miss,** after downtime.
+- **Cron is standard five-field syntax** (minute, hour, day of month, month, weekday). A wall-clock
+  time that doesn't exist when clocks jump forward is skipped, and one that happens twice when they
+  go back runs once.
+- **Turning a schedule on starts counting from that moment.** Ticks that came due while it was off
+  are neither run nor recorded.
+- **Missed ticks run once, not once per miss,** after downtime. The run notes how many ticks it
+  stood for.
 
 ### Run records
 
@@ -313,7 +395,7 @@ create table selva.trigger_runs (
   id            uuid primary key default gen_random_uuid(),
   trigger_id    uuid not null references selva.triggers(id) on delete cascade,
   version_id    uuid not null,
-  source        text not null check (source in ('http', 'schedule')),
+  source        text not null check (source in ('http', 'schedule', 'manual')),
   status        text not null
                 check (status in ('pending', 'running', 'succeeded', 'failed', 'skipped')),
   error_code    text,
@@ -487,6 +569,9 @@ optional fields.
 | Input renamed, same id                                 | compatible for id-keyed mappings; flagged                  | migrates; nickname-keyed callers are listed           |
 | Input re-placed in Grasshopper (new id)                | breaking                                                   | paused, with a suggested remap                        |
 
+A rule counts as mapping an input whether it reads the payload or holds a constant `value`, so a
+schedule with a fixed value for a removed input is broken too.
+
 **What a trigger does on a version change.**
 
 - **A trigger follows the live version by default,** and the check runs when a version goes live,
@@ -499,8 +584,9 @@ optional fields.
   is claimed and validates the mapping against that version's contract before solving, so a cron
   tick that lands between a publish and the check still can't solve with a stale mapping. The check
   only moves the status earlier, to a person instead of a 3 a.m. failure.
-- **A paused schedule is visible.** Each missed tick records a `skipped` run with the reason, and the
-  owner is notified once on the transition, not once per tick.
+- **A paused schedule is visible.** Each missed tick records a `skipped` run with the reason, up to
+  a cap per pause. Beyond it the rest collapse into one row with a count, so a per-minute schedule
+  can't fill the table. The owner is notified once on the transition, not once per tick.
 - **A remap is suggested, never applied silently.** When exactly one mapped id disappears and one new
   id appears with the same nickname and `paramType`, the UI offers the remap with a diff.
   Auto-applying it would route a payload field to an input that may mean something else.
@@ -545,10 +631,11 @@ standard, with no new format.
   committed, drift-tested file; per-definition documents are data, not code.
 - **Mapping a `paramType` to JSON Schema:** `number`/`integer` to the same with `minimum`/`maximum`
   from the widget; `boolean`; `text` with `maxLength` and `pattern` from the widget; `valueList` to
-  `oneOf` of `const` and `title`, so the labels travel; `color` to a hex string; `file` to a URI
-  string; `inputStructure` `list` to an array and `tree` to an object keyed by branch path. The
-  Grasshopper `id` rides along as `x-selva-id`, the default as `default`. `stepSize` is a UI hint,
-  not a `multipleOf`, so it goes in `x-selva-step`.
+  `oneOf` of `const` and `title`, so the labels travel; `color` to a hex string; `inputStructure`
+  `list` to an array and `tree` to an object keyed by branch path. The Grasshopper `id` rides along
+  as `x-selva-id`, the default as `default`. `stepSize` is a UI hint, not a `multipleOf`, so it goes
+  in `x-selva-step`. An input whose type has no JSON form yet stays in the contract, flagged
+  `x-selva-unsupported` and without a value schema.
 - **Property names are nicknames,** disambiguated with a short id suffix when two inputs share one
   (Grasshopper doesn't enforce unique nicknames). Both the nickname and the id are accepted on input;
   the saved mapping stores the id.
@@ -575,9 +662,13 @@ standard, with no new format.
   leaked API token that could mint one would leave a door open after the token is revoked. Reading
   and the rest take a session or a token with `write` on the definition. The secret is returned once
   on create and rotate.
-- **A "test" action** takes a sample payload, applies the mapping, and returns the resolved inputs or
-  the validation errors without solving. This is how you build a mapping against a real sender
-  payload.
+- **A "test" action** takes a sample payload and an optional draft `mapping` (the saved one when
+  omitted), and returns the resolved inputs with their sources, or the validation errors with their
+  paths, without solving. This is how you build a mapping against a real sender payload, and all a
+  mapper UI needs from the server to preview a change.
+- **A "run now" action** starts a run from the saved values, for schedule triggers only, since an
+  HTTP trigger has no payload to run with. The run is recorded with source `manual` and refused
+  while the trigger is paused.
 - **Events:** `trigger.created`, `trigger.deleted`, `trigger.secret_rotated`, `trigger.migrated`,
   `trigger.broken`, `trigger.failing`, ids only. Each carries `orgId`, resolved from the definition
   at emit time, which [webhooks.md](./webhooks.md) requires of a deliverable event. These become
@@ -662,9 +753,8 @@ enough for n8n, Make, Zapier and Power Automate, so this is for senders that can
 
 ### 7. Outbound and batches
 
-Webhooks per [webhooks.md](./webhooks.md), a `callbackUrl` on triggers through the dispatcher, file
-inputs by URL once the pinned-connection fetch exists, and the fan-out decision for payloads that
-carry many rows.
+Webhooks per [webhooks.md](./webhooks.md), a `callbackUrl` on triggers through the dispatcher, and
+the fan-out decision for payloads that carry many rows.
 
 ### 8. Typed outputs
 
@@ -672,6 +762,12 @@ Starts when the output typing settles. `SchemaOutput` gains its `dataType`, `der
 the output half, the generators follow, MCP gets richer outputs, and chaining is designed against
 the Arazzo question above. Nothing earlier is reworked: the derivation, the generators and the
 comparison were shaped to take it.
+
+### Not sequenced
+
+File and geometry inputs have their own dependencies and are not a slice. Files wait for the
+pinned-connection fetch and the saved-schema gap, and geometry waits for a value path in the solve
+pipeline. [Room to grow](#room-to-grow) holds what the format reserves for them.
 
 ### Gates for every slice
 
@@ -701,20 +797,33 @@ verifies it with a stock library.
 - **Which service account.** One per org for all triggers, or one per trigger. One per org is less
   to manage, but all its triggers share one compute bucket. One per trigger gives a clean audit
   trail, independent revocation and its own bucket.
-- **File inputs.** A `file` input can't come from a JSON body. Options: a URL the engine fetches, or
-  multipart. Likely URL-only in v1, and it makes a trigger an SSRF surface: a sender chooses the URL.
-  `assertSafeRemoteDefinitionUrl` resolves the host and rejects blocked addresses, and the
-  remote-definition fetch refuses redirects, but the check returns the URL and the fetch resolves it
-  again, so a name can rebind between the two. That helper is not enough here. The fetch also needs
-  the connection pinned to the validated IP, a per-trigger host allowlist, https only, and size and
-  time caps. If that is too much for v1, file inputs wait.
+- **Which row was this?** A run keeps no payload, so a callback can't say which Notion row, order or
+  chair a result belongs to. An optional `reference` in the mapping, a path into the payload capped
+  in length, could be stored on the run and echoed in the poll response and the callback. It is an
+  opaque id for the sender's bookkeeping and is never a solve input.
+- **What does a sender see when a value fails validation?** A 4xx tells the sender at once, but a
+  sender like Notion pauses its whole automation after one failed webhook, so a single bad row would
+  stop every later edit. Answering `202` and recording a failed run keeps the sender running, and the
+  failure shows in the run list and on the poll. The lean is 4xx for authentication, format and cap
+  failures, and `202` with a failed run for value failures. `?wait` then returns the failed status.
+- **What does a trigger do with deliveries while it is still being set up?** Refusing them with
+  `409` makes a sender like Notion pause its automation before the editor has seen one real
+  message. Accepting them as dry runs, which resolve the inputs and record the outcome without
+  solving, shows the editor that the sender is wired up. The lean is a `setup` status that accepts
+  authenticated deliveries as dry runs. The payload itself still needs the armed capture under
+  [Room to grow](#room-to-grow).
+- **Where does an editor see why a sender is refused?** The sender gets a bare `401` by design, so a
+  wrong secret, a stale timestamp and a missing signature header all look the same from outside.
+  Per-trigger hourly counters keyed by reason code would show an editor what is failing, without
+  storing a row per unauthenticated call or any request content.
+- **What if a scheduled run is still going when the next tick is due?** Starting a second run piles
+  work onto Compute when the solve is slow. The lean is to record the tick as `skipped` with the
+  reason "previous run still going", the state a paused schedule already uses.
 - **Query-string secrets.** Dropped for log hygiene. If a real sender needs one, add it as an
   explicit, flagged "weaker" mode with log redaction, not a default.
 - **Secrets in the body.** Microsoft Graph sends a `clientState` value in each notification rather
   than signing it. A third auth kind could compare a secret at a JSON path. It is weaker than a
   signature, since the secret travels with every delivery, so add it only for a real sender.
-- **Geometry inputs** have no sensible JSON form from a no-code tool. Out of scope for v1; the
-  mapping rejects them at save time.
 - **Compute saturation.** The per-trigger concurrency cap bounds one trigger, and the `user:{id}`
   bucket bounds one principal. Nothing bounds an org with many principals, or a burst that fills
   Compute across triggers. Whether that needs a per-org budget depends on real traffic.

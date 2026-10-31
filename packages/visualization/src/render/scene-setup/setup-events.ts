@@ -6,7 +6,6 @@ import type { CameraController } from '../camera-controller.js';
 import { computeContentBounds, isViewerAid } from '../three-helpers.js';
 import { highlightMembers, memberBounds, resolveHitMember } from './merged-picking.js';
 import type { ResolvedOptions } from './defaults.js';
-import { HOVER_COLOR } from './hover-outline.js';
 import type { SelectionTarget } from './viewer.js';
 
 // Tuned against the brightest look (`showcase`, exposure 1.15 + sun 2.6): the highlight has to stay
@@ -19,6 +18,22 @@ const SELECTION_EMISSIVE_INTENSITY = 0.6;
 const SELECTION_MAX_METALNESS = 0.2;
 /** Below this a highlight reads as a ghost, so the selection is forced opaque. */
 const SELECTION_MIN_OPACITY = 1;
+/**
+ * Lighter than the default selection red on purpose: amber and red are close hues under red-green
+ * color blindness, so what tells hover from selected there is brightness.
+ */
+const HOVER_COLOR = '#ffb020';
+/** Linear RGB distance. Closer than this, a tint barely changes the surface. */
+const MIN_TINT_DISTANCE = 0.35;
+/** Taken by a surface already close to the tint. Blue stays distinct under every common deficiency. */
+const FALLBACK_TINT = new THREE.Color('#2f7bff');
+
+function readableTint(material: THREE.Material, tint: THREE.Color): THREE.Color {
+	const base = (material as THREE.MeshStandardMaterial).color as THREE.Color | undefined;
+	if (!base) return tint;
+	const distance = Math.hypot(base.r - tint.r, base.g - tint.g, base.b - tint.b);
+	return distance < MIN_TINT_DISTANCE ? FALLBACK_TINT : tint;
+}
 
 /**
  * Recolors a material clone to mark it selected. Exported for tests: the highlight reads against
@@ -35,9 +50,10 @@ const SELECTION_MIN_OPACITY = 1;
  */
 export function tintForSelection(
 	material: THREE.Material,
-	selectionColor: THREE.Color,
+	color: THREE.Color,
 	isMesh: boolean
 ): void {
+	const selectionColor = readableTint(material, color);
 	if (isMesh && 'emissive' in material) {
 		const mesh = material as THREE.MeshStandardMaterial;
 		mesh.emissive = selectionColor.clone();
@@ -71,7 +87,7 @@ export function setupEventHandlers(
 	fitToView: () => void;
 	clearSelection: () => void;
 	selectEntries: (targets: SelectionTarget[]) => void;
-	setHoverTint: (object: THREE.Object3D | null) => void;
+	setHover: (object: THREE.Object3D | null, memberIndex?: number | null) => void;
 } {
 	const selectedObjects = new Set<THREE.Object3D>();
 	const originalMaterials = new Map<THREE.Object3D, THREE.Material | THREE.Material[]>();
@@ -124,21 +140,53 @@ export function setupEventHandlers(
 	let hoverObject: (THREE.Object3D & { material?: THREE.Material | THREE.Material[] }) | null =
 		null;
 	let hoverOriginal: THREE.Material | THREE.Material[] | null = null;
+	let hoverMember: { restore: () => void; material: THREE.Material } | null = null;
+
+	// If the object left the scene, no traversal can reach the original material just restored to
+	// it, so dispose it here. Compute content is cleared wholesale per solve, so a detached object's
+	// material has no surviving sharers.
+	const disposeIfDetached = (
+		object: THREE.Object3D,
+		original: THREE.Material | THREE.Material[]
+	) => {
+		let root = object;
+		while (root.parent) root = root.parent;
+		if (root === scene) return;
+		if (original instanceof THREE.Material) original.dispose();
+		else original.forEach((m) => m.dispose());
+	};
 
 	const clearHover = () => {
+		hoverMember?.restore();
+		hoverMember?.material.dispose();
+		hoverMember = null;
 		if (hoverObject && hoverOriginal) {
 			const clone = hoverObject.material;
 			if (clone instanceof THREE.Material) clone.dispose();
 			hoverObject.material = hoverOriginal;
+			disposeIfDetached(hoverObject, hoverOriginal);
 		}
 		hoverObject = null;
 		hoverOriginal = null;
 	};
 
-	/** Hover for what can't be outlined. Yields to a selection already tinting the same object. */
-	const setHoverTint = (object: THREE.Object3D | null) => {
+	/**
+	 * Previews an outliner row in the viewport. Fires no events, and yields to a selection already
+	 * tinting the same thing.
+	 */
+	const setHover = (object: THREE.Object3D | null, memberIndex: number | null = null) => {
 		clearHover();
-		if (!object || selectedObjects.has(object)) return;
+		if (!object) return;
+
+		if (memberIndex !== null && object instanceof THREE.Mesh) {
+			const material = getBaseMaterial(object).clone();
+			tintForSelection(material, hoverColorObj, true);
+			const members = new Set([memberIndex]);
+			hoverMember = { restore: highlightMembers(object, members, material, 'hover'), material };
+			return;
+		}
+
+		if (selectedObjects.has(object)) return;
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
 		if (!(target.material instanceof THREE.Material)) return;
 		const clone = target.material.clone();
@@ -166,15 +214,7 @@ export function setupEventHandlers(
 				restorable.material = original;
 				originalMaterials.delete(obj);
 
-				// If the object left the scene while selected, no traversal can reach the original
-				// material we just restored — dispose it here. Compute content is cleared wholesale
-				// per solve, so a detached object's material has no surviving sharers.
-				let root: THREE.Object3D = obj;
-				while (root.parent) root = root.parent;
-				if (root !== scene) {
-					if (original instanceof THREE.Material) original.dispose();
-					else original.forEach((m) => m.dispose());
-				}
+				disposeIfDetached(obj, original);
 			}
 		});
 		selectedObjects.clear();
@@ -404,5 +444,5 @@ export function setupEventHandlers(
 		clearSelection();
 	};
 
-	return { dispose, fitToView, clearSelection, selectEntries, setHoverTint };
+	return { dispose, fitToView, clearSelection, selectEntries, setHover };
 }

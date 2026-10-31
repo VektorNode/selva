@@ -46,5 +46,6 @@ export {
 	getBaseMaterial,
 	setMemberHighlight,
 	clearMemberHighlight,
+	type HighlightKind,
 	onMemberDrawChange
 } from './merged-draw.js';

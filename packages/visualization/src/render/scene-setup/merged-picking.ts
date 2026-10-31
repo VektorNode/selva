@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 
-import { clearMemberHighlight, setMemberHighlight } from '../../shared/index.js';
+import {
+	clearMemberHighlight,
+	setMemberHighlight,
+	type HighlightKind
+} from '../../shared/index.js';
 
 // ============================================================================
 // Picking inside a merged mesh
@@ -91,8 +95,9 @@ export function memberBounds(mesh: THREE.Mesh, member: PickableMember): THREE.Bo
 export function highlightMembers(
 	mesh: THREE.Mesh,
 	members: ReadonlySet<number>,
-	highlight: THREE.Material
+	highlight: THREE.Material,
+	kind?: HighlightKind
 ): () => void {
-	setMemberHighlight(mesh, members, highlight);
-	return () => clearMemberHighlight(mesh);
+	setMemberHighlight(mesh, members, highlight, kind);
+	return () => clearMemberHighlight(mesh, kind);
 }

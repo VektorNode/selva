@@ -14,6 +14,13 @@ const RED = new THREE.Color('#ff0000');
 const wall = () => new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.8 });
 
 describe('tintForSelection', () => {
+	it('switches to the fallback on a surface already close to the tint', () => {
+		const material = new THREE.MeshStandardMaterial({ color: '#e00000' });
+		tintForSelection(material, RED, true);
+
+		expect(material.emissive.b).toBeGreaterThan(material.emissive.r);
+	});
+
 	it('moves a white surface most of the way to the selection color', () => {
 		const material = wall();
 		tintForSelection(material, RED, true);

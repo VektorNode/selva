@@ -97,8 +97,8 @@ export interface ThreeViewer {
 	 */
 	selectEntries: (targets: SelectionTarget[]) => void;
 	/**
-	 * Outlines one object, or one member of a merged mesh, as a preview (an outliner row under the
-	 * pointer). `null` clears it. Lines and points have no outline, so they tint instead.
+	 * Tints one object, or one member of a merged mesh, as a preview (an outliner row under the
+	 * pointer), lighter than a selection. `null` clears it. A selected object keeps its selection tint.
 	 */
 	setHover: (object: THREE.Object3D | null, memberIndex?: number | null) => void;
 	/**

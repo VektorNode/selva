@@ -130,7 +130,7 @@ describe('setupEventHandlers click vs double-click', () => {
 	});
 });
 
-describe('setupEventHandlers hover tint', () => {
+describe('setupEventHandlers hover', () => {
 	const config = {
 		events: { enableClickToFocus: true, selectionColor: '#ff0000' }
 	} as unknown as ResolvedOptions;
@@ -144,13 +144,13 @@ describe('setupEventHandlers hover tint', () => {
 		const original = cube.material;
 		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
 
-		handlers.setHoverTint(cube);
+		handlers.setHover(cube);
 		expect(cube.material).not.toBe(original);
 
-		handlers.setHoverTint(other);
+		handlers.setHover(other);
 		expect(cube.material).toBe(original);
 
-		handlers.setHoverTint(null);
+		handlers.setHover(null);
 		handlers.dispose();
 	});
 
@@ -163,7 +163,7 @@ describe('setupEventHandlers hover tint', () => {
 		fire('mousedown', CENTRE);
 		fire('click', CENTRE);
 		const selected = cube.material;
-		handlers.setHoverTint(cube);
+		handlers.setHover(cube);
 
 		expect(cube.material).toBe(selected);
 		handlers.dispose();
@@ -184,6 +184,22 @@ describe('setupEventHandlers selectEntries', () => {
 		];
 		return mesh;
 	}
+
+	it('hovers one merged member beside a selected one, and restores only the hover', () => {
+		const { canvas } = fakeCanvas();
+		const scene = sceneWithCube();
+		const merged = mergedMesh();
+		scene.add(merged);
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		handlers.selectEntries([{ object: merged, memberIndex: 0 }]);
+		handlers.setHover(merged, 2);
+		expect(merged.material).toHaveLength(3);
+
+		handlers.setHover(null);
+		expect(merged.material).toHaveLength(2);
+		handlers.dispose();
+	});
 
 	it('tints every target and restores them when replaced', () => {
 		const { canvas } = fakeCanvas();
