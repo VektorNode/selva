@@ -13,6 +13,7 @@
  * build time.
  */
 
+import { isEncryptedSecret } from '@selvajs/platform/computeServer';
 import { isLinkLocalUrl } from './safe-url.js';
 import { apiError, ApiErrorCode } from '../api/errors.js';
 
@@ -94,6 +95,10 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 		assertUsableServerUrl(s.serverUrl);
 		if (s.apiKey !== undefined && s.apiKey !== null && typeof s.apiKey !== 'string')
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a string, null, or omitted');
+		// Clients never receive stored keys, so an envelope here is someone else's
+		// ciphertext being replayed against a URL they control.
+		if (s.apiKey && isEncryptedSecret(s.apiKey))
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a plaintext key');
 	}
 }
 

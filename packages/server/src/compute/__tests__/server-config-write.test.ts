@@ -125,3 +125,19 @@ describe('validateIncomingServers — SSRF guard on serverUrl', () => {
 		expect(() => validateIncomingServers([server({ serverUrl })])).not.toThrow();
 	});
 });
+
+describe('validateIncomingServers apiKey', () => {
+	const server = { id: 's', label: 'x', serverUrl: 'http://compute.example' };
+
+	it('refuses ciphertext, which a client has no business sending back', () => {
+		for (const apiKey of ['enc:v1:abc', 'enc:v2:abc']) {
+			expect(() => validateIncomingServers([{ ...server, apiKey }])).toThrow(/apiKey/);
+		}
+	});
+
+	it('accepts a plain key, null and omitted', () => {
+		for (const apiKey of ['plain', null, undefined]) {
+			expect(() => validateIncomingServers([{ ...server, apiKey }])).not.toThrow();
+		}
+	});
+});

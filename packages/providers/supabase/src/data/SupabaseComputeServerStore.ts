@@ -17,15 +17,10 @@ import { decryptSecret, encryptSecret, isEncryptedSecret } from '@selvajs/platfo
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 
-// Two separate literal column lists rather than one computed from a flag:
-// supabase-js infers the row type from the literal string, so building it
-// dynamically would degrade the type to `string`. The default list omits
-// `api_key` — decrypting costs one call per row, and `getConfig` normally
-// only needs to report whether a key is set.
+// Sessions have no SELECT on `api_key`, so this list is all a session can read.
+// Keys come from `readApiKeys`, after RLS has said which servers the caller sees.
 const SERVER_COLUMNS =
 	'id, scope, owner_org_id, shared_with_all, label, server_url, timeout_ms, retry_count, has_api_key';
-const SERVER_COLUMNS_WITH_KEY =
-	'id, scope, owner_org_id, shared_with_all, label, server_url, timeout_ms, retry_count, has_api_key, api_key';
 const SHARE_COLUMNS = 'server_id, org_id';
 const ORG_DEFAULT_COLUMNS = 'org_id, default_server_id';
 
@@ -65,9 +60,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		const withKeys = opts.includeApiKeys === true;
 
 		const [serversRes, sharesRes, orgDefRes, platDefRes] = await Promise.all([
-			withKeys
-				? client.from('compute_servers').select(SERVER_COLUMNS_WITH_KEY)
-				: client.from('compute_servers').select(SERVER_COLUMNS),
+			client.from('compute_servers').select(SERVER_COLUMNS),
 			client.from('compute_server_shares').select(SHARE_COLUMNS),
 			client.from('compute_server_org_defaults').select(ORG_DEFAULT_COLUMNS),
 			client
@@ -89,9 +82,9 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			sharedByServer.set(row.server_id, list);
 		}
 
-		const servers = (serversRes.data ?? []).map((row) =>
-			rowToServer(withKeys ? this.decryptRowApiKey(row) : row, sharedByServer, withKeys)
-		);
+		const rows: ServerRow[] = serversRes.data ?? [];
+		const keyed = withKeys ? await this.withApiKeys(rows) : rows;
+		const servers = keyed.map((row) => rowToServer(row, sharedByServer, withKeys));
 
 		const orgDefaults: Record<string, string> = {};
 		for (const row of orgDefRes.data ?? []) {
@@ -112,8 +105,16 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	 * yields `undefined` rather than throwing.
 	 */
 	async getServerApiKey(ctx: RequestContext, serverId: string): Promise<string | undefined> {
-		const { data, error } = await this.clients
+		const { data: visible, error: visibleError } = await this.clients
 			.forRequest(ctx)
+			.from('compute_servers')
+			.select('id')
+			.eq('id', serverId)
+			.maybeSingle();
+		if (visibleError) throw mapPostgrestError(visibleError);
+		if (!visible) return undefined;
+
+		const { data, error } = await this.clients.serviceClient
 			.from('compute_servers')
 			.select('id, label, api_key')
 			.eq('id', serverId)
@@ -121,6 +122,21 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		if (error) throw mapPostgrestError(error);
 		if (!data) return undefined;
 		return this.decryptRowApiKey(data as ServerRow).api_key ?? undefined;
+	}
+
+	/** `rows` must come from a session read: this reaches keys with the service role. */
+	private async withApiKeys(rows: ServerRow[]): Promise<ServerRow[]> {
+		if (rows.length === 0) return rows;
+		const { data, error } = await this.clients.serviceClient
+			.from('compute_servers')
+			.select('id, label, api_key')
+			.in(
+				'id',
+				rows.map((r) => r.id)
+			);
+		if (error) throw mapPostgrestError(error);
+		const keys = new Map((data ?? []).map((r) => [r.id as string, r.api_key as string | null]));
+		return rows.map((row) => this.decryptRowApiKey({ ...row, api_key: keys.get(row.id) ?? null }));
 	}
 
 	async savePlatformServers(
@@ -241,21 +257,19 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	// ==========================================================================
 
 	/**
-	 * Encrypt a server's `apiKey` before it is written to the DB. Idempotent —
-	 * an already-enveloped value is passed through, so a round-trip (read →
-	 * save) never double-encrypts. Throws if the store was built without a key
-	 * but a real secret needs writing, so we never silently persist plaintext.
+	 * Encrypt a server's `apiKey` before it is written to the DB, bound to its id.
+	 * Throws on a value that is already an envelope, and if the store was built
+	 * without a key, so we never silently persist plaintext.
 	 */
 	private encryptServerApiKey(s: ComputeServerConfig): ComputeServerConfig {
 		if (!s.apiKey) return s;
-		if (isEncryptedSecret(s.apiKey)) return s;
 		if (!this.secretKey) {
 			throw new Error(
 				'Cannot store a compute-server apiKey: SELVA_AT_REST_KEY is not configured. ' +
 					'Set it so secrets are encrypted at rest.'
 			);
 		}
-		return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey) };
+		return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey, s.id) };
 	}
 
 	/**
@@ -283,7 +297,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			return { ...row, api_key: null };
 		}
 		try {
-			return { ...row, api_key: decryptSecret(row.api_key, this.secretKey) };
+			return { ...row, api_key: decryptSecret(row.api_key, this.secretKey, row.id) };
 		} catch (cause) {
 			this.logger.warn(
 				'Could not decrypt api_key: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
@@ -335,7 +349,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				continue;
 			}
 			try {
-				decryptSecret(apiKey, this.secretKey);
+				decryptSecret(apiKey, this.secretKey, id);
 			} catch (cause) {
 				failures.push({
 					serverId: id,
@@ -357,7 +371,7 @@ interface ServerRow {
 	shared_with_all: boolean;
 	label: string;
 	server_url: string;
-	/** Absent unless the row was read with `SERVER_COLUMNS_WITH_KEY`. */
+	/** Absent unless the row went through `withApiKeys`. */
 	api_key?: string | null;
 	/** Generated column — true when a key is stored, without reading it. */
 	has_api_key?: boolean;
@@ -380,8 +394,6 @@ function rowToServer(
 		label: row.label,
 		serverUrl: row.server_url,
 		apiKey: withKey ? (row.api_key ?? undefined) : undefined,
-		// Prefer the generated column; fall back to the key itself for rows read
-		// with the key-bearing projection on a DB predating the column.
 		hasApiKey: row.has_api_key ?? !!row.api_key,
 		timeoutMs: row.timeout_ms ?? undefined,
 		retryCount: row.retry_count ?? undefined

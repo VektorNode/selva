@@ -112,7 +112,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				);
 			}
 			try {
-				return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey) };
+				return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey, s.id) };
 			} catch (cause) {
 				this.logger.warn(
 					'Could not decrypt apiKey: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
@@ -154,7 +154,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				continue;
 			}
 			try {
-				decryptSecret(s.apiKey, this.secretKey);
+				decryptSecret(s.apiKey, this.secretKey, s.id);
 			} catch (cause) {
 				failures.push({
 					serverId: s.id,
@@ -171,8 +171,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 	private encryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
 		return servers.map((s) => {
 			if (!s.apiKey) return s;
-			if (isEncryptedSecret(s.apiKey)) return s;
-			return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey) };
+			return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey, s.id) };
 		});
 	}
 

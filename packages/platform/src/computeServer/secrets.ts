@@ -3,13 +3,17 @@ import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 const ALGO = 'aes-256-gcm';
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
-const PREFIX = 'enc:v1:';
+const PREFIX_V1 = 'enc:v1:';
+const PREFIX_V2 = 'enc:v2:';
 
 /**
  * AES-256-GCM envelope for at-rest secrets (e.g. compute API keys).
  *
- * Wire format: `enc:v1:<base64(iv|tag|ciphertext)>`. The version prefix lets
- * a future migration to a new algorithm tell old and new envelopes apart.
+ * Wire format: `enc:v2:<base64(iv|tag|ciphertext)>`. `v2` authenticates the
+ * record the secret belongs to as AAD, so ciphertext copied onto another record
+ * fails to decrypt instead of handing the plaintext to that record's URL.
+ * `enc:v1:` envelopes have no AAD and still read: a store rewrites them as `v2`
+ * on its next save.
  *
  * Defends against backup leaks, accidental file/DB sharing, and read-only
  * storage access — not against an attacker who also has the master key
@@ -21,10 +25,11 @@ const PREFIX = 'enc:v1:';
  */
 
 export function isEncryptedSecret(value: string): boolean {
-	return value.startsWith(PREFIX);
+	return value.startsWith(PREFIX_V1) || value.startsWith(PREFIX_V2);
 }
 
-export function encryptSecret(plaintext: string, key: Buffer): string {
+/** Pass `aad` to bind the secret to its record. {@link decryptSecret} then needs the same value. */
+export function encryptSecret(plaintext: string, key: Buffer, aad?: string): string {
 	if (key.length !== 32) {
 		throw new Error(`Secret key must be 32 bytes; got ${key.length}`);
 	}
@@ -33,24 +38,32 @@ export function encryptSecret(plaintext: string, key: Buffer): string {
 	}
 	const iv = randomBytes(IV_BYTES);
 	const cipher = createCipheriv(ALGO, key, iv);
+	if (aad !== undefined) cipher.setAAD(Buffer.from(aad, 'utf8'));
 	const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
 	const tag = cipher.getAuthTag();
-	return PREFIX + Buffer.concat([iv, tag, ciphertext]).toString('base64');
+	const prefix = aad === undefined ? PREFIX_V1 : PREFIX_V2;
+	return prefix + Buffer.concat([iv, tag, ciphertext]).toString('base64');
 }
 
-export function decryptSecret(envelope: string, key: Buffer): string {
+/** `aad` is ignored for an `enc:v1:` envelope and required for an `enc:v2:` one. */
+export function decryptSecret(envelope: string, key: Buffer, aad?: string): string {
 	if (key.length !== 32) {
 		throw new Error(`Secret key must be 32 bytes; got ${key.length}`);
 	}
 	if (!isEncryptedSecret(envelope)) {
 		throw new Error('Value is not an encrypted secret envelope');
 	}
-	const buf = Buffer.from(envelope.slice(PREFIX.length), 'base64');
+	const bound = envelope.startsWith(PREFIX_V2);
+	if (bound && aad === undefined) {
+		throw new Error('This secret is bound to a record: pass its id');
+	}
+	const buf = Buffer.from(envelope.slice(PREFIX_V2.length), 'base64');
 	const iv = buf.subarray(0, IV_BYTES);
 	const tag = buf.subarray(IV_BYTES, IV_BYTES + TAG_BYTES);
 	const ciphertext = buf.subarray(IV_BYTES + TAG_BYTES);
 	const decipher = createDecipheriv(ALGO, key, iv);
 	decipher.setAuthTag(tag);
+	if (bound) decipher.setAAD(Buffer.from(aad as string, 'utf8'));
 	return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
 }
 
