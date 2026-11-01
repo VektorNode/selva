@@ -264,6 +264,17 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got!.updatedAt >= created.updatedAt).toBe(true);
 		});
 
+		it('update with null tags clears them', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, tags: ['roof'] }));
+
+			await store.update(ctx(scope.ownerId), guid, { tags: null });
+			const got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.tags ?? []).toEqual([]);
+		});
+
 		it('solveCacheLimit round-trips: absent → inherit, set → value, null → cleared', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();

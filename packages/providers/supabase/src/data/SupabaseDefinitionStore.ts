@@ -512,7 +512,7 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.displayName !== undefined) row.display_name = patch.displayName;
 	if (patch.description !== undefined) row.description = patch.description;
 	if (patch.category !== undefined) row.category = patch.category;
-	if (patch.tags !== undefined) row.tags = patch.tags;
+	if (patch.tags !== undefined) row.tags = patch.tags ?? [];
 	if (patch.coverImage !== undefined) row.cover_image = patch.coverImage;
 	if (patch.projectId !== undefined) row.project_id = patch.projectId;
 	if (patch.computeServerId !== undefined) row.compute_server_id = patch.computeServerId;
