@@ -1,5 +1,145 @@
 # @selvajs/server
 
+## 2.0.0-beta.15
+
+### Major Changes
+
+- 5ab63df: A clean-up major for the platform contract. Adapters and direct consumers need the changes below. No behaviour changes for an app that only uses the routes.
+
+  Changed signatures:
+
+  - `IStorageProvider.put` returns the path it stored at, since images are rewritten to `.webp`. An adapter has to return it; a caller can use it instead of guessing.
+  - `IInviteStore.markAccepted` returns `true` when this call accepted the invite and `false` when it was already accepted or is gone.
+
+  Removed:
+
+  - `IOAuthAuth.refreshSession`. Use `auth.sessionRefresh?.refreshSession(...)`.
+  - `orgPaths.privateAsset`, `requireCanViewOrg` from `@selvajs/server`, and the `org` value of `AssetVisibility` and `AssetScope`. No asset class serves those paths.
+  - `orgServersFor`, `isPublicAssetPath`, `COVER_IMAGE_EXTENSIONS`, `ALLOWED_UPLOAD_EXTENSIONS`, `DefinitionVersionSchema` and `DefinitionFileExtSchema`, which nothing used.
+
+  No longer exported, though still used inside the package: `ApiTokenRevokeReasonSchema`, `IMAGE_MAX_WIDTH`, `IMAGE_WEBP_QUALITY`, `isImageUpload`, `toWebpPath`, `AssetVisibility`, `AssetScope`, `AssetClass`, `AssetMatch`, `ALL_ORG_ASSET_KINDS`, `CreateOrgInput`, `UpdateOrgInput`, `DefinitionChannelSchema`, `UUID_REGEX`, `PlatformProjectGrantSchema`, `PlatformProjectGranteeTypeSchema`, `PlatformProjectGranteeType`, `AuditUpdate` and `AuditSoftDelete`.
+
+  The root barrel now re-exports each area with `export *`, so a new export reaches it without a second edit. Secret crypto stays out of it, on `@selvajs/platform/computeServer`. `OPERATOR_PLATFORM_PERMISSIONS` is also on `@selvajs/platform/permissions`.
+
+### Minor Changes
+
+- 6efcd98: Erasing a user no longer takes shared data with them, and a compute save can no longer lose servers, keys or defaults.
+
+  Erasure on Supabase: `owner_id` on orgs, projects and definitions and `uploaded_by` on versions now go null when the user is deleted, and the stores read that as the erased actor. An org, or a project someone else works in, used to be deleted along with its creator, and the uploader of someone else's live version couldn't be erased at all. `DELETE /api/admin/users/[id]` now answers 409 for the only owner of an org: make someone else an owner, or delete the org, first.
+
+  Compute saves:
+
+  - On Supabase, `savePlatformServers` and `saveOrgServers` run in one transaction, through the new `save_platform_compute_servers` and `save_org_compute_servers` RPCs. A failed save leaves the stored set alone, and an unchanged server keeps its org defaults.
+  - `validateIncomingServers` refuses a server id that isn't a UUID, a repeated id, a `timeoutMs` outside 1000 to 300000 and a `retryCount` outside 0 to 5. An id already used by another org or the platform answers 409 on Supabase.
+  - A save that leaves `apiKey` out for a key that can't be decrypted answers 409 instead of overwriting the ciphertext. Restore `SELVA_AT_REST_KEY`, or send a new key.
+
+  Apply this release's migrations: run `npx selva-supabase`, then `npx supabase db push`. Local deployments with a hand-written, non-UUID server id have to give it a UUID before they can save compute config.
+
+- ff7e2a0: Image uploads have limits, stored images match the docs, and deleted orgs and projects take their blobs with them.
+
+  - `transcodeImageIfNeeded` refuses more than 60 MP, stops after 10 seconds, runs two at a time and checks the real format, so a small upload can no longer eat gigabytes or seconds of CPU. SVG has to be declared as SVG. Anything it won't process throws `ProviderError(422)` rather than a 500.
+  - Stored images apply EXIF orientation and fit within 1200px on both sides, not only the width.
+  - A declared content type now beats the file extension: a PDF named `x.png` is stored as a PDF.
+  - `IStorageProvider.put`'s doc now states that images are stored as WebP at a rewritten path, as part of the contract.
+  - `deletePrefix` refuses an empty prefix and `/` on both providers, and the Supabase listing pages past 1000 entries.
+  - `SupabaseStorageProvider` keeps any unclassified path in the private bucket.
+  - `GuidSchema` lowercases, so one GUID can't become two records on local.
+  - The `definition-cover` class matches `cover.webp` only, and the unused `org-private` class is gone, along with its branch in `/api/files`. `orgPaths.privateAsset` is deprecated.
+  - `deleteProjectWithBlobs` and `deleteOrgWithBlobs` in `@selvajs/server/projects` wipe blobs on delete, and every delete route uses them.
+
+### Patch Changes
+
+- b6935ce: Access-rule fixes and closed races.
+
+  - `canCreateDefinition` on a commons project now requires `canView`. With `ALLOW_CROSS_ORG_PUBLIC` off, someone outside the org can't upload to a commons project, or move a definition into one.
+  - `canView` passes for a project member at any non-`platform` visibility, so an outside `instance_admin` who reclaimed a project can open it.
+  - `hasPermission` is false for a share-link context, which runs as `system` only to pick the service-role client.
+  - With `ENABLE_PLATFORM_PROJECTS` off, `instance_admin` can no longer edit or delete a platform project.
+  - Two admins deleting each other no longer leave the instance with none: the delete revokes first, through the atomic `set`, and restores the permissions if the delete doesn't happen.
+  - Two project owners demoting or removing each other no longer leave zero owners.
+  - `PATCH /api/admin/users/[id]` refuses to make a disabled user an instance admin.
+  - Accepting an invite adds its platform permissions to what the user already holds instead of replacing them.
+  - A double submit on accept-invite creates one account on local and header-auth, and local `markAccepted` emits once.
+
+- 817af19: Stored compute ciphertext can no longer be replayed to decrypt someone else's API key.
+
+  - `encryptSecret` and `decryptSecret` take an optional `aad`. With it, `encryptSecret` writes an `enc:v2:` envelope bound to that value. `enc:v1:` envelopes still read, and a store rewrites them as `v2` the next time their server is saved.
+  - Both compute stores bind each key to its server id and refuse a value that's already an envelope, instead of passing it through.
+  - `validateIncomingServers` rejects an `apiKey` that looks like an envelope, on both the admin and org compute routes.
+  - On Supabase, sessions can no longer select `compute_servers.api_key`. The store reads keys with the service role, and only for servers the session's own read can see.
+
+  Apply this release's migration: run `npx selva-supabase`, then `npx supabase db push`. Host apps that select `api_key` with a session JWT have to move that read behind the service role.
+
+- cc081b1: Two admins demoting each other on Supabase no longer deadlock. One now gets `last_admin` rather than a 500. Apply this release's migration: run `npx selva-supabase`, then `npx supabase db push`.
+
+  New in `@selvajs/platform`, none of it breaking:
+
+  - `COMPUTE_TIMEOUT_DEFAULT_MS`, `COMPUTE_TIMEOUT_MIN_MS`, `COMPUTE_TIMEOUT_MAX_MS` and `COMPUTE_RETRY_MAX`, plus `clampTimeoutMs` and `clampRetryCount`, so the settings forms and the server agree on one set of limits.
+  - `pickServer`, for a caller that holds an already-filtered server list.
+  - `decodeOffsetCursor`, `encodeOffsetCursor` and `clampPageLimit`, which both providers now use. A `NaN` limit reads as the default.
+  - `assertCanAccessProfile` and `MAX_RECENT_RUNS` from `@selvajs/platform/userProfile`, for adapter authors.
+  - `runOAuthAuthConformance` and `runAuditQueryConformance` in `@selvajs/platform/testing`.
+  - `defineConfig` keeps the type you pass it.
+
+- 35e5c67: Interface docs now match what providers do, and the conformance suites test more of it.
+
+  - Contract docs cover `hasInstanceAdmin` and disabled users, plaintext keys at rest, `saveOrgServers` ignoring non-org entries (local now does what Supabase does), share-link reads and `revoke`, default list order, `rate_limited`, the delegated-session lifetime and the delete order.
+  - `DefinitionChannel` and `PlatformProjectGranteeType` derive from their schemas.
+  - `SupabaseAuditQuery` treats a fractional limit below 1 as 1.
+  - Saving a definition cover gives it a new URL, so caches don't keep the old one.
+  - The tarball no longer ships source maps that point at sources it doesn't include.
+  - `@selvajs/platform/permissions` exports `assertCanReadPermissions`, `assertCanReadPermissionsBatch` and `assertCanManagePermissions` for adapter authors, and both bundled permission stores use them.
+
+  Conformance changes for adapter authors:
+
+  - `runAuthCoreConformance` and `runPasswordAuthConformance` are new, and `runAuthProviderConformance` wraps them. Pass `passwordless` to run the core alone, and `selfRegistration` to test `registerUser`.
+  - `listByOrg` cases run only with `orgRoster: true`, and show as skipped otherwise instead of passing with no assertion.
+  - `runOrgStoreConformance` and `runProjectStoreConformance` take `seedOutsider`, and the definition scope takes `privateProjectId`, for the ctx-isolation cases.
+  - `runEmailLinkAuthConformance` no longer takes `validEmail`, and `sendMagicLink` on an invalid address must answer `invalid_email`.
+  - `removeOrgMember` on a non-member, `saveOrgServers` with a non-org entry, `markAccepted` keeping its first acceptor, and `tryIncrementSolveCount` under concurrency are now tested, along with compute key reads and `recordRun`. `delete` on an unknown grant id is no longer pinned to throw.
+
+- 77780c7: Smaller fixes across the platform package and its consumers.
+
+  - The solve-metric cap now counts batches waiting to be written, so a hung backend can't grow memory past `maxBufferSize`, and dropped rows are logged.
+  - `@selvajs/platform` declares `sideEffects: false` and no longer names `sharp` statically, so the root barrel bundles for the browser. `instanceof ProviderError` works across two installed copies.
+  - SMTP failures log an error code and a keyed hash of the recipient instead of the address and the raw server message, and `SendResult.reason` carries the code.
+  - `scopeConfigToOrg` drops an org default the org can't see.
+  - `decodeSecretKey` trims whitespace and refuses junk-padded input or a passphrase that isn't really base64.
+  - `slugify` folds accents and never ends in a hyphen. A renamed project with no usable letters keeps its slug. New `orgSlugFromName` moves an org off a reserved word, and setup and bootstrap use it.
+  - `RESERVED_SLUGS` now matches the route tree: `docs`, `mcp` and `oauth` are in, `settings` is out, and a test holds it there.
+  - Org and definition names are trimmed, so a name of only spaces is refused.
+  - `withCacheBust` puts the token before a fragment.
+  - Session refresh uses `auth.sessionRefresh` first, so a provider without OAuth is refreshed too.
+  - `canEdit`, `canManage` and `canEditProjectSettings` refuse a null project, `canEditDefinition` checks the definition belongs to the project, and `canView` on an `org` project requires acting as that org.
+
+- 1fb3914: Row-level security now enforces the access rules on its own, so a user holding a session JWT can't get around them by calling PostgREST directly.
+
+  - Pending invites can't be edited apart from being accepted, and minting one is held to `canChangeOrgRole` and the instance-admin rule for platform permissions.
+  - `org_members` writes follow `canChangeOrgRole`: an admin can no longer promote themselves or change an owner.
+  - A departed member can't reactivate a project owner row or edit, share or revoke on a commons project. An outsider can still finish a first upload to a public commons.
+  - `user_profiles` reads are limited to yourself and people who share an org with you.
+  - API-token sessions stay inside their token's org on every membership check.
+
+  Removing an org member now ends their access to private projects the acting admin can't see, through the new `remove_org_member` RPC. Reclaim reaches those projects too, and the orphaned-project report includes them.
+
+  The share-link roster now lists links on private projects, through the new `org_share_link_roster` RPC. Commons uploaders can revoke their own links, and `revoke` fails with a 403 or 404 instead of reporting success when RLS filtered the write. `revokeUserApiTokens` runs as `system`, so an operator without a grant on the org no longer leaves a disabled user's tokens live.
+
+  `removeOrgMember` throws a 404 for someone who isn't a member, on both providers. Conformance suites in `@selvajs/platform` assert this, so a third-party adapter has to do the same.
+
+  Apply this release's migration: run `npx selva-supabase`, then `npx supabase db push`. Host apps that wrote to `selva.invites` with a session JWT can now only set `accepted_at` and `accepted_by_user_id`.
+
+- Updated dependencies [b6935ce]
+- Updated dependencies [817af19]
+- Updated dependencies [cc081b1]
+- Updated dependencies [eebd2f6]
+- Updated dependencies [35e5c67]
+- Updated dependencies [77780c7]
+- Updated dependencies [5ab63df]
+- Updated dependencies [ff7e2a0]
+- Updated dependencies [1fb3914]
+  - @selvajs/platform@1.0.0-beta.4
+  - @selvajs/notifications@0.3.0-beta.4
+
 ## 1.5.0-beta.14
 
 ### Minor Changes

@@ -1,5 +1,20 @@
 # @selvajs/solve
 
+## 2.0.0-beta.11
+
+### Patch Changes
+
+- Updated dependencies [b6935ce]
+- Updated dependencies [817af19]
+- Updated dependencies [cc081b1]
+- Updated dependencies [eebd2f6]
+- Updated dependencies [35e5c67]
+- Updated dependencies [77780c7]
+- Updated dependencies [5ab63df]
+- Updated dependencies [ff7e2a0]
+- Updated dependencies [1fb3914]
+  - @selvajs/platform@1.0.0-beta.4
+
 ## 2.0.0-beta.10
 
 ### Patch Changes
