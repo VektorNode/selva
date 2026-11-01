@@ -9,8 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import type { IDefinitionStore } from '../../definitions/interface.js';
 import type { DefinitionRecord, DefinitionVersion } from '../../definitions/types.js';
-import { makeCtx, makeUuid } from './helpers.js';
-import type { RequestContext } from '../../context.js';
+import { makeSeedHelpers, makeUuid } from './helpers.js';
 
 /**
  * Scope the suite needs to reference from each test. Adapters that enforce
@@ -32,6 +31,8 @@ export interface DefinitionTestScope {
 	 * Must reference a real row for FK-enforcing adapters.
 	 */
 	secondaryProjectId: string;
+	/** Used by the ctx-isolation cases when `projectId` is one anyone can see. */
+	privateProjectId?: string;
 	/** Optional third user id for ctx-isolation tests. Required when ctxIsolation is set. */
 	secondaryUserId?: string;
 	/** Token for `secondaryUserId`, when used. */
@@ -63,26 +64,14 @@ const DEFAULT_SCOPE: DefinitionTestScope = {
 	secondaryUserId: 'user-b'
 };
 
-// Suite-wide token map. `scopeFor` populates it from the scope; `ctx`
-// auto-attaches the matching token so adapters with DB-side auth (Supabase
-// RLS) run as the right user. Local providers ignore tokens entirely.
-const tokens = new Map<string, string>();
-
-function ctx(
-	userId: string,
-	opts: {
-		actingOrgId?: string;
-		platformPermissions?: RequestContext['platformPermissions'];
-		orgPermissions?: RequestContext['orgPermissions'];
-	} = {}
-): RequestContext {
-	return makeCtx(userId, { ...opts, sessionToken: tokens.get(userId) });
-}
+// `scopeFor` registers the scope's tokens, so `ctx` runs as the right user on an
+// adapter with DB-side auth (Supabase RLS). This suite seeds nobody itself.
+const { ctx, registerToken } = makeSeedHelpers(async (userId) => ({ userId }));
 
 function recordTokensFromScope(scope: DefinitionTestScope): void {
-	if (scope.ownerSessionToken) tokens.set(scope.ownerId, scope.ownerSessionToken);
+	if (scope.ownerSessionToken) registerToken(scope.ownerId, scope.ownerSessionToken);
 	if (scope.secondaryUserId && scope.secondaryUserSessionToken) {
-		tokens.set(scope.secondaryUserId, scope.secondaryUserSessionToken);
+		registerToken(scope.secondaryUserId, scope.secondaryUserSessionToken);
 	}
 }
 
@@ -400,9 +389,8 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		});
 
 		it('reserveNextVersionNumber mints a FRESH number after delete-latest (fileKeys never collide)', async () => {
-			// The whole reason the counter exists: max(existing)+1 reused a number
-			// after deleting the latest version, colliding the fileKey. The monotonic
-			// counter must hand out a number BEYOND any deleted version's.
+			// The counter exists because max(existing)+1 would reuse a deleted number
+			// and collide the fileKey, so it must go beyond any deleted version's.
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
@@ -762,7 +750,10 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				const otherUser = scope.secondaryUserId;
 				if (!otherUser) throw new Error('ctxIsolation requires scope.secondaryUserId');
 				const guid = makeUuid();
-				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+				await store.create(
+					ctx(scope.ownerId),
+					record(scope, { guid, projectId: scope.privateProjectId ?? scope.projectId })
+				);
 
 				const page = await store.list(ctx(otherUser));
 				expect(page.items.map((r) => r.guid)).not.toContain(guid);
@@ -774,7 +765,10 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				const otherUser = scope.secondaryUserId;
 				if (!otherUser) throw new Error('ctxIsolation requires scope.secondaryUserId');
 				const guid = makeUuid();
-				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+				await store.create(
+					ctx(scope.ownerId),
+					record(scope, { guid, projectId: scope.privateProjectId ?? scope.projectId })
+				);
 
 				const got = await store.get(ctx(otherUser), guid);
 				expect(got).toBeNull();

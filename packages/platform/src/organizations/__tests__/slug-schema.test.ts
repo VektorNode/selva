@@ -7,13 +7,6 @@ import {
 	slugify
 } from '../schemas.js';
 
-/**
- * Reserved-slug guard (audit D4). A tenant slug must never equal a top-level
- * route segment, or it could shadow (or be shadowed by) a route once flat
- * tenant URLs — `/o/{slug}/…` per ADR 0006 — exist. These tests pin that the
- * guard rejects every reserved word and still accepts ordinary slugs, so the
- * reservation can't silently regress before the multi-org routing is built.
- */
 describe('SlugSchema', () => {
 	it('accepts a normal lowercase-hyphenated slug', () => {
 		expect(SlugSchema.safeParse('acme-studio').success).toBe(true);

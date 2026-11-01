@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { runAuthCoreConformance } from '@selvajs/platform/testing';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -30,6 +31,14 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+runAuthCoreConformance({
+	name: 'HeaderAuthProvider',
+	createProvider: () => ({
+		provider: new HeaderAuthProvider({ allowlistFilePath }),
+		adminPassword: ''
+	})
 });
 
 // ============================================================================

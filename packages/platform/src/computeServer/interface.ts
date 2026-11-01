@@ -30,10 +30,9 @@ export interface GetConfigOptions {
 	 *
 	 * Org-facing surfaces must pass this. Without it the store hands back every
 	 * platform server and every *other* org's private servers, leaving each
-	 * caller to re-apply a filter it can silently forget — the global
-	 * `defaultServerId` in particular passed straight through before this
-	 * existed. Admin surfaces, boot health and the save-diff handlers omit it
-	 * deliberately; they act instance-wide.
+	 * caller to re-apply a filter it can silently forget. Admin surfaces, boot
+	 * health and the save-diff handlers omit it deliberately; they act
+	 * instance-wide.
 	 */
 	scopeToOrgId?: string;
 }
@@ -57,6 +56,10 @@ export interface IComputeServerStore {
 	 * authenticated under the current `SELVA_AT_REST_KEY` (the solve fails
 	 * later at Rhino.Compute rather than here).
 	 *
+	 * A plaintext key at rest is adapter-defined: local throws, because it never
+	 * writes one, and Supabase warns and returns it, because rows can predate
+	 * encryption. Both report it through `verifySecrets`.
+	 *
 	 * The narrow path onto the solve hot path: resolve a server from the
 	 * key-free config, then fetch that one key.
 	 */
@@ -71,7 +74,8 @@ export interface IComputeServerStore {
 
 	/**
 	 * Replaces the org-private server set for `orgId` and (optionally) updates
-	 * `orgDefaults[orgId]`. Platform rows are left untouched.
+	 * `orgDefaults[orgId]`. Platform rows are left untouched, and any non-org entry
+	 * in `servers` is ignored.
 	 *
 	 * `defaultServerId: null` clears the org's override; `undefined` leaves
 	 * the existing value alone.

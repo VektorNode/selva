@@ -93,5 +93,5 @@ export class SupabaseAuditQuery implements IAuditQuery {
 function clampLimit(requested: number | undefined): number {
 	if (!requested || requested <= 0) return DEFAULT_LIMIT;
 	if (requested > MAX_LIMIT) return MAX_LIMIT;
-	return Math.floor(requested);
+	return Math.max(1, Math.floor(requested));
 }

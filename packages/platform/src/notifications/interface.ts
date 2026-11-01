@@ -39,8 +39,7 @@ export interface INotificationProvider {
  * Default `INotificationProvider` — sends nothing, reports `not-configured`.
  *
  * Mail is optional in every deployment, so this is a supported wiring rather
- * than a test double: callers already handle `not-configured` as "no mail",
- * which keeps the no-SMTP path identical to the pre-notification behaviour.
+ * than a test double: callers already handle `not-configured` as "no mail".
  */
 export class NoopNotificationProvider implements INotificationProvider {
 	readonly name = 'None';

@@ -93,7 +93,8 @@ export class SupabaseStorageProvider implements IStorageProvider {
 			.from(bucket)
 			.upload(transcoded.path, transcoded.data, {
 				contentType: transcoded.contentType,
-				// Objects are content-addressed and immutable — cache for a year.
+				// `put` upserts, so a changed object needs a new URL: `withCacheBust` is
+				// how callers get one. A year is safe only because of that.
 				cacheControl: '31536000',
 				upsert: true
 			});

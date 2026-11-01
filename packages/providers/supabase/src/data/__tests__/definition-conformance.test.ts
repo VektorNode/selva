@@ -2,7 +2,7 @@ import { describe, beforeEach, it } from 'vitest';
 import { runDefinitionStoreConformance } from '@selvajs/platform/testing';
 import { DEFAULT_ORG_PERMISSIONS } from '@selvajs/platform';
 import { SupabaseDefinitionStore } from '../SupabaseDefinitionStore.js';
-import { readEnv, resetAllData, seedUser } from './test-helpers.js';
+import { readEnv, resetAllData, seedPlainUser, seedUser } from './test-helpers.js';
 
 const envCtx = readEnv();
 
@@ -19,17 +19,18 @@ if (!envCtx) {
 		runDefinitionStoreConformance({
 			name: 'SupabaseDefinitionStore',
 			createStore: () => new SupabaseDefinitionStore(envCtx.bundle),
+			ctxIsolation: true,
 			createScope: async () => {
 				// Seed: 1 owner + 1 secondary user + 1 org + 2 projects. Definitions
 				// created in the suite FK to one of those two projects.
 				const { userId: ownerId, sessionToken: ownerSessionToken } = await seedUser(envCtx, '');
-				const { userId: secondaryUserId, sessionToken: secondaryUserSessionToken } = await seedUser(
-					envCtx,
-					''
-				);
+				// Plain, not an instance admin: the ctx-isolation cases read as this user.
+				const { userId: secondaryUserId, sessionToken: secondaryUserSessionToken } =
+					await seedPlainUser(envCtx, '');
 				const orgId = crypto.randomUUID();
 				const projectId = crypto.randomUUID();
 				const secondaryProjectId = crypto.randomUUID();
+				const privateProjectId = crypto.randomUUID();
 				const now = new Date().toISOString();
 				const admin = envCtx.adminClient;
 
@@ -71,6 +72,16 @@ if (!envCtx) {
 						owner_id: ownerId,
 						created_at: now,
 						updated_at: now
+					},
+					{
+						id: privateProjectId,
+						org_id: orgId,
+						name: 'Project C',
+						slug: `proj-c-${privateProjectId.slice(0, 8)}`,
+						visibility: 'private',
+						owner_id: ownerId,
+						created_at: now,
+						updated_at: now
 					}
 				]);
 				if (p1Error) throw p1Error;
@@ -80,6 +91,7 @@ if (!envCtx) {
 					ownerSessionToken,
 					projectId,
 					secondaryProjectId,
+					privateProjectId,
 					secondaryUserId,
 					secondaryUserSessionToken
 				};

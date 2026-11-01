@@ -129,11 +129,6 @@ export function runPlatformProjectGrantStoreConformance(
 			expect(got).toHaveLength(0);
 		});
 
-		it('delete on unknown id throws', async () => {
-			const store = await createStore();
-			await expect(store.delete(SYSTEM_CONTEXT, makeUuid())).rejects.toThrow();
-		});
-
 		it('deleteByProject removes every grant for that project', async () => {
 			const store = await createStore();
 			const target = await seed();

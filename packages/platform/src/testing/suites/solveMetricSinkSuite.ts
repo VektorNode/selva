@@ -11,6 +11,7 @@
  * response after a solve.
  */
 
+import { makeSystemCtx } from './helpers.js';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import type { ISolveMetricSink, SolveMetric, RequestContext } from '../../index.js';
 
@@ -46,7 +47,7 @@ export interface SolveMetricSinkConformanceOptions {
 }
 
 function sysCtx(userId: string): RequestContext {
-	return { userId, platformPermissions: [], orgPermissions: [], system: true };
+	return makeSystemCtx(userId);
 }
 
 function baseMetric(overrides: Partial<SolveMetric> = {}): SolveMetric {

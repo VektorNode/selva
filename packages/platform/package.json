@@ -1,7 +1,7 @@
 {
 	"name": "@selvajs/platform",
 	"version": "0.21.0-beta.3",
-	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
+	"description": "Interfaces, access rules and conformance suites for Selva platform providers",
 	"license": "MIT",
 	"author": "VektorNode",
 	"homepage": "https://selva.dev",

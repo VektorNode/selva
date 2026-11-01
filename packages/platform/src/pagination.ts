@@ -1,8 +1,10 @@
 import type { DefinitionStatus } from './definitions/types.js';
 
 /**
- * Cursor-paginated list options. Adapters default to limit=50, orderBy=createdAt
- * desc, and clamp limit to `MAX_PAGE_LIMIT`.
+ * Cursor-paginated list options. Adapters default to limit=50 and clamp limit to
+ * `MAX_PAGE_LIMIT`. Order is `createdAt` desc unless a store says otherwise: local
+ * definitions default to `name` asc, and the Supabase member, invite and token
+ * lists have one fixed order and ignore `orderBy`.
  *
  * Cursors are opaque — adapters may use row ids, offsets, or keyset encodings.
  * Callers must not inspect them.

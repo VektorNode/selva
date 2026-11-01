@@ -32,10 +32,9 @@ export interface IInviteStore {
 	 * revoked. Accepted invites are left alone — consuming one is history, not
 	 * a live grant.
 	 *
-	 * Offboarding needs this: `removeOrgMember` cascades `project_members` but
-	 * has never touched invites, so a dormant invite let a removed user walk
-	 * back in at their original role for the rest of its TTL. Matching by email
-	 * rather than user id is deliberate — an invite names an address, and the
+	 * Offboarding needs this: `removeOrgMember` does not touch invites, so a
+	 * dormant invite would let a removed user walk back in at their original role
+	 * for the rest of its TTL. Matching by email rather than user id is deliberate — an invite names an address, and the
 	 * account it will create may not exist yet.
 	 *
 	 * One call rather than list-then-revoke-each: the loop would race a

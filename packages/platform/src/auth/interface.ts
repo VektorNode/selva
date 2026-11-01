@@ -83,8 +83,7 @@ export interface IOAuthAuth {
 	 * @deprecated Session refresh is session lifecycle, not OAuth — a consumer
 	 * that brokers no OAuth still needs it (refreshing a password session, or
 	 * revoking on logout). Moved to `IAuthProvider.sessionRefresh`
-	 * (`ISessionRefresh`). This member delegates for one release and will be
-	 * removed in the next minor; migrate callers to
+	 * (`ISessionRefresh`). This member delegates to it; migrate callers to
 	 * `auth.sessionRefresh?.refreshSession(...)`.
 	 */
 	refreshSession(refreshToken: string): Promise<{
@@ -260,8 +259,8 @@ export interface IDelegatedSession {
 	status(): Promise<DelegatedSessionStatus>;
 
 	/**
-	 * A session token acting as `userId` inside `orgId`, valid for about a
-	 * minute. It carries no instance-admin rights, whatever the user holds: those
+	 * A session token acting as `userId` inside `orgId`, valid for `ttlSeconds`
+	 * (default 60 s). It carries no instance-admin rights, whatever the user holds: those
 	 * never ride on a bearer key. Throws if `status` isn't ok.
 	 */
 	mint(userId: string, opts: { orgId: string }): Promise<string>;

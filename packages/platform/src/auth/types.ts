@@ -23,7 +23,10 @@ export interface AuthUser {
  */
 export type UserManagementResult = 'ok' | 'not_found' | 'not_supported' | 'last_admin';
 
-/** `success` includes the session token the provider minted. */
+/**
+ * `success` includes the session token the provider minted. `rate_limited` is for
+ * providers that throttle logins; no bundled provider returns it.
+ */
 export type LoginResult =
 	| { kind: 'success'; user: AuthUser; sessionToken: string }
 	| { kind: 'failed'; reason?: 'invalid_credentials' | 'disabled' | 'rate_limited' };

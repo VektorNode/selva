@@ -1,4 +1,8 @@
-export { runAuthProviderConformance } from './suites/authProviderSuite.js';
+export {
+	runAuthCoreConformance,
+	runAuthProviderConformance,
+	runPasswordAuthConformance
+} from './suites/authProviderSuite.js';
 export type { AuthProviderConformanceOptions } from './suites/authProviderSuite.js';
 
 export { runEmailLinkAuthConformance } from './suites/emailLinkAuthSuite.js';

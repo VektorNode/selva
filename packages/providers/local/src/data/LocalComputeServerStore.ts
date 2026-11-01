@@ -231,14 +231,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 			const platformRows = all.servers.filter(isPlatformServer);
 			const otherOrgRows = all.servers.filter((s) => isOrgServer(s) && s.ownerOrgId !== orgId);
 			const thisOrgRows = this.encryptApiKeys(
-				servers
-					.filter((_s): _s is ComputeServerConfig => true)
-					.map((s) =>
-						isOrgServer(s)
-							? { ...s, ownerOrgId: orgId }
-							: // Coerce — caller passed something with the wrong/missing scope.
-								({ ...s, scope: 'org', ownerOrgId: orgId } as ComputeServerConfig)
-					)
+				servers.filter(isOrgServer).map((s) => ({ ...s, ownerOrgId: orgId }))
 			);
 
 			const orgDefaults = { ...(all.orgDefaults ?? {}) };

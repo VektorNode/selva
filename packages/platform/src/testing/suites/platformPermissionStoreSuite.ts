@@ -5,13 +5,10 @@
  * `countInstanceAdminsExcluding`, plus the §2 sole-`instance_admin`
  * invariant — `set` must return `'last_admin'` when dropping the only admin,
  * and `countInstanceAdminsExcluding` must exclude the named user.
- *
- * These tests used to live on the auth-provider conformance suite when the
- * invariant was enforced there; the move from `IAuthProvider` to
- * `IPlatformPermissionStore` brought them with it.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { makeSystemCtx } from './helpers.js';
 import type { IPlatformPermissionStore, RequestContext } from '../../index.js';
 import { ALL_ORG_PERMISSIONS, ALL_PLATFORM_PERMISSIONS } from '../../index.js';
 
@@ -128,12 +125,7 @@ export function runPlatformPermissionStoreConformance(
 		it('hasInstanceAdmin returns false on a fresh instance, true after granting', async () => {
 			const { store, seedUser } = await createStore();
 			const adminId = await seedUser();
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 			expect(await store.hasInstanceAdmin(sysCtx)).toBe(false);
 			await store.set(adminCtx(adminId), adminId, ['instance_admin']);
 			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
@@ -163,10 +155,8 @@ export function runPlatformPermissionStoreConformance(
 			expect(after).toContain('instance_admin');
 		});
 
-		// The invariant has to survive concurrency, not just sequence. Two admins
-		// demoting each other at the same moment used to each read the other as
-		// "another admin exists" and both commit, bricking the instance. Exactly
-		// one must win.
+		// The invariant has to survive concurrency, not just sequence: two admins
+		// demoting each other must not each read the other as the survivor.
 		it('concurrent demotions of two admins leave one standing', async () => {
 			const { store, seedUser } = await createStore();
 			const adminA = await seedUser();
@@ -183,12 +173,7 @@ export function runPlatformPermissionStoreConformance(
 			expect([resA, resB].filter((r) => r === 'ok')).toHaveLength(1);
 			expect([resA, resB].filter((r) => r === 'last_admin')).toHaveLength(1);
 
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
 		});
 
@@ -206,12 +191,7 @@ export function runPlatformPermissionStoreConformance(
 			expect(results.filter((r) => r === 'ok')).toHaveLength(ids.length - 1);
 			expect(results.filter((r) => r === 'last_admin')).toHaveLength(1);
 
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
 		});
 
@@ -219,12 +199,7 @@ export function runPlatformPermissionStoreConformance(
 			const { store, seedUser } = await createStore();
 			const first = await seedUser();
 			const second = await seedUser();
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 
 			expect(await store.claimFirstInstanceAdmin(sysCtx, first, ['instance_admin'])).toBe(true);
 			expect(await store.getFor(adminCtx(first), first)).toContain('instance_admin');
@@ -243,12 +218,7 @@ export function runPlatformPermissionStoreConformance(
 			// the read-then-write version granted all four.
 			const ids: string[] = [];
 			for (let i = 0; i < 4; i++) ids.push(await seedUser());
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 
 			const results = await Promise.all(
 				ids.map((id) => store.claimFirstInstanceAdmin(sysCtx, id, ['instance_admin']))
@@ -265,12 +235,7 @@ export function runPlatformPermissionStoreConformance(
 			const adminB = await seedUser();
 			await store.set(adminCtx(adminA), adminA, ['instance_admin']);
 			await store.set(adminCtx(adminA), adminB, ['instance_admin']);
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 			// Excluding adminA: one admin (adminB) remains
 			expect(await store.countInstanceAdminsExcluding(sysCtx, adminA)).toBe(1);
 			// Excluding adminB: one admin (adminA) remains
@@ -281,24 +246,14 @@ export function runPlatformPermissionStoreConformance(
 			const { store, seedUser } = await createStore();
 			const adminId = await seedUser();
 			await store.set(adminCtx(adminId), adminId, ['instance_admin']);
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 			expect(await store.countInstanceAdminsExcluding(sysCtx, adminId)).toBe(0);
 		});
 
 		itWithDisable('hasInstanceAdmin ignores disabled admins', async () => {
 			const { store, seedUser } = await createStore();
 			const adminId = await seedUser();
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 			await store.set(adminCtx(adminId), adminId, ['instance_admin']);
 			expect(await store.hasInstanceAdmin(sysCtx)).toBe(true);
 			await disableUser!(adminId);
@@ -311,12 +266,7 @@ export function runPlatformPermissionStoreConformance(
 			const adminB = await seedUser();
 			await store.set(adminCtx(adminA), adminA, ['instance_admin']);
 			await store.set(adminCtx(adminA), adminB, ['instance_admin']);
-			const sysCtx: RequestContext = {
-				userId: '',
-				platformPermissions: [],
-				orgPermissions: [],
-				system: true
-			};
+			const sysCtx: RequestContext = makeSystemCtx();
 			await disableUser!(adminB);
 			// adminB holds the grant but is disabled — must not count as the
 			// "other admin" that would allow demoting/disabling adminA.

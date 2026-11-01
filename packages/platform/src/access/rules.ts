@@ -290,18 +290,12 @@ export interface OrgOwnerAuthorityInput {
 }
 
 /**
- * Whether the actor may hand out or take away org `owner`/`admin` standing (§3).
+ * Whether the actor may hand out or take away org `owner`/`admin` standing.
+ * Inviting someone as owner/admin, changing a member's role and removing an owner
+ * are one rule, so all three read it here.
  *
- * Three routes decide this — inviting someone as owner/admin, changing an
- * existing member's role, and removing an owner — and all three had written it
- * out longhand. Two of them had drifted by the time the access audit found
- * them: the invite route let an admin mint an `owner` invite for themselves,
- * and DELETE let an admin remove an owner that PATCH would not let them demote.
- * They are one rule, so they read it from one place.
- *
- * Reads the actor's **membership row**. `Organization.ownerId` is a separate
- * field that can disagree with it — see the sole-`instance_admin` finding — and
- * is not authority for this decision.
+ * Reads the actor's **membership row**. `Organization.ownerId` is a separate field
+ * that can disagree with it and is not authority for this decision.
  */
 export function canChangeOrgRole(input: OrgOwnerAuthorityInput): boolean {
 	if (input.role === 'member') return true;

@@ -38,7 +38,7 @@ export interface AuditQueryFilters {
 	/** Inclusive bounds, ISO 8601. */
 	sinceIso?: string;
 	untilIso?: string;
-	/** Implementations clamp to a sane upper bound (<=200). */
+	/** Implementations clamp to at least 1 and at most 200. */
 	limit?: number;
 	cursor?: AuditCursor;
 }

@@ -2,10 +2,8 @@ import { z } from 'zod';
 
 /**
  * Top-level path segments a tenant slug must never equal, so a slug can never
- * shadow (or be shadowed by) a route. `/o/{slug}/` is the planned shape for
- * per-org URLs, so `o` is reserved even though the length gate below already
- * makes a 1-char slug impossible — that keeps a future move to `/o/{slug}/…`
- * collision-free before any external link is minted against a slug.
+ * shadow (or be shadowed by) a route. `o` is reserved for `/o/{slug}/` even though
+ * the length gate below already makes a 1-char slug impossible.
  * `reserved-slugs.test.ts` in the selva app holds this to the route tree.
  */
 export const RESERVED_SLUGS: readonly string[] = [

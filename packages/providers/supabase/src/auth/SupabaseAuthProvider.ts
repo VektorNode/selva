@@ -473,7 +473,7 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 		};
 	}
 
-	/** @deprecated Delegates to `IAuthProvider.sessionRefresh`. Removed next minor. */
+	/** @deprecated Delegates to `IAuthProvider.sessionRefresh`. */
 	async refreshSession(refreshToken: string): Promise<{
 		sessionToken: string;
 		refreshToken: string;

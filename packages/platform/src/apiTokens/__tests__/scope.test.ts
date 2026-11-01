@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { RequestContext } from '../../context.js';
-import { narrowApiTokenContext, scopeAllows } from '../scope.js';
+import {
+	apiScopeActionCovers,
+	narrowApiTokenContext,
+	outsideTokenOrg,
+	scopeAllows
+} from '../scope.js';
 import { describeApiScope, formatApiScope, parseApiScope } from '../types.js';
 
 const ORG = 'org-a';
@@ -20,12 +25,17 @@ function keyed(...scopes: string[]): RequestContext {
 }
 
 describe('parseApiScope', () => {
-	it.each(['read:all', 'write:org:org-a', 'solve:project:p1', 'read:definition:abc-123'])(
-		'round-trips %s',
-		(s) => {
-			expect(formatApiScope(parseApiScope(s)!)).toBe(s);
-		}
-	);
+	it.each([
+		'read:all',
+		'write:org:org-a',
+		'solve:project:p1',
+		'read:definition:abc-123',
+		'upload:all',
+		'upload:project:p1',
+		'upload:definition:d1'
+	])('round-trips %s', (s) => {
+		expect(formatApiScope(parseApiScope(s)!)).toBe(s);
+	});
 
 	it.each(['admin:all', 'read', 'read:org', 'read:all:x', 'read:org:a:b', 'read:team:t1', ''])(
 		'rejects %s',
@@ -33,6 +43,34 @@ describe('parseApiScope', () => {
 			expect(parseApiScope(s)).toBeNull();
 		}
 	);
+});
+
+describe('apiScopeActionCovers', () => {
+	it.each([
+		['read', 'read', true],
+		['write', 'read', true],
+		['upload', 'read', true],
+		['solve', 'read', true],
+		['write', 'upload', true],
+		['upload', 'write', false],
+		['read', 'write', false],
+		['read', 'solve', false],
+		['write', 'solve', false]
+	] as const)('%s covers %s: %s', (granted, wanted, covered) => {
+		expect(apiScopeActionCovers(granted, wanted)).toBe(covered);
+	});
+});
+
+describe('outsideTokenOrg', () => {
+	it('is false for a browser session, whatever the org', () => {
+		expect(outsideTokenOrg(session(), 'somewhere-else')).toBe(false);
+	});
+
+	it('holds a token to the org it was issued for', () => {
+		const ctx = keyed('read:all');
+		expect(outsideTokenOrg(ctx, ORG)).toBe(false);
+		expect(outsideTokenOrg(ctx, 'somewhere-else')).toBe(true);
+	});
 });
 
 describe('scopeAllows', () => {
@@ -111,10 +149,6 @@ describe('narrowApiTokenContext', () => {
 });
 
 describe('upload', () => {
-	it.each(['upload:all', 'upload:project:p1', 'upload:definition:d1'])('round-trips %s', (s) => {
-		expect(formatApiScope(parseApiScope(s)!)).toBe(s);
-	});
-
 	it('includes read and nothing else', () => {
 		const ctx = keyed('upload:all');
 		expect(scopeAllows(ctx, 'upload')).toBe(true);

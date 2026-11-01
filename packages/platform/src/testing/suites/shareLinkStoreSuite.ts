@@ -10,23 +10,12 @@
 import { describe, it, expect } from 'vitest';
 import type { IShareLinkStore } from '../../shareLinks/interface.js';
 import type { ShareLink } from '../../shareLinks/types.js';
-import { makeCtx, makeUuid } from './helpers.js';
-import type { RequestContext } from '../../context.js';
+import { SYSTEM_CONTEXT } from '../../context.js';
+import { makeSeedHelpers, makeUuid } from './helpers.js';
 
-// Suite-wide token map. `scopeFor` populates it; `ctx` auto-attaches the
-// matching token so DB-side auth (Supabase RLS) sees the right user.
-const tokens = new Map<string, string>();
-
-function ctx(
-	userId: string,
-	opts: {
-		actingOrgId?: string;
-		platformPermissions?: RequestContext['platformPermissions'];
-		orgPermissions?: RequestContext['orgPermissions'];
-	} = {}
-): RequestContext {
-	return makeCtx(userId, { ...opts, sessionToken: tokens.get(userId) });
-}
+// `scopeFor` registers the owner's token, so `ctx` runs as them on an adapter with
+// DB-side auth (Supabase RLS). This suite seeds nobody itself.
+const { ctx, registerToken } = makeSeedHelpers(async (userId) => ({ userId }));
 
 export interface ShareLinkTestScope {
 	/** Owner of the parent definition. Used as `createdBy`. */
@@ -58,6 +47,8 @@ export interface ShareLinkStoreConformanceOptions {
 	 * `definitions` row + parent project). Local adapters can return stub ids.
 	 */
 	createScope?: () => Promise<ShareLinkTestScope> | ShareLinkTestScope;
+	/** The scope seeds `orgId` and `otherOrgId`, so the `listByOrg` cases can run. */
+	orgRoster?: boolean;
 }
 
 const DEFAULT_SCOPE: ShareLinkTestScope = {
@@ -85,10 +76,10 @@ function link(scope: ShareLinkTestScope, overrides: Partial<ShareLink> = {}): Sh
 }
 
 export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOptions): void {
-	const { name, createStore, createScope } = opts;
+	const { name, createStore, createScope, orgRoster = false } = opts;
 	const scopeFor = async (): Promise<ShareLinkTestScope> => {
 		const s = createScope ? await createScope() : DEFAULT_SCOPE;
-		if (s.ownerSessionToken) tokens.set(s.ownerId, s.ownerSessionToken);
+		if (s.ownerSessionToken) registerToken(s.ownerId, s.ownerSessionToken);
 		return s;
 	};
 
@@ -195,14 +186,12 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 			expect(got?.id).toBe(l.id);
 		});
 
-		// The org roster is the only read that answers "what reaches this
-		// tenant's data right now?". `it.skipIf` rather than an omitted block, so
-		// an adapter that stops seeding an org shows as skipped instead of silently
-		// covering nothing.
-		describe('listByOrg', () => {
+		// The org roster is the only read that answers "what reaches this tenant's
+		// data right now?". `skipIf` rather than an omitted block, so an adapter that
+		// doesn't seed an org shows as skipped instead of silently covering nothing.
+		describe.skipIf(!orgRoster)('listByOrg', () => {
 			it('returns links across every definition in the org, newest first', async () => {
 				const scope = await scopeFor();
-				if (!scope.orgId) return;
 				const store = await createStore();
 				const a = link(scope, { createdAt: '2026-04-01T00:00:00.000Z' });
 				const b = link(scope, {
@@ -212,18 +201,17 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 				await store.create(ctx(scope.ownerId), a);
 				await store.create(ctx(scope.ownerId), b);
 
-				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId!, { limit: 100 });
 				expect(page.items.map((l) => l.id)).toEqual([b.id, a.id]);
 			});
 
 			it('names the parent definition and project on every row', async () => {
 				const scope = await scopeFor();
-				if (!scope.orgId) return;
 				const store = await createStore();
 				const l = link(scope);
 				await store.create(ctx(scope.ownerId), l);
 
-				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId!, { limit: 100 });
 				const row = page.items.find((x) => x.id === l.id);
 				// A roster of bare GUIDs can't be acted on — revoking the wrong link
 				// is unrecoverable.
@@ -234,11 +222,10 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 
 			it('never carries tokenHash — the roster spans the whole tenant', async () => {
 				const scope = await scopeFor();
-				if (!scope.orgId) return;
 				const store = await createStore();
 				await store.create(ctx(scope.ownerId), link(scope));
 
-				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId!, { limit: 100 });
 				expect(page.items.length).toBeGreaterThan(0);
 				for (const row of page.items) {
 					expect(row).not.toHaveProperty('tokenHash');
@@ -247,7 +234,6 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 
 			it('excludes revoked and expired links', async () => {
 				const scope = await scopeFor();
-				if (!scope.orgId) return;
 				const store = await createStore();
 				const revoked = link(scope);
 				const expired = link(scope, { expiresAt: new Date(Date.now() - 60_000).toISOString() });
@@ -257,7 +243,7 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 				await store.create(ctx(scope.ownerId), live);
 				await store.revoke(ctx(scope.ownerId), revoked.id);
 
-				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId, { limit: 100 });
+				const page = await store.listByOrg(ctx(scope.ownerId), scope.orgId!, { limit: 100 });
 				const ids = page.items.map((x) => x.id);
 				expect(ids).toContain(live.id);
 				expect(ids).not.toContain(revoked.id);
@@ -266,13 +252,27 @@ export function runShareLinkStoreConformance(opts: ShareLinkStoreConformanceOpti
 
 			it('does not leak links into another org', async () => {
 				const scope = await scopeFor();
-				if (!scope.orgId || !scope.otherOrgId) return;
+				if (!scope.otherOrgId) throw new Error('orgRoster requires scope.otherOrgId');
 				const store = await createStore();
 				await store.create(ctx(scope.ownerId), link(scope));
 
 				const page = await store.listByOrg(ctx(scope.ownerId), scope.otherOrgId, { limit: 100 });
 				expect(page.items).toHaveLength(0);
 			});
+		});
+
+		it('tryIncrementSolveCount holds the cap under concurrent solves', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const l = link(scope, { maxSolves: 5 });
+			await store.create(ctx(scope.ownerId), l);
+
+			const results = await Promise.all(
+				Array.from({ length: 20 }, () => store.tryIncrementSolveCount(SYSTEM_CONTEXT, l.id))
+			);
+
+			expect(results.filter((n) => n !== null)).toHaveLength(5);
+			expect((await store.getById(ctx(scope.ownerId), l.id))?.solveCount).toBe(5);
 		});
 
 		it('revoke is idempotent (no error on double-revoke)', async () => {

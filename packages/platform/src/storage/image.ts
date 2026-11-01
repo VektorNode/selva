@@ -144,7 +144,7 @@ async function loadSharp(): Promise<SharpFn> {
 	} catch (err) {
 		throw new Error(
 			'Image transcoding requires `sharp` to be installed. Add it as a dependency in your provider package.',
-			{ cause: err as Error }
+			{ cause: err }
 		);
 	}
 }

@@ -28,6 +28,14 @@ export function makeCtx(
 	};
 }
 
+/**
+ * A system context holding no permissions of its own, for proving a store leans on
+ * `system` rather than on a permission `SYSTEM_CONTEXT` happens to carry.
+ */
+export function makeSystemCtx(userId = ''): RequestContext {
+	return { userId, platformPermissions: [], orgPermissions: [], system: true };
+}
+
 export function makeUuid(): string {
 	return crypto.randomUUID();
 }

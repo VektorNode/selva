@@ -252,7 +252,7 @@ export type { ISolveMetricSink, SolveMetric, SolveFailureKind } from './metrics/
 export { NoopSolveMetricSink } from './metrics/interface.js';
 
 // ---------------------------------------------------------------------------
-// solveCache (durable L2 solve-result cache — H1)
+// solveCache (durable L2 solve-result cache)
 // ---------------------------------------------------------------------------
 export type {
 	ISolveResultCache,

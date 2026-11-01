@@ -2,7 +2,7 @@
  * Structured context attached to a reported error. All fields optional — a
  * report can fire before any request context is built (e.g. an
  * `unhandledRejection` with no active request). Deliberately NOT a
- * `RequestContext`: reporters must never receive the opaque `authToken`, so
+ * `RequestContext`: reporters must never receive the opaque `adapterContext`, so
  * only non-sensitive routing/identity fields are surfaced here.
  */
 export interface ErrorContext {

@@ -35,6 +35,7 @@ describe('LocalAuthProvider — auth-users.json mode', () => {
 			}
 			return { provider, adminEmail: ADMIN_EMAIL, adminPassword: ADMIN_PASSWORD };
 		},
-		userManagement: true
+		userManagement: true,
+		selfRegistration: true
 	});
 });

@@ -1,4 +1,6 @@
 import type { UISchema } from '@selvajs/schemas';
+import type { z } from 'zod';
+import type { DefinitionChannelSchema } from './schemas.js';
 
 export type DefinitionFileExt = 'gh' | 'ghx';
 
@@ -173,4 +175,4 @@ export interface DefinitionRecordPatch {
 	sourceDocumentId?: string | null;
 }
 
-export type DefinitionChannel = 'live' | 'draft';
+export type DefinitionChannel = z.infer<typeof DefinitionChannelSchema>;

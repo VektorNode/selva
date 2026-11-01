@@ -176,19 +176,14 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 		// Image transcoding
 		// ============================================================================
 		//
-		// Every adapter MUST run uploads through the shared `transcodeImageIfNeeded`
-		// helper so cover images, archive thumbnails, etc. land as WebP regardless
-		// of what the user uploaded. Otherwise a provider that skipped this would
-		// produce a pipeline that looks correct until someone uploads a PNG.
+		// Part of the `IStorageProvider.put` contract: images land as WebP at a
+		// rewritten path, whatever the user uploaded.
 
 		it('transcodes png input to webp (path rewritten, magic bytes flipped)', async () => {
 			const storage = await createStorage();
 			// Minimal 1×1 transparent PNG (68 bytes): 8-byte signature + IHDR + IDAT + IEND.
 			// The IDAT is a real zlib stream of one scanline (filter 0 + RGBA 0,0,0,0) with a
-			// correct Adler-32. Don't hand-tweak these bytes — the previous fixture carried a
-			// truncated IDAT that older libpng tolerated and sharp >=0.35 rejects outright
-			// ("vipspng: libpng read error"). Regenerate with zlib.deflateSync if it ever needs
-			// to change.
+			// correct Adler-32. Don't hand-tweak these bytes: regenerate with zlib.deflateSync.
 			const pngBytes = Uint8Array.from([
 				0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
 				0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f,
