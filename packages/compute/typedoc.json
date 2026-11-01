@@ -5,6 +5,5 @@
 	"name": "Selva Compute API Reference",
 	"includeVersion": true,
 	"readme": "README.md",
-	"plugin": ["typedoc-plugin-missing-exports"],
 	"hideGenerator": true
 }

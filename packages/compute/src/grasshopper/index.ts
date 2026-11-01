@@ -23,6 +23,7 @@ export type {
 	SolveContext,
 	SolveResult,
 	SolveDetail,
+	CacheStats,
 	SchedulerSolveOptions,
 	SolveExecutor
 } from './scheduler/types';
@@ -54,6 +55,7 @@ export type {
 } from './io/output/response-processors';
 export { disposeRhinoObjects, isRhinoDecodeError } from './io/output/rhino-objects';
 export type { RhinoDecodeError } from './io/output/rhino-objects';
+export type { RhinoRuntime } from './io/output/rhino-decoder';
 
 // ============================================================================
 // DATA STRUCTURES

@@ -85,8 +85,8 @@ describe('processInputWithError under arbitrary schemas', () => {
 });
 
 describe('decimalsOf', () => {
-	// A value typed with d decimals must never read as having more: past 1e4,
-	// `toFixed(12)` used to print the float's own noise and step became 1e-12.
+	// A value typed with d decimals must never read as having more. Counting fixed places would:
+	// from 1e4 up, `toFixed(12)` prints the float's own noise, and the step comes out as 1e-12.
 	it('never counts float noise as decimals', () => {
 		fc.assert(
 			fc.property(fc.integer({ min: 0, max: 6 }), fc.integer({ min: -1e9, max: 1e9 }), (d, k) => {

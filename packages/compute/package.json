@@ -15,41 +15,21 @@
 	"keywords": [
 		"compute",
 		"rhino",
-		"grasshopper",
-		"geometry",
-		"3d",
-		"cad",
-		"parametric",
-		"modeling",
-		"rhino3dm",
-		"automation",
-		"geometry-processing",
-		"design",
-		"cloud",
-		"gh",
+		"rhino-compute",
 		"rhino.compute",
-		"computational-design"
+		"grasshopper",
+		"parametric",
+		"computational-design",
+		"typescript"
 	],
 	"exports": {
 		"./grasshopper": {
-			"import": {
-				"types": "./dist/grasshopper.d.ts",
-				"default": "./dist/grasshopper.js"
-			},
-			"require": {
-				"types": "./dist/grasshopper.d.cts",
-				"default": "./dist/grasshopper.cjs"
-			}
+			"types": "./dist/grasshopper.d.ts",
+			"default": "./dist/grasshopper.js"
 		},
 		"./core": {
-			"import": {
-				"types": "./dist/core.d.ts",
-				"default": "./dist/core.js"
-			},
-			"require": {
-				"types": "./dist/core.d.cts",
-				"default": "./dist/core.cjs"
-			}
+			"types": "./dist/core.d.ts",
+			"default": "./dist/core.js"
 		}
 	},
 	"files": [
@@ -61,14 +41,14 @@
 		"node": ">=24.0.0"
 	},
 	"publishConfig": {
-		"access": "public",
-		"provenance": false
+		"access": "public"
 	},
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsdown",
 		"dev": "tsdown --watch",
 		"lint": "eslint .",
+		"lint:types": "eslint . --config eslint.typed.config.js",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:live": "vitest run live.test",
@@ -86,8 +66,7 @@
 		"fast-check": "catalog:",
 		"rhino3dm": "catalog:",
 		"tsdown": "catalog:",
-		"typedoc": "^0.28.17",
-		"typedoc-plugin-missing-exports": "^4.1.2",
+		"typedoc": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

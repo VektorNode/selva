@@ -1,12 +1,12 @@
-import { ComputeError, ErrorCodes } from '../errors';
+import { abortedByCaller, ComputeError, ErrorCodes } from '../errors';
 import { utf8ByteLength } from '../utils/encoding';
 import { getLogger } from '../utils/logger';
 import { validateServerUrl } from '../server/validate-server-url';
 import { ERROR_BODY_MAX_BYTES, readBodyText } from './read-body';
 import { buildUrl, buildHeaders, generateRequestId } from './request';
-import { handleResponse, type RequestContext } from './response';
+import { handleResponse, type AttemptOutcome, type RequestContext } from './response';
 import { backoffDelay, isRetryableStatus, resolveRetryPolicy, retryDelay, sleep } from './retry';
-import { composeSignal, isAbortError } from './signal';
+import { composeSignal, isAbortError, MAX_TIMEOUT_MS } from './signal';
 
 import type { ComputeConfig, RetryPolicy } from '../types';
 
@@ -17,17 +17,6 @@ interface AttemptContext extends RequestContext {
 	errorContext: Record<string, unknown>;
 }
 
-type AttemptOutcome =
-	| { ok: true; value: unknown }
-	| { ok: false; cause: ComputeError; retryable: boolean; delayMs?: number };
-
-function abortedByCaller(ctx: AttemptContext, originalError: Error): ComputeError {
-	return new ComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
-		context: ctx.errorContext,
-		originalError
-	});
-}
-
 async function attemptFetch(
 	ctx: AttemptContext,
 	policy: Required<RetryPolicy>,
@@ -36,9 +25,10 @@ async function attemptFetch(
 ): Promise<AttemptOutcome> {
 	const { signal, cleanup } = composeSignal(ctx.config.signal, ctx.config.timeoutMs);
 	const startTime = performance.now();
+	const send = ctx.config.fetch ?? fetch;
 
 	try {
-		const response = await fetch(ctx.fullUrl, {
+		const response = await send(ctx.fullUrl, {
 			method: 'POST',
 			body: ctx.body,
 			headers: ctx.headers,
@@ -63,7 +53,7 @@ async function attemptFetch(
 			};
 		}
 
-		return { ok: true, value: await handleResponse(response, ctx, startTime) };
+		return await handleResponse(response, ctx, startTime);
 	} catch (error) {
 		return classifyFetchError(error, ctx);
 	} finally {
@@ -72,10 +62,14 @@ async function attemptFetch(
 }
 
 function classifyFetchError(error: unknown, ctx: AttemptContext): AttemptOutcome {
+	if (error instanceof ComputeError) return { ok: false, retryable: false, cause: error };
+
+	// Fetch rejects with `signal.reason`, and a caller can abort with anything.
+	if (ctx.config.signal?.aborted) {
+		return { ok: false, retryable: false, cause: abortedByCaller(ctx.errorContext, error) };
+	}
+
 	if (isAbortError(error)) {
-		if (ctx.config.signal?.aborted) {
-			return { ok: false, retryable: false, cause: abortedByCaller(ctx, error) };
-		}
 		// With no timeout armed, the runtime aborted on its own (e.g. an undici socket teardown):
 		// as transient as a network drop, but not a timeout.
 		const { timeoutMs } = ctx.config;
@@ -110,17 +104,6 @@ function classifyFetchError(error: unknown, ctx: AttemptContext): AttemptOutcome
 		return { ok: false, retryable: true, cause };
 	}
 
-	if (error instanceof ComputeError) {
-		// From handleResponse: a 2xx NETWORK_ERROR is a body cut off mid-stream.
-		const status = error.statusCode;
-		const truncatedSuccess =
-			error.code === ErrorCodes.NETWORK_ERROR &&
-			status !== undefined &&
-			status >= 200 &&
-			status < 300;
-		return { ok: false, retryable: truncatedSuccess, cause: error };
-	}
-
 	return {
 		ok: false,
 		retryable: false,
@@ -133,6 +116,28 @@ function classifyFetchError(error: unknown, ctx: AttemptContext): AttemptOutcome
 			}
 		)
 	};
+}
+
+function requireNumber(
+	name: string,
+	value: number | undefined,
+	isValid: (n: number) => boolean
+): void {
+	if (value !== undefined && !isValid(value)) {
+		throw new ComputeError(`${name} is not usable: ${value}`, ErrorCodes.INVALID_CONFIG, {
+			context: { [name]: value }
+		});
+	}
+}
+
+/** `NaN` fails every comparison, so unchecked it disables a loop's exit or a limit. */
+export function validateNumbers({ timeoutMs, maxResponseBytes, retry }: ComputeConfig): void {
+	const notNegative = (n: number) => n >= 0;
+	requireNumber('timeoutMs', timeoutMs, (n) => n <= MAX_TIMEOUT_MS);
+	requireNumber('maxResponseBytes', maxResponseBytes, notNegative);
+	requireNumber('retry.attempts', retry?.attempts, (n) => notNegative(n) && Number.isFinite(n));
+	requireNumber('retry.baseDelayMs', retry?.baseDelayMs, notNegative);
+	requireNumber('retry.maxDelayMs', retry?.maxDelayMs, notNegative);
 }
 
 /**
@@ -174,14 +179,7 @@ export async function fetchCompute<R = unknown>(
 	const requestSize = utf8ByteLength(body);
 	// Shape only: which hosts to block is the backend's call, made where its client is built.
 	const serverUrl = validateServerUrl(config.serverUrl, { blockedHosts: [] });
-	const { maxResponseBytes } = config;
-	if (maxResponseBytes !== undefined && !(maxResponseBytes >= 0)) {
-		throw new ComputeError(
-			`maxResponseBytes must be a number of bytes, got ${maxResponseBytes}`,
-			ErrorCodes.INVALID_CONFIG,
-			{ context: { maxResponseBytes } }
-		);
-	}
+	validateNumbers(config);
 	const fullUrl = buildUrl(endpoint, serverUrl);
 	const headers = buildHeaders(requestId, config);
 	const retryPolicy = resolveRetryPolicy(config.retry);
@@ -189,10 +187,7 @@ export async function fetchCompute<R = unknown>(
 
 	if (config.debug) {
 		const sizeKb = (requestSize / 1024).toFixed(2);
-		const emoji = requestSize > 100000 ? '⚠️' : '🚀';
-		getLogger().debug(
-			`${emoji} Starting compute request [${requestId}]: ${endpoint} (${sizeKb}KB)`
-		);
+		getLogger().debug(`Starting compute request [${requestId}]: ${endpoint} (${sizeKb}KB)`);
 	}
 
 	const ctx: AttemptContext = {
@@ -216,14 +211,14 @@ export async function fetchCompute<R = unknown>(
 		const delayMs = result.delayMs ?? backoffDelay(attempt, retryPolicy);
 		if (config.debug) {
 			getLogger().debug(
-				`🔁 Request [${requestId}] retrying after ${delayMs}ms (attempt ${attempt + 2}/${totalAttempts}): ${result.cause.message}`
+				`Request [${requestId}] retrying after ${delayMs}ms (attempt ${attempt + 2}/${totalAttempts}): ${result.cause.code}`
 			);
 		}
 
 		try {
 			await sleep(delayMs, config.signal);
 		} catch {
-			throw abortedByCaller(ctx, result.cause);
+			throw abortedByCaller(ctx.errorContext, result.cause);
 		}
 	}
 }

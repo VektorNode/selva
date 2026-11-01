@@ -90,7 +90,8 @@ export function processInputWithError(rawInput: InputParamSchema): {
 				}
 			);
 		}
-		getLogger().error(`Validation error for input ${label}:`, error.message);
+		// The code, not the message: messages quote the rejected default.
+		getLogger().error(`Validation error for input ${label}: ${error.code}`);
 		report(error);
 		const fallback = parser?.fallback ?? unknownTypeFallback;
 		return { input: fallback(schema, baseInput), errors };

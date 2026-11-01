@@ -15,7 +15,10 @@ export const ErrorCodes = {
 	NOT_FOUND: 'NOT_FOUND',
 	/** HTTP 429. Retried, honouring `Retry-After`, when the policy allows (`RetryPolicy.retryOn429`). */
 	RATE_LIMIT: 'RATE_LIMIT',
-	/** A 2xx that declared a non-JSON body, e.g. a captive portal or proxy login page. Never retried. */
+	/**
+	 * A 2xx with a body the client can't use: declared non-JSON (a captive portal, a proxy login page)
+	 * or JSON that isn't an object. Never retried.
+	 */
 	INVALID_RESPONSE: 'INVALID_RESPONSE',
 	/**
 	 * The response body passed `ComputeConfig.maxResponseBytes`; the download was cancelled there.
@@ -29,8 +32,8 @@ export const ErrorCodes = {
 	/** A caller-supplied argument is unusable: an empty definition, an unserializable body. */
 	INVALID_INPUT: 'INVALID_INPUT',
 	/**
-	 * Bad configuration: an invalid `serverUrl`, a server that answers with a redirect, an
-	 * incomplete logger, an interval out of range.
+	 * Bad configuration: an invalid `serverUrl`, an unsendable header, an unusable number, a server
+	 * that answers with a redirect, an incomplete logger, an interval out of range.
 	 */
 	INVALID_CONFIG: 'INVALID_CONFIG',
 	/** A browser-only API (file download) was called outside a browser. */
@@ -77,15 +80,25 @@ export class ComputeError extends Error {
 		code: ErrorCode = ErrorCodes.UNKNOWN_ERROR,
 		options?: { statusCode?: number; context?: Record<string, unknown>; originalError?: unknown }
 	) {
-		super(message);
+		const original = options?.originalError;
+		const cause =
+			original === undefined || original instanceof Error ? original : new Error(String(original));
+		super(message, cause && { cause });
 		this.name = 'ComputeError';
 		this.code = code;
 		this.statusCode = options?.statusCode;
 		this.context = options?.context;
-		if (options?.originalError !== undefined) {
-			const original = options.originalError;
-			this.originalError = original instanceof Error ? original : new Error(String(original));
-			(this as { cause?: unknown }).cause = this.originalError;
-		}
+		this.originalError = cause;
 	}
+}
+
+/** A caller's signal cancelled the work. */
+export function abortedByCaller(
+	context: Record<string, unknown>,
+	originalError?: unknown
+): ComputeError {
+	return new ComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
+		context,
+		originalError
+	});
 }

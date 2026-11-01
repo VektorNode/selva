@@ -1,9 +1,11 @@
 import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
+import { tryParseJson } from '@/core/utils/try-parse-json';
 import { validateServerUrl } from '@/core/server/validate-server-url';
-import { buildAuthHeaders } from '@/core/compute-fetch/request';
+import { buildAuthHeaders, withJsonContentType } from '@/core/compute-fetch/request';
 import { readBodyText } from '@/core/compute-fetch/read-body';
 import { isRedirect } from '@/core/compute-fetch/response';
+import { composeSignal } from '@/core/compute-fetch/signal';
 import type { ComputeAuth } from '@/core/types';
 
 export interface ServerVersion {
@@ -19,9 +21,7 @@ export interface ServerStats {
 }
 
 /**
- * ComputeServerStats provides methods to query Rhino Compute server statistics.
- *
- * @public Use this for server health monitoring and statistics.
+ * Server health and control: liveness, version, child processes, cache purges.
  *
  * @example
  * ```typescript
@@ -64,26 +64,30 @@ export default class ComputeServerStats {
 	 */
 	constructor(serverUrl: string, auth?: string | ComputeAuth) {
 		this.serverUrl = validateServerUrl(serverUrl);
-		this.headers = {
-			...buildAuthHeaders(typeof auth === 'string' ? { apiKey: auth } : (auth ?? {})),
-			'Content-Type': 'application/json'
-		};
+		this.headers = buildAuthHeaders(typeof auth === 'string' ? { apiKey: auth } : (auth ?? {}));
 	}
 
 	/**
 	 * Aborts after `timeoutMs` so a hung connection can't stall a probe or `monitor()`; `0` disables
 	 * it. Redirects are not followed: fetch would carry the API key header to the target.
 	 */
-	private fetchWithTimeout(
+	private async fetchWithTimeout(
 		url: string,
 		init: RequestInit = {},
 		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS
 	): Promise<Response> {
-		const requestInit: RequestInit = { ...init, headers: this.headers, redirect: 'manual' };
-		if (timeoutMs > 0 && !requestInit.signal) {
-			requestInit.signal = AbortSignal.timeout(timeoutMs);
+		const { signal, cleanup } = composeSignal(init.signal ?? undefined, timeoutMs);
+		try {
+			return await fetch(url, {
+				...init,
+				// Only a POST: on a GET the header forces a CORS preflight and describes no body.
+				headers: init.method === 'POST' ? withJsonContentType(this.headers) : this.headers,
+				redirect: 'manual',
+				signal
+			});
+		} finally {
+			cleanup();
 		}
-		return fetch(url, requestInit);
 	}
 
 	/**
@@ -145,11 +149,13 @@ export default class ComputeServerStats {
 	 *
 	 * @param timeoutMs - Abort the probe after this many ms (default: 5000).
 	 *   Pass `0` to disable the timeout.
+	 * @param signal - Cancels the probe, which then reports the abort as its `error`.
 	 * @returns `online` plus either the HTTP `status` the server answered with,
 	 *   or the `error` the connection attempt failed with.
 	 */
 	public async probeServer(
-		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS
+		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS,
+		signal?: AbortSignal
 	): Promise<{ online: boolean; status?: number; error?: string }> {
 		this.ensureNotDisposed();
 
@@ -161,16 +167,14 @@ export default class ComputeServerStats {
 		const url = `${this.serverUrl}/`;
 
 		try {
-			const response = await this.fetchWithTimeout(url, { method: 'GET' }, timeoutMs);
+			const response = await this.fetchWithTimeout(url, { method: 'GET', signal }, timeoutMs);
 			// Unread, the body would hold its connection until garbage collection.
 			await response.body?.cancel().catch(() => {});
 			return { online: response.ok || isRedirect(response), status: response.status };
 		} catch (err) {
-			getLogger().debug('[ComputeServerStats] Fetch error:', err);
-			return {
-				online: false,
-				error: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-			};
+			const error = describeProbeError(err);
+			getLogger().debug(`[ComputeServerStats] Fetch error: ${error}`);
+			return { online: false, error };
 		}
 	}
 
@@ -594,11 +598,14 @@ export default class ComputeServerStats {
 	}
 }
 
-/** The parsed body, or `undefined` when it isn't JSON. */
-function tryParseJson(text: string): unknown {
-	try {
-		return JSON.parse(text);
-	} catch {
-		return undefined;
-	}
+/**
+ * undici reports every connection failure as `TypeError: fetch failed` and keeps what happened on
+ * `cause`, whose message is empty when several addresses failed: its `code` is the one sure field.
+ */
+function describeProbeError(err: unknown): string {
+	if (!(err instanceof Error)) return String(err);
+	const summary = `${err.name}: ${err.message}`;
+	if (!(err.cause instanceof Error)) return summary;
+	const { code } = err.cause as { code?: unknown };
+	return `${summary}: ${typeof code === 'string' ? `${code} ` : ''}${err.cause.message}`.trim();
 }

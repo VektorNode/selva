@@ -2,8 +2,9 @@ import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { decodeBase64ToBinary } from '@/core/utils/encoding';
 import { readField } from '@/core/utils/read-field';
+import { redactUrl } from '@/core/utils/redact-url';
 
-import { DownloadOptions, FileBaseInfo, FileData, ProcessedFile } from './types';
+import type { DownloadOptions, FileBaseInfo, FileData, ProcessedFile } from './types';
 import { groupFilesByRoot, pathBelowRoot, subFolderSegments, toArchiveName } from './sub-folder';
 
 /**
@@ -68,7 +69,7 @@ export const downloadFileData = async (
 			'Failed to download files from compute response',
 			ErrorCodes.INVALID_STATE,
 			{
-				context: { originalError: err instanceof Error ? err.message : String(err) },
+				context: { fileCount: downloadableFiles.length, zipName: fileFoldername },
 				originalError: err
 			}
 		);
@@ -116,17 +117,21 @@ export const downloadFileDataByRoot = async (
 };
 
 /**
- * Zip-slip defense for a server-controlled path: drop `.`, `..` and drive-letter segments so no
- * entry escapes the extraction directory. `''` when nothing safe remains.
+ * Zip-slip defense for a server-controlled path: drop `.`, `..` and drive-prefixed segments
+ * (`C:`, and `C:evil`, which is relative to that drive's working directory) so no entry escapes
+ * the extraction directory. `''` when nothing safe remains.
  */
 const sanitizeArchivePath = (raw: string): string =>
 	subFolderSegments(raw)
-		.filter((segment) => segment !== '.' && segment !== '..' && !/^[a-zA-Z]:$/.test(segment))
+		.filter((segment) => segment !== '.' && segment !== '..' && !/^[a-zA-Z]:/.test(segment))
 		.join('/');
 
 /** The `isBase64Encoded` wire flag. Some server branches send booleans as strings (`"True"`). */
 export const isBase64Flag = (flag: unknown): boolean =>
 	flag === true || (typeof flag === 'string' && flag.trim().toLowerCase() === 'true');
+
+const joinArchivePath = (subFolder: string, name: string): string =>
+	subFolder !== '' ? `${subFolder}/${name}` : name;
 
 const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 	const processedFiles: ProcessedFile[] = [];
@@ -143,7 +148,7 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 		}
 		const rawSubFolder = readField<string>(item, 'subFolder');
 		const subFolder = rawSubFolder ? sanitizeArchivePath(rawSubFolder) : '';
-		const filePath = subFolder !== '' ? `${subFolder}/${fileName}` : fileName;
+		const filePath = joinArchivePath(subFolder, fileName);
 
 		const data = readField<unknown>(item, 'data');
 		if (typeof data !== 'string' || data === '') {
@@ -151,29 +156,24 @@ const decodeResponseFiles = (dataItems: FileData[]): ProcessedFile[] => {
 			return;
 		}
 
-		const metadata = readField<Record<string, string>>(item, 'metadata');
-
+		let content: Uint8Array | string = data;
 		if (isBase64Flag(readField<unknown>(item, 'isBase64Encoded'))) {
 			try {
-				processedFiles.push({
-					fileName,
-					content: decodeBase64ToBinary(data),
-					path: filePath,
-					subFolder,
-					...(metadata ? { metadata } : {})
-				});
+				content = decodeBase64ToBinary(data);
 			} catch (err) {
 				getLogger().warn(`Skipping file "${filePath}": base64 decode failed.`, err);
+				return;
 			}
-		} else {
-			processedFiles.push({
-				fileName,
-				content: data,
-				path: filePath,
-				subFolder,
-				...(metadata ? { metadata } : {})
-			});
 		}
+
+		const metadata = readField<Record<string, string>>(item, 'metadata');
+		processedFiles.push({
+			fileName,
+			content,
+			path: filePath,
+			subFolder,
+			...(metadata ? { metadata } : {})
+		});
 	});
 
 	return processedFiles;
@@ -190,7 +190,7 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 					signal: AbortSignal.timeout(REMOTE_FILE_TIMEOUT_MS)
 				});
 				if (!response.ok) {
-					getLogger().warn(`Failed to fetch additional file from URL: ${file.filePath}`);
+					getLogger().warn(`Failed to fetch additional file: ${redactUrl(file.filePath)}`);
 					return null;
 				}
 				const arrayBuffer = await response.arrayBuffer();
@@ -203,12 +203,14 @@ const fetchRemoteFiles = async (refs: FileBaseInfo[]): Promise<ProcessedFile[]> 
 				return {
 					fileName: safeName,
 					content: new Uint8Array(arrayBuffer),
-					path: subFolder !== '' ? `${subFolder}/${safeName}` : safeName,
+					path: joinArchivePath(subFolder, safeName),
 					// No `metadata`: an external URL carries no GH authoring context.
 					subFolder
 				} as ProcessedFile;
 			} catch (error) {
-				getLogger().error(`Error fetching additional file from URL: ${file.filePath}`, error);
+				// The error's name only: a bad URL's message quotes it, signed query included.
+				const reason = error instanceof Error ? error.name : 'unknown error';
+				getLogger().error(`Error fetching additional file ${redactUrl(file.filePath)}: ${reason}`);
 				return null;
 			}
 		})
@@ -225,7 +227,7 @@ async function createAndDownloadZip(
 	const { zip, strToU8 } = await import('fflate');
 
 	// Paths are already unique: extractFilesFromComputeResponse renames collisions. fflate
-	// flattens entries into a plain object, where a root entry named `__proto__` is lost.
+	// flattens entries into a plain object of its own, where a root entry named `__proto__` is lost.
 	const taken = new Set(files.map((file) => file.path));
 	const zipData: Record<string, Uint8Array> = {};
 	for (const file of files) {

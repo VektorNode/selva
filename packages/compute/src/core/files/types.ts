@@ -16,7 +16,7 @@ export type FileData = {
 
 /** A decoded or fetched file, ready to archive or hand to a caller. */
 export type ProcessedFile = {
-	/** Full filename including extension (e.g., "model.3dm") */
+	/** Filename including extension (e.g., "model.3dm"). Holds a nested path when the name had one. */
 	fileName: string;
 	/** File content as binary data (Uint8Array for decoded base64 or fetched binary) or text */
 	content: Uint8Array | string;

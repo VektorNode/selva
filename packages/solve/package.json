@@ -23,34 +23,16 @@
 	],
 	"exports": {
 		"./client": {
-			"import": {
-				"types": "./dist/client.d.ts",
-				"default": "./dist/client.js"
-			},
-			"require": {
-				"types": "./dist/client.d.cts",
-				"default": "./dist/client.cjs"
-			}
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
 		},
 		"./server": {
-			"import": {
-				"types": "./dist/server.d.ts",
-				"default": "./dist/server.js"
-			},
-			"require": {
-				"types": "./dist/server.d.cts",
-				"default": "./dist/server.cjs"
-			}
+			"types": "./dist/server.d.ts",
+			"default": "./dist/server.js"
 		},
 		"./shared": {
-			"import": {
-				"types": "./dist/shared.d.ts",
-				"default": "./dist/shared.js"
-			},
-			"require": {
-				"types": "./dist/shared.d.cts",
-				"default": "./dist/shared.cjs"
-			}
+			"types": "./dist/shared.d.ts",
+			"default": "./dist/shared.js"
 		}
 	},
 	"files": [
@@ -75,7 +57,7 @@
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
 		"@selvajs/platform": "workspace:^",
-		"@selvajs/schemas": "workspace:*"
+		"@selvajs/schemas": "workspace:^"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

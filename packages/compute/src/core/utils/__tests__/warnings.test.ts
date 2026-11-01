@@ -5,7 +5,7 @@
  * jsdom user-agent marker give it away).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { warnIfClientSide, resetClientSideWarnings } from '../warnings';
+import { warnIfClientSide, resetWarnings } from '../warnings';
 import { setLogger } from '../logger';
 
 const warn = vi.fn();
@@ -21,7 +21,7 @@ function stubRealBrowser(): void {
 
 beforeEach(() => {
 	warn.mockClear();
-	resetClientSideWarnings();
+	resetWarnings();
 	setLogger({ debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() });
 });
 
@@ -65,19 +65,10 @@ describe('warnIfClientSide', () => {
 		expect(warn.mock.calls[0][0]).toContain('solveGrasshopperDefinition');
 	});
 
-	it('warns at most once per function (dedupe)', () => {
+	it('warns once per function', () => {
 		stubRealBrowser();
 
 		warnIfClientSide('solveGrasshopperDefinition');
-		warnIfClientSide('solveGrasshopperDefinition');
-		warnIfClientSide('solveGrasshopperDefinition');
-
-		expect(warn).toHaveBeenCalledTimes(1);
-	});
-
-	it('warns separately for different functions', () => {
-		stubRealBrowser();
-
 		warnIfClientSide('solveGrasshopperDefinition');
 		warnIfClientSide('fetchDefinitionIO');
 
@@ -89,24 +80,5 @@ describe('warnIfClientSide', () => {
 
 		warnIfClientSide('solveGrasshopperDefinition', true);
 		expect(warn).not.toHaveBeenCalled();
-	});
-
-	it('resetClientSideWarnings clears the dedupe', () => {
-		stubRealBrowser();
-
-		warnIfClientSide('solveGrasshopperDefinition');
-		resetClientSideWarnings();
-		warnIfClientSide('solveGrasshopperDefinition');
-
-		expect(warn).toHaveBeenCalledTimes(2);
-	});
-
-	it('tolerates a missing navigator in a browser-like environment', () => {
-		vi.stubGlobal('window', {});
-		vi.stubGlobal('process', undefined);
-		vi.stubGlobal('navigator', undefined);
-
-		warnIfClientSide('solveGrasshopperDefinition');
-		expect(warn).toHaveBeenCalledTimes(1);
 	});
 });

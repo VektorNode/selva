@@ -1,9 +1,9 @@
 // `rhino` is a stand-in: the decoders only construct `Point`/`Line` and call
 // `CommonObject.decode`, so no rhino3dm WASM is needed.
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import type { RhinoModule } from 'rhino3dm';
 
-import { decodeRhinoGeometry } from '../rhino-decoder';
+import { decodeRhinoGeometry, type RhinoRuntime } from '../rhino-decoder';
 import { isRhinoDecodeError } from '../rhino-objects';
 
 /** `Point`/`Line` record their args so we can assert on them. */
@@ -27,24 +27,22 @@ function fakeRhino(
 	} as unknown as RhinoModule;
 }
 
-describe('decodeRhinoGeometry — registered decoders', () => {
-	it('decodes a Point3d via its registered decoder', () => {
-		const rhino = fakeRhino();
-		const result = decodeRhinoGeometry({ X: 1, Y: 2, Z: 3 }, 'Rhino.Geometry.Point3d', rhino) as {
-			location: number[];
-		};
-		expect(result.location).toEqual([1, 2, 3]);
-	});
+it('accepts a real rhino3dm module', () => {
+	expectTypeOf<RhinoModule>().toExtend<RhinoRuntime>();
+});
 
-	it('decodes a Line via its registered decoder', () => {
-		const rhino = fakeRhino();
-		const data = { From: { X: 0, Y: 0, Z: 0 }, To: { X: 1, Y: 1, Z: 1 } };
-		const result = decodeRhinoGeometry(data, 'Rhino.Geometry.Line', rhino) as {
-			from: number[];
-			to: number[];
-		};
-		expect(result.from).toEqual([0, 0, 0]);
-		expect(result.to).toEqual([1, 1, 1]);
+describe('decodeRhinoGeometry — registered decoders', () => {
+	it.each([
+		['Point3d', { X: 1, Y: 2, Z: 3 }, { location: [1, 2, 3] }],
+		[
+			'Line',
+			{ From: { X: 0, Y: 0, Z: 0 }, To: { X: 1, Y: 1, Z: 1 } },
+			{ from: [0, 0, 0], to: [1, 1, 1] }
+		]
+	])('decodes a %s via its registered decoder', (name, data, expected) => {
+		expect(decodeRhinoGeometry(data, `Rhino.Geometry.${name}`, fakeRhino())).toMatchObject(
+			expected
+		);
 	});
 
 	it('a decoder returning null falls through instead of short-circuiting', () => {
@@ -56,24 +54,13 @@ describe('decodeRhinoGeometry — registered decoders', () => {
 	});
 
 	it('a prefix-collided type reaches the CommonObject fallback', () => {
-		// Rhino.Geometry.LineCurve startsWith-matches the Rhino.Geometry.Line decoder,
-		// whose {From, To} guard fails on the CommonObject envelope — the envelope must
-		// then reach CommonObject.decode instead of decoding to null.
+		// Decoders match the exact type: LineCurve must not reach the Line decoder, whose
+		// {From, To} guard fails on the envelope, but CommonObject.decode.
 		const envelope = { version: 10000, archive3dm: 70, opennurbs: 0, data: 'BASE64' };
 		const decode = vi.fn(() => ({ decodedCurve: true }));
 		const result = decodeRhinoGeometry(envelope, 'Rhino.Geometry.LineCurve', fakeRhino(decode));
 		expect(decode).toHaveBeenCalledWith(envelope);
 		expect(result).toEqual({ decodedCurve: true });
-	});
-
-	it('matches a decoder by prefix when the exact type is not registered', () => {
-		// A subtype like "...Point3d, Foo" still resolves to the Point3d decoder via startsWith.
-		const result = decodeRhinoGeometry(
-			{ X: 5, Y: 6, Z: 7 },
-			'Rhino.Geometry.Point3d, Rhino.Common',
-			fakeRhino()
-		) as { location: number[] };
-		expect(result.location).toEqual([5, 6, 7]);
 	});
 
 	it('falls back to CommonObject.decode when a decoder throws', () => {
@@ -98,17 +85,13 @@ describe('decodeRhinoGeometry — CommonObject fallback', () => {
 		expect(result).toEqual({ brep: envelope });
 	});
 
-	it('passes through a payload that is not an envelope (no base64 `data` string)', () => {
+	it.each([
+		['Rhino.Geometry.Mesh', { value: { v: 1 } }],
+		['Rhino.Geometry.Unknown', { type: 'Rhino.Geometry.Unknown' }]
+	])('passes a %s payload with no base64 `data` string through raw', (type, raw) => {
 		const decode = vi.fn((p) => ({ ok: p }));
-		const rhino = fakeRhino(decode);
-		const raw = { value: { v: 1 } };
-		expect(decodeRhinoGeometry(raw, 'Rhino.Geometry.Mesh', rhino)).toBe(raw);
+		expect(decodeRhinoGeometry(raw, type, fakeRhino(decode))).toBe(raw);
 		expect(decode).not.toHaveBeenCalled();
-	});
-
-	it('returns the raw input when there is no decoder and no extractable payload', () => {
-		const raw = { type: 'Rhino.Geometry.Unknown' };
-		expect(decodeRhinoGeometry(raw, 'Rhino.Geometry.Unknown', fakeRhino())).toBe(raw);
 	});
 
 	it('returns a __decodeError sentinel when CommonObject.decode throws', () => {

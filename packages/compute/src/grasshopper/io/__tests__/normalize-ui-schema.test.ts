@@ -12,34 +12,6 @@ import { describe, expect, it } from 'vitest';
 import { normalizeUISchemaCasing } from '../normalize-ui-schema';
 
 describe('normalizeUISchemaCasing', () => {
-	it('canonicalizes top-level structural keys', () => {
-		const pascal = {
-			Id: 'schema-1',
-			SchemaVersion: '2.14.0',
-			Inputs: [],
-			Outputs: [],
-			Layout: { Type: 'tabbed', Tabs: [] }
-		};
-
-		expect(normalizeUISchemaCasing(pascal)).toEqual({
-			id: 'schema-1',
-			schemaVersion: '2.14.0',
-			inputs: [],
-			outputs: [],
-			layout: { type: 'tabbed', tabs: [] }
-		});
-	});
-
-	it('recurses through arrays of nested records', () => {
-		const pascal = {
-			Inputs: [{ Id: 'a', ParamType: 'number', InputStructure: 'item', Default: null }]
-		};
-
-		expect(normalizeUISchemaCasing(pascal)).toEqual({
-			inputs: [{ id: 'a', paramType: 'number', inputStructure: 'item', default: null }]
-		});
-	});
-
 	it('canonicalizes the full layout nesting down to widget config', () => {
 		const pascal = {
 			Layout: {
@@ -242,15 +214,34 @@ describe('normalizeUISchemaCasing', () => {
 		});
 	});
 
-	it('passes an already-camelCase schema through unchanged', () => {
-		const camel = {
-			id: 'schema-1',
-			schemaVersion: '2.14.0',
-			inputs: [{ id: 'a', paramType: 'number' }],
-			layout: { type: 'tabbed', tabs: [] }
-		};
+	it('normalizing twice equals normalizing once', () => {
+		const once = normalizeUISchemaCasing({
+			Id: 'schema-1',
+			SchemaVersion: '2.14.0',
+			Inputs: [{ Id: 'a', ParamType: 'number', Values: { 'Option A': '1', True: '0' } }],
+			Layout: {
+				Type: 'tabbed',
+				Tabs: [
+					{
+						Groups: [
+							{
+								Items: [
+									{
+										WidgetType: 'dropdown',
+										Config: {
+											Options: { Oak: '0' },
+											OptionMedia: { Oak: { IconName: 'lucide:tree-deciduous' } }
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		});
 
-		expect(normalizeUISchemaCasing(camel)).toEqual(camel);
+		expect(normalizeUISchemaCasing(once)).toEqual(once);
 	});
 
 	it('returns a fresh object rather than mutating the input', () => {
@@ -259,12 +250,6 @@ describe('normalizeUISchemaCasing', () => {
 
 		expect(pascal).toEqual({ Inputs: [{ Id: 'a' }] });
 		expect(result).not.toBe(pascal);
-	});
-
-	it('handles non-object input without throwing', () => {
-		expect(normalizeUISchemaCasing(null)).toBeNull();
-		expect(normalizeUISchemaCasing('text')).toBe('text');
-		expect(normalizeUISchemaCasing(42)).toBe(42);
 	});
 
 	// Must match Newtonsoft's CamelCaseNamingStrategy, or an acronym-prefixed field

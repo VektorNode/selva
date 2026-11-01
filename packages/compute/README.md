@@ -21,6 +21,8 @@ objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/v
 npm install @selvajs/compute
 ```
 
+The package is ESM only, with two entrypoints: `/core` and `/grasshopper`.
+
 Two entrypoints: `@selvajs/compute/grasshopper` (client, scheduler, data trees, IO parsing) and
 `@selvajs/compute/core` (low-level fetch, errors, config). There is no root entry: import a
 subpath.
@@ -72,7 +74,7 @@ Pick the row that matches what the user is doing:
 | Workload                          | `mode`          | `timeoutMs`      | `retry`           | Notes                                                                                                                    |
 | --------------------------------- | --------------- | ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **Slider scrubs / live previews** | `'latest-wins'` | `30_000`         | default           | Aborts in-flight solves when newer values arrive. Add `cache: { maxBytes: 64 * 1024 * 1024 }` for instant repeats.       |
-| **Submit / long-running jobs**    | `'queue'`       | `0` (no timeout) | `{ attempts: 1 }` | Serial queue. Pass a caller `signal` so users can hit Cancel. See [Long jobs behind a proxy](#long-jobs-behind-a-proxy). |
+| **Submit / long-running jobs**    | `'queue'`       | `0` (no timeout) | default           | Serial queue. Pass a caller `signal` so users can hit Cancel. See [Long jobs behind a proxy](#long-jobs-behind-a-proxy). |
 | **Background / batch parallel**   | `'queue'`       | `60_000`         | `{ attempts: 2 }` | Set `maxConcurrent` (e.g. 4) to run that many solves at once; queue mode defaults to 1.                                  |
 
 Create one scheduler per UI surface: their queues, cancel scopes and caches are independent.
@@ -109,6 +111,20 @@ A proxy in front of Compute closes idle connections after its own timeout, and t
 work around that: raise the proxy's idle timeout before running long solves from a browser. For
 solves longer than a couple of minutes, run this library server-side behind your own job queue
 and expose a status endpoint to the browser.
+
+On Node, undici stops waiting for response headers at 300 s, and neither `timeoutMs` nor `0` lifts
+that: the solve fails with `NETWORK_ERROR` while it is still running on the server, and a retry
+would run it a second time. Past 300 s, keep `retry` off and pass a `fetch` with a longer limit:
+
+```ts
+import { Agent, fetch as undiciFetch } from 'undici';
+
+const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+const client = await GrasshopperClient.create({
+	serverUrl,
+	fetch: (url, init) => undiciFetch(url, { ...init, dispatcher })
+});
+```
 
 ## Errors
 

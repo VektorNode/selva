@@ -22,7 +22,7 @@
  * shutdownChildren — those mutate the child pool. It is safe to run against any
  * reachable server, including production.
  */
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ComputeServerStats from '../../src/grasshopper/server/compute-server-stats';
 
@@ -32,22 +32,17 @@ const LIVE_KEY = process.env.COMPUTE_LIVE_KEY;
 // tests/setup.ts replaces global.fetch with a vi.fn(); restore Node's native
 // fetch for this suite so the probes actually reach the network. Captured here
 // (not at import time) and put back in afterAll so other suites keep the stub.
-let stubbedFetch: typeof globalThis.fetch;
-
 describe.runIf(Boolean(LIVE_URL))('ComputeServerStats — live read-only probes', () => {
 	let stats: ComputeServerStats;
 
 	beforeAll(() => {
-		// tests/setup.ts stashed Node's native fetch before installing the stub;
-		// swap it back for this suite so the probes reach the real network.
-		stubbedFetch = globalThis.fetch;
-		globalThis.fetch = (globalThis as { __nativeFetch?: typeof fetch }).__nativeFetch!;
 		stats = new ComputeServerStats(LIVE_URL!, LIVE_KEY);
 	});
 
+	beforeEach(() => vi.unstubAllGlobals());
+
 	afterAll(async () => {
 		await stats.dispose();
-		globalThis.fetch = stubbedFetch;
 	});
 
 	it('isServerOnline() is true against a running server', async () => {

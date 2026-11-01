@@ -1,11 +1,12 @@
-import { ComputeConfig, ComputeError, ErrorCodes } from '@/core';
 import { fetchCompute } from '@/core/compute-fetch/compute-fetch';
+import { ComputeError, ErrorCodes } from '@/core/errors';
+import type { ComputeConfig } from '@/core/types';
 import { readField } from '@/core/utils/read-field';
 import { warnIfClientSide } from '@/core/utils/warnings';
 import { validateServerUrl } from '@/core/server/validate-server-url';
-import { prepareGrasshopperArgs, withGrasshopperErrorCodes } from '../solve';
+import { assertResponseObject, prepareGrasshopperArgs, withGrasshopperErrorCodes } from '../solve';
 
-import { GrasshopperParsedIO, GrasshopperParsedIORaw } from '../types';
+import type { GrasshopperParsedIO, GrasshopperParsedIORaw } from '../types';
 
 import { processInputsWithErrors } from './input/input-processors';
 import { normalizeInputSchema, normalizeOutputSchema } from './normalize-schema';
@@ -13,14 +14,11 @@ import { normalizeInputSchema, normalizeOutputSchema } from './normalize-schema'
 /**
  * Fetches a definition's input/output schemas without per-type parsing.
  *
- * Field KEYS are canonicalized to camelCase and missing required fields get a
- * fallback ({@link normalizeInputSchema}); a missing or non-array `inputs` /
- * `outputs` becomes `[]`. Field VALUES, notably `default` and the `values`
+ * Field KEYS are canonicalized to camelCase and missing required fields get a fallback; a missing
+ * or non-array `inputs` / `outputs` becomes `[]`. Field VALUES, notably `default` and the `values`
  * label map, pass through verbatim.
  *
  * @throws {ComputeError} If fetch fails or response is invalid
- *
- * @public Use `fetchParsedDefinitionIO()` for processed, type-safe inputs
  */
 export async function fetchDefinitionIO(
 	definition: string | Uint8Array,
@@ -43,11 +41,7 @@ export async function fetchDefinitionIO(
 		withGrasshopperErrorCodes(config)
 	);
 
-	if (!response || typeof response !== 'object') {
-		throw new ComputeError('Invalid IO response structure', ErrorCodes.INVALID_INPUT, {
-			context: { response }
-		});
-	}
+	assertResponseObject(response);
 
 	const loadWarnings = nonEmptyStrings(readField(response, 'warnings'));
 	const loadErrors = nonEmptyStrings(readField(response, 'errors'));

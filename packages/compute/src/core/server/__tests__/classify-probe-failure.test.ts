@@ -76,17 +76,16 @@ describe('classifyProbeFailure', () => {
 			}
 		});
 
-		it('defaults an unrecognized failure to retryable', () => {
+		it('defaults an unrecognized failure, or one with no detail, to retryable', () => {
 			const result = classifyProbeFailure({ online: false, error: 'something odd happened' });
 			expect(result?.verdict).toBe('unknown');
 			expect(result?.retryable).toBe(true);
 			expect(result?.summary).toContain('something odd happened');
-		});
 
-		it('handles a failure with no detail at all', () => {
-			const result = classifyProbeFailure({ online: false });
-			expect(result?.verdict).toBe('unknown');
-			expect(result?.retryable).toBe(true);
+			expect(classifyProbeFailure({ online: false })).toMatchObject({
+				verdict: 'unknown',
+				retryable: true
+			});
 		});
 	});
 });

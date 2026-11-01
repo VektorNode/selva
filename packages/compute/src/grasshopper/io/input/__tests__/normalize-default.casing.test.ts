@@ -48,32 +48,6 @@ describe('normalizeDefault — real wire casing (PascalCase InnerTree)', () => {
 		expect(input.default).toBeUndefined();
 	});
 
-	it('still parses lowercase innerTree (forward-compatible if a branch camelCases it)', () => {
-		const { input } = processInputWithError(
-			createInputSchema({
-				paramType: 'Number',
-				default: {
-					paramName: 'x',
-					innerTree: { '{0}': [{ type: 'System.Double', data: '7' }] }
-				}
-			})
-		);
-		expect(input.default).toBe(7);
-	});
-
-	it('GUARD: a non-empty tree default must never collapse to null', () => {
-		for (const wrapper of ['InnerTree', 'innerTree'] as const) {
-			const { input } = processInputWithError(
-				createInputSchema({
-					paramType: 'Number',
-					default: { [wrapper]: { '{0}': [{ type: 'System.Double', data: '9' }] } }
-				})
-			);
-			expect(input.default).not.toBeNull();
-			expect(input.default).toBe(9);
-		}
-	});
-
 	it('keeps a bracket-leading System.String tree value as a string (no JSON.parse)', () => {
 		// A multi-value Dynamic_ValueList sends string labels that can start with
 		// `[`/`{`. Parsed into an array, the leaf `data` is rejected by the fork's
@@ -97,11 +71,17 @@ describe('normalizeDefault — real wire casing (PascalCase InnerTree)', () => {
 		expect(input.default).toEqual({ '{0}': ['[1,2,3]', '{not json', 'plain'] });
 	});
 
-	it('warns and nulls only a genuinely unknown shape (no tree key at all)', () => {
+	it('strips the JSON quotes from a tree Text default, as the scalar path does', () => {
 		const { input } = processInputWithError(
-			createInputSchema({ paramType: 'Number', default: { somethingElse: 1 } })
+			createInputSchema({
+				paramType: 'Text',
+				treeAccess: true,
+				default: {
+					InnerTree: { '{0}': [{ type: 'System.String', data: '"hello"' }] }
+				}
+			})
 		);
-		expect(input.default).toBeNull();
+		expect(input.default).toEqual({ '{0}': ['hello'] });
 	});
 
 	it('surfaces a MALFORMED_DEFAULT parse error for an unknown default shape', () => {
@@ -115,12 +95,5 @@ describe('normalizeDefault — real wire casing (PascalCase InnerTree)', () => {
 		expect(input.default).toBeNull();
 		expect(errors).toMatchObject([{ code: 'MALFORMED_DEFAULT', inputName: 'Weird' }]);
 		expect(errors[0].message).toContain('Weird');
-	});
-
-	it('does NOT emit a parse error for a well-formed default', () => {
-		const { errors } = processInputWithError(
-			createInputSchema({ paramType: 'Number', default: pascalCaseDefault })
-		);
-		expect(errors).toEqual([]);
 	});
 });

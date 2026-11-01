@@ -77,8 +77,6 @@ export function hashSolveInput(definition: SolveDefinition, dataTree: unknown): 
 /**
  * `hashSolveInput` from a precomputed {@link hashDefinition}, so the scheduler, which also keys its
  * server-cache-key map by that hash, passes over a multi-MB definition once per solve.
- *
- * @internal
  */
 export function hashSolveInputForDefinition(definitionHash: string, dataTree: unknown): string {
 	return `${definitionHash}|t:${sha256Hex(stableStringify(dataTree))}`;

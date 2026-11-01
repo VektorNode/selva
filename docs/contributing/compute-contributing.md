@@ -63,7 +63,7 @@ Steps:
    consumers can't name is a type they can't narrow to.
 5. **Test** the parser through `INPUT_TYPE_PARSERS.get('CustomType')!.parse(schema, base)`, with
    `createInputSchema` from `tests/helpers/test-data-builders.ts`. Add a case to
-   `process-inputs.characterization.test.ts` so the full pipeline, fallback included, is pinned.
+   `process-input.test.ts` so the full pipeline, fallback included, is pinned.
 
 A parser must:
 

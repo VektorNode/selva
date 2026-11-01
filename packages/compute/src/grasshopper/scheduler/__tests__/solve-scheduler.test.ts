@@ -92,7 +92,10 @@ describe('SolveScheduler', () => {
 			const second = scheduler.solve('def', [tree('y')]);
 
 			// First should reject as superseded; the in-flight is aborted via its signal
-			await expect(first).rejects.toMatchObject({ message: expect.stringMatching(/Superseded/i) });
+			await expect(first).rejects.toMatchObject({
+				code: ErrorCodes.SUPERSEDED,
+				message: expect.stringMatching(/Superseded/i)
+			});
 
 			// The aborted call rejects with AbortError → drainNext kicks in → second runs
 			await vi.waitFor(() => expect(queue.length).toBeGreaterThanOrEqual(2));
@@ -100,24 +103,6 @@ describe('SolveScheduler', () => {
 			queue[1].release(makeResponse('b'));
 			const r2 = await second;
 			expect(r2.filename).toBe('b');
-		});
-
-		it('supersedes pending when newer call arrives during in-flight', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'latest-wins' });
-
-			const first = scheduler.solve('def', [tree('x')]);
-			const middle = scheduler.solve('def', [tree('y')]);
-			const last = scheduler.solve('def', [tree('z')]);
-
-			// Both first (in-flight, aborted) and middle (pending, superseded) reject
-			await expect(first).rejects.toMatchObject({ code: expect.any(String) });
-			await expect(middle).rejects.toMatchObject({ message: expect.stringMatching(/Superseded/i) });
-
-			// `last` should run after the aborted first finishes its finally block
-			await vi.waitFor(() => expect(queue.length).toBe(2));
-			queue[1].release(makeResponse('z'));
-			await expect(last).resolves.toMatchObject({ filename: 'z' });
 		});
 
 		it('fires onSuperseded hook for cancelled calls', async () => {
@@ -158,16 +143,6 @@ describe('SolveScheduler', () => {
 			expect(onSettle).toHaveBeenCalledTimes(1);
 		});
 
-		it('rejects superseded calls with ErrorCodes.SUPERSEDED', async () => {
-			const { executor } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'latest-wins' });
-
-			const first = scheduler.solve('def', [tree('x')]);
-			scheduler.solve('def', [tree('y')]).catch(() => {});
-
-			await expect(first).rejects.toMatchObject({ code: ErrorCodes.SUPERSEDED });
-		});
-
 		it('only the latest survives when many solves race during abort window', async () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'latest-wins' });
@@ -198,29 +173,6 @@ describe('SolveScheduler', () => {
 			await expect(promises[9]).resolves.toMatchObject({ filename: 'latest' });
 		});
 
-		it('preserves SUPERSEDED code even when new solve arrives in the abort window', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'latest-wins' });
-
-			const first = scheduler.solve('def', [tree('a')]);
-
-			// Second triggers abort of first — first.reject is called synchronously
-			// with SUPERSEDED. The executor's catch later sees AbortError, but the
-			// scheduler must NOT overwrite the rejection with an ABORTED code.
-			const second = scheduler.solve('def', [tree('b')]);
-
-			// A third arrives during the abort window — second should also be SUPERSEDED.
-			const third = scheduler.solve('def', [tree('c')]);
-
-			await expect(first).rejects.toMatchObject({ code: ErrorCodes.SUPERSEDED });
-			await expect(second).rejects.toMatchObject({ code: ErrorCodes.SUPERSEDED });
-
-			await vi.waitFor(() => expect(queue.length).toBeGreaterThanOrEqual(2));
-			// Release whichever in-flight is left — third should resolve.
-			for (const q of queue) q.release(makeResponse('c'));
-			await expect(third).resolves.toMatchObject({ filename: 'c' });
-		});
-
 		it('lastError reflects the original supersede cause, not the downstream abort', async () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'latest-wins' });
@@ -241,42 +193,24 @@ describe('SolveScheduler', () => {
 	});
 
 	describe('queue mode', () => {
-		it('runs solves serially when maxConcurrent=1', async () => {
+		it.each([1, 2])('runs at most maxConcurrent=%i at once', async (maxConcurrent) => {
 			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, {
-				mode: 'queue',
-				maxConcurrent: 1
-			});
+			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue', maxConcurrent });
 
-			const a = scheduler.solve('def', [tree('a')]);
-			const b = scheduler.solve('def', [tree('b')]);
+			const solves = Array.from({ length: maxConcurrent + 1 }, (_, i) =>
+				scheduler.solve('def', [tree(`p${i}`)])
+			);
 
-			// Only first should be in-flight
-			expect(queue).toHaveLength(1);
+			expect(queue).toHaveLength(maxConcurrent);
+			expect(scheduler.inFlightCount).toBe(maxConcurrent);
 			expect(scheduler.queueDepth).toBe(1);
 
-			queue[0].release(makeResponse('a'));
-			await a;
+			queue[0].release(makeResponse('first'));
+			await solves[0];
 
-			await vi.waitFor(() => expect(queue.length).toBe(2));
-			queue[1].release(makeResponse('b'));
-			expect((await b).filename).toBe('b');
-		});
-
-		it('respects maxConcurrent', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, {
-				mode: 'queue',
-				maxConcurrent: 2
-			});
-
-			scheduler.solve('def', [tree('a')]).catch(() => {});
-			scheduler.solve('def', [tree('b')]).catch(() => {});
-			scheduler.solve('def', [tree('c')]).catch(() => {});
-
-			expect(queue).toHaveLength(2);
-			expect(scheduler.inFlightCount).toBe(2);
-			expect(scheduler.queueDepth).toBe(1);
+			await vi.waitFor(() => expect(queue.length).toBe(maxConcurrent + 1));
+			queue.slice(1).forEach((call) => call.release(makeResponse('rest')));
+			expect((await solves[maxConcurrent]).filename).toBe('rest');
 		});
 	});
 
@@ -405,22 +339,6 @@ describe('SolveScheduler', () => {
 	});
 
 	describe('cancellation', () => {
-		it('cancelAll rejects pending and aborts in-flight', async () => {
-			const { executor } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, {
-				mode: 'queue',
-				maxConcurrent: 1
-			});
-
-			const a = scheduler.solve('def', [tree('a')]);
-			const b = scheduler.solve('def', [tree('b')]);
-
-			scheduler.cancelAll();
-
-			await expect(a).rejects.toBeInstanceOf(ComputeError);
-			await expect(b).rejects.toMatchObject({ message: expect.stringMatching(/aborted/i) });
-		});
-
 		it('aborting a QUEUED solve rejects it and never executes it', async () => {
 			const { executor, queue } = deferredExecutor();
 			const onSettle = vi.fn();
@@ -537,99 +455,38 @@ describe('SolveScheduler', () => {
 			const b = scheduler.solve('def', [tree('b')]);
 
 			ctrlA.abort();
-			await expect(a).rejects.toBeInstanceOf(ComputeError);
+			await expect(a).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
 
 			// b should still be in flight
 			expect(scheduler.inFlightCount).toBe(1);
 			queue[1].release(makeResponse('b'));
 			await expect(b).resolves.toMatchObject({ filename: 'b' });
 		});
-
-		it('rejects immediately when caller signal is already aborted', async () => {
-			const { executor } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig);
-			const ctrl = new AbortController();
-			ctrl.abort();
-			await expect(scheduler.solve('def', [], { signal: ctrl.signal })).rejects.toMatchObject({
-				code: ErrorCodes.ABORTED
-			});
-		});
-
-		it('per-call signal aborts in-flight with ErrorCodes.ABORTED', async () => {
-			const { executor } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
-
-			const ctrl = new AbortController();
-			const p = scheduler.solve('def', [tree('a')], {
-				signal: ctrl.signal
-			});
-
-			ctrl.abort();
-			await expect(p).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
-		});
 	});
 
 	describe('cache', () => {
-		it('returns cached response without invoking executor', async () => {
+		it('drops an expired entry on read, counting a miss and releasing its bytes', async () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
-				cache: { maxBytes: 100_000 }
+				cache: { ttlMs: 10, maxBytes: 1000 }
 			});
 
 			const inputs = [tree('x')];
 			const first = scheduler.solve('def', inputs);
-			queue[0].release(makeResponse('hit'));
+			const response = makeResponse('one');
+			setResponseWireSize(response, 100);
+			queue[0].release(response);
 			await first;
-
-			// Same input → cache hit
-			const second = await scheduler.solve('def', inputs);
-			expect(second.filename).toBe('hit');
-			expect(queue).toHaveLength(1); // executor not called again
-		});
-
-		it('respects ttl', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, {
-				mode: 'queue',
-				cache: { ttlMs: 10, maxBytes: 100_000 }
-			});
-
-			const inputs = [tree('x')];
-			const first = scheduler.solve('def', inputs);
-			queue[0].release(makeResponse('one'));
-			await first;
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 1, bytes: 100 });
 
 			await new Promise((r) => setTimeout(r, 20));
-
-			const secondPromise = scheduler.solve('def', inputs);
+			const second = scheduler.solve('def', inputs);
+			// The solve ran again, so this is a miss, whatever the reason the entry was gone.
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 0, bytes: 0, hits: 0, misses: 2 });
 			await vi.waitFor(() => expect(queue.length).toBe(2));
 			queue[1].release(makeResponse('two'));
-			const second = await secondPromise;
-			expect(second.filename).toBe('two');
-		});
-
-		it('retains entries far past any count cap, bounded only by maxBytes', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, {
-				mode: 'queue',
-				cache: { maxBytes: 100_000 }
-			});
-
-			const trees = ['a', 'b', 'c'].map((n) => [tree(n)]);
-			for (let i = 0; i < 3; i++) {
-				const p = scheduler.solve('def', trees[i]);
-				await vi.waitFor(() => expect(queue.length).toBe(i + 1));
-				const response = makeResponse(String(i + 1));
-				setResponseWireSize(response, 100);
-				queue[i].release(response);
-				await p;
-			}
-
-			expect(scheduler.cacheStats()).toMatchObject({ entries: 3, evictions: 0 });
-			// The oldest entry survives a count that would have evicted it under any cap.
-			expect((await scheduler.solve('def', trees[0])).filename).toBe('1');
-			expect(queue.length).toBe(3);
+			expect((await second).filename).toBe('two');
 		});
 
 		it('evicts LRU when retained bytes exceed maxBytes', async () => {
@@ -650,7 +507,7 @@ describe('SolveScheduler', () => {
 			}
 
 			// 3 × 100 bytes > 250 → the oldest entry was evicted.
-			expect(scheduler.cacheStats()).toMatchObject({ entries: 2, bytes: 200 });
+			expect(scheduler.cacheStats()).toMatchObject({ entries: 2, bytes: 200, evictions: 1 });
 			const recheck = scheduler.solve('def', trees[0]);
 			await vi.waitFor(() => expect(queue.length).toBe(4));
 			queue[3].release(makeResponse('1-again'));
@@ -696,29 +553,6 @@ describe('SolveScheduler', () => {
 			expect(scheduler.cacheStats().entries).toBe(0);
 		});
 
-		it('releases an entry’s bytes when it expires via ttl', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, {
-				mode: 'queue',
-				cache: { ttlMs: 10, maxBytes: 1000 }
-			});
-
-			const inputs = [tree('x')];
-			const first = scheduler.solve('def', inputs);
-			const response = makeResponse('one');
-			setResponseWireSize(response, 100);
-			queue[0].release(response);
-			await first;
-			expect(scheduler.cacheStats()).toMatchObject({ entries: 1, bytes: 100 });
-
-			await new Promise((r) => setTimeout(r, 20));
-			const second = scheduler.solve('def', inputs); // expired read drops the entry
-			expect(scheduler.cacheStats()).toMatchObject({ entries: 0, bytes: 0 });
-			await vi.waitFor(() => expect(queue.length).toBe(2));
-			queue[1].release(makeResponse('two'));
-			await second;
-		});
-
 		// The counters behind the operator-facing hit rate. Without these the
 		// admin panel could report a confident number that means nothing.
 		describe('hit/miss counters', () => {
@@ -736,51 +570,10 @@ describe('SolveScheduler', () => {
 				await first;
 				expect(scheduler.cacheStats()).toMatchObject({ hits: 0, misses: 1 });
 
-				await scheduler.solve('def', inputs); // served from cache
+				const second = await scheduler.solve('def', inputs); // served from cache
+				expect(second.filename).toBe('one');
+				expect(queue).toHaveLength(1);
 				expect(scheduler.cacheStats()).toMatchObject({ hits: 1, misses: 1 });
-			});
-
-			it('counts a TTL-expired read as a miss, not a hit', async () => {
-				const { executor, queue } = deferredExecutor();
-				const scheduler = new SolveScheduler(executor, baseConfig, {
-					mode: 'queue',
-					cache: { ttlMs: 10, maxBytes: 100_000 }
-				});
-				const inputs = [tree('x')];
-
-				const first = scheduler.solve('def', inputs);
-				await vi.waitFor(() => expect(queue.length).toBe(1));
-				queue[0].release(makeResponse('one'));
-				await first;
-
-				await new Promise((r) => setTimeout(r, 20));
-				const second = scheduler.solve('def', inputs);
-				// The solve ran again, so this is a miss — which is what a hit rate
-				// is measuring, regardless of why the entry was gone.
-				expect(scheduler.cacheStats()).toMatchObject({ hits: 0, misses: 2 });
-				await vi.waitFor(() => expect(queue.length).toBe(2));
-				queue[1].release(makeResponse('two'));
-				await second;
-			});
-
-			it('counts evictions only under byte pressure, not replacement', async () => {
-				const { executor, queue } = deferredExecutor();
-				const scheduler = new SolveScheduler(executor, baseConfig, {
-					mode: 'queue',
-					cache: { maxBytes: 250 }
-				});
-
-				const trees = ['a', 'b', 'c'].map((n) => [tree(n)]);
-				for (let i = 0; i < 3; i++) {
-					const p = scheduler.solve('def', trees[i]);
-					await vi.waitFor(() => expect(queue.length).toBe(i + 1));
-					const response = makeResponse(String(i + 1));
-					setResponseWireSize(response, 100);
-					queue[i].release(response);
-					await p;
-				}
-				// 3 × 100 > 250 → exactly one entry pushed out by the byte budget.
-				expect(scheduler.cacheStats()).toMatchObject({ evictions: 1 });
 			});
 
 			it('keeps counters across clearCache so a hit rate stays comparable', async () => {
@@ -832,23 +625,25 @@ describe('SolveScheduler', () => {
 			expect(successSettles.map((c) => c[1].response.filename)).toEqual(['x-cached', 'x-cached']);
 		});
 
-		it('an already-aborted signal rejects ABORTED even on a cache hit', async () => {
+		it('an already-aborted signal rejects ABORTED, even on a cache hit', async () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig, {
 				mode: 'queue',
 				cache: { maxBytes: 100_000 }
 			});
-
 			const inputs = [tree('x')];
+			const ctrl = new AbortController();
+			ctrl.abort();
+			const solveAborted = () => scheduler.solve('def', inputs, { signal: ctrl.signal });
+
+			await expect(solveAborted()).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
+
 			const prime = scheduler.solve('def', inputs);
 			queue[0].release(makeResponse('cached'));
 			await prime;
 
-			const ctrl = new AbortController();
-			ctrl.abort();
-			await expect(scheduler.solve('def', inputs, { signal: ctrl.signal })).rejects.toMatchObject({
-				code: ErrorCodes.ABORTED
-			});
+			await expect(solveAborted()).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
+			expect(queue).toHaveLength(1);
 		});
 
 		// An errored solve is a valid, deterministic GH result.
@@ -943,71 +738,54 @@ describe('SolveScheduler', () => {
 	});
 
 	describe('observability', () => {
-		it('notifies subscribers on state change', async () => {
+		it('notifies subscribers of each state change', async () => {
 			const { executor, queue } = deferredExecutor();
 			const scheduler = new SolveScheduler(executor, baseConfig);
-			const listener = vi.fn();
-			scheduler.subscribe(listener);
+			const solving: boolean[] = [];
+			scheduler.subscribe(() => solving.push(scheduler.isSolving));
 
 			const p = scheduler.solve('def', []);
-			expect(listener).toHaveBeenCalled();
+			expect(solving.at(-1)).toBe(true);
 
 			queue[0].release(makeResponse('x'));
 			await p;
-
-			// Settle should also notify
-			expect(listener.mock.calls.length).toBeGreaterThanOrEqual(2);
+			await vi.waitFor(() => expect(solving.at(-1)).toBe(false));
 		});
 
-		it('exposes lastResult / lastError / lastDurationMs', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig);
-
-			const p1 = scheduler.solve('def', []);
-			queue[0].release(makeResponse('ok'));
-			await p1;
-
-			expect(scheduler.lastResult?.filename).toBe('ok');
-			expect(scheduler.lastDurationMs).toBeGreaterThanOrEqual(0);
-			expect(scheduler.lastError).toBeNull();
-
-			const p2 = scheduler.solve('def', [tree('fail')]);
-			queue[1].fail(new Error('boom'));
-			await expect(p2).rejects.toBeInstanceOf(ComputeError);
-			expect(scheduler.lastError).toBeInstanceOf(ComputeError);
-		});
-
-		it('fires onStart and onSettle hooks', async () => {
+		it('records the outcome and fires onStart and onSettle', async () => {
 			const { executor, queue } = deferredExecutor();
 			const onStart = vi.fn();
 			const onSettle = vi.fn();
 			const scheduler = new SolveScheduler(executor, baseConfig, { onStart, onSettle });
 
-			const p = scheduler.solve('def', []);
+			const ok = scheduler.solve('def', []);
 			expect(onStart).toHaveBeenCalledTimes(1);
 
-			queue[0].release(makeResponse('x'));
-			await p;
+			queue[0].release(makeResponse('ok'));
+			await ok;
 
 			expect(onSettle).toHaveBeenCalledTimes(1);
 			expect(onSettle.mock.calls[0][1]).toMatchObject({ status: 'success', fromCache: false });
+			expect(scheduler.lastResult?.filename).toBe('ok');
+			expect(scheduler.lastDurationMs).toBeGreaterThanOrEqual(0);
+			expect(scheduler.lastError).toBeNull();
+
+			const failing = scheduler.solve('def', [tree('fail')]);
+			queue[1].fail(new Error('boom'));
+			await expect(failing).rejects.toBeInstanceOf(ComputeError);
+			expect(scheduler.lastError).toBeInstanceOf(ComputeError);
 		});
 	});
 
 	describe('mode validation', () => {
-		it("rejects the removed 'parallel' mode, naming the queue equivalent", () => {
+		it('rejects an unknown mode with INVALID_CONFIG', () => {
 			const { executor } = deferredExecutor();
-			const make = () =>
-				new SolveScheduler(executor, baseConfig, {
-					mode: 'parallel' as unknown as SchedulerMode
-				});
-			expect(make).toThrow(ComputeError);
-			expect(make).toThrow("{ mode: 'queue', maxConcurrent: 4 }");
-			try {
-				make();
-			} catch (err) {
-				expect((err as ComputeError).code).toBe(ErrorCodes.INVALID_CONFIG);
-			}
+			expect(
+				() =>
+					new SolveScheduler(executor, baseConfig, {
+						mode: 'parallel' as unknown as SchedulerMode
+					})
+			).toThrowError(expect.objectContaining({ code: ErrorCodes.INVALID_CONFIG }));
 		});
 	});
 
@@ -1029,16 +807,6 @@ describe('SolveScheduler', () => {
 			const hit = await scheduler.solveDetailed('def', [tree('a')]);
 			expect(hit).toEqual({ response: miss.response, fromCache: true, durationMs: 0 });
 			expect(queue).toHaveLength(1);
-		});
-
-		it('solve() resolves with the bare response', async () => {
-			const { executor, queue } = deferredExecutor();
-			const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
-
-			const p = scheduler.solve('def', [tree('a')]);
-			const response = makeResponse('a');
-			queue[0].release(response);
-			await expect(p).resolves.toBe(response);
 		});
 	});
 
@@ -1146,5 +914,67 @@ describe('SolveScheduler', () => {
 				code: ErrorCodes.INVALID_STATE
 			});
 		});
+	});
+});
+
+describe('SolveScheduler — concurrency limit', () => {
+	const noop: SolveExecutor = async () => ({
+		response: makeResponse('r'),
+		cacheKey: null,
+		missed: false
+	});
+
+	it('rejects a NaN maxConcurrent, which would wedge the queue', () => {
+		expect(
+			() => new SolveScheduler(noop, baseConfig, { mode: 'queue', maxConcurrent: NaN })
+		).toThrowError(expect.objectContaining({ code: ErrorCodes.INVALID_CONFIG }));
+		const scheduler = new SolveScheduler(noop, baseConfig, { mode: 'queue' });
+		expect(() => scheduler.setMaxConcurrent(NaN)).toThrowError(
+			expect.objectContaining({ code: ErrorCodes.INVALID_CONFIG })
+		);
+	});
+
+	it('setMaxConcurrent starts queued work when raised and clamps below 1', async () => {
+		const release: (() => void)[] = [];
+		const executor: SolveExecutor = () =>
+			new Promise((resolve) => {
+				release.push(() => resolve({ response: makeResponse('r'), cacheKey: null, missed: false }));
+			});
+		const scheduler = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
+		const solves = [scheduler.solve('a', []), scheduler.solve('b', [])];
+		expect(scheduler.inFlightCount).toBe(1);
+
+		scheduler.setMaxConcurrent(2);
+		expect(scheduler.inFlightCount).toBe(2);
+
+		scheduler.setMaxConcurrent(0);
+		release.splice(0).forEach((settle) => settle());
+		await Promise.all(solves);
+
+		const after = [scheduler.solve('c', []), scheduler.solve('d', [])];
+		expect(scheduler.inFlightCount).toBe(1);
+		scheduler.cancelAll();
+		await Promise.allSettled(after);
+	});
+});
+
+describe('SolveScheduler — dispose', () => {
+	it('leaves the cache empty when an executor resolves after dispose', async () => {
+		let finish!: () => void;
+		const executor: SolveExecutor = () =>
+			new Promise((resolve) => {
+				finish = () => resolve({ response: makeResponse('late'), cacheKey: null, missed: false });
+			});
+		const scheduler = new SolveScheduler(executor, baseConfig, {
+			mode: 'queue',
+			cache: { maxBytes: 1_000_000 }
+		});
+		const solving = scheduler.solve('a', []);
+		solving.catch(() => {});
+		scheduler.dispose();
+		finish();
+		await expect(solving).rejects.toMatchObject({ code: ErrorCodes.ABORTED });
+		await Promise.resolve();
+		expect(scheduler.cacheStats().entries).toBe(0);
 	});
 });

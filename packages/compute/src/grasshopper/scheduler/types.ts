@@ -56,6 +56,15 @@ export interface CacheOptions {
 	cacheErroredSolves?: boolean;
 }
 
+/** What {@link SolveScheduler.cacheStats} reports. */
+export interface CacheStats {
+	entries: number;
+	bytes: number;
+	hits: number;
+	misses: number;
+	evictions: number;
+}
+
 export interface SolveSchedulerOptions {
 	mode?: SchedulerMode;
 	maxConcurrent?: number;
@@ -120,8 +129,7 @@ export type SolveResult =
 			 */
 			definitionReuploaded?: boolean;
 	  }
-	| { status: 'error'; error: ComputeError; durationMs: number }
-	| { status: 'superseded' };
+	| { status: 'error'; error: ComputeError; durationMs: number };
 
 /**
  * Solves by `cacheKey` when given one, otherwise uploads. Reports the server's

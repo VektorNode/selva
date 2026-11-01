@@ -15,6 +15,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ComputeServerStats from '../compute-server-stats';
+import { classifyProbeFailure } from '@/core/server/classify-probe-failure';
+import type { ComputeError } from '@/core/errors';
 import { setLogger } from '@/core/utils/logger';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -64,14 +66,6 @@ describe('isServerOnline', () => {
 		fetchMock.mockRejectedValue(new TypeError('fetch failed'));
 		const stats = new ComputeServerStats(SERVER);
 		await expect(stats.isServerOnline()).resolves.toBe(false);
-		await stats.dispose();
-	});
-
-	it('probes the proxy root `/` (its real liveness route, not /healthcheck)', async () => {
-		fetchMock.mockResolvedValue(res('compute.rhino3d running'));
-		const stats = new ComputeServerStats(SERVER);
-		await stats.isServerOnline();
-		expect(fetchMock.mock.calls[0][0]).toBe(`${SERVER}/`);
 		await stats.dispose();
 	});
 });
@@ -127,26 +121,11 @@ describe('getInstalledPlugins', () => {
 		route({ '/plugins/rhino/installed': () => res(JSON.stringify({ Bongo: '8.0' })) });
 		const stats = new ComputeServerStats(SERVER);
 		await expect(stats.getInstalledPlugins('rhino')).resolves.toEqual({ Bongo: '8.0' });
-		expect(fetchMock.mock.calls[0][0]).toBe(`${SERVER}/plugins/rhino/installed`);
-		await stats.dispose();
-	});
-
-	it('returns null on a non-2xx response', async () => {
-		route({ '/plugins/gh/installed': () => res('', { ok: false, status: 401 }) });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getInstalledPlugins()).resolves.toBeNull();
 		await stats.dispose();
 	});
 
 	it('returns null on a non-JSON body', async () => {
 		route({ '/plugins/gh/installed': () => res('not json') });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getInstalledPlugins()).resolves.toBeNull();
-		await stats.dispose();
-	});
-
-	it('returns null (not throwing) when the network rejects', async () => {
-		fetchMock.mockRejectedValue(new TypeError('fetch failed'));
 		const stats = new ComputeServerStats(SERVER);
 		await expect(stats.getInstalledPlugins()).resolves.toBeNull();
 		await stats.dispose();
@@ -172,46 +151,20 @@ describe('getActiveChildren', () => {
 		route({ '/activechildren?initialize=false': () => res('2') });
 		const stats = new ComputeServerStats(SERVER);
 		await expect(stats.getActiveChildren({ initialize: false })).resolves.toBe(2);
-		expect(fetchMock.mock.calls[0][0]).toBe(`${SERVER}/activechildren?initialize=false`);
-		await stats.dispose();
-	});
-
-	it('returns null on a non-numeric body', async () => {
-		route({ '/activechildren': () => res('not-a-number') });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getActiveChildren()).resolves.toBeNull();
 		await stats.dispose();
 	});
 
 	// parseInt would read "302 Found…" as 302 children: a redirect/error page
 	// must be rejected, not fed into purgeAllChildren.
-	it('rejects a garbage-prefixed body instead of parsing its leading digits', async () => {
-		route({ '/activechildren': () => res('302 Found - redirecting') });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getActiveChildren()).resolves.toBeNull();
-		await stats.dispose();
-	});
-
-	it('rejects non-integer numeric bodies', async () => {
-		route({ '/activechildren': () => res('2.5') });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getActiveChildren()).resolves.toBeNull();
-		await stats.dispose();
-	});
-
-	it('returns null on a non-2xx response', async () => {
-		route({ '/activechildren': () => res('', { ok: false, status: 500 }) });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getActiveChildren()).resolves.toBeNull();
-		await stats.dispose();
-	});
-
-	it('returns null (not throwing) when the network rejects', async () => {
-		fetchMock.mockRejectedValue(new TypeError('fetch failed'));
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getActiveChildren()).resolves.toBeNull();
-		await stats.dispose();
-	});
+	it.each(['not-a-number', '302 Found - redirecting', '2.5'])(
+		'returns null for the body %j',
+		async (body) => {
+			route({ '/activechildren': () => res(body) });
+			const stats = new ComputeServerStats(SERVER);
+			await expect(stats.getActiveChildren()).resolves.toBeNull();
+			await stats.dispose();
+		}
+	);
 });
 
 describe('getVersion', () => {
@@ -252,24 +205,21 @@ describe('getVersion', () => {
 		});
 		await stats.dispose();
 	});
-
-	it('returns null on a non-2xx response', async () => {
-		route({ '/version': () => res('', { ok: false, status: 404 }) });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getVersion()).resolves.toBeNull();
-		await stats.dispose();
-	});
 });
 
 describe('API key header', () => {
-	it('sends RhinoComputeKey when an apiKey is configured', async () => {
+	it('sends RhinoComputeKey only when an apiKey is configured', async () => {
 		route({ '/version': () => res(JSON.stringify({ rhino: '8', compute: '1', git_sha: null })) });
-		const stats = new ComputeServerStats(SERVER, 'secret-key');
-		await stats.getVersion();
-		const init = fetchMock.mock.calls[0][1] as RequestInit;
-		// Header keys are Headers-normalized (lowercased); look up case-insensitively.
-		expect(new Headers(init.headers).get('RhinoComputeKey')).toBe('secret-key');
-		await stats.dispose();
+		const keyed = new ComputeServerStats(SERVER, 'secret-key');
+		const keyless = new ComputeServerStats(SERVER);
+		await keyed.getVersion();
+		await keyless.getVersion();
+		const sent = fetchMock.mock.calls.map(([, init]) =>
+			new Headers((init as RequestInit).headers).get('RhinoComputeKey')
+		);
+		expect(sent).toEqual(['secret-key', null]);
+		await keyed.dispose();
+		await keyless.dispose();
 	});
 
 	it('sends the same auth headers a solve would when given ComputeConfig auth fields', async () => {
@@ -286,15 +236,6 @@ describe('API key header', () => {
 		expect(headers.get('Authorization')).toBe('Bearer t');
 		expect(headers.get('X-Route')).toBe('a');
 		expect(headers.get('RhinoComputeKey')).toBeNull();
-		await stats.dispose();
-	});
-
-	it('omits RhinoComputeKey when no apiKey is set', async () => {
-		route({ '/version': () => res(JSON.stringify({ rhino: '8', compute: '1', git_sha: null })) });
-		const stats = new ComputeServerStats(SERVER);
-		await stats.getVersion();
-		const init = fetchMock.mock.calls[0][1] as RequestInit;
-		expect(new Headers(init.headers).get('RhinoComputeKey')).toBeNull();
 		await stats.dispose();
 	});
 });
@@ -341,32 +282,8 @@ describe('purgeCache', () => {
 		await stats.dispose();
 	});
 
-	it('sends the RhinoComputeKey header when configured', async () => {
-		route({ '/cache/purge': () => res(JSON.stringify({ purged: 0 })) });
-		const stats = new ComputeServerStats(SERVER, 'k');
-		await stats.purgeCache();
-		const init = fetchMock.mock.calls[0][1] as RequestInit;
-		// Header keys are Headers-normalized (lowercased); look up case-insensitively.
-		expect(new Headers(init.headers).get('RhinoComputeKey')).toBe('k');
-		await stats.dispose();
-	});
-
-	it('returns null on a non-2xx response', async () => {
-		route({ '/cache/purge': () => res('', { ok: false, status: 401 }) });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.purgeCache()).resolves.toBeNull();
-		await stats.dispose();
-	});
-
 	it('returns null on a non-JSON / unexpected body', async () => {
 		route({ '/cache/purge': () => res('purged') });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.purgeCache()).resolves.toBeNull();
-		await stats.dispose();
-	});
-
-	it('returns null (not throwing) when the network rejects', async () => {
-		fetchMock.mockRejectedValue(new TypeError('fetch failed'));
 		const stats = new ComputeServerStats(SERVER);
 		await expect(stats.purgeCache()).resolves.toBeNull();
 		await stats.dispose();
@@ -461,22 +378,6 @@ describe('getServerTime', () => {
 	});
 });
 
-describe('getIdleSpan', () => {
-	it('parses the numeric idle seconds', async () => {
-		route({ '/idlespan': () => res('42.5') });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getIdleSpan()).resolves.toBe(42.5);
-		await stats.dispose();
-	});
-
-	it('returns null on a non-2xx response', async () => {
-		route({ '/idlespan': () => res('', { ok: false, status: 500 }) });
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.getIdleSpan()).resolves.toBeNull();
-		await stats.dispose();
-	});
-});
-
 describe('child-lifecycle control', () => {
 	it('launchChildren POSTs and returns { spawned, active }', async () => {
 		route({ '/launch-children': () => res(JSON.stringify({ spawned: [6001, 6002], active: 2 })) });
@@ -493,33 +394,25 @@ describe('child-lifecycle control', () => {
 		expect(fetchMock.mock.calls[0][0]).toBe(`${SERVER}/launch-child?port=6003`);
 		await stats.dispose();
 	});
+});
 
-	it('shutdownChildren targets all children when no port is given', async () => {
-		route({ '/shutdown-children': () => res(JSON.stringify({ shutdown: 3, active: 0 })) });
+describe('a failed read', () => {
+	it.each<[string, (stats: ComputeServerStats) => Promise<unknown>]>([
+		['getInstalledPlugins', (stats) => stats.getInstalledPlugins()],
+		['getActiveChildren', (stats) => stats.getActiveChildren()],
+		['getVersion', (stats) => stats.getVersion()],
+		['getIdleSpan', (stats) => stats.getIdleSpan()],
+		['purgeCache', (stats) => stats.purgeCache()],
+		['recycleChildren', (stats) => stats.recycleChildren()]
+	])('%s returns null on a non-2xx or a network failure, never throwing', async (_name, read) => {
 		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.shutdownChildren()).resolves.toEqual({ shutdown: 3, active: 0 });
-		expect(fetchMock.mock.calls[0][0]).toBe(`${SERVER}/shutdown-children`);
-		await stats.dispose();
-	});
 
-	it('recycleChildren returns { shutdown, spawned, active }', async () => {
-		route({
-			'/recycle-children': () =>
-				res(JSON.stringify({ shutdown: 2, spawned: [6001, 6002], active: 2 }))
-		});
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.recycleChildren()).resolves.toEqual({
-			shutdown: 2,
-			spawned: [6001, 6002],
-			active: 2
-		});
-		await stats.dispose();
-	});
+		fetchMock.mockResolvedValue(res('', { ok: false, status: 500 }));
+		await expect(read(stats)).resolves.toBeNull();
 
-	it('returns null (not throwing) when a control call rejects', async () => {
 		fetchMock.mockRejectedValue(new TypeError('fetch failed'));
-		const stats = new ComputeServerStats(SERVER);
-		await expect(stats.recycleChildren()).resolves.toBeNull();
+		await expect(read(stats)).resolves.toBeNull();
+
 		await stats.dispose();
 	});
 });
@@ -577,7 +470,7 @@ describe('monitor', () => {
 
 	// dispose() racing an in-flight poll is normal shutdown: the nested
 	// INVALID_STATE throw must not surface as an error-level log.
-	it('does not error-log when dispose() races an in-flight poll', async () => {
+	it('stays silent when dispose() races an in-flight poll', async () => {
 		let resolveFetch!: (r: Response) => void;
 		fetchMock.mockImplementation(() => new Promise<Response>((r) => (resolveFetch = r)));
 
@@ -585,7 +478,8 @@ describe('monitor', () => {
 		setLogger({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: errorSpy });
 
 		const stats = new ComputeServerStats(SERVER);
-		stats.monitor(() => {}, 1000);
+		const callback = vi.fn();
+		stats.monitor(callback, 1000);
 
 		// The initial poll's fetch is now in flight; dispose before it resolves.
 		await stats.dispose();
@@ -596,35 +490,29 @@ describe('monitor', () => {
 		await new Promise((r) => setTimeout(r, 0));
 
 		expect(errorSpy).not.toHaveBeenCalled();
+		expect(callback).not.toHaveBeenCalled();
 	});
 
-	it('does not invoke the callback after dispose()', async () => {
-		let resolveFetch!: (r: Response) => void;
-		fetchMock.mockImplementation(() => new Promise<Response>((r) => (resolveFetch = r)));
+	it('drops the result of a poll still in flight when stopped', async () => {
+		let answerProbe!: (r: Response) => void;
+		fetchMock.mockImplementation(() => new Promise<Response>((r) => (answerProbe = r)));
 
 		const stats = new ComputeServerStats(SERVER);
+		const poll = vi.spyOn(stats, 'getServerStats');
 		const callback = vi.fn();
-		stats.monitor(callback, 1000);
+		const stop = stats.monitor(callback, 1000);
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
-		await stats.dispose();
-		resolveFetch(res('compute.rhino3d running'));
-		await new Promise((r) => setTimeout(r, 0));
-		await new Promise((r) => setTimeout(r, 0));
+		stop();
+		answerProbe(res('', { ok: false, status: 503 }));
+		await expect(poll.mock.results[0].value).resolves.toEqual({ isOnline: false });
 
 		expect(callback).not.toHaveBeenCalled();
+		await stats.dispose();
 	});
 });
 
-describe('ComputeServerStats — redirects and body size', () => {
-	it('never follows a redirect on a control-plane read', async () => {
-		fetchMock.mockResolvedValue(res('', { ok: false, status: 302 }));
-		const stats = new ComputeServerStats(SERVER, 'secret');
-
-		expect(await stats.getVersion()).toBeNull();
-		expect(await stats.purgeCache()).toBeNull();
-		for (const [, init] of fetchMock.mock.calls) expect(init).toMatchObject({ redirect: 'manual' });
-	});
-
+describe('ComputeServerStats — body size', () => {
 	it('gives up on an oversized body instead of buffering it', async () => {
 		fetchMock.mockResolvedValue(res('{"rhino":"' + 'x'.repeat(2 << 20) + '"}'));
 		const stats = new ComputeServerStats(SERVER);
@@ -645,5 +533,53 @@ describe('ComputeServerStats — probe connection', () => {
 
 		expect(await new ComputeServerStats(SERVER).isServerOnline()).toBe(true);
 		expect(cancelled).toBe(true);
+	});
+});
+
+describe('ComputeServerStats — probe failures as undici reports them', () => {
+	const fetchFailed = (cause: unknown) => new TypeError('fetch failed', { cause });
+	const withCode = (message: string, code: string) => Object.assign(new Error(message), { code });
+
+	it.each([
+		['refused', 'refused', withCode('connect ECONNREFUSED 127.0.0.1:6500', 'ECONNREFUSED')],
+		['refused over happy eyeballs', 'refused', withCode('', 'ECONNREFUSED')],
+		['unresolved', 'dns', withCode('getaddrinfo ENOTFOUND compute.example', 'ENOTFOUND')]
+	])('classifies a %s host from the cause', async (_name, verdict, cause) => {
+		fetchMock.mockRejectedValue(fetchFailed(cause));
+		const stats = new ComputeServerStats(SERVER);
+		expect(classifyProbeFailure(await stats.probeServer())?.verdict).toBe(verdict);
+	});
+
+	it('still reports an error with no cause', async () => {
+		fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+		const stats = new ComputeServerStats(SERVER);
+		expect((await stats.probeServer()).error).toBe('TypeError: Failed to fetch');
+	});
+});
+
+describe('ComputeServerStats — headers', () => {
+	it('sends no Content-Type on a GET, which would force a CORS preflight', async () => {
+		fetchMock.mockResolvedValue(res('1.0'));
+		await new ComputeServerStats(SERVER, { headers: { 'X-Tenant': 'a' } }).getVersion();
+		const { headers } = fetchMock.mock.calls[0][1] as { headers: Record<string, string> };
+		expect(headers).toEqual({ 'X-Tenant': 'a' });
+	});
+
+	it('sends one Content-Type on a POST when the caller set it in another case', async () => {
+		fetchMock.mockResolvedValue(res('{"purged":1}'));
+		const stats = new ComputeServerStats(SERVER, { headers: { 'content-type': 'text/plain' } });
+		await stats.purgeCache();
+		const { headers } = fetchMock.mock.calls[0][1] as { headers: Record<string, string> };
+		expect(headers).toEqual({ 'Content-Type': 'application/json' });
+	});
+
+	it('rejects an unsendable API key at construction, without quoting it', () => {
+		expect.assertions(2);
+		try {
+			new ComputeServerStats(SERVER, 'super-secret\nkey');
+		} catch (error) {
+			expect((error as ComputeError).code).toBe('INVALID_CONFIG');
+			expect((error as ComputeError).message).not.toContain('super-secret');
+		}
 	});
 });

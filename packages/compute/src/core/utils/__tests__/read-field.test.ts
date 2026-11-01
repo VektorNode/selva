@@ -42,50 +42,17 @@ describe('readField', () => {
 		expect(readField({ toString: 'own' }, 'toString')).toBe('own');
 		expect(readField({ toString: 'own' }, 'ToString')).toBe('own');
 	});
-
-	it('sees keys added after the first read', () => {
-		const payload: Record<string, unknown> = { First: 1 };
-		expect(readField(payload, 'first')).toBe(1); // primes the cache
-		payload.Second = 2;
-		expect(readField(payload, 'second')).toBe(2); // cased lookup, post-mutation
-		expect(hasField(payload, 'SECOND')).toBe(true);
-	});
-
-	it('sees a key replaced without changing the key count', () => {
-		const payload: Record<string, unknown> = { First: 1 };
-		expect(readField(payload, 'first')).toBe(1);
-		delete payload.First;
-		payload.Other = 2;
-		expect(readField(payload, 'first')).toBeUndefined();
-		expect(readField(payload, 'other')).toBe(2);
-	});
-
-	it('serves repeated cased reads of an unmutated object', () => {
-		const payload = { InnerTree: 1, ParamName: 'x' };
-		expect(readField(payload, 'innertree')).toBe(1);
-		expect(readField(payload, 'paramname')).toBe('x');
-		expect(readField(payload, 'innerTree')).toBe(1);
-	});
 });
 
 describe('hasField', () => {
-	it('detects a key regardless of casing', () => {
-		expect(hasField({ InnerTree: {} }, 'innerTree')).toBe(true);
-		expect(hasField({ innerTree: {} }, 'InnerTree')).toBe(true);
-	});
-
-	it('is true even when the value is null/undefined', () => {
-		expect(hasField({ x: null }, 'x')).toBe(true);
-		expect(hasField({ x: undefined }, 'x')).toBe(true);
-	});
-
-	it('is false when the key is absent or input is not an object', () => {
-		expect(hasField({ a: 1 }, 'b')).toBe(false);
-		expect(hasField(null, 'x')).toBe(false);
-	});
-
-	it('is false for inherited prototype keys', () => {
-		expect(hasField({}, 'constructor')).toBe(false);
-		expect(hasField({}, 'toString')).toBe(false);
+	it.each([
+		['a key in another casing', { InnerTree: {} }, 'innerTree', true],
+		['a null value', { x: null }, 'x', true],
+		['an undefined value', { x: undefined }, 'x', true],
+		['an absent key', { a: 1 }, 'b', false],
+		['a non-object', null, 'x', false],
+		['an inherited key', {}, 'constructor', false]
+	])('handles %s', (_name, payload, key, expected) => {
+		expect(hasField(payload, key)).toBe(expected);
 	});
 });

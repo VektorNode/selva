@@ -1,5 +1,5 @@
 import { ComputeError, ErrorCodes, type ErrorCode } from '@/core/errors';
-import { getLogger } from '@/core';
+import { getLogger } from '@/core/utils/logger';
 import { isDataTreeDefault } from '../../data-tree/tree-path';
 import { applyRounding, decimalsOf, getInputStepSize, serverStepSize } from './numeric-rounding';
 import {
@@ -42,6 +42,8 @@ export interface InputTypeParser<T extends InputParam = InputParam> {
 	/** The safe param when {@link parse} throws. Omit it when `parse` can't throw. */
 	fallback?(schema: InputParamSchema, base: BaseInputType): T;
 }
+
+const labelOf = (schema: InputParamSchema): string => schema.nickname || 'unnamed';
 
 const listOr = <T>(schema: InputParamSchema, value: T): T | T[] =>
 	(schema.atMost ?? 1) > 1 ? [value] : value;
@@ -120,19 +122,23 @@ function computeNumeric(schema: InputParamSchema): {
 	};
 }
 
+const numericParam = (
+	schema: InputParamSchema,
+	base: BaseInputType,
+	computed: Pick<NumericInputType, 'stepSize' | 'default'>
+): NumericInputType => ({
+	...base,
+	paramType: schema.paramType as 'Number' | 'Integer',
+	minimum: schema.minimum,
+	maximum: schema.maximum,
+	atLeast: schema.atLeast,
+	atMost: schema.atMost,
+	...computed
+});
+
 const numericParser: InputTypeParser<NumericInputType> = {
 	parse(schema, base) {
-		const { default: def, stepSize } = computeNumeric(schema);
-		return {
-			...base,
-			paramType: schema.paramType as 'Number' | 'Integer',
-			minimum: schema.minimum,
-			maximum: schema.maximum,
-			atLeast: schema.atLeast,
-			atMost: schema.atMost,
-			stepSize,
-			default: def
-		};
+		return numericParam(schema, base, computeNumeric(schema));
 	},
 	fallback(schema, base) {
 		// With minimum > 0, a plain 0 would sit below the slider's own range.
@@ -140,16 +146,10 @@ const numericParser: InputTypeParser<NumericInputType> = {
 			typeof schema.minimum === 'number' && Number.isFinite(schema.minimum) && schema.minimum > 0
 				? schema.minimum
 				: 0;
-		return {
-			...base,
-			paramType: schema.paramType as 'Number' | 'Integer',
-			minimum: schema.minimum,
-			maximum: schema.maximum,
-			atLeast: schema.atLeast,
-			atMost: schema.atMost,
+		return numericParam(schema, base, {
 			stepSize: defaultStep(schema),
 			default: listOr(schema, safeValue)
-		};
+		});
 	}
 };
 
@@ -198,7 +198,7 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			typeof schema.values !== 'object' ||
 			Object.keys(schema.values).length === 0
 		) {
-			const inputName = schema.nickname || 'unnamed';
+			const inputName = labelOf(schema);
 			throw new ComputeError(
 				`Input "${inputName}" has no values defined (expected ValueList)`,
 				ErrorCodes.INVALID_INPUT,
@@ -206,13 +206,13 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			);
 		}
 
-		let defaultValue = schema.default as string | undefined;
+		let defaultValue: string | undefined;
 		if (schema.default !== undefined && schema.default !== null) {
 			// A tree/array-shaped default can't index the values map — `String()`
 			// would silently turn it into '[object Object]'. Reject it properly.
 			if (typeof schema.default === 'object') {
 				throw new ComputeError(
-					`ValueList input "${schema.nickname || 'unnamed'}" default is not a string-able value`,
+					`ValueList input "${labelOf(schema)}" default is not a string-able value`,
 					ErrorCodes.VALIDATION_ERROR,
 					{ context: { inputName: schema.name, default: schema.default } }
 				);
@@ -221,13 +221,15 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 			// Membership is case-insensitive, but downstream lookups (`values[default]`)
 			// are not — return the canonical-cased key on a match.
 			const match = Object.keys(schema.values).find((key) => key.toLowerCase() === defaultLower);
-			if (match !== undefined) {
-				defaultValue = match;
-			} else {
+			defaultValue = match ?? String(schema.default);
+			if (match === undefined) {
 				// Out-of-range only warns: the parse still succeeds.
-				const message = `ValueList input "${schema.nickname || 'unnamed'}" default value "${schema.default}" is not in available values`;
-				getLogger().warn(message);
-				warn?.({ code: ErrorCodes.VALIDATION_ERROR, message });
+				const inputName = labelOf(schema);
+				getLogger().warn(`ValueList input "${inputName}" default is not in available values`);
+				warn?.({
+					code: ErrorCodes.VALIDATION_ERROR,
+					message: `ValueList input "${inputName}" default value "${schema.default}" is not in available values`
+				});
 			}
 		}
 
@@ -249,6 +251,9 @@ const valueListParser: InputTypeParser<ValueListInputType> = {
 	}
 };
 
+const objectDefault = (schema: InputParamSchema): unknown =>
+	coerceDefault(schema.default, objectTransformer(labelOf(schema)), true);
+
 function geometryFallback(schema: InputParamSchema, base: BaseInputType): GeometryInputType {
 	return {
 		...base,
@@ -259,15 +264,10 @@ function geometryFallback(schema: InputParamSchema, base: BaseInputType): Geomet
 
 const geometryParser: InputTypeParser<GeometryInputType> = {
 	parse(schema, base) {
-		const value = coerceDefault(
-			schema.default,
-			objectTransformer(schema.nickname || 'unnamed'),
-			true
-		);
 		return {
 			...base,
 			paramType: 'Geometry',
-			default: value as GeometryInputType['default']
+			default: objectDefault(schema) as GeometryInputType['default']
 		};
 	},
 	fallback: geometryFallback
@@ -275,16 +275,11 @@ const geometryParser: InputTypeParser<GeometryInputType> = {
 
 const fileParser: InputTypeParser<FileInputType> = {
 	parse(schema, base) {
-		const value = coerceDefault(
-			schema.default,
-			objectTransformer(schema.nickname || 'unnamed'),
-			true
-		);
 		return {
 			...base,
 			paramType: 'File',
 			acceptedFormats: schema.acceptedFormats,
-			default: value as FileInputType['default']
+			default: objectDefault(schema) as FileInputType['default']
 		};
 	}
 };

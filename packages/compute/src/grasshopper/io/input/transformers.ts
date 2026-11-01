@@ -1,4 +1,4 @@
-import { getLogger } from '@/core';
+import { getLogger } from '@/core/utils/logger';
 
 /**
  * Coerce one raw default value to `T`, or return `null` when it can't be
@@ -90,8 +90,8 @@ export function objectTransformer(inputName: string): ValueTransformer<object> {
 				if (typeof parsed === 'object' && parsed !== null) return parsed;
 				getLogger().warn(`Parsed value for input ${inputName} is not an object`);
 				return null;
-			} catch (err) {
-				getLogger().warn(`Failed to parse object value "${value}" for input ${inputName}`, err);
+			} catch {
+				getLogger().warn(`Failed to parse the object value for input ${inputName}`);
 				return null;
 			}
 		}

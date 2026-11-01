@@ -1,4 +1,6 @@
-import { fetchCompute, ComputeError, ErrorCodes } from '@/core';
+import { fetchCompute, validateNumbers } from '@/core/compute-fetch/compute-fetch';
+import { composeSignal, raceSignal } from '@/core/compute-fetch/signal';
+import { abortedByCaller, ComputeError, ErrorCodes } from '@/core/errors';
 import type { ComputeConfig, ServerErrorCodeMap } from '@/core/types';
 import { getResponseWireSize, setResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { base64ByteArray, detectBase64Payload, encodeStringToBase64 } from '@/core/utils/encoding';
@@ -7,7 +9,7 @@ import { readField } from '@/core/utils/read-field';
 import { warnIfClientSide } from '@/core/utils/warnings';
 import { validateServerUrl } from '@/core/server/validate-server-url';
 
-import {
+import type {
 	GrasshopperRequestSchema,
 	GrasshopperComputeConfig,
 	GrasshopperComputeResponse,
@@ -46,8 +48,6 @@ function isDefinitionLoadMiss(error: unknown): boolean {
 /**
  * Debug-only: names the outputs that produced nothing, usually a definition that didn't compute
  * (missing inputs, a guarded branch). An empty output can be legitimate, so this only warns.
- *
- * @internal Exported for testing.
  */
 export function warnOnEmptyInnerTrees(response: GrasshopperComputeResponse, debug?: boolean): void {
 	if (!debug) return;
@@ -98,6 +98,8 @@ export async function solveGrasshopperDefinition(
 	config: GrasshopperComputeConfig
 ): Promise<GrasshopperComputeResponse> {
 	warnIfClientSide('solveGrasshopperDefinition', config.suppressBrowserWarning);
+	// The transport checks the URL's shape only; which hosts to block is decided here.
+	validateServerUrl(config.serverUrl);
 	return (await uploadAndSolve(dataTree, definition, config)).response;
 }
 
@@ -130,15 +132,31 @@ async function uploadAndSolve(
 	definition: SolveDefinition,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey> {
-	const bytes = await materializeDefinition(definition);
+	const bytes = await materializeDefinition(definition, config);
 	return runSolve(prepareGrasshopperArgs(bytes, dataTree), config);
 }
 
-async function materializeDefinition(definition: SolveDefinition): Promise<string | Uint8Array> {
+async function materializeDefinition(
+	definition: SolveDefinition,
+	config: GrasshopperComputeConfig
+): Promise<string | Uint8Array> {
 	if (!isDefinitionRef(definition)) return definition;
+	validateNumbers(config);
+	const { signal, cleanup } = composeSignal(config.signal, config.timeoutMs);
 	try {
-		return await definition.load();
+		// Raced, not just passed on: a `load()` that ignores the signal must not pin a scheduler slot.
+		return await raceSignal(definition.load(signal), signal);
 	} catch (error) {
+		if (config.signal?.aborted) {
+			throw abortedByCaller({ definitionKey: definition.key }, error);
+		}
+		if (signal?.aborted) {
+			throw new ComputeError(
+				`Loading definition '${definition.key}' timed out after ${config.timeoutMs}ms`,
+				ErrorCodes.TIMEOUT_ERROR,
+				{ context: { definitionKey: definition.key, timeoutMs: config.timeoutMs } }
+			);
+		}
 		throw new ComputeError(
 			`Failed to load definition bytes for ref '${definition.key}'`,
 			ErrorCodes.INVALID_INPUT,
@@ -147,6 +165,8 @@ async function materializeDefinition(definition: SolveDefinition): Promise<strin
 				originalError: error
 			}
 		);
+	} finally {
+		cleanup();
 	}
 }
 
@@ -159,7 +179,6 @@ async function runSolve(
 	args: GrasshopperRequestSchema,
 	config: GrasshopperComputeConfig
 ): Promise<SolveWithCacheKey> {
-	validateServerUrl(config.serverUrl);
 	applyOptionalComputeSettings(args, config);
 
 	// The server echoes an uploaded definition back as `algo`: the limit is for the rest.
@@ -176,12 +195,17 @@ async function runSolve(
 		})
 	);
 
+	assertResponseObject(result);
 	const {
 		pointer,
 		algo: _algo,
 		...rest
 	} = result as GrasshopperComputeResponse & { pointer?: unknown; algo?: unknown };
-	const response = rest as GrasshopperComputeResponse;
+	// A warnings-only response can arrive without `values`: every caller gets the array the type
+	// promises. Read through `readField`, so a differently cased key isn't shadowed by this default.
+	const response = (
+		readField(rest, 'values') ? rest : { ...rest, values: [] }
+	) as GrasshopperComputeResponse;
 	// The wire-size hint is keyed by object identity, so the copy re-registers it, minus `algo`.
 	const wireSize = getResponseWireSize(result);
 	if (wireSize !== undefined) {
@@ -195,11 +219,19 @@ async function runSolve(
 	};
 }
 
+/** A 200 can carry valid JSON that isn't an object: `null` from a proxy, or a bare string. */
+export function assertResponseObject(response: unknown): asserts response is object {
+	if (!response || typeof response !== 'object') {
+		throw new ComputeError('Invalid response structure', ErrorCodes.INVALID_RESPONSE, {
+			context: { responseType: response === null ? 'null' : typeof response }
+		});
+	}
+}
+
 // ============================================================================
 // Grasshopper Arguments
 // ============================================================================
 
-/** @internal */
 export function prepareGrasshopperArgs(
 	definition: string | Uint8Array,
 	dataTree: DataTree[]
@@ -223,9 +255,6 @@ export function prepareGrasshopperArgs(
 	return args;
 }
 
-/**
- * @internal
- */
 export function applyOptionalComputeSettings(
 	arglist: GrasshopperRequestSchema,
 	options: GrasshopperComputeConfig

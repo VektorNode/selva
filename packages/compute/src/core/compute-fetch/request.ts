@@ -1,4 +1,5 @@
-import { getLogger } from '../utils/logger';
+import { ComputeError, ErrorCodes } from '../errors';
+import { warnOnce } from '../utils/warnings';
 
 import type { ComputeAuth, ComputeConfig } from '../types';
 
@@ -14,9 +15,6 @@ function isLocalhost(serverUrl: string): boolean {
 	return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
 }
 
-/** Server URLs already warned about missing auth — warn once per server, not per request. */
-const warnedNoAuth = new Set<string>();
-
 const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
 
 /**
@@ -24,29 +22,31 @@ const DEFAULT_API_KEY_HEADER = 'RhinoComputeKey';
  * so a liveness probe authenticates exactly like the solve it gates.
  */
 export function buildAuthHeaders(auth: ComputeAuth): Record<string, string> {
-	return mergeUnder(auth.headers, credentialHeaders(auth));
+	return assertSendable(mergeUnder(auth.headers, credentialHeaders(auth)));
 }
 
-export function buildHeaders(requestId: string, config: ComputeConfig): HeadersInit {
-	const headers = mergeUnder(config.headers, {
-		...credentialHeaders(config),
-		'X-Request-ID': requestId,
-		'Content-Type': 'application/json'
-	});
+export function buildHeaders(requestId: string, config: ComputeConfig): Record<string, string> {
+	const headers = assertSendable(
+		mergeUnder(config.headers, {
+			...credentialHeaders(config),
+			'X-Request-ID': requestId,
+			'Content-Type': 'application/json'
+		})
+	);
 
-	if (
-		!config.apiKey &&
-		!config.authToken &&
-		!warnedNoAuth.has(config.serverUrl) &&
-		!isLocalhost(config.serverUrl)
-	) {
-		warnedNoAuth.add(config.serverUrl);
-		getLogger().warn(
-			`⚠️ [Compute] Request [${requestId}] targets remote server (${config.serverUrl}) but no API key or auth token is configured. Requests may fail or be rate-limited. (warned once per server)`
+	if (!config.apiKey && !config.authToken && !isLocalhost(config.serverUrl)) {
+		warnOnce(
+			`no-auth:${config.serverUrl}`,
+			`[Compute] Request [${requestId}] targets remote server (${config.serverUrl}) but no API key or auth token is configured. Requests may fail or be rate-limited. (warned once per server)`
 		);
 	}
 
 	return headers;
+}
+
+/** `headers` with a JSON `Content-Type` that replaces one of any casing already there. */
+export function withJsonContentType(headers: Record<string, string>): Record<string, string> {
+	return mergeUnder(headers, { 'Content-Type': 'application/json' });
 }
 
 function credentialHeaders(auth: ComputeAuth): Record<string, string> {
@@ -67,6 +67,26 @@ function mergeUnder(
 	const taken = new Set(Object.keys(transport).map((name) => name.toLowerCase()));
 	const kept = Object.entries(caller ?? {}).filter(([name]) => !taken.has(name.toLowerCase()));
 	return { ...Object.fromEntries(kept), ...transport };
+}
+
+/**
+ * Left to fetch, a bad value becomes a retried TypeError that quotes it, and the value may be the
+ * API key. `Headers` throws the same message, so its error is not kept as the cause.
+ */
+function assertSendable(headers: Record<string, string>): Record<string, string> {
+	const check = new Headers();
+	for (const [name, value] of Object.entries(headers)) {
+		try {
+			check.set(name, value);
+		} catch {
+			throw new ComputeError(
+				`Header "${name}" has an invalid name or value`,
+				ErrorCodes.INVALID_CONFIG,
+				{ context: { header: name } }
+			);
+		}
+	}
+	return headers;
 }
 
 export function generateRequestId(): string {

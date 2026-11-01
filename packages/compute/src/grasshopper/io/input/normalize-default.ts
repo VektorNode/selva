@@ -1,22 +1,17 @@
-import { ErrorCodes, getLogger } from '@/core';
+import { ErrorCodes } from '@/core/errors';
+import { getLogger } from '@/core/utils/logger';
 import { readField, hasField } from '@/core/utils/read-field';
 import { setOwnField } from '@/core/utils/set-own-field';
 import { isDataTreeDefault } from '../../data-tree/tree-path';
-import { booleanTransformer, numericTransformer } from './transformers';
+import {
+	BOOLEAN_ITEM_TYPE,
+	INTEGER_ITEM_TYPES,
+	NUMERIC_ITEM_TYPES,
+	STRING_ITEM_TYPE
+} from '../wire-item-types';
+import { booleanTransformer, numericTransformer, textTransformer } from './transformers';
 import type { ParserWarning } from './input-type-parsers';
 import type { InputParamSchema } from '../../types';
-
-/** Every numeric CLR type Grasshopper serializes, so no numeric item stays a string. */
-const NUMERIC_ITEM_TYPES = new Set([
-	'System.Double',
-	'System.Single',
-	'System.Decimal',
-	'System.Int32',
-	'System.Int64'
-]);
-
-/** Integral wire item types — rounded like the scalar Integer path. */
-const INTEGER_ITEM_TYPES = new Set(['System.Int32', 'System.Int64']);
 
 interface NormalizedDefault {
 	schema: InputParamSchema;
@@ -84,13 +79,17 @@ export function normalizeDefault(input: InputParamSchema, label: string): Normal
 					parsed.push(INTEGER_ITEM_TYPES.has(type) ? Math.round(num) : num);
 					continue;
 				}
-				if (type === 'System.Boolean') {
+				if (type === BOOLEAN_ITEM_TYPE) {
 					const bool = booleanTransformer(data);
 					if (bool === null) {
 						invalidItems.push(`"${String(data)}" (${type})`);
 						continue;
 					}
 					parsed.push(bool);
+					continue;
+				}
+				if (type === STRING_ITEM_TYPE && typeof data === 'string') {
+					parsed.push(textTransformer(data));
 					continue;
 				}
 				// Only geometry is JSON-encoded on the wire. A `System.String` label like
@@ -111,7 +110,8 @@ export function normalizeDefault(input: InputParamSchema, label: string): Normal
 		// The good values survive; the dropped ones are reported.
 		if (invalidItems.length > 0) {
 			const message = `Input "${label}" default contained ${invalidItems.length} tree value(s) that could not be parsed and were dropped: ${invalidItems.join(', ')}.`;
-			getLogger().warn(message);
+			// The values go to the caller in `warning`, not to the log.
+			getLogger().warn(`Input "${label}" default: dropped ${invalidItems.length} tree value(s)`);
 			return {
 				schema: { ...input, default: tree },
 				warning: { code: ErrorCodes.MALFORMED_DEFAULT, message }

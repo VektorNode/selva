@@ -1,6 +1,6 @@
 import type { ErrorCode } from './errors';
 
-/** A backend's error-body `code` → one of our {@link ErrorCodes}. */
+/** A backend's error-body `code` → one of our `ErrorCodes`. */
 export type ServerErrorCodeMap = Record<string, ErrorCode>;
 
 /**
@@ -39,13 +39,20 @@ export interface ComputeConfig {
 	headers?: Record<string, string>;
 	/** Log each request at debug level through the configured logger (see `setLogger`). */
 	debug?: boolean;
-	/** Silence the warning logged when a call that carries the API key runs in a browser. */
+	/** Silence the warning logged when a call runs in a browser, where the config is exposed. */
 	suppressBrowserWarning?: boolean;
 	/**
 	 * Per-attempt timeout, re-armed on every retry: the worst case is `(attempts + 1) × timeoutMs`
-	 * plus backoff. Pass `signal` for an overall deadline.
+	 * plus backoff. Pass `signal` for an overall deadline. On Node it can't outlast undici's own
+	 * `headersTimeout`, and neither can `0`: see {@link fetch}. Loading a `DefinitionRef` gets its
+	 * own `timeoutMs`, before the first attempt.
 	 */
 	timeoutMs?: number;
+	/**
+	 * Sends requests in place of the global `fetch`. A Node host with solves past undici's default
+	 * `headersTimeout` needs one, bound to a dispatcher with a longer limit.
+	 */
+	fetch?: typeof fetch;
 	/** Retry policy for transient errors. Default: no retries. */
 	retry?: RetryPolicy;
 	/**
@@ -60,7 +67,7 @@ export interface ComputeConfig {
 	 */
 	maxResponseBytes?: number;
 	/**
-	 * Maps the `code` field of this backend's JSON error bodies to our {@link ErrorCodes}. A listed
+	 * Maps the `code` field of this backend's JSON error bodies to our `ErrorCodes`. A listed
 	 * code outranks the status-based mapping: the server's production mode scrubs the human message
 	 * but not the code. Core knows no backend's codes; the client supplies its own table.
 	 */

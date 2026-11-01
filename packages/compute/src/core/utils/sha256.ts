@@ -40,7 +40,7 @@ const K = new Int32Array([
 	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
 ]);
 
-/** @internal Exported so tests can check it against Node's native hash. */
+/** Exported so tests can check it against Node's native hash. */
 export function sha256HexPortable(input: string | Uint8Array): string {
 	const state = new Sha256();
 	if (typeof input === 'string') state.updateString(input);

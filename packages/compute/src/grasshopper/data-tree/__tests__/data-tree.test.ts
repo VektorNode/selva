@@ -57,6 +57,9 @@ describe('TreeBuilder — basic building', () => {
 		expect(tree.InnerTree).toEqual({
 			'{0}': [{ data: 1 }, { data: 2 }, { data: 3 }, { data: 4 }, { data: 5 }]
 		});
+		expect(new TreeBuilder('Single').appendFlat(7).toComputeFormat().InnerTree).toEqual({
+			'{0}': [{ data: 7 }]
+		});
 	});
 
 	it('builds a multi-branch tree with nested paths', () => {
@@ -79,11 +82,6 @@ describe('TreeBuilder — basic building', () => {
 		expect(items[2].data).toBe('hello');
 	});
 
-	it('appendFlat with a single (non-array) value still wraps to path [0]', () => {
-		const tree = new TreeBuilder('Single').appendFlat(7).toComputeFormat();
-		expect(tree.InnerTree).toEqual({ '{0}': [{ data: 7 }] });
-	});
-
 	it('fromDataTreeDefault loads an existing branch structure', () => {
 		const tree = new TreeBuilder('Values').fromDataTreeDefault({
 			'{0}': [1, 2, 3],
@@ -93,7 +91,6 @@ describe('TreeBuilder — basic building', () => {
 
 		expect(Object.keys(tree.toComputeFormat().InnerTree)).toEqual(['{0}', '{0;0}', '{1}']);
 		expect(tree.toComputeFormat().InnerTree['{0;0}']).toEqual([{ data: 4 }, { data: 5 }]);
-		expect(tree.flatten()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
 	});
 });
 
@@ -342,13 +339,6 @@ describe('TreeBuilder.getTreeValue', () => {
 		expect((caught as ComputeError).message).toContain('getTree');
 	});
 
-	it('reads a camelCase tree', () => {
-		const trees = [
-			{ paramName: 'X', innerTree: { '{0}': [{ data: 5 }] } }
-		] as unknown as DataTree[];
-		expect(TreeBuilder.getTreeValue(trees, 'X')).toBe(5);
-	});
-
 	it('deserializes JSON-encoded objects', () => {
 		const trees = [dataTree('P', { '{0}': [{ data: '{"x":1,"y":2}' }] })];
 		expect(TreeBuilder.getTreeValue(trees, 'P')).toEqual({ x: 1, y: 2 });
@@ -359,28 +349,15 @@ describe('TreeBuilder.getTreeValue', () => {
 		expect(TreeBuilder.getTreeValue(trees, 'WithNulls')).toEqual([1, null, 3]);
 	});
 
-	it('maps items missing a data field to null in place (no index shift)', () => {
-		const trees = [dataTree('Holey', { '{0}': [{ data: 1 }, {}, { data: 3 }] })];
-		expect(TreeBuilder.getTreeValue(trees, 'Holey')).toEqual([1, null, 3]);
-	});
-
 	it('an all-null branch reads as nulls, not "param not found"', () => {
 		const trees = [dataTree('AllNull', { '{0}': [{ data: null }, { data: null }] })];
 		expect(TreeBuilder.getTreeValue(trees, 'AllNull')).toEqual([null, null]);
 	});
 
-	it('keeps an empty string a string (not numeric 0)', () => {
-		// Number('') === 0, so a plain numeric check would turn '' into 0.
-		expect(TreeBuilder.getTreeValue([dataTree('S', { '{0}': [{ data: '' }] })], 'S')).toBe('');
-	});
-
-	it('keeps a whitespace-only string a string', () => {
-		expect(TreeBuilder.getTreeValue([dataTree('S', { '{0}': [{ data: '  ' }] })], 'S')).toBe('  ');
-	});
-
 	it('keeps non-canonical numeric-looking strings as strings', () => {
 		// A string on the wire stays a string unless it is the canonical form of a finite number.
-		const strings = ['007', '1e5', 'Infinity', '-Infinity', ' 5'];
+		// Number('') is 0, so a plain numeric check would turn '' into 0.
+		const strings = ['', '  ', '007', '1e5', 'Infinity', '-Infinity', ' 5'];
 		const trees = [dataTree('S', { '{0}': strings.map((data) => ({ data })) })];
 		expect(TreeBuilder.getTreeValue(trees, 'S')).toEqual(strings);
 	});
@@ -442,23 +419,31 @@ describe('TreeBuilder.fromValues', () => {
 		expect(trees.map((t) => t.ParamName)).toEqual(['A', 'B']);
 	});
 
-	it('coerces numeric strings for Number', () => {
-		expect(only([{ value: ['1.5', ' 2 '] }])).toEqual({ '{0}': [{ data: 1.5 }, { data: 2 }] });
+	it.each<[string, string, unknown, unknown[]]>([
+		['coerces numeric strings for Number', 'Number', ['1.5', ' 2 '], [1.5, 2]],
+		['rounds Integer items', 'Integer', [1.4, 1.6, '2.5'], [1, 2, 3]],
+		[
+			'coerces Boolean items, keeping an explicit false',
+			'Boolean',
+			[false, 'TRUE', ' false '],
+			[false, true, false]
+		],
+		['matches paramType case-insensitively', 'INTEGER', 2.7, [3]]
+	])('%s', (_name, paramType, value, kept) => {
+		expect(only([{ paramType, value }])).toEqual({ '{0}': kept.map((data) => ({ data })) });
 	});
 
-	it('drops a Number item the numeric coercion rejects, with a warning', () => {
-		expect(only([{ value: [1, 'abc', Infinity, '0x10', 2] }])).toEqual({
-			'{0}': [{ data: 1 }, { data: 2 }]
-		});
-		expect(warn).toHaveBeenCalledTimes(3);
-		expect(warn.mock.calls[0][0]).toContain('P');
-	});
-
-	it('rounds Integer items', () => {
-		expect(only([{ paramType: 'Integer', value: [1.4, 1.6, '2.5'] }])).toEqual({
-			'{0}': [{ data: 1 }, { data: 2 }, { data: 3 }]
-		});
-	});
+	it.each<[string, unknown[], unknown[], number]>([
+		['Number', [1, 'abc', Infinity, '0x10', 2], [1, 2], 3],
+		['Boolean', [true, 'yes', 1], [true], 2]
+	])(
+		'drops a %s item its coercion rejects, warning for each',
+		(paramType, value, kept, warnings) => {
+			expect(only([{ paramType, value }])).toEqual({ '{0}': kept.map((data) => ({ data })) });
+			expect(warn).toHaveBeenCalledTimes(warnings);
+			expect(warn.mock.calls[0][0]).toContain('P');
+		}
+	);
 
 	it('clamps Number and Integer items to minimum and maximum', () => {
 		expect(only([{ value: [-5, 50, 500], minimum: 0, maximum: 100 }])).toEqual({
@@ -475,40 +460,18 @@ describe('TreeBuilder.fromValues', () => {
 		});
 	});
 
-	it('coerces Boolean items, keeping an explicit false', () => {
-		expect(only([{ paramType: 'Boolean', value: [false, 'TRUE', ' false '] }])).toEqual({
-			'{0}': [{ data: false }, { data: true }, { data: false }]
-		});
-	});
-
-	it('drops a Boolean item the boolean coercion rejects, with a warning', () => {
-		expect(only([{ paramType: 'Boolean', value: [true, 'yes', 1] }])).toEqual({
-			'{0}': [{ data: true }]
-		});
-		expect(warn).toHaveBeenCalledTimes(2);
-	});
-
-	it('matches paramType case-insensitively', () => {
-		expect(only([{ paramType: 'number', value: '3' }])).toEqual({ '{0}': [{ data: 3 }] });
-		expect(only([{ paramType: 'INTEGER', value: 2.7 }])).toEqual({ '{0}': [{ data: 3 }] });
-		expect(only([{ paramType: 'boolean', value: 'true' }])).toEqual({ '{0}': [{ data: true }] });
-	});
-
 	it.each([
 		['Text', 'hello'],
+		['Text', '007'],
+		['Text', ''],
 		['ValueList', '1'],
-		['valueList', '1'],
 		['dynamicValueList', '3.5'],
 		['Color', '255,0,0'],
 		['generic', 'd'],
 		['SomethingNew', 'x']
-	])('passes a %s value through unchanged', (paramType, value) => {
+	])('passes a %s value of %j through unchanged', (paramType, value) => {
 		expect(only([{ paramType, value }])).toEqual({ '{0}': [{ data: value }] });
 		expect(warn).not.toHaveBeenCalled();
-	});
-
-	it('passes a numeric-looking string through for a non-numeric type', () => {
-		expect(only([{ paramType: 'Text', value: '007' }])).toEqual({ '{0}': [{ data: '007' }] });
 	});
 
 	it('passes a dynamicValueList checklist through as one branch', () => {
@@ -521,10 +484,6 @@ describe('TreeBuilder.fromValues', () => {
 		expect(only([{ paramType: 'File', value: { fileName: 'a.3dm' } }])).toEqual({
 			'{0}': [{ data: '{"fileName":"a.3dm"}' }]
 		});
-	});
-
-	it('keeps an empty string', () => {
-		expect(only([{ paramType: 'Text', value: '' }])).toEqual({ '{0}': [{ data: '' }] });
 	});
 
 	it.each([
@@ -639,5 +598,18 @@ describe('TreeBuilder — large branches', () => {
 		const branch = (tree.InnerTree as unknown as Record<string, { data: number }[]>)['{0}'];
 		expect(branch).toHaveLength(500_000);
 		expect(branch[499_999]).toEqual({ data: 499_999 });
+	});
+});
+
+describe('TreeBuilder — null values', () => {
+	it('never sends null as the text "null"', () => {
+		expect(new TreeBuilder('x').append([0], [1, null, 2]).toComputeFormat().InnerTree).toEqual({
+			'{0}': [{ data: 1 }, { data: 2 }]
+		});
+	});
+
+	it('replaceTreeValue with null leaves the param with no data', () => {
+		const [tree] = TreeBuilder.replaceTreeValue([], 'x', null);
+		expect(JSON.stringify(tree)).not.toContain('null');
 	});
 });

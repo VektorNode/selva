@@ -36,6 +36,8 @@ one here rather than naming a backend inside `core/`:
 
 - `ComputeConfig.apiKeyHeader`: the name of the header that carries `apiKey` (default
   `RhinoComputeKey`).
+- `ComputeConfig.fetch`: replaces the global `fetch` for solves, for a host that needs its own
+  dispatcher.
 - `ComputeConfig.serverErrorCodes`: the backend's wire error codes mapped to `ErrorCodes`,
   outranking the status mapping. Grasshopper's table is in `grasshopper/solve.ts`.
 - `validateServerUrl(url, { blockedHosts })`: the shared public endpoint a caller must not target

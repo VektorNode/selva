@@ -15,14 +15,9 @@ export function encodeStringToBase64(str: string): string {
 
 /**
  * WHATWG forgiving-base64 normalization: strip ASCII whitespace, then drop trailing padding where
- * the spec allows it (total length a multiple of 4). `null` when the result can't be base64.
+ * the spec allows it (total length a multiple of 4). `null` when the length can't be base64. Leaves
+ * the alphabet check to the decoders, which make it faster than a regex over a multi-MB payload.
  */
-function normalizeBase64(str: string): string | null {
-	const data = stripBase64(str);
-	return data === null || /[^A-Za-z0-9+/]/.test(data) ? null : data;
-}
-
-/** {@link normalizeBase64} without the alphabet check, which the decoders make faster on their own. */
 function stripBase64(str: string): string | null {
 	let data = str.replace(/[\t\n\f\r ]/g, '');
 	if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
@@ -39,8 +34,9 @@ const B64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
  * `null` (treat it as plain text). A heuristic; pass a `Uint8Array` when it must be exact.
  */
 export function detectBase64Payload(str: string): string | null {
-	const data = normalizeBase64(str);
+	const data = stripBase64(str);
 	if (data === null || data.length < BASE64_DETECT_MIN_LENGTH) return null;
+	if (/[^A-Za-z0-9+/]/.test(data)) return null;
 
 	// An encoder leaves the final character's unused low bits zero; otherwise re-encoding the
 	// decoded bytes wouldn't reproduce the input.
@@ -108,34 +104,10 @@ function decodeStripped(data: string): Uint8Array | null {
 	);
 }
 
-/** UTF-8 byte length without allocating the encoded copy `TextEncoder.encode` would. */
+/** UTF-8 byte length. Sizes every request body: `Buffer` counts without allocating the copy. */
 export function utf8ByteLength(str: string): number {
 	const Buffer = getNodeBuffer();
-	if (Buffer) {
-		return Buffer.byteLength(str, 'utf-8');
-	}
-	let bytes = 0;
-	for (let i = 0; i < str.length; i++) {
-		const code = str.charCodeAt(i);
-		if (code < 0x80) {
-			bytes += 1;
-		} else if (code < 0x800) {
-			bytes += 2;
-		} else if (
-			code >= 0xd800 &&
-			code <= 0xdbff &&
-			i + 1 < str.length &&
-			(str.charCodeAt(i + 1) & 0xfc00) === 0xdc00
-		) {
-			// Surrogate pair → one 4-byte code point; lone surrogates fall through
-			// to 3 bytes (the replacement-character encoding TextEncoder emits).
-			bytes += 4;
-			i++;
-		} else {
-			bytes += 3;
-		}
-	}
-	return bytes;
+	return Buffer ? Buffer.byteLength(str, 'utf-8') : new TextEncoder().encode(str).length;
 }
 
 export function base64ByteArray(bytes: Uint8Array): string {
