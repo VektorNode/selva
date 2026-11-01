@@ -74,9 +74,14 @@ export function decryptSecret(envelope: string, key: Buffer, aad?: string): stri
  * ciphertext nothing can decrypt.
  */
 export function decodeSecretKey(raw: string): Buffer {
-	if (/^[0-9a-fA-F]{64}$/.test(raw)) return Buffer.from(raw, 'hex');
-	const buf = Buffer.from(raw, 'base64');
-	if (buf.length === 32) return buf;
+	const key = raw.trim();
+	if (/^[0-9a-fA-F]{64}$/.test(key)) return Buffer.from(key, 'hex');
+	// `Buffer.from` skips what it can't decode, so only a round trip proves the
+	// whole string was base64 rather than 32 bytes of it.
+	const buf = Buffer.from(key, 'base64');
+	if (buf.length === 32 && buf.toString('base64').replace(/=+$/, '') === key.replace(/=+$/, '')) {
+		return buf;
+	}
 	throw new Error(
 		'SELVA_AT_REST_KEY must be 32 bytes encoded as 64-char hex or base64. ' +
 			"Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""

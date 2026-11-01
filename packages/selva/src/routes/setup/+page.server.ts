@@ -19,7 +19,7 @@ import {
 } from '$lib/server/providers.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { slugify } from '@selvajs/platform';
+import { orgSlugFromName, slugify } from '@selvajs/platform';
 import { env } from '$env/dynamic/private';
 
 // Redirect away if a platform admin already exists — setup is only for a
@@ -66,8 +66,7 @@ export const actions = {
 		if (requireCompany && !companyName) {
 			return fail(400, { error: 'Company name is required' });
 		}
-		const slug = requireCompany ? slugify(companyName) : '';
-		if (requireCompany && slug.length < 3) {
+		if (requireCompany && slugify(companyName).length < 3) {
 			return fail(400, { error: 'Company name must contain at least 3 letters or digits' });
 		}
 		if (!email || !email.includes('@')) {
@@ -127,7 +126,7 @@ export const actions = {
 				const org: Organization = {
 					id: randomUUID(),
 					name: companyName,
-					slug,
+					slug: orgSlugFromName(companyName),
 					ownerId: user.id,
 					createdBy: user.id,
 					updatedBy: user.id,

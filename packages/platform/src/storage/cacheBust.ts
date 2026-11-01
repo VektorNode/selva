@@ -19,6 +19,9 @@ export function withCacheBust(url: string, token: string | number | undefined | 
 	if (token === undefined || token === null) return url;
 	const value = String(token).trim();
 	if (value === '') return url;
-	const sep = url.includes('?') ? '&' : '?';
-	return `${url}${sep}v=${encodeURIComponent(value)}`;
+	const hash = url.indexOf('#');
+	const base = hash === -1 ? url : url.slice(0, hash);
+	const fragment = hash === -1 ? '' : url.slice(hash);
+	const sep = base.includes('?') ? '&' : '?';
+	return `${base}${sep}v=${encodeURIComponent(value)}${fragment}`;
 }

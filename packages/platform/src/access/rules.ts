@@ -85,7 +85,7 @@ export function canView(input: ProjectAccessInput): boolean {
 	// A project member sees the project at any visibility. Leaving the org ends the
 	// membership, so this only widens access for someone who reclaimed from outside.
 	if (member !== null) return true;
-	if (project.visibility === 'org') return orgMember !== null;
+	if (project.visibility === 'org') return orgMember !== null && actingOrgId === project.orgId;
 	if (project.visibility === 'public') return allowCrossOrgPublic ? true : orgMember !== null;
 	return false;
 }
@@ -128,7 +128,8 @@ export function canSolve(input: ProjectAccessInput): boolean {
  */
 export function canEdit(input: ProjectAccessInput): boolean {
 	const { member, project, enablePlatformProjects, platformPermissions } = input;
-	if (project?.visibility === 'platform') {
+	if (!project) return false;
+	if (project.visibility === 'platform') {
 		if (!enablePlatformProjects) return false;
 		return isInstanceAdmin(platformPermissions);
 	}
@@ -146,7 +147,8 @@ export function canCreateDefinition(input: ProjectAccessInput): boolean {
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canManage(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') {
+	if (!input.project) return false;
+	if (input.project.visibility === 'platform') {
 		if (!input.enablePlatformProjects) return false;
 		return isInstanceAdmin(input.platformPermissions);
 	}
@@ -155,7 +157,8 @@ export function canManage(input: ProjectAccessInput): boolean {
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canEditProjectSettings(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') {
+	if (!input.project) return false;
+	if (input.project.visibility === 'platform') {
 		if (!input.enablePlatformProjects) return false;
 		return isInstanceAdmin(input.platformPermissions);
 	}
@@ -214,6 +217,7 @@ export function canEditDefinition(input: DefinitionAccessInput): boolean {
 		enablePlatformProjects
 	} = input;
 	if (!project || !definition) return false;
+	if (definition.projectId !== project.id) return false;
 
 	if (project.visibility === 'platform') {
 		if (!enablePlatformProjects) return false;

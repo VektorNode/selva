@@ -17,7 +17,7 @@ import {
 	getProjectProvider,
 	getTenancy
 } from './providers.server.js';
-import { slugify } from '@selvajs/platform';
+import { orgSlugFromName } from '@selvajs/platform';
 
 /**
  * Shared post-verification flow used by every IdP-callback route (OAuth,
@@ -95,7 +95,7 @@ async function ensureSingleTenantDefaultOrg(user: AuthUser): Promise<void> {
 	const displayName =
 		typeof user.metadata?.displayName === 'string' ? user.metadata.displayName : undefined;
 	const orgName = displayName?.trim() || user.email?.split('@')[0]?.trim() || 'Default';
-	const slug = slugify(orgName).length >= 3 ? slugify(orgName) : 'default';
+	const slug = orgSlugFromName(orgName);
 
 	const now = new Date().toISOString();
 	const org: Organization = {

@@ -131,12 +131,14 @@ export async function withTranscodeSlot<T>(fn: () => Promise<T>): Promise<T> {
 // type itself is no longer callable. Take the type off `default` and keep the
 // `?? mod` runtime fallback for the older CJS shape.
 type SharpFn = typeof import('sharp').default;
+// Not a literal: a browser build of the root barrel would try to resolve it.
+const SHARP_MODULE = 'sharp';
 let cachedSharp: SharpFn | null = null;
 
 async function loadSharp(): Promise<SharpFn> {
 	if (cachedSharp) return cachedSharp;
 	try {
-		const mod = (await import('sharp')) as unknown as { default: SharpFn };
+		const mod = (await import(/* @vite-ignore */ SHARP_MODULE)) as unknown as { default: SharpFn };
 		cachedSharp = mod.default ?? (mod as unknown as SharpFn);
 		return cachedSharp;
 	} catch (err) {

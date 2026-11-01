@@ -48,6 +48,7 @@ export {
 	SlugSchema,
 	slugify,
 	RESERVED_SLUGS,
+	orgSlugFromName,
 	CreateOrgSchema,
 	UpdateOrgSchema,
 	ALL_ORG_PERMISSIONS,

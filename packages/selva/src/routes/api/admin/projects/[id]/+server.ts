@@ -49,7 +49,9 @@ export const PATCH: RequestHandler = apiRoute(
 		const patch: { name?: string; slug?: string; description?: string } = {};
 		if (input.name !== undefined) {
 			patch.name = input.name;
-			patch.slug = slugify(input.name);
+			// A name with no usable letters yields '', which keeps the current slug.
+			const slug = slugify(input.name);
+			if (slug) patch.slug = slug;
 		}
 		if (input.description !== undefined) {
 			patch.description = input.description ?? undefined;

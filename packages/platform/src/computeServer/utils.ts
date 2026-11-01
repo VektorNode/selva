@@ -106,7 +106,7 @@ export function scopeConfigToOrg(config: ComputeConfig, orgId: string): ComputeC
 			config.defaultServerId && visibleIds.has(config.defaultServerId)
 				? config.defaultServerId
 				: undefined,
-		orgDefaults: orgDefault ? { [orgId]: orgDefault } : {}
+		orgDefaults: orgDefault && visibleIds.has(orgDefault) ? { [orgId]: orgDefault } : {}
 	};
 }
 

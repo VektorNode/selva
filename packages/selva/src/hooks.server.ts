@@ -312,9 +312,9 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// Local/HMAC sessions never set a refresh cookie, so this is a no-op there.
 		if (!user) {
 			const refreshToken = getRefreshToken(event.cookies);
-			const oauth = providers.auth.oauth;
-			if (refreshToken && oauth) {
-				const refreshed = await oauth.refreshSession(refreshToken);
+			const refresher = providers.auth.sessionRefresh ?? providers.auth.oauth;
+			if (refreshToken && refresher) {
+				const refreshed = await refresher.refreshSession(refreshToken);
 				if (refreshed) {
 					setSessionCookie(event.cookies, refreshed.sessionToken);
 					setRefreshCookie(event.cookies, refreshed.refreshToken);

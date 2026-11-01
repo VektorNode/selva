@@ -242,7 +242,9 @@ export const updateProject: ApiHandler = async (req) => {
 	// A renamed project gets a re-derived slug; the two must not drift apart.
 	if (input.name !== undefined) {
 		patch.name = input.name;
-		patch.slug = slugify(input.name);
+		// A name with no usable letters yields '', which keeps the current slug.
+		const slug = slugify(input.name);
+		if (slug) patch.slug = slug;
 	}
 	if (input.description !== undefined) patch.description = input.description ?? undefined;
 	if (input.visibility !== undefined) patch.visibility = input.visibility;

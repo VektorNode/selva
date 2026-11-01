@@ -7,11 +7,11 @@ import type { RecentRun, UserProfile } from './types.js';
  * providers (Entra, Supabase Auth) don't have to model fields they can't
  * persist.
  *
- * Adapters must scope by `ctx`: a caller cannot read or modify another
- * user's profile via the `userId` argument. SQL adapters delegate to RLS;
- * document-store adapters check `ctx.userId === userId` (or
- * `instance_admin` for admin tooling). Pass `SYSTEM_CONTEXT` for trusted
- * server flows (auto-seed on signup, janitors).
+ * Adapters must scope `getProfile` and the writes by `ctx`: a caller cannot read
+ * or modify another user's profile via the `userId` argument. `getProfiles` is
+ * unscoped by design, because rosters show other people's names, so its callers
+ * decide who may see the list. Pass `SYSTEM_CONTEXT` for trusted server flows
+ * (auto-seed on signup, janitors).
  */
 export interface IUserProfileStore {
 	/** Returns null when no profile row exists — treat as `emptyProfile(id)`. */
