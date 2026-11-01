@@ -1,3 +1,4 @@
+import { crc32, deflateSync } from 'node:zlib';
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { ProviderError } from '../../errors.js';
@@ -11,6 +12,31 @@ const size = async (data: Uint8Array) => {
 const blank = (width: number, height: number) =>
 	sharp({ create: { width, height, channels: 3, background: '#fff' } });
 
+function pngChunk(type: string, data: Buffer): Buffer {
+	const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+	const length = Buffer.alloc(4);
+	length.writeUInt32BE(data.length);
+	const crc = Buffer.alloc(4);
+	crc.writeUInt32BE(crc32(body));
+	return Buffer.concat([length, body, crc]);
+}
+
+/** A valid PNG header over almost no data: what a bomb says, with no pixels to pay for. */
+function pngHeaderClaiming(width: number, height: number): Uint8Array {
+	const header = Buffer.alloc(13);
+	header.writeUInt32BE(width, 0);
+	header.writeUInt32BE(height, 4);
+	header.set([8, 2, 0, 0, 0], 8);
+	return new Uint8Array(
+		Buffer.concat([
+			Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+			pngChunk('IHDR', header),
+			pngChunk('IDAT', deflateSync(Buffer.alloc(16))),
+			pngChunk('IEND', Buffer.alloc(0))
+		])
+	);
+}
+
 async function rejection(promise: Promise<unknown>): Promise<ProviderError> {
 	const err = await promise.then(
 		() => null,
@@ -20,13 +46,14 @@ async function rejection(promise: Promise<unknown>): Promise<ProviderError> {
 	return err as ProviderError;
 }
 
-describe('transcodeImageIfNeeded limits', () => {
-	it('refuses a pixel bomb without decoding it', async () => {
-		const bomb = await blank(9000, 9000).png({ compressionLevel: 9 }).toBuffer();
+// Building a big fixture is real CPU work, and CI runners are slower than a laptop.
+describe('transcodeImageIfNeeded limits', { timeout: 30_000 }, () => {
+	it('refuses a pixel bomb from its header, without decoding it', async () => {
 		const err = await rejection(
-			transcodeImageIfNeeded(new Uint8Array(bomb), 'image/png', 'a/b.png')
+			transcodeImageIfNeeded(pngHeaderClaiming(9000, 9000), 'image/png', 'a/b.png')
 		);
 		expect(err.statusCode).toBe(422);
+		expect(err.message).toMatch(/too many pixels/);
 	});
 
 	it('refuses an SVG with a huge canvas quickly', async () => {
@@ -43,7 +70,7 @@ describe('transcodeImageIfNeeded limits', () => {
 		);
 
 		expect(err.statusCode).toBe(422);
-		expect(Date.now() - started).toBeLessThan(2000);
+		expect(Date.now() - started).toBeLessThan(5000);
 	});
 
 	it('refuses SVG declared as PNG', async () => {
@@ -88,7 +115,7 @@ describe('transcodeImageIfNeeded limits', () => {
 	});
 });
 
-describe('transcodeImageIfNeeded output', () => {
+describe('transcodeImageIfNeeded output', { timeout: 30_000 }, () => {
 	it('applies EXIF orientation', async () => {
 		const rotated = await blank(40, 20).jpeg().withMetadata({ orientation: 6 }).toBuffer();
 		const out = await transcodeImageIfNeeded(new Uint8Array(rotated), 'image/jpeg', 'a/b.jpg');

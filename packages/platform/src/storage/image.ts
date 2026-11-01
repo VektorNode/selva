@@ -79,9 +79,11 @@ async function rasterize(
 	contentType: string | undefined,
 	storagePath: string
 ): Promise<Buffer> {
-	const open = () => sharp(input, { limitInputPixels: MAX_INPUT_PIXELS });
 	try {
-		const { format, width = 0, height = 0 } = await open().metadata();
+		// Unlimited here: this only reads the header, and sharp's own limit would hide
+		// the reason from the check below.
+		const header = sharp(input, { limitInputPixels: false });
+		const { format, width = 0, height = 0 } = await header.metadata();
 		// SVG is the expensive format, so it has to be asked for: a route that only
 		// checks the declared type must not let one in as a PNG.
 		const declaredSvg = contentType === 'image/svg+xml' || /\.svg$/i.test(storagePath);
@@ -91,7 +93,7 @@ async function rasterize(
 		if (width * height > MAX_INPUT_PIXELS) {
 			throw new ProviderError('Image has too many pixels', 422);
 		}
-		return await open()
+		return await sharp(input, { limitInputPixels: MAX_INPUT_PIXELS })
 			.autoOrient()
 			.resize({
 				width: IMAGE_MAX_WIDTH,
