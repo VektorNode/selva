@@ -1,5 +1,6 @@
 import { ProviderError } from '@selvajs/platform';
 import type { PlatformPermission, RecentRun } from '@selvajs/platform';
+import { MAX_RECENT_RUNS } from '@selvajs/platform/userProfile';
 import { CachedJsonFile } from './fsJson.js';
 
 /**
@@ -22,8 +23,6 @@ export interface StoredUserData {
 export interface UserDataFile {
 	users: StoredUserData[];
 }
-
-const MAX_RECENT_RUNS = 20;
 
 const empty = (): UserDataFile => ({ users: [] });
 

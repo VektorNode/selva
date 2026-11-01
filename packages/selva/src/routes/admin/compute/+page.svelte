@@ -22,7 +22,12 @@
 		Power
 	} from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
-	import type { TenancyMode } from '@selvajs/platform';
+	import {
+		COMPUTE_TIMEOUT_DEFAULT_MS,
+		clampRetryCount,
+		clampTimeoutMs,
+		type TenancyMode
+	} from '@selvajs/platform';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -121,7 +126,7 @@
 			label: s.label,
 			serverUrl: s.serverUrl,
 			sharedWith: s.sharedWith === 'all' ? 'all' : [...s.sharedWith],
-			timeoutMs: s.timeoutMs ?? 30000,
+			timeoutMs: s.timeoutMs ?? COMPUTE_TIMEOUT_DEFAULT_MS,
 			retryCount: s.retryCount ?? 0,
 			apiKey: '',
 			hasApiKey: s.hasApiKey
@@ -218,7 +223,7 @@
 				sharedWith: 'all',
 				apiKey: '',
 				hasApiKey: false,
-				timeoutMs: 30000,
+				timeoutMs: COMPUTE_TIMEOUT_DEFAULT_MS,
 				retryCount: 0
 			}
 		];
@@ -266,11 +271,9 @@
 					: (kept[0]?.id ?? ''),
 				servers: kept.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
 					...s,
-					timeoutMs: Math.min(300000, Math.max(1000, Number(timeoutMs) || 30000)),
+					timeoutMs: clampTimeoutMs(timeoutMs),
 					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
-					...(Number(retryCount)
-						? { retryCount: Math.min(5, Math.max(0, Number(retryCount))) }
-						: {})
+					...(Number(retryCount) ? { retryCount: clampRetryCount(retryCount) } : {})
 				}))
 			};
 			const res = await fetch('/api/admin/compute', {
@@ -765,11 +768,11 @@
 				<p class="text-muted-foreground text-xs">Timeout (ms)</p>
 				<Input
 					type="number"
-					placeholder="30000"
+					placeholder={String(COMPUTE_TIMEOUT_DEFAULT_MS)}
 					bind:value={server.timeoutMs}
 					oninput={() => markDirty(server.id)}
 					onblur={() => {
-						server.timeoutMs = Math.min(300000, Math.max(1000, Number(server.timeoutMs) || 30000));
+						server.timeoutMs = clampTimeoutMs(server.timeoutMs);
 					}}
 					class="text-xs"
 				/>
@@ -782,7 +785,7 @@
 					bind:value={server.retryCount}
 					oninput={() => markDirty(server.id)}
 					onblur={() => {
-						server.retryCount = Math.min(5, Math.max(0, Number(server.retryCount) || 0));
+						server.retryCount = clampRetryCount(server.retryCount);
 					}}
 					class="text-xs"
 				/>

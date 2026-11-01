@@ -181,7 +181,14 @@ export type {
 	PlatformComputeServer,
 	OrgComputeServer
 } from './computeServer/types.js';
-export { isPlatformServer, isOrgServer } from './computeServer/types.js';
+export {
+	COMPUTE_RETRY_MAX,
+	COMPUTE_TIMEOUT_DEFAULT_MS,
+	COMPUTE_TIMEOUT_MAX_MS,
+	COMPUTE_TIMEOUT_MIN_MS,
+	isPlatformServer,
+	isOrgServer
+} from './computeServer/types.js';
 export type { IComputeServerStore, GetConfigOptions } from './computeServer/interface.js';
 // Secret crypto functions (encryptSecret etc.) use node:crypto and are NOT re-exported
 // here — this barrel is imported by client .svelte code and a browser bundle can't
@@ -196,6 +203,9 @@ export type { ResolveOptions } from './computeServer/utils.js';
 export {
 	serversVisibleTo,
 	defaultServerIdFor,
+	clampRetryCount,
+	clampTimeoutMs,
+	pickServer,
 	resolveServerForOrg,
 	findServerById,
 	platformServers,
@@ -309,7 +319,13 @@ export {
 } from './context.js';
 
 export type { ListOptions, DefinitionListOptions, Page } from './pagination.js';
-export { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination.js';
+export {
+	DEFAULT_PAGE_LIMIT,
+	MAX_PAGE_LIMIT,
+	clampPageLimit,
+	decodeOffsetCursor,
+	encodeOffsetCursor
+} from './pagination.js';
 
 export type {
 	TenancyMode,

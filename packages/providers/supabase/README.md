@@ -108,6 +108,8 @@ EOF
 pnpm test
 ```
 
+CI's `supabase` job does the same, with `SELVA_REQUIRE_SUPABASE=1` so an unreachable stack fails rather than skips.
+
 `.env.test` is gitignored and separate from your app's `.env`. `vitest.config.ts` loads it if present and probes `SUPABASE_URL` before the run; if the file is missing or the stack is unreachable it strips the three vars so every suite takes its no-credentials skip path and prints a warning.
 
 The suites wipe every table and every auth user between tests — **do not point them at a production project.**

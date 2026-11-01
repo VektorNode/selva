@@ -50,3 +50,20 @@ export interface Page<T> {
 
 export const DEFAULT_PAGE_LIMIT = 50;
 export const MAX_PAGE_LIMIT = 200;
+
+/** For adapters paging by offset. Junk and negatives read as the first page. */
+export function decodeOffsetCursor(cursor: string | undefined): number {
+	const offset = cursor ? parseInt(cursor, 10) : 0;
+	return Number.isFinite(offset) && offset >= 0 ? offset : 0;
+}
+
+export function encodeOffsetCursor(offset: number): string {
+	return String(offset);
+}
+
+/** The effective page size for a requested limit. */
+export function clampPageLimit(limit: number | undefined): number {
+	const requested = limit ?? DEFAULT_PAGE_LIMIT;
+	if (!Number.isFinite(requested)) return DEFAULT_PAGE_LIMIT;
+	return Math.min(Math.max(1, Math.floor(requested)), MAX_PAGE_LIMIT);
+}

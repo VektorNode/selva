@@ -38,10 +38,16 @@ export default async () =>
 async function reachableTestEnv(): Promise<Record<string, string>> {
 	const env = loadTestEnv();
 	const url = env.SUPABASE_URL;
-	if (!url) return env;
+	const required = process.env.SELVA_REQUIRE_SUPABASE === '1';
+	if (!url) {
+		if (required) throw new Error('SELVA_REQUIRE_SUPABASE is set, but .env.test has no stack.');
+		return env;
+	}
 
 	const reason = await probe(url, env.SUPABASE_ANON_KEY);
 	if (!reason) return env;
+	// The CI job exists to run these suites, so a skip there must not read as a pass.
+	if (required) throw new Error(`SELVA_REQUIRE_SUPABASE is set, but ${url}: ${reason}`);
 
 	console.warn(
 		`\n⚠  Supabase conformance suites skipped: ${url} is unreachable (${reason}).\n` +

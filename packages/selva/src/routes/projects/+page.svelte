@@ -26,6 +26,7 @@
 		ComputeServerConfig,
 		AuthUser
 	} from './+page.server';
+	import { pickServer } from '@selvajs/platform';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
 
 	interface PageData {
@@ -115,17 +116,9 @@
 		return data.projects.find((p) => p.id === id)?.visibility;
 	}
 
-	// Resolve the compute server a definition solves on: its pin (if still
-	// visible) → the org/global default. Mirrors resolveServerForOrg's order
-	// using the already-visibility-filtered server list from the loader.
 	function serverNameFor(record: DefinitionRecord): string | undefined {
-		const servers = data.computeServers;
-		if (servers.length === 0) return undefined;
-		const pinned = record.computeServerId
-			? servers.find((s) => s.id === record.computeServerId)
-			: undefined;
-		const fallback = servers.find((s) => s.id === data.defaultComputeServerId) ?? servers[0];
-		return (pinned ?? fallback)?.label;
+		return pickServer(data.computeServers, data.defaultComputeServerId, record.computeServerId)
+			?.label;
 	}
 
 	function recordCanEdit(record: DefinitionRecord) {

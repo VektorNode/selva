@@ -1,4 +1,8 @@
 import {
+	COMPUTE_RETRY_MAX,
+	COMPUTE_TIMEOUT_DEFAULT_MS,
+	COMPUTE_TIMEOUT_MAX_MS,
+	COMPUTE_TIMEOUT_MIN_MS,
 	isOrgServer,
 	isPlatformServer,
 	type ComputeConfig,
@@ -47,43 +51,43 @@ export function defaultServerIdFor(
 	return undefined;
 }
 
-/**
- * Resolves a definition's compute server, in order:
- *   1. Definition pin (`computeServerId`) if visible to the project's org.
- *   2. `orgDefaults[orgId]` if set.
- *   3. Global `defaultServerId`.
- *
- * Throws if no usable server exists.
- */
 export interface ResolveOptions {
 	/** Per-definition pin. Falls through silently if not visible. */
 	definitionPin?: string | null;
 }
 
+/**
+ * From servers already filtered for visibility, the pin if it is among them, then
+ * the default, then the first. Only for a caller holding the filtered list: use
+ * {@link resolveServerForOrg} when you have the config.
+ */
+export function pickServer<T extends { id: string }>(
+	visible: readonly T[],
+	defaultId: string | null | undefined,
+	pin: string | null | undefined
+): T | undefined {
+	// A pin can go stale when an admin un-shares the server, so it falls through.
+	return visible.find((s) => s.id === pin) ?? visible.find((s) => s.id === defaultId) ?? visible[0];
+}
+
+/**
+ * Resolves a definition's compute server, in order:
+ *   1. Definition pin (`computeServerId`) if visible to the project's org.
+ *   2. `orgDefaults[orgId]` if set.
+ *   3. Global `defaultServerId`.
+ *   4. The first visible server, mainly before a default is chosen.
+ *
+ * Throws if no usable server exists.
+ */
 export function resolveServerForOrg(
 	config: ComputeConfig,
 	orgId: string | null | undefined,
 	opts: ResolveOptions = {}
 ): ComputeServerConfig {
 	const visible = serversVisibleTo(config, orgId);
-	if (visible.length === 0) {
-		throw new Error('No compute servers are configured or visible for this org.');
-	}
-
-	if (opts.definitionPin) {
-		const pinned = visible.find((s) => s.id === opts.definitionPin);
-		if (pinned) return pinned;
-		// Not visible — admin may have un-shared the server since the pin was set. Fall through.
-	}
-
-	const defaultId = defaultServerIdFor(config, orgId);
-	if (defaultId) {
-		const found = visible.find((s) => s.id === defaultId);
-		if (found) return found;
-	}
-
-	// Last resort: first visible server. Mainly hit in tests and initial setup before a default is chosen.
-	return visible[0];
+	const server = pickServer(visible, defaultServerIdFor(config, orgId), opts.definitionPin);
+	if (!server) throw new Error('No compute servers are configured or visible for this org.');
+	return server;
 }
 
 /**
@@ -125,4 +129,15 @@ export function platformServers(config: ComputeConfig) {
 
 export function orgServersFor(config: ComputeConfig, orgId: string) {
 	return config.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId);
+}
+
+/** What a compute settings form should send for a typed timeout. */
+export function clampTimeoutMs(value: unknown): number {
+	const ms = Number(value) || COMPUTE_TIMEOUT_DEFAULT_MS;
+	return Math.min(COMPUTE_TIMEOUT_MAX_MS, Math.max(COMPUTE_TIMEOUT_MIN_MS, ms));
+}
+
+/** What a compute settings form should send for a typed retry count. */
+export function clampRetryCount(value: unknown): number {
+	return Math.min(COMPUTE_RETRY_MAX, Math.max(0, Number(value) || 0));
 }

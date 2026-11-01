@@ -51,6 +51,14 @@ if (!envCtx) {
 					joined_at: now
 				});
 				if (memberError) throw memberError;
+				const { error: secondaryOrgError } = await admin.from('org_members').insert({
+					org_id: orgId,
+					user_id: secondaryUserId,
+					role: 'member',
+					permissions: [],
+					joined_at: now
+				});
+				if (secondaryOrgError) throw secondaryOrgError;
 
 				const { error: p1Error } = await admin.from('projects').insert([
 					{
@@ -85,6 +93,13 @@ if (!envCtx) {
 					}
 				]);
 				if (p1Error) throw p1Error;
+				// An editor on the public project, and a stranger to the private one.
+				const { error: editorError } = await admin.from('project_members').insert({
+					project_id: projectId,
+					user_id: secondaryUserId,
+					role: 'editor'
+				});
+				if (editorError) throw editorError;
 
 				return {
 					ownerId,

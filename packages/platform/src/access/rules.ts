@@ -157,12 +157,7 @@ export function canManage(input: ProjectAccessInput): boolean {
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canEditProjectSettings(input: ProjectAccessInput): boolean {
-	if (!input.project) return false;
-	if (input.project.visibility === 'platform') {
-		if (!input.enablePlatformProjects) return false;
-		return isInstanceAdmin(input.platformPermissions);
-	}
-	return input.member?.role === 'owner';
+	return canManage(input);
 }
 
 export interface VisibilityChangeInput {

@@ -125,7 +125,8 @@ const sameGeometry = (a: THREE.Mesh, b: THREE.Mesh): boolean => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-describe('inflate and transfer to the assembly worker', () => {
+// Real CPU work on a heavy mesh: on a loaded machine one case can pass the 5 s default.
+describe('inflate and transfer to the assembly worker', { timeout: 30_000 }, () => {
 	const built = heavy();
 	let reference: Promise<THREE.Mesh[]> | undefined;
 	const expected = () => (reference ??= parseIn(wrapInSlvm(built), 'none'));

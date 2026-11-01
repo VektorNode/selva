@@ -119,6 +119,18 @@ export function assertCanManagePermissions(ctx: RequestContext): void {
 	throw new ProviderError('Forbidden: instance admin required', 403);
 }
 
+/**
+ * For provider authors: may `ctx` read or change `userId`'s profile? Throws
+ * `ProviderError(403)` if not.
+ */
+export function assertCanAccessProfile(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'access user profiles');
+	if (ctx.system) return;
+	if (ctx.userId === userId) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	throw new ProviderError('Forbidden: cannot access another user’s profile', 403);
+}
+
 const PLATFORM_PERMISSION_VALUES = new Set<string>(ALL_PLATFORM_PERMISSIONS);
 
 function isPlatformPermission(p: string): p is PlatformPermission {

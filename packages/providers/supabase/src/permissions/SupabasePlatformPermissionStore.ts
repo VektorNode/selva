@@ -66,10 +66,8 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 	): Promise<UserManagementResult> {
 		assertCanManagePermissions(ctx);
 
-		// The §2 last-admin check lives inside the UPDATE's WHERE clause, so it
-		// is evaluated under the row lock that guards the write. Doing it here
-		// as count-then-update let two concurrent demotions each observe the
-		// other as "another admin exists" and both commit, leaving zero admins.
+		// The last-admin check runs inside the RPC, under the locks that guard the
+		// write. A count here would let two demotions each see the other survive.
 		const { data, error } = await this.client().rpc('set_platform_permissions', {
 			p_user_id: userId,
 			p_permissions: [...permissions]

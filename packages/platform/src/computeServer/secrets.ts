@@ -6,6 +6,10 @@ const TAG_BYTES = 16;
 const PREFIX_V1 = 'enc:v1:';
 const PREFIX_V2 = 'enc:v2:';
 
+export function isEncryptedSecret(value: string): boolean {
+	return value.startsWith(PREFIX_V1) || value.startsWith(PREFIX_V2);
+}
+
 /**
  * AES-256-GCM envelope for at-rest secrets (e.g. compute API keys).
  *
@@ -22,13 +26,10 @@ const PREFIX_V2 = 'enc:v2:';
  *
  * Pure `node:crypto`, no fs or DB coupling, so the local and Supabase
  * compute-server stores share this one implementation.
+ *
+ * Pass `aad` to bind the secret to its record. {@link decryptSecret} then needs the
+ * same value.
  */
-
-export function isEncryptedSecret(value: string): boolean {
-	return value.startsWith(PREFIX_V1) || value.startsWith(PREFIX_V2);
-}
-
-/** Pass `aad` to bind the secret to its record. {@link decryptSecret} then needs the same value. */
 export function encryptSecret(plaintext: string, key: Buffer, aad?: string): string {
 	if (key.length !== 32) {
 		throw new Error(`Secret key must be 32 bytes; got ${key.length}`);

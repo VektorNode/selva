@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { COMPUTE_TIMEOUT_DEFAULT_MS, clampRetryCount, clampTimeoutMs } from '@selvajs/platform';
 	import { page } from '$app/state';
 	import {
 		Button,
@@ -52,7 +53,7 @@
 				id: s.id,
 				label: s.label,
 				serverUrl: s.serverUrl,
-				timeoutMs: s.timeoutMs ?? 30000,
+				timeoutMs: s.timeoutMs ?? COMPUTE_TIMEOUT_DEFAULT_MS,
 				retryCount: s.retryCount ?? 0,
 				apiKey: '',
 				hasApiKey: s.hasApiKey
@@ -88,7 +89,7 @@
 				id: randomId(),
 				label: 'org-server',
 				serverUrl: 'http://localhost:5000',
-				timeoutMs: 30000,
+				timeoutMs: COMPUTE_TIMEOUT_DEFAULT_MS,
 				retryCount: 0,
 				apiKey: '',
 				hasApiKey: false
@@ -116,11 +117,9 @@
 				defaultServerId: orgDefaultServerId === '' ? null : orgDefaultServerId,
 				servers: servers.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
 					...s,
-					timeoutMs: Math.min(300000, Math.max(1000, Number(timeoutMs) || 30000)),
+					timeoutMs: clampTimeoutMs(timeoutMs),
 					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
-					...(Number(retryCount)
-						? { retryCount: Math.min(5, Math.max(0, Number(retryCount))) }
-						: {})
+					...(Number(retryCount) ? { retryCount: clampRetryCount(retryCount) } : {})
 				}))
 			};
 
@@ -238,11 +237,11 @@
 				<p class="text-muted-foreground text-xs">Timeout (ms)</p>
 				<Input
 					type="number"
-					placeholder="30000"
+					placeholder={String(COMPUTE_TIMEOUT_DEFAULT_MS)}
 					bind:value={server.timeoutMs}
 					oninput={() => (dirty = true)}
 					onblur={() => {
-						server.timeoutMs = Math.min(300000, Math.max(1000, Number(server.timeoutMs) || 30000));
+						server.timeoutMs = clampTimeoutMs(server.timeoutMs);
 					}}
 					class="text-xs"
 				/>
@@ -255,7 +254,7 @@
 					bind:value={server.retryCount}
 					oninput={() => (dirty = true)}
 					onblur={() => {
-						server.retryCount = Math.min(5, Math.max(0, Number(server.retryCount) || 0));
+						server.retryCount = clampRetryCount(server.retryCount);
 					}}
 					class="text-xs"
 				/>

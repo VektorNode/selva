@@ -1,5 +1,9 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runAuthProviderConformance, runEmailLinkAuthConformance } from '@selvajs/platform/testing';
+import {
+	runAuthProviderConformance,
+	runEmailLinkAuthConformance,
+	runOAuthAuthConformance
+} from '@selvajs/platform/testing';
 import { SupabaseAuthProvider } from '../SupabaseAuthProvider.js';
 import { readEnv, resetAllData } from '../../data/__tests__/test-helpers.js';
 
@@ -58,6 +62,14 @@ if (!envCtx) {
 				return { provider, adminPassword, adminEmail: ADMIN_EMAIL };
 			},
 			userManagement: true
+		});
+
+		runOAuthAuthConformance({
+			name: 'SupabaseOAuthAuth',
+			createAdapter: async () => {
+				const { provider } = await makeProvider();
+				return { oauth: provider.oauth, sessionRefresh: provider.sessionRefresh };
+			}
 		});
 
 		runEmailLinkAuthConformance({

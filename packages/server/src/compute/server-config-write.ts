@@ -13,7 +13,12 @@
  * build time.
  */
 
-import { UUID_REGEX } from '@selvajs/platform';
+import {
+	COMPUTE_RETRY_MAX,
+	COMPUTE_TIMEOUT_MAX_MS,
+	COMPUTE_TIMEOUT_MIN_MS,
+	UUID_REGEX
+} from '@selvajs/platform';
 import { isEncryptedSecret } from '@selvajs/platform/computeServer';
 import { isLinkLocalUrl } from './safe-url.js';
 import { apiError, ApiErrorCode } from '../api/errors.js';
@@ -66,10 +71,6 @@ function assertUsableServerUrl(serverUrl: string): void {
 	}
 }
 
-const MIN_TIMEOUT_MS = 1000;
-const MAX_TIMEOUT_MS = 300000;
-const MAX_RETRY_COUNT = 5;
-
 function inIntegerRange(value: number, min: number, max: number): boolean {
 	return Number.isInteger(value) && value >= min && value <= max;
 }
@@ -114,17 +115,20 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 		// ciphertext being replayed against a URL they control.
 		if (s.apiKey && isEncryptedSecret(s.apiKey))
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a plaintext key');
-		if (s.timeoutMs !== undefined && !inIntegerRange(s.timeoutMs, MIN_TIMEOUT_MS, MAX_TIMEOUT_MS))
+		if (
+			s.timeoutMs !== undefined &&
+			!inIntegerRange(s.timeoutMs, COMPUTE_TIMEOUT_MIN_MS, COMPUTE_TIMEOUT_MAX_MS)
+		)
 			apiError(
 				400,
 				ApiErrorCode.VALIDATION_FAILED,
-				`timeoutMs must be a whole number from ${MIN_TIMEOUT_MS} to ${MAX_TIMEOUT_MS}`
+				`timeoutMs must be a whole number from ${COMPUTE_TIMEOUT_MIN_MS} to ${COMPUTE_TIMEOUT_MAX_MS}`
 			);
-		if (s.retryCount !== undefined && !inIntegerRange(s.retryCount, 0, MAX_RETRY_COUNT))
+		if (s.retryCount !== undefined && !inIntegerRange(s.retryCount, 0, COMPUTE_RETRY_MAX))
 			apiError(
 				400,
 				ApiErrorCode.VALIDATION_FAILED,
-				`retryCount must be a whole number from 0 to ${MAX_RETRY_COUNT}`
+				`retryCount must be a whole number from 0 to ${COMPUTE_RETRY_MAX}`
 			);
 	}
 }

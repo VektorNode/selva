@@ -5,17 +5,17 @@ import type {
 	UserManagementResult,
 	UserProfile
 } from '@selvajs/platform';
-import { ProviderError, hasPermission, assertNotShareContext } from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
+import { assertCanAccessProfile, MAX_RECENT_RUNS } from '@selvajs/platform/userProfile';
 import type { ClientBundle } from '../data/client.js';
 
 /**
  * Backed by `public.user_profiles` (one row per `auth.users.id`), auto-seeded
  * by the `handle_new_auth_user` trigger on signup — this store never inserts,
  * only reads/updates. Service-role throughout since RLS here is too coarse
- * for server-side flows like the hooks.server.ts profile load; `assertCanAccess`
+ * for server-side flows like the hooks.server.ts profile load; `assertCanAccessProfile`
  * enforces "own profile only" at the app layer instead.
  */
-const MAX_RECENT_RUNS = 20;
 
 export class SupabaseUserProfileProvider implements IUserProfileStore {
 	constructor(private readonly clients: ClientBundle) {}
@@ -25,7 +25,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 	}
 
 	async getProfile(ctx: RequestContext, userId: string): Promise<UserProfile | null> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		const { data, error } = await this.client()
 			.from('user_profiles')
 			.select('user_id, display_name, starred_definitions, recent_runs')
@@ -36,7 +36,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 	}
 
 	async getProfiles(_ctx: RequestContext, userIds: readonly string[]): Promise<UserProfile[]> {
-		// No assertCanAccess: this serves display-name lookups across other users.
+		// No assertCanAccessProfile: this serves display-name lookups across other users.
 		if (userIds.length === 0) return [];
 		const { data, error } = await this.client()
 			.from('user_profiles')
@@ -51,7 +51,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		patch: { displayName?: string }
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		const row: Record<string, unknown> = {};
 		if (patch.displayName !== undefined) row.display_name = patch.displayName;
 		if (Object.keys(row).length === 0) return 'ok';
@@ -70,7 +70,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		definitionId: string
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		// Read-modify-write races under concurrent starring; a SECURITY DEFINER
 		// RPC using array_append + array_distinct would close it if that matters.
 		const existing = await this.getProfile(ctx, userId);
@@ -92,7 +92,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		definitionId: string
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		const existing = await this.getProfile(ctx, userId);
 		if (!existing) return 'not_found';
 		if (!existing.starredDefinitions.includes(definitionId)) return 'ok';
@@ -112,7 +112,7 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		run: RecentRun
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		const existing = await this.getProfile(ctx, userId);
 		if (!existing) return 'not_found';
 
@@ -127,14 +127,6 @@ export class SupabaseUserProfileProvider implements IUserProfileStore {
 		if (error) throw mapError(error);
 		return data && data.length > 0 ? 'ok' : 'not_found';
 	}
-}
-
-function assertCanAccess(ctx: RequestContext, userId: string): void {
-	assertNotShareContext(ctx, 'access user profiles');
-	if (ctx.system) return;
-	if (ctx.userId === userId) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	throw new ProviderError('Forbidden: cannot access another user’s profile', 403);
 }
 
 interface ProfileRow {
