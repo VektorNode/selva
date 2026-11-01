@@ -1,7 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getProjectProvider } from '$lib/server/providers.server';
+import {
+	getDefinitionMeta,
+	getProjectProvider,
+	getStorageProvider
+} from '$lib/server/providers.server';
+import { deleteProjectWithBlobs } from '@selvajs/server/projects';
 import { requireInstanceAdmin } from '$lib/server/access.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, noContent, parseBody, requireParams } from '$lib/server/api/http';
@@ -62,7 +67,15 @@ export const DELETE: RequestHandler = apiRoute(
 		const { id } = requireParams(params, 'id');
 
 		await loadPlatformProjectOr404(id);
-		await getProjectProvider().deleteProject(SYSTEM_CONTEXT, id);
+		await deleteProjectWithBlobs(
+			{
+				projects: getProjectProvider(),
+				definitions: getDefinitionMeta(),
+				storage: getStorageProvider()
+			},
+			SYSTEM_CONTEXT,
+			id
+		);
 		return noContent();
 	}
 );

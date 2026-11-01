@@ -6,7 +6,10 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 // regex is what keeps `__proto__` and `constructor` out of a key position.
 // Relaxing it to a looser string re-opens prototype pollution in every store
 // that does `config.definitions[guid]`.
-export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
+//
+// Lowercases because local keys by raw string while Postgres compares `uuid`
+// columns case-insensitively, so one GUID in two cases is two records on local.
+export const GuidSchema = z.string().toLowerCase().regex(UUID_REGEX, 'Invalid GUID format');
 
 /** A Grasshopper document GUID as stores keep and compare it (lowercase), or null for anything else. */
 export function toSourceDocumentId(value: unknown): string | null {

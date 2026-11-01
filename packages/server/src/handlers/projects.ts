@@ -44,7 +44,7 @@ import {
 	requireCanEditProjectSettings,
 	requireCanManage
 } from '../access/index.js';
-import { createProjectWithUniqueSlug } from '../projects/index.js';
+import { createProjectWithUniqueSlug, deleteProjectWithBlobs } from '../projects/index.js';
 
 /**
  * Projects the caller can view. `canCreateDefinitions` says whether
@@ -257,6 +257,14 @@ export const deleteProject: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
 	await requireCanManage(req, id);
 
-	await req.deps.projects.deleteProject(ctx, id);
+	await deleteProjectWithBlobs(
+		{
+			projects: req.deps.projects,
+			definitions: req.deps.definitionMeta,
+			storage: req.deps.storage
+		},
+		ctx,
+		id
+	);
 	return noContent();
 };

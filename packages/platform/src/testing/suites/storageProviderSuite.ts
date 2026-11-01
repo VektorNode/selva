@@ -100,6 +100,16 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 			expect(file2).toBeTruthy();
 		});
 
+		it('deletePrefix refuses a prefix that names the whole store', async () => {
+			const storage = await createStorage();
+			await storage.put('test/file.txt', bytes('keep'));
+
+			await expect(storage.deletePrefix('')).rejects.toThrow();
+			await expect(storage.deletePrefix('/')).rejects.toThrow();
+
+			expect(await storage.get('test/file.txt')).toEqual(bytes('keep'));
+		});
+
 		it('deletePrefix with no matches is a no-op', async () => {
 			const storage = await createStorage();
 			await storage.put('other/file.txt', bytes('data'));

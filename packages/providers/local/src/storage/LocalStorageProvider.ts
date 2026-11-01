@@ -81,6 +81,10 @@ export class LocalStorageProvider implements IStorageProvider {
 
 	async deletePrefix(prefix: string): Promise<void> {
 		const fullPath = this.resolvePath(prefix);
+		// The root is `DATA_PATH`, so this would take every store with it.
+		if (fullPath === path.resolve(this.basePath)) {
+			throw new Error(`Refusing to delete the whole store: ${JSON.stringify(prefix)}`);
+		}
 		await fs.rm(fullPath, { recursive: true, force: true });
 	}
 

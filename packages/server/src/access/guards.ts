@@ -338,9 +338,8 @@ export async function requireCanCreateDefinition(
 }
 
 /**
- * Org-content gate — the caller must be a member of `orgId`. Used by the
- * file-serving proxy for org-private assets (e.g. pricing sheets under
- * `orgs/{id}/private/*`). Org membership is the only rule; runs through
+ * Org-content gate — the caller must be a member of `orgId`. Org membership is
+ * the only rule; runs through
  * `contentCheck` (no `instance_admin` bypass) — platform staff use Reclaim
  * if they need access without membership.
  *

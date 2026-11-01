@@ -1,5 +1,6 @@
 import { ALL_ORG_ASSET_KINDS } from '../organizations/schemas.js';
-import { COVER_IMAGE_EXTENSIONS } from '../definitions/types.js';
+import { UUID_REGEX } from '../definitions/schemas.js';
+import { SAFE_SEGMENT } from './safeKey.js';
 
 /**
  * How a stored asset is allowed to be read. A property of the asset *class*
@@ -7,7 +8,7 @@ import { COVER_IMAGE_EXTENSIONS } from '../definitions/types.js';
  * entry in {@link ASSET_CLASSES} rather than a new route.
  *
  * - `public`  — anyone, including logged-out visitors (branding: logo, favicon).
- * - `org`     — members of the owning org only; route resolves orgId from the path.
+ * - `org`     — members of the owning org only. No class uses this today.
  * - `project` — members of the owning project only; route resolves the
  *   definition guid to its project (cover images, per-definition blobs).
  */
@@ -40,17 +41,7 @@ export interface AssetMatch {
 // Built from the schema enum so a new branding kind extends this pattern automatically.
 const BRANDING_KINDS = ALL_ORG_ASSET_KINDS.join('|');
 
-// Derived from COVER_IMAGE_EXTENSIONS so a new cover format propagates here
-// instead of silently 404ing legit covers.
-const COVER_EXTS = COVER_IMAGE_EXTENSIONS.map((ext) =>
-	ext.replace(/^\./, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-).join('|');
-
-// SAFE_SEGMENT mirrors the assertSafeKey alphabet in the path helpers
-// (traversal/empty segments are rejected separately by hasUnsafeSegment);
-// GUID is kept in sync with UUID_REGEX in definitions/schemas.ts.
-const SAFE_SEGMENT = String.raw`[A-Za-z0-9._-]+`;
-const GUID = String.raw`[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}`;
+const GUID = UUID_REGEX.source.slice(1, -1);
 
 /**
  * The closed registry of servable asset classes. Patterns are mutually
@@ -67,16 +58,12 @@ export const ASSET_CLASSES: readonly AssetClass[] = [
 		)
 	},
 	{
-		id: 'org-private',
-		visibility: 'org',
-		scope: 'org',
-		pattern: new RegExp(String.raw`^orgs\/(${SAFE_SEGMENT})\/private\/${SAFE_SEGMENT}$`)
-	},
-	{
 		id: 'definition-cover',
 		visibility: 'project',
 		scope: 'project',
-		pattern: new RegExp(String.raw`^definitions\/(${GUID})\/cover\.(?:${COVER_EXTS})$`, 'i')
+		// `put` transcodes every cover and `definitionPaths.image` names it, so this is
+		// the only cover that can exist.
+		pattern: new RegExp(String.raw`^definitions\/(${GUID})\/cover\.webp$`, 'i')
 	}
 ];
 
