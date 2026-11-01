@@ -41,7 +41,7 @@ function findDecoder(rhinoType: string): RhinoDecoder | undefined {
  * Whether the parsed item looks like a rhino3dm serialization envelope
  * (`{version, archive3dm, opennurbs, data: "<base64>"}`). `CommonObject.decode` expects the WHOLE
  * envelope — unwrapping `.data` first hands it the bare base64 string, which throws or decodes to
- * garbage (see the correct usage in display-items-parser.ts).
+ * garbage.
  */
 function isDecodableEnvelope(parsedData: unknown): parsedData is object {
 	return Boolean(

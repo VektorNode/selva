@@ -31,8 +31,8 @@ concept, it is the concept named here.
 
 ## Core seams
 
-The transport in `core/` knows no backend. What a backend needs arrives through three seams; add
-a fourth here rather than naming a backend inside `core/`:
+The transport in `core/` knows no backend. What a backend needs arrives through these seams; add
+one here rather than naming a backend inside `core/`:
 
 - `ComputeConfig.apiKeyHeader`: the name of the header that carries `apiKey` (default
   `RhinoComputeKey`).

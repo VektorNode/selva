@@ -147,17 +147,16 @@ Read outputs through `GrasshopperResponseProcessor`, or a whole tree with
 `getTreeValue` is the shortcut for a one-branch param: it unwraps a single item and throws when
 the param has more than one branch.
 
-Pass a rhino3dm module as `{ rhino }` in the `getValues` / `getValue` options to decode geometry. Its objects live on the WASM
-heap, which garbage collection never frees: release them with `disposeRhinoObjects`. Install
-`rhino3dm` yourself; this package doesn't depend on it.
+Pass a rhino3dm module as `{ rhino }` in the `getValues` / `getValue` options to decode geometry.
+Its objects live on the WASM heap, which garbage collection never frees: release them with
+`disposeRhinoObjects`. Install `rhino3dm` yourself; this package doesn't depend on it.
 
 ## File outputs
 
-File outputs need the [Selva plugin](https://www.food4rhino.com/en/app/selva?lang=en) and the
-[VektorNode compute fork](https://github.com/VektorNode/compute.rhino3d); standard Rhino Compute
-drops them. Read one with `getValue` and it comes back as `FileData`.
+File outputs need the Selva plugin and the VektorNode fork (see [Requirements](#requirements));
+standard Rhino Compute drops them. Read one with `getValue` and it comes back as `FileData`.
 
-Each file component has a `Sub Folder` input, where `::` nests (as in Rhino layer names). The
+Each file component has a `Sub Folder` input, where `/` or `::` nests (as in Rhino layer names). The
 first segment is the root: `downloadFileDataByRoot` from `/core` turns each root into its own
 archive and puts files without one in the fallback archive. With `'export'` as the fallback name:
 
@@ -174,8 +173,6 @@ archive and puts files without one in the fallback archive. With `'export'` as t
 
 ## Requirements
 
-**Node.js >= 24.**
-
 The [official McNeel Rhino Compute](https://github.com/mcneel/compute.rhino3d) handles plain
 Grasshopper solving. The [VektorNode compute fork](https://github.com/VektorNode/compute.rhino3d)
 adds input grouping (`groupName`), persistent input ids keyed on Grasshopper object GUIDs, file
@@ -185,7 +182,9 @@ file-export components those features read.
 
 ## Troubleshooting
 
-**`Network error: Failed to fetch`** means the browser couldn't reach the server. Check that
+**`CORS_ERROR` (`Request failed: Failed to fetch`)** means the browser got no response, which it
+reports the same way for a CORS block and for an unreachable server. Outside a browser the same
+failure is `NETWORK_ERROR`. Check that
 `curl http://localhost:6500/` returns 200; that a server on another origin sends
 `Access-Control-Allow-Origin` (standard Rhino Compute doesn't: put a proxy in front that adds it,
 or use the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d)); that an HTTPS app

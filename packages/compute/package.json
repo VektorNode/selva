@@ -55,10 +55,7 @@
 	"files": [
 		"dist",
 		"README.md",
-		"LICENSE",
-		"!**/__tests__/**",
-		"!**/*.test.*",
-		"!**/*.spec.*"
+		"LICENSE"
 	],
 	"engines": {
 		"node": ">=24.0.0"

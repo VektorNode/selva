@@ -7,38 +7,21 @@ import {
 } from '../src/grasshopper';
 
 /**
- * Simple example demonstrating how to use GrasshopperClient
+ * Prerequisites: a Rhino Compute instance (default http://localhost:6500), and an API key if it
+ * requires one.
  *
- * This example shows the basic workflow:
- * 1. Create a client connected to a Rhino Compute server
- * 2. Inspect definition inputs/outputs using getIO()
- * 3. Build input data using TreeBuilder
- * 4. Run computation with solve()
- * 5. Process results using GrasshopperResponseProcessor
- * 6. Clean up resources
- *
- * Prerequisites:
- * - An active Rhino Compute instance running (default: http://localhost:6500)
- * - (Optional) An API key if your server requires authentication
- *
- * How to run:
- * npx tsx examples/simple_example.ts
- *
- * Troubleshooting:
- * - If connection fails, ensure Rhino Compute is running on http://localhost:6500
- * - Enable debug mode by setting debug: true in the config for detailed logging
+ * Run: npx tsx examples/simple_example.ts
  */
 async function main() {
 	// Configuration
 	const DEFINITION_FILE = new URL('./files/simple_api_test.gh', import.meta.url);
 	const COMPUTE_SERVER = 'http://localhost:6500';
-	// const API_KEY = 'your-api-key'; // Replace with your actual API key if needed
 
-	const config = {
+	const config: GrasshopperComputeConfig = {
 		serverUrl: COMPUTE_SERVER,
-		// apiKey: API_KEY,
-		debug: false // Set to true for detailed logging
-	} as GrasshopperComputeConfig;
+		apiKey: process.env.COMPUTE_API_KEY,
+		debug: false // true logs each request
+	};
 
 	let client: GrasshopperClient | null = null;
 

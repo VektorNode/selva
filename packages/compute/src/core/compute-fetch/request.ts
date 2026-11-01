@@ -8,14 +8,10 @@ export function buildUrl(endpoint: string, serverUrl: string): string {
 }
 
 function isLocalhost(serverUrl: string): boolean {
-	try {
-		// `hostname` (not `host`) strips the port; IPv6 hostnames keep their
-		// brackets, so `http://[::1]:6500` yields `[::1]`.
-		const hostname = new URL(serverUrl).hostname.toLowerCase();
-		return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
-	} catch {
-		return /(localhost|127\.0\.0\.1|\[::1\])/i.test(serverUrl);
-	}
+	// `hostname` (not `host`) strips the port; IPv6 hostnames keep their
+	// brackets, so `http://[::1]:6500` yields `[::1]`.
+	const hostname = new URL(serverUrl).hostname.toLowerCase();
+	return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
 }
 
 /** Server URLs already warned about missing auth — warn once per server, not per request. */
