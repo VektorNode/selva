@@ -387,37 +387,11 @@ export class SupabaseOrgStore implements IOrgStore {
 	}
 
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
-		// Losing org membership ends every project membership scoped to that
-		// tenant. Run the project_members cascade BEFORE the org_member update —
-		// RLS policies gate project_members writes on org_member existence, so
-		// reversing the order would fail partway through under user-scoped RLS.
-		const client = this.clients.forRequest(ctx);
-		const stampRow = stampSoftDelete(ctx);
-
-		const { data: orgProjects, error: projError } = await client
-			.from('projects')
-			.select('id')
-			.eq('org_id', orgId)
-			.is('deleted_at', null);
-		if (projError) throw mapPostgrestError(projError);
-
-		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
-		if (projectIds.length > 0) {
-			const { error: pmError } = await client
-				.from('project_members')
-				.update(stampRow)
-				.in('project_id', projectIds)
-				.eq('user_id', userId)
-				.is('deleted_at', null);
-			if (pmError) throw mapPostgrestError(pmError);
-		}
-
-		const { error } = await client
-			.from('org_members')
-			.update(stampRow)
-			.eq('org_id', orgId)
-			.eq('user_id', userId)
-			.is('deleted_at', null);
+		// An RPC because RLS hides private projects from an admin who is not in them,
+		// so a cascade run from here would leave the leaver's access intact.
+		const { error } = await this.clients
+			.forRequest(ctx)
+			.rpc('remove_org_member', { o: orgId, u: userId });
 		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'org_member.removed',

@@ -254,6 +254,15 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			expect(got?.role).toBe('admin');
 		});
 
+		it('removeOrgMember throws 404 for someone who is not a member', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const stranger = await seed();
+			await expect(store.removeOrgMember(ctx(u1), orgId, stranger)).rejects.toMatchObject({
+				statusCode: 404
+			});
+		});
+
 		it('removeOrgMember deletes the member', async () => {
 			const store = await createStore();
 			const { u1, orgId } = await setupOrg(store);

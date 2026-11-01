@@ -332,7 +332,9 @@ export async function revokeUserApiTokens(
 ): Promise<void> {
 	if (!store) return;
 	try {
-		await store.revokeAllForUser(ctx, userId, opts);
+		// The caller is already authorized. As `system`, so RLS cannot quietly match no
+		// rows for an operator without a grant on the org, while `userId` stays the actor.
+		await store.revokeAllForUser({ ...ctx, system: true }, userId, opts);
 	} catch (err) {
 		log.error('Failed to revoke API tokens', {
 			component: 'ApiTokens',

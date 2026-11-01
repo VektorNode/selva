@@ -338,7 +338,7 @@ export class LocalOrgStore implements IOrgStore {
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
 		const store = await this.loader.get();
 		const m = store.orgMembers.find((m) => m.orgId === orgId && m.userId === userId && isLive(m));
-		if (!m) return;
+		if (!m) throw new ProviderError(`Org member '${userId}' not found`, 404);
 		const stamp = auditSoftDelete(ctx, m.updatedBy);
 		Object.assign(m, stamp);
 

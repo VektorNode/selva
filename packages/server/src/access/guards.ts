@@ -44,7 +44,8 @@ import {
 	canManage,
 	canEditProjectSettings,
 	canEditDefinition,
-	outsideTokenOrg
+	outsideTokenOrg,
+	SYSTEM_CONTEXT
 } from '@selvajs/platform';
 import {
 	createProjectAccessInputBuilder,
@@ -392,7 +393,17 @@ export async function requireCanReclaim(
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId, locals);
+	// Reclaim exists for projects the caller cannot see, and RLS hides those from
+	// their own session. Only the org's leadership may learn that one exists.
+	const visible = await projectsOf(locals).getProject(ctx, projectId);
+	const project = visible ?? (await projectsOf(locals).getProject(SYSTEM_CONTEXT, projectId));
+	if (
+		!project ||
+		outsideTokenOrg(ctx, project.orgId) ||
+		(!visible && project.orgId !== ctx.actingOrgId)
+	) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	}
 
 	// Ahead of the bypass, not inside the check: `instance_admin` short-circuits
 	// `managementBypassOrRun`, so `canReclaim`'s platform-project refusal (§4a)
@@ -412,6 +423,7 @@ export async function requireCanReclaim(
 		});
 	});
 	if (!allowed) {
+		if (!visible) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
 		apiError(
 			403,
 			ApiErrorCode.FORBIDDEN,

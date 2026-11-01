@@ -28,6 +28,7 @@ import {
 	type OrgPermission,
 	type OrgRole,
 	type Project,
+	SYSTEM_CONTEXT,
 	type RequestContext
 } from '@selvajs/platform';
 import { requireManageOrgMembers, requireActingOrg } from '../access/index.js';
@@ -114,16 +115,19 @@ async function hasAnotherOwner(
  */
 async function findProjectsLosingSoleOwner(
 	req: ApiRequest,
-	ctx: RequestContext,
 	orgId: string,
 	userId: string
 ): Promise<Project[]> {
+	// As system: RLS hides private projects from the acting admin, and those are the
+	// likeliest to lose their only owner.
 	const projects = req.deps.projects;
-	const orgProjects = await projects.listProjects(ctx, orgId, { limit: ROSTER_PAGE_LIMIT });
+	const orgProjects = await projects.listProjects(SYSTEM_CONTEXT, orgId, {
+		limit: ROSTER_PAGE_LIMIT
+	});
 
 	const checks = await Promise.all(
 		orgProjects.items.map(async (project) => {
-			const members = await projects.listProjectMembers(ctx, project.id, {
+			const members = await projects.listProjectMembers(SYSTEM_CONTEXT, project.id, {
 				limit: ROSTER_PAGE_LIMIT
 			});
 			const owners = members.items.filter((m) => m.role === 'owner' && !m.deletedAt);
@@ -256,7 +260,7 @@ export const removeOrgMember: ApiHandler = async (req) => {
 
 		// Must run before the removal: the cascade soft-deletes the very rows this
 		// reads. Reported, not blocked — see the docblock on `findProjectsLosingSoleOwner`.
-		const losing = await findProjectsLosingSoleOwner(req, ctx, orgId, userId);
+		const losing = await findProjectsLosingSoleOwner(req, orgId, userId);
 		await orgs.removeOrgMember(ctx, orgId, userId);
 		return losing;
 	});
