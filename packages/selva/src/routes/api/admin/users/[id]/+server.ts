@@ -8,6 +8,7 @@ import {
 } from '$lib/server/access.server';
 import {
 	requireCanRemoveInstanceAdmin,
+	requireEnabledToBecomeAdmin,
 	requireNotSoleOrgOwner
 } from '$lib/server/admin/instanceAdmins.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
@@ -41,6 +42,7 @@ export const PATCH: RequestHandler = apiRoute(
 			id
 		);
 		assertCanGrantPlatformPermissions(locals.ctx!, platform, existingPlatform);
+		await requireEnabledToBecomeAdmin(id, platform, existingPlatform);
 
 		const platformResult = await setUserPlatformPermissions(locals.ctx!, id, platform);
 		if (platformResult === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
@@ -71,8 +73,22 @@ export const DELETE: RequestHandler = apiRoute(
 		requireManageInstanceUsers(locals);
 		const { id } = requireParams(params, 'id');
 
-		await requireCanRemoveInstanceAdmin(locals.ctx!, id, 'delete');
+		const { targetIsAdmin } = await requireCanRemoveInstanceAdmin(locals.ctx!, id, 'delete');
 		await requireNotSoleOrgOwner(id);
+
+		// The check above reads, then this writes: `set` is the atomic step, so two
+		// admins deleting each other cannot both get past it.
+		const priorPermissions = await getPermissionStore().getFor(locals.ctx!, id);
+		if (targetIsAdmin) {
+			const revoked = await setUserPlatformPermissions(locals.ctx!, id, []);
+			if (revoked === 'last_admin') {
+				apiError(
+					409,
+					ApiErrorCode.CONFLICT,
+					'Cannot delete the last instance admin. Promote another user to instance admin first.'
+				);
+			}
+		}
 
 		// Capture the email BEFORE deletion — `onUserDeleted` needs it to scrub
 		// invite/audit rows keyed by email, but the auth user is gone by then.
@@ -80,6 +96,9 @@ export const DELETE: RequestHandler = apiRoute(
 		const email = target?.email;
 
 		const result = await getAuthProvider().deleteUser(id);
+		if (targetIsAdmin && result !== 'ok') {
+			await setUserPlatformPermissions(locals.ctx!, id, priorPermissions);
+		}
 		if (result === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
 		if (result === 'not_supported')
 			apiError(501, ApiErrorCode.INTERNAL, 'User deletion not supported by this auth provider');

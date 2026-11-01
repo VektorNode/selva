@@ -20,7 +20,7 @@ import {
 	actAs,
 	callHandler
 } from '../../testing/index.js';
-import { createProject, updateProject } from '../projects.js';
+import { createProject, deleteProject, updateProject } from '../projects.js';
 
 let tp: HandlerHarness | null = null;
 
@@ -116,5 +116,38 @@ describe('platform visibility is instance-admin only', () => {
 		});
 
 		expect(res.status).toBe(204);
+	});
+});
+
+describe('platform projects with ENABLE_PLATFORM_PROJECTS off', () => {
+	it('refuses instance_admin too, on PATCH and DELETE', async () => {
+		tp = await freshHarness();
+		const { acme, bob } = await seedAcme(tp);
+		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
+		const project = await seedProject(tp, {
+			orgId: acme.id,
+			name: 'Platform',
+			slug: 'platform',
+			ownerId: bob.id,
+			visibility: 'platform'
+		});
+		const locals = await actAs(tp, bob.id);
+
+		const patched = await callHandler(updateProject, {
+			locals,
+			method: 'PATCH',
+			params: { id: project.id },
+			body: { name: 'Renamed' }
+		});
+		const deleted = await callHandler(deleteProject, {
+			locals,
+			method: 'DELETE',
+			params: { id: project.id }
+		});
+
+		expect(patched.status).toBe(403);
+		expect(deleted.status).toBe(403);
+		const still = await tp.config.data.projects.getProject(SYSTEM_CONTEXT, project.id);
+		expect(still?.name).toBe('Platform');
 	});
 });

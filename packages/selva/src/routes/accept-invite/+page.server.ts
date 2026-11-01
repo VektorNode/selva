@@ -7,7 +7,7 @@ import {
 	getOrganizationProvider,
 	getUserProfileStore
 } from '$lib/server/providers.server';
-import { getAuthProvider } from '$lib/server/providers.server';
+import { getAuthProvider, getPermissionStore } from '$lib/server/providers.server';
 import { findAuthUserByEmail } from '@selvajs/server/providers';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
@@ -145,11 +145,10 @@ export const actions = {
 				// `ensureUser` on the first authed request — one the invitee has not
 				// made yet. Without this the grant returns `not_found` and vanishes.
 				await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
-				const granted = await setUserPlatformPermissions(
-					SYSTEM_CONTEXT,
-					user.id,
-					invite.platformPermissions
-				);
+				const held = await getPermissionStore().getFor(SYSTEM_CONTEXT, user.id);
+				const granted = await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [
+					...new Set([...held, ...invite.platformPermissions])
+				]);
 				if (granted !== 'ok') {
 					throw new Error(`Platform permission grant failed: ${granted}`);
 				}

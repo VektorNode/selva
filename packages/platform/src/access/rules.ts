@@ -82,7 +82,9 @@ export function canView(input: ProjectAccessInput): boolean {
 		);
 	}
 
-	if (project.visibility === 'private') return member !== null;
+	// A project member sees the project at any visibility. Leaving the org ends the
+	// membership, so this only widens access for someone who reclaimed from outside.
+	if (member !== null) return true;
 	if (project.visibility === 'org') return orgMember !== null;
 	if (project.visibility === 'public') return allowCrossOrgPublic ? true : orgMember !== null;
 	return false;
@@ -135,11 +137,11 @@ export function canEdit(input: ProjectAccessInput): boolean {
 
 /**
  * Adding a new definition. Commons projects (`autoJoinOnUpload`) take uploads
- * from anyone who reaches them, and the uploader owns what they upload;
- * everywhere else it needs {@link canEdit}.
+ * from anyone who can {@link canView} them, and the uploader owns what they
+ * upload; everywhere else it needs {@link canEdit}.
  */
 export function canCreateDefinition(input: ProjectAccessInput): boolean {
-	return input.project?.autoJoinOnUpload === true || canEdit(input);
+	return (input.project?.autoJoinOnUpload === true && canView(input)) || canEdit(input);
 }
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */

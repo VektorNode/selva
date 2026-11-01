@@ -370,6 +370,22 @@ describe('accept-invite grants platform permissions', () => {
 		return new URL(acceptUrl).searchParams.get('token')!;
 	}
 
+	it('adds to the permissions an existing user already holds', async () => {
+		tp = await freshProviders();
+		const token = await mintCarrying(tp, ['manage_instance_users']);
+		const user = await seedUser(tp, INVITEE);
+		await grantPlatformPermissions(tp, user.id, ['manage_updates', 'manage_compute']);
+
+		await submit(token, {}, { user: (await actAs(tp, user.id)).user });
+
+		const perms = await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, user.id);
+		expect([...perms].sort()).toEqual([
+			'manage_compute',
+			'manage_instance_users',
+			'manage_updates'
+		]);
+	});
+
 	it('promotes the invitee to instance_admin on accept', async () => {
 		tp = await freshProviders();
 		const token = await mintCarrying(tp, ['instance_admin']);

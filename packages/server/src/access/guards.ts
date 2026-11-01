@@ -245,6 +245,20 @@ async function contentCheck(check: () => Promise<boolean>): Promise<boolean> {
 	return await check();
 }
 
+// With ENABLE_PLATFORM_PROJECTS off every rule denies a platform project, even for
+// `instance_admin`, so the bypass must not reopen it.
+function managementBypassForProject(
+	ctx: RequestContext,
+	project: Project,
+	src: HasDeps,
+	check: () => Promise<boolean>
+): Promise<boolean> {
+	if (project.visibility === 'platform' && !flagOf(src)('ENABLE_PLATFORM_PROJECTS')) {
+		return check();
+	}
+	return managementBypassOrRun(ctx, check);
+}
+
 async function loadProjectOr404(
 	ctx: RequestContext,
 	projectId: string,
@@ -471,10 +485,10 @@ export async function requireCanManage(
 	action: 'project' | 'members' = 'project'
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await managementBypassOrRun(ctx, async () => {
-		const project = await loadProjectOr404(ctx, projectId, locals);
-		return canManage(await buildProjectAccessInput(ctx, project, locals));
-	});
+	const project = await loadProjectOr404(ctx, projectId, locals);
+	const allowed = await managementBypassForProject(ctx, project, locals, async () =>
+		canManage(await buildProjectAccessInput(ctx, project, locals))
+	);
 	if (!allowed) {
 		apiError(
 			403,
@@ -495,7 +509,7 @@ export async function requireCanEditProjectSettings(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId, locals);
-	const allowed = await managementBypassOrRun(ctx, async () =>
+	const allowed = await managementBypassForProject(ctx, project, locals, async () =>
 		canEditProjectSettings(await buildProjectAccessInput(ctx, project, locals))
 	);
 	if (!allowed)

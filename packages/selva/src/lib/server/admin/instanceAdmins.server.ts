@@ -1,6 +1,10 @@
-import type { RequestContext } from '@selvajs/platform';
+import type { PlatformPermission, RequestContext } from '@selvajs/platform';
 import { hasPermission, SYSTEM_CONTEXT } from '@selvajs/platform';
-import { getOrganizationProvider, getPermissionStore } from '../providers.server.js';
+import {
+	getAuthProvider,
+	getOrganizationProvider,
+	getPermissionStore
+} from '../providers.server.js';
 import { apiError, ApiErrorCode } from '../api-errors.js';
 
 /**
@@ -42,6 +46,23 @@ export async function requireCanRemoveInstanceAdmin(
 	}
 
 	return { targetIsAdmin };
+}
+
+/**
+ * A disabled admin counts as an admin but cannot sign in. The last enabled admin
+ * could then be removed, `/setup` would stay closed, and no endpoint re-enables a
+ * user, which locks the instance.
+ */
+export async function requireEnabledToBecomeAdmin(
+	targetUserId: string,
+	next: readonly PlatformPermission[],
+	existing: readonly PlatformPermission[]
+): Promise<void> {
+	if (!next.includes('instance_admin') || existing.includes('instance_admin')) return;
+	const target = await getAuthProvider().getUser(targetUserId);
+	if (target?.disabled) {
+		apiError(409, ApiErrorCode.CONFLICT, 'A disabled user cannot become an instance admin.');
+	}
 }
 
 const ORG_PAGE_LIMIT = 200;

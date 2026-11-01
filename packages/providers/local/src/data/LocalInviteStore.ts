@@ -9,7 +9,7 @@ import type {
 } from '@selvajs/platform';
 import { NoopEventSink, actorOf } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
-import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { readJsonFile, writeJsonFile, withFileLock } from './fsJson.js';
 
 interface InvitesFile {
 	invites: Invite[];
@@ -79,12 +79,16 @@ export class LocalInviteStore implements IInviteStore {
 	}
 
 	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
-		const file = await this.load();
-		const invite = file.invites.find((i) => i.id === id);
-		if (!invite || invite.acceptedAt) return;
-		invite.acceptedAt = new Date().toISOString();
-		invite.acceptedByUserId = userId;
-		await this.save(file);
+		const invite = await withFileLock(this.filePath, async () => {
+			const file = await this.load();
+			const target = file.invites.find((i) => i.id === id);
+			if (!target || target.acceptedAt) return null;
+			target.acceptedAt = new Date().toISOString();
+			target.acceptedByUserId = userId;
+			await this.save(file);
+			return target;
+		});
+		if (!invite) return;
 		await this.events.emit({
 			type: 'invite.accepted',
 			inviteId: invite.id,

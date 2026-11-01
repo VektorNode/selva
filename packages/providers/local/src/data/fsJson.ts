@@ -2,6 +2,24 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+const fileQueues = new Map<string, Promise<unknown>>();
+
+/**
+ * Runs a read-modify-write of `filePath` alone in this process, so two writers
+ * can't both start from the same snapshot and lose one's change.
+ */
+export function withFileLock<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+	// Chain onto the tail however the previous write settled, so one rejection
+	// can't wedge the queue.
+	const next = (fileQueues.get(filePath) ?? Promise.resolve()).then(fn, fn);
+	const tail = next.catch(() => {});
+	fileQueues.set(filePath, tail);
+	void tail.then(() => {
+		if (fileQueues.get(filePath) === tail) fileQueues.delete(filePath);
+	});
+	return next;
+}
+
 /** Returns `fallback` if the file doesn't exist. Other errors propagate. */
 export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T> {
 	try {

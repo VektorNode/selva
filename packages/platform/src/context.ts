@@ -60,7 +60,7 @@ export function hasPermission(
 	ctx: RequestContext,
 	permission: PlatformPermission | OrgPermission
 ): boolean {
-	if (ctx.system) return true;
+	if (ctx.system && !isShareContext(ctx)) return true;
 	if (ctx.platformPermissions.includes('instance_admin')) return true;
 	if (isPlatformPermission(permission)) {
 		return ctx.platformPermissions.includes(permission);

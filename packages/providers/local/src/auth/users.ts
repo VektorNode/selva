@@ -129,6 +129,9 @@ export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserSt
 		},
 
 		async createUser(email, password) {
+			// Hash first: nothing may await between the uniqueness check and the push, or
+			// a double submit gets past the check twice.
+			const passwordHash = password !== null ? await hashPassword(password) : null;
 			const file = await load();
 			if (file.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
 				throw new ProviderError(`User with email "${email}" already exists`, 409);
@@ -136,7 +139,7 @@ export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserSt
 			const user: StoredAuthUser = {
 				id: randomUUID(),
 				email,
-				passwordHash: password !== null ? await hashPassword(password) : null,
+				passwordHash,
 				createdAt: new Date().toISOString()
 			};
 			file.users.push(user);

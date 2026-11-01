@@ -33,25 +33,7 @@ import {
 } from '@selvajs/platform';
 import { requireManageOrgMembers, requireActingOrg } from '../access/index.js';
 import { revokeUserApiTokens } from './apiTokens.js';
-
-const ownerChangeQueues = new Map<string, Promise<unknown>>();
-
-/**
- * Runs one org's member changes one at a time. The sole-owner check reads, then
- * writes: two owners removing each other at once would each see the other as
- * the survivor and leave the org with none. Per process only; replicas still
- * need an atomic store write to close it.
- */
-function serializeOwnerChanges<T>(orgId: string, run: () => Promise<T>): Promise<T> {
-	const previous = ownerChangeQueues.get(orgId) ?? Promise.resolve();
-	const next = previous.catch(() => {}).then(run);
-	const tail = next.catch(() => {});
-	ownerChangeQueues.set(orgId, tail);
-	void tail.then(() => {
-		if (ownerChangeQueues.get(orgId) === tail) ownerChangeQueues.delete(orgId);
-	});
-	return next;
-}
+import { serializeOwnerChanges } from './ownerChanges.js';
 
 const ROSTER_PAGE_LIMIT = 200;
 // Runaway guard against an adapter returning a non-advancing cursor. Matches

@@ -184,3 +184,24 @@ describe('createAllowlistStore — durability', () => {
 		expect(siblings.some((f) => f.endsWith('.tmp'))).toBe(false);
 	});
 });
+
+describe('createAllowlistStore — concurrent writes', () => {
+	it('creates one entry for a double submit, with a clean 409 for the loser', async () => {
+		const results = await Promise.allSettled([
+			store.createUser('new@acme.test'),
+			store.createUser('new@acme.test')
+		]);
+
+		expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+		const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+		expect(rejected.reason).toBeInstanceOf(ProviderError);
+		expect(await store.listUsers()).toHaveLength(1);
+	});
+
+	it('keeps every entry from different users created at once', async () => {
+		await Promise.all(
+			Array.from({ length: 10 }, (_, i) => store.createUser(`user-${i}@acme.test`))
+		);
+		expect(await store.listUsers()).toHaveLength(10);
+	});
+});
