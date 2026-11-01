@@ -257,6 +257,52 @@ describe('runSolvePipeline — gzip', () => {
 	});
 });
 
+describe('runSolvePipeline — a response served again', () => {
+	const big = () => ({ values: 'x'.repeat(5000) });
+
+	const ok = (outcome: Awaited<ReturnType<typeof runSolvePipeline>>) => {
+		if (outcome.kind !== 'ok') throw new Error(`expected ok, got ${outcome.kind}`);
+		return outcome.envelope;
+	};
+
+	it('sends the gzipped bytes it already built, doing no work', async () => {
+		const cached = big();
+		const args = baseArgs({ acceptEncoding: 'gzip', client: fakeClient(async () => cached) });
+
+		const first = ok(await runSolvePipeline(args));
+		const repeat = ok(await runSolvePipeline(args));
+
+		expect(repeat.body).toBe(first.body);
+		expect(repeat.metrics.serializeMs).toBe(0);
+		expect(repeat.metrics.gzipMs).toBe(0);
+		expect(repeat.metrics.serializedBytes).toBe(first.metrics.serializedBytes);
+		expect(repeat.headers['Content-Length']).toBe(first.headers['Content-Length']);
+		expect(JSON.parse(gunzipSync(repeat.body as Uint8Array).toString())).toEqual(cached);
+	});
+
+	it('still answers a client without gzip in plain JSON', async () => {
+		const cached = big();
+		const client = fakeClient(async () => cached);
+		await runSolvePipeline(baseArgs({ acceptEncoding: 'gzip', client }));
+
+		const plain = ok(await runSolvePipeline(baseArgs({ acceptEncoding: 'br', client })));
+
+		expect(plain.encoding).toBeUndefined();
+		expect(JSON.parse(plain.body as string)).toEqual(cached);
+	});
+
+	it('builds a body per response, never reusing another one', async () => {
+		const responses = [{ values: 'a'.repeat(5000) }, { values: 'b'.repeat(5000) }];
+		const client = fakeClient(async () => responses.shift()!);
+		const args = baseArgs({ acceptEncoding: 'gzip', client });
+
+		ok(await runSolvePipeline(args));
+		const second = ok(await runSolvePipeline(args));
+
+		expect(JSON.parse(gunzipSync(second.body as Uint8Array).toString()).values[0]).toBe('b');
+	});
+});
+
 describe('adaptEnvelopeToEncoding — single-flight per-waiter re-key', () => {
 	// Build a real gzip envelope the way the pipeline does, so the adapter is
 	// exercised against genuine compressed bytes rather than a hand-rolled stub.

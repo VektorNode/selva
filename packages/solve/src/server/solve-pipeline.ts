@@ -27,6 +27,24 @@ import type { ByteRefOutcome } from './definition-byte-cache.js';
 // gzipSync blocks the event loop for multi-MB bodies; promisify(gzip) doesn't.
 const gzipAsync = promisify(gzip);
 
+/**
+ * Display output is base64 of already-deflated bytes, where higher levels find nothing more:
+ * level 1 lands within 1% of the default's size, in up to a fifth of the time.
+ */
+const GZIP_LEVEL = 1;
+
+interface GzippedBody {
+	body: Uint8Array;
+	serializedBytes: number;
+}
+
+/**
+ * A scheduler cache hit returns the same response object, so a repeat solve reuses its bytes rather
+ * than paying to serialize and compress them again. Entries live exactly as long as the response.
+ * Only the gzip form is kept: browsers always take it, and the JSON string would double the memory.
+ */
+const gzippedBodies = new WeakMap<object, GzippedBody>();
+
 // ============================================================================
 // Wire contract version
 // ============================================================================
@@ -207,30 +225,37 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 	}
 	const solveMs = performance.now() - solveStart;
 
-	const serializeStart = performance.now();
-	let serialized: string;
-	try {
-		serialized = JSON.stringify(result);
-	} catch (err) {
-		// V8 caps a string at ~512 MB; an oversized `file` output trips a RangeError
-		// here. Treat it the same as the byte cap: too_large.
-		if (err instanceof RangeError) return { kind: 'too_large' };
-		throw err;
-	}
-	if (serialized.length > args.responseMaxBytes) return { kind: 'too_large' };
-	const serializeMs = performance.now() - serializeStart;
-
-	// Buffered, not streamed, so Content-Length is known upfront and a connection
-	// cut mid-transfer fails hard instead of silently truncating the JSON. Below
-	// 1 KB gzip isn't worth the CPU for the wire savings.
 	const clientWantsGzip = /\bgzip\b/i.test(args.acceptEncoding);
-	const worthSendingGzip = clientWantsGzip && serialized.length > 1024;
-	let compressed: Buffer | null = null;
+	const remembered = clientWantsGzip ? gzippedBodies.get(result) : undefined;
+	let compressed = remembered?.body ?? null;
+	let serializedBytes = remembered?.serializedBytes ?? 0;
+	let serialized = '';
+	let serializeMs = 0;
 	let gzipMs = 0;
-	if (worthSendingGzip) {
-		const gzipStart = performance.now();
-		compressed = await gzipAsync(Buffer.from(serialized));
-		gzipMs = performance.now() - gzipStart;
+
+	if (!remembered) {
+		const serializeStart = performance.now();
+		try {
+			serialized = JSON.stringify(result);
+		} catch (err) {
+			// V8 caps a string at ~512 MB; an oversized `file` output trips a RangeError
+			// here. Treat it the same as the byte cap: too_large.
+			if (err instanceof RangeError) return { kind: 'too_large' };
+			throw err;
+		}
+		if (serialized.length > args.responseMaxBytes) return { kind: 'too_large' };
+		serializeMs = performance.now() - serializeStart;
+		serializedBytes = serialized.length;
+
+		// Buffered, not streamed, so Content-Length is known upfront and a connection
+		// cut mid-transfer fails hard instead of silently truncating the JSON. Below
+		// 1 KB gzip isn't worth the CPU for the wire savings.
+		if (clientWantsGzip && serialized.length > 1024) {
+			const gzipStart = performance.now();
+			compressed = new Uint8Array(await gzipAsync(Buffer.from(serialized), { level: GZIP_LEVEL }));
+			gzipMs = performance.now() - gzipStart;
+			gzippedBodies.set(result, { body: compressed, serializedBytes });
+		}
 	}
 
 	const serverTotalMs = performance.now() - args.loadStartMs;
@@ -261,7 +286,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		serializeMs,
 		gzipMs,
 		serverTotalMs,
-		serializedBytes: serialized.length,
+		serializedBytes,
 		compressedBytes: compressed?.byteLength ?? null
 	};
 
@@ -272,7 +297,7 @@ export async function runSolvePipeline(args: SolvePipelineArgs): Promise<SolveOu
 		headers['Content-Encoding'] = 'gzip';
 		headers['Content-Length'] = String(compressed.byteLength);
 		envelope = {
-			body: new Uint8Array(compressed),
+			body: compressed,
 			encoding: 'gzip',
 			headers,
 			result,
