@@ -10,6 +10,7 @@ import {
 } from '@selvajs/platform';
 import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
 import {
+	assertStoredKeysReadable,
 	validateIncomingServers,
 	resolveApiKey,
 	storedKeysById,
@@ -105,6 +106,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		// One of the few reads that genuinely needs every key: unchanged servers
 		// keep their stored key, and `evictChangedServers` diffs on key rotation.
 		const existing = await provider.getConfig(locals.ctx!, { includeApiKeys: true });
+		assertStoredKeysReadable(incoming.servers, platformServers(existing));
 		const storedKeys = storedKeysById(platformServers(existing));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(

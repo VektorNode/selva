@@ -51,6 +51,7 @@ export { resolveServerForOrg } from './resolve-server.js';
 export { ComputeServerUnconfiguredError } from './errors.js';
 export { evictChangedServers, type ServerConnection } from './evict-changed-servers.js';
 export {
+	assertStoredKeysReadable,
 	validateIncomingServers,
 	resolveApiKey,
 	storedKeysById,

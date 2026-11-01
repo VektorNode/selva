@@ -49,6 +49,11 @@ payloads (`redact_audit_event_email`), and tombstones `solve_metrics.actor_id` t
 `'deleted'` so the row survives for capacity aggregates while the person does not. The
 admin delete handler captures the email before `deleteUser` and passes it through.
 
+Erasure removes the person, not what they made. Orgs, projects, definitions and versions
+stay, and their `owner_id` or `uploaded_by` goes null, which the stores read as `'deleted'`.
+The delete route refuses the only owner of an org, because nobody could run that org
+afterwards: make someone else an owner, or delete the org, first.
+
 **Open gap:** no time-based retention on `audit_events` or `solve_metrics`; rows live
 until a subject is erased.
 

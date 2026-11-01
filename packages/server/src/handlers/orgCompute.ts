@@ -29,6 +29,7 @@ import {
 } from '@selvajs/platform';
 import { requireManageOrgCompute, requireActingOrg } from '../access/index.js';
 import {
+	assertStoredKeysReadable,
 	evictChangedServers,
 	validateIncomingServers,
 	resolveApiKey,
@@ -93,9 +94,11 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 	const provider = req.deps.computeServer;
 	// Every key is needed: an unchanged server keeps its stored key across the write.
 	const existing = await provider.getConfig(ctx, { includeApiKeys: true });
-	const storedKeys = storedKeysById(
-		existing.servers.filter((s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId)
+	const orgServers = existing.servers.filter(
+		(s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId
 	);
+	assertStoredKeysReadable(incoming.servers, orgServers);
+	const storedKeys = storedKeysById(orgServers);
 
 	const next: OrgComputeServer[] = incoming.servers.map((s) => ({
 		id: s.id,

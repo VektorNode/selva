@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import type { DomainEvent } from '@selvajs/platform';
+import { SYSTEM_CONTEXT, type DomainEvent } from '@selvajs/platform';
 import {
 	freshProviders,
 	seedAcme,
@@ -123,5 +123,32 @@ describe('finding 6 — platform-scope events', () => {
 		expect(eventsOfType(tp.events, 'user.deleted')).toMatchObject([
 			{ userId: bob.id, actorId: alice.id }
 		]);
+	});
+
+	it('refuses deleting the only owner of an org', async () => {
+		tp = await freshProviders();
+		const { acme, alice, bob } = await seedAcme(tp);
+		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
+		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, alice.id, 'owner');
+
+		const res = await call(DELETE, { locals: await actAs(tp, bob.id), params: { id: alice.id } });
+
+		expect(res.status).toBe(409);
+		expect(res.json).toMatchObject({ message: expect.stringContaining('Acme') });
+		expect(
+			await tp.config.data.orgs.getOrgMember(SYSTEM_CONTEXT, acme.id, alice.id)
+		).not.toBeNull();
+	});
+
+	it('deletes an owner once the org has another', async () => {
+		tp = await freshProviders();
+		const { acme, alice, bob } = await seedAcme(tp);
+		await grantPlatformPermissions(tp, bob.id, ['instance_admin']);
+		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, alice.id, 'owner');
+		await tp.config.data.orgs.updateOrgMemberRole(SYSTEM_CONTEXT, acme.id, bob.id, 'owner');
+
+		const res = await call(DELETE, { locals: await actAs(tp, bob.id), params: { id: alice.id } });
+
+		expect(res.status).toBe(204);
 	});
 });

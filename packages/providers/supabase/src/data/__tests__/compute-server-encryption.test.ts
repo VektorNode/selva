@@ -60,7 +60,13 @@ function fakeBundle(selectRows: Record<string, unknown[]> = {}) {
 		return chain;
 	}
 
-	const client = { from: (t: string) => builder(t) };
+	const client = {
+		from: (t: string) => builder(t),
+		rpc: async (_fn: string, args: { servers: unknown[] }) => {
+			inserted['compute_servers'] = (inserted['compute_servers'] ?? []).concat(args.servers);
+			return { error: null };
+		}
+	};
 	const bundle = {
 		serviceClient: client,
 		forRequest: () => client

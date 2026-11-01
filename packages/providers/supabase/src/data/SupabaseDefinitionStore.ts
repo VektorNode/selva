@@ -12,7 +12,7 @@ import type {
 	Page,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
+import { ERASED_ACTOR_ID, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -411,7 +411,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 interface DefinitionRow {
 	guid: string;
 	project_id: string;
-	owner_id: string;
+	owner_id: string | null;
 	created_by?: string | null;
 	updated_by?: string | null;
 	compute_server_id: string | null;
@@ -439,7 +439,7 @@ interface DefinitionVersionRow {
 	file_ext: DefinitionFileExt;
 	file_key: string;
 	original_filename: string | null;
-	uploaded_by: string;
+	uploaded_by: string | null;
 	uploaded_at: string;
 	change_note?: string | null;
 	schema?: UISchema | null;
@@ -447,12 +447,13 @@ interface DefinitionVersionRow {
 }
 
 function rowToRecord(row: DefinitionRow): DefinitionRecord {
+	const owner = row.owner_id ?? ERASED_ACTOR_ID;
 	return {
 		guid: row.guid,
 		projectId: row.project_id,
-		ownerId: row.owner_id,
-		createdBy: row.created_by ?? row.owner_id,
-		updatedBy: row.updated_by ?? row.owner_id,
+		ownerId: owner,
+		createdBy: row.created_by ?? owner,
+		updatedBy: row.updated_by ?? owner,
 		liveVersionId: row.live_version_id,
 		draftVersionId: row.draft_version_id,
 		computeServerId: row.compute_server_id ?? undefined,
@@ -531,7 +532,7 @@ function rowToVersion(row: DefinitionVersionRow): DefinitionVersion {
 		fileExt: row.file_ext,
 		fileKey: row.file_key,
 		originalFilename: row.original_filename ?? undefined,
-		uploadedBy: row.uploaded_by,
+		uploadedBy: row.uploaded_by ?? ERASED_ACTOR_ID,
 		uploadedAt: row.uploaded_at,
 		changeNote: row.change_note ?? undefined,
 		schema: row.schema ?? undefined,

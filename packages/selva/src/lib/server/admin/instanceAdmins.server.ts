@@ -1,6 +1,6 @@
 import type { RequestContext } from '@selvajs/platform';
-import { hasPermission } from '@selvajs/platform';
-import { getPermissionStore } from '../providers.server.js';
+import { hasPermission, SYSTEM_CONTEXT } from '@selvajs/platform';
+import { getOrganizationProvider, getPermissionStore } from '../providers.server.js';
 import { apiError, ApiErrorCode } from '../api-errors.js';
 
 /**
@@ -42,4 +42,49 @@ export async function requireCanRemoveInstanceAdmin(
 	}
 
 	return { targetIsAdmin };
+}
+
+const ORG_PAGE_LIMIT = 200;
+
+/**
+ * Erasing an org's only owner would leave nobody who can run it: `canReclaim`
+ * needs an org owner or admin, so unlike a project there is no way back. The
+ * caller has to hand the org over or delete it first, which is why this refuses
+ * rather than picking a successor.
+ */
+export async function requireNotSoleOrgOwner(targetUserId: string): Promise<void> {
+	const orgs = getOrganizationProvider();
+	let cursor: string | undefined;
+	do {
+		const page = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: ORG_PAGE_LIMIT, cursor });
+		const memberships = await orgs.getOrgMembersFor(
+			SYSTEM_CONTEXT,
+			page.items.map((o) => o.id),
+			targetUserId
+		);
+		for (const org of page.items) {
+			if (memberships.get(org.id)?.role !== 'owner') continue;
+			if (await orgHasAnotherOwner(org.id, targetUserId)) continue;
+			apiError(
+				409,
+				ApiErrorCode.CONFLICT,
+				`This user is the only owner of ${org.name}. Make someone else an owner, or delete the organization first.`
+			);
+		}
+		cursor = page.nextCursor;
+	} while (cursor);
+}
+
+async function orgHasAnotherOwner(orgId: string, exceptUserId: string): Promise<boolean> {
+	const orgs = getOrganizationProvider();
+	let cursor: string | undefined;
+	do {
+		const page = await orgs.listOrgMembers(SYSTEM_CONTEXT, orgId, {
+			limit: ORG_PAGE_LIMIT,
+			cursor
+		});
+		if (page.items.some((m) => m.role === 'owner' && m.userId !== exceptUserId)) return true;
+		cursor = page.nextCursor;
+	} while (cursor);
+	return false;
 }

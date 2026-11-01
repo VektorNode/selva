@@ -9,7 +9,13 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { DEFAULT_ORG_PERMISSIONS, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
+import {
+	DEFAULT_ORG_PERMISSIONS,
+	ERASED_ACTOR_ID,
+	ProviderError,
+	actorOf,
+	NoopEventSink
+} from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
@@ -416,7 +422,7 @@ interface OrgRow {
 	id: string;
 	name: string;
 	slug: string;
-	owner_id: string;
+	owner_id: string | null;
 	assets?: Record<string, string> | null;
 	created_by?: string | null;
 	updated_by?: string | null;
@@ -437,14 +443,15 @@ interface OrgMemberRow {
 }
 
 function rowToOrg(row: OrgRow): Organization {
+	const owner = row.owner_id ?? ERASED_ACTOR_ID;
 	return {
 		id: row.id,
 		name: row.name,
 		slug: row.slug,
-		ownerId: row.owner_id,
+		ownerId: owner,
 		assets: row.assets ?? undefined,
-		createdBy: row.created_by ?? row.owner_id,
-		updatedBy: row.updated_by ?? row.owner_id,
+		createdBy: row.created_by ?? owner,
+		updatedBy: row.updated_by ?? owner,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null

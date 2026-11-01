@@ -6,7 +6,10 @@ import {
 	assertCanGrantPlatformPermissions,
 	requireManageInstanceUsers
 } from '$lib/server/access.server';
-import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
+import {
+	requireCanRemoveInstanceAdmin,
+	requireNotSoleOrgOwner
+} from '$lib/server/admin/instanceAdmins.server';
 import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, noContent, parseBody, requireParams } from '$lib/server/api/http';
 import {
@@ -69,6 +72,7 @@ export const DELETE: RequestHandler = apiRoute(
 		const { id } = requireParams(params, 'id');
 
 		await requireCanRemoveInstanceAdmin(locals.ctx!, id, 'delete');
+		await requireNotSoleOrgOwner(id);
 
 		// Capture the email BEFORE deletion — `onUserDeleted` needs it to scrub
 		// invite/audit rows keyed by email, but the auth user is gone by then.

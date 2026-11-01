@@ -144,34 +144,18 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		servers: ComputeServerConfig[],
 		defaultServerId: string | undefined
 	): Promise<void> {
-		const client = this.clients.forRequest(ctx);
 		const platformOnly = servers.filter(isPlatformServer);
-
-		const { error: delErr } = await client.from('compute_servers').delete().eq('scope', 'platform');
-		if (delErr) throw mapPostgrestError(delErr);
-
-		if (platformOnly.length > 0) {
-			const { error: insErr } = await client
-				.from('compute_servers')
-				.insert(platformOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
-			if (insErr) throw mapPostgrestError(insErr);
-
-			const shareRows = platformOnly.flatMap((s) =>
-				s.sharedWith === 'all'
-					? []
-					: s.sharedWith.map((orgId) => ({ server_id: s.id, org_id: orgId }))
-			);
-			if (shareRows.length > 0) {
-				const { error: shErr } = await client.from('compute_server_shares').insert(shareRows);
-				if (shErr) throw mapPostgrestError(shErr);
-			}
-		}
-
-		const { error: defErr } = await client
-			.from('compute_server_platform_default')
-			.update({ default_server_id: defaultServerId ?? null })
-			.eq('singleton', true);
-		if (defErr) throw mapPostgrestError(defErr);
+		const shares = platformOnly.flatMap((s) =>
+			s.sharedWith === 'all'
+				? []
+				: s.sharedWith.map((orgId) => ({ server_id: s.id, org_id: orgId }))
+		);
+		const { error } = await this.clients.forRequest(ctx).rpc('save_platform_compute_servers', {
+			servers: platformOnly.map((s) => serverToRow(this.encryptServerApiKey(s))),
+			shares,
+			default_server: defaultServerId ?? null
+		});
+		if (error) throw mapPostgrestError(error);
 	}
 
 	async saveOrgServers(
@@ -180,35 +164,14 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 		servers: ComputeServerConfig[],
 		defaultServerId?: string | null
 	): Promise<void> {
-		const client = this.clients.forRequest(ctx);
 		const orgOnly = servers.filter(isOrgServer).map((s) => ({ ...s, ownerOrgId: orgId }));
-
-		const { error: delErr } = await client
-			.from('compute_servers')
-			.delete()
-			.eq('scope', 'org')
-			.eq('owner_org_id', orgId);
-		if (delErr) throw mapPostgrestError(delErr);
-
-		if (orgOnly.length > 0) {
-			const { error: insErr } = await client
-				.from('compute_servers')
-				.insert(orgOnly.map((s) => serverToRow(this.encryptServerApiKey(s))));
-			if (insErr) throw mapPostgrestError(insErr);
-		}
-
-		if (defaultServerId === null) {
-			const { error } = await client
-				.from('compute_server_org_defaults')
-				.delete()
-				.eq('org_id', orgId);
-			if (error) throw mapPostgrestError(error);
-		} else if (typeof defaultServerId === 'string') {
-			const { error } = await client
-				.from('compute_server_org_defaults')
-				.upsert({ org_id: orgId, default_server_id: defaultServerId });
-			if (error) throw mapPostgrestError(error);
-		}
+		const { error } = await this.clients.forRequest(ctx).rpc('save_org_compute_servers', {
+			o: orgId,
+			servers: orgOnly.map((s) => serverToRow(this.encryptServerApiKey(s))),
+			set_default: defaultServerId !== undefined,
+			default_server: defaultServerId ?? null
+		});
+		if (error) throw mapPostgrestError(error);
 	}
 
 	async setOrgDefault(ctx: RequestContext, orgId: string, serverId: string | null): Promise<void> {
