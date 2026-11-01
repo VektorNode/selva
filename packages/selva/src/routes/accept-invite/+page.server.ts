@@ -172,7 +172,15 @@ export const actions = {
 					deletedAt: null
 				});
 			}
-			await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
+			const claimed = await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
+			if (!claimed) {
+				// A double submit: membership upserts, so the outcome is the same either way.
+				locals.log.info('Invite was already accepted', {
+					component: 'accept-invite',
+					inviteId: invite.id,
+					userId: user.id
+				});
+			}
 		} catch (err) {
 			locals.log.error('Post-signup wiring failed', {
 				component: 'accept-invite',

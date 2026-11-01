@@ -3,7 +3,6 @@ import {
 	COMPUTE_TIMEOUT_DEFAULT_MS,
 	COMPUTE_TIMEOUT_MAX_MS,
 	COMPUTE_TIMEOUT_MIN_MS,
-	isOrgServer,
 	isPlatformServer,
 	type ComputeConfig,
 	type ComputeServerConfig
@@ -125,10 +124,6 @@ export function findServerById(config: ComputeConfig, id: string): ComputeServer
 
 export function platformServers(config: ComputeConfig) {
 	return config.servers.filter(isPlatformServer);
-}
-
-export function orgServersFor(config: ComputeConfig, orgId: string) {
-	return config.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId);
 }
 
 /** What a compute settings form should send for a typed timeout. */

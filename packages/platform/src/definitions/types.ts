@@ -5,8 +5,6 @@ import type { DefinitionChannelSchema } from './schemas.js';
 export type DefinitionFileExt = 'gh' | 'ghx';
 
 export const GH_EXTENSIONS: string[] = ['.gh', '.ghx'];
-export const COVER_IMAGE_EXTENSIONS: string[] = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-export const ALLOWED_UPLOAD_EXTENSIONS: string[] = [...GH_EXTENSIONS, ...COVER_IMAGE_EXTENSIONS];
 
 export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
 	'.jpg': 'image/jpeg',

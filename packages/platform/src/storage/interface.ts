@@ -12,13 +12,12 @@ export interface IStorageProvider {
 	get(path: string): Promise<Uint8Array | null>;
 
 	/**
-	 * Stores the bytes, replacing what is there. Images go through
-	 * `transcodeImageIfNeeded` first, and that is part of the contract: they are
-	 * stored as WebP and a `.png` or similar path becomes `.webp`, so
-	 * `put('a.png', …)` is read back with `get('a.webp')`. Throws
-	 * `ProviderError(422)` for an image the transcoder refuses.
+	 * Stores the bytes, replacing what is there, and returns the path they landed
+	 * at. Images go through `transcodeImageIfNeeded` first: they are stored as WebP
+	 * and a `.png` or similar path becomes `.webp`, so read back with the returned
+	 * path. Throws `ProviderError(422)` for an image the transcoder refuses.
 	 */
-	put(path: string, data: Uint8Array, contentType?: string): Promise<void>;
+	put(path: string, data: Uint8Array, contentType?: string): Promise<string>;
 
 	/** No-op if the path does not exist. */
 	delete(path: string): Promise<void>;

@@ -17,7 +17,7 @@ import {
 	COMPUTE_RETRY_MAX,
 	COMPUTE_TIMEOUT_MAX_MS,
 	COMPUTE_TIMEOUT_MIN_MS,
-	UUID_REGEX
+	GuidSchema
 } from '@selvajs/platform';
 import { isEncryptedSecret } from '@selvajs/platform/computeServer';
 import { isLinkLocalUrl } from './safe-url.js';
@@ -99,7 +99,7 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 	for (const s of servers) {
 		if (!s.id || typeof s.id !== 'string')
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs an id');
-		if (!UUID_REGEX.test(s.id))
+		if (!GuidSchema.safeParse(s.id).success)
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Server id must be a UUID: ${s.id}`);
 		if (seen.has(s.id))
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Server id appears more than once: ${s.id}`);

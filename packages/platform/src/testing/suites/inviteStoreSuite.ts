@@ -124,8 +124,8 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
 			const { userId: second } = await seedUser(makeUuid());
-			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
-			await store.markAccepted(SYSTEM_CONTEXT, inv.id, second);
+			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor)).toBe(true);
+			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, second)).toBe(false);
 
 			const page = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
 			expect(page.items.find((i) => i.id === inv.id)?.acceptedByUserId).toBe(acceptor);

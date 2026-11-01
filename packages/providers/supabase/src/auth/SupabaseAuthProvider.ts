@@ -129,8 +129,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		this.oauth = new SupabaseOAuthAuth(
 			this.anon,
 			(user) => this.hydrate(user),
-			config.oauthProviders ?? [],
-			this.sessionRefresh
+			config.oauthProviders ?? []
 		);
 		this.emailLink = new SupabaseEmailLinkAuth(
 			this.anon,
@@ -438,8 +437,7 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 	constructor(
 		private readonly anon: SupabaseClient,
 		private readonly hydrate: (user: User) => AuthUser,
-		private readonly providers: readonly string[],
-		private readonly sessionRefresh: ISessionRefresh
+		private readonly providers: readonly string[]
 	) {}
 
 	listProviders(): readonly string[] {
@@ -471,14 +469,6 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 			sessionToken: data.session.access_token,
 			refreshToken: data.session.refresh_token
 		};
-	}
-
-	/** @deprecated Delegates to `IAuthProvider.sessionRefresh`. */
-	async refreshSession(refreshToken: string): Promise<{
-		sessionToken: string;
-		refreshToken: string;
-	} | null> {
-		return this.sessionRefresh.refreshSession(refreshToken);
 	}
 }
 

@@ -16,15 +16,6 @@ export const orgPaths = {
 		assertSafeKey(kind, 'assetKind');
 		return `orgs/${id}/branding/${kind}.webp`;
 	},
-	/**
-	 * @deprecated No asset class serves this path, so nothing can read what lands
-	 * here. Removed at the next major.
-	 */
-	privateAsset: (id: string, name: string) => {
-		assertSafeKey(id, 'orgId');
-		assertSafeKey(name, 'assetName');
-		return `orgs/${id}/private/${name}`;
-	},
 	prefix: (id: string) => {
 		assertSafeKey(id, 'orgId');
 		return `orgs/${id}/`;

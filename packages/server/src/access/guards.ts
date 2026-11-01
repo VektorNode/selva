@@ -338,25 +338,6 @@ export async function requireCanCreateDefinition(
 }
 
 /**
- * Org-content gate — the caller must be a member of `orgId`. Org membership is
- * the only rule; runs through
- * `contentCheck` (no `instance_admin` bypass) — platform staff use Reclaim
- * if they need access without membership.
- *
- * Throws 401 unauthenticated, 403 when not a member.
- */
-export async function requireCanViewOrg(locals: ScopedLocals, orgId: string): Promise<AuthUser> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await contentCheck(async () => {
-		const member = await orgsOf(locals).getOrgMember(ctx, orgId, ctx.userId);
-		return member !== null;
-	});
-	if (!allowed)
-		apiError(403, ApiErrorCode.FORBIDDEN, 'You do not have access to this organization.');
-	return user;
-}
-
-/**
  * Project members must belong to the project's parent org. Enforced at the
  * rule layer, not as a DB constraint, to leave room for cross-org guests
  * later without a schema migration.

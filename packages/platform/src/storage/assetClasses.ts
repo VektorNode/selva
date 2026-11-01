@@ -8,17 +8,16 @@ import { SAFE_SEGMENT } from './safeKey.js';
  * entry in {@link ASSET_CLASSES} rather than a new route.
  *
  * - `public`  — anyone, including logged-out visitors (branding: logo, favicon).
- * - `org`     — members of the owning org only. No class uses this today.
  * - `project` — members of the owning project only; route resolves the
  *   definition guid to its project (cover images, per-definition blobs).
  */
-export type AssetVisibility = 'public' | 'org' | 'project';
+export type AssetVisibility = 'public' | 'project';
 
 /**
  * What scope id the route must authorize against. `none` for public assets
- * (no scope to check); `org`/`project` carry the id extracted from the path.
+ * (no scope to check); `project` carries the guid extracted from the path.
  */
-export type AssetScope = 'none' | 'org' | 'project';
+export type AssetScope = 'none' | 'project';
 
 export interface AssetClass {
 	/** Stable identifier — for logging and tests, not user-facing. */
@@ -27,7 +26,7 @@ export interface AssetClass {
 	readonly scope: AssetScope;
 	/**
 	 * Anchored matcher for this class's storage paths. Capture group 1 (when
-	 * present) is the scope id (orgId or guid) the route authorizes against.
+	 * present) is the scope id the route authorizes against.
 	 */
 	readonly pattern: RegExp;
 }
@@ -100,9 +99,4 @@ export function classifyAssetPath(storagePath: string): AssetMatch | null {
 		return { class: cls, scopeId: cls.scope === 'none' ? null : (m[1] ?? null) };
 	}
 	return null;
-}
-
-/** True when the path belongs to a `public` asset class (CDN-servable, no auth). */
-export function isPublicAssetPath(storagePath: string): boolean {
-	return classifyAssetPath(storagePath)?.class.visibility === 'public';
 }

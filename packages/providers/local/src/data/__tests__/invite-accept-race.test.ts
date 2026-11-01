@@ -35,11 +35,12 @@ describe('markAccepted under a double submit', () => {
 		await store.create(SYSTEM_CONTEXT, invite);
 		emit.mockClear();
 
-		await Promise.all([
+		const claimed = await Promise.all([
 			store.markAccepted(SYSTEM_CONTEXT, 'i', 'first'),
 			store.markAccepted(SYSTEM_CONTEXT, 'i', 'second')
 		]);
 
+		expect(claimed).toEqual([true, false]);
 		expect(emit).toHaveBeenCalledOnce();
 		const { invites } = JSON.parse(await fs.readFile(path.join(dir, 'invites.json'), 'utf8'));
 		expect(invites[0].acceptedByUserId).toBe('first');

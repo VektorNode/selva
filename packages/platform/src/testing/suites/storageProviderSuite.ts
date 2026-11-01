@@ -37,6 +37,13 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 	const { name, createStorage } = opts;
 
 	describe(`IStorageProvider conformance: ${name}`, () => {
+		it('put returns the path it stored at', async () => {
+			const storage = await createStorage();
+			expect(await storage.put('test/plain.txt', bytes('data'), 'text/plain')).toBe(
+				'test/plain.txt'
+			);
+		});
+
 		it('put + get returns the stored data', async () => {
 			const storage = await createStorage();
 			const data = bytes('Hello, World!');
@@ -191,7 +198,7 @@ export function runStorageProviderConformance(opts: StorageProviderConformanceOp
 				0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x01, 0x7a, 0x5e, 0xab, 0x3f, 0x00, 0x00, 0x00, 0x00,
 				0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82
 			]);
-			await storage.put('covers/tiny.png', pngBytes, 'image/png');
+			expect(await storage.put('covers/tiny.png', pngBytes, 'image/png')).toBe('covers/tiny.webp');
 
 			// Image transcoding rewrites the path to .webp — the original path is empty.
 			const atPng = await storage.get('covers/tiny.png');

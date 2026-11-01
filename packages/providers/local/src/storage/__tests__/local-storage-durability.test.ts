@@ -22,7 +22,7 @@ describe('LocalStorageProvider', () => {
 		await storage.put('a/blob.bin', big);
 
 		const reads: Promise<Uint8Array | null>[] = [];
-		const writes: Promise<void>[] = [];
+		const writes: Promise<string>[] = [];
 		for (let i = 0; i < 20; i++) {
 			writes.push(storage.put('a/blob.bin', big));
 			reads.push(storage.get('a/blob.bin'));

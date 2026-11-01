@@ -84,7 +84,7 @@ export class LocalInviteStore implements IInviteStore {
 		return paginate(applyOrder(filtered, opts), opts);
 	}
 
-	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
+	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<boolean> {
 		const invite = await this.locked(async () => {
 			const file = await this.load();
 			const target = file.invites.find((i) => i.id === id);
@@ -94,7 +94,7 @@ export class LocalInviteStore implements IInviteStore {
 			await this.save(file);
 			return target;
 		});
-		if (!invite) return;
+		if (!invite) return false;
 		await this.events.emit({
 			type: 'invite.accepted',
 			inviteId: invite.id,
@@ -102,6 +102,7 @@ export class LocalInviteStore implements IInviteStore {
 			userId,
 			...actorOf(ctx)
 		});
+		return true;
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {

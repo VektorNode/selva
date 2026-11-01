@@ -71,8 +71,8 @@ export class SupabaseInviteStore implements IInviteStore {
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
 
-	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
-		// Idempotent: `.is('accepted_at', null)` means a second call just no-ops.
+	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<boolean> {
+		// `.is('accepted_at', null)` makes this the claim: a second call matches nothing.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('invites')
@@ -82,7 +82,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			.select('org_id');
 		if (error) throw mapPostgrestError(error);
 		const row = data?.[0];
-		if (!row) return;
+		if (!row) return false;
 		await this.events.emit({
 			type: 'invite.accepted',
 			inviteId: id,
@@ -90,6 +90,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			userId,
 			...actorOf(ctx)
 		});
+		return true;
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {

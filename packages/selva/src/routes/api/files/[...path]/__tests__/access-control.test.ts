@@ -188,7 +188,7 @@ describe('GET /api/files/[...path] — orgs/{id}/private', () => {
 	it('has no asset class, so even a member gets 404', async () => {
 		tp = await freshProviders();
 		const { acme, bob } = await seedAcme(tp);
-		const path = orgPaths.privateAsset(acme.id, 'pricing.pdf');
+		const path = `orgs/${acme.id}/private/pricing.pdf`;
 		await tp.config.storage.put(path, new TextEncoder().encode('PRICES'), 'application/pdf');
 
 		const res = await call(GET, { locals: await actAs(tp, bob.id), params: { path } });

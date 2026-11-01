@@ -54,7 +54,7 @@ export class LocalStorageProvider implements IStorageProvider {
 		}
 	}
 
-	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<void> {
+	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<string> {
 		// Rewrites images to .webp; non-images pass through untouched.
 		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
 		const fullPath = this.resolvePath(transcoded.path);
@@ -69,6 +69,7 @@ export class LocalStorageProvider implements IStorageProvider {
 			await fs.rm(tmp, { force: true }).catch(() => {});
 			throw err;
 		}
+		return transcoded.path;
 	}
 
 	async delete(storagePath: string): Promise<void> {

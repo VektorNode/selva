@@ -86,7 +86,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		return new Uint8Array(buffer);
 	}
 
-	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<void> {
+	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<string> {
 		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
 		const bucket = this.bucketFor(transcoded.path);
 		const { error } = await this.client.storage
@@ -99,6 +99,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 				upsert: true
 			});
 		if (error) throw error;
+		return transcoded.path;
 	}
 
 	async delete(storagePath: string): Promise<void> {

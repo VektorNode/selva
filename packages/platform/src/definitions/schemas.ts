@@ -21,23 +21,6 @@ export function toSourceDocumentId(value: unknown): string | null {
 // metadata-first window, and a client must never hand-set it through an update.
 export const DefinitionStatusSchema = z.enum(['draft', 'published', 'archived']);
 
-export const DefinitionFileExtSchema = z.enum(['gh', 'ghx']);
-
-export const DefinitionVersionSchema = z.object({
-	id: GuidSchema,
-	definitionId: GuidSchema,
-	versionNumber: z.number().int().min(1),
-	fileExt: DefinitionFileExtSchema,
-	fileKey: z.string().min(1),
-	originalFilename: z.string().max(256).optional(),
-	uploadedBy: z.string().min(1),
-	uploadedAt: z.string(),
-	changeNote: z.string().max(1000).optional(),
-	// Rhino.Compute validates structural correctness at upload; this only asserts it's an object.
-	schema: z.record(z.string(), z.unknown()).optional(),
-	schemaExtractedAt: z.string().optional()
-});
-
 export const DefinitionChannelSchema = z.enum(['live', 'draft']);
 
 /** HTTP-body validator for new-definition input. */
