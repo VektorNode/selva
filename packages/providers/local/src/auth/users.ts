@@ -1,7 +1,7 @@
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import { ProviderError } from '@selvajs/platform';
-import { readJsonFile, writeJsonFile } from '../data/fsJson.js';
+import { CachedJsonFile } from '../data/fsJson.js';
 
 /**
  * Identity-only on-disk shape. Per-user app state (permissions, profile,
@@ -94,23 +94,9 @@ export function createLocalAuthUserStore(usersFilePath: string): LocalAuthUserSt
 	// in-memory copy stays authoritative — every mutation updates the cache and
 	// persists via temp+rename. Concurrent first callers share one in-flight
 	// load so writes stack on the same array.
-	let cache: AuthUsersFile | null = null;
-	let loading: Promise<AuthUsersFile> | null = null;
-
-	async function load(): Promise<AuthUsersFile> {
-		if (cache) return cache;
-		loading ??= readJsonFile<AuthUsersFile>(usersFilePath, empty()).then((data) => {
-			cache = data;
-			loading = null;
-			return data;
-		});
-		return loading;
-	}
-
-	async function persist(file: AuthUsersFile): Promise<void> {
-		cache = file;
-		await writeJsonFile(usersFilePath, file);
-	}
+	const store = new CachedJsonFile<AuthUsersFile>(usersFilePath, empty);
+	const load = () => store.get();
+	const persist = (file: AuthUsersFile) => store.write(file);
 
 	return {
 		async findByEmail(email) {

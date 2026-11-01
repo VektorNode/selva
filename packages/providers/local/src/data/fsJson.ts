@@ -33,12 +33,9 @@ export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T>
 
 /**
  * Writes to a sibling temp file, then renames into place, so a crash mid-write
- * can't corrupt the target. The temp name is random per call — a fixed `.tmp`
- * name broke concurrent writers: the first rename moved the shared temp away,
- * and every other writer then failed with ENOENT renaming a file that no
- * longer existed. With a random name each writer renames its own file; last
- * rename wins, same as the last-write-wins the read-modify-write callers
- * already have.
+ * can't corrupt the target. The temp name is random per call: a shared name would
+ * let one writer's rename pull the file out from under another. A read-modify-write
+ * caller still needs {@link withFileLock}.
  *
  * Owner-only permissions are not optional here: this helper is the sole writer
  * for `auth-users.json` (email addresses + PBKDF2 password hashes) and
@@ -57,5 +54,48 @@ export async function writeJsonFile<T>(filePath: string, data: T): Promise<void>
 	} catch (err) {
 		await fs.rm(tmp, { force: true }).catch(() => {});
 		throw err;
+	}
+}
+
+/**
+ * A JSON file read once and kept in memory, where the provider is the sole writer
+ * in a single process. Callers mutate what `get` returns, then pass it to `write`.
+ */
+export class CachedJsonFile<T> {
+	private cache: T | null = null;
+	private loading: Promise<T> | null = null;
+
+	constructor(
+		readonly filePath: string,
+		private readonly fallback: () => T
+	) {}
+
+	/** Concurrent first callers share one read, so they mutate the same object. */
+	async get(): Promise<T> {
+		if (this.cache) return this.cache;
+		this.loading ??= readJsonFile<T>(this.filePath, this.fallback())
+			.then((data) => {
+				this.cache = data;
+				return data;
+			})
+			.finally(() => {
+				this.loading = null;
+			});
+		return this.loading;
+	}
+
+	/**
+	 * Writes run one at a time and stringify when their turn comes, so the newest
+	 * state lands last. A failed write drops the cache: it holds a change the disk
+	 * never took.
+	 */
+	async write(data: T): Promise<void> {
+		this.cache = data;
+		try {
+			await withFileLock(this.filePath, () => writeJsonFile(this.filePath, data));
+		} catch (err) {
+			this.cache = null;
+			throw err;
+		}
 	}
 }

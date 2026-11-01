@@ -4,6 +4,7 @@ import type {
 	IInviteStore,
 	IApiTokenStore,
 	IComputeServerStore,
+	IDefinitionStore,
 	IPlatformProjectGrantStore,
 	IEventSink,
 	Organization,
@@ -18,6 +19,7 @@ import type {
 } from '@selvajs/platform';
 import {
 	DEFAULT_ORG_PERMISSIONS,
+	ERASED_ACTOR_ID,
 	ProviderError,
 	auditUpdate,
 	auditSoftDelete,
@@ -25,7 +27,7 @@ import {
 	NoopEventSink
 } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
-import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { CachedJsonFile } from './fsJson.js';
 import { LocalInviteStore } from './LocalInviteStore.js';
 import { LocalApiTokenStore } from './LocalApiTokenStore.js';
 import { LocalComputeServerStore } from './LocalComputeServerStore.js';
@@ -48,37 +50,27 @@ function isLive<T extends { deletedAt?: string | null }>(row: T): boolean {
  * Shared by LocalOrgStore and LocalProjectStore — one instance so all
  * reads/writes go through one cache and one atomic write path.
  *
- * Concurrent first-callers share a single in-flight read promise, so they
- * end up with the same cached object reference; `writeJsonFile`'s
- * temp+rename keeps the on-disk view atomic.
  */
 export class LocalOrgStoreLoader {
 	readonly storePath: string;
-	private store: LocalOrgStoreData | null = null;
-	private loading: Promise<LocalOrgStoreData> | null = null;
+	private readonly file: CachedJsonFile<LocalOrgStoreData>;
 
 	constructor(dataPath: string) {
 		this.storePath = path.join(dataPath, 'local-org.json');
-	}
-
-	async get(): Promise<LocalOrgStoreData> {
-		if (this.store) return this.store;
-		this.loading ??= readJsonFile<LocalOrgStoreData>(this.storePath, {
+		this.file = new CachedJsonFile(this.storePath, () => ({
 			orgs: [],
 			projects: [],
 			orgMembers: [],
 			projectMembers: []
-		}).then((data) => {
-			this.store = data;
-			this.loading = null;
-			return data;
-		});
-		return this.loading;
+		}));
 	}
 
-	async write(store: LocalOrgStoreData): Promise<void> {
-		this.store = store;
-		await writeJsonFile(this.storePath, store);
+	get(): Promise<LocalOrgStoreData> {
+		return this.file.get();
+	}
+
+	write(store: LocalOrgStoreData): Promise<void> {
+		return this.file.write(store);
 	}
 }
 
@@ -98,6 +90,7 @@ export interface LocalOrgStoreOptions {
 
 export class LocalOrgStore implements IOrgStore {
 	private readonly loader: LocalOrgStoreLoader;
+	private definitions?: IDefinitionStore;
 	private readonly events: IEventSink;
 	private readonly invites: IInviteStore;
 	private readonly apiTokens: IApiTokenStore;
@@ -122,6 +115,31 @@ export class LocalOrgStore implements IOrgStore {
 		this.computeServer = opts.computeServer;
 		this.grants = opts.grants;
 		this.events = opts.events ?? new NoopEventSink();
+	}
+
+	/** A setter rather than an option: the definition store is built after this one. */
+	setDefinitionProvider(definitions: IDefinitionStore): void {
+		this.definitions = definitions;
+	}
+
+	/** Removes the user's membership rows, soft-deleted ones too, and their name elsewhere. */
+	async eraseUser(userId: string): Promise<void> {
+		const store = await this.loader.get();
+		const erased = <T extends { updatedBy?: string }>(row: T): T =>
+			row.updatedBy === userId ? { ...row, updatedBy: ERASED_ACTOR_ID } : row;
+		const erasedOwner = <T extends { ownerId: string; createdBy: string; updatedBy: string }>(
+			row: T
+		): T =>
+			erased({
+				...row,
+				ownerId: row.ownerId === userId ? ERASED_ACTOR_ID : row.ownerId,
+				createdBy: row.createdBy === userId ? ERASED_ACTOR_ID : row.createdBy
+			});
+		store.orgs = store.orgs.map(erasedOwner);
+		store.projects = store.projects.map(erasedOwner);
+		store.orgMembers = store.orgMembers.filter((m) => m.userId !== userId).map(erased);
+		store.projectMembers = store.projectMembers.filter((m) => m.userId !== userId).map(erased);
+		await this.loader.write(store);
 	}
 
 	async listOrgs(_ctx: RequestContext, opts?: ListOptions): Promise<Page<Organization>> {
@@ -209,6 +227,11 @@ export class LocalOrgStore implements IOrgStore {
 		await this.invites.deleteByOrg(ctx, id);
 		await this.apiTokens.deleteByOrg(ctx, id);
 		await this.computeServer.deleteByOrg(ctx, id);
+		if (this.definitions) {
+			for (const projectId of orgProjectIds) {
+				await this.definitions.deleteByProject(ctx, projectId);
+			}
+		}
 		// User grants survive — they're identity-scoped, not org-scoped.
 		for (const projectId of orgProjectIds) {
 			await this.grants.deleteByProject(ctx, projectId);

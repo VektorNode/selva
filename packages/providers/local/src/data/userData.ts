@@ -1,6 +1,6 @@
 import { ProviderError } from '@selvajs/platform';
 import type { PlatformPermission, RecentRun } from '@selvajs/platform';
-import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { CachedJsonFile } from './fsJson.js';
 
 /**
  * Per-user state keyed by the auth provider's user ID. Mirrors
@@ -75,23 +75,9 @@ export function createLocalUserDataStore(filePath: string): LocalUserDataStore {
 	// instance. LocalDataProvider injects a single instance across the
 	// profile, permission, and data-provider views; don't call this factory
 	// more than once per process.
-	let cache: UserDataFile | null = null;
-	let loading: Promise<UserDataFile> | null = null;
-
-	async function load(): Promise<UserDataFile> {
-		if (cache) return cache;
-		loading ??= readJsonFile<UserDataFile>(filePath, empty()).then((data) => {
-			cache = data;
-			loading = null;
-			return data;
-		});
-		return loading;
-	}
-
-	async function persist(file: UserDataFile): Promise<void> {
-		cache = file;
-		await writeJsonFile(filePath, file);
-	}
+	const store = new CachedJsonFile<UserDataFile>(filePath, empty);
+	const load = () => store.get();
+	const persist = (file: UserDataFile) => store.write(file);
 
 	// Serializes permission writes that must not interleave. Single-process
 	// only, like the cache above — it makes the local provider's own

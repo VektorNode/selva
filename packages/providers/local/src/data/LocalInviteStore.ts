@@ -50,10 +50,16 @@ export class LocalInviteStore implements IInviteStore {
 		await writeJsonFile(this.filePath, file);
 	}
 
+	private locked<T>(fn: () => Promise<T>): Promise<T> {
+		return withFileLock(this.filePath, fn);
+	}
+
 	async create(ctx: RequestContext, invite: Invite): Promise<void> {
-		const file = await this.load();
-		file.invites.push(invite);
-		await this.save(file);
+		await this.locked(async () => {
+			const file = await this.load();
+			file.invites.push(invite);
+			await this.save(file);
+		});
 		await this.events.emit({
 			type: 'invite.created',
 			inviteId: invite.id,
@@ -79,7 +85,7 @@ export class LocalInviteStore implements IInviteStore {
 	}
 
 	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
-		const invite = await withFileLock(this.filePath, async () => {
+		const invite = await this.locked(async () => {
 			const file = await this.load();
 			const target = file.invites.find((i) => i.id === id);
 			if (!target || target.acceptedAt) return null;
@@ -99,11 +105,15 @@ export class LocalInviteStore implements IInviteStore {
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
-		const file = await this.load();
-		const target = file.invites.find((i) => i.id === id && !i.acceptedAt);
+		const target = await this.locked(async () => {
+			const file = await this.load();
+			const found = file.invites.find((i) => i.id === id && !i.acceptedAt);
+			if (!found) return null;
+			file.invites = file.invites.filter((i) => i.id !== id || i.acceptedAt);
+			await this.save(file);
+			return found;
+		});
 		if (!target) return;
-		file.invites = file.invites.filter((i) => i.id !== id || i.acceptedAt);
-		await this.save(file);
 		await this.events.emit({
 			type: 'invite.revoked',
 			inviteId: id,
@@ -116,15 +126,17 @@ export class LocalInviteStore implements IInviteStore {
 		// Emails are stored lowercase at mint time; normalize the needle too so an
 		// offboarding call with the address as the admin typed it still matches.
 		const needle = email.trim().toLowerCase();
-		const file = await this.load();
-		const doomed = file.invites.filter(
-			(i) => i.orgId === orgId && !i.acceptedAt && i.email.toLowerCase() === needle
-		);
-		if (doomed.length === 0) return [];
-
-		const ids = new Set(doomed.map((i) => i.id));
-		file.invites = file.invites.filter((i) => !ids.has(i.id));
-		await this.save(file);
+		const doomed = await this.locked(async () => {
+			const file = await this.load();
+			const matched = file.invites.filter(
+				(i) => i.orgId === orgId && !i.acceptedAt && i.email.toLowerCase() === needle
+			);
+			if (matched.length === 0) return matched;
+			const ids = new Set(matched.map((i) => i.id));
+			file.invites = file.invites.filter((i) => !ids.has(i.id));
+			await this.save(file);
+			return matched;
+		});
 		for (const invite of doomed) {
 			await this.events.emit({
 				type: 'invite.revoked',
@@ -133,14 +145,28 @@ export class LocalInviteStore implements IInviteStore {
 				...actorOf(ctx)
 			});
 		}
-		return [...ids];
+		return doomed.map((i) => i.id);
 	}
 
 	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
-		const file = await this.load();
-		const before = file.invites.length;
-		file.invites = file.invites.filter((i) => i.orgId !== orgId);
-		if (file.invites.length === before) return;
-		await this.save(file);
+		await this.locked(async () => {
+			const file = await this.load();
+			const before = file.invites.length;
+			file.invites = file.invites.filter((i) => i.orgId !== orgId);
+			if (file.invites.length === before) return;
+			await this.save(file);
+		});
+	}
+
+	/** Invites addressed to or minted by the user, and their name on any they accepted. */
+	async eraseUser(userId: string, email: string | undefined): Promise<void> {
+		const needle = email?.trim().toLowerCase();
+		await this.locked(async () => {
+			const file = await this.load();
+			file.invites = file.invites
+				.filter((i) => i.invitedBy !== userId && i.email.toLowerCase() !== needle)
+				.map((i) => (i.acceptedByUserId === userId ? { ...i, acceptedByUserId: undefined } : i));
+			await this.save(file);
+		});
 	}
 }

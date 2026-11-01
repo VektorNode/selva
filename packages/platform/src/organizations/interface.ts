@@ -19,10 +19,9 @@ export interface IOrgStore {
 		patch: Partial<Pick<Organization, 'name' | 'slug' | 'assets'>>
 	): Promise<void>;
 	/**
-	 * Soft-deletes the org, cascading to org members, projects, and project
-	 * members (definitions and share links cascade through project deletion).
-	 * Invites and the org compute-server override are NOT cascaded — clean
-	 * those up explicitly if needed.
+	 * Soft-deletes the org, cascading to org members, projects, project members and
+	 * definitions. Share links die with their definition. Hard-deletes its invites,
+	 * API tokens, compute servers and compute defaults.
 	 */
 	deleteOrg(ctx: RequestContext, id: string): Promise<void>;
 
