@@ -57,7 +57,8 @@
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
 		"@selvajs/platform": "workspace:^",
-		"@selvajs/schemas": "workspace:^"
+		"@selvajs/schemas": "workspace:^",
+		"undici": "catalog:"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",

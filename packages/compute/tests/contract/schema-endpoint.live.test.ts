@@ -2,11 +2,10 @@
  * LIVE check that a running compute server's `/grasshopper/schema` body is
  * readable by this client.
  *
- * ## Why a live test, when the committed server-contract snapshot pins the wire names
+ * ## Why a live test
  *
- * That snapshot comes from the server's C# SOURCE. The failure this test guards
- * against is invisible there, because it is not in the source at all — it is an
- * assembly identity problem that only exists at runtime:
+ * The failure this test guards against is invisible in the server's C# source: it
+ * is an assembly identity problem that only exists at runtime:
  *
  * `Selva.gha` ILRepack-merges Newtonsoft.Json, so the `[JsonProperty("inputs")]`
  * attributes on `UISchema` have type `Selva!Newtonsoft.Json.JsonPropertyAttribute`.

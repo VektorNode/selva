@@ -117,6 +117,9 @@ catalogs:
     typescript:
       specifier: ~6.0.3
       version: 6.0.3
+    undici:
+      specifier: ^8.11.2
+      version: 8.11.2
     vite:
       specifier: ^8.3.5
       version: 8.3.5
@@ -710,6 +713,9 @@ importers:
       '@selvajs/schemas':
         specifier: workspace:^
         version: link:../schemas
+      undici:
+        specifier: 'catalog:'
+        version: 8.11.2
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -13391,8 +13397,7 @@ snapshots:
 
   undici@6.29.0: {}
 
-  undici@8.11.2:
-    optional: true
+  undici@8.11.2: {}
 
   unicode-emoji-modifier-base@1.0.0: {}
 

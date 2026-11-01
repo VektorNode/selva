@@ -4,8 +4,28 @@ import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { getComputeServerConfigStore } from '$lib/server/providers.server';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '$lib/server/access.server';
-import { ComputeServerStats } from '@selvajs/compute/grasshopper';
 import { classifyProbeFailure } from '@selvajs/compute/core';
+import { openServerStats } from '$lib/server/compute/serverStats.server';
+
+/** The response for a server that can't be read, whatever stopped it. */
+function unreachable(failure: {
+	retryable: boolean;
+	failureReason: string | null;
+	failureSummary: string | null;
+}) {
+	return json({
+		reachable: false,
+		ready: false,
+		...failure,
+		rhinoVersion: null,
+		computeVersion: null,
+		selvaInstalled: false,
+		selvaVersion: null,
+		plugins: {},
+		activeChildren: null,
+		idleSpanSeconds: null
+	});
+}
 
 export const GET: RequestHandler = async ({ url, locals }) => {
 	requireManageCompute(locals);
@@ -21,29 +41,28 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
 
 	const apiKey = server.hasApiKey ? await store.getServerApiKey(locals.ctx!, server.id) : undefined;
-	const stats = new ComputeServerStats(server.serverUrl, apiKey);
+	const { stats, misconfigured } = openServerStats(server.serverUrl, apiKey);
+	if (!stats) {
+		// Retrying can't help: the stored URL or key has to change first.
+		return unreachable({
+			retryable: false,
+			failureReason: 'misconfigured',
+			failureSummary: misconfigured
+		});
+	}
 	try {
 		// Probe liveness first; only fan out to version/plugins when reachable.
 		const probe = await stats.probeServer();
 		if (!probe.online) {
 			const failure = classifyProbeFailure(probe);
-			return json({
-				reachable: false,
-				ready: false,
+			return unreachable({
 				// `retryable: false` is the client's cue to stop polling: a refused
 				// connection or a rejected key cannot resolve itself, and retrying it
 				// for the full window leaves the operator staring at a spinner that
 				// was never going to turn green.
 				retryable: failure?.retryable ?? true,
 				failureReason: failure?.verdict ?? null,
-				failureSummary: failure?.summary ?? null,
-				rhinoVersion: null,
-				computeVersion: null,
-				selvaInstalled: false,
-				selvaVersion: null,
-				plugins: {},
-				activeChildren: null,
-				idleSpanSeconds: null
+				failureSummary: failure?.summary ?? null
 			});
 		}
 

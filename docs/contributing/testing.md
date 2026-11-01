@@ -21,7 +21,8 @@ config excludes `**/e2e/**` and Playwright only collects from `e2e/`.
 Shared fixtures and harness that several suites import go in a package-level
 `tests/` directory (`tests/setup.ts`, `tests/helpers/`). Only put a `.test.ts`
 there when it isn't testing one module: `@selvajs/compute`'s
-`tests/contract/` holds seam tests against a recorded server snapshot.
+`tests/contract/` holds the live suites that run against a real server when
+`COMPUTE_LIVE_URL` is set.
 
 Benchmarks live beside the tests as `*.bench.ts`. `pnpm test` never runs them;
 they're on-demand via `@selvajs/visualization`'s `bench` script. They record a

@@ -5,6 +5,8 @@ import {
 } from '@selvajs/compute/grasshopper';
 import { enableDebugLogging } from '@selvajs/compute/core';
 
+import { fetchForDeadline } from './long-fetch';
+
 // ============================================================================
 // Shared compute client cache
 // ============================================================================
@@ -181,15 +183,17 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 	async function build(server: ResolvedServer, definitionGuid?: string): Promise<CachedClient> {
 		const debugVerbose = config.debug === 'verbose';
+		const longFetch = fetchForDeadline(config.solveDeadlineMs);
 
 		const clientConfig: GrasshopperComputeConfig = {
 			serverUrl: server.serverUrl,
 			apiKey: server.apiKey,
-			// Lib-level debug is the verbose one (full payload logs); keep it on the
-			// verbose flag so the concise cache logs can run without the noise.
+			// Lib-level debug is the verbose one; keep it on the verbose flag so the
+			// concise cache logs can run without the noise.
 			debug: debugVerbose,
 			cachesolve: config.cachesolve,
-			maxResponseBytes: config.maxResponseBytes
+			maxResponseBytes: config.maxResponseBytes,
+			...(longFetch && { fetch: longFetch })
 		};
 
 		if (config.debug) {

@@ -112,6 +112,18 @@ beforeEach(() => {
 });
 
 describe('createClientCache — concurrency vs. the server child count', () => {
+	it('leaves fetch to the global one under undici limits', async () => {
+		const cache = createClientCache(baseConfig());
+		await cache.getClient(server('a'));
+		expect(prop(createdConfigs[0], 'fetch')).toBeUndefined();
+	});
+
+	it('hands the client its own fetch once the deadline reaches undici limits', async () => {
+		const cache = createClientCache({ ...baseConfig(), solveDeadlineMs: 420_000 });
+		await cache.getClient(server('a'));
+		expect(prop(createdConfigs[0], 'fetch')).toBeTypeOf('function');
+	});
+
 	it('always adopts the server child count, never an operator-supplied cap', async () => {
 		activeChildren = 8;
 		const cache = createClientCache(baseConfig());

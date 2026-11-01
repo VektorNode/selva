@@ -11,8 +11,8 @@ import type { ComputeServerConfig } from '@selvajs/platform';
 
 /**
  * `SELVA_FLAG_COMPUTE_DEBUG` is a three-way knob, not a boolean: `off` (default),
- * `on` (concise cache/timing logs), or `verbose` (adds full lib-level request/
- * response dumps, incl. base64 geometry). `verbose` implies `on`.
+ * `on` (concise cache/timing logs), or `verbose` (adds lib-level request logs and
+ * Compute's raw error bodies). `verbose` implies `on`.
  *
  * `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE` still honoured (as `verbose`) so an
  * operator's existing `.env` degrades to a warning instead of silently losing

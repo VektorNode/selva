@@ -293,8 +293,7 @@ describe('GrasshopperClient.createScheduler', () => {
 
 describe('GrasshopperClient.getIO (e2e through transport + parser pipeline)', () => {
 	it('fetches IO and parses raw inputs into typed InputParams', async () => {
-		// camelCase to match the real Compute8 server contract (pinned by
-		// tests/contract/server-contract.test.ts) — fetchDefinitionIO reads these
+		// camelCase to match a real Compute8 server: fetchDefinitionIO reads these
 		// straight through with no key conversion.
 		const ioResponse = {
 			inputnames: [],

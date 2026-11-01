@@ -28,7 +28,8 @@ import { isHttpError } from '@sveltejs/kit';
 import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
 import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
 import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
-import { engine, COMPUTE_DEBUG } from '$lib/server/compute/engine.server';
+import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '$lib/server/compute/engine.server';
+import { computeErrorLogFields } from '$lib/server/compute/errorLogFields';
 import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
 import type {
 	ByteCacheRef,
@@ -444,13 +445,7 @@ export function mapSolveError(err: unknown, locals: App.Locals): never {
 	locals.log.error('Solve request failed', {
 		component: 'API/Compute',
 		err: renderThrown(err),
-		// The compute server's raw error body (bounded by the transport) — the
-		// message alone can be scrubbed to a generic string in the server's
-		// production mode, so this is often the only diagnostic that survives.
-		...(err instanceof ComputeError &&
-			typeof err.context?.responseBody === 'string' && {
-				computeResponseBody: err.context.responseBody
-			})
+		...computeErrorLogFields(err, COMPUTE_DEBUG_VERBOSE)
 	});
 
 	// The compute transport classifies its failures — map the classes the caller
