@@ -7,6 +7,7 @@ import type { LabelLayer } from '../label-layer.js';
 import type { NearPlaneFitter } from '../near-plane.js';
 import type { RenderPipeline } from '../render-pipeline.js';
 import type { ViewGizmo } from '../view-gizmo.js';
+import type { IdleRefiner } from './idle-refine.js';
 
 // Resize applied before render so buffer clear and draw happen in the same frame — avoids a
 // visible blank frame on resize.
@@ -26,7 +27,8 @@ export function createAnimationLoop(
 	labelLayer?: LabelLayer | null,
 	nearFitter?: NearPlaneFitter | null,
 	// false = render every frame regardless of invalidate()/camera movement.
-	onDemand: boolean = true
+	onDemand: boolean = true,
+	refiner?: IdleRefiner | null
 ): { animate: () => void; dispose: () => void; invalidate: () => void; renderNow: () => void } {
 	let animationId: number | null = null;
 	let lastTime = performance.now();
@@ -91,6 +93,13 @@ export function createAnimationLoop(
 		}
 	};
 
+	const drawOverlays = (activeCamera: THREE.Camera) => {
+		if (labelLayer) labelLayer.render(scene, activeCamera);
+
+		// Corner-viewport overlay with its own clear; must render last to sit on top.
+		if (gizmo) gizmo.render(renderer);
+	};
+
 	const drawFrame = (activeCamera: THREE.Camera, delta: number) => {
 		const renderPipeline = getRenderPipeline?.();
 		if (renderPipeline) {
@@ -100,16 +109,15 @@ export function createAnimationLoop(
 			renderer.render(scene, activeCamera);
 		}
 
-		if (labelLayer) labelLayer.render(scene, activeCamera);
-
-		// Corner-viewport overlay with its own clear; must render last to sit on top.
-		if (gizmo) gizmo.render(renderer);
+		drawOverlays(activeCamera);
 	};
 
 	// Without preserveDrawingBuffer the colour buffer is cleared once the browser composites, so a
 	// canvas read (toBlob/toDataURL) only sees pixels if it happens in the same task as a draw.
 	const renderNow = () => {
-		drawFrame(getActiveCamera(), 0);
+		const activeCamera = getActiveCamera();
+		if (refiner?.present()) drawOverlays(activeCamera);
+		else drawFrame(activeCamera, 0);
 	};
 
 	const animate = function () {
@@ -135,13 +143,20 @@ export function createAnimationLoop(
 		const activeCamera = getActiveCamera();
 
 		if (onDemand) {
-			const shouldRender =
-				renderRequested ||
-				cameraMoved(activeCamera) ||
-				now - lastRenderTime >= IDLE_REPAINT_INTERVAL_MS;
-			if (!shouldRender) return;
-			renderRequested = false;
+			const moved = cameraMoved(activeCamera);
+			if (moved) refiner?.moving(delta * 1000);
+			const changed = renderRequested || moved;
+			if (!changed && refiner?.wants(now)) {
+				refiner.step(activeCamera);
+				drawOverlays(activeCamera);
+				return;
+			}
+			const repaint = now - lastRenderTime >= IDLE_REPAINT_INTERVAL_MS;
+			if (!changed && !repaint) return;
 			lastRenderTime = now;
+			if (!changed && refiner?.isHolding()) return;
+			renderRequested = false;
+			refiner?.reset(now);
 		}
 
 		drawFrame(activeCamera, delta);

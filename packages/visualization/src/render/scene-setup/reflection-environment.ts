@@ -1,13 +1,17 @@
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
+import { createStudioScene, disposeStudioScene } from './studio-environment.js';
 
 // A metal shows nothing but its reflection. The HDR that lights the scene is an outdoor sky with a
 // hard horizon over a near-black ground, so a metal mirrors a white band over a black one and the
-// split lands mid-face, jagged wherever roughness varies. Metals reflect a soft studio room instead;
-// everything else keeps the HDR, so the looks tuned on it don't move.
+// split lands mid-face, jagged wherever roughness varies. Metals reflect a soft studio room instead.
+// Everything else keeps the HDR, clear coats included: a material's envMap replaces its diffuse
+// lighting too, and the studio's softboxes wash a dark paint out to pastel.
 const METAL = 0.5;
+
+/** Above PMREM's blur for a mirror, so a softbox has an edge in chrome without showing as a shape. */
+const STUDIO_BLUR = 0.03;
 
 const KEY = 'selvaReflectionEnvironment';
 
@@ -26,9 +30,9 @@ export function createReflectionEnvironment(
 	rotation: THREE.Euler
 ): void {
 	const pmrem = new THREE.PMREMGenerator(renderer);
-	const room = new RoomEnvironment();
-	const texture = pmrem.fromScene(room, 0.04).texture;
-	room.dispose();
+	const studio = createStudioScene();
+	const texture = pmrem.fromScene(studio, STUDIO_BLUR).texture;
+	disposeStudioScene(studio);
 	pmrem.dispose();
 	installReflectionEnvironment(scene, texture, rotation);
 }

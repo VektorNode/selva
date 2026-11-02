@@ -19,7 +19,7 @@ catalogs:
     # types ahead of the runtime typecheck APIs the deployed Node doesn't have.
     '@types/node': ^24.0.0
     '@types/nodemailer': ^8.0.2
-    '@types/three': ^0.186.0
+    '@types/three': ^0.187.0
     bits-ui: ^2.20.2
     clsx: ^2.1.1
     eslint: ^10.13.0
@@ -38,7 +38,7 @@ catalogs:
     tailwind-merge: ^3.7.0
     tailwind-variants: ^3.3.1
     tailwindcss: ^4.3.3
-    three: ^0.186.1
+    three: ^0.187.0
     typedoc: ^0.28.17
     undici: ^8.11.2
     tsdown: ^0.23.2

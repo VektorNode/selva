@@ -5,6 +5,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 import type { BloomOptions } from '../shared/types.js';
@@ -28,6 +29,12 @@ export interface RenderPipeline {
 	setCamera(camera: THREE.Camera): void;
 	setEdgeDetection(enabled: boolean): void;
 	edgeDetectionEnabled(): boolean;
+	/** Draws a frame into the running average, then shows the average. Index 0 starts a new one. */
+	accumulate(index: number): void;
+	/** Shows the running average without drawing. */
+	presentAccumulated(): void;
+	/** Scales ambient occlusion live, 0 skipping the pass: no rebuild, so it can change every frame. */
+	setAoWeight(weight: number): void;
 	dispose(): void;
 }
 
@@ -73,6 +80,73 @@ const HDR_CLAMP_SHADER = {
 			gl_FragColor = vec4(safe(color.r), safe(color.g), safe(color.b), color.a);
 		}`
 };
+
+const AVERAGE_SHADER = {
+	vertexShader: /* glsl */ `
+		varying vec2 vUv;
+		void main() {
+			vUv = uv;
+			gl_Position = vec4(position.xy, 0.0, 1.0);
+		}`,
+	fragmentShader: /* glsl */ `
+		uniform sampler2D tFrame;
+		varying vec2 vUv;
+		void main() {
+			gl_FragColor = texture2D(tFrame, vUv);
+		}`
+};
+
+/**
+ * Keeps the running average of the composer's finished frames. They're already tone mapped, which
+ * suits what gets averaged here: shadows and edges, not HDR highlights. Half float, because 32
+ * frames blended into 8 bits would band in a soft shadow.
+ */
+function createAccumulator(renderer: THREE.WebGLRenderer) {
+	const target = new THREE.WebGLRenderTarget(1, 1, {
+		type: THREE.HalfFloatType,
+		depthBuffer: false
+	});
+	const material = new THREE.ShaderMaterial({
+		...AVERAGE_SHADER,
+		uniforms: { tFrame: { value: null } },
+		depthTest: false,
+		depthWrite: false,
+		toneMapped: false,
+		blending: THREE.CustomBlending,
+		blendSrc: THREE.ConstantAlphaFactor,
+		blendDst: THREE.OneMinusConstantAlphaFactor
+	});
+	const quad = new FullScreenQuad(material);
+
+	const draw = (texture: THREE.Texture, weight: number) => {
+		material.uniforms.tFrame.value = texture;
+		material.blendAlpha = weight;
+		// FullScreenQuad renders through the renderer, whose auto clear would wipe the average.
+		const autoClear = renderer.autoClear;
+		renderer.autoClear = false;
+		quad.render(renderer);
+		renderer.autoClear = autoClear;
+	};
+	const present = () => {
+		renderer.setRenderTarget(null);
+		draw(target.texture, 1);
+	};
+
+	return {
+		add: (frame: THREE.Texture, index: number, width: number, height: number) => {
+			if (target.width !== width || target.height !== height) target.setSize(width, height);
+			renderer.setRenderTarget(target);
+			draw(frame, 1 / (index + 1));
+			present();
+		},
+		present,
+		dispose: () => {
+			target.dispose();
+			material.dispose();
+			quad.dispose();
+		}
+	};
+}
 
 /**
  * Without MSAA a sub-pixel feature (a sheet's bright hem edge) comes out as a dashed line, which
@@ -141,6 +215,8 @@ export function createRenderPipeline(
 	renderer.toneMapping = options.toneMapping;
 	renderer.toneMappingExposure = options.toneMappingExposure;
 
+	let accumulator: ReturnType<typeof createAccumulator> | null = null;
+
 	const aoPixelRatioCap = options.aoPixelRatio ?? 1;
 	// The composer sizes every pass at the scene's resolution; AO alone is cheap enough to run lower,
 	// and its blend samples by UV so it upscales onto the full-resolution frame.
@@ -188,9 +264,24 @@ export function createRenderPipeline(
 			edgePass.enabled = enabled;
 		},
 		edgeDetectionEnabled: () => edgePass.enabled,
+		accumulate: (index) => {
+			composer.renderToScreen = false;
+			renderFrame(0);
+			composer.renderToScreen = true;
+			accumulator ??= createAccumulator(renderer);
+			const { texture, width, height } = composer.readBuffer;
+			accumulator.add(texture, index, width, height);
+		},
+		presentAccumulated: () => accumulator?.present(),
+		setAoWeight: (weight) => {
+			if (!gtaoPass) return;
+			gtaoPass.enabled = weight > 0;
+			gtaoPass.blendIntensity = (options.aoIntensity ?? 1) * weight;
+		},
 		// composer.dispose() doesn't free passes.
 		dispose: () => {
 			composer.dispose();
+			accumulator?.dispose();
 			gtaoPass?.dispose();
 			clampPass?.dispose();
 			bloomPass?.dispose();

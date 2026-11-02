@@ -1,0 +1,236 @@
+import { parseMeshBatchBlob } from '../src/parse/index.ts';
+import { initThree, updateScene } from '../src/render/index.ts';
+import { LOOK_PRESETS } from '../src/shared/index.ts';
+
+const scenes = import.meta.glob('../../../fixtures/viewer-scenes/*.slvm', {
+	query: '?url',
+	import: 'default',
+	eager: true
+});
+
+// The bridge's recordings are in the document's units; the viewer works in metres.
+const METRES_PER_UNIT = 0.001;
+
+const options = Object.fromEntries(new URLSearchParams(location.search));
+const manual = 'manual' in options;
+
+// `run.mjs` steps frames itself, so a frame's time is its real cost and not the vsync interval.
+let pending = null;
+if (manual) {
+	window.requestAnimationFrame = (callback) => {
+		pending = callback;
+		return 1;
+	};
+	window.cancelAnimationFrame = () => {
+		pending = null;
+	};
+}
+const step = () => {
+	const callback = pending;
+	pending = null;
+	callback?.(performance.now());
+};
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function load(names) {
+	const urls = Object.entries(scenes)
+		.filter(([path]) => names.some((name) => path.endsWith(`/${name}.slvm`)))
+		.map(([, url]) => url);
+	if (urls.length === 0) throw new Error(`No scene named ${names}: see fixtures/viewer-scenes.`);
+	const batches = await Promise.all(
+		urls.map(async (url) =>
+			parseMeshBatchBlob(await (await fetch(url)).arrayBuffer(), { mergeByMaterial: true })
+		)
+	);
+	const meshes = batches.flat();
+	for (const mesh of meshes) {
+		mesh.scale.setScalar(METRES_PER_UNIT);
+		mesh.updateMatrixWorld();
+	}
+	return meshes;
+}
+
+async function start() {
+	const canvas = document.getElementById('viewer');
+	const look = options.look ?? 'studio';
+	const render = {};
+	if (options.frames != null) render.idleRefineFrames = Number(options.frames);
+	if (options.orbit != null) render.lightOrbitFrameMs = Number(options.orbit);
+
+	// Each is what a feature costs: the same scene with it removed.
+	const without = new Set(options.without?.split(',') ?? []);
+	const preset = LOOK_PRESETS[look];
+	if (without.has('ao')) preset.ambientOcclusion = false;
+	if (without.has('bloom')) delete preset.bloom;
+	if (without.has('emissive')) preset.emissiveLights = false;
+	if (without.has('shadows')) render.enableShadows = false;
+
+	const viewer = initThree(canvas, {
+		look,
+		environment: { hdrPath: '/baseHDR.hdr', backgroundColor: options.background ?? '#0a0e12' },
+		render
+	});
+	const { scene, camera, controls, renderer } = viewer;
+
+	const meshes = await load((options.scene ?? 'lamp').split('+'));
+	if (without.has('finishes')) {
+		for (const { material } of meshes) {
+			material.onBeforeCompile = () => {};
+			material.customProgramCacheKey = () => 'plain';
+			material.needsUpdate = true;
+		}
+	}
+	updateScene(scene, meshes, camera, controls, false);
+	viewer.setLook(look);
+	viewer.updateShadowBounds();
+	viewer.syncEmissiveLights();
+	for (let i = 0; i < 400 && !scene.environment; i++) await sleep(25);
+
+	const target = controls.target;
+	const view = camera.position.clone().sub(target);
+	view.applyAxisAngle(camera.up, Number(options.turn ?? 0));
+	view.multiplyScalar(Number(options.distance ?? 1));
+	camera.position.copy(target).add(view);
+	camera.lookAt(target);
+
+	const gl = renderer.getContext();
+	const pixel = new Uint8Array(4);
+	// Blocks on the GPU, or the timer would only measure queuing the draw calls.
+	const finish = () => gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+
+	const megabytes = (bytes) => Math.round(bytes / 1e4) / 100;
+	const geometryBytes = () => {
+		let bytes = 0;
+		const seen = new Set();
+		scene.traverse(({ geometry }) => {
+			if (!geometry || seen.has(geometry)) return;
+			seen.add(geometry);
+			const buffers = [...Object.values(geometry.attributes), geometry.index];
+			for (const buffer of buffers) bytes += buffer?.array.byteLength ?? 0;
+		});
+		return bytes;
+	};
+	// Depth only: a cube map is six faces, and a blurred VSM map adds a colour pass of its own.
+	const shadowBytes = () => {
+		let bytes = 0;
+		scene.traverse((light) => {
+			if (!light.isLight || !light.castShadow) return;
+			const { x, y } = light.shadow.mapSize;
+			bytes += x * y * 4 * (light.isPointLight ? 6 : renderer.shadowMap.type === 3 ? 2 : 1);
+		});
+		return bytes;
+	};
+	const countFrame = () => {
+		renderer.info.autoReset = false;
+		renderer.info.reset();
+		viewer.invalidate();
+		step();
+		finish();
+		const { calls, triangles } = renderer.info.render;
+		renderer.info.autoReset = true;
+		return { drawCalls: calls, triangles };
+	};
+
+	const sorted = (values) => [...values].sort((a, b) => a - b);
+	const round = (value) => Math.round(value * 10) / 10;
+
+	const refineFrames = Number(options.frames ?? 32);
+	// A camera change is seen on the next frame, and restarts the settle delay from there.
+	const settle = async () => {
+		viewer.invalidate();
+		step();
+		step();
+		finish();
+		await sleep(250);
+	};
+
+	window.lab = {
+		/** Waits out the settle delay and every refine frame, so the image is the finished one. */
+		shot: async () => {
+			await settle();
+			for (let i = 0; i < refineFrames; i++) step();
+			finish();
+			const blob = await viewer.captureImage();
+			const bytes = new Uint8Array(await blob.arrayBuffer());
+			return btoa(bytes.reduce((text, byte) => text + String.fromCharCode(byte), ''));
+		},
+		/** Frame-to-frame change across an orbit, its stop and the refine, to catch a visible pop. */
+		transition: async () => {
+			const pixels = () => {
+				const { width, height } = canvas;
+				const data = new Uint8Array(width * height * 4);
+				gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
+				return data;
+			};
+			const change = (a, b) => {
+				let sum = 0;
+				for (let i = 0; i < a.length; i += 4) sum += Math.abs(a[i + 1] - b[i + 1]);
+				return Math.round((sum / (a.length / 4) / 255) * 1e4) / 100;
+			};
+			const home = camera.position.clone();
+			const changes = [];
+			let previous = null;
+			const frame = () => {
+				step();
+				finish();
+				const current = pixels();
+				if (previous) changes.push(change(previous, current));
+				previous = current;
+			};
+			frame();
+			// A nudge too small to move the picture, so what changes is the shading.
+			for (let i = 0; i < 16; i++) {
+				camera.position.copy(home).addScalar(1e-6 * (i % 2));
+				camera.lookAt(target);
+				frame();
+			}
+			camera.position.copy(home);
+			camera.lookAt(target);
+			frame();
+			await sleep(250);
+			for (let i = 0; i < 44; i++) frame();
+			return changes;
+		},
+		bench: async (frames = 90) => {
+			const orbit = [];
+			const home = camera.position.clone().sub(target);
+			for (let i = 0; i < frames + 8; i++) {
+				camera.position
+					.copy(target)
+					.add(home.clone().applyAxisAngle(camera.up, Math.sin(i * 0.15) * 0.25));
+				camera.lookAt(target);
+				const start = performance.now();
+				viewer.invalidate();
+				step();
+				finish();
+				if (i >= 8) orbit.push(performance.now() - start);
+			}
+			camera.position.copy(target).add(home);
+			camera.lookAt(target);
+			await settle();
+			const start = performance.now();
+			for (let i = 0; i < refineFrames; i++) {
+				step();
+				finish();
+			}
+			const debug = gl.getExtension('WEBGL_debug_renderer_info');
+			return {
+				gpu: debug ? gl.getParameter(debug.UNMASKED_RENDERER_WEBGL) : 'unknown',
+				size: `${canvas.width}x${canvas.height}`,
+				...countFrame(),
+				geometryMb: megabytes(geometryBytes()),
+				shadowMapMb: megabytes(shadowBytes()),
+				orbitMedianMs: round(sorted(orbit)[Math.floor(orbit.length / 2)]),
+				orbitP95Ms: round(sorted(orbit)[Math.floor(orbit.length * 0.95)]),
+				refineTotalMs: round(performance.now() - start),
+				look
+			};
+		}
+	};
+	document.title = 'ready';
+}
+
+start().catch((error) => {
+	document.body.textContent = error.message;
+	document.title = 'failed';
+});

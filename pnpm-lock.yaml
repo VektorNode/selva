@@ -46,8 +46,8 @@ catalogs:
       specifier: ^8.0.2
       version: 8.0.2
     '@types/three':
-      specifier: ^0.186.0
-      version: 0.186.0
+      specifier: ^0.187.0
+      version: 0.187.0
     '@types/ws':
       specifier: ^8.18.2
       version: 8.18.2
@@ -106,8 +106,8 @@ catalogs:
       specifier: ^4.3.3
       version: 4.3.3
     three:
-      specifier: ^0.186.1
-      version: 0.186.1
+      specifier: ^0.187.0
+      version: 0.187.0
     tsdown:
       specifier: ^0.23.2
       version: 0.23.2
@@ -193,7 +193,7 @@ importers:
         version: 24.19.2
       '@types/three':
         specifier: 'catalog:'
-        version: 0.186.0
+        version: 0.187.0
       '@typescript-eslint/eslint-plugin':
         specifier: ^8.72.0
         version: 8.72.0(@typescript-eslint/parser@8.72.0(eslint@10.13.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@8.1.1)(typescript@6.0.3))(eslint@10.13.0(jiti@2.7.0)(supports-color@8.1.1))(supports-color@10.2.2)(typescript@6.0.3)
@@ -241,7 +241,7 @@ importers:
         version: 4.3.3
       three:
         specifier: 'catalog:'
-        version: 0.186.1
+        version: 0.187.0
       turbo:
         specifier: ^2.11.10
         version: 2.11.10
@@ -408,7 +408,7 @@ importers:
         version: 3.3.1(tailwind-merge@3.7.0)(tailwindcss@4.3.3)
       three:
         specifier: 'catalog:'
-        version: 0.186.1
+        version: 0.187.0
       zod:
         specifier: 'catalog:'
         version: 4.6.7
@@ -433,7 +433,7 @@ importers:
         version: 2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.72.0))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.72.0))(typescript@6.0.3)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       '@types/three':
         specifier: 'catalog:'
-        version: 0.186.0
+        version: 0.187.0
       '@types/ws':
         specifier: 'catalog:'
         version: 8.18.2
@@ -589,7 +589,7 @@ importers:
         version: 3.3.1(tailwind-merge@3.7.0)(tailwindcss@4.3.3)
       three:
         specifier: 'catalog:'
-        version: 0.186.1
+        version: 0.187.0
       zod:
         specifier: 'catalog:'
         version: 4.6.7
@@ -644,7 +644,7 @@ importers:
         version: 8.0.2
       '@types/three':
         specifier: 'catalog:'
-        version: 0.186.0
+        version: 0.187.0
       rimraf:
         specifier: 'catalog:'
         version: 6.1.3
@@ -773,7 +773,7 @@ importers:
         version: 3.7.0
       three:
         specifier: 'catalog:'
-        version: 0.186.1
+        version: 0.187.0
       tw-animate-css:
         specifier: 'catalog:'
         version: 1.4.0
@@ -804,7 +804,7 @@ importers:
         version: 7.3.1(svelte@5.57.2(@typescript-eslint/types@8.72.0))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
       '@types/three':
         specifier: 'catalog:'
-        version: 0.186.0
+        version: 0.187.0
       bits-ui:
         specifier: 'catalog:'
         version: 2.20.2(@internationalized/date@3.12.4)(@sveltejs/kit@2.70.3(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.3.1(svelte@5.57.2(@typescript-eslint/types@8.72.0))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.72.0))(typescript@6.0.3)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(svelte@5.57.2(@typescript-eslint/types@8.72.0))
@@ -830,6 +830,9 @@ importers:
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.13.0(jiti@2.7.0)(supports-color@10.2.2))
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.64.1
       '@selvajs/config':
         specifier: workspace:*
         version: link:../config
@@ -838,7 +841,7 @@ importers:
         version: 24.19.2
       '@types/three':
         specifier: 'catalog:'
-        version: 0.186.0
+        version: 0.187.0
       eslint:
         specifier: 'catalog:'
         version: 10.13.0(jiti@2.7.0)(supports-color@10.2.2)
@@ -856,7 +859,7 @@ importers:
         version: 3.9.10
       three:
         specifier: 'catalog:'
-        version: 0.186.1
+        version: 0.187.0
       tsdown:
         specifier: 'catalog:'
         version: 0.23.2(publint@0.3.25)(typescript@6.0.3)
@@ -3028,8 +3031,8 @@ packages:
   '@types/stats.js@0.17.4':
     resolution: {integrity: sha512-jIBvWWShCvlBqBNIZt0KAshWpvSjhkwkEu4ZUcASoAvhmrgAUI2t1dXrjSL4xXVLB4FznPrIsX3nKXFl/Dt4vA==}
 
-  '@types/three@0.186.0':
-    resolution: {integrity: sha512-mxYSBpDC+D0pLfSP6sW4WZTcT+nrtmZcimMqnVmy36Hte3XpeYSrvgg4TRdaM1GemGog1AWzI5qL2VoIfMXbJQ==}
+  '@types/three@0.187.0':
+    resolution: {integrity: sha512-v+vKNarUtk4n2QRZ4+CN5ygMM0ARUjXjIQl0R/unMUfmStFeVqGbgqarbrpoGTXRZoulSH16ePrVJVxPJEbMUA==}
 
   '@types/triple-beam@1.3.5':
     resolution: {integrity: sha512-6WaYesThRMCl19iryMYP7/x2OVgCtbIVflDGFpWnb9irXI3UjYE4AzmYuiUKY1AJstGijoY+MgUszMgRxIYTYw==}
@@ -6613,8 +6616,8 @@ packages:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
 
-  three@0.186.1:
-    resolution: {integrity: sha512-blFeqb49wRCSGUGj7gtpfnSGHy2lwDk94RhUmS1c/hTby70kvChbWpkJ4Pm1390LqzzvTmzgXKHPEafJwCb8jA==}
+  three@0.187.0:
+    resolution: {integrity: sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA==}
 
   tinybench@6.2.2:
     resolution: {integrity: sha512-nIZ2N2dFpjBsg2hgitKu7mA+FvsIJuGJOwysRngmVRRmWgR/UyPjwJj8c/fT/dhm8EkHnF5EOogRf+0Z2qrimA==}
@@ -9014,7 +9017,7 @@ snapshots:
 
   '@types/stats.js@0.17.4': {}
 
-  '@types/three@0.186.0':
+  '@types/three@0.187.0':
     dependencies:
       '@dimforge/rapier3d-compat': 0.12.0
       '@tweenjs/tween.js': 23.1.3
@@ -13245,7 +13248,7 @@ snapshots:
     dependencies:
       real-require: 1.0.0
 
-  three@0.186.1: {}
+  three@0.187.0: {}
 
   tinybench@6.2.2: {}
 

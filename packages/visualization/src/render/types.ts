@@ -73,6 +73,17 @@ export type RenderConfig = {
 	 * device with a phone-sized screen. Set it to force the tier on or off.
 	 */
 	lowPower?: boolean;
+	/**
+	 * Frames averaged while the camera rests, for soft shadows and clean edges. Needs the composer,
+	 * so looks without AO or bloom skip it. Costs nothing while orbiting. Default 32, or 0 on a
+	 * `lowPower` device; 0 turns it off.
+	 */
+	idleRefineFrames?: number;
+	/**
+	 * Orbit frames slower than this fade ambient occlusion out while the camera moves, its largest
+	 * cost. Needs `idleRefineFrames` to fade back in. Default 22. 0 always does; `Infinity` never does.
+	 */
+	lightOrbitFrameMs?: number;
 	/** Default false — switches rendering from `renderer.render` to an EffectComposer, which costs more. */
 	ambientOcclusion?: boolean;
 	/** Glow around emissive parts. The look decides; `night` sets it. */

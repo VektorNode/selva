@@ -157,6 +157,8 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 			toneMappingExposure: options.render?.toneMappingExposure ?? preset.toneMappingExposure,
 			preserveDrawingBuffer: options.render?.preserveDrawingBuffer ?? false,
 			lowPower,
+			idleRefineFrames: options.render?.idleRefineFrames ?? (lowPower ? 0 : 32),
+			lightOrbitFrameMs: options.render?.lightOrbitFrameMs ?? 22,
 			ambientOcclusion: options.render?.ambientOcclusion ?? preset.ambientOcclusion,
 			aoIntensity: options.render?.aoIntensity ?? 1,
 			bloom: options.render?.bloom ?? preset.bloom,

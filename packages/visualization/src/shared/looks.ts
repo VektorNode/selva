@@ -152,7 +152,7 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 		sunlightIntensity: 0.14,
 		background: 0x0a0e12,
 		// Above what the environment reaches on polished metal, so only emitters glow.
-		bloom: { strength: 0.26, radius: 0.5, threshold: 1.8 },
+		bloom: { strength: 0.2, radius: 0.3, threshold: 1.8 },
 		emissiveLights: true,
 		// Full-screen passes are the cost here: AO alone takes a quarter of the frame on an integrated
 		// GPU, and without it there is no composer. A bounce light costs next to nothing and is all

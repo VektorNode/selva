@@ -215,3 +215,5 @@ option exists only for hosts doing their own texture work.
 
 **Every GPU resource has one owner.** Free scene content through `disposeObjectTree` in
 `shared/gpu-dispose.ts` — never a hand-rolled `traverse` + `.dispose()` loop.
+
+While the camera rests, `scene-setup/idle-refine.ts` averages `render.idleRefineFrames` frames with the camera and lights jittered. It needs the composer, so looks without AO or bloom skip it.

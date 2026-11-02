@@ -168,6 +168,8 @@ export interface AppearanceController {
 	setAoIntensity(intensity: number): void;
 	setLook(look: Look, options?: SetLookOptions): void;
 	syncEmissiveLights(): void;
+	jitterEmissiveLights(index: number): void;
+	settleEmissiveLights(): void;
 	getMaterialAppearance(): MaterialAppearanceOptions;
 }
 
@@ -329,6 +331,8 @@ export function createAppearanceController(params: {
 		setAoIntensity,
 		setLook,
 		syncEmissiveLights,
+		jitterEmissiveLights: emissiveLights.jitter,
+		settleEmissiveLights: emissiveLights.settle,
 		getMaterialAppearance: () => materialAppearanceForLook(activeLook)
 	};
 }

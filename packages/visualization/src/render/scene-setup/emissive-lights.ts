@@ -7,6 +7,7 @@ import {
 	getHiddenMembers
 } from '../../shared/index.js';
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
+import { halton } from './idle-refine.js';
 import { memberBounds, membersOf } from './merged-picking.js';
 
 /** Point lights are expensive: every lit material pays for each one in its shader. */
@@ -138,6 +139,10 @@ export interface EmissiveLights {
 	 * `enabled` false removes every light.
 	 */
 	sync(enabled: boolean, maxLights?: number): void;
+	/** Moves each key light within its lamp's bounds, which is what gives its shadow a real penumbra. */
+	jitter(index: number): void;
+	/** Back to the middle of each lamp. */
+	settle(): void;
 	dispose(): void;
 }
 
@@ -147,8 +152,15 @@ export interface EmissiveLights {
  * so does a dimmer glow around its light: a bulb or its diffuser would otherwise block the light.
  */
 export function createEmissiveLights(scene: THREE.Scene): EmissiveLights {
-	const lights: { key: THREE.PointLight; bounce: THREE.PointLight }[] = [];
+	const lights: {
+		key: THREE.PointLight;
+		bounce: THREE.PointLight;
+		/** The key light's resting place, and the lamp it can move within. */
+		home: THREE.Vector3;
+		size: THREE.Vector3;
+	}[] = [];
 	const silenced = new Set<THREE.Mesh>();
+	const offset = new THREE.Vector3();
 
 	const addLight = (shadowed: boolean) => {
 		const key = new THREE.PointLight(0xffffff, 1, 0, 2);
@@ -163,7 +175,7 @@ export function createEmissiveLights(scene: THREE.Scene): EmissiveLights {
 			// Solve output only changes between syncs, and six faces every frame would sink orbiting.
 			key.shadow.autoUpdate = false;
 		}
-		const pair = { key, bounce };
+		const pair = { key, bounce, home: new THREE.Vector3(), size: new THREE.Vector3() };
 		lights.push(pair);
 		scene.add(key, bounce);
 		return pair;
@@ -206,7 +218,7 @@ export function createEmissiveLights(scene: THREE.Scene): EmissiveLights {
 
 		// Reused across solves: a new light reallocates its shadow map and recompiles every shader.
 		sources.forEach((source, index) => {
-			const { key, bounce } = lights[index] ?? addLight(index < MAX_SHADOWED_LIGHTS);
+			const { key, bounce, home, size } = lights[index] ?? addLight(index < MAX_SHADOWED_LIGHTS);
 			const intensity = source.light ?? source.strength * INTENSITY_PER_STRENGTH * radius * radius;
 			key.color.copy(source.color);
 			// Lit windows across a facade end up as one light in its middle, which burns a hole in the
@@ -215,6 +227,8 @@ export function createEmissiveLights(scene: THREE.Scene): EmissiveLights {
 			const spread = source.bounds.getSize(new THREE.Vector3()).length() / 2 / radius;
 			key.intensity = !source.light && spread > MAX_POINT_SOURCE_SPREAD ? 0 : intensity;
 			source.bounds.getCenter(key.position);
+			home.copy(key.position);
+			source.bounds.getSize(size);
 			bounce.color.copy(source.color);
 			// Over the radius because decay 1 scales with distance once, not squared like the key.
 			bounce.intensity = (intensity * BOUNCE_SHARE) / radius;
@@ -238,5 +252,23 @@ export function createEmissiveLights(scene: THREE.Scene): EmissiveLights {
 		silence(parts, sources);
 	};
 
-	return { sync, dispose: () => sync(false) };
+	const place = (position: (home: THREE.Vector3, size: THREE.Vector3) => THREE.Vector3) => {
+		for (const { key, home, size } of lights) {
+			key.position.copy(position(home, size));
+			if (key.castShadow) key.shadow.needsUpdate = true;
+		}
+	};
+
+	return {
+		sync,
+		jitter: (index) =>
+			place((home, size) =>
+				offset
+					.set(halton(index, 2) - 0.5, halton(index, 3) - 0.5, halton(index, 5) - 0.5)
+					.multiply(size)
+					.add(home)
+			),
+		settle: () => place((home) => home),
+		dispose: () => sync(false)
+	};
 }

@@ -25,11 +25,12 @@ import { createCamera } from './create-camera.js';
 import { createScene } from './create-scene.js';
 import { applyDefaults, defaultUp } from './defaults.js';
 import { disposeObjectTree, disposeSceneResources } from './dispose.js';
+import { createIdleRefiner } from './idle-refine.js';
 import { createPipelineController } from './pipeline-controller.js';
 import { setupControls } from './setup-controls.js';
 import { addFloor, setupEnvironment } from './setup-environment.js';
 import { setupEventHandlers } from './setup-events.js';
-import { fitShadowToContent, setupLighting } from './setup-lighting.js';
+import { fitShadowToContent, jitterSun, setupLighting } from './setup-lighting.js';
 import { setupRenderer } from './setup-renderer.js';
 import type { ThreeViewer } from './viewer.js';
 
@@ -264,6 +265,23 @@ export const initThree = function (
 		requestRender: () => requestRender()
 	});
 
+	let restoreSun: (() => void) | undefined;
+	const refiner = createIdleRefiner({
+		scene,
+		renderer,
+		getPipeline: () => pipeline.get(),
+		frames: config.render.idleRefineFrames!,
+		lightOrbitFrameMs: config.render.lightOrbitFrameMs!,
+		jitterLights: (index) => {
+			if (sunlight) restoreSun = jitterSun(sunlight, index);
+			appearance.jitterEmissiveLights(index);
+		},
+		restoreLights: () => {
+			restoreSun?.();
+			appearance.settleEmissiveLights();
+		}
+	});
+
 	const {
 		animate,
 		dispose: disposeAnimation,
@@ -284,7 +302,8 @@ export const initThree = function (
 		() => pipeline.get(),
 		labelLayer,
 		nearFitter,
-		config.render.onDemand ?? true
+		config.render.onDemand ?? true,
+		refiner
 	);
 	requestRender = invalidate;
 	animate();

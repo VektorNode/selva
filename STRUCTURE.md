@@ -280,8 +280,9 @@ Assets for `examples/` demos aren't fixtures in this sense and stay under
 `examples/`.
 
 The repo-root `fixtures/` is for local development aids no test reads:
-Grasshopper definitions for manual plugin testing and their rhino-mcp
-regeneration recipes. If a test starts reading one of these files, it becomes
+Grasshopper definitions for manual plugin testing, their rhino-mcp
+regeneration recipes, and the recorded solves in `viewer-scenes/` that
+[the viewer lab](packages/visualization/lab/README.md) replays. If a test starts reading one of these files, it becomes
 a test fixture: move it to the scope its consumers share.
 
 Every package's `vitest.config.ts` starts from `createVitestConfig()` in

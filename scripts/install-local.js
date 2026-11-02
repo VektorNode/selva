@@ -28,15 +28,25 @@ const targets = [
 	{ staging: 'rh-9', rhino: '9.0' }
 ];
 
-function rhinoIsRunning() {
+// compute.geometry hosts Rhino and loads Selva.gha too, so it locks the folder as well.
+const lockingProcesses =
+	process.platform === 'win32' ? ['Rhino.exe', 'compute.geometry.exe', 'rhino.compute.exe'] : [];
+
+function runningLockers() {
+	if (process.platform !== 'win32') {
+		try {
+			return /\d/.test(execSync('pgrep -x Rhinoceros', { encoding: 'utf-8' }))
+				? ['Rhinoceros']
+				: [];
+		} catch {
+			return [];
+		}
+	}
 	try {
-		const cmd =
-			process.platform === 'win32'
-				? 'tasklist /FI "IMAGENAME eq Rhino.exe" /NH'
-				: 'pgrep -x Rhinoceros';
-		return /Rhino/i.test(execSync(cmd, { encoding: 'utf-8' }));
+		const out = execSync('tasklist /NH', { encoding: 'utf-8' }).toLowerCase();
+		return lockingProcesses.filter((name) => out.includes(name.toLowerCase()));
 	} catch {
-		return false;
+		return [];
 	}
 }
 
@@ -44,8 +54,9 @@ const csproj = readFileSync(join(projectRoot, 'Plugin/Selva.GH/Selva.GH.csproj')
 const version = csproj.match(/<Version>([^<]+)<\/Version>/)?.[1].trim();
 if (!version) throw new Error('No <Version> in Selva.GH.csproj');
 
-if (rhinoIsRunning()) {
-	console.error('Rhino is running and locks Selva.gha. Close it and rerun.');
+const lockers = runningLockers();
+if (lockers.length > 0) {
+	console.error(`${lockers.join(', ')} running and locking Selva.gha. Close and rerun.`);
 	process.exit(1);
 }
 

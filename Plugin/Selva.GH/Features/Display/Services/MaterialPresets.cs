@@ -23,6 +23,8 @@ public static class MaterialPresets
         public double? FinishStrength;
         public double? Transmission;
         public double? Ior;
+        public double? Clearcoat;
+        public double? ClearcoatRoughness;
 
         /// <summary>The material the Material Preset component outputs.</summary>
         public ThreeMaterial ToMaterial()
@@ -38,6 +40,8 @@ public static class MaterialPresets
                 FinishStrength = FinishStrength,
                 Transmission = Transmission,
                 Ior = Ior,
+                Clearcoat = Clearcoat,
+                ClearcoatRoughness = ClearcoatRoughness,
                 Mapping = Mapping
             };
         }
@@ -77,7 +81,7 @@ public static class MaterialPresets
         new()
         {
             Name = "Coil-coated (RAL)", Color = Color.FromArgb(0x38, 0x3E, 0x42), Metalness = 0,
-            Roughness = 0.45, Mapping = UvMapping.Surface
+            Roughness = 0.45, Mapping = UvMapping.Surface, Clearcoat = 0.3, ClearcoatRoughness = 0.3
         },
         new()
         {
@@ -108,7 +112,7 @@ public static class MaterialPresets
         new()
         {
             Name = "Walnut", Color = Color.FromArgb(0x6B, 0x47, 0x2E), Metalness = 0,
-            Roughness = 0.5, Mapping = UvMapping.Part, Finish = "wood"
+            Roughness = 0.5, Mapping = UvMapping.Part, Finish = "wood", Clearcoat = 0.35, ClearcoatRoughness = 0.3
         },
         new()
         {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import { defaultUp, type ResolvedOptions } from './defaults.js';
+import { halton } from './idle-refine.js';
 
 export type SceneLights = {
 	ambient: THREE.AmbientLight;
@@ -20,6 +21,12 @@ const SUN_SHADOW_BLUR = 6;
 
 /** Sky and bounce always fill a shadow in, so a fully dark one looks painted on. */
 const SUN_SHADOW_DENSITY = 0.62;
+
+/**
+ * How far the sun moves while the view refines, as a tangent: about 1 degree. The real sun's 0.27
+ * looks hard on a model this size, and much past 1 a small part's shadow dissolves completely.
+ */
+const SUN_DISC_RADIUS = 0.018;
 
 /** Survives a solve with the sun, which would otherwise aim at a target outside the scene. */
 export const SUN_TARGET_ID = 'sun-target';
@@ -78,6 +85,23 @@ export function setupLighting(scene: THREE.Scene, config: ResolvedOptions): Scen
 	sunlight.target.userData.id = SUN_TARGET_ID;
 	scene.add(sunlight.target);
 	return { ambient, hemisphere, sun: sunlight };
+}
+
+/** Moves the sun within its disc and returns how to put it back. */
+export function jitterSun(light: THREE.DirectionalLight, index: number): () => void {
+	const home = light.position.clone();
+	const toSun = home.clone().sub(light.target.position);
+	const side = new THREE.Vector3(0, 0, 1).cross(toSun);
+	if (side.lengthSq() === 0) side.set(1, 0, 0);
+	side.setLength(toSun.length() * SUN_DISC_RADIUS);
+	const across = toSun.clone().cross(side).setLength(side.length());
+
+	const angle = halton(index, 2) * Math.PI * 2;
+	const reach = Math.sqrt(halton(index, 3));
+	light.position
+		.addScaledVector(side, Math.cos(angle) * reach)
+		.addScaledVector(across, Math.sin(angle) * reach);
+	return () => light.position.copy(home);
 }
 
 /**
