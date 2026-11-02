@@ -18,7 +18,7 @@ export function createAnimationLoop(
 	cameraController: CameraController,
 	controls: OrbitControls,
 	getCanvasSize: () => { width: number; height: number },
-	pixelRatio: number,
+	getPixelRatio: () => number,
 	onFrame?: (delta: number) => void,
 	grid?: Grid | null,
 	gizmo?: ViewGizmo | null,
@@ -72,6 +72,7 @@ export function createAnimationLoop(
 	const checkResize = () => {
 		const { width, height } = getCanvasSize();
 		if (width === 0 || height === 0) return;
+		const pixelRatio = getPixelRatio();
 
 		// Must floor (not round) to match renderer.setSize's own flooring — otherwise the size
 		// comparison below never settles and the resize branch runs every frame.

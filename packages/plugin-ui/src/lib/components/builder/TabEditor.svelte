@@ -38,6 +38,8 @@
 		outputValues?: Record<string, unknown>;
 		/** Ids of the open item cards. */
 		expandedItems: SvelteSet<string>;
+		/** Ids of collapsed groups shown open for now; see EditableGroup. */
+		peekedGroups: SvelteSet<string>;
 	}
 
 	let {
@@ -59,7 +61,8 @@
 		availableInputs,
 		getParameterInfo,
 		outputValues = {},
-		expandedItems
+		expandedItems,
+		peekedGroups
 	}: Props = $props();
 
 	const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
@@ -204,6 +207,7 @@
 									{getParameterInfo}
 									{outputValues}
 									{expandedItems}
+									{peekedGroups}
 								/>
 							{/if}
 						</div>

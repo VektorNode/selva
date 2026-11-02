@@ -154,4 +154,162 @@ public class LayoutSpecTests
         Assert.Equal("Cap width, in mm.", input.Description);
         Assert.Equal(250L, input.Default);
     }
+
+    [Fact]
+    public void Apply_RefreshesValueListOptions_FromTheCanvas()
+    {
+        var first = Apply(Canvas(), """{ "groups": [ { "label": "Size", "items": [ "Kind" ] } ] }""");
+        var stale = first.Schema;
+        var item = (InputDropdownLayoutItem)((FlatLayoutConfig)stale.Layout).Groups[0].Items[0];
+        item.Config.Options["Flat"] = "\"flat\"";
+
+        var again = Apply(stale, """{ "groups": [ { "label": "Size", "items": [ "Kind" ] } ] }""");
+
+        var fresh = (InputDropdownLayoutItem)((FlatLayoutConfig)again.Schema.Layout).Groups[0].Items[0];
+        Assert.Equal("flat", fresh.Config.Options["Flat"]);
+    }
+
+    [Fact]
+    public void Apply_RefusesARuleOnAValueTheListDoesNotHave()
+    {
+        var outcome = Apply(Canvas(), """
+            { "groups": [ { "label": "Size", "items": [ "Kind",
+                { "param": "Width", "visibilityCondition": { "mode": "all", "action": "show",
+                    "rules": [ { "param": "Kind", "operator": "equals", "value": "Sloped" } ] } } ] } ] }
+            """);
+
+        var error = Assert.Single(outcome.Errors);
+        Assert.Contains("\"Sloped\" is not a value of \"Kind\"", error);
+        Assert.Contains("flat, sloped", error);
+    }
+
+    [Fact]
+    public void Apply_ChecksEveryValueOfAnInRule()
+    {
+        var outcome = Apply(Canvas(), """
+            { "groups": [ { "label": "Size", "items": [ "Kind",
+                { "param": "Width", "visibilityCondition": { "mode": "all", "action": "show",
+                    "rules": [ { "param": "Kind", "operator": "in", "values": [ "flat", "curved" ] } ] } } ] } ] }
+            """);
+
+        Assert.Contains("\"curved\"", Assert.Single(outcome.Errors));
+    }
+
+    [Fact]
+    public void Apply_RefusesANumberForAValueListOption()
+    {
+        var outcome = Apply(Canvas(), """
+            { "groups": [ { "label": "Size", "items": [ "Kind",
+                { "param": "Width", "visibilityCondition": { "mode": "all", "action": "show",
+                    "rules": [ { "param": "Kind", "operator": "equals", "value": 1 } ] } } ] } ] }
+            """);
+
+        Assert.Contains("1 is not a value of \"Kind\"", Assert.Single(outcome.Errors));
+    }
+
+    [Fact]
+    public void Apply_ChecksChecklistOperators()
+    {
+        var outcome = Apply(Canvas(), """
+            { "groups": [ { "label": "Size", "items": [ "Kind",
+                { "param": "Width", "visibilityCondition": { "mode": "all", "action": "show", "rules": [
+                    { "param": "Kind", "operator": "contains", "value": "Sloped" },
+                    { "param": "Kind", "operator": "containsAny", "values": [ "Curved" ] } ] } } ] } ] }
+            """);
+
+        Assert.Equal(2, outcome.Errors.Count);
+    }
+
+    [Fact]
+    public void Apply_ChecksARuleGivenByParamId()
+    {
+        var schema = Canvas();
+        var kind = schema.Inputs.First(i => i.Nickname == "Kind").Id;
+
+        var outcome = Apply(schema, $$"""
+            { "groups": [ { "label": "Size", "items": [ "Kind",
+                { "param": "Width", "visibilityCondition": { "mode": "all", "action": "show",
+                    "rules": [ { "paramId": "{{kind}}", "operator": "equals", "value": "Sloped" } ] } } ] } ] }
+            """);
+
+        Assert.Contains("\"Sloped\" is not a value of \"Kind\"", Assert.Single(outcome.Errors));
+    }
+
+    [Fact]
+    public void Apply_ToleratesASavedRuleOnAValueTheListHasSinceDropped()
+    {
+        var withRule = new Func<string, string>(value => $$"""
+            { "groups": [ { "label": "Size", "items": [ "Kind",
+                { "param": "Width", "visibilityCondition": { "mode": "all", "action": "show",
+                    "rules": [ { "param": "Kind", "operator": "equals", "value": "{{value}}" } ] } } ] } ] }
+            """);
+        var saved = LayoutSpec.Apply(Canvas(), JObject.Parse(withRule("curved")),
+            (id, widget) => id == Kind && widget == "dropdown"
+                ? new JObject { ["options"] = new JObject { ["Curved"] = "curved" } }
+                : null);
+        Assert.Empty(saved.Errors);
+
+        Assert.Empty(Apply(saved.Schema, LayoutSpec.Read(saved.Schema).ToString()).Errors);
+        Assert.Contains("\"bent\" is not a value of \"Kind\"", Assert.Single(Apply(saved.Schema, withRule("bent")).Errors));
+    }
+
+    [Fact]
+    public void Apply_TakesAssetsAndOptionMediaInOneSpec()
+    {
+        var outcome = Apply(Canvas(), """
+            { "assets": { "ic-flat": { "d": "M4 4h16" } },
+              "groups": [ { "label": "Size", "items": [
+                { "param": "Kind", "config": { "optionMedia": { "Flat": { "icon": "ic-flat" } } } } ] } ] }
+            """);
+
+        Assert.Empty(outcome.Errors);
+        Assert.Equal("M4 4h16", outcome.Schema.Assets["ic-flat"].D);
+    }
+
+    [Fact]
+    public void Apply_MergesViewerOptions_AndReadReturnsThem()
+    {
+        var schema = Canvas();
+        schema.ViewerOptions = new ViewerOptions { EnableLocal = true, BackgroundColor = "#ffffff" };
+
+        var outcome = Apply(schema, """
+            { "viewerOptions": { "backgroundColor": "#123456" }, "groups": [ { "label": "Size", "items": [ "Width" ] } ] }
+            """);
+
+        Assert.Empty(outcome.Errors);
+        Assert.True(outcome.Schema.ViewerOptions.EnableLocal);
+        Assert.Equal("#123456", (string)LayoutSpec.Read(outcome.Schema)["viewerOptions"]["backgroundColor"]);
+    }
+
+    [Fact]
+    public void Apply_RefusesUnknownViewerOptionAndAssetKeys()
+    {
+        var outcome = Apply(Canvas(), """
+            { "viewerOptions": { "camera": "top" }, "assets": { "a": { "path": "M0 0" } },
+              "groups": [ { "label": "Size", "items": [ "Width" ] } ] }
+            """);
+
+        Assert.Equal(2, outcome.Errors.Count);
+    }
+
+    [Fact]
+    public void Apply_SetsTheStartingLook()
+    {
+        var outcome = Apply(Canvas(), """
+            { "viewerOptions": { "look": "night" }, "groups": [ { "label": "Size", "items": [ "Width" ] } ] }
+            """);
+
+        Assert.Empty(outcome.Errors);
+        Assert.Equal("night", (string)LayoutSpec.Read(outcome.Schema)["viewerOptions"]["look"]);
+    }
+
+    [Fact]
+    public void Apply_RefusesALookTheViewerDoesNotHave()
+    {
+        var outcome = Apply(Canvas(), """
+            { "viewerOptions": { "look": "neon" }, "groups": [ { "label": "Size", "items": [ "Width" ] } ] }
+            """);
+
+        Assert.Contains("\"neon\" is not a look", Assert.Single(outcome.Errors));
+    }
 }

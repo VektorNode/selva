@@ -1,9 +1,14 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { LOOKS, LOOK_PRESETS, materialAppearanceForLook } from '../../../shared/index.js';
+import {
+	LOOKS,
+	LOOK_PRESETS,
+	lookPreset,
+	materialAppearanceForLook
+} from '../../../shared/index.js';
 import type { Look, LookPreset } from '../../types';
-import { applyDefaults } from '../defaults';
+import { applyDefaults, isPhone } from '../defaults';
 
 // Characterization tests for the `look` preset system: the option-precedence resolver in
 // applyDefaults, the default look, the lighting-vs-overlay decoupling, and preset shape.
@@ -54,7 +59,8 @@ describe('LOOK_PRESETS', () => {
 	// Looks with no lit surface to shade: xray is transparent, wireframe draws lines, and lineart
 	// is deliberately unlit so nothing competes with the edge overlay for the eye.
 	const UNLIT_LOOKS: Look[] = ['xray', 'wireframe', 'lineart'];
-	const SHADED_LOOKS = ALL_LOOKS.filter((look) => !UNLIT_LOOKS.includes(look));
+	// Night is lit by what the model emits, so a key light would defeat it.
+	const SHADED_LOOKS = ALL_LOOKS.filter((look) => !UNLIT_LOOKS.includes(look) && look !== 'night');
 
 	// The regression these guard: IBL plus flat fill alone lights every face of a box nearly
 	// equally, so the model renders as a white silhouette. A key light and contact shading are what
@@ -256,6 +262,48 @@ describe('applyDefaults — every EdgesConfig field survives resolution', () => 
 		for (const key of Object.keys(edges) as (keyof typeof edges)[]) {
 			expect(resolved[key], `edges.${key} dropped by applyDefaults`).toBe(edges[key]);
 		}
+	});
+});
+
+describe('low-power tier', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	const stubDevice = (coarse: boolean, width: number, height: number) =>
+		vi.stubGlobal('window', {
+			matchMedia: () => ({ matches: coarse }),
+			screen: { width, height }
+		});
+
+	it('takes a touch device with a phone-sized screen for a phone, in either orientation', () => {
+		stubDevice(true, 390, 844);
+		expect(isPhone()).toBe(true);
+		stubDevice(true, 844, 390);
+		expect(isPhone()).toBe(true);
+	});
+
+	it('leaves tablets and mouse-driven small windows alone', () => {
+		stubDevice(true, 820, 1180);
+		expect(isPhone()).toBe(false);
+		stubDevice(false, 390, 844);
+		expect(isPhone()).toBe(false);
+	});
+
+	it('cuts night on a phone, and a host can force it either way', () => {
+		stubDevice(true, 390, 844);
+		const night = applyDefaults({ look: 'night' }).render;
+		expect(night.lowPower).toBe(true);
+		expect(night.bloom).toBeUndefined();
+		expect(night.ambientOcclusion).toBe(false);
+
+		const forcedOff = applyDefaults({ look: 'night', render: { lowPower: false } }).render;
+		expect(forcedOff.bloom).toEqual(LOOK_PRESETS.night.bloom);
+		expect(forcedOff.ambientOcclusion).toBe(true);
+	});
+
+	it('only touches looks that name a tier', () => {
+		const looks = ALL_LOOKS.filter((look) => !LOOK_PRESETS[look].lowPower);
+		expect(looks).toHaveLength(ALL_LOOKS.length - 1);
+		for (const look of looks) expect(lookPreset(look, true)).toEqual(LOOK_PRESETS[look]);
 	});
 });
 

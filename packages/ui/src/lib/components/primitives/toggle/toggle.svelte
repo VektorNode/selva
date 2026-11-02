@@ -6,7 +6,10 @@
 		variants: {
 			variant: {
 				default: 'bg-transparent',
-				outline: 'border-input hover:bg-muted border bg-transparent'
+				outline: 'border-input hover:bg-muted border bg-transparent',
+				// Filled accent for the active item; a bare bg-muted is too faint on a form.
+				accent:
+					'border-input hover:bg-muted border bg-transparent data-[state=on]:bg-primary/15 data-[state=on]:ring-1 data-[state=on]:ring-primary data-[state=on]:ring-inset'
 			},
 			size: {
 				default:

@@ -32,6 +32,7 @@ For developers embedding Selva's pieces rather than deploying the app. Each
 package's own README is authoritative for its API.
 
 - [build/overview.md](./packages/build/overview.md): which packages to reach for, and how they fit
+- [build/night-scenes.md](./packages/build/night-scenes.md): glowing parts, the Night look, and real lamps in Kelvin and lumens
 - **compute/**: [how-it-works](./packages/build/how-it-works.md), [data-trees](./packages/build/data-trees.md), [errors](./packages/build/errors.md), [common-tasks](./packages/build/common-tasks.md): using `@selvajs/compute`
 
 ## [contributing/](./contributing/): work on this repo

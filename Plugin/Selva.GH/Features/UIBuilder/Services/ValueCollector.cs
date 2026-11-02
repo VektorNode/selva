@@ -9,6 +9,7 @@ using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.ComputeIO.Goos;
+using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Features.Display.Goos;
 using Selva.GH.Features.Display.Services;
@@ -667,6 +668,12 @@ public class ValueCollector
             catch (Exception)
             {
             }
+        }
+
+        // GH_Colour reads as "30,62,54", which the page's colour input draws as black.
+        if (data is GH_Colour colour)
+        {
+            return ColorHex.Of(colour.Value);
         }
 
         if (data.CastTo(out string strValue))

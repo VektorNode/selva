@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { cachedSourceOf, computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
 import { isHostOwned } from './scene-ownership.js';
 import { applyReflectionEnvironment } from './scene-setup/reflection-environment.js';
+import { SUN_TARGET_ID } from './scene-setup/setup-lighting.js';
 import { isoOffset } from './up-axis';
 
 const CAMERA_CONFIG = {
@@ -80,7 +81,7 @@ export function updateScene(
 // Excluded from every content-bounds query: the grid is a huge plane that re-centers on the
 // camera each frame, so including it would make fit-to-view frame the camera's position instead
 // of the geometry.
-const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
+const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure', SUN_TARGET_ID]);
 
 /** True if `object` itself roots a viewer aid; {@link isViewerAid} also checks ancestors. */
 export function isViewerAidRoot(object: THREE.Object3D): boolean {
@@ -128,7 +129,7 @@ function cachedGeometriesOf(objects: THREE.Object3D[]): Set<THREE.BufferGeometry
 	return cached;
 }
 
-const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
+const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer', SUN_TARGET_ID]);
 
 /** Frees the solve content. `keepUploaded` names the cached geometries the next content draws. */
 export function clearScene(
@@ -142,8 +143,12 @@ export function clearScene(
 		// by walking the live scene, so labels added afterwards would never render.
 		// Host-added geometry (tagged by addUserGeometry, either plain 'user' or an app: scope)
 		// persists across solves so it isn't lost when compute content is replaced.
-		if (PERSISTENT_SCENE_IDS.has(object.userData.id) || isHostOwned(object)) kept.push(object);
-		else removed.push(object);
+		// Lights belong to the viewer, not the solve: losing them leaves only the environment map, with
+		// no sun, no shadows and flat upward faces, and nothing errors.
+		const isLight = (object as Partial<THREE.Light>).isLight === true;
+		if (isLight || PERSISTENT_SCENE_IDS.has(object.userData.id) || isHostOwned(object)) {
+			kept.push(object);
+		} else removed.push(object);
 	}
 
 	// One rebuild of the child list, not removeFromParent per object: that is indexOf + splice

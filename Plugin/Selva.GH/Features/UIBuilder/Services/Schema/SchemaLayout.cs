@@ -53,7 +53,7 @@ public static class SchemaLayout
         {
             outcome = LayoutSpec.Apply(Synced(bridge, document), parsed, (id, widget) => CanvasConfig(document, id, widget));
         }
-        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidCastException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException or InvalidCastException or InvalidOperationException)
         {
             return Result(false, "The spec could not be read: " + ex.Message);
         }

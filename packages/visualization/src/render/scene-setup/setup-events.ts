@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { getBaseMaterial, getLogger } from '../../shared/index.js';
+import { cloneForTint, getBaseMaterial, getLogger } from '../../shared/index.js';
 
 import type { CameraController } from '../camera-controller.js';
 import { computeContentBounds, isViewerAid } from '../three-helpers.js';
@@ -189,7 +189,7 @@ export function setupEventHandlers(
 		if (selectedObjects.has(object)) return;
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
 		if (!(target.material instanceof THREE.Material)) return;
-		const clone = target.material.clone();
+		const clone = cloneForTint(target.material);
 		tintForSelection(clone, hoverColorObj, object instanceof THREE.Mesh);
 		hoverObject = target;
 		hoverOriginal = target.material;
@@ -242,7 +242,7 @@ export function setupEventHandlers(
 		const target = object as THREE.Object3D & { material?: THREE.Material | THREE.Material[] };
 		if (!(target.material instanceof THREE.Material)) return false;
 
-		const clone = target.material.clone();
+		const clone = cloneForTint(target.material);
 		tintForSelection(clone, selectionColorObj, object instanceof THREE.Mesh);
 
 		originalMaterials.set(object, target.material);

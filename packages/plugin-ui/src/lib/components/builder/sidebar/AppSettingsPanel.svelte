@@ -6,7 +6,7 @@
 		ViewerOptions
 	} from '@selvajs/schemas';
 	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
-	import { Input, Textarea, Switch, Button, toast, pickFile } from '@selvajs/ui';
+	import { Input, Textarea, Switch, Button, Select, toast, pickFile } from '@selvajs/ui';
 	import { Download, Upload } from '@lucide/svelte';
 	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';
 	import type { ExportedSchema } from '$lib/utils/schema-exporter';
@@ -30,6 +30,15 @@
 
 	const DEFAULT_BACKGROUND = '#E0E0E0';
 	const background = $derived(schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND);
+
+	const LOOKS: { value: NonNullable<ViewerOptions['look']>; label: string }[] = [
+		{ value: 'technical', label: 'Technical' },
+		{ value: 'studio', label: 'Studio' },
+		{ value: 'showcase', label: 'Showcase' },
+		{ value: 'night', label: 'Night' },
+		{ value: 'arctic', label: 'Arctic' }
+	];
+	const look = $derived(schema.viewerOptions?.look ?? 'technical');
 
 	function updateSchema(updates: Partial<UISchema>) {
 		onSchemaChange({ ...schema, ...updates });
@@ -161,6 +170,26 @@
 				placeholder={DEFAULT_BACKGROUND}
 			/>
 		</div>
+	</SettingRow>
+	<SettingRow
+		label="Starting look"
+		for="viewer-look"
+		hint="Night lights the scene with Emissive Material parts."
+	>
+		<Select.Root
+			type="single"
+			value={look}
+			onValueChange={(value) => updateViewerOptions({ look: value as ViewerOptions['look'] })}
+		>
+			<Select.Trigger id="viewer-look" size="sm" class="w-full">
+				{LOOKS.find((option) => option.value === look)?.label ?? look}
+			</Select.Trigger>
+			<Select.Content>
+				{#each LOOKS as option (option.value)}
+					<Select.Item value={option.value} label={option.label} />
+				{/each}
+			</Select.Content>
+		</Select.Root>
 	</SettingRow>
 </SettingsSection>
 

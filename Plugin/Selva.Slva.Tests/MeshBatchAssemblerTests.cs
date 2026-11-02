@@ -177,6 +177,20 @@ public class MeshBatchAssemblerTests
     }
 
     [Fact]
+    public void MaterialCache_KeepsMaterialsThatDifferOnlyInEmission()
+    {
+        var cache = new MaterialCache();
+        var plain = ThreeMaterial.Default();
+        var glowing = ThreeMaterial.Default();
+        glowing.Emissive = "#FFD8A0";
+        glowing.EmissiveIntensity = 4;
+        var brighter = glowing.Clone();
+        brighter.EmissiveIntensity = 6;
+
+        Assert.Equal(3, new[] { plain, glowing, brighter }.Select(cache.GetMaterialId).Distinct().Count());
+    }
+
+    [Fact]
     public void CreateBatch_GeometryDoesNotDependOnMaterialAssignment()
     {
         // What lets a geometry cache hit when parts change material: only the table moves.

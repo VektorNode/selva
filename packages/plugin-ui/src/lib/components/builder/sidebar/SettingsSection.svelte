@@ -3,6 +3,7 @@
 	import { Collapsible } from '@selvajs/ui';
 	import { ChevronDown } from '@lucide/svelte';
 	import { usePersisted } from '$lib/composables/usePersisted.svelte';
+	import { getSectionOpeners } from '../reveal';
 
 	interface Props {
 		/** Stable id; the open/closed state is remembered under it. */
@@ -17,9 +18,15 @@
 	// The storage key is read once; `id` is fixed for the component's lifetime.
 	// svelte-ignore state_referenced_locally
 	const open = usePersisted(`builder.section.open:${id}`, true);
+
+	const openers = getSectionOpeners();
+	$effect(() => {
+		openers.set(id, () => (open.value = true));
+		return () => openers.delete(id);
+	});
 </script>
 
-<div class="border-border border-b last:border-b-0">
+<div data-settings-section={id} class="border-border border-b last:border-b-0">
 	<Collapsible.Root bind:open={open.value}>
 		<Collapsible.Trigger>
 			{#snippet child({ props })}

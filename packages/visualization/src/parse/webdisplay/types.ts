@@ -19,6 +19,12 @@ export interface SerializableMaterial {
 	normalMap?: string;
 	/** Wins over the look's `envMapIntensity` (except in looks that override materials). */
 	envMapIntensity?: number;
+	/** Hex colour the surface emits. Omitted: no emission. */
+	emissive?: string;
+	/** Omitted: 1. Above 1 it blooms in looks with bloom. */
+	emissiveIntensity?: number;
+	/** Light the surface casts in the night look, in candela-scaled units. Omitted: scaled to the model. */
+	emissiveLight?: number;
 	/** Omitted: no coat. */
 	clearcoat?: number;
 	clearcoatRoughness?: number;
@@ -35,7 +41,7 @@ export interface SerializableMaterial {
 	 */
 	mapSize?: number;
 	/** Procedural scratch fibres along the grain, from UVs in mm. */
-	finish?: 'brushed' | 'rolled';
+	finish?: 'brushed' | 'rolled' | 'wood' | 'concrete' | 'plaster' | 'brick' | 'corten';
 	/** Scales the finish's streaks; 0 draws none. Omitted: 1. */
 	finishStrength?: number;
 	/** Light passing through (glass); unlike `opacity` it keeps reflections. */

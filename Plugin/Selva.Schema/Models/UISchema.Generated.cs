@@ -635,6 +635,12 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("backgroundColor", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string BackgroundColor { get; set; } = "#ffffff";
+
+/// <summary>
+/// The viewer look a definition opens in. A viewer can still switch look from its display menu.
+/// </summary>
+        [JsonProperty("look", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string Look { get; set; } = "technical";
     }
 
     public class LocalOptions

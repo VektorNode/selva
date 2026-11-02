@@ -45,6 +45,24 @@ export async function encodeThumbnail(
 	return fallback === 'unsupported' ? { ok: false, smallestBytes: smallest } : fallback;
 }
 
+/** `createImageBitmap` rejects SVG blobs in Chromium; an `<img>` decodes them. */
+async function decodeImage(file: Blob): Promise<ImageBitmap> {
+	try {
+		return await createImageBitmap(file);
+	} catch (err) {
+		const url = URL.createObjectURL(file);
+		try {
+			const img = new Image();
+			img.src = url;
+			await img.decode();
+			if (!img.naturalWidth || !img.naturalHeight) throw err;
+			return await createImageBitmap(img);
+		} finally {
+			URL.revokeObjectURL(url);
+		}
+	}
+}
+
 /**
  * Center-crops the picked image to a square thumbnail. The Rhino panel's picker returns a File
  * without a MIME type, so the image is judged by decoding it, not by `file.type`.
@@ -52,7 +70,7 @@ export async function encodeThumbnail(
 export async function drawThumbnail(
 	file: Blob
 ): Promise<{ encode: ThumbnailEncoder; opaque: boolean }> {
-	const bitmap = await createImageBitmap(file);
+	const bitmap = await decodeImage(file);
 	const side = Math.min(bitmap.width, bitmap.height);
 	const canvas = document.createElement('canvas');
 	canvas.width = canvas.height = THUMBNAIL_PX;

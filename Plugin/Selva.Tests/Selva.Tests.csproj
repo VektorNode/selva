@@ -90,6 +90,8 @@
 		         Link="Linked\SchemaOutputCanonicalizer.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\LayoutSpec.cs"
 		         Link="Linked\LayoutSpec.cs"/>
+		<Compile Include="..\Selva.GH\Features\UIBuilder\Helpers\ColorHex.cs"
+		         Link="Linked\ColorHex.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SyncModels.cs"
 		         Link="Linked\SyncModels.cs"/>
 		<Compile Include="..\Selva.GH\Features\UIBuilder\Services\Schema\SyncDirection.cs"

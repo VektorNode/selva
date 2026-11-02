@@ -40,6 +40,7 @@ export interface ViewerMessages {
 	lookTechnical: string;
 	lookStudio: string;
 	lookShowcase: string;
+	lookNight: string;
 	lookArctic: string;
 	lookXray: string;
 	lookLineart: string;
@@ -268,6 +269,7 @@ const en: ViewerMessages = {
 	lookTechnical: 'Technical',
 	lookStudio: 'Studio',
 	lookShowcase: 'Showcase',
+	lookNight: 'Night',
 	lookArctic: 'Arctic',
 	lookXray: 'X-Ray',
 	lookLineart: 'Line Art',
@@ -461,6 +463,7 @@ const de: ViewerMessages = {
 	lookTechnical: 'Technisch',
 	lookStudio: 'Studio',
 	lookShowcase: 'Präsentation',
+	lookNight: 'Nacht',
 	lookArctic: 'Arktis',
 	lookXray: 'Röntgen',
 	lookLineart: 'Strichzeichnung',

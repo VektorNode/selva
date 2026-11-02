@@ -161,7 +161,7 @@ public class SchemaMigratorTests
         var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(99, 0, 0));
 
         Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
-        Assert.Contains(changes, c => c.Contains("Applied migration from 2.17.0 to 2.18.0"));
+        Assert.Contains(changes, c => c.Contains("Applied migration from 2.18.0 to 2.19.0"));
         Assert.Null(migratedSchema.LocalOptions);
     }
 

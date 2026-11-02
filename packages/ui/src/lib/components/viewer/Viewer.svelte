@@ -52,6 +52,8 @@
 		showDisplayMenu?: boolean;
 		enableMeshClick?: boolean;
 		backgroundColor?: string;
+		/** The look to open in. Default `technical`. */
+		look?: Look;
 		/** Initial state of the edge overlay and its display-menu checkmark. Default false. */
 		showEdges?: boolean;
 	}
@@ -91,6 +93,7 @@
 		showDisplayMenu: true,
 		enableMeshClick: true,
 		backgroundColor: '#E6E6E6',
+		look: 'technical',
 		showEdges: false
 	};
 
@@ -124,7 +127,8 @@
 	let clearEdges: ThreeViewer['clearEdges'] | null = null;
 	let invalidate: (() => void) | null = null;
 	let captureImage: ThreeViewer['captureImage'] | null = null;
-	let setLook: ((look: Look) => void) | null = null;
+	let setLook: ThreeViewer['setLook'] | null = null;
+	let syncEmissiveLights: (() => void) | null = null;
 	let updateGridScale: (() => void) | null = null;
 	let updateShadowBounds: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
@@ -145,9 +149,16 @@
 	let projection: CameraProjection = $state('perspective');
 	let measureActive = $state(false);
 	let gridVisible = $state(false);
-	let renderStyle: Look = $state('technical');
+	// A saved schema can name a look this build doesn't have, and an unknown look throws on mount.
+	const openingLook = untrack(() => {
+		const look = viewerConfig.look;
+		return look && LOOKS.includes(look) ? look : defaultViewerConfig.look;
+	});
+	const opensAsLineDrawing = LOOK_PRESETS[openingLook].requiresEdges === true;
+	const configuredEdges = untrack(() => viewerConfig.showEdges) ?? defaultViewerConfig.showEdges;
+	let renderStyle: Look = $state(openingLook);
 	// Seeded once, then owned by the menu toggle.
-	let edgesVisible = $state(untrack(() => viewerConfig.showEdges) ?? defaultViewerConfig.showEdges);
+	let edgesVisible = $state(opensAsLineDrawing || configuredEdges);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
@@ -160,7 +171,8 @@
 		arctic: t.lookArctic,
 		xray: t.lookXray,
 		lineart: t.lookLineart,
-		wireframe: t.lookWireframe
+		wireframe: t.lookWireframe,
+		night: t.lookNight
 	});
 	const styleOptions = $derived<{ look: Look; label: string }[]>(
 		LOOKS.map((look) => ({
@@ -234,6 +246,7 @@
 		invalidate = init.invalidate;
 		captureImage = init.captureImage;
 		setLook = init.setLook;
+		syncEmissiveLights = init.syncEmissiveLights;
 		updateGridScale = init.updateGridScale;
 		updateShadowBounds = init.updateShadowBounds;
 		fitToView = init.fitToView;
@@ -279,7 +292,7 @@
 
 	// Edges the lineart look switched on, so leaving it can put the user's own choice back rather
 	// than stranding them with overlays they never asked for.
-	let edgesBeforeLineDrawing: boolean | null = null;
+	let edgesBeforeLineDrawing: boolean | null = opensAsLineDrawing ? configuredEdges : null;
 
 	function setRenderStyle(look: Look) {
 		if (!setLook || look === renderStyle) return;
@@ -366,7 +379,8 @@
 			untrack(() => {
 				// The new meshes carry the materials the parser built, so a look that overrides them
 				// (arctic, x-ray) has to be re-applied or the solve silently reverts to shaded.
-				setLook?.(renderStyle);
+				// Emissive lights wait for `applyTo` below, or a hidden lamp would count as lit.
+				setLook?.(renderStyle, { deferEmissiveLights: true });
 				// updateScene discarded the previous solve's overlays along with its content.
 				if (edgesVisible) applyEdges?.(scene!, edgeOverrides());
 				// Rescale the grid so cells and fade match the new content's extent.
@@ -377,6 +391,7 @@
 				// The rebuild un-hid everything; the outliner keys hidden state on Grasshopper
 				// identity, not on the instances just discarded, so it can re-hide it.
 				outliner?.applyTo();
+				syncEmissiveLights?.();
 				sceneVersion++;
 				// Repaint now rather than on the render loop's safety interval.
 				invalidate?.();
@@ -680,7 +695,7 @@
 				<SceneManager
 					{outliner}
 					{sceneVersion}
-					onVisibilityChange={() => invalidate?.()}
+					onVisibilityChange={() => syncEmissiveLights?.()}
 					onHover={(entry) => setHover?.(entry?.object ?? null, entry?.memberIndex ?? null)}
 				/>
 			</Resizable.Pane>

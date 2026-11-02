@@ -172,7 +172,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<IGH_GeometricGoo> geoTree;
         if (!DA.GetDataTree(0, out geoTree) || geoTree.IsEmpty)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry provided");
+            // A switched-off option leaves this empty on purpose, so it isn't worth warning the page.
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "No geometry provided");
             return;
         }
 
@@ -221,7 +222,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         // mirrored (all-empty) tree so downstream components keep the paths.
         if (result.Count == 0)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
+            AddRuntimeMessage(geoTree.DataCount == 0 ? GH_RuntimeMessageLevel.Remark : GH_RuntimeMessageLevel.Warning,
+                "No valid geometry could be displayed");
         }
         else if (result.Skipped > 0)
         {

@@ -257,6 +257,11 @@ var result = (string)layout.GetMethod("Apply").Invoke(null, new object[] { doc, 
   by key), else takes it from the canvas: a value list's options, a getter's range. The widget
   follows the param type unless `widget` names one.
 - `description` and `default` set the input's too. Visibility rules take `param` for `paramId`.
+- A value list's `options` always come from the canvas. A rule on one must name an option's value as a
+  string, or the spec is refused: the page compares strictly, so a typo or a bare number would be a
+  rule that never holds.
+- `assets` and `viewerOptions` sit at the root. `assets` adds to what the schema holds; `config.optionMedia`
+  in the same spec can use them. `Read` returns `viewerOptions` but not `assets`.
 - Any error refuses the whole spec, each one named, and nothing changes. Unknown keys are errors.
 - The document must have solved once, or Context Bake outputs are not known yet.
 

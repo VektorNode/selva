@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { publishMaxAnisotropy } from '../../shared/index.js';
+import { lookPreset, publishMaxAnisotropy } from '../../shared/index.js';
 import { createCameraController } from '../camera-controller.js';
 import {
 	EDGES_SKIPPED_OVERLAY_BUDGET,
@@ -20,7 +20,7 @@ import type { ThreeInitializerOptions } from '../types.js';
 import { upToAxis } from '../up-axis.js';
 import { createViewGizmo } from '../view-gizmo.js';
 import { createAnimationLoop } from './animation-loop.js';
-import { createAppearanceController } from './appearance.js';
+import { createAppearanceController, lookPixelRatio } from './appearance.js';
 import { createCamera } from './create-camera.js';
 import { createScene } from './create-scene.js';
 import { applyDefaults, defaultUp } from './defaults.js';
@@ -41,9 +41,14 @@ export const initThree = function (
 
 	const sceneUp = config.environment?.sceneUp || defaultUp;
 
-	// Single source of truth for DPR (renderer, resize check, AO pipeline); applyDefaults always
-	// sets it, the fallback here is just type narrowing.
-	const pixelRatio = config.render.pixelRatio ?? Math.min(window.devicePixelRatio, 2);
+	// Single source of truth for DPR (renderer, resize check, AO pipeline), kept in config because a
+	// look can cap it; applyDefaults always sets it, the fallback here is just type narrowing.
+	const fullPixelRatio = config.render.pixelRatio ?? Math.min(window.devicePixelRatio, 2);
+	const pixelRatio = lookPixelRatio(
+		fullPixelRatio,
+		lookPreset(config.look!, config.render.lowPower)
+	);
+	config.render.pixelRatio = pixelRatio;
 
 	const scene = createScene(config);
 	const camera = createCamera(config, canvas);
@@ -244,7 +249,6 @@ export const initThree = function (
 		scene,
 		getActiveCamera,
 		getCanvasSize,
-		pixelRatio,
 		config,
 		requestRender: () => requestRender()
 	});
@@ -256,6 +260,7 @@ export const initThree = function (
 		lights,
 		config,
 		pipeline,
+		fullPixelRatio,
 		requestRender: () => requestRender()
 	});
 
@@ -272,7 +277,7 @@ export const initThree = function (
 		cameraController,
 		controls,
 		getCanvasSize,
-		pixelRatio,
+		() => config.render.pixelRatio!,
 		config.events.onFrame,
 		grid,
 		gizmo,
@@ -368,6 +373,7 @@ export const initThree = function (
 		captureImage,
 		setAmbientOcclusion: pipeline.setAmbientOcclusion,
 		setLook: appearance.setLook,
+		syncEmissiveLights: appearance.syncEmissiveLights,
 		setFillLights: appearance.setFillLights,
 		setEnvironmentIntensity: appearance.setEnvironmentIntensity,
 		setToneMappingExposure: appearance.setToneMappingExposure,

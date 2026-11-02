@@ -33,7 +33,15 @@ public static class LayoutSpec
 
     private static readonly JsonSerializer Serializer = JsonSerializer.Create(SchemaSerializationSettings.Settings);
 
-    private static readonly string[] RootKeys = { "name", "description", "tabs", "groups", "unplaced" };
+    private static readonly string[] RootKeys =
+        { "name", "description", "tabs", "groups", "unplaced", "assets", "viewerOptions" };
+
+    private static readonly string[] AssetKeys = { "d", "img", "w", "h" };
+    private static readonly string[] ViewerKeys = { "enableLocal", "enableRemote", "backgroundColor", "look" };
+
+    // ViewerOptions.Look is a plain string in C#, so the schema's enum is restated here.
+    private static readonly string[] Looks =
+        { "technical", "studio", "showcase", "arctic", "xray", "lineart", "wireframe", "night" };
     private static readonly string[] TabKeys = { "id", "label", "icon", "position", "visible", "groups" };
 
     private static readonly string[] GroupKeys =
@@ -61,6 +69,11 @@ public static class LayoutSpec
         if (!string.IsNullOrEmpty(schema.Description))
         {
             spec["description"] = schema.Description;
+        }
+
+        if (schema.ViewerOptions != null)
+        {
+            spec["viewerOptions"] = JObject.FromObject(schema.ViewerOptions, Serializer);
         }
 
         switch (schema.Layout)
@@ -215,6 +228,8 @@ public static class LayoutSpec
         var build = new Builder(schema, canvasConfig, outcome.Errors);
 
         build.RejectUnknownKeys(spec, RootKeys, "the spec");
+        build.Assets(spec["assets"]);
+        build.ViewerOptions(spec["viewerOptions"]);
         var tabs = spec["tabs"] as JArray;
         var groups = spec["groups"] as JArray;
         if ((tabs == null) == (groups == null))
@@ -285,6 +300,10 @@ public static class LayoutSpec
         // Ids the old layout holds: a new tab, group or item never takes one a later one may keep.
         private readonly HashSet<string> _reserved;
 
+        // Values the saved rules already compare. A list that dropped one since isn't this spec's
+        // fault, and refusing it would block every edit to the form until that rule is fixed.
+        private readonly HashSet<(string ParamId, string Value)> _savedRuleValues;
+
         public Builder(UISchema schema, Func<Guid, string, JObject> canvasConfig, List<string> errors)
         {
             _schema = schema;
@@ -303,11 +322,52 @@ public static class LayoutSpec
                 .Concat(_oldGroups.Select(x => x.Group.Id))
                 .Concat(_oldItems.Values.Select(i => i.Id))
                 .Where(id => id != null));
+            _savedRuleValues = new HashSet<(string, string)>(
+                (schema.Layout == null ? Enumerable.Empty<JToken>() : JToken.FromObject(schema.Layout, Serializer).SelectTokens("$..visibilityCondition.rules[*]"))
+                .OfType<JObject>()
+                .SelectMany(rule => ComparedValues(rule).Select(value => ((string)rule["paramId"], value.ToString(Formatting.None)))));
         }
 
         public Parameters Parameters { get; }
 
         public HashSet<Guid> Placed { get; } = new HashSet<Guid>();
+
+        /// <summary>Added to what the schema holds, so a form can use its icons in one spec.</summary>
+        public void Assets(JToken token)
+        {
+            if (token is not JObject assets)
+            {
+                return;
+            }
+
+            _schema.Assets ??= new Dictionary<string, OptionAsset>();
+            foreach (var asset in assets.Properties())
+            {
+                RejectUnknownKeys((JObject)asset.Value, AssetKeys, $"asset \"{asset.Name}\"");
+                _schema.Assets[asset.Name] = asset.Value.ToObject<OptionAsset>(Serializer);
+            }
+        }
+
+        public void ViewerOptions(JToken token)
+        {
+            if (token is not JObject change)
+            {
+                return;
+            }
+
+            RejectUnknownKeys(change, ViewerKeys, "viewerOptions");
+            if (change["look"] is { } look && !(look.Type == JTokenType.String && Looks.Contains((string)look)))
+            {
+                // A look the viewer doesn't know would crash it on mount.
+                _errors.Add($"viewerOptions: {look.ToString(Formatting.None)} is not a look. "
+                            + $"Looks: {string.Join(", ", Looks)}.");
+                return;
+            }
+
+            var merged = _schema.ViewerOptions == null ? new JObject() : JObject.FromObject(_schema.ViewerOptions, Serializer);
+            merged.Merge(change);
+            _schema.ViewerOptions = merged.ToObject<ViewerOptions>(Serializer);
+        }
 
         public TabConfig Tab(JToken token, int index)
         {
@@ -424,11 +484,19 @@ public static class LayoutSpec
             }
 
             var keepsWidget = old != null && old.Type == type && old.WidgetType == widget;
-            var config = (keepsWidget ? oldRaw["config"] as JObject : null) ?? _canvasConfig?.Invoke(param.Id, widget);
+            var canvas = _canvasConfig?.Invoke(param.Id, widget);
+            var config = (keepsWidget ? oldRaw["config"] as JObject : null) ?? canvas;
             if (spec["config"] is JObject change)
             {
                 config = (JObject)config?.DeepClone() ?? new JObject();
                 config.Merge(change, new JsonMergeSettings { MergeArrayHandling = MergeArrayHandling.Replace });
+            }
+
+            // Grasshopper owns a value list's options, so neither the old item nor the spec outranks it.
+            if (canvas?["options"] is JObject options)
+            {
+                config = (JObject)config.DeepClone();
+                config["options"] = options.DeepClone();
             }
 
             var raw = new JObject
@@ -512,17 +580,57 @@ public static class LayoutSpec
             var copy = (JObject)condition.DeepClone();
             foreach (var rule in (copy["rules"] as JArray ?? new JArray()).OfType<JObject>())
             {
-                if (rule["param"] == null)
+                Parameter param;
+                if (rule["param"] != null)
+                {
+                    param = Resolve(new JObject { ["param"] = rule["param"] }, where + " visibilityCondition");
+                    rule.Remove("param");
+                    rule["paramId"] = param?.Id.ToString() ?? "";
+                }
+                else
+                {
+                    param = Parameters.All.FirstOrDefault(p => p.Id.ToString() == Text(rule, "paramId"));
+                }
+
+                if (param != null)
+                {
+                    CheckRuleValues(rule, param, where);
+                }
+            }
+
+            return copy;
+        }
+
+        // Rules compare strictly with an option's value, always a string, so a typo or a bare number
+        // is a condition that never holds.
+        private void CheckRuleValues(JObject rule, Parameter param, string where)
+        {
+            if (param.Type != "valueList"
+                || _canvasConfig?.Invoke(param.Id, "dropdown")?["options"] is not JObject options)
+            {
+                return;
+            }
+
+            var known = options.Properties().Select(p => (string)p.Value).ToList();
+            foreach (var value in ComparedValues(rule).Where(v => v.Type != JTokenType.String || !known.Contains((string)v)))
+            {
+                if (_savedRuleValues.Contains((param.Id.ToString(), value.ToString(Formatting.None))))
                 {
                     continue;
                 }
 
-                var param = Resolve(new JObject { ["param"] = rule["param"] }, where + " visibilityCondition");
-                rule.Remove("param");
-                rule["paramId"] = param?.Id.ToString() ?? "";
+                _errors.Add($"{where} visibilityCondition: {value.ToString(Formatting.None)} is not a value of \"{param.Nickname}\". "
+                            + $"Values: {string.Join(", ", known)}.");
             }
+        }
 
-            return copy;
+        private static IEnumerable<JToken> ComparedValues(JObject rule)
+        {
+            return (string)rule["operator"] is "in" or "notIn" or "containsAny"
+                ? (rule["values"] as JArray ?? new JArray()).AsEnumerable()
+                : (string)rule["operator"] is "equals" or "notEquals" or "contains"
+                    ? new[] { rule["value"] ?? JValue.CreateNull() }
+                    : Enumerable.Empty<JToken>();
         }
 
         private string Claim(HashSet<string> taken, string wanted, string fallback, string where)

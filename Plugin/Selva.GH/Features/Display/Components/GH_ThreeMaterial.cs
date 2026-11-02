@@ -20,7 +20,12 @@ public class GH_ThreeMaterial : SelvaZuiComponent
     {
         ("None", null),
         ("Brushed", "brushed"),
-        ("Rolled", "rolled")
+        ("Rolled", "rolled"),
+        ("Wood", "wood"),
+        ("Concrete", "concrete"),
+        ("Plaster", "plaster"),
+        ("Brick", "brick"),
+        ("Corten", "corten")
     };
 
     public GH_ThreeMaterial()
@@ -93,8 +98,8 @@ public class GH_ThreeMaterial : SelvaZuiComponent
             + "Leave empty to stretch textures once over the texture coordinates.",
             GH_ParamAccess.item);
         pManager.AddIntegerParameter("Finish", "F",
-            "Procedural streaks along the grain, no texture needed (right-click for the list): None, "
-            + "Brushed (fine fibres) or Rolled (faint rolling lines).",
+            "A built-in surface, no texture needed (right-click for the list): Brushed, Rolled, Wood, "
+            + "Concrete, Plaster, Brick or Corten. Drawn at real size.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Transmission", "TR",
             "Light passing through (0.0 - 1.0), for glass. Unlike Opacity it keeps the reflections.",

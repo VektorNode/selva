@@ -49,6 +49,11 @@
 		outputValues?: Record<string, unknown>;
 		/** Ids of the open item cards, held by the page so the sidebar can open one. */
 		expandedItems: SvelteSet<string>;
+		/**
+		 * Ids of groups shown open for now. `group.collapsed` is the app's saved default, so finding
+		 * an item inside a group must not flip it or dirty the schema.
+		 */
+		peekedGroups: SvelteSet<string>;
 	}
 
 	let {
@@ -62,8 +67,11 @@
 		availableInputs,
 		getParameterInfo,
 		outputValues = {},
-		expandedItems
+		expandedItems,
+		peekedGroups
 	}: EditableGroupProps = $props();
+
+	const collapsed = $derived(!!group.collapsed && !peekedGroups.has(group.id));
 
 	let showVisibilityRules = $state(false);
 	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
@@ -223,6 +231,8 @@
 	}
 
 	function toggleCollapsed() {
+		const wasPeeked = peekedGroups.delete(group.id);
+		if (wasPeeked && group.collapsed) return;
 		onEdit(() => (group.collapsed = !group.collapsed));
 	}
 </script>
@@ -249,11 +259,11 @@
 				<div class="flex items-center gap-1">
 					<button
 						type="button"
-						class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-transform duration-200 {group.collapsed
+						class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-transform duration-200 {collapsed
 							? ''
 							: 'rotate-180'}"
 						onclick={toggleCollapsed}
-						aria-label={group.collapsed ? 'Expand group' : 'Collapse group'}
+						aria-label={collapsed ? 'Expand group' : 'Collapse group'}
 					>
 						<ChevronDown size={16} />
 					</button>
@@ -283,7 +293,7 @@
 			</div>
 		</div>
 		<div class="ml-auto flex items-center gap-2">
-			{#if !group.collapsed}
+			{#if !collapsed}
 				<label class="text-muted-foreground flex items-center gap-1 text-xs">
 					Col:
 					<input
@@ -317,7 +327,7 @@
 	</Card.Header>
 
 	<!-- Visibility Rules Section -->
-	{#if !group.collapsed}
+	{#if !collapsed}
 		<div class="border-border bg-muted border-t px-3 py-2">
 			<button
 				onclick={() => (showVisibilityRules = !showVisibilityRules)}
@@ -346,7 +356,7 @@
 		</div>
 	{/if}
 
-	{#if !group.collapsed}
+	{#if !collapsed}
 		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-4">
 			<div class="relative">
 				<div

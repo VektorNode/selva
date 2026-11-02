@@ -465,6 +465,11 @@ export interface ViewerOptions {
 	 * Background color for the 3D viewer as hex string (e.g., '#ffffff')
 	 */
 	backgroundColor?: string;
+	/**
+	 * The viewer look a definition opens in. A viewer can still switch look from its display menu.
+	 */
+	look?:
+		'technical' | 'studio' | 'showcase' | 'arctic' | 'xray' | 'lineart' | 'wireframe' | 'night';
 }
 export interface LocalOptions {
 	/**
@@ -552,6 +557,11 @@ export interface ViewerOptions1 {
 	 * Background color for the 3D viewer as hex string (e.g., '#ffffff')
 	 */
 	backgroundColor?: string;
+	/**
+	 * The viewer look a definition opens in. A viewer can still switch look from its display menu.
+	 */
+	look?:
+		'technical' | 'studio' | 'showcase' | 'arctic' | 'xray' | 'lineart' | 'wireframe' | 'night';
 }
 
 // ============================================================================
@@ -571,7 +581,7 @@ export const MAX_TAGS = 5 as const;
 export const MAX_CATEGORY_LENGTH = 40 as const;
 
 /** Current UISchema format version (from ui-schema.json's schemaVersion default). */
-export const UI_SCHEMA_VERSION = '2.18.0';
+export const UI_SCHEMA_VERSION = '2.19.0';
 
 // ============================================================================
 // TYPE ALIASES AND GUARDS (derived from the LayoutItem union)

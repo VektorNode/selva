@@ -55,7 +55,7 @@
 
 	async function addImage(name: string) {
 		const file = await pickFile({
-			accept: 'image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp'
+			accept: 'image/*,.svg'
 		});
 		if (!file || !draft) return;
 		try {

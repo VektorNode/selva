@@ -347,7 +347,8 @@
 					{onViewerReady}
 					viewerConfig={{
 						...viewerConfig,
-						backgroundColor: schema?.viewerOptions?.backgroundColor,
+						backgroundColor: schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
+						look: schema?.viewerOptions?.look ?? viewerConfig.look,
 						showSceneManager: false
 					}}
 				/>
@@ -490,7 +491,9 @@
 							{onViewerReady}
 							viewerConfig={{
 								...viewerConfig,
-								backgroundColor: schema?.viewerOptions?.backgroundColor
+								backgroundColor:
+									schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
+								look: schema?.viewerOptions?.look ?? viewerConfig.look
 							}}
 						/>
 					</Resizable.Pane>

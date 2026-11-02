@@ -45,6 +45,7 @@
 			bind:this={tiles[index]}
 			type="button"
 			role="radio"
+			title={option.name}
 			aria-checked={selected}
 			tabindex={index === focusIndex ? 0 : -1}
 			{disabled}
@@ -65,7 +66,7 @@
 					<span class="text-lg font-medium" aria-hidden="true">{option.name.charAt(0)}</span>
 				{/if}
 			</span>
-			<span class="px-0.5 text-xs leading-tight truncate" class:font-medium={selected}>
+			<span class="px-0.5 text-xs leading-tight line-clamp-2" class:font-medium={selected}>
 				{option.name}
 			</span>
 		</button>

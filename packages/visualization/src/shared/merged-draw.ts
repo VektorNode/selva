@@ -36,6 +36,8 @@ interface DrawState extends Record<HighlightKind, Highlight | null> {
 const states = new WeakMap<THREE.Mesh, DrawState>();
 const listeners = new WeakMap<THREE.Mesh, Set<() => void>>();
 
+const tintOrigins = new WeakMap<THREE.Material, THREE.Material>();
+
 const NONE: ReadonlySet<number> = new Set();
 
 function windowsOf(mesh: THREE.Mesh): Required<MemberWindow>[] | null {
@@ -144,9 +146,16 @@ export function setHiddenMembers(mesh: THREE.Mesh, hidden: ReadonlySet<number>):
 
 /** The material `mesh` draws with when nothing is highlighted. */
 export function getBaseMaterial(mesh: THREE.Mesh): THREE.Material {
-	return (
-		states.get(mesh)?.base ?? (Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material)
-	);
+	const material =
+		states.get(mesh)?.base ?? (Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material);
+	return tintOrigins.get(material) ?? material;
+}
+
+/** A clone to tint and swap onto a mesh. `getBaseMaterial` keeps answering with `material`. */
+export function cloneForTint(material: THREE.Material): THREE.Material {
+	const clone = material.clone();
+	tintOrigins.set(clone, tintOrigins.get(material) ?? material);
+	return clone;
 }
 
 /** Draws `members` with `material`. The caller owns `material` and disposes it. */

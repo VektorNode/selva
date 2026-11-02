@@ -77,6 +77,12 @@
 				? activeTypes[0]
 				: `${activeTypes.length} types`
 	);
+
+	/** Narrows the list to one parameter, dropping any type filter that would hide it. */
+	export function showParameter(nickname: string) {
+		query = nickname;
+		types.value = [];
+	}
 </script>
 
 <div class="flex flex-col gap-3">

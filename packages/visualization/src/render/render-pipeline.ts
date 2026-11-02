@@ -1,15 +1,20 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+import type { BloomOptions } from '../shared/types.js';
 
 import { EdgeDetectionPass, type EdgeDetectionOptions } from './edge-detection-pass';
 
 /**
- * Pipeline: RenderPass → GTAOPass? → EdgeDetectionPass? → SMAAPass → OutputPass. EdgeDetectionPass
- * sits before SMAA so its 1px lines get antialiased. EffectComposer renders offscreen, where the
+ * Pipeline: RenderPass → GTAOPass? → BloomPass? → EdgeDetectionPass? → SMAAPass → OutputPass. Bloom
+ * sits before OutputPass because it needs linear HDR values: tone mapping would clamp the emissive
+ * highlights it keys on. EdgeDetectionPass sits before SMAA so its 1px lines get antialiased. EffectComposer renders offscreen, where the
  * canvas's own MSAA never applies, so the scene target carries its own (see {@link msaaSamplesFor});
  * SMAA then smooths what MSAA leaves, the edge pass's lines included. SMAA over TAA because TAA's
  * temporal jitter smears during OrbitControls drags. OutputPass applies tone mapping and color
@@ -36,9 +41,38 @@ export interface RenderPipelineOptions {
 	aoIntensity?: number;
 	/** DPR cap for the AO buffers only; the scene itself renders at the full pixel ratio. Default 1. */
 	aoPixelRatio?: number;
+	/** Omitted: no bloom pass at all. */
+	bloom?: BloomOptions;
 	/** Start with the screen-space edge pass enabled; pass an object to tune it. */
 	edgeDetection?: boolean | EdgeDetectionOptions;
 }
+
+/**
+ * A highlight beside a point light overflows the half-float target to infinity, and bloom's blur
+ * turns that one pixel into NaN across the whole frame: the viewer goes blank. Clamping first keeps
+ * a hot pixel hot without letting it reach the blur.
+ */
+const HDR_CLAMP_SHADER = {
+	name: 'HdrClamp',
+	uniforms: { tDiffuse: { value: null } },
+	vertexShader: /* glsl */ `
+		varying vec2 vUv;
+		void main() {
+			vUv = uv;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+		}`,
+	fragmentShader: /* glsl */ `
+		uniform sampler2D tDiffuse;
+		varying vec2 vUv;
+		const float MAX_RADIANCE = 64.0;
+		float safe(float v) {
+			return isnan(v) ? 0.0 : clamp(v, 0.0, MAX_RADIANCE);
+		}
+		void main() {
+			vec4 color = texture2D(tDiffuse, vUv);
+			gl_FragColor = vec4(safe(color.r), safe(color.g), safe(color.b), color.a);
+		}`
+};
 
 /**
  * Without MSAA a sub-pixel feature (a sheet's bright hem edge) comes out as a dashed line, which
@@ -81,6 +115,16 @@ export function createRenderPipeline(
 		gtaoPass.blendIntensity = options.aoIntensity ?? 1;
 		gtaoPass.updateGtaoMaterial({ screenSpaceRadius: true });
 		composer.addPass(gtaoPass);
+	}
+
+	let clampPass: ShaderPass | null = null;
+	let bloomPass: UnrealBloomPass | null = null;
+	if (options.bloom) {
+		const { strength, radius, threshold } = options.bloom;
+		clampPass = new ShaderPass(HDR_CLAMP_SHADER);
+		composer.addPass(clampPass);
+		bloomPass = new UnrealBloomPass(new THREE.Vector2(width, height), strength, radius, threshold);
+		composer.addPass(bloomPass);
 	}
 
 	const edgeOptions = typeof options.edgeDetection === 'object' ? options.edgeDetection : {};
@@ -148,6 +192,8 @@ export function createRenderPipeline(
 		dispose: () => {
 			composer.dispose();
 			gtaoPass?.dispose();
+			clampPass?.dispose();
+			bloomPass?.dispose();
 			edgePass.dispose();
 			smaaPass.dispose();
 			outputPass.dispose();

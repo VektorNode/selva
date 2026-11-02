@@ -2,7 +2,10 @@
 	import { ScrollArea, Tabs } from '@selvajs/ui';
 	import { ListTree } from '@lucide/svelte';
 	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
+	import { tick } from 'svelte';
 	import { usePersisted } from '$lib/composables/usePersisted.svelte';
+	import type { SearchTarget } from '$lib/features/builder';
+	import { bringIntoView, setSectionOpeners, type SectionOpeners } from './reveal';
 	import { SCOPES } from './scope/scopes';
 	import ParameterPanel from './sidebar/ParameterPanel.svelte';
 	import AppSettingsPanel from './sidebar/AppSettingsPanel.svelte';
@@ -57,6 +60,33 @@
 	const unplacedCount = $derived(
 		[...availableInputs, ...availableOutputs].filter((p) => !placedIds.has(p.id)).length
 	);
+
+	const sectionOpeners: SectionOpeners = new Map();
+	setSectionOpeners(sectionOpeners);
+
+	let parameterPanel = $state<ParameterPanel>();
+
+	export async function revealParameter(nickname: string) {
+		panel.value = 'parameters';
+		await tick();
+		parameterPanel?.showParameter(nickname);
+	}
+
+	export async function revealSetting({
+		panel: target,
+		sectionId,
+		controlId
+	}: Extract<SearchTarget, { kind: 'setting' }>) {
+		panel.value = target;
+		await tick();
+		sectionOpeners.get(sectionId)?.();
+		await tick();
+		const control = controlId ? document.getElementById(controlId) : null;
+		const el = control ?? document.querySelector(`[data-settings-section="${sectionId}"]`);
+		if (!el) return;
+		bringIntoView(el);
+		control?.focus({ preventScroll: true });
+	}
 </script>
 
 <aside
@@ -93,6 +123,7 @@
 			<div class="px-4 pt-1 pb-3">
 				<Tabs.Content value="parameters">
 					<ParameterPanel
+						bind:this={parameterPanel}
 						tabs={schema.layout?.type === 'tabbed' ? schema.layout.tabs : []}
 						{availableInputs}
 						{availableOutputs}

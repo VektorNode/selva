@@ -71,7 +71,8 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 		materialOverride: {
 			color: 0xeef1f5,
 			metalness: 0,
-			roughness: 0.75
+			roughness: 0.75,
+			emissiveIntensity: 0
 		}
 	},
 	// See-through blue-white with depth writes off, so interior geometry shows through the shell.
@@ -91,6 +92,7 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			color: 0x9fc4e8,
 			metalness: 0,
 			roughness: 0.9,
+			emissiveIntensity: 0,
 			opacity: 0.28,
 			depthWrite: false,
 			side: THREE.DoubleSide
@@ -126,7 +128,8 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 		materialOverride: {
 			color: 0xf7f8fa,
 			metalness: 0,
-			roughness: 1
+			roughness: 1,
+			emissiveIntensity: 0
 		}
 	},
 	// Triangle edges only — the tessellation itself, diagonals and all. That makes it a mesh-
@@ -135,6 +138,32 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 	// the sun is off and fill carries the image, because a directional light on a line renders it
 	// black wherever the line runs away from the key. AO is off for the same reason — a full-screen
 	// contact pass has no contacts to find between wires, and it only costs frames.
+	// After dark: the only real light comes from what the model emits, so a lamp lights its desk.
+	// A little sky stays so the unlit half of the model keeps its shape instead of going black.
+	night: {
+		toneMapping: THREE.ACESFilmicToneMapping,
+		toneMappingExposure: 1,
+		envMapIntensity: 0.32,
+		environmentIntensity: 0.15,
+		hemisphereIntensity: 0.26,
+		ambientIntensity: 0.05,
+		cullBackfaces: false,
+		ambientOcclusion: true,
+		sunlightIntensity: 0.14,
+		background: 0x0a0e12,
+		// Above what the environment reaches on polished metal, so only emitters glow.
+		bloom: { strength: 0.26, radius: 0.5, threshold: 1.8 },
+		emissiveLights: true,
+		// Full-screen passes are the cost here: AO alone takes a quarter of the frame on an integrated
+		// GPU, and without it there is no composer. A bounce light costs next to nothing and is all
+		// that lights the room outside the shade, so one stays with its key.
+		lowPower: {
+			ambientOcclusion: false,
+			bloom: undefined,
+			maxEmissiveLights: 1,
+			maxPixelRatio: 1.5
+		}
+	},
 	wireframe: {
 		toneMapping: THREE.NeutralToneMapping,
 		toneMappingExposure: 1,
@@ -152,11 +181,24 @@ export const LOOK_PRESETS: Record<Look, LookPreset> = {
 			color: 0x2b3138,
 			metalness: 0,
 			roughness: 1,
+			emissiveIntensity: 0,
 			wireframe: true,
 			side: THREE.DoubleSide
 		}
 	}
 };
+
+/** A look's preset, with its `lowPower` fields applied on a low-power device. */
+export function lookPreset(look: Look, lowPower = false): LookPreset {
+	const preset = LOOK_PRESETS[look];
+	return lowPower ? { ...preset, ...preset.lowPower } : preset;
+}
+
+/** `userData` key marking a material whose emission came from the wire, not from a selection tint. */
+export const OWN_EMISSIVE = 'selvaEmissive';
+
+/** `userData` key holding the light a material casts, from real lumens rather than its look. */
+export const EMISSIVE_LIGHT = 'selvaEmissiveLight';
 
 /**
  * `userData` key holding a material's own `envMapIntensity`, set by the parser when the wire

@@ -177,6 +177,19 @@ a PNG from `run_csharp` and read the file instead:
   the objects and layers. Set `doc.PreviewMode = GH_PreviewMode.Disabled` first, or every
   intermediate component's preview is in the shot.
 
+## Laying out a form
+
+Use `SchemaLayout` ([plugin-context.md](../../../docs/contributing/plugin-context.md#laying-out-a-form-from-a-script)),
+not the reflection below: it takes nicknames, and one spec can carry `assets`, `viewerOptions` and
+visibility rules, refusing a rule on a value the list doesn't have. Traps when building for it:
+
+- **Write value list items unquoted**, `new GH_ValueListItem("Two-Joint", "Two-Joint")`. A quoted
+  expression puts the quotes in the option's value, and rules must then match them.
+- **Three Material shows 7 inputs by default.** Index past `Base` throws: clearcoat, transmission and
+  the rest are hidden until zoomed in.
+- **Viewer looks differ a lot.** `technical`, the default, renders upward faces mid-grey. Pick
+  Showcase or Studio from the viewer's Display menu before capturing.
+
 ## Authoring the embedded UI schema
 
 `GH_UIBuilderComponent.Schema` is a public property (Selva >= 0.16.1) over the `_embeddedSchema`

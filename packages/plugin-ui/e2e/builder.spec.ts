@@ -56,6 +56,29 @@ test.describe('/builder', () => {
 		await expect(page.getByText(/Grasshopper refused this link/)).toBeVisible({ timeout: 15_000 });
 	});
 
+	test('search reaches a placed parameter and a setting in a closed panel', async ({ page }) => {
+		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
+		await expect(page.getByRole('button', { name: 'Search', exact: true })).toBeEnabled({
+			timeout: 15_000
+		});
+
+		const box = page.getByRole('combobox', { name: 'Search the builder' });
+		await page.keyboard.press('Control+k');
+		await box.fill('count');
+		await page.keyboard.press('Enter');
+		await expect(box).toBeHidden();
+		await expect(
+			page.locator('[data-builder-item-id="item-1"]').getByRole('button', {
+				name: 'Collapse details'
+			})
+		).toBeVisible();
+
+		await page.keyboard.press('Control+k');
+		await box.fill('background');
+		await page.keyboard.press('Enter');
+		await expect(page.locator('#viewer-background')).toBeFocused();
+	});
+
 	test('gives a value-list option an icon from the bundled set', async ({ page }) => {
 		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
 		await expect(page.getByText('Loading schema...')).toBeHidden({ timeout: 15_000 });

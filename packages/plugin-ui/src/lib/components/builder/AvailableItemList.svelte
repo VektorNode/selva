@@ -63,6 +63,10 @@
 
 	const clusters = $derived(clusterItems(filtered, groupBy));
 
+	// A hit folded away looks like no hit, so a search shows through the remembered folds.
+	const searching = $derived(query.trim() !== '');
+	const isSectionOpen = $derived(sectionOpen.value || searching);
+
 	// Per-cluster local mirror so dndzone can mutate visually without touching the upstream
 	// catalog. Source zones are read-only: once a drop completes, `placedIds` changes and
 	// `clusters` re-derives, overriding any in-flight mutation.
@@ -93,7 +97,7 @@
 	}
 
 	function isClusterOpen(key: string): boolean {
-		return clusterOpen.value[`${groupBy}:${key}`] ?? true;
+		return searching || (clusterOpen.value[`${groupBy}:${key}`] ?? true);
 	}
 
 	function setClusterOpen(key: string, open: boolean) {
@@ -126,7 +130,7 @@
 	</div>
 {/snippet}
 
-<Collapsible.Root bind:open={sectionOpen.value}>
+<Collapsible.Root bind:open={() => isSectionOpen, (open) => (sectionOpen.value = open)}>
 	<Collapsible.Trigger>
 		{#snippet child({ props })}
 			<button
@@ -141,7 +145,7 @@
 				</span>
 				<ChevronDown
 					size={14}
-					class="text-muted-foreground group-hover/list:text-foreground ml-auto transition-transform duration-200 {sectionOpen.value
+					class="text-muted-foreground group-hover/list:text-foreground ml-auto transition-transform duration-200 {isSectionOpen
 						? 'rotate-180'
 						: ''}"
 				/>

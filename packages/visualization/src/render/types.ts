@@ -68,8 +68,15 @@ export type RenderConfig = {
 	toneMapping?: THREE.ToneMapping;
 	toneMappingExposure?: number;
 	preserveDrawingBuffer?: boolean;
+	/**
+	 * Cuts what the look's `lowPower` fields name; only `night` has any. Default: on for a touch
+	 * device with a phone-sized screen. Set it to force the tier on or off.
+	 */
+	lowPower?: boolean;
 	/** Default false — switches rendering from `renderer.render` to an EffectComposer, which costs more. */
 	ambientOcclusion?: boolean;
+	/** Glow around emissive parts. The look decides; `night` sets it. */
+	bloom?: BloomOptions;
 	/** AO strength 0–1 when {@link RenderConfig.ambientOcclusion} is on. Default 1. */
 	aoIntensity?: number;
 	/**
@@ -86,7 +93,7 @@ export type RenderConfig = {
 	onDemand?: boolean;
 };
 
-import type { Look } from '../shared/index.js';
+import type { BloomOptions, Look } from '../shared/index.js';
 
 /**
  * A named bundle of lighting/material defaults, independent of CAD overlays (edges, grid). 'technical'

@@ -55,6 +55,9 @@ public class MaterialCache
         private readonly string _roughnessMap;
         private readonly string _normalMap;
         private readonly double? _envMapIntensity;
+        private readonly string _emissive;
+        private readonly double? _emissiveIntensity;
+        private readonly double? _emissiveLight;
         private readonly double? _clearcoat;
         private readonly double? _clearcoatRoughness;
         private readonly double? _anisotropy;
@@ -76,6 +79,9 @@ public class MaterialCache
             _roughnessMap = material.RoughnessMap;
             _normalMap = material.NormalMap;
             _envMapIntensity = Round(material.EnvMapIntensity);
+            _emissive = material.Emissive;
+            _emissiveIntensity = Round(material.EmissiveIntensity);
+            _emissiveLight = Round(material.EmissiveLight);
             _clearcoat = Round(material.Clearcoat);
             _clearcoatRoughness = Round(material.ClearcoatRoughness);
             _anisotropy = Round(material.Anisotropy);
@@ -103,6 +109,9 @@ public class MaterialCache
                    && string.Equals(_roughnessMap, other._roughnessMap, StringComparison.Ordinal)
                    && string.Equals(_normalMap, other._normalMap, StringComparison.Ordinal)
                    && _envMapIntensity == other._envMapIntensity
+                   && string.Equals(_emissive, other._emissive, StringComparison.Ordinal)
+                   && _emissiveIntensity == other._emissiveIntensity
+                   && _emissiveLight == other._emissiveLight
                    && _clearcoat == other._clearcoat
                    && _clearcoatRoughness == other._clearcoatRoughness
                    && _anisotropy == other._anisotropy
@@ -132,6 +141,9 @@ public class MaterialCache
                 hash = hash * 397 ^ (_roughnessMap != null ? StringComparer.Ordinal.GetHashCode(_roughnessMap) : 0);
                 hash = hash * 397 ^ (_normalMap != null ? StringComparer.Ordinal.GetHashCode(_normalMap) : 0);
                 hash = hash * 397 ^ _envMapIntensity.GetHashCode();
+                hash = hash * 397 ^ (_emissive != null ? StringComparer.Ordinal.GetHashCode(_emissive) : 0);
+                hash = hash * 397 ^ _emissiveIntensity.GetHashCode();
+                hash = hash * 397 ^ _emissiveLight.GetHashCode();
                 hash = hash * 397 ^ _clearcoat.GetHashCode();
                 hash = hash * 397 ^ _clearcoatRoughness.GetHashCode();
                 hash = hash * 397 ^ _anisotropy.GetHashCode();

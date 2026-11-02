@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SUN_TARGET_ID } from '../scene-setup/setup-lighting.js';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -183,4 +184,21 @@ describe('clearScene', () => {
 
 		expect(large / small).toBeLessThan(8);
 	}, 60_000);
+});
+
+describe('clearScene and lights', () => {
+	it('keeps every light and the target of the sun across a solve', () => {
+		const scene = new THREE.Scene();
+		const sun = new THREE.DirectionalLight();
+		sun.target.userData.id = SUN_TARGET_ID;
+		const fill = new THREE.AmbientLight();
+		const sky = new THREE.HemisphereLight();
+		const solved = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+		scene.add(sun, sun.target, fill, sky, solved);
+
+		clearScene(scene);
+
+		expect(scene.children).toEqual(expect.arrayContaining([sun, sun.target, fill, sky]));
+		expect(scene.children).not.toContain(solved);
+	});
 });

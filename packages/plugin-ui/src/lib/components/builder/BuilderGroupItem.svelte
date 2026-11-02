@@ -323,7 +323,7 @@
 	}
 </script>
 
-<div class="relative" data-builder-item-id={item.id}>
+<div class="relative rounded-lg" data-builder-item-id={item.id}>
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
 			class="group bg-background hover:border-border border-border/60 @container overflow-hidden rounded-lg py-1.5 transition-all hover:shadow-sm"

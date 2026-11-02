@@ -12,11 +12,20 @@
 		unsupportedItems,
 		useFooterItem
 	} from '@selvajs/ui';
-	import { Save, RefreshCw, CloudUpload, Ellipsis, SlidersHorizontal } from '@lucide/svelte';
+	import {
+		Save,
+		RefreshCw,
+		CloudUpload,
+		Ellipsis,
+		Search,
+		SlidersHorizontal
+	} from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import ModeHeader from '$lib/components/ModeHeader.svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
-	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
+	import { BuilderSearch, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
+	import { bringIntoView } from '$lib/components/builder/reveal';
+	import type { SearchTarget } from '$lib/features/builder';
 	import SelvaUploadDialog from '$lib/components/selva-upload/SelvaUploadDialog.svelte';
 	import { buildSessionParams } from '$lib/utils/session';
 	import { currentRole } from '$lib/utils/session-role.svelte';
@@ -32,6 +41,8 @@
 	let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
 	let selvaUpload = $state<SelvaUpload | null>(null);
 	let showBatchProcessor = $state(false);
+	let searchOpen = $state(false);
+	let sidebar = $state<BuilderSidebar>();
 	let saveInFlight: Promise<boolean> | null = null;
 
 	// Navigation confirmation. When the user clicks "Interactive Preview" with
@@ -182,6 +193,9 @@
 		} else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 			e.preventDefault();
 			saveSchema().catch(() => {});
+		} else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+			e.preventDefault();
+			if (builderState?.state.draft) searchOpen = !searchOpen;
 		}
 	}
 
@@ -224,16 +238,37 @@
 	}
 
 	const expandedItems = new SvelteSet<string>();
+	const peekedGroups = new SvelteSet<string>();
+
+	async function revealGroup(tabId: string, groupId: string) {
+		if (tabId) handleTabChange(tabId);
+		await tick();
+		const target = document.querySelector(`[data-builder-group-id="${CSS.escape(groupId)}"]`);
+		if (target) bringIntoView(target);
+	}
 
 	async function revealItem(tabId: string, groupId: string, itemId: string) {
 		if (tabId) handleTabChange(tabId);
+		peekedGroups.add(groupId);
 		expandedItems.add(itemId);
 		await tick();
-		// A collapsed group renders no cards; then the group itself is the best we can show.
-		const target =
-			document.querySelector(`[data-builder-item-id="${CSS.escape(itemId)}"]`) ??
-			document.querySelector(`[data-builder-group-id="${CSS.escape(groupId)}"]`);
-		target?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+		const target = document.querySelector(`[data-builder-item-id="${CSS.escape(itemId)}"]`);
+		if (target) bringIntoView(target);
+	}
+
+	function revealSearchResult(target: SearchTarget) {
+		switch (target.kind) {
+			case 'item':
+				return revealItem(target.tabId, target.groupId, target.itemId);
+			case 'group':
+				return revealGroup(target.tabId, target.groupId);
+			case 'tab':
+				return handleTabChange(target.tabId);
+			case 'param':
+				return sidebar?.revealParameter(target.nickname);
+			case 'setting':
+				return sidebar?.revealSetting(target);
+		}
 	}
 
 	useFooterItem({
@@ -249,6 +284,15 @@
 </script>
 
 {#snippet headerActions()}
+	<Button
+		variant="outline"
+		size="sm"
+		onclick={() => (searchOpen = true)}
+		disabled={!builderState?.state.draft}
+		title="Search the builder (Ctrl+K / ⌘K)"
+	>
+		<Search class="h-4 w-4" /><span class="max-lg:sr-only">Search</span>
+	</Button>
 	<!-- Below lg the full row crowds out the schema name: Save stays, the rest goes in a menu. -->
 	<Button
 		variant="outline"
@@ -368,6 +412,7 @@
 					<Resizable.Pane {...split.sidebar}>
 						<div class="h-full px-(--page-px) py-(--page-py) max-lg:py-2">
 							<BuilderSidebar
+								bind:this={sidebar}
 								schema={builderState.state.draft}
 								{availableInputs}
 								availableOutputs={availableOutputsUnplaced}
@@ -432,6 +477,7 @@
 									{getParameterInfo}
 									outputValues={builderState.state.outputValues}
 									{expandedItems}
+									{peekedGroups}
 								/>
 							{/if}
 						</main>
@@ -496,6 +542,16 @@
 
 	{#if selvaUpload}
 		<SelvaUploadDialog upload={selvaUpload} schema={builderState?.state.draft} />
+	{/if}
+
+	{#if builderState?.state.draft}
+		<BuilderSearch
+			bind:open={searchOpen}
+			schema={builderState.state.draft}
+			availableInputs={allAvailableInputs}
+			availableOutputs={availableOutputsUnplaced}
+			onPick={revealSearchResult}
+		/>
 	{/if}
 
 	{#if builderState}

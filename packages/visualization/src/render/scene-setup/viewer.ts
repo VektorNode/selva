@@ -9,6 +9,7 @@ import type { MeasureTool } from '../measure.js';
 import type { ToolRegistry } from '../tool-registry.js';
 import type { Look, MaterialAppearanceOptions } from '../types.js';
 import type { ViewGizmo } from '../view-gizmo.js';
+import type { SetLookOptions } from './appearance.js';
 
 /** One thing to select: a whole object, or one member of a merged mesh. */
 export interface SelectionTarget {
@@ -62,7 +63,12 @@ export interface ThreeViewer {
 	 * Retunes lighting/material (tone mapping, fill, IBL, AO) only — never edges/grid. Overwrites
 	 * any granular lighting dials set earlier with the preset's values.
 	 */
-	setLook: (look: Look) => void;
+	setLook: (look: Look, options?: SetLookOptions) => void;
+	/**
+	 * Call after showing or hiding objects, solve output included: a look that lights the scene from
+	 * glowing parts reads what is drawn when it runs, so a hidden lamp would keep shining.
+	 */
+	syncEmissiveLights: () => void;
 	/**
 	 * Raising `hemisphereIntensity` is the most effective way to lift shadowed surfaces a dark HDR
 	 * leaves black. Lazily creates the hemisphere light if the viewer was built without one; `0` turns
