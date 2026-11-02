@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url';
 
 import { chromium } from '@playwright/test';
 
+import { stampModelUnits } from './slvm-units.mjs';
+
 const [url, name] = process.argv.slice(2);
 if (!url || !name) {
 	console.error('Usage: pnpm lab:record <session url> <scene name>');
@@ -16,6 +18,7 @@ await mkdir(outDir, { recursive: true });
 // the newest announcement are the whole scene as it stands now.
 let expected = 0;
 let frames = [];
+let modelUnits = null;
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage();
@@ -24,6 +27,7 @@ page.on('websocket', (socket) =>
 		if (typeof payload === 'string') {
 			const count = /"binaryBatchCount":\s*(\d+)/.exec(payload)?.[1];
 			if (count == null) return;
+			modelUnits = /"modelUnits":\s*"(\w+)"/.exec(payload)?.[1] ?? null;
 			expected = Number(count);
 			frames = [];
 		} else if (frames.length < expected) {
@@ -43,6 +47,7 @@ if (frames.length === 0) {
 }
 for (const [index, frame] of frames.entries()) {
 	const suffix = frames.length > 1 ? `-${index}` : '';
-	await writeFile(`${outDir}${name}${suffix}.slvm`, frame);
+	const bytes = modelUnits ? stampModelUnits(new Uint8Array(frame), modelUnits) : frame;
+	await writeFile(`${outDir}${name}${suffix}.slvm`, bytes);
 }
 console.log(`Wrote ${frames.length} file(s) for ${name} to ${outDir}`);

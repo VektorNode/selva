@@ -47,7 +47,11 @@ namespace Selva.Slva;
 ///     EXTN  host extension: [varint nsLen][namespace utf8][payload]. Foreign readers skip it.
 ///           Selva writes namespace "selva.gh" (see <see cref="SelvaExtension" />) with a JSON
 ///           payload {"curves": {"objIndex": "rhino nurbs json", ...}} — only when the batch
-///           actually carries curves; a mesh-only container has no EXTN at all.
+///           actually carries curves.
+///           A file also carries namespace "selva.units" (see <see cref="ModelUnitsNamespace" />):
+///           the UTF-8 Rhino unit system name the coordinates are in ("Millimeters"). The wire has
+///           no use for it, since `modelUnits` travels beside the blob, but a file outlives the
+///           document that wrote it.
 ///
 ///     Object model: one global index space, meshes first, then curves, then points. TABL stores
 ///     per-object counts; vertex/index windows are the prefix sums of those counts in table order —
@@ -70,6 +74,8 @@ public static class SlvmDocument
 
     public const string SelvaGhNamespace = "selva.gh";
 
+    public const string ModelUnitsNamespace = "selva.units";
+
     /// <summary>Material "map" prefix that references a TEXR chunk by index.</summary>
     public const string TexRefPrefix = "slvm:tex:";
 
@@ -82,6 +88,34 @@ public static class SlvmDocument
     /// <summary>Reserved attr keys for curve/point styling — same mechanism as user metadata.</summary>
     public const string StyleColorKey = "style:color";
     public const string StyleOpacityKey = "style:opacity";
+
+    /// <summary>
+    ///     The unit system recorded in a container's "selva.units" chunk, without decoding the
+    ///     rest. Null for a bare SLVA/SLVZ blob or a container that recorded none.
+    /// </summary>
+    public static string ReadModelUnits(byte[] bytes)
+    {
+        if (!IsSlvm(bytes))
+        {
+            return null;
+        }
+
+        foreach (var (type, payload) in SlvmChunks.Read(bytes))
+        {
+            if (type != ChunkExtn)
+            {
+                continue;
+            }
+
+            var (ns, body) = ExtensionChunk.Decode(payload);
+            if (ns == ModelUnitsNamespace)
+            {
+                return Encoding.UTF8.GetString(body);
+            }
+        }
+
+        return null;
+    }
 
     public static bool IsSlvm(byte[] bytes)
     {
@@ -225,6 +259,15 @@ public static class SlvmDocument
         ///     none. Pass back into <see cref="Write" /> to survive a rebuild.
         /// </summary>
         public Dictionary<string, byte[]> Extensions { get; set; }
+
+        /// <summary>
+        ///     The Rhino unit system name the coordinates are in. Null when the writer recorded
+        ///     none: a wire blob, or a file from before units were stored.
+        /// </summary>
+        public string ModelUnits =>
+            Extensions != null && Extensions.TryGetValue(ModelUnitsNamespace, out var bytes)
+                ? Encoding.UTF8.GetString(bytes)
+                : null;
     }
 
     public static ReadResult Read(byte[] bytes)

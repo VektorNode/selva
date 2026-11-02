@@ -62,7 +62,8 @@ Two mechanisms, both already part of the wire format:
   `{"myapp": payloadBytes}` writes one EXTN chunk; `SlvmDocument.Read` returns foreign
   namespaces in `ReadResult.Extensions`, and the rebuild helpers (`Restamp`,
   `StripItems`) preserve them. Selva's own `selva.gh` extension (batch id + Rhino curve
-  JSON) is just the first client of this mechanism.
+  JSON) is just the first client of this mechanism. `SlvmFile.Write` adds `selva.units`, the
+  Rhino unit system name the coordinates are in, and `SlvmFile.Read` reports it.
 
 ## The contract with the TypeScript decoder
 

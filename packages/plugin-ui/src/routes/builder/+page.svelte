@@ -12,14 +12,7 @@
 		unsupportedItems,
 		useFooterItem
 	} from '@selvajs/ui';
-	import {
-		Save,
-		RefreshCw,
-		CloudUpload,
-		Ellipsis,
-		Search,
-		SlidersHorizontal
-	} from '@lucide/svelte';
+	import { Save, RefreshCw, CloudUpload, Ellipsis, SlidersHorizontal } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import ModeHeader from '$lib/components/ModeHeader.svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
@@ -284,15 +277,6 @@
 </script>
 
 {#snippet headerActions()}
-	<Button
-		variant="outline"
-		size="sm"
-		onclick={() => (searchOpen = true)}
-		disabled={!builderState?.state.draft}
-		title="Search the builder (Ctrl+K / ⌘K)"
-	>
-		<Search class="h-4 w-4" /><span class="max-lg:sr-only">Search</span>
-	</Button>
 	<!-- Below lg the full row crowds out the schema name: Save stays, the rest goes in a menu. -->
 	<Button
 		variant="outline"
@@ -436,6 +420,7 @@
 								onAddToNewGroup={actions.onAddToNewGroup}
 								onImportGhGroups={actions.onImportGhGroups}
 								onRevealItem={revealItem}
+								onSearch={() => (searchOpen = true)}
 							/>
 						</div>
 					</Resizable.Pane>

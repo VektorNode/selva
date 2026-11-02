@@ -1,12 +1,7 @@
 <script lang="ts">
-	import type {
-		UISchema,
-		DiscoveredInput,
-		DiscoveredOutput,
-		ViewerOptions
-	} from '@selvajs/schemas';
-	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
-	import { Input, Textarea, Switch, Button, Select, toast, pickFile } from '@selvajs/ui';
+	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
+	import { MAX_CATEGORY_LENGTH } from '@selvajs/schemas';
+	import { Input, Textarea, Switch, Button, toast, pickFile } from '@selvajs/ui';
 	import { Download, Upload } from '@lucide/svelte';
 	import { exportSchemaAsFile, importSchemaFromFile } from '$lib/utils/schema-exporter';
 	import type { ExportedSchema } from '$lib/utils/schema-exporter';
@@ -14,6 +9,7 @@
 	import SchemaImportDialog from '../SchemaImportDialog.svelte';
 	import TagEditor from '../../TagEditor.svelte';
 	import ScopeNote from '../scope/ScopeNote.svelte';
+	import ScopeChip from '../scope/ScopeChip.svelte';
 	import SettingsSection from './SettingsSection.svelte';
 	import SettingRow from './SettingRow.svelte';
 
@@ -28,24 +24,8 @@
 
 	let pendingImport: ExportedSchema | null = $state(null);
 
-	const DEFAULT_BACKGROUND = '#E0E0E0';
-	const background = $derived(schema.viewerOptions?.backgroundColor ?? DEFAULT_BACKGROUND);
-
-	const LOOKS: { value: NonNullable<ViewerOptions['look']>; label: string }[] = [
-		{ value: 'technical', label: 'Technical' },
-		{ value: 'studio', label: 'Studio' },
-		{ value: 'showcase', label: 'Showcase' },
-		{ value: 'night', label: 'Night' },
-		{ value: 'arctic', label: 'Arctic' }
-	];
-	const look = $derived(schema.viewerOptions?.look ?? 'technical');
-
 	function updateSchema(updates: Partial<UISchema>) {
 		onSchemaChange({ ...schema, ...updates });
-	}
-
-	function updateViewerOptions(updates: Partial<ViewerOptions>) {
-		updateSchema({ viewerOptions: { ...schema.viewerOptions, ...updates } });
 	}
 
 	const tags = $derived(schema.tags ?? []);
@@ -95,15 +75,9 @@
 	}
 </script>
 
-<ScopeNote scope="shared">
-	Saved with the schema. Applies in the local preview and on Selva.
-</ScopeNote>
+<ScopeNote scope="shared">Saved with the schema. Applies in the preview and on Selva.</ScopeNote>
 
-<SettingsSection
-	id="app.general"
-	title="General"
-	description="Selva copies these into the definition when you upload it. Edit them in Selva after that."
->
+<SettingsSection id="app.general" title="General" collapsible={false}>
 	<SettingRow label="Name" for="schema-name">
 		<Input
 			id="schema-name"
@@ -114,11 +88,22 @@
 	<SettingRow label="Description" for="schema-description">
 		<Textarea
 			id="schema-description"
+			rows={2}
 			value={schema.description}
 			oninput={(e) => updateSchema({ description: e.currentTarget.value })}
 		/>
 	</SettingRow>
-	<SettingRow label="Category" for="schema-category" scope="compute">
+</SettingsSection>
+
+<SettingsSection
+	id="app.listing"
+	title="Selva listing"
+	description="Copied into the definition on upload."
+>
+	{#snippet badge()}
+		<ScopeChip scope="compute" label="Compute" />
+	{/snippet}
+	<SettingRow label="Category" for="schema-category">
 		<Input
 			id="schema-category"
 			maxlength={MAX_CATEGORY_LENGTH}
@@ -127,22 +112,17 @@
 			placeholder="e.g. Facade"
 		/>
 	</SettingRow>
-	<SettingRow
-		label="Tags"
-		for="schema-tags"
-		scope="compute"
-		hint="Up to {MAX_TAGS}. Press Enter to add; a comma starts a new tag."
-	>
+	<SettingRow label="Tags" for="schema-tags">
 		<TagEditor id="schema-tags" {tags} onChange={setTags} />
 	</SettingRow>
 </SettingsSection>
 
-<SettingsSection id="app.solving" title="Solving">
+<SettingsSection id="app.behaviour" title="Behaviour" collapsible={false}>
 	<SettingRow
 		label="Instant solve"
 		for="instance-solve"
 		layout="inline"
-		hint="Solve on every change. Off: users press Calculate."
+		hint="Off: users press Calculate."
 	>
 		<Switch
 			id="instance-solve"
@@ -152,63 +132,19 @@
 	</SettingRow>
 </SettingsSection>
 
-<SettingsSection id="app.viewer" title="Viewer">
-	<SettingRow label="Background" for="viewer-background">
-		<div class="flex items-center gap-2">
-			<input
-				type="color"
-				aria-label="Pick background color"
-				class="border-input size-9 shrink-0 cursor-pointer rounded-md border bg-transparent p-1"
-				value={background}
-				oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
-			/>
-			<Input
-				id="viewer-background"
-				class="font-mono"
-				value={background}
-				oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
-				placeholder={DEFAULT_BACKGROUND}
-			/>
-		</div>
-	</SettingRow>
-	<SettingRow
-		label="Starting look"
-		for="viewer-look"
-		hint="Night lights the scene with Emissive Material parts."
-	>
-		<Select.Root
-			type="single"
-			value={look}
-			onValueChange={(value) => updateViewerOptions({ look: value as ViewerOptions['look'] })}
-		>
-			<Select.Trigger id="viewer-look" size="sm" class="w-full">
-				{LOOKS.find((option) => option.value === look)?.label ?? look}
-			</Select.Trigger>
-			<Select.Content>
-				{#each LOOKS as option (option.value)}
-					<Select.Item value={option.value} label={option.label} />
-				{/each}
-			</Select.Content>
-		</Select.Root>
-	</SettingRow>
-</SettingsSection>
-
-<SettingsSection
-	id="app.file"
-	title="Schema file"
-	description="Share or back up this layout as an .sls file."
->
-	<div class="grid grid-cols-2 gap-2">
-		<Button variant="outline" size="sm" onclick={handleExport}>
+<div data-settings-section="app.file" class="flex items-center justify-between gap-2 py-3">
+	<span class="text-muted-foreground text-xs">Schema file (.sls)</span>
+	<div class="flex gap-1">
+		<Button variant="ghost" size="sm" onclick={handleExport}>
 			<Download />
 			Export
 		</Button>
-		<Button variant="outline" size="sm" onclick={handleImport}>
+		<Button variant="ghost" size="sm" onclick={handleImport}>
 			<Upload />
 			Import
 		</Button>
 	</div>
-</SettingsSection>
+</div>
 
 {#if pendingImport}
 	<SchemaImportDialog

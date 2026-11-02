@@ -1,6 +1,7 @@
-import { parseMeshBatchBlob } from '../src/parse/index.ts';
+import { SCALE_FACTORS, parseMeshBatchBlob } from '../src/parse/index.ts';
 import { initThree, updateScene } from '../src/render/index.ts';
 import { LOOK_PRESETS } from '../src/shared/index.ts';
+import { readModelUnits } from './slvm-units.mjs';
 
 const scenes = import.meta.glob('../../../fixtures/viewer-scenes/*.slvm', {
 	query: '?url',
@@ -8,8 +9,9 @@ const scenes = import.meta.glob('../../../fixtures/viewer-scenes/*.slvm', {
 	eager: true
 });
 
-// The bridge's recordings are in the document's units; the viewer works in metres.
-const METRES_PER_UNIT = 0.001;
+// A recording is in its document's units and the viewer works in metres. Recordings made before
+// units were stored were all millimetres.
+const DEFAULT_UNITS = 'Millimeters';
 
 const options = Object.fromEntries(new URLSearchParams(location.search));
 const manual = 'manual' in options;
@@ -37,17 +39,19 @@ async function load(names) {
 		.filter(([path]) => names.some((name) => path.endsWith(`/${name}.slvm`)))
 		.map(([, url]) => url);
 	if (urls.length === 0) throw new Error(`No scene named ${names}: see fixtures/viewer-scenes.`);
-	const batches = await Promise.all(
-		urls.map(async (url) =>
-			parseMeshBatchBlob(await (await fetch(url)).arrayBuffer(), { mergeByMaterial: true })
-		)
+	const meshes = await Promise.all(
+		urls.map(async (url) => {
+			const bytes = await (await fetch(url)).arrayBuffer();
+			const scale = SCALE_FACTORS[readModelUnits(new Uint8Array(bytes)) ?? DEFAULT_UNITS];
+			const batch = await parseMeshBatchBlob(bytes, { mergeByMaterial: true });
+			for (const mesh of batch) {
+				mesh.scale.setScalar(scale);
+				mesh.updateMatrixWorld();
+			}
+			return batch;
+		})
 	);
-	const meshes = batches.flat();
-	for (const mesh of meshes) {
-		mesh.scale.setScalar(METRES_PER_UNIT);
-		mesh.updateMatrixWorld();
-	}
-	return meshes;
+	return meshes.flat();
 }
 
 async function start() {

@@ -22,6 +22,7 @@ export * as AlertDialog from './alert-dialog';
 export * as ContextMenu from './context-menu';
 export * as DropdownMenu from './dropdown-menu';
 export * as Popover from './popover';
+export * as Tooltip from './tooltip';
 export * as Command from './command';
 export * as ToggleGroup from './toggle-group';
 export * as Empty from './empty';

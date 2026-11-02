@@ -76,7 +76,7 @@ describe('searchEntries', () => {
 
 	it('finds settings by label and by hidden terms', () => {
 		expect(find('background')[0].target).toMatchObject({
-			panel: 'app',
+			panel: 'viewer',
 			controlId: 'viewer-background'
 		});
 		expect(find('export')[0].label).toBe('Schema file');

@@ -1,7 +1,7 @@
 import type { DiscoveredInput, DiscoveredOutput, UISchema } from '@selvajs/schemas';
 import { layoutContainers } from './input-sources';
 
-export type SettingsPanel = 'app' | 'local' | 'compute';
+export type SettingsPanel = 'app' | 'viewer' | 'local' | 'compute';
 
 export type SearchTarget =
 	| { kind: 'item'; tabId: string; groupId: string; itemId: string }
@@ -26,6 +26,7 @@ const SEARCH_RESULT_LIMIT = 50;
 
 const PANEL_LABELS: Record<SettingsPanel, string> = {
 	app: 'App',
+	viewer: 'Viewer',
 	local: 'Local',
 	compute: 'Compute'
 };
@@ -57,39 +58,39 @@ const SETTINGS: {
 	},
 	{
 		label: 'Category',
-		section: 'General',
-		sectionId: 'app.general',
+		section: 'Selva listing',
+		sectionId: 'app.listing',
 		panel: 'app',
 		controlId: 'schema-category'
 	},
 	{
 		label: 'Tags',
-		section: 'General',
-		sectionId: 'app.general',
+		section: 'Selva listing',
+		sectionId: 'app.listing',
 		panel: 'app',
 		controlId: 'schema-tags'
 	},
 	{
 		label: 'Instant solve',
-		section: 'Solving',
-		sectionId: 'app.solving',
+		section: 'Behaviour',
+		sectionId: 'app.behaviour',
 		panel: 'app',
 		controlId: 'instance-solve',
 		terms: 'calculate auto'
 	},
 	{
 		label: 'Background',
-		section: 'Viewer',
-		sectionId: 'app.viewer',
-		panel: 'app',
+		section: 'Look',
+		sectionId: 'viewer.look',
+		panel: 'viewer',
 		controlId: 'viewer-background',
 		terms: 'color colour'
 	},
 	{
-		label: 'Starting look',
-		section: 'Viewer',
-		sectionId: 'app.viewer',
-		panel: 'app',
+		label: 'Look',
+		section: 'Look',
+		sectionId: 'viewer.look',
+		panel: 'viewer',
 		controlId: 'viewer-look',
 		terms: 'theme lighting studio night'
 	},

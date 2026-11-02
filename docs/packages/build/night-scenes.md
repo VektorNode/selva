@@ -11,7 +11,7 @@ Lamps, screens and lit windows can glow in the viewer. In the Night look, the st
 
 1. **Add an Emissive Material** from the Selva Display tab. Set its **Color** and **Strength**: around 1 is a lit surface, 4 a lamp. To make an existing material glow, wire it into **Base**.
 2. **Wire it into Display's Material input**, as with any other material.
-3. **Open in Night.** In the UI builder, set Settings → Viewer → **Starting look** to Night. Anyone can also switch look from the viewer's display menu.
+3. **Open in Night.** In the UI builder, set the **Viewer** tab’s **Look** to Night. Anyone can also switch look from the viewer's display menu.
 
 Wire a slider or toggle into **Strength** to let people dim the light. A strength of 0 turns it off.
 

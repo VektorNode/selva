@@ -41,7 +41,9 @@
 {/if}
 <Input
 	{id}
-	placeholder={tags.length >= MAX_TAGS ? 'Tag limit reached' : 'Add a tag'}
+	placeholder={tags.length >= MAX_TAGS
+		? 'Tag limit reached'
+		: `Add a tag (up to ${MAX_TAGS}), Enter to confirm`}
 	disabled={tags.length >= MAX_TAGS}
 	onkeydown={(e) => {
 		if (e.key !== 'Enter') return;

@@ -2,9 +2,9 @@
 	import { MediaQuery } from 'svelte/reactivity';
 	import {
 		Camera,
-		Frame,
 		Grid3x3,
 		Layers,
+		LocateFixed,
 		Maximize,
 		Minimize,
 		Moon,
@@ -307,7 +307,7 @@
 
 		<div style={itemStyle(idx('fit'))}>
 			<button class={BTN} title="{t.fitToView} (F)" aria-label="{t.fitToView} (F)" onclick={onFit}>
-				<Frame class="size-4.5" />
+				<LocateFixed class="size-4.5" />
 			</button>
 		</div>
 

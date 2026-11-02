@@ -7,7 +7,8 @@
 // don't shift whenever this demo data grows.
 //
 //   pnpm dev:plugin:mock                               mock + Vite dev server, opens the page
-//   node dev/mock-grasshopper.ts [--port 0] [--latency 250] [--player]   mock only
+//   pnpm dev:plugin:mock --scene lamp                  serve a viewer scene: courtyard, lamp or tower
+//   node dev/mock-grasshopper.ts [--port 0] [--latency 250] [--player] [--scene lamp]   mock only
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -16,6 +17,7 @@ import { readFileSync } from 'node:fs';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { icons } from 'lucide';
 import { UI_SCHEMA_VERSION } from '@selvajs/schemas';
+import { readModelUnits } from '../../visualization/lab/slvm-units.mjs';
 import type {
 	DiscoveredInput,
 	DiscoveredOutput,
@@ -682,16 +684,34 @@ const exampleMesh = JSON.parse(readFileSync(exampleMeshPath, 'utf-8')) as {
 	compressedData: string;
 	items?: unknown[];
 };
-const meshFrame = Buffer.from(exampleMesh.compressedData, 'base64');
+
+// --scene serves a viewer-scenes fixture instead. The frame decoder dispatches on the container's
+// magic and skips the file-only item chunks, so the .slvm bytes go out as they are.
+const SCENES = ['courtyard', 'lamp', 'tower'];
+const sceneName = process.argv.includes('--scene')
+	? process.argv[process.argv.indexOf('--scene') + 1]
+	: undefined;
+if (sceneName !== undefined && !SCENES.includes(sceneName)) {
+	throw new Error(`--scene must be one of ${SCENES.join(', ')}, got "${sceneName}"`);
+}
+const sceneFrame = sceneName
+	? readFileSync(
+			fileURLToPath(new URL(`../../../fixtures/viewer-scenes/${sceneName}.slvm`, import.meta.url))
+		)
+	: undefined;
+const meshFrame = sceneFrame ?? Buffer.from(exampleMesh.compressedData, 'base64');
+// A recording says what units it was drawn in; the tower example is in metres.
+const modelUnits = (sceneFrame && readModelUnits(sceneFrame)) ?? 'Meters';
+const meshItems = sceneName ? [] : (exampleMesh.items ?? []);
 
 function sendOutputsWithMesh(ws: WebSocket, sessionId: string) {
 	send(ws, {
 		type: 'outputs',
 		sessionId,
 		outputs: solve(),
-		modelUnits: 'Meters',
+		modelUnits,
 		binaryBatchCount: 1,
-		displayItems: exampleMesh.items ?? []
+		displayItems: meshItems
 	});
 	ws.send(meshFrame);
 }
@@ -1164,7 +1184,7 @@ wss.on('connection', (ws) => {
 						summary: '2 curves',
 						error: null
 					});
-					send(ws, { type: 'outputs', sessionId, outputs: solve(), modelUnits: 'Meters' });
+					send(ws, { type: 'outputs', sessionId, outputs: solve(), modelUnits });
 				}, 600);
 				break;
 

@@ -25,6 +25,12 @@ public static class DisplayBatchCombiner
         /// <summary>Inputs skipped because their blob wouldn't decode. Surfaced as a warning.</summary>
         public List<string> Failures { get; } = new List<string>();
 
+        /// <summary>
+        ///     The distinct unit systems the inputs recorded. The combined batch records none, so
+        ///     the caller checks these against the document the geometry is shown in.
+        /// </summary>
+        public List<string> ModelUnits { get; } = new List<string>();
+
         public int MeshCount { get; set; }
         public int MaterialCount { get; set; }
         public int ItemCount { get; set; }
@@ -70,6 +76,12 @@ public static class DisplayBatchCombiner
             {
                 result.Failures.Add($"input {b}: {ex.Message}");
                 continue;
+            }
+
+            var units = SlvmDocument.ReadModelUnits(batch.CompressedData);
+            if (units != null && !result.ModelUnits.Contains(units))
+            {
+                result.ModelUnits.Add(units);
             }
 
             foreach (var group in batch.Groups)
