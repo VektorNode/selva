@@ -1,6 +1,6 @@
 ---
 title: MCP server
-order: 10
+order: 7
 published: true
 description: 'Connect an AI agent to Selva over MCP: the endpoint, signing in with OAuth or a key, and what it can and cannot do.'
 ---
@@ -58,7 +58,7 @@ A browser-based client, such as a web MCP inspector, is refused unless its origi
 ## Limits
 
 - **Solves spend compute.** A token solve draws on its owner's compute budget, and the token rate
-  limit applies on top: see [Security and limits](./security-and-limits.md#api-tokens-apiv1).
+  limit applies on top: see [Security and limits](../../self-hosting/deployment/security-and-limits.md#api-tokens-apiv1).
   The server tells the agent to confirm with the user before a series of solves.
 - **Only the live version solves.** A definition with nothing published can't be solved from MCP.
 - **Geometry stays in Selva.** A solve returns number and text outputs, a count per geometry

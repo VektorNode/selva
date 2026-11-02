@@ -1,6 +1,6 @@
 ---
 title: How the compute client works
-order: 1
+order: 2
 published: true
 description: 'What a solve is, how a request travels through @selvajs/compute, and when to use a scheduler instead of calling solve directly.'
 ---

@@ -19,14 +19,24 @@ import path from 'node:path';
  * carrying `process.env` reads and, in the worst case, storage credentials.
  *
  * Runs against `dist/`, so it needs a build. Skips (loudly) rather than fails when there isn't one —
- * a fresh clone running `pnpm test` before `pnpm build` shouldn't see a red herring. CI builds
- * before testing, and `pnpm build` runs `type-check` first, so the artifact is real when it counts.
+ * a fresh clone running `pnpm test` before `pnpm build` shouldn't see a red herring. `turbo.json`
+ * makes this package's `test` depend on its `build`, so the artifact is real when it counts.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, '../..');
 const clientEntry = path.join(packageRoot, 'dist/client.js');
-const hasBuild = existsSync(clientEntry);
+const serverEntry = path.join(packageRoot, 'dist/server.js');
+const hasBuild = existsSync(clientEntry) && existsSync(serverEntry);
+
+/** Names that exist only in `server/`. */
+const serverOnly = [
+	'runSolvePipeline',
+	'createClientCache',
+	'createDefinitionByteCache',
+	'createSolveCacheSingleFlight',
+	'buildSolveInputTree'
+];
 
 /** Bundle an entry for the browser and return the emitted JS. */
 async function bundleForBrowser(entry: string): Promise<string> {
@@ -49,28 +59,10 @@ describe.skipIf(!hasBuild)('client bundle boundary', () => {
 		bundled = await bundleForBrowser(clientEntry);
 	}, 60_000);
 
-	it('bundles for the browser at all — no node builtin reaches the client entry', () => {
-		// esbuild with platform:'browser' fails to resolve `node:zlib`/`node:crypto`, so reaching
-		// this line already proves their absence — asserted explicitly so the reason is visible
-		// if a future change makes the build throw instead.
-		//
-		// Probe: adding `export { runSolvePipeline } from '../server/solve-pipeline.js'` to
-		// `client/index.ts` fails here, in beforeAll, on `node:zlib`, before any string assertion
-		// below runs. That's this guard's real teeth; the string greps below only catch the
-		// subtler case of server code with no node import.
-		expect(bundled.length).toBeGreaterThan(0);
-	});
-
+	// esbuild with platform:'browser' fails to resolve `node:zlib`, so a node builtin reaching the
+	// client entry fails `beforeAll`. The greps below catch the subtler case: server code with no
+	// node import.
 	it('carries no server-only module', () => {
-		// Names that exist only in `server/`. If one appears, `client/` (or something `shared/`
-		// pulls in) reached across the boundary.
-		const serverOnly = [
-			'runSolvePipeline',
-			'createClientCache',
-			'createDefinitionByteCache',
-			'createSolveCacheSingleFlight',
-			'buildSolveInputTree'
-		];
 		expect(serverOnly.filter((name) => bundled.includes(name))).toEqual([]);
 	});
 
@@ -91,7 +83,7 @@ describe.skipIf(!hasBuild)('client bundle boundary', () => {
 		// Bundled for node — the server entry legitimately targets node, and a browser build
 		// would just fail on `node:zlib` instead of producing a comparable string.
 		const serverBundle = await build({
-			entryPoints: [path.join(packageRoot, 'dist/server.js')],
+			entryPoints: [serverEntry],
 			bundle: true,
 			write: false,
 			platform: 'node',
@@ -100,10 +92,6 @@ describe.skipIf(!hasBuild)('client bundle boundary', () => {
 			logLevel: 'silent'
 		}).then((r) => r.outputFiles.map((f) => f.text).join('\n'));
 
-		expect(serverBundle).toContain('runSolvePipeline');
+		expect(serverOnly.filter((name) => !serverBundle.includes(name))).toEqual([]);
 	}, 60_000);
-});
-
-describe.skipIf(hasBuild)('client bundle boundary', () => {
-	it.skip('needs `pnpm build` — dist/client.js is missing', () => {});
 });

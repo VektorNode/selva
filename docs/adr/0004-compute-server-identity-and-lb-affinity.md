@@ -77,9 +77,11 @@ Concretely, before K2 publishes:
 - The client-cache key changes from `serverUrl + apiKey` to the server `id`. Staleness (an operator
   rotating a URL/key via `/admin/compute`) is then handled by **explicit invalidation on config
   write**, not by the key silently changing; see Consequences.
-- K2 exports `getClient(serverIdentity)` where `serverIdentity` is an **opaque type** from day one
+- ~~K2 exports `getClient(serverIdentity)` where `serverIdentity` is an **opaque type** from day one
   (a branded `string`, or `{ id: string }`), so a later change to what an identity contains is not
-  an API break.
+  an API break.~~ Amended for `@selvajs/solve` 2.0: the brand never reached a caller, because
+  `getClient` keys on `ResolvedServer.id` and `evict` took plain strings. `getClient` takes the
+  `{ id, serverUrl, apiKey }` object, so pool membership stays additive without a brand.
 - `ComputeServerConfig` staying `{ id, serverUrl, apiKey, ... }` is unchanged. Pool membership, when
   it lands, is an **additive** change (`urls: string[]`, or member rows resolved by `id`); no schema
   break, because nothing stored ever referenced a URL.
@@ -102,7 +104,8 @@ parsing the solve POST body.
 
 The routing law is recorded, not implemented: when a pool exists,
 `member = hash(definitionGuid) mod poolSize` with a liveness fallback. Until then there is exactly one
-member and the header is inert metadata (also useful in compute-side access logs immediately).
+member and the header is inert metadata. Don't read it in access logs: every solve on a warm client
+carries the guid of the first definition that client served.
 
 ### What is explicitly NOT decided / built here
 

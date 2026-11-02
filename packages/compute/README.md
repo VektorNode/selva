@@ -67,7 +67,7 @@ scheduler.subscribe(() => {
 });
 ```
 
-New here? [How the client works](https://selva.dev/docs/packages/compute/how-it-works) explains the pieces, and [Common tasks](https://selva.dev/docs/packages/compute/common-tasks) has copy-ready examples.
+New here? [How the client works](https://selva.dev/docs/packages/build/how-it-works) explains the pieces, and [Common tasks](https://selva.dev/docs/packages/build/common-tasks) has copy-ready examples.
 
 > `client.solve` throws on solver errors; `scheduler.solve` resolves with them. See [Errors](#errors).
 

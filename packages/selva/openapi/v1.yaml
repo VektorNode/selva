@@ -700,7 +700,7 @@ paths:
               type: object
               properties:
                 inputs:
-                  default: []
+                  deprecated: true
                   type: array
                   items: {}
                 values:

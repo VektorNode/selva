@@ -12,7 +12,7 @@ public class SolveDiagnostics
     ///
     ///     Rhino.Compute flattens runtime messages to bare strings with no component attribution,
     ///     so on that path this is the only way to tell a deliberate block from any other error.
-    ///     Must stay identical to <c>SOLVE_BLOCKED_MARKER</c> in
+    ///     Must stay identical to the marker of the same name in
     ///     <c>packages/solve/src/shared/solve-fn.ts</c>. It is baked into published definitions'
     ///     solve output, so changing it breaks blocking for every .gh already in the wild.
     /// </summary>

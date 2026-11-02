@@ -67,11 +67,11 @@ domain objects.
 The pino redaction list (`packages/server/src/logging/PinoLogger.ts`) scrubs by
 **credential field name** (`token`, `apiKey`, …) and will **not** catch an email nested in a
 payload; it is a backstop for accidents, not a licence to log objects. See
-[security & limits § Logging and personal data](./security-and-limits.md#logging-and-personal-data)
+[security & limits § Logging and personal data](../deployment/security-and-limits.md#logging-and-personal-data)
 for exactly which field names are matched and at what depth.
 
 ## Next
 
-- [Security & limits](./security-and-limits.md): secrets, cookies, and the logging contract.
+- [Security & limits](../deployment/security-and-limits.md): secrets, cookies, and the logging contract.
 - [Providers](../providers/overview.md): where identity and credentials actually live.
-- [Admin guide](./admin.md): the user-deletion flow in the UI.
+- [Admin guide](../deployment/admin.md): the user-deletion flow in the UI.

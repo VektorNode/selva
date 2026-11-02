@@ -40,20 +40,12 @@ export interface SolveSessionState {
 	 */
 	blocked: boolean;
 	/**
-	 * The last solve raised messages the user has not acknowledged yet. While true the result
-	 * is withheld: `meshes` and the solve's outputs stay at their previous values until
-	 * `acknowledge()` releases them.
-	 */
-	awaitingAck: boolean;
-	/**
-	 * The withheld result, kept whole so `acknowledge()` can apply it without a re-solve.
-	 * Null whenever `awaitingAck` is false. A newer solve replaces it: the user is always
-	 * confirming the most recent result, never a stale one.
+	 * The result withheld until the user answers for it, kept whole so `acknowledge()` can apply
+	 * it without a re-solve. While set, `meshes` and the solve's outputs stay at their previous
+	 * values. A newer solve drops it: the user only ever confirms the most recent result.
 	 */
 	heldResult: SolveResult | null;
 	meshes: unknown[];
-	/** Values changed since the last solve, in manual (instanceSolve === false) mode. */
-	pendingValues: Record<string, unknown>;
 	hasPendingChanges: boolean;
 	hasNeverSolved: boolean;
 	/**
@@ -65,6 +57,12 @@ export interface SolveSessionState {
 	 * disagreeing with `state.values` mid-scrub is the feature, not a bug.
 	 */
 	lastResult: RetainedSolveResult | null;
+	/**
+	 * Why the result on screen does not answer the current inputs, when nothing else says so: the
+	 * last solve was aborted, or the user discarded it. Nothing marks those inputs dirty, so
+	 * without this `ensureSolved` would hand out the older result as theirs.
+	 */
+	unsolved: 'aborted' | 'discarded' | null;
 }
 
 export type ExternalReader = (ref: ExternalValueRef) => unknown | undefined;
@@ -96,28 +94,55 @@ export function buildInitialValues(
 }
 
 /** Manual-solve schemas (instanceSolve === false) start dirty; auto-solve schemas start clean. */
-export function makeInitialFlags(instanceSolve: boolean | undefined): {
-	hasPendingChanges: boolean;
-	hasNeverSolved: boolean;
-} {
-	const manual = instanceSolve === false;
-	return { hasPendingChanges: manual, hasNeverSolved: manual };
+export function createInitialState(
+	schema: UISchema,
+	scopeKey: string,
+	read: ExternalReader
+): SolveSessionState {
+	const manual = schema.instanceSolve === false;
+	return {
+		values: buildInitialValues(schema, scopeKey, read),
+		error: '',
+		computeErrors: [],
+		computeWarnings: [],
+		diagnostics: [],
+		blocked: false,
+		heldResult: null,
+		meshes: [],
+		hasPendingChanges: manual,
+		hasNeverSolved: manual,
+		lastResult: null,
+		unsolved: null
+	};
 }
 
-/** Manual mode defers (records the pending value, raises the dirty flag) instead of solving. */
+/**
+ * Whether the change should dispatch. Manual mode defers and raises the dirty flag instead;
+ * `force` overrides that, and what it solves is every pending edit.
+ */
 export function applyValueChange(
 	state: SolveSessionState,
 	id: string,
 	value: unknown,
-	instanceSolve: boolean | undefined
-): { state: SolveSessionState; shouldSolve: boolean } {
+	instanceSolve: boolean | undefined,
+	force = false
+): boolean {
 	state.values[id] = value;
-	if (instanceSolve === false) {
-		state.pendingValues[id] = value;
-		state.hasPendingChanges = true;
-		return { state, shouldSolve: false };
-	}
-	return { state, shouldSolve: true };
+	if (instanceSolve !== false) return true;
+	state.hasPendingChanges = !force;
+	return force;
+}
+
+/** Same rule as `applyValueChange`, for a whole set. Whether it should dispatch. */
+export function applyLoadedValues(
+	state: SolveSessionState,
+	incoming: Record<string, unknown>,
+	instanceSolve: boolean | undefined
+): boolean {
+	Object.assign(state.values, incoming);
+	if (instanceSolve !== false) return true;
+	state.hasPendingChanges = true;
+	return false;
 }
 
 // Worth sending even unchanged: a dynamic list's options can change under the same selection, and
@@ -131,7 +156,7 @@ const RESEND_UNCHANGED = new Set(['dynamicValueList', 'file']);
  * dynamic list on each update, so the repeat is a real solve. Objects never count as repeats.
  */
 export function isRepeatOfLastSolve(
-	schema: UISchema | undefined,
+	schema: UISchema,
 	lastSent: Record<string, unknown> | null,
 	values: Record<string, unknown>,
 	id: string,
@@ -140,7 +165,7 @@ export function isRepeatOfLastSolve(
 	if (!lastSent || !(id in lastSent)) return false;
 	if (value !== null && typeof value === 'object') return false;
 	if (!Object.is(lastSent[id], value) || !Object.is(values[id], value)) return false;
-	const paramType = schema?.inputs?.find((input) => input.id === id)?.paramType;
+	const paramType = schema.inputs.find((input) => input.id === id)?.paramType;
 	return !RESEND_UNCHANGED.has(paramType ?? '');
 }
 
@@ -150,74 +175,97 @@ export function isRepeatOfLastSolve(
  * options-list output showed this can re-upload a multi-MB payload no backend reads.
  */
 export function pickInputValues(
-	schema: UISchema | undefined,
+	schema: UISchema,
 	values: Record<string, unknown>
 ): Record<string, unknown> {
-	if (!schema?.inputs) return values;
 	const picked: Record<string, unknown> = {};
 	for (const input of schema.inputs) {
-		if (input.id in values) picked[input.id] = values[input.id];
+		if (Object.hasOwn(values, input.id)) picked[input.id] = values[input.id];
 	}
 	return picked;
 }
 
-export function applySolveResult(state: SolveSessionState, result: SolveResult): SolveSessionState {
+/** An input was edited after `sent` was dispatched, so a result for `sent` does not cover it. */
+export function inputsChangedSince(
+	schema: UISchema,
+	values: Record<string, unknown>,
+	sent: Record<string, unknown> | null
+): boolean {
+	if (!sent) return false;
+	const current = pickInputValues(schema, values);
+	return Object.keys(current).some(
+		(id) => !Object.hasOwn(sent, id) || !Object.is(current[id], sent[id])
+	);
+}
+
+/**
+ * `editedSinceSent` keeps the dirty flag for a value changed while the solve ran: its result
+ * answers the older value, and clearing the flag would hide the Calculate prompt on a stale answer.
+ */
+export function applySolveResult(
+	state: SolveSessionState,
+	result: SolveResult,
+	editedSinceSent: boolean
+): void {
 	state.error = '';
 	state.computeErrors = result.errors ?? [];
 	state.computeWarnings = result.warnings ?? [];
 	state.diagnostics = result.diagnostics ?? [];
 	state.blocked = result.blocked ?? false;
-
-	// A blocked solve is applied at once: there is no result to weigh, and the previous one must
-	// not stay on screen looking like the answer to the current inputs. The caller blanks the
-	// outputs (see `blankOutputs`); the empty mesh list clears the viewer.
-	if (state.blocked) {
-		state.awaitingAck = false;
-		state.heldResult = null;
-		return commitSolveResult(state, result);
-	}
+	state.unsolved = result.aborted ? 'aborted' : null;
 
 	// The solve is finished either way — Grasshopper cannot be paused mid-solution — so what is
 	// held back here is the *result*, not the computation. Everything the solve produced is kept
 	// intact in `heldResult` and released verbatim by `acknowledge()`.
-	if (needsAcknowledgement(state.diagnostics)) {
-		state.awaitingAck = true;
+	//
+	// A blocked solve is applied at once: there is no result to weigh, and the previous one must
+	// not stay on screen looking like the answer to the current inputs. The caller blanks the
+	// outputs (see `blankOutputs`); the empty mesh list clears the viewer.
+	if (!state.blocked && needsAcknowledgement(state.diagnostics)) {
 		state.heldResult = result;
-		// The input set stays dirty-free regardless: the values were sent and solved, and
-		// leaving them pending would re-solve them on the next tick.
-		state.pendingValues = {};
-		state.hasPendingChanges = false;
-		return state;
+		state.hasPendingChanges &&= editedSinceSent;
+		return;
 	}
 
-	state.awaitingAck = false;
 	state.heldResult = null;
-	return commitSolveResult(state, result);
+	commitSolveResult(state, result, editedSinceSent);
 }
 
 /**
  * Every schema output set to null. A blocked solve reports `outputs: {}`, and merging that into
  * `values` would leave the previous solve's outputs behind.
  */
-export function blankOutputs(schema: UISchema | undefined): Record<string, null> {
+export function blankOutputs(schema: UISchema): Record<string, null> {
 	const blank: Record<string, null> = {};
-	for (const output of schema?.outputs ?? []) blank[output.id] = null;
+	for (const output of schema.outputs) blank[output.id] = null;
 	return blank;
 }
 
 /** Writes a result into the state. Shared by the clean path and by `acknowledge()`. */
 export function commitSolveResult(
 	state: SolveSessionState,
-	result: SolveResult
-): SolveSessionState {
+	result: SolveResult,
+	editedSinceSent: boolean
+): void {
 	state.meshes = result.meshes ?? [];
 	const { meshes: _meshes, ...retained } = result;
 	state.lastResult = retained;
 	Object.assign(state.values, result.outputs);
-	state.pendingValues = {};
-	state.hasPendingChanges = false;
+	state.hasPendingChanges &&= editedSinceSent;
 	state.hasNeverSolved = false;
-	return state;
+}
+
+/** What `ensureSolved` has to do for the current inputs. */
+export type EnsureSolvedStep = 'wait' | 'solve' | 'discarded' | 'blocked' | 'applied';
+
+/** `busy`: the driver is solving or has a solve queued. */
+export function ensureSolvedStep(state: SolveSessionState, busy: boolean): EnsureSolvedStep {
+	if (busy || state.heldResult) return 'wait';
+	if (state.hasPendingChanges) return 'solve';
+	// Not re-solved: the same inputs would raise the same messages and ask the user again.
+	if (state.unsolved === 'discarded') return 'discarded';
+	if (state.unsolved || state.hasNeverSolved || state.error || !state.lastResult) return 'solve';
+	return state.blocked ? 'blocked' : 'applied';
 }
 
 export type SolvePhase = 'idle' | 'solving' | 'review' | 'blocked';
@@ -228,7 +276,7 @@ export type SolvePhase = 'idle' | 'solving' | 'review' | 'blocked';
  */
 export function solvePhase(state: SolveSessionState, isSolving: boolean): SolvePhase {
 	if (isSolving) return 'solving';
-	if (state.awaitingAck) return 'review';
+	if (state.heldResult) return 'review';
 	if (state.blocked) return 'blocked';
 	return 'idle';
 }
@@ -245,9 +293,9 @@ export function solvePhase(state: SolveSessionState, isSolving: boolean): SolveP
  * the user, never a future one. Under `instanceSolve` with a live warning that means a dialog
  * per solve, which is the intended checkpoint, not an oversight.
  *
- * Without `diagnostics` (a transport that reports no structure) nothing gates: the messages are
+ * A transport that reports no structure has no diagnostics, so nothing gates: the messages are
  * still shown, just without interrupting.
  */
-export function needsAcknowledgement(diagnostics: SolveDiagnostic[] | undefined): boolean {
-	return (diagnostics ?? []).some((d) => d.isGate && d.level !== 'remark');
+export function needsAcknowledgement(diagnostics: SolveDiagnostic[]): boolean {
+	return diagnostics.some((d) => d.isGate && d.level !== 'remark');
 }

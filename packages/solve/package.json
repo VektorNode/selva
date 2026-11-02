@@ -37,41 +37,34 @@
 	},
 	"files": [
 		"dist",
-		"README.md",
-		"!**/__tests__/**",
-		"!**/*.test.*",
-		"!**/*.spec.*"
+		"README.md"
 	],
 	"sideEffects": false,
 	"scripts": {
-		"build": "pnpm type-check && tsdown",
+		"build": "tsdown",
 		"dev": "tsdown --watch",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
+		"prepack": "publint --strict",
 		"test": "vitest run",
 		"test:watch": "vitest watch",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.server.json"
 	},
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
-		"@selvajs/platform": "workspace:^",
 		"@selvajs/schemas": "workspace:^",
 		"undici": "catalog:"
 	},
 	"devDependencies": {
-		"@eslint/js": "^10.0.1",
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"esbuild": "^0.28.2",
 		"eslint": "catalog:",
-		"eslint-config-prettier": "^10.1.8",
-		"globals": "^17.13.0",
 		"prettier": "catalog:",
 		"tsdown": "catalog:",
 		"typescript": "catalog:",
-		"vite": "catalog:",
 		"vitest": "catalog:"
 	},
 	"engines": {

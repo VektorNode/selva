@@ -1,6 +1,6 @@
 ---
 title: Admin Guide
-order: 7
+order: 5
 published: true
 description: 'Day-to-day operation: registering compute servers, managing users, and the admin surfaces.'
 ---
@@ -9,7 +9,7 @@ description: 'Day-to-day operation: registering compute servers, managing users,
 
 `/admin` is where you run the instance: users, orgs, the compute pool, updates, and
 the audit log. For the authorization model underneath it, see
-[Permissions & Organizations](./permissions.md).
+[Permissions & Organizations](../concepts/permissions.md).
 
 ## Who can reach /admin
 
@@ -130,6 +130,6 @@ flag off the section isn't there at all.
 
 ## Next
 
-- [Permissions & Organizations](./permissions.md): the model behind these controls.
+- [Permissions & Organizations](../concepts/permissions.md): the model behind these controls.
 - [Security & Limits](./security-and-limits.md): secrets, cookies, and the caps.
 - [Providers](../providers/overview.md): where admin state is stored.

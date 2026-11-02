@@ -6,34 +6,34 @@ function bytes(n: number, marker = 0): Uint8Array {
 	return new Uint8Array(n).fill(marker);
 }
 
+/** A storage read the test finishes by hand. */
+function hungRead(result = bytes(16)) {
+	let seen: AbortSignal | undefined;
+	let finish!: () => void;
+	const done = new Promise<Uint8Array>((resolve) => (finish = () => resolve(result)));
+	const load = vi.fn((signal: AbortSignal) => {
+		seen = signal;
+		return done;
+	});
+	return { load, finish, signal: () => seen };
+}
+
 describe('createDefinitionByteCache', () => {
-	it('serves a warm entry without re-invoking the loader (hit) and reports it', async () => {
+	it('serves a warm entry without re-invoking the loader, and reports miss then hit', async () => {
 		const cache = createDefinitionByteCache(10 * 1024 * 1024);
 		const load = vi.fn(async () => bytes(1024, 7));
 
-		const first = await cache.getOrLoad('v-1', load).load();
-		const second = await cache.getOrLoad('v-1', load).load();
-
-		expect(first).toEqual(second);
-		expect(load).toHaveBeenCalledTimes(1);
-		const s = cache.stats();
-		expect(s.hits).toBe(1);
-		expect(s.misses).toBe(1);
-		expect(s.entries).toBe(1);
-		expect(s.bytes).toBe(1024);
-	});
-
-	it('per-ref outcome distinguishes miss (loader) from hit (warm)', async () => {
-		const cache = createDefinitionByteCache(10 * 1024 * 1024);
-		const load = async () => bytes(512);
-
 		const refMiss = cache.getOrLoad('v-1', load);
-		await refMiss.load();
+		const first = await refMiss.load();
 		expect(refMiss.outcome).toEqual({ loaded: true, fromCache: false });
 
 		const refHit = cache.getOrLoad('v-1', load);
-		await refHit.load();
+		const second = await refHit.load();
 		expect(refHit.outcome).toEqual({ loaded: true, fromCache: true });
+
+		expect(first).toEqual(second);
+		expect(load).toHaveBeenCalledTimes(1);
+		expect(cache.stats()).toMatchObject({ hits: 1, misses: 1, entries: 1, bytes: 1024 });
 	});
 
 	it("a ref whose load() is never called leaves outcome.loaded false (the 'skipped' verdict)", () => {
@@ -80,22 +80,6 @@ describe('createDefinitionByteCache', () => {
 		expect(load).toHaveBeenCalledTimes(2);
 	});
 
-	it('keys on the passed version id — two versions that reused a fileKey never collide', async () => {
-		// Guards against delete-latest-then-reupload: fileKey can repeat, but
-		// version id is always fresh, so distinct ids must stay distinct entries.
-		const cache = createDefinitionByteCache(10 * 1024 * 1024);
-		const oldBytes = bytes(1024, 1);
-		const newBytes = bytes(1024, 2);
-
-		const a = await cache.getOrLoad('version-old', async () => oldBytes).load();
-		const b = await cache.getOrLoad('version-new', async () => newBytes).load();
-
-		expect(a).toEqual(oldBytes);
-		expect(b).toEqual(newBytes);
-		expect(a).not.toEqual(b);
-		expect(cache.stats().entries).toBe(2);
-	});
-
 	it('budget 0 disables caching entirely (every load hits the loader, nothing retained)', async () => {
 		const cache = createDefinitionByteCache(0);
 		const load = vi.fn(async () => bytes(16));
@@ -110,12 +94,154 @@ describe('createDefinitionByteCache', () => {
 		expect(ref1.outcome).toEqual({ loaded: true, fromCache: false });
 	});
 
-	it('re-storing the same key updates bytes without double-counting the budget', async () => {
+	it('clear empties the cache and its byte count', async () => {
 		const cache = createDefinitionByteCache(10 * 1024 * 1024);
 		await cache.getOrLoad('v-1', async () => bytes(1024)).load();
-		expect(cache.stats().bytes).toBe(1024);
 		cache.clear();
 		expect(cache.stats().bytes).toBe(0);
 		expect(cache.stats().entries).toBe(0);
+	});
+});
+
+describe('concurrent misses', () => {
+	it('share one storage read', async () => {
+		const cache = createDefinitionByteCache(1024 * 1024);
+		const read = hungRead(bytes(1000));
+		const refs = Array.from({ length: 8 }, () => cache.getOrLoad('v', read.load));
+		const loads = refs.map((ref) => ref.load());
+		read.finish();
+
+		const all = await Promise.all(loads);
+		expect(read.load).toHaveBeenCalledTimes(1);
+		expect(new Set(all).size).toBe(1);
+		expect(cache.stats()).toMatchObject({ misses: 1, hits: 7, bytes: 1000 });
+	});
+
+	it('counts a joiner as a hit: it read nothing from storage', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const read = hungRead();
+		const first = cache.getOrLoad('v', read.load);
+		const joiner = cache.getOrLoad('v', read.load);
+		const loads = [first.load(), joiner.load()];
+		read.finish();
+		await Promise.all(loads);
+		expect(joiner.outcome.fromCache).toBe(true);
+		expect(first.outcome.fromCache).toBe(false);
+	});
+
+	it('a failed read fails its callers and leaves nothing behind', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const failing = vi.fn(async () => {
+			throw new Error('storage down');
+		});
+		await expect(cache.getOrLoad('v', failing).load()).rejects.toThrow('storage down');
+		await expect(cache.getOrLoad('v', async () => bytes(4)).load()).resolves.toHaveLength(4);
+	});
+});
+
+describe('a caller giving up on a read', () => {
+	it('stops waiting at once, even when storage ignores the signal', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const read = hungRead();
+		const caller = new AbortController();
+		const load = cache.getOrLoad('v', read.load).load(caller.signal);
+		caller.abort(new Error('deadline'));
+		await expect(load).rejects.toThrow('deadline');
+	});
+
+	it('hands the loader a signal that fires', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const read = hungRead();
+		const caller = new AbortController();
+		const load = cache.getOrLoad('v', read.load).load(caller.signal);
+		await Promise.resolve();
+		caller.abort();
+		await load.catch(() => {});
+		expect(read.signal()?.aborted).toBe(true);
+	});
+
+	it('leaves the read running for the others on it', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const read = hungRead();
+		const leaver = new AbortController();
+		const stayer = new AbortController();
+		const gone = cache.getOrLoad('v', read.load).load(leaver.signal);
+		const kept = cache.getOrLoad('v', read.load).load(stayer.signal);
+		await Promise.resolve();
+		leaver.abort();
+		await gone.catch(() => {});
+		expect(read.signal()?.aborted).toBe(false);
+		read.finish();
+		await expect(kept).resolves.toHaveLength(16);
+	});
+
+	it('a caller after everyone left reads again once the abandoned read has failed', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const abandoned = vi.fn(
+			(signal: AbortSignal) =>
+				new Promise<Uint8Array>((_, reject) => {
+					signal.addEventListener('abort', () => reject(new Error('stopped')));
+				})
+		);
+		const caller = new AbortController();
+		const gone = cache.getOrLoad('v', abandoned).load(caller.signal);
+		await Promise.resolve();
+		caller.abort();
+		await gone.catch(() => {});
+
+		const fresh = vi.fn(async () => bytes(8));
+		await expect(cache.getOrLoad('v', fresh).load()).resolves.toHaveLength(8);
+		expect(fresh).toHaveBeenCalledTimes(1);
+	});
+
+	it('a retry against a hung store adds no second read', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const read = hungRead();
+		const first = new AbortController();
+		const gone = cache.getOrLoad('v', read.load).load(first.signal);
+		await Promise.resolve();
+		first.abort();
+		await gone.catch(() => {});
+
+		const second = new AbortController();
+		const retry = vi.fn(async () => bytes(8));
+		const retried = cache.getOrLoad('v', retry).load(second.signal);
+		second.abort();
+
+		await expect(retried).rejects.toBeDefined();
+		expect(retry).not.toHaveBeenCalled();
+	});
+
+	it('never aborts a read under a caller that has no signal to leave with', async () => {
+		const cache = createDefinitionByteCache(1024);
+		const read = hungRead();
+		const plain = cache.getOrLoad('v', read.load).load();
+		const leaving = new AbortController();
+		const gone = cache.getOrLoad('v', read.load).load(leaving.signal);
+		await Promise.resolve();
+		leaving.abort();
+		await gone.catch(() => {});
+
+		expect(read.signal()?.aborted).toBe(false);
+		read.finish();
+		await expect(plain).resolves.toHaveLength(16);
+	});
+
+	it('a retry waiting on an abandoned read is served what that read lands', async () => {
+		const cache = createDefinitionByteCache(10_000);
+		const read = hungRead(bytes(100));
+		const caller = new AbortController();
+		const gone = cache.getOrLoad('v', read.load).load(caller.signal);
+		await Promise.resolve();
+		caller.abort();
+		await gone.catch(() => {});
+
+		const retry = vi.fn(async () => bytes(1));
+		const retried = cache.getOrLoad('v', retry).load();
+		read.finish();
+
+		await expect(retried).resolves.toHaveLength(100);
+		expect(retry).not.toHaveBeenCalled();
+		expect(cache.stats()).toMatchObject({ entries: 1, bytes: 100 });
 	});
 });

@@ -206,11 +206,15 @@ export function createWebSocketSolveDriver(
 					outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
 					meshes: sceneObjects
 				},
-				outcome
+				// A message on the solve: it still applied, and `reportError` would settle it again.
+				displayError
+					? {
+							...outcome,
+							diagnostics: [...outcome.diagnostics, { level: 'error', message: displayError }]
+						}
+					: outcome
 			)
 		);
-		// After the report, so the solve settles once, as applied; the error still shows.
-		if (displayError) getReporter().reportError(displayError);
 	}
 
 	// Live events ride their own frame; the session decides what to do with them.

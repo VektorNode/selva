@@ -1,6 +1,6 @@
 ---
 title: Security & Limits
-order: 6
+order: 4
 published: true
 description: 'Request limits, rate limiting, guards on outbound fetches, and the boundaries that keep a deployment safe.'
 ---
@@ -84,7 +84,7 @@ server is safer under-used than oversent. The one place to change it is
 `--childcount` on the compute server.
 
 Cache byte budgets (`COMPUTE_DEFINITION_CACHE_MB`, `COMPUTE_SOLVE_CACHE_MB`) and the
-Rhino.Compute server flags are covered in [Caching](./caching.md).
+Rhino.Compute server flags are covered in [Caching](../concepts/caching.md).
 
 ## Guard on remote-definition URLs
 
@@ -130,7 +130,7 @@ These people can:
   and editors, and on a commons project anyone who reaches it. A new version needs edit
   rights on that definition. This has always been true of the web upload.
 - **Anyone holding an API token with `upload` or `write`.** The Grasshopper plugin signs
-  in with an `upload` token ([Signing in from apps](./signing-in-from-apps.md)). That's one
+  in with an `upload` token ([Signing in from apps](../../packages/build/signing-in-from-apps.md)). That's one
   more way in, not more reach: a token uploads only where its owner could from the browser.
 - **Anyone who can solve a remote definition.** `/api/v1/compute` takes a `definitionUrl`,
   and any signed-in user or org-wide `solve` token may point it at a file they host. The
@@ -235,10 +235,10 @@ It does **not** catch emails or other personal data buried in a payload, and it 
 runs when the optional `pino` package is installed; the console fallback strips
 nothing. Log identifiers (`eventType`, `actorId`, `userId`), never whole domain
 objects. An audit payload can embed an invitee's email, and logs are the one place
-erasure cannot reach. See [data privacy](./data-privacy.md) for the full contract.
+erasure cannot reach. See [data privacy](../concepts/data-privacy.md) for the full contract.
 
 ## Next
 
-- [Caching](./caching.md): the cache byte budgets referenced above.
+- [Caching](../concepts/caching.md): the cache byte budgets referenced above.
 - [Providers](../providers/overview.md): where secrets and the trust boundary come from.
 - [Admin guide](./admin.md): where compute keys and limits surface in the UI.

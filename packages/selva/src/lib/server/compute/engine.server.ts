@@ -5,7 +5,7 @@
 
 import { SolveEngine, type CachedClient } from '@selvajs/solve/server';
 import { env } from '$env/dynamic/private';
-import { getLogger, lazyLogger } from '$lib/server/providers.server';
+import { getLogger } from '$lib/server/providers.server';
 import { computeLimits } from '$lib/server/computeLimits';
 import type { ComputeServerConfig } from '@selvajs/platform';
 
@@ -43,7 +43,6 @@ export const COMPUTE_DEBUG_VERBOSE = COMPUTE_DEBUG_MODE === 'verbose';
 
 export const engine = new SolveEngine({
 	limits: computeLimits,
-	logger: lazyLogger,
 	debug: COMPUTE_DEBUG ? (COMPUTE_DEBUG_VERBOSE ? 'verbose' : true) : false,
 	onDebugLog: (message) => getLogger().debug(message, { component: 'Compute/client-cache' }),
 	onSolveCoalesced: (key) => {

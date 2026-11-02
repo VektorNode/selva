@@ -1,6 +1,6 @@
 ---
 title: Common tasks
-order: 4
+order: 5
 published: true
 description: 'Ready-to-copy patterns for @selvajs/compute: live sliders, batch jobs, cancelling, and loading definitions on demand.'
 ---

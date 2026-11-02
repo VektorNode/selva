@@ -1,6 +1,6 @@
 ---
 title: Data trees
-order: 2
+order: 3
 published: true
 description: 'What a Grasshopper data tree is, how branch paths work, and how to build solve inputs and read outputs.'
 ---
@@ -11,16 +11,18 @@ Grasshopper doesn't pass plain lists around. Every parameter holds a **tree**: a
 
 ## What a tree looks like
 
-Each branch has a **path**, such as `{0}`, `{0;1}` or `{2;0;5}`. A path is like an address in nested lists.
+A tree is a list of lists. Each inner list is a **branch**, and its **path** is its address.
+
+![A data tree with two floors: each panel is a branch, and its path is the numbers on the way down.](/diagrams/data-tree.svg)
+
+**The common case.** Most inputs are a single branch, which you can send as a plain value:
 
 ```
-{0}    → [1, 2, 3]
-{1}    → [4, 5]
-{1;0}  → [6]
-{}     → [7]        the root branch, a path with no numbers
+{0}  ● 10             → 10
+{0}  ● ● ●  1, 2, 3   → [1, 2, 3]
 ```
 
-Most inputs are simple: a single branch, `{0}`, with one value or a short list. Trees matter when a definition expects grouped data, such as one list of points per panel.
+Use several branches only when the definition processes groups separately, like points per panel. `{}` is the root branch, a path with no numbers.
 
 ## Building inputs
 

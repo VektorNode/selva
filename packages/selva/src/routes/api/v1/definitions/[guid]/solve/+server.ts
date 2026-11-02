@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode, handleApiError } from '$lib/server/api-errors';
 import { parseBody, requireCaller, requireParams } from '$lib/server/api/http';
-import type { PipelineInput } from '@selvajs/solve/server';
+import { acceptsGzip } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
 import { requireMaxBodySize } from '$lib/server/admin-auth.server';
 import { runSolve, mapSolveError } from '$lib/server/compute/solve.server';
@@ -66,7 +66,6 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, params, l
 			// no share-token branch and must never grow one.
 			access: { kind: 'user', ctx, rateLimitKey: `user:${user.id}` },
 			definitionUrl,
-			inputs: body.inputs as PipelineInput[],
 			values: body.values,
 			channel: body.channel,
 			versionId: body.versionId ?? null,
@@ -86,7 +85,7 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, params, l
 
 		// The stored body is already encoded, so a gzip reply must never replay to
 		// a client that can't read it.
-		const encoding = /\bgzip\b/i.test(request.headers.get('accept-encoding') ?? '')
+		const encoding = acceptsGzip(request.headers.get('accept-encoding') ?? '')
 			? 'gzip'
 			: 'identity';
 		// The body is already consumed, so the fingerprint hashes the parsed value.

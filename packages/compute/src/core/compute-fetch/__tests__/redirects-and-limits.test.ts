@@ -61,6 +61,22 @@ describe('fetchCompute — redirects', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
+	it('keeps credentials and a query out of the error when naming the target', async () => {
+		fetchMock.mockResolvedValue(
+			new Response(null, {
+				status: 302,
+				headers: { Location: 'http://user:s3cret@evil.example/x?token=t0k3n' }
+			})
+		);
+
+		const error = await rejection(fetchCompute('grasshopper', {}, config));
+
+		const reported = `${error.message} ${JSON.stringify(error.context)}`;
+		expect(reported).toContain('evil.example');
+		expect(reported).not.toContain('s3cret');
+		expect(reported).not.toContain('t0k3n');
+	});
+
 	it("rejects a browser's opaque redirect the same way", async () => {
 		const opaque = {
 			...createMockResponse(null, { ok: false, status: 0 }),

@@ -13,61 +13,82 @@ import { SOLVE_BLOCKED_MARKER, type SolveDiagnostic, type SolveResult } from './
 
 export type { SolveOutcome };
 
-const LEVELS = new Set(['error', 'warning', 'remark']);
+function isLevel(value: unknown): value is SolveDiagnostic['level'] {
+	return value === 'error' || value === 'warning' || value === 'remark';
+}
 
 /**
- * Normalizes a wire outcome: unknown levels read as remarks, text is trimmed, empty and exactly
- * repeated messages are dropped, and `source`/`isGate` are omitted rather than null or false, so
- * the same verdict decodes to the same object from either transport. Null when `wire` is not an
- * outcome at all; the caller then falls back.
+ * One wire diagnostic, normalized: an unknown level reads as a remark, text is trimmed, and
+ * `source`/`isGate` are omitted rather than null or false. Null when it carries no message.
+ */
+export function decodeDiagnostic(entry: unknown): SolveDiagnostic | null {
+	if (!entry || typeof entry !== 'object') return null;
+	const d = entry as Record<string, unknown>;
+	const message = typeof d.message === 'string' ? d.message.trim() : '';
+	if (!message) return null;
+	const source = typeof d.source === 'string' && d.source ? d.source : undefined;
+	return {
+		level: isLevel(d.level) ? d.level : 'remark',
+		message,
+		...(source ? { source } : {}),
+		...(d.isGate === true ? { isGate: true } : {})
+	};
+}
+
+function normalizeOutcome(
+	entries: readonly unknown[],
+	blocked: boolean,
+	aborted: boolean
+): SolveOutcome {
+	const seen = new Set<string>();
+	const diagnostics: SolveDiagnostic[] = [];
+	for (const entry of entries) {
+		const d = decodeDiagnostic(entry);
+		if (!d) continue;
+		const key = `${d.level}\u0000${d.message}\u0000${d.source ?? ''}\u0000${d.isGate === true}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		diagnostics.push(d);
+	}
+	return { diagnostics, blocked: blocked || aborted, aborted };
+}
+
+/**
+ * Normalizes a wire outcome with `decodeDiagnostic`, dropping exact repeats, so the same verdict
+ * decodes to the same object from either transport. Null when `wire` is not an outcome at all;
+ * the caller then falls back. A verdict without a diagnostic list still counts: reading a refusal
+ * as "no outcome" would let the solve through.
  */
 export function decodeOutcome(wire: unknown): SolveOutcome | null {
 	if (!wire || typeof wire !== 'object') return null;
-	const raw = wire as { diagnostics?: unknown; blocked?: unknown; aborted?: unknown };
-	if (!Array.isArray(raw.diagnostics)) return null;
-
-	const seen = new Set<string>();
-	const diagnostics: SolveDiagnostic[] = [];
-	for (const entry of raw.diagnostics) {
-		if (!entry || typeof entry !== 'object') continue;
-		const d = entry as Record<string, unknown>;
-		const message = typeof d.message === 'string' ? d.message.trim() : '';
-		if (!message) continue;
-		const level = (LEVELS.has(d.level as string) ? d.level : 'remark') as SolveDiagnostic['level'];
-		const source = typeof d.source === 'string' && d.source ? d.source : undefined;
-		const isGate = d.isGate === true;
-		const key = `${level}\u0000${message}\u0000${source ?? ''}\u0000${isGate}`;
-		if (seen.has(key)) continue;
-		seen.add(key);
-		diagnostics.push({
-			level,
-			message,
-			...(source ? { source } : {}),
-			...(isGate ? { isGate } : {})
-		});
-	}
-
-	const aborted = raw.aborted === true;
-	return { diagnostics, blocked: raw.blocked === true || aborted, aborted };
+	const { diagnostics, blocked, aborted } = wire as Record<string, unknown>;
+	const hasList = Array.isArray(diagnostics);
+	if (!hasList && blocked === undefined && aborted === undefined) return null;
+	// `'true'` too: a flag that arrives stringified must fail closed, not let a refusal through.
+	const isTrue = (flag: unknown) => flag === true || flag === 'true';
+	return normalizeOutcome(hasList ? diagnostics : [], isTrue(blocked), isTrue(aborted));
 }
 
 /** The legacy verdict, read from Compute's flattened `errors`/`warnings` and their markers. */
 export function outcomeFromComputeMessages(
-	errors: readonly string[],
-	warnings: readonly string[]
+	errors: readonly unknown[],
+	warnings: readonly unknown[]
 ): SolveOutcome {
-	return {
-		diagnostics: parseComputeDiagnostics(errors, warnings),
+	const strings = (list: readonly unknown[]) => list.filter((m) => typeof m === 'string');
+	const errorText = strings(errors);
+	return normalizeOutcome(
+		parseComputeDiagnostics(errorText, strings(warnings)),
 		// Substring, not prefix: the server numbers each entry ("1. Solution exception: ...").
-		blocked: errors.some((e) => e.includes(SOLVE_BLOCKED_MARKER)),
-		aborted: false
-	};
+		errorText.some((e) => e.includes(SOLVE_BLOCKED_MARKER)),
+		false
+	);
 }
 
 /**
  * Builds the result a driver reports. A blocked or aborted outcome is "no result" whatever the
- * transport sent along: no outputs, and an empty mesh list so the viewer clears. `errors` and
- * `warnings` are derived from the diagnostics for hosts that only want text.
+ * transport sent along: no outputs, no `source` (it holds the withheld outputs), and an empty mesh
+ * list so the viewer clears. `errors` and `warnings` are derived from the diagnostics for hosts
+ * that only want text.
  */
 export function finalizeResult<TMesh, TSource>(
 	partial: { outputs: Record<string, unknown>; meshes?: TMesh[]; source?: TSource },
@@ -83,6 +104,6 @@ export function finalizeResult<TMesh, TSource>(
 		diagnostics: outcome.diagnostics,
 		blocked: outcome.blocked,
 		aborted: outcome.aborted,
-		...(partial.source !== undefined ? { source: partial.source } : {})
+		...(partial.source !== undefined && !rejected ? { source: partial.source } : {})
 	};
 }

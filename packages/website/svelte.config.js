@@ -33,12 +33,12 @@ const mdsvexOptions = {
 						primaryTextColor: '#e8ebe3', // node text (foreground)
 						secondaryColor: '#1e2a22',
 						tertiaryColor: '#16201a', // subgraph fill (background)
-						tertiaryBorderColor: '#3a473d', // subgraph border
+						tertiaryBorderColor: '#6f8073', // subgraph border
 						tertiaryTextColor: '#e8ebe3',
 						lineColor: '#7cc47f', // edges
 						textColor: '#e8ebe3',
 						clusterBkg: '#16201a',
-						clusterBorder: '#3a473d',
+						clusterBorder: '#6f8073',
 						edgeLabelBackground: '#16201a'
 					}
 				}

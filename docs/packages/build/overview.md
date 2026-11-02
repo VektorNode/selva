@@ -1,6 +1,6 @@
 ---
 title: Build your own app
-order: 6
+order: 1
 published: true
 description: 'Embed the Selva viewer and controls in your own product using the @selvajs/* packages.'
 ---
@@ -73,7 +73,7 @@ Import from `/grasshopper` or `/core`, whichever you need, so a bundler drops th
 
 Turning a solve response into Three.js objects is a separate job, and [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization) does it. Import from `/scene`, `/render`, or `/parse`.
 
-New to the client? Start with [How the compute client works](../compute/how-it-works.md), then [Data trees](../compute/data-trees.md), [Errors and retries](../compute/errors.md) and [Common tasks](../compute/common-tasks.md).
+New to the client? Start with [How the compute client works](./how-it-works.md), then [Data trees](./data-trees.md), [Errors and retries](./errors.md) and [Common tasks](./common-tasks.md).
 
 **Full API reference: <https://selva.dev/docs/api/compute/>**
 

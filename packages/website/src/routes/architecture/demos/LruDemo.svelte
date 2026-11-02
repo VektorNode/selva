@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Same eviction order as createSolveMemo, shrunk to 4 entries so the tail is
+	// Same eviction order as the solve memo, shrunk to 4 entries so the tail is
 	// visible in a few clicks. The real memo holds 16.
 	const MAX = 4;
 

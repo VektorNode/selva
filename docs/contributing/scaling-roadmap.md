@@ -1,7 +1,7 @@
 # Scaling roadmap
 
 The staged plan for lifting the limits described in
-[docs/self-hosting/concepts/scaling.md](../self-hosting/concepts/scaling.md).
+[docs/self-hosting/deployment/scaling.md](../self-hosting/deployment/scaling.md).
 Everything here is unbuilt design. It is repo-internal on purpose: it is not a
 commitment, and it links into source paths a deployment operator has no reason to
 open.

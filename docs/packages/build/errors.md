@@ -1,6 +1,6 @@
 ---
 title: Errors and retries
-order: 3
+order: 4
 published: true
 description: 'The error codes @selvajs/compute can throw, which ones are retried, and what to do about each.'
 ---

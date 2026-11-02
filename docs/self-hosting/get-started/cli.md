@@ -91,7 +91,7 @@ It re-prompts using your current values as defaults and rewrites `.env`. It won'
 | `hmac`    | `SELVA_HMAC_KEY`    | Everyone is logged out; every share link and pending invite stops resolving.          |
 | `at-rest` | `SELVA_AT_REST_KEY` | The stored Rhino.Compute API key becomes unreadable; re-enter it at `/admin/compute`. |
 
-It prints the blast radius and asks for confirmation first. Restart afterwards. Rotating one doesn't affect the other; [Secrets](../concepts/security-and-limits.md#secrets) covers why.
+It prints the blast radius and asks for confirmation first. Restart afterwards. Rotating one doesn't affect the other; [Secrets](../deployment/security-and-limits.md#secrets) covers why.
 
 ## About pm2
 

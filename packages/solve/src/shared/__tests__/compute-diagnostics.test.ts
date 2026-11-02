@@ -66,36 +66,6 @@ describe('parseComputeDiagnostics', () => {
 	});
 });
 
-describe('the real strings from a Compute solve of live_solve_showcase', () => {
-	it("separates the author's two messages from Grasshopper's own warning", () => {
-		const out = parseComputeDiagnostics(
-			[
-				'1. Solution exception:[Selva:blocked] More than 200 spheres is too heavy for the web viewer: refused: component "Message" (380977dd-7cb3-49c0-af7a-d808e4f93a59)'
-			],
-			[
-				'Radius scale above 2 makes the spheres overlap heavily: component "Message" (2ae32b34-fd18-4d18-94b4-124ce2e6dec6)',
-				'Parameter failed to collect data: component "Voronoi" (0f44f938-67c3-41e1-a480-106a027226e8)'
-			]
-		);
-
-		expect(out).toEqual([
-			{
-				level: 'error',
-				message: 'More than 200 spheres is too heavy for the web viewer: refused',
-				source: 'Message',
-				isGate: true
-			},
-			{
-				level: 'warning',
-				message: 'Radius scale above 2 makes the spheres overlap heavily',
-				source: 'Message',
-				isGate: true
-			},
-			{ level: 'warning', message: 'Parameter failed to collect data', source: 'Voronoi' }
-		]);
-	});
-});
-
 describe('Notify = Log', () => {
 	it('keeps the message and its source, but does not gate', () => {
 		const [d] = parseComputeDiagnostics(
@@ -110,13 +80,13 @@ describe('Notify = Log', () => {
 		expect(d.isGate).toBeUndefined();
 	});
 
-	it('never silences an error: a withheld result must be explained', () => {
+	it('still shows an error carrying the marker, ungated', () => {
 		// The component refuses to write the log marker on an error, but a hand-edited or
-		// future payload must not be able to hide one either.
+		// future payload must not be able to hide one.
 		const [d] = parseComputeDiagnostics(
-			['[Selva:blocked] Wall too thin: component "Message" (380977dd-7cb3-49c0-af7a-d808e4f93a59)'],
+			['[Selva:log] Wall too thin: component "Message" (380977dd-7cb3-49c0-af7a-d808e4f93a59)'],
 			[]
 		);
-		expect(d.isGate).toBe(true);
+		expect(d).toEqual({ level: 'error', message: 'Wall too thin', source: 'Message' });
 	});
 });

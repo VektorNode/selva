@@ -1,15 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const parseMeshBatchBlob = vi.hoisted(() => vi.fn());
+const parseDisplayItems = vi.hoisted(() => vi.fn());
 
 vi.mock('@selvajs/visualization/parse', () => ({
 	parseMeshBatchBlob,
-	parseDisplayItems: () => [],
+	parseDisplayItems,
 	SCALE_FACTORS: {}
 }));
 vi.mock('@selvajs/ui', () => ({
 	decodeOutcome: () => undefined,
-	finalizeResult: (result: unknown) => result
+	finalizeResult: (result: object, outcome: unknown) => ({ ...result, outcome })
 }));
 
 import { createWebSocketSolveDriver } from '../websocket-solve-driver';
@@ -31,7 +32,10 @@ function fakeSocket() {
 	};
 }
 
-beforeEach(() => parseMeshBatchBlob.mockReset());
+beforeEach(() => {
+	parseMeshBatchBlob.mockReset();
+	parseDisplayItems.mockReset().mockReturnValue([]);
+});
 
 describe('createWebSocketSolveDriver', () => {
 	it('skips the frames of a solve that a newer one has replaced', async () => {
@@ -60,5 +64,32 @@ describe('createWebSocketSolveDriver', () => {
 		expect(parseMeshBatchBlob).toHaveBeenCalledTimes(1);
 		expect(reports).toHaveLength(1);
 		expect(reports[0]!.meshes).toEqual([]);
+	});
+
+	it('reports a display error inside the verdict, so the solve settles once', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const socket = fakeSocket();
+		const reportError = vi.fn();
+		const reports: unknown[] = [];
+		createWebSocketSolveDriver(socket.wsState as never, 's', () => ({
+			report: (result) => reports.push(result),
+			reportError,
+			reportAborted: () => {}
+		}));
+		parseDisplayItems.mockImplementation(() => {
+			throw new Error('untessellated curve');
+		});
+
+		await socket.handlers.get('outputs')!({
+			type: 'outputs',
+			sessionId: 's',
+			displayItems: [{}]
+		} as never);
+
+		expect(reportError).not.toHaveBeenCalled();
+		expect(reports).toHaveLength(1);
+		expect(reports[0]).toMatchObject({
+			outcome: { diagnostics: [{ level: 'error', message: 'untessellated curve' }] }
+		});
 	});
 });

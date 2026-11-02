@@ -13,17 +13,18 @@ import type { SolveDiagnostic, SolveResult } from '../../shared/solve-fn.js';
 import type { SolveDriver } from '../drivers/driver.js';
 import { EMPTY_LIVE_SOLVE, reduceLiveSolve, type LiveSolveState } from '../events/live-solve.js';
 import {
-	buildInitialValues,
-	makeInitialFlags,
-	applyValueChange,
+	applyLoadedValues,
 	applySolveResult,
+	applyValueChange,
 	blankOutputs,
 	commitSolveResult,
+	createInitialState,
+	ensureSolvedStep,
+	inputsChangedSince,
 	isRepeatOfLastSolve,
 	pickInputValues,
 	solvePhase,
 	type SolvePhase,
-	type SolveSessionState,
 	type RetainedSolveResult
 } from './solve-session-core.js';
 
@@ -34,7 +35,7 @@ import {
  */
 export type SolveSettlement =
 	| { status: 'applied'; result: RetainedSolveResult; diagnostics: SolveDiagnostic[] }
-	/** The user rejected a held result; the screen still shows the one before it. */
+	/** A held result the user rejected or a newer solve replaced; the screen still shows the one before it. */
 	| { status: 'discarded'; diagnostics: SolveDiagnostic[] }
 	/** The definition refused the solve. */
 	| { status: 'blocked'; diagnostics: SolveDiagnostic[] }
@@ -97,10 +98,10 @@ export interface SolveSession {
 	abort(): void;
 	readonly meshes: unknown[];
 	/**
-	 * The last reported result without its meshes — what the viewer is currently showing,
-	 * including the `source`/`values` pair a commit path needs. Null before the first solve,
-	 * and again after `rebuild()`. Survives `reportError`: a failed solve leaves the last good
-	 * geometry on screen, so a host committing what it sees should still see what produced it.
+	 * What the viewer is currently showing, including the `source`/`values` pair a commit path
+	 * needs. Null before the first solve, and again after `rebuild()`. Survives `reportError`: a
+	 * failed solve leaves the last good geometry on screen, so a host committing what it sees
+	 * should still see what produced it.
 	 */
 	readonly lastResult: RetainedSolveResult | null;
 	readonly hasPendingChanges: boolean;
@@ -117,7 +118,8 @@ export interface SolveSession {
 	/**
 	 * The result for the current inputs, solving only when it has to: right away from the result
 	 * on screen when nothing changed, after the running or held solve when there is one, else
-	 * after a new solve. For an action that needs a fresh result, such as an export.
+	 * after a new solve. For an action that needs a fresh result, such as an export. Inputs whose
+	 * result the user just discarded settle as `discarded` rather than ask them again.
 	 */
 	ensureSolved(): Promise<SolveSettlement>;
 	/** Fires once per settled solve, the ones input changes start included. Returns the unsubscribe. */
@@ -133,9 +135,9 @@ export interface SolveSession {
 	/** For driver-owned state the session only forwards: `isSolving` lives on the driver, so wire this to its `onChange`. */
 	notify(): void;
 	/**
-	 * Stops listening to the driver's live events and drops every subscriber. Call when the
-	 * session is discarded: the event source can outlive it (the cloud stream belongs to the tab),
-	 * and would otherwise keep feeding a session nobody reads.
+	 * Resets the driver, stops listening to its live events and drops every subscriber. Call when
+	 * the session is discarded: the event source can outlive it (the cloud stream belongs to the
+	 * tab), and would otherwise keep feeding a session nobody reads. Inert afterwards.
 	 */
 	dispose(): void;
 }
@@ -146,36 +148,36 @@ export interface SolveSessionArgs {
 	driver: SolveDriver;
 }
 
+/** One listener's bug must not cost the others their update, or strand a solve mid-landing. */
+function notifyAll<T>(listeners: Iterable<(value: T) => void>, value: T) {
+	for (const listener of [...listeners]) {
+		try {
+			listener(value);
+		} catch (err) {
+			console.error('[Solve/session] listener threw:', err);
+		}
+	}
+}
+
 export function createSolveSession(args: SolveSessionArgs): SolveSession {
 	let currentSchema = args.schema;
 	// The inputs the last dispatch sent; null after a failure or abort, so the same values retry.
 	let lastSent: Record<string, unknown> | null = null;
+	// Survives a failure, unlike `lastSent`: a queued solve may be running on exactly these inputs.
+	let lastDispatched: Record<string, unknown> | null = null;
 
-	const flags = makeInitialFlags(currentSchema?.instanceSolve);
-	const state: SolveSessionState = {
-		values: buildInitialValues(currentSchema, args.scopeKey, readExternalValue),
-		error: '',
-		computeErrors: [],
-		computeWarnings: [],
-		diagnostics: [],
-		blocked: false,
-		awaitingAck: false,
-		heldResult: null,
-		meshes: [],
-		pendingValues: {},
-		hasPendingChanges: flags.hasPendingChanges,
-		hasNeverSolved: flags.hasNeverSolved,
-		lastResult: null
-	};
+	const state = createInitialState(currentSchema, args.scopeKey, readExternalValue);
+	let disposed = false;
 
 	const listeners = new Set<() => void>();
-	const emit = () => listeners.forEach((l) => l());
+	const emit = () => notifyAll(listeners, undefined);
 
 	const settledListeners = new Set<(settlement: SolveSettlement) => void>();
 	let waiters: ((settlement: SolveSettlement) => void)[] = [];
 	const ABORTED: SolveSettlement = { status: 'aborted', diagnostics: [] };
 
 	function nextSettlement(): Promise<SolveSettlement> {
+		if (disposed) return Promise.resolve(ABORTED);
 		return new Promise((resolve) => waiters.push(resolve));
 	}
 
@@ -183,7 +185,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		const waiting = waiters;
 		waiters = [];
 		waiting.forEach((resolve) => resolve(settlement));
-		settledListeners.forEach((listener) => listener(settlement));
+		notifyAll(settledListeners, settlement);
 	}
 
 	/** Resolves waiting callers without telling listeners: no solve ended, the session moved on. */
@@ -193,11 +195,31 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		waiting.forEach((resolve) => resolve(ABORTED));
 	}
 
-	function settleResult(result: SolveResult) {
+	function settlementOf(result: SolveResult): SolveSettlement {
 		const diagnostics = state.diagnostics;
-		if (result.aborted) return settle({ status: 'aborted', diagnostics });
-		if (result.blocked) return settle({ status: 'blocked', diagnostics });
-		settle({ status: 'applied', result: state.lastResult!, diagnostics });
+		if (result.aborted) return { status: 'aborted', diagnostics };
+		if (result.blocked) return { status: 'blocked', diagnostics };
+		return { status: 'applied', result: state.lastResult!, diagnostics };
+	}
+
+	/** One solve ended. Tells subscribers, then settles unless a queued solve is about to replace it. */
+	function land(settlement: () => SolveSettlement) {
+		emit();
+		if (!args.driver.hasQueued) settle(settlement());
+	}
+
+	/**
+	 * Waiters stay: `solve()` resolves with what lands, and that is now the newer solve. Only
+	 * listeners hear of it, so the dropped solve still settles exactly once.
+	 */
+	function dropHeld() {
+		if (!state.heldResult) return;
+		state.heldResult = null;
+		notifyAll(settledListeners, { status: 'discarded', diagnostics: state.diagnostics });
+	}
+
+	function editedSinceSent() {
+		return inputsChangedSince(currentSchema, state.values, lastDispatched);
 	}
 
 	let live: LiveSolveState = EMPTY_LIVE_SOLVE;
@@ -216,9 +238,12 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 	}
 
 	function dispatch() {
+		if (disposed) return;
+		dropHeld();
 		// Copy: state.values is the live map, and a driver may hold the payload across an
 		// async solve — a later setValue must not mutate what's already in flight.
 		lastSent = { ...pickInputValues(currentSchema, state.values) };
+		lastDispatched = lastSent;
 		args.driver.solve(lastSent);
 		emit();
 	}
@@ -243,28 +268,25 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 			return state.blocked;
 		},
 		get awaitingAck() {
-			return state.awaitingAck;
+			return state.heldResult !== null;
 		},
 
 		acknowledge() {
-			if (!state.awaitingAck) return;
 			const held = state.heldResult;
-			state.awaitingAck = false;
+			if (!held) return;
 			state.heldResult = null;
-			if (held) commitSolveResult(state, held);
-			emit();
-			if (held) settleResult(held);
+			commitSolveResult(state, held, editedSinceSent());
+			land(() => settlementOf(held));
 		},
 
 		discard() {
-			if (!state.awaitingAck) return;
-			state.awaitingAck = false;
+			if (!state.heldResult) return;
 			state.heldResult = null;
+			state.unsolved = 'discarded';
 			// `values`, `meshes` and `lastResult` are untouched: the viewer keeps showing the last
 			// result the user accepted. The messages stay on `computeErrors`/`computeWarnings` so
 			// the footer still explains why nothing changed.
-			emit();
-			settle({ status: 'discarded', diagnostics: state.diagnostics });
+			land(() => ({ status: 'discarded', diagnostics: state.diagnostics }));
 		},
 		get live() {
 			return live;
@@ -294,12 +316,7 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		setValue(id, value, forceSolve = false) {
 			if (!forceSolve && isRepeatOfLastSolve(currentSchema, lastSent, state.values, id, value))
 				return;
-			const { shouldSolve } = applyValueChange(state, id, value, currentSchema?.instanceSolve);
-			if (shouldSolve || forceSolve) {
-				if (forceSolve && !shouldSolve) {
-					state.pendingValues = {};
-					state.hasPendingChanges = false;
-				}
+			if (applyValueChange(state, id, value, currentSchema.instanceSolve, forceSolve)) {
 				dispatch();
 			} else {
 				emit();
@@ -309,20 +326,18 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		solve,
 
 		ensureSolved() {
-			if (args.driver.isSolving || args.driver.hasQueued || state.awaitingAck) {
-				return nextSettlement();
+			const busy = args.driver.isSolving || args.driver.hasQueued === true;
+			const step = ensureSolvedStep(state, busy);
+			if (step === 'wait') return nextSettlement();
+			if (step === 'solve') return solve();
+			if (step === 'applied') {
+				return Promise.resolve({
+					status: step,
+					result: state.lastResult!,
+					diagnostics: state.diagnostics
+				});
 			}
-			if (state.hasPendingChanges || state.hasNeverSolved || state.error || !state.lastResult) {
-				return solve();
-			}
-			if (state.blocked) {
-				return Promise.resolve({ status: 'blocked', diagnostics: state.diagnostics });
-			}
-			return Promise.resolve({
-				status: 'applied',
-				result: state.lastResult,
-				diagnostics: state.diagnostics
-			});
+			return Promise.resolve({ status: step, diagnostics: state.diagnostics });
 		},
 
 		onSettled(listener) {
@@ -331,40 +346,25 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		loadValues(incoming) {
-			Object.assign(state.values, incoming);
-			if (currentSchema?.instanceSolve !== false) {
+			if (applyLoadedValues(state, incoming, currentSchema.instanceSolve)) {
 				dispatch();
 			} else {
-				state.hasPendingChanges = true;
 				emit();
 			}
 		},
 
 		rebuild(schema, scopeKey) {
+			if (disposed) return;
 			// A caller waiting on the old definition's solve would otherwise get the new one's.
 			abandon();
 			currentSchema = schema;
 			lastSent = null;
-			// The new definition has its own input space; a matching input key from the prior
-			// one must not serve that definition's cached result.
-			args.driver.clearCache?.();
-			state.meshes = [];
-			// Same reason as clearCache: a retained result belongs to the previous definition.
-			state.lastResult = null;
-			state.error = '';
-			state.computeErrors = [];
-			state.computeWarnings = [];
-			state.diagnostics = [];
-			state.blocked = false;
-			state.awaitingAck = false;
-			// Belongs to the previous definition, same as lastResult.
-			state.heldResult = null;
-			state.pendingValues = {};
-			state.values = buildInitialValues(schema, scopeKey, readExternalValue);
-			const f = makeInitialFlags(schema?.instanceSolve);
-			state.hasPendingChanges = f.hasPendingChanges;
-			state.hasNeverSolved = f.hasNeverSolved;
-			if (schema && Object.keys(state.values).length > 0 && schema.instanceSolve !== false) {
+			lastDispatched = null;
+			// The old definition's running solve and cached results must not reach the new one,
+			// even where the two share input ids.
+			args.driver.reset?.();
+			Object.assign(state, createInitialState(schema, scopeKey, readExternalValue));
+			if (Object.keys(state.values).length > 0 && schema.instanceSolve !== false) {
 				dispatch();
 			} else {
 				emit();
@@ -372,32 +372,36 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		},
 
 		report(result) {
+			const rejected = result.blocked || result.aborted;
+			// An aborted solve answered nothing, so whatever was dirty stays dirty.
+			const edited = result.aborted === true || editedSinceSent();
 			if (result.aborted) lastSent = null;
 			// `finalizeResult` already dropped a rejected solve's outputs; this also nulls the
 			// ones still in `values` from the previous solve, which only the session can name.
 			applySolveResult(
 				state,
-				result.blocked || result.aborted
-					? { ...result, outputs: blankOutputs(currentSchema), meshes: [] }
-					: result
+				rejected ? { ...result, outputs: blankOutputs(currentSchema), meshes: [] } : result,
+				edited
 			);
-			emit();
-			// A held result settles on acknowledge() or discard(); one a queued solve replaces, never.
-			if (state.awaitingAck || args.driver.hasQueued) return;
-			settleResult(result);
+			// A result a queued solve replaces never asks the user anything, and never settles.
+			if (args.driver.hasQueued) state.heldResult = null;
+			// A held result settles on acknowledge() or discard().
+			if (state.heldResult) return emit();
+			land(() => settlementOf(result));
 		},
 
 		reportError(message) {
+			dropHeld();
 			lastSent = null;
 			state.error = message;
-			emit();
-			if (!args.driver.hasQueued) settle({ status: 'failed', error: message });
+			state.unsolved = null;
+			land(() => ({ status: 'failed', error: message }));
 		},
 
 		reportAborted() {
 			lastSent = null;
-			emit();
-			if (!args.driver.hasQueued) settle(ABORTED);
+			state.unsolved = 'aborted';
+			land(() => ABORTED);
 		},
 
 		subscribe(listener) {
@@ -408,9 +412,11 @@ export function createSolveSession(args: SolveSessionArgs): SolveSession {
 		notify: emit,
 
 		dispose() {
+			disposed = true;
 			stopEvents?.();
 			listeners.clear();
 			settledListeners.clear();
+			args.driver.reset?.();
 			abandon();
 		}
 	};

@@ -31,12 +31,14 @@ import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/se
 import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '$lib/server/compute/engine.server';
 import { computeErrorLogFields } from '$lib/server/compute/errorLogFields';
 import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
-import type {
-	ByteCacheRef,
-	PipelineInput,
-	SolveDefinition,
-	SolveEnvelope
+import {
+	solveInputsFromSchema,
+	type ByteCacheRef,
+	type SolveDefinition,
+	type SolveEnvelope,
+	type SolveInput
 } from '@selvajs/solve/server';
+import type { UISchema } from '@selvajs/schemas';
 import { apiRateLimiter, checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
 import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
 import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/access.server';
@@ -66,7 +68,12 @@ export type SolveAccess =
 export interface SolveParams {
 	access: SolveAccess;
 	definitionUrl: string;
-	inputs: PipelineInput[];
+	/**
+	 * The request body's inputs, read for a remote URL only. A stored definition's come from its
+	 * version's schema: a caller, a share-link visitor included, must not choose its ids, types or
+	 * bounds.
+	 */
+	inputs?: unknown;
 	values: Record<string, unknown>;
 	channel: SolveChannel;
 	/** Explicit version pick; editor-only, never share-token accessible. */
@@ -98,6 +105,26 @@ export interface SolveParams {
 	 * replay that would skip this function, so it must not be charged twice.
 	 */
 	tokenCharged?: boolean;
+}
+
+function readRemoteInputs(inputs: unknown): SolveInput[] {
+	const valid =
+		Array.isArray(inputs) &&
+		inputs.every(
+			(input) =>
+				typeof input === 'object' &&
+				input !== null &&
+				typeof (input as SolveInput).id === 'string' &&
+				typeof (input as SolveInput).nickname === 'string'
+		);
+	if (!valid) {
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			'A remote definitionUrl needs inputs: a list of { id, nickname, paramType }.'
+		);
+	}
+	return inputs as SolveInput[];
 }
 
 /**
@@ -141,6 +168,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// `def_bytes` Server-Timing verdict. Null for remote-URL solves.
 	let localDefinitionRef: ByteCacheRef | null = null;
 	let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
+	let storedSchema: UISchema | undefined;
 	// BYO compute routing per org; null for remote definitions.
 	let solveOrgId: string | null = null;
 	let definitionPin: string | null = null;
@@ -266,6 +294,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' version is missing`);
 		}
 		localVersionForBackfill = { id: version.id, hasSchema: version.schema !== undefined };
+		storedSchema = version.schema;
 		metricDefinitionId = guid;
 		metricVersionId = version.id;
 		mark('version');
@@ -284,6 +313,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	} else {
 		// A remote URL names no project, so only an org-wide key may solve it.
 		assertScope(access.ctx, 'solve');
+		readRemoteInputs(inputs);
 		try {
 			definitionSource = await loadRemoteDefinition(definitionUrl);
 		} catch (err) {
@@ -335,8 +365,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		try {
 			// Warms the byte-cache entry the upcoming solve's `load()` would hit anyway.
 			const bytes = await localDefinitionRef.load();
-			const schema = await fetchSchemaFromCompute(bytes, serverConfig);
-			await providers.data.definitions.setVersionSchema(solveCtx, versionId, schema);
+			storedSchema = await fetchSchemaFromCompute(bytes, serverConfig);
+			await providers.data.definitions.setVersionSchema(solveCtx, versionId, storedSchema);
 		} catch (err) {
 			locals.log.warn('Schema backfill failed', {
 				component: 'API/Compute',
@@ -349,12 +379,20 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		mark('schemaBackfill');
 	}
 
-	// `SolveEngine.solve` owns warm-client lookup, input-tree build,
-	// single-flight coalescing, the abort/hasWaiters dance (a coalesced solve
-	// must not follow one caller's disconnect and 499 every waiter), and
-	// per-caller Accept-Encoding re-keying. Remote-URL solves have no version
-	// id, so the URL stands in as coalesce-key identity (`definitionKey`);
-	// local solves already carry that identity on `localDefinitionRef.key`.
+	if (isLocal && !storedSchema) {
+		apiError(
+			503,
+			ApiErrorCode.COMPUTE_UNAVAILABLE,
+			"This version's inputs could not be read. Retry shortly."
+		);
+	}
+	const solveInputs = storedSchema ? solveInputsFromSchema(storedSchema) : readRemoteInputs(inputs);
+
+	// `SolveEngine.solve` owns warm-client lookup, input-tree build, single-flight
+	// coalescing (a coalesced solve aborts only when its last caller leaves), and
+	// per-caller encoding. Remote-URL solves have no version id, so the URL stands
+	// in as coalesce-key identity (`definitionKey`); local solves already carry
+	// that identity on `localDefinitionRef.key`.
 	const live = bindLiveSolve({
 		ownerKey: liveOwnerKey(access.kind === 'user' ? access.ctx.userId : null),
 		streamId,
@@ -369,7 +407,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			server: serverConfig,
 			definitionSource,
 			definitionKey: isLocal ? undefined : definitionUrl,
-			inputs,
+			inputs: solveInputs,
 			values,
 			signal: request.signal,
 			acceptEncoding: request.headers.get('accept-encoding') ?? '',
@@ -394,6 +432,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		recordMetric('too_large');
 	} else if (outcome.kind === 'shed') {
 		recordMetric('shed', { durationMs: outcome.durationMs });
+	} else if (outcome.kind === 'compute_error') {
+		recordMetric('compute_error', { durationMs: outcome.durationMs });
 	} else if (outcome.kind === 'ok') {
 		recordMetric('ok', {
 			durationMs: outcome.solveMs,

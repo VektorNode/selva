@@ -9,6 +9,9 @@
 import type { SolveEvent } from '@selvajs/schemas';
 import type { SolveEventSource } from '../drivers/driver.js';
 
+const MIN_RECONNECT_MS = 1_000;
+const MAX_RECONNECT_MS = 30_000;
+
 export interface SolveEventStreamOptions {
 	/** The SSE endpoint, e.g. `/api/v1/solve-events`. `streamId` is appended as a query param. */
 	endpoint: string;
@@ -22,6 +25,7 @@ export interface SolveEventStream extends SolveEventSource {
 	readonly streamId: string;
 	/** The solve the server last reported as started and not yet ended; null between solves. */
 	readonly currentSolveId: string | null;
+	/** Final: the stream does not reopen, and a later subscriber hears nothing. */
 	close(): void;
 }
 
@@ -38,12 +42,18 @@ export function createSolveEventStream(options: SolveEventStreamOptions): SolveE
 	const doFetch = options.fetch ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
 	let source: EventSource | null = null;
 	let currentSolveId: string | null = null;
+	let reconnectMs = MIN_RECONNECT_MS;
+	let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 	function open() {
 		if (source || typeof EventSource === 'undefined') return;
 		const url = `${options.endpoint}${options.endpoint.includes('?') ? '&' : '?'}streamId=${streamId}`;
-		source = new EventSource(url);
-		source.addEventListener('solve', (raw) => {
+		const opened = new EventSource(url);
+		source = opened;
+		opened.addEventListener('open', () => {
+			reconnectMs = MIN_RECONNECT_MS;
+		});
+		opened.addEventListener('solve', (raw) => {
 			let event: SolveEvent;
 			try {
 				event = JSON.parse((raw as MessageEvent<string>).data);
@@ -55,7 +65,15 @@ export function createSolveEventStream(options: SolveEventStreamOptions): SolveE
 				currentSolveId = null;
 			for (const listener of listeners) listener(event);
 		});
-		// EventSource reconnects on its own; nothing to do on error beyond not tearing down.
+		// EventSource reconnects after a dropped connection on its own, but a non-200 closes it for
+		// good: one 502 during a deploy would end progress and cancel until a reload.
+		opened.addEventListener('error', () => {
+			if (opened.readyState !== EventSource.CLOSED || source !== opened) return;
+			source = null;
+			currentSolveId = null;
+			reconnectTimer = setTimeout(open, reconnectMs);
+			reconnectMs = Math.min(reconnectMs * 2, MAX_RECONNECT_MS);
+		});
 	}
 
 	open();
@@ -67,7 +85,6 @@ export function createSolveEventStream(options: SolveEventStreamOptions): SolveE
 		},
 		subscribe(listener) {
 			listeners.add(listener);
-			open();
 			return () => {
 				listeners.delete(listener);
 			};
@@ -82,6 +99,7 @@ export function createSolveEventStream(options: SolveEventStreamOptions): SolveE
 			);
 		},
 		close() {
+			if (reconnectTimer) clearTimeout(reconnectTimer);
 			source?.close();
 			source = null;
 			listeners.clear();

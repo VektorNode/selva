@@ -1,6 +1,6 @@
 ---
 title: Scaling
-order: 8
+order: 3
 published: true
 description: 'Current limits of the compute and data path, and how to tune a deployment against them.'
 ---
@@ -32,7 +32,7 @@ Browser ──HTTP POST /api/v1/compute──► Selva server ──HTTP──�
 - Multiple compute servers are supported, but resolution is **pinning, not load
   balancing**: each definition resolves to exactly one server, with a per-server
   in-process FIFO queue.
-- Caches already stack; see [Caching](./caching.md). **Pointer reuse and
+- Caches already stack; see [Caching](../concepts/caching.md). **Pointer reuse and
   `cachesolve` are per compute server.**
 - `Server-Timing` on every solve plus per-attempt solve metrics tell you which
   limit you are actually hitting. Measure before you tune.
@@ -71,7 +71,7 @@ to 50 MB.
 
 When outputs are unique per input, result caching has near-zero hit rate no matter
 how clever the cache. What already helps is caching the stable upstream artifacts:
-definition bytes, pointer reuse, warm clients ([Caching](./caching.md)).
+definition bytes, pointer reuse, warm clients ([Caching](../concepts/caching.md)).
 
 Before assuming a result cache would help, measure the hit rate via the
 `selva_cache` Server-Timing metric and the `/admin/compute` caching panel. If it is

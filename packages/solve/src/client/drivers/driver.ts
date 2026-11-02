@@ -31,11 +31,12 @@ export interface SolveDriver {
 	 */
 	readonly hasQueued?: boolean;
 	/**
-	 * Drops cached solve results. Optional — only the request/response driver has a
-	 * client-side memo to clear. Call on rebuild: a definition swap must not serve a
-	 * stale result from the prior definition's input space.
+	 * Forgets the current definition: stops its running solve, drops its cached results, and
+	 * never reports for it again. The session calls this on rebuild and dispose, where a late
+	 * result would land in the wrong definition. Optional: a push transport leaves it out, because
+	 * the solve it would stop belongs to the Grasshopper canvas, not to this session.
 	 */
-	clearCache?(): void;
+	reset?(): void;
 	/**
 	 * Live events from the running solve, when the transport carries them (a WebSocket frame
 	 * locally, an SSE stream in cloud mode). Returns the unsubscribe. A driver without a live

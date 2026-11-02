@@ -1,6 +1,6 @@
 ---
-title: Providers
-order: 3
+title: Choosing a provider
+order: 0
 published: true
 description: 'Bring your own backend: auth, data, and storage are pluggable interfaces you pick at deploy time.'
 ---

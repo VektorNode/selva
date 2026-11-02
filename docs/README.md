@@ -24,7 +24,7 @@ For operators deploying `@selvajs/selva`.
 - **get-started/**: [overview](./self-hosting/get-started/overview.md), [quick-start](./self-hosting/get-started/quick-start.md), [cli](./self-hosting/get-started/cli.md), [rhino-compute](./self-hosting/get-started/rhino-compute.md)
 - **deployment/**: [prerequisites](./self-hosting/deployment/prerequisites.md), [reverse-proxy](./self-hosting/deployment/reverse-proxy.md)
 - **providers/**: [overview](./self-hosting/providers/overview.md), [local](./self-hosting/providers/local.md), [supabase](./self-hosting/providers/supabase.md), [header-auth-entra](./self-hosting/providers/header-auth-entra.md), [writing-a-provider](./self-hosting/providers/writing-a-provider.md)
-- **concepts/**: [permissions](./self-hosting/concepts/permissions.md), [caching](./self-hosting/concepts/caching.md), [security-and-limits](./self-hosting/concepts/security-and-limits.md), [data-privacy](./self-hosting/concepts/data-privacy.md), [scaling](./self-hosting/concepts/scaling.md), [admin](./self-hosting/concepts/admin.md), [mcp](./self-hosting/concepts/mcp.md), [signing-in-from-apps](./self-hosting/concepts/signing-in-from-apps.md)
+- **concepts/**: [permissions](./self-hosting/concepts/permissions.md), [caching](./self-hosting/concepts/caching.md), [security-and-limits](./self-hosting/deployment/security-and-limits.md), [data-privacy](./self-hosting/concepts/data-privacy.md), [scaling](./self-hosting/deployment/scaling.md), [admin](./self-hosting/deployment/admin.md), [mcp](./packages/build/mcp.md), [signing-in-from-apps](./packages/build/signing-in-from-apps.md)
 
 ## [packages/](./packages/): build on `@selvajs/*`
 
@@ -32,7 +32,7 @@ For developers embedding Selva's pieces rather than deploying the app. Each
 package's own README is authoritative for its API.
 
 - [build/overview.md](./packages/build/overview.md): which packages to reach for, and how they fit
-- **compute/**: [how-it-works](./packages/compute/how-it-works.md), [data-trees](./packages/compute/data-trees.md), [errors](./packages/compute/errors.md), [common-tasks](./packages/compute/common-tasks.md): using `@selvajs/compute`
+- **compute/**: [how-it-works](./packages/build/how-it-works.md), [data-trees](./packages/build/data-trees.md), [errors](./packages/build/errors.md), [common-tasks](./packages/build/common-tasks.md): using `@selvajs/compute`
 
 ## [contributing/](./contributing/): work on this repo
 

@@ -56,7 +56,7 @@ The `scopeKey` is whatever uniquely identifies the solver context: `sessionId` i
 
 ### How values reach Grasshopper
 
-`values[paramId]` is set from sessionStorage, then `buildSolveInputTree` (`@selvajs/solve/server`) builds the GH data tree server-side through `TreeBuilder.fromValues`, which coerces number and boolean values and passes every other type through. For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write the payload: an object is sent as its JSON string, and the GH definition parses it via a script component.
+`values[paramId]` is set from sessionStorage, then `SolveEngine.solve` (`@selvajs/solve/server`) builds the GH data tree server-side through `TreeBuilder.fromValues`, which coerces number and boolean values and passes every other type through. For complex types (geometry, curves, etc.), use a **text** input on the schema and have the producer write the payload: an object is sent as its JSON string, and the GH definition parses it via a script component.
 
 ### What's intentionally absent in v1
 

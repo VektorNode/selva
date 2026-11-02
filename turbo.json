@@ -53,6 +53,11 @@
 				"!../../docs/adr/**"
 			]
 		},
+		"@selvajs/solve#test": {
+			"dependsOn": ["build"],
+			"outputs": [],
+			"inputs": ["src/**", "tests/**", "scripts/**", "vitest.config.ts", ".env.test"]
+		},
 		"check": {
 			"dependsOn": ["^build"],
 			"outputs": [],

@@ -1,6 +1,7 @@
 import { ComputeError, ErrorCodes, type ErrorCode } from '../errors';
 import { getLogger } from '../utils/logger';
 import { readField } from '../utils/read-field';
+import { redactUrl } from '../utils/redact-url';
 import { tryParseJson } from '../utils/try-parse-json';
 import { fireServerTiming } from './server-timing';
 import { ERROR_BODY_MAX_BYTES, readBodyText } from './read-body';
@@ -143,7 +144,9 @@ export function isRedirect(response: Response): boolean {
 
 /** Following a redirect would send the API key header, which fetch keeps cross-origin, to the target. */
 function redirectError(response: Response, ctx: RequestContext): ComputeError {
-	const location = response.headers.get('Location') ?? undefined;
+	const header = response.headers.get('Location');
+	// The target is chosen by the server, so it can carry credentials or a token in its URL.
+	const location = header ? redactUrl(header) : undefined;
 	return new ComputeError(
 		`Server redirected the request${location ? ` to ${location}` : ''}. Redirects are not followed, ` +
 			'so credentials never leave serverUrl: set serverUrl to the address it redirects to.',

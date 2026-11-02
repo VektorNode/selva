@@ -1,6 +1,6 @@
 ---
 title: Signing in from apps
-order: 11
+order: 6
 published: true
 description: 'How the Grasshopper plugin and MCP clients sign in through the browser, what each may be granted, and where the resulting token lives.'
 ---
@@ -51,7 +51,7 @@ computer. The consent page warns that the token goes to a program on your comput
 approve a sign-in you just started.
 
 Uploading a definition runs its scripts on your organization's Compute server. See
-[who can put code on Compute](./security-and-limits.md#who-can-put-code-on-compute).
+[who can put code on Compute](../../self-hosting/deployment/security-and-limits.md#who-can-put-code-on-compute).
 
 ## MCP clients
 
@@ -95,4 +95,4 @@ reads the token, but such malware could also act through Rhino itself.
 The app's own calls carry a `selva_` key, and the OAuth discovery and token endpoints are
 called with no session, so the proxy must let those through without its sign-in.
 `/oauth/authorize` stays behind it, so you sign in as usual. The Caddyfile in
-[Header auth with Entra](../providers/header-auth-entra.md#part-5-caddyfile) does this.
+[Header auth with Entra](../../self-hosting/providers/header-auth-entra.md#part-5-caddyfile) does this.
