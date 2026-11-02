@@ -20,14 +20,14 @@
 	data-slot="resizable-handle"
 	class={cn(
 		'group/handle after:inset-y-0 after:w-1 data-[direction=vertical]:after:left-0 data-[direction=vertical]:after:h-1 data-[direction=vertical]:after:translate-x-0 relative flex w-px items-center justify-center after:absolute after:left-1/2 after:-translate-x-1/2 focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-hidden data-[direction=vertical]:h-px data-[direction=vertical]:w-full data-[direction=vertical]:after:w-full data-[direction=vertical]:after:-translate-y-1/2 [&[data-direction=vertical]>div]:rotate-90',
-		line ? 'bg-border' : 'bg-transparent',
+		line ? 'bg-border' : 'w-3 data-[direction=vertical]:h-3 bg-transparent',
 		className
 	)}
 	{...restProps}
 >
 	{#if withHandle}
 		<div
-			class="h-10 w-1 z-10 flex shrink-0 rounded-lg bg-border transition duration-150 group-hover/handle:scale-y-110 group-hover/handle:bg-foreground/40 group-active/handle:bg-foreground/60"
+			class="h-8 w-0.75 group-hover/handle:h-12 z-10 flex shrink-0 rounded-full bg-foreground/15 transition duration-150 group-hover/handle:bg-foreground/40 group-active/handle:bg-foreground/60"
 		></div>
 	{/if}
 </ResizablePrimitive.PaneResizer>

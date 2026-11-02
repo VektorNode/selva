@@ -15,30 +15,15 @@
 		type Grid,
 		type ThreeViewer
 	} from '@selvajs/visualization/render';
-	import {
-		Maximize,
-		Minimize,
-		Camera,
-		Layers,
-		Settings2,
-		Box,
-		Square,
-		Frame,
-		Ruler,
-		Grid3x3,
-		Palette,
-		Spline
-	} from '@lucide/svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { createSceneOutliner, type SceneOutliner } from '@selvajs/visualization/scene';
 	import { clearGeometryCache } from '@selvajs/visualization/parse';
 	import SceneManager from './SceneManager.svelte';
+	import ViewerDock from './ViewerDock.svelte';
 	import MeshMetadataPanel from './MeshMetadataPanel.svelte';
 	import * as Resizable from '$lib/components/primitives/resizable/index.js';
-	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
-	import { Button } from '$lib/components/primitives/button/index.js';
 	import type { Locale } from '$lib/i18n/messages';
 	import { layerLocaleContext } from '$lib/i18n/localeContext.svelte';
 	import { saveBlob } from '$lib/utils/host-files';
@@ -174,12 +159,16 @@
 		wireframe: t.lookWireframe,
 		night: t.lookNight
 	});
+	// Night has its own toggle, so it stays out of the radio list.
 	const styleOptions = $derived<{ look: Look; label: string }[]>(
-		LOOKS.map((look) => ({
+		LOOKS.filter((look) => look !== 'night').map((look) => ({
 			look,
 			label: lookLabels[look] ?? look.charAt(0).toUpperCase() + look.slice(1)
 		}))
 	);
+	const nightOn = $derived(renderStyle === 'night');
+	// What the night toggle returns to.
+	let dayLook: Look = $state(openingLook === 'night' ? defaultViewerConfig.look : openingLook);
 
 	const VIEW_PRESETS: { preset: ViewPreset; label: () => string }[] = [
 		{ preset: 'top', label: () => t.viewTop },
@@ -298,6 +287,7 @@
 		if (!setLook || look === renderStyle) return;
 		const wasLineDrawing = LOOK_PRESETS[renderStyle].requiresEdges === true;
 		renderStyle = look;
+		if (look !== 'night') dayLook = look;
 		setLook(look);
 
 		// A look never drives the overlay itself; honouring `requiresEdges` is the host's call. Without
@@ -361,6 +351,10 @@
 		if (!scene) return;
 		if (edgesVisible) applyEdges?.(scene, edgeOverrides());
 		else clearEdges?.(scene);
+	}
+
+	function toggleNight() {
+		setRenderStyle(nightOn ? dayLook : 'night');
 	}
 
 	function toggleEdges() {
@@ -448,6 +442,27 @@
 		isFullscreen = !isFullscreen;
 	}
 
+	// Single letters; F (fit) is handled by the canvas itself. Held back while typing, e.g. in the
+	// scene manager's search box.
+	const SHORTCUTS: Record<string, () => void> = {
+		o: toggleProjection,
+		m: toggleMeasure,
+		g: toggleGrid,
+		n: toggleNight,
+		e: toggleEdges,
+		s: () => (sceneManagerOpen = !sceneManagerOpen)
+	};
+
+	function handleShortcut(event: KeyboardEvent) {
+		if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+		const target = event.target as HTMLElement;
+		if (target.closest('input, textarea, select, [contenteditable]')) return;
+		const action = SHORTCUTS[event.key.toLowerCase()];
+		if (!action) return;
+		event.preventDefault();
+		action();
+	}
+
 	function hasUsefulMetadata(metadata: Record<string, any>): boolean {
 		if (!metadata) return false;
 
@@ -478,10 +493,13 @@
 	}
 </script>
 
+<!-- Key events bubble up from the focused canvas or any control inside; the div itself is not interactive. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="min-h-64 sm:min-h-96 lg:min-h-125 relative h-full flex-1 border {isFullscreen
 		? 'fullscreen-viewer'
 		: 'overflow-hidden rounded-lg'}"
+	onkeydown={handleShortcut}
 >
 	<Resizable.PaneGroup direction="horizontal" class="h-full w-full">
 		<!-- `defaultSize` must sum to 100 across the live panes. Panes register a frame before the
@@ -495,7 +513,7 @@
 				     the DOM, so this is the only observable proof a solve's geometry decoded and
 				     rendered; e2e asserts on it. -->
 				<canvas
-					class="viewer-canvas block h-full w-full select-none"
+					class="viewer-canvas block h-full w-full outline-none select-none"
 					data-testid="viewer-canvas"
 					data-mesh-count={meshes.length}
 					bind:this={canvas}
@@ -511,10 +529,10 @@
 				     solve hides the model the user is adjusting. -->
 				{#if isSolving}
 					<div
-						class="inset-x-0 top-0 h-0.5 animate-in fade-in pointer-events-none absolute z-20 overflow-hidden bg-primary/20 duration-200"
+						class="inset-x-0 top-0 animate-in fade-in pointer-events-none absolute z-20 h-px overflow-hidden duration-300"
 						aria-hidden="true"
 					>
-						<div class="solve-bar h-full w-1/3 bg-primary"></div>
+						<div class="solve-bar h-full w-1/3 bg-foreground/25"></div>
 					</div>
 				{/if}
 				{#if isSlow}
@@ -548,143 +566,36 @@
 				{/if}
 
 				{#if config.showToolsMenu}
-					<div
-						class="left-4 bottom-4 gap-2 *:shadow-lg absolute z-50 flex items-center *:rounded-md {hideButton
-							? 'pointer-events-none opacity-0'
-							: ''}"
-					>
-						<DropdownMenu.Root>
-							<DropdownMenu.Trigger>
-								{#snippet child({ props })}
-									<Button
-										{...props}
-										variant="overlay"
-										size="icon-lg"
-										title={t.toolsMenu}
-										aria-label={t.toolsMenu}
-									>
-										<Settings2 />
-									</Button>
-								{/snippet}
-							</DropdownMenu.Trigger>
-							<!-- Above the fullscreen viewer, which sits at z-index 10000. -->
-							<DropdownMenu.Content sideOffset={6} class="min-w-44 z-10001 w-auto">
-								<DropdownMenu.Item onSelect={toggleProjection}>
-									{#if projection === 'perspective'}
-										<Square />
-										{t.switchToOrthographic}
-									{:else}
-										<Box />
-										{t.switchToPerspective}
-									{/if}
-								</DropdownMenu.Item>
-								<DropdownMenu.Item onSelect={() => fitToView?.()}>
-									<Frame />
-									{t.fitToView}
-								</DropdownMenu.Item>
-
-								<DropdownMenu.Sub>
-									<DropdownMenu.SubTrigger>
-										<Box />
-										{t.views}
-									</DropdownMenu.SubTrigger>
-									<DropdownMenu.SubContent class="z-10001">
-										{#each VIEW_PRESETS as { preset, label } (preset)}
-											<DropdownMenu.Item onSelect={() => setView(preset)}
-												>{label()}</DropdownMenu.Item
-											>
-										{/each}
-									</DropdownMenu.SubContent>
-								</DropdownMenu.Sub>
-
-								{#if config.showDisplayMenu}
-									<DropdownMenu.Sub>
-										<DropdownMenu.SubTrigger>
-											<Palette />
-											{t.display}
-										</DropdownMenu.SubTrigger>
-										<DropdownMenu.SubContent class="min-w-40 z-10001">
-											<DropdownMenu.RadioGroup
-												value={renderStyle}
-												onValueChange={(look) => setRenderStyle(look as typeof renderStyle)}
-											>
-												{#each styleOptions as { look, label } (look)}
-													<DropdownMenu.RadioItem value={look} closeOnSelect={false}>
-														{label}
-													</DropdownMenu.RadioItem>
-												{/each}
-											</DropdownMenu.RadioGroup>
-											<DropdownMenu.Separator />
-											<DropdownMenu.CheckboxItem
-												checked={edgesVisible}
-												onCheckedChange={toggleEdges}
-											>
-												<Spline />
-												{t.edges}
-											</DropdownMenu.CheckboxItem>
-										</DropdownMenu.SubContent>
-									</DropdownMenu.Sub>
-								{/if}
-
-								<DropdownMenu.CheckboxItem checked={measureActive} onCheckedChange={toggleMeasure}>
-									<Ruler />
-									{t.measure}
-								</DropdownMenu.CheckboxItem>
-
-								{#if config.showGridToggle}
-									<DropdownMenu.CheckboxItem checked={gridVisible} onCheckedChange={toggleGrid}>
-										<Grid3x3 />
-										{t.grid}
-									</DropdownMenu.CheckboxItem>
-								{/if}
-
-								{#if config.showSceneManager || config.showScreenshotButton || config.showFullscreenButton}
-									<DropdownMenu.Separator />
-								{/if}
-
-								{#if config.showSceneManager}
-									<DropdownMenu.CheckboxItem
-										checked={sceneManagerOpen}
-										onCheckedChange={() => (sceneManagerOpen = !sceneManagerOpen)}
-									>
-										<Layers />
-										{t.sceneManager}
-									</DropdownMenu.CheckboxItem>
-								{/if}
-
-								{#if config.showScreenshotButton}
-									<DropdownMenu.Item onSelect={downloadScreenshot}>
-										<Camera />
-										{t.screenshot}
-									</DropdownMenu.Item>
-								{/if}
-
-								{#if config.showFullscreenButton}
-									<DropdownMenu.Item onSelect={toggleFullscreen}>
-										{#if isFullscreen}
-											<Minimize />
-											{t.exitFullscreen}
-										{:else}
-											<Maximize />
-											{t.fullscreen}
-										{/if}
-									</DropdownMenu.Item>
-								{/if}
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
-						<!-- Touch has no F key, and fit-to-view is the way back from a framed part. -->
-						<div class="hidden pointer-coarse:block">
-							<Button
-								variant="overlay"
-								size="icon-lg"
-								title={t.fitToView}
-								aria-label={t.fitToView}
-								onclick={() => fitToView?.()}
-							>
-								<Frame />
-							</Button>
-						</div>
-					</div>
+					<ViewerDock
+						{t}
+						hidden={hideButton}
+						showDisplay={config.showDisplayMenu}
+						showGrid={config.showGridToggle}
+						showSceneManager={config.showSceneManager}
+						showScreenshot={config.showScreenshotButton}
+						showFullscreen={config.showFullscreenButton}
+						{styleOptions}
+						viewPresets={VIEW_PRESETS.map(({ preset, label }) => ({ preset, label: label() }))}
+						{renderStyle}
+						{nightOn}
+						{edgesVisible}
+						{measureActive}
+						{gridVisible}
+						{sceneManagerOpen}
+						{projection}
+						{isFullscreen}
+						onSetLook={setRenderStyle}
+						onToggleNight={toggleNight}
+						onToggleEdges={toggleEdges}
+						onToggleMeasure={toggleMeasure}
+						onToggleGrid={toggleGrid}
+						onToggleSceneManager={() => (sceneManagerOpen = !sceneManagerOpen)}
+						onToggleProjection={toggleProjection}
+						onSetView={setView}
+						onFit={() => fitToView?.()}
+						onScreenshot={downloadScreenshot}
+						onToggleFullscreen={toggleFullscreen}
+					/>
 				{/if}
 			</div>
 		</Resizable.Pane>

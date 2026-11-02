@@ -888,7 +888,8 @@ public class SchemaSynchronizer
         // fighting the canonicalizer and producing spurious "1 parameter removed" churn.
         var toRemove = schema.Outputs
             .Where(o => bakeComponents.TryGetValue(o.Id, out var c)
-                        && !ParameterTypeHelper.IsQualifyingBakeOutput(c))
+                        && !ParameterTypeHelper.IsQualifyingBakeOutput(c)
+                        && !ParameterTypeHelper.IsAwaitingBakeData(c))
             .Select(o => o.Id)
             .ToList();
 

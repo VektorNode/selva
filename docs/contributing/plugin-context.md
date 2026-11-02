@@ -46,7 +46,12 @@ So N `Set Dynamic Value List` components feeding one bake collapse to **one** ou
 is whichever source Grasshopper happens to order first. The other N−1 routes are structurally
 unrepresentable. No warning is emitted.
 
-**Three DVLs need three bakes.** Same for files and charts.
+**Three DVLs need three bakes.** Same for charts. Files differ: `CollectFileOutputs` sends every
+`FileData` on the bake as one list.
+
+File and DVL bakes qualify through wires and relays, or by holding the goo after a solve. So either
+one routed through Merge, Dispatch or any other data-passing component only shows up after that
+solve.
 
 ### 3. The output identity is the ContextBake's GUID, never the Set component's
 
