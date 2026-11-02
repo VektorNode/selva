@@ -283,7 +283,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
  * and a row cached during that window would otherwise be served forever, long
  * after the server was fixed. See `assertCamelCaseSchema`.
  */
-function isUsableCachedSchema(schema: UISchema): boolean {
+export function isUsableCachedSchema(schema: UISchema): boolean {
 	return schema.schemaVersion === UI_SCHEMA_VERSION && Array.isArray(schema.inputs);
 }
 

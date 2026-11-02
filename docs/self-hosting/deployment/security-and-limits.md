@@ -7,238 +7,106 @@ description: 'Request limits, rate limiting, guards on outbound fetches, and the
 
 # Security & Limits
 
-The guardrails an operator tunes: rate limits, size and concurrency caps, the guard
-on remote-definition URLs, who can run code on Compute, the two secret keys, and
-cookie/transport behaviour.
-[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)
-is the authoritative env-var list and documents each inline.
-
-Sizes use `MB = 1024 × 1024`. Every cap resolves once at boot
-(`packages/server/src/compute/limits.ts`); an invalid value warns and falls back to
-the default.
+[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example) is the authoritative env-var list. Caps resolve once at boot (`packages/server/src/compute/limits.ts`); an invalid value warns and falls back to the default. `MB = 1024 × 1024`.
 
 ## Rate limiting
 
-Two independent limiters. Both count requests in a **fixed window** (the count
-resets wholesale when the window ends, rather than sliding), and both keep those
-counts **in memory only**, so nothing is persisted. In a multi-instance deployment
-each instance keeps its own counts, so the effective rate is roughly N× the
-per-key limit.
+All limiters use a fixed window and keep counts in memory, so N instances enforce roughly N times the limit. Over the limit returns **429**.
 
 ### Compute solves (`/api/v1/compute`)
 
-| Env var                        | Default  | Meaning                                     |
-| ------------------------------ | -------- | ------------------------------------------- |
-| `COMPUTE_RATE_LIMIT_WINDOW_MS` | `100000` | Window length.                              |
-| `COMPUTE_RATE_LIMIT_MAX`       | `120`    | Max solves per window (≈1.2/sec sustained). |
+| Env var                        | Default  | Meaning            |
+| ------------------------------ | -------- | ------------------ |
+| `COMPUTE_RATE_LIMIT_WINDOW_MS` | `100000` | Window length.     |
+| `COMPUTE_RATE_LIMIT_MAX`       | `120`    | Solves per window. |
 
-Keyed by caller: `user:<id>` for signed-in solves, `share:<linkId>` for
-share-token solves, so anonymous link traffic never eats into the owner's budget.
-Over the limit returns **429** with a `Retry-After` header.
+Keyed by `user:<id>` or, for share-token solves, `share:<linkId>`, so anonymous link traffic never uses the owner's budget. The response carries `Retry-After`.
 
 ### API tokens (`/api/v1`)
 
-| Env var                          | Default | Meaning                                              |
-| -------------------------------- | ------- | ---------------------------------------------------- |
-| `API_TOKEN_RATE_LIMIT_WINDOW_MS` | `60000` | Window length.                                       |
-| `API_TOKEN_RATE_LIMIT_MAX`       | `600`   | Max requests per token per window; `0` turns it off. |
+| Env var                          | Default | Meaning                                    |
+| -------------------------------- | ------- | ------------------------------------------ |
+| `API_TOKEN_RATE_LIMIT_WINDOW_MS` | `60000` | Window length.                             |
+| `API_TOKEN_RATE_LIMIT_MAX`       | `600`   | Requests per token per window; `0` is off. |
 
-Keyed by token, so two keys of one user have separate budgets. Browser sessions
-are not charged. A token solve also draws on its owner's compute bucket above, so
-extra keys never buy extra compute. Over the limit returns **429** `RATE_LIMITED`
-with `Retry-After`; every token response carries `RateLimit-Limit` and
-`RateLimit-Remaining`.
+Keyed per token; browser sessions are not charged. A token solve also draws on its owner's compute bucket, so extra keys buy no extra compute. Responses carry `RateLimit-Limit` and `RateLimit-Remaining`, and `RATE_LIMITED` plus `Retry-After` when over.
 
-### Login
+### Login and share links
 
-Hardcoded, **not** env-configurable: **5 failed attempts per 15 minutes**, keyed
-by client IP. Only failed logins count, and a success resets the count to zero.
-Over the limit returns **429**.
+- **Login:** 5 failed attempts per 15 minutes per client IP. Fixed, not configurable. A success resets the count.
+- **Share links:** each link has a `maxSolves` counter, checked atomically before every solve. When exhausted, the solve returns **429**.
 
-### Share-link solve cap
+## Size, concurrency and queue caps
 
-Separate from rate limiting: each share link carries a stored `maxSolves` counter,
-checked and raised in one indivisible step before each solve, so two solves
-arriving together can't both slip past the last remaining slot. When exhausted the
-solve returns **429** ("Share link solve cap reached").
+| Env var                              | Default              | Guards                                                                                               |
+| ------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `COMPUTE_SOLVE_DEADLINE_MS`          | `100000`             | Longest single solve before abort. Replaces `MAX_SOLVE_DURATION_MS`, which still works and warns.    |
+| `COMPUTE_MAX_QUEUE_DEPTH`            | `0` (unbounded)      | Max queued solves. A full queue returns **503** + `Retry-After`.                                     |
+| `COMPUTE_QUEUE_WAIT_MS`              | `0` (none)           | Max queue time before **503**.                                                                       |
+| `MAX_DEFINITION_FILE_SIZE_BYTES`     | `52428800` (50 MB)   | `.gh` uploads and remote-definition fetches.                                                         |
+| `MAX_IMAGE_FILE_SIZE_BYTES`          | `10485760` (10 MB)   | Cover-image uploads.                                                                                 |
+| `COMPUTE_REQUEST_MAX_BYTES`          | `268435456` (256 MB) | `/api/v1/compute` request body. Keep ≤ `BODY_SIZE_LIMIT`.                                            |
+| `COMPUTE_RESPONSE_MAX_BYTES`         | `314572800` (300 MB) | `/api/v1/compute` response, under Node's ~512 MB string limit. Over returns **413**.                 |
+| `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Remote-definition fetch deadline.                                                                    |
+| `BODY_SIZE_LIMIT`                    | `256M`               | adapter-node body cap on every route. Use `256M` or raw bytes: `256mb` and `Infinity` throw on boot. |
 
-## Size, concurrency, and queue caps
-
-| Env var                              | Default              | Guards                                                                                                                                                                                                     |
-| ------------------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `COMPUTE_SOLVE_DEADLINE_MS`          | `100000`             | Longest a single solve may run before it is aborted. Renamed from `MAX_SOLVE_DURATION_MS`, which still works for one minor version and warns at boot.                                                      |
-| `COMPUTE_MAX_QUEUE_DEPTH`            | `0` (unbounded)      | Max solves allowed to wait. A full queue is rejected with **503** + `Retry-After`.                                                                                                                         |
-| `COMPUTE_QUEUE_WAIT_MS`              | `0` (no deadline)    | Max time a solve may sit queued before it is rejected with **503**.                                                                                                                                        |
-| `MAX_DEFINITION_FILE_SIZE_BYTES`     | `52428800` (50 MB)   | Largest `.gh` on upload, and the cap on remote-definition fetches.                                                                                                                                         |
-| `MAX_IMAGE_FILE_SIZE_BYTES`          | `10485760` (10 MB)   | Cover-image upload cap.                                                                                                                                                                                    |
-| `COMPUTE_REQUEST_MAX_BYTES`          | `268435456` (256 MB) | `/api/v1/compute` request-body cap (inputs, values, base64 file widgets). Keep ≤ `BODY_SIZE_LIMIT`.                                                                                                        |
-| `COMPUTE_RESPONSE_MAX_BYTES`         | `314572800` (300 MB) | `/api/v1/compute` response cap, kept under the ~512 MB ceiling on a single text value in Node so a huge result fails cleanly rather than crashing. Over the cap returns **413**.                           |
-| `REMOTE_DEFINITION_FETCH_TIMEOUT_MS` | `30000`              | Deadline on remote-definition fetch, so a server that trickles bytes forever can't tie one up indefinitely.                                                                                                |
-| `BODY_SIZE_LIMIT`                    | `256M`               | adapter-node's global body cap on **every** route. Must be ≥ `COMPUTE_REQUEST_MAX_BYTES`. Use `256M` or a raw byte count: only `K`/`M`/`G` are units, so `256mb` and `Infinity` are NaN and throw on boot. |
-
-How many solves may run at once is not an env var: Selva probes the compute server's
-active child count, once at connect and again after solves, since children exit under
-`--idlespan` and the pool resizes at runtime. A failed probe, or a cold server
-honestly reporting `0`, falls back to `1`, on the grounds that an unknown-capacity
-server is safer under-used than oversent. The one place to change it is
-`--childcount` on the compute server.
-
-Cache byte budgets (`COMPUTE_DEFINITION_CACHE_MB`, `COMPUTE_SOLVE_CACHE_MB`) and the
-Rhino.Compute server flags are covered in [Caching](../concepts/caching.md).
+Concurrency is not an env var. Selva reads the compute server's active child count at connect and after solves, and falls back to `1` if the probe fails or reports `0`. Change it with `--childcount` on the compute server. Cache budgets are in [Caching](../concepts/caching.md).
 
 ## Guard on remote-definition URLs
 
-A definition can be loaded from a user-supplied URL. Without a check that URL could
-point back at your own network (a private-address database, a cloud metadata
-endpoint) and the server would fetch it and hand back the result. That's SSRF.
+A user-supplied definition URL could point at your internal network or the cloud metadata endpoint (SSRF). `packages/server/src/compute/safe-url.ts` checks before any fetch:
 
-`packages/server/src/compute/safe-url.ts` validates before any fetch, using a scheme
-allowlist plus an address blocklist, checked twice:
+```mermaid
+flowchart LR
+    U[URL] --> A{"Text check, no DNS:<br/>http(s), not localhost,<br/>no private IP encoding"}
+    A -->|pass| D[Resolve DNS]
+    D --> B{"Every resolved address<br/>outside blocklist?"}
+    B -->|pass| F[Fetch]
+    A -->|fail| R[Reject]
+    B -->|fail| R
+```
 
-1. **The URL text, no DNS.** Scheme must be `http` or `https`. `localhost` and
-   `*.localhost` are rejected, as is every encoding of a private IPv4 address
-   (decimal, octal, hex, short-form, IPv4-mapped IPv6); each is canonicalized before
-   judging.
-2. **The resolved addresses**, each re-checked against the same list, because a
-   harmless-looking hostname can resolve to a private one.
-
-Blocked: `0.0.0.0/8`, loopback (`127/8`, `::1`, `::`), private ranges (`10/8`,
-`172.16–31`, `192.168/16`, `fc00::/7`), and link-local (`169.254/16`, **including
-the cloud metadata endpoint `169.254.169.254`**, and `fe80::/10`).
-
-Every rejection returns the same vague message, `Remote definition URL is not
-allowed`, so nobody can map your internal network by watching which URLs it
-complains about differently; the specific reason is logged server-side.
-
-One gap is documented rather than closed: an address can change between the check
-and the fetch (DNS rebinding), so a hostname that passes could be pointed elsewhere
-a moment later.
-
-Rhino.Compute _server_ URLs are not subject to this guard; they are configured in
-`/admin/compute` and stored by the data provider, not fetched from user input.
+Blocked: `0.0.0.0/8`, loopback, `10/8`, `172.16–31`, `192.168/16`, `fc00::/7`, and link-local (`169.254/16` including `169.254.169.254`, `fe80::/10`). Every rejection returns the same `Remote definition URL is not allowed`; the reason is logged server-side. DNS rebinding between check and fetch is not closed. Rhino.Compute _server_ URLs skip this guard: admins set them in `/admin/compute`.
 
 ## Who can put code on Compute
 
-A Grasshopper definition is a program. Its script components (C#, Python, VB) run on
-the Rhino.Compute server with whatever rights the Compute process has. Compute loads a
-file when it's uploaded, to read its inputs, and again for every solve. So anyone who can
-get a definition onto Compute can run code there.
+A definition's script components (C#, Python, VB) run on the Compute server with its process rights, on upload and every solve. Anyone who gets a definition onto Compute can run code there:
 
-These people can:
+- **Anyone who can create a definition** (project owners and editors; on a commons project, anyone who reaches it).
+- **Anyone with an API token scoped `upload` or `write`**, such as the Grasshopper plugin ([Signing in from apps](../../packages/build/signing-in-from-apps.md)). A token reaches only what its owner could from the browser.
+- **Anyone who can solve a remote definition**: any signed-in user or org-wide `solve` token can pass a `definitionUrl`. The [URL guard](#guard-on-remote-definition-urls) protects your network, not Compute from the file's scripts.
 
-- **Anyone who can create a definition**, from the web app or the API: project owners
-  and editors, and on a commons project anyone who reaches it. A new version needs edit
-  rights on that definition. This has always been true of the web upload.
-- **Anyone holding an API token with `upload` or `write`.** The Grasshopper plugin signs
-  in with an `upload` token ([Signing in from apps](../../packages/build/signing-in-from-apps.md)). That's one
-  more way in, not more reach: a token uploads only where its owner could from the browser.
-- **Anyone who can solve a remote definition.** `/api/v1/compute` takes a `definitionUrl`,
-  and any signed-in user or org-wide `solve` token may point it at a file they host. The
-  [URL guard](#guard-on-remote-definition-urls) stops it reaching your network, not the
-  file's scripts running once Compute has it.
-
-Selva doesn't sandbox scripts, and can't tell a harmless one from a hostile one. Treat the
-Compute server as running code from everyone above:
-
-- Give it its own machine or VM and its own unprivileged service account.
-- Keep secrets off it: no Selva database credentials, no `SELVA_*` keys, no cloud
-  credentials the service account can read.
-- Limit what it can reach on the network to what definitions actually need.
+Selva doesn't sandbox scripts. Run Compute on its own machine with an unprivileged account, no Selva database credentials, `SELVA_*` keys or cloud credentials, and only the network access definitions need.
 
 ## Secrets
 
-Two keys. Both are required under every provider, and `npx @selvajs/cli` generates
-both for you at scaffold time, so you never write one by hand.
+Two required keys, generated by `npx @selvajs/cli` at scaffold time.
 
-| Key                 | Protects                                                                             | Format                                               | Rotating it…                                                             |
-| ------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| `SELVA_HMAC_KEY`    | Signs session cookies; hashes share-link and invite tokens at rest.                  | ≥ 32 characters.                                     | Logs everyone out and invalidates every share link and pending invite.   |
-| `SELVA_AT_REST_KEY` | AES-256-GCM encryption of the Rhino.Compute API key at rest (on disk and in the DB). | 64-char hex, or base64 decoding to exactly 32 bytes. | Makes the stored API key undecryptable; re-enter it at `/admin/compute`. |
+| Key                 | Protects                                                                 | Format                                               | Rotating it…                                                           |
+| ------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `SELVA_HMAC_KEY`    | Signs session cookies; hashes share-link and invite tokens.              | ≥ 32 characters.                                     | Logs everyone out; invalidates all share links and pending invites.    |
+| `SELVA_AT_REST_KEY` | AES-256-GCM encryption of the Rhino.Compute API key (on disk and in DB). | 64-char hex, or base64 decoding to exactly 32 bytes. | Stored API key becomes undecryptable; re-enter it at `/admin/compute`. |
 
-What each key covers shifts with the auth provider, but neither becomes optional:
+Under `supabase`, sessions are Supabase JWTs, so the HMAC key only hashes tokens. `SupabaseDataProvider` refuses to start without the at-rest key. A key mismatch is caught at boot and shown in admin system health. The at-rest key guards against leaked backups, not an attacker inside the running process.
 
-- **`local`:** the HMAC key signs session cookies _and_ hashes tokens; the at-rest
-  key encrypts the compute API key in `compute.config.json`.
-- **`supabase`:** sessions are Supabase JWTs, so the HMAC key only hashes tokens.
-  The at-rest key still encrypts `compute_servers.api_key`, and
-  `SupabaseDataProvider` refuses to construct without it.
-
-`SELVA_AT_REST_KEY` is encryption at rest: it defends against a leaked backup or
-read-only storage access, not against an attacker who already holds the running
-process's memory. A key mismatch is detected at boot and surfaced in the admin
-system health view.
-
-### Why two keys and not one
-
-One signs, one encrypts, and they fail asymmetrically: losing the HMAC key costs a
-round of logins, losing the at-rest key costs a credential you must re-enter by hand.
-Keeping them separate is what lets `selva keys rotate hmac` treat a suspected
-session-secret leak as routine instead of an action that also takes compute offline.
-
-They aren't interchangeable anyway: at-rest must decode to exactly 32 bytes, HMAC
-only needs 32 characters. If one `.env` entry ever becomes the goal, derive two keys
-from a single root secret rather than passing the same bytes to both.
+The keys are separate so `selva keys rotate hmac` can answer a session-secret leak without taking compute offline. Don't reuse the same bytes for both.
 
 ### What rotating `SELVA_HMAC_KEY` breaks
 
-`selva keys rotate hmac` takes effect on restart. Nothing errors; the affected things
-simply stop being found:
+Takes effect on restart. Nothing errors; items just stop being found:
 
-1. **Sessions, local provider only.** Every issued cookie fails its signature check
-   and everyone signs in again. Under `supabase` or `header` auth, sessions never
-   touch this key and are unaffected.
-2. **Share links, all providers.** Links are looked up by hash, so existing ones
-   read as invalid. Mint replacements from the definition's share dialog.
-3. **Pending invites, all providers.** Same mechanism; unaccepted invites read as
-   "invalid or has expired". Already-accepted invites are unaffected: membership is a
-   stored record, not a token. Re-send any still open.
+- **Sessions (local provider only):** everyone signs in again.
+- **Share links:** read as invalid. Mint new ones.
+- **Pending invites:** read as "invalid or has expired". Re-send. Accepted invites are unaffected.
 
-Rows for dead links and invites stay in the store, unreachable and harmless. Rotation
-does not clean them up.
-
-Untouched: user accounts, passwords (hashed with their own scheme), org membership
-and permissions, projects, definitions, uploaded files, and the Rhino.Compute API key
-(that's `SELVA_AT_REST_KEY`).
+Dead link and invite rows stay in the store, harmless. Accounts, passwords, memberships, projects, definitions and files are untouched.
 
 ## Cookies and transport
 
-- **Secure cookies.** In production, session and refresh cookies are marked
-  `Secure`, so the browser only sends them over HTTPS. They are also `httpOnly`
-  (JavaScript on the page cannot read them) and `sameSite=lax` (they are not sent
-  along with requests originating from another site). Setting
-  `ALLOW_INSECURE_COOKIES=true` drops the `Secure` mark, the escape hatch for
-  HTTP-only deployments. This var is code-only and
-  not listed in `.env.example`; without it, cookies over plain `http://` in
-  production are dropped and login silently fails.
-- **`ORIGIN`.** Selva checks that a form submission came from its own site, which
-  stops another site from making a logged-in visitor's browser submit one on their
-  behalf. To do that it has to know its own public address: behind a reverse proxy,
-  set `ORIGIN=https://your-domain.com` (no trailing slash). Without it, form POSTs
-  fail with "Cross-site POST form submissions are forbidden".
-- **`HOST` / header-auth boundary.** `HOST` defaults to `0.0.0.0` (adapter-node's
-  default). Under the header-auth provider the app **must** be reachable only through
-  the trusted proxy: bind `127.0.0.1` or firewall the port. The proxy must
-  authenticate every request and **overwrite** the inbound `SELVA-*` headers, since
-  Selva reads them as identity and never strips them itself. There is no runtime
-  check; the deployment is the entire trust boundary.
+- **Cookies** are `Secure`, `httpOnly` and `sameSite=lax` in production. `ALLOW_INSECURE_COOKIES=true` drops `Secure` for HTTP-only deployments. It is not in `.env.example`; without it, login over plain `http://` silently fails.
+- **`ORIGIN`** must be your public address when behind a proxy (`https://your-domain.com`, no trailing slash). Otherwise form POSTs fail with "Cross-site POST form submissions are forbidden".
+- **`HOST`** defaults to `0.0.0.0`. Under header-auth the app **must** be reachable only through the trusted proxy (bind `127.0.0.1`), and the proxy must authenticate every request and **overwrite** inbound `SELVA-*` headers. Selva never strips them and doesn't check at runtime.
 
 ## Logging and personal data
 
-`PinoLogger` strips values by **field name** only, and only credential-shaped names.
-Eight at the top level (`token`, `sessionToken`, `refreshToken`, `apiKey`,
-`api_key`, `password`, `authorization`, `cookie`), of which only five are also
-matched one level down (`*.token`, `*.sessionToken`, `*.refreshToken`, `*.apiKey`,
-`*.password`). Nothing deeper, and `authorization`, `cookie`, and `api_key` are
-**not** caught when nested.
-
-It does **not** catch emails or other personal data buried in a payload, and it only
-runs when the optional `pino` package is installed; the console fallback strips
-nothing. Log identifiers (`eventType`, `actorId`, `userId`), never whole domain
-objects. An audit payload can embed an invitee's email, and logs are the one place
-erasure cannot reach. See [data privacy](../concepts/data-privacy.md) for the full contract.
-
-## Next
-
-- [Caching](../concepts/caching.md): the cache byte budgets referenced above.
-- [Providers](../providers/overview.md): where secrets and the trust boundary come from.
-- [Admin guide](./admin.md): where compute keys and limits surface in the UI.
+`PinoLogger` redacts by field name only. Top level: `token`, `sessionToken`, `refreshToken`, `apiKey`, `api_key`, `password`, `authorization`, `Authorization`, `cookie`, `secret`. One level down, the same minus `api_key` and `cookie`. Nothing deeper, no personal data such as emails, and nothing at all when `pino` isn't installed (console fallback). Log identifiers (`eventType`, `actorId`, `userId`), never whole objects: logs are where erasure can't reach. See [data privacy](../concepts/data-privacy.md).

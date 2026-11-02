@@ -1,3 +1,4 @@
+import { walkPages } from '@selvajs/platform';
 import type { IDataProvider, Invite, RequestContext } from '@selvajs/platform';
 
 /**
@@ -14,12 +15,9 @@ export async function findPendingInviteInOrg(
 	id: string,
 	store: IDataProvider['invites']
 ): Promise<Invite | null> {
-	let cursor: string | undefined;
-	do {
-		const page = await store.listByOrg(ctx, orgId, { limit: 200, cursor });
+	for await (const page of walkPages((p) => store.listByOrg(ctx, orgId, p))) {
 		const match = page.items.find((i) => i.id === id);
 		if (match) return match;
-		cursor = page.nextCursor ?? undefined;
-	} while (cursor);
+	}
 	return null;
 }

@@ -1,5 +1,5 @@
 import type { PlatformPermission, RequestContext } from '@selvajs/platform';
-import { hasPermission, SYSTEM_CONTEXT } from '@selvajs/platform';
+import { hasPermission, SYSTEM_CONTEXT, walkPages } from '@selvajs/platform';
 import {
 	getAuthProvider,
 	getOrganizationProvider,
@@ -65,8 +65,6 @@ export async function requireEnabledToBecomeAdmin(
 	}
 }
 
-const ORG_PAGE_LIMIT = 200;
-
 /**
  * Erasing an org's only owner would leave nobody who can run it: `canReclaim`
  * needs an org owner or admin, so unlike a project there is no way back. The
@@ -75,9 +73,7 @@ const ORG_PAGE_LIMIT = 200;
  */
 export async function requireNotSoleOrgOwner(targetUserId: string): Promise<void> {
 	const orgs = getOrganizationProvider();
-	let cursor: string | undefined;
-	do {
-		const page = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: ORG_PAGE_LIMIT, cursor });
+	for await (const page of walkPages((p) => orgs.listOrgs(SYSTEM_CONTEXT, p))) {
 		const memberships = await orgs.getOrgMembersFor(
 			SYSTEM_CONTEXT,
 			page.items.map((o) => o.id),
@@ -92,20 +88,13 @@ export async function requireNotSoleOrgOwner(targetUserId: string): Promise<void
 				`This user is the only owner of ${org.name}. Make someone else an owner, or delete the organization first.`
 			);
 		}
-		cursor = page.nextCursor;
-	} while (cursor);
+	}
 }
 
 async function orgHasAnotherOwner(orgId: string, exceptUserId: string): Promise<boolean> {
 	const orgs = getOrganizationProvider();
-	let cursor: string | undefined;
-	do {
-		const page = await orgs.listOrgMembers(SYSTEM_CONTEXT, orgId, {
-			limit: ORG_PAGE_LIMIT,
-			cursor
-		});
+	for await (const page of walkPages((p) => orgs.listOrgMembers(SYSTEM_CONTEXT, orgId, p))) {
 		if (page.items.some((m) => m.role === 'owner' && m.userId !== exceptUserId)) return true;
-		cursor = page.nextCursor;
-	} while (cursor);
+	}
 	return false;
 }

@@ -53,7 +53,9 @@ export {
 	MAX_PAGE_LIMIT,
 	clampPageLimit,
 	decodeOffsetCursor,
-	encodeOffsetCursor
+	encodeOffsetCursor,
+	listAll,
+	walkPages
 } from './pagination.js';
 
 export type {

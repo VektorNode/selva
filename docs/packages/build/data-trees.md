@@ -26,45 +26,27 @@ Use several branches only when the definition processes groups separately, like 
 
 ## Building inputs
 
-`TreeBuilder` creates the trees a solve sends.
-
 ```ts
 import { TreeBuilder } from '@selvajs/compute/grasshopper';
 
 // Start from every input's default value.
 let inputs = TreeBuilder.fromInputParams(io.inputs);
 
-// A single value goes to branch {0}.
+// A single value or a list goes to branch {0}.
 inputs = TreeBuilder.replaceTreeValue(inputs, 'Radius', 10);
-
-// A list also goes to {0}.
 inputs = TreeBuilder.replaceTreeValue(inputs, 'Counts', [1, 2, 3]);
 
-// A map of paths gives you several branches.
+// A map of paths gives several branches.
 inputs = TreeBuilder.replaceTreeValue(inputs, 'Points', { '{0}': [1, 2], '{0;1}': [3] });
 ```
 
-Three habits prevent most mistakes:
+- `replaceTreeValue` returns a new array. Ignore it and the solve sends the defaults.
+- Inputs match by _nickname_, not display name. `io.inputs` lists both.
+- A misspelled name adds a tree the definition ignores, with no error.
 
-1. **Use the returned value.** `replaceTreeValue` gives you a new array and leaves the old one alone. If you ignore the result, the solve sends the defaults.
-2. **Use the nickname.** Inputs are matched by their _nickname_, not their display name. `io.inputs` lists both.
-3. **Check the name.** If you misspell a name, `replaceTreeValue` adds a new tree that the definition ignores, without any error.
-
-### Building from raw values
-
-`TreeBuilder.fromValues` is meant for values that come straight from a UI. It cleans them up the way Grasshopper expects:
-
-- Number and Integer items are converted to numbers. Integers are rounded.
-- Numbers are limited to the input's `minimum` and `maximum`, and a warning is logged when one is changed.
-- Boolean items also accept the text `'true'` and `'false'`.
-- An item that can't be converted is dropped, with a warning.
-- An input left with no items is left out, so Grasshopper uses its own value. An empty string `''` counts as an item, not as "nothing".
-
-Objects are sent as JSON text. Numbers and booleans keep their type.
+`TreeBuilder.fromValues` takes values straight from a UI and cleans them up: numbers are converted (integers rounded) and clamped to `minimum`/`maximum` with a warning, booleans accept `'true'`/`'false'`, unconvertible items are dropped with a warning, and an input left empty is omitted so Grasshopper uses its own value. `''` counts as an item. Objects are sent as JSON text.
 
 ## Reading outputs
-
-Use the processor to get ready-to-use values:
 
 ```ts
 import { GrasshopperResponseProcessor } from '@selvajs/compute/grasshopper';
@@ -74,24 +56,21 @@ const { values } = processor.getValues(); // every output, by name
 const area = processor.getValue({ byName: 'Area' });
 ```
 
-Each item is converted by its type: text to text, integers and decimals to numbers, true/false to booleans, and files to file objects. An integer too large for a JavaScript number stays as a string of digits, so it isn't rounded by mistake.
+Items convert by type: text, numbers, booleans, file objects. An integer too large for a JavaScript number stays a digit string.
 
-To keep the branch structure, read the tree itself:
+To keep branches, read the tree:
 
 ```ts
 const branches = TreeBuilder.getTree(response.values, 'Points');
 // Map { '{0}' => [...], '{0;1}' => [...] }, or null if there is no such output
 
 const single = TreeBuilder.getTreeValue(response.values, 'Area');
-// One item as itself (5, not [5]); several items as an array.
-// Throws INVALID_INPUT if the output has more than one branch.
+// 5, not [5]. Throws INVALID_INPUT if the output has more than one branch.
 ```
-
-Use `getTreeValue` only for outputs that always have one branch. Otherwise use `getTree`.
 
 ## Geometry outputs
 
-To get Rhino geometry as rhino3dm objects, pass a rhino3dm module:
+Pass a rhino3dm module to get Rhino geometry objects:
 
 ```ts
 const result = processor.getValues(false, { rhino });
@@ -99,10 +78,8 @@ const result = processor.getValues(false, { rhino });
 result.dispose();
 ```
 
-These objects live in memory that JavaScript can't clean up by itself. Call `dispose()` when you're done with the values, after every solve, or memory use keeps growing. Don't use the values after that. Install `rhino3dm` yourself: this package doesn't include it.
-
-To draw geometry in 3D, pass the response to `@selvajs/visualization/parse` instead.
+They live in WebAssembly memory that garbage collection can't free. Call `dispose()` after every solve and don't use the values afterward. Install `rhino3dm` yourself. To draw geometry in 3D, pass the response to `@selvajs/visualization/parse`.
 
 ## When an output is empty
 
-An output with no branches means the definition produced nothing for it. That isn't always a mistake. Common causes are a missing input, a branch switched off by a toggle, or an earlier component that failed. To see which outputs came back empty, call `setLogger(console)` from `/core` and set `debug: true` in the client config.
+No branches means the definition produced nothing: a missing input, a toggled-off branch, or an earlier component that failed. Call `setLogger(console)` from `/core` and set `debug: true` to see which outputs came back empty.

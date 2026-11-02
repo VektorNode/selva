@@ -268,7 +268,7 @@ export class SolveEngine {
 		const { body, serializedBytes, serializeMs, gzipMs } = encoded;
 		const { solveMs, response } = flight;
 		const serverTotalMs = performance.now() - (args.loadStartMs ?? startedAt);
-		const serverTiming = buildServerTiming({
+		const timing = {
 			defLoadMs: args.defLoadMs ?? 0,
 			treeBuildMs,
 			solveMs,
@@ -277,18 +277,14 @@ export class SolveEngine {
 			serverTotalMs,
 			rhino: flight.rhino,
 			settle: flight.settle,
-			defBytes: flight.defBytes,
-			prepMarks: args.prepMarks ?? []
-		});
+			...(flight.defBytes ? { defBytes: flight.defBytes } : {})
+		};
+		const serverTiming = buildServerTiming({ ...timing, prepMarks: args.prepMarks ?? [] });
 
 		return {
 			kind: 'ok',
 			envelope: buildEnvelope(encoded, response, serverTiming, {
-				treeBuildMs,
-				solveMs,
-				serializeMs,
-				gzipMs,
-				serverTotalMs,
+				...timing,
 				serializedBytes,
 				compressedBytes: encoded.encoding === 'gzip' ? (body as Uint8Array).byteLength : null
 			}),

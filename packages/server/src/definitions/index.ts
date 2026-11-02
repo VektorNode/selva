@@ -13,6 +13,7 @@ export type { SchemaExtractionResult } from './schema-extraction.js';
 export {
 	createDefinitionLoader,
 	DefinitionLoadError,
+	isUsableCachedSchema,
 	type DefinitionChannel,
 	type DefinitionLoader,
 	type DefinitionLoaderDeps,

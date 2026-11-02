@@ -7,11 +7,11 @@ description: 'Ready-to-copy patterns for @selvajs/compute: live sliders, batch j
 
 # Common tasks
 
-These assume you already have a connected `client`, a `definition` and an `io`. [How the compute client works](./how-it-works.md) shows how to get them.
+These assume a connected `client`, a `definition` and an `io`. [How the compute client works](./how-it-works.md) shows how to get them.
 
 ## A live slider
 
-Run one solve at a time, let the newest value win, and answer repeated values instantly.
+The newest value wins, and repeated values answer instantly.
 
 ```ts
 const scheduler = client.createScheduler({
@@ -37,11 +37,7 @@ scheduler.subscribe(() => {
 });
 ```
 
-`latest-wins` cancels the outdated solve instead of waiting for it. The cache answers a slider that goes back to an earlier value without sending a request.
-
 ## A submit button with long jobs
-
-Every job runs, in order, and the user can cancel.
 
 ```ts
 const scheduler = client.createScheduler({ mode: 'queue', timeoutMs: 0 });
@@ -52,7 +48,7 @@ cancelButton.onclick = () => controller.abort();
 const response = await scheduler.solve(definition, inputs, { signal: controller.signal });
 ```
 
-`timeoutMs: 0` means no time limit. A proxy in front of Compute can still close a connection that sits idle for too long. See "Long jobs behind a proxy" in the package README.
+`timeoutMs: 0` means no limit. A proxy can still close an idle connection; see "Long jobs behind a proxy" in the package README.
 
 ## Many solves at once
 
@@ -67,21 +63,17 @@ const scheduler = client.createScheduler({
 const responses = await Promise.all(variants.map((tree) => scheduler.solve(definition, tree)));
 ```
 
-Set `maxConcurrent` to roughly the number of solves your Compute server can run at the same time. Higher values just make the extra requests wait on the server. If that number changes later, call `scheduler.setMaxConcurrent(n)`.
+Set `maxConcurrent` to the number of solves your server runs at once. On a shared server, add `maxQueueDepth` and `queueWaitMs`.
 
-On a shared server, also set `maxQueueDepth` and `queueWaitMs`. A burst of requests is then turned away quickly instead of waiting forever.
-
-## Clean up when you're done
+## Clean up
 
 ```ts
 onDestroy(() => scheduler.dispose());
 ```
 
-`dispose()` cancels everything running or waiting, empties the cache, and makes later calls fail with `INVALID_STATE`. Disposing the client disposes every scheduler made from it.
+`dispose()` cancels running and waiting solves and empties the cache. Later calls fail with `INVALID_STATE`. Disposing the client disposes its schedulers.
 
 ## Show the outputs that worked
-
-A scheduler returns the response even when the solver reported errors:
 
 ```ts
 const response = await scheduler.solve(definition, inputs);
@@ -92,7 +84,7 @@ const { values } = new GrasshopperResponseProcessor(response).getValues();
 showWhatExists(values);
 ```
 
-By default, a response with errors is cached like any other, because Grasshopper errors usually depend only on the inputs. If your definition reads something outside its inputs, such as a web service, errors may be temporary. Then use `cache: { maxBytes, cacheErroredSolves: false }`.
+Errored responses are cached too. If the definition reads outside its inputs (a web service), use `cache: { maxBytes, cacheErroredSolves: false }`.
 
 ## See how a solve went
 
@@ -100,44 +92,40 @@ By default, a response with errors is cached like any other, because Grasshopper
 const { response, fromCache, definitionReuploaded, durationMs } = await scheduler.solveDetailed(
 	definition,
 	inputs,
-	{
-		onServerTiming: (timing) => log(timing.solve, timing.gh)
-	}
+	{ onServerTiming: (timing) => log(timing.solve, timing.gh) }
 );
 ```
 
-For metrics across all solves, the scheduler's `onSettle` option runs when a solve finishes, fails or is cancelled. A solve replaced in `latest-wins` mode runs `onSuperseded` instead. `onServerTiming` doesn't run for cache hits, because no request was sent.
+The scheduler's `onSettle` runs when any solve finishes, fails or is cancelled; `onSuperseded` runs for solves replaced in `latest-wins`. `onServerTiming` doesn't run for cache hits.
 
 ## Load definition bytes on demand
 
-If your definitions live in storage, pass a `DefinitionRef` instead of the bytes. The bytes are fetched only when an upload is needed.
+Pass a `DefinitionRef` to fetch bytes from storage only when an upload is needed.
 
 ```ts
 import type { DefinitionRef } from '@selvajs/compute/core';
 
 const definition: DefinitionRef = {
-	key: versionId, // identifies one exact file: a version id, never a file name
+	key: versionId, // one exact file: a version id, never a file name
 	load: (signal) => storage.read(versionId, { signal })
 };
 
 await scheduler.solve(definition, inputs);
 ```
 
-The first solve calls `load()` and uploads the file. Later solves send only the server's key and never call `load()`. A solve cancelled while it waits in the queue doesn't load anything either. Pass `signal` on to your storage read, so cancelling a solve also stops the read.
+Only the first solve calls `load()`. The `key` is trusted: two files sharing one return each other's results.
 
-The `key` is trusted. If two different files share a key, each gets the other's results and nothing warns you. Use a version or content id.
-
-## Solve a definition from a URL
+## Solve from a URL
 
 ```ts
 await client.solve('https://example.com/definition.gh', inputs);
 ```
 
-The Compute server downloads the file itself, so the URL must be reachable from the server. Nothing is uploaded, so server definition reuse has nothing to do.
+The Compute server downloads the file, so it must reach the URL.
 
 ## Download file outputs
 
-File outputs need the Selva plugin and the VektorNode fork.
+Needs the Selva plugin and the VektorNode fork.
 
 ```ts
 import { downloadFileDataByRoot } from '@selvajs/compute/core';
@@ -146,4 +134,4 @@ const files = [processor.getValue({ byName: 'Export' })].flat();
 await downloadFileDataByRoot(files, 'export');
 ```
 
-This runs in a browser. In Node, use `groupFilesByRoot` to group the files the same way, then write them yourself. The package README explains the `Sub Folder` convention and the resulting archive layout.
+This runs in a browser. In Node, group files with `groupFilesByRoot` and write them yourself. The package README covers the `Sub Folder` convention.

@@ -7,61 +7,35 @@ description: 'Connect an AI agent to Selva over MCP: the endpoint, signing in wi
 
 # MCP server
 
-Every Selva instance serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp`. An agent
-connected to it can find a definition, read its inputs, solve it and read the numbers back. With
-a key that can upload, it can also publish a version. It cannot delete anything, manage share
-links or tokens, or reach `/admin`.
+Every Selva instance serves an [MCP](https://modelcontextprotocol.io) endpoint at `/mcp`. An agent can find a definition, read its inputs, solve it and read the numbers back. With an upload-capable key it can also publish a version. It cannot delete anything, manage share links or tokens, or reach `/admin`.
 
-The endpoint is a client of `/api/v1`: each tool call goes through the API with the caller's key,
-so it sees exactly what that key sees and is rate-limited the same way.
+Each tool call goes through `/api/v1` with the caller's key, so the agent sees what that key sees and is rate-limited the same way.
 
 ## Connect
 
-Point the client at `https://<your-selva-host>/mcp`. It signs in one of two ways.
+Point the client at `https://<your-selva-host>/mcp`.
 
-### Sign in through the browser (OAuth)
+### Browser sign-in (OAuth)
 
-Clients that support MCP authorization, such as claude.ai connectors, Claude Desktop and Claude
-Code, need only the URL. On first use they open Selva in a browser, where you sign in and choose
-what the client may do:
+Clients with MCP authorization (claude.ai connectors, Claude Desktop, Claude Code) need only the URL. On first use they open Selva, where you sign in and choose **Read** or **Read and run solves**. In claude.ai: **Settings → Connectors → Add custom connector**.
 
-- **Read**: browse definitions and their inputs.
-- **Read and run solves**: also solve, which spends your compute budget.
+Allowing creates a 30-day API token named after the client, listed under **Team → API tokens** where you can revoke it. After expiry the client asks you to sign in again. Details: [Signing in from apps](./signing-in-from-apps.md).
 
-Allowing it creates an API token named after the client, such as "Claude (OAuth)", for 30 days.
-It shows up under **Team → API tokens**, where you can revoke it. When it expires, the client
-asks you to sign in again. [Signing in from apps](./signing-in-from-apps.md) covers the flow,
-the org picker, and who may approve which access.
+### A key you create
 
-In claude.ai: **Settings → Connectors → Add custom connector**, and paste the URL.
-
-### Send a key yourself
-
-1. Create an API key at **Team → API tokens** (`/team/tokens`). Pick **Read and run solves**; a
-   **Read** key sees no solve tool. To publish from the agent, pick **Read, change and run
-   solves**. Browser sign-in never grants publishing.
-2. Send it as a header: `Authorization: Bearer selva_…`.
-
-Claude Code:
+1. Create a key at **Team → API tokens** (`/team/tokens`). **Read and run solves** is needed for the solve tool. **Read, change and run solves** also allows publishing; browser sign-in never grants that.
+2. Send it as `Authorization: Bearer selva_…`.
 
 ```bash
 claude mcp add --transport http selva https://selva.example.com/mcp \
   --header "Authorization: Bearer selva_…"
 ```
 
-Other clients that support remote MCP servers with custom headers take the same URL and header in
-their MCP config.
-
-A browser-based client, such as a web MCP inspector, is refused unless its origin is listed in
-`MCP_ALLOWED_ORIGINS` (see [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)).
+Browser-based clients are refused unless their origin is in `MCP_ALLOWED_ORIGINS` (see [`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example)).
 
 ## Limits
 
-- **Solves spend compute.** A token solve draws on its owner's compute budget, and the token rate
-  limit applies on top: see [Security and limits](../../self-hosting/deployment/security-and-limits.md#api-tokens-apiv1).
-  The server tells the agent to confirm with the user before a series of solves.
-- **Only the live version solves.** A definition with nothing published can't be solved from MCP.
-- **Geometry stays in Selva.** A solve returns number and text outputs, a count per geometry
-  output and file names, plus a link to view the result.
-- **Tokens need a provider that stores them.** On a data provider without an API-token store,
-  every call returns 503 `API_TOKENS_UNAVAILABLE`.
+- Solves draw on the token owner's compute budget, plus the token rate limit: see [Security and limits](../../self-hosting/deployment/security-and-limits.md#api-tokens-apiv1).
+- Only the live version solves.
+- A solve returns number and text outputs, a count per geometry output, file names and a link to view the result. Geometry stays in Selva.
+- Without an API-token store in the data provider, every call returns 503 `API_TOKENS_UNAVAILABLE`.

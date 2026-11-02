@@ -170,10 +170,27 @@
 	color: var(--color-foreground);
 }
 
-/* Center build-time mermaid diagrams (rendered as inline SVG). */
-.prose > svg {
+/* Diagrams sit in a card matching the SVG palette: mermaid output (wrapped in
+   <figure> by rehype-mermaid-svg-html) and hand-drawn SVGs in /diagrams. */
+.prose figure.diagram {
+	display: flex;
+	justify-content: center;
+	margin-block: 1.5rem;
+	padding: 1.25rem 1rem;
+	overflow-x: auto;
+	background: #16201a;
+	border: 1px solid color-mix(in oklab, white 10%, transparent);
+	border-radius: 0.75rem;
+}
+.prose figure.diagram > svg {
+	flex: none;
+	max-width: 100%;
+	height: auto;
+}
+.prose img[src^='/diagrams/'] {
 	display: block;
-	margin-inline: auto;
+	border: 1px solid color-mix(in oklab, white 10%, transparent);
+	border-radius: 0.75rem;
 }
 
 /* Copy-to-clipboard button on Shiki code blocks (markup from svelte.config.js). */

@@ -20,7 +20,8 @@ import {
 	canEditDefinition,
 	canView,
 	outsideTokenOrg,
-	scopeAllows
+	scopeAllows,
+	walkPages
 } from '@selvajs/platform';
 import type {
 	DefinitionListOptions,
@@ -135,12 +136,8 @@ export async function canCreateDefinitionInOrg(
 ): Promise<boolean> {
 	const orgMember =
 		(await deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [orgId], ctx.userId)).get(orgId) ?? null;
-	let cursor: string | undefined;
-	do {
-		const page = await deps.projects.listProjects(SYSTEM_CONTEXT, orgId, {
-			limit: SCAN_LIMIT,
-			cursor
-		});
+	const pages = walkPages((page) => deps.projects.listProjects(SYSTEM_CONTEXT, orgId, page));
+	for await (const page of pages) {
 		const platformIds = page.items.filter((p) => p.visibility === 'platform').map((p) => p.id);
 		const [members, grants] = await Promise.all([
 			deps.projects.getProjectMembersFor(
@@ -162,8 +159,7 @@ export async function canCreateDefinitionInOrg(
 			)
 		);
 		if (allowed) return true;
-		cursor = page.nextCursor;
-	} while (cursor);
+	}
 	return false;
 }
 

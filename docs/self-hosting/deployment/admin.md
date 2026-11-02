@@ -7,129 +7,69 @@ description: 'Day-to-day operation: registering compute servers, managing users,
 
 # Admin Guide
 
-`/admin` is where you run the instance: users, orgs, the compute pool, updates, and
-the audit log. For the authorization model underneath it, see
-[Permissions & Organizations](../concepts/permissions.md).
+`/admin` runs the instance. The model underneath is [Permissions & Organizations](../concepts/permissions.md).
 
 ## Who can reach /admin
 
-**Any** platform permission gets you in: `instance_admin`, `manage_compute`,
-`manage_instance_users`, or `manage_updates`. Org-scope permissions don't. Each
-section then gates itself on top of that:
+Any platform permission gets you in: `instance_admin`, `manage_compute`, `manage_instance_users` or `manage_updates`. Org-scope permissions don't. Sections then gate themselves:
 
-| Section       | Requires                                                                                                            |
-| ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Users         | `manage_instance_users`                                                                                             |
-| Organizations | `instance_admin`; hidden in single-tenant mode                                                                      |
-| Compute       | `manage_compute`                                                                                                    |
-| System        | any platform permission to view; `manage_updates` to update; `instance_admin` for health check and throughput probe |
-| Audit         | `instance_admin`                                                                                                    |
-| Projects      | `instance_admin` + `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS`; 404s otherwise                                            |
+| Section       | Requires                                                                              |
+| ------------- | ------------------------------------------------------------------------------------- |
+| Users         | `manage_instance_users`                                                               |
+| Organizations | `instance_admin`; hidden in single-tenant mode                                        |
+| Compute       | `manage_compute`                                                                      |
+| System        | view: any; update: `manage_updates`; health check, throughput probe: `instance_admin` |
+| Audit         | `instance_admin`                                                                      |
+| Projects      | `instance_admin` + `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS` (404 otherwise)              |
 
-`instance_admin` is the superuser: it bypasses management checks at the call site
-rather than expanding into the other permissions in the stored set.
+`instance_admin` bypasses management checks at the call site.
 
 ## First-run setup
 
-On a brand-new instance with no users, all traffic is redirected to `/setup`.
+With no users, all traffic redirects to `/setup`.
 
-- **Password / local providers:** `/setup` creates the first user, grants them all
-  platform permissions, and in single-tenant mode seeds the default org and
-  project. It only renders while no admin exists.
-- **OAuth / email-link / header-auth:** there's no `/setup` form. Set
-  `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`, and the first sign-in matching it is granted
-  admin. The policy differs by tenancy:
-  - `single` + no env var → the first person to sign in becomes admin.
-  - `single` + env var set → only that email qualifies.
-  - `multi` → the env var is **required** and must match, so a random first signup
-    can't become staff.
+- **Password / local:** `/setup` creates the first user with all platform permissions (and, single-tenant, the default org and project). It renders only while no admin exists.
+- **OAuth / email-link / header-auth:** no form. Set `BOOTSTRAP_INSTANCE_ADMIN_EMAIL`; the first matching sign-in becomes admin (header-auth matches the UPN).
+  - `single`, unset: the first sign-in becomes admin.
+  - `single`, set: only that email.
+  - `multi`: the variable is **required**.
 
-Under header-auth the same variable is matched against the upstream UPN rather than a
-password identity.
-
-`BOOTSTRAP_INSTANCE_ADMIN_EMAIL` is also how you get back in if admin access is ever
-lost, after restoring a backup or an upgrade that leaves the database in a state
-nobody can administer.
+The same variable restores access if admin access is lost.
 
 ## Sections
 
-### Users (`manage_instance_users`)
+### Users
 
-Create users, change their permissions, and delete them. You can also add existing
-users to the active org, and create and revoke org invites.
+- Granting platform permissions requires `instance_admin`, so no self-elevation.
+- **Deleting a user is irreversible.** Linked rows go with them. On Supabase, audit rows they authored are deleted, solve metrics anonymized, invites to their email deleted, and their email redacted from remaining audit payloads.
+- Delete, disable and permission removal return **409** if they'd remove the last enabled instance admin.
 
-- **Granting platform-scope permissions requires `instance_admin`**, so an operator
-  holding only `manage_instance_users` can't self-elevate.
-- **Deleting a user is a hard, irreversible erasure.** Rows pointing at the user go
-  with them; personal data that link doesn't reach is cleaned up explicitly: on
-  Supabase, audit rows the user authored are deleted, solve metrics anonymized,
-  invites to their email deleted, and their email redacted from surviving audit
-  payloads.
-- Delete, disable, and permission-removal each return **409** if they'd remove the
-  last enabled instance admin.
+### Organizations
 
-### Organizations (`instance_admin`, multi-tenant only)
+**Deleting an org takes everything under it.** Members, projects and project members are marked deleted; pending invites and the org's compute config are removed.
 
-Lists every org with member counts; create, rename, and delete through the admin API.
-**Deleting an org takes everything under it:** org members, projects, and project
-members are marked deleted, while pending invites and the org's compute config are
-removed outright. Single-tenant instances hide this section.
+### Compute
 
-### Compute (`manage_compute`)
+Register, edit and remove servers, set the global default, and scope servers to orgs. Probing only reads version, plugins and workers. **Purge** clears the server's cache; **shutdown** stops its Rhino workers after current jobs finish.
 
-Register, edit, and remove platform Rhino.Compute servers, set the global default,
-and scope each server to specific orgs. Probing a server is a passive read of its
-version, plugins, and running workers; it never spawns work. Two actions apply to
-the server itself: **purge** clears its cache where it can, and **shutdown** stops
-its Rhino worker processes, letting each finish what it is doing first.
-
-On save, an omitted API key is preserved, `null` clears it, and a new value replaces
-it. Rotating a key or URL evicts the warm client for that server.
-
-Rotating `SELVA_AT_REST_KEY`, or restoring a backup, leaves stored API keys
-undecryptable. The system health check flags this, and the fix is to re-enter the
-keys here.
+On save, an omitted API key is kept, `null` clears it, a new value replaces it. Rotating `SELVA_AT_REST_KEY` or restoring a backup makes stored keys undecryptable; the health check flags it, so re-enter them here.
 
 ### System
 
-- **Release channel** (`manage_updates`): switch between `stable` and `beta`. This
-  only persists the channel, it does **not** trigger an update.
-- **Update** (`instance_admin`): runs the package update and restarts the app, with
-  output streamed live. A brief downtime is by design. The new process gets ~30 s to
-  pass its health check (15 probes, 2 s apart); if it doesn't, the update rolls back
-  to the prior version by itself. Beta builds may be unstable, and getting back to
-  stable means switching channel and updating again.
+- **Channel** (`stable` or `beta`): saves the choice only; it does not update.
+- **Update:** runs the package update and restarts. The new process has about 30 s to pass its health check (15 probes, 2 s apart), else it rolls back. To leave beta, switch channel and update again.
+- **Supabase:** apply migrations **before** updating ([Upgrading later](../providers/supabase.md#upgrading-later)). Updates never run migrations, so a release missing them fails the health check and rolls back every time.
+- **Health check:** at-rest decryption, DB schema version, default compute reachability, writable `DATA_PATH`.
+- **Throughput probe:** measures bandwidth with incompressible bytes, not reachability.
 
-  On Supabase, apply pending migrations **before** updating; see
-  [Upgrading later](../providers/supabase.md#upgrading-later). The update never touches
-  the database (migrations aren't reversible, so auto-applying them would strand the
-  schema ahead of a rolled-back app), so a release whose migrations are missing fails
-  its health check and rolls back every time until you run them.
+### Audit
 
-- **Health check** (`instance_admin`): verifies at-rest secret decryption, DB schema
-  version, default compute reachability, and that `DATA_PATH` is writable.
-- **Throughput probe** (`instance_admin`): measures download and upload bandwidth by
-  streaming incompressible bytes. It is not a reachability test.
-- Read-only panels show feature flags, resolved compute and upload limits, the
-  version, and the current channel.
+Paged, read-only log with actor and target names. Filter by event type, actor and date. Shows "unavailable" if the provider has no audit query layer.
 
-### Audit (`instance_admin`)
+### Platform Projects
 
-A read-only, paged view of the audit log, enriched with actor and target names.
-Filter by event type (a fixed set of 25 covering org, project, member, definition,
-version, share-link, invite, and system-update events), by actor id, and by date
-range. Renders "unavailable" if the provider has no audit query layer. Deleting a
-user scrubs their audit rows (see Users).
-
-### Platform Projects (`instance_admin`, `SELVA_FLAG_ENABLE_PLATFORM_PROJECTS`)
-
-List, create, rename, and delete cross-org platform projects, and manage per-org or
-per-user access grants, each with a `canSolve` flag. Membership of the host org does
-not by itself grant access, because `platform` visibility overrides it. With the
-flag off the section isn't there at all.
+Cross-org projects with per-org or per-user grants, each with a `canSolve` flag. Host-org membership doesn't grant access.
 
 ## Next
 
-- [Permissions & Organizations](../concepts/permissions.md): the model behind these controls.
-- [Security & Limits](./security-and-limits.md): secrets, cookies, and the caps.
-- [Providers](../providers/overview.md): where admin state is stored.
+[Security & Limits](./security-and-limits.md) · [Providers](../providers/overview.md)

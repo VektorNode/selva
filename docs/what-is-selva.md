@@ -9,39 +9,35 @@ description: "Your workflow, everyone's tool: the problem Selva solves and the t
 
 **Your workflow, everyone's tool.**
 
-A few specialists build a Grasshopper definition. Everyone else needs what it produces, not the canvas it runs on. Selva puts a web UI and a live 3D viewer in front of the definition, so the rest of the company can use it through a link. The file stays on your server.
+A few specialists build a Grasshopper definition. Everyone else needs what it produces, not the canvas. Selva puts a web UI and a live 3D viewer in front of the definition, so colleagues use it through a link. The file stays on your server, and roles decide who can change a definition and who can only run it.
 
-Selva is open source (MIT) and free to self-host and modify.
+Sending the `.gh` file instead means the recipient needs Rhino and Grasshopper skill, and keeps the method permanently.
 
-## Where it came from
-
-The definitions worth sharing are the ones you can least afford to hand out. Years of production logic, tolerances, and rules of thumb, kept by a handful of people who know how it fits together.
-
-Sending someone the `.gh` file has two problems. They need a Rhino license and enough Grasshopper knowledge to open it without breaking something. And they now have the method permanently, to reuse or pass on.
-
-So the logic stays with the people who wrote it. Everyone else files a request and waits.
-
-Selva closes that gap. You hand out a URL instead of the file. Colleagues drive the model and get geometry back. Roles decide who can change a definition and who can only run it.
+Selva is open source (MIT) and free to self-host.
 
 ## Two halves
 
-**The Selva plugin** is where you design the interface, entirely from Grasshopper. Drop components on the canvas to mark which parameters users drive and what comes back out. Sliders and toggles become web controls on their own. Dedicated components cover dropdowns, color pickers, and file and image uploads. Then a designer panel, linked live to the running Rhino session, lets you drag those parameters into tabs and groups. That layout is the **schema**, and it saves into the `.gh` file itself. No separate design tool, no code.
+```mermaid
+flowchart LR
+    P["Selva plugin<br/>design the UI in Grasshopper"] -->|schema, saved in the .gh| W["Web app<br/>controls + 3D viewer"]
+    W -->|solve| C["Rhino.Compute<br/>headless Rhino"]
+```
 
-**The web app** is where the interface runs. It loads the schema, draws the controls, and solves through **Rhino.Compute**, a headless Rhino that does nothing but solve definitions on request.
+**The plugin** is where you design the interface. Components on the canvas mark which parameters users drive and what comes back. Sliders and toggles become web controls on their own; other components cover dropdowns, color pickers, and file and image uploads. A designer panel, linked to the running Rhino, lets you drag them into tabs and groups. That layout is the **schema**.
 
-One schema drives both. It generates into TypeScript and C#, so the two never drift.
+**The web app** loads the schema, draws the controls, and solves through **Rhino.Compute**.
+
+One schema drives both. It generates into TypeScript and C#, so the two stay in step.
 
 ## Two ways to run the web half
 
-Take the whole app, or just the parts you need:
-
-1. **Use the Selva platform.** `@selvajs/selva` plus the [CLI](./self-hosting/get-started/cli.md) is a ready-made multi-user app. It gives you organizations, projects, and roles that separate who can edit a definition's schema from who can only run it. Most teams take this path.
-2. **Build your own app.** The same parts ship as `@selvajs/*` npm packages: a Rhino.Compute client, the 3D viewer, the Svelte UI layer, and provider interfaces for auth and storage. Build one API endpoint for an existing internal tool, or a full custom application. See [Build your own app](./packages/build/overview.md).
+1. **The Selva platform.** `@selvajs/selva` plus the [CLI](./self-hosting/get-started/cli.md) is a ready-made multi-user app with organizations, projects, and roles. Most teams take this path.
+2. **Your own app.** The same parts ship as `@selvajs/*` npm packages: a Rhino.Compute client, the 3D viewer, Svelte UI, and provider interfaces. See [Build your own app](./packages/build/overview.md).
 
 Auth, data, and storage are pluggable [providers](./self-hosting/providers/overview.md) either way.
 
 ## Next
 
-- [Architecture](./architecture.md): how the parts fit together.
-- [Permissions](./self-hosting/concepts/permissions.md): who can edit, who can only run.
-- [Get Started](./self-hosting/get-started/overview.md): set it up.
+- [Architecture](./architecture.md)
+- [Permissions](./self-hosting/concepts/permissions.md)
+- [Get Started](./self-hosting/get-started/overview.md)

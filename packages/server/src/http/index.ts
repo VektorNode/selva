@@ -17,6 +17,12 @@ export {
 } from './login-rate-limit.js';
 export { buildRequestContext, type BuildRequestContextInput } from './request-context.js';
 export {
+	createBoundedTtlCache,
+	type BoundedTtlCache,
+	type BoundedTtlCacheConfig
+} from './bounded-ttl-cache.js';
+export { createSessionRefresher, type SessionRefresher } from './session-refresher.js';
+export {
 	createHolderVerdictCache,
 	resolveApiToken,
 	type ApiTokenResolution,

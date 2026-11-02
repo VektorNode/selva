@@ -5,7 +5,9 @@
 
 import { gzip } from 'node:zlib';
 import { promisify } from 'node:util';
+import type { ServerTiming } from '@selvajs/compute/core';
 import type { GrasshopperComputeResponse } from '@selvajs/compute/grasshopper';
+import type { CacheVerdict, DefBytesVerdict } from './server-timing.js';
 
 // gzipSync blocks the event loop for multi-MB bodies; promisify(gzip) doesn't.
 const gzipAsync = promisify(gzip);
@@ -31,8 +33,9 @@ export const COMPUTE_VERSION_HEADER = 'X-Selva-Compute-Version';
 // Envelope
 // ============================================================================
 
-/** Phase timings measured for one caller; the caller uses them for debug logging. */
+/** What the `Server-Timing` header carries for one caller, as data: read this, don't parse that. */
 export interface SolvePhaseMetrics {
+	defLoadMs: number;
 	treeBuildMs: number;
 	solveMs: number;
 	serializeMs: number;
@@ -41,6 +44,11 @@ export interface SolvePhaseMetrics {
 	serializedBytes: number;
 	/** Null when compression was skipped. */
 	compressedBytes: number | null;
+	/** The compute server's own timing; null when it reports none. */
+	rhino: ServerTiming | null;
+	settle: CacheVerdict;
+	/** Absent for raw-bytes solves. */
+	defBytes?: DefBytesVerdict;
 }
 
 /** A ready-to-send response: body + headers + the solve result + phase metrics. */

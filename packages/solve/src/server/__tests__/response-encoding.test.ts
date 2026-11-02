@@ -20,13 +20,16 @@ function encoded(result: EncodedBody | 'too_large'): EncodedBody {
 }
 
 const metrics = {
+	defLoadMs: 0,
 	treeBuildMs: 0,
 	solveMs: 0,
 	serializeMs: 0,
 	gzipMs: 0,
 	serverTotalMs: 0,
 	serializedBytes: 0,
-	compressedBytes: null
+	compressedBytes: null,
+	rhino: null,
+	settle: { fromCache: false }
 };
 
 describe('acceptsGzip', () => {

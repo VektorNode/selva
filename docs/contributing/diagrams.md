@@ -3,7 +3,7 @@
 Docs are dark-only. Two kinds, one look:
 
 - **Flows and sequences:** a ` ```mermaid ` fence. Already themed in `packages/website/svelte.config.js`; don't set colors per diagram.
-- **Anything mermaid can't draw** (trees, layouts): a hand-written SVG in `packages/website/static/diagrams/`, embedded with `![alt](/diagrams/name.svg)`. Reference: `data-tree.svg`.
+- **Anything mermaid can't draw** (trees, layouts): a hand-written SVG in `packages/website/static/diagrams/`, embedded with `![alt](/diagrams/data-tree.svg)`.
 
 ## Palette
 

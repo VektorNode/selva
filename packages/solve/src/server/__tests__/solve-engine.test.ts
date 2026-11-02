@@ -537,6 +537,17 @@ describe('SolveEngine.solve — outcomes', () => {
 		expect(outcome.envelope.headers['Server-Timing']).toContain('tree;dur=');
 	});
 
+	it('carries what the Server-Timing header says as data', async () => {
+		const engine = new SolveEngine({ limits: baseLimits() });
+		const outcome = await engine.solve(solveArgs({ defLoadMs: 12 }));
+		if (outcome.kind !== 'ok') throw new Error(outcome.kind);
+		expect(outcome.envelope.metrics).toMatchObject({
+			defLoadMs: 12,
+			rhino: null,
+			settle: { fromCache: false }
+		});
+	});
+
 	it('measures total from the host request start', async () => {
 		const engine = new SolveEngine({ limits: baseLimits() });
 		const outcome = await engine.solve(solveArgs({ loadStartMs: performance.now() - 5_000 }));

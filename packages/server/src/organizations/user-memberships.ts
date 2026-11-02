@@ -1,7 +1,5 @@
-import { SYSTEM_CONTEXT } from '@selvajs/platform';
+import { SYSTEM_CONTEXT, walkPages } from '@selvajs/platform';
 import type { IOrgStore, OrgMember, Organization } from '@selvajs/platform';
-
-const PAGE = 200;
 
 /**
  * Every org `userId` belongs to, with their membership row. Reads a page of
@@ -13,9 +11,7 @@ export async function listUserMemberships(
 	userId: string
 ): Promise<{ org: Organization; member: OrgMember }[]> {
 	const out: { org: Organization; member: OrgMember }[] = [];
-	let cursor: string | undefined;
-	do {
-		const page = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: PAGE, cursor });
+	for await (const page of walkPages((p) => orgs.listOrgs(SYSTEM_CONTEXT, p))) {
 		const members = await orgs.getOrgMembersFor(
 			SYSTEM_CONTEXT,
 			page.items.map((o) => o.id),
@@ -25,7 +21,6 @@ export async function listUserMemberships(
 			const member = members.get(org.id);
 			if (member) out.push({ org, member });
 		}
-		cursor = page.nextCursor;
-	} while (cursor);
+	}
 	return out;
 }

@@ -8,6 +8,7 @@ import {
 	buildRequestContext,
 	createHolderVerdictCache,
 	createRouteClassifier,
+	createSessionRefresher,
 	isCrossSiteFormSubmission,
 	resolveApiToken
 } from '@selvajs/server/http';
@@ -24,6 +25,7 @@ import { MCP_PATH } from '$lib/server/mcp/server';
 
 const OAUTH_TOKEN_PATH = '/oauth/token';
 const holderVerdicts = createHolderVerdictCache();
+const refreshSession = createSessionRefresher(() => providers.auth.sessionRefresh);
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
@@ -312,9 +314,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// Local/HMAC sessions never set a refresh cookie, so this is a no-op there.
 		if (!user) {
 			const refreshToken = getRefreshToken(event.cookies);
-			const sessionRefresh = providers.auth.sessionRefresh;
-			if (refreshToken && sessionRefresh) {
-				const refreshed = await sessionRefresh.refreshSession(refreshToken);
+			if (refreshToken && providers.auth.sessionRefresh) {
+				const refreshed = await refreshSession(refreshToken);
 				if (refreshed) {
 					setSessionCookie(event.cookies, refreshed.sessionToken);
 					setRefreshCookie(event.cookies, refreshed.refreshToken);

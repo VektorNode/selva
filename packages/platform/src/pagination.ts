@@ -61,6 +61,28 @@ export function encodeOffsetCursor(offset: number): string {
 	return String(offset);
 }
 
+type PageFetcher<T> = (page: { limit: number; cursor?: string }) => Promise<Page<T>>;
+
+/**
+ * Every page of a list, in order. One call stops at `MAX_PAGE_LIMIT` without saying so, which is
+ * fatal for a read that must see every row. Break out of the loop to stop reading.
+ */
+export async function* walkPages<T>(fetchPage: PageFetcher<T>): AsyncGenerator<Page<T>> {
+	let cursor: string | undefined;
+	do {
+		const page = await fetchPage({ limit: MAX_PAGE_LIMIT, cursor });
+		yield page;
+		cursor = page.nextCursor;
+	} while (cursor);
+}
+
+/** Every row of a list, across all its pages. */
+export async function listAll<T>(fetchPage: PageFetcher<T>): Promise<T[]> {
+	const items: T[] = [];
+	for await (const page of walkPages(fetchPage)) items.push(...page.items);
+	return items;
+}
+
 /** The effective page size for a requested limit. */
 export function clampPageLimit(limit: number | undefined): number {
 	const requested = limit ?? DEFAULT_PAGE_LIMIT;

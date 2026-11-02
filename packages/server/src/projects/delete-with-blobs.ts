@@ -1,7 +1,9 @@
 import {
 	SYSTEM_CONTEXT,
 	definitionPaths,
+	listAll,
 	orgPaths,
+	walkPages,
 	type IDefinitionStore,
 	type IOrgStore,
 	type IProjectStore,
@@ -15,27 +17,20 @@ export interface BlobCleanupStores {
 	storage: IStorageProvider;
 }
 
-const PAGE_LIMIT = 200;
-
 // As system: the caller is authorized by now, RLS can hide a project's definitions
 // from them, and soft-deleted records no longer list, so this runs before the delete.
 async function definitionPrefixes(
 	definitions: IDefinitionStore,
 	projectId: string
 ): Promise<string[]> {
-	const prefixes: string[] = [];
-	let cursor: string | undefined;
-	do {
-		const page = await definitions.listByProject(SYSTEM_CONTEXT, projectId, {
-			limit: PAGE_LIMIT,
-			cursor,
+	const all = await listAll((page) =>
+		definitions.listByProject(SYSTEM_CONTEXT, projectId, {
+			...page,
 			includePending: true,
 			includeArchived: true
-		});
-		prefixes.push(...page.items.map((d) => definitionPaths.prefix(d.guid)));
-		cursor = page.nextCursor;
-	} while (cursor);
-	return prefixes;
+		})
+	);
+	return all.map((d) => definitionPaths.prefix(d.guid));
 }
 
 /**
@@ -60,17 +55,12 @@ export async function deleteOrgWithBlobs(
 	orgId: string
 ): Promise<void> {
 	const prefixes = [orgPaths.prefix(orgId)];
-	let cursor: string | undefined;
-	do {
-		const page = await stores.projects.listProjects(SYSTEM_CONTEXT, orgId, {
-			limit: PAGE_LIMIT,
-			cursor
-		});
+	const projects = walkPages((page) => stores.projects.listProjects(SYSTEM_CONTEXT, orgId, page));
+	for await (const page of projects) {
 		for (const project of page.items) {
 			prefixes.push(...(await definitionPrefixes(stores.definitions, project.id)));
 		}
-		cursor = page.nextCursor;
-	} while (cursor);
+	}
 
 	await stores.orgs.deleteOrg(ctx, orgId);
 	for (const prefix of prefixes) await stores.storage.deletePrefix(prefix);
