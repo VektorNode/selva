@@ -1,5 +1,15 @@
 # @selvajs/ui
 
+## 6.6.0-beta.15
+
+### Minor Changes
+
+- 3ff7284: Schema 2.19.0: an optional `viewerOptions.look` sets the look a definition opens in. A new `night` look lights the scene from what the model emits: a material carrying `emissive` and `emissiveIntensity` gets a shadow-casting point light and bloom. `emissiveLight` sets that light's intensity directly. The plugin's new Emissive Material component makes any material glow, from a colour and strength, or from a real source's Kelvin and Lumens.
+
+### Patch Changes
+
+- 3ff7284: A segmented input's selected option now stands out on dark panels, and a tile's label wraps to two lines instead of truncating.
+
 ## 6.6.0-beta.14
 
 ### Minor Changes

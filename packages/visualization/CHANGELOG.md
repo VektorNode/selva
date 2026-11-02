@@ -1,5 +1,13 @@
 # @selvajs/visualization
 
+## 1.6.0-beta.9
+
+### Minor Changes
+
+- 3ff7284: Schema 2.19.0: an optional `viewerOptions.look` sets the look a definition opens in. A new `night` look lights the scene from what the model emits: a material carrying `emissive` and `emissiveIntensity` gets a shadow-casting point light and bloom. `emissiveLight` sets that light's intensity directly. The plugin's new Emissive Material component makes any material glow, from a colour and strength, or from a real source's Kelvin and Lumens.
+- 3ff7284: The `night` look now runs lighter on phones: one emissive source casts light, with no bloom or ambient occlusion, capped at 1.5x pixel ratio. A phone is a coarse pointer on a screen under 600px wide. Set `render.lowPower` to force the tier on or off.
+- 3ff7284: Built-in wood, concrete, plaster, brick and corten surfaces, drawn at real size with no texture files. Sun shadows are softer and lighter. Lights now survive a solve: `clearScene` was removing them, which left only the environment map after the first solve. The sun stays outside building-sized scenes, so everything casts a shadow. Night's fill light no longer blows out large models, and a glow spread across a facade no longer burns a hot spot into it.
+
 ## 1.6.0-beta.8
 
 ### Minor Changes
