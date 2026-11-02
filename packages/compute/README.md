@@ -67,6 +67,10 @@ scheduler.subscribe(() => {
 });
 ```
 
+New here? [How the client works](https://selva.dev/docs/packages/compute/how-it-works) explains the pieces, and [Common tasks](https://selva.dev/docs/packages/compute/common-tasks) has copy-ready examples.
+
+> `client.solve` throws on solver errors; `scheduler.solve` resolves with them. See [Errors](#errors).
+
 ## Configuring the scheduler
 
 Pick the row that matches what the user is doing:

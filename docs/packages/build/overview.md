@@ -73,6 +73,8 @@ Import from `/grasshopper` or `/core`, whichever you need, so a bundler drops th
 
 Turning a solve response into Three.js objects is a separate job, and [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/visualization) does it. Import from `/scene`, `/render`, or `/parse`.
 
+New to the client? Start with [How the compute client works](../compute/how-it-works.md), then [Data trees](../compute/data-trees.md), [Errors and retries](../compute/errors.md) and [Common tasks](../compute/common-tasks.md).
+
 **Full API reference: <https://selva.dev/docs/api/compute/>**
 
 ## Next

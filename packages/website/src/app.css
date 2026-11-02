@@ -12,6 +12,26 @@
 /* Shared base theme (tokens, dark mode) from @selvajs/ui */
 @import '@selvajs/ui/styles/base.css';
 
+/* Docs layout dimensions. The colour tokens live in @selvajs/ui; these only size the
+   three columns, so the layout is retuned here without touching the components. */
+:root {
+	/* Widest the three columns may spread; the article is centred between nav and outline. */
+	--docs-max-w: 96rem;
+	--docs-nav-w: 15rem;
+	--docs-toc-w: 15rem;
+	--docs-measure: 52rem;
+	/* Clears the floating header, for sticky columns and heading anchors. */
+	--docs-top: 6rem;
+	/* Sticky bar below the floating header on small screens. */
+	--docs-bar-top: 4.75rem;
+	--docs-body-size: 1.0625rem;
+	--docs-leading: 1.75;
+	--docs-code-bg: var(--color-card);
+	--docs-code-radius: 0.75rem;
+	/* Tallest a sticky column may be before it scrolls on its own. */
+	--docs-sticky-h: calc(100svh - var(--docs-top) - 2rem);
+}
+
 /* Map @tailwindcss/typography (prose) onto the shared theme tokens so /docs
    content matches the rest of the site in dark mode. Kept unlayered so these
    win over the prose utility's own (light-mode) variable defaults. */
@@ -57,6 +77,97 @@
 	display: block;
 	max-width: 100%;
 	overflow-x: auto;
+}
+
+/* Calmer reading style for docs: lighter headings, looser lines, quiet code and tables.
+   It reads the tokens above, so retuning is a variable change. */
+.prose {
+	font-size: var(--docs-body-size);
+	line-height: var(--docs-leading);
+	/* Light text on a dark ground looks heavier than it is; grayscale smoothing evens it out. */
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	--tw-prose-body: color-mix(in oklab, var(--color-foreground) 80%, transparent);
+}
+/* The sentence under the title reads as an introduction. */
+.prose > h1 + p {
+	font-size: 1.1875rem;
+	line-height: 1.65;
+	color: var(--color-foreground);
+}
+.prose :where(h1) {
+	font-size: clamp(1.75rem, 6vw, 2.25rem);
+	font-weight: 600;
+	letter-spacing: -0.025em;
+	line-height: 1.15;
+	margin-bottom: 0.6em;
+}
+.prose :where(h2) {
+	font-size: 1.5rem;
+	font-weight: 600;
+	letter-spacing: -0.02em;
+	margin-top: 2.75em;
+	margin-bottom: 0.75em;
+}
+.prose :where(h3) {
+	font-size: 1.125rem;
+	font-weight: 600;
+	margin-top: 2em;
+	margin-bottom: 0.5em;
+}
+.prose :where(a):not(:where(.code-copy)) {
+	font-weight: 500;
+	text-decoration-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
+	text-underline-offset: 0.2em;
+	transition: text-decoration-color 0.15s;
+}
+.prose :where(a):not(:where(.code-copy)):hover {
+	text-decoration-color: var(--color-primary);
+}
+.prose :where(li) {
+	margin-block: 0.35em;
+}
+.prose :where(hr) {
+	margin-block: 3em;
+}
+.prose :where(blockquote) {
+	font-style: normal;
+	font-weight: 400;
+	color: var(--color-muted-foreground);
+}
+.prose :where(blockquote p:first-of-type)::before,
+.prose :where(blockquote p:last-of-type)::after {
+	content: none;
+}
+/* Shiki writes its own background inline, so only !important can swap in the token. */
+.prose :where(pre) {
+	background-color: var(--docs-code-bg) !important;
+	border: 1px solid var(--color-border);
+	border-radius: var(--docs-code-radius);
+	padding: 1rem 1.125rem;
+	font-size: 0.8125rem;
+	line-height: 1.7;
+}
+.prose :where(code):not(:where(pre code, a code)) {
+	border: 0;
+}
+.prose :where(table) {
+	font-size: 0.9375rem;
+	width: max-content;
+	min-width: 100%;
+}
+.prose :where(thead th) {
+	color: var(--color-foreground);
+	font-weight: 600;
+	padding-block: 0.7rem;
+}
+.prose :where(tbody td) {
+	padding-block: 0.7rem;
+	vertical-align: top;
+}
+/* The first column names the row, so it reads as a label. */
+.prose :where(tbody td:first-child) {
+	color: var(--color-foreground);
 }
 
 /* Center build-time mermaid diagrams (rendered as inline SVG). */

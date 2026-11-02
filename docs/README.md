@@ -32,6 +32,7 @@ For developers embedding Selva's pieces rather than deploying the app. Each
 package's own README is authoritative for its API.
 
 - [build/overview.md](./packages/build/overview.md): which packages to reach for, and how they fit
+- **compute/**: [how-it-works](./packages/compute/how-it-works.md), [data-trees](./packages/compute/data-trees.md), [errors](./packages/compute/errors.md), [common-tasks](./packages/compute/common-tasks.md): using `@selvajs/compute`
 
 ## [contributing/](./contributing/): work on this repo
 
