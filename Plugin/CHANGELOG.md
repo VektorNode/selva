@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2-beta.3] - 2026-11-03
+
 ### Added
 
 - Display To File records the document's units in the `.slvm`, and Display From File and Combine Display warn when a file's units differ from the open document's. Before, a file from a millimetre document loaded into a metre document displayed 1000 times too large with no message.
