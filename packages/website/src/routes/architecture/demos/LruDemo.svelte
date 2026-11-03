@@ -28,7 +28,7 @@
 	<div class="flex flex-wrap items-center gap-1.5">
 		{#each [10, 20, 30, 40, 50] as value (value)}
 			<button
-				class="border-border hover:bg-muted rounded border px-2.5 py-1 font-mono text-xs tabular-nums transition"
+				class="border-border hover:bg-hover rounded border px-2.5 py-1 font-mono text-xs tabular-nums transition"
 				onclick={() => solve(value)}
 			>
 				radius {value}
@@ -43,7 +43,7 @@
 	</div>
 
 	<!-- Left is the eviction end: the next entry to fall off. -->
-	<div class="bg-muted/40 flex min-h-12 items-center gap-1.5 rounded-md p-2">
+	<div class="bg-muted flex min-h-12 items-center gap-1.5 rounded-md p-2">
 		{#each entries as entry (entry)}
 			<span
 				class="rounded border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 font-mono text-xs text-violet-600 tabular-nums dark:text-violet-400"

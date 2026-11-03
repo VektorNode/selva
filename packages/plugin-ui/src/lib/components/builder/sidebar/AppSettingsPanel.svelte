@@ -8,7 +8,6 @@
 	import { remapImportedSchema } from '$lib/utils/schema-remap';
 	import SchemaImportDialog from '../SchemaImportDialog.svelte';
 	import TagEditor from '../../TagEditor.svelte';
-	import ScopeNote from '../scope/ScopeNote.svelte';
 	import ScopeChip from '../scope/ScopeChip.svelte';
 	import SettingsSection from './SettingsSection.svelte';
 	import SettingRow from './SettingRow.svelte';
@@ -75,8 +74,6 @@
 	}
 </script>
 
-<ScopeNote scope="shared">Saved with the schema. Applies in the preview and on Selva.</ScopeNote>
-
 <SettingsSection id="app.general" title="General" collapsible={false}>
 	<SettingRow label="Name" for="schema-name">
 		<Input
@@ -132,7 +129,7 @@
 	</SettingRow>
 </SettingsSection>
 
-<div data-settings-section="app.file" class="flex items-center justify-between gap-2 py-3">
+<div data-settings-section="app.file" class="flex items-center justify-between gap-2 py-4">
 	<span class="text-muted-foreground text-xs">Schema file (.sls)</span>
 	<div class="flex gap-1">
 		<Button variant="ghost" size="sm" onclick={handleExport}>

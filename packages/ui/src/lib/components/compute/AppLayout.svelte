@@ -284,7 +284,7 @@
 			trailing={hasMenu ? actionsMenu : undefined}
 		/>
 	{:else if hasMenu || solvingIndicatorPlacement === 'inline'}
-		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border/50">
+		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border">
 			{#if solvingIndicatorPlacement === 'inline'}
 				<SolvingIndicator show={showSolvingChip} placement="inline" />
 			{/if}
@@ -325,7 +325,7 @@
 	data-layout-root
 	class="min-h-0 flex flex-1 flex-col overflow-hidden {stacked
 		? ''
-		: `sm:flex-row sm:py-(--page-py) ${leftCollapsed ? 'sm:pl-0' : 'sm:pl-(--page-px)'} ${rightCollapsed ? 'sm:pr-0' : 'sm:pr-(--page-px)'}`}"
+		: `sm:flex-row sm:py-2 ${leftCollapsed ? 'sm:pl-0' : 'sm:pl-2'} ${rightCollapsed ? 'sm:pr-0' : 'sm:pr-2'}`}"
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
 	class:mobile-root={stacked}
@@ -355,7 +355,7 @@
 			</div>
 
 			<div
-				class="drawer-container rounded-t-2xl z-40 border-t bg-background shadow-sheet drawer-{drawer}"
+				class="drawer-container z-40 rounded-t-xl border-t bg-background shadow-sheet drawer-{drawer}"
 			>
 				<!-- Named by its visible label; aria-expanded carries the open/closed state. -->
 				<button
@@ -473,6 +473,7 @@
 					<Resizable.Handle
 						withHandle
 						line={false}
+						class="translate-x-1.5 z-20"
 						data-collapsed={leftCollapsed}
 						onclick={() => {
 							if (leftCollapsed) leftPaneRef?.expand();
@@ -504,6 +505,7 @@
 						<Resizable.Handle
 							withHandle
 							line={false}
+							class="-translate-x-1.5 z-20"
 							data-collapsed={rightCollapsed}
 							onclick={() => {
 								if (rightCollapsed) rightPaneRef?.expand();

@@ -6,6 +6,8 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 [STRUCTURE.md](./STRUCTURE.md) is authoritative for folder layout, naming, and per-package conventions. Read it before adding files.
 
+[docs/contributing/design-system.md](./docs/contributing/design-system.md) is authoritative for UI colour, radius and spacing. Read it before adding or restyling a component: pick a surface role, never a grey.
+
 ## Never do these
 
 Each of these is silent: nothing fails at build time, and the damage shows up later in someone else's saved file, log collector, or bundle.

@@ -222,7 +222,7 @@
 
 <div
 	bind:this={wrapperEl}
-	class="group relative overflow-hidden rounded-lg border border-border {isFullscreen
+	class="group relative overflow-hidden rounded-lg border border-border-strong {isFullscreen
 		? 'bg-background'
 		: ''}"
 >
@@ -241,7 +241,7 @@
 		>
 			{#if loading}
 				<div
-					class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-muted-foreground"
+					class="p-1.5 backdrop-blur-sm flex items-center rounded-sm border border-border-strong bg-background/80 text-muted-foreground"
 				>
 					<Loader size={14} class="animate-spin" />
 				</div>
@@ -253,7 +253,7 @@
 					disabled={loading}
 					title={isFullscreen ? t.exitFullscreen : t.fullscreen}
 					aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
-					class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+					class="p-1.5 backdrop-blur-sm flex items-center rounded-sm border border-border-strong bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					{#if isFullscreen}
 						<Minimize size={14} />

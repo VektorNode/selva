@@ -66,7 +66,7 @@
 	</div>
 
 	{#if subnav}
-		<div class="h-10 flex items-center border-t border-border/60 px-(--page-px)">
+		<div class="h-10 flex items-center border-t border-border px-(--page-px)">
 			{@render subnav()}
 		</div>
 	{/if}

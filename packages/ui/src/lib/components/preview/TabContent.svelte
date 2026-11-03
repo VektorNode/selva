@@ -137,7 +137,7 @@
 	{#if bare}
 		{@render body()}
 	{:else}
-		<div class="h-full bg-muted dark:bg-background">
+		<div class="h-full">
 			<!-- `auto`, not the default `hover`: a hover-only bar comes and goes with the pointer,
 			     and a host that freezes mid-solve drops the pointer state with it. -->
 			<ScrollArea class="h-full" orientation="vertical" type="auto">

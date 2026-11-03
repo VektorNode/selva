@@ -55,6 +55,7 @@ Design references (check code against intent before changing it):
 - [plugin-context.md](./contributing/plugin-context.md): canvas wiring and schema identity; every rule in it fails silently
 - [slva-format.md](./contributing/slva-format.md): the binary display wire format; the C# encoder and the TS parser must be changed together
 - [viewer-apps.md](./contributing/viewer-apps.md): the `ThreeViewer` seams for drawing your own geometry and tools into the scene
+- [design-system.md](./contributing/design-system.md): surface roles, states, radius and spacing for every Svelte package; the lint enforces part of it
 
 Outstanding work:
 

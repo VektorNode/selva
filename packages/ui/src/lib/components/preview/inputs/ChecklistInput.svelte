@@ -30,7 +30,7 @@
 	}
 </script>
 
-<div class="divide-y divide-border/60 overflow-hidden rounded-md border border-input">
+<div class="divide-y divide-border overflow-hidden rounded-md border border-input">
 	{#each Object.entries(options) as [name, expr] (name)}
 		{@const optionValue = expr ?? name}
 		{@const optionId = `${inputId}-${optionValue}`}
@@ -38,8 +38,8 @@
 		{@const glyph = optionGlyph(config?.optionMedia?.[name], assets)}
 		<label
 			for={optionId}
-			class="gap-3 px-3 py-2 text-sm flex items-center transition-colors select-none hover:bg-accent/50 {isSelected
-				? 'bg-accent/30'
+			class="gap-3 px-3 py-2 text-sm flex items-center transition-colors select-none hover:bg-hover {isSelected
+				? 'bg-selected'
 				: ''} {disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}"
 		>
 			<Checkbox

@@ -76,7 +76,8 @@ export interface HeaderAuthProviderConfig {
 	/**
 	 * Header names the proxy sets. Defaults match the README's Caddy example
 	 * (`SELVA-UserPrincipalName`, `SELVA-Email`, `SELVA-DisplayName`). Override
-	 * to match a different proxy (e.g. oauth2-proxy uses `X-Auth-Request-User`).
+	 * to match a different proxy (e.g. oauth2-proxy sends the UPN as
+	 * `X-Auth-Request-Preferred-Username`; its `X-Auth-Request-User` is the OIDC `sub`).
 	 */
 	headers?: Partial<HeaderNames>;
 	/**

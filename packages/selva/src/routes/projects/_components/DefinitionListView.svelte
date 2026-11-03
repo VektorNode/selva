@@ -25,7 +25,7 @@
 
 <div class="border-border bg-card overflow-hidden rounded-xl border">
 	<div
-		class="border-border bg-muted/50 text-muted-foreground grid gap-4 border-b px-4 py-2.5 font-mono text-[10.5px] tracking-widest uppercase {gridTemplate}"
+		class="border-border bg-muted text-muted-foreground grid gap-4 border-b px-4 py-2.5 font-mono text-[10.5px] tracking-widest uppercase {gridTemplate}"
 	>
 		<span></span><span>Definition</span><span class="hidden sm:block">Project</span><span
 			>Status</span
@@ -47,7 +47,7 @@
 					style:--tool-h1={hues.h1}
 					style:--tool-h2={hues.h2}
 				>
-					<span class="text-foreground/40 text-base font-semibold">
+					<span class="text-faint-foreground text-base font-semibold">
 						{monogram(record.displayName)}
 					</span>
 				</div>
@@ -74,7 +74,7 @@
 				<button
 					type="button"
 					onclick={() => onOpen(record)}
-					class="text-muted-foreground hover:bg-muted hover:text-foreground rounded p-1 transition-colors pointer-coarse:p-2"
+					class="text-muted-foreground hover:bg-hover hover:text-foreground rounded-sm p-1 transition-colors pointer-coarse:p-2"
 					aria-label="Open {record.displayName}"
 				>
 					<Ellipsis class="h-4 w-4" />

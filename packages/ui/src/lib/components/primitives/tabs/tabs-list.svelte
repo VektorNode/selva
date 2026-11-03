@@ -5,7 +5,7 @@
 		base: 'inline-flex items-center text-muted-foreground',
 		variants: {
 			variant: {
-				default: 'h-9 w-fit justify-center rounded-lg bg-muted p-0.75',
+				default: 'h-9 w-fit justify-center rounded-md bg-muted p-0.5',
 				line: 'gap-1 px-2 w-full justify-start'
 			}
 		},

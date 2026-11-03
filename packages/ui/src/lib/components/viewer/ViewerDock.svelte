@@ -13,7 +13,7 @@
 		Ruler,
 		Settings2,
 		Spline,
-		Square
+		Cuboid
 	} from '@lucide/svelte';
 	import type { CameraProjection, Look, ViewPreset } from '@selvajs/visualization/render';
 	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
@@ -87,7 +87,7 @@
 	const touch = new MediaQuery('(pointer: coarse)');
 	const reducedMotion = new MediaQuery('(prefers-reduced-motion: reduce)');
 
-	const COLLAPSED = $derived(touch.current ? { w: 44, h: 44 } : { w: 56, h: 6 });
+	const COLLAPSED = $derived(touch.current ? { w: 44, h: 44 } : { w: 72, h: 8 });
 	const EXPANDED_H = $derived(touch.current ? 54 : 46);
 	const PAD = 4;
 
@@ -195,7 +195,7 @@
 	const idx = (id: string) => buttons.indexOf(id);
 
 	const BTN =
-		'relative grid size-9.5 shrink-0 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground pointer-coarse:size-11';
+		'relative grid size-9.5 shrink-0 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground data-[state=open]:bg-selected data-[state=open]:text-foreground pointer-coarse:size-11';
 	const DOT =
 		'aria-pressed:after:absolute aria-pressed:after:bottom-0.5 aria-pressed:after:size-1 aria-pressed:after:rounded-full aria-pressed:after:bg-primary';
 </script>
@@ -210,9 +210,15 @@
 	role="toolbar"
 	aria-label={t.toolsMenu}
 	tabindex="-1"
-	class="shadow-lg backdrop-blur-md absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden border bg-background/70 {hidden
+	class="shadow-lg backdrop-blur-md absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden border {hidden
 		? 'pointer-events-none opacity-0'
-		: ''} {wantOpen ? '' : 'cursor-pointer opacity-80'}"
+		: ''} {wantOpen
+		? 'bg-background/70'
+		: touch.current
+			? 'cursor-pointer border-border bg-background/90'
+			: nightOn
+				? 'border-white/50 bg-white/40 hover:bg-white/65 cursor-pointer'
+				: 'cursor-pointer border-border-strong bg-faint-foreground hover:bg-muted-foreground'}"
 	style={containerStyle}
 	onclick={openFromCollapsed}
 	onkeydown={(e) => (e.key === 'Escape' ? (engaged = false) : undefined)}
@@ -360,7 +366,7 @@
 						checked={projection === 'orthographic'}
 						onCheckedChange={onToggleProjection}
 					>
-						<Square />
+						<Cuboid />
 						{t.switchToOrthographic}
 						<DropdownMenu.Shortcut class="pointer-coarse:hidden">O</DropdownMenu.Shortcut>
 					</DropdownMenu.CheckboxItem>

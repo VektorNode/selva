@@ -390,7 +390,7 @@
 		<Card.Content class="space-y-3">
 			<details class="group rounded-lg border">
 				<summary
-					class="hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
+					class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
 				>
 					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
 					Platform flags
@@ -423,7 +423,7 @@
 
 			<details class="group rounded-lg border">
 				<summary
-					class="hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
+					class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
 				>
 					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
 					Platform limits

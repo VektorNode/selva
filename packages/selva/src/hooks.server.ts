@@ -10,7 +10,8 @@ import {
 	createRouteClassifier,
 	createSessionRefresher,
 	isCrossSiteFormSubmission,
-	resolveApiToken
+	resolveApiToken,
+	resolveApiTokenSignInWindowMs
 } from '@selvajs/server/http';
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
 import {
@@ -18,13 +19,15 @@ import {
 	flag,
 	getErrorReporter,
 	getEventSink,
-	getLogger
+	getLogger,
+	lazyLogger
 } from '$lib/server/providers.server';
 import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
 import { MCP_PATH } from '$lib/server/mcp/server';
 
 const OAUTH_TOKEN_PATH = '/oauth/token';
 const holderVerdicts = createHolderVerdictCache();
+const apiTokenSignInWindowMs = resolveApiTokenSignInWindowMs(env, lazyLogger);
 const refreshSession = createSessionRefresher(() => providers.auth.sessionRefresh);
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
@@ -256,6 +259,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					data: providers.data,
 					flag,
 					holderVerdicts,
+					signInWindowMs: apiTokenSignInWindowMs,
 					log: event.locals.log
 				});
 	if (tokenResult.kind === 'rejected') {

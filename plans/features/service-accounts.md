@@ -43,6 +43,8 @@ person who set it up") gives the org a key owner that never leaves.
 - **Not via GoTrue's ban.** The resolver treats `user.disabled` as "refuse every key", so a ban
   would also kill the tokens. Disabling a service account _is_ meant to kill its tokens, so
   `disabled` keeps that meaning and login is blocked by the explicit check instead.
+- **Exempt from `API_TOKEN_SIGN_IN_WINDOW_DAYS`.** The resolver refuses a key whose owner hasn't
+  come through the proxy within the window, and a service account never does.
 
 ### Who manages it
 

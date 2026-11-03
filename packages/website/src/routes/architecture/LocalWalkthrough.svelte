@@ -109,7 +109,7 @@ frame 2 of 2 — 12 KB`,
 		<div
 			class="rounded-md border p-3 {frame.kind === 'none'
 				? 'border-orange-500/30 bg-orange-500/5'
-				: 'border-border bg-muted/30'}"
+				: 'border-border bg-muted'}"
 		>
 			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 				<p class="text-sm font-semibold">
@@ -128,7 +128,7 @@ frame 2 of 2 — 12 KB`,
 			<p class="text-muted-foreground mt-1.5 text-xs leading-relaxed">{frame.explain}</p>
 
 			{#if frame.payload}
-				<div class="border-border/60 mt-3 flex items-center gap-2 border-t pt-2.5">
+				<div class="border-border mt-3 flex items-center gap-2 border-t pt-2.5">
 					<span
 						class="rounded px-1.5 py-0.5 font-mono text-[10px] {frame.kind === 'binary'
 							? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
@@ -144,7 +144,7 @@ frame 2 of 2 — 12 KB`,
 	{/each}
 
 	<!-- What a push transport has to handle that a request/response one gets for free. -->
-	<div class="border-border bg-muted/30 rounded-md border p-3">
+	<div class="border-border bg-muted rounded-md border p-3">
 		<p class="text-sm font-semibold">What can arrive out of order</p>
 		<p class="text-muted-foreground mt-1.5 text-xs leading-relaxed">
 			Nothing pairs a reply to a request here, and nothing can be cancelled — a newer value simply

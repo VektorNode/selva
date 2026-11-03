@@ -142,7 +142,7 @@
 					onpointerleave={() => (hovered = null)}
 					onfocus={() => (hovered = name)}
 					onblur={() => (hovered = null)}
-					class={`hover:bg-accent focus-visible:ring-ring text-foreground flex aspect-square items-center justify-center rounded-md outline-none focus-visible:ring-2 ${
+					class={`hover:bg-hover focus-visible:ring-ring text-foreground flex aspect-square items-center justify-center rounded-md outline-none focus-visible:ring-2 ${
 						name === currentName ? 'bg-primary/10 text-primary ring-primary ring-1' : ''
 					}`}
 				>
@@ -207,7 +207,7 @@
 						class={`rounded-full border px-2.5 py-0.5 text-xs transition-colors ${
 							category === name
 								? 'bg-primary text-primary-foreground border-primary'
-								: 'border-border text-muted-foreground hover:bg-accent hover:text-foreground'
+								: 'border-border text-muted-foreground hover:bg-hover hover:text-foreground'
 						}`}
 					>
 						{name}

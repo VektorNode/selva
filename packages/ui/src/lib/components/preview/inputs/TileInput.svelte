@@ -53,7 +53,7 @@
 			onkeydown={(e) => onKeydown(e, index)}
 			class="gap-1.5 p-1.5 min-w-0 flex flex-col rounded-lg border text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 {selected
 				? 'border-primary bg-primary/5 ring-1 ring-primary'
-				: 'border-input hover:bg-accent/40'}"
+				: 'border-input hover:bg-hover'}"
 		>
 			<span
 				class="flex aspect-square w-full items-center justify-center overflow-hidden rounded-md bg-muted text-muted-foreground"

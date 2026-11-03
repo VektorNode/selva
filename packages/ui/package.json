@@ -44,8 +44,7 @@
 			"types": "./dist/external/storage.d.ts",
 			"svelte": "./dist/external/storage.js"
 		},
-		"./styles/base.css": "./src/lib/styles/base.css",
-		"./styles/themes/*": "./src/lib/styles/themes/*"
+		"./styles/base.css": "./src/lib/styles/base.css"
 	},
 	"files": [
 		"dist",

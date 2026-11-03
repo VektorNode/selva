@@ -9,7 +9,11 @@ import type {
 	ProjectMember,
 	RequestContext
 } from '@selvajs/platform';
-import { resolveApiToken, type ResolveApiTokenDeps } from '../api-token.js';
+import {
+	resolveApiToken,
+	resolveApiTokenSignInWindowMs,
+	type ResolveApiTokenDeps
+} from '../api-token.js';
 import { createApiTokenCodec } from '../../tokens/api-token-codec.js';
 
 const codec = createApiTokenCodec('k'.repeat(32));
@@ -336,6 +340,52 @@ describe('resolveApiToken with a holder policy', () => {
 		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
 		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
 		expect(policy).not.toHaveBeenCalled();
+	});
+});
+
+describe('resolveApiToken with a sign-in window', () => {
+	const NOW = Date.parse('2026-11-03T12:00:00Z');
+
+	function behindProxy(w: World, lastLoginAt: string | undefined, windowDays = 7) {
+		w.user.lastLoginAt = lastLoginAt;
+		w.deps.auth = { ...w.deps.auth, proxyAuth: {} as never };
+		w.deps.signInWindowMs = windowDays * DAY;
+		w.deps.now = () => NOW;
+	}
+
+	it('resolves while the owner came through the proxy within the window', async () => {
+		const w = world();
+		behindProxy(w, new Date(NOW - 6 * DAY).toISOString());
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result.kind).toBe('ok');
+	});
+
+	it('gives 401 once the owner has stayed away longer than the window', async () => {
+		const w = world();
+		behindProxy(w, new Date(NOW - 8 * DAY).toISOString());
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result).toMatchObject({ kind: 'rejected', status: 401, code: 'UNAUTHORIZED' });
+	});
+
+	it('treats an owner never seen through the proxy as lapsed', async () => {
+		const w = world();
+		behindProxy(w, undefined);
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+
+	it('ignores the window without a proxy-auth provider', async () => {
+		const w = world();
+		behindProxy(w, new Date(NOW - 30 * DAY).toISOString());
+		w.deps.auth = { getUser: w.deps.auth.getUser };
+		const result = await resolveApiToken(req('/api/v1/projects', bearer(w.raw)), w.deps);
+		expect(result.kind).toBe('ok');
+	});
+
+	it('reads the window in days from the env, 0 or unset meaning off', () => {
+		expect(resolveApiTokenSignInWindowMs({ API_TOKEN_SIGN_IN_WINDOW_DAYS: '7' })).toBe(7 * DAY);
+		expect(resolveApiTokenSignInWindowMs({ API_TOKEN_SIGN_IN_WINDOW_DAYS: '0' })).toBeUndefined();
+		expect(resolveApiTokenSignInWindowMs({})).toBeUndefined();
 	});
 });
 

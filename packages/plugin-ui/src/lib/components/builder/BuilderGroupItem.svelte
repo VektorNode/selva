@@ -27,6 +27,7 @@
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import VisibilityRulesDialog from './VisibilityRulesDialog.svelte';
 	import OptionMediaEditor from './OptionMediaEditor.svelte';
 	import { getBuilderDraft } from './draft-context';
 	import ScopeChip from './scope/ScopeChip.svelte';
@@ -124,9 +125,9 @@
 	let dynamicValueListInputs = $derived(
 		availableInputs.filter((p) => p.type === 'dynamicValueList')
 	);
-	let showAdvanced = $state(false);
-	let showVisibilityRules = $state(false);
-	let hasVisibilityRules = $derived((item.visibilityCondition?.rules?.length ?? 0) > 0);
+	let visibilityRuleCount = $derived(item.visibilityCondition?.rules?.length ?? 0);
+	let alwaysHidden = $derived(item.visible === false);
+	let hasVisibilityRules = $derived(visibilityRuleCount > 0 || alwaysHidden);
 	let hasAdvancedOptions = $derived(
 		isNumberInput ||
 			isCheckboxInput ||
@@ -214,7 +215,7 @@
 		{
 			value: 'segmented',
 			label: 'Buttons',
-			hint: 'One choice from a row of buttons; a list too long for one row shows as a menu.'
+			hint: 'One choice from a row of buttons.'
 		},
 		{ value: 'tiles', label: 'Tiles', hint: 'One choice from a grid of thumbnails.' },
 		{
@@ -323,17 +324,31 @@
 	}
 </script>
 
-<div class="relative rounded-lg" data-builder-item-id={item.id}>
+{#snippet toggleRow(label: string, checked: boolean, onChange: () => void, hint?: string)}
+	<label class="flex cursor-pointer items-start gap-2 text-[11px]">
+		<Switch
+			{checked}
+			onCheckedChange={onChange}
+			class="mt-px -mr-1 shrink-0 origin-left scale-75"
+		/>
+		<span class="flex flex-col">
+			<span class="text-foreground">{label}</span>
+			{#if hint}<span class="text-faint-foreground text-[10px]">{hint}</span>{/if}
+		</span>
+	</label>
+{/snippet}
+
+<div class="relative rounded-md" data-builder-item-id={item.id}>
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
-			class="group bg-background hover:border-border border-border/60 @container overflow-hidden rounded-lg py-1.5 transition-all hover:shadow-sm"
+			class="group bg-raised shadow-raised border-border-strong hover:border-input @container overflow-hidden rounded-md border py-1.5 transition-colors"
 		>
 			<!-- Compact header row (always visible). In a card under 20rem the type badge drops its
 			     label, and the name and chips wrap so the controls stay in view. -->
 			<div data-builder-item-header class="flex items-center gap-2 px-3 py-1.5">
 				<div
 					use:dragHandle
-					class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+					class="text-muted-foreground hover:text-foreground hover:bg-hover flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 					role="button"
 					tabindex="0"
 					aria-label="Drag to reorder"
@@ -387,14 +402,33 @@
 					{/if}
 					{#if detectedChartType}
 						<span
-							class="text-muted-foreground/70 border-border/60 rounded-sm border px-1.5 py-0.5 text-[10px] capitalize @max-[20rem]:hidden"
+							class="text-faint-foreground border-border rounded-sm border px-1.5 py-0.5 text-[10px] capitalize @max-[20rem]:hidden"
 						>
 							{detectedChartType}
 						</span>
 					{/if}
 				</div>
+				<VisibilityRulesDialog
+					compact
+					subject={item.displayName || paramInfo?.nickname || 'Parameter'}
+					ruleCount={visibilityRuleCount}
+					{alwaysHidden}
+				>
+					<VisibilityRulesEditor
+						bind:visibilityCondition={item.visibilityCondition}
+						bind:visible={item.visible}
+						showAlwaysHidden
+						{availableInputs}
+						currentParamInfo={paramInfo}
+						{getParameterInfo}
+						isGroupCondition={item.type === 'output'}
+						options={item.type === 'input' && item.widgetType === 'dropdown'
+							? item.config.options
+							: undefined}
+					/>
+				</VisibilityRulesDialog>
 				<Collapsible.Trigger
-					class="hover:bg-accent/50 relative flex h-6 w-6 shrink-0 items-center justify-center rounded-sm {hasNonDefaultConfig
+					class="hover:bg-hover relative flex h-6 w-6 shrink-0 items-center justify-center rounded-sm {hasNonDefaultConfig
 						? 'text-primary'
 						: 'text-muted-foreground hover:text-foreground'}"
 					aria-label={expanded ? 'Collapse details' : 'Expand details'}
@@ -411,340 +445,264 @@
 			</div>
 
 			<Collapsible.Content>
-				<div class="flex flex-col gap-2 px-2 pt-1 pb-2">
-					{#if columns > 1}
-						<label class="text-muted-foreground flex items-center gap-1 text-[10px]">
-							Span:
-							<input
-								type="number"
-								bind:value={() => item.span ?? 1, (span) => (item.span = span ?? undefined)}
-								min="1"
-								max={columns}
-								class="border-border bg-background text-foreground w-8 rounded-sm border px-1 py-0.5 text-[10px]"
-							/>
-						</label>
-					{/if}
-
-					<!-- Description -->
-					<input
-						type="text"
-						bind:value={item.description}
-						class="text-muted-foreground hover:border-border focus:border-primary rounded-sm border border-transparent bg-transparent px-1
-							   py-0.5 text-[11px] focus:outline-none"
-						placeholder="Description"
-					/>
+				<div class="flex flex-col gap-3 px-4 pt-1 pb-3">
+					<div class="flex items-center gap-2">
+						<input
+							type="text"
+							bind:value={item.description}
+							class="border-border bg-background text-foreground placeholder:text-faint-foreground hover:border-input focus:border-primary h-7 min-w-0 flex-1 rounded-sm border px-2 text-xs focus:outline-none"
+							placeholder="Description"
+							aria-label="Description"
+						/>
+						{#if columns > 1}
+							<label class="text-muted-foreground flex shrink-0 items-center gap-1.5 text-[11px]">
+								Span
+								<input
+									type="number"
+									bind:value={() => item.span ?? 1, (span) => (item.span = span ?? undefined)}
+									min="1"
+									max={columns}
+									class="border-border bg-background text-foreground focus:border-primary h-7 w-12 rounded-sm border px-1.5 text-xs focus:outline-none"
+								/>
+							</label>
+						{/if}
+					</div>
 
 					<!-- Advanced -->
 					{#if hasAdvancedOptions}
-						<div class="border-border/70 mt-1 border-t pt-1">
-							<button
-								onclick={() => (showAdvanced = !showAdvanced)}
-								class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
-							>
-								<ChevronDown
-									size={12}
-									class={`transition-transform ${showAdvanced ? 'rotate-180' : ''}`}
-								/>
-								Advanced
-							</button>
+						<div class="border-border flex flex-col gap-2 border-t pt-2">
+							<!-- Output: File ↔ Image display mode switcher -->
+							{#if isFileOrImageOutput}
+								<div class="flex flex-col gap-2 pb-2">
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
+										<div class="grid grid-cols-2 gap-1">
+											<button
+												onclick={() => setFileOutputMode('file')}
+												class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
+													isFileOutput
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border hover:border-border hover:bg-hover'
+												}`}
+											>
+												File (download)
+											</button>
+											<button
+												onclick={() => setFileOutputMode('image')}
+												class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
+													isImageOutput
+														? 'bg-primary text-primary-foreground border-primary'
+														: 'border-border hover:border-border hover:bg-hover'
+												}`}
+											>
+												Image viewer
+											</button>
+										</div>
+									</div>
 
-							{#if showAdvanced}
-								<!-- Output: File ↔ Image display mode switcher -->
-								{#if isFileOrImageOutput}
-									<div class="flex flex-col gap-2 pb-2">
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
-											<div class="grid grid-cols-2 gap-1">
+									{#if isImageOutput && imageConfig}
+										{@render toggleRow('Allow download', imageConfig.allowDownload ?? true, () =>
+											toggleImageOption('allowDownload')
+										)}
+										{@render toggleRow(
+											'Allow fullscreen',
+											imageConfig.allowFullscreen ?? true,
+											() => toggleImageOption('allowFullscreen')
+										)}
+									{/if}
+								</div>
+							{/if}
+
+							<!-- Output: Dynamic Value List target-input picker -->
+							{#if isDynamicValueListOutput && dynamicValueListOutputConfig}
+								<div class="flex flex-col gap-1 pb-2">
+									<span class="text-muted-foreground text-[10px] font-medium">Target Input</span>
+									{#if dynamicValueListInputs.length === 0}
+										<span class="text-[10px] text-amber-600 dark:text-amber-400">
+											No Dynamic Value List inputs in this schema. Add one first, then pick it here.
+										</span>
+									{:else}
+										<select
+											bind:value={dynamicValueListOutputConfig.targetInputId}
+											class="border-border bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
+										>
+											<option value="">— Select an input —</option>
+											{#each dynamicValueListInputs as input (input.id)}
+												<option value={input.id}>{input.nickname}</option>
+											{/each}
+										</select>
+										<span class="text-faint-foreground text-[9px]">
+											Receives this output's options.
+										</span>
+									{/if}
+								</div>
+							{/if}
+
+							<!-- Widget-Specific Options -->
+							{#if isNumberInput}
+								{@const config = item.config as NumberWidgetConfig}
+								{@render toggleRow('Slider', config.renderAsSlider ?? true, toggleSliderMode)}
+							{/if}
+
+							{#if isCheckboxInput}
+								{@render toggleRow(
+									'Button',
+									(item.config as CheckboxWidgetConfig | undefined)?.displayAs === 'button',
+									toggleButtonMode,
+									'A press solves once with true, then goes back to false. Rhino only.'
+								)}
+							{/if}
+
+							{#if isDropdownInput && dropdownConfig}
+								{@const mode = dropdownConfig.displayAs ?? 'dropdown'}
+								<div class="flex flex-col gap-2 pb-2">
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
+										<div class="grid grid-cols-4 gap-1">
+											{#each VALUE_LIST_MODES as option (option.value)}
 												<button
-													onclick={() => setFileOutputMode('file')}
-													class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
-														isFileOutput
+													onclick={() => setValueListMode(option.value)}
+													class={`rounded-sm border px-1 py-1 text-[10px] transition-colors ${
+														mode === option.value
 															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
+															: 'border-border hover:border-border hover:bg-hover'
 													}`}
 												>
-													File (download)
+													{option.label}
 												</button>
+											{/each}
+										</div>
+										<span class="text-faint-foreground text-[9px]">
+											{VALUE_LIST_MODES.find((m) => m.value === mode)?.hint}
+										</span>
+									</div>
+									<OptionMediaEditor config={dropdownConfig} />
+								</div>
+							{/if}
+
+							{#if isFileInput && fileInputConfig}
+								<div class="flex flex-col gap-2">
+									<!-- Allowed Input Modes -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium"
+											>Allowed Input Modes</span
+										>
+										<div class="grid grid-cols-2 gap-1">
+											{#each ['upload', 'url'] as const as mode (mode)}
+												{@const isAllowed =
+													fileInputConfig.allowedInputModes?.includes(mode) ?? true}
 												<button
-													onclick={() => setFileOutputMode('image')}
+													onclick={() => toggleAllowedMode(mode)}
 													class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
-														isImageOutput
+														isAllowed
 															? 'bg-primary text-primary-foreground border-primary'
-															: 'border-border/70 hover:border-border hover:bg-accent'
+															: 'border-border hover:border-border hover:bg-hover'
 													}`}
 												>
-													Image viewer
+													{mode === 'upload' ? 'Upload' : 'URL'}
 												</button>
-											</div>
-											<span class="text-muted-foreground/70 text-[9px]">
-												{isImageOutput
-													? 'Renders PNG/JPG/WEBP/GIF/SVG inline. Other formats fall back to download.'
-													: 'Standard download button for any file type.'}
-											</span>
+											{/each}
 										</div>
-
-										{#if isImageOutput && imageConfig}
-											<div class="flex items-center justify-between text-[11px]">
-												<span class="text-muted-foreground">Allow download</span>
-												<Switch
-													checked={imageConfig.allowDownload ?? true}
-													onCheckedChange={() => toggleImageOption('allowDownload')}
-													class="scale-75"
-												/>
-											</div>
-											<div class="flex items-center justify-between text-[11px]">
-												<span class="text-muted-foreground">Allow fullscreen</span>
-												<Switch
-													checked={imageConfig.allowFullscreen ?? true}
-													onCheckedChange={() => toggleImageOption('allowFullscreen')}
-													class="scale-75"
-												/>
-											</div>
-										{/if}
 									</div>
-								{/if}
 
-								<!-- Output: Dynamic Value List target-input picker -->
-								{#if isDynamicValueListOutput && dynamicValueListOutputConfig}
-									<div class="flex flex-col gap-1 pb-2">
-										<span class="text-muted-foreground text-[10px] font-medium">Target Input</span>
-										{#if dynamicValueListInputs.length === 0}
-											<span class="text-[10px] text-amber-600 dark:text-amber-400">
-												No Dynamic Value List inputs in this schema. Add one first, then pick it
-												here.
-											</span>
-										{:else}
-											<select
-												bind:value={dynamicValueListOutputConfig.targetInputId}
-												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
-											>
-												<option value="">— Select an input —</option>
-												{#each dynamicValueListInputs as input (input.id)}
-													<option value={input.id}>{input.nickname}</option>
-												{/each}
-											</select>
-											<span class="text-muted-foreground/70 text-[9px]">
-												The Dynamic Value List input that this output's computed options populate.
-											</span>
-										{/if}
-									</div>
-								{/if}
-
-								<!-- Widget-Specific Options -->
-								{#if isNumberInput}
-									{@const config = item.config as NumberWidgetConfig}
-									<div class="mt-1 flex items-center justify-between text-[11px]">
-										<span class="text-muted-foreground">Slider</span>
-										<Switch
-											checked={config.renderAsSlider ?? true}
-											onCheckedChange={toggleSliderMode}
-											class="scale-75"
-										/>
-									</div>
-								{/if}
-
-								{#if isCheckboxInput}
-									<div class="flex items-center justify-between text-[11px]">
-										<div class="flex flex-col">
-											<span class="text-muted-foreground">Button</span>
-											<span class="text-muted-foreground/70 text-[9px]">
-												A press solves once with true, then goes back to false. Rhino only.
-											</span>
-										</div>
-										<Switch
-											checked={(item.config as CheckboxWidgetConfig | undefined)?.displayAs ===
-												'button'}
-											onCheckedChange={toggleButtonMode}
-											class="scale-75"
-										/>
-									</div>
-								{/if}
-
-								{#if isDropdownInput && dropdownConfig}
-									{@const mode = dropdownConfig.displayAs ?? 'dropdown'}
-									<div class="flex flex-col gap-2 pb-2">
+									<!-- Default Mode (only relevant when both are allowed) -->
+									{#if (fileInputConfig.allowedInputModes?.length ?? 2) > 1}
 										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Display As</span>
-											<div class="grid grid-cols-4 gap-1">
-												{#each VALUE_LIST_MODES as option (option.value)}
-													<button
-														onclick={() => setValueListMode(option.value)}
-														class={`rounded-sm border px-1 py-1 text-[10px] transition-colors ${
-															mode === option.value
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														{option.label}
-													</button>
-												{/each}
-											</div>
-											<span class="text-muted-foreground/70 text-[9px]">
-												{VALUE_LIST_MODES.find((m) => m.value === mode)?.hint}
-											</span>
-										</div>
-										<OptionMediaEditor config={dropdownConfig} />
-									</div>
-								{/if}
-
-								{#if isFileInput && fileInputConfig}
-									<div class="flex flex-col gap-2">
-										<!-- Allowed Input Modes -->
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium"
-												>Allowed Input Modes</span
+											<span class="text-muted-foreground text-[10px] font-medium">Default Mode</span
 											>
 											<div class="grid grid-cols-2 gap-1">
-												{#each ['upload', 'url'] as const as mode (mode)}
-													{@const isAllowed =
-														fileInputConfig.allowedInputModes?.includes(mode) ?? true}
-													<button
-														onclick={() => toggleAllowedMode(mode)}
-														class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
-															isAllowed
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														{mode === 'upload' ? 'Upload' : 'URL'}
-													</button>
-												{/each}
-											</div>
-											<span class="text-muted-foreground text-[9px]"
-												>At least one must be enabled</span
-											>
-										</div>
-
-										<!-- Default Mode (only relevant when both are allowed) -->
-										{#if (fileInputConfig.allowedInputModes?.length ?? 2) > 1}
-											<div class="flex flex-col gap-1">
-												<span class="text-muted-foreground text-[10px] font-medium"
-													>Default Mode</span
+												<button
+													onclick={() => setFileInputMode('upload')}
+													class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
+														(fileInputConfig.defaultInputMode ?? 'upload') === 'upload'
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border hover:border-border hover:bg-hover'
+													}`}
 												>
-												<div class="grid grid-cols-2 gap-1">
-													<button
-														onclick={() => setFileInputMode('upload')}
-														class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
-															(fileInputConfig.defaultInputMode ?? 'upload') === 'upload'
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														Upload
-													</button>
-													<button
-														onclick={() => setFileInputMode('url')}
-														class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
-															fileInputConfig.defaultInputMode === 'url'
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														URL
-													</button>
-												</div>
+													Upload
+												</button>
+												<button
+													onclick={() => setFileInputMode('url')}
+													class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
+														fileInputConfig.defaultInputMode === 'url'
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border hover:border-border hover:bg-hover'
+													}`}
+												>
+													URL
+												</button>
 											</div>
-										{/if}
+										</div>
+									{/if}
 
-										<!-- File Formats -->
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">File Formats</span
-											>
-											<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
-												{#each availableFileFormats as format (format)}
-													{@const isChecked = fileInputConfig.acceptedFormats?.includes(format)}
-													<button
-														onclick={() => toggleAcceptedFormat(format)}
-														class={`rounded-sm border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
-															isChecked
-																? 'bg-primary text-primary-foreground border-primary'
-																: 'border-border/70 hover:border-border hover:bg-accent'
-														}`}
-													>
-														{format}
-													</button>
-												{/each}
-											</div>
+									<!-- File Formats -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">File Formats</span>
+										<div class="grid max-h-24 grid-cols-3 gap-1 overflow-y-auto">
+											{#each availableFileFormats as format (format)}
+												{@const isChecked = fileInputConfig.acceptedFormats?.includes(format)}
+												<button
+													onclick={() => toggleAcceptedFormat(format)}
+													class={`rounded-sm border px-1.5 py-0.5 text-[9px] whitespace-nowrap transition-colors ${
+														isChecked
+															? 'bg-primary text-primary-foreground border-primary'
+															: 'border-border hover:border-border hover:bg-hover'
+													}`}
+												>
+													{format}
+												</button>
+											{/each}
 										</div>
 									</div>
-								{/if}
+								</div>
+							{/if}
 
-								{#if isTextInput}
-									{@const config = item.config as TextWidgetConfig}
-									<div class="flex flex-col gap-2">
-										<!-- Max Length -->
-										<div class="flex flex-col gap-1">
-											<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
-											<input
-												type="number"
-												min="1"
-												bind:value={config.maxLength}
-												placeholder="No limit"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
-											/>
-										</div>
+							{#if isTextInput}
+								{@const config = item.config as TextWidgetConfig}
+								<div class="flex flex-col gap-2">
+									<!-- Max Length -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium">Max Length</span>
+										<input
+											type="number"
+											min="1"
+											bind:value={config.maxLength}
+											placeholder="No limit"
+											class="border-border bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
+										/>
+									</div>
 
-										<!-- Pattern (Regex) -->
+									<!-- Pattern (Regex) -->
+									<div class="flex flex-col gap-1">
+										<span class="text-muted-foreground text-[10px] font-medium"
+											>Validation Pattern (Regex)</span
+										>
+										<input
+											type="text"
+											bind:value={config.pattern}
+											placeholder="e.g., ^[a-zA-Z0-9]+$"
+											class="border-border bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
+										/>
+									</div>
+
+									<!-- Custom Error Message -->
+									{#if config.pattern}
 										<div class="flex flex-col gap-1">
 											<span class="text-muted-foreground text-[10px] font-medium"
-												>Validation Pattern (Regex)</span
+												>Custom Error Message</span
 											>
 											<input
 												type="text"
-												bind:value={config.pattern}
-												placeholder="e.g., ^[a-zA-Z0-9]+$"
-												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
+												bind:value={config.customErrorMessage}
+												placeholder="Invalid format"
+												class="border-border bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
 											/>
 										</div>
-
-										<!-- Custom Error Message -->
-										{#if config.pattern}
-											<div class="flex flex-col gap-1">
-												<span class="text-muted-foreground text-[10px] font-medium"
-													>Custom Error Message</span
-												>
-												<input
-													type="text"
-													bind:value={config.customErrorMessage}
-													placeholder="Invalid format"
-													class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
-												/>
-											</div>
-										{/if}
-									</div>
-								{/if}
+									{/if}
+								</div>
 							{/if}
 						</div>
 					{/if}
-
-					<!-- Visibility Rules Section (separate from Advanced) -->
-					<div class="border-border/70 mt-1 border-t pt-1">
-						<button
-							onclick={() => (showVisibilityRules = !showVisibilityRules)}
-							class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
-						>
-							<ChevronDown
-								size={12}
-								class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
-							/>
-							Visibility Rules {hasVisibilityRules
-								? `(${item.visibilityCondition?.rules?.length ?? 0})`
-								: ''}
-						</button>
-
-						{#if showVisibilityRules}
-							<VisibilityRulesEditor
-								bind:visibilityCondition={item.visibilityCondition}
-								{availableInputs}
-								currentParamInfo={paramInfo}
-								{getParameterInfo}
-								isGroupCondition={item.type === 'output'}
-								options={item.type === 'input' && item.widgetType === 'dropdown'
-									? item.config.options
-									: undefined}
-							/>
-						{/if}
-					</div>
 
 					<!-- Value source (input items only): who supplies this input. -->
 					{#if isInput}
@@ -760,7 +718,7 @@
 											class={`rounded-sm border px-2 py-1 text-[10px] transition-colors ${
 												sourceKind === kind
 													? 'bg-primary text-primary-foreground border-primary'
-													: 'border-border/70 bg-background hover:border-border hover:bg-accent'
+													: 'border-border bg-background hover:border-border hover:bg-hover'
 											}`}
 										>
 											{SOURCE_KIND_LABELS[kind]}
@@ -783,15 +741,13 @@
 										placeholder={sourceKind === 'client'
 											? 'e.g. line-app'
 											: 'e.g. capture.geometry'}
-										class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
+										class="border-border bg-background focus:border-primary h-6 rounded-sm border px-2 font-mono text-[10px] focus:outline-none"
 									/>
 									<span class="text-muted-foreground text-[10px]">
 										{#if sourceKind === 'client'}
-											Filled by a browser app before the form runs. The key names which producer to
-											open. Hidden from the form by default.
+											Filled in the browser before the form runs.
 										{:else}
-											Looked up on the server at solve time. The key names what to fetch. Never
-											shown in the form.
+											Looked up on the server when solving.
 										{/if}
 									</span>
 
@@ -802,7 +758,7 @@
 												value={clientPresentation}
 												onchange={(e) =>
 													setClientPresentation(e.currentTarget.value as 'hidden' | 'slot')}
-												class="border-border/70 bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
+												class="border-border bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
 											>
 												<option value="hidden">Hidden</option>
 												<option value="slot">Custom slot (host app)</option>
@@ -810,7 +766,7 @@
 										</div>
 										{#if clientPresentation === 'slot'}
 											<span class="text-muted-foreground text-[10px]">
-												The host app renders its own element here; Selva renders nothing itself.
+												The host app renders this element.
 											</span>
 										{/if}
 									{/if}

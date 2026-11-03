@@ -161,7 +161,9 @@
 				</p>
 				{#if data.bootstrapEmail}
 					<p class="text-sm">
-						Expected email: <code class="bg-muted rounded px-1 py-0.5">{data.bootstrapEmail}</code>
+						Expected email: <code class="bg-muted rounded-sm px-1 py-0.5"
+							>{data.bootstrapEmail}</code
+						>
 					</p>
 				{:else}
 					<Callout tone="danger">

@@ -106,7 +106,7 @@
 {#if draft}
 	<div class="flex flex-col gap-1">
 		<span class="text-muted-foreground text-2xs font-medium">Option pictures</span>
-		<ul class="border-border/70 divide-border/60 divide-y rounded-sm border">
+		<ul class="border-border divide-border divide-y rounded-sm border">
 			{#each names as name (name)}
 				{@const src = imageSrc(name)}
 				{@const path = src ? undefined : iconPath(name)}
@@ -133,7 +133,7 @@
 									{:else if path}
 										{@render iconGlyph(path)}
 									{:else}
-										<Smile class="text-muted-foreground/60" />
+										<Smile class="text-faint-foreground" />
 									{/if}
 								</Button>
 							{/snippet}
@@ -175,12 +175,12 @@
 								{:else}
 									<div class="flex flex-col items-center gap-3 py-2">
 										<div
-											class="border-border bg-muted/40 flex size-24 items-center justify-center overflow-hidden rounded-md border"
+											class="border-border bg-muted flex size-24 items-center justify-center overflow-hidden rounded-md border"
 										>
 											{#if src}
 												<img {src} alt="" class="size-full object-cover" />
 											{:else}
-												<ImagePlus class="text-muted-foreground/50 size-6" />
+												<ImagePlus class="text-faint-foreground size-6" />
 											{/if}
 										</div>
 										<div class="flex gap-2">
@@ -201,9 +201,6 @@
 												</Button>
 											{/if}
 										</div>
-										<p class="text-muted-foreground text-center text-xs">
-											Cropped to a square and shrunk to {THUMBNAIL_PX} px. Replaces the icon.
-										</p>
 									</div>
 								{/if}
 							</div>
@@ -230,7 +227,7 @@
 			{/each}
 		</ul>
 		<span
-			class={`text-2xs ${totalBytes > WARN_TOTAL_BYTES ? 'text-destructive' : 'text-muted-foreground/70'}`}
+			class={`text-2xs ${totalBytes > WARN_TOTAL_BYTES ? 'text-destructive' : 'text-faint-foreground'}`}
 		>
 			{totalBytes > WARN_TOTAL_BYTES
 				? `Icons and images add ${Math.round(totalBytes / 1024)} KB to the .gh. Remove some to keep it quick to open.`

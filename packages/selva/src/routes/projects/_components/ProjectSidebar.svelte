@@ -64,7 +64,7 @@
 		{#if canManageProjects}
 			<button
 				onclick={() => (showForm = !showForm)}
-				class="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors"
+				class="text-muted-foreground hover:text-foreground rounded-sm p-0.5 transition-colors"
 				title="New project"
 				aria-label="New project"
 			>
@@ -74,7 +74,7 @@
 	</div>
 
 	{#if showForm && canManageProjects}
-		<div class="border-border bg-muted/40 mx-3 mb-3 space-y-2 rounded-md border p-3">
+		<div class="border-border bg-raised shadow-raised mx-3 mb-3 space-y-2 rounded-md border p-3">
 			<Input bind:value={newName} placeholder="Project name" class="h-8 text-xs" />
 			<select
 				bind:value={newVisibility}
@@ -124,8 +124,8 @@
 			onclick={() => onSelect(null)}
 			class={`group relative flex w-full items-center gap-2 py-1.5 pr-2.5 text-left transition-colors ${
 				activeProjectId === null
-					? 'bg-accent text-accent-foreground rounded-r-md pl-4'
-					: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground mx-2 rounded-md pl-2.5'
+					? 'bg-selected text-foreground rounded-r-md pl-4'
+					: 'text-muted-foreground hover:bg-hover hover:text-foreground mx-2 rounded-md pl-2.5'
 			}`}
 		>
 			{#if activeProjectId === null}
@@ -136,7 +136,7 @@
 		</button>
 
 		{#if filteredProjects.length > 0}
-			<div class="border-border/60 my-2 border-t"></div>
+			<div class="border-border my-2 border-t"></div>
 		{/if}
 
 		{#each filteredProjects as project (project.id)}
@@ -146,8 +146,8 @@
 				onclick={() => onSelect(project.id)}
 				class={`group relative flex w-full items-center gap-2 py-1.5 pr-2.5 text-left transition-colors ${
 					isActive
-						? 'bg-accent text-accent-foreground rounded-r-md pl-4'
-						: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground mx-2 rounded-md pl-2.5'
+						? 'bg-selected text-foreground rounded-r-md pl-4'
+						: 'text-muted-foreground hover:bg-hover hover:text-foreground mx-2 rounded-md pl-2.5'
 				}`}
 			>
 				{#if isActive}

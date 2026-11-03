@@ -25,7 +25,7 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			'h-9 min-w-0 px-3 pt-1.5 text-sm font-medium shadow-xs flex w-full rounded-md border border-input bg-transparent ring-offset-background transition outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30',
+			'h-9 min-w-0 px-3 pt-1.5 text-sm font-medium shadow-xs flex w-full rounded-md border border-input bg-field ring-offset-background transition outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
 			'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring',
 			'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
 			className
@@ -40,7 +40,7 @@
 		bind:this={ref}
 		data-slot={dataSlot}
 		class={cn(
-			'h-9 min-w-0 px-3 py-1 text-base shadow-xs md:text-sm flex w-full rounded-md border border-input bg-background ring-offset-background transition outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30',
+			'h-9 min-w-0 px-3 py-1 text-base shadow-xs md:text-sm flex w-full rounded-md border border-input bg-field ring-offset-background transition outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
 			'focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring',
 			'aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40',
 			className

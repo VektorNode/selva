@@ -99,7 +99,7 @@
 			one solve
 		</button>
 		<button
-			class="border-border hover:bg-muted rounded border px-3 py-1.5 text-xs font-medium transition"
+			class="border-border hover:bg-hover rounded border px-3 py-1.5 text-xs font-medium transition"
 			onclick={() => send(8)}
 		>
 			eight at once
@@ -118,7 +118,7 @@
 			<p class="text-muted-foreground text-[11px] tracking-wide uppercase">workers on the VM</p>
 			<div class="mt-1.5 flex items-center gap-2">
 				<button
-					class="border-border hover:bg-muted size-6 rounded border font-mono text-xs"
+					class="border-border hover:bg-hover size-6 rounded border font-mono text-xs"
 					onclick={() => (workers = Math.max(1, workers - 1))}
 					aria-label="Remove a worker"
 				>
@@ -126,7 +126,7 @@
 				</button>
 				<span class="w-5 text-center font-mono text-sm tabular-nums">{workers}</span>
 				<button
-					class="border-border hover:bg-muted size-6 rounded border font-mono text-xs"
+					class="border-border hover:bg-hover size-6 rounded border font-mono text-xs"
 					onclick={() => (workers = Math.min(8, workers + 1))}
 					aria-label="Add a worker"
 				>
@@ -170,7 +170,7 @@
 				<div
 					class="relative h-9 overflow-hidden rounded border {withinCap
 						? 'border-border'
-						: 'border-border/30'}"
+						: 'border-border'}"
 				>
 					{#if job}
 						<div
@@ -191,7 +191,7 @@
 						</span>
 					{:else if withinCap}
 						<span
-							class="text-muted-foreground/40 absolute inset-0 flex items-center justify-center text-xs"
+							class="text-faint-foreground absolute inset-0 flex items-center justify-center text-xs"
 						>
 							·
 						</span>
@@ -205,7 +205,7 @@
 		<p class="text-muted-foreground mb-1.5 text-[11px] tracking-wide uppercase">
 			waiting their turn
 		</p>
-		<div class="bg-muted/40 flex min-h-9 flex-wrap items-center gap-1.5 rounded p-1.5">
+		<div class="bg-muted flex min-h-9 flex-wrap items-center gap-1.5 rounded p-1.5">
 			{#each waiting as id (id)}
 				<span
 					class="rounded bg-amber-500/10 px-2 py-0.5 font-mono text-[11px] text-amber-600 dark:text-amber-400"

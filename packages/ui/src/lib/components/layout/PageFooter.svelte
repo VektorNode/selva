@@ -88,12 +88,12 @@
 			<ComputeMessagesDialog {errors} {warnings} {diagnostics}>
 				{#snippet trigger()}
 					<div
-						class="gap-1.5 px-2 py-1 rounded flex cursor-pointer items-center transition-colors hover:bg-muted {errorCount >
+						class="gap-1.5 px-2 py-1 flex cursor-pointer items-center rounded-sm transition-colors hover:bg-hover {errorCount >
 						0
 							? 'text-destructive hover:bg-destructive/10'
 							: warningCount > 0
 								? 'text-warning hover:bg-warning/10'
-								: 'hover:bg-muted'}"
+								: 'hover:bg-hover'}"
 						title={formatCount(totalCount, t.lastSolveMessagesOne, t.lastSolveMessagesOther)}
 					>
 						{#if errorCount > 0}

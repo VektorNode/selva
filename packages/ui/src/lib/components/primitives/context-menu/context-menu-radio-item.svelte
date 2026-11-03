@@ -15,7 +15,7 @@
 	bind:ref
 	data-slot="context-menu-radio-item"
 	class={cn(
-		"gap-2 py-1.5 pe-2 ps-8 text-sm [&_svg:not([class*='size-'])]:size-4 relative flex cursor-default items-center rounded-sm outline-hidden select-none data-highlighted:bg-accent data-highlighted:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+		"gap-2 py-1.5 pe-2 ps-8 text-sm [&_svg:not([class*='size-'])]:size-4 relative flex cursor-default items-center rounded-inner outline-hidden select-none data-highlighted:bg-hover data-highlighted:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
 		className
 	)}
 	{...restProps}

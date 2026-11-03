@@ -93,12 +93,12 @@
 	<Card.Content>
 		<div class="flex items-center gap-4">
 			<div
-				class="bg-muted/40 flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border"
+				class="bg-muted flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-lg border"
 			>
 				{#if url}
 					<img src={url} alt={title} class="h-full w-full object-contain" />
 				{:else}
-					<Building2 class="text-muted-foreground/50 h-8 w-8" />
+					<Building2 class="text-faint-foreground h-8 w-8" />
 				{/if}
 			</div>
 			<div class="flex flex-col gap-2">

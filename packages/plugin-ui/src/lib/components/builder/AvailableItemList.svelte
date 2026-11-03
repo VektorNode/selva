@@ -120,7 +120,7 @@
 		}}
 		onconsider={(e) => handleConsider(key, e)}
 		onfinalize={(e) => handleFinalize(key, e)}
-		class="flex flex-col gap-1"
+		class="bg-muted flex flex-col gap-1 rounded-md p-1.5"
 	>
 		{#each zoneItems as item (item.id)}
 			<div animate:flip={{ duration: DND_FLIP_MS }}>

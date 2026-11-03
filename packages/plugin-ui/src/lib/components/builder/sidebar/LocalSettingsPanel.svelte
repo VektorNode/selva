@@ -2,7 +2,6 @@
 	import type { LocalOptions, UISchema, ViewerOptions } from '@selvajs/schemas';
 	import { Switch } from '@selvajs/ui';
 	import ScopeNote from '../scope/ScopeNote.svelte';
-	import SettingsSection from './SettingsSection.svelte';
 	import SettingRow from './SettingRow.svelte';
 
 	interface Props {
@@ -21,36 +20,35 @@
 	}
 </script>
 
-<ScopeNote scope="local">
-	Used by the preview this Grasshopper session serves. Selva ignores these.
-</ScopeNote>
+<ScopeNote scope="local">Only the preview in Rhino uses these. Selva ignores them.</ScopeNote>
 
-<SettingsSection id="local.preview" title="Live preview">
-	<SettingRow
-		label="Local render"
-		for="enable-local-rendering"
-		layout="inline"
-		hint="Grasshopper streams display meshes to this preview. No server needed."
-	>
-		<Switch
-			id="enable-local-rendering"
-			checked={schema.viewerOptions?.enableLocal ?? false}
-			onCheckedChange={(checked) => updateViewerOptions({ enableLocal: checked })}
-		/>
-	</SettingRow>
-</SettingsSection>
-
-<SettingsSection id="local.rhino" title="Rhino">
-	<SettingRow
-		label="Track picked objects"
-		for="track-picked-objects"
-		layout="inline"
-		hint="Geometry picked in the viewport follows its Rhino objects: editing one re-solves, deleting one drops it. Off, a pick is a snapshot."
-	>
-		<Switch
-			id="track-picked-objects"
-			checked={schema.localOptions?.trackPickedObjects ?? false}
-			onCheckedChange={(checked) => updateLocalOptions({ trackPickedObjects: checked })}
-		/>
-	</SettingRow>
-</SettingsSection>
+<div class="divide-border flex flex-col divide-y">
+	<div class="py-4">
+		<SettingRow
+			label="Local render"
+			for="enable-local-rendering"
+			layout="inline"
+			hint="Stream Grasshopper meshes to this preview."
+		>
+			<Switch
+				id="enable-local-rendering"
+				checked={schema.viewerOptions?.enableLocal ?? false}
+				onCheckedChange={(checked) => updateViewerOptions({ enableLocal: checked })}
+			/>
+		</SettingRow>
+	</div>
+	<div class="py-4">
+		<SettingRow
+			label="Track picked objects"
+			for="track-picked-objects"
+			layout="inline"
+			hint="Picked geometry follows its Rhino objects. Off keeps a snapshot."
+		>
+			<Switch
+				id="track-picked-objects"
+				checked={schema.localOptions?.trackPickedObjects ?? false}
+				onCheckedChange={(checked) => updateLocalOptions({ trackPickedObjects: checked })}
+			/>
+		</SettingRow>
+	</div>
+</div>

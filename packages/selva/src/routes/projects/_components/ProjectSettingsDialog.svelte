@@ -198,7 +198,7 @@
 				<p
 					class={`shrink-0 rounded-md border px-3 py-2 text-xs ${
 						membersGrantAccess
-							? 'border-border bg-muted/40 text-muted-foreground'
+							? 'border-border bg-muted text-muted-foreground'
 							: 'border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400'
 					}`}
 				>

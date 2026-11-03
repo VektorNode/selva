@@ -133,6 +133,16 @@ export interface ViewerMessages {
 	/** `{max}` is replaced with the field's character limit. */
 	maxLength: string;
 	invalidFormat: string;
+	/** Trigger label; `{color}` is the current hex value. */
+	colorPick: string;
+	colorArea: string;
+	/** `{s}` and `{v}` are percentages. */
+	colorAreaValue: string;
+	colorHue: string;
+	colorHex: string;
+	colorHexInvalid: string;
+	colorPresets: string;
+	colorEyedropper: string;
 	invalidPattern: string;
 
 	// Geometry input (Rhino only)
@@ -344,6 +354,14 @@ const en: ViewerMessages = {
 	fineDragHint: 'Hold Shift to drag finely',
 	maxLength: 'Maximum {max} characters allowed',
 	invalidFormat: 'Invalid format',
+	colorPick: 'Choose color, currently {color}',
+	colorArea: 'Saturation and brightness',
+	colorAreaValue: 'Saturation {s}%, brightness {v}%',
+	colorHue: 'Hue',
+	colorHex: 'Hex color',
+	colorHexInvalid: 'Enter a hex color such as #2f6fd6',
+	colorPresets: 'Presets',
+	colorEyedropper: 'Pick a color from the screen',
 	invalidPattern: 'Invalid validation pattern configured',
 
 	geometryPickAnyOne: 'Pick an object',
@@ -540,6 +558,14 @@ const de: ViewerMessages = {
 	fineDragHint: 'Umschalttaste halten für feine Schritte',
 	maxLength: 'Höchstens {max} Zeichen erlaubt',
 	invalidFormat: 'Ungültiges Format',
+	colorPick: 'Farbe wählen, aktuell {color}',
+	colorArea: 'Sättigung und Helligkeit',
+	colorAreaValue: 'Sättigung {s} %, Helligkeit {v} %',
+	colorHue: 'Farbton',
+	colorHex: 'Hex-Farbe',
+	colorHexInvalid: 'Hex-Farbe eingeben, z. B. #2f6fd6',
+	colorPresets: 'Vorgaben',
+	colorEyedropper: 'Farbe vom Bildschirm aufnehmen',
 	invalidPattern: 'Ungültiges Prüfmuster hinterlegt',
 
 	geometryPickAnyOne: 'Objekt wählen',

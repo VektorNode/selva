@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
 	import { Input, Select } from '@selvajs/ui';
-	import ScopeNote from '../scope/ScopeNote.svelte';
 	import SettingsSection from './SettingsSection.svelte';
 	import SettingRow from './SettingRow.svelte';
 
@@ -28,8 +27,6 @@
 		onSchemaChange({ ...schema, viewerOptions: { ...schema.viewerOptions, ...updates } });
 	}
 </script>
-
-<ScopeNote scope="shared">Saved with the schema. Applies in the preview and on Selva.</ScopeNote>
 
 <SettingsSection id="viewer.look" title="Look" collapsible={false}>
 	<div class="grid grid-cols-2 gap-3">

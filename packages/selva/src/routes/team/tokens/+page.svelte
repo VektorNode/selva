@@ -182,7 +182,7 @@
 				{#if secret}
 					<Callout tone="success" title="Copy your token now. You won't see it again.">
 						<div class="flex items-center gap-2">
-							<code class="bg-muted min-w-0 flex-1 truncate rounded px-2 py-1 font-mono text-sm">
+							<code class="bg-muted min-w-0 flex-1 truncate rounded-sm px-2 py-1 font-mono text-sm">
 								{secret}
 							</code>
 							<Button size="sm" variant="outline" onclick={copySecret}>

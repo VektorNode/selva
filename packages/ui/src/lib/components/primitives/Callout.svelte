@@ -8,7 +8,7 @@
 		variants: {
 			tone: {
 				info: 'border-info/40 bg-info/10',
-				tip: 'border-border bg-muted/40',
+				tip: 'border-border bg-muted',
 				success: 'border-success/40 bg-success/10',
 				warning: 'border-warning/40 bg-warning/10',
 				danger: 'border-destructive/40 bg-destructive/10'
@@ -38,7 +38,7 @@
 		title?: string;
 		/** Replaces the tone's default icon. `null` drops the icon entirely. */
 		icon?: Component | null;
-		children: Snippet;
+		children?: Snippet;
 	}
 
 	let { tone = 'info', title, icon, class: className, children, ...restProps }: Props = $props();
@@ -59,8 +59,10 @@
 		{#if title}
 			<p class={cn('leading-tight font-medium', accent)}>{title}</p>
 		{/if}
-		<div class="leading-relaxed text-muted-foreground [&_a]:underline [&_strong]:text-foreground">
-			{@render children()}
-		</div>
+		{#if children}
+			<div class="leading-relaxed text-muted-foreground [&_a]:underline [&_strong]:text-foreground">
+				{@render children()}
+			</div>
+		{/if}
 	</div>
 </div>

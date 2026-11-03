@@ -43,7 +43,7 @@
 		</a>
 		<a
 			href="/docs/packages/build/overview"
-			class="border-border text-foreground hover:bg-muted inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition"
+			class="border-border text-foreground hover:bg-hover inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition"
 		>
 			Build your own app
 		</a>
@@ -71,7 +71,7 @@
 						<li>
 							<a
 								href={`/docs/${doc.slug}`}
-								class="hover:bg-muted/60 block px-4 py-3 transition first:rounded-t-lg last:rounded-b-lg"
+								class="hover:bg-hover block px-4 py-3 transition first:rounded-t-lg last:rounded-b-lg"
 							>
 								<span class="text-muted-foreground text-xs">{doc.group}</span>
 								<span class="text-foreground mt-0.5 block font-medium">{doc.title}</span>
@@ -96,7 +96,7 @@
 							<li>
 								<a
 									href={`/docs/${doc.slug}`}
-									class="group border-border bg-card hover:border-muted-foreground/40 flex h-full flex-col rounded-xl border p-4 transition"
+									class="group border-border bg-card hover:border-input flex h-full flex-col rounded-xl border p-4 transition"
 								>
 									<span class="text-foreground flex items-center justify-between gap-2 font-medium">
 										{doc.title}

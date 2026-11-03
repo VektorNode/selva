@@ -13,6 +13,7 @@
 	import LineBreakItem from './LineBreakItem.svelte';
 	import { ChevronDown, GripVertical, MousePointerClick, Trash2 } from '@lucide/svelte';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import VisibilityRulesDialog from './VisibilityRulesDialog.svelte';
 	import {
 		dragHandle,
 		dragHandleZone,
@@ -73,8 +74,7 @@
 
 	const collapsed = $derived(!!group.collapsed && !peekedGroups.has(group.id));
 
-	let showVisibilityRules = $state(false);
-	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
+	const visibilityRuleCount = $derived(group.visibilityCondition?.rules?.length ?? 0);
 	function isExpanded(id: string) {
 		return expandedItems.has(id);
 	}
@@ -239,7 +239,7 @@
 
 <Card.Root
 	data-builder-group-id={group.id}
-	class="group bg-muted gap-0 overflow-hidden border-2 py-0 {isDndTarget ? 'border-primary' : ''}"
+	class="group gap-0 overflow-hidden py-0 {isDndTarget ? 'border-primary' : ''}"
 >
 	<Card.Header
 		class="border-border bg-card flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 border-b px-3 py-3 transition-colors"
@@ -247,7 +247,7 @@
 		<!-- Drag Handle (group-level) — TabEditor declares the dragHandleZone. -->
 		<div
 			use:dragHandle
-			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+			class="text-muted-foreground hover:text-foreground hover:bg-hover flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 			role="button"
 			tabindex="0"
 			aria-label="Drag to reorder"
@@ -259,7 +259,7 @@
 				<div class="flex items-center gap-1">
 					<button
 						type="button"
-						class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-transform duration-200 {collapsed
+						class="text-muted-foreground hover:text-foreground hover:bg-hover flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-transform duration-200 {collapsed
 							? ''
 							: 'rotate-180'}"
 						onclick={toggleCollapsed}
@@ -320,44 +320,23 @@
 					{group.items.length}
 				</span>
 			{/if}
+			<VisibilityRulesDialog subject={group.label || 'Group'} ruleCount={visibilityRuleCount}>
+				<VisibilityRulesEditor
+					bind:visibilityCondition={group.visibilityCondition}
+					{availableInputs}
+					currentParamInfo={undefined}
+					{getParameterInfo}
+					isGroupCondition={true}
+				/>
+			</VisibilityRulesDialog>
 			<Button variant="ghost" size="icon-lg" onclick={onRemove} aria-label="Delete group">
 				<Trash2 size={16} />
 			</Button>
 		</div>
 	</Card.Header>
 
-	<!-- Visibility Rules Section -->
 	{#if !collapsed}
-		<div class="border-border bg-muted border-t px-3 py-2">
-			<button
-				onclick={() => (showVisibilityRules = !showVisibilityRules)}
-				class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
-			>
-				<ChevronDown
-					size={12}
-					class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
-				/>
-				Visibility Rules {hasVisibilityRules
-					? `(${group.visibilityCondition?.rules?.length ?? 0})`
-					: ''}
-			</button>
-
-			{#if showVisibilityRules}
-				<div class="bg-card mt-2 rounded-sm p-2">
-					<VisibilityRulesEditor
-						bind:visibilityCondition={group.visibilityCondition}
-						{availableInputs}
-						currentParamInfo={undefined}
-						{getParameterInfo}
-						isGroupCondition={true}
-					/>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	{#if !collapsed}
-		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-4">
+		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-3">
 			<div class="relative">
 				<div
 					use:dragHandleZone={{

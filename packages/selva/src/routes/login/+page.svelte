@@ -77,7 +77,7 @@
 	Remove once header-auth deployments have stabilized.
 -->
 {#snippet requestHeaderDump(headers: Array<{ name: string; value: string }>)}
-	<details class="border-border rounded border p-3 text-xs">
+	<details class="border-border rounded-sm border p-3 text-xs">
 		<summary class="text-muted-foreground cursor-pointer font-medium">
 			Request headers ({headers.length})
 		</summary>

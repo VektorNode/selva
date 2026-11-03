@@ -40,7 +40,7 @@
 		<div class="bg-border h-3 w-px"></div>
 		<span class="text-muted-foreground flex items-center gap-1.5 text-xs">
 			<span class="shrink-0">Session:</span>
-			<code class="bg-muted text-foreground rounded px-1.5 py-0.5 font-mono text-xs font-medium">
+			<code class="bg-muted text-foreground rounded-sm px-1.5 py-0.5 font-mono text-xs font-medium">
 				{sessionId}
 			</code>
 		</span>

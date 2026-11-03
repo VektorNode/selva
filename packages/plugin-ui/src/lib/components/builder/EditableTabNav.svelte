@@ -170,13 +170,13 @@
 						class="group/tab relative flex h-10 items-center rounded-t-lg transition-colors {pendingTargetTabId ===
 						tab.id
 							? 'bg-primary/10 ring-primary ring-2 ring-inset'
-							: 'hover:bg-muted/60'}"
+							: 'hover:bg-hover'}"
 						role="presentation"
 					>
 						{#if onReorderTabs}
 							<div
 								use:dragHandle
-								class="text-muted-foreground/60 hover:text-foreground flex cursor-grab items-center self-stretch pl-1.5 opacity-0 transition-opacity group-hover/tab:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
+								class="text-faint-foreground hover:text-foreground flex cursor-grab items-center self-stretch pl-1.5 opacity-0 transition-opacity group-hover/tab:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
 								role="button"
 								tabindex="0"
 								aria-label="Drag to reorder tab"

@@ -36,7 +36,7 @@
 					type="submit"
 					title="Log out"
 					aria-label="Log out"
-					class="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full p-2 transition-colors"
+					class="text-muted-foreground hover:text-foreground hover:bg-hover rounded-full p-2 transition-colors"
 				>
 					<LogOut class="h-3.5 w-3.5" />
 				</button>

@@ -26,7 +26,7 @@
 							aria-current={active ? 'page' : undefined}
 							class="-ml-px block border-l py-1 pl-3 text-sm transition {active
 								? 'border-primary text-foreground font-medium'
-								: 'text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 border-transparent'}"
+								: 'text-muted-foreground hover:text-foreground hover:border-input border-transparent'}"
 						>
 							{link.label}
 						</a>

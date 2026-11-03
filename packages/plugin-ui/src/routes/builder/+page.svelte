@@ -6,13 +6,11 @@
 		StateDisplay,
 		Button,
 		Dialog,
-		DropdownMenu,
 		Resizable,
 		toast,
-		unsupportedItems,
 		useFooterItem
 	} from '@selvajs/ui';
-	import { Save, RefreshCw, CloudUpload, Ellipsis, SlidersHorizontal } from '@lucide/svelte';
+	import { Save, RefreshCw, CloudUpload } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import ModeHeader from '$lib/components/ModeHeader.svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
@@ -92,10 +90,6 @@
 	}
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
-
-	const leftOutOnSelva = $derived(
-		builderState?.state.draft ? unsupportedItems(builderState.state.draft, 'selva').length : 0
-	);
 
 	// Side by side under 1024px, the sidebar's quarter is too narrow to read a parameter name, and
 	// a docked Rhino panel is narrower still. Stacked, a parameter can still be dragged from the
@@ -277,24 +271,6 @@
 </script>
 
 {#snippet headerActions()}
-	<!-- Below lg the full row crowds out the schema name: Save stays, the rest goes in a menu. -->
-	<Button
-		variant="outline"
-		size="sm"
-		class="max-lg:hidden"
-		onclick={() => builderState?.requestSyncPreview()}
-		disabled={!builderState?.state.draft}
-	>
-		Sync with Grasshopper
-	</Button>
-	<Button
-		variant="outline"
-		size="sm"
-		class="max-lg:hidden"
-		onclick={() => (showBatchProcessor = !showBatchProcessor)}
-	>
-		Batch Processors
-	</Button>
 	<Button
 		variant={builderState?.state.isDirty ? 'default' : 'outline'}
 		size="sm"
@@ -305,53 +281,16 @@
 		<Save class="h-4 w-4" /><span class="max-sm:sr-only">Save</span>
 	</Button>
 	<!-- The title sits on a wrapper: a disabled button gets no hover, so its own title never shows. -->
-	<span class="max-lg:hidden" title={uploadNeedsSave ? 'Save the schema first' : undefined}>
+	<span title={uploadNeedsSave ? 'Save the schema first' : undefined}>
 		<Button
 			variant="outline"
 			size="sm"
 			onclick={() => selvaUpload?.open()}
 			disabled={!builderState?.state.draft || !selvaUpload || uploadNeedsSave}
 		>
-			<CloudUpload class="h-4 w-4" />Upload to Selva
+			<CloudUpload class="h-4 w-4" /><span class="max-lg:sr-only">Upload to Selva</span>
 		</Button>
 	</span>
-	<DropdownMenu.Root>
-		<DropdownMenu.Trigger>
-			{#snippet child({ props })}
-				<Button
-					{...props}
-					variant="outline"
-					size="icon-sm"
-					class="lg:hidden"
-					aria-label="More actions"
-					title="More actions"
-				>
-					<Ellipsis />
-				</Button>
-			{/snippet}
-		</DropdownMenu.Trigger>
-		<DropdownMenu.Content align="end" class="w-56">
-			<DropdownMenu.Item
-				disabled={!builderState?.state.draft}
-				onSelect={() => builderState?.requestSyncPreview()}
-			>
-				<RefreshCw />Sync with Grasshopper
-			</DropdownMenu.Item>
-			<DropdownMenu.Item onSelect={() => (showBatchProcessor = true)}>
-				<SlidersHorizontal />Batch Processors
-			</DropdownMenu.Item>
-			<DropdownMenu.Item
-				disabled={!builderState?.state.draft || !selvaUpload || uploadNeedsSave}
-				onSelect={() => selvaUpload?.open()}
-			>
-				<CloudUpload />
-				<span class="flex-1">Upload to Selva</span>
-				{#if uploadNeedsSave}
-					<span class="text-muted-foreground text-xs">Save first</span>
-				{/if}
-			</DropdownMenu.Item>
-		</DropdownMenu.Content>
-	</DropdownMenu.Root>
 {/snippet}
 
 <AppShell {...rhinoShellProps()} mode="fixed" showFooter>
@@ -416,6 +355,8 @@
 									}
 								}}
 								onSync={() => builderState?.syncParameters()}
+								onSyncPreview={() => builderState?.requestSyncPreview()}
+								onBatch={() => (showBatchProcessor = true)}
 								onAddToGroup={actions.onAddToGroup}
 								onAddToNewGroup={actions.onAddToNewGroup}
 								onImportGhGroups={actions.onImportGhGroups}
@@ -431,16 +372,6 @@
 						<main
 							class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py) max-lg:py-3"
 						>
-							<p class="text-muted-foreground -mb-3 text-xs" data-testid="host-summary">
-								{#if leftOutOnSelva === 0}
-									Runs in Rhino and on Selva.
-								{:else}
-									Runs in Rhino. On Selva, {leftOutOnSelva === 1
-										? '1 element is'
-										: `${leftOutOnSelva} elements are`} left out for now, and the definition solves with
-									its own values there.
-								{/if}
-							</p>
 							{#if builderState.state.draft.layout?.type === 'tabbed'}
 								<TabEditor
 									bind:tabs={builderState.state.draft.layout.tabs}

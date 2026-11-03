@@ -26,7 +26,7 @@
 			type="button"
 			onclick={() => onOpen(record.guid)}
 			disabled={loadingGuid === record.guid}
-			class="hover:bg-muted/40 group grid w-full items-center gap-4 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60
+			class="hover:bg-hover group grid w-full items-center gap-4 px-4 py-3 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-60
 				{gridTemplate} {i < records.length - 1 ? 'border-border border-b' : ''}"
 		>
 			{#if record.coverImage}
@@ -40,7 +40,7 @@
 					style:--tool-h1={hues.h1}
 					style:--tool-h2={hues.h2}
 				>
-					<span class="text-foreground/40 text-base font-semibold">
+					<span class="text-faint-foreground text-base font-semibold">
 						{monogram(record.displayName)}
 					</span>
 				</div>
@@ -59,7 +59,7 @@
 				{#if record.tags?.length}
 					{#each record.tags.slice(0, 3) as tag (tag)}
 						<span
-							class="bg-muted text-muted-foreground rounded px-1.5 py-px font-mono text-[10.5px]"
+							class="bg-muted text-muted-foreground rounded-sm px-1.5 py-px font-mono text-[10.5px]"
 							>#{tag}</span
 						>
 					{/each}

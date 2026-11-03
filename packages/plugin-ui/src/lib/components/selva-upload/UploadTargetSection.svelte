@@ -53,7 +53,7 @@
 	}
 
 	const optionClass =
-		'flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors hover:bg-accent/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:disabled]:hover:bg-transparent';
+		'flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors hover:bg-hover has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:disabled]:hover:bg-transparent';
 </script>
 
 <fieldset class="flex flex-col gap-2">
@@ -120,8 +120,7 @@
 			{/each}
 		</ul>
 		<p class="mt-1">
-			Your upload goes on top as the newest version. It's made from this file alone, so it won't
-			have those changes unless this file has them too.
+			Your upload becomes the newest version, without those changes unless this file has them.
 		</p>
 	</Callout>
 {/if}
@@ -179,7 +178,7 @@
 			</div>
 		</div>
 		<p class="text-muted-foreground -mt-2 text-xs">
-			Filled in from the schema's settings. Up to {MAX_TAGS} tags.
+			Up to {MAX_TAGS} tags.
 		</p>
 	</div>
 {/if}

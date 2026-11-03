@@ -110,7 +110,7 @@
 	{:else}
 		<div class="border-border bg-card overflow-hidden rounded-md border">
 			<div
-				class="border-border bg-muted/40 flex items-center justify-between gap-3 border-b px-4 py-2"
+				class="border-border bg-muted flex items-center justify-between gap-3 border-b px-4 py-2"
 			>
 				<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
 					{activeLinks.length} active link{activeLinks.length === 1 ? '' : 's'}

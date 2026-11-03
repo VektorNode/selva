@@ -51,11 +51,11 @@
 				tabindex="-1"
 				role="button"
 				title={item.description || undefined}
-				class="group/param border-border bg-background hover:border-primary/50 flex h-9 cursor-grab items-center gap-2 rounded-lg border pr-2 pl-1 text-sm transition-colors active:cursor-grabbing [#dnd-action-dragged-el>&]:h-full"
+				class="group/param bg-raised shadow-raised border-border-strong hover:border-input flex h-9 cursor-grab items-center gap-2 rounded-md border pr-2 pl-1 text-sm transition-colors active:cursor-grabbing [#dnd-action-dragged-el>&]:h-full"
 			>
 				<GripVertical
 					size={14}
-					class="text-muted-foreground/40 group-hover/param:text-muted-foreground shrink-0"
+					class="text-faint-foreground group-hover/param:text-muted-foreground shrink-0"
 				/>
 				<span class="text-foreground min-w-0 flex-1 truncate font-medium">{label}</span>
 				{#if isInput}
@@ -114,7 +114,6 @@
 					onkeydown={handleKeydown}
 					class="h-8 text-sm"
 				/>
-				<p class="text-muted-foreground mt-1 text-xs">Use "Tab/Group" to create in specific tab</p>
 			</div>
 			<ContextMenu.Item onclick={handleAddToNewGroup} disabled={!newGroupPath.trim()}>
 				Add to New Group

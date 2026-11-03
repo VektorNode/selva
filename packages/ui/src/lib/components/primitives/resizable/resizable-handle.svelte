@@ -27,7 +27,7 @@
 >
 	{#if withHandle}
 		<div
-			class="h-8 w-0.75 group-hover/handle:h-12 z-10 flex shrink-0 rounded-full bg-foreground/15 transition duration-150 group-hover/handle:bg-foreground/40 group-active/handle:bg-foreground/60"
+			class="h-8 w-0.75 group-hover/handle:h-12 z-10 flex shrink-0 rounded-full bg-border-strong transition duration-150 group-hover/handle:bg-input group-active/handle:bg-muted-foreground"
 		></div>
 	{/if}
 </ResizablePrimitive.PaneResizer>

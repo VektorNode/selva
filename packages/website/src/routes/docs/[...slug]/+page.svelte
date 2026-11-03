@@ -54,7 +54,7 @@
 		{#if data.prev}
 			<a
 				href={`/docs/${data.prev.slug}`}
-				class="group border-border hover:border-muted-foreground/40 hover:bg-muted/40 flex flex-col rounded-lg border p-4 transition"
+				class="group border-border hover:border-input hover:bg-hover flex flex-col rounded-lg border p-4 transition"
 			>
 				<span class="text-muted-foreground inline-flex items-center gap-1 text-xs">
 					<ArrowLeft class="size-3.5" /> Previous
@@ -69,7 +69,7 @@
 		{#if data.next}
 			<a
 				href={`/docs/${data.next.slug}`}
-				class="group border-border hover:border-muted-foreground/40 hover:bg-muted/40 flex flex-col rounded-lg border p-4 text-right transition"
+				class="group border-border hover:border-input hover:bg-hover flex flex-col rounded-lg border p-4 text-right transition"
 			>
 				<span class="text-muted-foreground inline-flex items-center justify-end gap-1 text-xs">
 					Next <ArrowRight class="size-3.5" />

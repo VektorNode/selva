@@ -49,7 +49,7 @@
 				{#snippet child({ props })}
 					<button
 						{...props}
-						class="group/section flex w-full items-start justify-between gap-3 pt-4 pb-3 text-left"
+						class="group/section flex w-full items-start justify-between gap-3 pt-5 pb-3 text-left"
 					>
 						{@render heading()}
 						<ChevronDown
@@ -62,14 +62,14 @@
 				{/snippet}
 			</Collapsible.Trigger>
 			<Collapsible.Content>
-				<div class="flex flex-col gap-4 pb-4">
+				<div class="flex flex-col gap-5 pb-5">
 					{@render children()}
 				</div>
 			</Collapsible.Content>
 		</Collapsible.Root>
 	{:else}
-		<div class="pt-4 pb-3">{@render heading()}</div>
-		<div class="flex flex-col gap-4 pb-4">
+		<div class="pt-5 pb-3">{@render heading()}</div>
+		<div class="flex flex-col gap-5 pb-5">
 			{@render children()}
 		</div>
 	{/if}

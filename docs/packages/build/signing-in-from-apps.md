@@ -61,3 +61,5 @@ The check runs on every request, so a token stops working when its owner no long
 ## Behind a forward-auth proxy
 
 Let the OAuth discovery and token endpoints and `selva_` keys through without the proxy's sign-in. Keep `/oauth/authorize` behind it. The Caddyfile in [Header auth with Entra](../../self-hosting/providers/header-auth-entra.md#part-5-caddyfile) does this.
+
+Those keys never pass the proxy, so disabling someone in your identity provider doesn't stop them by itself. Disable the person in Selva too, or set a sign-in window so their keys lapse: [When someone leaves](../../self-hosting/providers/header-auth-entra.md#when-someone-leaves).

@@ -115,10 +115,10 @@
 			{#snippet header()}
 				{#if data.org}
 					<div
-						class="border-border bg-accent/40 flex items-center gap-2 rounded-md border px-2.5 py-2"
+						class="border-border bg-selected flex items-center gap-2 rounded-md border px-2.5 py-2"
 					>
 						<span
-							class="bg-primary/15 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-[11px] font-semibold"
+							class="bg-primary/15 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded-sm font-mono text-[11px] font-semibold"
 						>
 							{orgInitials(data.org.name)}
 						</span>

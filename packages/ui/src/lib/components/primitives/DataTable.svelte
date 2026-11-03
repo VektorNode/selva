@@ -41,7 +41,7 @@
 	style:--table-cols-sm={mobileTemplate}
 >
 	<div
-		class="data-table-row gap-4 px-4 py-2 text-xs font-medium tracking-wide sm:grid-cols-(--table-cols) grid grid-cols-(--table-cols-sm) bg-muted/40 text-muted-foreground uppercase {hiddenCols}"
+		class="data-table-row gap-4 px-4 py-2 text-xs font-medium tracking-wide sm:grid-cols-(--table-cols) grid grid-cols-(--table-cols-sm) bg-muted text-muted-foreground uppercase {hiddenCols}"
 	>
 		{#each columns as col (col.label)}
 			<span class={col.align === 'right' ? 'text-right' : ''}>{col.label}</span>

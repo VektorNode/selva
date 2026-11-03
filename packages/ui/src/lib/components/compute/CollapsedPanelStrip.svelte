@@ -27,7 +27,7 @@
 	);
 
 	const tabButtonClass =
-		'w-8 h-8 rounded-md cursor-pointer flex shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-accent hover:text-foreground';
+		'w-8 h-8 rounded-md cursor-pointer flex shrink-0 items-center justify-center text-muted-foreground transition-colors hover:bg-hover hover:text-foreground';
 </script>
 
 <div

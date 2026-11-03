@@ -98,7 +98,7 @@
 			<button
 				type="button"
 				onclick={onCancel}
-				class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1"
+				class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1"
 				aria-label="Cancel"
 			>
 				<X class="h-3.5 w-3.5" />
@@ -120,7 +120,7 @@
 						onclick={() => pick(user)}
 						onmouseenter={() => (highlighted = i)}
 						class={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
-							highlighted === i ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'
+							highlighted === i ? 'bg-selected text-foreground' : 'hover:bg-hover'
 						}`}
 					>
 						<UserAvatar name={userLabel(user)} size="sm" />

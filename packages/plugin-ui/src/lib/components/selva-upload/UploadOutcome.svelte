@@ -45,7 +45,7 @@
 					{:else if i === currentIndex}
 						<Spinner aria-label="In progress" />
 					{:else}
-						<Circle class="text-muted-foreground/50 size-3.5" aria-label="Not started" />
+						<Circle class="text-faint-foreground size-3.5" aria-label="Not started" />
 					{/if}
 				</span>
 				<span class="flex flex-col gap-0.5">

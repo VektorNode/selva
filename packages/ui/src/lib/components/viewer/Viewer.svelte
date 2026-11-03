@@ -532,7 +532,7 @@
 						class="inset-x-0 top-0 animate-in fade-in pointer-events-none absolute z-20 h-px overflow-hidden duration-300"
 						aria-hidden="true"
 					>
-						<div class="solve-bar h-full w-1/3 bg-foreground/25"></div>
+						<div class="solve-bar h-full w-1/3 bg-faint-foreground"></div>
 					</div>
 				{/if}
 				{#if isSlow}

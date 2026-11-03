@@ -13,7 +13,7 @@
 	const mark = $derived(SCOPES[scope]);
 </script>
 
-<p class="text-muted-foreground flex items-center gap-1.5 pt-2 pb-1 text-xs">
+<p class="text-muted-foreground flex items-center gap-1.5 pt-1 pb-3 text-xs">
 	<mark.icon class="size-3.5 shrink-0 {mark.text}" aria-hidden="true" />
 	<span>{@render children()}</span>
 </p>

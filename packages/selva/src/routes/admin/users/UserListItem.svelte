@@ -92,7 +92,7 @@
 	{/each}
 {/snippet}
 
-<div class={`px-4 py-3 ${expanded ? 'bg-accent/20' : ''}`}>
+<div class={`px-4 py-3 ${expanded ? 'bg-selected' : ''}`}>
 	<div class="flex items-center gap-3">
 		<button
 			type="button"
@@ -166,7 +166,7 @@
 							class={`flex items-start gap-2 rounded-md border p-2.5 ${
 								state.locked
 									? 'border-border cursor-not-allowed opacity-60'
-									: 'border-border hover:bg-accent/40 cursor-pointer'
+									: 'border-border hover:bg-hover cursor-pointer'
 							}`}
 							title={state.soleAdminLock ? 'Cannot remove the only instance admin.' : undefined}
 						>

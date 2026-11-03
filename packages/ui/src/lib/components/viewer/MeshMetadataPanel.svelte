@@ -65,7 +65,7 @@
 			<table class="text-xs w-full border-collapse">
 				<tbody>
 					{#each Object.entries(filteredMetadata) as [key, value] (key)}
-						<tr class="border-b border-border/60 last:border-b-0">
+						<tr class="border-b border-border last:border-b-0">
 							<th
 								scope="row"
 								class="px-4 py-2 font-normal text-left align-top whitespace-nowrap text-muted-foreground"

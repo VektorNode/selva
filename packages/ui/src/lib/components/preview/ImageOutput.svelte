@@ -297,14 +297,14 @@
 	}
 
 	const toolButton =
-		'flex h-7 min-w-7 items-center justify-center rounded px-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
+		'flex h-7 min-w-7 items-center justify-center rounded-sm px-1.5 text-muted-foreground transition-colors hover:bg-hover hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
 </script>
 
 <!-- The layout hides this output until a solve returns a file, so there is no empty state here. -->
 {#if error || unsupported || current}
 	<div
 		bind:this={wrapperEl}
-		class="flex flex-col overflow-hidden rounded-lg border border-border bg-background {isFullscreen
+		class="flex flex-col overflow-hidden rounded-lg border border-border-strong bg-background {isFullscreen
 			? 'h-dvh'
 			: ''}"
 	>
@@ -375,7 +375,7 @@
 						onclick={() => step(-1)}
 						title="{t.previousImage} (←)"
 						aria-label={t.previousImage}
-						class="left-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border bg-background/80 text-foreground hover:bg-background"
+						class="left-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border-strong bg-background/80 text-foreground hover:bg-background"
 					>
 						<ChevronLeft size={16} />
 					</button>
@@ -383,14 +383,14 @@
 						onclick={() => step(1)}
 						title="{t.nextImage} (→)"
 						aria-label={t.nextImage}
-						class="right-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border bg-background/80 text-foreground hover:bg-background"
+						class="right-2 p-1.5 backdrop-blur-sm absolute top-1/2 -translate-y-1/2 rounded-full border border-border-strong bg-background/80 text-foreground hover:bg-background"
 					>
 						<ChevronRight size={16} />
 					</button>
 				{/if}
 
 				<div
-					class="px-2.5 py-1 text-xs bottom-2 rounded pointer-events-none absolute left-1/2 -translate-x-1/2 bg-foreground/80 text-background transition-opacity {showWheelHint
+					class="px-2.5 py-1 text-xs bottom-2 pointer-events-none absolute left-1/2 -translate-x-1/2 rounded-sm bg-foreground text-background transition-opacity {showWheelHint
 						? 'opacity-100'
 						: 'opacity-0'}"
 				>
@@ -404,7 +404,7 @@
 						<button
 							onclick={() => select(i)}
 							title="{image.fileName}{image.fileType}"
-							class="h-12 w-16 rounded shrink-0 overflow-hidden border-2 bg-muted transition-colors {i ===
+							class="h-12 w-16 shrink-0 overflow-hidden rounded-sm border-2 bg-muted transition-colors {i ===
 							currentIndex
 								? 'border-primary'
 								: 'border-transparent opacity-70 hover:opacity-100'}"

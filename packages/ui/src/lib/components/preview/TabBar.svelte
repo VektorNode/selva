@@ -12,9 +12,11 @@
 		tabs: TabConfig[];
 		activeTabId: string;
 		onTabChange: (tabId: string) => void;
+		/** Matches TabContent's tighter gutter in the stacked phone layout. */
+		bare?: boolean;
 	}
 
-	let { tabs, activeTabId, onTabChange }: Props = $props();
+	let { tabs, activeTabId, onTabChange, bare = false }: Props = $props();
 
 	const SCROLL_BUTTON_WIDTH = 32;
 
@@ -64,7 +66,7 @@
 	}
 </script>
 
-<div class="tab-bar relative shrink-0 border-b border-border">
+<div class="tab-bar relative shrink-0 border-b border-border {bare ? 'mx-1' : 'mx-3'}">
 	<Tabs.List bind:ref={listRef} variant="line" onscroll={updateOverflow} onwheel={handleWheel}>
 		{#each tabs as tab (tab.id)}
 			<Tabs.Trigger value={tab.id} onclick={() => onTabChange(tab.id)} variant="line">
@@ -127,11 +129,11 @@
 	.scroll-button.back {
 		left: 0;
 		padding: 0 1.25rem 0 0.375rem;
-		background: linear-gradient(to right, var(--card) 55%, transparent);
+		background: linear-gradient(to right, var(--tab-bar-bg, var(--background)) 55%, transparent);
 	}
 	.scroll-button.forward {
 		right: 0;
 		padding: 0 0.375rem 0 1.25rem;
-		background: linear-gradient(to left, var(--card) 55%, transparent);
+		background: linear-gradient(to left, var(--tab-bar-bg, var(--background)) 55%, transparent);
 	}
 </style>

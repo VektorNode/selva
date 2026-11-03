@@ -282,7 +282,7 @@
 		<Card.Content class="space-y-4 pt-6">
 			<!-- Add user form -->
 			{#if showAddForm}
-				<div class="bg-muted/40 space-y-3 rounded-lg border p-4">
+				<div class="bg-raised shadow-raised space-y-3 rounded-lg border p-4">
 					<p class="text-sm font-medium">New User</p>
 					<Input type="email" placeholder="Email" bind:value={newEmail} />
 					<p class="text-muted-foreground text-xs">

@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import { plugin as shadcn } from '@shadcn/lint';
+import { plugin as selva } from './eslint-rules/surface-roles.js';
 import prettier from 'eslint-config-prettier';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
@@ -56,11 +57,13 @@ export const config = [
 		// (`tailwind.css`). Warn-only while a package still has violations; one that has
 		// none raises them to errors in its own config (see packages/ui).
 		files: ['**/*.svelte', '**/*.ts'],
-		plugins: { shadcn },
+		plugins: { shadcn, selva },
 		settings: {
 			shadcn: { componentImports: ['^@selvajs/ui(/|$)'] }
 		},
 		rules: {
+			// Error everywhere from the start: no package carries a violation.
+			'selva/surface-roles': 'error',
 			'shadcn/no-raw-colors': 'warn',
 			'shadcn/no-arbitrary-values': 'warn',
 			'shadcn/no-unknown-classes': 'warn',

@@ -9,6 +9,7 @@ import type {
 } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, narrowApiTokenContext } from '@selvajs/platform';
 import { ApiErrorCode } from '../api/errors.js';
+import { readNonNegativeInt, type EnvRecord } from '../compute/limits.js';
 import {
 	API_TOKEN_PREFIX,
 	looksLikeApiToken,
@@ -27,7 +28,7 @@ export type ApiTokenResolution =
 export interface ResolveApiTokenDeps {
 	/** Absent when the host hasn't configured API tokens: a sent key gets 503. */
 	codec?: ApiTokenCodec;
-	auth: Pick<IAuthProvider, 'getUser' | 'delegatedSession'>;
+	auth: Pick<IAuthProvider, 'getUser' | 'delegatedSession' | 'proxyAuth'>;
 	data: Pick<
 		IDataProvider,
 		'apiTokens' | 'orgs' | 'permissions' | 'projects' | 'platformProjectGrants' | 'definitions'
@@ -44,6 +45,14 @@ export interface ResolveApiTokenDeps {
 	 * Absent: checked on every request.
 	 */
 	holderVerdicts?: HolderVerdictCache;
+	/**
+	 * Behind a proxy-auth provider, refuse a key whose owner hasn't come through
+	 * the proxy for this long. Keys skip the proxy, so this is what retires the
+	 * keys of someone disabled at the identity provider. Ignored with other
+	 * providers: they write `lastLoginAt` only at password sign-in, so an active
+	 * user would read as absent. Absent or 0: no limit.
+	 */
+	signInWindowMs?: number;
 	/** Receives background failures (the `lastUsedAt` write). Logs the token id only. */
 	log?: ILogger;
 	now?: () => number;
@@ -69,6 +78,16 @@ const UNAVAILABLE: ApiTokenResolution = {
 	status: 503,
 	code: ApiErrorCode.API_TOKENS_UNAVAILABLE,
 	message: 'API tokens are not available on this server.'
+};
+
+// A 401, so a client drops the key and signs in again: that sign-in passes the
+// proxy and the identity provider, which is the point.
+const SIGN_IN_LAPSED: ApiTokenResolution = {
+	kind: 'rejected',
+	status: 401,
+	code: ApiErrorCode.UNAUTHORIZED,
+	message:
+		'This API token’s owner hasn’t signed in to Selva recently. Sign in again to get a new one.'
 };
 
 const HOLDER_REFUSED: ApiTokenResolution = {
@@ -138,12 +157,13 @@ export async function resolveApiToken(
 		deps.data.permissions.getFor(SYSTEM_CONTEXT, token.userId)
 	]);
 	if (!user || user.disabled || !member) return UNAUTHORIZED;
+	const now = deps.now?.() ?? Date.now();
+	if (signInLapsed(user, deps, now)) return SIGN_IN_LAPSED;
 
 	const live = await buildRequestContext(
 		{ user, platformPermissions, membership: member, pinOrg: true },
 		{ orgs: deps.data.orgs }
 	);
-	const now = deps.now?.() ?? Date.now();
 	if (!deps.holderVerdicts?.passed(token.id, now)) {
 		const holds = await canHoldApiTokens(live, token.scopes, {
 			policy: deps.mayHoldApiTokens,
@@ -178,6 +198,25 @@ export async function resolveApiToken(
 	}
 
 	return { kind: 'ok', user, ctx, token };
+}
+
+function signInLapsed(user: AuthUser, deps: ResolveApiTokenDeps, now: number): boolean {
+	const windowMs = deps.signInWindowMs;
+	if (!windowMs || !deps.auth.proxyAuth) return false;
+	// Never seen through the proxy counts as lapsed.
+	const at = Date.parse(user.lastLoginAt ?? '');
+	return !Number.isFinite(at) || now - at > windowMs;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** `API_TOKEN_SIGN_IN_WINDOW_DAYS` in milliseconds; undefined when unset or 0. */
+export function resolveApiTokenSignInWindowMs(
+	env: EnvRecord,
+	logger?: ILogger
+): number | undefined {
+	const days = readNonNegativeInt(env, 'API_TOKEN_SIGN_IN_WINDOW_DAYS', 0, logger);
+	return days > 0 ? days * DAY_MS : undefined;
 }
 
 export interface HolderVerdictCache {

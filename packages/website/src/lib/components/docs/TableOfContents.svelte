@@ -80,7 +80,7 @@
 						? 'pl-6'
 						: 'pl-3'} {active
 						? 'border-primary text-foreground font-medium'
-						: 'text-muted-foreground hover:text-foreground hover:border-muted-foreground/40 border-transparent'}"
+						: 'text-muted-foreground hover:text-foreground hover:border-input border-transparent'}"
 				>
 					{heading.text}
 				</a>

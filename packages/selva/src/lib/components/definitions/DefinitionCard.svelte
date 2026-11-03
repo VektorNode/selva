@@ -76,7 +76,7 @@
 				style:--tool-h1={hues.h1}
 				style:--tool-h2={hues.h2}
 			>
-				<span class="text-foreground/40 text-4xl font-semibold">
+				<span class="text-faint-foreground text-4xl font-semibold">
 					{monogram(record.displayName)}
 				</span>
 			</div>
@@ -142,7 +142,8 @@
 		{#if record.tags?.length}
 			<div class="mt-2.5 flex flex-wrap gap-1">
 				{#each record.tags.slice(0, 3) as tag (tag)}
-					<span class="bg-muted text-muted-foreground rounded px-1.5 py-px font-mono text-[10.5px]"
+					<span
+						class="bg-muted text-muted-foreground rounded-sm px-1.5 py-px font-mono text-[10.5px]"
 						>#{tag}</span
 					>
 				{/each}

@@ -20,7 +20,7 @@ export const SCOPES: Record<Scope, ScopeMark> = {
 		label: 'Shared',
 		icon: Settings2,
 		text: 'text-foreground',
-		surface: 'border-border bg-muted/50',
+		surface: 'border-border bg-muted',
 		chip: 'bg-muted text-foreground'
 	},
 	local: {

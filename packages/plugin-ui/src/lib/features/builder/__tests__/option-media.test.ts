@@ -43,7 +43,7 @@ describe('iconNodeToPath', () => {
 		);
 	});
 
-	it('draws a rounded rect with quarter arcs', () => {
+	it('draws a rounded-sm rect with quarter arcs', () => {
 		expect(iconNodeToPath([['rect', { x: '3', y: '3', width: '18', height: '18', rx: '2' }]])).toBe(
 			'M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2z'
 		);

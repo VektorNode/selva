@@ -25,6 +25,7 @@ export { createSessionRefresher, type SessionRefresher } from './session-refresh
 export {
 	createHolderVerdictCache,
 	resolveApiToken,
+	resolveApiTokenSignInWindowMs,
 	type ApiTokenResolution,
 	type HolderVerdictCache,
 	type ResolveApiTokenDeps,

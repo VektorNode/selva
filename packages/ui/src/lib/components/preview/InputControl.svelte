@@ -378,6 +378,7 @@
 				{inputId}
 				value={typeof value === 'string' ? value : '#000000'}
 				onChange={(newValue) => commit(newValue)}
+				{disabled}
 			/>
 		{/if}
 	</div>

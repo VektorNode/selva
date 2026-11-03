@@ -474,7 +474,7 @@
 			<p class="text-muted-foreground text-xs">Available to</p>
 			<div class="bg-muted inline-flex rounded-md p-0.5">
 				<button
-					class="rounded px-2 py-0.5 text-xs {isAll
+					class="rounded-sm px-2 py-0.5 text-xs {isAll
 						? 'bg-background shadow-sm'
 						: 'text-muted-foreground hover:text-foreground'}"
 					onclick={() => setSharedWithAll(server, true)}
@@ -482,7 +482,7 @@
 					All orgs
 				</button>
 				<button
-					class="rounded px-2 py-0.5 text-xs {!isAll
+					class="rounded-sm px-2 py-0.5 text-xs {!isAll
 						? 'bg-background shadow-sm'
 						: 'text-muted-foreground hover:text-foreground'}"
 					onclick={() => setSharedWithAll(server, false)}
@@ -510,7 +510,7 @@
 			{:else}
 				<div class="grid gap-1 sm:grid-cols-2">
 					{#each data.orgs as org (org.id)}
-						<label class="hover:bg-muted/40 flex items-center gap-2 rounded px-2 py-1 text-xs">
+						<label class="hover:bg-hover flex items-center gap-2 rounded-sm px-2 py-1 text-xs">
 							<input
 								type="checkbox"
 								checked={orgIds.has(org.id)}
@@ -549,7 +549,7 @@
 			? 'border-destructive/40 bg-destructive/5'
 			: isDirty
 				? 'border-amber-400/60 bg-amber-50/30 dark:border-amber-500/40 dark:bg-amber-950/10'
-				: 'bg-muted/30'}"
+				: 'bg-muted'}"
 	>
 		{#if isRemoved}
 			<div class="flex items-center justify-between gap-3">
@@ -683,15 +683,15 @@
 
 		{#if health?.reachable && !isRemoved}
 			<div class="grid grid-cols-3 gap-2">
-				<div class="bg-muted/40 rounded-md px-3 py-2">
+				<div class="bg-muted rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Rhino</p>
 					<p class="mt-0.5 text-xs font-medium">{health.rhinoVersion ?? '-'}</p>
 				</div>
-				<div class="bg-muted/40 rounded-md px-3 py-2">
+				<div class="bg-muted rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Compute</p>
 					<p class="mt-0.5 text-xs font-medium">{health.computeVersion ?? '-'}</p>
 				</div>
-				<div class="bg-muted/40 rounded-md px-3 py-2">
+				<div class="bg-muted rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Selva Plugin</p>
 					<p class="mt-0.5 text-xs font-medium">
 						{#if health.selvaInstalled}
@@ -705,11 +705,11 @@
 				</div>
 			</div>
 			<div class="grid grid-cols-2 gap-2">
-				<div class="bg-muted/40 rounded-md px-3 py-2">
+				<div class="bg-muted rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Active children</p>
 					<p class="mt-0.5 text-xs font-medium">{health.activeChildren ?? '-'}</p>
 				</div>
-				<div class="bg-muted/40 rounded-md px-3 py-2">
+				<div class="bg-muted rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Idle for</p>
 					<p class="mt-0.5 text-xs font-medium">{formatIdle(health.idleSpanSeconds)}</p>
 				</div>
@@ -812,7 +812,7 @@
 				{#if expandedPlugins[server.id]}
 					<div class="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">
 						{#each pluginEntries as [name, version] (name)}
-							<div class="bg-muted/40 flex items-center justify-between rounded-md px-3 py-1.5">
+							<div class="bg-muted flex items-center justify-between rounded-md px-3 py-1.5">
 								<span class="text-xs font-medium">{name}</span>
 								<span class="text-muted-foreground text-xs">{version}</span>
 							</div>
@@ -849,7 +849,7 @@
 				<button
 					type="button"
 					onclick={addServer}
-					class="border-muted-foreground/30 text-muted-foreground hover:border-foreground/50 hover:text-foreground hover:bg-muted/30 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-4 text-sm font-medium transition-colors"
+					class="border-border-strong text-muted-foreground hover:border-input hover:text-foreground hover:bg-hover flex w-full items-center justify-center gap-2 rounded-lg border border-dashed py-4 text-sm font-medium transition-colors"
 				>
 					<Plus class="h-4 w-4" />
 					Add another server

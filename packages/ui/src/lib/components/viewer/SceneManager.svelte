@@ -225,16 +225,16 @@
 	onmousedown={() => outliner.selection.clear()}
 >
 	<div class="px-3 py-2 gap-2 flex items-center border-b border-border">
-		<Search class="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+		<Search class="h-3.5 w-3.5 shrink-0 text-faint-foreground" />
 		<input
-			class="min-w-0 text-xs flex-1 bg-transparent text-foreground outline-none placeholder:text-muted-foreground/50"
+			class="min-w-0 text-xs flex-1 bg-transparent text-foreground outline-none placeholder:text-faint-foreground"
 			placeholder={t.searchObjects}
 			bind:value={searchQuery}
 		/>
 		{#if searchQuery}
 			<button onclick={() => (searchQuery = '')} aria-label={t.clearSearch}>
 				<X
-					class="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+					class="h-3.5 w-3.5 text-faint-foreground transition-colors hover:text-muted-foreground"
 				/>
 			</button>
 		{/if}
@@ -247,11 +247,11 @@
 		>
 			{#if allCollapsed}
 				<ChevronsUpDown
-					class="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+					class="h-3.5 w-3.5 text-faint-foreground transition-colors hover:text-muted-foreground"
 				/>
 			{:else}
 				<ChevronsDownUp
-					class="h-3.5 w-3.5 text-muted-foreground/50 transition-colors hover:text-muted-foreground"
+					class="h-3.5 w-3.5 text-faint-foreground transition-colors hover:text-muted-foreground"
 				/>
 			{/if}
 		</button>
@@ -285,10 +285,10 @@
 						{@const isCollapsed = collapsed.has(row.layerName)}
 
 						<div
-							class="gap-1 pl-1 pr-2 group flex h-full items-center transition-colors hover:bg-muted"
+							class="gap-1 pl-1 pr-2 group flex h-full items-center transition-colors hover:bg-hover"
 						>
 							<button
-								class="rounded p-0.5 shrink-0 text-muted-foreground transition-colors hover:text-muted-foreground"
+								class="p-0.5 shrink-0 rounded-sm text-muted-foreground transition-colors hover:text-muted-foreground"
 								onclick={() => outliner.toggleCollapsed(row.layerName)}
 								aria-label={isCollapsed ? t.expandLayer : t.collapseLayer}
 							>
@@ -300,15 +300,15 @@
 							</button>
 
 							<button
-								class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
+								class="p-1 shrink-0 rounded-sm transition-colors hover:bg-hover"
 								onclick={() => toggleLayer(entries)}
 								title={layerHidden ? t.showLayer : t.hideLayer}
 								aria-label={layerHidden ? t.showLayer : t.hideLayer}
 							>
 								{#if layerHidden}
-									<EyeOff class="h-3.5 w-3.5 text-muted-foreground/40" />
+									<EyeOff class="h-3.5 w-3.5 text-faint-foreground" />
 								{:else if layerPartial}
-									<Eye class="h-3.5 w-3.5 text-muted-foreground/60" />
+									<Eye class="h-3.5 w-3.5 text-faint-foreground" />
 								{:else}
 									<Eye class="h-3.5 w-3.5 text-muted-foreground" />
 								{/if}
@@ -316,13 +316,13 @@
 
 							<span
 								class="min-w-0 text-xs font-medium flex-1 truncate {layerHidden
-									? 'text-muted-foreground/40 line-through'
+									? 'text-faint-foreground line-through'
 									: 'text-foreground'}"
 							>
 								{row.layerName}
 							</span>
 
-							<span class="shrink-0 text-2xs text-muted-foreground/50 tabular-nums">
+							<span class="shrink-0 text-2xs text-faint-foreground tabular-nums">
 								{entries.length}
 							</span>
 						</div>
@@ -338,7 +338,7 @@
 								aria-selected={isSelected}
 								tabindex="-1"
 								class="gap-1.5 pl-5 pr-2 flex h-full cursor-pointer items-center transition-colors
-									{isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-muted'}
+									{isSelected ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-hover'}
 									{isHidden ? 'opacity-40' : ''}"
 								onmouseenter={() => onHover?.(entry)}
 								onmouseleave={() => onHover?.(null)}
@@ -351,7 +351,7 @@
 									e.key === 'Enter' && selectObject(entry.key, e as unknown as MouseEvent)}
 							>
 								<button
-									class="rounded p-1 shrink-0 transition-colors hover:bg-muted"
+									class="p-1 shrink-0 rounded-sm transition-colors hover:bg-hover"
 									onclick={(e) => {
 										e.stopPropagation();
 										toggleEntry(entry);
@@ -360,7 +360,7 @@
 									aria-label={isHidden ? t.showObject : t.hideObject}
 								>
 									{#if isHidden}
-										<EyeOff class="h-3 w-3 text-muted-foreground/60" />
+										<EyeOff class="h-3 w-3 text-faint-foreground" />
 									{:else}
 										<Eye class="h-3 w-3 text-muted-foreground" />
 									{/if}
@@ -369,13 +369,13 @@
 								<span
 									class="min-w-0 text-xs flex-1 truncate {isHidden
 										? 'text-muted-foreground line-through'
-										: 'text-foreground/80'}"
+										: 'text-foreground'}"
 								>
 									{entry.label}
 								</span>
 
 								<span
-									class="rounded px-1 py-0.5 font-medium shrink-0 bg-muted text-2xs text-muted-foreground/70"
+									class="px-1 py-0.5 font-medium shrink-0 rounded-sm bg-muted text-2xs text-faint-foreground"
 								>
 									{getTypeLabel(entry.object)}
 								</span>
@@ -388,12 +388,12 @@
 
 		{#if sceneObjects.length === 0}
 			<div class="py-12 flex flex-col items-center justify-center text-center">
-				<EyeOff class="mb-2 h-5 w-5 text-muted-foreground/30" />
+				<EyeOff class="mb-2 h-5 w-5 text-faint-foreground" />
 				<p class="text-xs text-muted-foreground">{t.noObjects}</p>
 			</div>
 		{:else if layerGroups.size === 0}
 			<div class="py-12 flex flex-col items-center justify-center text-center">
-				<Search class="mb-2 h-5 w-5 text-muted-foreground/30" />
+				<Search class="mb-2 h-5 w-5 text-faint-foreground" />
 				<p class="text-xs text-muted-foreground">
 					{t.noResultsFor.replace('{query}', searchQuery)}
 				</p>

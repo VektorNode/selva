@@ -224,7 +224,7 @@
 					</div>
 
 					{#if showAddGrant}
-						<div class="bg-muted/30 space-y-3 rounded-lg border p-4">
+						<div class="bg-raised shadow-raised space-y-3 rounded-lg border p-4">
 							<div class="space-y-1.5">
 								<Label>Grantee type</Label>
 								<div class="flex gap-2">

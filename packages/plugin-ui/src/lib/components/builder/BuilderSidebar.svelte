@@ -22,6 +22,8 @@
 		syncNeeded?: boolean;
 		onSchemaChange: (schema: UISchema) => void;
 		onSync: () => void;
+		onSyncPreview: () => void;
+		onBatch: () => void;
 		onAddToGroup: (
 			tabId: string,
 			groupId: string,
@@ -48,6 +50,8 @@
 		syncNeeded = false,
 		onSchemaChange,
 		onSync,
+		onSyncPreview,
+		onBatch,
 		onAddToGroup,
 		onAddToNewGroup,
 		onImportGhGroups,
@@ -114,11 +118,11 @@
 	}
 </script>
 
-<aside class="border-border bg-card flex h-full overflow-hidden rounded-xl border shadow-sm">
+<aside class="bg-card shadow-raised flex h-full overflow-hidden rounded-xl border">
 	<div
 		role="tablist"
 		aria-orientation="vertical"
-		class="border-border bg-muted/40 flex w-12 shrink-0 flex-col items-center gap-1 border-r py-2"
+		class="border-border bg-muted flex w-14 shrink-0 flex-col items-center gap-1.5 border-r py-3"
 	>
 		<Tooltip.Provider delayDuration={400} disableCloseOnTriggerClick>
 			{#each RAIL as item (item.value)}
@@ -136,7 +140,7 @@
 								aria-label={item.label}
 								class="text-muted-foreground hover:text-foreground relative grid size-9 place-items-center rounded-lg transition-colors {panel.value ===
 								item.value
-									? 'bg-card text-foreground ring-border shadow-sm ring-1'
+									? 'bg-raised text-foreground ring-border-strong shadow-raised ring-1'
 									: ''}"
 								onclick={() => (panel.value = item.value)}
 							>
@@ -173,11 +177,11 @@
 	</div>
 
 	<div role="tabpanel" class="flex min-h-0 min-w-0 flex-1 flex-col">
-		<h2 class="text-foreground px-4 pt-3 text-sm font-semibold">
+		<h2 class="text-foreground px-5 pt-4 pb-1 text-base font-semibold">
 			{RAIL.find((item) => item.value === panel.value)?.label}
 		</h2>
 		<ScrollArea class="min-h-0 flex-1">
-			<div class="px-4 pt-1 pb-3">
+			<div class="px-5 pt-2 pb-6">
 				{#if panel.value === 'parameters'}
 					<ParameterPanel
 						bind:this={parameterPanel}
@@ -187,6 +191,8 @@
 						{placedIds}
 						{syncNeeded}
 						{onSync}
+						{onSyncPreview}
+						{onBatch}
 						{onAddToGroup}
 						{onAddToNewGroup}
 						{onImportGhGroups}

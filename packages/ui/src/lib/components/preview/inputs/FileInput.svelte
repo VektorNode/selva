@@ -282,10 +282,10 @@
 					type="button"
 					onclick={() => (activeMode = mode)}
 					aria-pressed={activeMode === mode}
-					class={`px-3 py-1 font-medium flex-1 rounded-sm transition-colors ${
+					class={`px-3 py-1 font-medium flex-1 rounded-sm border transition-colors ${
 						activeMode === mode
-							? 'shadow-xs bg-background text-foreground'
-							: 'text-muted-foreground hover:text-foreground'
+							? 'shadow-xs border-border-strong bg-raised text-foreground'
+							: 'border-transparent text-muted-foreground hover:text-foreground'
 					}`}
 				>
 					{mode === 'upload' ? t.fileModeUpload : t.fileModeUrl}

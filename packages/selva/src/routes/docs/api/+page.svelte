@@ -40,7 +40,7 @@
 	</header>
 
 	<section class="mb-10 grid gap-4 sm:grid-cols-2">
-		<div class="bg-muted/40 rounded-lg border p-4">
+		<div class="bg-muted rounded-lg border p-4">
 			<h2 class="font-medium">Pagination</h2>
 			<p class="text-muted-foreground mt-2 text-sm leading-relaxed">
 				Lists take <code>limit</code> and <code>cursor</code> and return
@@ -50,7 +50,7 @@
 				clamp rather than fail.
 			</p>
 		</div>
-		<div class="bg-muted/40 rounded-lg border p-4">
+		<div class="bg-muted rounded-lg border p-4">
 			<h2 class="font-medium">Errors</h2>
 			<p class="text-muted-foreground mt-2 text-sm leading-relaxed">
 				Failures return <code>{'{ message, code }'}</code>. Branch on <code>code</code>, never on
@@ -59,7 +59,7 @@
 			</p>
 			<div class="mt-3 flex flex-wrap gap-1.5">
 				{#each data.errorCodes as code (code)}
-					<code class="bg-background rounded border px-1.5 py-0.5 text-xs">{code}</code>
+					<code class="bg-background rounded-sm border px-1.5 py-0.5 text-xs">{code}</code>
 				{/each}
 			</div>
 		</div>
@@ -74,7 +74,7 @@
 					<li class="rounded-lg border p-4">
 						<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
 							<span
-								class="rounded px-2 py-0.5 font-mono text-xs font-semibold {METHOD_CLASS[
+								class="rounded-sm px-2 py-0.5 font-mono text-xs font-semibold {METHOD_CLASS[
 									ep.method
 								]}"
 							>

@@ -38,7 +38,7 @@
 		Checking your Selva sign-in…
 	</div>
 {:else if account.status === 'signedIn'}
-	<div class="bg-muted/30 flex items-center gap-3 rounded-lg border px-3.5 py-3">
+	<div class="bg-muted flex items-center gap-3 rounded-lg border px-3.5 py-3">
 		<div
 			class="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
 			aria-hidden="true"
@@ -91,7 +91,7 @@
 		</Callout>
 	{/if}
 {:else if account.status === 'signingIn'}
-	<div class="bg-muted/30 flex items-center gap-3 rounded-lg border px-3.5 py-3">
+	<div class="bg-muted flex items-center gap-3 rounded-lg border px-3.5 py-3">
 		<Spinner class="size-5" />
 		<div class="min-w-0 flex-1">
 			<p class="text-sm font-medium">Waiting for you to approve in your browser…</p>
@@ -126,7 +126,7 @@
 					{#each otherKnownOrigins as origin (origin)}
 						<button
 							type="button"
-							class="hover:bg-accent hover:text-foreground rounded-sm border px-1.5 py-0.5 font-mono transition-colors"
+							class="hover:bg-hover hover:text-foreground rounded-sm border px-1.5 py-0.5 font-mono transition-colors"
 							onclick={() => (uploadState.originInput = origin)}
 						>
 							{origin}
@@ -153,9 +153,7 @@
 				Use an API key
 			</button>
 		</div>
-		<p class="text-muted-foreground text-xs">
-			Your browser opens to sign in. Rhino keeps the sign-in; this page never sees it.
-		</p>
+		<p class="text-muted-foreground text-xs">Your browser opens to sign in.</p>
 	</form>
 
 	{#if uploadState.awaitingKeyDialog}

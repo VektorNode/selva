@@ -38,7 +38,7 @@
 	);
 	const hasValue = $derived(value != null);
 
-	const boxClass = 'min-h-12.5 rounded-md px-3 py-3 text-sm border border-border/60';
+	const boxClass = 'min-h-12.5 rounded-md px-3 py-3 text-sm border border-border-strong';
 
 	async function copyToClipboard() {
 		try {
@@ -194,7 +194,7 @@
 					<span class="font-medium">{node.name}</span>
 				</button>
 				{#if isOpen}
-					<div class="ml-4 pl-2 border-l border-border/50">
+					<div class="ml-4 pl-2 border-l border-border-strong">
 						{@render treeNodes(node.children, folderPath)}
 					</div>
 				{/if}
@@ -217,12 +217,14 @@
 
 {#snippet fileDisplay()}
 	{#if fileCount === 0}
-		<div class="px-3 py-3 text-sm rounded-md border border-border bg-muted text-muted-foreground">
+		<div
+			class="px-3 py-3 text-sm rounded-md border border-border-strong bg-muted text-muted-foreground"
+		>
 			{t.waitingForFiles}
 		</div>
 	{:else}
 		<div class="gap-2 flex flex-col">
-			<div class="px-3 py-2 rounded-md border border-border bg-muted">
+			<div class="px-3 py-2 rounded-md border border-border-strong bg-muted">
 				<div class="gap-2 flex items-center justify-between">
 					<span class="min-w-0 text-sm font-medium truncate text-foreground">
 						{fileCount === 1
@@ -313,10 +315,10 @@
 			<div class="group relative">
 				{#if isObjectValue}
 					<pre
-						class="{boxClass} max-h-96 font-mono overflow-auto bg-muted/10 wrap-anywhere text-foreground">{formattedValue}</pre>
+						class="{boxClass} max-h-96 font-mono overflow-auto bg-muted wrap-anywhere text-foreground">{formattedValue}</pre>
 				{:else}
 					<div
-						class="{boxClass} bg-muted/10 wrap-anywhere wrap-break-word whitespace-pre-wrap text-foreground"
+						class="{boxClass} bg-muted wrap-anywhere wrap-break-word whitespace-pre-wrap text-foreground"
 					>
 						{#if hasValue}{value}{:else}{@render placeholder()}{/if}
 					</div>

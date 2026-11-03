@@ -146,8 +146,8 @@
 						onclick={() => (showFilters = !showFilters)}
 						class={`relative inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
 							showFilters || activeFilterCount > 0
-								? 'border-border bg-accent text-accent-foreground'
-								: 'border-input bg-background text-foreground hover:bg-muted/40'
+								? 'border-border bg-selected text-foreground'
+								: 'border-input bg-background text-foreground hover:bg-hover'
 						}`}
 					>
 						<FilterIcon class="h-3.5 w-3.5" />
@@ -248,7 +248,7 @@
 							<button
 								onclick={() => open(run.definitionId)}
 								disabled={loadingGuid === run.definitionId}
-								class={`group hover:bg-muted/40 grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+								class={`group hover:bg-hover grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
 									i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''
 								}`}
 								style="grid-template-columns: minmax(0, 1fr) auto auto"

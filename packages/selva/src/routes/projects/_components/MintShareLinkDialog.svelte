@@ -216,12 +216,12 @@
 					— revoke it immediately if it's compromised.
 				</Callout>
 
-				<div class="border-border bg-muted/40 rounded-md border p-3">
+				<div class="border-border bg-muted rounded-md border p-3">
 					<p class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
 						Share URL
 					</p>
 					<div class="flex items-start gap-2">
-						<code class="bg-background min-w-0 flex-1 rounded p-2 font-mono text-xs break-all"
+						<code class="bg-background min-w-0 flex-1 rounded-sm p-2 font-mono text-xs break-all"
 							>{mintedShareUrl}</code
 						>
 						<Button

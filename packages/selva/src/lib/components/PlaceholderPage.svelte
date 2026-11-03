@@ -14,7 +14,7 @@
 
 <div class="mx-auto flex max-w-xl flex-col items-center py-16 text-center">
 	<div
-		class="bg-accent text-accent-foreground mb-5 flex h-12 w-12 items-center justify-center rounded-full"
+		class="bg-selected text-foreground mb-5 flex h-12 w-12 items-center justify-center rounded-full"
 	>
 		<Icon class="h-5 w-5" />
 	</div>

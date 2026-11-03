@@ -35,7 +35,6 @@ export * as Resizable from './resizable';
 export { Separator } from './separator';
 export { Switch } from './switch';
 export { Toaster, toast } from './sonner';
-export { ThemeSwitcher } from './theme-switcher';
 
 // Custom components (not replaced by shadcn)
 export { default as StateDisplay } from './StateDisplay.svelte';

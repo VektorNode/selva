@@ -291,7 +291,7 @@
 	     framed box inside an edge-to-edge column reads as a dialog glued into the page. -->
 	<div
 		class={placement === 'inline'
-			? `px-2 py-2 border-t ${view === 'blocked' ? 'border-destructive/40' : 'border-border/50'}`
+			? `px-2 py-2 border-t ${view === 'blocked' ? 'border-destructive/40' : 'border-border'}`
 			: `p-3 bottom-4 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg border bg-background ${view === 'blocked' ? 'border-destructive/50' : ''}`}
 		role={view === 'review' || view === 'blocked' ? 'alert' : undefined}
 		data-testid="solve-messages"
@@ -319,7 +319,7 @@
 							title={t.solveMessagesEscHint}
 						>
 							{t.solveMessagesAbort}
-							<kbd class="px-1 font-sans rounded border border-border/60 text-2xs opacity-70">
+							<kbd class="px-1 font-sans rounded-sm border border-border text-2xs opacity-70">
 								Esc
 							</kbd>
 						</Button>

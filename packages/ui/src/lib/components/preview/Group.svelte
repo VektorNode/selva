@@ -69,7 +69,7 @@
 	</div>
 {/snippet}
 
-<section class="shadow-xs rounded-xl border bg-card">
+<section class="rounded-xl border bg-card shadow-raised">
 	{#if flat}
 		<div class="p-4">
 			{@render grid()}
@@ -80,18 +80,18 @@
 		<h3>
 			<button
 				type="button"
-				class="gap-3 px-4 pt-3.5 flex w-full items-start text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset {description
+				class="gap-3 px-4 pt-4 flex w-full items-start text-left outline-none select-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset {description
 					? 'pb-0'
-					: 'pb-3.5'}"
+					: 'pb-3'}"
 				aria-expanded={!collapsed}
 				aria-describedby={description ? descriptionId : undefined}
 				onclick={onToggle}
 			>
-				<span class="min-w-0 text-base font-semibold leading-snug flex-1 text-foreground"
+				<span class="min-w-0 text-sm font-semibold leading-snug flex-1 text-foreground"
 					>{label}</span
 				>
 				<ChevronDown
-					class="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 {collapsed
+					class="mt-0.5 h-4 w-4 shrink-0 text-faint-foreground transition-transform duration-200 {collapsed
 						? '-rotate-90'
 						: ''}"
 				/>
@@ -100,14 +100,14 @@
 		{#if description}
 			<p
 				id={descriptionId}
-				class="pl-4 pr-11 pt-0.5 pb-3.5 text-xs leading-snug text-muted-foreground"
+				class="pl-4 pr-11 pt-0.5 pb-3 text-xs leading-snug text-muted-foreground"
 			>
 				{description}
 			</p>
 		{/if}
 		<div class="content-wrapper" class:collapsed inert={collapsed}>
 			<div class="content-inner">
-				<div class="px-4 pt-1 pb-5">
+				<div class="px-4 pt-1 pb-4">
 					{@render grid()}
 				</div>
 			</div>

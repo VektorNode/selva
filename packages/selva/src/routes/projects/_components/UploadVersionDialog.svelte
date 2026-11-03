@@ -77,7 +77,7 @@
 				<Label for="upload-file">Grasshopper file</Label>
 				<label
 					for="upload-file"
-					class="border-border hover:bg-accent/30 flex cursor-pointer items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 transition-colors"
+					class="border-border hover:bg-hover flex cursor-pointer items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 transition-colors"
 				>
 					<FileUp class="text-muted-foreground h-5 w-5 shrink-0" />
 					<div class="min-w-0 flex-1">
