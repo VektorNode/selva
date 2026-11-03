@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The schema builder selects several rows at once: Shift-click parameters in the sidebar or items on the canvas, then drag them together.
+- Dragging a parameter or item over another tab opens that tab's group list, so you can drop it into a group there or into a new group without switching tabs first.
+
+### Changed
+
+- The UI typeface is Hanken Grotesk, replacing Familjen Grotesk.
+
 ## [0.24.2-beta.3] - 2026-11-03
 
 ### Added
