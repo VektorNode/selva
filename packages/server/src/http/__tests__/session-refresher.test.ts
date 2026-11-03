@@ -80,3 +80,55 @@ describe('createSessionRefresher', () => {
 		await expect(refresh('t')).resolves.toBeNull();
 	});
 });
+
+describe('createSessionRefresher with a sign-in max age', () => {
+	const DAY = 86_400_000;
+	const NOW = Date.parse('2026-11-03T12:00:00Z');
+
+	function withSignIn(lastLoginAt: string | undefined) {
+		const refreshSession = vi.fn(async () => PAIR);
+		const revokeSession = vi.fn(async () => true);
+		const auth = {
+			verifyToken: vi.fn(async (token: string) =>
+				token === PAIR.sessionToken ? { id: 'u1' } : null
+			),
+			getUser: vi.fn(async () => ({ id: 'u1', lastLoginAt }))
+		};
+		const refresh = createSessionRefresher(
+			() => ({ refreshSession, revokeSession }) as unknown as ISessionRefresh,
+			{ signInMaxAgeMs: 7 * DAY, auth: () => auth, now: () => NOW }
+		);
+		return { refresh, revokeSession };
+	}
+
+	it('refreshes while the last sign-in is within the max age', async () => {
+		const { refresh } = withSignIn(new Date(NOW - 6 * DAY).toISOString());
+		await expect(refresh('t')).resolves.toEqual(PAIR);
+	});
+
+	it('ends the session once the last sign-in is older, so the user signs in again', async () => {
+		const { refresh, revokeSession } = withSignIn(new Date(NOW - 8 * DAY).toISOString());
+		await expect(refresh('t')).resolves.toBeNull();
+		expect(revokeSession).toHaveBeenCalledWith(PAIR.sessionToken);
+	});
+});
+
+describe('createSessionRefresher when the sign-in lookup fails', () => {
+	it('keeps the session rather than signing the user out everywhere', async () => {
+		const revokeSession = vi.fn(async () => true);
+		const refresh = createSessionRefresher(
+			() => ({ refreshSession: async () => PAIR, revokeSession }) as unknown as ISessionRefresh,
+			{
+				signInMaxAgeMs: 7 * 86_400_000,
+				auth: () => ({
+					verifyToken: async () => ({ id: 'u1' }),
+					getUser: async () => {
+						throw new Error('GoTrue 503');
+					}
+				})
+			}
+		);
+		await expect(refresh('t')).resolves.toEqual(PAIR);
+		expect(revokeSession).not.toHaveBeenCalled();
+	});
+});

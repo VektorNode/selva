@@ -82,6 +82,8 @@ export interface SelvaDeps {
 		apiTokens?: ApiTokenCodec;
 		/** Who may mint and use API tokens. Absent: the platform permission `manage_api_tokens`. */
 		mayHoldApiTokens?: ApiTokenHolderPolicy;
+		/** How long one sign-in lasts before minting needs a new one (`resolveSignInMaxAgeMs`). Absent: no limit. */
+		signInMaxAgeMs?: number;
 	};
 	/**
 	 * Upload caps, in bytes.

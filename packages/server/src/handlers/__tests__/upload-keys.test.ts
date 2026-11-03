@@ -174,6 +174,34 @@ describe('who may hold a key that only reads and uploads', () => {
 // Write rights in listings
 // ============================================================================
 
+describe('minting needs a recent sign-in', () => {
+	const DAY = 86_400_000;
+
+	async function signedInAgo(days: number) {
+		const w = await world();
+		w.h.deps = { ...w.h.deps, tokens: { ...w.h.deps!.tokens, signInMaxAgeMs: 7 * DAY } };
+		const auth = w.h.config.auth;
+		const getUser = auth.getUser.bind(auth);
+		vi.spyOn(auth, 'getUser').mockImplementation(async (id) => {
+			const user = await getUser(id);
+			return user && { ...user, lastLoginAt: new Date(Date.now() - days * DAY).toISOString() };
+		});
+		return { w, locals: await actAs(w.h, w.dana.id) };
+	}
+
+	it('mints within the max age', async () => {
+		const { w, locals } = await signedInAgo(1);
+		expect((await mint(locals, w.acme.id, ['upload:all'])).status).toBe(201);
+	});
+
+	it('asks for a new sign-in past it, so a key is never born lapsed', async () => {
+		const { w, locals } = await signedInAgo(8);
+		const res = await mint(locals, w.acme.id, ['upload:all']);
+		expect(res.status).toBe(401);
+		expect(res.json).toMatchObject({ code: 'SIGN_IN_REQUIRED' });
+	});
+});
+
 describe('canCreateDefinitions on GET /projects', () => {
 	async function flags(locals: ActingLocals) {
 		const res = await callHandler(listProjects, { locals });

@@ -99,6 +99,10 @@
 			<p class="text-muted-foreground text-sm">Sign in to your account</p>
 		</div>
 
+		{#if page.url.searchParams.get('reauth') === '1' && !form?.error}
+			<Callout tone="info">Your sign-in is too old for this. Sign in again to continue.</Callout>
+		{/if}
+
 		{#if form?.error}
 			{#key attempt}
 				<div in:fade={{ duration: 120 }}>

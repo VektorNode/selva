@@ -35,6 +35,7 @@ import { apiTokenCodec } from '../apiTokens/token.server';
 import { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../computeLimits';
 import { evictComputeClient } from '../compute/engine.server';
 import { apiRateLimiter } from '../computeRateLimit.server';
+import { signInMaxAgeMs } from '../signInMaxAge.server';
 
 /**
  * This app's own errors, folded into the shared envelope.
@@ -89,7 +90,8 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 			tokens: {
 				shareLinks: shareLinkCodec(),
 				invites: inviteCodec(),
-				apiTokens: apiTokenCodec()
+				apiTokens: apiTokenCodec(),
+				signInMaxAgeMs
 			},
 			// Passed explicitly — depsFromConfig's defaults would silently ignore
 			// this deployment's MAX_*_FILE_SIZE_BYTES.

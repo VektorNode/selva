@@ -55,10 +55,13 @@ describe('createAllowlistStore — findByEmail', () => {
 		expect((await store.findByEmail('ALICE@example.com'))?.id).toBe(created.id);
 	});
 
-	it('matches a materialized email that differs from the upn', async () => {
+	it('ignores the header-written email column', async () => {
+		// The column mirrors whatever the proxy last sent. Matching on it hands a
+		// reassigned address to the departed holder's row; a renamed UPN is
+		// allowlisted again instead.
 		const created = await store.createUser('alice@tenant.onmicrosoft.com');
 		await store.syncFromHeaders(created.id, { email: 'alice@company.com' });
-		expect((await store.findByEmail('alice@company.com'))?.id).toBe(created.id);
+		expect(await store.findByEmail('alice@company.com')).toBeNull();
 	});
 
 	it('returns null when nothing matches', async () => {

@@ -29,6 +29,22 @@ export interface AuthProviderConformanceOptions {
 	passwordless?: boolean;
 	/** `passwordAuth.registerUser` is on, so its cases run. */
 	selfRegistration?: boolean;
+	/**
+	 * Run the sign-in contract: a sign-in stamps `lastLoginAt`, a session
+	 * refresh never moves it, and a disabled user can't refresh. The sign-in
+	 * max age reads `lastLoginAt` as "the identity provider last let this person
+	 * in", so a provider that moves it on refresh switches that check off.
+	 */
+	signInContract?: boolean;
+	/**
+	 * Sign in and return a refresh token, for the contract's refresh cases. A
+	 * password sign-in returns no refresh token, so a provider with
+	 * `sessionRefresh` passes its own way of getting one. Absent: those cases skip.
+	 */
+	signInWithRefreshToken?: (
+		email: string,
+		password: string
+	) => Promise<{ userId: string; refreshToken: string }>;
 }
 
 /** Cases every auth provider must pass, password or not. */
@@ -245,4 +261,43 @@ export function runPasswordAuthConformance(opts: AuthProviderConformanceOptions)
 export function runAuthProviderConformance(opts: AuthProviderConformanceOptions): void {
 	runAuthCoreConformance(opts);
 	if (!opts.passwordless) runPasswordAuthConformance(opts);
+	if (opts.signInContract && !opts.passwordless) runSignInContract(opts);
+}
+
+/** See `AuthProviderConformanceOptions.signInContract`. */
+export function runSignInContract(opts: AuthProviderConformanceOptions): void {
+	const { name, createProvider, userManagement = false } = opts;
+
+	describe(`IAuthProvider sign-in contract: ${name}`, () => {
+		it('a sign-in stamps lastLoginAt', async () => {
+			const { provider, adminPassword, adminEmail = '' } = await createProvider();
+			const result = await provider.passwordAuth!.verifyLogin(adminEmail, adminPassword);
+			if (result.kind !== 'success') throw new Error('admin sign-in failed');
+			const user = await provider.getUser(result.user.id);
+			expect(Number.isFinite(Date.parse(user?.lastLoginAt ?? ''))).toBe(true);
+		});
+
+		const signIn = opts.signInWithRefreshToken;
+		if (signIn) {
+			it('a session refresh does not move lastLoginAt', async () => {
+				const { provider, adminPassword, adminEmail = '' } = await createProvider();
+				const { userId, refreshToken } = await signIn(adminEmail, adminPassword);
+				const before = (await provider.getUser(userId))?.lastLoginAt;
+				await new Promise((r) => setTimeout(r, 1100));
+				expect(await provider.sessionRefresh!.refreshSession(refreshToken)).not.toBeNull();
+				expect((await provider.getUser(userId))?.lastLoginAt).toBe(before);
+			});
+		}
+
+		if (signIn && userManagement) {
+			it('a disabled user cannot refresh', async () => {
+				const { provider } = await createProvider();
+				const email = `refresh-${makeUuid()}@example.com`;
+				const created = await provider.passwordAuth!.createUserWithPassword(email, 'pass12345678');
+				const { refreshToken } = await signIn(email, 'pass12345678');
+				await provider.disableUser(created.id);
+				expect(await provider.sessionRefresh!.refreshSession(refreshToken)).toBeNull();
+			});
+		}
+	});
 }

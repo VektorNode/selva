@@ -24,7 +24,9 @@ export const ApiErrorCode = {
 	/** Too many requests, or a share link's solve cap is spent. `Retry-After`, when sent, says when to retry. */
 	RATE_LIMITED: 'RATE_LIMITED',
 	/** The key is valid, but the host's holder policy no longer lets its owner hold API tokens. */
-	API_TOKEN_HOLDER_REFUSED: 'API_TOKEN_HOLDER_REFUSED'
+	API_TOKEN_HOLDER_REFUSED: 'API_TOKEN_HOLDER_REFUSED',
+	/** The caller's last sign-in at the identity provider is too old for this; sign in again. */
+	SIGN_IN_REQUIRED: 'SIGN_IN_REQUIRED'
 } as const;
 
 export type ApiErrorCode = (typeof ApiErrorCode)[keyof typeof ApiErrorCode];

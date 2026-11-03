@@ -87,7 +87,8 @@ export const ApiTokenRevokeReasonSchema = z.enum([
 	'owner',
 	'admin',
 	'member_removed',
-	'user_disabled'
+	'user_disabled',
+	'sign_in_lapsed'
 ]);
 export type ApiTokenRevokeReason = z.infer<typeof ApiTokenRevokeReasonSchema>;
 

@@ -10,8 +10,7 @@ import {
 	createRouteClassifier,
 	createSessionRefresher,
 	isCrossSiteFormSubmission,
-	resolveApiToken,
-	resolveApiTokenSignInWindowMs
+	resolveApiToken
 } from '@selvajs/server/http';
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
 import {
@@ -22,13 +21,17 @@ import {
 	getLogger,
 	lazyLogger
 } from '$lib/server/providers.server';
+import { signInMaxAgeMs } from '$lib/server/signInMaxAge.server';
 import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
 import { MCP_PATH } from '$lib/server/mcp/server';
 
 const OAUTH_TOKEN_PATH = '/oauth/token';
 const holderVerdicts = createHolderVerdictCache();
-const apiTokenSignInWindowMs = resolveApiTokenSignInWindowMs(env, lazyLogger);
-const refreshSession = createSessionRefresher(() => providers.auth.sessionRefresh);
+lazyLogger.info('Sign-in max age', { component: 'auth', maxAgeMs: signInMaxAgeMs ?? 'off' });
+const refreshSession = createSessionRefresher(() => providers.auth.sessionRefresh, {
+	signInMaxAgeMs,
+	auth: () => providers.auth
+});
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
@@ -259,7 +262,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					data: providers.data,
 					flag,
 					holderVerdicts,
-					signInWindowMs: apiTokenSignInWindowMs,
+					signInMaxAgeMs,
 					log: event.locals.log
 				});
 	if (tokenResult.kind === 'rejected') {

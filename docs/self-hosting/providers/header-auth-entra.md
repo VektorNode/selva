@@ -193,12 +193,12 @@ ORIGIN=https://[your-domain]
 BOOTSTRAP_INSTANCE_ADMIN_EMAIL=admin@corp.com
 ADDRESS_HEADER=X-Forwarded-For
 XFF_DEPTH=1
-API_TOKEN_SIGN_IN_WINDOW_DAYS=7
+SIGN_IN_MAX_AGE_DAYS=7
 ```
 
 `ADDRESS_HEADER` and `XFF_DEPTH` let Selva's rate limits see each client's address instead of Caddy's ([Reverse proxy](../deployment/reverse-proxy.md)). Without them every client shares one bucket, and one client can block every sign-in.
 
-`API_TOKEN_SIGN_IN_WINDOW_DAYS` retires the API tokens of someone who stops coming through Entra: see [When someone leaves](#when-someone-leaves). Leave it out if you run integrations on a key whose owner rarely opens Selva, because that key would stop working too.
+`SIGN_IN_MAX_AGE_DAYS` revokes the API tokens of someone who stops coming through Entra: see [When someone leaves](#when-someone-leaves). Leave it out if you run integrations on a key whose owner rarely opens Selva, because that key would stop working too.
 
 `HOST=127.0.0.1` is required, and port 3000 must be closed in the firewall. Leave `HEADER_AUTH_*_HEADER` unset: this Caddyfile maps onto the default `SELVA-*` names. If you forward oauth2-proxy's headers unchanged instead, set `HEADER_AUTH_UPN_HEADER=X-Auth-Request-Preferred-Username` and `HEADER_AUTH_EMAIL_HEADER=X-Auth-Request-Email`, and leave the display-name header alone ([details](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md#header-names-must-match-what-reaches-selva)).
 
@@ -229,7 +229,7 @@ Run the [provider README's self-test](https://github.com/VektorNode/selva/blob/m
 1. **Disable them in Selva** at **Admin → Users**. This is the instant stop: it refuses their sign-in and revokes their API tokens (the Grasshopper plugin's upload sign-in, MCP clients, and keys made at **Team → API tokens**). An MCP client may keep going for up to a minute.
 2. **Disable the user in Entra.** Their browser session ends at oauth2-proxy's next refresh, within `cookie_refresh`.
 
-A request with a Selva API token skips oauth2-proxy (`@selfAuthenticated` above), so Entra never sees it. If step 1 is forgotten, `API_TOKEN_SIGN_IN_WINDOW_DAYS` (Part 6) still retires the person's tokens: they stop working once the person hasn't come through Entra for that many days. Without it, a token keeps working until it expires; **Team → API tokens** shows each key's expiry.
+A request with a Selva API token skips oauth2-proxy (`@selfAuthenticated` above), so Entra never sees it. If step 1 is forgotten, `SIGN_IN_MAX_AGE_DAYS` (Part 6) still retires the person's tokens: they are revoked once the person hasn't come through Entra for that many days. Without it, a token keeps working until it expires; **Team → API tokens** shows each key's expiry.
 
 Disable the Selva user rather than leave it. Selva matches header-auth users by UPN, then by email, so if Entra later gives either to someone else, they would sign in as the old account, with its projects and roles. A disabled account refuses them instead.
 

@@ -104,6 +104,7 @@ components:
             - API_TOKENS_UNAVAILABLE
             - RATE_LIMITED
             - API_TOKEN_HOLDER_REFUSED
+            - SIGN_IN_REQUIRED
         fields:
           type: object
           description: "Per-field messages, keyed by dotted path. Present on validation failures."

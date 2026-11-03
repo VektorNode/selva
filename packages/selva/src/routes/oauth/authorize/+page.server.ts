@@ -1,4 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { requireRecentSignIn } from '$lib/server/signInMaxAge.server';
 import { apiScopesFor, isLoopbackRedirect, OAuthError } from '@selvajs/server/oauth';
 import {
 	consentOffer,
@@ -48,6 +49,7 @@ export const load: PageServerLoad = async (event) => {
 	if (!locals.user || !locals.ctx) {
 		redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
+	await requireRecentSignIn(event);
 
 	const offer = await consentOffer(toApiRequest(event), request.scopes);
 	if (!offer) {
@@ -76,6 +78,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	approve: async (event) => {
+		await requireRecentSignIn(event);
 		const form = await event.request.formData();
 		const { request } = await parse(event.url);
 		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });

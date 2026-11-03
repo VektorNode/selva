@@ -14,7 +14,7 @@
 		toast
 	} from '@selvajs/ui';
 	import { Check, Copy, KeyRound, Trash2 } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { API_TOKEN_LIFETIME_DAYS, describeApiScope } from '@selvajs/platform';
 	import {
 		ACCESS_PRESETS,
@@ -65,6 +65,10 @@
 				})
 			});
 			const body = await res.json().catch(() => ({}));
+			if (body.code === 'SIGN_IN_REQUIRED') {
+				await goto(`/login?reauth=1&redirectTo=${encodeURIComponent('/team/tokens')}`);
+				return;
+			}
 			if (!res.ok) {
 				toast.error(body.message || 'Failed to create the token');
 				return;

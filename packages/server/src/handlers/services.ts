@@ -36,7 +36,7 @@ export function orgAssetService(deps: SelvaDeps): OrgAssetService {
  */
 export function tokenCodec(
 	deps: SelvaDeps,
-	family: Exclude<keyof SelvaDeps['tokens'], 'mayHoldApiTokens'>
+	family: Exclude<keyof SelvaDeps['tokens'], 'mayHoldApiTokens' | 'signInMaxAgeMs'>
 ): TokenCodec {
 	const codec = deps.tokens[family];
 	if (!codec) {

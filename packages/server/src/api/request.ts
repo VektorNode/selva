@@ -33,6 +33,14 @@ export function requireCaller(req: ApiRequest): { ctx: RequestContext; user: Aut
 }
 
 /**
+ * Refuse an API key: for actions whose effect outlives the key (members,
+ * invites, keys themselves), so revoking a leaked key ends what it did.
+ */
+export function requireSession(req: ApiRequest, message: string): void {
+	if (req.ctx?.apiScope) apiError(403, ApiErrorCode.FORBIDDEN, message);
+}
+
+/**
  * Fail with a Zod error's messages, one per field.
  *
  * The top-level `message` names the first problem so a human reading the

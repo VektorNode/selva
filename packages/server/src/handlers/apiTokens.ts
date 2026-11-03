@@ -43,6 +43,7 @@ import {
 import type { ApiHandler, ApiRequest } from '../api/index.js';
 import { requireActingOrg, requireCanViewProject } from '../access/index.js';
 import { canHoldApiTokens, type ApiTokenCodec } from '../tokens/index.js';
+import { signInIsStale } from '../http/sign-in-age.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -229,6 +230,11 @@ export async function mintApiToken(
 			ApiErrorCode.FORBIDDEN,
 			'API tokens can only be created from a signed-in session.'
 		);
+	}
+	// A key minted on a stale sign-in would be refused on its first request.
+	const signedIn = await req.deps.auth.getUser(user.id);
+	if (signInIsStale(signedIn?.lastLoginAt, req.deps.tokens.signInMaxAgeMs, Date.now())) {
+		apiError(401, ApiErrorCode.SIGN_IN_REQUIRED, 'Sign in again to create an API token.');
 	}
 	if (!(await mayHoldApiTokens(req.deps, ctx, input.scopes))) {
 		apiError(

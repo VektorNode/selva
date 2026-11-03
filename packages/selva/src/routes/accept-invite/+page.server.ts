@@ -9,6 +9,7 @@ import {
 } from '$lib/server/providers.server';
 import { getAuthProvider, getPermissionStore } from '$lib/server/providers.server';
 import { findAuthUserByEmail } from '@selvajs/server/providers';
+import { inviterStillVouches } from '@selvajs/server/handlers';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
 import { hashToken } from '$lib/server/invites/token.server';
@@ -40,6 +41,14 @@ function signupMode(auth: ReturnType<typeof getAuthProvider>): 'password' | 'pro
  * anonymously would let anyone holding a forwarded link join an org as someone
  * else.
  */
+function inviteDeps() {
+	return {
+		auth: getAuthProvider(),
+		orgs: getOrganizationProvider(),
+		permissions: getPermissionStore()
+	};
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const token = url.searchParams.get('token')?.trim();
 	if (!token) {
@@ -47,7 +56,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	}
 
 	const invite = await getInviteStore().getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
-	if (!invite) {
+	if (!invite || !(await inviterStillVouches(invite, inviteDeps()))) {
 		return { ok: false as const, reason: 'This invite link is invalid or has expired.' };
 	}
 
@@ -86,7 +95,7 @@ export const actions = {
 		} catch {
 			return fail(500, { error: 'Could not validate the invite. Please try again.' });
 		}
-		if (!invite) {
+		if (!invite || !(await inviterStillVouches(invite, inviteDeps()))) {
 			return fail(410, { error: 'This invite link is invalid or has expired.' });
 		}
 

@@ -9,6 +9,7 @@ import {
 	safeRedirectTarget
 } from '$lib/server/admin-auth.server';
 import { getAuthProvider } from '$lib/server/providers.server';
+import { endSessionForReauth } from '$lib/server/signInMaxAge.server';
 import { getPermissionStore } from '$lib/server/providers.server';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 
@@ -25,8 +26,9 @@ import { SYSTEM_CONTEXT } from '@selvajs/platform';
  * even though auth is working — because the no-method/proxy-auth fallback
  * block doesn't know about the already-authed `locals.user`.
  */
-export const load: PageServerLoad = async ({ locals, url, request }) => {
-	if (locals.user) {
+export const load: PageServerLoad = async ({ locals, url, request, cookies }) => {
+	const reauth = url.searchParams.get('reauth') === '1';
+	if (locals.user && !(reauth && (await endSessionForReauth({ cookies })))) {
 		const destination = safeRedirectTarget(url.searchParams.get('redirectTo'), '/library');
 		redirect(303, destination);
 	}

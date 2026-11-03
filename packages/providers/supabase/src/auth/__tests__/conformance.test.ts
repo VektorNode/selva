@@ -1,4 +1,5 @@
 import { describe, beforeEach, it } from 'vitest';
+import { createClient } from '@supabase/supabase-js';
 import {
 	runAuthProviderConformance,
 	runEmailLinkAuthConformance,
@@ -61,7 +62,14 @@ if (!envCtx) {
 				const { provider, adminPassword } = await makeProvider();
 				return { provider, adminPassword, adminEmail: ADMIN_EMAIL };
 			},
-			userManagement: true
+			userManagement: true,
+			signInContract: true,
+			signInWithRefreshToken: async (email, password) => {
+				const anon = createClient(ctx.url, ctx.anonKey, { auth: { persistSession: false } });
+				const { data, error } = await anon.auth.signInWithPassword({ email, password });
+				if (error || !data.session) throw error ?? new Error('no session');
+				return { userId: data.user.id, refreshToken: data.session.refresh_token };
+			}
 		});
 
 		runOAuthAuthConformance({

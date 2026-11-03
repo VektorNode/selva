@@ -335,6 +335,18 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 // Bootstrap-allowlist policy — first-admin auto-allowlist
 // ============================================================================
 
+describe('HeaderAuthProvider — sign-in contract', () => {
+	it('a proxied visit is a sign-in: it stamps lastLoginAt', async () => {
+		const created = await provider.createUser!('alice@example.com');
+		expect((await provider.getUser(created.id))?.lastLoginAt).toBeUndefined();
+		await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ 'SELVA-UserPrincipalName': 'alice@example.com' })
+		);
+		const stamped = (await provider.getUser(created.id))?.lastLoginAt;
+		expect(Number.isFinite(Date.parse(stamped ?? ''))).toBe(true);
+	});
+});
+
 describe('HeaderAuthProvider — bootstrap policy', () => {
 	it('auto-allowlists when policy returns true and grants identity in the same call', async () => {
 		const policy = vi.fn(async () => true);

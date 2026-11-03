@@ -287,7 +287,11 @@ describe('accept-invite under forward-auth', () => {
 			name: 'header-auth',
 			createUser,
 			proxyAuth: { hasNoIdentityHeaders: () => false },
-			verifyToken: async () => null
+			verifyToken: async () => null,
+			getUser: async (id: string) => {
+				const user = await providers.authUsers.findById(id);
+				return user && { id: user.id, email: user.email, disabled: user.disabled };
+			}
 		};
 		return createUser;
 	}

@@ -17,7 +17,8 @@ import {
 	noContent,
 	parseBody,
 	requireParams,
-	UpdateOrgMemberBodySchema
+	UpdateOrgMemberBodySchema,
+	requireSession
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
 import {
@@ -129,6 +130,7 @@ async function findProjectsLosingSoleOwner(
  *     member's permissions does NOT change their role.
  */
 export const updateOrgMember: ApiHandler = async (req) => {
+	requireSession(req, 'Members are managed from the web app, not with an API key.');
 	const { userId } = requireParams(req.params, 'orgId', 'userId');
 
 	// Owner+admin gate, covering permission edits. The role-change branch adds
@@ -213,6 +215,7 @@ export const updateOrgMember: ApiHandler = async (req) => {
  * owner would leave the org unadministrable.
  */
 export const removeOrgMember: ApiHandler = async (req) => {
+	requireSession(req, 'Members are managed from the web app, not with an API key.');
 	const { userId } = requireParams(req.params, 'orgId', 'userId');
 	requireManageOrgMembers(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);

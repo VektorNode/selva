@@ -111,11 +111,10 @@ export function createAllowlistStore(filePath: string): AllowlistStore {
 		async findByEmail(email) {
 			const { users } = await readFile(filePath);
 			const key = norm(email);
-			// Match the `email` column OR the `upn` column: admins pre-allowlist
-			// via `createUser(email)`, which stores the email AS the upn (the
-			// `email` column stays empty until first-login materialization). So
-			// an email-keyed lookup has to consider both.
-			return users.find((u) => norm(u.email ?? '') === key || u.upn === key) ?? null;
+			// Admins pre-allowlist via `createUser(email)`, which stores the email
+			// AS the upn. The `email` column is not searched: proxy headers write
+			// it, so it would hand a reassigned address to the departed holder.
+			return users.find((u) => u.upn === key) ?? null;
 		},
 
 		async findById(id) {

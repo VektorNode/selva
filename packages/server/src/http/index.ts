@@ -15,6 +15,7 @@ export {
 	type LoginRateLimiter,
 	type LoginRateLimiterConfig
 } from './login-rate-limit.js';
+export { resolveSignInMaxAgeMs, signInIsStale } from './sign-in-age.js';
 export { buildRequestContext, type BuildRequestContextInput } from './request-context.js';
 export {
 	createBoundedTtlCache,
@@ -25,7 +26,6 @@ export { createSessionRefresher, type SessionRefresher } from './session-refresh
 export {
 	createHolderVerdictCache,
 	resolveApiToken,
-	resolveApiTokenSignInWindowMs,
 	type ApiTokenResolution,
 	type HolderVerdictCache,
 	type ResolveApiTokenDeps,

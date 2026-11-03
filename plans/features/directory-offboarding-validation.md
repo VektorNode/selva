@@ -1,7 +1,7 @@
 # Validation: directory-offboarding
 
 Validates [directory-offboarding.md](./directory-offboarding.md), the built sign-in window
-(`API_TOKEN_SIGN_IN_WINDOW_DAYS`, `packages/server/src/http/api-token.ts`), and the Entra guide
+(then `API_TOKEN_SIGN_IN_WINDOW_DAYS`, now `SIGN_IN_MAX_AGE_DAYS`; `packages/server/src/http/api-token.ts`), and the Entra guide
 changes ([header-auth-entra.md](../../docs/self-hosting/providers/header-auth-entra.md),
 [signing-in-from-apps.md](../../docs/packages/build/signing-in-from-apps.md)).
 
@@ -221,5 +221,5 @@ t += 10 * 60_000; // past CODE_TTL_MS
 // unseal(code) with SELVA_HMAC_KEY returns grant.secret === 'selva_LIVE_RAW_KEY'
 ```
 
-The window fails open (`offboarding.test.ts`): `resolveApiTokenSignInWindowMs` returns `undefined`
+The window fails open (`offboarding.test.ts`): `resolveApiTokenSignInWindowMs` (now `resolveSignInMaxAgeMs`) returns `undefined`
 for unset, `'7d'`, `'1w'` and `'0.5'`; only `'7d'` and `'1w'` log a warning.

@@ -14,6 +14,7 @@ export {
 	parseParam,
 	readForm,
 	requireCaller,
+	requireSession,
 	requireParams,
 	requireUpload,
 	throwZodError
