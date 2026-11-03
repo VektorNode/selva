@@ -1,5 +1,13 @@
 # @selvajs/local-provider
 
+## 0.16.0-beta.4
+
+### Patch Changes
+
+- 3ba8225: The local compute store refuses a server id that another org or the platform already uses, with a 409, as Supabase does. Keys are looked up by id alone, so an org admin who knew another tenant's server id could have had that tenant's Rhino.Compute key sent to their own URL. The compute store conformance suite now checks both providers for this.
+- Updated dependencies [3ba8225]
+  - @selvajs/platform@1.0.0-beta.8
+
 ## 0.16.0-beta.3
 
 ### Minor Changes
