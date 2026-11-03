@@ -20,7 +20,7 @@ EOF
 sudo systemctl reload caddy
 ```
 
-Open ports 443 and 80 in your firewall. In `.env`, set `ORIGIN=https://selva.yourdomain.com`, remove `ALLOW_INSECURE_COOKIES=true` if set, then `npm run restart`. No domain yet: use `:80` as the site address (plain HTTP) and set `ALLOW_INSECURE_COOKIES=true`, or login over `http://` silently fails.
+Open ports 443 and 80 in your firewall. In `.env`, set `ORIGIN=https://selva.yourdomain.com`, remove `ALLOW_INSECURE_COOKIES=true` if set, then `npm run restart`. No domain yet: use `:80` as the site address (plain HTTP) and set `ORIGIN=http://…`, which drops the `Secure` cookie flag so login works over HTTP.
 
 For gzip, the body cap and access logs, start from [Caddyfile.example](./Caddyfile.example). The app sets its own security headers.
 

@@ -114,4 +114,28 @@ export interface SecretVerificationReport {
 	failures: SecretVerificationFailure[];
 	/** True if at least one row holds an unencrypted apiKey at rest. */
 	plaintextFound: boolean;
+	/** Rows only SELVA_AT_REST_KEY_PREVIOUS opens. Drop the previous key once this is 0. */
+	onPreviousKey?: number;
+}
+
+/**
+ * {@link decryptSecret} under each key in turn, current first. AES-GCM
+ * authenticates, so a wrong key fails rather than returning garbage, and trying
+ * the next one is safe. `keyIndex` above 0 means the caller should re-encrypt
+ * under `keys[0]`.
+ */
+export function decryptWithKeys(
+	envelope: string,
+	keys: readonly Buffer[],
+	aad?: string
+): { plaintext: string; keyIndex: number } {
+	let lastError: unknown;
+	for (const [keyIndex, key] of keys.entries()) {
+		try {
+			return { plaintext: decryptSecret(envelope, key, aad), keyIndex };
+		} catch (err) {
+			lastError = err;
+		}
+	}
+	throw lastError ?? new Error('No key to decrypt with');
 }

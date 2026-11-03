@@ -20,7 +20,7 @@ import {
 	callHandler
 } from '../../testing/index.js';
 import { listShareLinks, createShareLink, revokeShareLink } from '../shareLinks.js';
-import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
+import { DEFAULT_SHARE_LINK_MAX_SOLVES, DEFAULT_SHARE_LINK_TTL_DAYS } from '@selvajs/platform';
 
 let tp: HandlerHarness | null = null;
 
@@ -66,6 +66,29 @@ describe('POST /api/definitions/[guid]/share-links', () => {
 		expect(res.status).toBe(201);
 		const body = res.json as { link: { maxSolves: number | null } };
 		expect(body.link.maxSolves).toBeNull();
+	});
+
+	it('a link minted without an expiry expires after the default; explicit null never does', async () => {
+		tp = await freshHarness({ flags: { ENABLE_SHARING: true } });
+		const { alice, alicesPrivate } = await seedAcme(tp);
+		const def = await seedDefinition(tp, { projectId: alicesPrivate.id, ownerId: alice.id });
+		const aliceLocals = await actAs(tp, alice.id);
+		const mint = async (extra: Record<string, unknown>) =>
+			(
+				(
+					await callHandler(createShareLink, {
+						locals: aliceLocals,
+						params: { guid: def.record.guid },
+						body: { channel: 'live', allowSolve: true, ...extra }
+					})
+				).json as { link: { expiresAt: string | null } }
+			).link.expiresAt;
+
+		const days = (iso: string) => (new Date(iso).getTime() - Date.now()) / 86_400_000;
+		const defaulted = await mint({});
+		expect(defaulted).not.toBeNull();
+		expect(days(defaulted!)).toBeCloseTo(DEFAULT_SHARE_LINK_TTL_DAYS, 0);
+		expect(await mint({ expiresAt: null })).toBeNull();
 	});
 
 	it('GET strips tokenHash from list responses', async () => {

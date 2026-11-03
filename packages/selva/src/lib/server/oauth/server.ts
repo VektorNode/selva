@@ -5,7 +5,7 @@
  */
 
 import { json, type RequestEvent } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { hmacKeys } from '$lib/server/keys.server';
 import {
 	assertSafeRemoteDefinitionUrl,
 	createComputeRateLimiter,
@@ -46,21 +46,24 @@ function onRedeemed(tokenId: string): void {
 
 /** Whether `oauthServer` would build one, without building it. */
 export function oauthConfigured(): boolean {
-	const secret = env.SELVA_HMAC_KEY;
+	const secret = hmacKeys().current;
 	return Boolean(secret && secret.length >= MIN_TOKEN_SECRET_LENGTH);
 }
 
 /** Undefined without a usable SELVA_HMAC_KEY: the endpoints then answer 503. */
 export function oauthServer(origin: string): OAuthServer | undefined {
 	if (!oauthConfigured()) return undefined;
-	const secret = env.SELVA_HMAC_KEY!;
-	if (cached?.origin !== origin || cached.secret !== secret) {
+	const { current, previous } = hmacKeys();
+	const secret = current!;
+	const cacheKey = `${secret}\n${previous ?? ''}`;
+	if (cached?.origin !== origin || cached.secret !== cacheKey) {
 		cached = {
 			origin,
-			secret,
+			secret: cacheKey,
 			server: createOAuthServer({
 				origin,
 				secret,
+				...(previous ? { previousSecret: previous } : {}),
 				fetchClientMetadata,
 				redeemedCodes,
 				onRedeemed

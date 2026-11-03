@@ -78,4 +78,4 @@ Details in [scripts/DEV-PROVIDERS.md](https://github.com/VektorNode/selva/blob/m
 - **Compute 500s on solve.** Check Rhino.Compute is running and registered at `/admin/compute`.
 - **`Cross-site POST form submissions are forbidden`.** Behind a proxy, set `ORIGIN` to the public URL, no trailing slash.
 - **`/setup` redirects to `/login`.** An admin exists. With the `local` provider, stop the server and delete `.selva-data/` (`DATA_PATH`) to start over.
-- **Login bounces back to `/login`.** A production build over plain `http://` drops the `Secure` cookie. Add `ALLOW_INSECURE_COOKIES=true` to `.env`; it isn't in `.env.example`.
+- **Login bounces back to `/login`.** A production build over plain `http://` drops the `Secure` cookie. Set `ORIGIN` to the `http://` address you browse to, or add `ALLOW_INSECURE_COOKIES=true` to `.env`.

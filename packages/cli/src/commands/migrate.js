@@ -2,13 +2,22 @@
 // provider packages), removes stale selva.config.js, updates ecosystem.config.cjs.
 // Idempotent; mirrors update's lifecycle (stop/mutate/start with rollback on failure).
 
-import { existsSync, readFileSync, writeFileSync, copyFileSync, rmSync, renameSync } from 'node:fs';
+import {
+	existsSync,
+	readFileSync,
+	readdirSync,
+	writeFileSync,
+	copyFileSync,
+	rmSync,
+	renameSync
+} from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
-import { renameEnvKeys, RENAMED_ENV_VARS } from '../env.js';
+import { readEnvFile, renameEnvKeys, RENAMED_ENV_VARS, writeEnvText } from '../env.js';
+import { planEnvMigration } from '../env-migration.js';
 import {
 	buildDeploymentPackageJson,
 	CANONICAL_FIELDS,
@@ -100,7 +109,7 @@ export function classifyBackups(names, now = new Date(), maxAgeDays = BACKUP_AGE
 // dependency tree, so it has to run against a real directory — but not against
 // a real npm or pm2 daemon.
 export async function runMigrate(
-	_argv,
+	argv = [],
 	{
 		dir: injectedDir,
 		// --prefer-online: npm can otherwise resolve a cached packument that
@@ -114,7 +123,13 @@ export async function runMigrate(
 	const dir = injectedDir ?? resolveDeploymentDir();
 	requireDeploymentDir(dir);
 
-	p.intro(pc.bgCyan(pc.black(' selva migrate ')));
+	const dryRun = argv.includes('--dry-run');
+	p.intro(pc.bgCyan(pc.black(dryRun ? ' selva migrate --dry-run ' : ' selva migrate ')));
+
+	if (argv.includes('--undo')) {
+		undoEnvMigration(dir);
+		return;
+	}
 
 	const pkgPath = join(dir, 'package.json');
 	if (!existsSync(pkgPath)) {
@@ -123,7 +138,7 @@ export async function runMigrate(
 	}
 
 	const before = JSON.parse(readFileSync(pkgPath, 'utf8'));
-	const deploymentEnv = readDeploymentEnv(join(dir, '.env'));
+	const deploymentEnv = readEnvFile(join(dir, '.env'));
 	const { pkg: target, notes: pinNotes } = buildTargetPackageJson(
 		before,
 		resolveVersion,
@@ -131,32 +146,76 @@ export async function runMigrate(
 	);
 	const pkgDiff = diffPackageJson(before, target);
 
-	// The server drops its read-old-name shim after one minor version, so
-	// rewriting now is what keeps a tuned value tuned instead of silently
-	// reverting to defaults later.
+	// The server stops reading old names in a later release, so rewriting now is
+	// what keeps a tuned value tuned instead of silently reverting to a default.
 	const envPath = join(dir, '.env');
 	const envBefore = existsSync(envPath) ? readFileSync(envPath, 'utf8') : null;
-	const envRename = envBefore
-		? renameEnvKeys(envBefore, RENAMED_ENV_VARS)
-		: { text: '', changes: [] };
+	const envPlan = envBefore
+		? planEnvMigration(envBefore)
+		: { text: '', changes: [], mismatches: [], blockers: [], fallbacks: [], unknown: [] };
+	const envChanged = envPlan.changes.length > 0;
 
-	const sideFileChanges = [];
-	for (const [oldName, newName, action] of envRename.changes) {
-		sideFileChanges.push(
-			action === 'dropped'
-				? `${pc.red('-')} .env ${pc.dim(`${oldName} (deprecated; ${newName} is already set)`)}`
-				: `${pc.yellow('~')} .env ${pc.dim(`${oldName} → ${newName}`)}`
-		);
+	// The rewrite would change what a setting means. Never write that.
+	if (envPlan.mismatches.length > 0) {
+		p.log.error('The .env rewrite would change these settings, so nothing was written:');
+		for (const m of envPlan.mismatches) {
+			console.log(`  ${m.key}: ${JSON.stringify(m.was)} → ${JSON.stringify(m.is)}`);
+		}
+		p.outro(pc.red('Migration refused. Please report this: it is a bug in the migration.'));
+		process.exit(1);
 	}
 
+	// Values the old readers ignored that this release refuses to boot on.
+	if (envPlan.blockers.length > 0) {
+		p.log.error('This release would not start with these .env values:');
+		for (const b of envPlan.blockers) console.log(`  ${b.key} ${b.problem}`);
+		p.outro(
+			pc.red(
+				'Fix them first (`selva config set KEY=VALUE`), then run migrate again. Nothing was written.'
+			)
+		);
+		process.exit(1);
+	}
+	for (const f of envPlan.fallbacks) {
+		p.log.warn(`${f.key} ${f.problem}: the app runs on its default instead.`);
+	}
+
+	const sideFileChanges = envPlan.changes.map(describeEnvChange);
+
 	if (pkgDiff.length === 0 && sideFileChanges.length === 0) {
+		reportUnknown(envPlan.unknown);
 		p.outro(pc.green('Already on the current layout — nothing to migrate.'));
 		return;
 	}
 
-	p.log.info('Changes to apply:');
+	p.log.info(dryRun ? 'Would apply (nothing is written in a dry run):' : 'Changes to apply:');
 	for (const line of pkgDiff) console.log('  ' + line);
 	for (const line of sideFileChanges) console.log('  ' + line);
+	reportUnknown(envPlan.unknown);
+
+	if (dryRun) {
+		p.outro(pc.green('Every setting keeps its meaning. Run without --dry-run to apply.'));
+		return;
+	}
+
+	// Only .env changes: no reinstall, no restart of anyone's running app.
+	if (pkgDiff.length === 0) {
+		const go = await confirm('Rewrite .env (a backup is kept)?');
+		if (p.isCancel(go) || !go) {
+			p.cancel('Cancelled.');
+			return;
+		}
+		const bak = backupPathFor(envPath, backupStamp());
+		copyFileSync(envPath, bak);
+		writeEnvText(bak, readFileSync(bak, 'utf8'));
+		writeEnvText(envPath, envPlan.text);
+		p.outro(
+			pc.green('.env migrated. ') +
+				pc.dim(`Backup: ${bak}. Undo: selva migrate --undo. Apply: `) +
+				pc.cyan('selva restart')
+		);
+		return;
+	}
 
 	// The diff shows the pin that will be written; these explain why it is that
 	// pin. A preserved beta and a pin that couldn't be resolved both look like
@@ -203,9 +262,10 @@ export async function runMigrate(
 	copyFileSync(pkgPath, bakPath);
 	writeFileSync(pkgPath, JSON.stringify(target, null, 2) + '\n', 'utf8');
 
-	if (envRename.changes.length > 0) {
+	if (envChanged) {
 		copyFileSync(envPath, envBak);
-		writeFileSync(envPath, envRename.text, 'utf8');
+		writeEnvText(envBak, readFileSync(envBak, 'utf8'));
+		writeEnvText(envPath, envPlan.text);
 	}
 
 	// A legacy lockfile pins the old package set across a major bump, so this needs
@@ -231,7 +291,7 @@ export async function runMigrate(
 	} catch (err) {
 		s.stop(pc.red('npm install failed — rolling back'));
 		copyFileSync(bakPath, pkgPath);
-		if (envRename.changes.length > 0 && existsSync(envBak)) {
+		if (envChanged && existsSync(envBak)) {
 			copyFileSync(envBak, envPath);
 		}
 
@@ -268,7 +328,7 @@ export async function runMigrate(
 	if (pm2Notice) p.log.warn(pm2Notice);
 
 	const backupHints = [`package.json.${stamp}.bak`];
-	if (envRename.changes.length > 0) backupHints.push(`.env.${stamp}.bak`);
+	if (envChanged) backupHints.push(`.env.${stamp}.bak`);
 
 	if (status === 0) {
 		p.outro(
@@ -303,19 +363,6 @@ function restartAfterRollback(dir, pm2 = runPm2) {
 				`The app is likely down — run \`npm install\` then \`selva start\`.`
 		);
 	}
-}
-
-// Only the provider keys matter here, so this reads `KEY=value` lines rather
-// than pulling in a dotenv parser: no quoting, expansion, or multi-line values
-// to honour.
-function readDeploymentEnv(envPath) {
-	if (!existsSync(envPath)) return {};
-	const env = {};
-	for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-		const match = /^\s*([A-Z0-9_]+)\s*=\s*(.*)$/.exec(line);
-		if (match) env[match[1]] = match[2].trim().replace(/^["']|["']$/g, '');
-	}
-	return env;
 }
 
 function buildTargetPackageJson(current, resolveVersion = npmDistTagVersion, env = {}) {
@@ -475,3 +522,51 @@ export function buildPm2UpgradeNotice(beforeVersion, afterVersion) {
 }
 
 export { buildTargetPackageJson, diffPackageJson };
+
+function describeEnvChange(c) {
+	const env = (text) => `${pc.yellow('~')} .env ${pc.dim(text)}`;
+	switch (c.action) {
+		case 'stripped':
+			return env('shipped template comments removed (your own notes above a setting are kept)');
+		case 'renamed':
+			return env(`${c.key} → ${c.to}`);
+		case 'dropped':
+			return `${pc.red('-')} .env ${pc.dim(`${c.key} (${c.reason})`)}`;
+		case 'replaced':
+			return env(`${c.key} → ${c.to}`);
+		case 'rewritten':
+			return env(`${c.key} written as ${c.to}, what it already meant`);
+		case 'removed':
+			return `${pc.red('-')} .env ${pc.dim(`${c.key} (${c.reason})`)}`;
+		default:
+			return env(c.key);
+	}
+}
+
+function reportUnknown(unknown) {
+	for (const u of unknown) {
+		p.log.warn(
+			`.env sets ${u.key}, which Selva does not read${u.suggestion ? ` (did you mean ${u.suggestion}?)` : ''}. Left as is.`
+		);
+	}
+}
+
+/** Restore the newest .env backup migrate (or config set) wrote. */
+function undoEnvMigration(dir) {
+	const backups = readdirSync(dir)
+		.filter((f) => f.startsWith('.env.') && BACKUP_PATTERN.test(f))
+		.sort()
+		.reverse();
+	if (backups.length === 0) {
+		p.outro(pc.yellow('No .env backup to restore.'));
+		return;
+	}
+	const envPath = join(dir, '.env');
+	const current = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
+	// Keep what is being replaced, so an undo can itself be undone.
+	if (current) writeEnvText(backupPathFor(envPath, backupStamp()), current);
+	writeEnvText(envPath, readFileSync(join(dir, backups[0]), 'utf8'));
+	p.outro(
+		pc.green(`Restored .env from ${backups[0]}. `) + pc.dim('Apply: ') + pc.cyan('selva restart')
+	);
+}

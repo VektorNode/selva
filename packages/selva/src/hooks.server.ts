@@ -1,4 +1,4 @@
-import { redirect, type RequestEvent } from '@sveltejs/kit';
+import { redirect, type RequestEvent, type ServerInit } from '@sveltejs/kit';
 import { isHttpError } from '@sveltejs/kit';
 import { isApiError } from '@selvajs/server/api';
 import type { AuthUser } from '@selvajs/platform';
@@ -33,6 +33,7 @@ const refreshSession = createSessionRefresher(() => providers.auth.sessionRefres
 	auth: () => providers.auth
 });
 import { getBootHealth } from '$lib/server/bootHealth.server';
+import { checkConfigAtBoot } from '$lib/server/config/boot.server';
 import { env } from '$env/dynamic/private';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
 import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
@@ -57,9 +58,10 @@ let bootHealthKicked = false;
 // single log line rather than one per anonymous request.
 let proxyAuthLoginMissWarned = false;
 
-// Env validation is owned by each provider's `fromEnv()` (throws on missing
-// vars, e.g. DATA_PATH for local, SUPABASE_URL for supabase) — no app-level
-// check needed here.
+// Once at server start, never in tests that import this module for `handle`.
+export const init: ServerInit = () => {
+	checkConfigAtBoot();
+};
 
 // One-way transition (zero users → at least one). Once true, permanent —
 // caching it skips a per-request listUsers DB read after the first user exists.

@@ -214,7 +214,8 @@ Run the [provider README's self-test](https://github.com/VektorNode/selva/blob/m
 
 - **Restrict sign-in further:** `allowed_groups`, or `authenticated_emails_file` in place of `email_domains`.
 - **Add users:** allowlist them in **Admin → Users → Allowlist user**, then grant org access in **Team → Members & roles**.
-- **Rotate the secret:** create a new one in Entra, update `client_secret`, restart oauth2-proxy.
+- **Rotate the client secret before it expires.** Entra client secrets last 24 months at most, and nobody can sign in once it lapses. Note the expiry date shown under **Certificates & secrets** where the next admin will find it. To rotate: create a new secret in Entra, update `client_secret` in `/etc/oauth2-proxy.cfg`, restart oauth2-proxy, then delete the old secret in Entra.
+- **Rotate Selva's own keys:** `npx selva keys rotate hmac` (or `at-rest`) keeps the old key working, so nothing breaks. See [rotating a key](../deployment/security-and-limits.md#rotating-a-key).
 - **A UPN changes:** Selva sees the new UPN as a new person. Allowlist it, give it the old account's roles, then disable the old account so the old UPN can't be handed to someone else.
 
 ### When someone leaves

@@ -8,7 +8,6 @@
 import {
 	existsSync,
 	readFileSync,
-	writeFileSync,
 	copyFileSync,
 	readdirSync,
 	accessSync,
@@ -20,7 +19,13 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
-import { readEnvFile, parseEnv, countEnvCommentLines, stripEnvComments } from '../env.js';
+import {
+	readEnvFile,
+	parseEnv,
+	countEnvCommentLines,
+	stripEnvComments,
+	writeEnvText
+} from '../env.js';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
 import { satisfiesNodeRange } from '../node-range.js';
 import { green, yellow, red, fixable } from '../checks/result.js';
@@ -32,6 +37,8 @@ import {
 	checkDeprecatedEnv,
 	checkEnvDocumentation,
 	checkHeaderNames,
+	checkHmacKey,
+	checkKeyRotation,
 	checkOrigin,
 	checkProviders,
 	checkSecret,
@@ -55,8 +62,9 @@ export async function runDoctor(argv = []) {
 	checks.push(checkLayoutDrift(dir));
 	checks.push(checkMigrationLeftovers(dir));
 	checks.push(checkAgedBackups(dir));
-	checks.push(checkSecret(env.SELVA_HMAC_KEY, 'SELVA_HMAC_KEY is a 32-byte hex string'));
-	checks.push(checkSecret(env.SELVA_AT_REST_KEY, 'SELVA_AT_REST_KEY is a 32-byte hex string'));
+	checks.push(checkHmacKey(env.SELVA_HMAC_KEY));
+	checks.push(checkSecret(env.SELVA_AT_REST_KEY, 'SELVA_AT_REST_KEY is a 32-byte key'));
+	checks.push(...checkKeyRotation(env));
 
 	const providers = resolveProviders(env);
 	checks.push(...checkProviders(providers));
@@ -460,7 +468,7 @@ function checkEnvDocs(dir) {
 				if (drift) return red(`refused to strip .env — ${drift}`);
 
 				copyFileSync(envPath, envPath + '.bak');
-				writeFileSync(envPath, strippedText, 'utf8');
+				writeEnvText(envPath, strippedText);
 				return green(`stripped ${removed} comment lines from .env (backup: .env.bak)`);
 			} catch (err) {
 				return red(`could not rewrite .env: ${err instanceof Error ? err.message : err}`);

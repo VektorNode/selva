@@ -18,6 +18,12 @@ import {
 	COMPUTE_DEFINITION_CACHE_BYTES,
 	COMPUTE_SOLVE_CACHE_BYTES
 } from '$lib/server/computeLimits';
+import {
+	getChangesSinceLastBoot,
+	getConfigReport,
+	getKeyRotation
+} from '$lib/server/config/boot.server';
+import { getBootHealth } from '$lib/server/bootHealth.server';
 import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -90,6 +96,16 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 		isInstanceAdmin,
 		flags,
 		limits,
+		// Hosts, ports and addresses: instance admins only, like the health check.
+		config: isInstanceAdmin
+			? {
+					report: getConfigReport(),
+					changes: getChangesSinceLastBoot(),
+					rotation: getKeyRotation(),
+					// Set only while SELVA_AT_REST_KEY_PREVIOUS is: what `--finish` would strand.
+					atRestOnPreviousKey: (await getBootHealth()).atRestSecrets?.onPreviousKey ?? null
+				}
+			: null,
 		version: pkg.version,
 		channel,
 		update

@@ -14,10 +14,11 @@ import {
 	type ILogger
 } from '@selvajs/platform';
 import { NoopLogger, ProviderError } from '@selvajs/platform';
+import { previousKey } from '@selvajs/platform/config';
 import { readJsonFile, withFileLock, writeJsonFile } from './fsJson.js';
 import {
 	decodeSecretKey,
-	decryptSecret,
+	decryptWithKeys,
 	encryptSecret,
 	isEncryptedSecret
 } from './secretCrypto.js';
@@ -58,6 +59,12 @@ function assertIdsFree(
 	}
 }
 
+/** SELVA_AT_REST_KEY_PREVIOUS, while within its deadline. */
+function previousAtRestKey(env: Record<string, string | undefined>): Buffer | undefined {
+	const key = previousKey(env, 'SELVA_AT_REST_KEY').key;
+	return key ? decodeSecretKey(key) : undefined;
+}
+
 /**
  * Reads/writes compute.config.json, re-read on every call so edits take
  * effect without a restart. Mutation methods are scope-targeted
@@ -79,18 +86,23 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		return new LocalComputeServerStore(
 			path.join(env.DATA_PATH, 'compute.config.json'),
 			decodeSecretKey(env.SELVA_AT_REST_KEY),
-			logger
+			logger,
+			previousAtRestKey(env)
 		);
 	}
 
 	private readonly logger: ILogger;
+	/** Current key first; the previous one still opens rows sealed before a rotation. */
+	private readonly keys: Buffer[];
 
 	constructor(
 		private readonly configFilePath: string,
 		private readonly secretKey: Buffer,
-		logger?: ILogger
+		logger?: ILogger,
+		previousKey?: Buffer
 	) {
 		this.logger = logger ?? new NoopLogger();
+		this.keys = previousKey ? [secretKey, previousKey] : [secretKey];
 	}
 
 	private async readAll(): Promise<OnDiskShape> {
@@ -124,7 +136,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				);
 			}
 			try {
-				return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey, s.id) };
+				return { ...s, apiKey: decryptWithKeys(s.apiKey, this.keys, s.id).plaintext };
 			} catch (cause) {
 				this.logger.warn(
 					'Could not decrypt apiKey: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
@@ -153,6 +165,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		const all = await this.readAll();
 		const failures: SecretVerificationFailure[] = [];
 		let plaintextFound = false;
+		let onPreviousKey = 0;
 
 		for (const s of all.servers) {
 			if (!s.apiKey) continue;
@@ -166,7 +179,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				continue;
 			}
 			try {
-				decryptSecret(s.apiKey, this.secretKey, s.id);
+				if (decryptWithKeys(s.apiKey, this.keys, s.id).keyIndex > 0) onPreviousKey += 1;
 			} catch (cause) {
 				failures.push({
 					serverId: s.id,
@@ -177,7 +190,38 @@ export class LocalComputeServerStore implements IComputeServerStore {
 			}
 		}
 
-		return { ok: failures.length === 0, failures, plaintextFound };
+		return {
+			ok: failures.length === 0,
+			failures,
+			plaintextFound,
+			...(this.keys.length > 1 ? { onPreviousKey } : {})
+		};
+	}
+
+	/**
+	 * Re-seal every row that only the previous key opens, under the current one,
+	 * so the previous key can be dropped. Under the file lock, so it can't
+	 * interleave with an admin save. Returns how many rows it re-sealed.
+	 */
+	async reencryptSecrets(): Promise<number> {
+		if (this.keys.length < 2) return 0;
+		return withFileLock(this.configFilePath, async () => {
+			const all = await this.readAll();
+			let changed = 0;
+			const servers = all.servers.map((s) => {
+				if (!s.apiKey || !isEncryptedSecret(s.apiKey)) return s;
+				try {
+					const { plaintext, keyIndex } = decryptWithKeys(s.apiKey, this.keys, s.id);
+					if (keyIndex === 0) return s;
+					changed += 1;
+					return { ...s, apiKey: encryptSecret(plaintext, this.secretKey, s.id) };
+				} catch {
+					return s;
+				}
+			});
+			if (changed > 0) await writeJsonFile<OnDiskShape>(this.configFilePath, { ...all, servers });
+			return changed;
+		});
 	}
 
 	private encryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {

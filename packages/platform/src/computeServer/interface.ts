@@ -111,4 +111,10 @@ export interface IComputeServerStore {
 	 * `/api/health` to 503. Optional so a non-encrypting store can omit it.
 	 */
 	verifySecrets?(): Promise<SecretVerificationReport>;
+	/**
+	 * Re-seal under the current key every `apiKey` only `SELVA_AT_REST_KEY_PREVIOUS`
+	 * opens. Separate from `verifySecrets`, which a GET calls and must stay
+	 * read-only. Returns how many rows it re-sealed.
+	 */
+	reencryptSecrets?(): Promise<number>;
 }

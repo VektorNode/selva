@@ -10,7 +10,7 @@ import { createTokenCodec, type TokenCodec } from './token-codec.js';
  *   keys use it.
  * - 30 base62 chars carry ~178 bits of entropy.
  * - The checksum lets the resolver reject a typo or a truncated paste without
- *   a store lookup. It is not a MAC: the HMAC at rest is what authenticates.
+ *   a store lookup. It is not a MAC: the hash at rest is what authenticates.
  * - CRC32 tops out below 62^6, so 6 chars always fit; shorter values are
  *   left-padded with `0`.
  */
@@ -62,8 +62,12 @@ export interface ApiTokenCodec extends TokenCodec {
 	hasValidChecksum(raw: string): boolean;
 }
 
-export function createApiTokenCodec(secret: string): ApiTokenCodec {
-	const base = createTokenCodec({ prefix: API_TOKEN_PREFIX, secret });
+export function createApiTokenCodec(secret: string, previousSecret?: string): ApiTokenCodec {
+	const base = createTokenCodec({
+		prefix: API_TOKEN_PREFIX,
+		secret,
+		...(previousSecret ? { previousSecret } : {})
+	});
 	return {
 		...base,
 		mintRawToken(): string {

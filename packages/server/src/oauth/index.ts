@@ -109,8 +109,10 @@ export interface Grant {
 export interface OAuthServerOptions {
 	/** This instance's origin, e.g. `https://selva.example.com`. */
 	origin: string;
-	/** `SELVA_HMAC_KEY`. Rotating it invalidates registered clients and live codes. */
+	/** `SELVA_HMAC_KEY`. Signs client ids and seals codes. */
 	secret: string;
+	/** The key before the last rotation: client ids and codes it made still verify. */
+	previousSecret?: string;
 	/**
 	 * Fetches a Client ID Metadata Document. The URL comes from an unknown client,
 	 * so the host must guard it against SSRF. Without it, URL client ids are refused.
@@ -182,6 +184,9 @@ export function createOAuthServer(options: OAuthServerOptions) {
 	const now = options.now ?? Date.now;
 	const signKey = derive(options.secret, 'selva-oauth-client');
 	const codeKey = derive(options.secret, `selva-oauth-code:${origin}`);
+	const previous = options.previousSecret;
+	const previousSignKey = previous ? derive(previous, 'selva-oauth-client') : undefined;
+	const previousCodeKey = previous ? derive(previous, `selva-oauth-code:${origin}`) : undefined;
 	const redeemed = options.redeemedCodes ?? new Map<string, number>();
 	const metadataCache = new Map<
 		string,
@@ -229,7 +234,9 @@ export function createOAuthServer(options: OAuthServerOptions) {
 
 	function registeredClient(clientId: string): OAuthClient {
 		const [payload, signature] = clientId.slice('dcr_'.length).split('.');
-		if (!payload || !signature || !safeEqual(signature, sign(signKey, payload))) {
+		const signedBy = (key: Buffer | undefined) =>
+			key !== undefined && safeEqual(signature, sign(key, payload));
+		if (!payload || !signature || !(signedBy(signKey) || signedBy(previousSignKey))) {
 			throw new OAuthError('invalid_client', 'Unknown client.');
 		}
 		const meta = JSON.parse(unb64(payload)) as { n: string; r: string[] };
@@ -338,7 +345,8 @@ export function createOAuthServer(options: OAuthServerOptions) {
 				throw new OAuthError('unsupported_grant_type', 'Only authorization_code is supported.');
 			}
 			const code = form.get('code') ?? '';
-			const sealed = open(codeKey, code) as {
+			const sealed = (open(codeKey, code) ??
+				(previousCodeKey ? open(previousCodeKey, code) : null)) as {
 				c: string;
 				r: string;
 				p: string;

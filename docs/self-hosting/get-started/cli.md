@@ -29,7 +29,7 @@ The directory gets `.env`, `ecosystem.config.cjs` (pm2), and a `package.json` th
 
 ### First boot, before HTTPS
 
-Session cookies are `Secure`, so over plain HTTP logins appear to succeed but don't stick. Add `ALLOW_INSECURE_COOKIES=true` to `.env` until HTTPS is live. It isn't in `.env.example`. Use an editor, not `echo >>`: a missing trailing newline glues your line onto the last one.
+Session cookies are `Secure` unless `ORIGIN` starts with `http://`, so over plain HTTP without that origin logins appear to succeed but don't stick. Set `ORIGIN=http://…` until HTTPS is live, or `npx selva config set ALLOW_INSECURE_COOKIES=true`.
 
 ## Operate a deployment
 
@@ -41,10 +41,12 @@ Session cookies are `Secure`, so over plain HTTP logins appear to succeed but do
 | `selva restart`                     | `pm2 restart selva-compute --update-env`                                        |
 | `selva logs`                        | Tails logs. Extra args pass through (`--lines 200`).                            |
 | `selva update`                      | Updates `@selvajs/cli` and `@selvajs/selva`, then restarts.                     |
-| `selva init`                        | Re-asks the setup questions and rewrites `.env`.                                |
-| `selva migrate`                     | Brings an old deployment onto the current scaffold layout.                      |
+| `selva init`                        | Re-asks the setup questions and updates the answered keys in `.env`.            |
+| `selva config show [--all]`         | What `.env` sets, what is default, what is wrong, what changed since boot.      |
+| `selva config set KEY=VALUE`        | Checks one value, edits only its line, keeps a backup. `unset KEY` removes one. |
+| `selva migrate [--dry-run\|--undo]` | Brings an old deployment and its `.env` onto the current release.               |
 | `selva setup-proxy`                 | Installs Caddy with TLS in front of the app. Flags: `--domain`, `--acme-email`. |
-| `selva keys rotate <hmac\|at-rest>` | Replaces a secret (see below).                                                  |
+| `selva keys rotate <hmac\|at-rest>` | Replaces a secret; the old one keeps working (see below).                       |
 
 `npm start`, `npm run stop|restart|logs|doctor|update` alias the matching commands.
 
@@ -52,12 +54,15 @@ Session cookies are `Secure`, so over plain HTTP logins appear to succeed but do
 - **Use `selva restart`, not `pm2 restart`.** Without `--update-env`, pm2 keeps its old environment and your `.env` edit does nothing.
 - **`init` keeps your secrets** and `package.json`. Restart afterwards.
 
-### `keys rotate` is destructive
+### Inheriting a deployment
 
-- **`hmac`:** everyone is logged out, and every share link, pending invite and API token stops working. That includes plugin sign-ins and MCP connections.
-- **`at-rest`:** the stored Rhino.Compute API key becomes unreadable; re-enter it at `/admin/compute`.
+Run `npx selva config show` first. It lists the settings that matter, which ones are defaults, every value that is wrong or isn't a setting Selva reads, and anything in `.env` the running app hasn't picked up. Secrets show as a fingerprint, never the value.
 
-It asks for confirmation first. Restart afterwards.
+Then `npx selva migrate --dry-run`. It shows every rename and cleanup it would make to `.env`, and checks that each setting keeps its meaning; nothing is written. `npx selva migrate` applies it with a backup, and `--undo` restores the backup.
+
+### `keys rotate` keeps the old key working
+
+The old key moves to `<KEY>_PREVIOUS`, which the app still accepts for 30 days, so nobody is logged out and no link breaks. After that it is refused on its own; `--finish` ends the overlap early or removes the leftover lines. `--leaked` drops it at once, for a key that must stop working now. See [rotating a key](../deployment/security-and-limits.md#rotating-a-key). Restart afterwards.
 
 ## About pm2
 

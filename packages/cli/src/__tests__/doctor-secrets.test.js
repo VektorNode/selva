@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkSecret } from '../checks/config.js';
+import { checkHmacKey, checkSecret } from '../checks/config.js';
 import { generateKey } from '../secrets.js';
 
 const PLACEHOLDER = 'replace-this-with-a-random-32-byte-hex-key';
@@ -58,4 +58,20 @@ test('a key of the wrong length or alphabet is rejected', () => {
 
 test('uppercase hex is accepted — operators may paste it from elsewhere', () => {
 	assert.equal(checkSecret('A'.repeat(64), 'k').severity, 'green');
+});
+
+test('a 32-byte base64 key is accepted, as the runtime accepts it', () => {
+	// decodeSecretKey takes hex or base64, and the runtime's own error text
+	// suggests `openssl rand -base64 32`; doctor must not red what boots fine.
+	const b64 = Buffer.alloc(32, 7).toString('base64');
+	assert.equal(checkSecret(b64, 'k').severity, 'green');
+	assert.equal(checkSecret(b64.replace(/=+$/, ''), 'k').severity, 'green');
+});
+
+test('SELVA_HMAC_KEY is checked by the runtime rule: any 32+ characters, not the placeholder', () => {
+	assert.equal(checkHmacKey('x'.repeat(48)).severity, 'green');
+	assert.equal(checkHmacKey(generateKey()).severity, 'green');
+	assert.equal(checkHmacKey('x'.repeat(31)).severity, 'red');
+	assert.equal(checkHmacKey(PLACEHOLDER).severity, 'red');
+	assert.match(checkHmacKey(undefined).line, /unset/);
 });

@@ -15,6 +15,7 @@ import {
 	type ApiTokenCodec
 } from '../tokens/api-token-codec.js';
 import { canHoldApiTokens, type ApiTokenHolderPolicy } from '../tokens/api-token-holder.js';
+import { findByToken } from '../tokens/token-codec.js';
 import { buildRequestContext } from './request-context.js';
 import { signInIsStale } from './sign-in-age.js';
 
@@ -135,7 +136,7 @@ export async function resolveApiToken(
 	if (delegated && !(await delegated.status()).ok) return UNAVAILABLE;
 
 	if (!deps.codec.hasValidChecksum(raw)) return UNAUTHORIZED;
-	const token = await store.getByTokenHash(SYSTEM_CONTEXT, deps.codec.hashToken(raw));
+	const token = await findByToken(deps.codec, raw, (h) => store.getByTokenHash(SYSTEM_CONTEXT, h));
 	if (!token) return UNAUTHORIZED;
 
 	const [user, member, platformPermissions] = await Promise.all([

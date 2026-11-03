@@ -10,5 +10,6 @@ export {
 	isEncryptedSecret,
 	encryptSecret,
 	decryptSecret,
+	decryptWithKeys,
 	decodeSecretKey
 } from '@selvajs/platform/computeServer';

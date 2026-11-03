@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { env } from '$env/dynamic/private';
+import { hmacKeys } from '$lib/server/keys.server';
 
 /**
  * Per-solve bearer for the Compute → Selva callback. Stateless on purpose: the
@@ -7,27 +7,26 @@ import { env } from '$env/dynamic/private';
  * expired", which a second server instance can check without shared state.
  *
  * Format: `<expiryMs>.<base64url(HMAC-SHA256(SELVA_HMAC_KEY, solveId + "." + expiryMs))>`.
- * Rotating `SELVA_HMAC_KEY` invalidates in-flight solves' tokens, which is fine —
- * they end within the solve deadline anyway.
+ * Verified under the previous key too, so a rotation doesn't cut off solves in flight.
  */
 
-function secret(): string {
-	const key = env.SELVA_HMAC_KEY;
-	if (!key) {
+function keys(): string[] {
+	const { current, previous } = hmacKeys();
+	if (!current) {
 		throw new Error(
 			'Missing required env var: SELVA_HMAC_KEY. See packages/selva/.env.example for setup instructions.'
 		);
 	}
-	return key;
+	return previous ? [current, previous] : [current];
 }
 
-function sign(solveId: string, expiresAt: number): string {
-	return createHmac('sha256', secret()).update(`${solveId}.${expiresAt}`).digest('base64url');
+function sign(key: string, solveId: string, expiresAt: number): string {
+	return createHmac('sha256', key).update(`${solveId}.${expiresAt}`).digest('base64url');
 }
 
 export function mintSolveToken(solveId: string, ttlMs: number): string {
 	const expiresAt = Date.now() + ttlMs;
-	return `${expiresAt}.${sign(solveId, expiresAt)}`;
+	return `${expiresAt}.${sign(keys()[0], solveId, expiresAt)}`;
 }
 
 export function verifySolveToken(solveId: string, token: string | null | undefined): boolean {
@@ -37,6 +36,8 @@ export function verifySolveToken(solveId: string, token: string | null | undefin
 	const expiresAt = Number(token.slice(0, dot));
 	if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
 	const given = Buffer.from(token.slice(dot + 1));
-	const expected = Buffer.from(sign(solveId, expiresAt));
-	return given.length === expected.length && timingSafeEqual(given, expected);
+	return keys().some((key) => {
+		const expected = Buffer.from(sign(key, solveId, expiresAt));
+		return given.length === expected.length && timingSafeEqual(given, expected);
+	});
 }

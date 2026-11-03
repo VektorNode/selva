@@ -45,7 +45,8 @@
 		"openapi:generate": "node scripts/generate-openapi.js",
 		"test:e2e": "playwright test",
 		"lint": "eslint .",
-		"lint:types": "eslint . --config eslint.typed.config.js"
+		"lint:types": "eslint . --config eslint.typed.config.js",
+		"generate:cli-config": "node scripts/generate-cli-config.js"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",

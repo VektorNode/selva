@@ -99,6 +99,11 @@
 			"types": "./dist/computeServer/index.d.ts",
 			"import": "./dist/computeServer/index.js"
 		},
+		"./config": {
+			"selva-source": "./src/config/index.ts",
+			"types": "./dist/config/index.d.ts",
+			"import": "./dist/config/index.js"
+		},
 		"./access": {
 			"selva-source": "./src/access/index.ts",
 			"types": "./dist/access/index.d.ts",

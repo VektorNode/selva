@@ -12,7 +12,7 @@ import { findAuthUserByEmail } from '@selvajs/server/providers';
 import { inviterStillVouches } from '@selvajs/server/handlers';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
 import { setSessionCookie } from '$lib/server/admin-auth.server';
-import { hashToken } from '$lib/server/invites/token.server';
+import { findByRawToken } from '$lib/server/invites/token.server';
 import { renderThrown } from '@selvajs/server/logging';
 
 /**
@@ -55,7 +55,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		return { ok: false as const, reason: 'This invite link is missing a token.' };
 	}
 
-	const invite = await getInviteStore().getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
+	const invite = await findByRawToken(token, (h) =>
+		getInviteStore().getByTokenHash(SYSTEM_CONTEXT, h)
+	);
 	if (!invite || !(await inviterStillVouches(invite, inviteDeps()))) {
 		return { ok: false as const, reason: 'This invite link is invalid or has expired.' };
 	}
@@ -91,7 +93,9 @@ export const actions = {
 
 		let invite: Invite | null;
 		try {
-			invite = await getInviteStore().getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
+			invite = await findByRawToken(token, (h) =>
+				getInviteStore().getByTokenHash(SYSTEM_CONTEXT, h)
+			);
 		} catch {
 			return fail(500, { error: 'Could not validate the invite. Please try again.' });
 		}

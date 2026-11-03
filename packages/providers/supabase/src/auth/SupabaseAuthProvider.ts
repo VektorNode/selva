@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient, type User } from '@supabase/supabase
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 import { DEFAULT_SCHEMA, type SelvaSchemaClient } from '../data/client.js';
 import { SupabaseDelegatedSession } from './SupabaseDelegatedSession.js';
+import { resolveSupabaseEnv } from '../config.js';
 import type {
 	IAuthProvider,
 	IDelegatedSession,
@@ -64,12 +65,6 @@ export interface SupabaseAuthProviderConfig {
 }
 
 const DEFAULT_REVALIDATE_MS = 60_000;
-
-function parsePositiveInt(raw: string | undefined): number | undefined {
-	if (!raw) return undefined;
-	const n = Number.parseInt(raw, 10);
-	return Number.isFinite(n) && n > 0 ? n : undefined;
-}
 
 export class SupabaseAuthProvider implements IAuthProvider {
 	readonly name = 'Supabase Auth';
@@ -153,30 +148,23 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		logger?: ILogger,
 		options: Pick<SupabaseAuthProviderConfig, 'delegatedSessionTtlSeconds'> = {}
 	): SupabaseAuthProvider {
-		const supabaseUrl = env.SUPABASE_URL;
-		const anonKey = env.SUPABASE_ANON_KEY;
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
-		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
-		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
-		const oauthProviders = (env.SUPABASE_OAUTH_PROVIDERS ?? '')
-			.split(',')
-			.map((p) => p.trim().toLowerCase())
-			.filter((p) => p.length > 0);
-		const tokenVerification = env.SUPABASE_TOKEN_VERIFICATION === 'strict' ? 'strict' : 'hybrid';
-		const revalidateMs = parsePositiveInt(env.SUPABASE_REVALIDATE_MS);
+		// Strict parsing: a sign-up control that read anything but "false" as on
+		// let `=no` open sign-ups. A bad value now stops boot.
+		const v = resolveSupabaseEnv(env);
+		const jwtSigningKey = v.SUPABASE_JWT_SIGNING_KEY as string | undefined;
+		const jwtSecret = v.SUPABASE_JWT_SECRET as string | undefined;
 		return new SupabaseAuthProvider({
-			supabaseUrl,
-			anonKey,
-			serviceRoleKey,
-			enableSelfSignup: env.SUPABASE_ENABLE_SELF_SIGNUP === 'true',
-			oauthProviders,
-			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false',
-			tokenVerification,
-			...(revalidateMs !== undefined ? { revalidateMs } : {}),
+			supabaseUrl: v.SUPABASE_URL as string,
+			anonKey: v.SUPABASE_ANON_KEY as string,
+			serviceRoleKey: v.SUPABASE_SERVICE_ROLE_KEY as string,
+			enableSelfSignup: v.SUPABASE_ENABLE_SELF_SIGNUP as boolean,
+			oauthProviders: (v.SUPABASE_OAUTH_PROVIDERS as string[]).map((p) => p.toLowerCase()),
+			allowEmailLinkSignup: v.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP as boolean,
+			tokenVerification: v.SUPABASE_TOKEN_VERIFICATION as 'hybrid' | 'strict',
+			revalidateMs: v.SUPABASE_REVALIDATE_MS as number,
 			...(logger ? { logger } : {}),
-			...(env.SUPABASE_JWT_SIGNING_KEY ? { jwtSigningKey: env.SUPABASE_JWT_SIGNING_KEY } : {}),
-			...(env.SUPABASE_JWT_SECRET ? { jwtSecret: env.SUPABASE_JWT_SECRET } : {}),
+			...(jwtSigningKey ? { jwtSigningKey } : {}),
+			...(jwtSecret ? { jwtSecret } : {}),
 			...options
 		});
 	}

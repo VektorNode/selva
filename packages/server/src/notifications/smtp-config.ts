@@ -1,3 +1,5 @@
+import { readBool } from '../compute/limits.js';
+
 export interface SmtpConfig {
 	host: string;
 	port: number;
@@ -58,8 +60,9 @@ export function readSmtpConfig(env: SmtpEnv): SmtpConfig | null {
 		host,
 		port,
 		// Port 465 is implicit TLS; 587 and 25 start plaintext and upgrade via
-		// STARTTLS, which nodemailer does on its own when `secure` is false.
-		secure: env.SMTP_SECURE ? env.SMTP_SECURE === 'true' : port === 465,
+		// STARTTLS, which nodemailer does on its own when `secure` is false. Parsed
+		// with the manifest's boolean words, so what `selva config show` reports runs.
+		secure: readBool({ SMTP_SECURE: env.SMTP_SECURE }, 'SMTP_SECURE', port === 465),
 		auth: user && pass ? { user, pass } : undefined,
 		from
 	};

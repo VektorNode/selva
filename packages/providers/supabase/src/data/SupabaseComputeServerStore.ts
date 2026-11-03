@@ -13,7 +13,7 @@ import {
 } from '@selvajs/platform';
 import { NoopLogger } from '@selvajs/platform';
 // `node:crypto`-based, so it's a server-only subpath, not the root barrel.
-import { decryptSecret, encryptSecret, isEncryptedSecret } from '@selvajs/platform/computeServer';
+import { decryptWithKeys, encryptSecret, isEncryptedSecret } from '@selvajs/platform/computeServer';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 
@@ -46,13 +46,17 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 	 * without a key throws if asked to write or read a secret.
 	 */
 	private readonly logger: ILogger;
+	/** Current key first; the previous one still opens rows sealed before a rotation. */
+	private readonly keys: Buffer[];
 
 	constructor(
 		private readonly clients: ClientBundle,
 		private readonly secretKey?: Buffer,
-		logger?: ILogger
+		logger?: ILogger,
+		previousKey?: Buffer
 	) {
 		this.logger = logger ?? new NoopLogger();
+		this.keys = secretKey ? (previousKey ? [secretKey, previousKey] : [secretKey]) : [];
 	}
 
 	async getConfig(ctx: RequestContext, opts: GetConfigOptions = {}): Promise<ComputeConfig> {
@@ -260,7 +264,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			return { ...row, api_key: null };
 		}
 		try {
-			return { ...row, api_key: decryptSecret(row.api_key, this.secretKey, row.id) };
+			return { ...row, api_key: decryptWithKeys(row.api_key, this.keys, row.id).plaintext };
 		} catch (cause) {
 			this.logger.warn(
 				'Could not decrypt api_key: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
@@ -291,6 +295,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 
 		const failures: SecretVerificationFailure[] = [];
 		let plaintextFound = false;
+		let onPreviousKey = 0;
 
 		for (const row of data ?? []) {
 			const apiKey = (row as { api_key: string | null }).api_key;
@@ -312,7 +317,7 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 				continue;
 			}
 			try {
-				decryptSecret(apiKey, this.secretKey, id);
+				if (decryptWithKeys(apiKey, this.keys, id).keyIndex > 0) onPreviousKey += 1;
 			} catch (cause) {
 				failures.push({
 					serverId: id,
@@ -323,7 +328,47 @@ export class SupabaseComputeServerStore implements IComputeServerStore {
 			}
 		}
 
-		return { ok: failures.length === 0, failures, plaintextFound };
+		return {
+			ok: failures.length === 0,
+			failures,
+			plaintextFound,
+			...(this.keys.length > 1 ? { onPreviousKey } : {})
+		};
+	}
+
+	/**
+	 * Re-seal under the current key every row only the previous key opens. The
+	 * update matches on the old ciphertext too, so a row an admin re-saved in
+	 * between is left alone rather than overwritten.
+	 */
+	async reencryptSecrets(): Promise<number> {
+		if (this.keys.length < 2 || !this.secretKey) return 0;
+		const { data, error } = await this.clients.serviceClient
+			.from('compute_servers')
+			.select('id, api_key');
+		if (error) throw mapPostgrestError(error);
+		let changed = 0;
+		for (const row of (data ?? []) as { id: string; api_key: string | null }[]) {
+			if (!row.api_key || !isEncryptedSecret(row.api_key)) continue;
+			let opened: { plaintext: string; keyIndex: number };
+			try {
+				opened = decryptWithKeys(row.api_key, this.keys, row.id);
+			} catch {
+				continue;
+			}
+			if (opened.keyIndex === 0) continue;
+			const { error: updateError, count } = await this.clients.serviceClient
+				.from('compute_servers')
+				.update(
+					{ api_key: encryptSecret(opened.plaintext, this.secretKey, row.id) },
+					{ count: 'exact' }
+				)
+				.eq('id', row.id)
+				.eq('api_key', row.api_key);
+			if (updateError) throw mapPostgrestError(updateError);
+			changed += count ?? 0;
+		}
+		return changed;
 	}
 }
 

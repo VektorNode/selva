@@ -67,10 +67,24 @@ export function warnIfAddressKeysCollapse(
 // ============================================================================
 // Session management (cookie I/O — SvelteKit transport layer)
 // ============================================================================
+
+/**
+ * Whether cookies carry the `Secure` flag. A browser drops a Secure cookie
+ * over plain http, so sign-in would appear to work and then not stick:
+ * an `http://` ORIGIN turns the flag off unless ALLOW_INSECURE_COOKIES says
+ * otherwise. Pass it to deletes too: SvelteKit sends a delete as Secure by
+ * default, and a browser on http ignores that, so sign-out wouldn't stick.
+ */
+export function cookiesAreSecure(): boolean {
+	if (process.env.NODE_ENV !== 'production') return false;
+	const override = env.ALLOW_INSECURE_COOKIES?.trim().toLowerCase();
+	if (override) return !['true', '1', 'yes', 'on'].includes(override);
+	return !(env.ORIGIN ?? '').startsWith('http://');
+}
 // The token itself is always minted by the auth provider (local = HMAC,
 // Supabase = JWT) as part of `verifyLogin`; these helpers only handle cookies.
 export function setSessionCookie(cookies: Cookies, sessionToken: string): void {
-	const isSecure = process.env.NODE_ENV === 'production' && env.ALLOW_INSECURE_COOKIES !== 'true';
+	const isSecure = cookiesAreSecure();
 
 	cookies.set(SESSION_COOKIE_NAME, sessionToken, {
 		path: '/',
@@ -87,8 +101,8 @@ export function getSessionToken(cookies: Cookies): string | undefined {
 }
 
 export function destroySession(cookies: Cookies): void {
-	cookies.delete(SESSION_COOKIE_NAME, { path: '/' });
-	cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });
+	cookies.delete(SESSION_COOKIE_NAME, { path: '/', secure: cookiesAreSecure() });
+	cookies.delete(REFRESH_COOKIE_NAME, { path: '/', secure: cookiesAreSecure() });
 }
 
 /**
@@ -97,7 +111,7 @@ export function destroySession(cookies: Cookies): void {
  * using this. Local/HMAC sessions don't need it.
  */
 export function setRefreshCookie(cookies: Cookies, refreshToken: string): void {
-	const isSecure = process.env.NODE_ENV === 'production' && env.ALLOW_INSECURE_COOKIES !== 'true';
+	const isSecure = cookiesAreSecure();
 	cookies.set(REFRESH_COOKIE_NAME, refreshToken, {
 		path: '/',
 		httpOnly: true,
@@ -112,7 +126,7 @@ export function getRefreshToken(cookies: Cookies): string | undefined {
 }
 
 export function clearRefreshCookie(cookies: Cookies): void {
-	cookies.delete(REFRESH_COOKIE_NAME, { path: '/' });
+	cookies.delete(REFRESH_COOKIE_NAME, { path: '/', secure: cookiesAreSecure() });
 }
 
 // ============================================================================

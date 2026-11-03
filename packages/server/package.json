@@ -31,6 +31,11 @@
 			"types": "./dist/compute/index.d.ts",
 			"import": "./dist/compute/index.js"
 		},
+		"./config": {
+			"selva-source": "./src/config/index.ts",
+			"types": "./dist/config/index.d.ts",
+			"import": "./dist/config/index.js"
+		},
 		"./definitions": {
 			"selva-source": "./src/definitions/index.ts",
 			"types": "./dist/definitions/index.d.ts",

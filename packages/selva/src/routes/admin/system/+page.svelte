@@ -5,6 +5,8 @@
 	import ChannelSection from './ChannelSection.svelte';
 	import HealthSection from './HealthSection.svelte';
 	import NetworkSection from './NetworkSection.svelte';
+	import ConfigSection from './ConfigSection.svelte';
+	import type { ConfigChange, ConfigReport, KeyRotation } from '@selvajs/platform/config';
 	import { pollForRestart, type RestartHealth } from '$lib/update-restart-poll';
 
 	interface PageData {
@@ -17,6 +19,12 @@
 			updateAvailable: boolean;
 			nodeCompatibility: { compatible: boolean | null; required: string | null; running: string };
 		};
+		config: {
+			report: ConfigReport;
+			changes: ConfigChange[];
+			atRestOnPreviousKey: number | null;
+			rotation: KeyRotation[];
+		} | null;
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
 			ALLOW_ORG_COMPUTE_OVERRIDE: boolean;
@@ -382,12 +390,21 @@
 		<Card.Header>
 			<Card.Title class="text-sm font-medium">Configuration</Card.Title>
 			<Card.Description>
-				Flags and limits resolved from the environment. To change one, set the listed variable in
-				your <code class="font-mono text-xs">.env</code> and restart the app.
-				<code class="font-mono text-xs">.env.example</code> documents what each does.
+				What this server runs on. Read-only: to change a value, run
+				<code class="font-mono text-xs">selva config set</code> (or edit
+				<code class="font-mono text-xs">.env</code>) and restart the app.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="space-y-3">
+			{#if data.config}
+				<ConfigSection
+					report={data.config.report}
+					changes={data.config.changes}
+					atRestOnPreviousKey={data.config.atRestOnPreviousKey}
+					rotation={data.config.rotation}
+				/>
+			{/if}
+
 			<details class="group rounded-lg border">
 				<summary
 					class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"

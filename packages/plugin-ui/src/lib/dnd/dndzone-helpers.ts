@@ -97,6 +97,46 @@ export function liftDraggedElement(el?: HTMLElement): void {
 	el.style.opacity = '0.95';
 }
 
+// The library calls the transform again each time the clone enters a zone, so this is idempotent.
+const DRAG_COUNT_ATTR = 'data-drag-count';
+
+/**
+ * Lifts the clone and, when it carries a selection, stacks two card edges behind it and pins a
+ * count badge, so a multi-row drag never looks like a single row.
+ */
+export function liftWithCount(el: HTMLElement | undefined, count: number): void {
+	if (!el) return;
+	liftDraggedElement(el);
+	if (count < 2 || el.querySelector(`[${DRAG_COUNT_ATTR}]`)) return;
+
+	// The clone's outer div is square; the card inside carries the radius the stack must follow.
+	const card = el.firstElementChild instanceof HTMLElement ? el.firstElementChild : el;
+	card.style.boxShadow =
+		'4px 4px 0 -1px var(--raised), 4px 4px 0 0 var(--border-strong), ' +
+		'8px 8px 0 -1px var(--raised), 8px 8px 0 0 var(--border-strong)';
+
+	const badge = document.createElement('span');
+	badge.setAttribute(DRAG_COUNT_ATTR, '');
+	badge.textContent = String(count);
+	Object.assign(badge.style, {
+		position: 'absolute',
+		top: '-8px',
+		right: '-8px',
+		minWidth: '20px',
+		height: '20px',
+		padding: '0 6px',
+		display: 'grid',
+		placeItems: 'center',
+		borderRadius: '9999px',
+		background: 'var(--primary)',
+		color: 'var(--primary-foreground)',
+		font: '600 11px/1 ui-sans-serif, system-ui, sans-serif',
+		fontVariantNumeric: 'tabular-nums',
+		zIndex: '1'
+	});
+	el.appendChild(badge);
+}
+
 // An expanded group can be taller than the viewport; cap the clone so the drop target stays
 // visible. The placeholder keeps the full height, so the layout itself doesn't move.
 export function liftDraggedGroup(el?: HTMLElement): void {

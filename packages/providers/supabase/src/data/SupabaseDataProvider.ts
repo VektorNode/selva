@@ -8,6 +8,7 @@ import type {
 } from '@selvajs/platform';
 import { ERASED_ACTOR_ID, NoopLogger, ProviderError, type ILogger } from '@selvajs/platform';
 import { decodeSecretKey } from '@selvajs/platform/computeServer';
+import { previousKey } from '@selvajs/platform/config';
 import { EXPECTED_MIGRATION_HEAD } from './migrationHead.js';
 import type { ClientBundle, BuildClientOptions } from './client.js';
 import { buildClientBundle, clientBundleFromEnv } from './client.js';
@@ -76,7 +77,8 @@ export class SupabaseDataProvider implements IDataProvider {
 		private readonly clients: ClientBundle,
 		events: IEventSink,
 		secretKey?: Buffer,
-		logger: ILogger = new NoopLogger()
+		logger: ILogger = new NoopLogger(),
+		previousSecretKey?: Buffer
 	) {
 		this.events = events;
 		this.solveMetrics = new SupabaseSolveMetricSink(clients, { logger });
@@ -84,7 +86,12 @@ export class SupabaseDataProvider implements IDataProvider {
 		this.projects = new SupabaseProjectStore(clients, events);
 		this.definitions = new SupabaseDefinitionStore(clients, events);
 		this.invites = new SupabaseInviteStore(clients, events);
-		this.computeServer = new SupabaseComputeServerStore(clients, secretKey, logger);
+		this.computeServer = new SupabaseComputeServerStore(
+			clients,
+			secretKey,
+			logger,
+			previousSecretKey
+		);
 		this.shareLinks = new SupabaseShareLinkStore(clients, events);
 		this.apiTokens = new SupabaseApiTokenStore(clients, events);
 		this.userProfile = new SupabaseUserProfileProvider(clients);
@@ -108,11 +115,13 @@ export class SupabaseDataProvider implements IDataProvider {
 			);
 		}
 		const secretKey = decodeSecretKey(env.SELVA_AT_REST_KEY);
+		const previous = previousKey(env, 'SELVA_AT_REST_KEY').key;
 		return new SupabaseDataProvider(
 			bundle,
 			events ?? new SupabaseEventSink(bundle, { logger }),
 			secretKey,
-			logger
+			logger,
+			previous ? decodeSecretKey(previous) : undefined
 		);
 	}
 
