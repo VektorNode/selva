@@ -23,12 +23,14 @@ export { runHandler, toErrorBody, type ApiErrorBody, type RunHandlerOptions } fr
 export {
 	createApiRateLimiter,
 	defaultApiRateLimiter,
+	defaultProjectCreateLimiter,
 	resolveApiRateLimitConfig,
 	chargeApiRateLimit,
 	rateLimitHeaders,
 	rateLimitedResponse,
 	withRateLimitHeaders,
 	DEFAULT_API_RATE_LIMIT,
+	DEFAULT_PROJECT_CREATE_LIMIT,
 	type ApiRateLimiter,
 	type ApiRateLimitConfig,
 	type ApiRateLimitVerdict

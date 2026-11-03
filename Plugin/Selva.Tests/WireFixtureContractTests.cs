@@ -188,14 +188,17 @@ public class WireFixtureContractTests
                     Org = new SelvaOrg { Id = "org-1", Name = "Studio" },
                     ExpiresAt = "2026-02-14T12:00:00Z",
                     ExtraScopes = new List<string>(),
-                    Storage = "keychain"
+                    Storage = "keychain",
+                    Verified = true
                 })),
 
             ["selva-targets.json"] = ("SelvaTargets",
                 OutboundEnvelopes.SelvaTargets(Session, new SelvaTargets
                 {
                     Origin = "https://selva.example.com",
+                    TokenId = "token-1",
                     Projects = new List<SelvaProject> { new SelvaProject { Id = "project-1", Name = "Tower" } },
+                    CanCreateProjects = true,
                     Suggestion = new SelvaVersionTarget
                     {
                         DefinitionGuid = "44444444-4444-4444-8444-444444444444",

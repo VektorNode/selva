@@ -10,9 +10,11 @@
 		result: SelvaUploadResult | null;
 		/** Whether the upload in flight also makes the version live, so the last step is shown. */
 		makingLive: boolean;
+		/** Whether it creates a project first. */
+		creatingProject: boolean;
 	}
 
-	let { stage, result, makingLive }: Props = $props();
+	let { stage, result, makingLive, creatingProject }: Props = $props();
 
 	interface Step {
 		stage: UploadStage;
@@ -22,6 +24,7 @@
 
 	const STEPS: Step[] = [
 		{ stage: 'preparing', label: 'Preparing the file' },
+		{ stage: 'creatingProject', label: 'Creating the project' },
 		{
 			stage: 'uploading',
 			label: 'Uploading',
@@ -30,7 +33,13 @@
 		{ stage: 'publishing', label: 'Making it live' }
 	];
 
-	const steps = $derived(makingLive ? STEPS : STEPS.filter((s) => s.stage !== 'publishing'));
+	const steps = $derived(
+		STEPS.filter(
+			(s) =>
+				(makingLive || s.stage !== 'publishing') &&
+				(creatingProject || s.stage !== 'creatingProject')
+		)
+	);
 	const currentIndex = $derived(steps.findIndex((s) => s.stage === stage));
 	const selvaUrl = $derived(safeHttpUrl(result?.url));
 </script>

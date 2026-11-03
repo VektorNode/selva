@@ -4,7 +4,7 @@
  * document is ignored, so a host can describe more without the engine caring.
  */
 
-export type ScopeAction = 'read' | 'write' | 'solve' | 'upload';
+export type ScopeAction = 'read' | 'write' | 'solve' | 'upload' | 'create_projects';
 
 /** A JSON Schema object, as the spec carries it. */
 export type JsonSchema = Record<string, unknown>;

@@ -96,6 +96,24 @@ export function defaultApiRateLimiter(): ApiRateLimiter | null {
 }
 
 /**
+ * Projects one owner may create through API keys per window. A browser
+ * session isn't counted. Process-local like the request limit.
+ */
+export const DEFAULT_PROJECT_CREATE_LIMIT: Readonly<ApiRateLimitConfig> = Object.freeze({
+	windowMs: 60 * 60_000,
+	maxPerWindow: 20
+});
+
+let sharedProjectCreate: ApiRateLimiter | null | undefined;
+
+export function defaultProjectCreateLimiter(): ApiRateLimiter | null {
+	if (sharedProjectCreate === undefined) {
+		sharedProjectCreate = createApiRateLimiter(DEFAULT_PROJECT_CREATE_LIMIT);
+	}
+	return sharedProjectCreate;
+}
+
+/**
  * Charge one request to the caller's token. `undefined` for a session caller
  * or when no limiter is wired.
  */

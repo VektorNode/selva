@@ -176,8 +176,7 @@ describe('an upload key', () => {
 				method: 'DELETE'
 			}),
 			await call(shareLinksRoute.POST, { locals, params: { guid }, body: {} }),
-			await call(imageRoute.POST, { locals, params: { guid }, body: new FormData() }),
-			await call(projectsRoute.POST, { locals, body: { name: 'New', visibility: 'org' } })
+			await call(imageRoute.POST, { locals, params: { guid }, body: new FormData() })
 		];
 		for (const res of refused) {
 			expect(res.status).toBe(403);
@@ -188,6 +187,29 @@ describe('an upload key', () => {
 		expect(await tp.config.data.definitions.get(SYSTEM_CONTEXT, guid)).toMatchObject({
 			displayName: record.displayName
 		});
+	});
+
+	it('can’t create a project, which takes create_projects', async () => {
+		const w = await world();
+		const locals = await keyLocals(await mint(w.alice.id, w.acme.id, ['upload:all']));
+		const res = await call(projectsRoute.POST, { locals, body: { name: 'New' } });
+		expect(res.status).toBe(403);
+		expect(res.json).toMatchObject({
+			details: { requiredScope: `create_projects:org:${w.acme.id}` }
+		});
+	});
+
+	it('creates a private project when it also holds create_projects', async () => {
+		const w = await world();
+		const locals = await keyLocals(
+			await mint(w.alice.id, w.acme.id, ['upload:all', 'create_projects:all'])
+		);
+		expect((await call(projectsRoute.POST, { locals, body: { name: 'New' } })).status).toBe(201);
+		const org = await call(projectsRoute.POST, {
+			locals,
+			body: { name: 'Shared', visibility: 'org' }
+		});
+		expect(org.status).toBe(403);
 	});
 
 	it('revokes itself, and nothing else', async () => {

@@ -329,6 +329,15 @@ describe('the built-in Grasshopper client', () => {
 		expect(consentChoices(request.scopes)).toEqual([{ access: 'upload', scopes: ['upload'] }]);
 	});
 
+	it('grants project creation alongside upload when it asks, offered as one choice', async () => {
+		const request = await ask(server(), { scope: 'read upload create_projects' });
+		expect(request.scopes).toEqual(['read', 'upload', 'create_projects']);
+		expect(apiScopesFor(request.scopes)).toEqual(['read:all', 'upload:all', 'create_projects:all']);
+		expect(consentChoices(request.scopes)).toEqual([
+			{ access: 'upload', scopes: ['read', 'upload', 'create_projects'] }
+		]);
+	});
+
 	it('accepts any port on 127.0.0.1/callback', async () => {
 		for (const port of ['1', '53121', '65535']) {
 			await expect(
@@ -384,6 +393,12 @@ describe('registered clients and upload', () => {
 		expect((await authorized(server(), { scope: 'read solve upload' })).request.scopes).toEqual([
 			'read',
 			'solve'
+		]);
+	});
+
+	it('drops create_projects for a DCR client', async () => {
+		expect((await authorized(server(), { scope: 'read create_projects' })).request.scopes).toEqual([
+			'read'
 		]);
 	});
 

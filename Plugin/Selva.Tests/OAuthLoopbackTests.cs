@@ -24,7 +24,7 @@ public class OAuthLoopbackTests
     }
 
     [Fact]
-    public void AuthorizeUrl_AsksForUploadWithPkceOnTheLoopbackRedirect()
+    public void AuthorizeUrl_AsksForUploadAndProjectCreationWithPkceOnTheLoopbackRedirect()
     {
         var url = OAuthCallback.AuthorizeUrl("https://selva.example.com/oauth/authorize",
             "http://127.0.0.1:50123/callback", "CHALLENGE", State, Issuer);
@@ -32,7 +32,7 @@ public class OAuthLoopbackTests
         Assert.Equal(
             "https://selva.example.com/oauth/authorize?response_type=code&client_id=selva-grasshopper" +
             "&redirect_uri=http%3A%2F%2F127.0.0.1%3A50123%2Fcallback&code_challenge=CHALLENGE" +
-            "&code_challenge_method=S256&state=state-123&scope=upload&resource=https%3A%2F%2Fselva.example.com",
+            "&code_challenge_method=S256&state=state-123&scope=upload%20create_projects&resource=https%3A%2F%2Fselva.example.com",
             url);
     }
 

@@ -10,7 +10,7 @@
 		toast,
 		useFooterItem
 	} from '@selvajs/ui';
-	import { Save, RefreshCw, CloudUpload } from '@lucide/svelte';
+	import { Save, RefreshCw, CloudUpload, PlugZap } from '@lucide/svelte';
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import ModeHeader from '$lib/components/ModeHeader.svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
@@ -18,6 +18,7 @@
 	import { bringIntoView } from '$lib/components/builder/reveal';
 	import type { SearchTarget } from '$lib/features/builder';
 	import SelvaUploadDialog from '$lib/components/selva-upload/SelvaUploadDialog.svelte';
+	import SelvaConnectionDialog from '$lib/components/selva-upload/SelvaConnectionDialog.svelte';
 	import { buildSessionParams } from '$lib/utils/session';
 	import { currentRole } from '$lib/utils/session-role.svelte';
 	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
@@ -280,17 +281,23 @@
 	>
 		<Save class="h-4 w-4" /><span class="max-sm:sr-only">Save</span>
 	</Button>
-	<!-- The title sits on a wrapper: a disabled button gets no hover, so its own title never shows. -->
-	<span title={uploadNeedsSave ? 'Save the schema first' : undefined}>
-		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => selvaUpload?.open()}
-			disabled={!builderState?.state.draft || !selvaUpload || uploadNeedsSave}
-		>
-			<CloudUpload class="h-4 w-4" /><span class="max-lg:sr-only">Upload to Selva</span>
+	{#if selvaUpload?.available}
+		<!-- The title sits on a wrapper: a disabled button gets no hover, so its own title never shows. -->
+		<span title={uploadNeedsSave ? 'Save the schema first' : undefined}>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => selvaUpload?.open()}
+				disabled={!builderState?.state.draft || uploadNeedsSave}
+			>
+				<CloudUpload class="h-4 w-4" /><span class="max-lg:sr-only">Upload to Selva</span>
+			</Button>
+		</span>
+	{:else}
+		<Button variant="outline" size="sm" onclick={() => selvaUpload?.openConnection()}>
+			<PlugZap class="h-4 w-4" /><span class="max-lg:sr-only">Connect to Selva…</span>
 		</Button>
-	</span>
+	{/if}
 {/snippet}
 
 <AppShell {...rhinoShellProps()} mode="fixed" showFooter>
@@ -458,6 +465,7 @@
 
 	{#if selvaUpload}
 		<SelvaUploadDialog upload={selvaUpload} schema={builderState?.state.draft} />
+		<SelvaConnectionDialog upload={selvaUpload} />
 	{/if}
 
 	{#if builderState?.state.draft}

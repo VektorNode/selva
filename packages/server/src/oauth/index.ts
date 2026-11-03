@@ -25,13 +25,14 @@ import {
 } from 'node:crypto';
 
 /** The scopes a grant can carry. Each maps to one org-wide API scope. */
-export const OAUTH_SCOPES = ['read', 'solve', 'upload'] as const;
+export const OAUTH_SCOPES = ['read', 'solve', 'upload', 'create_projects'] as const;
 export type OAuthScope = (typeof OAUTH_SCOPES)[number];
 
 /**
  * All a registered (DCR or CIMD) client can be granted. Its name and redirects
  * are whatever the registrant chose, so `upload`, which puts code on the org's
- * Compute server, stays with the built-in client and a look-alike can't phish for it.
+ * Compute server, and `create_projects` stay with the built-in client and a
+ * look-alike can't phish for them.
  */
 export const REGISTERED_CLIENT_SCOPES = ['read', 'solve'] as const satisfies readonly OAuthScope[];
 
@@ -45,7 +46,7 @@ const GRASSHOPPER_CLIENT: OAuthClient = {
 	name: 'Selva for Grasshopper',
 	redirectUris: ['http://127.0.0.1/callback'],
 	builtIn: true,
-	scopes: ['read', 'upload']
+	scopes: ['read', 'upload', 'create_projects']
 };
 
 export const MCP_PATH = '/mcp';

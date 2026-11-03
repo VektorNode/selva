@@ -55,7 +55,11 @@ describe('apiScopeActionCovers', () => {
 		['upload', 'write', false],
 		['read', 'write', false],
 		['read', 'solve', false],
-		['write', 'solve', false]
+		['write', 'solve', false],
+		['write', 'create_projects', true],
+		['create_projects', 'read', true],
+		['upload', 'create_projects', false],
+		['create_projects', 'upload', false]
 	] as const)('%s covers %s: %s', (granted, wanted, covered) => {
 		expect(apiScopeActionCovers(granted, wanted)).toBe(covered);
 	});

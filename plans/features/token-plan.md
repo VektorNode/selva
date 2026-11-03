@@ -53,10 +53,12 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
 
 ### Scopes and enforcement
 
-- **Actions are `read`, `write`, `solve` and `upload`.** `write`, `solve` and `upload` include
-  `read`, and `write` includes `upload`. `upload` covers exactly creating a definition, uploading a
-  version, making a version live and previewing a file's schema, so the Grasshopper plugin holds a
-  key that can't delete, edit metadata or share ([publish-from-plugin.md](../archive/publish-from-plugin.md)).
+- **Actions are `read`, `write`, `solve`, `upload` and `create_projects`.** Each includes `read`,
+  and `write` includes `upload` and `create_projects`. `upload` covers exactly creating a
+  definition, uploading a version, making a version live and previewing a file's schema, so the
+  Grasshopper plugin holds a key that can't delete, edit metadata or share
+  ([publish-from-plugin.md](../archive/publish-from-plugin.md)). `create_projects` covers creating
+  private projects only ([plugin-upload-next.md](./plugin-upload-next.md)).
   A host app maps its own scopes onto these and accepts the cost: it can't grant writes on one of
   its resources without the others. Host-registered actions were rejected as more engine surface
   than anything needs today. Scopes are stored as strings, so an action is added without migrating

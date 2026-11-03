@@ -114,6 +114,12 @@ export interface SelvaDeps {
 	 * must outlive the request, since deps are rebuilt per request.
 	 */
 	apiRateLimiter?: ApiRateLimiter | null;
+	/**
+	 * Projects one owner may create through API keys, across all their keys.
+	 * Absent: the process-wide default (`DEFAULT_PROJECT_CREATE_LIMIT`). `null`:
+	 * no limit.
+	 */
+	projectCreateLimiter?: ApiRateLimiter | null;
 	/** Replay store for routes mounted with `idempotent: true`. Absent: the process-wide default. */
 	idempotency?: ApiIdempotencyStore;
 	/** Instance display name, used where a record has none. */
@@ -168,6 +174,7 @@ export function depsFromConfig(
 		instanceName = 'Selva',
 		apiTokenSettingsPath = '/settings/tokens',
 		apiRateLimiter,
+		projectCreateLimiter,
 		idempotency
 	}: {
 		tokens?: SelvaDeps['tokens'];
@@ -177,6 +184,7 @@ export function depsFromConfig(
 		instanceName?: string;
 		apiTokenSettingsPath?: string;
 		apiRateLimiter?: ApiRateLimiter | null;
+		projectCreateLimiter?: ApiRateLimiter | null;
 		idempotency?: ApiIdempotencyStore;
 	} = {}
 ): SelvaDeps {
@@ -209,6 +217,7 @@ export function depsFromConfig(
 		instanceName,
 		apiTokenSettingsPath,
 		apiRateLimiter,
+		projectCreateLimiter,
 		idempotency,
 		services
 	};

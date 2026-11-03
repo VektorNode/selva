@@ -14,7 +14,6 @@
 	import type { SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
 	import { nowhereToUpload, selectedVersionTarget } from '$lib/composables/selva-upload-core';
 	import { formatFileSize } from '$lib/utils/file-size';
-	import SelvaAccountSection from './SelvaAccountSection.svelte';
 	import UploadTargetSection from './UploadTargetSection.svelte';
 	import UploadOutcome from './UploadOutcome.svelte';
 
@@ -29,8 +28,9 @@
 	const leftOutOnSelva = $derived(schema ? unsupportedItems(schema, 'selva').length : 0);
 
 	const uploadState = $derived(upload.state);
-	const signedIn = $derived(uploadState.account?.status === 'signedIn');
-	const targets = $derived(signedIn ? uploadState.targets : null);
+	const verified = $derived(upload.available);
+	const account = $derived(uploadState.account);
+	const targets = $derived(verified ? uploadState.targets : null);
 	const showOutcome = $derived(uploadState.uploading || uploadState.result !== null);
 	const showForm = $derived(
 		!!targets && !showOutcome && !targets.blockedReason && !nowhereToUpload(targets)
@@ -100,11 +100,26 @@
 				</Callout>
 			{/if}
 
-			<section aria-label="Selva account" class="flex flex-col gap-3">
-				<SelvaAccountSection {upload} />
-			</section>
+			{#if account?.user}
+				<p class="text-muted-foreground flex flex-wrap items-center gap-x-1 text-xs">
+					As <span class="text-foreground">{account.user.displayName || account.user.email}</span>
+					{#if account.org}in <span class="text-foreground">{account.org.name}</span>{/if}
+					on <span class="text-foreground font-mono">{instance}</span>
+					<button
+						type="button"
+						class="hover:text-foreground ml-1 underline underline-offset-4 disabled:pointer-events-none disabled:opacity-50"
+						disabled={uploadState.uploading}
+						onclick={() => {
+							upload.close();
+							upload.openConnection();
+						}}
+					>
+						Change
+					</button>
+				</p>
+			{/if}
 
-			{#if signedIn}
+			{#if verified}
 				<Separator />
 
 				{#if showOutcome}
@@ -112,6 +127,8 @@
 						stage={uploadState.stage}
 						result={uploadState.result}
 						makingLive={uploadState.form.makeLive}
+						creatingProject={uploadState.target?.kind === 'newDefinition' &&
+							uploadState.form.createProject}
 					/>
 				{:else if !targets}
 					<div class="text-muted-foreground flex items-center gap-2 py-2 text-sm">
@@ -128,7 +145,7 @@
 					</Callout>
 				{:else if nowhereToUpload(targets)}
 					<Callout tone="warning" title="There's nowhere you can upload">
-						You can't create definitions in any project{uploadState.account?.org
+						You can't create definitions or projects{uploadState.account?.org
 							? ` in ${uploadState.account.org.name}`
 							: ''} on {instance}, and this file isn't linked to a definition you can edit. Ask
 						whoever runs your Selva projects to add you to one.

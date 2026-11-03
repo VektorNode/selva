@@ -90,7 +90,9 @@ describe('API tokens on the local provider', () => {
 
 		const res = await call(POST, { locals, body: { name: 'Nope', visibility: 'private' } });
 		expect(res.status).toBe(403);
-		expect(res.json).toMatchObject({ details: { requiredScope: `write:org:${acme.id}` } });
+		expect(res.json).toMatchObject({
+			details: { requiredScope: `create_projects:org:${acme.id}` }
+		});
 	});
 
 	it('a write key creates a project as its owner', async () => {

@@ -219,6 +219,10 @@ export interface SelvaAccount {
 	 */
 	storage: 'keychain' | 'memory';
 	/**
+	 * Selva accepted this key for uploading during this Rhino session. Upload is offered only when true; message says why when Selva refused it.
+	 */
+	verified?: boolean;
+	/**
 	 * Why the last sign-in or sign-out ended the way it did, when it needs saying.
 	 */
 	message?: string;
@@ -234,9 +238,17 @@ export interface SelvaOrg {
 export interface SelvaTargets {
 	origin: string;
 	/**
+	 * The key these targets were listed with. The upload request echoes it with origin, and the plugin refuses a mismatch.
+	 */
+	tokenId: string;
+	/**
 	 * Projects the user can create definitions in.
 	 */
 	projects: SelvaProject[];
+	/**
+	 * Selva would let this key create a project. False when the server doesn't say.
+	 */
+	canCreateProjects: boolean;
 	suggestion?: SelvaVersionTarget;
 	/**
 	 * Other editable definitions uploaded from the same Grasshopper document.
@@ -286,7 +298,13 @@ export interface SelvaUploadFile {
 }
 export interface SelvaUploadRequest {
 	kind: 'newDefinition' | 'newVersion';
+	origin: string;
+	tokenId: string;
 	projectId?: string;
+	/**
+	 * Create a private project with this name and upload into it.
+	 */
+	newProjectName?: string;
 	displayName?: string;
 	description?: string;
 	category?: string;
@@ -302,7 +320,7 @@ export interface SelvaUploadProgress {
 	/**
 	 * uploading covers Selva checking the file on Rhino.Compute, which happens before it answers.
 	 */
-	stage: 'preparing' | 'uploading' | 'publishing';
+	stage: 'preparing' | 'creatingProject' | 'uploading' | 'publishing';
 }
 export interface SelvaUploadResult {
 	ok: boolean;

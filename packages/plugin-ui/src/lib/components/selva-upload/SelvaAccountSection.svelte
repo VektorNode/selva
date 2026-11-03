@@ -67,6 +67,13 @@
 		</Button>
 	</div>
 
+	{#if account.verified === undefined && !account.message}
+		<div class="text-muted-foreground flex items-center gap-2 text-xs">
+			<Spinner />
+			Checking with Selva…
+		</div>
+	{/if}
+
 	{#if account.extraScopes.length > 0}
 		<Callout tone="warning" title="This key can do more than upload">
 			<p>Anyone who copies it from this computer can also:</p>
@@ -120,6 +127,9 @@
 				autocomplete="url"
 				spellcheck={false}
 			/>
+			{#if uploadState.originError}
+				<p class="text-destructive text-xs" role="alert">{uploadState.originError}</p>
+			{/if}
 			{#if otherKnownOrigins.length > 0}
 				<div class="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
 					Used before:

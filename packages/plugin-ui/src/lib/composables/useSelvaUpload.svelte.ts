@@ -1,6 +1,7 @@
 // Reactive shell over selva-upload-core.ts: owns the $state, subscribes the SelvaSource's events
 // to the pure handlers, and exposes the commands the dialog calls.
 
+import { untrack } from 'svelte';
 import { toast } from '@selvajs/ui';
 import { getWebSocketPortFromUrl } from '$lib/utils/session';
 import { getGrasshopperSelvaSource } from '$lib/selva-source/grasshopper-selva-source';
@@ -9,6 +10,10 @@ import {
 	createInitialSelvaUploadState,
 	openDialog,
 	closeDialog,
+	openConnection,
+	closeConnection,
+	loadAccount,
+	uploadAvailable,
 	signIn,
 	useApiKey,
 	signOut,
@@ -49,6 +54,7 @@ export function useSelvaUpload(sessionId: string, options: Options) {
 	const onResult = (m: Parameters<typeof handleResult>[2]) => handleResult(state, deps, m);
 
 	let subscribed = false;
+	let stopWatching: (() => void) | null = null;
 
 	function initialize() {
 		if (subscribed) return;
@@ -57,6 +63,13 @@ export function useSelvaUpload(sessionId: string, options: Options) {
 		source.on('selvaTargets', onTargets);
 		source.on('selvaUploadProgress', onProgress);
 		source.on('selvaUploadResult', onResult);
+		// The header offers Upload only once the plugin says Selva took the key, so ask on every
+		// (re)connect: a command sent before the socket is up is lost.
+		stopWatching = $effect.root(() => {
+			$effect(() => {
+				if (source.connected) untrack(() => loadAccount(deps));
+			});
+		});
 	}
 
 	function cleanup() {
@@ -66,6 +79,8 @@ export function useSelvaUpload(sessionId: string, options: Options) {
 		source.off('selvaTargets', onTargets);
 		source.off('selvaUploadProgress', onProgress);
 		source.off('selvaUploadResult', onResult);
+		stopWatching?.();
+		stopWatching = null;
 	}
 
 	return {
@@ -78,8 +93,13 @@ export function useSelvaUpload(sessionId: string, options: Options) {
 		get blocker() {
 			return uploadBlocker(state, deps);
 		},
+		get available() {
+			return uploadAvailable(state);
+		},
 		open: () => openDialog(state, deps),
 		close: () => closeDialog(state),
+		openConnection: () => openConnection(state, deps),
+		closeConnection: () => closeConnection(state),
 		signIn: () => signIn(state, deps),
 		useApiKey: () => useApiKey(state, deps),
 		signOut: () => signOut(state, deps),

@@ -13,11 +13,20 @@ public class SelvaUploadServiceTests
     private const string Facade = "44444444-4444-4444-8444-444444444444";
     private const string Roof = "55555555-5555-4555-8555-555555555555";
     private const string DocumentId = "66666666-6666-4666-8666-666666666666";
+    private const string TokenId = "token-1";
 
     private readonly FakeSelva _selva = new();
+    private readonly Dictionary<string, string> _createdProjects = new();
 
     private SelvaUploadService Service() =>
-        new(new SelvaApiClient(Origin, "selva_key", "ua", _selva), userId: "user-me", orgId: "org-1");
+        new(new SelvaApiClient(Origin, "selva_key", "ua", _selva), userId: "user-me", orgId: "org-1",
+            tokenId: TokenId, createdProjects: _createdProjects);
+
+    private static SelvaUploadRequest IntoNewProject(string name) => new()
+    {
+        Origin = Origin, TokenId = TokenId, Kind = "newDefinition", NewProjectName = name,
+        DisplayName = "Facade panel", MakeLive = false
+    };
 
     private static SelvaDefinitionDefaults Defaults() =>
         new() { DisplayName = "Facade panel", Tags = new List<string>() };
@@ -36,6 +45,33 @@ public class SelvaUploadServiceTests
         Assert.Equal(new[] { "project-tower" }, targets.Projects.Select(p => p.Id));
         Assert.Null(targets.Suggestion);
         Assert.Empty(targets.Matches);
+    }
+
+    [Fact]
+    public async Task Targets_SayWhetherTheKeyMayCreateProjects()
+    {
+        var targets = await Service().ListTargetsAsync(null, null, Defaults(), File(), CancellationToken.None);
+        Assert.True(targets.CanCreateProjects);
+        Assert.Equal(TokenId, targets.TokenId);
+
+        _selva.CreateProjects = false;
+        targets = await Service().ListTargetsAsync(null, null, Defaults(), File(), CancellationToken.None);
+        Assert.False(targets.CanCreateProjects);
+    }
+
+    // An older server says nothing, and must not be offered what it can't do.
+    [Fact]
+    public async Task Targets_ReadAMissingCapabilityAsNo()
+    {
+        _selva.OlderServer = true;
+        var link = new SelvaDefinitionLink
+            { Origin = Origin, DefinitionGuid = Facade, VersionId = "v3", VersionNumber = 3 };
+
+        var targets = await Service().ListTargetsAsync(link, null, Defaults(), File(), CancellationToken.None);
+
+        Assert.False(targets.CanCreateProjects);
+        Assert.Empty(targets.Projects);
+        Assert.Null(targets.Suggestion);
     }
 
     [Fact]
@@ -135,6 +171,7 @@ public class SelvaUploadServiceTests
         var stages = new List<string>();
         var (result, link) = await Service().UploadAsync(new SelvaUploadRequest
         {
+            Origin = Origin, TokenId = TokenId,
             Kind = "newDefinition",
             ProjectId = "project-tower",
             DisplayName = "Facade panel",
@@ -158,12 +195,84 @@ public class SelvaUploadServiceTests
             link!.VersionId);
     }
 
+    [Theory]
+    [InlineData("https://other.example.com", TokenId)]
+    [InlineData(Origin, "token-2")]
+    public async Task Upload_ForAnotherInstanceOrKey_IsRefusedBeforeSending(string origin, string tokenId)
+    {
+        var (result, _) = await Service().UploadAsync(new SelvaUploadRequest
+        {
+            Origin = origin, TokenId = tokenId, Kind = "newVersion", DefinitionGuid = Facade, MakeLive = false
+        }, new byte[] { 1 }, "facade.gh", _ => { }, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Empty(_selva.Seen);
+    }
+
+    [Fact]
+    public async Task NewProject_IsCreatedPrivateAndTheDefinitionGoesIntoIt()
+    {
+        var stages = new List<string>();
+        var (result, _) = await Service().UploadAsync(IntoNewProject("Facades"), new byte[] { 1 }, "facade.gh",
+            stages.Add, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.Equal(new[] { "creatingProject", "uploading" }, stages);
+        Assert.Equal(new JObject
+        {
+            ["name"] = "Facades", ["visibility"] = "private", ["autoJoinOnUpload"] = false
+        }.ToString(), _selva.ProjectBody!.ToString());
+        Assert.NotNull(_selva.ProjectIdempotencyKeys.Single());
+        Assert.Equal("project-new", _selva.Form["projectId"]);
+    }
+
+    [Fact]
+    public async Task NewProject_RetriedAfterADroppedConnection_YieldsOneProject()
+    {
+        _selva.DropFirstProjectResponse = true;
+
+        var (result, _) = await Service().UploadAsync(IntoNewProject("Facades"), new byte[] { 1 }, "facade.gh",
+            _ => { }, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.Equal(1, _selva.ProjectsCreated);
+        Assert.Equal(2, _selva.ProjectIdempotencyKeys.Count);
+        Assert.Single(_selva.ProjectIdempotencyKeys.Distinct());
+        Assert.Equal("project-new", _selva.Form["projectId"]);
+    }
+
+    [Fact]
+    public async Task NewProject_UploadedAgain_ReusesTheProjectItCreated()
+    {
+        await Service().UploadAsync(IntoNewProject("Facades"), new byte[] { 1 }, "facade.gh", _ => { },
+            CancellationToken.None);
+        var (result, _) = await Service().UploadAsync(IntoNewProject("Facades"), new byte[] { 1 }, "facade.gh",
+            _ => { }, CancellationToken.None);
+
+        Assert.True(result.Ok, result.Error);
+        Assert.Single(_selva.ProjectIdempotencyKeys);
+    }
+
+    [Fact]
+    public async Task NewProject_WithANameAlreadyTaken_SaysSo()
+    {
+        _selva.ProjectNameTaken = true;
+
+        var (result, _) = await Service().UploadAsync(IntoNewProject("Tower"), new byte[] { 1 }, "facade.gh",
+            _ => { }, CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Contains("already", result.Error);
+        Assert.DoesNotContain(_selva.Seen, p => p == "/api/v1/definitions");
+    }
+
     [Fact]
     public async Task NewVersion_WithMakeLive_IsPublished()
     {
         var stages = new List<string>();
         var (result, link) = await Service().UploadAsync(new SelvaUploadRequest
         {
+            Origin = Origin, TokenId = TokenId,
             Kind = "newVersion", DefinitionGuid = Facade, ChangeNote = "Wider", MakeLive = true
         }, new byte[] { 1 }, "facade.gh", stages.Add, CancellationToken.None);
 
@@ -183,6 +292,7 @@ public class SelvaUploadServiceTests
 
         var (result, link) = await Service().UploadAsync(new SelvaUploadRequest
         {
+            Origin = Origin, TokenId = TokenId,
             Kind = "newVersion", DefinitionGuid = Facade, MakeLive = true
         }, new byte[] { 1 }, "facade.gh", _ => { }, CancellationToken.None);
 
@@ -199,6 +309,7 @@ public class SelvaUploadServiceTests
 
         var (result, link) = await Service().UploadAsync(new SelvaUploadRequest
         {
+            Origin = Origin, TokenId = TokenId,
             Kind = "newVersion", DefinitionGuid = Facade, MakeLive = false
         }, new byte[] { 1 }, "facade.gh", _ => { }, CancellationToken.None);
 
@@ -217,6 +328,7 @@ public class SelvaUploadServiceTests
     {
         var (result, _) = await Service().UploadAsync(new SelvaUploadRequest
         {
+            Origin = Origin, TokenId = TokenId,
             Kind = kind, DefinitionGuid = guid, ProjectId = projectId, DisplayName = name, MakeLive = false
         }, new byte[] { 1 }, "facade.gh", _ => { }, CancellationToken.None);
 
@@ -232,6 +344,7 @@ public class SelvaUploadServiceTests
 
         var (result, _) = await Service().UploadAsync(new SelvaUploadRequest
         {
+            Origin = Origin, TokenId = TokenId,
             Kind = "newVersion", DefinitionGuid = Facade, MakeLive = false
         }, new byte[] { 1 }, "facade.gh", _ => { }, cts.Token);
 
@@ -244,6 +357,13 @@ public class SelvaUploadServiceTests
         public bool FacadeCanEdit = true;
         public bool FacadeNeverPublished;
         public bool IgnoreDocumentFilter;
+        public bool CreateProjects = true;
+        public bool OlderServer;
+        public bool DropFirstProjectResponse;
+        public bool ProjectNameTaken;
+        public int ProjectsCreated;
+        public JObject? ProjectBody;
+        public readonly List<string?> ProjectIdempotencyKeys = new();
         public HttpStatusCode UploadStatus = HttpStatusCode.Created;
         public HttpStatusCode PublishStatus = HttpStatusCode.OK;
         public readonly List<string> Seen = new();
@@ -279,14 +399,57 @@ public class SelvaUploadServiceTests
 
             switch (request.Method.Method, path)
             {
+                case ("GET", "/api/v1/me"):
+                    return Json(OlderServer
+                        ? new JObject { ["userId"] = "user-me" }
+                        : new JObject
+                        {
+                            ["userId"] = "user-me",
+                            ["capabilities"] = new JObject { ["createProjects"] = CreateProjects }
+                        });
+
                 case ("GET", "/api/v1/projects"):
-                    return Json(new JObject
+                {
+                    var items = new JArray(
+                        Project("project-tower", "Tower", "org-1", true),
+                        Project("project-archive", "Archive", "org-1", false),
+                        Project("project-elsewhere", "Elsewhere", "org-2", true));
+                    if (ProjectsCreated > 0)
                     {
-                        ["items"] = new JArray(
-                            Project("project-tower", "Tower", "org-1", true),
-                            Project("project-archive", "Archive", "org-1", false),
-                            Project("project-elsewhere", "Elsewhere", "org-2", true))
-                    });
+                        items.Add(Project("project-new", "Facades", "org-1", true));
+                    }
+
+                    if (OlderServer)
+                    {
+                        foreach (var item in items.OfType<JObject>())
+                        {
+                            item.Remove("canCreateDefinitions");
+                        }
+                    }
+
+                    return Json(new JObject { ["items"] = items });
+                }
+
+                case ("POST", "/api/v1/projects"):
+                {
+                    ProjectIdempotencyKeys.Add(request.Headers.TryGetValues("Idempotency-Key", out var keys)
+                        ? keys.Single()
+                        : null);
+                    ProjectBody = JObject.Parse(await request.Content!.ReadAsStringAsync());
+                    if (ProjectNameTaken || ProjectsCreated > 0)
+                    {
+                        return Json(new JObject { ["message"] = "A project with this name already exists." },
+                            HttpStatusCode.Conflict);
+                    }
+
+                    ProjectsCreated++;
+                    if (DropFirstProjectResponse)
+                    {
+                        throw new HttpRequestException("Connection reset");
+                    }
+
+                    return Json(new JObject { ["id"] = "project-new", ["name"] = "Facades" }, HttpStatusCode.Created);
+                }
 
                 case ("GET", "/api/v1/definitions") when uri.Query.Contains("documentId="):
                     return Json(new JObject
@@ -297,8 +460,16 @@ public class SelvaUploadServiceTests
                     });
 
                 case ("GET", "/api/v1/definitions/" + Facade):
-                    return Json(Definition(Facade, "Facade panel", FacadeCanEdit,
-                        live: FacadeNeverPublished ? null : 4, draft: 5));
+                {
+                    var definition = Definition(Facade, "Facade panel", FacadeCanEdit,
+                        live: FacadeNeverPublished ? null : 4, draft: 5);
+                    if (OlderServer)
+                    {
+                        definition.Remove("canEdit");
+                    }
+
+                    return Json(definition);
+                }
 
                 case ("GET", "/api/v1/definitions/" + Roof):
                     return Json(Definition(Roof, "Roof", true, live: 2, draft: 2));

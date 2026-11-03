@@ -29,6 +29,7 @@ import type {
 	OrgRole,
 	PlatformPermission,
 	Project,
+	ProjectVisibility,
 	RequestContext,
 	SelvaConfig
 } from '@selvajs/platform';
@@ -44,7 +45,9 @@ import {
 	canManage,
 	canEditProjectSettings,
 	canEditDefinition,
+	canChangeVisibilityToPublic,
 	outsideTokenOrg,
+	scopeAllows,
 	SYSTEM_CONTEXT
 } from '@selvajs/platform';
 import {
@@ -428,15 +431,17 @@ export async function requireCanReclaim(
 }
 
 /**
- * `canCreateProject` — owner/admin always; member needs `manage_projects`.
- * Tenancy is enforced via `actingOrgId`.
+ * May the caller create a project in `targetOrgId`? Owner/admin always; a
+ * member needs `manage_projects`; tenancy is enforced via `actingOrgId`. An
+ * API key also needs the `create_projects` scope (or `write`) org-wide.
  */
-export async function requireCanCreateProject(
+export async function canCreateProjectIn(
 	locals: ScopedLocals,
+	ctx: RequestContext,
 	targetOrgId: string
-): Promise<{ user: AuthUser; ctx: RequestContext }> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await managementBypassOrRun(ctx, async () => {
+): Promise<boolean> {
+	if (!scopeAllows(ctx, 'create_projects')) return false;
+	return managementBypassOrRun(ctx, async () => {
 		const orgMember = await orgsOf(locals).getOrgMember(ctx, targetOrgId, ctx.userId);
 		return canCreateProject({
 			orgPermissions: ctx.orgPermissions,
@@ -445,13 +450,69 @@ export async function requireCanCreateProject(
 			targetOrgId
 		});
 	});
-	if (!allowed)
+}
+
+export async function requireCanCreateProject(
+	locals: ScopedLocals,
+	targetOrgId: string
+): Promise<{ user: AuthUser; ctx: RequestContext }> {
+	const { user, ctx } = requireAuthed(locals);
+	if (!(await canCreateProjectIn(locals, ctx, targetOrgId)))
 		apiError(
 			403,
 			ApiErrorCode.FORBIDDEN,
 			'You do not have permission to create projects in this org.'
 		);
 	return { user, ctx };
+}
+
+/**
+ * The visibility a project may be created with or changed to, for create and
+ * PATCH alike. `current` is absent on create.
+ *
+ * - `platform` takes a project out of its org entirely (no org member sees it,
+ *   and with ENABLE_PLATFORM_PROJECTS off every rule denies everyone), so
+ *   moving into it is instance-admin only.
+ * - Becoming `public` is a disclosure, so it needs an org owner or admin.
+ * - A key without `write` creates private projects only, never joinable ones:
+ *   whoever approved it was told it can't share anything.
+ */
+export async function requireProjectVisibilityAllowed(
+	locals: ScopedLocals,
+	ctx: RequestContext,
+	orgId: string,
+	next: { visibility?: ProjectVisibility; autoJoinOnUpload?: boolean },
+	current?: Pick<Project, 'visibility'>
+): Promise<void> {
+	// Create only: PATCH already needs `write` on the project, which the mount checks with its target.
+	if (!current && ctx.apiScope && !scopeAllows(ctx, 'write')) {
+		if (next.visibility !== 'private' || next.autoJoinOnUpload === true) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'This API token can only create private projects that nobody joins on upload.'
+			);
+		}
+	}
+	if (next.visibility === 'platform' && current?.visibility !== 'platform') {
+		if (!hasPermission(ctx, 'instance_admin')) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'Only a platform admin can give a project platform visibility.'
+			);
+		}
+	}
+	if (next.visibility === 'public' && current?.visibility !== 'public') {
+		const passes = await managementBypassOrRun(ctx, async () =>
+			canChangeVisibilityToPublic({
+				orgMember: await orgsOf(locals).getOrgMember(ctx, orgId, ctx.userId)
+			})
+		);
+		if (!passes) {
+			apiError(403, ApiErrorCode.FORBIDDEN, 'Only org owners or admins can make a project public.');
+		}
+	}
 }
 
 /**

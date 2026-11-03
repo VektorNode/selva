@@ -342,6 +342,12 @@ namespace Selva.Schema.Models
         public string Storage { get; set; }
 
 /// <summary>
+/// Selva accepted this key for uploading during this Rhino session. Upload is offered only when true; message says why when Selva refused it.
+/// </summary>
+        [JsonProperty("verified")]
+        public bool? Verified { get; set; }
+
+/// <summary>
 /// Why the last sign-in or sign-out ended the way it did, when it needs saying.
 /// </summary>
         [JsonProperty("message")]
@@ -375,10 +381,22 @@ namespace Selva.Schema.Models
         public string Origin { get; set; }
 
 /// <summary>
+/// The key these targets were listed with. The upload request echoes it with origin, and the plugin refuses a mismatch.
+/// </summary>
+        [JsonProperty("tokenId")]
+        public string TokenId { get; set; }
+
+/// <summary>
 /// Projects the user can create definitions in.
 /// </summary>
         [JsonProperty("projects")]
         public List<SelvaProject> Projects { get; set; } = new List<SelvaProject>();
+
+/// <summary>
+/// Selva would let this key create a project. False when the server doesn't say.
+/// </summary>
+        [JsonProperty("canCreateProjects")]
+        public bool CanCreateProjects { get; set; }
 
         [JsonProperty("suggestion", NullValueHandling = NullValueHandling.Ignore)]
         public SelvaVersionTarget Suggestion { get; set; }
@@ -491,8 +509,20 @@ namespace Selva.Schema.Models
         [JsonProperty("kind")]
         public string Kind { get; set; }
 
+        [JsonProperty("origin")]
+        public string Origin { get; set; }
+
+        [JsonProperty("tokenId")]
+        public string TokenId { get; set; }
+
         [JsonProperty("projectId")]
         public string ProjectId { get; set; }
+
+/// <summary>
+/// Create a private project with this name and upload into it.
+/// </summary>
+        [JsonProperty("newProjectName")]
+        public string NewProjectName { get; set; }
 
         [JsonProperty("displayName")]
         public string DisplayName { get; set; }

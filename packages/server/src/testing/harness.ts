@@ -55,8 +55,8 @@ export interface TestHarness {
 	auth: SeedAuthAdapter;
 	/** Folds host domain errors into the envelope, exactly as the host's adapter does. */
 	mapError?: (err: unknown) => ApiError | undefined;
-	/** Overrides merged onto the deps `callHandler` builds — token codecs, services, upload caps. */
-	deps?: Partial<Pick<SelvaDeps, 'tokens' | 'uploadLimits' | 'services'>>;
+	/** Overrides merged onto the deps `callHandler` builds — token codecs, services, upload caps, limiters. */
+	deps?: Partial<Pick<SelvaDeps, 'tokens' | 'uploadLimits' | 'services' | 'projectCreateLimiter'>>;
 	log?: ILogger;
 }
 
@@ -456,7 +456,8 @@ export async function callHandler(handler: ApiHandler, opts: CallHandlerOpts): P
 		request: new Request(url.toString(), init),
 		deps: depsFromConfig(locals.providers, h.deps?.services ?? {}, {
 			tokens: h.deps?.tokens,
-			uploadLimits: h.deps?.uploadLimits
+			uploadLimits: h.deps?.uploadLimits,
+			projectCreateLimiter: h.deps?.projectCreateLimiter
 		})
 	};
 

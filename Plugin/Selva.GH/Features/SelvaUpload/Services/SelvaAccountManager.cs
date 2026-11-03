@@ -39,6 +39,7 @@ public sealed class SelvaAccountManager
 
     private readonly string _accountsPath;
     private readonly SelvaAccountsFile _file;
+    private readonly Func<string, Task<bool>> _confirmNewOrigin;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly Func<HttpMessageHandler> _handlers;
     private readonly MemoryCredentialStore _memory = new();
@@ -47,6 +48,10 @@ public sealed class SelvaAccountManager
     private readonly ICredentialStore _osStore;
     private readonly object _stateLock = new();
     private readonly Dictionary<string, string> _tokens = new();
+
+    // Origins whose key Selva accepted for uploading in this Rhino session. Never saved: a key
+    // that stopped qualifying since the last session must be asked about again.
+    private readonly HashSet<string> _verified = new();
     private readonly string _userAgent;
 
     private bool _cancelRequested;
@@ -55,9 +60,16 @@ public sealed class SelvaAccountManager
     private bool _signingIn;
 
     /// <param name="openBrowser">Opens an https URL on the instance in the system browser.</param>
+    /// <param name="confirmNewOrigin">
+    ///     Asks the user, in Rhino and never in the page, whether to connect to an instance this
+    ///     machine hasn't used. Gets the display host. A page that can send commands could otherwise
+    ///     point the plugin at an instance of its choosing.
+    /// </param>
     public SelvaAccountManager(ICredentialStore osStore, string accountsPath, Func<HttpMessageHandler> handlers,
-        string userAgent, Action<string> openBrowser, Func<DateTimeOffset>? now = null)
+        string userAgent, Action<string> openBrowser, Func<string, Task<bool>> confirmNewOrigin,
+        Func<DateTimeOffset>? now = null)
     {
+        _confirmNewOrigin = confirmNewOrigin;
         _osStore = osStore;
         _accountsPath = accountsPath;
         _handlers = handlers;
@@ -87,6 +99,7 @@ public sealed class SelvaAccountManager
                 KnownOrigins = _file.Accounts.Select(a => a.Origin).ToList(),
                 ExtraScopes = new List<string>(),
                 Storage = record?.Storage == "memory" ? "memory" : _osStore.Kind,
+                Verified = signedIn && !_signingIn && _verified.Contains(origin!),
                 Message = _message
             };
 
@@ -143,6 +156,19 @@ public sealed class SelvaAccountManager
             if (!SelvaOrigin.TryNormalize(input, out var origin, out var error))
             {
                 SetMessage(error);
+                return;
+            }
+
+            // Asked before the address is contacted at all.
+            bool known;
+            lock (_stateLock)
+            {
+                known = _file.Find(origin) != null;
+            }
+
+            if (!known && !await _confirmNewOrigin(SelvaOrigin.DisplayHost(origin!)).ConfigureAwait(false))
+            {
+                SetMessage($"Not connected to {SelvaOrigin.DisplayHost(origin!)}.");
                 return;
             }
 
@@ -319,11 +345,68 @@ public sealed class SelvaAccountManager
             }
 
             await CompleteAsync(origin, key, cancellationToken).ConfigureAwait(false);
-            SetMessage(null);
         }
         catch (SelvaApiException ex)
         {
             SetMessage(ex.Status == 401 ? "Selva didn't accept this key. It may have expired or been revoked." : ex.Message);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    /// <summary>
+    ///     Asks Selva whether it still takes the key for uploading. Refused (403, or a key that
+    ///     can't upload): kept, so Sign out can still revoke it, but not verified, and the message
+    ///     says why. Invalid (401): forgotten. Unreachable: the last verdict stands.
+    /// </summary>
+    public async Task VerifyAsync(CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var session = Session();
+            if (session == null)
+            {
+                return;
+            }
+
+            JObject me;
+            try
+            {
+                using var client = new SelvaApiClient(session.Origin, session.Token, _userAgent, _handlers());
+                me = await client.GetJsonAsync("/api/v1/me", cancellationToken).ConfigureAwait(false);
+            }
+            catch (SelvaApiException ex) when (ex.Status == 401)
+            {
+                Forget(session.Origin,
+                    $"Selva no longer accepts your sign-in to {SelvaOrigin.DisplayHost(session.Origin)}. Sign in again.");
+                return;
+            }
+            catch (SelvaApiException ex) when (ex.Status == 403)
+            {
+                SetVerdict(session.Origin, ex.Message);
+                return;
+            }
+            catch (SelvaApiException)
+            {
+                return;
+            }
+
+            // Sign-ins saved before the token id was recorded learn it here; uploads echo it.
+            lock (_stateLock)
+            {
+                var record = _file.Find(session.Origin);
+                var tokenId = (string?)me["apiToken"]?["id"];
+                if (record != null && tokenId != null && record.TokenId != tokenId)
+                {
+                    record.TokenId = tokenId;
+                    SaveFile();
+                }
+            }
+
+            SetVerdict(session.Origin, CannotUploadReason(me));
         }
         finally
         {
@@ -383,6 +466,7 @@ public sealed class SelvaAccountManager
         lock (_stateLock)
         {
             _tokens.Remove(origin);
+            _verified.Remove(origin);
             _memory.Delete(origin);
 
             var record = _file.Find(origin);
@@ -457,10 +541,46 @@ public sealed class SelvaAccountManager
                 ExpiresAt = (string?)me["apiToken"]?["expiresAt"],
                 Scopes = (me["apiToken"]?["scopes"] as JArray)?.Select(s => (string?)s).OfType<string>().ToList() ??
                          new List<string>(),
+                TokenId = (string?)me["apiToken"]?["id"],
                 Storage = stored ? _osStore.Kind : "memory"
             });
             SaveFile();
         }
+
+        SetVerdict(origin, CannotUploadReason(me));
+    }
+
+    // Upload needs `upload` or `write` org-wide: the plugin creates definitions in projects it
+    // picks, and a key scoped to one project or definition can't list them.
+    private static string? CannotUploadReason(JObject me)
+    {
+        var scopes = (me["apiToken"]?["scopes"] as JArray)?.Select(s => (string?)s).OfType<string>() ??
+                     Enumerable.Empty<string>();
+        var uploads = scopes.Select(s => s.Split(':')).Any(parts =>
+            parts.Length >= 2 && (parts[0] == "upload" || parts[0] == "write") &&
+            (parts[1] == "all" || parts[1] == "org"));
+        return uploads
+            ? null
+            : "This key can't upload definitions. Sign in with the browser, or use a key that may upload.";
+    }
+
+    private void SetVerdict(string origin, string? refusal)
+    {
+        lock (_stateLock)
+        {
+            if (refusal == null)
+            {
+                _verified.Add(origin);
+            }
+            else
+            {
+                _verified.Remove(origin);
+            }
+
+            _message = refusal;
+        }
+
+        RaiseChanged();
     }
 
     private async Task RevokeQuietlyAsync(string origin, string token)
@@ -505,7 +625,7 @@ public sealed class SelvaAccountManager
         return scopes.Where(s =>
         {
             var action = s.Split(':')[0];
-            return action != "read" && action != "upload";
+            return action != "read" && action != "upload" && action != "create_projects";
         }).ToList();
     }
 

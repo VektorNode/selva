@@ -66,7 +66,7 @@ public static class OAuthCallback
             "code_challenge=" + Uri.EscapeDataString(codeChallenge),
             "code_challenge_method=S256",
             "state=" + Uri.EscapeDataString(state),
-            "scope=upload",
+            "scope=" + Uri.EscapeDataString("upload create_projects"),
             "resource=" + Uri.EscapeDataString(resource)
         });
     }

@@ -405,6 +405,26 @@ describe('a key revoking itself', () => {
 		expect(open.status).toBe(204);
 	});
 
+	it('works for a key whose owner may no longer hold it, so signing out still revokes', async () => {
+		const w = await world();
+		const raw = await mintedSecret(w, w.dana.id, ['upload:all']);
+		await setRole(w, w.acmeOrg.id, w.dana.id, 'viewer');
+		vi.spyOn(w.h.config.data.apiTokens!, 'touchLastUsed').mockResolvedValue();
+		const at = (method: string, path: string) =>
+			resolveApiToken(
+				new Request(`http://selva.test/api/v1/${path}`, {
+					method,
+					headers: { authorization: `Bearer ${raw}` }
+				}),
+				{ codec, auth: w.h.config.auth, data: w.h.config.data }
+			);
+
+		expect(await at('GET', 'me')).toMatchObject({ code: 'API_TOKEN_HOLDER_REFUSED' });
+		expect(await at('GET', 'me/token')).toMatchObject({ code: 'API_TOKEN_HOLDER_REFUSED' });
+		const own = await at('DELETE', 'me/token');
+		expect(own.kind).toBe('ok');
+	});
+
 	it('gives a browser session 400', async () => {
 		const w = await world();
 		const res = await callHandler(revokeOwnApiToken, {

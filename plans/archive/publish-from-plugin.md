@@ -142,7 +142,9 @@ definition's metadata and create public share links. Thirty days of that on a de
 is far more than the button needs.
 
 `upload` allows exactly four routes: `POST /definitions`, `POST /definitions/{guid}/versions`,
-`POST /definitions/{guid}/publish` and `POST /compute/schema`. It includes `read`, and `write`
+`POST /definitions/{guid}/publish` and `POST /compute/schema`. Creating a project is the separate
+`create_projects` action, which the plugin asks for alongside
+([plugin-upload-next.md](../features/plugin-upload-next.md)). It includes `read`, and `write`
 includes it. In `scopeAllows` that's one more case in `actionCovers`. An upload key that tries
 anything else gets the usual 403 naming the missing scope.
 

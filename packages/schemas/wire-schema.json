@@ -286,6 +286,10 @@
 					"enum": ["keychain", "memory"],
 					"description": "keychain: kept in the OS credential store across Rhino sessions. memory: lost when Rhino closes."
 				},
+				"verified": {
+					"type": "boolean",
+					"description": "Selva accepted this key for uploading during this Rhino session. Upload is offered only when true; message says why when Selva refused it."
+				},
 				"message": {
 					"type": "string",
 					"description": "Why the last sign-in or sign-out ended the way it did, when it needs saying."
@@ -317,10 +321,18 @@
 			"description": "Where the open definition can go: a new definition in one of these projects, or a new version of a definition Selva already has. `suggestion` is the definition this file was last uploaded to on this instance, when the user can still edit it.",
 			"properties": {
 				"origin": { "type": "string" },
+				"tokenId": {
+					"type": "string",
+					"description": "The key these targets were listed with. The upload request echoes it with origin, and the plugin refuses a mismatch."
+				},
 				"projects": {
 					"type": "array",
 					"items": { "$ref": "#/definitions/SelvaProject" },
 					"description": "Projects the user can create definitions in."
+				},
+				"canCreateProjects": {
+					"type": "boolean",
+					"description": "Selva would let this key create a project. False when the server doesn't say."
 				},
 				"suggestion": { "$ref": "#/definitions/SelvaVersionTarget" },
 				"matches": {
@@ -335,7 +347,15 @@
 					"description": "Why nothing can be uploaded right now."
 				}
 			},
-			"required": ["origin", "projects", "matches", "defaults", "file"],
+			"required": [
+				"origin",
+				"tokenId",
+				"projects",
+				"canCreateProjects",
+				"matches",
+				"defaults",
+				"file"
+			],
 			"additionalProperties": false
 		},
 		"SelvaProject": {
@@ -403,13 +423,19 @@
 		},
 		"SelvaUploadRequest": {
 			"type": "object",
-			"description": "The web UI's upload choice. newDefinition reads projectId and the metadata; newVersion reads definitionGuid and changeNote.",
+			"description": "The web UI's upload choice. newDefinition reads projectId, or newProjectName to create a private project first, and the metadata; newVersion reads definitionGuid and changeNote. origin and tokenId echo the targets the dialog showed.",
 			"properties": {
 				"kind": {
 					"type": "string",
 					"enum": ["newDefinition", "newVersion"]
 				},
+				"origin": { "type": "string" },
+				"tokenId": { "type": "string" },
 				"projectId": { "type": "string" },
+				"newProjectName": {
+					"type": "string",
+					"description": "Create a private project with this name and upload into it."
+				},
 				"displayName": { "type": "string" },
 				"description": { "type": "string" },
 				"category": { "type": "string" },
@@ -421,7 +447,7 @@
 					"description": "Point the definition's live channel at the new version. Off, it lands as the draft."
 				}
 			},
-			"required": ["kind", "makeLive"],
+			"required": ["kind", "origin", "tokenId", "makeLive"],
 			"additionalProperties": false
 		},
 		"SelvaUploadProgress": {
@@ -429,7 +455,7 @@
 			"properties": {
 				"stage": {
 					"type": "string",
-					"enum": ["preparing", "uploading", "publishing"],
+					"enum": ["preparing", "creatingProject", "uploading", "publishing"],
 					"description": "uploading covers Selva checking the file on Rhino.Compute, which happens before it answers."
 				}
 			},

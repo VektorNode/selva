@@ -164,7 +164,11 @@ export async function resolveApiToken(
 		{ user, platformPermissions, membership: member, pinOrg: true },
 		{ orgs: deps.data.orgs }
 	);
-	if (!deps.holderVerdicts?.passed(token.id, now)) {
+	// A key must always be able to revoke itself, or a refused holder couldn't
+	// sign out. Revoking reaches nothing else.
+	const revokingItself =
+		request.method === 'DELETE' && url.pathname === `${pathPrefix.replace(/\/$/, '')}/me/token`;
+	if (!revokingItself && !deps.holderVerdicts?.passed(token.id, now)) {
 		const holds = await canHoldApiTokens(live, token.scopes, {
 			policy: deps.mayHoldApiTokens,
 			deps: {

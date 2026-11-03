@@ -69,6 +69,7 @@ export const load: PageServerLoad = async (event) => {
 		loopback: isLoopbackRedirect(request.redirectUri),
 		levels: offer.levels.map(({ choice, orgs }) => ({
 			access: choice.access,
+			createsProjects: choice.scopes.includes('create_projects'),
 			orgs,
 			orgId: (orgs.find((o) => o.id === actingOrgId) ?? orgs[0]!).id
 		})),

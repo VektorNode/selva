@@ -51,8 +51,8 @@ Each plan below links to its tracking issue at the top of the file.
 | [triggers](./features/triggers.md)                                           | **unfiled** — design only                                                       |
 | [webhooks](./features/webhooks.md)                                           | **unfiled** — design only                                                       |
 | [service-accounts](./features/service-accounts.md)                           | **unfiled** — design only                                                       |
-| [directory-offboarding](./features/directory-offboarding.md)                 | **unfiled** — sign-in window built for header-auth only; the rest design only   |
-| [plugin-upload-next](./features/plugin-upload-next.md)                       | **unfiled** — design only                                                       |
+| [directory-offboarding](./features/directory-offboarding.md)                 | **unfiled** — built; SCIM and object-ID matching design only                    |
+| [plugin-upload-next](./features/plugin-upload-next.md)                       | **unfiled** — built                                                             |
 | [notifications](./features/notifications.md)                                 | **unfiled** — package extracted; `notify()` and Selva-side magic links open     |
 | [local-bridge-perf-audit](./fixes/local-bridge-perf-audit.md)                | **unfiled**                                                                     |
 
