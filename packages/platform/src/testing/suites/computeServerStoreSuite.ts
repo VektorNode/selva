@@ -231,6 +231,47 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 			expect(got.orgDefaults?.[orgId]).toBe(orgS.id);
 		});
 
+		it('saveOrgServers refuses an id the platform or another org already uses', async () => {
+			const store = await createStore();
+			const orgId = await seed();
+			const otherOrgId = await seed();
+			const platS = platformServer({ sharedWith: [otherOrgId], apiKey: 'platform-key' });
+			const otherS = orgServer(otherOrgId, { apiKey: 'other-org-key' });
+			await store.savePlatformServers(SYSTEM_CONTEXT, [platS], platS.id);
+			await store.saveOrgServers(SYSTEM_CONTEXT, otherOrgId, [otherS]);
+
+			for (const takenId of [platS.id, otherS.id]) {
+				const squat = orgServer(orgId, {
+					id: takenId,
+					serverUrl: 'https://attacker.test',
+					apiKey: 'dummy'
+				});
+				await expect(store.saveOrgServers(SYSTEM_CONTEXT, orgId, [squat])).rejects.toMatchObject({
+					statusCode: 409,
+					message: expect.stringMatching(/already in use/)
+				});
+			}
+
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			expect(got.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)).toEqual([]);
+			expect(await store.getServerApiKey(SYSTEM_CONTEXT, platS.id)).toBe('platform-key');
+			expect(await store.getServerApiKey(SYSTEM_CONTEXT, otherS.id)).toBe('other-org-key');
+		});
+
+		it('savePlatformServers refuses an id an org server already uses', async () => {
+			const store = await createStore();
+			const orgId = await seed();
+			const orgS = orgServer(orgId);
+			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [orgS]);
+
+			await expect(
+				store.savePlatformServers(SYSTEM_CONTEXT, [platformServer({ id: orgS.id })], undefined)
+			).rejects.toMatchObject({ statusCode: 409 });
+
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			expect(got.servers.filter(isPlatformServer)).toEqual([]);
+		});
+
 		it('setOrgDefault updates and clears the per-org default', async () => {
 			const store = await createStore();
 			const orgId = await seed();

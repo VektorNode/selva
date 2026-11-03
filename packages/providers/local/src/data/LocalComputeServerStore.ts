@@ -13,7 +13,7 @@ import {
 	type SecretVerificationReport,
 	type ILogger
 } from '@selvajs/platform';
-import { NoopLogger } from '@selvajs/platform';
+import { NoopLogger, ProviderError } from '@selvajs/platform';
 import { readJsonFile, withFileLock, writeJsonFile } from './fsJson.js';
 import {
 	decodeSecretKey,
@@ -45,6 +45,18 @@ interface OnDiskShape {
 // `readJsonFile` returns its fallback BY REFERENCE when the file is missing,
 // so a shared module-level constant would let mutations bleed across calls.
 const empty = (): OnDiskShape => ({ servers: [], orgDefaults: {} });
+
+// `getServerApiKey` looks a key up by id alone, so an org reusing another
+// scope's id would get that scope's key sent to its own URL.
+function assertIdsFree(
+	incoming: readonly ComputeServerConfig[],
+	otherScopes: readonly ComputeServerConfig[]
+): void {
+	const taken = new Set(otherScopes.map((s) => s.id));
+	if (incoming.some((s) => taken.has(s.id))) {
+		throw new ProviderError('A compute server id is already in use', 409);
+	}
+}
 
 /**
  * Reads/writes compute.config.json, re-read on every call so edits take
@@ -210,7 +222,9 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		await withFileLock(this.configFilePath, async () => {
 			const all = await this.readAll();
 			const orgRows = all.servers.filter(isOrgServer);
-			const platformRows = this.encryptApiKeys(servers.filter(isPlatformServer));
+			const incoming = servers.filter(isPlatformServer);
+			assertIdsFree(incoming, orgRows);
+			const platformRows = this.encryptApiKeys(incoming);
 
 			await writeJsonFile<OnDiskShape>(this.configFilePath, {
 				servers: [...platformRows, ...orgRows],
@@ -230,9 +244,9 @@ export class LocalComputeServerStore implements IComputeServerStore {
 			const all = await this.readAll();
 			const platformRows = all.servers.filter(isPlatformServer);
 			const otherOrgRows = all.servers.filter((s) => isOrgServer(s) && s.ownerOrgId !== orgId);
-			const thisOrgRows = this.encryptApiKeys(
-				servers.filter(isOrgServer).map((s) => ({ ...s, ownerOrgId: orgId }))
-			);
+			const incoming = servers.filter(isOrgServer).map((s) => ({ ...s, ownerOrgId: orgId }));
+			assertIdsFree(incoming, [...platformRows, ...otherOrgRows]);
+			const thisOrgRows = this.encryptApiKeys(incoming);
 
 			const orgDefaults = { ...(all.orgDefaults ?? {}) };
 			if (defaultServerId === null) {
