@@ -150,7 +150,7 @@ Three things `doctor` can't see: the buckets from step 4; the email setup in ste
 
 ### Upgrading later
 
-**Migrate first, then update the app.** The updater refuses to finish against a database that is behind: the new version boots, reports `degraded`, fails its health probe for 30 seconds, and rolls back. The site stays up, but you get an outage window and no upgrade.
+**Migrate first, then update the app.** Against a database that is behind, the new version boots `degraded`: `/api/health` returns 503 and writes that need the new schema fail. The admin center's **Run update** rolls back after 30 seconds of failed health probes. `npm run update` keeps the new version running and exits with the migration commands to run.
 
 The migration SQL ships inside `@selvajs/supabase-provider`, so the newer provider has to be on disk before the sync has anything new to copy:
 

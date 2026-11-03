@@ -31,6 +31,7 @@ import { satisfiesNodeRange } from '../node-range.js';
 import { green, yellow, red, fixable } from '../checks/result.js';
 import { checkBootPersistence } from '../checks/boot.js';
 import { checkRuntimeEnvironment } from '../checks/runtime.js';
+import { checkSupabaseMigrations } from '../checks/migrations.js';
 import {
 	checkBodySizeLimit,
 	checkClientAddress,
@@ -77,7 +78,13 @@ export async function runDoctor(argv = []) {
 
 	if (used.has('supabase')) {
 		checks.push(checkSupabase(env));
-		checks.push(checkSupabaseMigrations(dir, env));
+		checks.push(
+			checkSupabaseMigrations(
+				dir,
+				env,
+				readPackageVersion(join(dir, 'node_modules', '@selvajs', 'selva', 'package.json'))
+			)
+		);
 	}
 
 	if (providers.auth === 'header') {
@@ -219,83 +226,6 @@ export async function checkSupabase(env) {
 		return yellow(`SUPABASE_URL responded ${res.status} — check project status`);
 	} catch (err) {
 		return yellow(`SUPABASE_URL unreachable (${err.message ?? err}) — skipping`);
-	}
-}
-
-// Compares the newest migration shipped by @selvajs/supabase-provider against
-// what the database reports via selva.migration_head(). Red on skew — the app
-// degrades /api/health to 503 at boot in the same state, so catching it here
-// saves a confusing deploy.
-async function checkSupabaseMigrations(dir, env) {
-	if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_ROLE_KEY) {
-		return yellow('Migration-head check skipped — Supabase env incomplete');
-	}
-
-	const migrationsDir = join(
-		dir,
-		'node_modules',
-		'@selvajs',
-		'supabase-provider',
-		'supabase',
-		'migrations'
-	);
-	let expected = null;
-	try {
-		expected =
-			readdirSync(migrationsDir)
-				.filter((f) => /^\d{14}_.+\.sql$/.test(f))
-				.map((f) => f.slice(0, 14))
-				.sort()
-				.pop() ?? null;
-	} catch {
-		// Provider package not installed in this deployment.
-	}
-	if (!expected) {
-		return red(
-			'@selvajs/supabase-provider is not installed, so the migration SQL is missing. ' +
-				'Run `selva migrate` to add it, then `npm install`.'
-		);
-	}
-
-	try {
-		const controller = new AbortController();
-		const timer = setTimeout(() => controller.abort(), 4000);
-		const res = await fetch(env.SUPABASE_URL + '/rest/v1/rpc/migration_head', {
-			method: 'POST',
-			headers: {
-				apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-				Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`,
-				'Content-Type': 'application/json',
-				// The function lives in the selva schema the app is pinned to.
-				'Content-Profile': 'selva'
-			},
-			body: '{}',
-			signal: controller.signal
-		});
-		clearTimeout(timer);
-		if (res.status === 404) {
-			return red(
-				`Database is missing selva.migration_head() — migrations are pending (expected head ${expected}). Run: npx selva-supabase && npx supabase db push`
-			);
-		}
-		if (!res.ok) {
-			return yellow(`migration_head RPC responded ${res.status} — cannot verify schema head`);
-		}
-		const actual = String((await res.json()) ?? '');
-		if (!actual) {
-			return red(
-				`Database reports no applied migrations (expected head ${expected}). Run: npx selva-supabase && npx supabase db push`
-			);
-		}
-		// String comparison — relies on both heads being fixed-width, zero-padded timestamps.
-		if (actual < expected) {
-			return red(
-				`Database migration head ${actual} is behind the installed provider (${expected}). Run: npx selva-supabase && npx supabase db push`
-			);
-		}
-		return green(`Database migration head ${actual} matches the installed provider`);
-	} catch (err) {
-		return yellow(`Migration-head check skipped (${err.message ?? err})`);
 	}
 }
 

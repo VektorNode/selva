@@ -34,7 +34,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"dev:lan": "vite dev --host",
-		"build": "rimraf build && vite build && node ./scripts/generate-templates.js",
+		"build": "rimraf build && vite build && node ./scripts/generate-templates.js && node ./scripts/write-runtime-meta.js",
 		"preview": "vite preview",
 		"start": "node build/index.js",
 		"clean": "rimraf build templates",
