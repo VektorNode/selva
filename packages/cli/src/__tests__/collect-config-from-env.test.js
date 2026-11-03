@@ -168,6 +168,20 @@ test('header-auth binds to loopback by default', () => {
 	assert.equal(v.HOST, '127.0.0.1');
 });
 
+test('behind a proxy (ORIGIN set) binds to loopback unless HOST is given', () => {
+	// ADDRESS_HEADER trusts client-supplied X-Forwarded-For, so the app must not
+	// be reachable around the proxy.
+	assert.equal(collectConfigFromEnv({ ORIGIN: 'https://selva.example.test' }).HOST, '127.0.0.1');
+	assert.equal(
+		collectConfigFromEnv({ ORIGIN: 'https://selva.example.test', HOST: '10.0.0.5' }).HOST,
+		'10.0.0.5'
+	);
+});
+
+test('without ORIGIN a non-header scaffold writes no HOST', () => {
+	assert.equal(collectConfigFromEnv({}).HOST, undefined);
+});
+
 test('header-auth with a non-local data provider requires an explicit allowlist dir', () => {
 	// There is no DATA_PATH to fall back to.
 	assert.throws(

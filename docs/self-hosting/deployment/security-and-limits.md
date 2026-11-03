@@ -91,7 +91,7 @@ Dead link, token and invite rows stay in the store, harmless. Accounts, password
 
 - **Cookies** are `Secure`, `httpOnly` and `sameSite=lax` in production. `ALLOW_INSECURE_COOKIES=true` drops `Secure` for HTTP-only deployments. It is not in `.env.example`; without it, login over plain `http://` silently fails.
 - **`ORIGIN`** must be your public address when behind a proxy (`https://your-domain.com`, no trailing slash). Otherwise form POSTs fail with "Cross-site POST form submissions are forbidden".
-- **`HOST`** defaults to `0.0.0.0`. Under header-auth the app **must** be reachable only through the trusted proxy (bind `127.0.0.1`), and the proxy must authenticate every request and **overwrite** inbound `SELVA-*` headers. Selva never strips them and doesn't check at runtime.
+- **`HOST`** defaults to `0.0.0.0`; the scaffold sets `127.0.0.1` for header auth or when an origin is given. Under header-auth the app **must** be reachable only through the trusted proxy (bind `127.0.0.1`), and the proxy must authenticate every request and **overwrite** inbound `SELVA-*` headers. Selva never strips them and doesn't check at runtime.
 
 ## Logging and personal data
 

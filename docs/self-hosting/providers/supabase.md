@@ -146,7 +146,7 @@ npm start
 
 Three things `doctor` can't see: the buckets from step 4; the email setup in step 6 (a broken template only shows up when someone clicks a link); and `ORIGIN`, which must match the URL you serve on, or form posts get a 403 and email callbacks point at the wrong host.
 
-`npm start` binds `0.0.0.0` unless you chose header auth. Set `HOST=127.0.0.1`, keep port 3000 closed in the firewall, and put Caddy or nginx terminating TLS in front ([Reverse proxy](../deployment/reverse-proxy.md)).
+`npm start` binds `0.0.0.0` unless the scaffold set `HOST=127.0.0.1` (it does when you give an origin, or choose header auth). Set `HOST=127.0.0.1` yourself otherwise, keep port 3000 closed in the firewall, and put Caddy or nginx terminating TLS in front ([Reverse proxy](../deployment/reverse-proxy.md)).
 
 ### Upgrading later
 

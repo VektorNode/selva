@@ -72,6 +72,13 @@ export const actions = {
 		if (!email || !email.includes('@')) {
 			return fail(400, { error: 'Valid email is required' });
 		}
+		// Same rule as the OAuth and proxy bootstrap: when the operator pinned an
+		// admin email, only that address may claim the empty instance. Unpinned,
+		// whoever reaches /setup first owns it.
+		const pinnedEmail = env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL?.trim().toLowerCase();
+		if (pinnedEmail && email.trim().toLowerCase() !== pinnedEmail) {
+			return fail(403, { error: 'Setup is restricted to the configured admin email.' });
+		}
 		if (!password || password.length < 8) {
 			return fail(400, { error: 'Password must be at least 8 characters' });
 		}

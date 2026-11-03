@@ -3,8 +3,12 @@
 Fact-checks all 52 files under `docs/` against the tree, then asks of every paragraph whether it earns
 its place. There was no review document to validate, so the docs themselves were the claims. Line
 numbers drift: when one stops resolving, grep the quoted text. The doc edits in sections 1 and 3 were
-applied afterwards, so read them as the record of why the docs changed. Sections 4 and 5 are code
-and policy questions that edits to `docs/` do not close.
+applied afterwards, so read them as the record of why the docs changed. `scaling-roadmap.md` and
+`drawing-backlog.md` moved to `plans/`; `/setup` now honours the pinned bootstrap email; the scaffold
+binds `127.0.0.1` when an origin is given. Still open in code: the Update button shown to
+`manage_updates` holders, `max_size 256mb` in `caddyfile.js` and `infra/startup.sh.tpl`, the
+"`Infinity` throws" message in `checks/config.js` and `deploymentConfig.ts`, no doctor warning for
+`ADDRESS_HEADER` on a public bind, and the password-recovery gap.
 
 **How this was checked.** Nine agents. Seven Sonnet readers took one slice of the docs each and opened
 the code behind every checkable claim. One Opus agent read across all docs for duplication,

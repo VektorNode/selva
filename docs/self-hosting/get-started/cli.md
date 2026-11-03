@@ -95,7 +95,7 @@ Start the app and visit `/setup`. In single-tenant mode it also creates a new or
 
 **"Cross-site POST form submissions are forbidden".** `ORIGIN` in `.env` must match the browser URL exactly: same scheme and host, no trailing slash. Fix it and `npm run restart`.
 
-**Unreachable from outside.** `HOST` defaults to `0.0.0.0`, so check your firewall. Only the header-auth scaffold sets `HOST=127.0.0.1`. Either way, put a [reverse proxy](../deployment/reverse-proxy.md) in front rather than opening port 3000.
+**Unreachable from outside.** `HOST` defaults to `0.0.0.0`, so check your firewall. The scaffold sets `HOST=127.0.0.1` for header auth and whenever you give an origin (behind a proxy); without an origin it leaves `HOST` unset. Either way, put a [reverse proxy](../deployment/reverse-proxy.md) in front rather than opening port 3000.
 
 **`npm run update` reports the same version.** npm's cache is stale:
 

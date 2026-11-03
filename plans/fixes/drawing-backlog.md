@@ -1,5 +1,7 @@
 # Drawing system: outstanding work
 
+**Not tracked as issues.** This is the unfiled remainder; file an issue when someone commits to an item.
+
 GH components live in `Plugin/Selva.GH/Features/Drawing/`. Pure model + renderers live in `Plugin/Selva.Drawing/`.
 
 ---

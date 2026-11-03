@@ -55,6 +55,8 @@ Each plan below links to its tracking issue at the top of the file.
 | [plugin-upload-next](./features/plugin-upload-next.md)                       | **unfiled** — built                                                             |
 | [notifications](./features/notifications.md)                                 | **unfiled** — package extracted; `notify()` and Selva-side magic links open     |
 | [local-bridge-perf-audit](./fixes/local-bridge-perf-audit.md)                | **unfiled**                                                                     |
+| [scaling-roadmap](./features/scaling-roadmap.md)                             | **unfiled** — design only; nothing built                                        |
+| [drawing-backlog](./fixes/drawing-backlog.md)                                | **unfiled** — three small items                                                 |
 
 The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until

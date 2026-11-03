@@ -311,7 +311,7 @@ config, the provider conformance kits, and why `@selvajs/cli` is exempt.
 - `CONTRIBUTING.md` is for human contributors.
 - `STRUCTURE.md` (this file) is the source of truth for layout/naming.
 - [docs/contributing/plugin-context.md](./docs/contributing/plugin-context.md) is the source of truth for Grasshopper canvas wiring and schema identity.
-- Package-level developer notes and deep-dives go in `docs/contributing/`, not scattered through package folders. A spec, backlog, or format reference under `packages/` or `Plugin/` is misplaced: move it.
+- Package-level developer notes and deep-dives go in `docs/contributing/`, not scattered through package folders. A spec or format reference under `packages/` or `Plugin/` is misplaced: move it. Backlogs and designs for unbuilt work go in `plans/`, not here (see [plans/CONVENTIONS.md](./plans/CONVENTIONS.md)).
 - A package's `README.md` stays with the package: it's the published API surface, and npm renders it.
 - `CONTEXT.md` beside its code is the one documented exception: source comments reference it by bare filename, so it has to sit next to what it describes.
 - Keep `examples/` for runnable artifacts only.

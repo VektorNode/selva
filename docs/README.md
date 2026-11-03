@@ -50,11 +50,6 @@ Design references (check code against intent before changing it):
 - [design-system.md](./contributing/design-system.md): surface roles, states, radius and spacing for every Svelte package; the lint enforces part of it
 - [materials-plan.md](./contributing/materials-plan.md): mapping, tangents, presets and environment for metal, wood and other viewer materials
 
-Outstanding work:
-
-- [drawing-backlog.md](./contributing/drawing-backlog.md): what's still missing in the drawing / SVG / PDF pipeline
-- [scaling-roadmap.md](./contributing/scaling-roadmap.md): staged design for lifting the scaling limits; mostly unbuilt
-
 Package-local `CONTEXT.md` files ([ui](../packages/ui/CONTEXT.md),
 [compute](../packages/compute/CONTEXT.md)) stay next to their code on purpose:
 source comments reference them by bare filename.

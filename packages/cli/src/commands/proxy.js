@@ -144,6 +144,18 @@ export async function runSetupProxy(argv = []) {
 		);
 	}
 
+	const host = env.HOST ?? '0.0.0.0';
+	if (host !== '127.0.0.1' && host !== 'localhost' && host !== '::1') {
+		p.log.warn(
+			`Add this to .env, then \`selva restart\`:\n` +
+				pc.cyan('  HOST=127.0.0.1\n') +
+				pc.dim(
+					'Without it the app listens on every interface, so port 3000 is reachable\n' +
+						'without Caddy and a direct caller can set its own X-Forwarded-For.'
+				)
+		);
+	}
+
 	p.outro(
 		[
 			pc.green(`Caddy is serving ${domain}.`),

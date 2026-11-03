@@ -1,10 +1,10 @@
 # Scaling roadmap
 
+**Not tracked as an issue.** File one when a limit shows up in real usage.
+
 Design notes for lifting the limits in
-[docs/self-hosting/deployment/scaling.md](../self-hosting/deployment/scaling.md); read that page
+[docs/self-hosting/deployment/scaling.md](../../docs/self-hosting/deployment/scaling.md); read that page
 first for where the architecture stands. Unless a section says otherwise, nothing here is built.
-It stays out of the operator docs because it links into source paths an operator has no reason
-to open.
 
 ## 1. Moving big data
 
@@ -17,7 +17,7 @@ Near-term, no architecture change:
 - **File inputs stop being base64-in-JSON.** Client uploads to storage first (or
   `multipart/form-data`), then references the blob in the solve request. Cuts the wire size by
   a quarter (base64 inflates by a third) and removes a 100 MB string from the JSON body.
-- **File outputs go out-of-band** ([ADR 0003](../adr/0003-large-file-output-streaming.md),
+- **File outputs go out-of-band** ([ADR 0003](../../docs/adr/0003-large-file-output-streaming.md),
   proposed): large `file` outputs stage to storage, the solve response carries a small
   `file-ref` descriptor, and the browser streams the download separately.
 - **Parse off the main thread.** The browser does `res.text()` + `JSON.parse` on the whole
@@ -63,7 +63,7 @@ core-hour as scaling out and needs no routing work. Then, in this order:
   [IComputeServerStore](../../packages/platform/src/computeServer/interface.ts): shared config
   plus member instances with health state. Existing single servers become groups of one.
 - **Definition-sticky routing** inside the group, by definition guid per
-  [ADR 0004](../adr/0004-compute-server-identity-and-lb-affinity.md), which already puts the
+  [ADR 0004](../../docs/adr/0004-compute-server-identity-and-lb-affinity.md), which already puts the
   guid on the wire as `X-Selva-Definition`. The pointer cache is in-memory per instance and
   McNeel does not support cross-instance pointer reuse. When a home server saturates, spill to
   the least-loaded one: the client's transparent re-upload on `definition_not_cached`
