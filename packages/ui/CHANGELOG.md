@@ -1,5 +1,11 @@
 # @selvajs/ui
 
+## 6.6.0-beta.17
+
+### Minor Changes
+
+- 57189d6: Export `visibleInputItems(schema, values)`: the input items the form shows for these values, after item, group and tab visibility. For a host that repeats the form back, such as a summary before a commit.
+
 ## 6.6.0-beta.16
 
 ### Minor Changes
