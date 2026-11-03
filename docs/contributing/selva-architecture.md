@@ -19,9 +19,11 @@ UI on top, Rhino.Compute solving on the backend. Two runtime modes share one sch
 [packages/schemas/ui-schema.json](../../packages/schemas/ui-schema.json) (the saved UI schema) and
 [wire-schema.json](../../packages/schemas/wire-schema.json) (messages and runtime state) are the source
 contract: they generate TypeScript for the web stack and C# for the plugin, so the shapes cannot drift.
+After editing either, run `pnpm generate` from the repo root; CI fails on stale output. Outputs and
+generator conventions are in [packages/schemas/README.md](../../packages/schemas/README.md).
 
-The two runtimes are **independent**. They communicate only through the shared schema format and the
-`.gh` / `.ghx` file the designer uploads.
+The two runtimes share no code. They meet in the schema format, the `.gh` / `.ghx` file the designer
+uploads, and Selva's HTTP API, which the plugin signs in to and uploads over (`SelvaUploadService`).
 
 ---
 
@@ -33,18 +35,15 @@ Instance (one Selva deployment)
  │    └── UserProfile (displayName, starredDefinitions, recentRuns)
  │
  ├── PlatformPermission(userId, permission)      ← IPlatformPermissionStore
- │                                                  (instance_admin, manage_compute, …)
  │
  ├── Organization                                ← hard tenancy boundary
- │    ├── OrgMember (User × Org)
- │    │    ├── role: owner | admin | member
- │    │    └── permissions[]   (manage_org_members, manage_definitions, …)
+ │    ├── OrgMember (User × Org): role + permissions[]
  │    ├── Invite (pending email → org + role)
  │    ├── ComputeServerConfig (optional org override)
  │    └── Project
  │         ├── visibility: private | org | public | platform
  │         ├── autoJoinOnUpload: bool   ← container vs commons mode
- │         ├── ProjectMember (User × Project) — role: owner | editor | viewer
+ │         ├── ProjectMember (User × Project): owner | editor | viewer
  │         └── Definition  (identified by guid)
  │              ├── ownerId          ← display in container mode,
  │              │                      access input in commons mode
@@ -55,9 +54,6 @@ Instance (one Selva deployment)
  │              │     ├── fileKey → blob in IStorageProvider
  │              │     └── schema  → cached UISchema (see schema-caching.md)
  │              └── ShareLink[]   (per-link tokens for unauth access)
- │                    ├── channel: live | draft
- │                    ├── allowSolve, maxSolves, expiresAt, revokedAt
- │                    └── tokenHash (HMAC; raw shown once at mint)
  │
  └── ComputeServerConfig[]
        ├── PlatformComputeServer  (scope: 'platform', sharedWith: 'all' | string[])
@@ -66,15 +62,12 @@ Instance (one Selva deployment)
 
 ### Invariants
 
-- **Org is the tenancy boundary.** Every tenant-owned row carries `orgId`. Nothing crosses orgs
-  except `public` projects (gated by `ALLOW_CROSS_ORG_PUBLIC`) and `platform` projects reached
-  through an explicit grant.
+- **Org is the tenancy boundary** ([permissions.md §1](./permissions.md#1-mental-model)). Projects,
+  org members and invites carry `orgId`. Definitions, versions and share links reach their org
+  through their project.
 - **Definitions live inside projects.** Deleting a project cascades.
-- **Versions are immutable.** Mutations create new rows; `live` and `draft` are pointers.
-- **Sharing is per-definition.** Anonymous access is delivered only via `ShareLink` tokens. There is
-  no project-level anonymous flag.
-- **A user can belong to multiple orgs.** Every request carries an `actingOrgId` that the rule layer
-  compares against the resource's `orgId`.
+- **A user can belong to multiple orgs.** Every request carries an `actingOrgId`; tenancy checks
+  compare it to the resource's org, never "is the user in some matching org".
 
 ---
 
@@ -86,17 +79,12 @@ Owned by `IAuthProvider`, not by the data layer, which references users only by 
 Selva-side state (display name, starred definitions, recent runs) lives in `UserProfile`
 (`IUserProfileStore`); platform permissions live in `IPlatformPermissionStore`. The split keeps
 external IdPs from having to model anything Selva-specific: see
-[permissions.md §2](./permissions.md#2-platform-scope).
-
-**Invariant:** at least one user always holds `instance_admin`; the data layer rejects the operation
-that would zero it out.
+[permissions.md §2](./permissions.md#2-platform-scope), which also holds the
+at-least-one-`instance_admin` invariant.
 
 ### 3.2 Organization
 
-`id`, `slug` (unique, URL-safe), `ownerId` (transferable), `createdBy` (immutable), soft-delete via
-`deletedAt`. Membership via `OrgMember(orgId, userId, role, permissions[])`: `owner`/`admin` get
-every org permission; `member` gets none and can be granted `manage_definitions` and/or
-`manage_projects`.
+Roles and org permissions: [permissions.md §3](./permissions.md#3-org-scope).
 
 `SELVA_TENANCY=single` (default) provisions one org at setup and resolves every user's
 `actingOrgId` to it. `multi` makes orgs first-class. The multi-org URL namespace is reserved but
@@ -104,92 +92,53 @@ not routed: see [ADR 0006](../adr/0006-multi-org-url-shape-and-reserved-slugs.md
 
 ### 3.3 Project
 
-Lives in one org (`orgId`, never null). `slug` is unique per org, not globally.
-
-`visibility`: `private` (members only), `org` (any org member), `public` (any authenticated user,
-optionally cross-org), `platform` (instance admins plus explicit grants, gated by
-`ENABLE_PLATFORM_PROJECTS`).
-
-Roles: `owner`, `editor`, `viewer`. `viewer` is for stakeholders who solve and download but cannot
-modify.
-
-Two project models, selected per-project by `autoJoinOnUpload`:
-
-- **Container** (default, `false`): project role is authoritative. `Definition.ownerId` is
-  display-only.
-- **Commons** (`true`, `public` projects only): any authenticated user can upload a _new_ definition
-  and owns it; they cannot modify anyone else's. Project owner/editor keep moderation authority.
-
-Full semantics in [permissions.md §4](./permissions.md#4-project-scope).
-
-**Reclaim:** an org owner/admin can add themselves as co-owner of any project in their org when the
-original owner is unreachable. It does not demote the original owner.
+Lives in one org; `slug` is unique per org, not globally. Visibility, roles and the container and
+commons models (`autoJoinOnUpload`) are in [permissions.md §4](./permissions.md#4-project-scope);
+Reclaim is under `canReclaim` in §5.
 
 ### 3.4 Definition
 
-- `guid`: immutable, public-facing. `projectId` FK to the parent project.
-- `ownerId` set at creation, never changes.
-- `status`: `pending | draft | published`. `pending` covers the window between metadata-write and
-  blob-upload; list endpoints filter it out unless `includePending`.
-- `runCount` increments per solve. `liveVersionId` / `draftVersionId` point at version rows.
+- `guid` is immutable and public-facing; `projectId` points at the parent project.
+- `status` includes `pending`, an internal state between the metadata write and the blob upload.
+  List endpoints hide `pending` and `archived` unless asked.
 - `coverImage` is a public URL; uploads are transcoded to WebP, max 1200px, q=85
   ([storage/image.ts](../../packages/platform/src/storage/image.ts)).
-- `computeServerId` optional override: falls back to org default, then instance default.
 
 ### 3.5 DefinitionVersion
 
-`(id, definitionId, versionNumber, fileExt, fileKey, originalFilename?, uploadedBy, uploadedAt,
-schema?, schemaExtractedAt?)`. `versionNumber` is monotonic and never reused; `fileKey` resolves
-through `IStorageProvider` at `definitions/{guid}/versions/v{n}.{ext}`.
+`versionNumber` is monotonic and never reused, even after the latest version is deleted
+(`nextVersionNumber` on the record). `fileKey` resolves through `IStorageProvider`. The cached
+`schema` is covered by [schema-caching.md](./schema-caching.md).
 
-A version cannot be deleted while referenced by `liveVersionId` or `draftVersionId` (FK
-`ON DELETE RESTRICT` in Postgres, explicit check in the local provider): it returns 409. Rollback is a
-re-point of `liveVersionId`, not a re-upload.
-
-The cached `schema` is covered by [schema-caching.md](./schema-caching.md).
+Immutability, the live and draft pointers, rollback and deletion protection:
+[permissions.md §6](./permissions.md#6-definition-versioning).
 
 ### 3.6 ShareLink
 
 Per-definition, per-channel grant for unauthenticated access; the only anonymous-access mechanism.
-Gated by `ENABLE_SHARING`.
-
-The raw token is shown to the minter **once** at creation
-(`POST /api/v1/definitions/[guid]/share-links`); only the HMAC `tokenHash` is persisted. Resolution
-HMACs the supplied token, looks up by hash, checks revocation/expiry/cap/parent-status, and builds a
-synthetic `RequestContext` scoped to the token, skipping user-based rules. Definition soft-delete
-fails tokens closed; hard-delete cascades them out.
-
-Full design in [permissions.md §7](./permissions.md#7-share-links).
+Gated by `ENABLE_SHARING`. Design, token resolution and cascade:
+[permissions.md §7](./permissions.md#7-share-links).
 
 ### 3.7 Invite
 
-Org-scoped only: you invite to an org; project membership is managed within-org.
-`(id, token, email, orgId, orgRole, orgPermissions[], invitedBy, expiresAt, acceptedAt?,
-acceptedByUserId?)`. The token is the capability, so `getByToken` and `markAccepted` accept
-`SYSTEM_CONTEXT`: `/accept-invite` is unauthenticated by design.
+Org-scoped only. `/accept-invite` is unauthenticated by design: the token is the capability, so
+`getByTokenHash` and `markAccepted` accept `SYSTEM_CONTEXT`.
 
 ### 3.8 ComputeServerConfig
 
-Discriminated by `scope`:
-
-- `PlatformComputeServer`: `sharedWith: 'all' | string[]`. Created by `manage_compute`.
-- `OrgComputeServer`: `ownerOrgId`. Created by an org owner/admin with `manage_org_compute`, gated
-  by `ALLOW_ORG_COMPUTE_OVERRIDE`.
-
-Defaults are layered: a global `defaultServerId` (must reference a platform server, and is **always**
-usable by every org regardless of `sharedWith`) plus per-org `orgDefaults[orgId]`.
-
-Resolution, narrowest wins: per-definition pin → per-org default → global default. A pin to a
-no-longer-visible server falls through silently. `serversVisibleTo(config, orgId)`
-([computeServer/utils.ts](../../packages/platform/src/computeServer/utils.ts)) is the shared visibility
-helper every picker and the resolver use.
+Platform and org-private servers, layered defaults, and the resolution order are in
+[permissions.md §3](./permissions.md#compute-servers-sharing-defaults).
+`serversVisibleTo(config, orgId)`
+([computeServer/utils.ts](../../packages/platform/src/computeServer/utils.ts)) is the shared
+visibility helper every picker and the resolver use.
 
 ---
 
 ## 4. Provider abstraction
 
 `@selvajs/platform` defines only TypeScript interfaces, Zod schemas, pure rule functions, and shared
-utilities. No I/O.
+utilities. No I/O. The interface list and the conformance suites every provider must pass are in
+[packages/platform/README.md](../../packages/platform/README.md).
 
 |                     | `@selvajs/local-provider`                          | `@selvajs/supabase-provider`                    |
 | ------------------- | -------------------------------------------------- | ----------------------------------------------- |
@@ -198,34 +147,12 @@ utilities. No I/O.
 | Blobs               | Filesystem under `DATA_PATH/`                      | Supabase Storage buckets                        |
 | Tenancy enforcement | Code-level scoping in store methods                | RLS policies, scoped via `adapterContext` (JWT) |
 
-`@selvajs/header-auth-provider` implements `IAuthProvider` only: pair it with either data/storage
+`@selvajs/header-auth-provider` implements `IAuthProvider` only; data and storage come from another
 provider.
-
-| Interface                    | Location                                                                                          |
-| ---------------------------- | ------------------------------------------------------------------------------------------------- |
-| `IAuthProvider`              | [`@selvajs/platform/auth`](../../packages/platform/src/auth/interface.ts)                         |
-| `IDataProvider`              | [`@selvajs/platform/data`](../../packages/platform/src/data/interface.ts)                         |
-| `IOrgStore`                  | [`@selvajs/platform/organizations`](../../packages/platform/src/organizations/interface.ts)       |
-| `IProjectStore`              | [`@selvajs/platform/projects`](../../packages/platform/src/projects/interface.ts)                 |
-| `IDefinitionStore`           | [`@selvajs/platform/definitions`](../../packages/platform/src/definitions/interface.ts)           |
-| `IComputeServerStore`        | [`@selvajs/platform/computeServer`](../../packages/platform/src/computeServer/interface.ts)       |
-| `IShareLinkStore`            | [`@selvajs/platform/shareLinks`](../../packages/platform/src/shareLinks/interface.ts)             |
-| `IPlatformProjectGrantStore` | [`@selvajs/platform/platformProjects`](../../packages/platform/src/platformProjects/interface.ts) |
-| `IInviteStore`               | [`@selvajs/platform/invites`](../../packages/platform/src/invites/interface.ts)                   |
-| `IStorageProvider`           | [`@selvajs/platform/storage`](../../packages/platform/src/storage/interface.ts)                   |
-| `IUserProfileStore`          | [`@selvajs/platform/userProfile`](../../packages/platform/src/userProfile/interface.ts)           |
-| `IPlatformPermissionStore`   | [`@selvajs/platform/permissions`](../../packages/platform/src/permissions/interface.ts)           |
-| `IEventSink`                 | [`@selvajs/platform/events`](../../packages/platform/src/events/interface.ts)                     |
-
-`IDataProvider` also carries optional `auditQuery` / `events` hooks, a `schemaVersion` handshake, and
-the `ensureUser` / `onUserDeleted` lifecycle methods.
 
 Cross-store orchestration lives outside platform: the definition service, render loader, and
 schema extraction are in [`@selvajs/server/definitions`](../../packages/server/src/definitions), wired to the
 app's providers by [`$lib/server/definitions/`](../../packages/selva/src/lib/server/definitions).
-
-**Conformance:** `@selvajs/platform/testing` exports framework-agnostic suites every provider runs
-against. A new provider must pass them to be drop-in.
 
 **Selection** is environment-driven: `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` /
 `SELVA_STORAGE_PROVIDER` resolved by `createSelvaProviders`
@@ -237,15 +164,11 @@ external `selva.config.js` for a provider not bundled in the app. Not switchable
 
 ## 5. Request lifecycle
 
-Every request flows through [hooks.server.ts](../../packages/selva/src/hooks.server.ts):
-
-1. Public-route shortcut (login, setup, accept-invite, logout, auth callbacks): pass through.
-2. Session cookie → `providers.auth.verifyToken(token)` → `AuthUser` or 401.
-3. Load `UserProfile`.
-4. Build `RequestContext`: resolve `actingOrgId` (first org membership, falling back to the first org
-   for instance admins), load that org's `OrgMember.permissions`, attach `adapterContext` (e.g. the
-   Supabase JWT for RLS).
-5. Stash on `event.locals`.
+[hooks.server.ts](../../packages/selva/src/hooks.server.ts) builds the `RequestContext` for every
+request. A bearer API token is resolved first (`resolveApiToken`) and decides the request on its
+own; otherwise the session cookie goes through `providers.auth.verifyToken`, and `attachSession`
+loads the profile and platform permissions and calls `buildRequestContext`. `actingOrgId` is the
+user's first org membership; an instance admin with none falls back to the first org.
 
 **`RequestContext` is the security currency.** Every store method takes it first, and adapters must
 scope queries by it: the query is the security boundary, never the route handler trusting itself.
@@ -254,73 +177,43 @@ scope queries by it: the query is the security boundary, never the route handler
 
 ## 6. Storage paths
 
-Built through [`@selvajs/platform/definitions/paths.ts`](../../packages/platform/src/definitions/paths.ts),
-never string-concatenated ad hoc:
-
-| Path                                     | Purpose                                     |
-| ---------------------------------------- | ------------------------------------------- |
-| `definitions/{guid}/versions/v{n}.{ext}` | A definition file                           |
-| `definitions/{guid}/cover.webp`          | Cover image (always WebP after transcoding) |
-| `definitions/{guid}/`                    | Cascade-delete prefix on definition removal |
-
-`assertSafeKey()` rejects `..`, absolute markers, separators, and NUL.
+Built through [`definitionPaths`](../../packages/platform/src/definitions/paths.ts)
+(`definitions/{guid}/versions/v{n}.{ext}`, `cover.webp`, and the `definitions/{guid}/` cascade-delete
+prefix), never string-concatenated ad hoc. `assertSafeKey()` admits only `[A-Za-z0-9._-]` segments and
+rejects `.` and `..`, so an id cannot escape its prefix.
 
 ---
 
-## 7. Schema generation
+## 7. Build and deployment
 
-```
-packages/schemas/ui-schema.json
-        ├─→ pnpm generate:ts → packages/schemas/src/generated/schema.ts
-        └─→ pnpm generate:cs → Plugin/Selva.Schema/Models/UISchema.Generated.cs
-packages/schemas/wire-schema.json
-        ├─→ pnpm generate:ts → packages/schemas/src/generated/wire.ts
-        └─→ pnpm generate:cs → Plugin/Selva.Schema/Models/Wire.Generated.cs
-```
-
-Edit the schema, run `pnpm generate`. CI fails on drift.
+The Compute app is standalone SvelteKit. Provider selection, tenancy, feature flags, and secrets are
+env vars: [.env.example](../../packages/selva/.env.example) is authoritative. The compute server URL
+and API key are not env: they are configured at `/admin/compute` and persisted through
+`IComputeServerStore`. Setup is in [quick-start.md](../self-hosting/get-started/quick-start.md).
 
 ---
 
-## 8. Build and deployment
+## 8. Data privacy
 
-**Plugin + plugin UI.** `pnpm dev:plugin` runs the schema designer on `:5173`; the plugin is built
-with `dotnet build` and connects back over WebSocket. `pnpm build:plugin` builds the web assets,
-embeds them as `EmbeddedResource`, and produces one self-contained `.gha` (net10.0 for
-Rhino 9, net8.0 for Rhino 8). The plugin allocates a local HTTP port at runtime to serve them.
-
-**Compute app.** Standalone SvelteKit deployment. Provider selection, tenancy, feature flags, and
-secrets are all env vars: [.env.example](../../packages/selva/.env.example) is authoritative. `PORT` defaults to 3000.
-The compute server URL and API key are configured at `/admin/compute` and persisted through
-`IComputeServerStore`, never via env. `npx @selvajs/cli` generates the deployment directory,
-including a PM2 [ecosystem.config.cjs](../../packages/selva/templates/ecosystem.config.cjs).
+Selva holds personal data, and **the operator is the data controller**, not the auth provider. The
+provider abstraction moves where _credentials_ live (Supabase `auth.users` vs the local provider's
+`auth-users.json`); it does not move Selva out of the compliance surface.
+[Data privacy](../self-hosting/concepts/data-privacy.md) is the authoritative inventory of what is
+stored and what erasure reaches.
 
 ---
 
-## 9. Data privacy
-
-Selva minimizes the personal data it holds, but it holds some, and **the operator is the data
-controller**, not the auth provider.
-[Data privacy](../self-hosting/concepts/data-privacy.md) is the
-authoritative inventory of what is stored and what erasure reaches. The provider abstraction moves
-where _credentials_ live (Supabase `auth.users` vs the local provider's own `auth-users.json`); it
-does not move Selva out of the compliance surface.
-
----
-
-## 10. Not covered here
+## 9. Not covered here
 
 - **Access-control rules**: [permissions.md](./permissions.md).
 - **Grasshopper plugin internals**: [plugin-context.md](./plugin-context.md).
 - **Frontend component architecture**: [packages/ui/CONTEXT.md](../../packages/ui/CONTEXT.md).
 - **Rhino.Compute topology**:
   [docs/self-hosting/get-started/rhino-compute.md](../self-hosting/get-started/rhino-compute.md).
-- **`@selvajs/compute`**: the published Rhino.Compute client library, a dependency rather than a
-  Selva component.
 
 ---
 
-## 11. Designed for, not yet wired
+## 10. Designed for, not yet wired
 
 | Item                                      | What's missing                                                                              |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------- |

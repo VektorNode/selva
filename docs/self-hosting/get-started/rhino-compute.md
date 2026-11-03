@@ -22,8 +22,8 @@ The headless Rhino that solves definitions, on a Windows machine separate from t
    It backs up the current deployment, swaps in the latest build, restarts IIS, and rolls back on failure. Re-run it to update.
 
 4. **Set environment variables** and restart the service:
-   - `RHINO_COMPUTE_CREATE_HEADLESS_DOC=true` enables block instances.
-   - `RHINO_COMPUTE_ABORT_ON_HANGUP=true` stops a solve whose caller hung up, so an abandoned slider solve doesn't block the next one.
+   - `RHINO_COMPUTE_CREATE_HEADLESS_DOC=true` enables block instances. The `8.x.selva` branch already defaults to true; `9.x.selva` defaults to false.
+   - `RHINO_COMPUTE_ABORT_ON_HANGUP=true` stops a solve whose caller hung up, so an abandoned slider solve doesn't block the next one. Only the fork's `9.x.state` branch reads it; `8.x.selva` and `9.x.selva` ignore it.
 
 5. **Install the Selva plugin** under the `rhino.compute` user account, through the Grasshopper Package Manager, along with any other plugins your definitions need. Plugins installed as another user aren't found at solve time.
 

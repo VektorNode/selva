@@ -37,5 +37,5 @@ Browser-based clients are refused unless their origin is in `MCP_ALLOWED_ORIGINS
 
 - Solves draw on the token owner's compute budget, plus the token rate limit: see [Security and limits](../../self-hosting/deployment/security-and-limits.md#api-tokens-apiv1).
 - Only the live version solves.
-- A solve returns number and text outputs, a count per geometry output, file names and a link to view the result. Geometry stays in Selva.
-- Without an API-token store in the data provider, every call returns 503 `API_TOKENS_UNAVAILABLE`.
+- A solve returns number and text outputs, a count per geometry output, file names and a link to view the result. `detail: 'full'` adds the raw response with geometry and file contents, which can be very large.
+- Every call returns 503 `API_TOKENS_UNAVAILABLE` when the data provider has no API-token store, `SELVA_HMAC_KEY` is missing or under 32 characters, or the Supabase delegated session is unhealthy.

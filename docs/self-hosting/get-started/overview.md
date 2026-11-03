@@ -7,14 +7,7 @@ description: 'Three steps to a live deployment, plus the mental model for comput
 
 # Get Started
 
-Going live takes three steps on two machines: a Windows **Compute server** running headless Rhino, and an **app server** (any host that runs a long-lived Node process).
-
-```mermaid
-flowchart LR
-    A["1. Rhino.Compute<br/>Windows VM"] --- B["2. Plugin + schema<br/>your Rhino"]
-    B --> C["3. Web app<br/>app server"]
-    C -->|solves via| A
-```
+Going live takes three steps on two machines: a Windows **Compute server** running headless Rhino, and an **app server** (any host that runs a long-lived Node process) that solves through it.
 
 To try it first, [Local Dev Setup](./quick-start.md) runs the app on your laptop. Solving still needs a Compute server.
 
@@ -25,21 +18,16 @@ Install the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d), Se
 ## 2. Plugin + schema
 
 1. Install **Selva** from the Grasshopper Package Manager and restart Rhino.
-2. Drop the Selva UI Builder onto your definition and open the designer.
+2. Drop the Selva UI Bridge onto your definition and open the designer.
 3. Drag inputs into controls, lay them out, save. The schema is written into the `.gh`.
 
 ## 3. Deploy the web app
 
-```bash
-npx @selvajs/cli my-deployment   # prompts for provider, origin, tenancy
-cd my-deployment
-npm run doctor                   # validates the config
-npm start                        # runs under pm2
-```
+Run `npx @selvajs/cli my-deployment`, then `npm run doctor` and `npm start` from the new directory. The [CLI guide](./cli.md) has the details.
 
-Open `/setup` to create the admin account, register your Compute server at `/admin/compute`, upload a definition, share the link.
+Open `/setup` to create the admin account, register your Compute server at `/admin/compute`, upload a definition, share the link. Do `/setup` before the host is reachable by anyone else: whoever finishes it first becomes the admin.
 
-Auth, data, and storage default to the `local` provider, which needs no setup. See [Providers](../providers/overview.md), [CLI](./cli.md), [Deployment prerequisites](../deployment/prerequisites.md).
+Auth, data, and storage default to the `local` provider, which needs no setup. See [Providers](../providers/overview.md) and [Deployment prerequisites](../deployment/prerequisites.md).
 
 ## 4. (Optional) Build your own app
 

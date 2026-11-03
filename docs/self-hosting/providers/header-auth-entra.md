@@ -7,7 +7,7 @@ description: 'Trust a reverse proxy for identity: front Selva with Entra SSO via
 
 # Header-auth (Entra, Okta, Google Workspace…)
 
-`@selvajs/header-auth-provider` is an **auth-only** adapter that trusts identity headers set by a reverse proxy (Caddy `forward_auth`, oauth2-proxy, Authelia) in front of Selva. Pair it with [`local`](./local.md) or [`supabase`](./supabase.md) for data and storage.
+`@selvajs/header-auth-provider` is an **auth-only** adapter that trusts identity headers set by a reverse proxy (Caddy `forward_auth`, oauth2-proxy, Authelia) in front of Selva. Pair it with [`local`](./local.md) for data and storage. With [`supabase`](./supabase.md) data the combination is unverified: see [Mixing providers](./overview.md#mixing-providers).
 
 ## ⚠ Security: the deployment IS the boundary
 
@@ -21,15 +21,7 @@ Selva running behind a [reverse proxy](../deployment/reverse-proxy.md) (see [Pre
 
 ## Entra SSO via oauth2-proxy + Caddy
 
-```mermaid
-flowchart LR
-  B[Browser] -->|HTTPS| C[Caddy]
-  C -->|forward_auth| O[oauth2-proxy]
-  O -->|OIDC| E[Entra]
-  C -->|"reverse_proxy + SELVA-* headers"| S["Selva 127.0.0.1:3000"]
-```
-
-Replace `[your-domain]`, `corp.com` and `admin@corp.com` throughout.
+Caddy checks requests with oauth2-proxy, which signs users in with Entra, then forwards them to Selva on `127.0.0.1:3000` with `SELVA-*` identity headers. Replace `[your-domain]`, `corp.com` and `admin@corp.com` throughout.
 
 ### Part 1: Entra app registration
 
@@ -44,7 +36,7 @@ The default `User.Read` permission is enough. Note the client secret's expiry da
 
 ### Part 2: Install oauth2-proxy
 
-Download a [release](https://github.com/oauth2-proxy/oauth2-proxy/releases), v7.15.5 or later. Earlier versions keep a session going after Entra refuses to refresh it, or write session cookies to the log ([GHSA-hhqp-vx7f-5c6m](https://github.com/oauth2-proxy/oauth2-proxy/security/advisories/GHSA-hhqp-vx7f-5c6m)). Put the binary at `/usr/local/bin/oauth2-proxy`, and generate a cookie secret:
+Download a [release](https://github.com/oauth2-proxy/oauth2-proxy/releases), v7.15.5 or later. Earlier versions log the full request, cookies and `Authorization` headers included, when an OAuth callback fails its CSRF check ([GHSA-hhqp-vx7f-5c6m](https://github.com/oauth2-proxy/oauth2-proxy/security/advisories/GHSA-hhqp-vx7f-5c6m)). Put the binary at `/usr/local/bin/oauth2-proxy`, and generate a cookie secret:
 
 ```bash
 python3 -c 'import os,base64;print(base64.urlsafe_b64encode(os.urandom(32)).decode())'
@@ -159,6 +151,9 @@ A user of its own keeps `cookie_secret` and `client_secret` away from the web se
             uri /oauth2/auth
             copy_headers X-Auth-Request-User X-Auth-Request-Email X-Auth-Request-Preferred-Username
 
+            # Without this block the browser sees a bare "unauthorized". Caddy has no
+            # `redirect` directive here (`unrecognized directive: redirect`): set
+            # Location and respond 302.
             @bad status 401
             handle_response @bad {
                 header Location /oauth2/start?rd={http.request.uri}
@@ -198,11 +193,11 @@ SIGN_IN_MAX_AGE_DAYS=7
 
 `ADDRESS_HEADER` and `XFF_DEPTH` let Selva's rate limits see each client's address instead of Caddy's ([Reverse proxy](../deployment/reverse-proxy.md)). Without them every client shares one bucket, and one client can block every sign-in.
 
-`SIGN_IN_MAX_AGE_DAYS` revokes the API tokens of someone who stops coming through Entra: see [When someone leaves](#when-someone-leaves). Leave it out if you run integrations on a key whose owner rarely opens Selva, because that key would stop working too.
+`SIGN_IN_MAX_AGE_DAYS` retires the API tokens of someone who stops coming through Entra ([When someone leaves](#when-someone-leaves)). Leave it out if an integration key's owner rarely opens Selva: that key would lapse too.
 
-`HOST=127.0.0.1` is required, and port 3000 must be closed in the firewall. Leave `HEADER_AUTH_*_HEADER` unset: this Caddyfile maps onto the default `SELVA-*` names. If you forward oauth2-proxy's headers unchanged instead, set `HEADER_AUTH_UPN_HEADER=X-Auth-Request-Preferred-Username` and `HEADER_AUTH_EMAIL_HEADER=X-Auth-Request-Email`, and leave the display-name header alone ([details](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md#header-names-must-match-what-reaches-selva)).
+`HOST=127.0.0.1` is required, and port 3000 must be closed in the firewall. Leave `HEADER_AUTH_*_HEADER` unset: this Caddyfile maps onto the default `SELVA-*` names. To forward oauth2-proxy's own headers instead, set all three vars, never just some: see the [provider README](https://github.com/VektorNode/selva/blob/main/packages/providers/header-auth/README.md#header-names-must-match-what-reaches-selva).
 
-Run `npm run doctor` in `~/selva` to see the resolved header names, then restart the app.
+Run `npm run doctor` in your deployment directory to see the resolved header names, then restart the app.
 
 ### Part 7: Test
 
@@ -212,8 +207,6 @@ Run the [provider README's self-test](https://github.com/VektorNode/selva/blob/m
 
 | Symptom                               | Fix                                                                           |
 | ------------------------------------- | ----------------------------------------------------------------------------- |
-| Browser shows plain "unauthorized"    | Add the `handle_response @bad` block                                          |
-| `unrecognized directive: redirect`    | Use `header Location ...` + `respond 302` inside `handle_response`            |
 | **AADSTS50011** redirect URI mismatch | Make `redirect_url` and the Entra URI identical                               |
 | Bounced after login                   | Compare the email in the oauth2-proxy log to `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` |
 
@@ -226,10 +219,10 @@ Run the [provider README's self-test](https://github.com/VektorNode/selva/blob/m
 
 ### When someone leaves
 
-1. **Disable them in Selva** at **Admin → Users**. This is the instant stop: it refuses their sign-in and revokes their API tokens (the Grasshopper plugin's upload sign-in, MCP clients, and keys made at **Team → API tokens**). An MCP client may keep going for up to a minute.
+1. **Disable them in Selva** at **Admin → Users**. This is the instant stop: it refuses their sign-in and revokes their API tokens (the Grasshopper plugin's upload sign-in, MCP clients, and keys made at **Team → API tokens**). An MCP client may still list its tools for up to a minute, but every call is refused at once.
 2. **Disable the user in Entra.** Their browser session ends at oauth2-proxy's next refresh, within `cookie_refresh`.
 
-A request with a Selva API token skips oauth2-proxy (`@selfAuthenticated` above), so Entra never sees it. If step 1 is forgotten, `SIGN_IN_MAX_AGE_DAYS` (Part 6) still retires the person's tokens: they are revoked once the person hasn't come through Entra for that many days. Without it, a token keeps working until it expires; **Team → API tokens** shows each key's expiry.
+A request with a Selva API token skips oauth2-proxy (`@selfAuthenticated` above), so Entra never sees it. If step 1 is forgotten, `SIGN_IN_MAX_AGE_DAYS` (Part 6) revokes the person's tokens once they haven't come through Entra for that many days. Without it, a token works until it expires; **Team → API tokens** shows each key's expiry.
 
 Disable the Selva user rather than leave it. Selva matches header-auth users by UPN, then by email, so if Entra later gives either to someone else, they would sign in as the old account, with its projects and roles. A disabled account refuses them instead.
 

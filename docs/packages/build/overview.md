@@ -26,14 +26,13 @@ flowchart TB
     routes -->|sends inputs to| compute
     ui -->|drives| viz
     ui -->|speaks| schemas
-    compute -->|speaks| schemas
     compute -->|solves over HTTP| rc
 ```
 
-Take only the boxes you need. For the viewer and solving, `@selvajs/ui` and `@selvajs/compute` are enough; `ui` peer-depends on `visualization`, `solve`, `schemas` and `three`.
+Take only the boxes you need. For the viewer and solving, install `@selvajs/ui`. It peer-depends on `compute`, `visualization`, `solve`, `schemas`, `three`, `@sveltejs/kit`, `bits-ui`, `svelte` and `tailwind-variants`.
 
 ```bash
-pnpm add @selvajs/ui @selvajs/visualization @selvajs/solve @selvajs/compute @selvajs/schemas three
+pnpm add @selvajs/ui @selvajs/visualization @selvajs/solve @selvajs/compute @selvajs/schemas three bits-ui tailwind-variants
 ```
 
 The [packages page](https://selva.dev/packages) lists every `@selvajs/*` package with its README, the reference for its API. Backends: [Providers](../../self-hosting/providers/overview.md).

@@ -7,19 +7,7 @@ description: 'How the Grasshopper plugin and MCP clients sign in through the bro
 
 # Signing in from apps
 
-The Grasshopper plugin (to upload definitions) and MCP clients such as Claude (to read and solve) use the standard native-app flow. The app never sees your password.
-
-```mermaid
-sequenceDiagram
-    participant App
-    participant Browser
-    participant Selva
-    App->>Browser: open /oauth/authorize
-    Browser->>Selva: sign in, pick org, Allow
-    Selva-->>App: one-time code (loopback or client redirect)
-    App->>Selva: code + PKCE secret
-    Selva-->>App: API token (30 days)
-```
+The Grasshopper plugin (to upload definitions) and MCP clients such as Claude (to read and solve) use the standard native-app flow: the app opens `/oauth/authorize` in your browser, you sign in and click Allow, and the app trades the one-time code it gets back for an API token. The app never sees your password.
 
 - The consent page names the app and lists what it may do.
 - With several organizations you pick one. The token works there only.
@@ -64,6 +52,4 @@ The check runs on every request, so a token stops working when its owner no long
 
 ## Behind a forward-auth proxy
 
-Let the OAuth discovery and token endpoints and `selva_` keys through without the proxy's sign-in. Keep `/oauth/authorize` behind it. The Caddyfile in [Header auth with Entra](../../self-hosting/providers/header-auth-entra.md#part-5-caddyfile) does this.
-
-Those keys never pass the proxy, so disabling someone in your identity provider doesn't stop them by itself. Disable the person in Selva too, or set `SIGN_IN_MAX_AGE_DAYS` so their keys lapse: [When someone leaves](../../self-hosting/providers/header-auth-entra.md#when-someone-leaves).
+Let the OAuth discovery and token endpoints and `selva_` keys through without the proxy's sign-in. Keep `/oauth/authorize` behind it. The Caddyfile in [Header auth with Entra](../../self-hosting/providers/header-auth-entra.md#part-5-caddyfile) does this. Because those keys skip the proxy, disabling someone in your identity provider doesn't stop them: see [When someone leaves](../../self-hosting/providers/header-auth-entra.md#when-someone-leaves).

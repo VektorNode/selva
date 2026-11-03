@@ -7,7 +7,7 @@ description: 'Why Selva needs a reverse proxy in front of it, and a minimal Cadd
 
 # Reverse proxy
 
-Bind Selva to `127.0.0.1` and keep port 3000 closed. The proxy terminates TLS and, with SSO, strips and sets the `SELVA-*` identity headers ([Header-auth & Entra](../providers/header-auth-entra.md)). Any proxy works; the example uses Caddy.
+Bind Selva to `127.0.0.1` and keep port 3000 closed. `HOST` defaults to `0.0.0.0`, and the scaffold sets it only for header auth, so set `HOST=127.0.0.1` yourself otherwise. The proxy terminates TLS and, with SSO, strips and sets the `SELVA-*` identity headers ([Header-auth & Entra](../providers/header-auth-entra.md)). Any proxy works; the example uses Caddy.
 
 ## Minimal Caddy example
 
@@ -20,9 +20,9 @@ EOF
 sudo systemctl reload caddy
 ```
 
-Open ports 443 and 80 in your firewall. In `.env`, set `ORIGIN=https://selva.yourdomain.com`, remove `ALLOW_INSECURE_COOKIES=true` if set, then `npm run restart`. No domain yet: use `:80 { reverse_proxy 127.0.0.1:3000 }` with `ALLOW_INSECURE_COOKIES=true`.
+Open ports 443 and 80 in your firewall. In `.env`, set `ORIGIN=https://selva.yourdomain.com`, remove `ALLOW_INSECURE_COOKIES=true` if set, then `npm run restart`. No domain yet: use `:80` as the site address (plain HTTP) and set `ALLOW_INSECURE_COOKIES=true`, or login over `http://` silently fails.
 
-For security headers, caching and access logs, start from [Caddyfile.example](./Caddyfile.example).
+For gzip, the body cap and access logs, start from [Caddyfile.example](./Caddyfile.example). The app sets its own security headers.
 
 ## Tell Selva the real client IP
 
@@ -39,6 +39,18 @@ XFF_DEPTH=1
 | Cloudflare → Caddy      | `2`         |
 | CDN → cloud LB → Caddy  | `3`         |
 
+Caddy replaces an incoming `X-Forwarded-For` with the connecting address unless that address is in `trusted_proxies`. Behind a CDN or load balancer, the last two rows therefore see one entry, and every request that reads the client address throws `XFF_DEPTH is 2, but only found 1 addresses`. Trust the proxy that connects to Caddy:
+
+```caddyfile
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+```
+
+`private_ranges` covers a load balancer inside your network. Otherwise list the ranges of the proxy that connects to Caddy.
+
 Unsure? Stop Selva and print what arrives:
 
 ```bash
@@ -48,7 +60,7 @@ node -e 'require("http").createServer((q,s)=>{console.log(q.headers["x-forwarded
 
 Load the site from a phone on mobile data (the LAN or server-side `curl` skip hops). The number of comma-separated entries is `XFF_DEPTH`, and the leftmost should be the phone's IP. Then `Ctrl-C` and `npm start`.
 
-- Leftmost isn't the phone: a hop overwrites the header. On Cloudflare, use `ADDRESS_HEADER=CF-Connecting-IP` and no `XFF_DEPTH`.
+- Leftmost isn't the phone: a hop overwrites the header (Caddy does, unless the hop is in `trusted_proxies`). On Cloudflare, use `ADDRESS_HEADER=CF-Connecting-IP` and no `XFF_DEPTH`.
 - Nothing prints: the proxy doesn't set it. nginx needs `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`.
 
 Without this, every request looks like `127.0.0.1`. Login rate limiting is per IP, so five failed logins from anyone lock out all users for 15 minutes.

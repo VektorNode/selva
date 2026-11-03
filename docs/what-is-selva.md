@@ -27,8 +27,6 @@ flowchart LR
 
 **The web app** loads the schema, draws the controls, and solves through **Rhino.Compute**.
 
-One schema drives both. It generates into TypeScript and C#, so the two stay in step.
-
 ## Two ways to run the web half
 
 1. **The Selva platform.** `@selvajs/selva` plus the [CLI](./self-hosting/get-started/cli.md) is a ready-made multi-user app with organizations, projects, and roles. Most teams take this path.

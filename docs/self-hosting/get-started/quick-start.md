@@ -23,7 +23,7 @@ pnpm install
 pnpm build
 ```
 
-The build is required: the app imports workspace packages from their built `dist/`.
+The build is required: `@selvajs/compute`, `solve` and `visualization` load from their built `dist/`. The other workspace packages load from source and hot-reload.
 
 ## 2. Configure
 
@@ -31,7 +31,7 @@ The build is required: the app imports workspace packages from their built `dist
 cp packages/selva/.env.example packages/selva/.env
 ```
 
-[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example) documents every setting. Replace the placeholders `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` with 32-byte keys:
+[`.env.example`](https://github.com/VektorNode/selva/blob/main/packages/selva/.env.example) documents the settings. Replace the placeholders `SELVA_HMAC_KEY` and `SELVA_AT_REST_KEY` with 32-byte keys:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
@@ -43,7 +43,7 @@ That's all the `local` provider needs. For Supabase, see [Supabase provider](../
 
 ```bash
 pnpm dev:selva
-# http://localhost:5173
+# http://localhost:5199
 ```
 
 On first boot, visit `/setup` to create the platform admin. Then register your Compute server at `/admin/compute`; nothing solves until you do.
@@ -77,5 +77,5 @@ Details in [scripts/DEV-PROVIDERS.md](https://github.com/VektorNode/selva/blob/m
 
 - **Compute 500s on solve.** Check Rhino.Compute is running and registered at `/admin/compute`.
 - **`Cross-site POST form submissions are forbidden`.** Behind a proxy, set `ORIGIN` to the public URL, no trailing slash.
-- **`/setup` redirects to `/login`.** An admin exists. With the `local` provider, delete `.selva-data/` (`DATA_PATH`) to start over.
-- **Login bounces back to `/login`.** A production build over plain `http://` drops the `Secure` cookie. Set `ALLOW_INSECURE_COOKIES=true`.
+- **`/setup` redirects to `/login`.** An admin exists. With the `local` provider, stop the server and delete `.selva-data/` (`DATA_PATH`) to start over.
+- **Login bounces back to `/login`.** A production build over plain `http://` drops the `Secure` cookie. Add `ALLOW_INSECURE_COOKIES=true` to `.env`; it isn't in `.env.example`.

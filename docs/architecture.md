@@ -52,7 +52,9 @@ flowchart LR
 | `@selvajs/solve`         | The solve flow, client and server.                                                                                  |
 | `@selvajs/server`        | Server building blocks: compute limits, rate limit, SSRF guard, definitions, tokens, access.                        |
 | `@selvajs/platform`      | Provider _interfaces_. See [Providers](./self-hosting/providers/overview.md).                                       |
-| `@selvajs/*-provider`    | Provider implementations. Each runs a conformance suite.                                                            |
+| `@selvajs/*-provider`    | Provider implementations. `local` and `supabase` run the platform conformance suites; `header-auth` has none.       |
+| `@selvajs/mcp`           | MCP server machinery: tools over a host's `/api/v1`, with API-key auth.                                             |
+| `@selvajs/notifications` | Message templates for outbound mail. Pure render, no transport.                                                     |
 | `@selvajs/cli`           | Scaffolds and operates a deployment. See [CLI](./self-hosting/get-started/cli.md).                                  |
 
 ## Next

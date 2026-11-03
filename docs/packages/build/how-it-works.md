@@ -35,18 +35,7 @@ const response = await client.solve(definition, inputs);
 const { values } = new GrasshopperResponseProcessor(response).getValues();
 ```
 
-`definition` is a URL (the server downloads it), the file's bytes as a `Uint8Array` (uploaded as base64), or a `DefinitionRef` that loads bytes only when needed (see [Common tasks](./common-tasks.md#load-definition-bytes-on-demand)). A file path doesn't work: the client sends the path string as the definition.
-
-```mermaid
-sequenceDiagram
-    participant App
-    participant Client as client.solve
-    participant RC as Rhino.Compute
-    App->>Client: definition, inputs
-    Client->>RC: HTTP (timeout, retries, size limit)
-    RC-->>Client: values, errors, warnings
-    Client-->>App: response
-```
+`definition` is a URL (the server downloads it), the file's bytes as a `Uint8Array` (uploaded as base64), or a `DefinitionRef` that loads bytes only when needed (see [Common tasks](./common-tasks.md#load-definition-bytes-on-demand)). A file path doesn't work: the client sends the path string as the definition. `getIO` is narrower: it takes a URL or bytes, not a `DefinitionRef`.
 
 ## `client.solve` or a scheduler?
 
@@ -63,15 +52,7 @@ A UI needs a scheduler (`client.createScheduler(options)`): sliders fire many so
 | Instant answers for repeated inputs   | `cache: { maxBytes }`                      |
 | A spinner                             | `subscribe()`, `isSolving`, `hasPending`   |
 
-When the solver reports errors, `client.solve` **throws** `COMPUTATION_ERROR` and `scheduler.solve` **returns** the response with the errors in it:
-
-```ts
-import { readField } from '@selvajs/compute/core';
-
-const response = await scheduler.solve(definition, inputs);
-const errors = readField<string[]>(response, 'errors');
-if (errors?.length) showError(errors.join('\n'));
-```
+When the solver reports errors, `client.solve` **throws** `COMPUTATION_ERROR` and `scheduler.solve` **returns** the response with the errors in it: see [Partial success](./errors.md#partial-success).
 
 ## Two caches
 
@@ -81,13 +62,10 @@ if (errors?.length) showError(errors.join('\n'));
 | Default   | Off. Turn on with `cache: { maxBytes }` | On. Turn off with `reuseServerDefinitionCache: false` |
 | On a miss | The solve runs as normal                | The file is uploaded again, automatically             |
 
-Both identify a definition by its content. So:
+Both identify a definition by its content, or by its `key` for a `DefinitionRef`. So:
 
 - Don't change a `Uint8Array` after solving with it. The scheduler remembers its fingerprint and may return old answers.
-- A `DefinitionRef` key must identify one exact file, such as a version id, never a file name. It is trusted without looking at the bytes.
 - Cached answers are shared, not copied. Treat them as read-only.
-
-`solveDetailed()` reports per call whether the answer came `fromCache` and whether the file was re-uploaded.
 
 ## In a browser
 

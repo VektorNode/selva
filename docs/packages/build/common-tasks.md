@@ -27,8 +27,10 @@ async function onSliderChange(value: number) {
 	try {
 		render(await scheduler.solve(definition, inputs));
 	} catch (err) {
-		if (err.code === ErrorCodes.SUPERSEDED || err.code === ErrorCodes.ABORTED) return;
-		showError(err);
+		const replaced =
+			err instanceof ComputeError &&
+			(err.code === ErrorCodes.SUPERSEDED || err.code === ErrorCodes.ABORTED);
+		if (!replaced) showError(err);
 	}
 }
 
@@ -48,7 +50,7 @@ cancelButton.onclick = () => controller.abort();
 const response = await scheduler.solve(definition, inputs, { signal: controller.signal });
 ```
 
-`timeoutMs: 0` means no limit. A proxy can still close an idle connection; see "Long jobs behind a proxy" in the package README.
+`timeoutMs: 0` means no limit from the client. On Node, undici still gives up at 300 s, and a proxy can close an idle connection: see "Long jobs behind a proxy" in the package README.
 
 ## Many solves at once
 
@@ -67,11 +69,7 @@ Set `maxConcurrent` to the number of solves your server runs at once. On a share
 
 ## Clean up
 
-```ts
-onDestroy(() => scheduler.dispose());
-```
-
-`dispose()` cancels running and waiting solves and empties the cache. Later calls fail with `INVALID_STATE`. Disposing the client disposes its schedulers.
+Call `scheduler.dispose()` when its UI goes away (Svelte `onDestroy`, a React effect cleanup). It cancels running and waiting solves and empties the cache. Later calls fail with `INVALID_STATE`. Disposing the client disposes its schedulers.
 
 ## Show the outputs that worked
 
@@ -113,15 +111,7 @@ const definition: DefinitionRef = {
 await scheduler.solve(definition, inputs);
 ```
 
-Only the first solve calls `load()`. The `key` is trusted: two files sharing one return each other's results.
-
-## Solve from a URL
-
-```ts
-await client.solve('https://example.com/definition.gh', inputs);
-```
-
-The Compute server downloads the file, so it must reach the URL.
+`load()` runs on the first solve and again after the server evicts the file. The `key` is trusted: two files sharing one return each other's results.
 
 ## Download file outputs
 
@@ -129,7 +119,10 @@ Needs the Selva plugin and the VektorNode fork.
 
 ```ts
 import { downloadFileDataByRoot } from '@selvajs/compute/core';
+import { GrasshopperResponseProcessor } from '@selvajs/compute/grasshopper';
 
+const response = await client.solve(definition, inputs);
+const processor = new GrasshopperResponseProcessor(response);
 const files = [processor.getValue({ byName: 'Export' })].flat();
 await downloadFileDataByRoot(files, 'export');
 ```

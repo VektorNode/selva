@@ -11,7 +11,7 @@ Any host that runs a long-lived Node process works. Scaffolding is the [CLI guid
 
 - **Node.js 24+** with `npm` on `PATH`.
 - **No global pm2.** Each deployment pins its own; a global one fights it over a shared daemon. See [About pm2](../get-started/cli.md#about-pm2) and [Running other Node apps on the same server](../get-started/cli.md#running-other-node-apps-on-the-same-server).
-- **No direct public access.** Bind `127.0.0.1` behind a [reverse proxy](./reverse-proxy.md). Keep port 3000 closed.
+- **No direct public access.** Put it behind a [reverse proxy](./reverse-proxy.md) and keep port 3000 closed.
 
 ## Installing Node 24
 
@@ -35,9 +35,12 @@ pm2 changes only through Selva releases. When the pin changes, `npm run doctor` 
 cd /path/to/deployment
 selva migrate       # new pin, reinstall, restart
 npx pm2 update      # replace the old daemon
+npx pm2 list        # the app must be online before you save
 npx pm2 save
 npm run doctor
 ```
+
+`pm2 update` empties the process table before restoring it. Saving after a failed restore overwrites `~/.pm2/dump.pm2`, the only record of what to bring back. If the list is empty, run `npx pm2 resurrect` or `npx pm2 start ecosystem.config.cjs`.
 
 ### With a global or apt-installed pm2
 
@@ -49,6 +52,7 @@ npx pm2 save && npx pm2 kill              # save the process list, stop the old 
 sudo npm uninstall -g pm2                 # remove the global install…
 sudo apt remove pm2 2>/dev/null || true   # …or the vendor .deb
 selva migrate
+npx pm2 list                              # the app must be online before you save
 npx pm2 save
 npx pm2 startup systemd -u $USER --hp $HOME
 npx pm2 save

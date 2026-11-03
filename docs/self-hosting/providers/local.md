@@ -9,11 +9,11 @@ description: 'The zero-dependency filesystem provider: JSON on disk, HMAC sessio
 
 `@selvajs/local-provider` is the default for all three slots: JSON files and HMAC sessions, all under one directory. No database, no external services.
 
-Selva is the auth provider here: `auth-users.json` holds emails and PBKDF2 password hashes on your own disk, and you are their data controller.
+Selva is the auth provider here, so `auth-users.json` holds emails and PBKDF2 password hashes on your own disk. See [data privacy](../concepts/data-privacy.md).
 
 ## When to pick it
 
-Use local for development, evaluation, or one instance on one VM. Use [Supabase](./supabase.md) for several instances, managed auth (MFA, OAuth), or database-enforced access rules.
+Use local for development, evaluation, or one instance on one VM. Use [Supabase](./supabase.md) for several instances, OAuth sign-in, or database-enforced access rules.
 
 ## Setup
 
@@ -21,9 +21,9 @@ Set:
 
 - `SELVA_HMAC_KEY`: signs session cookies, hashes share-link and invite tokens.
 - `SELVA_AT_REST_KEY`: encrypts the stored Rhino.Compute API key.
-- `DATA_PATH`: a writable directory for users, orgs/projects/definitions JSON, and uploaded `.gh` files. Defaults to `.selva-data/` at the repo root; use an absolute path in production.
+- `DATA_PATH`: a writable directory for users, orgs/projects/definitions JSON, and uploaded `.gh` files. Required; the code has no default (the CLI scaffolds `./.selva-data`). Use an absolute path in production.
 
-Both keys must be 32 bytes and stable across restarts:
+Keep both keys stable across restarts: changing the HMAC key signs everyone out, and changing the at-rest key leaves the stored compute key undecryptable. Formats and rotation: [Secrets](../deployment/security-and-limits.md#secrets). A 32-byte hex key satisfies both:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"

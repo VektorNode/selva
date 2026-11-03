@@ -61,8 +61,8 @@ Concentric: an item inside a padded container takes the container's radius minus
 | --------------- | ------------------------------------------------------------------------- |
 | `rounded-sm`    | Chips, badges, checkboxes.                                                |
 | `rounded-inner` | An item inside a control or a menu: segments, menu items, the active tab. |
-| `rounded-md`    | Controls, buttons, list rows.                                             |
-| `rounded-lg`    | Menus, popovers, tab-list tracks.                                         |
+| `rounded-md`    | Controls, buttons, list rows, tab-list tracks.                            |
+| `rounded-lg`    | Menus, popovers, segmented-control tracks.                                |
 | `rounded-xl`    | Cards, dialogs.                                                           |
 | `rounded-full`  | Dots, avatars, slider thumbs.                                             |
 
@@ -71,15 +71,16 @@ Concentric: an item inside a padded container takes the container's radius minus
 A 4px grid, and the proximity rule: space inside a unit is never larger than the space around
 it.
 
-| Gap | Where                                                    |
-| --- | -------------------------------------------------------- |
-| 2   | Segmented-control track padding.                         |
-| 6   | Label to its control.                                    |
-| 8   | Between buttons, between list rows in a tray.            |
-| 12  | Between cards, panel padding, a card header to its body. |
-| 16  | Card padding, between fields in a card.                  |
+| Gap | Where                                            |
+| --- | ------------------------------------------------ |
+| 2   | Segmented-control track padding.                 |
+| 6   | Label to its control.                            |
+| 8   | Between buttons, between list rows in a tray.    |
+| 12  | Between cards, panel padding.                    |
+| 16  | Between fields in a card.                        |
+| 24  | `Card` primitive padding and header-to-body gap. |
 
-Insets are symmetric: a card's header and body both sit 16 from the edge. Controls are 36 tall;
+Insets are symmetric: a card's header and body both sit 24 from the edge. Controls are 36 tall;
 compact header buttons 32.
 
 ## What the lint catches
@@ -87,8 +88,8 @@ compact header buttons 32.
 `selva/surface-roles` ([packages/config/eslint-rules/surface-roles.js](../../packages/config/eslint-rules/surface-roles.js))
 is an error in every package: an opacity modifier on a neutral role, a removed token (`accent`,
 `sidebar`), and a radius off the scale (the website opts out of the radius check). On top,
-`shadcn/no-unknown-classes` fails on any class Tailwind doesn't know, which covers typos and a
-token that doesn't exist.
+`shadcn/no-unknown-classes` flags any class Tailwind doesn't know, which covers typos and a
+token that doesn't exist. It is an error in `ui`, `plugin-ui` and `selva`, a warning elsewhere.
 
 Spacing and choosing the right role can't be linted. That's this page.
 

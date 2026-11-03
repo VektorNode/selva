@@ -100,7 +100,7 @@ cd packages/providers/supabase
 npx supabase start
 
 cat > .env.test <<EOF
-SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_URL=http://127.0.0.1:54421
 SUPABASE_ANON_KEY=<publishable key>
 SUPABASE_SERVICE_ROLE_KEY=<secret key>
 EOF

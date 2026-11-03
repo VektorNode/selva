@@ -10,12 +10,20 @@ description: 'What personal data a deployment holds, who owns the identity half,
 Selva minimizes the personal data it holds, but it holds some. **The operator is the data controller**
 and owns residency, retention, and erasure requests.
 
-## What every deployment stores
+## What a deployment stores
+
+On every provider:
 
 - Opaque session tokens (cookies)
 - User id + permissions
 - Display names (`user_profiles.display_name`)
+- Recent runs: each user's last 20 solves, as definition id, definition name and timestamp
+- API tokens: owner, scopes, last-used time, and the free-text name the owner chose, which is
+  personal data in practice ("Felix laptop")
 - Invite email addresses (`invites.email`), kept after accept or expiry
+
+**Supabase only**, because the local data provider discards both:
+
 - Audit-event payloads (`audit_events.data`), which embed an email for `invite.created`
   (see the `DomainEvent` union in `packages/platform/src/events/interface.ts`)
 - Solve telemetry (`solve_metrics`), keyed by `actor_id`. It is deliberately **not** FK-cascaded, so
@@ -26,30 +34,45 @@ never persisted.
 
 ## Who owns the identity data
 
-- **Supabase**: credentials and identity live in Supabase `auth.users`. Selva holds only the
-  authorization data above.
-- **Local**: Selva is the auth provider. `auth-users.json` holds email addresses and PBKDF2 password
-  hashes on the deployment's own disk (`packages/providers/local/src/auth/users.ts`).
+- **Supabase**: credentials, email and sign-in time live in Supabase `auth.users`. Selva holds only the
+  authorization data above (plus `user_profiles.last_login_at`).
+- **Local**: Selva is the auth provider. `auth-users.json` holds email addresses, PBKDF2 password
+  hashes and last sign-in time on the deployment's own disk (`packages/providers/local/src/auth/users.ts`).
+- **Header auth**: `header-allowlist.json` holds each user's UPN, email, display name and last sign-in
+  time. Credentials stay with your SSO.
 
 See [providers](../providers/overview.md) for the trust boundary.
 
 ## Erasure
 
-`SupabaseDataProvider.onUserDeleted(ctx, userId, { email })` scrubs what FK cascade doesn't reach. It:
+Deleting a user runs the data provider's `onUserDeleted(ctx, userId, { email })`. The admin delete
+handler captures the email before `deleteUser` and passes it through.
+
+**Supabase** (`SupabaseDataProvider`) scrubs what FK cascade doesn't reach:
 
 - deletes `audit_events` the user authored (keyed by plain-text `actor_id`)
 - deletes `invites` addressed to their email
 - redacts that email from surviving `invite.created` payloads (`redact_audit_event_email`)
 - sets `solve_metrics.actor_id` to `'deleted'`, so capacity aggregates survive without the person
 
-The admin delete handler captures the email before `deleteUser` and passes it through.
+**Local** (`LocalDataProvider`, `packages/providers/local/src/data/LocalDataProvider.ts`) has no FK
+cascade, so it removes the rows itself:
 
-Erasure removes the person, not what they made. Orgs, projects, definitions and versions stay, and
-their `owner_id` or `uploaded_by` goes null, which the stores read as `'deleted'`. The delete route
-refuses the only owner of an org: make someone else an owner, or delete the org, first.
+- deletes their `user-data.json` row (permissions, display name, starred definitions, recent runs)
+  and their API tokens
+- removes their org and project memberships
+- deletes invites they sent or that were addressed to their email, share links they minted, and their
+  platform-project grants
+- sets `deleted` on the owner, creator, updater and uploader fields of orgs, projects, definitions and
+  versions
 
-**Open gap:** `audit_events` and `solve_metrics` have no time-based retention. Rows live until a
-subject is erased.
+Erasure removes the person, not what they made. Orgs, projects, definitions and versions stay with
+`deleted` in place of the person (on Supabase their `owner_id` or `uploaded_by` goes null, which the
+stores read as `'deleted'`). The delete route refuses the only owner of an org: make someone else an
+owner, or delete the org, first.
+
+**Open gap:** on Supabase, `audit_events` and `solve_metrics` have no time-based retention. Rows live
+until a subject is erased.
 
 ## Logs are where erasure stops
 
