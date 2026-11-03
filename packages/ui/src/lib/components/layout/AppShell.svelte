@@ -101,7 +101,7 @@
 	// from the main column's left edge — that one spans the full body height.
 	const mainClass = $derived(
 		_mode === 'fixed'
-			? 'min-h-0 flex-1 overflow-y-auto'
+			? 'min-h-0 min-w-0 flex-1 overflow-y-auto'
 			: 'min-w-0 flex-1 overflow-y-auto border-border sm:border-l'
 	);
 </script>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button } from '@selvajs/ui';
+	import { Button, FilterableDropdown } from '@selvajs/ui';
 	import { Search, X } from '@lucide/svelte';
 	import type { ProjectRole } from '@selvajs/platform/projects';
 	import type { UserListItem } from '../+page.server';
@@ -143,14 +143,17 @@
 					<p class="text-muted-foreground truncate font-mono text-xs">{selected.email}</p>
 				{/if}
 			</div>
-			<select
-				bind:value={role}
-				class="border-input bg-background h-8 rounded-md border px-2 text-xs outline-none"
-			>
-				<option value="owner">Owner</option>
-				<option value="editor">Editor</option>
-				<option value="viewer">Viewer</option>
-			</select>
+			<FilterableDropdown
+				items={[
+					{ id: 'owner', label: 'Owner' },
+					{ id: 'editor', label: 'Editor' },
+					{ id: 'viewer', label: 'Viewer' }
+				]}
+				value={role}
+				onChange={(v) => (role = v as ProjectRole)}
+				size="sm"
+				class="w-28"
+			/>
 			<Button onclick={submit} disabled={adding} size="sm">
 				{adding ? 'Adding…' : 'Add'}
 			</Button>

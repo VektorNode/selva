@@ -19,16 +19,18 @@ import { SUPABASE_SETTINGS } from '@selvajs/supabase-provider/config';
 export const APP_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'ORIGIN',
+		label: 'Public address',
 		type: 'url',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Public URL of the app. Required behind a reverse proxy.',
+		description: 'The URL people use to reach Selva, such as https://selva.example.com.',
 		impact:
 			'Wrong or unset behind a proxy: form posts fail the CSRF check and invite links carry an internal host.'
 	}),
 	defineSetting({
 		key: 'PORT',
+		label: 'Port',
 		type: 'int',
 		min: 1,
 		max: 65535,
@@ -39,44 +41,51 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'HOST',
+		label: 'Listen address',
 		type: 'string',
 		default: '0.0.0.0',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Address the app binds to. 127.0.0.1 behind a proxy.',
+		description:
+			'Which network address the app accepts connections on. 127.0.0.1 when a proxy sits in front.',
 		impact: 'Under header auth, anything that reaches the port directly can claim to be any user.'
 	}),
 	defineSetting({
 		key: 'BODY_SIZE_LIMIT',
+		label: 'Max request size',
 		type: 'string',
 		default: '512K',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Largest request body adapter-node accepts (K, M or G suffix).',
+		description: 'Largest request the server accepts at all, uploads included (K, M or G suffix).',
 		impact: 'Below COMPUTE_REQUEST_MAX_BYTES, uploads and file inputs fail with 413.'
 	}),
 	defineSetting({
 		key: 'ADDRESS_HEADER',
+		label: 'Visitor IP header',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Header carrying the client IP behind a proxy (X-Forwarded-For).',
+		description:
+			'Header your proxy uses to pass on the visitor’s IP address. Usually X-Forwarded-For.',
 		impact: 'Unset behind a proxy: every client shares one rate-limit bucket.'
 	}),
 	defineSetting({
 		key: 'XFF_DEPTH',
+		label: 'Proxies in front',
 		type: 'int',
 		min: 1,
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Number of proxies in front of the app.'
+		description: 'How many proxies sit between visitors and the app. Usually 1.'
 	}),
 	defineSetting({
 		key: 'PROTOCOL_HEADER',
+		label: 'Protocol header',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -84,6 +93,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'HOST_HEADER',
+		label: 'Host header',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -91,6 +101,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'NODE_ENV',
+		label: 'Run mode',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -98,6 +109,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'ALLOW_INSECURE_COOKIES',
+		label: 'Allow sign-in over http',
 		type: 'bool',
 		default: false,
 		onInvalid: 'fail',
@@ -107,6 +119,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'INSTALL_DIR',
+		label: 'Install folder',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -115,6 +128,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_EVENT_CALLBACK_ORIGIN',
+		label: 'Solve event callback address',
 		type: 'url',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -123,6 +137,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'MCP_ALLOWED_ORIGINS',
+		label: 'Extra MCP origins',
 		type: 'list',
 		default: [],
 		onInvalid: 'fail',
@@ -131,6 +146,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'LOG_LEVEL',
+		label: 'Log level',
 		type: 'enum',
 		values: ['debug', 'info', 'warn', 'error'],
 		onInvalid: 'default',
@@ -139,6 +155,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_FLAG_COMPUTE_DEBUG',
+		label: 'Compute debug logging',
 		type: 'string',
 		default: 'off',
 		onInvalid: 'default',
@@ -149,6 +166,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_FLAG_COMPUTE_DEBUG_VERBOSE',
+		label: 'Compute debug logging (old name)',
 		type: 'bool',
 		onInvalid: 'default',
 		class: 'setting',
@@ -156,6 +174,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SENTRY_DSN',
+		label: 'Sentry error reporting',
 		type: 'url',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -164,6 +183,7 @@ export const APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_RELEASE',
+		label: 'Release tag',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'tunable',

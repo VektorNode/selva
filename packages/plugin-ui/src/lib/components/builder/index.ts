@@ -6,6 +6,7 @@ export { default as DraggableItem } from './DraggableItem.svelte';
 export { default as BuilderSearch } from './BuilderSearch.svelte';
 export { default as BuilderSidebar } from './BuilderSidebar.svelte';
 export { default as TabEditor } from './TabEditor.svelte';
+export { default as SelectionBar } from './SelectionBar.svelte';
 export { default as LineBreakItem } from './LineBreakItem.svelte';
 export { default as SyncDialog } from './SyncDialog.svelte';
 export { default as GhGroupImportDialog } from './GhGroupImportDialog.svelte';

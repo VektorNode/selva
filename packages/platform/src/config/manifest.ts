@@ -23,6 +23,8 @@ interface SettingBase<T> {
 	key: string;
 	class: SettingClass;
 	onInvalid: OnInvalid;
+	/** A few plain words naming the setting for someone who has never seen the key. */
+	label?: string;
 	/** One line, shown by `selva config show` and the admin page. */
 	description: string;
 	/** What changing it breaks or affects. Shown before `selva config set` writes. */
@@ -68,7 +70,12 @@ export interface IntSetting extends SettingBase<number> {
 	type: 'int';
 	min?: number;
 	max?: number;
+	/** What 0 means, when it is a sentinel rather than a quantity: "Off", "No limit". */
+	zero?: string;
+	/** Lets a reader print 100000 as "100 s". */
+	unit?: IntUnit;
 }
+export type IntUnit = 'ms' | 'bytes' | 'mb' | 'days';
 export interface BoolSetting extends SettingBase<boolean> {
 	type: 'bool';
 }

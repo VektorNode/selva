@@ -34,7 +34,7 @@
 	<div class="gap-2 sm:gap-5 flex h-(--header-h) items-center px-(--page-px)">
 		<!-- Logo -->
 		<a href={homeUrl} class="gap-2 flex shrink-0 items-center" aria-label={brandName}>
-			<img src={logo} alt="" aria-hidden="true" class="h-5 w-5" />
+			<img src={logo} alt="" aria-hidden="true" class="h-7 w-7" />
 			<!-- On a phone the page title needs the room more than the brand does. -->
 			<span
 				class="font-semibold text-sm tracking-tight {title !== undefined ? 'sm:inline hidden' : ''}"

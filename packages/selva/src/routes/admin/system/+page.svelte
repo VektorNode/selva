@@ -1,5 +1,7 @@
 <script lang="ts">
-	import { Card, SectionHeader } from '@selvajs/ui';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
+	import { Card, SectionHeader, Tabs } from '@selvajs/ui';
 	import { ChevronRight } from '@lucide/svelte';
 	import UpdateSection from './UpdateSection.svelte';
 	import ChannelSection from './ChannelSection.svelte';
@@ -7,6 +9,7 @@
 	import NetworkSection from './NetworkSection.svelte';
 	import ConfigSection from './ConfigSection.svelte';
 	import type { ConfigChange, ConfigReport, KeyRotation } from '@selvajs/platform/config';
+	import type { ConfigCheck } from '$lib/server/config/checks';
 	import { pollForRestart, type RestartHealth } from '$lib/update-restart-poll';
 
 	interface PageData {
@@ -22,8 +25,9 @@
 		config: {
 			report: ConfigReport;
 			changes: ConfigChange[];
-			atRestOnPreviousKey: number | null;
 			rotation: KeyRotation[];
+			proxied: boolean;
+			checks: ConfigCheck[];
 		} | null;
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
@@ -48,6 +52,27 @@
 		};
 	}
 	let { data }: { data: PageData } = $props();
+
+	// One tab per concern instead of one long page. The tab lives in `?tab=` so a link or a
+	// reload lands on the same one.
+	const tabs = $derived(
+		[
+			{ id: 'updates', label: 'Updates', show: data.canManageUpdates },
+			{ id: 'health', label: 'Health & network', show: data.isInstanceAdmin },
+			{ id: 'config', label: 'Configuration', show: true }
+		].filter((t) => t.show)
+	);
+	let requestedTab = $state(page.url.searchParams.get('tab'));
+	const activeTab = $derived(
+		tabs.find((t) => t.id === requestedTab)?.id ?? tabs[0]?.id ?? 'config'
+	);
+
+	function selectTab(id: string) {
+		requestedTab = id;
+		const url = new URL(page.url);
+		url.searchParams.set('tab', id);
+		replaceState(url, page.state);
+	}
 
 	function formatBytes(bytes: number): string {
 		if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -363,110 +388,128 @@
 		description="Updates, health checks, and the instance's env-driven configuration."
 	/>
 
-	{#if data.canManageUpdates}
-		<UpdateSection
-			currentVersion={data.version}
-			latestVersion={data.update.latest}
-			updateAvailable={data.update.updateAvailable}
-			channel={data.channel}
-			isRunning={updateRunning}
-			isRestarting={updateRestarting}
-			logs={updateLogs}
-			exitCode={updateExitCode}
-			nodeCompatibility={data.update.nodeCompatibility}
-			onRun={runUpdate}
-		/>
-		{#key data.channel}
-			<ChannelSection channel={data.channel} disabled={updateRunning} />
-		{/key}
-	{/if}
+	<Tabs.Root value={activeTab} onValueChange={selectTab} class="gap-6">
+		<Tabs.List variant="line" class="border-border border-b px-0">
+			{#each tabs as tab (tab.id)}
+				<Tabs.Trigger value={tab.id} variant="line">{tab.label}</Tabs.Trigger>
+			{/each}
+		</Tabs.List>
 
-	{#if data.isInstanceAdmin}
-		<HealthSection />
-		<NetworkSection />
-	{/if}
-
-	<Card.Root>
-		<Card.Header>
-			<Card.Title class="text-sm font-medium">Configuration</Card.Title>
-			<Card.Description>
-				What this server runs on. Read-only: to change a value, run
-				<code class="font-mono text-xs">selva config set</code> (or edit
-				<code class="font-mono text-xs">.env</code>) and restart the app.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content class="space-y-3">
-			{#if data.config}
-				<ConfigSection
-					report={data.config.report}
-					changes={data.config.changes}
-					atRestOnPreviousKey={data.config.atRestOnPreviousKey}
-					rotation={data.config.rotation}
+		<Tabs.Content value="updates" class="space-y-6">
+			{#if data.canManageUpdates}
+				<UpdateSection
+					currentVersion={data.version}
+					latestVersion={data.update.latest}
+					updateAvailable={data.update.updateAvailable}
+					channel={data.channel}
+					isRunning={updateRunning}
+					isRestarting={updateRestarting}
+					logs={updateLogs}
+					exitCode={updateExitCode}
+					nodeCompatibility={data.update.nodeCompatibility}
+					onRun={runUpdate}
 				/>
+				{#key data.channel}
+					<ChannelSection channel={data.channel} disabled={updateRunning} />
+				{/key}
 			{/if}
+		</Tabs.Content>
 
-			<details class="group rounded-lg border">
-				<summary
-					class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
-				>
-					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
-					Platform flags
-					<span class="text-muted-foreground ml-auto font-mono text-xs">{enabledFlagCount} on</span>
-				</summary>
-				<div class="divide-y border-t">
-					{#each Object.entries(data.flags) as [name, value] (name)}
-						<div class="flex items-center justify-between gap-4 px-4 py-2">
-							<div class="min-w-0 flex-1">
-								<code class="text-foreground font-mono text-xs">{name}</code>
-								{#if flagNotes[name as keyof PageData['flags']]}
-									<p class="text-muted-foreground mt-1 text-xs">
-										{flagNotes[name as keyof PageData['flags']]}
-									</p>
-								{/if}
-							</div>
-							<span
-								class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${
-									value
-										? 'border-success/40 bg-success/10 text-success'
-										: 'border-border text-muted-foreground'
-								}`}
-							>
-								{value ? 'On' : 'Off'}
-							</span>
-						</div>
-					{/each}
-				</div>
-			</details>
+		<Tabs.Content value="health" class="space-y-6">
+			{#if data.isInstanceAdmin}
+				<HealthSection />
+				<NetworkSection />
+			{/if}
+		</Tabs.Content>
 
-			<details class="group rounded-lg border">
-				<summary
-					class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
-				>
-					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
-					Platform limits
-					<span class="text-muted-foreground ml-auto font-mono text-xs">{limitRows.length}</span>
-				</summary>
-				<div class="divide-y border-t">
-					{#each limitRows as row (row.key)}
-						<div class="flex items-start justify-between gap-4 px-4 py-3">
-							<div class="min-w-0 flex-1">
-								<span class="text-foreground text-sm font-medium">{row.label}</span>
-								<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]"
-									>{row.env}</code
-								>
-								{#if row.note}
-									<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
-								{/if}
-							</div>
-							<span
-								class="border-border text-foreground shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide whitespace-nowrap"
+		<Tabs.Content value="config">
+			<Card.Root>
+				<Card.Header>
+					<Card.Title class="text-base font-semibold">Configuration</Card.Title>
+					<Card.Description>
+						What this server runs on, and anything that needs fixing. To change a value, run
+						<code class="font-mono text-xs">selva config set KEY=VALUE</code> on the server, then
+						<code class="font-mono text-xs">selva restart</code>.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="space-y-6">
+					{#if data.config}
+						<ConfigSection
+							report={data.config.report}
+							changes={data.config.changes}
+							rotation={data.config.rotation}
+							proxied={data.config.proxied}
+							checks={data.config.checks}
+						/>
+					{/if}
+
+					<details class="group rounded-lg border">
+						<summary
+							class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold select-none"
+						>
+							<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+							Platform flags
+							<span class="text-muted-foreground ml-auto font-mono text-xs"
+								>{enabledFlagCount} on</span
 							>
-								{row.value(data.limits)}
-							</span>
+						</summary>
+						<div class="divide-y border-t">
+							{#each Object.entries(data.flags) as [name, value] (name)}
+								<div class="flex items-center justify-between gap-4 px-4 py-3">
+									<div class="min-w-0 flex-1">
+										{#if flagNotes[name as keyof PageData['flags']]}
+											<p class="text-foreground text-sm leading-snug font-medium">
+												{flagNotes[name as keyof PageData['flags']]}
+											</p>
+										{/if}
+										<code class="text-muted-foreground text-2xs mt-1 block font-mono">{name}</code>
+									</div>
+									<span
+										class={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+											value
+												? 'border-success/40 bg-success/10 text-success'
+												: 'border-border text-muted-foreground'
+										}`}
+									>
+										{value ? 'On' : 'Off'}
+									</span>
+								</div>
+							{/each}
 						</div>
-					{/each}
-				</div>
-			</details>
-		</Card.Content>
-	</Card.Root>
+					</details>
+
+					<details class="group rounded-lg border">
+						<summary
+							class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold select-none"
+						>
+							<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+							Platform limits
+							<span class="text-muted-foreground ml-auto font-mono text-xs">{limitRows.length}</span
+							>
+						</summary>
+						<div class="divide-y border-t">
+							{#each limitRows as row (row.key)}
+								<div class="flex items-start justify-between gap-4 px-4 py-3">
+									<div class="min-w-0 flex-1">
+										<span class="text-foreground text-sm font-medium">{row.label}</span>
+										<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]"
+											>{row.env}</code
+										>
+										{#if row.note}
+											<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
+										{/if}
+									</div>
+									<span
+										class="bg-muted text-foreground shrink-0 rounded-md px-2 py-0.5 font-mono text-xs whitespace-nowrap"
+									>
+										{row.value(data.limits)}
+									</span>
+								</div>
+							{/each}
+						</div>
+					</details>
+				</Card.Content>
+			</Card.Root>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

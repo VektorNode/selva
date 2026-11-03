@@ -7,7 +7,8 @@
 		Input,
 		Label,
 		Textarea,
-		toast
+		toast,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { X } from '@lucide/svelte';
 	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
@@ -290,21 +291,17 @@
 					{#if computeServers.length > 0}
 						<div class="space-y-1">
 							<Label for="new-server">Compute Server</Label>
-							<select
+							<FilterableDropdown
 								id="new-server"
+								items={computeServers.map((s) => ({
+									id: s.id,
+									label: `${s.label}${s.id === defaultComputeServerId ? ' (Default)' : ''}`
+								}))}
 								value={selectedComputeServerId || (defaultComputeServerId ?? '')}
-								onchange={(e) => {
-									const picked = (e.currentTarget as HTMLSelectElement).value;
+								onChange={(picked) => {
 									selectedComputeServerId = picked === defaultComputeServerId ? '' : picked;
 								}}
-								class="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-							>
-								{#each computeServers as s (s.id)}
-									<option value={s.id}>
-										{s.label}{s.id === defaultComputeServerId ? ' (Default)' : ''}
-									</option>
-								{/each}
-							</select>
+							/>
 						</div>
 					{/if}
 				</div>

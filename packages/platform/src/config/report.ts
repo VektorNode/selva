@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Manifest, SettingClass } from './manifest.js';
+import type { IntUnit, Manifest, SettingClass, SettingSpec } from './manifest.js';
 import {
 	resolveConfig,
 	type EnvRecord,
@@ -11,6 +11,12 @@ import {
 
 export interface ReportRow {
 	key: string;
+	label?: string;
+	type: SettingSpec['type'];
+	required: boolean;
+	/** What 0 means for an int whose 0 is a sentinel. */
+	zero?: string;
+	unit?: IntUnit;
 	class: SettingClass;
 	summary: boolean;
 	description: string;
@@ -46,6 +52,11 @@ export function buildConfigReport(
 		const raw = k.source === 'alias' ? env[k.alias!] : env[spec.key];
 		return {
 			key: spec.key,
+			...(spec.label ? { label: spec.label } : {}),
+			type: spec.type,
+			required: spec.required === true,
+			...(spec.type === 'int' && spec.zero ? { zero: spec.zero } : {}),
+			...(spec.type === 'int' && spec.unit ? { unit: spec.unit } : {}),
 			class: spec.class,
 			summary: spec.summary === true,
 			description: spec.description,

@@ -28,8 +28,9 @@
 		DND_TYPE_PARAM,
 		isDiscoveredInput,
 		isDiscoveredOutput,
-		liftDraggedElement
+		liftWithCount
 	} from '$lib/dnd/dndzone-helpers';
+	import { builderSelection } from '$lib/features/builder/selection.svelte';
 	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
 
 	type ZoneItem = (LayoutItem | DiscoveredInput | DiscoveredOutput) & {
@@ -42,6 +43,8 @@
 		onEdit: (apply: () => void, coalesceKey?: string) => void;
 		onFinalize: (items: LayoutItem[]) => void;
 		onParameterDrop?: (event: CustomEvent) => void;
+		/** A selected card was dropped here from another group; the rest of the selection follows it. */
+		onCarrySelection?: (anchorItemId: string) => void;
 		onRemove: () => void;
 		onAddLineBreak: () => void;
 		onRemoveItem: (itemId: string) => void;
@@ -62,6 +65,7 @@
 		onEdit,
 		onFinalize,
 		onParameterDrop,
+		onCarrySelection,
 		onRemove,
 		onAddLineBreak,
 		onRemoveItem,
@@ -105,6 +109,7 @@
 		if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED) {
 			isDragOrigin = true;
 			captureDragFootprint(e, localItems);
+			builderSelection.startDrag(e.detail.info.id);
 		}
 		// The shadow item carries the dragged item's data, wherever the drag started.
 		const shadow = e.detail.items.find((i) => i.isDndShadowItem);
@@ -126,8 +131,18 @@
 	}
 
 	function handleFinalize(e: CustomEvent<DndEvent<ZoneItem>>) {
+		const wasOrigin = isDragOrigin;
 		isItemDragging = false;
 		isDragOrigin = false;
+		builderSelection.endDrag();
+
+		// Released on another tab's drop list: whatever this zone thinks it received is void, and the
+		// origin zone alone commits the move, so it happens once.
+		if (builderSelection.tabDrop) {
+			localItems = [...(group.items as ZoneItem[])];
+			if (wasOrigin) builderSelection.commitTabDrop(e.detail.info.id, 'placed');
+			return;
+		}
 
 		const items = e.detail.items.filter((i) => !i.isDndShadowItem);
 
@@ -184,8 +199,17 @@
 		}
 
 		const committed = items as LayoutItem[];
+		const draggedId = e.detail.info.id;
+		const arrived =
+			e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE &&
+			!group.items.some((i) => i.id === draggedId) &&
+			committed.some((i) => i.id === draggedId);
 		localItems = committed as ZoneItem[];
 		onFinalize(committed);
+		// Deferred: the origin group commits its own finalize after this one, and moving the rest
+		// first would let that commit write the moved cards back.
+		if (arrived && builderSelection.dragSize(draggedId) > 1)
+			setTimeout(() => onCarrySelection?.(draggedId));
 	}
 
 	// Collapsed height of a placed card, read off any card on the canvas: an expanded card is
@@ -348,7 +372,8 @@
 						// The library aims with the clone's centre, not the pointer. Centred, a full-width
 						// item can still target one column of a grid once it shrinks to the cell.
 						centreDraggedOnCursor: true,
-						transformDraggedElement: liftDraggedElement
+						transformDraggedElement: (el, data) =>
+							liftWithCount(el, builderSelection.dragSize((data as ZoneItem).id))
 					}}
 					onconsider={handleConsider}
 					onfinalize={handleFinalize}
@@ -366,8 +391,10 @@
 								<!-- dndzone hides the shadow's outer div; the inner one opts back in. -->
 								<div
 									style:--ghost-h="{ghostHeight || 48}px"
-									class="border-primary/40 bg-primary/5 pointer-events-none visible h-(--ghost-h) rounded-lg border-2 border-dashed"
-								></div>
+									class="border-primary/40 bg-primary/5 text-primary pointer-events-none visible grid h-(--ghost-h) place-items-center rounded-lg border-2 border-dashed text-xs font-medium"
+								>
+									{#if builderSelection.carried > 1}{builderSelection.carried} items{/if}
+								</div>
 							{:else if 'type' in item && item.type === 'linebreak'}
 								<LineBreakItem
 									item={item as LineBreakLayoutItem}

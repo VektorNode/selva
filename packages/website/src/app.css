@@ -1,11 +1,5 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import '@fontsource-variable/familjen-grotesk';
-
-/* Site typeface: Familjen Grotesk (OFL), self-hosted via Fontsource. */
-@theme {
-	--font-sans: 'Familjen Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
-}
 @plugin '@tailwindcss/typography';
 @source '../../ui/src/lib';
 

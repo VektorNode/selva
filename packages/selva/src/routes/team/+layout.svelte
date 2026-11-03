@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { SideNav, type SideNavItem } from '@selvajs/ui';
+	import { PageContent, SideNav, type SideNavItem } from '@selvajs/ui';
 	import {
 		Gauge,
 		Users,
@@ -134,7 +134,7 @@
 		</SideNav>
 	{/snippet}
 
-	<div class="px-(--page-px) py-(--page-py)">
+	<PageContent>
 		{@render children?.()}
-	</div>
+	</PageContent>
 </AppHeader>

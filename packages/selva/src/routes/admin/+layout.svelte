@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { SideNav, type SideNavItem } from '@selvajs/ui';
+	import { PageContent, SideNav, type SideNavItem } from '@selvajs/ui';
 	import { Gauge, Building2, Folders, Users, Server, Settings, ScrollText } from '@lucide/svelte';
 	import AppHeader from '$lib/components/AppHeader.svelte';
 	import type { OrgPermission, PlatformPermission, TenancyMode } from '@selvajs/platform';
@@ -78,7 +78,7 @@
 		<SideNav {items} eyebrow="Platform" border={false} />
 	{/snippet}
 
-	<div class="px-(--page-px) py-(--page-py)">
+	<PageContent>
 		{@render children?.()}
-	</div>
+	</PageContent>
 </AppHeader>

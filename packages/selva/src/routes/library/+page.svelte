@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
-	import { Search, toast, PageContent, SectionHeader, ViewToggle, EmptyState } from '@selvajs/ui';
+	import {
+		Search,
+		toast,
+		PageContent,
+		SectionHeader,
+		ViewToggle,
+		EmptyState,
+		FilterableDropdown
+	} from '@selvajs/ui';
 	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
@@ -182,16 +190,16 @@
 								<label class="text-muted-foreground text-xs font-medium" for="filter-project">
 									Project
 								</label>
-								<select
+								<FilterableDropdown
 									id="filter-project"
-									bind:value={activeProjectId}
-									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-								>
-									<option value={null}>All projects</option>
-									{#each projectList as p (p.id)}
-										<option value={p.id}>{p.name}</option>
-									{/each}
-								</select>
+									items={[
+										{ id: '', label: 'All projects' },
+										...projectList.map((p) => ({ id: p.id, label: p.name }))
+									]}
+									value={activeProjectId ?? ''}
+									onChange={(v) => (activeProjectId = v || null)}
+									size="sm"
+								/>
 							</div>
 						{/if}
 
@@ -200,16 +208,16 @@
 								<label class="text-muted-foreground text-xs font-medium" for="filter-category">
 									Category
 								</label>
-								<select
+								<FilterableDropdown
 									id="filter-category"
-									bind:value={activeCategory}
-									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-								>
-									<option value={null}>All categories</option>
-									{#each availableCategories as cat (cat)}
-										<option value={cat}>{cat}</option>
-									{/each}
-								</select>
+									items={[
+										{ id: '', label: 'All categories' },
+										...availableCategories.map((cat) => ({ id: cat, label: cat }))
+									]}
+									value={activeCategory ?? ''}
+									onChange={(v) => (activeCategory = v || null)}
+									size="sm"
+								/>
 							</div>
 						{/if}
 
@@ -218,16 +226,16 @@
 								<label class="text-muted-foreground text-xs font-medium" for="filter-tag">
 									Tag
 								</label>
-								<select
+								<FilterableDropdown
 									id="filter-tag"
-									bind:value={activeTag}
-									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-								>
-									<option value={null}>All tags</option>
-									{#each availableTags as tag (tag)}
-										<option value={tag}>#{tag}</option>
-									{/each}
-								</select>
+									items={[
+										{ id: '', label: 'All tags' },
+										...availableTags.map((tag) => ({ id: tag, label: `#${tag}` }))
+									]}
+									value={activeTag ?? ''}
+									onChange={(v) => (activeTag = v || null)}
+									size="sm"
+								/>
 							</div>
 						{/if}
 					</div>

@@ -10,7 +10,8 @@
 		Tabs,
 		Textarea,
 		toast,
-		ConfirmDialog
+		ConfirmDialog,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { ArrowLeft, FileText, Plus, Settings, Shield, Trash2, X } from '@lucide/svelte';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -246,19 +247,16 @@
 							</div>
 							<div class="space-y-1.5">
 								<Label for="grantee-id">{granteeType === 'org' ? 'Organization' : 'User'}</Label>
-								<select
+								<FilterableDropdown
 									id="grantee-id"
-									bind:value={granteeId}
-									class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-								>
-									{#each granteeOptions as opt (opt.id)}
-										<option value={opt.id} disabled={usedGranteeIds.has(opt.id)}>
-											{opt.label}{opt.sub ? ` — ${opt.sub}` : ''}{usedGranteeIds.has(opt.id)
-												? ' (already granted)'
-												: ''}
-										</option>
-									{/each}
-								</select>
+									items={granteeOptions.map((opt) => ({
+										id: opt.id,
+										label: `${opt.label}${opt.sub ? ` — ${opt.sub}` : ''}${usedGranteeIds.has(opt.id) ? ' (already granted)' : ''}`,
+										disabled: usedGranteeIds.has(opt.id)
+									}))}
+									value={granteeId}
+									onChange={(v) => (granteeId = v)}
+								/>
 							</div>
 							<label class="flex items-center gap-2 text-sm">
 								<input type="checkbox" bind:checked={canSolveNew} />

@@ -91,6 +91,9 @@ is an error in every package: an opacity modifier on a neutral role, a removed t
 `shadcn/no-unknown-classes` flags any class Tailwind doesn't know, which covers typos and a
 token that doesn't exist. It is an error in `ui`, `plugin-ui` and `selva`, a warning elsewhere.
 
+A native `<select>` is an error everywhere: its popup is drawn by the OS and ignores the theme.
+Use `FilterableDropdown` (`name` for a plain form post, `size="sm"` in a filter bar).
+
 Spacing and choosing the right role can't be linted. That's this page.
 
 ## Adding a token

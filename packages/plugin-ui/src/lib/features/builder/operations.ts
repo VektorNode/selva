@@ -317,6 +317,43 @@ export function handleGroupItemDrop(
 	insertLayoutItem(targetGroup, movedItem, targetItem, dropPosition);
 }
 
+/**
+ * Moves placed items, by layout item id, into the target group in layout order: right after
+ * `afterItemId` when it is in the target, else at the end. Items already in the target, or whose
+ * parameter the target already holds, stay where they are. Returns the moved count.
+ */
+export function moveItemsToGroup(
+	schema: UISchema,
+	itemIds: ReadonlySet<string>,
+	targetGroupId: string,
+	afterItemId?: string
+): number {
+	const groups = getGroups(schema);
+	const target = groups.find((g) => g.id === targetGroupId);
+	if (!target) return 0;
+
+	const held = new Set(target.items.flatMap((t) => (t.type === 'linebreak' ? [] : [t.paramId])));
+	const moving: LayoutItem[] = [];
+	for (const group of groups) {
+		if (group === target) continue;
+		const keep: LayoutItem[] = [];
+		for (const item of group.items) {
+			const paramId = item.type === 'linebreak' ? undefined : item.paramId;
+			if (itemIds.has(item.id) && !(paramId && held.has(paramId))) {
+				moving.push(item);
+				if (paramId) held.add(paramId);
+			} else keep.push(item);
+		}
+		if (keep.length !== group.items.length) group.items = keep;
+	}
+	if (moving.length === 0) return 0;
+
+	const anchor = afterItemId ? target.items.findIndex((i) => i.id === afterItemId) : -1;
+	const at = anchor === -1 ? target.items.length : anchor + 1;
+	target.items = [...target.items.slice(0, at), ...moving, ...target.items.slice(at)];
+	return moving.length;
+}
+
 export function addTab(schema: UISchema): string {
 	if (!schema.layout || schema.layout.type !== 'tabbed') return '';
 

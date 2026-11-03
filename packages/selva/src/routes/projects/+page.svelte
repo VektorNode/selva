@@ -6,14 +6,17 @@
 		AlertDialog,
 		Button,
 		EmptyState,
+		PageContent,
 		Search,
 		SectionHeader,
 		ViewToggle,
-		toast
+		toast,
+		FilterableDropdown
 	} from '@selvajs/ui';
-	import { Plus, Settings } from '@lucide/svelte';
+	import { FolderPlus, Plus, Settings } from '@lucide/svelte';
 	import AddDefinitionDialog from '$lib/components/definitions/AddDefinitionDialog.svelte';
 	import ProjectSidebar from './_components/ProjectSidebar.svelte';
+	import CreateProjectDialog from './_components/CreateProjectDialog.svelte';
 	import ProjectSettingsDialog from './_components/ProjectSettingsDialog.svelte';
 	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
 	import DefinitionListView from './_components/DefinitionListView.svelte';
@@ -65,6 +68,7 @@
 	let editingProjectId = $state<string | null>(null);
 	let deletingProjectId = $state<string | null>(null);
 	let showAddModal = $state(false);
+	let showCreateProject = $state(false);
 	// True when edit was opened from the detail drawer — surfaces a Back link.
 	let editCameFromDetail = $state(false);
 	let editInitialTab = $state<'versions' | 'details' | 'shares'>('versions');
@@ -307,28 +311,29 @@
 		{activeProjectId}
 		canManageProjects={data.canManageProjects}
 		onSelect={selectProject}
-		onCreate={createProject}
+		onNewProject={() => (showCreateProject = true)}
 	/>
 
-	<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
-		<div class="border-border bg-background shrink-0 border-b px-(--page-px) py-5">
-			<select
+	<div class="min-w-0 flex-1 overflow-y-auto">
+		<PageContent class="space-y-6">
+			<FilterableDropdown
 				aria-label="Project"
+				items={[
+					{ id: '', label: 'All projects' },
+					...data.projects.map((p) => ({ id: p.id, label: p.name }))
+				]}
 				value={activeProjectId ?? ''}
-				onchange={(e) => selectProject(e.currentTarget.value || null)}
-				class="border-input bg-background mb-4 h-10 w-full rounded-md border px-3 text-sm sm:hidden"
-			>
-				<option value="">All projects</option>
-				{#each data.projects as project (project.id)}
-					<option value={project.id}>{project.name}</option>
-				{/each}
-			</select>
+				onChange={(v) => selectProject(v || null)}
+				class="sm:hidden"
+			/>
+
 			<SectionHeader
 				class="mb-0"
-				eyebrow={activeProject ? activeProject.name : 'All projects'}
-				title="Definitions"
-				description={activeProject?.description ??
-					(!activeProject ? 'Definitions across every project in this organization.' : undefined)}
+				eyebrow="Projects"
+				title={activeProject?.name ?? 'All projects'}
+				description={activeProject
+					? activeProject.description || undefined
+					: 'Definitions across every project in this organization.'}
 			>
 				{#snippet actions()}
 					{#if data.canManageProjects && activeProject?.canManage}
@@ -338,7 +343,12 @@
 							onclick={() => (editingProjectId = activeProject.id)}
 						>
 							<Settings class="mr-1.5 h-3.5 w-3.5" />
-							Project settings
+							Settings
+						</Button>
+					{:else if data.canManageProjects && !activeProject}
+						<Button variant="outline" size="sm" onclick={() => (showCreateProject = true)}>
+							<FolderPlus class="mr-1.5 h-3.5 w-3.5" />
+							New project
 						</Button>
 					{/if}
 					{#if canAddDefinition}
@@ -349,18 +359,12 @@
 					{/if}
 				{/snippet}
 			</SectionHeader>
-		</div>
 
-		<div class="flex-1 overflow-y-auto px-(--page-px) py-5">
-			<div class="mb-5 flex flex-wrap items-center gap-3">
-				<div class="max-w-lg min-w-0 flex-1 basis-full sm:basis-auto">
-					<Search
-						bind:value={searchQuery}
-						placeholder="Search by name, description, tags…"
-						clearable
-					/>
+			<div class="flex items-center gap-3">
+				<div class="max-w-sm min-w-0 flex-1">
+					<Search bind:value={searchQuery} placeholder="Search definitions…" clearable />
 				</div>
-				<span class="text-muted-foreground font-mono text-xs tabular-nums">
+				<span class="text-muted-foreground hidden font-mono text-xs tabular-nums sm:inline">
 					{filtered.length} definition{filtered.length === 1 ? '' : 's'}
 				</span>
 				<div class="ml-auto">
@@ -398,9 +402,15 @@
 					onOpen={(r) => (drawerRecord = r)}
 				/>
 			{/if}
-		</div>
+		</PageContent>
 	</div>
 </div>
+
+<CreateProjectDialog
+	open={showCreateProject}
+	onOpenChange={(o) => (showCreateProject = o)}
+	onCreate={createProject}
+/>
 
 {#if drawerRecord}
 	<DefinitionDetailDrawer

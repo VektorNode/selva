@@ -1,3 +1,5 @@
+@import '@fontsource-variable/hanken-grotesk';
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Surfaces, edges and states share one set of names in both modes; each mode only changes the
@@ -8,40 +10,41 @@
 	--page-px: 1rem;
 	--page-py: 1.75rem;
 	/* Canvas, then surface (cards, panels), then raised (rows, menus, popovers). Light can't go
-	   lighter than white, so raised is white too and lifts with a border and a shadow instead. */
-	--background: oklch(0.91 0 0);
+	   lighter than white, so raised is white too and lifts with a border and a shadow instead.
+	   Values follow stock shadcn neutral. */
+	--background: oklch(0.985 0 0);
 	--card: oklch(1 0 0);
 	--raised: oklch(1 0 0);
 	/* Recessed fill for trays, table heads, code and skeletons: darker than the surface around it. */
-	--muted: oklch(0.94 0 0);
+	--muted: oklch(0.97 0 0);
 	/* Fill of anything you type into, on a card: recessed, the same step as muted, in both modes.
 	   The edge (`--input`) carries the boundary. */
 	--field: var(--muted);
-	--foreground: oklch(0.22 0 0);
-	--card-foreground: oklch(0.22 0 0);
-	--popover-foreground: oklch(0.22 0 0);
+	--foreground: oklch(0.145 0 0);
+	--card-foreground: oklch(0.145 0 0);
+	--popover-foreground: oklch(0.145 0 0);
 	/* 4.5:1 on every surface. */
-	--muted-foreground: oklch(0.48 0 0);
+	--muted-foreground: oklch(0.5 0 0);
 	/* Icons, placeholders, disabled text: 3:1 on every surface. */
 	--faint-foreground: oklch(0.6 0 0);
 	/* State overlays, laid over whatever surface is underneath. */
-	--hover: oklch(0 0 0 / 6%);
-	--selected: oklch(0 0 0 / 12%);
+	--hover: oklch(0 0 0 / 4%);
+	--selected: oklch(0 0 0 / 8%);
 	/* Rest fill of a neutral filled control; its hover is `selected`. */
-	--secondary: oklch(0 0 0 / 7%);
-	--secondary-foreground: oklch(0.22 0 0);
+	--secondary: oklch(0.97 0 0);
+	--secondary-foreground: oklch(0.205 0 0);
 	/* Outlines and separators. */
-	--border: oklch(0 0 0 / 11%);
+	--border: oklch(0 0 0 / 8%);
 	/* Popovers, outline buttons, dashed drop zones. */
-	--border-strong: oklch(0 0 0 / 24%);
+	--border-strong: oklch(0 0 0 / 14%);
 	/* Edge of anything you type into or toggle, slider tracks included. Softer than the 3:1 WCAG
 	   boundary minimum in both modes: the recessed field fill carries the rest of the boundary. */
-	--input: oklch(0 0 0 / 28%);
-	--ring: oklch(0.55 0 0);
-	--elevation-raised: 0 1px 2px oklch(0 0 0 / 6%);
-	--elevation-popover: 0 8px 24px oklch(0 0 0 / 12%);
+	--input: oklch(0 0 0 / 10%);
+	--ring: oklch(0.708 0 0);
+	--elevation-raised: 0 1px 2px oklch(0 0 0 / 5%);
+	--elevation-popover: 0 8px 24px oklch(0 0 0 / 10%);
 	/* 4.5:1 as text on a card and under its foreground; 3:1 as a fill on every surface. */
-	--primary: #4a7c52;
+	--primary: oklch(0.205 0 0);
 	--primary-foreground: oklch(0.985 0 0);
 	--destructive: #c9302d;
 	--destructive-foreground: #fbfbfb;
@@ -62,28 +65,28 @@
 }
 
 .dark {
-	--background: oklch(0.155 0 0);
-	--card: oklch(0.235 0 0);
-	--raised: oklch(0.275 0 0);
-	--muted: oklch(0.18 0 0);
-	--foreground: oklch(0.96 0 0);
-	--card-foreground: oklch(0.96 0 0);
-	--popover-foreground: oklch(0.96 0 0);
-	--muted-foreground: oklch(0.72 0 0);
-	--faint-foreground: oklch(0.56 0 0);
+	--background: oklch(0.145 0 0);
+	--card: oklch(0.205 0 0);
+	--raised: oklch(0.24 0 0);
+	--muted: oklch(0.269 0 0);
+	--foreground: oklch(0.985 0 0);
+	--card-foreground: oklch(0.985 0 0);
+	--popover-foreground: oklch(0.985 0 0);
+	--muted-foreground: oklch(0.708 0 0);
+	--faint-foreground: oklch(0.556 0 0);
 	--hover: oklch(1 0 0 / 6%);
-	--selected: oklch(1 0 0 / 12%);
-	--secondary: oklch(1 0 0 / 8%);
-	--secondary-foreground: oklch(0.96 0 0);
-	--border: oklch(1 0 0 / 16%);
-	--border-strong: oklch(1 0 0 / 30%);
-	--input: oklch(1 0 0 / 28%);
-	--ring: oklch(0.74 0 0);
-	/* Shadows barely show on a dark canvas, so raised things catch a top highlight instead. */
-	--elevation-raised: inset 0 1px 0 oklch(1 0 0 / 5%);
-	--elevation-popover: 0 8px 24px oklch(0 0 0 / 50%), inset 0 1px 0 oklch(1 0 0 / 6%);
-	--primary: #86ab78;
-	--primary-foreground: oklch(0.18 0 0);
+	--selected: oklch(1 0 0 / 10%);
+	--secondary: oklch(0.269 0 0);
+	--secondary-foreground: oklch(0.985 0 0);
+	--border: oklch(1 0 0 / 10%);
+	--border-strong: oklch(1 0 0 / 18%);
+	--input: oklch(1 0 0 / 15%);
+	--ring: oklch(0.556 0 0);
+	/* Shadows barely show on a dark canvas, so raised things lean on the border instead. */
+	--elevation-raised: none;
+	--elevation-popover: 0 8px 24px oklch(0 0 0 / 50%);
+	--primary: oklch(0.922 0 0);
+	--primary-foreground: oklch(0.205 0 0);
 	/* White text can't reach 4.5:1 on a red light enough to also be text on the dark card. */
 	--destructive: oklch(0.7 0.17 22);
 	--destructive-foreground: oklch(0.18 0 0);
@@ -151,6 +154,8 @@
 /* Design tokens beyond Tailwind's defaults. Reach for these before an arbitrary value: the
    design-system lint rejects `text-[10px]`, `max-h-[85dvh]` and the like. */
 @theme {
+	/* Hanken Grotesk (OFL), self-hosted via Fontsource: the plugin UI runs offline from the .gha. */
+	--font-sans: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
 	/* Type tags, counters and other dense labels. */
 	--text-2xs: 0.625rem;
 	--text-2xs--line-height: calc(0.875 / 0.625);

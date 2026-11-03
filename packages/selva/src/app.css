@@ -12,3 +12,13 @@
 .dark .tool-cover-fallback {
 	background: linear-gradient(135deg, hsl(var(--tool-h1), 32%, 24%), hsl(var(--tool-h2), 26%, 18%));
 }
+
+/* Project badge on a tool card: one hue per project name (--project-h). */
+.project-chip {
+	background: hsl(var(--project-h), 45%, 92%);
+	color: hsl(var(--project-h), 45%, 28%);
+}
+.dark .project-chip {
+	background: hsl(var(--project-h), 30%, 24%);
+	color: hsl(var(--project-h), 55%, 82%);
+}

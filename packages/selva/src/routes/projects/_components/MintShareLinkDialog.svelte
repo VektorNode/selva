@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { Button, Callout, Dialog, Input, Label, toast, ConfirmDialog } from '@selvajs/ui';
+	import {
+		Button,
+		Callout,
+		Dialog,
+		Input,
+		Label,
+		toast,
+		ConfirmDialog,
+		FilterableDropdown
+	} from '@selvajs/ui';
 	import { Copy, TriangleAlert, Check } from '@lucide/svelte';
 	import { DEFAULT_SHARE_LINK_MAX_SOLVES, DEFAULT_SHARE_LINK_TTL_DAYS } from '@selvajs/platform';
 
@@ -126,14 +135,15 @@
 			<div class="mt-4 space-y-4">
 				<div class="space-y-1.5">
 					<Label for="sl-channel">Channel</Label>
-					<select
+					<FilterableDropdown
 						id="sl-channel"
-						bind:value={channel}
-						class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-					>
-						<option value="live">Live — recipients see the published version</option>
-						<option value="draft">Draft — recipients see the unpublished version</option>
-					</select>
+						items={[
+							{ id: 'live', label: 'Live — recipients see the published version' },
+							{ id: 'draft', label: 'Draft — recipients see the unpublished version' }
+						]}
+						value={channel}
+						onChange={(v) => (channel = v as DefinitionChannel)}
+					/>
 					{#if channel === 'draft'}
 						<p class="text-warning flex items-start gap-1.5 text-xs">
 							<TriangleAlert class="mt-0.5 h-3 w-3 shrink-0" />

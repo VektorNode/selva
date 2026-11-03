@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
-	import { Input, Select } from '@selvajs/ui';
+	import { ColorInput, Select } from '@selvajs/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import SettingRow from './SettingRow.svelte';
 
@@ -31,22 +31,11 @@
 <SettingsSection id="viewer.look" title="Look" collapsible={false}>
 	<div class="grid grid-cols-2 gap-3">
 		<SettingRow label="Background" for="viewer-background">
-			<div class="flex items-center gap-2">
-				<input
-					type="color"
-					aria-label="Pick background color"
-					class="border-input size-8 shrink-0 cursor-pointer rounded-md border bg-transparent p-1"
-					value={background}
-					oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
-				/>
-				<Input
-					id="viewer-background"
-					class="min-w-0 font-mono"
-					value={background}
-					oninput={(e) => updateViewerOptions({ backgroundColor: e.currentTarget.value })}
-					placeholder={DEFAULT_BACKGROUND}
-				/>
-			</div>
+			<ColorInput
+				inputId="viewer-background"
+				value={background}
+				onChange={(backgroundColor) => updateViewerOptions({ backgroundColor })}
+			/>
 		</SettingRow>
 		<SettingRow label="Look" for="viewer-look">
 			<Select.Root

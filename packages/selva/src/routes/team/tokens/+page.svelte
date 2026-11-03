@@ -159,7 +159,7 @@
 	</div>
 {/snippet}
 
-<div class="mx-auto max-w-4xl space-y-6">
+<div class="space-y-6">
 	<SectionHeader
 		eyebrow="Settings"
 		title="API tokens"

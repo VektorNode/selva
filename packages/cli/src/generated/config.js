@@ -260,6 +260,11 @@ function buildConfigReport(manifest, env, options = {}) {
 		const raw = k.source === 'alias' ? env[k.alias] : env[spec.key];
 		return {
 			key: spec.key,
+			...(spec.label ? { label: spec.label } : {}),
+			type: spec.type,
+			required: spec.required === true,
+			...(spec.type === 'int' && spec.zero ? { zero: spec.zero } : {}),
+			...(spec.type === 'int' && spec.unit ? { unit: spec.unit } : {}),
 			class: spec.class,
 			summary: spec.summary === true,
 			description: spec.description,
@@ -407,9 +412,10 @@ Object.freeze({
 	maxPerWindow: 20
 });
 // ../server/src/config/settings.ts
-var flag = (key, description, impact) =>
+var flag = (key, label, description, impact) =>
 	defineSetting({
 		key: `SELVA_FLAG_${key}`,
+		label,
 		type: 'bool',
 		default: false,
 		onInvalid: 'fail',
@@ -417,9 +423,10 @@ var flag = (key, description, impact) =>
 		description,
 		...(impact ? { impact } : {})
 	});
-var tunableInt = (key, fallback, description, extra = {}) =>
+var tunableInt = (key, fallback, label, description, extra = {}) =>
 	defineSetting({
 		key,
+		label,
 		type: 'int',
 		min: 1,
 		default: fallback,
@@ -430,31 +437,50 @@ var tunableInt = (key, fallback, description, extra = {}) =>
 	});
 var MB = 1048576;
 var ENGINE_SETTINGS = composeManifest([
-	...['AUTH', 'DATA', 'STORAGE'].map((slot) =>
+	...[
+		[
+			'AUTH',
+			'Sign-in',
+			'Who checks passwords: local (this server), supabase, or header (your SSO proxy).'
+		],
+		[
+			'DATA',
+			'Database',
+			'Where users, orgs and projects live: local (files on this server) or supabase.'
+		],
+		[
+			'STORAGE',
+			'File storage',
+			'Where uploaded .gh files and images live: local (this server) or supabase.'
+		]
+	].map(([slot, label, description]) =>
 		defineSetting({
 			key: `SELVA_${slot}_PROVIDER`,
+			label,
 			type: 'string',
 			default: 'local',
 			onInvalid: 'fail',
 			class: 'bootstrap',
 			summary: true,
-			description: `${slot.toLowerCase()} provider: local, supabase${slot === 'AUTH' ? ' or header' : ''}.`,
+			description,
 			impact:
 				'Switching it does not move any data: the instance starts on what the new provider holds.'
 		})
 	),
 	defineSetting({
 		key: 'SELVA_TENANCY',
+		label: 'Organizations',
 		type: 'enum',
 		values: ['single', 'multi'],
 		default: 'single',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'single: one org per deployment. multi: users create their own orgs.'
+		description: 'single: everyone shares one organization. multi: users can create their own.'
 	}),
 	defineSetting({
 		key: 'SELVA_CONFIG_PATH',
+		label: 'Custom config file',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -462,6 +488,7 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_HMAC_KEY',
+		label: 'Signing key',
 		type: 'string',
 		minLength: 32,
 		required: true,
@@ -470,12 +497,14 @@ var ENGINE_SETTINGS = composeManifest([
 		sensitive: true,
 		generated: true,
 		summary: true,
-		description: 'Signs sessions (local auth), OAuth codes, MCP client ids and solve-event tokens.',
+		description:
+			'Stops sign-ins, links and tokens from being forged. Generated at install; never share it.',
 		impact:
 			'Changing it without SELVA_HMAC_KEY_PREVIOUS breaks what it signed: run `selva keys rotate hmac`.'
 	}),
 	defineSetting({
 		key: 'SELVA_AT_REST_KEY',
+		label: 'Encryption key',
 		type: 'key',
 		required: true,
 		onInvalid: 'fail',
@@ -483,12 +512,13 @@ var ENGINE_SETTINGS = composeManifest([
 		sensitive: true,
 		generated: true,
 		summary: true,
-		description: 'Encrypts stored Rhino.Compute API keys.',
+		description: 'Encrypts the Rhino.Compute API keys stored here. Generated at install.',
 		impact:
 			'Changing it without SELVA_AT_REST_KEY_PREVIOUS makes stored API keys unreadable: run `selva keys rotate at-rest`.'
 	}),
 	defineSetting({
 		key: 'SELVA_HMAC_KEY_PREVIOUS',
+		label: 'Previous signing key',
 		type: 'string',
 		minLength: 32,
 		onInvalid: 'fail',
@@ -496,11 +526,12 @@ var ENGINE_SETTINGS = composeManifest([
 		sensitive: true,
 		generated: true,
 		summary: true,
-		description: 'The HMAC key before the last rotation. Still accepted for what it signed.',
+		description: 'Kept after a rotation so what the old signing key signed works until it expires.',
 		impact: 'Removing it ends sessions, MCP clients and links signed before the rotation.'
 	}),
 	defineSetting({
 		key: 'SELVA_AT_REST_KEY_PREVIOUS',
+		label: 'Previous encryption key',
 		type: 'key',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -508,11 +539,12 @@ var ENGINE_SETTINGS = composeManifest([
 		generated: true,
 		summary: true,
 		description:
-			'The encryption key before the last rotation. Stored API keys are re-sealed at boot.',
+			'Kept after a rotation until stored API keys are re-encrypted, which happens at the next start.',
 		impact: 'Remove it only once /admin/system shows no API key on the previous key.'
 	}),
 	defineSetting({
 		key: 'SELVA_HMAC_KEY_PREVIOUS_EXPIRES',
+		label: 'Previous signing key expiry',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -523,6 +555,7 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_AT_REST_KEY_PREVIOUS_EXPIRES',
+		label: 'Previous encryption key expiry',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -533,49 +566,61 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'BOOTSTRAP_INSTANCE_ADMIN_EMAIL',
+		label: 'Recovery admin email',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		sensitive: true,
 		summary: true,
 		description:
-			'Only this address may claim instance admin while none exists. Break-glass recovery.'
+			'While no instance admin exists, only this address may become one. For first setup and lockouts.'
 	}),
 	defineSetting({
 		key: 'SIGN_IN_MAX_AGE_DAYS',
+		label: 'Force sign-in again after',
 		type: 'int',
 		min: 0,
 		default: 0,
 		onInvalid: 'fail',
 		class: 'setting',
 		summary: true,
-		description: 'How long one sign-in at the identity provider lasts. 0 is off.',
+		zero: 'Never',
+		unit: 'days',
+		description: 'Days before users must sign in at the identity provider again. 0 is never.',
 		impact: 'API tokens of anyone who has not signed in within this many days are revoked.'
 	}),
-	flag('ALLOW_ORG_CREATION', 'Self-service org creation (read by host apps).'),
+	flag('ALLOW_ORG_CREATION', 'Users create orgs', 'Self-service org creation (read by host apps).'),
 	flag(
 		'ALLOW_CROSS_ORG_PUBLIC',
+		'Public across orgs',
 		'Public projects are visible to every signed-in user, not just the publishing org.',
 		'Turning it on widens who sees existing public projects.'
 	),
-	flag('ALLOW_ORG_COMPUTE_OVERRIDE', 'Orgs may configure their own Rhino.Compute server.'),
+	flag(
+		'ALLOW_ORG_COMPUTE_OVERRIDE',
+		'Orgs bring their own compute',
+		'Orgs may configure their own Rhino.Compute server.'
+	),
 	flag(
 		'ENABLE_SHARING',
+		'Share links',
 		'Per-definition share links for anonymous access.',
 		'Turning it off stops every existing share link from resolving.'
 	),
 	flag(
 		'ENABLE_PLATFORM_PROJECTS',
+		'Platform projects',
 		'Projects owned by instance admins and granted to orgs or users.'
 	),
 	...[
-		['NAME', 'Product name in the header and titles.'],
-		['COPYRIGHT_NAME', 'Footer copyright owner. Defaults to the brand name.'],
-		['TAGLINE', 'Subtitle on the landing page.'],
-		['DESCRIPTION', 'Meta description for search and link previews.']
-	].map(([key, description]) =>
+		['NAME', 'Product name', 'Product name in the header and titles.'],
+		['COPYRIGHT_NAME', 'Copyright holder', 'Footer copyright owner. Defaults to the brand name.'],
+		['TAGLINE', 'Tagline', 'Subtitle on the landing page.'],
+		['DESCRIPTION', 'Site description', 'Meta description for search and link previews.']
+	].map(([key, label, description]) =>
 		defineSetting({
 			key: `SELVA_BRAND_${key}`,
+			label,
 			type: 'string',
 			onInvalid: 'fail',
 			class: 'setting',
@@ -584,6 +629,7 @@ var ENGINE_SETTINGS = composeManifest([
 	),
 	defineSetting({
 		key: 'SMTP_HOST',
+		label: 'Mail server',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'setting',
@@ -591,6 +637,7 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SMTP_PORT',
+		label: 'Mail server port',
 		type: 'int',
 		min: 1,
 		max: 65535,
@@ -601,6 +648,7 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SMTP_USER',
+		label: 'Mail username',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'setting',
@@ -609,6 +657,7 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SMTP_PASS',
+		label: 'Mail password',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -617,6 +666,7 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SMTP_FROM',
+		label: 'Sender address',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'setting',
@@ -625,52 +675,123 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SMTP_SECURE',
+		label: 'Mail TLS mode',
 		type: 'bool',
 		onInvalid: 'fail',
 		class: 'tunable',
 		description: 'Override the TLS mode inferred from the port.',
 		legacy: { bool: 'exact-true' }
 	}),
-	tunableInt('COMPUTE_SOLVE_DEADLINE_MS', 1e5, 'Longest one solve may run.', {
+	tunableInt('COMPUTE_SOLVE_DEADLINE_MS', 1e5, 'Solve time limit', 'Longest one solve may run.', {
+		unit: 'ms',
 		aliases: ['MAX_SOLVE_DURATION_MS'],
 		impact: 'Past the reverse proxy read timeout, solves fail there with a 502 instead.'
 	}),
-	tunableInt('COMPUTE_RATE_LIMIT_WINDOW_MS', 1e5, 'Compute rate-limit window.'),
-	tunableInt('COMPUTE_RATE_LIMIT_MAX', 120, 'Solves per user or share link per window.'),
-	tunableInt('MAX_DEFINITION_FILE_SIZE_BYTES', 50 * MB, 'Largest .gh upload.'),
-	tunableInt('MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB, 'Largest cover image upload.'),
-	tunableInt('COMPUTE_REQUEST_MAX_BYTES', 256 * MB, 'Largest solve request body.', {
-		impact: 'Must stay at or below BODY_SIZE_LIMIT, or that limit rejects first.'
+	tunableInt(
+		'COMPUTE_RATE_LIMIT_WINDOW_MS',
+		1e5,
+		'Solve rate limit window',
+		'Compute rate-limit window.',
+		{ unit: 'ms' }
+	),
+	tunableInt(
+		'COMPUTE_RATE_LIMIT_MAX',
+		120,
+		'Solves per window',
+		'Solves per user or share link per window.'
+	),
+	tunableInt('MAX_DEFINITION_FILE_SIZE_BYTES', 50 * MB, 'Max .gh upload', 'Largest .gh upload.', {
+		unit: 'bytes'
 	}),
-	tunableInt('COMPUTE_RESPONSE_MAX_BYTES', 300 * MB, 'Largest solve response body.'),
-	tunableInt('REMOTE_DEFINITION_FETCH_TIMEOUT_MS', 3e4, 'Deadline for fetching a remote .gh.'),
-	tunableInt('REMOTE_DEFINITION_CACHE_TTL_MS', 3e5, 'How long remote .gh bytes stay cached.', {
-		aliases: ['DEFINITION_CACHE_TTL_MS']
-	}),
+	tunableInt(
+		'MAX_IMAGE_FILE_SIZE_BYTES',
+		10 * MB,
+		'Max image upload',
+		'Largest cover image upload.',
+		{ unit: 'bytes' }
+	),
+	tunableInt(
+		'COMPUTE_REQUEST_MAX_BYTES',
+		256 * MB,
+		'Max solve request',
+		'Largest solve request body.',
+		{
+			unit: 'bytes',
+			impact: 'Must stay at or below BODY_SIZE_LIMIT, or that limit rejects first.'
+		}
+	),
+	tunableInt(
+		'COMPUTE_RESPONSE_MAX_BYTES',
+		300 * MB,
+		'Max solve response',
+		'Largest solve response body.',
+		{ unit: 'bytes' }
+	),
+	tunableInt(
+		'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
+		3e4,
+		'Remote .gh fetch timeout',
+		'Deadline for fetching a remote .gh.',
+		{ unit: 'ms' }
+	),
+	tunableInt(
+		'REMOTE_DEFINITION_CACHE_TTL_MS',
+		3e5,
+		'Remote .gh cache time',
+		'How long remote .gh bytes stay cached.',
+		{
+			unit: 'ms',
+			aliases: ['DEFINITION_CACHE_TTL_MS']
+		}
+	),
 	tunableInt(
 		'COMPUTE_MAX_QUEUE_DEPTH',
 		0,
+		'Solve queue length',
 		'Solves allowed to wait per compute server. 0 is unbounded.',
-		{ min: 0 }
+		{
+			min: 0,
+			zero: 'No limit'
+		}
 	),
-	tunableInt('COMPUTE_QUEUE_WAIT_MS', 0, 'Longest a solve may wait queued. 0 is no deadline.', {
-		min: 0
-	}),
-	tunableInt('COMPUTE_DEFINITION_CACHE_MB', 256, 'Definition cache budget. 0 turns it off.', {
-		min: 0,
-		aliases: ['COMPUTE_DEFINITION_BYTE_CACHE_MB']
-	}),
+	tunableInt(
+		'COMPUTE_QUEUE_WAIT_MS',
+		0,
+		'Max queue wait',
+		'Longest a solve may wait queued. 0 is no deadline.',
+		{
+			min: 0,
+			unit: 'ms',
+			zero: 'No limit'
+		}
+	),
+	tunableInt(
+		'COMPUTE_DEFINITION_CACHE_MB',
+		256,
+		'Definition cache size',
+		'Definition cache budget. 0 turns it off.',
+		{
+			min: 0,
+			unit: 'mb',
+			zero: 'Off',
+			aliases: ['COMPUTE_DEFINITION_BYTE_CACHE_MB']
+		}
+	),
 	tunableInt(
 		'COMPUTE_SOLVE_CACHE_MB',
 		256,
+		'Solve cache size',
 		'Solve cache budget per warm compute server. 0 turns it off.',
 		{
 			min: 0,
+			unit: 'mb',
+			zero: 'Off',
 			aliases: ['COMPUTE_RESPONSE_CACHE_MB']
 		}
 	),
 	defineSetting({
 		key: 'COMPUTE_REUSE_DEFINITION_CACHE',
+		label: 'Reuse compute server definition cache',
 		type: 'bool',
 		default: true,
 		onInvalid: 'default',
@@ -681,6 +802,7 @@ var ENGINE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'COMPUTE_SERVER_CACHESOLVE',
+		label: 'Compute server solve cache',
 		type: 'bool',
 		default: true,
 		onInvalid: 'default',
@@ -690,19 +812,26 @@ var ENGINE_SETTINGS = composeManifest([
 	tunableInt(
 		'API_TOKEN_RATE_LIMIT_WINDOW_MS',
 		DEFAULT_API_RATE_LIMIT.windowMs,
-		'API token rate-limit window.'
+		'API rate limit window',
+		'API token rate-limit window.',
+		{ unit: 'ms' }
 	),
 	tunableInt(
 		'API_TOKEN_RATE_LIMIT_MAX',
 		DEFAULT_API_RATE_LIMIT.maxPerWindow,
+		'API requests per window',
 		'Requests per API token per window. 0 is off.',
-		{ min: 0 }
+		{
+			min: 0,
+			zero: 'Off'
+		}
 	)
 ]);
 // ../providers/header-auth/src/config.ts
 var header = (key, fallback, slot) =>
 	defineSetting({
 		key,
+		label: `${slot[0].toUpperCase()}${slot.slice(1)} header`,
 		type: 'string',
 		default: fallback,
 		onInvalid: 'fail',
@@ -713,6 +842,7 @@ var header = (key, fallback, slot) =>
 var HEADER_AUTH_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'HEADER_AUTH_DATA_DIR',
+		label: 'Allowlist folder',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -726,12 +856,13 @@ var HEADER_AUTH_SETTINGS = composeManifest([
 var LOCAL_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'DATA_PATH',
+		label: 'Data folder',
 		type: 'string',
 		required: true,
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Directory holding users, orgs, projects and uploaded files.',
+		description: 'Folder on this server holding users, orgs, projects and uploads. Back it up.',
 		impact: 'Pointing it elsewhere starts an empty instance; the old data stays where it was.'
 	})
 ]);
@@ -739,6 +870,7 @@ var LOCAL_SETTINGS = composeManifest([
 var SUPABASE_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'SUPABASE_URL',
+		label: 'Supabase project',
 		type: 'url',
 		required: true,
 		onInvalid: 'fail',
@@ -749,6 +881,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_ANON_KEY',
+		label: 'Supabase publishable key',
 		type: 'string',
 		required: true,
 		onInvalid: 'fail',
@@ -757,6 +890,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_SERVICE_ROLE_KEY',
+		label: 'Supabase secret key',
 		type: 'string',
 		required: true,
 		onInvalid: 'fail',
@@ -766,6 +900,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_JWT_SIGNING_KEY',
+		label: 'Supabase JWT signing key',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -775,6 +910,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_JWT_SECRET',
+		label: 'Supabase JWT secret (legacy)',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -783,6 +919,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_ENABLE_SELF_SIGNUP',
+		label: 'Self sign-up',
 		type: 'bool',
 		default: false,
 		onInvalid: 'fail',
@@ -792,6 +929,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_ALLOW_EMAIL_LINK_SIGNUP',
+		label: 'Sign-up by email link',
 		type: 'bool',
 		default: true,
 		onInvalid: 'fail',
@@ -801,6 +939,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_OAUTH_PROVIDERS',
+		label: 'OAuth sign-in buttons',
 		type: 'list',
 		default: [],
 		onInvalid: 'fail',
@@ -809,6 +948,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_TOKEN_VERIFICATION',
+		label: 'Session check mode',
 		type: 'enum',
 		values: ['hybrid', 'strict'],
 		default: 'hybrid',
@@ -820,15 +960,18 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_REVALIDATE_MS',
+		label: 'Session recheck interval',
 		type: 'int',
 		min: 1,
 		default: 6e4,
+		unit: 'ms',
 		onInvalid: 'default',
 		class: 'tunable',
 		description: 'Hybrid recheck window: the longest a revoked session keeps working.'
 	}),
 	defineSetting({
 		key: 'SUPABASE_PUBLIC_BUCKET',
+		label: 'Public files bucket',
 		type: 'string',
 		default: 'selva-public',
 		onInvalid: 'fail',
@@ -837,6 +980,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_PRIVATE_BUCKET',
+		label: 'Private files bucket',
 		type: 'string',
 		default: 'selva-private',
 		onInvalid: 'fail',
@@ -845,6 +989,7 @@ var SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_PRIVATE_URL_PREFIX',
+		label: 'Private file URL prefix',
 		type: 'string',
 		default: '/api/files',
 		onInvalid: 'fail',
@@ -857,16 +1002,18 @@ var SUPABASE_SETTINGS = composeManifest([
 var APP_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'ORIGIN',
+		label: 'Public address',
 		type: 'url',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Public URL of the app. Required behind a reverse proxy.',
+		description: 'The URL people use to reach Selva, such as https://selva.example.com.',
 		impact:
 			'Wrong or unset behind a proxy: form posts fail the CSRF check and invite links carry an internal host.'
 	}),
 	defineSetting({
 		key: 'PORT',
+		label: 'Port',
 		type: 'int',
 		min: 1,
 		max: 65535,
@@ -877,44 +1024,51 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'HOST',
+		label: 'Listen address',
 		type: 'string',
 		default: '0.0.0.0',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Address the app binds to. 127.0.0.1 behind a proxy.',
+		description:
+			'Which network address the app accepts connections on. 127.0.0.1 when a proxy sits in front.',
 		impact: 'Under header auth, anything that reaches the port directly can claim to be any user.'
 	}),
 	defineSetting({
 		key: 'BODY_SIZE_LIMIT',
+		label: 'Max request size',
 		type: 'string',
 		default: '512K',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Largest request body adapter-node accepts (K, M or G suffix).',
+		description: 'Largest request the server accepts at all, uploads included (K, M or G suffix).',
 		impact: 'Below COMPUTE_REQUEST_MAX_BYTES, uploads and file inputs fail with 413.'
 	}),
 	defineSetting({
 		key: 'ADDRESS_HEADER',
+		label: 'Visitor IP header',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Header carrying the client IP behind a proxy (X-Forwarded-For).',
+		description:
+			'Header your proxy uses to pass on the visitor’s IP address. Usually X-Forwarded-For.',
 		impact: 'Unset behind a proxy: every client shares one rate-limit bucket.'
 	}),
 	defineSetting({
 		key: 'XFF_DEPTH',
+		label: 'Proxies in front',
 		type: 'int',
 		min: 1,
 		onInvalid: 'fail',
 		class: 'bootstrap',
 		summary: true,
-		description: 'Number of proxies in front of the app.'
+		description: 'How many proxies sit between visitors and the app. Usually 1.'
 	}),
 	defineSetting({
 		key: 'PROTOCOL_HEADER',
+		label: 'Protocol header',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -922,6 +1076,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'HOST_HEADER',
+		label: 'Host header',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -929,6 +1084,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'NODE_ENV',
+		label: 'Run mode',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -936,6 +1092,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'ALLOW_INSECURE_COOKIES',
+		label: 'Allow sign-in over http',
 		type: 'bool',
 		default: false,
 		onInvalid: 'fail',
@@ -945,6 +1102,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'INSTALL_DIR',
+		label: 'Install folder',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -953,6 +1111,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_EVENT_CALLBACK_ORIGIN',
+		label: 'Solve event callback address',
 		type: 'url',
 		onInvalid: 'fail',
 		class: 'bootstrap',
@@ -961,6 +1120,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'MCP_ALLOWED_ORIGINS',
+		label: 'Extra MCP origins',
 		type: 'list',
 		default: [],
 		onInvalid: 'fail',
@@ -969,6 +1129,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'LOG_LEVEL',
+		label: 'Log level',
 		type: 'enum',
 		values: ['debug', 'info', 'warn', 'error'],
 		onInvalid: 'default',
@@ -977,6 +1138,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_FLAG_COMPUTE_DEBUG',
+		label: 'Compute debug logging',
 		type: 'string',
 		default: 'off',
 		onInvalid: 'default',
@@ -987,6 +1149,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_FLAG_COMPUTE_DEBUG_VERBOSE',
+		label: 'Compute debug logging (old name)',
 		type: 'bool',
 		onInvalid: 'default',
 		class: 'setting',
@@ -994,6 +1157,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SENTRY_DSN',
+		label: 'Sentry error reporting',
 		type: 'url',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -1002,6 +1166,7 @@ var APP_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SELVA_RELEASE',
+		label: 'Release tag',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'tunable',

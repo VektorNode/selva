@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { builderSelection, preventShiftTextSelect } from '$lib/features/builder/selection.svelte';
 	import type {
 		InputLayoutItem,
 		OutputLayoutItem,
@@ -22,7 +23,8 @@
 		hostsFor,
 		isGeometryParamType,
 		isSupportedOn,
-		layoutItemKind
+		layoutItemKind,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, ChevronDown, GripVertical } from '@lucide/svelte';
 	import { ACCEPTED_FILE_FORMATS } from '@selvajs/schemas';
@@ -58,6 +60,8 @@
 		getParameterInfo,
 		currentValue = undefined
 	}: BuilderGroupItemProps = $props();
+
+	const selected = $derived(builderSelection.placed.has(item.id));
 
 	// Parses the live Plotly JSON to show the detected chart type for chart outputs.
 	const detectedChartType = $derived.by(() => {
@@ -341,11 +345,26 @@
 <div class="relative rounded-md" data-builder-item-id={item.id}>
 	<Collapsible.Root bind:open={expanded}>
 		<Card.Root
-			class="group bg-raised shadow-raised border-border-strong hover:border-input @container overflow-hidden rounded-md border py-1.5 transition-colors"
+			class="group bg-raised shadow-raised hover:border-input @container overflow-hidden rounded-md border py-1.5 transition {selected
+				? 'border-primary ring-primary ring-1'
+				: 'border-border-strong'} {selected && builderSelection.carried ? 'opacity-40' : ''}"
 		>
 			<!-- Compact header row (always visible). In a card under 20rem the type badge drops its
 			     label, and the name and chips wrap so the controls stay in view. -->
-			<div data-builder-item-header class="flex items-center gap-2 px-3 py-1.5">
+			<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+			<div
+				data-builder-item-header
+				data-select-row
+				class="flex items-center gap-2 px-3 py-1.5"
+				onmousedown={preventShiftTextSelect}
+				onclick={(e) => {
+					if (
+						e.shiftKey &&
+						!(e.target as HTMLElement).closest('button, input, select, textarea, a')
+					)
+						builderSelection.togglePlaced(item.id);
+				}}
+			>
 				<div
 					use:dragHandle
 					class="text-muted-foreground hover:text-foreground hover:bg-hover flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
@@ -522,15 +541,21 @@
 											No Dynamic Value List inputs in this schema. Add one first, then pick it here.
 										</span>
 									{:else}
-										<select
-											bind:value={dynamicValueListOutputConfig.targetInputId}
-											class="border-border bg-background focus:border-primary h-6 rounded-sm border px-2 text-[10px] focus:outline-none"
-										>
-											<option value="">— Select an input —</option>
-											{#each dynamicValueListInputs as input (input.id)}
-												<option value={input.id}>{input.nickname}</option>
-											{/each}
-										</select>
+										<FilterableDropdown
+											items={[
+												{ id: '', label: '— Select an input —' },
+												...dynamicValueListInputs.map((input) => ({
+													id: input.id,
+													label: input.nickname
+												}))
+											]}
+											value={dynamicValueListOutputConfig.targetInputId ?? ''}
+											onChange={(v) => {
+												if (dynamicValueListOutputConfig)
+													dynamicValueListOutputConfig.targetInputId = v;
+											}}
+											size="sm"
+										/>
 										<span class="text-faint-foreground text-[9px]">
 											Receives this output's options.
 										</span>
@@ -754,15 +779,16 @@
 									{#if sourceKind === 'client'}
 										<div class="flex items-center justify-between gap-2">
 											<span class="text-muted-foreground">In the form</span>
-											<select
+											<FilterableDropdown
+												items={[
+													{ id: 'hidden', label: 'Hidden' },
+													{ id: 'slot', label: 'Custom slot (host app)' }
+												]}
 												value={clientPresentation}
-												onchange={(e) =>
-													setClientPresentation(e.currentTarget.value as 'hidden' | 'slot')}
-												class="border-border bg-background focus:border-primary h-6 rounded-sm border px-1.5 text-[10px] focus:outline-none"
-											>
-												<option value="hidden">Hidden</option>
-												<option value="slot">Custom slot (host app)</option>
-											</select>
+												onChange={(v) => setClientPresentation(v as 'hidden' | 'slot')}
+												size="sm"
+												class="w-44"
+											/>
 										</div>
 										{#if clientPresentation === 'slot'}
 											<span class="text-muted-foreground text-[10px]">

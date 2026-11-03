@@ -8,6 +8,7 @@ import {
 export const SUPABASE_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'SUPABASE_URL',
+		label: 'Supabase project',
 		type: 'url',
 		required: true,
 		onInvalid: 'fail',
@@ -18,6 +19,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_ANON_KEY',
+		label: 'Supabase publishable key',
 		type: 'string',
 		required: true,
 		onInvalid: 'fail',
@@ -26,6 +28,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_SERVICE_ROLE_KEY',
+		label: 'Supabase secret key',
 		type: 'string',
 		required: true,
 		onInvalid: 'fail',
@@ -35,6 +38,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_JWT_SIGNING_KEY',
+		label: 'Supabase JWT signing key',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -44,6 +48,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_JWT_SECRET',
+		label: 'Supabase JWT secret (legacy)',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'secret',
@@ -52,6 +57,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_ENABLE_SELF_SIGNUP',
+		label: 'Self sign-up',
 		type: 'bool',
 		default: false,
 		onInvalid: 'fail',
@@ -61,6 +67,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_ALLOW_EMAIL_LINK_SIGNUP',
+		label: 'Sign-up by email link',
 		type: 'bool',
 		default: true,
 		onInvalid: 'fail',
@@ -70,6 +77,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_OAUTH_PROVIDERS',
+		label: 'OAuth sign-in buttons',
 		type: 'list',
 		default: [],
 		onInvalid: 'fail',
@@ -78,6 +86,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_TOKEN_VERIFICATION',
+		label: 'Session check mode',
 		type: 'enum',
 		values: ['hybrid', 'strict'],
 		default: 'hybrid',
@@ -89,15 +98,18 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_REVALIDATE_MS',
+		label: 'Session recheck interval',
 		type: 'int',
 		min: 1,
 		default: 60_000,
+		unit: 'ms',
 		onInvalid: 'default',
 		class: 'tunable',
 		description: 'Hybrid recheck window: the longest a revoked session keeps working.'
 	}),
 	defineSetting({
 		key: 'SUPABASE_PUBLIC_BUCKET',
+		label: 'Public files bucket',
 		type: 'string',
 		default: 'selva-public',
 		onInvalid: 'fail',
@@ -106,6 +118,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_PRIVATE_BUCKET',
+		label: 'Private files bucket',
 		type: 'string',
 		default: 'selva-private',
 		onInvalid: 'fail',
@@ -114,6 +127,7 @@ export const SUPABASE_SETTINGS = composeManifest([
 	}),
 	defineSetting({
 		key: 'SUPABASE_PRIVATE_URL_PREFIX',
+		label: 'Private file URL prefix',
 		type: 'string',
 		default: '/api/files',
 		onInvalid: 'fail',

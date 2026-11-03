@@ -64,6 +64,14 @@ export const config = [
 		rules: {
 			// Error everywhere from the start: no package carries a violation.
 			'selva/surface-roles': 'error',
+			// A native <select> opens the OS popup, which ignores the theme and dark mode.
+			'svelte/no-restricted-html-elements': [
+				'error',
+				{
+					elements: ['select'],
+					message: 'Use FilterableDropdown from @selvajs/ui instead of a native <select>.'
+				}
+			],
 			'shadcn/no-raw-colors': 'warn',
 			'shadcn/no-arbitrary-values': 'warn',
 			'shadcn/no-unknown-classes': 'warn',

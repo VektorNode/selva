@@ -11,6 +11,7 @@ import {
 import { getLogger } from '$lib/server/providers.server';
 import { findDeploymentDir } from '$lib/server/selfUpdate.server';
 import { deploymentReport, deploymentSnapshot, keyRotationStatus } from './settings.js';
+import { configChecks, type CheckInput, type ConfigCheck } from './checks.js';
 
 /** Beside `.env` in the deployment directory. The CLI reads it too. */
 export const SNAPSHOT_FILE = '.selva-config-snapshot.json';
@@ -27,6 +28,13 @@ export function getConfigReport(): ConfigReport {
 /** Each root key's rotation overlap, read now so a deadline that passes shows without a restart. */
 export function getKeyRotation(): KeyRotation[] {
 	return keyRotationStatus(env);
+}
+
+/** Findings for the admin page, read per request: proxy detection depends on the request. */
+export function getConfigChecks(
+	input: Omit<CheckInput, 'env' | 'report' | 'rotation'>
+): ConfigCheck[] {
+	return configChecks({ ...input, env, report: getConfigReport(), rotation: getKeyRotation() });
 }
 
 /** What differs from the previous boot's snapshot. Empty outside a deployment. */

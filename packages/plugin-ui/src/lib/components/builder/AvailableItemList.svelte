@@ -4,9 +4,10 @@
 	import DraggableItem from './DraggableItem.svelte';
 	import { ChevronDown } from '@lucide/svelte';
 	import { clusterItems, type GroupBy, type GroupedItem } from '$lib/utils/paramGrouping';
-	import { dndzone, type DndEvent } from 'svelte-dnd-action';
+	import { dndzone, TRIGGERS, type DndEvent } from 'svelte-dnd-action';
 	import { flip } from 'svelte/animate';
-	import { DND_FLIP_MS, DND_TYPE_PARAM, liftDraggedElement } from '$lib/dnd/dndzone-helpers';
+	import { DND_FLIP_MS, DND_TYPE_PARAM, liftWithCount } from '$lib/dnd/dndzone-helpers';
+	import { builderSelection } from '$lib/features/builder/selection.svelte';
 	import { captureDragFootprint } from '$lib/dnd/drag-footprint.svelte';
 	import { usePersisted } from '$lib/composables/usePersisted.svelte';
 
@@ -81,6 +82,8 @@
 	});
 
 	function handleConsider(key: string, e: CustomEvent<DndEvent<GroupedItem>>) {
+		if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED)
+			builderSelection.startDrag(e.detail.info.id);
 		captureDragFootprint(e, localClusterItems[key] ?? []);
 		isDragging = true;
 		localClusterItems = { ...localClusterItems, [key]: e.detail.items };
@@ -88,6 +91,8 @@
 
 	function handleFinalize(key: string, e: CustomEvent<DndEvent<GroupedItem>>) {
 		isDragging = false;
+		builderSelection.endDrag();
+		builderSelection.commitTabDrop(e.detail.info.id, 'param');
 		// Discard dndzone's mutated items: the destination's commit has already updated placedIds.
 		const current = clusters.find((c) => c.key === key);
 		localClusterItems = {
@@ -116,7 +121,8 @@
 			flipDurationMs: DND_FLIP_MS,
 			dropTargetStyle: {},
 			centreDraggedOnCursor: true,
-			transformDraggedElement: liftDraggedElement
+			transformDraggedElement: (el, data) =>
+				liftWithCount(el, builderSelection.dragSize((data as GroupedItem).id))
 		}}
 		onconsider={(e) => handleConsider(key, e)}
 		onfinalize={(e) => handleFinalize(key, e)}

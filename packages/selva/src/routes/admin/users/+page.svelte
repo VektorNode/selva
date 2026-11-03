@@ -8,7 +8,8 @@
 		SectionHeader,
 		Pagination,
 		Callout,
-		ConfirmDialog
+		ConfirmDialog,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Plus, ShieldCheck, X, Search, Users } from '@lucide/svelte';
 	import { invalidateAll } from '$app/navigation';
@@ -349,36 +350,41 @@
 							class="pl-9"
 						/>
 					</div>
-					<select
-						bind:value={roleFilter}
+					<FilterableDropdown
 						aria-label="Filter by role in the active organization"
-						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-					>
-						<option value="all">All org roles</option>
-						{#each ORG_ROLES as role (role)}
-							<option value={role}>{role}</option>
-						{/each}
-					</select>
-					<select
-						bind:value={permissionFilter}
+						items={[
+							{ id: 'all', label: 'All org roles' },
+							...ORG_ROLES.map((r) => ({ id: r, label: r }))
+						]}
+						value={roleFilter}
+						onChange={(v) => (roleFilter = v as OrgRole | 'all')}
+						size="sm"
+						class="w-40"
+					/>
+					<FilterableDropdown
 						aria-label="Filter by instance permission"
-						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-					>
-						<option value="all">All instance permissions</option>
-						{#each assignablePermissions as p (p)}
-							<option value={p}>{PERMISSION_LABELS[p]}</option>
-						{/each}
-					</select>
-					<select
-						bind:value={statusFilter}
+						items={[
+							{ id: 'all', label: 'All instance permissions' },
+							...assignablePermissions.map((p) => ({ id: p, label: PERMISSION_LABELS[p] }))
+						]}
+						value={permissionFilter}
+						onChange={(v) => (permissionFilter = v as PlatformPermission | 'all')}
+						size="sm"
+						class="w-52"
+					/>
+					<FilterableDropdown
 						aria-label="Filter by status"
-						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-					>
-						<option value="all">Any status</option>
-						<option value="enabled">Enabled</option>
-						<option value="disabled">Disabled</option>
-						<option value="never-signed-in">Never signed in</option>
-					</select>
+						items={[
+							{ id: 'all', label: 'Any status' },
+							{ id: 'enabled', label: 'Enabled' },
+							{ id: 'disabled', label: 'Disabled' },
+							{ id: 'never-signed-in', label: 'Never signed in' }
+						]}
+						value={statusFilter}
+						onChange={(v) => (statusFilter = v as typeof statusFilter)}
+						size="sm"
+						class="w-40"
+					/>
 					{#if filtersActive}
 						<Button variant="ghost" size="sm" onclick={clearFilters}>
 							<X class="mr-1.5 h-3.5 w-3.5" />

@@ -14,7 +14,13 @@
 	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
 	import ModeHeader from '$lib/components/ModeHeader.svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
-	import { BuilderSearch, BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
+	import {
+		BuilderSearch,
+		BuilderSidebar,
+		SelectionBar,
+		TabEditor,
+		SyncDialog
+	} from '$lib/components/builder';
 	import { bringIntoView } from '$lib/components/builder/reveal';
 	import type { SearchTarget } from '$lib/features/builder';
 	import SelvaUploadDialog from '$lib/components/selva-upload/SelvaUploadDialog.svelte';
@@ -25,6 +31,7 @@
 	import { onMount, tick } from 'svelte';
 	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
 	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
+	import { builderSelection } from '$lib/features/builder/selection.svelte';
 	import { setBuilderDraft } from '$lib/components/builder/draft-context';
 	import { putAsset } from '$lib/features/builder/option-assets';
 	import { useSelvaUpload, type SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
@@ -43,6 +50,11 @@
 	let pendingNavRoute = $state<'/preview' | null>(null);
 
 	const actions = useBuilderActions(() => builderState);
+
+	$effect(() => {
+		builderSelection.setTabDropHandler(actions.onDropOnTab);
+		return () => builderSelection.setTabDropHandler(null);
+	});
 	setBuilderDraft({
 		edit: (apply) => builderState?.editDraft(apply),
 		get assets() {
@@ -392,6 +404,7 @@
 									onReorderGroups={actions.onReorderGroups}
 									onMoveGroupToTab={actions.onMoveGroupToTab}
 									onParameterDrop={actions.onParameterDrop}
+									onCarrySelection={actions.onCarrySelection}
 									onReorder={actions.onReorder}
 									onRemoveItem={actions.onRemoveItem}
 									onAddLineBreak={actions.onAddLineBreak}
@@ -401,6 +414,12 @@
 									outputValues={builderState.state.outputValues}
 									{expandedItems}
 									{peekedGroups}
+								/>
+								<SelectionBar
+									tabs={builderState.state.draft.layout.tabs}
+									placedParamIds={placedInLayoutIds}
+									onAdd={actions.onAddSelectedToGroup}
+									onMove={actions.onMoveSelectedToGroup}
 								/>
 							{/if}
 						</main>

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Badge, Button, Callout } from '@selvajs/ui';
+	import { Badge, Button, Callout, FilterableDropdown } from '@selvajs/ui';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -75,16 +75,12 @@
 				{#if level && level.orgs.length > 1}
 					<label class="block space-y-2 text-sm">
 						<span class="text-foreground font-medium">Organization</span>
-						<select
+						<FilterableDropdown
 							name="orgId"
-							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+							items={level.orgs.map((org) => ({ id: org.id, label: org.name }))}
 							value={orgId}
-							onchange={(e) => (pickedOrgId = e.currentTarget.value)}
-						>
-							{#each level.orgs as org (org.id)}
-								<option value={org.id}>{org.name}</option>
-							{/each}
-						</select>
+							onChange={(v) => (pickedOrgId = v)}
+						/>
 					</label>
 				{:else if level}
 					<input type="hidden" name="orgId" value={orgId} />

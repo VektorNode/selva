@@ -46,7 +46,7 @@
 		"vitest": "catalog:"
 	},
 	"dependencies": {
-		"@fontsource-variable/familjen-grotesk": "^5.3.0",
+		"@fontsource-variable/hanken-grotesk": "catalog:",
 		"@lucide/svelte": "catalog:"
 	}
 }

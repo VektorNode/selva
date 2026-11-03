@@ -13,6 +13,7 @@ export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 // Design-system primitives (shadcn-svelte + custom)
 export * from './components/primitives';
 export { default as StateDisplay } from './components/primitives/StateDisplay.svelte';
+export { default as ColorInput } from './components/preview/inputs/ColorInput.svelte';
 
 export { default as Viewer } from './components/viewer/Viewer.svelte';
 

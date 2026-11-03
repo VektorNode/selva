@@ -92,6 +92,7 @@
 	},
 	"dependencies": {
 		"@floating-ui/dom": "catalog:",
+		"@fontsource-variable/hanken-grotesk": "catalog:",
 		"@iconify/svelte": "catalog:",
 		"@lucide/svelte": "catalog:",
 		"clsx": "catalog:",

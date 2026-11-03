@@ -7,7 +7,8 @@
 		Input,
 		Label,
 		SectionHeader,
-		toast
+		toast,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Folders, Plus } from '@lucide/svelte';
 	import { goto, invalidateAll } from '$app/navigation';
@@ -96,15 +97,15 @@
 				</div>
 				<div class="space-y-1.5">
 					<Label for="new-org">Host organization</Label>
-					<select
+					<FilterableDropdown
 						id="new-org"
-						bind:value={newOrgId}
-						class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-					>
-						{#each data.orgOptions as org (org.id)}
-							<option value={org.id}>{org.name} ({org.slug})</option>
-						{/each}
-					</select>
+						items={data.orgOptions.map((org) => ({
+							id: org.id,
+							label: `${org.name} (${org.slug})`
+						}))}
+						value={newOrgId}
+						onChange={(v) => (newOrgId = v)}
+					/>
 					<p class="text-muted-foreground text-xs">
 						Storage and compute use this org. Membership in this org does NOT grant access —
 						visibility = platform overrides.

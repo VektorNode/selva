@@ -18,11 +18,14 @@ import {
 	COMPUTE_DEFINITION_CACHE_BYTES,
 	COMPUTE_SOLVE_CACHE_BYTES
 } from '$lib/server/computeLimits';
+import { dev } from '$app/environment';
 import {
 	getChangesSinceLastBoot,
+	getConfigChecks,
 	getConfigReport,
 	getKeyRotation
 } from '$lib/server/config/boot.server';
+import { requestFacts } from '$lib/server/config/checks';
 import { getBootHealth } from '$lib/server/bootHealth.server';
 import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
@@ -37,7 +40,7 @@ import type { Actions, PageServerLoad } from './$types';
  * after an admin update the new build embeds the new constant. No need to
  * shell out to `npm` or read node_modules at request time.
  */
-export const load: PageServerLoad = async ({ locals, fetch }) => {
+export const load: PageServerLoad = async ({ locals, fetch, request, url }) => {
 	const ctx = locals.ctx;
 	const canManageUpdates = ctx ? hasPermission(ctx, 'manage_updates') : false;
 	// The on-demand health check endpoint is instance_admin-only; gate the UI
@@ -97,20 +100,30 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 		flags,
 		limits,
 		// Hosts, ports and addresses: instance admins only, like the health check.
-		config: isInstanceAdmin
-			? {
-					report: getConfigReport(),
-					changes: getChangesSinceLastBoot(),
-					rotation: getKeyRotation(),
-					// Set only while SELVA_AT_REST_KEY_PREVIOUS is: what `--finish` would strand.
-					atRestOnPreviousKey: (await getBootHealth()).atRestSecrets?.onPreviousKey ?? null
-				}
-			: null,
+		config: isInstanceAdmin ? await configView(request, url) : null,
 		version: pkg.version,
 		channel,
 		update
 	};
 };
+
+async function configView(request: Request, url: URL) {
+	// Set only while SELVA_AT_REST_KEY_PREVIOUS is: what `--finish` would strand.
+	const atRestOnPreviousKey = (await getBootHealth()).atRestSecrets?.onPreviousKey ?? null;
+	const facts = requestFacts(request.headers, url);
+	return {
+		report: getConfigReport(),
+		changes: getChangesSinceLastBoot(),
+		rotation: getKeyRotation(),
+		proxied: facts.proxied,
+		checks: getConfigChecks({
+			atRestOnPreviousKey,
+			request: facts,
+			computeRequestMaxBytes: COMPUTE_REQUEST_MAX_BYTES,
+			dev
+		})
+	};
+}
 
 export const actions: Actions = {
 	// Persist the release channel. Switch-only: this does NOT trigger an update —

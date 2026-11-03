@@ -3,6 +3,7 @@ import { composeManifest, defineSetting } from '@selvajs/platform/config';
 const header = (key: string, fallback: string, slot: string) =>
 	defineSetting({
 		key,
+		label: `${slot[0].toUpperCase()}${slot.slice(1)} header`,
 		type: 'string',
 		default: fallback,
 		onInvalid: 'fail',
@@ -14,6 +15,7 @@ const header = (key: string, fallback: string, slot: string) =>
 export const HEADER_AUTH_SETTINGS = composeManifest([
 	defineSetting({
 		key: 'HEADER_AUTH_DATA_DIR',
+		label: 'Allowlist folder',
 		type: 'string',
 		onInvalid: 'fail',
 		class: 'bootstrap',
