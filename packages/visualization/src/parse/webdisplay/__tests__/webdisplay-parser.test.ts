@@ -15,7 +15,7 @@ import { computeCombinedBoundingBox } from '../../../shared/index.js';
 import { SCALE_FACTORS, getThreeObjectsFromComputeResponse } from '../webdisplay-parser';
 import type { GrasshopperComputeResponse } from '../response-envelope.js';
 
-function response(values: any[], modelunits = 'Meters'): GrasshopperComputeResponse {
+function response(values: unknown[], modelunits = 'Meters'): GrasshopperComputeResponse {
 	return { values, modelunits } as unknown as GrasshopperComputeResponse;
 }
 

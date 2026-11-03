@@ -55,7 +55,7 @@
 				<Loader class="h-4 w-4 animate-spin" />
 				{t.solvingEllipsis}
 				<kbd
-					class="px-1 font-sans rounded-sm border border-current/30 text-2xs opacity-70"
+					class="px-1 rounded-sm border border-current/30 font-sans text-2xs opacity-70"
 					title={t.solveMessagesEscHint}
 				>
 					Esc

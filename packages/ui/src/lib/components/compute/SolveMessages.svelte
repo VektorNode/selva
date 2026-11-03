@@ -319,7 +319,7 @@
 							title={t.solveMessagesEscHint}
 						>
 							{t.solveMessagesAbort}
-							<kbd class="px-1 font-sans rounded-sm border border-border text-2xs opacity-70">
+							<kbd class="px-1 rounded-sm border border-border font-sans text-2xs opacity-70">
 								Esc
 							</kbd>
 						</Button>

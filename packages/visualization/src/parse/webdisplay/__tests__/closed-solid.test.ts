@@ -43,7 +43,7 @@ describe('isClosedSolid', () => {
 		expect(check(box)).toBe(true);
 	});
 
-	it('welds seam copies that rounded a float32 step apart', () => {
+	it('welds seam copies a float32 step apart', () => {
 		// As Rhino emits a solid far from the origin: each face computes the seam point itself.
 		const box = new THREE.BoxGeometry(200, 15, 50).translate(-2032, 2683, 0.97);
 		const position = box.getAttribute('position');
