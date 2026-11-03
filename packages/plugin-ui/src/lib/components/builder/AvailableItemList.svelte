@@ -120,7 +120,7 @@
 		}}
 		onconsider={(e) => handleConsider(key, e)}
 		onfinalize={(e) => handleFinalize(key, e)}
-		class="bg-muted flex flex-col gap-1 rounded-md p-1.5"
+		class="flex flex-col gap-1.5"
 	>
 		{#each zoneItems as item (item.id)}
 			<div animate:flip={{ duration: DND_FLIP_MS }}>
@@ -130,74 +130,78 @@
 	</div>
 {/snippet}
 
-<Collapsible.Root bind:open={() => isSectionOpen, (open) => (sectionOpen.value = open)}>
-	<Collapsible.Trigger>
-		{#snippet child({ props })}
-			<button
-				{...props}
-				class="group/list bg-card sticky top-0 z-10 flex w-full items-center gap-2 py-2 text-left"
-			>
-				<span class="text-muted-foreground text-xs font-semibold tracking-wide uppercase"
-					>{title}</span
+<div class="bg-muted rounded-lg p-2">
+	<Collapsible.Root bind:open={() => isSectionOpen, (open) => (sectionOpen.value = open)}>
+		<Collapsible.Trigger>
+			{#snippet child({ props })}
+				<button
+					{...props}
+					class="group/list bg-muted sticky top-0 z-10 flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left"
 				>
-				<span class="bg-muted text-muted-foreground rounded-full px-1.5 text-xs tabular-nums">
-					{unplaced.length}
-				</span>
-				<ChevronDown
-					size={14}
-					class="text-muted-foreground group-hover/list:text-foreground ml-auto transition-transform duration-200 {isSectionOpen
-						? 'rotate-180'
-						: ''}"
-				/>
-			</button>
-		{/snippet}
-	</Collapsible.Trigger>
+					<span class="text-muted-foreground text-xs font-semibold tracking-wide uppercase"
+						>{title}</span
+					>
+					<span
+						class="bg-selected text-foreground rounded-full px-1.5 text-xs font-medium tabular-nums"
+					>
+						{unplaced.length}
+					</span>
+					<ChevronDown
+						size={14}
+						class="text-muted-foreground group-hover/list:text-foreground ml-auto transition-transform duration-200 {isSectionOpen
+							? 'rotate-180'
+							: ''}"
+					/>
+				</button>
+			{/snippet}
+		</Collapsible.Trigger>
 
-	<Collapsible.Content>
-		<div class="pb-3">
-			{#if unplaced.length === 0}
-				<p class="text-muted-foreground py-2 text-xs">
-					{items.length === 0 ? 'None found in the definition.' : 'All placed on the canvas.'}
-				</p>
-			{:else if filtered.length === 0}
-				<p class="text-muted-foreground py-2 text-xs">No matches.</p>
-			{:else if groupBy === 'none'}
-				{@render zone(clusters[0].key, clusters[0].items)}
-			{:else}
-				<div class="flex flex-col gap-1">
-					{#each clusters as cluster (cluster.key)}
-						{#if cluster.items.length > 0}
-							<Collapsible.Root
-								open={isClusterOpen(cluster.key)}
-								onOpenChange={(o) => setClusterOpen(cluster.key, o)}
-							>
-								<Collapsible.Trigger>
-									{#snippet child({ props })}
-										<button
-											{...props}
-											class="group/cluster text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 py-1.5 text-left text-xs"
-										>
-											<ChevronDown
-												size={12}
-												class="transition-transform duration-200 {isClusterOpen(cluster.key)
-													? ''
-													: '-rotate-90'}"
-											/>
-											<span class="truncate font-medium">{cluster.label}</span>
-											<span class="tabular-nums opacity-60">{cluster.items.length}</span>
-										</button>
-									{/snippet}
-								</Collapsible.Trigger>
-								<Collapsible.Content>
-									<div class="pb-2 pl-4">
-										{@render zone(cluster.key, cluster.items)}
-									</div>
-								</Collapsible.Content>
-							</Collapsible.Root>
-						{/if}
-					{/each}
-				</div>
-			{/if}
-		</div>
-	</Collapsible.Content>
-</Collapsible.Root>
+		<Collapsible.Content>
+			<div class="pt-1">
+				{#if unplaced.length === 0}
+					<p class="text-muted-foreground py-2 text-xs">
+						{items.length === 0 ? 'None found in the definition.' : 'All placed on the canvas.'}
+					</p>
+				{:else if filtered.length === 0}
+					<p class="text-muted-foreground py-2 text-xs">No matches.</p>
+				{:else if groupBy === 'none'}
+					{@render zone(clusters[0].key, clusters[0].items)}
+				{:else}
+					<div class="flex flex-col gap-1.5">
+						{#each clusters as cluster (cluster.key)}
+							{#if cluster.items.length > 0}
+								<Collapsible.Root
+									open={isClusterOpen(cluster.key)}
+									onOpenChange={(o) => setClusterOpen(cluster.key, o)}
+								>
+									<Collapsible.Trigger>
+										{#snippet child({ props })}
+											<button
+												{...props}
+												class="group/cluster text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 py-1.5 text-left text-xs"
+											>
+												<ChevronDown
+													size={12}
+													class="transition-transform duration-200 {isClusterOpen(cluster.key)
+														? ''
+														: '-rotate-90'}"
+												/>
+												<span class="truncate font-medium">{cluster.label}</span>
+												<span class="tabular-nums opacity-60">{cluster.items.length}</span>
+											</button>
+										{/snippet}
+									</Collapsible.Trigger>
+									<Collapsible.Content>
+										<div class="pb-2 pl-4">
+											{@render zone(cluster.key, cluster.items)}
+										</div>
+									</Collapsible.Content>
+								</Collapsible.Root>
+							{/if}
+						{/each}
+					</div>
+				{/if}
+			</div>
+		</Collapsible.Content>
+	</Collapsible.Root>
+</div>

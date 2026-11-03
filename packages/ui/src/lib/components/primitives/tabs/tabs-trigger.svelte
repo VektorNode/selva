@@ -7,7 +7,7 @@
 			variant: {
 				default:
 					'px-2 py-1 data-[state=active]:shadow-sm h-full flex-1 rounded-inner border border-transparent text-foreground transition focus-visible:border-ring data-[state=active]:bg-raised dark:text-muted-foreground data-[state=active]:border-border-strong dark:data-[state=active]:text-foreground',
-				line: 'px-2.5 py-3 relative flex-none text-muted-foreground transition-colors after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full hover:text-foreground data-[state=active]:text-foreground data-[state=active]:after:bg-primary'
+				line: 'px-2.5 py-2.5 relative flex-none text-muted-foreground transition-colors after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full hover:text-foreground data-[state=active]:text-foreground data-[state=active]:after:bg-primary'
 			}
 		},
 		defaultVariants: {

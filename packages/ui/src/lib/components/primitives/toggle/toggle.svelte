@@ -9,7 +9,7 @@
 				// Item inside a segmented track: the chosen value sits raised above the track.
 				segmented:
 					'rounded-inner bg-transparent text-muted-foreground data-[state=on]:bg-raised data-[state=on]:text-foreground data-[state=on]:shadow-raised data-[state=on]:ring-1 data-[state=on]:ring-border-strong',
-				outline: 'border-input hover:bg-hover border bg-transparent',
+				outline: 'border-input hover:bg-hover border bg-field',
 				// Filled accent for the active item; a bare bg-muted is too faint on a form.
 				accent:
 					'border-input hover:bg-hover border bg-transparent data-[state=on]:bg-primary/15 data-[state=on]:ring-1 data-[state=on]:ring-primary data-[state=on]:ring-inset'

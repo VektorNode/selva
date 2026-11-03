@@ -13,7 +13,7 @@ token by what the thing _is_, never by the grey you want, and both modes come ou
 | surface | `bg-card`       | Cards, panels, group headers.                                                                          |
 | raised  | `bg-raised`     | Things that sit on a surface: list rows, menus, popovers, dialogs, the chosen segment, the active tab. |
 | well    | `bg-muted`      | Recessed areas: trays that hold rows, tab-list tracks, code, table heads, skeletons.                   |
-| field   | `bg-field`      | Anything you type into or toggle. Same fill as raised in both modes; the edge marks it.                |
+| field   | `bg-field`      | Anything you type into or toggle. Same fill as the well in both modes; the edge marks it.              |
 
 Nesting moves toward the viewer: canvas, then surface, then raised. Dark mode shows that by
 getting lighter. Light mode can't get lighter than white, so raised is white too and lifts with
@@ -22,8 +22,8 @@ getting lighter. Light mode can't get lighter than white, so raised is white too
 Wells go the other way: darker than what's around them. A tray of draggable rows is a `bg-muted`
 well holding `bg-raised` rows, never rows darker than their container.
 
-Fields are raised, not recessed: a recessed field looks disabled. That is why a field on a well
-still shows its fill.
+Fields are recessed like wells, and `border-input` carries the boundary. A field on a well
+shares its fill, so the edge is all that marks it there.
 
 ## States
 

@@ -113,7 +113,7 @@
 		{#if visibleGroups.length === 0}
 			<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
 		{:else}
-			<div class="gap-3 py-3 flex flex-col">
+			<div class="gap-4 py-4 flex flex-col">
 				{#each visibleGroups as group (group.id)}
 					<Group
 						label={group.label}

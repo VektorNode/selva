@@ -91,7 +91,7 @@
 	}
 </script>
 
-<div class="flex flex-col gap-5">
+<div class="flex flex-col gap-6">
 	{#if syncNeeded}
 		<Callout tone="warning" title="Definition changed">
 			<div class="flex flex-col items-start gap-2">
@@ -153,7 +153,7 @@
 		{/if}
 	</div>
 
-	<div class="flex flex-col">
+	<div class="flex flex-col gap-3">
 		<AvailableItemList
 			id="inputs"
 			title="Inputs"

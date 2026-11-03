@@ -107,7 +107,7 @@
 		{/if}
 		<div class="content-wrapper" class:collapsed inert={collapsed}>
 			<div class="content-inner">
-				<div class="px-4 pt-1 pb-4">
+				<div class="px-4 pt-2 pb-5">
 					{@render grid()}
 				</div>
 			</div>
@@ -152,7 +152,7 @@
 	.schema-grid {
 		display: grid;
 		grid-template-columns: repeat(var(--schema-cols), minmax(0, 1fr));
-		gap: 1rem var(--column-gap);
+		gap: 1.25rem var(--column-gap);
 		align-items: start;
 	}
 

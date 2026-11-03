@@ -6,7 +6,7 @@
 		variants: {
 			variant: {
 				default: 'h-9 w-fit justify-center rounded-md bg-muted p-0.5',
-				line: 'gap-1 px-2 w-full justify-start'
+				line: 'gap-1 px-1 w-full justify-start'
 			}
 		},
 		defaultVariants: {

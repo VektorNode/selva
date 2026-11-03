@@ -195,7 +195,7 @@
 	const idx = (id: string) => buttons.indexOf(id);
 
 	const BTN =
-		'relative grid size-8.5 shrink-0 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground data-[state=open]:bg-selected data-[state=open]:text-foreground pointer-coarse:size-11';
+		'relative grid size-8.5 shrink-0 place-items-center rounded-lg text-foreground outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground data-[state=open]:bg-selected data-[state=open]:text-foreground pointer-coarse:size-11';
 	const DOT =
 		'aria-pressed:after:absolute aria-pressed:after:bottom-0.5 aria-pressed:after:size-1 aria-pressed:after:rounded-full aria-pressed:after:bg-primary';
 </script>
@@ -213,12 +213,12 @@
 	class="backdrop-blur-md absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden transition-colors {hidden
 		? 'pointer-events-none opacity-0'
 		: ''} {wantOpen
-		? 'shadow-md border border-border bg-background/60'
+		? 'shadow-md border border-border-strong bg-card/75'
 		: touch.current
 			? 'shadow-lg cursor-pointer border border-border bg-background/90'
 			: nightOn
-				? 'bg-white/35 hover:bg-white/70 cursor-pointer'
-				: 'cursor-pointer bg-muted hover:bg-hover'}"
+				? 'border-white/25 bg-white/35 hover:bg-white/70 cursor-pointer border'
+				: 'shadow-sm cursor-pointer border border-border-strong bg-card/90 hover:bg-card'}"
 	style={containerStyle}
 	onclick={openFromCollapsed}
 	onkeydown={(e) => (e.key === 'Escape' ? (engaged = false) : undefined)}

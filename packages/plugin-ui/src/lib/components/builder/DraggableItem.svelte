@@ -51,7 +51,7 @@
 				tabindex="-1"
 				role="button"
 				title={item.description || undefined}
-				class="group/param bg-raised shadow-raised border-border-strong hover:border-input flex h-9 cursor-grab items-center gap-2 rounded-md border pr-2 pl-1 text-sm transition-colors active:cursor-grabbing [#dnd-action-dragged-el>&]:h-full"
+				class="group/param bg-raised shadow-raised border-border-strong hover:border-input flex h-10 cursor-grab items-center gap-2 rounded-md border pr-2 pl-1 text-sm transition-colors active:cursor-grabbing [#dnd-action-dragged-el>&]:h-full"
 			>
 				<GripVertical
 					size={14}

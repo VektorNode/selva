@@ -14,9 +14,9 @@
 	--raised: oklch(1 0 0);
 	/* Recessed fill for trays, table heads, code and skeletons: darker than the surface around it. */
 	--muted: oklch(0.94 0 0);
-	/* Fill of anything you type into, on a card: the same step as raised, in both modes. The edge
-	   (`--input`) carries the boundary. A recessed fill reads as a disabled control. */
-	--field: var(--raised);
+	/* Fill of anything you type into, on a card: recessed, the same step as muted, in both modes.
+	   The edge (`--input`) carries the boundary. */
+	--field: var(--muted);
 	--foreground: oklch(0.22 0 0);
 	--card-foreground: oklch(0.22 0 0);
 	--popover-foreground: oklch(0.22 0 0);
@@ -34,9 +34,9 @@
 	--border: oklch(0 0 0 / 11%);
 	/* Popovers, outline buttons, dashed drop zones. */
 	--border-strong: oklch(0 0 0 / 24%);
-	/* Edge of anything you type into or toggle, slider tracks included: at least 3:1 against the
-	   surfaces around it, the WCAG minimum for a control's boundary. */
-	--input: oklch(0 0 0 / 44%);
+	/* Edge of anything you type into or toggle, slider tracks included. Softer than the 3:1 WCAG
+	   boundary minimum in both modes: the recessed field fill carries the rest of the boundary. */
+	--input: oklch(0 0 0 / 28%);
 	--ring: oklch(0.55 0 0);
 	--elevation-raised: 0 1px 2px oklch(0 0 0 / 6%);
 	--elevation-popover: 0 8px 24px oklch(0 0 0 / 12%);
@@ -75,9 +75,9 @@
 	--selected: oklch(1 0 0 / 12%);
 	--secondary: oklch(1 0 0 / 8%);
 	--secondary-foreground: oklch(0.96 0 0);
-	--border: oklch(1 0 0 / 11%);
-	--border-strong: oklch(1 0 0 / 24%);
-	--input: oklch(1 0 0 / 41%);
+	--border: oklch(1 0 0 / 16%);
+	--border-strong: oklch(1 0 0 / 30%);
+	--input: oklch(1 0 0 / 28%);
 	--ring: oklch(0.74 0 0);
 	/* Shadows barely show on a dark canvas, so raised things catch a top highlight instead. */
 	--elevation-raised: inset 0 1px 0 oklch(1 0 0 / 5%);

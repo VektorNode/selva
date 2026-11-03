@@ -23,8 +23,8 @@
 
 <ToggleGroup.Root
 	type="single"
-	variant="segmented"
-	spacing={1}
+	variant="outline"
+	spacing={0}
 	size={hasIcons ? 'stacked' : 'default'}
 	class="w-full"
 	aria-labelledby={labelId}
