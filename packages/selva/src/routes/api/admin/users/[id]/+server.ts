@@ -20,6 +20,7 @@ import {
 	actorFrom
 } from '@selvajs/platform';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
+import { apiTokenResolutions } from '$lib/server/apiTokens/token.server';
 
 const UpdatePermissionsBody = z.object({
 	permissions: z.array(PlatformPermissionSchema)
@@ -107,6 +108,7 @@ export const DELETE: RequestHandler = apiRoute(
 		// reachable by FK cascade (audit rows, invites-by-email, solve telemetry).
 		// Supabase erases those explicitly; local removes its JSON rows + memberships.
 		await getDataProvider().onUserDeleted(SYSTEM_CONTEXT, id, { email });
+		apiTokenResolutions.forgetUser(id);
 
 		// Emitted after the erasure pass, which deletes audit rows this user
 		// authored — emitting first would delete the row recording their deletion.

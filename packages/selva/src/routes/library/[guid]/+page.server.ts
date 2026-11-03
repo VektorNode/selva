@@ -56,13 +56,14 @@ export const load = (async ({ params, locals, request, url }) => {
 			await asHttpError(() => requireEditableDefinition(scoped(locals), guid));
 		}
 
-		const loaded = await loadDefinitionForRender(ctx, record, channel, explicitVersionId);
-
-		// Owning org's logo, for viewer branding. Same `ctx` already authorized to
-		// load this definition (user session or share-token ctx, which carries
-		// actingOrgId). Best-effort: a missing project/org or read failure just
-		// yields no logo — branding is non-essential and must never break a solve.
-		const orgLogoUrl = await resolveOrgLogo(ctx, record.projectId, locals.log);
+		// Owning org's logo, for viewer branding, read beside the definition load. Same
+		// `ctx` already authorized to load this definition (user session or share-token
+		// ctx, which carries actingOrgId). Best-effort: a missing project/org or read
+		// failure just yields no logo — branding is non-essential and must never break a solve.
+		const [loaded, orgLogoUrl] = await Promise.all([
+			loadDefinitionForRender(ctx, record, channel, explicitVersionId),
+			resolveOrgLogo(ctx, record.projectId, locals.log)
+		]);
 
 		return {
 			schema: loaded.schema,

@@ -439,7 +439,7 @@ Cheap to lock in now, expensive to retrofit later.
 
 ## 10. Offboarding & ownership transfer
 
-- **Disable user (instance-wide):** `manage_instance_users` sets `disabled=true`. Identity and attribution are preserved, and the user's API tokens are revoked.
+- **Disable user (instance-wide):** `manage_instance_users` sets `disabled=true`. Identity and attribution are preserved, and the user's API tokens are revoked. The instance that disables drops them from its key cache at once; another instance stops accepting them within its 60-second window (`createApiTokenResolutionCache`).
 
   **Cutoff is bounded, not instant, and the bound differs per provider.** `sessionRefresh.revokeSession` takes the _target's_ session token, which an admin disabling someone else does not hold, and neither the interface nor GoTrue's admin API revokes by user id.
 

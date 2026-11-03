@@ -190,6 +190,19 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		return this.live(r) ? r : null;
 	}
 
+	async getDefinitionsFor(
+		_ctx: RequestContext,
+		guids: readonly string[]
+	): Promise<Map<string, DefinitionRecord>> {
+		const config = await this.readConfig();
+		const found = new Map<string, DefinitionRecord>();
+		for (const guid of guids) {
+			const r = config.definitions[guid];
+			if (this.live(r)) found.set(guid, r);
+		}
+		return found;
+	}
+
 	async create(ctx: RequestContext, record: DefinitionRecord): Promise<void> {
 		const config = await this.readConfig();
 		const actor = ctx.userId || record.ownerId;
@@ -361,6 +374,23 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			.sort((a, b) => b.versionNumber - a.versionNumber)
 			.map(({ schema: _schema, ...rest }) => rest);
 		return paginate(rows, opts);
+	}
+
+	async listVersionsFor(
+		_ctx: RequestContext,
+		definitionIds: readonly string[]
+	): Promise<Map<string, DefinitionVersion[]>> {
+		const config = await this.readConfig();
+		const byDefinition = new Map<string, DefinitionVersion[]>(definitionIds.map((id) => [id, []]));
+		for (const { schema: _schema, ...version } of Object.values(config.definitionVersions)) {
+			if (this.live(config.definitions[version.definitionId])) {
+				byDefinition.get(version.definitionId)?.push(version);
+			}
+		}
+		for (const versions of byDefinition.values()) {
+			versions.sort((a, b) => b.versionNumber - a.versionNumber);
+		}
+		return byDefinition;
 	}
 
 	async getVersion(_ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null> {

@@ -18,6 +18,7 @@ import type { OrgAssetService } from '../organizations/org-asset-service.js';
 import type { TokenCodec } from '../tokens/token-codec.js';
 import type { ApiTokenCodec } from '../tokens/api-token-codec.js';
 import type { ApiTokenHolderPolicy } from '../tokens/api-token-holder.js';
+import type { ApiTokenResolutionCache } from '../http/api-token.js';
 import type { ApiRateLimiter } from './rate-limit.js';
 import type { ApiIdempotencyStore } from './idempotency.js';
 import type {
@@ -84,6 +85,11 @@ export interface SelvaDeps {
 		mayHoldApiTokens?: ApiTokenHolderPolicy;
 		/** How long one sign-in lasts before minting needs a new one (`resolveSignInMaxAgeMs`). Absent: no limit. */
 		signInMaxAgeMs?: number;
+		/**
+		 * The cache the host hands `resolveApiToken`, so a revoke through these handlers drops
+		 * the key from it at once. Absent: nothing to drop.
+		 */
+		resolutionCache?: ApiTokenResolutionCache;
 	};
 	/**
 	 * Upload caps, in bytes.
@@ -140,6 +146,11 @@ export interface SelvaDeps {
 	 */
 	evictComputeClient: (id: string) => void;
 	/**
+	 * Called after every compute-config save, so a host remembering resolved servers
+	 * (`createServerResolver`) reads the config again. Defaults to a no-op.
+	 */
+	onComputeConfigSaved: () => void;
+	/**
 	 * Composed services the host supplies.
 	 *
 	 * The named ones are typed because handlers call them — leaving a service
@@ -170,6 +181,7 @@ export function depsFromConfig(
 		tokens = {},
 		uploadLimits,
 		evictComputeClient = () => {},
+		onComputeConfigSaved = () => {},
 		notifications,
 		instanceName = 'Selva',
 		apiTokenSettingsPath = '/settings/tokens',
@@ -180,6 +192,7 @@ export function depsFromConfig(
 		tokens?: SelvaDeps['tokens'];
 		uploadLimits?: Partial<SelvaDeps['uploadLimits']>;
 		evictComputeClient?: SelvaDeps['evictComputeClient'];
+		onComputeConfigSaved?: SelvaDeps['onComputeConfigSaved'];
 		notifications?: INotificationProvider;
 		instanceName?: string;
 		apiTokenSettingsPath?: string;
@@ -213,6 +226,7 @@ export function depsFromConfig(
 			maxImageFileSize: uploadLimits?.maxImageFileSize ?? 10 * 1024 * 1024
 		},
 		evictComputeClient,
+		onComputeConfigSaved,
 		notifications,
 		instanceName,
 		apiTokenSettingsPath,

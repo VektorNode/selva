@@ -56,7 +56,12 @@ export interface TestHarness {
 	/** Folds host domain errors into the envelope, exactly as the host's adapter does. */
 	mapError?: (err: unknown) => ApiError | undefined;
 	/** Overrides merged onto the deps `callHandler` builds — token codecs, services, upload caps, limiters. */
-	deps?: Partial<Pick<SelvaDeps, 'tokens' | 'uploadLimits' | 'services' | 'projectCreateLimiter'>>;
+	deps?: Partial<
+		Pick<
+			SelvaDeps,
+			'tokens' | 'uploadLimits' | 'services' | 'projectCreateLimiter' | 'onComputeConfigSaved'
+		>
+	>;
 	log?: ILogger;
 }
 
@@ -457,7 +462,8 @@ export async function callHandler(handler: ApiHandler, opts: CallHandlerOpts): P
 		deps: depsFromConfig(locals.providers, h.deps?.services ?? {}, {
 			tokens: h.deps?.tokens,
 			uploadLimits: h.deps?.uploadLimits,
-			projectCreateLimiter: h.deps?.projectCreateLimiter
+			projectCreateLimiter: h.deps?.projectCreateLimiter,
+			onComputeConfigSaved: h.deps?.onComputeConfigSaved
 		})
 	};
 

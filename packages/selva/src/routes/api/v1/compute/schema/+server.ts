@@ -1,4 +1,5 @@
-import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
+import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
+import { serverResolver } from '$lib/server/compute/serverResolver.server';
 import { asHttpError, requireCanCreateDefinition, scoped } from '$lib/server/access.server';
 import { assertScope } from '@selvajs/server/api';
 import type { RequestHandler } from './$types';
@@ -44,7 +45,7 @@ export const POST: RequestHandler = withApiRateLimit(async ({ request, locals, u
 
 	let server;
 	try {
-		server = await resolveServerForOrg(
+		server = await serverResolver.resolve(
 			locals.ctx!,
 			project.orgId,
 			locals.providers.data.computeServer,

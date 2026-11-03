@@ -9,7 +9,11 @@ import type {
 	ProjectMember,
 	RequestContext
 } from '@selvajs/platform';
-import { resolveApiToken, type ResolveApiTokenDeps } from '../api-token.js';
+import {
+	createApiTokenResolutionCache,
+	resolveApiToken,
+	type ResolveApiTokenDeps
+} from '../api-token.js';
 import { createApiTokenCodec } from '../../tokens/api-token-codec.js';
 
 const codec = createApiTokenCodec('k'.repeat(32));
@@ -437,5 +441,102 @@ describe('resolveApiToken with delegated sessions', () => {
 		expect(result).toMatchObject({ kind: 'rejected', status: 503, code: 'API_TOKENS_UNAVAILABLE' });
 		expect(lookup).not.toHaveBeenCalled();
 		expect(delegated.mint).not.toHaveBeenCalled();
+	});
+});
+
+describe('resolveApiToken with a resolution cache', () => {
+	function cached(w: World, now = { at: Date.now() }) {
+		const cache = createApiTokenResolutionCache(60_000);
+		w.deps = { ...w.deps, resolutionCache: cache, now: () => now.at };
+		const lookup = vi.spyOn(w.deps.data.apiTokens!, 'getByTokenHash');
+		const owner = vi.spyOn(w.deps.auth, 'getUser');
+		return { cache, lookup, owner, now };
+	}
+	const resolve = (w: World, path = '/api/v1/projects') =>
+		resolveApiToken(req(path, bearer(w.raw)), w.deps);
+
+	it('answers a key seen within the window without reading it or its owner again', async () => {
+		const w = world();
+		const { lookup, owner } = cached(w);
+		expect((await resolve(w)).kind).toBe('ok');
+		expect((await resolve(w)).kind).toBe('ok');
+		expect(lookup).toHaveBeenCalledTimes(1);
+		expect(owner).toHaveBeenCalledTimes(1);
+	});
+
+	it('mints a fresh delegated session for every request, cached or not', async () => {
+		const w = world();
+		cached(w);
+		let minted = 0;
+		w.deps.auth = {
+			...w.deps.auth,
+			delegatedSession: {
+				status: async () => ({ ok: true as const }),
+				mint: async () => `jwt-${++minted}`
+			} as never
+		};
+		await resolve(w);
+		const second = await resolve(w);
+		expect(second.kind === 'ok' && second.ctx.adapterContext).toEqual({ sessionToken: 'jwt-2' });
+	});
+
+	it('reads the key again once its window has passed', async () => {
+		const w = world();
+		const { lookup, now } = cached(w);
+		await resolve(w);
+		now.at += 60_001;
+		await resolve(w);
+		expect(lookup).toHaveBeenCalledTimes(2);
+	});
+
+	it('refuses a key revoked through this instance at once', async () => {
+		const w = world();
+		const { cache } = cached(w);
+		await resolve(w);
+		w.token = { ...w.token, revokedAt: new Date().toISOString() };
+		w.deps.data.apiTokens!.getByTokenHash = async () => null;
+		cache.forget('tok-1');
+		expect(await resolve(w)).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+
+	it('refuses every key of an owner dropped by user', async () => {
+		const w = world();
+		const { cache } = cached(w);
+		await resolve(w);
+		w.member = null;
+		cache.forgetUser('u1');
+		expect(await resolve(w)).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+
+	it('never answers a key past its expiry from the cache', async () => {
+		const w = world({ token: { expiresAt: new Date(Date.now() + 1_000).toISOString() } });
+		const { lookup, now } = cached(w);
+		await resolve(w);
+		now.at += 2_000;
+		await resolve(w);
+		expect(lookup).toHaveBeenCalledTimes(2);
+	});
+
+	it('misses once the codec that hashed the key is replaced', async () => {
+		const w = world();
+		const { lookup } = cached(w);
+		await resolve(w);
+		w.deps = { ...w.deps, codec: createApiTokenCodec('k'.repeat(32)) };
+		await resolve(w);
+		expect(lookup).toHaveBeenCalledTimes(2);
+	});
+
+	it('does not keep a self-revoke, which skips the holder check', async () => {
+		const w = world();
+		const { lookup } = cached(w);
+		await resolveApiToken(
+			new Request('http://selva.test/api/v1/me/token', {
+				method: 'DELETE',
+				headers: bearer(w.raw)
+			}),
+			w.deps
+		);
+		await resolve(w);
+		expect(lookup).toHaveBeenCalledTimes(2);
 	});
 });

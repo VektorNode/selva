@@ -22,7 +22,7 @@ A request checks each layer in turn and stops at the first hit.
 | Pointer reuse    | Selva ↔ Compute | re-uploading the `.gh`             | yes          |
 | `cachesolve`     | Rhino.Compute   | the solve                          | yes          |
 
-Four more mechanisms need no configuration: see [Caches you don't configure](#caches-you-dont-configure).
+Other mechanisms need no configuration: see [Caches you don't configure](#caches-you-dont-configure).
 
 ---
 
@@ -127,7 +127,7 @@ Asks the compute server to remember results, keyed on definition + inputs.
 
 ## Caches you don't configure
 
-None has settings and none can serve stale content.
+None has settings. The first four can't serve stale content.
 
 - **Warm-client cache** (Selva server, up to 16 servers) keeps a connected client per compute server
   instead of reconnecting each solve. It drops a server when you change its URL or key.
@@ -139,6 +139,18 @@ None has settings and none can serve stale content.
   skips most of the parse.
 - **Edge extraction** (browser). Edges are computed once per identical mesh in a solve, and the result
   goes with the geometry arrays it came from, so a cache hit above reuses it too.
+
+Two more have no settings but can lag behind a change, each by a fixed window and only on the
+instance that didn't make it:
+
+- **Compute server choice** (Selva server, 30 seconds per caller). Every solve and describe looks up
+  which compute server to use. Saving `/admin/compute` or an org's compute settings clears it on the
+  instance that saved; another instance picks the change up within 30 seconds.
+- **API keys** (Selva server, 60 seconds per key). A key and its owner are checked once a minute
+  instead of on every request, which matters for an agent making many calls. Revoking a key,
+  removing its owner from the org, or disabling or deleting the owner clears it on the instance that
+  did it at once; another instance stops accepting the key within 60 seconds. An expired key is never
+  accepted.
 
 ---
 

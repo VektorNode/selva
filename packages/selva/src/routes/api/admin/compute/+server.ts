@@ -9,6 +9,7 @@ import {
 	type PlatformComputeServer
 } from '@selvajs/platform';
 import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
+import { serverResolver } from '$lib/server/compute/serverResolver.server';
 import {
 	assertStoredKeysReadable,
 	validateIncomingServers,
@@ -119,6 +120,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		);
 
 		await provider.savePlatformServers(locals.ctx!, next, incoming.defaultServerId);
+		serverResolver.forget();
 		// Drop warm clients for servers whose URL/key rotated or that were removed —
 		// keyed on `id`, they wouldn't age out on their own (ADR 0004).
 		evictChangedServers(platformServers(existing), next);

@@ -137,4 +137,5 @@ export async function revokeUnredeemedConsentToken(
 	const token = await store.get(ctx, tokenId);
 	if (!token || token.revokedAt || token.lastUsedAt) return;
 	await store.revoke(ctx, tokenId, 'owner');
+	req.deps.tokens.resolutionCache?.forget(tokenId);
 }

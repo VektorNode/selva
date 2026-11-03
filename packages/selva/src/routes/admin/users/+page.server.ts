@@ -50,24 +50,31 @@ export const load: PageServerLoad = async ({ locals }) => {
 		auth.createUser && !auth.passwordAuth ? 'email-only' : 'none';
 	const providerInfo = { name: auth.name, userCreation };
 
+	// The roster and the admin count need no user ids, so they read beside the user list, and
+	// the profiles and platform permissions beside each other once it is in.
+	const activeOrgId = ctx.actingOrgId;
+	const pendingMembers = activeOrgId
+		? listAllOrgMembers(getOrganizationProvider(), activeOrgId, getLogger())
+		: Promise.resolve([] as OrgMember[]);
+	const pendingAdminCount = getPermissionStore().countInstanceAdminsExcluding(ctx, '');
+	pendingMembers.catch(() => {});
+	pendingAdminCount.catch(() => {});
+
 	let users: UserRow[] | null = null;
 	try {
 		const page = await auth.listUsers({ limit: 200 });
 		if (page) {
-			const orgs = getOrganizationProvider();
 			const userIds = page.items.map((u) => u.id);
-			const profiles = await getUserProfileStore().getProfiles(ctx, userIds);
-			const profileById = new Map(profiles.map((p) => [p.userId, p]));
-			const platformByUser = await getPermissionStore().getForBatch(ctx, userIds);
-			const activeOrgId = ctx.actingOrgId;
 			// One membership listing instead of a getOrgMember round-trip per user —
 			// the per-user lookup N+1s against remote adapters and re-runs on every
 			// invalidation of this page.
-			let memberByUserId = new Map<string, OrgMember>();
-			if (activeOrgId) {
-				const members = await listAllOrgMembers(orgs, activeOrgId, getLogger());
-				memberByUserId = new Map(members.map((m) => [m.userId, m]));
-			}
+			const [profiles, platformByUser, members] = await Promise.all([
+				getUserProfileStore().getProfiles(ctx, userIds),
+				getPermissionStore().getForBatch(ctx, userIds),
+				pendingMembers
+			]);
+			const profileById = new Map(profiles.map((p) => [p.userId, p]));
+			const memberByUserId = new Map(members.map((m) => [m.userId, m]));
 			users = page.items.map((u) => {
 				const member = memberByUserId.get(u.id);
 				const orgPermissions: OrgPermission[] = member ? [...member.permissions] : [];
@@ -116,7 +123,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	let enabledInstanceAdminCount: number | null = null;
 	if (users) {
 		try {
-			enabledInstanceAdminCount = await getPermissionStore().countInstanceAdminsExcluding(ctx, '');
+			enabledInstanceAdminCount = await pendingAdminCount;
 		} catch (err) {
 			// A null count means "unknown" and the UI falls back to not locking —
 			// the server refuses the removal either way, so a failed count must not

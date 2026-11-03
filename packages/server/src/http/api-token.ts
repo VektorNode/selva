@@ -7,6 +7,7 @@ import type {
 	RequestContext,
 	SelvaFlags
 } from '@selvajs/platform';
+import { createHash } from 'node:crypto';
 import { SYSTEM_CONTEXT, narrowApiTokenContext } from '@selvajs/platform';
 import { ApiErrorCode } from '../api/errors.js';
 import {
@@ -52,6 +53,11 @@ export interface ResolveApiTokenDeps {
 	 * identity provider, so this is what retires a leaver's keys. Absent: no limit.
 	 */
 	signInMaxAgeMs?: number;
+	/**
+	 * Answers a key seen within the cache's TTL without re-reading it or its owner. Absent:
+	 * every request reads both. See `createApiTokenResolutionCache` for what it gives up.
+	 */
+	resolutionCache?: ApiTokenResolutionCache;
 	/** Receives background failures (the `lastUsedAt` write). Logs the token id only. */
 	log?: ILogger;
 	now?: () => number;
@@ -136,6 +142,18 @@ export async function resolveApiToken(
 	if (delegated && !(await delegated.status()).ok) return UNAVAILABLE;
 
 	if (!deps.codec.hasValidChecksum(raw)) return UNAUTHORIZED;
+	const now = deps.now?.() ?? Date.now();
+	const cacheKey = deps.resolutionCache ? resolutionCacheKey(raw) : null;
+	const cached = cacheKey ? deps.resolutionCache!.get(cacheKey, deps.codec, now) : undefined;
+	if (cached) {
+		// The cached context carries no session: a delegated one lives only seconds.
+		const sessionToken = delegated
+			? await delegated.mint(cached.user.id, { orgId: cached.token.orgId })
+			: undefined;
+		const ctx = sessionToken ? { ...cached.ctx, adapterContext: { sessionToken } } : cached.ctx;
+		return { kind: 'ok', user: cached.user, ctx, token: cached.token };
+	}
+
 	const token = await findByToken(deps.codec, raw, (h) => store.getByTokenHash(SYSTEM_CONTEXT, h));
 	if (!token) return UNAUTHORIZED;
 
@@ -146,7 +164,6 @@ export async function resolveApiToken(
 		deps.data.permissions.getFor(SYSTEM_CONTEXT, token.userId)
 	]);
 	if (!user || user.disabled || !member) return UNAUTHORIZED;
-	const now = deps.now?.() ?? Date.now();
 	if (signInIsStale(user.lastLoginAt, deps.signInMaxAgeMs, now)) {
 		// Revoked, not just refused: a reused UPN or email that moves the same
 		// row's lastLoginAt would otherwise bring the key back. The answer matches
@@ -184,6 +201,10 @@ export async function resolveApiToken(
 		deps.holderVerdicts?.remember(token.id, now);
 	}
 	let ctx = narrowApiTokenContext(live, token);
+	// A self-revoke skipped the holder check above, so its verdict must not stand for later requests.
+	if (cacheKey && !revokingItself) {
+		deps.resolutionCache!.set(cacheKey, { user, ctx, token, codec: deps.codec }, now);
+	}
 
 	// Signed only after the user check above: a minted session can't be
 	// revoked, and row security doesn't look at bans.
@@ -203,6 +224,80 @@ export async function resolveApiToken(
 	}
 
 	return { kind: 'ok', user, ctx, token };
+}
+
+// ============================================================================
+// Resolution cache
+// ============================================================================
+
+interface CachedResolution {
+	user: AuthUser;
+	/** Narrowed, without `adapterContext`: a delegated session is minted per request. */
+	ctx: RequestContext;
+	token: ApiToken;
+	/** The codec that found it: a rotated secret ends every key it hashed. */
+	codec: ApiTokenCodec;
+}
+
+/**
+ * Remembers a resolved key for `ttlMs`, so a busy key (an agent's tool calls, a
+ * host calling itself in-process) costs its store and owner reads once per
+ * window. Within the window a change elsewhere is not seen: a revoke on another
+ * instance, an owner disabled or removed from the org, a withdrawn holder right.
+ * A revoke through this instance's handlers calls `forget` at once. An expired
+ * key is never answered.
+ */
+export interface ApiTokenResolutionCache {
+	get(key: string, codec: ApiTokenCodec, now: number): CachedResolution | undefined;
+	set(key: string, value: CachedResolution, now: number): void;
+	/** Drops one key, by its id: what a revoke knows. */
+	forget(tokenId: string): void;
+	/** Drops every key `userId` holds: a leave, a disable, a revoke of them all. */
+	forgetUser(userId: string): void;
+}
+
+/** The cache key: a digest of the raw key, so the raw key is never held as a map key. */
+function resolutionCacheKey(raw: string): string {
+	return createHash('sha256').update(raw).digest('hex');
+}
+
+export function createApiTokenResolutionCache(
+	ttlMs = 60_000,
+	maxEntries = 10_000
+): ApiTokenResolutionCache {
+	const entries = new Map<string, { value: CachedResolution; until: number }>();
+	const drop = (match: (value: CachedResolution) => boolean) => {
+		for (const [key, entry] of entries) if (match(entry.value)) entries.delete(key);
+	};
+	return {
+		get(key, codec, now) {
+			const entry = entries.get(key);
+			if (!entry) return undefined;
+			if (entry.until <= now || entry.value.codec !== codec) {
+				entries.delete(key);
+				return undefined;
+			}
+			return entry.value;
+		},
+		set(key, value, now) {
+			const expires = Date.parse(value.token.expiresAt);
+			const until = Math.min(now + ttlMs, Number.isNaN(expires) ? now + ttlMs : expires);
+			if (until <= now) return;
+			if (entries.size >= maxEntries) {
+				for (const [k, e] of entries) if (e.until <= now) entries.delete(k);
+				// Still full of live entries: drop the oldest insert.
+				if (entries.size >= maxEntries) entries.delete(entries.keys().next().value!);
+			}
+			entries.delete(key);
+			entries.set(key, { value, until });
+		},
+		forget(tokenId) {
+			drop((value) => value.token.id === tokenId);
+		},
+		forgetUser(userId) {
+			drop((value) => value.token.userId === userId);
+		}
+	};
 }
 
 export interface HolderVerdictCache {

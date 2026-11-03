@@ -23,7 +23,7 @@ import {
 } from '../../testing/index.js';
 import type { ApiRequest } from '../../api/index.js';
 import { createApiTokenCodec } from '../../tokens/index.js';
-import { resolveApiToken } from '../../http/index.js';
+import { createApiTokenResolutionCache, resolveApiToken } from '../../http/index.js';
 import { createApiToken, listApiTokens, revokeApiToken, revokeOwnApiToken } from '../apiTokens.js';
 import { listProjects } from '../projects.js';
 import { getDefinition, listDefinitions } from '../definitions.js';
@@ -370,6 +370,52 @@ describe('GET /definitions?documentId=', () => {
 // ============================================================================
 // DELETE /me/token
 // ============================================================================
+
+describe('a revoke with a resolution cache', () => {
+	async function cachedWorld() {
+		const w = await world();
+		const cache = createApiTokenResolutionCache();
+		w.h.deps = { ...w.h.deps, tokens: { ...w.h.deps!.tokens, resolutionCache: cache } };
+		const resolveCached = (raw: string) => {
+			vi.spyOn(w.h.config.data.apiTokens!, 'touchLastUsed').mockResolvedValue();
+			return resolveApiToken(
+				new Request('http://selva.test/api/v1/projects', {
+					headers: { authorization: `Bearer ${raw}` }
+				}),
+				{ codec, auth: w.h.config.auth, data: w.h.config.data, resolutionCache: cache }
+			);
+		};
+		return { w, resolveCached };
+	}
+
+	it('stops a key revoking itself at once, though it was cached', async () => {
+		const { w, resolveCached } = await cachedWorld();
+		const raw = await mintedSecret(w, w.dana.id, ['upload:all']);
+		const cachedKey = await resolveCached(raw);
+		if (cachedKey.kind !== 'ok') throw new Error('key rejected');
+		const res = await callHandler(revokeOwnApiToken, {
+			locals: { ...(await actAs(w.h, w.dana.id)), ctx: cachedKey.ctx },
+			method: 'DELETE',
+			mount: { anyScope: true }
+		});
+		expect(res.status).toBe(204);
+		expect(await resolveCached(raw)).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+
+	it('stops a key its owner revokes from the web app at once, though it was cached', async () => {
+		const { w, resolveCached } = await cachedWorld();
+		const raw = await mintedSecret(w, w.dana.id, ['upload:all']);
+		const cachedKey = await resolveCached(raw);
+		if (cachedKey.kind !== 'ok') throw new Error('key rejected');
+		const res = await callHandler(revokeApiToken, {
+			locals: await actAs(w.h, w.dana.id),
+			params: { orgId: w.acme.id, tokenId: cachedKey.token.id },
+			method: 'DELETE'
+		});
+		expect(res.status).toBe(204);
+		expect(await resolveCached(raw)).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+});
 
 describe('a key revoking itself', () => {
 	it('revokes the key that sent the request, which then gets 401', async () => {

@@ -6,8 +6,6 @@ import { oauthConfigured } from '$lib/server/oauth/server';
 import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
-export const MCP_PATH = '/mcp';
-
 /** Every action the key's scopes cover, as `scopeAllows` decides at /api/v1. */
 export async function grantedActions(api: UntypedApi): Promise<ScopeAction[]> {
 	const me = (await api.call('getMe')) as { apiToken?: { scopes: string[] } };

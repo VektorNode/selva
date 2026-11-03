@@ -289,7 +289,7 @@ export const removeOrgMember: ApiHandler = async (req) => {
 		req.deps.data.apiTokens,
 		ctx,
 		userId,
-		{ orgId, reason: 'member_removed' },
+		{ orgId, reason: 'member_removed', resolutionCache: req.deps.tokens.resolutionCache },
 		req.log
 	);
 

@@ -9,6 +9,7 @@ import {
 	createHolderVerdictCache,
 	createRouteClassifier,
 	createSessionRefresher,
+	createSessionResolver,
 	isCrossSiteFormSubmission,
 	resolveApiToken
 } from '@selvajs/server/http';
@@ -22,8 +23,9 @@ import {
 	lazyLogger
 } from '$lib/server/providers.server';
 import { signInMaxAgeMs } from '$lib/server/signInMaxAge.server';
-import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
-import { MCP_PATH } from '$lib/server/mcp/server';
+import { apiTokenCodec, apiTokenResolutions } from '$lib/server/apiTokens/token.server';
+import { MCP_PATH } from '$lib/server/mcp/path';
+import { requestMemo } from '$lib/server/requestMemo.server';
 
 const OAUTH_TOKEN_PATH = '/oauth/token';
 const holderVerdicts = createHolderVerdictCache();
@@ -94,35 +96,68 @@ async function ensureUserOnce(userId: string): Promise<void> {
 	ensuredUserIds.add(userId);
 }
 
+type SessionRows = Awaited<ReturnType<typeof readSessionRows>>;
+
+interface Session {
+	user: AuthUser;
+	profile: App.Locals['profile'];
+	ctx: App.Locals['ctx'];
+}
+
 /**
- * Populate `locals` for a signed-in session: profile, platform permissions and
- * acting org (the user's first membership, or an instance admin's fallback).
- *
- * The four reads are independent and keyed only by `user.id`, so they run in
- * one `Promise.all` as SYSTEM_CONTEXT (`ctx` isn't built yet). `ensureUser` is
- * the local equivalent of Supabase's `handle_new_auth_user` trigger, memoized
- * per process. Racing it against the reads is safe: on a brand-new user's first
- * request they may land before the row is seeded, but each fails soft to empty,
- * the correct state for a user with nothing yet.
+ * Profile, platform permissions and membership: independent and keyed only by the user id, so
+ * they run together as SYSTEM_CONTEXT (`ctx` isn't built yet), and for a JWT session beside
+ * `verifyToken`. Reads only: they run before the token is checked.
  */
-async function attachSession(
-	event: RequestEvent,
+function readSessionRows(userId: string) {
+	return Promise.all([
+		providers.data.userProfile.getProfile(SYSTEM_CONTEXT, userId),
+		providers.data.permissions.getFor(SYSTEM_CONTEXT, userId),
+		providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, userId)
+	]);
+}
+
+/**
+ * The acting org is the user's first membership, or an instance admin's fallback. `ensureUser`
+ * is the local equivalent of Supabase's `handle_new_auth_user` trigger, memoized per process.
+ * The rows may have been read before it seeded a brand-new user's row: each fails soft to
+ * empty, the correct state for a user with nothing yet.
+ */
+async function buildSession(
 	user: AuthUser,
+	[profile, platformPermissions, membership]: SessionRows,
 	// Forwarded so adapters scoping by the upstream token (Supabase RLS) get it.
 	sessionToken: string | undefined
-): Promise<void> {
-	const [, profile, platformPermissions, membership] = await Promise.all([
-		ensureUserOnce(user.id),
-		providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
-		providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
-		providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
-	]);
-	event.locals.user = user;
-	event.locals.profile = profile ?? emptyProfile(user.id);
-	event.locals.ctx = await buildRequestContext(
-		{ user, sessionToken, platformPermissions, membership: membership?.member ?? null },
-		{ orgs: providers.data.orgs }
-	);
+): Promise<Session> {
+	await ensureUserOnce(user.id);
+	return {
+		user,
+		profile: profile ?? emptyProfile(user.id),
+		ctx: await buildRequestContext(
+			{ user, sessionToken, platformPermissions, membership: membership?.member ?? null },
+			{ orgs: providers.data.orgs }
+		)
+	};
+}
+
+// No window: every request resolves its own session, since what it holds (stars, recent
+// runs, memberships) changes under many writes that don't invalidate. Requests carrying one
+// token at once still share one resolution, and a JWT's rows are read beside its check.
+const sessions = createSessionResolver({
+	verify: (token) => providers.auth.verifyToken(token),
+	read: readSessionRows,
+	build: buildSession
+});
+
+/** For a user identified without a session token (forward-auth headers). */
+async function sessionFor(user: AuthUser, sessionToken: string | undefined): Promise<Session> {
+	return buildSession(user, await readSessionRows(user.id), sessionToken);
+}
+
+function attachSession(event: RequestEvent, session: Session): void {
+	event.locals.user = session.user;
+	event.locals.profile = session.profile;
+	event.locals.ctx = session.ctx;
 }
 
 // ============================================================================
@@ -188,7 +223,11 @@ const routeClassifier = createRouteClassifier({
 // bug in either is security-relevant.
 export const { isStaticAsset, isSelfGatingApiRoute, isPublicRoute } = routeClassifier;
 
-export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
+// Every request runs inside its read memo, so a layout and its page share repeated reads.
+export const handle: import('@sveltejs/kit').Handle = (input) =>
+	requestMemo.run(input.event.request.method, () => gate(input));
+
+const gate: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
 
 	// Bound once per request; every downstream `locals.log` record inherits
@@ -265,6 +304,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					flag,
 					holderVerdicts,
 					signInMaxAgeMs,
+					resolutionCache: apiTokenResolutions,
 					log: event.locals.log
 				});
 	if (tokenResult.kind === 'rejected') {
@@ -316,12 +356,12 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	const needsAuth = !publicRoute;
 	if (needsAuth) {
 		let token = event.cookies.get('admin_session') ?? '';
-		let user = await providers.auth.verifyToken(token);
+		let session = await sessions.resolve(token);
 
 		// When the access token expired but a refresh token is present (Supabase
 		// OAuth flow), swap silently for a fresh pair and rotate the cookies.
 		// Local/HMAC sessions never set a refresh cookie, so this is a no-op there.
-		if (!user) {
+		if (!session) {
 			const refreshToken = getRefreshToken(event.cookies);
 			if (refreshToken && providers.auth.sessionRefresh) {
 				const refreshed = await refreshSession(refreshToken);
@@ -329,7 +369,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					setSessionCookie(event.cookies, refreshed.sessionToken);
 					setRefreshCookie(event.cookies, refreshed.refreshToken);
 					token = refreshed.sessionToken;
-					user = await providers.auth.verifyToken(token);
+					session = await sessions.resolve(token);
 				} else {
 					// Refresh failed — clear the stale cookie so the next request
 					// goes through the login flow cleanly.
@@ -341,6 +381,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// Forward-proxy fallback: providers that derive identity from trusted
 		// upstream-proxy signals (Caddy forward_auth, oauth2-proxy, etc.) get a
 		// chance to identify the request. See IProxyAuth for the trust contract.
+		let user = session?.user ?? null;
 		if (!user && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
 			// First-admin bootstrap for forward-auth deployments: OAuth and
@@ -371,7 +412,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname + event.url.search)}`);
 		}
 
-		await attachSession(event, user, token);
+		attachSession(event, session ?? (await sessionFor(user, token)));
 	} else {
 		// Public page route (e.g. `/`): best-effort session attach. If a valid
 		// session cookie is present, populate locals so the UI reflects authed
@@ -382,7 +423,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		const isPublicPage = PUBLIC_PAGE_ROUTES.has(pathname);
 		const wantsSessionAttach = isPublicPage || isSelfGatingApiRoute(pathname);
 		const token = wantsSessionAttach ? (event.cookies.get('admin_session') ?? '') : '';
-		let user = token ? await providers.auth.verifyToken(token) : null;
+		const session = token ? await sessions.resolve(token) : null;
+		let user = session?.user ?? null;
 		if (!user && wantsSessionAttach && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
 
@@ -409,7 +451,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 				}
 			}
 		}
-		if (user) await attachSession(event, user, token);
+		if (user) attachSession(event, session ?? (await sessionFor(user, token)));
 	}
 
 	return applyResponseHeaders(await resolve(event), pathname, requestId);

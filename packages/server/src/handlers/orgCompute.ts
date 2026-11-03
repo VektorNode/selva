@@ -134,6 +134,7 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 	}
 
 	await provider.saveOrgServers(ctx, orgId, next, incoming.defaultServerId);
+	req.deps.onComputeConfigSaved();
 	// Drop warm clients for servers whose URL or key rotated, or that were
 	// removed — keyed on `id`, they would not age out on their own.
 	evictChangedServers(

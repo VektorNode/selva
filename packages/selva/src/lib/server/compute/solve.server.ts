@@ -26,8 +26,9 @@ import {
 } from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
 import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
-import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
-import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
+import type { ComputeServerConfig, RequestContext, SolveFailureKind } from '@selvajs/platform';
+import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
+import { serverResolver } from './serverResolver.server';
 import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '$lib/server/compute/engine.server';
 import { computeErrorLogFields } from '$lib/server/compute/errorLogFields';
 import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
@@ -172,6 +173,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// BYO compute routing per org; null for remote definitions.
 	let solveOrgId: string | null = null;
 	let definitionPin: string | null = null;
+	// Started once the project is known; null for remote definitions.
+	let pendingServer: Promise<ComputeServerConfig> | null = null;
 	// Solve-metric attribution; null for remote-URL solves.
 	let metricDefinitionId: string | null = null;
 	let metricVersionId: string | null = null;
@@ -255,9 +258,25 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		if (!record) apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
 		mark('defRecord');
 
+		// The version and the server need only the record and its project, so they are read
+		// while access is checked, and awaited after it in their old order: a caller refused
+		// access learns nothing from a missing version or server.
+		const versionId =
+			explicitVersionId ?? (channel === 'live' ? record.liveVersionId : record.draftVersionId);
+		const pendingVersion = versionId
+			? providers.data.definitions.getVersion(solveCtx, versionId)
+			: null;
+		pendingVersion?.catch(() => {});
 		const project = await providers.data.projects.getProject(solveCtx, record.projectId);
 		solveOrgId = project?.orgId ?? null;
 		definitionPin = record.computeServerId ?? null;
+		pendingServer = serverResolver.resolve(
+			solveCtx,
+			solveOrgId,
+			locals.providers.data.computeServer,
+			{ definitionPin }
+		);
+		pendingServer.catch(() => {});
 		mark('project');
 
 		if (!sharedAccess) {
@@ -284,12 +303,10 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		}
 		mark('access');
 
-		const versionId =
-			explicitVersionId ?? (channel === 'live' ? record.liveVersionId : record.draftVersionId);
-		if (!versionId) {
+		if (!versionId || !pendingVersion) {
 			apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' has no ${channel} version yet`);
 		}
-		const version = await providers.data.definitions.getVersion(solveCtx, versionId);
+		const version = await pendingVersion;
 		if (!version || version.definitionId !== guid) {
 			apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' version is missing`);
 		}
@@ -348,12 +365,10 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		mark('shareCap');
 	}
 
-	const serverConfig = await resolveServerForOrg(
-		solveCtx,
-		solveOrgId,
-		locals.providers.data.computeServer,
-		{ definitionPin }
-	);
+	const serverConfig = await (pendingServer ??
+		serverResolver.resolve(solveCtx, solveOrgId, locals.providers.data.computeServer, {
+			definitionPin
+		}));
 	mark('resolveServer');
 
 	// BRIDGE: remove ~2026-09 — lazy backfill for versions uploaded before schema

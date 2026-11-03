@@ -45,3 +45,71 @@ export async function resolveServerForOrg(
 	if (!server.hasApiKey) return server;
 	return { ...server, apiKey: await store.getServerApiKey(ctx, server.id) };
 }
+
+// ============================================================================
+// Cached resolution
+// ============================================================================
+
+export interface ServerResolver {
+	/** `resolveServerForOrg`, answered from what the same caller resolved within the TTL. */
+	resolve(
+		ctx: RequestContext,
+		orgId: string | null | undefined,
+		store: ComputeServerStore,
+		opts?: { definitionPin?: string | null }
+	): Promise<ComputeServerConfig>;
+	/** Call after any compute-config write: the next resolve reads the config again. */
+	forget(): void;
+}
+
+/**
+ * Remembers each caller's resolved server for `ttlMs`: every solve and every
+ * describe resolves one, and the config changes only through its own write
+ * handlers, which call `forget`. The TTL bounds a write made on another
+ * instance. Keyed by what row security decides visibility by, so one caller's
+ * answer is never handed to another; a share link's anonymous context is never
+ * remembered. A failed read is not kept.
+ */
+export function createServerResolver({
+	ttlMs = 30_000,
+	maxEntries = 1_000
+}: { ttlMs?: number; maxEntries?: number } = {}): ServerResolver {
+	// Per store: a host that swaps its data provider (tests do) must not read another's answers.
+	let byStore = new WeakMap<
+		ComputeServerStore,
+		Map<string, { server: Promise<ComputeServerConfig>; until: number }>
+	>();
+	return {
+		resolve(ctx, orgId, store, opts = {}) {
+			const caller = callerKey(ctx);
+			if (caller === null) return resolveServerForOrg(ctx, orgId, store, opts);
+			let entries = byStore.get(store);
+			if (!entries) byStore.set(store, (entries = new Map()));
+			const key = `${caller}|${orgId ?? ''}|${opts.definitionPin ?? ''}`;
+			const now = Date.now();
+			const hit = entries.get(key);
+			if (hit && hit.until > now) return hit.server;
+			if (entries.size >= maxEntries) {
+				for (const [k, e] of entries) if (e.until <= now) entries.delete(k);
+				while (entries.size >= maxEntries) entries.delete(entries.keys().next().value!);
+			}
+			const server = resolveServerForOrg(ctx, orgId, store, opts);
+			entries.set(key, { server, until: now + ttlMs });
+			server.catch(() => {
+				if (entries.get(key)?.server === server) entries.delete(key);
+			});
+			return server;
+		},
+		forget() {
+			byStore = new WeakMap();
+		}
+	};
+}
+
+/** Who row security sees: the user, acting org, platform permissions and API key; null for a share link. */
+function callerKey(ctx: RequestContext): string | null {
+	if (ctx.system) return ctx.shareLinkId ? null : 'system';
+	if (!ctx.userId) return null;
+	const permissions = [...ctx.platformPermissions].sort().join(',');
+	return `${ctx.userId}:${ctx.actingOrgId ?? ''}:${permissions}:${ctx.apiScope?.tokenId ?? ''}`;
+}

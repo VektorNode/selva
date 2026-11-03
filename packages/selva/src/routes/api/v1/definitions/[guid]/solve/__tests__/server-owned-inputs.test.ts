@@ -22,7 +22,10 @@ vi.mock('$lib/server/compute/engine.server', async (importOriginal) => ({
 }));
 vi.mock('@selvajs/server/compute', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	resolveServerForOrg: async () => ({ id: 'server', serverUrl: 'http://compute.test' })
+	createServerResolver: () => ({
+		resolve: async () => ({ id: 'server', serverUrl: 'http://compute.test' }),
+		forget: () => {}
+	})
 }));
 
 import type { UISchema } from '@selvajs/schemas';

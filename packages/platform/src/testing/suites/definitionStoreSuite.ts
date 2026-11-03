@@ -144,6 +144,20 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			expect(got).toBeNull();
 		});
 
+		it('getDefinitionsFor returns the live record per guid, leaving out missing and deleted', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const [a, b, gone] = [makeUuid(), makeUuid(), makeUuid()];
+			for (const guid of [a, b, gone])
+				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			await store.delete(ctx(scope.ownerId), gone);
+
+			const found = await store.getDefinitionsFor(ctx(scope.ownerId), [a, b, gone, makeUuid()]);
+			expect([...found.keys()].sort()).toEqual([a, b].sort());
+			expect(found.get(a)?.guid).toBe(a);
+			expect((await store.getDefinitionsFor(ctx(scope.ownerId), [])).size).toBe(0);
+		});
+
 		it('list filters pending by default', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
@@ -450,6 +464,29 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const page = await store.listVersions(ctx(scope.ownerId), guid);
 			expect(page.items.map((v) => v.versionNumber)).toEqual([2, 1]);
 			expect(page.items.map((v) => v.id)).toEqual([v2.id, v1.id]);
+		});
+
+		it('listVersionsFor returns each definition’s versions newest-first, without the schema', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const [a, b, none] = [makeUuid(), makeUuid(), makeUuid()];
+			for (const guid of [a, b, none])
+				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const a1 = version(a, 1, scope.ownerId);
+			const a2 = version(a, 2, scope.ownerId);
+			const b1 = version(b, 1, scope.ownerId);
+			for (const v of [a1, b1, a2]) await store.createVersion(ctx(scope.ownerId), v);
+			await store.setVersionSchema(ctx(scope.ownerId), a2.id, {
+				name: 'Test',
+				inputs: [],
+				outputs: []
+			} as unknown as Parameters<typeof store.setVersionSchema>[2]);
+
+			const byDefinition = await store.listVersionsFor(ctx(scope.ownerId), [a, b, none]);
+			expect(byDefinition.get(a)?.map((v) => v.id)).toEqual([a2.id, a1.id]);
+			expect(byDefinition.get(b)?.map((v) => v.id)).toEqual([b1.id]);
+			expect(byDefinition.get(none)).toEqual([]);
+			expect(byDefinition.get(a)?.[0]?.schema).toBeUndefined();
 		});
 
 		it('getVersion returns the row by id', async () => {

@@ -3,6 +3,7 @@ import { apiError, ApiErrorCode } from '$lib/server/api-errors';
 import { apiRoute, noContent, requireParams } from '$lib/server/api/http';
 import { getAuthProvider, providers } from '$lib/server/providers.server';
 import { revokeUserApiTokens } from '@selvajs/server/handlers';
+import { apiTokenResolutions } from '$lib/server/apiTokens/token.server';
 import { requireManageInstanceUsers } from '$lib/server/access.server';
 import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
 import { setUserPlatformPermissions } from '$lib/server/permissions.server';
@@ -74,7 +75,7 @@ export const POST: RequestHandler = apiRoute(
 			providers.data.apiTokens,
 			locals.ctx!,
 			id,
-			{ reason: 'user_disabled' },
+			{ reason: 'user_disabled', resolutionCache: apiTokenResolutions },
 			locals.log
 		);
 

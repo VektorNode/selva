@@ -24,10 +24,18 @@ export {
 } from './bounded-ttl-cache.js';
 export { createSessionRefresher, type SessionRefresher } from './session-refresher.js';
 export {
+	createSessionResolver,
+	type SessionResolver,
+	type SessionResolverConfig
+} from './session-resolver.js';
+export {
+	createApiTokenResolutionCache,
 	createHolderVerdictCache,
 	resolveApiToken,
 	type ApiTokenResolution,
+	type ApiTokenResolutionCache,
 	type HolderVerdictCache,
 	type ResolveApiTokenDeps,
 	type ResolveApiTokenOptions
 } from './api-token.js';
+export { createRequestMemo, type RequestMemo } from './request-memo.js';

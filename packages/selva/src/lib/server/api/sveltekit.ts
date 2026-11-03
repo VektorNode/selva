@@ -31,9 +31,10 @@ import {
 } from '../providers.server';
 import { shareLinkCodec } from '../shareLinks/token.server';
 import { inviteCodec } from '../invites/token.server';
-import { apiTokenCodec } from '../apiTokens/token.server';
+import { apiTokenCodec, apiTokenResolutions } from '../apiTokens/token.server';
 import { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../computeLimits';
 import { evictComputeClient } from '../compute/engine.server';
+import { serverResolver } from '../compute/serverResolver.server';
 import { apiRateLimiter } from '../computeRateLimit.server';
 import { signInMaxAgeMs } from '../signInMaxAge.server';
 
@@ -91,7 +92,8 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 				shareLinks: shareLinkCodec(),
 				invites: inviteCodec(),
 				apiTokens: apiTokenCodec(),
-				signInMaxAgeMs
+				signInMaxAgeMs,
+				resolutionCache: apiTokenResolutions
 			},
 			// Passed explicitly — depsFromConfig's defaults would silently ignore
 			// this deployment's MAX_*_FILE_SIZE_BYTES.
@@ -102,6 +104,7 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 			// Cache is keyed on server id; without this a compute-config write
 			// leaves a warm client holding a rotated URL or key.
 			evictComputeClient,
+			onComputeConfigSaved: () => serverResolver.forget(),
 			notifications: getNotificationProvider(),
 			instanceName: getBranding().name,
 			apiTokenSettingsPath: '/team/tokens',

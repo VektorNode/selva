@@ -3,6 +3,7 @@ import {
 	MIN_TOKEN_SECRET_LENGTH,
 	type ApiTokenCodec
 } from '@selvajs/server/tokens';
+import { createApiTokenResolutionCache } from '@selvajs/server/http';
 import { hmacKeys } from '$lib/server/keys.server';
 
 // Lazy and re-keyed on the secret, like the invite and share-link codecs, so a
@@ -24,3 +25,9 @@ export function apiTokenCodec(): ApiTokenCodec | undefined {
 	}
 	return cached.codec;
 }
+
+/**
+ * Resolved keys, one window per process: the hook reads it, and the revoke handlers and the
+ * user-disable route drop from it, so a revoke here takes effect at once.
+ */
+export const apiTokenResolutions = createApiTokenResolutionCache();
