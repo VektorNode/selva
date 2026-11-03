@@ -46,7 +46,7 @@ describe('configChecks', () => {
 			{ request: PROXIED }
 		);
 		expect(c[0]).toMatchObject({ id: 'origin-missing', level: 'error' });
-		expect(c[0].fix?.[0]).toBe('selva config set ORIGIN=https://selva.example.com');
+		expect(c[0].fix?.[0]).toBe('npx selva config set ORIGIN=https://selva.example.com');
 	});
 
 	it('flags the proxy hazards only when a proxy is in front', () => {

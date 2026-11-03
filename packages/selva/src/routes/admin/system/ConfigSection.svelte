@@ -250,7 +250,7 @@
 						Do this if the key may have leaked, or as routine hygiene. On the server, in the install
 						folder, run:
 					</p>
-					{@render commands([`selva keys rotate ${r.arg}`, 'selva restart'])}
+					{@render commands([`npx selva keys rotate ${r.arg}`, 'npx selva restart'])}
 					<p class="pt-1">
 						{r.breaks} If the old key leaked and must stop working now, use
 						<code class="font-mono">--leaked</code> instead; that signs everyone out.

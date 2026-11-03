@@ -428,8 +428,9 @@
 					<Card.Title class="text-base font-semibold">Configuration</Card.Title>
 					<Card.Description>
 						What this server runs on, and anything that needs fixing. To change a value, run
-						<code class="font-mono text-xs">selva config set KEY=VALUE</code> on the server, then
-						<code class="font-mono text-xs">selva restart</code>.
+						<code class="font-mono text-xs">npx selva config set KEY=VALUE</code> on the server,
+						then
+						<code class="font-mono text-xs">npx selva restart</code>.
 					</Card.Description>
 				</Card.Header>
 				<Card.Content class="space-y-6">

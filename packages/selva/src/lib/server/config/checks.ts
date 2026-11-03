@@ -62,8 +62,8 @@ export interface CheckInput {
 	dev: boolean;
 }
 
-const restart = 'selva restart';
-const set = (key: string, value: string) => `selva config set ${key}=${value}`;
+const restart = 'npx selva restart';
+const set = (key: string, value: string) => `npx selva config set ${key}=${value}`;
 
 export function configChecks(input: CheckInput): ConfigCheck[] {
 	const { env, report, request } = input;
@@ -92,7 +92,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 			detail: u.suggestion
 				? `Selva doesn't read ${u.key}. It looks like a typo of ${u.suggestion}, which is the one that counts.`
 				: `Selva doesn't read ${u.key}. Remove it, or check the name against the settings below.`,
-			...(u.suggestion ? { fix: [`selva config unset ${u.key}`] } : {}),
+			...(u.suggestion ? { fix: [`npx selva config unset ${u.key}`] } : {}),
 			keys: [u.key]
 		});
 	}
@@ -191,7 +191,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 			title: 'Sign-in cookies may be sent over http',
 			detail:
 				'Meant for testing on a local network. Anyone on the same network can copy a session and act as that user.',
-			fix: ['selva config unset ALLOW_INSECURE_COOKIES', restart],
+			fix: ['npx selva config unset ALLOW_INSECURE_COOKIES', restart],
 			keys: ['ALLOW_INSECURE_COOKIES']
 		});
 	}
@@ -202,7 +202,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 			level: 'warning',
 			title: 'Running in development mode',
 			detail:
-				'Error pages show stack traces and cookies aren’t marked Secure. selva restart starts it through pm2, which sets NODE_ENV=production.',
+				'Error pages show stack traces and cookies aren’t marked Secure. npx selva restart starts it through pm2, which sets NODE_ENV=production.',
 			fix: [restart],
 			keys: ['NODE_ENV']
 		});
@@ -215,7 +215,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 			title: 'Logs may contain what users solved',
 			detail:
 				'Verbose compute debugging writes Rhino.Compute’s raw error bodies to the log, and deleting a user doesn’t remove them from there. Turn it off once you’re done debugging.',
-			fix: ['selva config unset SELVA_FLAG_COMPUTE_DEBUG', restart],
+			fix: ['npx selva config unset SELVA_FLAG_COMPUTE_DEBUG', restart],
 			keys: ['SELVA_FLAG_COMPUTE_DEBUG']
 		});
 	}
@@ -233,7 +233,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 
 	for (const r of input.rotation) {
 		const name = r.key === 'SELVA_HMAC_KEY' ? 'signing key' : 'encryption key';
-		const finish = `selva keys rotate ${r.key === 'SELVA_HMAC_KEY' ? 'hmac' : 'at-rest'} --finish`;
+		const finish = `npx selva keys rotate ${r.key === 'SELVA_HMAC_KEY' ? 'hmac' : 'at-rest'} --finish`;
 		const atRestBusy = r.key === 'SELVA_AT_REST_KEY' && (input.atRestOnPreviousKey ?? 0) > 0;
 		if (r.state === 'active') {
 			out.push({
@@ -279,7 +279,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 						level: 'info',
 						title: 'Every stored compute API key is on the new encryption key',
 						detail: 'The old encryption key is no longer needed. Finishing removes it.',
-						fix: ['selva keys rotate at-rest --finish', restart],
+						fix: ['npx selva keys rotate at-rest --finish', restart],
 						keys: ['SELVA_AT_REST_KEY_PREVIOUS']
 					}
 		);
