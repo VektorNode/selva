@@ -130,6 +130,24 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 				`Definition '${record.guid}' has no ${channel} version`
 			);
 
+		// The server needs only the record, so it resolves while the version and file are read.
+		// It is awaited after them, so a definition missing its data still fails as 'data'.
+		const pendingServer = (async (): Promise<ComputeServerConfig> => {
+			const project = await projects.getProject(ctx, record.projectId);
+			try {
+				return await resolveServer(ctx, project?.orgId ?? null, {
+					definitionPin: record.computeServerId ?? null
+				});
+			} catch (err) {
+				throw new DefinitionLoadError(
+					'missing-config',
+					'No compute server configured for this definition',
+					err
+				);
+			}
+		})();
+		pendingServer.catch(() => {});
+
 		const version = await definitions.getVersion(ctx, versionId);
 		if (!version) throw new DefinitionLoadError('data', `version missing for '${record.guid}'`);
 		// An explicitly requested version must belong to this definition.
@@ -143,19 +161,7 @@ export function createDefinitionLoader(deps: DefinitionLoaderDeps): DefinitionLo
 				`Definition file for '${record.guid}' not found on disk`
 			);
 
-		const project = await projects.getProject(ctx, record.projectId);
-		let computeServer: ComputeServerConfig;
-		try {
-			computeServer = await resolveServer(ctx, project?.orgId ?? null, {
-				definitionPin: record.computeServerId ?? null
-			});
-		} catch (err) {
-			throw new DefinitionLoadError(
-				'missing-config',
-				'No compute server configured for this definition',
-				err
-			);
-		}
+		const computeServer = await pendingServer;
 
 		// Returning before `getClient` is the point — the connect is the cost, not
 		// the `getIO` it carries. A missing or stale-format cache falls through to

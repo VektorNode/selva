@@ -176,8 +176,9 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	 *
 	 * `'hybrid'` (default): `getClaims(token)` verifies the JWT locally with
 	 * asymmetric signing keys (the modern Supabase default — the SDK checks
-	 * against the cached JWKS via Web Crypto, no GoTrue call), and falls back
-	 * to a network verify for legacy symmetric HS256 projects. Either way, a
+	 * against the cached JWKS via Web Crypto, no GoTrue call). A legacy
+	 * symmetric HS256 token can only be checked by GoTrue, so it gets one
+	 * `getUser` per call, as in `'strict'`. For an asymmetric token, a
 	 * local check can't see a server-side sign-out or `disabled` flip that
 	 * happened after the token was issued — the claims are a snapshot — so we
 	 * also re-check against GoTrue via `getUser`, at most once per
@@ -190,7 +191,9 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		if (!token) return null;
 
-		if (this.tokenVerification === 'strict') {
+		// A symmetric (HS256) token has no local check: `getClaims` would ask GoTrue, and the
+		// recheck would ask again. One `getUser` answers both.
+		if (this.tokenVerification === 'strict' || isSymmetricJwt(token)) {
 			return this.verifyViaGetUser(token);
 		}
 
@@ -377,6 +380,16 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	/** Lets other code (storage provider, per-request client factories) build user-scoped clients without a second config read. */
 	getAnonClientConfig(): { supabaseUrl: string; anonKey: string } {
 		return { supabaseUrl: this.supabaseUrl, anonKey: this.anonKey };
+	}
+}
+
+/** Whether a JWT's header names an HMAC algorithm. Unverified: it only picks the check. */
+function isSymmetricJwt(token: string): boolean {
+	try {
+		const header = JSON.parse(Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8'));
+		return typeof header?.alg === 'string' && header.alg.startsWith('HS');
+	} catch {
+		return false;
 	}
 }
 
