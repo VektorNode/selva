@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2-beta.4] - 2026-11-03
+
 ### Added
 
 - The schema builder selects several rows at once: Shift-click parameters in the sidebar or items on the canvas, then drag them together.
