@@ -87,8 +87,8 @@
 	const touch = new MediaQuery('(pointer: coarse)');
 	const reducedMotion = new MediaQuery('(prefers-reduced-motion: reduce)');
 
-	const COLLAPSED = $derived(touch.current ? { w: 44, h: 44 } : { w: 72, h: 8 });
-	const EXPANDED_H = $derived(touch.current ? 54 : 46);
+	const COLLAPSED = $derived(touch.current ? { w: 44, h: 44 } : { w: 56, h: 5 });
+	const EXPANDED_H = $derived(touch.current ? 54 : 42);
 	const PAD = 4;
 
 	let dockEl: HTMLDivElement | undefined = $state();
@@ -108,7 +108,7 @@
 	const containerStyle = $derived.by(() => {
 		const bottom = touch.current ? 'max(1rem,env(safe-area-inset-bottom))' : '0.75rem';
 		const geometry = wantOpen
-			? `width:${rowWidth + PAD * 2 + 2}px;height:${EXPANDED_H}px;border-radius:14px;padding:${PAD}px`
+			? `width:${rowWidth + PAD * 2 + 2}px;height:${EXPANDED_H}px;border-radius:12px;padding:${PAD}px`
 			: `width:${COLLAPSED.w}px;height:${COLLAPSED.h}px;border-radius:${touch.current ? 22 : 99}px;padding:0px`;
 		const size = `bottom:${bottom};${geometry}`;
 		if (reducedMotion.current) return size;
@@ -195,7 +195,7 @@
 	const idx = (id: string) => buttons.indexOf(id);
 
 	const BTN =
-		'relative grid size-9.5 shrink-0 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground data-[state=open]:bg-selected data-[state=open]:text-foreground pointer-coarse:size-11';
+		'relative grid size-8.5 shrink-0 place-items-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring aria-pressed:text-foreground data-[state=open]:bg-selected data-[state=open]:text-foreground pointer-coarse:size-11';
 	const DOT =
 		'aria-pressed:after:absolute aria-pressed:after:bottom-0.5 aria-pressed:after:size-1 aria-pressed:after:rounded-full aria-pressed:after:bg-primary';
 </script>
@@ -210,15 +210,15 @@
 	role="toolbar"
 	aria-label={t.toolsMenu}
 	tabindex="-1"
-	class="shadow-lg backdrop-blur-md absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden border {hidden
+	class="backdrop-blur-md absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden transition-colors {hidden
 		? 'pointer-events-none opacity-0'
 		: ''} {wantOpen
-		? 'bg-background/70'
+		? 'shadow-md border border-border bg-background/60'
 		: touch.current
-			? 'cursor-pointer border-border bg-background/90'
+			? 'shadow-lg cursor-pointer border border-border bg-background/90'
 			: nightOn
-				? 'border-white/50 bg-white/40 hover:bg-white/65 cursor-pointer'
-				: 'cursor-pointer border-border-strong bg-faint-foreground hover:bg-muted-foreground'}"
+				? 'bg-white/35 hover:bg-white/70 cursor-pointer'
+				: 'cursor-pointer bg-muted hover:bg-hover'}"
 	style={containerStyle}
 	onclick={openFromCollapsed}
 	onkeydown={(e) => (e.key === 'Escape' ? (engaged = false) : undefined)}
