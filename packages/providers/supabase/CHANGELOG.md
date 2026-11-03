@@ -1,5 +1,14 @@
 # @selvajs/supabase-provider
 
+## 0.20.0-beta.7
+
+### Patch Changes
+
+- a85ad5c: Fewer sequential round trips on two hot paths.
+
+  - `createDefinitionLoader` resolves the definition's compute server while it reads the version and the definition file, instead of after them. A describe that misses the cache waits on two fewer round trips. A definition missing its version or file still fails as `data` before a missing server fails as `missing-config`.
+  - `SupabaseAuthProvider.verifyToken` in `hybrid` mode checks a symmetric (HS256) token with one GoTrue `getUser`. `getClaims` cannot verify such a token locally and asks GoTrue itself, so the periodic recheck made it two calls.
+
 ## 0.20.0-beta.6
 
 ### Minor Changes
