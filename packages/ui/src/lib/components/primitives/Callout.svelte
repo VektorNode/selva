@@ -55,7 +55,7 @@
 	{#if Icon}
 		<Icon class={cn('mt-0.5 h-4 w-4 shrink-0', accent)} />
 	{/if}
-	<div class="min-w-0 space-y-1">
+	<div class="min-w-0 space-y-1 wrap-anywhere">
 		{#if title}
 			<p class={cn('leading-tight font-medium', accent)}>{title}</p>
 		{/if}

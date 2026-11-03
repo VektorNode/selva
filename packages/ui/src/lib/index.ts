@@ -19,6 +19,7 @@ export { default as Viewer } from './components/viewer/Viewer.svelte';
 export * from './schema/defaults';
 export * from './schema/dynamic-value-list';
 export * from './schema/traversal';
+export { visibleInputItems } from './schema/visibility-rules';
 export {
 	type UIHost,
 	type ElementKind,

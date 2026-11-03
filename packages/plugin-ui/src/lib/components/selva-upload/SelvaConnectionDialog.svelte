@@ -38,7 +38,7 @@
 			bind:this={body}
 			tabindex="-1"
 			aria-label="Selva account"
-			class="flex flex-col gap-3 outline-none"
+			class="flex min-w-0 flex-col gap-3 outline-none"
 		>
 			<SelvaAccountSection {upload} />
 		</section>
