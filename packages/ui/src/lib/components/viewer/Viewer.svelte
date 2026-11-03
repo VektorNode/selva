@@ -85,7 +85,6 @@
 	let {
 		meshes,
 		isFullscreen = $bindable(false),
-		isSolving = false,
 		isSlow = false,
 		isBlurred = false,
 		drawerOpen = false,
@@ -525,16 +524,6 @@
 						: 'blur-overlay-inactive'}"
 				></div>
 
-				<!-- The last result stays sharp while the next one solves: blurring it on every
-				     solve hides the model the user is adjusting. -->
-				{#if isSolving}
-					<div
-						class="inset-x-0 top-0 animate-in fade-in pointer-events-none absolute z-20 h-px overflow-hidden duration-300"
-						aria-hidden="true"
-					>
-						<div class="solve-bar h-full w-1/3 bg-faint-foreground"></div>
-					</div>
-				{/if}
 				{#if isSlow}
 					<div
 						class="inset-0 animate-in fade-in pointer-events-none absolute z-10 bg-background/25 duration-500"
@@ -631,27 +620,6 @@
 	.viewer-canvas {
 		-webkit-touch-callout: none;
 		-webkit-tap-highlight-color: transparent;
-	}
-
-	.solve-bar {
-		animation: solve-bar 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
-	}
-
-	@keyframes solve-bar {
-		from {
-			transform: translateX(-100%);
-		}
-		to {
-			transform: translateX(300%);
-		}
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.solve-bar {
-			animation: none;
-			width: 100%;
-			opacity: 0.6;
-		}
 	}
 
 	.blur-overlay {
