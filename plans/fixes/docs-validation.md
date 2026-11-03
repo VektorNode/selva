@@ -5,10 +5,10 @@ its place. There was no review document to validate, so the docs themselves were
 numbers drift: when one stops resolving, grep the quoted text. The doc edits in sections 1 and 3 were
 applied afterwards, so read them as the record of why the docs changed. `scaling-roadmap.md` and
 `drawing-backlog.md` moved to `plans/`; `/setup` now honours the pinned bootstrap email; the scaffold
-binds `127.0.0.1` when an origin is given. Still open in code: the Update button shown to
-`manage_updates` holders, `max_size 256mb` in `caddyfile.js` and `infra/startup.sh.tpl`, the
-"`Infinity` throws" message in `checks/config.js` and `deploymentConfig.ts`, no doctor warning for
-`ADDRESS_HEADER` on a public bind, and the password-recovery gap.
+binds `127.0.0.1` when an origin is given. Doctor and the admin health panel now warn when `ADDRESS_HEADER` is trusted on a public bind, and the
+Caddy templates write `256MiB`. Still open in code: the Update button shown to `manage_updates`
+holders, the "`Infinity` throws" message in `checks/config.js` and `deploymentConfig.ts`, and the
+password-recovery gap.
 
 **How this was checked.** Nine agents. Seven Sonnet readers took one slice of the docs each and opened
 the code behind every checkable claim. One Opus agent read across all docs for duplication,

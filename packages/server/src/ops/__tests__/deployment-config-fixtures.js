@@ -22,9 +22,21 @@ export const DEPLOYMENT_CONFIG_FIXTURES = [
 			ORIGIN: 'https://example.com',
 			ADDRESS_HEADER: 'X-Forwarded-For',
 			XFF_DEPTH: '1',
+			HOST: '127.0.0.1',
 			BODY_SIZE_LIMIT: '256M'
 		},
 		clientAddress: 'ok',
+		bodySizeLimit: 'ok'
+	},
+	{
+		name: 'trusted address header on a public bind — a direct caller picks its own bucket',
+		env: {
+			ORIGIN: 'https://example.com',
+			ADDRESS_HEADER: 'X-Forwarded-For',
+			XFF_DEPTH: '1',
+			BODY_SIZE_LIMIT: '256M'
+		},
+		clientAddress: 'warn',
 		bodySizeLimit: 'ok'
 	},
 	{
@@ -48,6 +60,7 @@ export const DEPLOYMENT_CONFIG_FIXTURES = [
 		env: {
 			ORIGIN: 'https://example.com',
 			ADDRESS_HEADER: 'CF-Connecting-IP',
+			HOST: '127.0.0.1',
 			BODY_SIZE_LIMIT: '256M'
 		},
 		clientAddress: 'ok',
@@ -70,6 +83,7 @@ export const DEPLOYMENT_CONFIG_FIXTURES = [
 			ORIGIN: 'https://example.com',
 			ADDRESS_HEADER: 'X-Forwarded-For',
 			XFF_DEPTH: '1',
+			HOST: '127.0.0.1',
 			BODY_SIZE_LIMIT: '210M'
 		},
 		clientAddress: 'ok',

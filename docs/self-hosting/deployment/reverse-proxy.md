@@ -7,7 +7,7 @@ description: 'Why Selva needs a reverse proxy in front of it, and a minimal Cadd
 
 # Reverse proxy
 
-Bind Selva to `127.0.0.1` and keep port 3000 closed. `HOST` defaults to `0.0.0.0`. The scaffold sets `127.0.0.1` for header auth and whenever you give an origin; if you added the proxy later, set `HOST=127.0.0.1` yourself. `selva setup-proxy` warns when it is not set. The proxy terminates TLS and, with SSO, strips and sets the `SELVA-*` identity headers ([Header-auth & Entra](../providers/header-auth-entra.md)). Any proxy works; the example uses Caddy.
+Bind Selva to `127.0.0.1` and keep port 3000 closed. `HOST` defaults to `0.0.0.0`. The scaffold sets `127.0.0.1` for header auth and whenever you give an origin; if you added the proxy later, set `HOST=127.0.0.1` yourself. `selva setup-proxy` and `selva doctor` warn when it is not set. The proxy terminates TLS and, with SSO, strips and sets the `SELVA-*` identity headers ([Header-auth & Entra](../providers/header-auth-entra.md)). Any proxy works; the example uses Caddy.
 
 ## Minimal Caddy example
 

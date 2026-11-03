@@ -32,6 +32,7 @@ export interface DeploymentEnv {
 	ORIGIN?: string;
 	ADDRESS_HEADER?: string;
 	XFF_DEPTH?: string;
+	HOST?: string;
 	BODY_SIZE_LIMIT?: string;
 	COMPUTE_REQUEST_MAX_BYTES?: string;
 	// Callers hand over a whole env bag (`process.env`, `$env/dynamic/private`),
@@ -182,6 +183,24 @@ export function checkClientAddress(env: DeploymentEnv): ConfigFinding {
 			verdict: 'fail',
 			summary: `XFF_DEPTH="${depth}" is not a positive integer.`,
 			remediation: 'It counts proxies from the outside in — use 1 for a single reverse proxy.'
+		};
+	}
+
+	// A trusted address header is only safe if every request passes through the
+	// proxy: on a public bind a direct caller sets the header itself and picks
+	// its own rate-limit bucket.
+	const host = env.HOST ?? '0.0.0.0';
+	if (!['127.0.0.1', 'localhost', '::1'].includes(host)) {
+		return {
+			...base,
+			verdict: 'warn',
+			summary:
+				`ADDRESS_HEADER=${header} is trusted but HOST=${host} leaves the app reachable ` +
+				'without the proxy, so a direct caller can set the header and pick its own ' +
+				'rate-limit bucket.',
+			remediation:
+				'Set HOST=127.0.0.1 and keep port 3000 closed in the firewall. Ignore this only ' +
+				'if the proxy runs on another host and network isolation keeps everything else out.'
 		};
 	}
 

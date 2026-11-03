@@ -291,6 +291,19 @@ export function checkClientAddress(env) {
 		);
 	}
 
+	// A trusted address header is only safe if every request passes through the
+	// proxy: on a public bind a direct caller sets the header itself and picks
+	// its own rate-limit bucket.
+	const host = env.HOST ?? '0.0.0.0';
+	if (!['127.0.0.1', 'localhost', '::1'].includes(host)) {
+		return yellow(
+			`ADDRESS_HEADER=${header} is trusted but HOST=${host} leaves the app reachable ` +
+				`without the proxy, so a direct caller can set the header and pick its own ` +
+				`rate-limit bucket. Set HOST=127.0.0.1 and keep port 3000 closed in the ` +
+				`firewall (ignore this only if the proxy runs on another host behind network isolation).`
+		);
+	}
+
 	return green(`ADDRESS_HEADER=${header}${depth ? ` (XFF_DEPTH=${depth})` : ''}`);
 }
 

@@ -214,9 +214,24 @@ test('accepts a configured pair', () => {
 	const r = checkClientAddress({
 		ORIGIN: 'https://selva.example.test',
 		ADDRESS_HEADER: 'X-Forwarded-For',
-		XFF_DEPTH: '1'
+		XFF_DEPTH: '1',
+		HOST: '127.0.0.1'
 	});
 	assert.equal(r.severity, 'green');
+});
+
+test('warns when a trusted address header sits on a public bind', () => {
+	// Without the loopback bind a direct caller sets the header itself.
+	for (const HOST of [undefined, '0.0.0.0']) {
+		const r = checkClientAddress({
+			ORIGIN: 'https://selva.example.test',
+			ADDRESS_HEADER: 'X-Forwarded-For',
+			XFF_DEPTH: '1',
+			HOST
+		});
+		assert.equal(r.severity, 'yellow');
+		assert.match(r.line, /HOST=127\.0\.0\.1/);
+	}
 });
 
 test('does not demand XFF_DEPTH for a single-value header', () => {
@@ -224,7 +239,8 @@ test('does not demand XFF_DEPTH for a single-value header', () => {
 	// is meaningless there — asking for it would push operators to set noise.
 	const r = checkClientAddress({
 		ORIGIN: 'https://selva.example.test',
-		ADDRESS_HEADER: 'CF-Connecting-IP'
+		ADDRESS_HEADER: 'CF-Connecting-IP',
+		HOST: '127.0.0.1'
 	});
 	assert.equal(r.severity, 'green');
 });
