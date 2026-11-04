@@ -9,6 +9,7 @@
  *
  * Time is controlled with fake timers so backoff sleeps resolve instantly.
  */
+import { gunzipSync, strFromU8 } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchCompute } from '@/core/compute-fetch/compute-fetch';
 import { ComputeError } from '@/core/errors';
@@ -239,6 +240,57 @@ describe('fetchCompute — HTTP status → error code mapping', () => {
 			})
 		);
 		await expect(fetchCompute('grasshopper', {}, config)).rejects.toThrow(/invalid api key/);
+	});
+
+	it("reads a 400's message out of its JSON body and does not retry it", async () => {
+		fetchMock.mockResolvedValue(
+			createMockResponse(
+				{ error: 'Bad Request', message: "The algo isn't valid base64", code: 'bad_request' },
+				{ ok: false, status: 400, statusText: 'Bad Request' }
+			)
+		);
+
+		const error = await rejection(
+			fetchCompute('grasshopper', {}, { ...config, retry: { attempts: 2, baseDelayMs: 0 } })
+		);
+
+		expect(error.code).toBe('VALIDATION_ERROR');
+		expect(error.message).toBe("Bad request: Bad Request — The algo isn't valid base64");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('fetchCompute — request compression', () => {
+	const big = { values: 'x'.repeat(4096) };
+	const advertising = () => createMockResponse({}, { headers: { 'Accept-Encoding': 'gzip' } });
+
+	it('gzips a large body once the server advertised gzip, and stops when it no longer does', async () => {
+		const gz = { serverUrl: 'http://gzip-server:6500' };
+		fetchMock
+			.mockResolvedValueOnce(advertising())
+			.mockResolvedValueOnce(createMockResponse({}))
+			.mockResolvedValueOnce(createMockResponse({}));
+
+		await fetchCompute('grasshopper', big, gz);
+		await fetchCompute('grasshopper', big, gz);
+		await fetchCompute('grasshopper', big, gz);
+
+		const [first, second, third] = fetchMock.mock.calls.map(([, init]) => init as RequestInit);
+		expect(typeof first.body).toBe('string');
+		expect((second.headers as Record<string, string>)['Content-Encoding']).toBe('gzip');
+		expect(JSON.parse(strFromU8(gunzipSync(second.body as Uint8Array)))).toEqual(big);
+		expect(typeof third.body).toBe('string');
+		expect(third.headers as Record<string, string>).not.toHaveProperty('Content-Encoding');
+	});
+
+	it('sends a small body uncompressed', async () => {
+		const gz = { serverUrl: 'http://gzip-small:6500' };
+		fetchMock.mockResolvedValueOnce(advertising()).mockResolvedValueOnce(createMockResponse({}));
+
+		await fetchCompute('grasshopper', {}, gz);
+		await fetchCompute('grasshopper', { a: 1 }, gz);
+
+		expect(typeof (fetchMock.mock.calls[1][1] as RequestInit).body).toBe('string');
 	});
 });
 

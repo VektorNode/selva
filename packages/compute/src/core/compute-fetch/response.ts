@@ -227,8 +227,8 @@ async function handleErrorStatus(
 	const parsed = truncated ? undefined : tryParseJson(rawBody);
 	let detail = rawBody;
 
-	if (isServerError && parsed !== undefined) {
-		const partial = partialSuccessCounts(parsed);
+	if (parsed !== undefined) {
+		const partial = isServerError ? partialSuccessCounts(parsed) : null;
 		if (partial) {
 			setResponseWireSize(parsed, rawBody.length);
 			logDebug(

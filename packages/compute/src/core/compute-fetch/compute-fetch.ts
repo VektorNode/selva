@@ -4,6 +4,7 @@ import { getLogger } from '../utils/logger';
 import { validateServerUrl } from '../server/validate-server-url';
 import { ERROR_BODY_MAX_BYTES, readBodyText } from './read-body';
 import { buildUrl, buildHeaders, generateRequestId } from './request';
+import { gzip, noteRequestEncodings, shouldGzipRequest } from './request-compression';
 import { handleResponse, type AttemptOutcome, type RequestContext } from './response';
 import { backoffDelay, isRetryableStatus, resolveRetryPolicy, retryDelay, sleep } from './retry';
 import { composeSignal, isAbortError, MAX_TIMEOUT_MS } from './signal';
@@ -12,8 +13,10 @@ import type { ComputeConfig, RetryPolicy } from '../types';
 
 interface AttemptContext extends RequestContext {
 	endpoint: string;
+	/** Validated: the key request compression is remembered under. */
+	serverUrl: string;
 	body: string;
-	headers: HeadersInit;
+	headers: Record<string, string>;
 	errorContext: Record<string, unknown>;
 }
 
@@ -28,14 +31,16 @@ async function attemptFetch(
 	const send = ctx.config.fetch ?? fetch;
 
 	try {
+		const gzipped = shouldGzipRequest(ctx.serverUrl, ctx.requestSize) ? await gzip(ctx.body) : null;
 		const response = await send(ctx.fullUrl, {
 			method: 'POST',
-			body: ctx.body,
-			headers: ctx.headers,
+			body: gzipped ?? ctx.body,
+			headers: gzipped ? { ...ctx.headers, 'Content-Encoding': 'gzip' } : ctx.headers,
 			signal,
 			// handleResponse rejects a redirect rather than let the API key follow it.
 			redirect: 'manual'
 		});
+		noteRequestEncodings(ctx.serverUrl, response);
 
 		if (!isFinal && isRetryableStatus(response.status, policy)) {
 			// Drain so the connection can be reused. The final attempt skips this branch so
@@ -192,6 +197,7 @@ export async function fetchCompute<R = unknown>(
 
 	const ctx: AttemptContext = {
 		endpoint,
+		serverUrl,
 		body,
 		requestSize,
 		fullUrl,

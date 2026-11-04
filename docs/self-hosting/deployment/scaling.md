@@ -28,7 +28,7 @@ The browser posts to `/api/v1/compute`, the Selva server calls Rhino.Compute, an
 
 ## Scale one server first
 
-`rhino.compute` round-robins across `compute.geometry` children, each a full headless Rhino:
+`rhino.compute` sends each request to an idle `compute.geometry` child, each a full headless Rhino:
 
 - `--childcount`: children (default 4, cap 64).
 - `--idlespan`: seconds before an idle child exits and stops billing (default 3600).
