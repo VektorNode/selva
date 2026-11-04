@@ -120,8 +120,8 @@ const SETTINGS: {
 	{
 		label: 'Compute render',
 		section: 'Rendering',
-		sectionId: 'compute.rendering',
-		panel: 'compute',
+		sectionId: 'viewer.rendering',
+		panel: 'viewer',
 		controlId: 'enable-remote-rendering',
 		terms: 'remote geometry'
 	},

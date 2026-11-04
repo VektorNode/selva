@@ -82,10 +82,9 @@
 			</p>
 			<p class="text-muted-foreground max-w-sm text-sm">
 				{#if result.live}
-					It's live: everyone using the definition now gets this version. You can roll back in
-					Selva.
+					It's live. Users now get this version. You can roll back in Selva.
 				{:else if !result.error}
-					It's the draft. Try it in Selva, and make it live there when it's ready.
+					Saved as a draft. Try it in Selva and make it live there when it's ready.
 				{/if}
 			</p>
 		</div>

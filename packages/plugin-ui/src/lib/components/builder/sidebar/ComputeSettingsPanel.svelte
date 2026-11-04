@@ -1,44 +1,18 @@
 <script lang="ts">
-	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
-	import { Switch } from '@selvajs/ui';
+	import type { UISchema } from '@selvajs/schemas';
 	import { listSourcedInputs, SOURCE_KIND_LABELS } from '$lib/features/builder';
 	import ScopeChip from '../scope/ScopeChip.svelte';
 	import SettingsSection from './SettingsSection.svelte';
-	import SettingRow from './SettingRow.svelte';
 
 	interface Props {
 		schema: UISchema;
-		onSchemaChange: (schema: UISchema) => void;
 		onRevealItem: (tabId: string, groupId: string, itemId: string) => void;
 	}
 
-	let { schema, onSchemaChange, onRevealItem }: Props = $props();
+	let { schema, onRevealItem }: Props = $props();
 
 	const sourcedInputs = $derived(listSourcedInputs(schema));
-
-	function updateSchema(updates: Partial<UISchema>) {
-		onSchemaChange({ ...schema, ...updates });
-	}
-
-	function updateViewerOptions(updates: Partial<ViewerOptions>) {
-		updateSchema({ viewerOptions: { ...schema.viewerOptions, ...updates } });
-	}
 </script>
-
-<div class="py-4">
-	<SettingRow
-		label="Compute render"
-		for="enable-remote-rendering"
-		layout="inline"
-		hint="Show Rhino.Compute's geometry in Selva's viewer."
-	>
-		<Switch
-			id="enable-remote-rendering"
-			checked={schema.viewerOptions?.enableRemote ?? false}
-			onCheckedChange={(checked) => updateViewerOptions({ enableRemote: checked })}
-		/>
-	</SettingRow>
-</div>
 
 <SettingsSection id="compute.sources" title="Input sources" collapsible={false}>
 	{#if sourcedInputs.length === 0}

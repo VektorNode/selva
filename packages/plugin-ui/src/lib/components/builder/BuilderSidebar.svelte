@@ -209,7 +209,7 @@
 				{:else if panel.value === 'local'}
 					<LocalSettingsPanel {schema} {onSchemaChange} />
 				{:else}
-					<ComputeSettingsPanel {schema} {onSchemaChange} {onRevealItem} />
+					<ComputeSettingsPanel {schema} {onRevealItem} />
 				{/if}
 			</div>
 		</ScrollArea>

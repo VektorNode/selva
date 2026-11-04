@@ -42,14 +42,13 @@
 	);
 
 	const makeLiveHint = $derived.by(() => {
-		const name = versionTarget?.displayName ?? 'the definition';
 		if (uploadState.form.makeLive) {
-			return `Everyone using ${name} gets this version once it's uploaded. You can roll back in Selva.`;
+			return 'Users get this version right after the upload. You can roll back in Selva.';
 		}
 		if (versionTarget?.liveVersionNumber != null) {
-			return `It lands as the draft. Users keep version ${versionTarget.liveVersionNumber} until you make it live in Selva.`;
+			return `Saved as a draft. Users stay on version ${versionTarget.liveVersionNumber} until you make it live.`;
 		}
-		return "It lands as the draft. Make it live in Selva when it's ready.";
+		return "Saved as a draft. Make it live in Selva when it's ready.";
 	});
 
 	let body = $state<HTMLElement | null>(null);

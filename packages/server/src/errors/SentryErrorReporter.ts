@@ -27,6 +27,7 @@ interface SentryNodeLike extends SentryLike {
 		environment?: string;
 		release?: string;
 		tracesSampleRate: number;
+		traceLifecycle?: 'static' | 'stream';
 		beforeSend: typeof scrubEvent;
 		beforeSendTransaction: typeof scrubEvent;
 		beforeBreadcrumb: typeof scrubBreadcrumb;
@@ -68,6 +69,8 @@ export class SentryErrorReporter implements IErrorReporter {
 					typeof opts.tracesSampleRate === 'number'
 						? sampleRate(String(opts.tracesSampleRate))
 						: sampleRate(opts.tracesSampleRate),
+				// Streamed spans skip beforeSendTransaction, so the scrubber would never see them.
+				traceLifecycle: 'static',
 				beforeSend: scrubEvent,
 				beforeSendTransaction: scrubEvent,
 				beforeBreadcrumb: scrubBreadcrumb

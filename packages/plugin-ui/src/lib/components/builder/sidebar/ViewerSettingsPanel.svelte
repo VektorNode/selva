@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
-	import { ColorInput, Select } from '@selvajs/ui';
+	import { ColorInput, Select, Switch } from '@selvajs/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import SettingRow from './SettingRow.svelte';
 
@@ -27,6 +27,21 @@
 		onSchemaChange({ ...schema, viewerOptions: { ...schema.viewerOptions, ...updates } });
 	}
 </script>
+
+<SettingsSection id="viewer.rendering" title="Rendering" collapsible={false}>
+	<SettingRow
+		label="Compute render"
+		for="enable-remote-rendering"
+		layout="inline"
+		hint="Show Rhino.Compute's geometry in Selva's viewer."
+	>
+		<Switch
+			id="enable-remote-rendering"
+			checked={schema.viewerOptions?.enableRemote ?? false}
+			onCheckedChange={(checked) => updateViewerOptions({ enableRemote: checked })}
+		/>
+	</SettingRow>
+</SettingsSection>
 
 <SettingsSection id="viewer.look" title="Look" collapsible={false}>
 	<div class="grid grid-cols-2 gap-3">
