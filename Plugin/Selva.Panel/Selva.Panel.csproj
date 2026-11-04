@@ -17,6 +17,7 @@
 	<ItemGroup>
 		<!-- RhinoCommon only (Eto comes with it): this plug-in must load before Grasshopper does. -->
 		<PackageReference Include="RhinoCommon" VersionOverride="$(RhinoRefVersion)" ExcludeAssets="runtime"/>
+		<PackageReference Include="System.Drawing.Common" />
 	</ItemGroup>
 
 	<ItemGroup>
