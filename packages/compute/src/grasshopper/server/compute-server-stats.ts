@@ -14,6 +14,16 @@ export interface ServerVersion {
 	git_sha: string | null;
 }
 
+/** What `GET /limits` reports. Only the VektorNode fork answers it. */
+export interface ServerLimits {
+	/** Longest the server lets one request run (`RHINO_COMPUTE_TIMEOUT`, `--timeout`). */
+	timeoutSeconds: number;
+	/** Largest request body it accepts (`RHINO_COMPUTE_MAX_REQUEST_SIZE`, `--max-request-size`). */
+	maxRequestBytes: number;
+	/** A stale definition pointer answers `definition_not_cached`, so pointer reuse is safe. */
+	signalsStaleDefinition: boolean;
+}
+
 export interface ServerStats {
 	isOnline: boolean;
 	version?: ServerVersion;
@@ -206,6 +216,38 @@ export default class ComputeServerStats {
 			return null;
 		}
 		return parseInt(text, 10);
+	}
+
+	/**
+	 * The server's request limits, or `null` when it can't report them: a standard rhino.compute
+	 * has no `/limits`, and neither does an older fork. A missing route is expected, so it isn't
+	 * logged as a failure.
+	 */
+	public async getLimits(): Promise<ServerLimits | null> {
+		this.ensureNotDisposed();
+		let text: string;
+		try {
+			const response = await this.fetchWithTimeout(`${this.serverUrl}/limits`);
+			if (!response.ok) {
+				await response.body?.cancel().catch(() => {});
+				return null;
+			}
+			const read = await readBodyText(response, ComputeServerStats.MAX_BODY_BYTES);
+			if (read.truncated) return null;
+			text = read.text;
+		} catch (err) {
+			getLogger().debug(`[ComputeServerStats] GET /limits errored: ${describeProbeError(err)}`);
+			return null;
+		}
+		const json = tryParseJson(text) as Partial<ServerLimits> | null;
+		const positive = (n: unknown): n is number =>
+			typeof n === 'number' && Number.isFinite(n) && n > 0;
+		if (!json || !positive(json.timeoutSeconds) || !positive(json.maxRequestBytes)) return null;
+		return {
+			timeoutSeconds: json.timeoutSeconds,
+			maxRequestBytes: json.maxRequestBytes,
+			signalsStaleDefinition: json.signalsStaleDefinition === true
+		};
 	}
 
 	/**

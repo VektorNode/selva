@@ -20,10 +20,7 @@ import { flag, getComputeServerConfigStore } from '$lib/server/providers.server'
  * page renders read-only with an explanatory note.
  */
 
-export type CatalogEntry = Pick<
-	ComputeServerConfig,
-	'id' | 'label' | 'serverUrl' | 'scope' | 'timeoutMs' | 'retryCount'
-> & {
+export type CatalogEntry = Pick<ComputeServerConfig, 'id' | 'label' | 'serverUrl' | 'scope'> & {
 	source: 'platform' | 'org';
 	isGlobalDefault: boolean;
 };
@@ -58,8 +55,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 		serverUrl: s.serverUrl,
 		scope: s.scope,
 		source: isPlatformServer(s) ? 'platform' : 'org',
-		timeoutMs: s.timeoutMs,
-		retryCount: s.retryCount,
 		isGlobalDefault: s.id === config.defaultServerId
 	}));
 

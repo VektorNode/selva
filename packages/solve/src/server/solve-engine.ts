@@ -50,9 +50,7 @@ import type { SolveInput } from '../shared/solve-input.js';
  * Pass the resolved object through as-is — extra fields are ignored.
  */
 export interface SolveEngineLimits {
-	solveDeadlineMs: number;
 	computeResponseMaxBytes: number;
-	computeReuseDefinitionCache: boolean;
 	computeServerCachesolve: boolean;
 	computeMaxQueueDepth: number;
 	computeQueueWaitMs: number;
@@ -68,7 +66,6 @@ function assertValidLimits(limits: SolveEngineLimits): void {
 			throw new RangeError(`SolveEngine: limits.${name} must be a number >= ${min}, got ${value}.`);
 		}
 	};
-	check('solveDeadlineMs', 1);
 	check('computeResponseMaxBytes', 1);
 	check('computeMaxQueueDepth', 0);
 	check('computeQueueWaitMs', 0);
@@ -148,9 +145,7 @@ export class SolveEngine {
 		this.limits = options.limits;
 
 		this.clientCache = createClientCache({
-			solveDeadlineMs: this.limits.solveDeadlineMs,
 			cachesolve: this.limits.computeServerCachesolve,
-			reuseServerDefinitionCache: this.limits.computeReuseDefinitionCache,
 			maxQueueDepth: this.limits.computeMaxQueueDepth,
 			queueWaitMs: this.limits.computeQueueWaitMs,
 			responseCacheMaxBytes: this.limits.computeSolveCacheBytes,
@@ -246,7 +241,6 @@ export class SolveEngine {
 					inputTree,
 					client,
 					responseMaxBytes: this.limits.computeResponseMaxBytes,
-					solveDeadlineMs: this.limits.solveDeadlineMs,
 					selvaEvents: args.selvaEvents,
 					signal
 				}),
@@ -324,6 +318,8 @@ export class SolveEngine {
 					message:
 						'Solve result is too large to return. This usually means a file output exceeds the supported size.'
 				});
+			case 'request_too_large':
+				return fail(413, { message: outcome.message });
 			case 'shed':
 				return fail(503, { message: outcome.message, retryAfter: outcome.retryAfterSeconds });
 			case 'compute_error':

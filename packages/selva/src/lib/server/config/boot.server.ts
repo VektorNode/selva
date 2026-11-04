@@ -10,7 +10,12 @@ import {
 } from '@selvajs/platform/config';
 import { getLogger } from '$lib/server/providers.server';
 import { findDeploymentDir } from '$lib/server/selfUpdate.server';
-import { deploymentReport, deploymentSnapshot, keyRotationStatus } from './settings.js';
+import {
+	deploymentReport,
+	deploymentSnapshot,
+	keyRotationStatus,
+	RETIRED_KEYS
+} from './settings.js';
 import { configChecks, type CheckInput, type ConfigCheck } from './checks.js';
 
 /** Beside `.env` in the deployment directory. The CLI reads it too. */
@@ -60,6 +65,14 @@ export function checkConfigAtBoot(): void {
 	}
 	for (const u of current.unknown) {
 		log.warn('Unknown env var', { component: 'config', envVar: u.key, suggestion: u.suggestion });
+	}
+	for (const [key, now] of Object.entries(RETIRED_KEYS)) {
+		if (env[key] === undefined) continue;
+		log.warn('Retired env var, ignored: run `selva migrate`', {
+			component: 'config',
+			envVar: key,
+			now
+		});
 	}
 	for (const row of current.rows.filter((r) => r.source === 'alias')) {
 		log.warn('Deprecated env var: run `selva migrate`', {

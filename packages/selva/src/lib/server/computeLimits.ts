@@ -18,25 +18,21 @@ import { resolveComputeLimits } from '@selvajs/server/compute';
 // would pin the boot placeholder, so this needs the forwarding one.
 import { lazyLogger } from '$lib/server/providers.server';
 
-// The logger surfaces malformed env values (e.g. a non-numeric
-// COMPUTE_RATE_LIMIT_MAX silently falling back to its default).
+// The logger surfaces malformed env values (a non-numeric COMPUTE_RATE_LIMIT_MAX
+// falls back to its default).
 const limits = resolveComputeLimits(env, lazyLogger);
 
 /** The whole resolved object — passed wholesale to `SolveEngine` (`compute/engine.server.ts`). */
 export const computeLimits = limits;
 
-// How long one solve may run — shared with the browser so the client's
-// AbortController matches the server's deadline rather than guessing.
-export const SOLVE_DEADLINE_MS = limits.solveDeadlineMs;
-
 // Per-key compute rate limit (see computeRateLimit.server.ts).
 export const RATE_LIMIT_WINDOW_MS = limits.rateLimitWindowMs;
 export const RATE_LIMIT_MAX_REQUESTS = limits.rateLimitMaxRequests;
 
-// Upload + payload caps; override per-deployment via the *_BYTES env vars.
-// The Rhino.Compute server caps at RHINO_COMPUTE_MAX_REQUEST_SIZE (default
-// 50 MB), so raising MAX_DEFINITION_FILE_SIZE past that only defers the 413
-// to compute — raise it there too.
+// Upload caps. Only the .gh cap is an env var. The Rhino.Compute server caps at
+// RHINO_COMPUTE_MAX_REQUEST_SIZE (default 50 MB), so raising
+// MAX_DEFINITION_FILE_SIZE_BYTES past that only defers the 413 to compute:
+// raise it there too.
 export const MAX_DEFINITION_FILE_SIZE = limits.maxDefinitionFileSize;
 export const MAX_IMAGE_FILE_SIZE = limits.maxImageFileSize;
 
@@ -53,9 +49,6 @@ export const REMOTE_DEFINITION_FETCH_TIMEOUT_MS = limits.remoteDefinitionFetchTi
 // TTL for the in-process cache of REMOTE-fetched .gh bytes. Only the remote path
 // is TTL'd — the definition cache below is keyed on an immutable version id.
 export const REMOTE_DEFINITION_CACHE_TTL_MS = limits.remoteDefinitionCacheTtlMs;
-
-// Server definition-cache reuse (pointer instead of re-uploading the binary).
-export const COMPUTE_REUSE_DEFINITION_CACHE = limits.computeReuseDefinitionCache;
 
 // Server-side solve-result cache (`cachesolve`).
 export const COMPUTE_SERVER_CACHESOLVE = limits.computeServerCachesolve;

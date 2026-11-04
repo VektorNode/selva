@@ -169,8 +169,8 @@ depends on it.
 - **`ApiErrorCode` merges into `@selvajs/server`;** the app's duplicate copy goes.
 - **Wiring.** `SelvaDeps.apiRateLimiter`: absent uses a process-wide default (600 per 60 s),
   `null` turns it off, or pass any `ApiRateLimiter` (`hit(key)`, may be async). The Selva app
-  builds one with `resolveApiRateLimitConfig` from `API_TOKEN_RATE_LIMIT_MAX` (`0` = off) and
-  `API_TOKEN_RATE_LIMIT_WINDOW_MS`. The bucket is charged before the scope check so a throttled
+  builds one with `resolveApiRateLimitConfig` from `API_TOKEN_RATE_LIMIT_MAX` (per minute, `0` =
+  off). The bucket is charged before the scope check so a throttled
   key never reaches `scopeTarget`'s database read. Routes that build their own response call
   `chargeApiRateLimit`, `rateLimitedResponse` and `withRateLimitHeaders`; the solve core does.
   The compute and share-cap 429s also carry `RATE_LIMITED`.

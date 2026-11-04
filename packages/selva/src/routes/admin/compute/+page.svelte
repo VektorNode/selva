@@ -22,12 +22,7 @@
 		Power
 	} from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
-	import {
-		COMPUTE_TIMEOUT_DEFAULT_MS,
-		clampRetryCount,
-		clampTimeoutMs,
-		type TenancyMode
-	} from '@selvajs/platform';
+	import type { TenancyMode } from '@selvajs/platform';
 	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
 	import { invalidateAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -126,8 +121,6 @@
 			label: s.label,
 			serverUrl: s.serverUrl,
 			sharedWith: s.sharedWith === 'all' ? 'all' : [...s.sharedWith],
-			timeoutMs: s.timeoutMs ?? COMPUTE_TIMEOUT_DEFAULT_MS,
-			retryCount: s.retryCount ?? 0,
 			apiKey: '',
 			hasApiKey: s.hasApiKey
 		};
@@ -222,9 +215,7 @@
 				serverUrl: 'http://localhost:5000',
 				sharedWith: 'all',
 				apiKey: '',
-				hasApiKey: false,
-				timeoutMs: COMPUTE_TIMEOUT_DEFAULT_MS,
-				retryCount: 0
+				hasApiKey: false
 			}
 		];
 		ensureHealth(id);
@@ -269,11 +260,9 @@
 				defaultServerId: kept.some((s) => s.id === defaultServerId)
 					? defaultServerId
 					: (kept[0]?.id ?? ''),
-				servers: kept.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
+				servers: kept.map(({ apiKey, hasApiKey: _, ...s }) => ({
 					...s,
-					timeoutMs: clampTimeoutMs(timeoutMs),
-					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
-					...(Number(retryCount) ? { retryCount: clampRetryCount(retryCount) } : {})
+					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {})
 				}))
 			};
 			const res = await fetch('/api/admin/compute', {
@@ -704,7 +693,7 @@
 					</p>
 				</div>
 			</div>
-			<div class="grid grid-cols-2 gap-2">
+			<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
 				<div class="bg-muted rounded-md px-3 py-2">
 					<p class="text-muted-foreground text-xs">Active children</p>
 					<p class="mt-0.5 text-xs font-medium">{health.activeChildren ?? '-'}</p>
@@ -713,7 +702,28 @@
 					<p class="text-muted-foreground text-xs">Idle for</p>
 					<p class="mt-0.5 text-xs font-medium">{formatIdle(health.idleSpanSeconds)}</p>
 				</div>
+				<div class="bg-muted rounded-md px-3 py-2">
+					<p class="text-muted-foreground text-xs">Solve timeout</p>
+					<p class="mt-0.5 text-xs font-medium">
+						{health.limits ? `${health.limits.timeoutSeconds} s` : '100 s (assumed)'}
+					</p>
+				</div>
+				<div class="bg-muted rounded-md px-3 py-2">
+					<p class="text-muted-foreground text-xs">Max request</p>
+					<p class="mt-0.5 text-xs font-medium">
+						{health.limits
+							? `${Math.round(health.limits.maxRequestBytes / (1024 * 1024))} MB`
+							: 'Not reported'}
+					</p>
+				</div>
 			</div>
+			{#if !health.limits}
+				<p class="text-muted-foreground text-xs">
+					This server doesn't report its limits, so Selva assumes Rhino.Compute's defaults and
+					re-uploads the definition on every solve. The VektorNode build of Rhino.Compute reports
+					them.
+				</p>
+			{/if}
 		{/if}
 
 		<div class="grid gap-2 sm:grid-cols-2 {isRemoved ? 'pointer-events-none opacity-50' : ''}">
@@ -763,32 +773,6 @@
 						</button>
 					{/if}
 				</div>
-			</div>
-			<div class="space-y-1">
-				<p class="text-muted-foreground text-xs">Timeout (ms)</p>
-				<Input
-					type="number"
-					placeholder={String(COMPUTE_TIMEOUT_DEFAULT_MS)}
-					bind:value={server.timeoutMs}
-					oninput={() => markDirty(server.id)}
-					onblur={() => {
-						server.timeoutMs = clampTimeoutMs(server.timeoutMs);
-					}}
-					class="text-xs"
-				/>
-			</div>
-			<div class="space-y-1">
-				<p class="text-muted-foreground text-xs">Retries</p>
-				<Input
-					type="number"
-					placeholder="0"
-					bind:value={server.retryCount}
-					oninput={() => markDirty(server.id)}
-					onblur={() => {
-						server.retryCount = clampRetryCount(server.retryCount);
-					}}
-					class="text-xs"
-				/>
 			</div>
 		</div>
 

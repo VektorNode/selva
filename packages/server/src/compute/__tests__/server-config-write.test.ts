@@ -160,22 +160,6 @@ describe('validateIncomingServers shape', () => {
 	it('refuses the same id twice', () => {
 		expect(() => validateIncomingServers([server, server])).toThrow(/more than once/);
 	});
-
-	it('refuses timeouts and retries outside their range', () => {
-		for (const bad of [{ timeoutMs: 3e9 }, { timeoutMs: 999 }, { timeoutMs: 1000.5 }]) {
-			expect(() => validateIncomingServers([{ ...server, ...bad }])).toThrow(/timeoutMs/);
-		}
-		for (const bad of [{ retryCount: 6 }, { retryCount: -1 }, { retryCount: 1.5 }]) {
-			expect(() => validateIncomingServers([{ ...server, ...bad }])).toThrow(/retryCount/);
-		}
-	});
-
-	it('accepts the edges', () => {
-		const edges = { timeoutMs: 300000, retryCount: 5 };
-		expect(() => validateIncomingServers([{ ...server, ...edges }])).not.toThrow();
-		const low = { timeoutMs: 1000, retryCount: 0 };
-		expect(() => validateIncomingServers([{ ...server, ...low }])).not.toThrow();
-	});
 });
 
 describe('assertStoredKeysReadable', () => {

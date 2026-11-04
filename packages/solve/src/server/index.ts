@@ -35,6 +35,11 @@ export {
 } from './response-encoding.js';
 
 export type { SolveCacheStats, CachedClient, ResolvedServer } from './client-cache.js';
+export {
+	DEFAULT_SOLVE_DEADLINE_MS,
+	MAX_SOLVE_DEADLINE_MS,
+	type SolveLimits
+} from './server-limits.js';
 export type { ByteCacheRef, ByteCacheStats, ByteRefOutcome } from './definition-byte-cache.js';
 
 export type { DefinitionRef, SolveDefinition } from '@selvajs/compute/core';

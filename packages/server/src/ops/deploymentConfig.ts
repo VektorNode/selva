@@ -15,6 +15,8 @@
  * both test suites, so a rule changed on one side fails CI on the other.
  */
 
+import { COMPUTE_REQUEST_MAX_BYTES } from '../compute/limits.js';
+
 /** Neutral severity. Callers map it onto their own presentation. */
 export type ConfigVerdict = 'ok' | 'warn' | 'fail';
 
@@ -34,7 +36,6 @@ export interface DeploymentEnv {
 	XFF_DEPTH?: string;
 	HOST?: string;
 	BODY_SIZE_LIMIT?: string;
-	COMPUTE_REQUEST_MAX_BYTES?: string;
 	// Callers hand over a whole env bag (`process.env`, `$env/dynamic/private`),
 	// which carries far more than these keys. Without this, an env bag typed as a
 	// bare index signature has no declared property in common with an all-optional
@@ -63,9 +64,6 @@ export function parseBodySizeLimit(raw: string | undefined | null): number | nul
 	return bytes;
 }
 
-/** The app's own default for COMPUTE_REQUEST_MAX_BYTES (compute/limits.ts). */
-const COMPUTE_REQUEST_DEFAULT_BYTES = 256 * 1024 * 1024;
-
 const asMb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 /**
@@ -77,7 +75,7 @@ const asMb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 export function checkBodySizeLimit(env: DeploymentEnv): ConfigFinding {
 	const base = { id: 'body-size-limit', label: 'Upload size limit' };
 	const raw = env.BODY_SIZE_LIMIT;
-	const requestCap = Number(env.COMPUTE_REQUEST_MAX_BYTES) || COMPUTE_REQUEST_DEFAULT_BYTES;
+	const requestCap = COMPUTE_REQUEST_MAX_BYTES;
 
 	if (raw == null || raw === '') {
 		return {
@@ -105,8 +103,8 @@ export function checkBodySizeLimit(env: DeploymentEnv): ConfigFinding {
 			...base,
 			verdict: 'warn',
 			summary:
-				`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below COMPUTE_REQUEST_MAX_BYTES ` +
-				`(${asMb(requestCap)}) — the global cap rejects first, making the compute cap dead config.`,
+				`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below the ` +
+				`${asMb(requestCap)} a solve may send — larger solves fail with 413 before Selva sees them.`,
 			remediation: `Raise BODY_SIZE_LIMIT to at least ${asMb(requestCap)} and restart.`
 		};
 	}

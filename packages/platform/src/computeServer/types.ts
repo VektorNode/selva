@@ -1,8 +1,3 @@
-export const COMPUTE_TIMEOUT_DEFAULT_MS = 30000;
-export const COMPUTE_TIMEOUT_MIN_MS = 1000;
-export const COMPUTE_TIMEOUT_MAX_MS = 300000;
-export const COMPUTE_RETRY_MAX = 5;
-
 /**
  * Compute servers belong to one of two scopes — never both.
  *
@@ -35,10 +30,6 @@ interface ComputeServerCommon {
 	 * they'd only throw away.
 	 */
 	hasApiKey?: boolean;
-	/** Default: {@link COMPUTE_TIMEOUT_DEFAULT_MS}. */
-	timeoutMs?: number;
-	/** Default: 0. */
-	retryCount?: number;
 }
 
 export interface PlatformComputeServer extends ComputeServerCommon {

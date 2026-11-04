@@ -259,9 +259,8 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'facts',
 				rows: [
-					['COMPUTE_REQUEST_MAX_BYTES', 'body cap, default 256 MB'],
-					['COMPUTE_RATE_LIMIT_MAX', 'requests per window, default 120'],
-					['COMPUTE_RATE_LIMIT_WINDOW_MS', 'window length ms, default 100000']
+					['Body cap', '256 MB, fixed'],
+					['COMPUTE_RATE_LIMIT_MAX', 'requests per 100 s window, default 120']
 				]
 			}
 		],
@@ -492,7 +491,10 @@ export const CLOUD_STEPS: FlowStep[] = [
 					],
 					['COMPUTE_MAX_QUEUE_DEPTH', 'max solves waiting, default 0 = unbounded'],
 					['COMPUTE_QUEUE_WAIT_MS', 'max wait before rejecting, default 0 = no deadline'],
-					['COMPUTE_SOLVE_DEADLINE_MS', 'per-solve deadline, default 100000']
+					[
+						'Solve deadline',
+						"the compute server's --timeout, read from the server; 100 s if it can't say"
+					]
 				]
 			},
 			{
@@ -529,7 +531,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 			{
 				kind: 'facts',
 				rows: [
-					['COMPUTE_REUSE_DEFINITION_CACHE', 'send pointer instead of bytes, default true'],
+					['Pointer reuse', 'on when the compute server reports /limits, off otherwise'],
 					['COMPUTE_DEFINITION_CACHE_MB', 'definition-bytes budget in MB, default 256']
 				]
 			}
@@ -696,44 +698,14 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 		title: 'Doors before the work starts',
 		vars: [
 			{
-				name: 'COMPUTE_REQUEST_MAX_BYTES',
-				default: '256 MB',
-				text: 'JSON request body cap for /api/compute (inputs + values, not the .gh file). Must stay under adapter-node’s global BODY_SIZE_LIMIT or that rejects first.'
-			},
-			{
-				name: 'COMPUTE_RESPONSE_MAX_BYTES',
-				default: '300 MB',
-				text: 'JSON response cap. Above this the result is refused with a clear error instead of crashing — there is a hard ceiling on how large a single text response the server can build.'
-			},
-			{
 				name: 'COMPUTE_RATE_LIMIT_MAX',
 				default: '120',
-				text: 'Requests allowed per window on /api/compute before a 429 with Retry-After.'
-			},
-			{
-				name: 'COMPUTE_RATE_LIMIT_WINDOW_MS',
-				default: '100000',
-				text: 'Length of the fixed rate-limit window, in ms.'
+				text: 'Requests allowed per 100-second window on /api/compute before a 429 with Retry-After.'
 			},
 			{
 				name: 'MAX_DEFINITION_FILE_SIZE_BYTES',
 				default: '50 MB',
 				text: 'Largest .gh definition accepted on upload, and the largest fetched from a remote URL — the same number for both, so a URL can’t smuggle a bigger file past the upload cap. Matches Rhino.Compute’s own request-size default.'
-			},
-			{
-				name: 'MAX_IMAGE_FILE_SIZE_BYTES',
-				default: '10 MB',
-				text: 'Largest image upload accepted for an image-typed input.'
-			},
-			{
-				name: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
-				default: '30000',
-				text: 'Deadline for fetching a remote .gh URL, so a server that trickles bytes forever cannot tie up the fetch indefinitely.'
-			},
-			{
-				name: 'REMOTE_DEFINITION_CACHE_TTL_MS',
-				default: '300000',
-				text: 'How long a remote .gh’s bytes stay cached before being fetched again. Only the remote path expires on a timer; the version-id-keyed cache below never does, because that key can’t go stale.'
 			}
 		]
 	},
@@ -748,12 +720,7 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 			{
 				name: 'COMPUTE_QUEUE_WAIT_MS',
 				default: '0 (no deadline)',
-				text: 'Longest a solve may sit queued before it’s rejected rather than run stale. Tune it close to COMPUTE_SOLVE_DEADLINE_MS.'
-			},
-			{
-				name: 'COMPUTE_SOLVE_DEADLINE_MS',
-				default: '100000',
-				text: 'Longest one solve may run before it’s aborted. The deadline is passed into the upstream Compute call, so it cancels the work rather than only timing out client-side. A reverse proxy or serverless platform can still cap it lower.'
+				text: 'Longest a solve may sit queued before it’s rejected rather than run stale. Tune it close to the compute server’s --timeout.'
 			}
 		]
 	},
@@ -769,11 +736,6 @@ export const ENV_VAR_GROUPS: EnvVarGroup[] = [
 				name: 'COMPUTE_SOLVE_CACHE_MB',
 				default: '256',
 				text: 'Byte budget for the solve-result cache — but PER warm compute-client. Up to 16 servers are kept warm, so the real ceiling is this × 16. 0 disables it.'
-			},
-			{
-				name: 'COMPUTE_REUSE_DEFINITION_CACHE',
-				default: 'true',
-				text: 'Send a short pointer instead of re-uploading the .gh bytes each solve. Only safe against a compute server that says so when it no longer holds the definition the pointer names, instead of silently returning empty geometry — the VektorNode fork does. Leave it off for a standard rhino.compute.'
 			},
 			{
 				name: 'COMPUTE_SERVER_CACHESOLVE',

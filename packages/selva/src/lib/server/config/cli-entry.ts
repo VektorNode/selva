@@ -14,5 +14,6 @@ export {
 	deploymentManifest,
 	deploymentReport,
 	deploymentSnapshot,
-	keyRotationStatus
+	keyRotationStatus,
+	RETIRED_KEYS
 } from './settings.js';

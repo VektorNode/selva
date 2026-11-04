@@ -37,7 +37,6 @@
 			ENABLE_SHARING: boolean;
 		};
 		limits: {
-			SOLVE_DEADLINE_MS: number;
 			RATE_LIMIT_WINDOW_MS: number;
 			RATE_LIMIT_MAX_REQUESTS: number;
 			MAX_DEFINITION_FILE_SIZE: number;
@@ -94,29 +93,22 @@
 	}
 
 	// Display metadata for each resolved limit, in render order. The `value`
-	// thunk picks the right unit formatter; `env` is the override var name.
+	// thunk picks the right unit formatter; `env` is the override var name, absent
+	// for limits fixed in code.
 	// `note` is optional and only carries what the label and value can't: a
 	// multiplier, a disable sentinel, what a limit is keyed on. What each var
 	// means belongs in .env.example, not here.
 	const limitRows: Array<{
 		key: keyof PageData['limits'];
 		label: string;
-		env: string;
+		env?: string;
 		value: (l: PageData['limits']) => string;
 		note?: string;
 	}> = [
 		{
-			key: 'SOLVE_DEADLINE_MS',
-			label: 'Solve deadline',
-			env: 'COMPUTE_SOLVE_DEADLINE_MS',
-			value: (l) => formatMs(l.SOLVE_DEADLINE_MS)
-		},
-		{
 			key: 'RATE_LIMIT_MAX_REQUESTS',
 			label: 'Compute rate limit',
-			// Two vars drive this row: the count and the window. Show both so an
-			// operator who wants to change "/ 1.7 min" knows which knob to set.
-			env: 'COMPUTE_RATE_LIMIT_MAX · COMPUTE_RATE_LIMIT_WINDOW_MS',
+			env: 'COMPUTE_RATE_LIMIT_MAX',
 			value: (l) => `${l.RATE_LIMIT_MAX_REQUESTS} / ${formatMs(l.RATE_LIMIT_WINDOW_MS)}`,
 			note: 'Counted per key — a user or a share link.'
 		},
@@ -129,20 +121,17 @@
 		{
 			key: 'MAX_IMAGE_FILE_SIZE',
 			label: 'Max cover image size',
-			env: 'MAX_IMAGE_FILE_SIZE_BYTES',
 			value: (l) => formatBytes(l.MAX_IMAGE_FILE_SIZE)
 		},
 		{
 			key: 'COMPUTE_REQUEST_MAX_BYTES',
 			label: 'Compute request body cap',
-			env: 'COMPUTE_REQUEST_MAX_BYTES',
 			value: (l) => formatBytes(l.COMPUTE_REQUEST_MAX_BYTES),
 			note: 'Inputs plus base64 file values.'
 		},
 		{
 			key: 'COMPUTE_RESPONSE_MAX_BYTES',
 			label: 'Compute response body cap',
-			env: 'COMPUTE_RESPONSE_MAX_BYTES',
 			value: (l) => formatBytes(l.COMPUTE_RESPONSE_MAX_BYTES)
 		},
 		{
@@ -155,13 +144,11 @@
 		{
 			key: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
 			label: 'Remote definition fetch timeout',
-			env: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
 			value: (l) => formatMs(l.REMOTE_DEFINITION_FETCH_TIMEOUT_MS)
 		},
 		{
 			key: 'REMOTE_DEFINITION_CACHE_TTL_MS',
 			label: 'Remote definition cache TTL',
-			env: 'REMOTE_DEFINITION_CACHE_TTL_MS',
 			value: (l) => formatMs(l.REMOTE_DEFINITION_CACHE_TTL_MS),
 			note: 'Remote fetches only — uploads are keyed on an immutable version and never go stale.'
 		},
@@ -493,9 +480,11 @@
 								<div class="flex items-start justify-between gap-4 px-4 py-3">
 									<div class="min-w-0 flex-1">
 										<span class="text-foreground text-sm font-medium">{row.label}</span>
-										<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]"
-											>{row.env}</code
-										>
+										{#if row.env}
+											<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]"
+												>{row.env}</code
+											>
+										{/if}
 										{#if row.note}
 											<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
 										{/if}

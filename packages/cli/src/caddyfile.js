@@ -45,7 +45,7 @@ export function renderCaddyfile({ domain, acmeEmail, port = 3000 }) {
 	@api path /api/*
 	header @api Cache-Control "no-cache, no-store, must-revalidate"
 
-	# Must clear the app's own caps (COMPUTE_REQUEST_MAX_BYTES / BODY_SIZE_LIMIT,
+	# Must clear the app's own caps (the solve request cap and BODY_SIZE_LIMIT,
 	# both 256 MiB) — Caddy rejects first, so a lower value here silently caps
 	# every upload no matter what .env says. Write MiB: Caddy's "mb" is 10^6 bytes.
 	request_body {

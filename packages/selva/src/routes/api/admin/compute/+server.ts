@@ -111,11 +111,14 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		const storedKeys = storedKeysById(platformServers(existing));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(
-			({ apiKey, sharedWith, ...rest }): PlatformComputeServer => ({
-				...rest,
+			// Named fields only: anything else in the body would be written to the store as-is.
+			({ id, label, serverUrl, apiKey, sharedWith }): PlatformComputeServer => ({
+				id,
+				label,
+				serverUrl,
 				scope: 'platform',
 				sharedWith: sharedWith === 'all' ? 'all' : [...sharedWith],
-				apiKey: resolveApiKey(apiKey, storedKeys.get(rest.id))
+				apiKey: resolveApiKey(apiKey, storedKeys.get(id))
 			})
 		);
 

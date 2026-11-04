@@ -4,7 +4,7 @@
 
 import { readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
 import { parseEnv as nodeParseEnv } from 'node:util';
-import { ALL_SETTINGS } from './generated/config.js';
+import { ALL_SETTINGS, RETIRED_KEYS } from './generated/config.js';
 
 // Old env name → its replacement, for keys renamed without changing meaning.
 // From the manifest's `aliases`, the same list the server reads old names by.
@@ -12,11 +12,8 @@ export const RENAMED_ENV_VARS = Object.fromEntries(
 	ALL_SETTINGS.flatMap((s) => (s.aliases ?? []).map((alias) => [alias, s.key]))
 );
 
-// Deprecated vars whose replacement changes the VALUE too, so a simple key
-// rename can't migrate them — `selva migrate` leaves these alone rather than guessing.
-export const REPLACED_ENV_VARS = {
-	SELVA_FLAG_COMPUTE_DEBUG_VERBOSE: 'SELVA_FLAG_COMPUTE_DEBUG=verbose'
-};
+// Keys the app no longer reads → what took their place. `selva migrate` removes them.
+export const RETIRED_ENV_VARS = RETIRED_KEYS;
 
 // Header written above the settings in a stripped .env. The pointer matters:
 // without it the operator has no way back to what a var means, and the reflex

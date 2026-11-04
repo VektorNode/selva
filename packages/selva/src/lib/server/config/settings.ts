@@ -165,14 +165,6 @@ export const APP_SETTINGS = composeManifest([
 		impact: 'verbose can write what was solved to the log, which erasure cannot reach.'
 	}),
 	defineSetting({
-		key: 'SELVA_FLAG_COMPUTE_DEBUG_VERBOSE',
-		label: 'Compute debug logging (old name)',
-		type: 'bool',
-		onInvalid: 'default',
-		class: 'setting',
-		description: 'Replaced by SELVA_FLAG_COMPUTE_DEBUG=verbose.'
-	}),
-	defineSetting({
 		key: 'SENTRY_DSN',
 		label: 'Sentry error reporting',
 		type: 'url',
@@ -220,6 +212,28 @@ export const WATCHED_PREFIXES = [
 export const EXTERNAL_KEYS = ['SELVA_REQUIRE_SUPABASE'] as const;
 
 /**
+ * Keys no release reads any more, with what took their place. Boot and doctor
+ * name them instead of calling them typos; `selva migrate` removes them.
+ */
+export const RETIRED_KEYS: Readonly<Record<string, string>> = {
+	SELVA_FLAG_COMPUTE_DEBUG_VERBOSE: 'use SELVA_FLAG_COMPUTE_DEBUG=verbose',
+	COMPUTE_RATE_LIMIT_WINDOW_MS: 'fixed at 100 s',
+	API_TOKEN_RATE_LIMIT_WINDOW_MS: 'fixed at 60 s',
+	MAX_IMAGE_FILE_SIZE_BYTES: 'fixed at 10 MB',
+	COMPUTE_REQUEST_MAX_BYTES: 'fixed at 256 MB',
+	COMPUTE_RESPONSE_MAX_BYTES: 'fixed at 300 MB',
+	REMOTE_DEFINITION_FETCH_TIMEOUT_MS: 'fixed at 30 s',
+	REMOTE_DEFINITION_CACHE_TTL_MS: 'fixed at 5 min',
+	DEFINITION_CACHE_TTL_MS: 'fixed at 5 min',
+	SUPABASE_TOKEN_VERIFICATION: 'always hybrid',
+	SUPABASE_REVALIDATE_MS: 'fixed at 60 s',
+	SUPABASE_PRIVATE_URL_PREFIX: 'fixed at /api/files',
+	COMPUTE_SOLVE_DEADLINE_MS: 'set --timeout (RHINO_COMPUTE_TIMEOUT) on the compute server',
+	MAX_SOLVE_DURATION_MS: 'set --timeout (RHINO_COMPUTE_TIMEOUT) on the compute server',
+	COMPUTE_REUSE_DEFINITION_CACHE: 'on whenever the compute server reports /limits'
+};
+
+/**
  * The manifest for this deployment: engine and app keys, plus the slices of
  * the providers it selects. A provider's required keys only apply when it is
  * in use, so slices are chosen here rather than all composed at once.
@@ -257,7 +271,7 @@ export function deploymentReport(env: EnvRecord): ConfigReport {
 	);
 	return buildConfigReport(manifest, env, {
 		prefixes: WATCHED_PREFIXES,
-		external: [...EXTERNAL_KEYS, ...inactive]
+		external: [...EXTERNAL_KEYS, ...Object.keys(RETIRED_KEYS), ...inactive]
 	});
 }
 

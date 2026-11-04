@@ -88,9 +88,7 @@ const IncomingComputeServerSchema = z.object({
 	id: z.string().min(1),
 	label: z.string().min(1),
 	serverUrl: z.string().min(1),
-	apiKey: z.string().nullable().optional(),
-	timeoutMs: z.number().optional(),
-	retryCount: z.number().optional()
+	apiKey: z.string().nullable().optional()
 });
 
 export const OrgComputePatchBodySchema = z.object({

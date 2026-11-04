@@ -2999,10 +2999,6 @@ paths:
                         type:
                           - string
                           - "null"
-                      timeoutMs:
-                        type: number
-                      retryCount:
-                        type: number
                     required:
                       - id
                       - label

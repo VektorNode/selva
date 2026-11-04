@@ -34,8 +34,6 @@ export interface SolvePipelineArgs {
 	inputTree: DataTree[];
 	client: CachedClient;
 	responseMaxBytes: number;
-	/** Only phrases the timeout message — the scheduler enforces the deadline itself. */
-	solveDeadlineMs: number;
 	/** Per-solve live-event callback the compute server hands to the definition; absent when the caller opened no stream. */
 	selvaEvents?: SelvaEventTarget;
 	/**
@@ -64,6 +62,8 @@ export type SolveFailure =
 	| { kind: 'timeout'; durationMs: number; message: string }
 	| { kind: 'client_abort'; durationMs: number }
 	| { kind: 'too_large' }
+	/** The compute server refused the request body (its `RHINO_COMPUTE_MAX_REQUEST_SIZE`). */
+	| { kind: 'request_too_large'; durationMs: number; message: string }
 	/**
 	 * Retryable: no result, through no fault of the request, and `retryAfterSeconds` is a backoff
 	 * hint. Scheduler backpressure rejected the solve before it ran (`queue_full`,
@@ -105,12 +105,23 @@ export function interrupted(durationMs: number): SolveFailure {
 
 function classifyFailure(err: unknown, durationMs: number, args: SolvePipelineArgs): SolveFailure {
 	if (!(err instanceof ComputeError)) return { kind: 'compute_error', durationMs, error: err };
+	if (err.statusCode === 413) {
+		const cap = args.client.limits.maxRequestBytes;
+		return {
+			kind: 'request_too_large',
+			durationMs,
+			message:
+				`The inputs are larger than the compute server accepts` +
+				(cap ? ` (${Math.round(cap / (1024 * 1024))} MB)` : '') +
+				'. Its admin can raise RHINO_COMPUTE_MAX_REQUEST_SIZE.'
+		};
+	}
 	switch (err.code) {
 		case ErrorCodes.TIMEOUT_ERROR:
 			return {
 				kind: 'timeout',
 				durationMs,
-				message: `Solve exceeded the ${Math.round(args.solveDeadlineMs / 1000)}s deadline.`
+				message: `Solve exceeded the ${Math.round(args.client.limits.solveDeadlineMs / 1000)}s deadline set by the compute server.`
 			};
 		case ErrorCodes.ABORTED:
 			return args.signal.aborted ? { kind: 'client_abort', durationMs } : interrupted(durationMs);

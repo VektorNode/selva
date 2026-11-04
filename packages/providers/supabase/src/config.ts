@@ -85,29 +85,6 @@ export const SUPABASE_SETTINGS = composeManifest([
 		description: 'OAuth buttons on the login page (google, github, azure, gitlab).'
 	}),
 	defineSetting({
-		key: 'SUPABASE_TOKEN_VERIFICATION',
-		label: 'Session check mode',
-		type: 'enum',
-		values: ['hybrid', 'strict'],
-		default: 'hybrid',
-		onInvalid: 'fail',
-		class: 'tunable',
-		description:
-			'hybrid verifies JWTs locally and rechecks periodically; strict asks Supabase every request.',
-		legacy: { enumFallback: 'hybrid' }
-	}),
-	defineSetting({
-		key: 'SUPABASE_REVALIDATE_MS',
-		label: 'Session recheck interval',
-		type: 'int',
-		min: 1,
-		default: 60_000,
-		unit: 'ms',
-		onInvalid: 'default',
-		class: 'tunable',
-		description: 'Hybrid recheck window: the longest a revoked session keeps working.'
-	}),
-	defineSetting({
 		key: 'SUPABASE_PUBLIC_BUCKET',
 		label: 'Public files bucket',
 		type: 'string',
@@ -124,15 +101,6 @@ export const SUPABASE_SETTINGS = composeManifest([
 		onInvalid: 'fail',
 		class: 'tunable',
 		description: 'Storage bucket for private files.'
-	}),
-	defineSetting({
-		key: 'SUPABASE_PRIVATE_URL_PREFIX',
-		label: 'Private file URL prefix',
-		type: 'string',
-		default: '/api/files',
-		onInvalid: 'fail',
-		class: 'tunable',
-		description: 'URL prefix the app serves private files at.'
 	})
 ]);
 

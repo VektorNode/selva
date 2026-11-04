@@ -9,7 +9,7 @@ import {
 } from '$lib/server/providers.server';
 import { asHttpError, requireCanSolve, scoped } from '$lib/server/access.server';
 import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
-import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
+import { getClient } from '$lib/server/compute/engine.server';
 import {
 	loadDefinitionForRender,
 	DefinitionLoadError
@@ -65,6 +65,9 @@ export const load = (async ({ params, locals, request, url }) => {
 			resolveOrgLogo(ctx, record.projectId, locals.log)
 		]);
 
+		// Warm already: loading the definition read its inputs through this client.
+		const { limits } = await getClient(loaded.computeServer, { definitionGuid: guid });
+
 		return {
 			schema: loaded.schema,
 			ghDefinition: clientDefUrl,
@@ -79,9 +82,9 @@ export const load = (async ({ params, locals, request, url }) => {
 			// Forward to the client so /api/compute/solve calls can include it.
 			// Null when the request was user-authenticated (session cookie carries auth).
 			shareToken,
-			// Same deadline the server enforces on /api/compute, so the client's
-			// AbortController matches the server's Promise.race.
-			solveDeadlineMs: SOLVE_DEADLINE_MS
+			// The deadline this definition's compute server sets, so the browser's
+			// AbortController doesn't stop a solve the server would still finish.
+			solveDeadlineMs: limits.solveDeadlineMs
 		};
 	} catch (err) {
 		// Let HttpError (from error() calls) bubble up.

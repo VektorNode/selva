@@ -102,7 +102,7 @@ the next unrelated restart. Booleans parse one way everywhere, `true|false|1|0|y
 insensitive, anything else invalid. That closes the email-link sign-up fail-open.
 
 **Unknown keys.** Any key under an engine prefix that no slice or host declares is reported with the
-nearest declared name (`COMPUTE_SOLVE_DEADLINE`: did you mean `COMPUTE_SOLVE_DEADLINE_MS`?). The scan
+nearest declared name (`COMPUTE_SOLVE_CACHE`: did you mean `COMPUTE_SOLVE_CACHE_MB`?). The scan
 reads `process.env`, not SvelteKit's env module, which under Kit 3 exposes declared keys only.
 
 **Keeping the manifest honest.** A test runs every provider's `fromEnv` against a Proxy env and fails
@@ -112,7 +112,7 @@ on any key read that no slice declares. Without it, a host passing resolved valu
 **The CLI gets a JSON projection** (keys, types, constraints, defaults, impact), generated and bundled
 into the CLI at build time. The CLI can't import the runtime: `@selvajs/*` code is bundled into the
 app's `build/`, and `@selvajs/selva` has no exports map. Cross-key rules (`BODY_SIZE_LIMIT` ≥
-`COMPUTE_REQUEST_MAX_BYTES`, proxy headers) stay code on both sides with the existing parity test;
+the solve request cap, proxy headers) stay code on both sides with the existing parity test;
 the per-key checks, the rename list and the copied defaults go.
 
 ## 2. Seeing the config
@@ -225,11 +225,13 @@ even less.
   notes.
 - `SELVA_RELEASE` should default to the installed package version (not built yet).
 - Each tunable gets the question "has anyone had a reason to change this?". No means it leaves the
-  manifest, and the migration removes it from `.env`. First candidates: `SUPABASE_PRIVATE_URL_PREFIX`,
-  the bucket names, `REMOTE_DEFINITION_FETCH_TIMEOUT_MS`, `REMOTE_DEFINITION_CACHE_TTL_MS`,
-  `COMPUTE_RESPONSE_MAX_BYTES`, `HEADER_AUTH_DATA_DIR`.
-- The generated template puts tunables in a trailing "advanced" block, so the top of it is the eight
-  or so keys an operator actually decides.
+  manifest and goes into `RETIRED_KEYS` (`packages/selva/src/lib/server/config/settings.ts`): boot
+  and doctor name it, and `selva migrate` removes it from `.env`. The fixed caps, both rate-limit
+  windows, the Supabase session-check knobs and `SUPABASE_PRIVATE_URL_PREFIX` are retired. The bucket
+  names stay (a host app reads them too), and so does `HEADER_AUTH_DATA_DIR` (a header-auth install
+  may point it away from `DATA_PATH`).
+- The template puts tunables in a trailing "advanced" block, so the top of it is the keys an
+  operator actually decides.
 
 Who owns `HOST`, `ADDRESS_HEADER` and `XFF_DEPTH` is a property of the deployment, not the key: the
 CLI scaffold, compose in parafa, the operator by hand on the Entra install. `config show` reports
@@ -301,7 +303,7 @@ when the CLI runs as a different user than the app.
 
 **Old names: shims stay one more release.** Release N ships the migration and still reads old names,
 with a warning. Release N+1 stops reading them, and an old name at boot becomes a boot error naming
-the fix (`MAX_SOLVE_DURATION_MS was renamed to COMPUTE_SOLVE_DEADLINE_MS: run selva migrate`). N+1
+the fix (`COMPUTE_RESPONSE_CACHE_MB was renamed to COMPUTE_SOLVE_CACHE_MB: run selva migrate`). N+1
 waits until the customer's deployment has migrated. Docker and Cloud Run deployments never run the
 migration, so for parafa N+1 is a breaking release it adopts deliberately.
 

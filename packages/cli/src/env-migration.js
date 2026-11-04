@@ -1,6 +1,6 @@
 // Plan the .env rewrite `selva migrate` applies: old names renamed, values a
-// looser reader used to accept rewritten to what they meant, no-op lines
-// removed, shipped template prose stripped. Unknown keys are kept.
+// looser reader used to accept rewritten to what they meant, no-op and retired
+// lines removed, shipped template prose stripped. Unknown keys are kept.
 //
 // `mismatches` is the proof: every declared key resolved from the old file
 // (with the old readers' semantics) and from the new one. Anything but empty
@@ -10,6 +10,7 @@ import {
 	countEnvCommentLines,
 	parseEnv,
 	RENAMED_ENV_VARS as RENAMES,
+	RETIRED_ENV_VARS as RETIRED,
 	renameEnvKeys,
 	setEnvValues,
 	stripEnvComments
@@ -34,8 +35,7 @@ function computeDebugMode(env) {
 /** Keys whose effective value depends on another key. */
 const EFFECTIVE = {
 	HEADER_AUTH_DATA_DIR: (env) => env.HEADER_AUTH_DATA_DIR || env.DATA_PATH,
-	SELVA_FLAG_COMPUTE_DEBUG: computeDebugMode,
-	SELVA_FLAG_COMPUTE_DEBUG_VERBOSE: () => undefined
+	SELVA_FLAG_COMPUTE_DEBUG: computeDebugMode
 };
 
 function canonical(value) {
@@ -114,6 +114,13 @@ export function planEnvMigration(input) {
 		changes.push({ key: 'HEADER_AUTH_DATA_DIR', action: 'removed', reason: 'same as DATA_PATH' });
 	}
 
+	// The app ignores these whatever their value, so removing the line changes nothing it does.
+	for (const [key, now] of Object.entries(RETIRED)) {
+		if (env[key] === undefined || key in updates) continue;
+		updates[key] = undefined;
+		changes.push({ key, action: 'removed', reason: `no longer read: ${now}` });
+	}
+
 	if (Object.keys(updates).length > 0) text = setEnvValues(text, updates);
 
 	// Read back with Node's parser, the one the app boots with, so a writer bug
@@ -127,7 +134,7 @@ export function planEnvMigration(input) {
 		if (JSON.stringify(was) !== JSON.stringify(is)) mismatches.push({ key: spec.key, was, is });
 	}
 	for (const key of Object.keys(before)) {
-		if (!SPECS.has(key) && !(key in RENAMES) && after[key] !== before[key]) {
+		if (!SPECS.has(key) && !(key in RENAMES) && !(key in RETIRED) && after[key] !== before[key]) {
 			mismatches.push({ key, was: before[key], is: after[key] });
 		}
 	}

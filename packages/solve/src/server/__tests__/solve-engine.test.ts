@@ -96,9 +96,7 @@ async function waitUntil(check: () => boolean, attempts = 20): Promise<void> {
 
 function baseLimits(over: Partial<SolveEngineLimits> = {}): SolveEngineLimits {
 	return {
-		solveDeadlineMs: 30_000,
 		computeResponseMaxBytes: 10 * 1024 * 1024,
-		computeReuseDefinitionCache: true,
 		computeServerCachesolve: true,
 		computeMaxQueueDepth: 0,
 		computeQueueWaitMs: 0,
@@ -159,9 +157,7 @@ describe('new SolveEngine', () => {
 	it('forwards every limit to the layer that enforces it', async () => {
 		const engine = new SolveEngine({
 			limits: baseLimits({
-				solveDeadlineMs: 11_000,
 				computeResponseMaxBytes: 1000,
-				computeReuseDefinitionCache: false,
 				computeServerCachesolve: false,
 				computeMaxQueueDepth: 7,
 				computeQueueWaitMs: 900,
@@ -171,10 +167,8 @@ describe('new SolveEngine', () => {
 		await engine.getClient(server);
 		expect(createdConfigs[0]).toMatchObject({ maxResponseBytes: 1000, cachesolve: false });
 		expect(createdSchedulerOptions[0]).toMatchObject({
-			timeoutMs: 11_000,
 			maxQueueDepth: 7,
 			queueWaitMs: 900,
-			reuseServerDefinitionCache: false,
 			cache: { maxBytes: 2048 }
 		});
 	});
@@ -188,9 +182,6 @@ describe('new SolveEngine', () => {
 	});
 
 	it.each([
-		['solveDeadlineMs', 0],
-		['solveDeadlineMs', -1],
-		['solveDeadlineMs', NaN],
 		['computeResponseMaxBytes', 0],
 		['computeMaxQueueDepth', -1],
 		['computeQueueWaitMs', Infinity],
@@ -507,9 +498,9 @@ describe('SolveEngine.solve — outcomes', () => {
 		scriptedSolve = async () => {
 			throw computeError('TIMEOUT_ERROR');
 		};
-		const engine = new SolveEngine({ limits: baseLimits({ solveDeadlineMs: 42_000 }) });
+		const engine = new SolveEngine({ limits: baseLimits() });
 		const [a, b] = await Promise.all([engine.solve(solveArgs()), engine.solve(solveArgs())]);
-		expect(a).toMatchObject({ kind: 'timeout', message: expect.stringContaining('42s') });
+		expect(a).toMatchObject({ kind: 'timeout', message: expect.stringContaining('100s') });
 		expect(b.kind).toBe('timeout');
 	});
 

@@ -57,7 +57,7 @@
 		footerText?: string;
 		/**
 		 * How long one solve may take before the client aborts it (ms). Pass the same value the
-		 * server enforces (`COMPUTE_SOLVE_DEADLINE_MS`), or the client aborts solves that would
+		 * server enforces for this definition's compute server, or the client aborts solves that would
 		 * have finished.
 		 */
 		solveDeadlineMs: number;

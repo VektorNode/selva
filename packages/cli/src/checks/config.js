@@ -10,7 +10,7 @@
 // it. `__tests__/doctor-config-parity.test.js` asserts both against one fixture
 // table, so a rule changed here and not there fails CI.
 
-import { RENAMED_ENV_VARS, REPLACED_ENV_VARS } from '../env.js';
+import { RENAMED_ENV_VARS, RETIRED_ENV_VARS } from '../env.js';
 import { keyRotationStatus } from '../generated/config.js';
 import { green, red, yellow } from './result.js';
 
@@ -221,10 +221,10 @@ export function parseBodySizeLimit(raw) {
 	return bytes;
 }
 
-// The app's own default for COMPUTE_REQUEST_MAX_BYTES (packages/server
+// The app's solve request cap (COMPUTE_REQUEST_MAX_BYTES in packages/server
 // compute/limits.ts). Duplicated rather than imported: the CLI installs the
 // runtime and cannot import from it.
-const COMPUTE_REQUEST_DEFAULT_BYTES = 256 * 1024 * 1024;
+const COMPUTE_REQUEST_MAX_BYTES = 256 * 1024 * 1024;
 
 /**
  * BODY_SIZE_LIMIT has to clear the compute request cap, or adapter-node's global
@@ -234,7 +234,7 @@ const COMPUTE_REQUEST_DEFAULT_BYTES = 256 * 1024 * 1024;
  */
 export function checkBodySizeLimit(env) {
 	const raw = env.BODY_SIZE_LIMIT;
-	const requestCap = Number(env.COMPUTE_REQUEST_MAX_BYTES) || COMPUTE_REQUEST_DEFAULT_BYTES;
+	const requestCap = COMPUTE_REQUEST_MAX_BYTES;
 	const asMb = (bytes) => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 	if (raw == null || raw === '') {
@@ -255,9 +255,9 @@ export function checkBodySizeLimit(env) {
 
 	if (bytes < requestCap) {
 		return yellow(
-			`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below COMPUTE_REQUEST_MAX_BYTES ` +
-				`(${asMb(requestCap)}) — the global cap rejects first, making the compute cap ` +
-				`dead config. Raise it to at least ${asMb(requestCap)}.`
+			`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below the ` +
+				`${asMb(requestCap)} a solve may send — larger solves fail with 413 before Selva ` +
+				`sees them. Raise it to at least ${asMb(requestCap)}.`
 		);
 	}
 
@@ -331,9 +331,7 @@ export function checkClientAddress(env) {
 	return green(`ADDRESS_HEADER=${header}${depth ? ` (XFF_DEPTH=${depth})` : ''}`);
 }
 
-// A rename is auto-fixable (`selva migrate` rewrites the key). A replacement
-// encodes a value in the new name, so migrate leaves it alone rather than
-// guessing — it's reported here and nowhere else.
+// Both are auto-fixable: `selva migrate` renames old names and removes retired keys.
 export function checkDeprecatedEnv(env) {
 	const checks = [];
 
@@ -346,9 +344,9 @@ export function checkDeprecatedEnv(env) {
 		);
 	}
 
-	for (const [oldName, replacement] of Object.entries(REPLACED_ENV_VARS)) {
-		if (env[oldName] === undefined) continue;
-		checks.push(yellow(`${oldName} is deprecated — replace it with ${replacement}`));
+	for (const [key, now] of Object.entries(RETIRED_ENV_VARS)) {
+		if (env[key] === undefined) continue;
+		checks.push(yellow(`${key} is no longer read (${now}) — \`selva migrate\` removes it`));
 	}
 
 	return checks;

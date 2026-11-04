@@ -18,7 +18,7 @@ import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from '@selvajs/server/definitions';
-import { resolveComputeLimits } from '@selvajs/server/compute';
+import { MAX_SOLVE_DEADLINE_MS } from '@selvajs/solve/server';
 import { OrgAssetService } from '@selvajs/server/organizations';
 import { SentryErrorReporter } from '@selvajs/server/errors';
 import { SmtpNotificationProvider } from '@selvajs/server/notifications';
@@ -50,9 +50,9 @@ const registry: ProviderRegistry = {
 		local: (e) => local.LocalAuthProvider.fromEnv(e),
 		supabase: (e) =>
 			supa.SupabaseAuthProvider.fromEnv(e, lazyLogger, {
-				// The session minted for an API-token request must outlive its solve.
-				// Not via `computeLimits.ts`: that module imports this one.
-				delegatedSessionTtlSeconds: Math.ceil(resolveComputeLimits(e).solveDeadlineMs / 1000) + 60
+				// The session minted for an API-token request must outlive its solve, whichever
+				// server runs it.
+				delegatedSessionTtlSeconds: MAX_SOLVE_DEADLINE_MS / 1000 + 60
 			}),
 		header: (e) => header.HeaderAuthProvider.fromEnv(e, lazyLogger)
 	},

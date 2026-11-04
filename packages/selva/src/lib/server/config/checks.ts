@@ -180,7 +180,7 @@ export function configChecks(input: CheckInput): ConfigCheck[] {
 				set('BODY_SIZE_LIMIT', `${Math.ceil(input.computeRequestMaxBytes / 1024 / 1024)}M`),
 				restart
 			],
-			keys: ['BODY_SIZE_LIMIT', 'COMPUTE_REQUEST_MAX_BYTES']
+			keys: ['BODY_SIZE_LIMIT']
 		});
 	}
 

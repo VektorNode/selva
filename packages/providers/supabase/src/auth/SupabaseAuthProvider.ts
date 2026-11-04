@@ -160,8 +160,6 @@ export class SupabaseAuthProvider implements IAuthProvider {
 			enableSelfSignup: v.SUPABASE_ENABLE_SELF_SIGNUP as boolean,
 			oauthProviders: (v.SUPABASE_OAUTH_PROVIDERS as string[]).map((p) => p.toLowerCase()),
 			allowEmailLinkSignup: v.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP as boolean,
-			tokenVerification: v.SUPABASE_TOKEN_VERIFICATION as 'hybrid' | 'strict',
-			revalidateMs: v.SUPABASE_REVALIDATE_MS as number,
 			...(logger ? { logger } : {}),
 			...(jwtSigningKey ? { jwtSigningKey } : {}),
 			...(jwtSecret ? { jwtSecret } : {}),

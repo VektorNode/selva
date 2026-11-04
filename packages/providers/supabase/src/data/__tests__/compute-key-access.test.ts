@@ -54,8 +54,6 @@ describe('SupabaseComputeServerStore key reads', () => {
 		shared_with_all: true,
 		label: id,
 		server_url: 'http://c',
-		timeout_ms: null,
-		retry_count: null,
 		has_api_key: true
 	});
 

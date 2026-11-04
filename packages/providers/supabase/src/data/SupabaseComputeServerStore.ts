@@ -19,8 +19,7 @@ import { mapPostgrestError } from './errors.js';
 
 // Sessions have no SELECT on `api_key`, so this list is all a session can read.
 // Keys come from `readApiKeys`, after RLS has said which servers the caller sees.
-const SERVER_COLUMNS =
-	'id, scope, owner_org_id, shared_with_all, label, server_url, timeout_ms, retry_count, has_api_key';
+const SERVER_COLUMNS = 'id, scope, owner_org_id, shared_with_all, label, server_url, has_api_key';
 const SHARE_COLUMNS = 'server_id, org_id';
 const ORG_DEFAULT_COLUMNS = 'org_id, default_server_id';
 
@@ -383,8 +382,6 @@ interface ServerRow {
 	api_key?: string | null;
 	/** Generated column — true when a key is stored, without reading it. */
 	has_api_key?: boolean;
-	timeout_ms: number | null;
-	retry_count: number | null;
 }
 
 /**
@@ -402,9 +399,7 @@ function rowToServer(
 		label: row.label,
 		serverUrl: row.server_url,
 		apiKey: withKey ? (row.api_key ?? undefined) : undefined,
-		hasApiKey: row.has_api_key ?? !!row.api_key,
-		timeoutMs: row.timeout_ms ?? undefined,
-		retryCount: row.retry_count ?? undefined
+		hasApiKey: row.has_api_key ?? !!row.api_key
 	};
 	if (row.scope === 'platform') {
 		return {
@@ -430,9 +425,7 @@ function serverToRow(s: ComputeServerConfig): ServerWriteRow {
 		id: s.id,
 		label: s.label,
 		server_url: s.serverUrl,
-		api_key: s.apiKey ?? null,
-		timeout_ms: s.timeoutMs ?? null,
-		retry_count: s.retryCount ?? null
+		api_key: s.apiKey ?? null
 	};
 	if (isPlatformServer(s)) {
 		return {

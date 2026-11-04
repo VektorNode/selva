@@ -23,7 +23,8 @@ function unreachable(failure: {
 		selvaVersion: null,
 		plugins: {},
 		activeChildren: null,
-		idleSpanSeconds: null
+		idleSpanSeconds: null,
+		limits: null
 	});
 }
 
@@ -68,11 +69,12 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 
 		// `initialize: false` keeps this a passive read — never spawn children just
 		// to count them, or the status probe would wake (and bill) an idle server.
-		const [version, plugins, activeChildren, idleSpanSeconds] = await Promise.all([
+		const [version, plugins, activeChildren, idleSpanSeconds, limits] = await Promise.all([
 			stats.getVersion(),
 			stats.getInstalledPlugins('gh'),
 			stats.getActiveChildren({ initialize: false }),
-			stats.getIdleSpan()
+			stats.getIdleSpan(),
+			stats.getLimits()
 		]);
 
 		// The proxy answers `/` (reachable) well before a child finishes loading
@@ -106,7 +108,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			selvaVersion,
 			plugins: installed,
 			activeChildren,
-			idleSpanSeconds
+			idleSpanSeconds,
+			limits
 		});
 	} catch {
 		return json({
@@ -122,7 +125,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 			selvaVersion: null,
 			plugins: {},
 			activeChildren: null,
-			idleSpanSeconds: null
+			idleSpanSeconds: null,
+			limits: null
 		});
 	} finally {
 		await stats.dispose();

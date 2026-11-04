@@ -94,11 +94,5 @@ export const DEPLOYMENT_CONFIG_FIXTURES = [
 		env: { BODY_SIZE_LIMIT: '256mb' },
 		clientAddress: 'ok',
 		bodySizeLimit: 'fail'
-	},
-	{
-		name: 'explicit COMPUTE_REQUEST_MAX_BYTES lowers the bar',
-		env: { BODY_SIZE_LIMIT: '100M', COMPUTE_REQUEST_MAX_BYTES: String(64 * 1024 * 1024) },
-		clientAddress: 'ok',
-		bodySizeLimit: 'ok'
 	}
 ];

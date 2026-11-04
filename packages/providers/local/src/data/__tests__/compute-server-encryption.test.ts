@@ -18,9 +18,7 @@ function makePlatformServer(
 		sharedWith: overrides.sharedWith ?? 'all',
 		label: overrides.label ?? 'Test',
 		serverUrl: overrides.serverUrl ?? 'http://localhost:5000',
-		apiKey: overrides.apiKey,
-		timeoutMs: overrides.timeoutMs,
-		retryCount: overrides.retryCount
+		apiKey: overrides.apiKey
 	};
 }
 

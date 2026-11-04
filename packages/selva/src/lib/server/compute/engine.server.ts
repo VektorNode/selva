@@ -13,29 +13,11 @@ import type { ComputeServerConfig } from '@selvajs/platform';
  * `SELVA_FLAG_COMPUTE_DEBUG` is a three-way knob, not a boolean: `off` (default),
  * `on` (concise cache/timing logs), or `verbose` (adds lib-level request logs and
  * Compute's raw error bodies). `verbose` implies `on`.
- *
- * `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE` still honoured (as `verbose`) so an
- * operator's existing `.env` degrades to a warning instead of silently losing
- * the verbose logging they asked for.
  */
 const COMPUTE_DEBUG_MODE = (() => {
 	const raw = (env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase();
 	if (raw === 'verbose') return 'verbose';
-	const on = ['true', '1', 'yes', 'on'].includes(raw);
-
-	const oldVerbose = ['true', '1', 'yes'].includes(
-		(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE ?? '').toLowerCase()
-	);
-	if (oldVerbose) {
-		getLogger().warn('Deprecated env var: rename it', {
-			component: 'selva',
-			envVar: 'SELVA_FLAG_COMPUTE_DEBUG_VERBOSE',
-			renamedTo: 'SELVA_FLAG_COMPUTE_DEBUG=verbose'
-		});
-		return 'verbose';
-	}
-
-	return on ? 'on' : 'off';
+	return ['true', '1', 'yes', 'on'].includes(raw) ? 'on' : 'off';
 })();
 
 export const COMPUTE_DEBUG = COMPUTE_DEBUG_MODE !== 'off';

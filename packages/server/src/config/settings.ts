@@ -301,70 +301,14 @@ export const ENGINE_SETTINGS = composeManifest([
 
 	// ── Compute limits ───────────────────────────────────────────────────────
 	tunableInt(
-		'COMPUTE_SOLVE_DEADLINE_MS',
-		100_000,
-		'Solve time limit',
-		'Longest one solve may run.',
-		{
-			unit: 'ms',
-			aliases: ['MAX_SOLVE_DURATION_MS'],
-			impact: 'Past the reverse proxy read timeout, solves fail there with a 502 instead.'
-		}
-	),
-	tunableInt(
-		'COMPUTE_RATE_LIMIT_WINDOW_MS',
-		100_000,
-		'Solve rate limit window',
-		'Compute rate-limit window.',
-		{ unit: 'ms' }
-	),
-	tunableInt(
 		'COMPUTE_RATE_LIMIT_MAX',
 		120,
 		'Solves per window',
-		'Solves per user or share link per window.'
+		'Solves per user or share link per 100-second window.'
 	),
 	tunableInt('MAX_DEFINITION_FILE_SIZE_BYTES', 50 * MB, 'Max .gh upload', 'Largest .gh upload.', {
 		unit: 'bytes'
 	}),
-	tunableInt(
-		'MAX_IMAGE_FILE_SIZE_BYTES',
-		10 * MB,
-		'Max image upload',
-		'Largest cover image upload.',
-		{ unit: 'bytes' }
-	),
-	tunableInt(
-		'COMPUTE_REQUEST_MAX_BYTES',
-		256 * MB,
-		'Max solve request',
-		'Largest solve request body.',
-		{
-			unit: 'bytes',
-			impact: 'Must stay at or below BODY_SIZE_LIMIT, or that limit rejects first.'
-		}
-	),
-	tunableInt(
-		'COMPUTE_RESPONSE_MAX_BYTES',
-		300 * MB,
-		'Max solve response',
-		'Largest solve response body.',
-		{ unit: 'bytes' }
-	),
-	tunableInt(
-		'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
-		30_000,
-		'Remote .gh fetch timeout',
-		'Deadline for fetching a remote .gh.',
-		{ unit: 'ms' }
-	),
-	tunableInt(
-		'REMOTE_DEFINITION_CACHE_TTL_MS',
-		5 * 60 * 1000,
-		'Remote .gh cache time',
-		'How long remote .gh bytes stay cached.',
-		{ unit: 'ms', aliases: ['DEFINITION_CACHE_TTL_MS'] }
-	),
 	tunableInt(
 		'COMPUTE_MAX_QUEUE_DEPTH',
 		0,
@@ -394,17 +338,6 @@ export const ENGINE_SETTINGS = composeManifest([
 		{ min: 0, unit: 'mb', zero: 'Off', aliases: ['COMPUTE_RESPONSE_CACHE_MB'] }
 	),
 	defineSetting({
-		key: 'COMPUTE_REUSE_DEFINITION_CACHE',
-		label: 'Reuse compute server definition cache',
-		type: 'bool',
-		default: true,
-		onInvalid: 'default',
-		class: 'tunable',
-		description: 'Reuse the compute server’s cached definition instead of re-uploading it.',
-		impact:
-			'Leave on only with a compute server that reports a stale pointer (the VektorNode fork).'
-	}),
-	defineSetting({
 		key: 'COMPUTE_SERVER_CACHESOLVE',
 		label: 'Compute server solve cache',
 		type: 'bool',
@@ -414,17 +347,10 @@ export const ENGINE_SETTINGS = composeManifest([
 		description: 'Ask Rhino.Compute to cache solve results server-side.'
 	}),
 	tunableInt(
-		'API_TOKEN_RATE_LIMIT_WINDOW_MS',
-		DEFAULT_API_RATE_LIMIT.windowMs,
-		'API rate limit window',
-		'API token rate-limit window.',
-		{ unit: 'ms' }
-	),
-	tunableInt(
 		'API_TOKEN_RATE_LIMIT_MAX',
 		DEFAULT_API_RATE_LIMIT.maxPerWindow,
-		'API requests per window',
-		'Requests per API token per window. 0 is off.',
+		'API requests per minute',
+		'Requests per API token per minute. 0 is off.',
 		{ min: 0, zero: 'Off' }
 	)
 ]);

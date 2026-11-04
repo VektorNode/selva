@@ -92,8 +92,6 @@ export const OrgComputeServerResponseSchema = z.object({
 	serverUrl: z.string(),
 	scope: z.literal('org'),
 	ownerOrgId: z.string(),
-	timeoutMs: z.number().optional(),
-	retryCount: z.number().optional(),
 	hasApiKey: z.boolean()
 });
 
@@ -103,9 +101,7 @@ export const ComputeCatalogEntrySchema = z.object({
 	label: z.string(),
 	serverUrl: z.string(),
 	scope: z.enum(['platform', 'org']),
-	source: z.enum(['platform', 'org']),
-	timeoutMs: z.number().optional(),
-	retryCount: z.number().optional()
+	source: z.enum(['platform', 'org'])
 });
 
 export const OrgComputeResponseSchema = z.object({

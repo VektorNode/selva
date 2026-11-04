@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { COMPUTE_TIMEOUT_DEFAULT_MS, clampRetryCount, clampTimeoutMs } from '@selvajs/platform';
 	import { page } from '$app/state';
 	import {
 		Button,
@@ -26,8 +25,6 @@
 		id: string;
 		label: string;
 		serverUrl: string;
-		timeoutMs: number;
-		retryCount: number;
 		apiKey: string;
 		hasApiKey: boolean;
 	}
@@ -53,8 +50,6 @@
 				id: s.id,
 				label: s.label,
 				serverUrl: s.serverUrl,
-				timeoutMs: s.timeoutMs ?? COMPUTE_TIMEOUT_DEFAULT_MS,
-				retryCount: s.retryCount ?? 0,
 				apiKey: '',
 				hasApiKey: s.hasApiKey
 			}));
@@ -89,8 +84,6 @@
 				id: randomId(),
 				label: 'org-server',
 				serverUrl: 'http://localhost:5000',
-				timeoutMs: COMPUTE_TIMEOUT_DEFAULT_MS,
-				retryCount: 0,
 				apiKey: '',
 				hasApiKey: false
 			}
@@ -115,11 +108,9 @@
 		try {
 			const payload = {
 				defaultServerId: orgDefaultServerId === '' ? null : orgDefaultServerId,
-				servers: servers.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
+				servers: servers.map(({ apiKey, hasApiKey: _, ...s }) => ({
 					...s,
-					timeoutMs: clampTimeoutMs(timeoutMs),
-					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
-					...(Number(retryCount) ? { retryCount: clampRetryCount(retryCount) } : {})
+					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {})
 				}))
 			};
 
@@ -232,32 +223,6 @@
 						</button>
 					{/if}
 				</div>
-			</div>
-			<div class="space-y-1">
-				<p class="text-muted-foreground text-xs">Timeout (ms)</p>
-				<Input
-					type="number"
-					placeholder={String(COMPUTE_TIMEOUT_DEFAULT_MS)}
-					bind:value={server.timeoutMs}
-					oninput={() => (dirty = true)}
-					onblur={() => {
-						server.timeoutMs = clampTimeoutMs(server.timeoutMs);
-					}}
-					class="text-xs"
-				/>
-			</div>
-			<div class="space-y-1">
-				<p class="text-muted-foreground text-xs">Retries</p>
-				<Input
-					type="number"
-					placeholder="0"
-					bind:value={server.retryCount}
-					oninput={() => (dirty = true)}
-					onblur={() => {
-						server.retryCount = clampRetryCount(server.retryCount);
-					}}
-					class="text-xs"
-				/>
 			</div>
 		</div>
 

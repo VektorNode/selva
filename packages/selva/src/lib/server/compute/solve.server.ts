@@ -46,7 +46,7 @@ import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/a
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ShareLink } from '@selvajs/platform';
-import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
+import { MAX_SOLVE_DEADLINE_MS } from '@selvajs/solve/server';
 import {
 	bindLiveSolve,
 	liveOwnerKey,
@@ -412,8 +412,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		ownerKey: liveOwnerKey(access.kind === 'user' ? access.ctx.userId : null),
 		streamId,
 		request,
-		// Outlives the deadline by a margin so a callback racing the response is not refused.
-		tokenTtlMs: SOLVE_DEADLINE_MS + 60_000
+		// Outlives any server's deadline by a margin, so a callback racing the response is not
+		// refused. Minted before the warm client that knows this server's deadline.
+		tokenTtlMs: MAX_SOLVE_DEADLINE_MS + 60_000
 	});
 
 	let outcome: Awaited<ReturnType<typeof engine.solve>> | undefined;

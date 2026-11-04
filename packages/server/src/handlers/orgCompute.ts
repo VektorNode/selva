@@ -69,9 +69,7 @@ export const getOrgCompute: ApiHandler = async (req) => {
 		label: s.label,
 		serverUrl: s.serverUrl,
 		scope: s.scope,
-		source: isPlatformServer(s) ? ('platform' as const) : ('org' as const),
-		timeoutMs: s.timeoutMs,
-		retryCount: s.retryCount
+		source: isPlatformServer(s) ? ('platform' as const) : ('org' as const)
 	}));
 
 	return shaped(OrgComputeResponseSchema, {
@@ -106,8 +104,6 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 		ownerOrgId: orgId,
 		label: s.label,
 		serverUrl: s.serverUrl,
-		timeoutMs: s.timeoutMs,
-		retryCount: s.retryCount,
 		apiKey: resolveApiKey(s.apiKey, storedKeys.get(s.id))
 	}));
 

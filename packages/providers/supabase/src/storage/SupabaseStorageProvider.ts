@@ -45,8 +45,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 			supabaseUrl,
 			serviceRoleKey,
 			publicBucket: env.SUPABASE_PUBLIC_BUCKET,
-			privateBucket: env.SUPABASE_PRIVATE_BUCKET,
-			privateUrlPrefix: env.SUPABASE_PRIVATE_URL_PREFIX
+			privateBucket: env.SUPABASE_PRIVATE_BUCKET
 		});
 	}
 

@@ -13,7 +13,7 @@
 
 import type { ILogger, RequestContext } from '@selvajs/platform';
 import { createComputeRateLimiter } from '../compute/rate-limit.js';
-import { readNonNegativeInt, readPositiveInt, type EnvRecord } from '../compute/limits.js';
+import { readNonNegativeInt, type EnvRecord } from '../compute/limits.js';
 import { ApiError, ApiErrorCode, toErrorBody } from './errors.js';
 
 export interface ApiRateLimitVerdict {
@@ -42,18 +42,10 @@ export const DEFAULT_API_RATE_LIMIT: Readonly<ApiRateLimitConfig> = Object.freez
 	maxPerWindow: 600
 });
 
-/**
- * Read `API_TOKEN_RATE_LIMIT_MAX` (requests per window, `0` = off) and
- * `API_TOKEN_RATE_LIMIT_WINDOW_MS` from an injected env map.
- */
+/** Read `API_TOKEN_RATE_LIMIT_MAX` (requests per window, `0` = off) from an injected env map. */
 export function resolveApiRateLimitConfig(env: EnvRecord, logger?: ILogger): ApiRateLimitConfig {
 	return {
-		windowMs: readPositiveInt(
-			env,
-			'API_TOKEN_RATE_LIMIT_WINDOW_MS',
-			DEFAULT_API_RATE_LIMIT.windowMs,
-			logger
-		),
+		windowMs: DEFAULT_API_RATE_LIMIT.windowMs,
 		maxPerWindow: readNonNegativeInt(
 			env,
 			'API_TOKEN_RATE_LIMIT_MAX',

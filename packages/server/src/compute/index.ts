@@ -11,6 +11,7 @@
 
 export {
 	resolveComputeLimits,
+	COMPUTE_REQUEST_MAX_BYTES,
 	readPositiveInt,
 	readNonNegativeInt,
 	readBool,

@@ -69,7 +69,12 @@ function fakeClient(
 	});
 	return {
 		client: {} as GrasshopperClient,
-		scheduler: { solveDetailed } as unknown as SolveScheduler
+		scheduler: { solveDetailed } as unknown as SolveScheduler,
+		limits: {
+			solveDeadlineMs: 42_000,
+			maxRequestBytes: 50 * 1024 * 1024,
+			reuseDefinitionCache: true
+		}
 	};
 }
 
@@ -84,7 +89,6 @@ function args(over: Partial<SolvePipelineArgs> = {}): SolvePipelineArgs {
 		inputTree: [],
 		client: fakeClient(async () => ({ values: [], errors: [], warnings: [] })),
 		responseMaxBytes: 10 * 1024 * 1024,
-		solveDeadlineMs: 42_000,
 		signal: new AbortController().signal,
 		...over
 	};
@@ -175,7 +179,16 @@ describe('runSolvePipeline — a solve that ran', () => {
 });
 
 describe('runSolvePipeline — how a solve fails', () => {
-	it("reads the scheduler's own deadline as a timeout, phrased from solveDeadlineMs", async () => {
+	it("reads the compute server's 413 as request_too_large, naming its cap", async () => {
+		const err = new ComputeError('Request too large', 'VALIDATION_ERROR', { statusCode: 413 });
+		const outcome = await runSolvePipeline(args({ client: throws(err) }));
+		expect(outcome.kind).toBe('request_too_large');
+		if (outcome.kind !== 'request_too_large') return;
+		expect(outcome.message).toContain('50 MB');
+		expect(outcome.message).toContain('RHINO_COMPUTE_MAX_REQUEST_SIZE');
+	});
+
+	it("reads the scheduler's own deadline as a timeout, phrased from the server's limit", async () => {
 		const outcome = await runSolvePipeline(args({ client: throws(computeError('TIMEOUT_ERROR')) }));
 		expect(outcome.kind).toBe('timeout');
 		if (outcome.kind !== 'timeout') return;

@@ -5,7 +5,6 @@ import { checkForUpdate } from '$lib/server/updateCheck.server';
 import { readChannel, writeChannel } from '$lib/server/releaseChannel.server';
 import { asHttpError, requirePermission } from '$lib/server/access.server';
 import {
-	SOLVE_DEADLINE_MS,
 	RATE_LIMIT_WINDOW_MS,
 	RATE_LIMIT_MAX_REQUESTS,
 	MAX_DEFINITION_FILE_SIZE,
@@ -59,7 +58,6 @@ export const load: PageServerLoad = async ({ locals, fetch, request, url }) => {
 	// truth — each value here reflects the env override or its default). Surfaced
 	// read-only so operators can see what's enforced without reading the .env.
 	const limits = {
-		SOLVE_DEADLINE_MS,
 		RATE_LIMIT_WINDOW_MS,
 		RATE_LIMIT_MAX_REQUESTS,
 		MAX_DEFINITION_FILE_SIZE,

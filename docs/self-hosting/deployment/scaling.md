@@ -12,7 +12,7 @@ description: 'Current limits of the compute and data path, and how to tune a dep
 The browser posts to `/api/v1/compute`, the Selva server calls Rhino.Compute, and the full JSON result comes back the same way.
 
 - The browser never reaches Rhino.Compute. The Selva server holds its URL and API key.
-- The `.gh`, inputs and result are buffered whole in Node memory and serialized with one blocking `JSON.stringify`. V8 caps a string near 512 MB, hence the 300 MB `COMPUTE_RESPONSE_MAX_BYTES`.
+- The `.gh`, inputs and result are buffered whole in Node memory and serialized with one blocking `JSON.stringify`. V8 caps a string near 512 MB, hence the fixed 300 MB response cap.
 - File and geometry data travels as base64 in JSON (about 4/3 larger).
 - A solve runs on one compute server: the definition's pin if it has one, else the resolved default. There is no load balancing, and each server's client has its own in-process FIFO queue. Pointer reuse and `cachesolve` are per server ([Caching](../concepts/caching.md)).
 - `Server-Timing` and solve metrics show which limit you hit. Measure first.

@@ -31,6 +31,9 @@ const disposedSchedulers: { disposed: boolean }[] = [];
 // for a server that cannot answer (stock McNeel build, network blip).
 let activeChildren: number | null = null;
 
+// What the mocked server reports from `/limits`. `null` is a server without the route.
+let reportedLimits: Recorded | null = null;
+
 // When set, `create` rejects with this instead of returning a client — stands in
 // for an unreachable compute server failing the liveness preflight.
 let createFailure: Error | null = null;
@@ -50,7 +53,8 @@ vi.mock('@selvajs/compute/grasshopper', () => {
 		}
 		constructor(public config: Recorded) {}
 		serverStats = {
-			getActiveChildren: async () => activeChildren
+			getActiveChildren: async () => activeChildren,
+			getLimits: async () => reportedLimits
 		};
 		createScheduler(options: Recorded) {
 			createdSchedulerOptions.push(options);
@@ -109,11 +113,9 @@ import { createClientCache } from '../client-cache.js';
 
 function baseConfig() {
 	return {
-		solveDeadlineMs: 30_000,
 		maxQueueDepth: 0,
 		queueWaitMs: 0,
 		cachesolve: true,
-		reuseServerDefinitionCache: true,
 		responseCacheMaxBytes: 256 * 1024 * 1024,
 		maxResponseBytes: 300 * 1024 * 1024,
 		debug: false as boolean | 'verbose'
@@ -131,6 +133,7 @@ beforeEach(() => {
 	createdSchedulerOptions.length = 0;
 	disposedSchedulers.length = 0;
 	activeChildren = null;
+	reportedLimits = null;
 	createFailure = null;
 	createCalls = 0;
 	createGate = null;
@@ -167,16 +170,65 @@ function finishSolve(scheduler: MockScheduler, result: Recorded = { status: 'suc
 }
 
 describe('createClientCache — fetch', () => {
-	it('leaves fetch to the global one under undici limits', async () => {
+	it('hands the client its own fetch, since the server may allow a deadline past undici limits', async () => {
 		const cache = createClientCache(baseConfig());
 		await cache.getClient(server('a'));
-		expect(prop(createdConfigs[0], 'fetch')).toBeUndefined();
+		expect(prop(createdConfigs[0], 'fetch')).toBeTypeOf('function');
+	});
+});
+
+describe('createClientCache — limits from the server', () => {
+	it('takes the deadline from the server timeout, with slack, and allows pointer reuse', async () => {
+		reportedLimits = { timeoutSeconds: 1800, maxRequestBytes: 1024, signalsStaleDefinition: true };
+		const cache = createClientCache(baseConfig());
+		const entry = await cache.getClient(server('a'));
+		expect(createdSchedulerOptions[0]).toMatchObject({
+			timeoutMs: 1_805_000,
+			reuseServerDefinitionCache: true
+		});
+		expect(entry.limits).toEqual({
+			solveDeadlineMs: 1_805_000,
+			maxRequestBytes: 1024,
+			reuseDefinitionCache: true
+		});
 	});
 
-	it('hands the client its own fetch once the deadline reaches undici limits', async () => {
-		const cache = createClientCache({ ...baseConfig(), solveDeadlineMs: 420_000 });
+	it('caps the deadline at an hour', async () => {
+		reportedLimits = { timeoutSeconds: 86_400, maxRequestBytes: 1, signalsStaleDefinition: true };
+		const cache = createClientCache(baseConfig());
 		await cache.getClient(server('a'));
-		expect(prop(createdConfigs[0], 'fetch')).toBeTypeOf('function');
+		expect(createdSchedulerOptions[0].timeoutMs).toBe(3_600_000);
+	});
+
+	it("falls back to Compute's defaults and no pointer reuse on a server that can't report", async () => {
+		const cache = createClientCache(baseConfig());
+		const entry = await cache.getClient(server('a'));
+		expect(createdSchedulerOptions[0]).toMatchObject({
+			timeoutMs: 100_000,
+			reuseServerDefinitionCache: false
+		});
+		expect(entry.limits.maxRequestBytes).toBeNull();
+	});
+
+	it('rebuilds the client when the server reports new limits', async () => {
+		vi.useFakeTimers();
+		try {
+			reportedLimits = { timeoutSeconds: 100, maxRequestBytes: 1, signalsStaleDefinition: true };
+			const cache = createClientCache(baseConfig());
+			const first = await cache.getClient(server('a'));
+			reportedLimits = { timeoutSeconds: 600, maxRequestBytes: 1, signalsStaleDefinition: true };
+			vi.advanceTimersByTime(5 * 60 * 1000);
+			(first.scheduler as unknown as { settle(r: Recorded): void }).settle({
+				status: 'success',
+				durationMs: 1
+			});
+			await vi.waitFor(async () => {
+				expect(await cache.getClient(server('a'))).not.toBe(first);
+			});
+			expect(createdSchedulerOptions.at(-1)?.timeoutMs).toBe(605_000);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 });
 

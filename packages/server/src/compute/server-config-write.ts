@@ -13,12 +13,7 @@
  * build time.
  */
 
-import {
-	COMPUTE_RETRY_MAX,
-	COMPUTE_TIMEOUT_MAX_MS,
-	COMPUTE_TIMEOUT_MIN_MS,
-	GuidSchema
-} from '@selvajs/platform';
+import { GuidSchema } from '@selvajs/platform';
 import { isEncryptedSecret } from '@selvajs/platform/computeServer';
 import { isLinkLocalUrl } from './safe-url.js';
 import { apiError, ApiErrorCode } from '../api/errors.js';
@@ -71,10 +66,6 @@ function assertUsableServerUrl(serverUrl: string): void {
 	}
 }
 
-function inIntegerRange(value: number, min: number, max: number): boolean {
-	return Number.isInteger(value) && value >= min && value <= max;
-}
-
 /** The fields every incoming server carries, whatever its scope. */
 export interface IncomingServerBase {
 	id: string;
@@ -85,8 +76,6 @@ export interface IncomingServerBase {
 	 * non-empty string → replace it. See {@link resolveApiKey}.
 	 */
 	apiKey?: string | null;
-	timeoutMs?: number;
-	retryCount?: number;
 }
 
 /**
@@ -115,21 +104,6 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 		// ciphertext being replayed against a URL they control.
 		if (s.apiKey && isEncryptedSecret(s.apiKey))
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a plaintext key');
-		if (
-			s.timeoutMs !== undefined &&
-			!inIntegerRange(s.timeoutMs, COMPUTE_TIMEOUT_MIN_MS, COMPUTE_TIMEOUT_MAX_MS)
-		)
-			apiError(
-				400,
-				ApiErrorCode.VALIDATION_FAILED,
-				`timeoutMs must be a whole number from ${COMPUTE_TIMEOUT_MIN_MS} to ${COMPUTE_TIMEOUT_MAX_MS}`
-			);
-		if (s.retryCount !== undefined && !inIntegerRange(s.retryCount, 0, COMPUTE_RETRY_MAX))
-			apiError(
-				400,
-				ApiErrorCode.VALIDATION_FAILED,
-				`retryCount must be a whole number from 0 to ${COMPUTE_RETRY_MAX}`
-			);
 	}
 }
 

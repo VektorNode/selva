@@ -6,6 +6,7 @@
  *   GET /                    -> 200 "compute.rhino3d running" (proxy liveness root).
  *   GET /activechildren      -> plain-text integer (proxy writes ActiveComputeCount).
  *   GET /version             -> { rhino, compute, git_sha } lowercase (proxied to a child).
+ *   GET /limits              -> { timeoutSeconds, maxRequestBytes, signalsStaleDefinition } (fork only).
  *   GET /plugins/*\/installed -> { name: version } map of non-core plugins.
  *
  * The client must DEGRADE GRACEFULLY on every failure (return null/false, never
@@ -165,6 +166,48 @@ describe('getActiveChildren', () => {
 			await stats.dispose();
 		}
 	);
+});
+
+describe('getLimits', () => {
+	it('reads the fork shape', async () => {
+		route({
+			'/limits': () =>
+				res(
+					JSON.stringify({
+						timeoutSeconds: 1800,
+						maxRequestBytes: 52428800,
+						signalsStaleDefinition: true
+					})
+				)
+		});
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.getLimits()).resolves.toEqual({
+			timeoutSeconds: 1800,
+			maxRequestBytes: 52428800,
+			signalsStaleDefinition: true
+		});
+		await stats.dispose();
+	});
+
+	it('is null on a server without the route', async () => {
+		route({ '/limits': () => res('', { ok: false, status: 404 }) });
+		const stats = new ComputeServerStats(SERVER);
+		await expect(stats.getLimits()).resolves.toBeNull();
+		await stats.dispose();
+	});
+
+	it('is null when a limit is missing or not positive', async () => {
+		for (const body of [
+			'not json',
+			JSON.stringify({ timeoutSeconds: 0, maxRequestBytes: 1 }),
+			JSON.stringify({ maxRequestBytes: 1 })
+		]) {
+			route({ '/limits': () => res(body) });
+			const stats = new ComputeServerStats(SERVER);
+			await expect(stats.getLimits()).resolves.toBeNull();
+			await stats.dispose();
+		}
+	});
 });
 
 describe('getVersion', () => {

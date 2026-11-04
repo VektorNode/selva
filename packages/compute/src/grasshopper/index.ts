@@ -38,7 +38,7 @@ export { solveGrasshopperDefinition } from './solve';
 // SERVER MONITORING
 // ============================================================================
 export { default as ComputeServerStats } from './server/compute-server-stats';
-export type { ServerVersion, ServerStats } from './server/compute-server-stats';
+export type { ServerVersion, ServerStats, ServerLimits } from './server/compute-server-stats';
 
 // ============================================================================
 // I/O PROCESSING

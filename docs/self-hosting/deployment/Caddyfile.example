@@ -27,7 +27,7 @@ app.example.dev {
 	@api path /api/*
 	header @api Cache-Control "no-cache, no-store, must-revalidate"
 
-	# Caddy rejects before the app does, so this must clear COMPUTE_REQUEST_MAX_BYTES and
+	# Caddy rejects before the app does, so this must clear the app's solve request cap and
 	# BODY_SIZE_LIMIT (both 256 MiB). A lower value caps every upload.
 	request_body {
 		max_size 256MiB

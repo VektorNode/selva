@@ -12,7 +12,7 @@ interface AsyncThrottleOptions {
 	 * How long one run may take before it is aborted (ms). Required and deliberately
 	 * undefaulted: this is a generic throttle, so it has no basis for guessing what
 	 * the caller's work costs. Callers driving a Selva solve pass the deadline the
-	 * server enforces (`COMPUTE_SOLVE_DEADLINE_MS`) — a shorter local guess would abort
+	 * server enforces (the compute server's own timeout) — a shorter local guess would abort
 	 * solves the server would have finished.
 	 */
 	runDeadlineMs: number;

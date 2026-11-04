@@ -7,6 +7,12 @@ import { ComputeError, enableDebugLogging, ErrorCodes } from '@selvajs/compute/c
 
 import { createConcurrencyProbe } from './concurrency-probe';
 import { fetchForDeadline } from './long-fetch';
+import {
+	MAX_SOLVE_DEADLINE_MS,
+	sameSolveLimits,
+	solveLimitsFor,
+	type SolveLimits
+} from './server-limits';
 
 // ============================================================================
 // Shared compute client cache
@@ -37,6 +43,8 @@ export interface ResolvedServer {
 export interface CachedClient {
 	client: GrasshopperClient;
 	scheduler: SolveScheduler;
+	/** Read from the server when the client was built; a changed server rebuilds the client. */
+	limits: SolveLimits;
 }
 
 /**
@@ -48,11 +56,7 @@ export type ClientCacheDebug = boolean | 'verbose';
 
 /** Config injected by the consuming app, so this module stays env-agnostic and testable. */
 export interface ClientCacheConfig {
-	/** Per-solve timeout forwarded to the scheduler (`ComputeLimits.solveDeadlineMs`). */
-	solveDeadlineMs: number;
 	cachesolve: boolean;
-	/** Reference large definitions by server cache key instead of re-uploading. */
-	reuseServerDefinitionCache: boolean;
 	/**
 	 * Max solves that may wait in the FIFO queue, excluding in-flight solves
 	 * (capped at `maxConcurrent`, itself driven by the server's probed child
@@ -121,6 +125,12 @@ export interface SolveCacheStats {
 }
 
 const DEFAULT_MAX_WARM_COMPUTE_SERVERS = 16;
+
+/**
+ * How often a warm client re-reads its server's limits, riding on solve completion like the
+ * concurrency probe. An operator who changes `--timeout` sees it within this window.
+ */
+const LIMITS_RECHECK_MS = 5 * 60 * 1000;
 
 /**
  * How long a failed build is remembered before the next `getClient` retries the
@@ -214,7 +224,9 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 	async function build(server: ResolvedServer, definitionGuid?: string): Promise<CachedClient> {
 		const debugVerbose = config.debug === 'verbose';
-		const longFetch = fetchForDeadline(config.solveDeadlineMs);
+		// The deadline comes from the server, read only once the client exists: pick the fetch
+		// for the longest one. Calls without a signal keep undici's limits either way.
+		const longFetch = fetchForDeadline(MAX_SOLVE_DEADLINE_MS);
 
 		const clientConfig: GrasshopperComputeConfig = {
 			serverUrl: server.serverUrl,
@@ -260,7 +272,31 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		const client = await GrasshopperClient.create(clientConfig);
 
 		const probe = createConcurrencyProbe(client, debugLog);
-		await probe.refresh();
+		const readLimits = async () =>
+			solveLimitsFor(
+				(await Promise.resolve(client.serverStats?.getLimits?.()).catch(() => null)) ?? null
+			);
+		const [limits] = await Promise.all([readLimits(), probe.refresh()]);
+		debugLog(
+			`[Compute/client-cache] server ${server.id}: deadline ${limits.solveDeadlineMs}ms, ` +
+				`request cap ${limits.maxRequestBytes ?? 'not reported'}, pointer reuse ${limits.reuseDefinitionCache}`
+		);
+		let limitsCheckedAt = Date.now();
+		let checkingLimits = false;
+		const recheckLimitsIfDue = () => {
+			if (checkingLimits || Date.now() - limitsCheckedAt < LIMITS_RECHECK_MS) return;
+			checkingLimits = true;
+			void readLimits()
+				.then((next) => {
+					limitsCheckedAt = Date.now();
+					if (sameSolveLimits(next, limits)) return;
+					debugLog(`[Compute/client-cache] server ${server.id} limits changed — rebuilding`);
+					if (cache.get(server.id) === entry) evictEntry(server.id);
+				})
+				.finally(() => {
+					checkingLimits = false;
+				});
+		};
 
 		const scheduler = client.createScheduler({
 			mode: 'queue',
@@ -273,13 +309,13 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// would reject EVERY queued solve).
 			maxQueueDepth: config.maxQueueDepth || undefined,
 			queueWaitMs: config.queueWaitMs || undefined,
-			timeoutMs: config.solveDeadlineMs,
+			timeoutMs: limits.solveDeadlineMs,
 			// The byte budget is the only eviction pressure. A solve is a pure
 			// function of (definition, inputs), both immutable, so a retained
 			// result can never go stale — expiring one only forces a paid re-solve
 			// of the identical answer.
 			cache: config.responseCacheMaxBytes > 0 ? { maxBytes: config.responseCacheMaxBytes } : false,
-			reuseServerDefinitionCache: config.reuseServerDefinitionCache,
+			reuseServerDefinitionCache: limits.reuseDefinitionCache,
 			onSettle: (_ctx, result) => {
 				// Deferred: this hook fires before the scheduler drops the solve from its in-flight set.
 				queueMicrotask(() => finishDraining(entry));
@@ -287,12 +323,22 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				// A cache hit means we never reached the server, so it says nothing about the pool.
 				// `scheduler` is safe despite being referenced from inside its own initializer:
 				// onSettle only ever fires during a solve, long after binding.
-				if (result.fromCache !== true) probe.refreshIfDue(scheduler);
+				if (result.fromCache !== true) {
+					probe.refreshIfDue(scheduler);
+					recheckLimitsIfDue();
+				}
 				if (config.debug) describeSettledSolve(result).forEach(debugLog);
 			}
 		});
-		const entry: CachedClient = { client, scheduler };
+		const entry: CachedClient = { client, scheduler, limits };
 		return entry;
+	}
+
+	function evictEntry(id: string) {
+		const entry = cache.get(id);
+		if (!entry) return;
+		cache.delete(id);
+		retire(entry);
 	}
 
 	return {
@@ -376,11 +422,9 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 				build.token.stale = true;
 				pending.delete(id);
 			}
-			const entry = cache.get(id);
-			if (entry) {
+			if (cache.has(id)) {
 				debugLog(`[Compute/client-cache] evicted warm client for server ${id} (config change)`);
-				cache.delete(id);
-				retire(entry);
+				evictEntry(id);
 			}
 		},
 

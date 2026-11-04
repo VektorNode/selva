@@ -97,8 +97,8 @@ A definition reaches a solve from one of two sources, and only one can go stale:
 | **Remote URL** (`definitionUrl`) | the URL                   | 5 min         | whoever owns the URL can swap the file   |
 
 Remote bytes live in a separate in-process map of up to 50 entries, outside the byte budget, so
-`COMPUTE_DEFINITION_CACHE_MB=0` doesn't turn them off. `REMOTE_DEFINITION_CACHE_TTL_MS` (the 5
-minutes) applies only to them.
+`COMPUTE_DEFINITION_CACHE_MB=0` doesn't turn them off. The 5-minute bound is fixed and applies only
+to them.
 
 ### Pointer reuse (how the definition is sent)
 
@@ -107,9 +107,9 @@ Not a result cache. Selva uploads the `.gh` once, gets a key back, and sends onl
 - The only cache that helps while inputs keep changing, such as slider scrubbing on a large definition.
 - Doesn't skip the solve, only the upload.
 - If the server forgot the key, Selva re-uploads automatically.
-- **Warning:** auto-recovery needs a server that reports a forgotten key correctly (the VektorNode
-  fork does). On a Rhino.Compute server you don't control, a forgotten key could return empty
-  geometry. Set `COMPUTE_REUSE_DEFINITION_CACHE=false`.
+- Only on a server that reports a forgotten key correctly. Selva turns pointer reuse on when the
+  server answers `/limits` (the VektorNode fork does) and off otherwise, because elsewhere a
+  forgotten key could return empty geometry.
 
 ### `cachesolve` (Rhino.Compute)
 
@@ -160,13 +160,11 @@ Server-side, in [`packages/selva/.env.example`](https://github.com/VektorNode/se
 Defaults and parsing live in [`packages/server/src/compute/limits.ts`](https://github.com/VektorNode/selva/blob/main/packages/server/src/compute/limits.ts).
 Restart the Selva server after editing. The defaults suit most deployments; the settings exist to turn a cache _down_ on a constrained host.
 
-| Setting                          | Default  | Effect                                                                        |
-| -------------------------------- | -------- | ----------------------------------------------------------------------------- |
-| `COMPUTE_DEFINITION_CACHE_MB`    | `256`    | MB of uploaded `.gh` bytes to keep. `0` disables.                             |
-| `COMPUTE_SOLVE_CACHE_MB`         | `256`    | MB of results to keep, **per compute server** (×16 worst case). `0` disables. |
-| `COMPUTE_REUSE_DEFINITION_CACHE` | `true`   | Send a pointer instead of re-uploading the `.gh`.                             |
-| `COMPUTE_SERVER_CACHESOLVE`      | `true`   | Let Rhino.Compute cache and return solve results.                             |
-| `REMOTE_DEFINITION_CACHE_TTL_MS` | `300000` | Freshness bound on `.gh` bytes fetched from a **remote URL** only.            |
+| Setting                       | Default | Effect                                                                        |
+| ----------------------------- | ------- | ----------------------------------------------------------------------------- |
+| `COMPUTE_DEFINITION_CACHE_MB` | `256`   | MB of uploaded `.gh` bytes to keep. `0` disables.                             |
+| `COMPUTE_SOLVE_CACHE_MB`      | `256`   | MB of results to keep, **per compute server** (×16 worst case). `0` disables. |
+| `COMPUTE_SERVER_CACHESOLVE`   | `true`  | Let Rhino.Compute cache and return solve results.                             |
 
 ---
 

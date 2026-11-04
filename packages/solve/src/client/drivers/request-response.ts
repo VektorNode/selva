@@ -5,7 +5,7 @@ import type { SolveFn, SolveResult } from '../../shared/solve-fn.js';
 import type { SolveDriver, SolveEventSource, SolveReporter } from './driver.js';
 
 export interface RequestResponseDriverOptions<TMesh> {
-	/** How long one solve may take before the client aborts it (ms). Pass the server's `COMPUTE_SOLVE_DEADLINE_MS` so the two agree. */
+	/** How long one solve may take before the client aborts it (ms). Pass the deadline the solve's server enforces so the two agree. */
 	solveDeadlineMs: number;
 	onChange?: () => void;
 	/** Mesh ownership policy for the result memo — see `MeshPolicy` (solve-memo.ts). */

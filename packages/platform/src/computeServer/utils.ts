@@ -1,12 +1,4 @@
-import {
-	COMPUTE_RETRY_MAX,
-	COMPUTE_TIMEOUT_DEFAULT_MS,
-	COMPUTE_TIMEOUT_MAX_MS,
-	COMPUTE_TIMEOUT_MIN_MS,
-	isPlatformServer,
-	type ComputeConfig,
-	type ComputeServerConfig
-} from './types.js';
+import { isPlatformServer, type ComputeConfig, type ComputeServerConfig } from './types.js';
 
 /**
  * Servers an org can see in pickers and use for solves:
@@ -124,15 +116,4 @@ export function findServerById(config: ComputeConfig, id: string): ComputeServer
 
 export function platformServers(config: ComputeConfig) {
 	return config.servers.filter(isPlatformServer);
-}
-
-/** What a compute settings form should send for a typed timeout. */
-export function clampTimeoutMs(value: unknown): number {
-	const ms = Number(value) || COMPUTE_TIMEOUT_DEFAULT_MS;
-	return Math.min(COMPUTE_TIMEOUT_MAX_MS, Math.max(COMPUTE_TIMEOUT_MIN_MS, ms));
-}
-
-/** What a compute settings form should send for a typed retry count. */
-export function clampRetryCount(value: unknown): number {
-	return Math.min(COMPUTE_RETRY_MAX, Math.max(0, Number(value) || 0));
 }
