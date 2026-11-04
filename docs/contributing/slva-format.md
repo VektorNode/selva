@@ -2,36 +2,13 @@
 
 What happens between a Brep on the Grasshopper canvas and a lit, selectable mesh in the browser.
 
-The C# Display component encodes; `batch-parser.ts` and `binary-parser.ts` decode. Both ends have to agree — see the normative-spec note in stage 2 before changing either.
-
-## The short version
-
-```mermaid
-flowchart TB
-    geo["Rhino geometry<br/><i>Brep, Mesh, Curve, Point</i>"]
-    disp["**Display** component<br/>mesh · group by material · quantize · compress"]
-    blob["**SLVA blob**<br/>binary geometry + JSON envelope"]
-    net["Rhino.Compute → the web app"]
-    parse["**@selvajs/visualization** `/parse`<br/>decode · dequantize · build materials"]
-    three["THREE.Mesh in the scene<br/><i>lit, selectable, in the outliner</i>"]
-
-    geo --> disp --> blob --> net --> parse --> three
-```
-
-Five stages. The first two happen in Grasshopper, the last two in the browser.
+Five stages: meshing and encoding in Grasshopper, transport, then parsing and the scene in the browser. The C# Display component encodes; `batch-parser.ts` and `binary-parser.ts` decode. Both ends have to agree, so read the normative-spec note in stage 2 before changing either.
 
 ## Stage 1: Meshing (Grasshopper)
 
-The **Display** component takes geometry as a tree and converts anything that isn't already a mesh into one, using the meshing settings on its `MS` input (default: `FastRenderMesh`).
+The **Display** component takes geometry as a tree and converts anything that isn't already a mesh into one, using the meshing settings on its `MS` input (default: Rhino's `MeshingParameters.Default`).
 
-Alongside the geometry it reads four parallel trees:
-
-| Input          | Purpose                                                                |
-| -------------- | ---------------------------------------------------------------------- |
-| `Name` (N)     | The object's name in the scene outliner.                               |
-| `Layer` (L)    | Grouping path, e.g. `Structure/Walls`. Builds the outliner tree.       |
-| `Metadata` (D) | `Key=Value` strings surfaced when the user selects the object.         |
-| `Material` (M) | A **Three Material**. Objects sharing a material get batched together. |
+Alongside the geometry it reads four parallel trees: `Name` (N, the object's name in the scene outliner), `Layer` (L, a grouping path such as `Structure/Walls` that builds the outliner tree), `Metadata` (D, `Key=Value` strings shown when the user selects the object) and `Material` (M, a **Three Material**; objects sharing a material get batched together).
 
 **One batch per input branch.** The output tree mirrors the input tree rather than flattening, so branch structure you built upstream survives into the viewer.
 
@@ -44,40 +21,18 @@ Two things worth knowing here:
 
 The meshes are packed into a compact binary format:
 
-1. **Group by material.** Every unique material becomes one group; all meshes using it are concatenated into one vertex/index stream. Fewer groups means fewer draw calls in the browser.
-2. **Quantize.** Vertex positions snap to a signed 16-bit grid spanning the geometry's bounding box: half the size of float32, with error far below anything visible. If the resulting step would exceed 5 cm per int16 unit (a very large model), the block falls back to raw float32 rather than degrade the preview. UVs quantize to unsigned 16 bits the same way, with their own fallback past 1/4096 (heavily tiled UVs). Vertex colours are 8-bit per channel and never fall back.
-3. **Delta filter.** Each vertex component is stored as the difference from the previous vertex, zigzag-mapped so small differences become small unsigned numbers. Welded meshes have spatially-local vertices, so the deltas cluster near zero. This is a PNG-style pre-filter: it exists purely to make the last step work better. A side effect worth knowing: it makes a part's vertex stream translation-invariant, so repeated parts (the same screw placed 500 times) become repeated byte runs that DEFLATE dedupes — instancing-like savings with no instancing in the format.
-4. **Byte layout, chosen per blob.** The filtered streams are written either interleaved (x,y,z per vertex) or planar byte-split (all X deltas, then Y, then Z, low bytes before high). Neither wins everywhere, so the writer deflates both and keeps the smaller, recording the choice in a flag bit:
-   Which one wins turns on the vertex count of the individual repeated part, not on how many copies the batch holds:
-   - **Planar** wins on welded surfaces and on scatters of substantial parts, where near-zero deltas turn the high planes into runs of zeros. This needs each plane's run to be long enough to matter, which holds once a part carries more than roughly 64 vertices — from there the margin grows fast (measured 21% at 64 vertices per part, 75% at 1024).
-   - **Interleaved** wins on batches of very small repeated parts. Below roughly 16 vertices per part a copy's delta stream is only tens of bytes, too short to form useful LZ77 matches once planar scatters it across six distant planes. Measured 6–13% on thousands of boxes — the shape an assembly of bolts, posts or panel clips takes.
-
-   Between roughly 16 and 64 vertices per part the two sit within a percent or two of each other. Nothing cheap infers part size from a flat vertex array — a batch arrives as one concatenated buffer with no part boundaries — hence the measurement. Colors stay interleaved unconditionally: planar loses on noisy per-channel data. Batches under 4096 vertices skip the probe and take planar; the wire difference there is a few hundred bytes, less than the two trial deflates cost.
-
+1. **Group by material.** Identical materials dedupe to one. Meshes stay in input order, and each run of consecutive meshes on one material becomes a group, so a material can head several groups. Keeping input order means the geometry bytes never depend on which material a mesh has. The browser gathers every group of one material into one merged mesh per layer, so interleaving costs no draw calls.
+2. **Quantize.** Vertex positions snap to a signed 16-bit grid spanning the geometry's bounding box: half the size of float32, with error far below anything visible. If the step would exceed 5 cm per int16 unit (measured in metres via the document's unit scale, so ~3.3 km wide in any unit), the block falls back to raw float32 rather than degrade the preview. UVs quantize to unsigned 16 bits the same way, with their own fallback past 1/4096 (heavily tiled UVs). Vertex colours are 8-bit per channel and never fall back.
+3. **Delta filter.** Each vertex component is stored as the difference from the previous vertex, zigzag-mapped so small differences become small unsigned numbers. Welded meshes have spatially-local vertices, so the deltas cluster near zero. This is a PNG-style pre-filter: it exists purely to make the last step work better. A side effect worth knowing: it makes a part's vertex stream translation-invariant, so repeated parts (the same screw placed 500 times) become repeated byte runs that DEFLATE dedupes. That gives instancing-like savings with no instancing in the format.
+4. **Byte layout, chosen per blob.** The filtered streams are written either interleaved (x,y,z per vertex) or planar byte-split (all X deltas, then Y, then Z, low bytes before high). Neither wins everywhere, so the writer deflates both and keeps the smaller, recording the choice in a flag bit. Planar wins on welded surfaces and on scatters of substantial parts. Interleaved wins on batches of very small repeated parts (bolts, posts, panel clips): each copy's delta stream is too short to form useful LZ77 matches once planar scatters it across six distant planes. Which one wins turns on the vertex count of the individual repeated part, not on how many copies the batch holds, and nothing cheap infers part size from a flat vertex array (a batch arrives as one concatenated buffer with no part boundaries), hence the measurement. Colors stay interleaved unconditionally: planar loses on noisy per-channel data. Batches under 4096 vertices skip the probe and take planar. Thresholds and measurements are in `ChoosePlanarLayout` in `SlvaWriter.cs`.
 5. **Deflate.** The chosen stream is compressed, and the geometry blob wrapped in an `SLVZ` container when that actually shrinks it. Decoders sniff `SLVA` vs `SLVZ` from the leading magic, so the result is self-describing.
+6. **The SLVM container.** The finished geometry blob is packed with everything else the batch carries into one chunked container: the bytes that travel as `CompressedData` and, with the item chunks added, sit on disk as a `.slvm` file. The chunks are `GEOM` (the blob from steps 1 to 5), `TABL`, `MATL`, `TEXR`, `CRVS`, `PNTS`, `CLSD` and `EXTN`; the header and every chunk's payload are specified in [`SlvmDocument.cs`](../../Plugin/Selva.Slva/Container/SlvmDocument.cs).
 
-6. **The SLVM container.** The finished geometry blob is packed with everything else the batch carries into one chunked container — the bytes that travel as `CompressedData` and, with the item chunks added, sit on disk as a `.slvm` file:
+   Readers skip unknown chunk types by length; that is the format's extension mechanism. The `TABL` object table is columnar and pays only for what's present: per-mesh vertex/triangle counts (vertex/index **starts are never stored**: geometry is concatenated in table order, so windows are prefix sums and can't overlap by construction), material run-lengths, names/layers as string-pool references (the auto-numbering default collapses to one mode byte), and sparse attr columns (the key stored once, then only the objects carrying it: `gh:branch`, `ifc:guid`, `style:color`, …). Object identity is the reserved `id` attr in `TABL`, split back out on read. Selva's own host data, the Rhino NURBS JSON behind each curve, lives in `EXTN "selva.gh"`, so the core container stays free of Grasshopper concepts: a foreign reader gets every mesh, name, layer and material without knowing Selva exists.
 
-   ```
-   [4] "SLVM" | [4] version = 3 | [4] chunkCount
-   per chunk: [4] fourcc | [4] byteLen | payload | zero pad to 4
-   ```
+   The wire container omits the item chunks (curves/points travel as JSON alongside, stage 3); the `.slvm` file includes them. Ids travel inside the file, so Display From File needs no restamping, and the geometry is never re-encoded. A file also carries `EXTN "selva.units"`, the unit system its coordinates are in: the viewer scales by the open document's units, so Display From File warns when they differ.
 
-   | chunk  | payload                                                                                                |
-   | ------ | ------------------------------------------------------------------------------------------------------ |
-   | `GEOM` | the SLVA/SLVZ geometry blob from steps 1–5, its embedded metadata empty                                |
-   | `TABL` | the columnar object table (below), optionally SLVZ-wrapped                                             |
-   | `MATL` | materials JSON; a `map`, `roughnessMap` or `normalMap` of `slvm:tex:N` references the Nth `TEXR` chunk |
-   | `TEXR` | one texture: mime string + raw image bytes (extracted from data URIs)                                  |
-   | `CRVS` | polyline vertices for curve items — another bare SLVA blob, no indices                                 |
-   | `PNTS` | point positions, same encoding                                                                         |
-   | `EXTN` | namespaced host extension; readers skip namespaces they don't know                                     |
-
-   Readers skip unknown chunk types by length — that is the format's extension mechanism. The `TABL` object table is columnar and pays only for what's present: per-mesh vertex/triangle counts (vertex/index **starts are never stored** — geometry is concatenated in table order, so windows are prefix sums and can't overlap by construction), material run-lengths, an `originalIndex` column only when the material sort reordered the table, names/layers as string-pool references (the auto-numbering default collapses to one mode byte), and sparse attr columns — the key stored once, then only the objects carrying it (`gh:branch`, `ifc:guid`, `style:color`, …). Selva's own host data (`sourceComponentId`, the Rhino NURBS JSON behind each curve) lives in `EXTN "selva.gh"`, so the core container stays free of Grasshopper concepts: a foreign reader gets every mesh, name, layer and material without knowing Selva exists.
-
-   The wire container omits the item chunks (curves/points travel as JSON alongside, stage 3); the `.slvm` file includes them. Display From File restamps a loaded batch's identity by rewriting the tiny `EXTN` chunk — the geometry is never re-encoded.
-
-Version gates are additive within the geometry blob: each SLVA bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade. The frozen pre-v4 fixtures under `packages/schemas/fixtures/slva/v3/` pin this on both stacks — never regenerate them. Containers are gated separately: readers accept SLVM v3, the legacy `DMF1` file container, and bare SLVA/SLVZ blobs from old `.gh` files, dispatching on the leading magic; new bytes are always SLVM v3. Unlike the geometry blob, the container version is an exact match, not a floor — SLVM v2 was a pre-release layout that never shipped, so nothing on disk carries it and readers reject it outright. The cross-stack container fixtures live under `packages/schemas/fixtures/slvm3/` (`UPDATE_SLVM_FIXTURES=1 dotnet test` regenerates).
+Version gates are additive within the geometry blob: each SLVA bump so far only added a flag bit, and readers ignore trailing bytes, so a decoder handles every blob back to version 1. That matters because blobs persist: saved `.gh` files, `.slvm` mesh files and cached compute results must stay decodable after an upgrade. The frozen pre-v4 fixtures under `packages/schemas/fixtures/slva/v3/` pin this on both stacks; never regenerate them. Containers are gated separately and dispatched on the leading magic: new bytes are always SLVM v3, and both stacks read SLVM v3 and the bare SLVA/SLVZ blobs in old `.gh` files. Only the C# `SlvmFile` also reads the legacy `DMF1` file container. Unlike the geometry blob, the container version is an exact match, not a floor: SLVM v2 was a pre-release layout that never shipped, so nothing on disk carries it and readers reject it outright. The cross-stack container fixtures live under `packages/schemas/fixtures/slvm3/` (`UPDATE_SLVM_FIXTURES=1 dotnet test` regenerates).
 
 > **The byte-level spec is normative and lives in code, in two places that must agree:** for the geometry blob, the remarks block at the top of [`SlvaWriter.cs`](../../Plugin/Selva.Slva/Geometry/SlvaWriter.cs) (encoder) and the constants in [`binary/header.ts`](../../packages/visualization/src/parse/webdisplay/binary/header.ts) (decoder); for the container, [`SlvmDocument.cs`](../../Plugin/Selva.Slva/Container/SlvmDocument.cs) (TABL layout in [`SlvmTable.cs`](../../Plugin/Selva.Slva/Container/SlvmTable.cs)) and [`binary/slvm.ts`](../../packages/visualization/src/parse/webdisplay/binary/slvm.ts). Change them together and bump the version.
 >
@@ -85,7 +40,7 @@ Version gates are additive within the geometry blob: each SLVA bump so far only 
 
 ## Stage 3: Transport
 
-The blob travels inside a `DisplayBatch` JSON envelope (`types.ts`): base64 over HTTP from Rhino.Compute, raw binary over the plugin's WebSocket. Large file outputs stream out-of-band instead ([ADR 0003](../adr/0003-large-file-output-streaming.md)); display payloads currently do not.
+The blob travels inside a `DisplayBatch` JSON envelope (`types.ts`): base64 over HTTP from Rhino.Compute, raw binary over the plugin's WebSocket.
 
 Producing these payloads requires the VektorNode Rhino.Compute fork.
 
@@ -120,20 +75,20 @@ The parsed meshes are added to the Three.js scene by the viewer (`/render`), and
 Three invariants hold across the whole pipeline:
 
 - **One coordinate frame end to end.** The Three scene _is_ Rhino's Z-up frame. Vertices pass through unrotated; nothing anywhere reintroduces a rotation.
-- **Nothing caches across solves.** Every solve decodes its own geometry and textures. The scene owns what it built and frees it when replaced.
-- **The scene owns its GPU resources.** Geometries and textures are disposed with the objects holding them.
+- **Reuse across solves is narrow.** `batch/finished-cache.ts` hands back the same `BufferGeometry` when the geometry bytes match an earlier batch byte for byte (256 MB cap), and `render/edges/extraction.ts` keeps edge results keyed on those geometries' arrays. Never write to a parsed geometry's attributes.
+- **The scene owns its GPU resources.** Geometries and textures are disposed with the objects holding them, except geometry shared from the finished-geometry cache; the ownership rule is in `shared/gpu-ownership.ts`.
 
 ## Debugging a bad scene
 
-| Symptom                                    | Look at                                                                                   |
-| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| Nothing renders                            | Is the Display output actually reaching the schema? Check the UI Bridge picked it up.     |
-| Geometry is there but untextured/grey      | Material wired? A texture that failed to load leaves the base colour.                     |
-| Faceted where it should be smooth          | Meshing settings on Display's `MS` input.                                                 |
-| Slow to load                               | **Display Size**. Then meshing density, then how much geometry you're emitting at all.    |
-| Slow to orbit once loaded                  | Too many distinct materials: every unique material is its own draw call. Share materials. |
-| Scene looks right, outliner is a flat list | The `Layer` input is empty. It's what builds the tree.                                    |
-| Curves missing, meshes fine                | Curves arrive pre-tessellated from the plugin. An older plugin build won't send them.     |
+| Symptom                                    | Look at                                                                                                    |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Nothing renders                            | Is the Display output actually reaching the schema? Check the UI Bridge picked it up.                      |
+| Geometry is there but untextured/grey      | Material wired? A texture that failed to load leaves the base colour.                                      |
+| Faceted where it should be smooth          | Meshing settings on Display's `MS` input.                                                                  |
+| Slow to load                               | **Display Size**. Then meshing density, then how much geometry you're emitting at all.                     |
+| Slow to orbit once loaded                  | Too many distinct material and layer pairs: each pair is its own draw call after merging. Share materials. |
+| Scene looks right, outliner is a flat list | The `Layer` input is empty. It's what builds the tree.                                                     |
+| Curves missing, meshes fine                | Curves arrive pre-tessellated from the plugin. An older plugin build won't send them.                      |
 
 ## Next
 

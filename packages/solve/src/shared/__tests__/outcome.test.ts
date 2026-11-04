@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { decodeOutcome, finalizeResult, outcomeFromComputeMessages } from '../outcome.js';
+import {
+	decodeDiagnostic,
+	decodeOutcome,
+	finalizeResult,
+	outcomeFromComputeMessages
+} from '../outcome.js';
 
 // Written by the C# SolveOutcomeContractTests; see fixtures/solve/README.md.
 const fixture = (name: string) =>
@@ -44,7 +49,21 @@ describe('cross-stack verdict', () => {
 describe('decodeOutcome', () => {
 	it('is null for anything that is not an outcome', () => {
 		expect(decodeOutcome(undefined)).toBeNull();
-		expect(decodeOutcome({ blocked: true })).toBeNull();
+		expect(decodeOutcome({})).toBeNull();
+		expect(decodeOutcome({ diagnostics: 'x' })).toBeNull();
+	});
+
+	it('fails closed: a refusal without a diagnostic list still refuses', () => {
+		expect(decodeOutcome({ blocked: true })).toEqual({
+			diagnostics: [],
+			blocked: true,
+			aborted: false
+		});
+		expect(decodeOutcome({ aborted: true })).toMatchObject({ blocked: true, aborted: true });
+	});
+
+	it('reads a stringly-typed flag as set', () => {
+		expect(decodeOutcome({ diagnostics: [], blocked: 'true' })?.blocked).toBe(true);
 	});
 
 	it('narrows unknown levels, drops empty and repeated messages, and blocks an abort', () => {
@@ -62,6 +81,37 @@ describe('decodeOutcome', () => {
 	});
 });
 
+describe('decodeDiagnostic', () => {
+	it('is null without a message', () => {
+		expect(decodeDiagnostic(null)).toBeNull();
+		expect(decodeDiagnostic({ level: 'error', message: '  ' })).toBeNull();
+	});
+
+	it('normalizes one entry the way a whole outcome does', () => {
+		const entry = { level: 'warning', message: ' x ', source: 'S', isGate: true };
+		expect(decodeDiagnostic(entry)).toEqual(
+			decodeOutcome({ diagnostics: [entry] })?.diagnostics[0]
+		);
+	});
+});
+
+describe('outcomeFromComputeMessages', () => {
+	it('normalizes as decodeOutcome does: no empties, no exact repeats', () => {
+		expect(outcomeFromComputeMessages(['boom', 'boom', '   '], [])).toEqual({
+			diagnostics: [{ level: 'error', message: 'boom' }],
+			blocked: false,
+			aborted: false
+		});
+	});
+
+	it('skips an entry that is not a string instead of throwing', () => {
+		const errors = ['boom', 7, null] as unknown as string[];
+		expect(outcomeFromComputeMessages(errors, []).diagnostics).toEqual([
+			{ level: 'error', message: 'boom' }
+		]);
+	});
+});
+
 describe('finalizeResult', () => {
 	const clean = { diagnostics: [], blocked: false, aborted: false };
 
@@ -74,14 +124,18 @@ describe('finalizeResult', () => {
 		expect(finalizeResult({ outputs: {} }, clean)).not.toHaveProperty('meshes');
 	});
 
-	it('drops outputs and clears meshes for a rejected outcome', () => {
+	it('keeps the source of a clean outcome', () => {
+		expect(finalizeResult({ outputs: {}, source: 'raw' }, clean).source).toBe('raw');
+	});
+
+	it('drops outputs, meshes and the source holding them for a rejected outcome', () => {
 		const result = finalizeResult(
 			{ outputs: { a: 1 }, meshes: ['m'], source: 'raw' },
 			decodeOutcome(outcome)!
 		);
 		expect(result.outputs).toEqual({});
 		expect(result.meshes).toEqual([]);
-		expect(result.source).toBe('raw');
+		expect(result).not.toHaveProperty('source');
 		expect(result.errors).toEqual(['More than 200 spheres']);
 		expect(result.warnings).toHaveLength(2);
 	});

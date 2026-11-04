@@ -1,27 +1,23 @@
 ---
-title: Providers
-order: 3
+title: Choosing a provider
+order: 0
 published: true
 description: 'Bring your own backend: auth, data, and storage are pluggable interfaces you pick at deploy time.'
 ---
 
 # Providers
 
-Selva doesn't own a database, an auth service, or a file store. Those are **providers**: backends you pick at deploy time. The app is written against interfaces, so the same Selva runs on files on disk, on Supabase, or behind corporate SSO. You switch by config, not by forking.
+Auth, data, and storage are **providers**: backends you pick at deploy time by config. The same Selva runs on files on disk, on Supabase, or behind corporate SSO.
 
-Where credentials live follows from that choice. Point Selva at Supabase or corporate SSO and identity stays there, with Selva keeping only session tokens and authorization data. Run the local provider and Selva _is_ the auth provider, storing emails and password hashes itself. Either way Selva also stores display names, invite emails, audit-event payloads, and solve telemetry: the deployment operator is the data controller for all of it.
+Where identity data lives depends on the provider: `local` keeps emails and password hashes on your disk, `supabase` keeps credentials in Supabase Auth, and `header-auth` stores each user's UPN, email and display name in `header-allowlist.json`. The operator is the data controller in every case: see [data privacy](../concepts/data-privacy.md).
 
 ## Three roles
 
-Mix implementations freely: Supabase for auth and data, files elsewhere, for example.
+- **Auth** (`IAuthProvider`): tokens, users, sessions. The identity it produces drives everything else.
+- **Data** (`IDataProvider`): the stores for orgs, projects, definitions and their versions, share links, invites, compute servers, user profiles, platform permissions, platform project grants and API tokens, plus optional audit and event hooks.
+- **Storage** (`IStorageProvider`): blobs for definition files and assets.
 
-| Role        | Interface          | Owns                                                                                                                  |
-| ----------- | ------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| **Auth**    | `IAuthProvider`    | Tokens, users, sessions. The identity it produces drives everything else.                                             |
-| **Data**    | `IDataProvider`    | Metadata: orgs, projects, definitions + version history, share links, invites, compute config, profiles, permissions. |
-| **Storage** | `IStorageProvider` | Blob storage for definition files and assets.                                                                         |
-
-These are plain TypeScript interfaces in [`@selvajs/platform`](https://www.npmjs.com/package/@selvajs/platform). Each adapter lives in its own package.
+The interfaces live in [`@selvajs/platform`](https://www.npmjs.com/package/@selvajs/platform), whose README is the contract.
 
 ## What ships
 
@@ -31,16 +27,16 @@ These are plain TypeScript interfaces in [`@selvajs/platform`](https://www.npmjs
 | [`supabase`](./supabase.md)             | Supabase Auth + Postgres + Storage    | Multi-instance, several tenants           |
 | [`header-auth`](./header-auth-entra.md) | Trusts reverse-proxy identity headers | Existing SSO (Caddy, oauth2-proxy, Entra) |
 
-Pick one per slot with `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER`, then restart. Each defaults to `local`. Note `header` is auth-only; pair it with `local` or `supabase` for data and storage.
+Set `SELVA_AUTH_PROVIDER` / `SELVA_DATA_PROVIDER` / `SELVA_STORAGE_PROVIDER` (default `local`) and restart. `header` is auth-only. For your own, see [Writing a provider](./writing-a-provider.md).
 
-For a provider not shipped in the box, point `SELVA_CONFIG_PATH` at a `.js` file exporting a `defineConfig()` result. See [Writing a provider](./writing-a-provider.md).
+## Mixing providers
 
-## The scoping rule
+The three slots are chosen independently, but only some combinations are documented: all `local`, all `supabase`, and `header` auth with `local` data and storage. Check any other mix before relying on it.
 
-Every request carries a `RequestContext`: the caller's identity and scope. One rule makes multi-tenancy safe: **the query is the security boundary.** Providers filter every read and write by that context, so an unauthorized caller gets empty results or an error, never someone else's data.
+Supabase data scopes every query by a session token issued by the Supabase auth provider; API-token requests get one through its `delegatedSession`. Under another auth provider no token is sent, so queries run as the anon role, which row-level security may deny. `header-auth` has no `delegatedSession`.
 
 ## Next
 
 - [Local](./local.md) · [Supabase](./supabase.md) · [Header-auth & Entra](./header-auth-entra.md) · [Writing a provider](./writing-a-provider.md)
-- [Architecture](../../architecture.md): where providers sit.
-- [Permissions & Organizations](../concepts/permissions.md): the authorization model providers store.
+- [Architecture](../../architecture.md)
+- [Permissions & Organizations](../concepts/permissions.md)

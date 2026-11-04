@@ -61,7 +61,7 @@
 		</Dialog.Header>
 
 		<div class="space-y-4">
-			<div class="bg-muted/50 rounded-lg border p-4">
+			<div class="bg-muted rounded-lg border p-4">
 				<h3 class="mb-2 font-semibold">Schema Details</h3>
 				<dl class="space-y-1 text-sm">
 					<div class="flex justify-between">
@@ -116,17 +116,11 @@
 			</div>
 
 			{#if validation.isValid}
-				<Callout tone="success" title="Schema Valid">
-					This schema is compatible with your current document and can be safely imported.
-				</Callout>
+				<Callout tone="success" title="Schema valid" />
 			{:else if validation.canLoad}
-				<Callout tone="warning" title="Warnings Found">
-					The schema can be imported but has some warnings. Review them below.
-				</Callout>
+				<Callout tone="warning" title="Importable, with warnings" />
 			{:else}
-				<Callout tone="danger" title="Cannot Import">
-					This schema has validation errors and cannot be imported. See details below.
-				</Callout>
+				<Callout tone="danger" title="Cannot import" />
 			{/if}
 
 			{#if validation.issues.length > 0}
@@ -142,14 +136,9 @@
 				</div>
 			{/if}
 
-			<Callout tone="info" title="What happens when you import?">
-				<ul class="list-inside list-disc">
-					<li>Your current layout configuration will be completely replaced</li>
-					<li>All tabs, groups, and widget arrangements will be updated</li>
-					<li>Parameter values are NOT affected (only the layout)</li>
-					<li>The schema will be saved to your Grasshopper document</li>
-				</ul>
-			</Callout>
+			<p class="text-muted-foreground text-xs">
+				Replaces your layout. Parameter values are not affected.
+			</p>
 		</div>
 
 		<Dialog.Footer class="flex gap-2">

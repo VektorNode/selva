@@ -2,11 +2,10 @@
  * LIVE check that a running compute server's `/grasshopper/schema` body is
  * readable by this client.
  *
- * ## Why a live test, when the committed server-contract snapshot pins the wire names
+ * ## Why a live test
  *
- * That snapshot comes from the server's C# SOURCE. The failure this test guards
- * against is invisible there, because it is not in the source at all — it is an
- * assembly identity problem that only exists at runtime:
+ * The failure this test guards against is invisible in the server's C# source: it
+ * is an assembly identity problem that only exists at runtime:
  *
  * `Selva.gha` ILRepack-merges Newtonsoft.Json, so the `[JsonProperty("inputs")]`
  * attributes on `UISchema` have type `Selva!Newtonsoft.Json.JsonPropertyAttribute`.
@@ -22,7 +21,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { normalizeUISchemaCasing } from '../../src/grasshopper/io/normalize-ui-schema';
 import { readSchemaResults } from '../../src/grasshopper/io/schema-endpoint';
@@ -33,10 +32,6 @@ const API_KEY = process.env.COMPUTE_LIVE_KEY;
 // A definition carrying a real embedded Selva schema.
 const FIXTURE = resolve(__dirname, '../fixtures/bench-display.gh');
 
-// `tests/setup.ts` replaces global.fetch with a vi.fn() for unit suites and
-// stashes the real one here for exactly this case.
-const nativeFetch = (globalThis as { __nativeFetch?: typeof fetch }).__nativeFetch ?? fetch;
-
 async function postSchema(): Promise<unknown> {
 	const form = new FormData();
 	form.append(
@@ -45,7 +40,7 @@ async function postSchema(): Promise<unknown> {
 		'definition.gh'
 	);
 
-	const response = await nativeFetch(new URL('/grasshopper/schema', COMPUTE_URL), {
+	const response = await fetch(new URL('/grasshopper/schema', COMPUTE_URL), {
 		method: 'POST',
 		headers: API_KEY ? { RhinoComputeKey: API_KEY } : {},
 		body: form,
@@ -57,6 +52,8 @@ async function postSchema(): Promise<unknown> {
 }
 
 describe.runIf(Boolean(COMPUTE_URL))('live /grasshopper/schema body', () => {
+	beforeEach(() => vi.unstubAllGlobals());
+
 	it('yields a schema this client can read', async () => {
 		const results = readSchemaResults(await postSchema());
 		const raw = results.flatMap((r) => r.schemas ?? []);

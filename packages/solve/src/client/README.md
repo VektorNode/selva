@@ -26,8 +26,8 @@ A driver turns its transport's reply into a `SolveResult` with `finalizeResult` 
 `shared/outcome.ts`, after decoding the plugin's verdict with `decodeOutcome`. That is where
 "a blocked or aborted solve has no result" is decided, for every transport.
 
-Adding a live event kind: a case in `reduceLiveSolve` and a field on `LiveSolveState`. Unknown
-kinds already land in `LiveSolveState.other`.
+Adding a live event kind: a case in `reduceLiveSolve` (`events/live-solve.ts`) and a field on
+`LiveSolveState`. Unknown kinds already land in `LiveSolveState.other`.
 
 ## Typical flow
 
@@ -37,8 +37,9 @@ kinds already land in `LiveSolveState.other`.
 4. The UI reads the latest state from the session.
 
 ```ts
-const session = createSolveSession({ driver: createRequestResponseDriver() });
-session.solve({ width: 10, height: 20 });
+const driver = createRequestResponseDriver(onSolve, () => session, { solveDeadlineMs });
+const session = createSolveSession({ schema, scopeKey, driver });
+session.setValue('width', 10);
 ```
 
 ```ts
@@ -71,6 +72,7 @@ re-renders.
 
 ```ts
 const driver = createRequestResponseDriver(onSolve, () => session, {
+	solveDeadlineMs,
 	onChange: () => session.notify()
 });
 ```
@@ -106,16 +108,16 @@ A driver with its own queue also exposes `hasQueued`, true while a newer solve w
 reporting. The session then holds back that result's settlement, so a host hears about the solve
 that lands, not every one on the way. A push transport without a queue leaves it out.
 
+A driver that owns its solves also exposes `reset()`: the session calls it on rebuild and dispose,
+so a late result can't land in the wrong definition. A push transport leaves it out, because the
+solve it would stop belongs to the Grasshopper canvas.
+
 ## Real-world examples
 
 ### WebSocket app
 
-Use this when a plugin or local service pushes results back to the app.
-
-```ts
-const session = createSolveSession({ driver: createRequestResponseDriver() });
-session.solve(values);
-```
+Use this when a plugin or local service pushes results back to the app. Write a driver as above:
+`packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts` is the working example.
 
 ### HTTP app
 
@@ -124,7 +126,9 @@ Use the HTTP solve helper when the server responds to a request.
 ```ts
 const solve = createComputeFetchSolveFn({
 	endpoint: '/api/compute',
-	definitionUrl: () => '/definition.gh'
+	definitionUrl: () => '/definition.gh',
+	inputs: () => schema.inputs,
+	outputs: () => schema.outputs
 });
 ```
 
@@ -143,7 +147,7 @@ needs a policy from the host.
 
 ```ts
 import { meshPolicy } from '@selvajs/visualization/parse';
-const driver = createRequestResponseDriver(onSolve, () => session, { meshPolicy });
+const driver = createRequestResponseDriver(onSolve, () => session, { solveDeadlineMs, meshPolicy });
 ```
 
 Without a policy, the memo stores meshes by reference. That only works when nothing else disposes

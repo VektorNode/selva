@@ -107,9 +107,14 @@ public sealed class StepProgress
     ///     solution, but guard anyway so a second call cannot count twice.
     /// </summary>
     /// <param name="skipped">The reporter got no data, so the step it describes will not run.</param>
-    public Snapshot? Step(Guid id, string label, bool skipped, long nowMs)
+    /// <param name="aborted">
+    ///     The solution is being aborted. A skip then comes from the abort, not the definition, and
+    ///     counting it would walk the bar to 100% for a solve that did not finish.
+    /// </param>
+    public Snapshot? Step(Guid id, string label, bool skipped, long nowMs, bool aborted = false)
     {
         if (_current == id || _done.Contains(id)) return null;
+        if (skipped && aborted) return null;
 
         // Not predicted at the start: expired mid-solution, or the runtime was created by this
         // very report. Count it rather than drop it.

@@ -24,7 +24,7 @@ describe('isSceneContent', () => {
 	});
 
 	it('rejects viewer aids by userData.id', () => {
-		for (const id of ['grid', 'floor', 'label-layer', 'measure']) {
+		for (const id of ['grid', 'floor', 'label-layer', 'measure', 'sun-target']) {
 			expect(isSceneContent(withUserData(new THREE.Object3D(), { id }))).toBe(false);
 		}
 	});

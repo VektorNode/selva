@@ -42,20 +42,27 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const orgs = getOrganizationProvider();
 	const auth = getAuthProvider();
 
+	// The roster and the invites are independent, and each member's identity and profile
+	// depend only on the roster: two waits, not four.
+	const pendingInvites = getInviteStore()
+		.listByOrg(ctx, orgId, { limit: 100 })
+		.then((page) => page.items)
+		.catch((): Invite[] => []);
+
 	let members: MemberRow[] = [];
 	let actorRole: OrgRole | null = null;
 	try {
 		const page = await orgs.listOrgMembers(ctx, orgId, { limit: 200 });
 		const userIds = page.items.map((m) => m.userId);
-		const users = await Promise.all(
-			userIds.map((id) => auth.getUser(id).catch(() => null as AuthUser | null))
-		);
-		const userById = new Map(users.filter((u): u is AuthUser => !!u).map((u) => [u.id, u]));
 		// `displayName` lives on `UserProfile`, not `AuthUser`, and the profile only
 		// has a value once the user sets one. Header-auth carries the IdP name on
 		// the identity's metadata instead — same resolution order as /admin/users,
 		// so one person renders identically on both pages.
-		const profiles = await getUserProfileStore().getProfiles(ctx, userIds);
+		const [users, profiles] = await Promise.all([
+			Promise.all(userIds.map((id) => auth.getUser(id).catch(() => null as AuthUser | null))),
+			getUserProfileStore().getProfiles(ctx, userIds)
+		]);
+		const userById = new Map(users.filter((u): u is AuthUser => !!u).map((u) => [u.id, u]));
 		const profileById = new Map(profiles.map((p) => [p.userId, p]));
 		members = page.items.map((m) => {
 			const authUser = userById.get(m.userId);
@@ -75,13 +82,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		// Provider may not support listing — surface empty roster
 	}
 
-	let invites: Invite[] = [];
-	try {
-		const page = await getInviteStore().listByOrg(ctx, orgId, { limit: 100 });
-		invites = page.items;
-	} catch {
-		// Non-fatal
-	}
+	const invites = await pendingInvites;
 
 	// Drives the copy after minting: with mail off the admin must send the link
 	// themselves, so the UI says so instead of implying it was delivered.

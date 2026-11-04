@@ -40,6 +40,20 @@ export function isClosedSolid(
 	const tag = new Int32Array(vertexCount);
 	const canonicalOf = new Int32Array(vertexCount);
 
+	// Per-member tables, grown to the largest member and reused: a fresh set per member is about
+	// 1 MB of zeroed memory each.
+	let weldVertex: Int32Array = new Int32Array(0);
+	let cellX: Int32Array = new Int32Array(0);
+	let cellY: Int32Array = new Int32Array(0);
+	let cellZ: Int32Array = new Int32Array(0);
+	let welded: Int32Array = new Int32Array(0);
+	let vertexOf: Int32Array = new Int32Array(0);
+	let outStart: Int32Array = new Int32Array(0);
+	let outTo: Int32Array = new Int32Array(0);
+	let cursor: Int32Array = new Int32Array(0);
+	const grown = (array: Int32Array, length: number): Int32Array =>
+		array.length >= length ? array : new Int32Array(length);
+
 	const memberIsClosed = (member: number, start: number, count: number): boolean => {
 		// A tetrahedron is the smallest closed surface.
 		if (count < 12 || count % 3 !== 0) return false;
@@ -72,10 +86,12 @@ export function isClosedSolid(
 
 		const weldSize = tableSizeFor(uniqueVertices);
 		const weldMask = weldSize - 1;
-		const weldVertex = new Int32Array(weldSize).fill(-1);
-		const cellX = new Int32Array(weldSize);
-		const cellY = new Int32Array(weldSize);
-		const cellZ = new Int32Array(weldSize);
+		// Only `weldVertex` is read before it is written: a cell's coordinates count once its slot is taken.
+		weldVertex = grown(weldVertex, weldSize);
+		weldVertex.fill(-1, 0, weldSize);
+		cellX = grown(cellX, weldSize);
+		cellY = grown(cellY, weldSize);
+		cellZ = grown(cellZ, weldSize);
 		const cellSlot = (x: number, y: number, z: number): number => {
 			let h = Math.imul(x, 0x9e3779b1) ^ Math.imul(y, 0x85ebca77) ^ Math.imul(z, 0xc2b2ae3d);
 			h = (h ^ (h >>> 15)) & weldMask;
@@ -91,9 +107,9 @@ export function isClosedSolid(
 			return offset > 0.25 ? cell + 1 : offset < -0.25 ? cell - 1 : cell;
 		};
 
-		const welded = new Int32Array(count);
+		welded = grown(welded, count);
 		// The vertex each canonical stands for, to read its position.
-		const vertexOf = new Int32Array(uniqueVertices);
+		vertexOf = grown(vertexOf, uniqueVertices);
 		let canonicals = 0;
 		for (let i = 0; i < count; i++) {
 			const v = indices[start + i]!;
@@ -112,13 +128,16 @@ export function isClosedSolid(
 			const nz = neighbour(sz, z);
 
 			let canonical = -1;
+			let ownSlot = -1;
 			for (let combo = 0; combo < 8 && canonical === -1; combo++) {
 				if ((combo & 1 && nx === x) || (combo & 2 && ny === y) || (combo & 4 && nz === z)) continue;
 				const h = cellSlot(combo & 1 ? nx : x, combo & 2 ? ny : y, combo & 4 ? nz : z);
+				if (combo === 0) ownSlot = h;
 				if (weldVertex[h] !== -1) canonical = weldVertex[h]!;
 			}
 			if (canonical === -1) {
-				const h = cellSlot(x, y, z);
+				// Nothing matched, so the table is as the first probe left it: that slot is still free.
+				const h = ownSlot;
 				canonical = canonicals++;
 				weldVertex[h] = canonical;
 				cellX[h] = x;
@@ -135,7 +154,8 @@ export function isClosedSolid(
 		// That is exactly "every edge joins two triangles that agree on winding", i.e. closed and
 		// consistently oriented. Each canonical's outgoing edges sit together, so both checks scan
 		// its handful of neighbours rather than hashing every edge.
-		const outStart = new Int32Array(canonicals + 1);
+		outStart = grown(outStart, canonicals + 1);
+		outStart.fill(0, 0, canonicals + 1);
 		let triangles = 0;
 		for (let i = 0; i < count; i += 3) {
 			const a = welded[i]!;
@@ -150,8 +170,9 @@ export function isClosedSolid(
 		}
 		if (triangles < 4) return false;
 		for (let k = 0; k < canonicals; k++) outStart[k + 1] += outStart[k]!;
-		const outTo = new Int32Array(outStart[canonicals]!);
-		const cursor = outStart.slice(0, canonicals);
+		outTo = grown(outTo, outStart[canonicals]!);
+		cursor = grown(cursor, canonicals);
+		cursor.set(outStart.subarray(0, canonicals));
 		for (let i = 0; i < count; i += 3) {
 			const a = welded[i]!;
 			const b = welded[i + 1]!;

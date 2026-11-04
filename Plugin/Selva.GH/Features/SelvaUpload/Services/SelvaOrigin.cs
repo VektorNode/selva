@@ -26,6 +26,14 @@ public static class SelvaOrigin
             return false;
         }
 
+        // Checked before anything else touches the text: connecting would send a pasted key to
+        // DNS and the system proxy as a host name.
+        if (text.IndexOf(ApiKeyFormat.Prefix, StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            error = "That's a Selva key, not an address. Sign in with the browser, or use Rhino's \"Use an API key\" dialog.";
+            return false;
+        }
+
         if (!text.Contains("://"))
         {
             text = "https://" + text;
@@ -46,6 +54,12 @@ public static class SelvaOrigin
         if (!string.IsNullOrEmpty(uri.UserInfo))
         {
             error = "Leave the user name and password out of the address.";
+            return false;
+        }
+
+        if (uri.HostNameType == UriHostNameType.Dns && !uri.Host.Contains(".") && !IsLoopbackHost(uri.Host))
+        {
+            error = "Enter the full address, such as selva.example.com.";
             return false;
         }
 

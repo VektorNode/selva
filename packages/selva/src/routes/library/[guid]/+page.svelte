@@ -30,8 +30,8 @@
 	// One SSE stream per tab; the solve fn names it so the server routes each solve's events here.
 	// Anonymous share-token viewers get no stream (the route needs a session) and solve as before.
 	// Built only for a signed-in viewer: the stream connects as soon as it exists, and an
-	// anonymous one would retry a 401 forever. Signing in or out is a navigation, so the initial
-	// value is the only one this page sees.
+	// anonymous one would keep retrying a 401 with backoff. Signing in or out is a navigation, so
+	// the initial value is the only one this page sees.
 	const liveEvents = untrack(() => isAuthed)
 		? createSolveEventStream({
 				endpoint: '/api/v1/solve-events',

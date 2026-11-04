@@ -18,6 +18,7 @@ internal sealed class SelvaWebHost
     private static readonly Size DefaultWindowSize = new Size(1100, 800);
 
     private PanelTarget? _shown;
+    private bool _pageLoaded;
 
     // Created on the first target and kept for the life of the plug-in: an idle panel starts no
     // browser process, and disposing WebView2 mid-initialisation throws E_ABORT on older Eto.
@@ -38,6 +39,9 @@ internal sealed class SelvaWebHost
     /// <summary>The panel re-reads <see cref="View" /> and <see cref="InWindow" />.</summary>
     public event Action? Changed;
 
+    /// <summary>The shown target's page has loaded, or was already loaded when shown again.</summary>
+    public event Action? PageLoaded;
+
     public PanelTarget? Shown => _shown;
 
     /// <summary>The WebView to display, or null while there's no session.</summary>
@@ -45,27 +49,47 @@ internal sealed class SelvaWebHost
 
     public bool InWindow => _window != null;
 
-    public void Show(PanelTarget target)
+    /// <param name="raise">
+    ///     Activates a panel or pop-out already on screen. Off for shows the user didn't ask for:
+    ///     the Grasshopper editor and a floating panel are sibling windows owned by Rhino's main
+    ///     window, so activating the panel lifts it over the editor.
+    /// </param>
+    public void Show(PanelTarget target, bool raise)
+    {
+        Retarget(target);
+
+        if (_window != null)
+        {
+            if (raise)
+            {
+                _window.BringToFront();
+            }
+        }
+        else if (raise || !Panels.IsPanelVisible(typeof(SelvaPanel).GUID))
+        {
+            Panels.OpenPanel(typeof(SelvaPanel).GUID);
+        }
+    }
+
+    /// <summary>Points the WebView at a session; a panel the user closed stays closed.</summary>
+    public void Retarget(PanelTarget target)
     {
         _webView ??= CreateWebView();
         var previous = _shown;
 
         // Before navigating: the navigation policy judges the request against _shown.
         _shown = target;
-        if (previous?.Url != target.Url)
+        var navigate = previous?.Url != target.Url;
+        if (navigate)
         {
+            _pageLoaded = false;
             _webView.Url = target.Url;
         }
 
         Changed?.Invoke();
-
-        if (_window != null)
+        if (!navigate && _pageLoaded)
         {
-            _window.BringToFront();
-        }
-        else
-        {
-            Panels.OpenPanel(typeof(SelvaPanel).GUID);
+            PageLoaded?.Invoke();
         }
     }
 
@@ -81,6 +105,7 @@ internal sealed class SelvaWebHost
         }
 
         _shown = null;
+        _pageLoaded = false;
         if (!keepWindow)
         {
             CloseWindow();
@@ -218,8 +243,16 @@ internal sealed class SelvaWebHost
             }
         };
 
-        // A reload forgets what NotifyPage told the previous document.
-        webView.DocumentLoaded += (_, _) => NotifyPage();
+        webView.DocumentLoaded += (_, e) =>
+        {
+            // A reload forgets what NotifyPage told the previous document.
+            NotifyPage();
+            if (_shown != null && e.Uri != null && e.Uri.Scheme != Blank.Scheme)
+            {
+                _pageLoaded = true;
+                PageLoaded?.Invoke();
+            }
+        };
 
         EnableWebInspector(webView);
         return webView;

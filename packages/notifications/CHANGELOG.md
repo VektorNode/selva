@@ -1,5 +1,69 @@
 # @selvajs/notifications
 
+## 0.3.0-beta.11
+
+### Patch Changes
+
+- Updated dependencies [a723f1a]
+  - @selvajs/platform@1.0.0-beta.11
+
+## 0.3.0-beta.10
+
+### Patch Changes
+
+- Updated dependencies [95dbab4]
+  - @selvajs/platform@1.0.0-beta.10
+
+## 0.3.0-beta.9
+
+### Patch Changes
+
+- Updated dependencies [94692f5]
+  - @selvajs/platform@1.0.0-beta.9
+
+## 0.3.0-beta.8
+
+### Patch Changes
+
+- Updated dependencies [3ba8225]
+  - @selvajs/platform@1.0.0-beta.8
+
+## 0.3.0-beta.7
+
+### Patch Changes
+
+- Updated dependencies [a409b68]
+  - @selvajs/platform@1.0.0-beta.7
+
+## 0.3.0-beta.6
+
+### Patch Changes
+
+- Updated dependencies [5a42d64]
+  - @selvajs/platform@1.0.0-beta.6
+
+## 0.3.0-beta.5
+
+### Patch Changes
+
+- Updated dependencies [a7c12ee]
+  - @selvajs/platform@1.0.0-beta.5
+
+## 0.3.0-beta.4
+
+### Patch Changes
+
+- Updated dependencies [b6935ce]
+- Updated dependencies [817af19]
+- Updated dependencies [cc081b1]
+- Updated dependencies [eebd2f6]
+- Updated dependencies [35e5c67]
+- Updated dependencies [77780c7]
+- Updated dependencies [5ab63df]
+- Updated dependencies [ff7e2a0]
+- Updated dependencies [1fb3914]
+  - @selvajs/platform@1.0.0-beta.4
+
 ## 0.3.0-beta.3
 
 ### Patch Changes

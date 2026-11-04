@@ -33,7 +33,7 @@ schedule.
 
 Two adapters define this seam:
 
-- **Request/response driver** — wraps `createAsyncThrottle` + a `SolveFn` (`onSolve`).
+- **Request/response driver** — wraps a latest-wins throttle + a `SolveFn` (`onSolve`).
   Calls `session.report()` when the solve promise resolves. Lives beside the session in
   `@selvajs/solve/client`; used by `ComputeApp`.
 - **WebSocket driver** — sends values over the socket; reports when output frames

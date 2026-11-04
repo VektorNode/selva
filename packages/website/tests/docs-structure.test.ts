@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 const DOCS_ROOT = fileURLToPath(new URL('../../../docs/', import.meta.url));
+const STATIC_ROOT = path.resolve(import.meta.dirname, '../static');
 
 // ADRs are excluded from the website glob entirely, so none of the rules here
 // apply to them — they are internal records, not published pages.
@@ -107,7 +108,10 @@ describe('docs links', () => {
 				const target = href.split('#')[0];
 				if (!target) continue;
 
-				const resolved = path.resolve(fromDir, target);
+				// A root-relative link is served from the site's static folder.
+				const resolved = target.startsWith('/')
+					? path.join(STATIC_ROOT, target)
+					: path.resolve(fromDir, target);
 				try {
 					statSync(resolved);
 				} catch {

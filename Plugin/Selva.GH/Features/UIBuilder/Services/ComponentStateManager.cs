@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using Selva.GH.Utilities.Guards;
 
 namespace Selva.GH.Features.UIBuilder.Services;
@@ -23,10 +24,17 @@ public class ComponentStateManager
     {
     }
 
-    internal ComponentStateManager(Func<bool> isHeadless)
+    internal ComponentStateManager(Func<bool> isHeadless, Func<DateTime>? utcNow = null)
     {
         _isHeadless = isHeadless ?? (() => false);
+        _utcNow = utcNow ?? (() => DateTime.UtcNow);
     }
+
+    // The schedule delay is 10-35 ms; this is long enough that a busy UI thread has started the
+    // solve by then, short enough that a solve which never starts doesn't stall the page.
+    internal const int ScheduledStaleMs = 2000;
+
+    private readonly Func<DateTime> _utcNow;
 
     // A SolutionStart was seen (possibly debounced) since the last SolutionEnd. The start-debounce
     // only suppresses redundant solving=true *indicator* broadcasts; it must NOT make the matching
@@ -40,7 +48,11 @@ public class ComponentStateManager
     // arriving in that gap would otherwise schedule a *second* solve. This flag, set synchronously the
     // moment we schedule, makes IsBusy true across the whole schedule→start→end cycle so the second
     // update coalesces (see _pendingValues) instead of double-scheduling. Cleared when a real solve ends.
-    private bool _solveScheduled;
+    //
+    // A schedule older than ScheduledStaleMs with no solve started reads as clear: the callback threw,
+    // the solver is disabled, or the document switched, and no SolutionEnd will ever come.
+    private volatile bool _solveScheduled;
+    private long _scheduledAtTicks;
 
     // Latest-wins coalesce buffer. When a value update arrives while IsBusy, we merge it here instead
     // of dropping it (the old behavior silently lost the final slider value when the update landed in
@@ -59,7 +71,31 @@ public class ComponentStateManager
     // _solveStartedSinceLastEnd, not just IsSolving: a debounced start leaves IsSolving false, and
     // an update applied during that solve schedules a solution that never runs until the next
     // message arrives.
-    public bool IsBusy => IsSolving || _solveScheduled || _solveStartedSinceLastEnd;
+    public bool IsBusy => IsSolving || _solveStartedSinceLastEnd || IsStartPending;
+
+    /// <summary>
+    ///     A solve is scheduled and its SolutionStart hasn't fired. False once the schedule goes stale,
+    ///     so a solve that never starts can't hold <see cref="IsBusy" /> forever.
+    /// </summary>
+    public bool IsStartPending
+    {
+        get
+        {
+            if (!_solveScheduled || IsSolving || _solveStartedSinceLastEnd)
+            {
+                return false;
+            }
+
+            var scheduledAt = new DateTime(Interlocked.Read(ref _scheduledAtTicks), DateTimeKind.Utc);
+            if ((_utcNow() - scheduledAt).TotalMilliseconds < ScheduledStaleMs)
+            {
+                return true;
+            }
+
+            _solveScheduled = false;
+            return false;
+        }
+    }
 
     public bool IsHeadlessMode => _isHeadless();
 
@@ -96,7 +132,7 @@ public class ComponentStateManager
             _solveScheduled = false;
             if (solved)
             {
-                _lastStateChangeTime = DateTime.UtcNow;
+                _lastStateChangeTime = _utcNow();
             }
 
             Debug.WriteLine($"[ComponentStateManager] Solve ended (actuallySolving={solved})");
@@ -108,7 +144,7 @@ public class ComponentStateManager
 
         if (!IsSolving)
         {
-            var now = DateTime.UtcNow;
+            var now = _utcNow();
             var timeSinceLastChange = (now - _lastStateChangeTime).TotalMilliseconds;
 
             // Debounce only the solving=true indicator broadcast — rapid back-to-back solve starts
@@ -136,6 +172,7 @@ public class ComponentStateManager
     /// </summary>
     public void MarkSolveScheduled()
     {
+        Interlocked.Exchange(ref _scheduledAtTicks, _utcNow().Ticks);
         _solveScheduled = true;
     }
 

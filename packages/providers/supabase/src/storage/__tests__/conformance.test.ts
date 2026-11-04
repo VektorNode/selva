@@ -1,7 +1,7 @@
 import { describe, beforeEach, it, expect } from 'vitest';
 import { createClient } from '@supabase/supabase-js';
 import { runStorageProviderConformance } from '@selvajs/platform/testing';
-import { definitionPaths } from '@selvajs/platform';
+import { definitionPaths, orgPaths } from '@selvajs/platform';
 import { SupabaseStorageProvider } from '../SupabaseStorageProvider.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -145,9 +145,13 @@ if (_adminClient === null) {
 			});
 
 			it('getPublicUrl returns the CDN URL for public files', () => {
-				const path = definitionPaths.image('guid-1');
-				const url = storage.getPublicUrl(path);
+				const url = storage.getPublicUrl(orgPaths.asset('acme', 'logo'));
 				expect(url).toContain(`/storage/v1/object/public/${PUBLIC_BUCKET}/`);
+			});
+
+			it('getPublicUrl keeps a cover behind the proxy', () => {
+				const path = definitionPaths.image('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+				expect(storage.getPublicUrl(path)).toBe(`/api/files/${path}`);
 			});
 		});
 	});

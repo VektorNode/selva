@@ -3,7 +3,16 @@ import {
 	type GrasshopperComputeConfig,
 	type SolveScheduler
 } from '@selvajs/compute/grasshopper';
-import { enableDebugLogging } from '@selvajs/compute/core';
+import { ComputeError, enableDebugLogging, ErrorCodes } from '@selvajs/compute/core';
+
+import { createConcurrencyProbe } from './concurrency-probe';
+import { fetchForDeadline } from './long-fetch';
+import {
+	MAX_SOLVE_DEADLINE_MS,
+	sameSolveLimits,
+	solveLimitsFor,
+	type SolveLimits
+} from './server-limits';
 
 // ============================================================================
 // Shared compute client cache
@@ -23,12 +32,6 @@ import { enableDebugLogging } from '@selvajs/compute/core';
 // for `getIO` — so a definition that was just solved renders from the same
 // warm client instead of re-handshaking Rhino.Compute per page load.
 
-/**
- * Opaque identity of a compute server — construct only via `serverIdentity()`.
- * Kept opaque so "a server is now a pool of URLs behind one id" stays additive.
- */
-export type ServerIdentity = string & { readonly __brand: 'ServerIdentity' };
-
 /** Minimal resolved-server shape the cache needs (a subset of the app's `ComputeServerConfig`). */
 export interface ResolvedServer {
 	id: string;
@@ -37,13 +40,11 @@ export interface ResolvedServer {
 	apiKey?: string;
 }
 
-export function serverIdentity(server: Pick<ResolvedServer, 'id'>): ServerIdentity {
-	return server.id as ServerIdentity;
-}
-
 export interface CachedClient {
 	client: GrasshopperClient;
 	scheduler: SolveScheduler;
+	/** Read from the server when the client was built; a changed server rebuilds the client. */
+	limits: SolveLimits;
 }
 
 /**
@@ -55,13 +56,7 @@ export type ClientCacheDebug = boolean | 'verbose';
 
 /** Config injected by the consuming app, so this module stays env-agnostic and testable. */
 export interface ClientCacheConfig {
-	/** Per-solve timeout forwarded to the scheduler (`ComputeLimits.solveDeadlineMs`). */
-	solveDeadlineMs: number;
 	cachesolve: boolean;
-	/** Only meaningful with `cachesolve`. */
-	cacheerroredsolves: boolean;
-	/** Reference large definitions by server cache key instead of re-uploading. */
-	reuseServerDefinitionCache: boolean;
 	/**
 	 * Max solves that may wait in the FIFO queue, excluding in-flight solves
 	 * (capped at `maxConcurrent`, itself driven by the server's probed child
@@ -87,7 +82,7 @@ export interface ClientCacheConfig {
 	 */
 	maxResponseBytes?: number;
 	debug: ClientCacheDebug;
-	/** Max distinct warm compute servers before the LRU evicts the oldest. Default 16. */
+	/** Max distinct warm compute servers before the LRU evicts the oldest. */
 	maxWarmComputeServers?: number;
 	/** Sink for the debug lines. `onDebugLog` only fires when `debug` is not `false`. */
 	onDebugLog?: (message: string) => void;
@@ -95,14 +90,16 @@ export interface ClientCacheConfig {
 
 export interface ClientCache {
 	/**
-	 * Get (or create) the warm client + scheduler for a resolved compute server,
-	 * keyed by its `id`. `definitionGuid`, when present, is stamped as the
-	 * `X-Selva-Definition` header on this client's outbound solve/IO requests —
-	 * inert routing/telemetry metadata until a pool router exists.
+	 * Get (or create) the warm client + scheduler for a resolved compute server, keyed by its `id`.
+	 *
+	 * @throws {ComputeError} `ABORTED` when `evict` or `disposeAll` overtakes the build.
 	 */
 	getClient(server: ResolvedServer, opts?: { definitionGuid?: string }): Promise<CachedClient>;
-	/** Dispose and drop the warm client for `id`, so the next request rebuilds against fresh connection details. */
-	evict(id: string | ServerIdentity): void;
+	/**
+	 * Drops the warm client for `id`, so the next request rebuilds, and disposes it once idle. A
+	 * build in flight for `id` is abandoned.
+	 */
+	evict(id: string): void;
 	/** Solve-cache counters summed across every warm client. Counters die with the client that owns them, so totals can fall over time. */
 	solveCacheStats(): SolveCacheStats;
 	/**
@@ -113,7 +110,7 @@ export interface ClientCache {
 	 * its output, e.g. it reads an external source that has since changed.
 	 */
 	clearSolveCaches(): void;
-	/** Dispose every warm client. Test seam / shutdown hook. */
+	/** Dispose every warm client now, running solves included. Test seam / shutdown hook. */
 	disposeAll(): void;
 }
 
@@ -130,19 +127,10 @@ export interface SolveCacheStats {
 const DEFAULT_MAX_WARM_COMPUTE_SERVERS = 16;
 
 /**
- * Fallback concurrency while the first probe is still in flight, and the value
- * kept whenever a probe fails or reports 0 — never send more than a single
- * solve to a server whose real capacity is unknown.
+ * How often a warm client re-reads its server's limits, riding on solve completion like the
+ * concurrency probe. An operator who changes `--timeout` sees it within this window.
  */
-const FALLBACK_CONCURRENCY = 1;
-
-/**
- * How stale the compute server's child count may get before a solve triggers a
- * re-read. Short enough that a resized pool is picked up within a few solves,
- * long enough that a busy server is probed rarely — the probe rides on solve
- * completion, so an idle server is never polled at all.
- */
-const CONCURRENCY_PROBE_INTERVAL_MS = 5 * 60 * 1000;
+const LIMITS_RECHECK_MS = 5 * 60 * 1000;
 
 /**
  * How long a failed build is remembered before the next `getClient` retries the
@@ -164,16 +152,53 @@ interface FailedBuild {
 	at: number;
 }
 
+interface PendingBuild {
+	promise: Promise<CachedClient>;
+	/** Set when the connection details this build started from stopped being true. */
+	token: { stale: boolean };
+}
+
+interface SettledSolve {
+	fromCache?: boolean;
+	durationMs: number;
+	definitionReuploaded?: boolean;
+	response?: { errors?: unknown };
+}
+
+function describeSettledSolve(result: SettledSolve): string[] {
+	const verdict = result.fromCache
+		? 'HIT  — served from cache (no compute call)'
+		: 'miss — went to Rhino.Compute';
+	const lines = [`[Compute/selva-cache] ${verdict} (${Math.round(result.durationMs)}ms)`];
+	if (result.fromCache) return lines;
+
+	lines.push(
+		result.definitionReuploaded === true
+			? '[Compute/def-cache] miss — definition RE-UPLOADED (pointer was cold/stale)'
+			: result.definitionReuploaded === false
+				? '[Compute/def-cache] HIT  — definition reused from server cache (no upload)'
+				: '[Compute/def-cache] n/a — reuse disabled or non-reusable definition'
+	);
+	const errors = result.response?.errors;
+	if (Array.isArray(errors) && errors.length > 0) {
+		// A count: solver text can quote user input, and logs are out of erasure's reach.
+		lines.push(`[Compute/rhino-cache] ${errors.length} GH error(s); not cached by Rhino.Compute.`);
+	}
+	return lines;
+}
+
 export function createClientCache(config: ClientCacheConfig): ClientCache {
 	const maxWarmComputeServers = config.maxWarmComputeServers ?? DEFAULT_MAX_WARM_COMPUTE_SERVERS;
 	const cache = new Map<string, CachedClient>();
 	// Builds in flight, keyed like `cache`. Concurrent `getClient` calls for the
 	// same id must share ONE build: without this, both miss, both handshake, and
 	// the loser's entry is overwritten in the map without ever being disposed.
-	const pending = new Map<string, Promise<CachedClient>>();
+	const pending = new Map<string, PendingBuild>();
 	// Recent build failures, keyed like `cache`. Cleared by `evict` so a config
 	// fix takes effect immediately rather than waiting out the TTL.
 	const failed = new Map<string, FailedBuild>();
+	// Out of `cache`, waiting for their running solves to finish.
+	const draining = new Set<CachedClient>();
 
 	if (config.debug === 'verbose') enableDebugLogging();
 
@@ -181,18 +206,37 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 		if (config.debug) config.onDebugLog?.(message);
 	};
 
+	function isIdle({ scheduler }: CachedClient) {
+		return scheduler.inFlightCount === 0 && scheduler.queueDepth === 0;
+	}
+
+	/** Disposing a busy scheduler aborts its solves, so a config write would fail them all. */
+	function retire(entry: CachedClient) {
+		if (isIdle(entry)) entry.scheduler.dispose();
+		else draining.add(entry);
+	}
+
+	function finishDraining(entry: CachedClient) {
+		if (!draining.has(entry) || !isIdle(entry)) return;
+		draining.delete(entry);
+		entry.scheduler.dispose();
+	}
+
 	async function build(server: ResolvedServer, definitionGuid?: string): Promise<CachedClient> {
 		const debugVerbose = config.debug === 'verbose';
+		// The deadline comes from the server, read only once the client exists: pick the fetch
+		// for the longest one. Calls without a signal keep undici's limits either way.
+		const longFetch = fetchForDeadline(MAX_SOLVE_DEADLINE_MS);
 
 		const clientConfig: GrasshopperComputeConfig = {
 			serverUrl: server.serverUrl,
 			apiKey: server.apiKey,
-			// Lib-level debug is the verbose one (full payload logs); keep it on the
-			// verbose flag so the concise cache logs can run without the noise.
+			// Lib-level debug is the verbose one; keep it on the verbose flag so the
+			// concise cache logs can run without the noise.
 			debug: debugVerbose,
 			cachesolve: config.cachesolve,
-			cacheerroredsolves: config.cacheerroredsolves,
-			maxResponseBytes: config.maxResponseBytes
+			maxResponseBytes: config.maxResponseBytes,
+			...(longFetch && { fetch: longFetch })
 		};
 
 		if (config.debug) {
@@ -227,112 +271,74 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 		const client = await GrasshopperClient.create(clientConfig);
 
-		// rhino.compute hands out children in strict rotation and never reports "busy",
-		// so nothing downstream enforces a concurrency cap — send more than it has
-		// children and requests silently double up on one. Rhino.Compute is the only
-		// source of truth for its own child count, so this always probes rather than
-		// trusting an operator-supplied guess.
-		//
-		// The count is not static: children exit on their own under `-idlespan`, and
-		// `/launch-child` + `/recycle-children` resize the pool at runtime. So the probe
-		// re-runs after solves (see `refreshConcurrency`) rather than only at connect.
-		let maxConcurrent = FALLBACK_CONCURRENCY;
-		let lastProbeAt = 0;
-		let probing = false;
-
-		/**
-		 * Best-effort re-read of the server's child count. Never awaited by a caller:
-		 * a probe must not add a round-trip to the solve path, so a changed count takes
-		 * effect on the NEXT solve rather than the one that triggered the probe.
-		 *
-		 * `initialize: false` keeps this from spawning children on an idle server —
-		 * which also means a cold server honestly reports 0. Both a failed probe and a
-		 * 0 result fall back to `FALLBACK_CONCURRENCY` (1): an unknown-capacity server
-		 * is safer under-used than oversent.
-		 */
-		async function refreshConcurrency(scheduler?: { setMaxConcurrent(n: number): void }) {
-			if (probing) return;
-			probing = true;
-			try {
-				const children = await Promise.resolve(
-					client.serverStats?.getActiveChildren({ initialize: false })
-				).catch(() => null);
-				lastProbeAt = Date.now();
-				const next = !children || children <= 0 ? FALLBACK_CONCURRENCY : children;
-				if (next === maxConcurrent) return;
-				debugLog(
-					`[Compute/client-cache] concurrency ${maxConcurrent} → ${next} (server child count)`
-				);
-				maxConcurrent = next;
-				scheduler?.setMaxConcurrent(next);
-			} finally {
-				probing = false;
-			}
-		}
-
-		// One blocking probe at connect so the first solves already use the right cap.
-		await refreshConcurrency();
+		const probe = createConcurrencyProbe(client, debugLog);
+		const readLimits = async () =>
+			solveLimitsFor(
+				(await Promise.resolve(client.serverStats?.getLimits?.()).catch(() => null)) ?? null
+			);
+		const [limits] = await Promise.all([readLimits(), probe.refresh()]);
+		debugLog(
+			`[Compute/client-cache] server ${server.id}: deadline ${limits.solveDeadlineMs}ms, ` +
+				`request cap ${limits.maxRequestBytes ?? 'not reported'}, pointer reuse ${limits.reuseDefinitionCache}`
+		);
+		let limitsCheckedAt = Date.now();
+		let checkingLimits = false;
+		const recheckLimitsIfDue = () => {
+			if (checkingLimits || Date.now() - limitsCheckedAt < LIMITS_RECHECK_MS) return;
+			checkingLimits = true;
+			void readLimits()
+				.then((next) => {
+					limitsCheckedAt = Date.now();
+					if (sameSolveLimits(next, limits)) return;
+					debugLog(`[Compute/client-cache] server ${server.id} limits changed — rebuilding`);
+					if (cache.get(server.id) === entry) evictEntry(server.id);
+				})
+				.finally(() => {
+					checkingLimits = false;
+				});
+		};
 
 		const scheduler = client.createScheduler({
 			mode: 'queue',
 			// Queue mode defaults maxConcurrent to 1, serializing every solve on
 			// this server through a single slot while the compute VM's other
 			// compute.geometry children idle — always pass it explicitly.
-			maxConcurrent,
+			maxConcurrent: probe.maxConcurrent,
 			// The scheduler treats undefined as unbounded/no-deadline, so map our
 			// `0`-means-off convention to undefined rather than passing 0 (which
 			// would reject EVERY queued solve).
 			maxQueueDepth: config.maxQueueDepth || undefined,
 			queueWaitMs: config.queueWaitMs || undefined,
-			timeoutMs: config.solveDeadlineMs,
+			timeoutMs: limits.solveDeadlineMs,
 			// The byte budget is the only eviction pressure. A solve is a pure
 			// function of (definition, inputs), both immutable, so a retained
 			// result can never go stale — expiring one only forces a paid re-solve
 			// of the identical answer.
 			cache: config.responseCacheMaxBytes > 0 ? { maxBytes: config.responseCacheMaxBytes } : false,
-			reuseServerDefinitionCache: config.reuseServerDefinitionCache,
+			reuseServerDefinitionCache: limits.reuseDefinitionCache,
 			onSettle: (_ctx, result) => {
+				// Deferred: this hook fires before the scheduler drops the solve from its in-flight set.
+				queueMicrotask(() => finishDraining(entry));
 				if (result.status !== 'success') return;
-				// Piggyback the pool re-read on real traffic: only servers actually
-				// being used get probed, at most once per window, and never on the
-				// request path. A cache hit means we never reached the server, so it
-				// says nothing about the pool — don't spend a probe on it.
-				if (
-					result.fromCache !== true &&
-					Date.now() - lastProbeAt >= CONCURRENCY_PROBE_INTERVAL_MS
-				) {
-					// Safe despite being referenced from inside its own initializer:
-					// onSettle only ever fires during a solve, long after binding.
-					void refreshConcurrency(scheduler);
+				// A cache hit means we never reached the server, so it says nothing about the pool.
+				// `scheduler` is safe despite being referenced from inside its own initializer:
+				// onSettle only ever fires during a solve, long after binding.
+				if (result.fromCache !== true) {
+					probe.refreshIfDue(scheduler);
+					recheckLimitsIfDue();
 				}
-				if (!config.debug) return;
-				debugLog(
-					`[Compute/selva-cache] ${result.fromCache ? 'HIT  — served from cache (no compute call)' : 'miss — went to Rhino.Compute'} (${Math.round(result.durationMs)}ms)`
-				);
-				if (!result.fromCache) {
-					debugLog(
-						result.definitionReuploaded === true
-							? '[Compute/def-cache] miss — definition RE-UPLOADED (pointer was cold/stale)'
-							: result.definitionReuploaded === false
-								? '[Compute/def-cache] HIT  — definition reused from server cache (no upload)'
-								: '[Compute/def-cache] n/a — reuse disabled or non-reusable definition'
-					);
-				}
-				if (!result.fromCache) {
-					const errs = (result.response as { errors?: unknown[] })?.errors;
-					const errCount = Array.isArray(errs) ? errs.length : 0;
-					if (errCount > 0) {
-						const cacheNote = config.cacheerroredsolves
-							? 'cached (cacheerroredsolves on)'
-							: 'not cached (cacheerroredsolves off) — re-run until fixed';
-						debugLog(
-							`[Compute/rhino-cache] ${errCount} GH error(s); ${cacheNote}. First: ${JSON.stringify((errs as unknown[])[0])}`
-						);
-					}
-				}
+				if (config.debug) describeSettledSolve(result).forEach(debugLog);
 			}
 		});
-		return { client, scheduler };
+		const entry: CachedClient = { client, scheduler, limits };
+		return entry;
+	}
+
+	function evictEntry(id: string) {
+		const entry = cache.get(id);
+		if (!entry) return;
+		cache.delete(id);
+		retire(entry);
 	}
 
 	return {
@@ -347,7 +353,7 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			}
 
 			const inFlight = pending.get(key);
-			if (inFlight) return inFlight;
+			if (inFlight) return inFlight.promise;
 
 			// Replay a recent failure instead of re-running the probe ladder. The
 			// original error is rethrown verbatim so the caller still sees the real
@@ -366,13 +372,24 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 			// A build is a Rhino.Compute handshake — expensive, and repeated builds for
 			// the same id mean churn (LRU thrash or config-rotation evictions).
 			debugLog(`[Compute/client-cache] miss — building warm client for server ${key}`);
-			const buildPromise = (async () => {
+			const token = { stale: false };
+			const promise = (async () => {
 				let entry: CachedClient;
 				try {
 					entry = await build(server, opts?.definitionGuid);
 				} catch (err) {
-					failed.set(key, { error: err, at: Date.now() });
+					if (!token.stale) failed.set(key, { error: err, at: Date.now() });
 					throw err;
+				}
+
+				// Installing it would carry the old URL or key past the eviction, with nothing left to
+				// evict it again. Its caller holds a client built from those same details, so it fails too.
+				if (token.stale) {
+					entry.scheduler.dispose();
+					throw new ComputeError(
+						`Compute server ${key} changed while connecting.`,
+						ErrorCodes.ABORTED
+					);
 				}
 
 				if (cache.size >= maxWarmComputeServers) {
@@ -381,28 +398,33 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 						debugLog(
 							`[Compute/client-cache] LRU evicted warm client for server ${oldestKey} (cap ${maxWarmComputeServers})`
 						);
-						cache.get(oldestKey)?.scheduler.dispose();
+						const oldest = cache.get(oldestKey);
 						cache.delete(oldestKey);
+						if (oldest) retire(oldest);
 					}
 				}
 
 				cache.set(key, entry);
 				return entry;
-			})().finally(() => pending.delete(key));
-			pending.set(key, buildPromise);
-			return buildPromise;
+			})().finally(() => {
+				if (pending.get(key)?.token === token) pending.delete(key);
+			});
+			pending.set(key, { promise, token });
+			return promise;
 		},
 
 		evict(id): void {
-			const key = id as string;
 			// Drop any remembered failure too: `evict` means the connection details
 			// changed, so the reason the last build failed no longer applies.
-			failed.delete(key);
-			const entry = cache.get(key);
-			if (entry) {
-				debugLog(`[Compute/client-cache] evicted warm client for server ${key} (config change)`);
-				entry.scheduler.dispose();
-				cache.delete(key);
+			failed.delete(id);
+			const build = pending.get(id);
+			if (build) {
+				build.token.stale = true;
+				pending.delete(id);
+			}
+			if (cache.has(id)) {
+				debugLog(`[Compute/client-cache] evicted warm client for server ${id} (config change)`);
+				evictEntry(id);
 			}
 		},
 
@@ -433,8 +455,11 @@ export function createClientCache(config: ClientCacheConfig): ClientCache {
 
 		disposeAll(): void {
 			debugLog(`[Compute/client-cache] disposing all ${cache.size} warm client(s)`);
-			for (const entry of cache.values()) entry.scheduler.dispose();
+			for (const entry of [...cache.values(), ...draining]) entry.scheduler.dispose();
+			for (const build of pending.values()) build.token.stale = true;
+			pending.clear();
 			cache.clear();
+			draining.clear();
 			failed.clear();
 		}
 	};

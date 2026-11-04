@@ -28,6 +28,15 @@ import { LocalUserProfileProvider } from '../userProfile/LocalUserProfileProvide
 import { LocalPlatformPermissionStore } from '../permissions/LocalPlatformPermissionStore.js';
 import { createLocalUserDataStore, type LocalUserDataStore } from './userData.js';
 
+/** The concrete stores, for the erasure steps the platform interfaces don't have. */
+interface ErasableStores {
+	orgs: LocalOrgStore;
+	definitions: LocalDefinitionStore;
+	invites: LocalInviteStore;
+	shareLinks: LocalShareLinkStore;
+	platformProjectGrants: LocalPlatformProjectGrantStore;
+}
+
 /**
  * Composition root for every local-provider data store. One
  * `LocalOrgStoreLoader` is shared across org + project stores so they see the
@@ -50,13 +59,24 @@ export class LocalDataProvider implements IDataProvider {
 	readonly events?: IEventSink;
 
 	private readonly userData: LocalUserDataStore;
+	private readonly erasable: ErasableStores;
 
 	private constructor(
-		stores: Omit<IDataProvider, 'ensureUser' | 'onUserDeleted' | 'apiTokens'> & {
-			apiTokens: IApiTokenStore;
-		},
+		stores: Omit<
+			IDataProvider,
+			| 'ensureUser'
+			| 'onUserDeleted'
+			| 'apiTokens'
+			| 'orgs'
+			| 'definitions'
+			| 'invites'
+			| 'shareLinks'
+			| 'platformProjectGrants'
+		> &
+			ErasableStores & { apiTokens: IApiTokenStore },
 		userData: LocalUserDataStore
 	) {
+		this.erasable = stores;
 		this.events = stores.events;
 		this.orgs = stores.orgs;
 		this.projects = stores.projects;
@@ -84,18 +104,14 @@ export class LocalDataProvider implements IDataProvider {
 
 	/**
 	 * Cascade hook run after the auth provider deletes a user: removes the
-	 * `user-data.json` row and every live org membership, so the roster
-	 * doesn't keep showing a bare user ID forever (Supabase gets this from FK
-	 * constraints; local does it explicitly). Tolerates missing rows.
-	 *
-	 * `opts.email` is unused — the local provider has no audit_events or
-	 * solve_metrics tables to scrub, and its invite set is small and
-	 * operator-visible on disk.
+	 * `user-data.json` row, every membership and everything else that names them
+	 * (Supabase gets most of this from FK constraints). Rows they made stay, under
+	 * `ERASED_ACTOR_ID`. Tolerates missing rows.
 	 */
 	async onUserDeleted(
 		ctx: RequestContext,
 		userId: string,
-		_opts?: UserErasureOptions
+		opts?: UserErasureOptions
 	): Promise<void> {
 		try {
 			await this.userData.deleteUser(userId);
@@ -111,6 +127,11 @@ export class LocalDataProvider implements IDataProvider {
 			if (!membership) break;
 			await this.orgs.removeOrgMember(ctx, membership.org.id, userId);
 		}
+		await this.erasable.orgs.eraseUser(userId);
+		await this.erasable.definitions.eraseUser(userId);
+		await this.erasable.invites.eraseUser(userId, opts?.email);
+		await this.erasable.shareLinks.eraseUser(userId);
+		await this.erasable.platformProjectGrants.eraseUser(userId);
 	}
 
 	static fromEnv(
@@ -152,6 +173,7 @@ export class LocalDataProvider implements IDataProvider {
 		shareLinks.setDefinitionProvider(definitions);
 		shareLinks.setProjectProvider(projects);
 		projects.setDefinitionProvider(definitions);
+		orgs.setDefinitionProvider(definitions);
 
 		const userData = createLocalUserDataStore(userDataFilePath);
 

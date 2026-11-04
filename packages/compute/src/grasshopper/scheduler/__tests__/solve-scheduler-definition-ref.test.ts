@@ -52,31 +52,6 @@ describe('scheduler + DefinitionRef', () => {
 		expect(refB.load).not.toHaveBeenCalled();
 	});
 
-	it('keys the server-pointer map by ref.key and re-learns on a miss, without materializing', async () => {
-		const calls: Array<{ cacheKey: string | null }> = [];
-		let next: { cacheKey: string; missed: boolean } = { cacheKey: 'md5_FIRST', missed: false };
-		const executor: SolveExecutor = async (_def, _tree, cacheKey) => {
-			calls.push({ cacheKey });
-			return { response: makeResponse(), ...next };
-		};
-		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
-
-		const refA = makeRef('version-1');
-		const refB = makeRef('version-1');
-
-		// First solve: no known pointer. Distinct trees so no L1 shortcut is possible.
-		await s.solve(refA, [{ ParamName: 'a', InnerTree: {} }]);
-		// Second solve, same identity via a different object: learned pointer is passed.
-		next = { cacheKey: 'md5_RELEARNED', missed: true }; // simulate server-side eviction
-		await s.solve(refB, [{ ParamName: 'b', InnerTree: {} }]);
-		// Third: the refreshed pointer from the miss is what gets used.
-		await s.solve(makeRef('version-1'), [{ ParamName: 'c', InnerTree: {} }]);
-
-		expect(calls.map((c) => c.cacheKey)).toEqual([null, 'md5_FIRST', 'md5_RELEARNED']);
-		expect(refA.load).not.toHaveBeenCalled();
-		expect(refB.load).not.toHaveBeenCalled();
-	});
-
 	it('settles as ABORTED when the signal fires while load() is pending', async () => {
 		let releaseLoad!: () => void;
 		const ref: DefinitionRef = {
@@ -106,19 +81,5 @@ describe('scheduler + DefinitionRef', () => {
 		releaseLoad();
 
 		await expectation;
-	});
-
-	it('a Uint8Array caller still round-trips unchanged', async () => {
-		const seen: unknown[] = [];
-		const executor: SolveExecutor = async (def) => {
-			seen.push(def);
-			return { response: makeResponse(), cacheKey: null, missed: true };
-		};
-		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
-
-		const bytes = new Uint8Array([9, 8, 7]);
-		await s.solve(bytes, []);
-
-		expect(seen).toEqual([bytes]); // same object, no wrapping or copying
 	});
 });

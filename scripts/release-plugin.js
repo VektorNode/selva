@@ -82,6 +82,14 @@ const BETA = flag('--beta');
 const ASSUME_YES = flag('--yes') || flag('-y');
 const bumpArg = args.find((a) => !a.startsWith('-'));
 
+// `-beta` (one dash) would otherwise be ignored and publish a stable release.
+const KNOWN_FLAGS = ['--beta', '--build', '--no-push', '--dry-run', '--yes', '-y', '--help', '-h'];
+const unknownFlag = args.find((a) => a.startsWith('-') && !KNOWN_FLAGS.includes(a));
+if (unknownFlag) {
+	const hint = unknownFlag.replace(/^-+/, '');
+	die(`Unknown option "${unknownFlag}". Did you mean "--${hint}"? Nothing was changed.`);
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -258,6 +266,11 @@ if (!DRY_RUN) {
 	if (branch !== 'main' && branch !== 'beta') {
 		die(`On branch "${branch}", not "main" or "beta". Releases are cut from one of those.`);
 	}
+	if (branch === 'beta' && !BETA) {
+		die(
+			`"${targetVersion}" is a stable release and can't be cut from beta. Use --beta, or merge to main.`
+		);
+	}
 
 	try {
 		execFileSync('git', ['fetch', 'origin', branch, '--quiet'], { cwd: projectRoot });
@@ -283,11 +296,22 @@ if (!DRY_RUN) {
 // Confirm
 // ============================================================================
 
+const YELLOW = '\x1b[33;1m';
+const RED = '\x1b[41;97;1m';
+const RESET = '\x1b[0m';
+
 info('');
-info(`  Plugin release plan`);
-info(`  ───────────────────`);
+if (BETA) {
+	info(`${YELLOW}  ◐ BETA PRE-RELEASE${RESET}  ${targetVersion}`);
+	info(`  Hidden from normal Yak installs; marked "pre-release" on GitHub.`);
+} else {
+	info(`${RED} ● STABLE PUBLIC RELEASE ${RESET}  ${targetVersion}`);
+	info(`  Goes to every Yak user and is the latest GitHub Release.`);
+	info(`  For a beta, re-run with --beta.`);
+}
+info('');
 info(`  version : ${currentVersion} → \x1b[1m${targetVersion}\x1b[0m`);
-info(`  channel : ${BETA ? 'beta (pre-release — hidden from normal yak installs)' : 'stable'}`);
+info(`  channel : ${BETA ? 'beta (pre-release)' : 'STABLE (public)'}`);
 info(`  tag     : ${tag}`);
 info(`  notes   : Plugin/CHANGELOG.md [Unreleased] → [${targetVersion}]`);
 info(`  build   : ${BUILD ? 'yes (pnpm build:plugin)' : 'no (CI builds on tag push)'}`);
@@ -295,8 +319,14 @@ info(`  push    : ${NO_PUSH ? 'no (local only)' : 'yes (triggers plugin-release.
 info('');
 
 if (!ASSUME_YES && !DRY_RUN) {
-	const ok = (await ask('Proceed? (y/N): ')).toLowerCase();
-	if (ok !== 'y' && ok !== 'yes') die('Aborted.');
+	if (BETA) {
+		const ok = (await ask('Publish beta? (y/N): ')).toLowerCase();
+		if (ok !== 'y' && ok !== 'yes') die('Aborted.');
+	} else {
+		// Typed, not y/N: a stable release is the one that can't be quietly taken back.
+		const ok = await ask(`Type "stable" to publish ${targetVersion} to everyone: `);
+		if (ok.toLowerCase() !== 'stable') die('Aborted.');
+	}
 }
 
 // ============================================================================
@@ -363,5 +393,9 @@ if (NO_PUSH) {
 	info(`  git push --follow-tags`);
 } else {
 	run('git', ['push', '--follow-tags']);
-	info(`✓ Pushed — plugin-release.yml will build and publish ${tag}.`);
+	info(
+		`✓ Pushed — plugin-release.yml will build and publish ${tag} as a ${
+			BETA ? 'beta pre-release' : 'STABLE release'
+		}.`
+	);
 }

@@ -8,7 +8,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
+import { ERASED_ACTOR_ID, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
@@ -203,13 +203,15 @@ export class SupabaseProjectStore implements IProjectStore {
 		if (!data) return null;
 
 		// deleteProject cascades the soft-delete to project_members; undo it here too.
-		const { error: pmErr } = await client
-			.from('project_members')
-			.update({ deleted_at: null })
-			.eq('project_id', data.id)
-			.eq('user_id', data.owner_id)
-			.not('deleted_at', 'is', null);
-		if (pmErr) throw mapPostgrestError(pmErr);
+		if (data.owner_id) {
+			const { error: pmErr } = await client
+				.from('project_members')
+				.update({ deleted_at: null })
+				.eq('project_id', data.id)
+				.eq('user_id', data.owner_id)
+				.not('deleted_at', 'is', null);
+			if (pmErr) throw mapPostgrestError(pmErr);
+		}
 
 		const project = rowToProject(data);
 		await this.events.emit({
@@ -360,7 +362,7 @@ interface ProjectRow {
 	slug: string;
 	description: string | null;
 	visibility: Project['visibility'];
-	owner_id: string;
+	owner_id: string | null;
 	created_by?: string | null;
 	updated_by?: string | null;
 	auto_join_on_upload?: boolean | null;
@@ -380,6 +382,7 @@ interface ProjectMemberRow {
 }
 
 function rowToProject(row: ProjectRow): Project {
+	const owner = row.owner_id ?? ERASED_ACTOR_ID;
 	return {
 		id: row.id,
 		orgId: row.org_id,
@@ -387,9 +390,9 @@ function rowToProject(row: ProjectRow): Project {
 		slug: row.slug,
 		description: row.description ?? undefined,
 		visibility: row.visibility,
-		ownerId: row.owner_id,
-		createdBy: row.created_by ?? row.owner_id,
-		updatedBy: row.updated_by ?? row.owner_id,
+		ownerId: owner,
+		createdBy: row.created_by ?? owner,
+		updatedBy: row.updated_by ?? owner,
 		autoJoinOnUpload: row.auto_join_on_upload ?? false,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,

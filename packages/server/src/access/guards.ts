@@ -29,6 +29,7 @@ import type {
 	OrgRole,
 	PlatformPermission,
 	Project,
+	ProjectVisibility,
 	RequestContext,
 	SelvaConfig
 } from '@selvajs/platform';
@@ -44,7 +45,10 @@ import {
 	canManage,
 	canEditProjectSettings,
 	canEditDefinition,
-	outsideTokenOrg
+	canChangeVisibilityToPublic,
+	outsideTokenOrg,
+	scopeAllows,
+	SYSTEM_CONTEXT
 } from '@selvajs/platform';
 import {
 	createProjectAccessInputBuilder,
@@ -244,6 +248,20 @@ async function contentCheck(check: () => Promise<boolean>): Promise<boolean> {
 	return await check();
 }
 
+// With ENABLE_PLATFORM_PROJECTS off every rule denies a platform project, even for
+// `instance_admin`, so the bypass must not reopen it.
+function managementBypassForProject(
+	ctx: RequestContext,
+	project: Project,
+	src: HasDeps,
+	check: () => Promise<boolean>
+): Promise<boolean> {
+	if (project.visibility === 'platform' && !flagOf(src)('ENABLE_PLATFORM_PROJECTS')) {
+		return check();
+	}
+	return managementBypassOrRun(ctx, check);
+}
+
 async function loadProjectOr404(
 	ctx: RequestContext,
 	projectId: string,
@@ -323,26 +341,6 @@ export async function requireCanCreateDefinition(
 }
 
 /**
- * Org-content gate — the caller must be a member of `orgId`. Used by the
- * file-serving proxy for org-private assets (e.g. pricing sheets under
- * `orgs/{id}/private/*`). Org membership is the only rule; runs through
- * `contentCheck` (no `instance_admin` bypass) — platform staff use Reclaim
- * if they need access without membership.
- *
- * Throws 401 unauthenticated, 403 when not a member.
- */
-export async function requireCanViewOrg(locals: ScopedLocals, orgId: string): Promise<AuthUser> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await contentCheck(async () => {
-		const member = await orgsOf(locals).getOrgMember(ctx, orgId, ctx.userId);
-		return member !== null;
-	});
-	if (!allowed)
-		apiError(403, ApiErrorCode.FORBIDDEN, 'You do not have access to this organization.');
-	return user;
-}
-
-/**
  * Project members must belong to the project's parent org. Enforced at the
  * rule layer, not as a DB constraint, to leave room for cross-org guests
  * later without a schema migration.
@@ -392,7 +390,17 @@ export async function requireCanReclaim(
 	projectId: string
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
-	const project = await loadProjectOr404(ctx, projectId, locals);
+	// Reclaim exists for projects the caller cannot see, and RLS hides those from
+	// their own session. Only the org's leadership may learn that one exists.
+	const visible = await projectsOf(locals).getProject(ctx, projectId);
+	const project = visible ?? (await projectsOf(locals).getProject(SYSTEM_CONTEXT, projectId));
+	if (
+		!project ||
+		outsideTokenOrg(ctx, project.orgId) ||
+		(!visible && project.orgId !== ctx.actingOrgId)
+	) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	}
 
 	// Ahead of the bypass, not inside the check: `instance_admin` short-circuits
 	// `managementBypassOrRun`, so `canReclaim`'s platform-project refusal (§4a)
@@ -412,6 +420,7 @@ export async function requireCanReclaim(
 		});
 	});
 	if (!allowed) {
+		if (!visible) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
 		apiError(
 			403,
 			ApiErrorCode.FORBIDDEN,
@@ -422,15 +431,17 @@ export async function requireCanReclaim(
 }
 
 /**
- * `canCreateProject` — owner/admin always; member needs `manage_projects`.
- * Tenancy is enforced via `actingOrgId`.
+ * May the caller create a project in `targetOrgId`? Owner/admin always; a
+ * member needs `manage_projects`; tenancy is enforced via `actingOrgId`. An
+ * API key also needs the `create_projects` scope (or `write`) org-wide.
  */
-export async function requireCanCreateProject(
+export async function canCreateProjectIn(
 	locals: ScopedLocals,
+	ctx: RequestContext,
 	targetOrgId: string
-): Promise<{ user: AuthUser; ctx: RequestContext }> {
-	const { user, ctx } = requireAuthed(locals);
-	const allowed = await managementBypassOrRun(ctx, async () => {
+): Promise<boolean> {
+	if (!scopeAllows(ctx, 'create_projects')) return false;
+	return managementBypassOrRun(ctx, async () => {
 		const orgMember = await orgsOf(locals).getOrgMember(ctx, targetOrgId, ctx.userId);
 		return canCreateProject({
 			orgPermissions: ctx.orgPermissions,
@@ -439,13 +450,69 @@ export async function requireCanCreateProject(
 			targetOrgId
 		});
 	});
-	if (!allowed)
+}
+
+export async function requireCanCreateProject(
+	locals: ScopedLocals,
+	targetOrgId: string
+): Promise<{ user: AuthUser; ctx: RequestContext }> {
+	const { user, ctx } = requireAuthed(locals);
+	if (!(await canCreateProjectIn(locals, ctx, targetOrgId)))
 		apiError(
 			403,
 			ApiErrorCode.FORBIDDEN,
 			'You do not have permission to create projects in this org.'
 		);
 	return { user, ctx };
+}
+
+/**
+ * The visibility a project may be created with or changed to, for create and
+ * PATCH alike. `current` is absent on create.
+ *
+ * - `platform` takes a project out of its org entirely (no org member sees it,
+ *   and with ENABLE_PLATFORM_PROJECTS off every rule denies everyone), so
+ *   moving into it is instance-admin only.
+ * - Becoming `public` is a disclosure, so it needs an org owner or admin.
+ * - A key without `write` creates private projects only, never joinable ones:
+ *   whoever approved it was told it can't share anything.
+ */
+export async function requireProjectVisibilityAllowed(
+	locals: ScopedLocals,
+	ctx: RequestContext,
+	orgId: string,
+	next: { visibility?: ProjectVisibility; autoJoinOnUpload?: boolean },
+	current?: Pick<Project, 'visibility'>
+): Promise<void> {
+	// Create only: PATCH already needs `write` on the project, which the mount checks with its target.
+	if (!current && ctx.apiScope && !scopeAllows(ctx, 'write')) {
+		if (next.visibility !== 'private' || next.autoJoinOnUpload === true) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'This API token can only create private projects that nobody joins on upload.'
+			);
+		}
+	}
+	if (next.visibility === 'platform' && current?.visibility !== 'platform') {
+		if (!hasPermission(ctx, 'instance_admin')) {
+			apiError(
+				403,
+				ApiErrorCode.FORBIDDEN,
+				'Only a platform admin can give a project platform visibility.'
+			);
+		}
+	}
+	if (next.visibility === 'public' && current?.visibility !== 'public') {
+		const passes = await managementBypassOrRun(ctx, async () =>
+			canChangeVisibilityToPublic({
+				orgMember: await orgsOf(locals).getOrgMember(ctx, orgId, ctx.userId)
+			})
+		);
+		if (!passes) {
+			apiError(403, ApiErrorCode.FORBIDDEN, 'Only org owners or admins can make a project public.');
+		}
+	}
 }
 
 /**
@@ -459,10 +526,10 @@ export async function requireCanManage(
 	action: 'project' | 'members' = 'project'
 ): Promise<AuthUser> {
 	const { user, ctx } = requireAuthed(locals);
-	const allowed = await managementBypassOrRun(ctx, async () => {
-		const project = await loadProjectOr404(ctx, projectId, locals);
-		return canManage(await buildProjectAccessInput(ctx, project, locals));
-	});
+	const project = await loadProjectOr404(ctx, projectId, locals);
+	const allowed = await managementBypassForProject(ctx, project, locals, async () =>
+		canManage(await buildProjectAccessInput(ctx, project, locals))
+	);
 	if (!allowed) {
 		apiError(
 			403,
@@ -483,7 +550,7 @@ export async function requireCanEditProjectSettings(
 ): Promise<{ user: AuthUser; ctx: RequestContext; project: Project }> {
 	const { user, ctx } = requireAuthed(locals);
 	const project = await loadProjectOr404(ctx, projectId, locals);
-	const allowed = await managementBypassOrRun(ctx, async () =>
+	const allowed = await managementBypassForProject(ctx, project, locals, async () =>
 		canEditProjectSettings(await buildProjectAccessInput(ctx, project, locals))
 	);
 	if (!allowed)

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { DEFAULT_LOOK, LOOK_PRESETS } from '../../shared/index.js';
+import { DEFAULT_LOOK, lookPreset } from '../../shared/index.js';
 import type { ThreeInitializerOptions } from '../types.js';
 import { isoOffset, sunOffset, upToAxis } from '../up-axis.js';
 
@@ -10,6 +10,16 @@ export const defaultUp = new THREE.Vector3(0, 0, 1);
 // onMaxAnisotropy stays optional — a caller-supplied hook, not a config value with a default.
 export type ResolvedOptions = Required<Omit<ThreeInitializerOptions, 'onMaxAnisotropy'>> &
 	Pick<ThreeInitializerOptions, 'onMaxAnisotropy'>;
+
+/**
+ * Decided once, from the device: reacting to slow frames would change the light count, which
+ * recompiles every shader on the device least able to. A coarse pointer alone would catch tablets;
+ * 600px is the narrowest tablet.
+ */
+export function isPhone(): boolean {
+	const coarse = window.matchMedia?.('(pointer: coarse)').matches ?? false;
+	return coarse && Math.min(window.screen.width, window.screen.height) < 600;
+}
 
 export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions {
 	const scale = options.sceneScale || 'm';
@@ -78,7 +88,8 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 	// The look seeds lighting/material defaults (tone mapping, AO, IBL, fill), ranked below explicit
 	// per-field options but above the plain defaults; it never touches edges/grid.
 	const look = options.look ?? DEFAULT_LOOK;
-	const preset = LOOK_PRESETS[look];
+	const lowPower = options.render?.lowPower ?? isPhone();
+	const preset = lookPreset(look, lowPower);
 
 	return {
 		sceneScale: scale,
@@ -138,15 +149,19 @@ export function applyDefaults(options: ThreeInitializerOptions): ResolvedOptions
 		},
 		render: {
 			enableShadows: options.render?.enableShadows ?? true,
-			shadowMapSize: options.render?.shadowMapSize || 2048,
+			shadowMapSize: options.render?.shadowMapSize || 1024,
 			antialias: options.render?.antialias ?? true,
 			pixelRatio: options.render?.pixelRatio || Math.min(window.devicePixelRatio, 2),
 			// ?? not ||: an explicit NoToneMapping (0) must be honoured, not fall through as falsy.
 			toneMapping: options.render?.toneMapping ?? preset.toneMapping,
 			toneMappingExposure: options.render?.toneMappingExposure ?? preset.toneMappingExposure,
 			preserveDrawingBuffer: options.render?.preserveDrawingBuffer ?? false,
+			lowPower,
+			idleRefineFrames: options.render?.idleRefineFrames ?? (lowPower ? 0 : 32),
+			lightOrbitFrameMs: options.render?.lightOrbitFrameMs ?? 22,
 			ambientOcclusion: options.render?.ambientOcclusion ?? preset.ambientOcclusion,
 			aoIntensity: options.render?.aoIntensity ?? 1,
+			bloom: options.render?.bloom ?? preset.bloom,
 			// Default caps AO buffers at 1x — biggest lever on GTAO cost at high DPI.
 			aoPixelRatio: options.render?.aoPixelRatio ?? 1,
 			onDemand: options.render?.onDemand ?? true

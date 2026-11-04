@@ -13,7 +13,8 @@ export default [
 	 * exists to test.
 	 */
 	{
-		files: ['src/client/**/*.ts'],
+		files: ['src/client/**/*.ts', 'src/shared/**/*.ts'],
+		ignores: ['src/**/__tests__/**'],
 		rules: {
 			'no-restricted-imports': [
 				'error',
@@ -22,7 +23,7 @@ export default [
 						{
 							group: ['../server', '../server/*', '**/server/**'],
 							message:
-								'client/ must never import server/ — it would pull server-only code into a browser bundle. Put anything both halves need in shared/.'
+								'client/ and shared/ must never import server/ — it would pull server-only code into a browser bundle. Put anything both halves need in shared/.'
 						},
 						{
 							group: [
@@ -30,10 +31,11 @@ export default [
 								'@selvajs/platform/*',
 								'@selvajs/server',
 								'@selvajs/server/*',
+								'undici',
 								'node:*'
 							],
 							message:
-								'client/ runs in a browser: no platform providers, no server plumbing, no node builtins.'
+								'client/ and shared/ run in a browser: no platform providers, no server plumbing, no node builtins.'
 						}
 					]
 				}

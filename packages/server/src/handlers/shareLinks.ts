@@ -26,7 +26,11 @@ import {
 	ShareLinkResponseSchema
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
-import { CreateShareLinkInputSchema, DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
+import {
+	CreateShareLinkInputSchema,
+	DEFAULT_SHARE_LINK_MAX_SOLVES,
+	DEFAULT_SHARE_LINK_TTL_DAYS
+} from '@selvajs/platform';
 import type { ShareLink } from '@selvajs/platform';
 import { GuidSchema } from '@selvajs/platform/definitions';
 import { requireEditableDefinition } from '../access/index.js';
@@ -77,7 +81,11 @@ export const createShareLink: ApiHandler = async (req) => {
 		name: input.name,
 		createdBy: user.id,
 		createdAt: new Date().toISOString(),
-		expiresAt: input.expiresAt ?? null,
+		// Same rule as maxSolves: absent gets the default, an explicit null never expires.
+		expiresAt:
+			input.expiresAt === undefined
+				? new Date(Date.now() + DEFAULT_SHARE_LINK_TTL_DAYS * 86_400_000).toISOString()
+				: input.expiresAt,
 		revokedAt: null,
 		allowSolve: input.allowSolve,
 		// The default applies only when the field is absent. An explicit `null`

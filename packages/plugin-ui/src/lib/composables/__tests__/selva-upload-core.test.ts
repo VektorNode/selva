@@ -11,7 +11,9 @@ import {
 	handleResult,
 	handleTargets,
 	nowhereToUpload,
+	openConnection,
 	openDialog,
+	originInputError,
 	closeDialog,
 	retryTargets,
 	safeHttpUrl,
@@ -19,6 +21,7 @@ import {
 	selectedVersionTarget,
 	signIn,
 	startUpload,
+	uploadAvailable,
 	uploadBlocker,
 	useApiKey,
 	versionTargets,
@@ -70,6 +73,7 @@ function account(overrides: Partial<SelvaAccount> = {}): SelvaAccount {
 		expiresAt: '2026-11-20T12:00:00Z',
 		extraScopes: [],
 		storage: 'keychain',
+		verified: true,
 		...overrides
 	};
 }
@@ -90,6 +94,8 @@ function versionTarget(overrides: Partial<SelvaVersionTarget> = {}): SelvaVersio
 function targets(overrides: Partial<SelvaTargets> = {}): SelvaTargets {
 	return {
 		origin: ORIGIN,
+		tokenId: 'token-1',
+		canCreateProjects: false,
 		projects: [
 			{ id: 'p-1', name: 'Tower' },
 			{ id: 'p-2', name: 'Plaza' }
@@ -168,6 +174,40 @@ describe('opening the dialog', () => {
 	});
 });
 
+describe('whether Upload is offered', () => {
+	it('only once Selva has accepted the key this session', () => {
+		const s = setup();
+		expect(uploadAvailable(s.state)).toBe(false);
+		sendAccount(s, account({ status: 'signedOut', user: undefined, org: undefined }));
+		expect(uploadAvailable(s.state)).toBe(false);
+		sendAccount(s, account({ verified: false }));
+		expect(uploadAvailable(s.state)).toBe(false);
+		sendAccount(s, account({ verified: undefined }));
+		expect(uploadAvailable(s.state)).toBe(false);
+		sendAccount(s, account());
+		expect(uploadAvailable(s.state)).toBe(true);
+	});
+
+	it('moves an open upload dialog to the connection when Selva refuses the key', () => {
+		const s = setup();
+		openDialog(s.state, s.deps);
+		sendAccount(
+			s,
+			account({ verified: false, message: 'This API token’s owner may no longer use API tokens.' })
+		);
+		expect(s.state.open).toBe(false);
+		expect(s.state.connectionOpen).toBe(true);
+		expect(s.source.sent.map((c) => c.type)).toEqual(['selvaGetAccount']);
+	});
+
+	it('opens the connection asking for the account afresh', () => {
+		const s = setup();
+		openConnection(s.state, s.deps);
+		expect(s.state.connectionOpen).toBe(true);
+		expect(s.source.sent).toEqual([{ type: 'selvaGetAccount', sessionId: SESSION }]);
+	});
+});
+
 describe('targets', () => {
 	it('preselects the suggestion and fills the form from the defaults', () => {
 		const s = ready();
@@ -232,6 +272,19 @@ describe('targets', () => {
 		expect(versionTargets(t).map((v) => v.definitionGuid)).toEqual(['def-1', 'def-2']);
 	});
 
+	it('offers a new project to someone with no projects who may create one', () => {
+		const t = targets({
+			projects: [],
+			suggestion: undefined,
+			matches: [],
+			canCreateProjects: true
+		});
+		expect(nowhereToUpload(t)).toBe(false);
+		const s = ready(t);
+		expect(s.state.target).toEqual({ kind: 'newDefinition' });
+		expect(s.state.form.createProject).toBe(true);
+	});
+
 	it('knows when there is nowhere to upload', () => {
 		expect(nowhereToUpload(targets({ projects: [], suggestion: undefined, matches: [] }))).toBe(
 			true
@@ -281,7 +334,7 @@ describe('targets', () => {
 describe('signing in', () => {
 	function signedOut() {
 		const s = setup();
-		openDialog(s.state, s.deps);
+		openConnection(s.state, s.deps);
 		sendAccount(
 			s,
 			account({
@@ -337,7 +390,32 @@ describe('signing in', () => {
 		s.state.originInput = ORIGIN;
 		signIn(s.state, s.deps);
 		sendAccount(s, account());
-		expect(s.source.sent.map((c) => c.type)).toEqual(['selvaConnect', 'selvaListTargets']);
+		expect(s.source.sent.map((c) => c.type)).toEqual(['selvaConnect']);
+		expect(uploadAvailable(s.state)).toBe(true);
+	});
+
+	it('refuses a pasted key as an address, and sends nothing', () => {
+		const s = signedOut();
+		s.state.originInput = 'selva_Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z';
+		signIn(s.state, s.deps);
+		expect(s.source.sent).toEqual([]);
+		expect(s.state.originError).toMatch(/key/);
+	});
+
+	it.each(['selva_abc', 'https://selva_abc.example.com', 'intranet', 'http://selva'])(
+		'refuses %s as an address',
+		(input) => {
+			expect(originInputError(input)).not.toBeNull();
+		}
+	);
+
+	it.each([
+		'selva.example.com',
+		'https://selva.example.com/library',
+		'localhost:5199',
+		'[::1]:5199'
+	])('accepts %s as an address', (input) => {
+		expect(originInputError(input)).toBeNull();
 	});
 
 	it('sends nothing for an empty instance field', () => {
@@ -404,6 +482,22 @@ describe('uploadBlocker', () => {
 		expect(uploadBlocker(s.state, s.deps)).toBe('Pick where to upload.');
 	});
 
+	it('asks for a name for a new project', () => {
+		const s = ready(targets({ canCreateProjects: true }));
+		selectTarget(s.state, { kind: 'newDefinition' });
+		s.state.form.createProject = true;
+		expect(uploadBlocker(s.state, s.deps)).toBe('Name the new project.');
+		s.state.form.newProjectName = 'Facades';
+		expect(uploadBlocker(s.state, s.deps)).toBeNull();
+	});
+
+	it('refuses a new project the key may not create', () => {
+		const s = ready();
+		selectTarget(s.state, { kind: 'newDefinition' });
+		Object.assign(s.state.form, { createProject: true, newProjectName: 'Facades' });
+		expect(uploadBlocker(s.state, s.deps)).toBe('Pick a project.');
+	});
+
 	it('refuses a new definition without projects to put it in', () => {
 		const s = ready(targets({ projects: [] }));
 		selectTarget(s.state, { kind: 'newDefinition' });
@@ -418,6 +512,8 @@ describe('buildUploadRequest', () => {
 		s.state.form.makeLive = true;
 		expect(buildUploadRequest(s.state)).toEqual({
 			kind: 'newVersion',
+			origin: ORIGIN,
+			tokenId: 'token-1',
 			definitionGuid: 'def-1',
 			changeNote: 'Thicker mullions',
 			makeLive: true
@@ -428,6 +524,8 @@ describe('buildUploadRequest', () => {
 		const s = ready();
 		expect(buildUploadRequest(s.state)).toEqual({
 			kind: 'newVersion',
+			origin: ORIGIN,
+			tokenId: 'token-1',
 			definitionGuid: 'def-1',
 			makeLive: false
 		});
@@ -445,9 +543,34 @@ describe('buildUploadRequest', () => {
 		});
 		expect(buildUploadRequest(s.state)).toEqual({
 			kind: 'newDefinition',
+			origin: ORIGIN,
+			tokenId: 'token-1',
 			projectId: 'p-2',
 			displayName: 'Plaza bench',
 			tags: ['street'],
+			makeLive: false
+		});
+	});
+
+	it('builds a new definition in a new project', () => {
+		const s = ready(targets({ canCreateProjects: true }));
+		selectTarget(s.state, { kind: 'newDefinition' });
+		Object.assign(s.state.form, {
+			createProject: true,
+			newProjectName: ' Facades ',
+			projectId: 'p-2',
+			displayName: 'Plaza bench',
+			tags: []
+		});
+		expect(buildUploadRequest(s.state)).toEqual({
+			kind: 'newDefinition',
+			origin: ORIGIN,
+			tokenId: 'token-1',
+			newProjectName: 'Facades',
+			displayName: 'Plaza bench',
+			description: 'Panelised facade',
+			category: 'Facade',
+			tags: [],
 			makeLive: false
 		});
 	});
@@ -461,7 +584,13 @@ describe('uploading', () => {
 			{
 				type: 'selvaUpload',
 				sessionId: SESSION,
-				request: { kind: 'newVersion', definitionGuid: 'def-1', makeLive: false }
+				request: {
+					kind: 'newVersion',
+					origin: ORIGIN,
+					tokenId: 'token-1',
+					definitionGuid: 'def-1',
+					makeLive: false
+				}
 			}
 		]);
 		expect(s.state.uploading).toBe(true);

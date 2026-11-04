@@ -53,7 +53,9 @@ public sealed class InboundMessageParser
         var sid = jObj["sessionId"]?.ToString();
         if (sid != expectedSessionId)
         {
-            return InboundMessage.Of(InboundKind.SessionMismatch, msgType);
+            // The requestId rides along so a host file request can still be failed.
+            return new InboundMessage
+                { Kind = InboundKind.SessionMismatch, MessageType = msgType, RequestId = RequestIdOf(jObj) };
         }
 
         try
@@ -200,7 +202,8 @@ public sealed class InboundMessageParser
                             : null;
                         if (requestId == null || fileName == null)
                         {
-                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                            return new InboundMessage
+                                { Kind = InboundKind.MissingField, MessageType = msgType, RequestId = requestId };
                         }
 
                         return new InboundMessage

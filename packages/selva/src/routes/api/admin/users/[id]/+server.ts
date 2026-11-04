@@ -6,7 +6,11 @@ import {
 	assertCanGrantPlatformPermissions,
 	requireManageInstanceUsers
 } from '#lib/server/access.server.js';
-import { requireCanRemoveInstanceAdmin } from '#lib/server/admin/instanceAdmins.server.js';
+import {
+	requireCanRemoveInstanceAdmin,
+	requireEnabledToBecomeAdmin,
+	requireNotSoleOrgOwner
+} from '#lib/server/admin/instanceAdmins.server.js';
 import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { apiRoute, noContent, parseBody, requireParams } from '#lib/server/api/http.js';
 import {
@@ -16,6 +20,7 @@ import {
 	actorFrom
 } from '@selvajs/platform';
 import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
+import { apiTokenResolutions } from '#lib/server/apiTokens/token.server.js';
 
 const UpdatePermissionsBody = z.object({
 	permissions: z.array(PlatformPermissionSchema)
@@ -38,6 +43,7 @@ export const PATCH: RequestHandler = apiRoute(
 			id
 		);
 		assertCanGrantPlatformPermissions(locals.ctx!, platform, existingPlatform);
+		await requireEnabledToBecomeAdmin(id, platform, existingPlatform);
 
 		const platformResult = await setUserPlatformPermissions(locals.ctx!, id, platform);
 		if (platformResult === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
@@ -68,7 +74,22 @@ export const DELETE: RequestHandler = apiRoute(
 		requireManageInstanceUsers(locals);
 		const { id } = requireParams(params, 'id');
 
-		await requireCanRemoveInstanceAdmin(locals.ctx!, id, 'delete');
+		const { targetIsAdmin } = await requireCanRemoveInstanceAdmin(locals.ctx!, id, 'delete');
+		await requireNotSoleOrgOwner(id);
+
+		// The check above reads, then this writes: `set` is the atomic step, so two
+		// admins deleting each other cannot both get past it.
+		const priorPermissions = await getPermissionStore().getFor(locals.ctx!, id);
+		if (targetIsAdmin) {
+			const revoked = await setUserPlatformPermissions(locals.ctx!, id, []);
+			if (revoked === 'last_admin') {
+				apiError(
+					409,
+					ApiErrorCode.CONFLICT,
+					'Cannot delete the last instance admin. Promote another user to instance admin first.'
+				);
+			}
+		}
 
 		// Capture the email BEFORE deletion — `onUserDeleted` needs it to scrub
 		// invite/audit rows keyed by email, but the auth user is gone by then.
@@ -76,6 +97,9 @@ export const DELETE: RequestHandler = apiRoute(
 		const email = target?.email;
 
 		const result = await getAuthProvider().deleteUser(id);
+		if (targetIsAdmin && result !== 'ok') {
+			await setUserPlatformPermissions(locals.ctx!, id, priorPermissions);
+		}
 		if (result === 'not_found') apiError(404, ApiErrorCode.NOT_FOUND, 'User not found');
 		if (result === 'not_supported')
 			apiError(501, ApiErrorCode.INTERNAL, 'User deletion not supported by this auth provider');
@@ -84,6 +108,7 @@ export const DELETE: RequestHandler = apiRoute(
 		// reachable by FK cascade (audit rows, invites-by-email, solve telemetry).
 		// Supabase erases those explicitly; local removes its JSON rows + memberships.
 		await getDataProvider().onUserDeleted(SYSTEM_CONTEXT, id, { email });
+		apiTokenResolutions.forgetUser(id);
 
 		// Emitted after the erasure pass, which deletes audit rows this user
 		// authored — emitting first would delete the row recording their deletion.

@@ -64,6 +64,47 @@ public class SlvmFileTests
     }
 
     [Fact]
+    public void ModelUnits_RoundTripThroughAFile()
+    {
+        using var ms = new MemoryStream();
+        SlvmFile.Write(ms, SampleBatch(), "Millimeters");
+        ms.Position = 0;
+
+        SlvmFile.Read(ms, out var units);
+
+        Assert.Equal("Millimeters", units);
+    }
+
+    [Fact]
+    public void ModelUnits_AreNullWhenTheWriterRecordedNone()
+    {
+        using var ms = new MemoryStream();
+        SlvmFile.Write(ms, SampleBatch());
+        ms.Position = 0;
+
+        SlvmFile.Read(ms, out var units);
+
+        Assert.Null(units);
+    }
+
+    [Fact]
+    public void ModelUnits_ASavedBatchKeepsTheUnitsItWasLoadedWith()
+    {
+        using var first = new MemoryStream();
+        SlvmFile.Write(first, SampleBatch(), "Millimeters");
+        first.Position = 0;
+        var loaded = SlvmFile.Read(first);
+
+        // Saved again from a document in other units: the verbatim geometry is still millimetres.
+        using var second = new MemoryStream();
+        SlvmFile.Write(second, loaded, "Meters");
+        second.Position = 0;
+        SlvmFile.Read(second, out var units);
+
+        Assert.Equal("Millimeters", units);
+    }
+
+    [Fact]
     public void RoundTrip_PreservesEveryEnvelopeField()
     {
         var decoded = RoundTrip(SampleBatch());

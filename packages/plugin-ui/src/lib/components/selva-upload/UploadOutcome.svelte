@@ -10,9 +10,11 @@
 		result: SelvaUploadResult | null;
 		/** Whether the upload in flight also makes the version live, so the last step is shown. */
 		makingLive: boolean;
+		/** Whether it creates a project first. */
+		creatingProject: boolean;
 	}
 
-	let { stage, result, makingLive }: Props = $props();
+	let { stage, result, makingLive, creatingProject }: Props = $props();
 
 	interface Step {
 		stage: UploadStage;
@@ -22,6 +24,7 @@
 
 	const STEPS: Step[] = [
 		{ stage: 'preparing', label: 'Preparing the file' },
+		{ stage: 'creatingProject', label: 'Creating the project' },
 		{
 			stage: 'uploading',
 			label: 'Uploading',
@@ -30,7 +33,13 @@
 		{ stage: 'publishing', label: 'Making it live' }
 	];
 
-	const steps = $derived(makingLive ? STEPS : STEPS.filter((s) => s.stage !== 'publishing'));
+	const steps = $derived(
+		STEPS.filter(
+			(s) =>
+				(makingLive || s.stage !== 'publishing') &&
+				(creatingProject || s.stage !== 'creatingProject')
+		)
+	);
 	const currentIndex = $derived(steps.findIndex((s) => s.stage === stage));
 	const selvaUrl = $derived(safeHttpUrl(result?.url));
 </script>
@@ -45,7 +54,7 @@
 					{:else if i === currentIndex}
 						<Spinner aria-label="In progress" />
 					{:else}
-						<Circle class="text-muted-foreground/50 size-3.5" aria-label="Not started" />
+						<Circle class="text-faint-foreground size-3.5" aria-label="Not started" />
 					{/if}
 				</span>
 				<span class="flex flex-col gap-0.5">
@@ -73,10 +82,9 @@
 			</p>
 			<p class="text-muted-foreground max-w-sm text-sm">
 				{#if result.live}
-					It's live: everyone using the definition now gets this version. You can roll back in
-					Selva.
+					It's live. Users now get this version. You can roll back in Selva.
 				{:else if !result.error}
-					It's the draft. Try it in Selva, and make it live there when it's ready.
+					Saved as a draft. Try it in Selva and make it live there when it's ready.
 				{/if}
 			</p>
 		</div>

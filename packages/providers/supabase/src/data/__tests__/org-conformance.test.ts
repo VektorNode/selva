@@ -4,7 +4,7 @@ import { runOrgStoreConformance } from '@selvajs/platform/testing';
 import { SupabaseOrgStore } from '../SupabaseOrgStore.js';
 import { SupabaseInviteStore } from '../SupabaseInviteStore.js';
 import { SupabaseComputeServerStore } from '../SupabaseComputeServerStore.js';
-import { readEnv, resetAllData, seedUser } from './test-helpers.js';
+import { readEnv, resetAllData, seedPlainUser, seedUser } from './test-helpers.js';
 
 const envCtx = readEnv();
 
@@ -22,6 +22,8 @@ if (!envCtx) {
 			name: 'SupabaseOrgStore',
 			createStore: () => new SupabaseOrgStore(envCtx.bundle),
 			seedUser: (id) => seedUser(envCtx, id),
+			seedOutsider: (id) => seedPlainUser(envCtx, id),
+			ctxIsolation: true,
 			createCompanionStores: () => ({
 				invites: new SupabaseInviteStore(envCtx.bundle),
 				// The cascade test saves an org server carrying an apiKey, which the

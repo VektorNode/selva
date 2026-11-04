@@ -21,13 +21,18 @@ import {
 	requireCaller,
 	requireParams,
 	shaped,
-	shapedCollection
+	shapedCollection,
+	requireSession
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
 import {
 	DEFAULT_ORG_PERMISSIONS,
 	MEMBER_ASSIGNABLE_PERMISSIONS,
-	type Invite
+	SYSTEM_CONTEXT,
+	type IAuthProvider,
+	type Invite,
+	type IOrgStore,
+	type IPlatformPermissionStore
 } from '@selvajs/platform';
 import {
 	assertCanGrantPlatformPermissions,
@@ -84,6 +89,7 @@ export const listInvites: ApiHandler = async (req) => {
 
 /** Create an invite and return the accept URL. */
 export const createInvite: ApiHandler = async (req) => {
+	requireSession(req, 'Invites are sent from the web app, not with an API key.');
 	requireManageOrgMembers(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 	const { user } = requireCaller(req);
@@ -166,11 +172,13 @@ export const revokeInvite: ApiHandler = async (req) => {
  * stops working the moment this returns, which is also what an admin wants
  * after mailing an invite to the wrong address.
  *
- * Grants are copied verbatim from the original. The role and permission gates
- * ran when it was minted; re-deriving them here would let a since-demoted admin
- * silently change what the invite carries.
+ * Grants are copied verbatim from the original: re-deriving them here would let
+ * a since-demoted admin silently change what the invite carries. The resender
+ * still passes the gates the original's minter did, because the response hands
+ * them a working link: an admin resending an owner invite could accept it.
  */
 export const resendInvite: ApiHandler = async (req) => {
+	requireSession(req, 'Invites are sent from the web app, not with an API key.');
 	requireManageOrgMembers(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
 	const { id } = requireParams(req.params, 'id');
@@ -179,6 +187,14 @@ export const resendInvite: ApiHandler = async (req) => {
 	if (!existing) apiError(404, ApiErrorCode.NOT_FOUND, 'Invite not found');
 	if (existing.acceptedAt) {
 		apiError(409, ApiErrorCode.CONFLICT, 'This invite has already been accepted.');
+	}
+	assertCanGrantPlatformPermissions(ctx, existing.platformPermissions ?? []);
+	if (!(await canActorChangeOrgRole(ctx, orgId, existing.orgRole, req))) {
+		apiError(
+			403,
+			ApiErrorCode.FORBIDDEN,
+			'Only the org owner can resend an invite for an owner or admin.'
+		);
 	}
 
 	const codec = tokenCodec(req.deps, 'invites');
@@ -202,3 +218,25 @@ export const resendInvite: ApiHandler = async (req) => {
 
 	return shaped(CreatedInviteResponseSchema, { ...replacement, acceptUrl, delivery }, 201);
 };
+
+/**
+ * Whether the person who sent `invite` may still bring someone in: enabled and
+ * still a member of the invite's org. Checked at acceptance, so disabling or
+ * removing someone also kills the invites they sent.
+ */
+export async function inviterStillVouches(
+	invite: Pick<Invite, 'orgId' | 'invitedBy'>,
+	deps: {
+		auth: Pick<IAuthProvider, 'getUser'>;
+		orgs: Pick<IOrgStore, 'getOrgMember'>;
+		permissions: Pick<IPlatformPermissionStore, 'getFor'>;
+	}
+): Promise<boolean> {
+	const [inviter, member, platform] = await Promise.all([
+		deps.auth.getUser(invite.invitedBy),
+		deps.orgs.getOrgMember(SYSTEM_CONTEXT, invite.orgId, invite.invitedBy),
+		deps.permissions.getFor(SYSTEM_CONTEXT, invite.invitedBy)
+	]);
+	// An instance admin may invite into an org they don't belong to.
+	return !!inviter && !inviter.disabled && (!!member || platform.includes('instance_admin'));
+}

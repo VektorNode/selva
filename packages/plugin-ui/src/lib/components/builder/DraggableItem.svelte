@@ -2,6 +2,10 @@
 	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/schemas';
 	import { ContextMenu, Input } from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, FolderPlus, GripVertical } from '@lucide/svelte';
+	import {
+		builderSelection,
+		preventShiftTextSelect
+	} from '#lib/features/builder/selection.svelte.js';
 
 	interface Props {
 		item: DiscoveredInput | DiscoveredOutput;
@@ -18,6 +22,7 @@
 
 	let newGroupPath = $state('');
 
+	const selected = $derived(builderSelection.params.has(item.id));
 	const isInput = $derived('name' in item);
 	const label = $derived(item.nickname || ('name' in item ? item.name : 'Unknown'));
 
@@ -50,12 +55,20 @@
 				{...props}
 				tabindex="-1"
 				role="button"
+				data-select-row
+				aria-pressed={selected}
 				title={item.description || undefined}
-				class="group/param border-border bg-background hover:border-primary/50 flex h-9 cursor-grab items-center gap-2 rounded-lg border pr-2 pl-1 text-sm transition-colors active:cursor-grabbing [#dnd-action-dragged-el>&]:h-full"
+				onmousedown={preventShiftTextSelect}
+				onclick={(e) => {
+					if (e.shiftKey) builderSelection.toggleParam(item.id);
+				}}
+				class="group/param bg-raised shadow-raised hover:border-input flex h-10 cursor-grab items-center gap-2 rounded-md border pr-2 pl-1 text-sm transition active:cursor-grabbing [#dnd-action-dragged-el>&]:h-full [#dnd-action-dragged-el>&]:opacity-100 {selected
+					? 'border-primary ring-primary ring-1'
+					: 'border-border-strong'} {selected && builderSelection.carried ? 'opacity-40' : ''}"
 			>
 				<GripVertical
 					size={14}
-					class="text-muted-foreground/40 group-hover/param:text-muted-foreground shrink-0"
+					class="text-faint-foreground group-hover/param:text-muted-foreground shrink-0"
 				/>
 				<span class="text-foreground min-w-0 flex-1 truncate font-medium">{label}</span>
 				{#if isInput}
@@ -114,7 +127,6 @@
 					onkeydown={handleKeydown}
 					class="h-8 text-sm"
 				/>
-				<p class="text-muted-foreground mt-1 text-xs">Use "Tab/Group" to create in specific tab</p>
 			</div>
 			<ContextMenu.Item onclick={handleAddToNewGroup} disabled={!newGroupPath.trim()}>
 				Add to New Group

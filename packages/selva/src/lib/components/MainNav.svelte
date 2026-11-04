@@ -19,8 +19,8 @@
 		class={[
 			'hidden h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors sm:flex',
 			active
-				? 'bg-accent text-accent-foreground'
-				: 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+				? 'bg-selected text-foreground'
+				: 'text-muted-foreground hover:bg-hover hover:text-foreground'
 		].join(' ')}
 	>
 		<Icon class="h-3.5 w-3.5" />

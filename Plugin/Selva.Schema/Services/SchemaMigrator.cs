@@ -35,7 +35,8 @@ public static class SchemaMigrator
             { new Version(2, 15, 0), MigrateTo_2_15_0 },
             { new Version(2, 16, 0), MigrateTo_2_16_0 },
             { new Version(2, 17, 0), MigrateTo_2_17_0 },
-            { SchemaVersion.CURRENT, MigrateTo_2_18_0 }
+            { new Version(2, 18, 0), MigrateTo_2_18_0 },
+            { SchemaVersion.CURRENT, MigrateTo_2_19_0 }
         };
 
     /// <summary>
@@ -387,10 +388,20 @@ public static class SchemaMigrator
 
     private static UISchema MigrateTo_2_18_0(UISchema schema)
     {
-        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+        schema.SchemaVersion = "2.18.0";
 
         // The schema gains an optional 'localOptions.trackPickedObjects'. Absent means a pick is a
         // snapshot, as before, so nothing is rewritten.
+
+        return schema;
+    }
+
+    private static UISchema MigrateTo_2_19_0(UISchema schema)
+    {
+        schema.SchemaVersion = SchemaVersion.CURRENT_STRING;
+
+        // The schema gains an optional 'viewerOptions.look'. Absent means the viewer's default look,
+        // as before, so nothing is rewritten.
 
         return schema;
     }

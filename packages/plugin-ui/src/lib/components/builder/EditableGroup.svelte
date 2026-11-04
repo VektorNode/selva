@@ -13,6 +13,7 @@
 	import LineBreakItem from './LineBreakItem.svelte';
 	import { ChevronDown, GripVertical, MousePointerClick, Trash2 } from '@lucide/svelte';
 	import VisibilityRulesEditor from './VisibilityRulesEditor.svelte';
+	import VisibilityRulesDialog from './VisibilityRulesDialog.svelte';
 	import {
 		dragHandle,
 		dragHandleZone,
@@ -27,8 +28,9 @@
 		DND_TYPE_PARAM,
 		isDiscoveredInput,
 		isDiscoveredOutput,
-		liftDraggedElement
+		liftWithCount
 	} from '#lib/dnd/dndzone-helpers.js';
+	import { builderSelection } from '#lib/features/builder/selection.svelte.js';
 	import { captureDragFootprint, dragFootprint } from '#lib/dnd/drag-footprint.svelte.js';
 
 	type ZoneItem = (LayoutItem | DiscoveredInput | DiscoveredOutput) & {
@@ -41,6 +43,8 @@
 		onEdit: (apply: () => void, coalesceKey?: string) => void;
 		onFinalize: (items: LayoutItem[]) => void;
 		onParameterDrop?: (event: CustomEvent) => void;
+		/** A selected card was dropped here from another group; the rest of the selection follows it. */
+		onCarrySelection?: (anchorItemId: string) => void;
 		onRemove: () => void;
 		onAddLineBreak: () => void;
 		onRemoveItem: (itemId: string) => void;
@@ -49,6 +53,11 @@
 		outputValues?: Record<string, unknown>;
 		/** Ids of the open item cards, held by the page so the sidebar can open one. */
 		expandedItems: SvelteSet<string>;
+		/**
+		 * Ids of groups shown open for now. `group.collapsed` is the app's saved default, so finding
+		 * an item inside a group must not flip it or dirty the schema.
+		 */
+		peekedGroups: SvelteSet<string>;
 	}
 
 	let {
@@ -56,17 +65,20 @@
 		onEdit,
 		onFinalize,
 		onParameterDrop,
+		onCarrySelection,
 		onRemove,
 		onAddLineBreak,
 		onRemoveItem,
 		availableInputs,
 		getParameterInfo,
 		outputValues = {},
-		expandedItems
+		expandedItems,
+		peekedGroups
 	}: EditableGroupProps = $props();
 
-	let showVisibilityRules = $state(false);
-	let hasVisibilityRules = $derived((group.visibilityCondition?.rules?.length ?? 0) > 0);
+	const collapsed = $derived(!!group.collapsed && !peekedGroups.has(group.id));
+
+	const visibilityRuleCount = $derived(group.visibilityCondition?.rules?.length ?? 0);
 	function isExpanded(id: string) {
 		return expandedItems.has(id);
 	}
@@ -97,6 +109,7 @@
 		if (e.detail.info.trigger === TRIGGERS.DRAG_STARTED) {
 			isDragOrigin = true;
 			captureDragFootprint(e, localItems);
+			builderSelection.startDrag(e.detail.info.id);
 		}
 		// The shadow item carries the dragged item's data, wherever the drag started.
 		const shadow = e.detail.items.find((i) => i.isDndShadowItem);
@@ -118,8 +131,18 @@
 	}
 
 	function handleFinalize(e: CustomEvent<DndEvent<ZoneItem>>) {
+		const wasOrigin = isDragOrigin;
 		isItemDragging = false;
 		isDragOrigin = false;
+		builderSelection.endDrag();
+
+		// Released on another tab's drop list: whatever this zone thinks it received is void, and the
+		// origin zone alone commits the move, so it happens once.
+		if (builderSelection.tabDrop) {
+			localItems = [...(group.items as ZoneItem[])];
+			if (wasOrigin) builderSelection.commitTabDrop(e.detail.info.id, 'placed');
+			return;
+		}
 
 		const items = e.detail.items.filter((i) => !i.isDndShadowItem);
 
@@ -176,8 +199,17 @@
 		}
 
 		const committed = items as LayoutItem[];
+		const draggedId = e.detail.info.id;
+		const arrived =
+			e.detail.info.trigger === TRIGGERS.DROPPED_INTO_ZONE &&
+			!group.items.some((i) => i.id === draggedId) &&
+			committed.some((i) => i.id === draggedId);
 		localItems = committed as ZoneItem[];
 		onFinalize(committed);
+		// Deferred: the origin group commits its own finalize after this one, and moving the rest
+		// first would let that commit write the moved cards back.
+		if (arrived && builderSelection.dragSize(draggedId) > 1)
+			setTimeout(() => onCarrySelection?.(draggedId));
 	}
 
 	// Collapsed height of a placed card, read off any card on the canvas: an expanded card is
@@ -223,13 +255,15 @@
 	}
 
 	function toggleCollapsed() {
+		const wasPeeked = peekedGroups.delete(group.id);
+		if (wasPeeked && group.collapsed) return;
 		onEdit(() => (group.collapsed = !group.collapsed));
 	}
 </script>
 
 <Card.Root
 	data-builder-group-id={group.id}
-	class="group bg-muted gap-0 overflow-hidden border-2 py-0 {isDndTarget ? 'border-primary' : ''}"
+	class="group gap-0 overflow-hidden py-0 {isDndTarget ? 'border-primary' : ''}"
 >
 	<Card.Header
 		class="border-border bg-card flex flex-row flex-wrap items-center justify-between gap-2 space-y-0 border-b px-3 py-3 transition-colors"
@@ -237,7 +271,7 @@
 		<!-- Drag Handle (group-level) — TabEditor declares the dragHandleZone. -->
 		<div
 			use:dragHandle
-			class="text-muted-foreground hover:text-foreground hover:bg-accent flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+			class="text-muted-foreground hover:text-foreground hover:bg-hover flex cursor-grab rounded-sm p-1 opacity-40 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
 			role="button"
 			tabindex="0"
 			aria-label="Drag to reorder"
@@ -249,11 +283,11 @@
 				<div class="flex items-center gap-1">
 					<button
 						type="button"
-						class="text-muted-foreground hover:text-foreground hover:bg-accent/50 flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-transform duration-200 {group.collapsed
+						class="text-muted-foreground hover:text-foreground hover:bg-hover flex h-6 w-6 shrink-0 items-center justify-center rounded-sm transition-transform duration-200 {collapsed
 							? ''
 							: 'rotate-180'}"
 						onclick={toggleCollapsed}
-						aria-label={group.collapsed ? 'Expand group' : 'Collapse group'}
+						aria-label={collapsed ? 'Expand group' : 'Collapse group'}
 					>
 						<ChevronDown size={16} />
 					</button>
@@ -283,7 +317,7 @@
 			</div>
 		</div>
 		<div class="ml-auto flex items-center gap-2">
-			{#if !group.collapsed}
+			{#if !collapsed}
 				<label class="text-muted-foreground flex items-center gap-1 text-xs">
 					Col:
 					<input
@@ -310,44 +344,23 @@
 					{group.items.length}
 				</span>
 			{/if}
+			<VisibilityRulesDialog subject={group.label || 'Group'} ruleCount={visibilityRuleCount}>
+				<VisibilityRulesEditor
+					bind:visibilityCondition={group.visibilityCondition}
+					{availableInputs}
+					currentParamInfo={undefined}
+					{getParameterInfo}
+					isGroupCondition={true}
+				/>
+			</VisibilityRulesDialog>
 			<Button variant="ghost" size="icon-lg" onclick={onRemove} aria-label="Delete group">
 				<Trash2 size={16} />
 			</Button>
 		</div>
 	</Card.Header>
 
-	<!-- Visibility Rules Section -->
-	{#if !group.collapsed}
-		<div class="border-border bg-muted border-t px-3 py-2">
-			<button
-				onclick={() => (showVisibilityRules = !showVisibilityRules)}
-				class="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center gap-1 text-[11px]"
-			>
-				<ChevronDown
-					size={12}
-					class={`transition-transform ${showVisibilityRules ? 'rotate-180' : ''}`}
-				/>
-				Visibility Rules {hasVisibilityRules
-					? `(${group.visibilityCondition?.rules?.length ?? 0})`
-					: ''}
-			</button>
-
-			{#if showVisibilityRules}
-				<div class="bg-card mt-2 rounded-sm p-2">
-					<VisibilityRulesEditor
-						bind:visibilityCondition={group.visibilityCondition}
-						{availableInputs}
-						currentParamInfo={undefined}
-						{getParameterInfo}
-						isGroupCondition={true}
-					/>
-				</div>
-			{/if}
-		</div>
-	{/if}
-
-	{#if !group.collapsed}
-		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-4">
+	{#if !collapsed}
+		<Card.Content class="bg-muted animate-[fadeIn_0.2s] p-3">
 			<div class="relative">
 				<div
 					use:dragHandleZone={{
@@ -359,7 +372,8 @@
 						// The library aims with the clone's centre, not the pointer. Centred, a full-width
 						// item can still target one column of a grid once it shrinks to the cell.
 						centreDraggedOnCursor: true,
-						transformDraggedElement: liftDraggedElement
+						transformDraggedElement: (el, data) =>
+							liftWithCount(el, builderSelection.dragSize((data as ZoneItem).id))
 					}}
 					onconsider={handleConsider}
 					onfinalize={handleFinalize}
@@ -377,8 +391,10 @@
 								<!-- dndzone hides the shadow's outer div; the inner one opts back in. -->
 								<div
 									style:--ghost-h="{ghostHeight || 48}px"
-									class="border-primary/40 bg-primary/5 pointer-events-none visible h-(--ghost-h) rounded-lg border-2 border-dashed"
-								></div>
+									class="border-primary/40 bg-primary/5 text-primary pointer-events-none visible grid h-(--ghost-h) place-items-center rounded-lg border-2 border-dashed text-xs font-medium"
+								>
+									{#if builderSelection.carried > 1}{builderSelection.carried} items{/if}
+								</div>
 							{:else if 'type' in item && item.type === 'linebreak'}
 								<LineBreakItem
 									item={item as LineBreakLayoutItem}

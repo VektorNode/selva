@@ -1,6 +1,7 @@
 import type * as THREE from 'three';
 
 import type { SerializableMaterial } from '../types.js';
+import { surfacePatch } from './surface-finish.js';
 
 export type Finish = NonNullable<SerializableMaterial['finish']>;
 
@@ -26,7 +27,7 @@ interface Bands {
 
 // Starting points, set by eye against photos of brushed stainless and mill-finish aluminium: tune
 // against photos of real sheet, never against another render.
-const RECIPES: Record<Finish, { fibres: Fibres[]; bands: Bands[] }> = {
+const RECIPES: Partial<Record<Finish, { fibres: Fibres[]; bands: Bands[] }>> = {
 	brushed: {
 		fibres: [
 			{ pitch: 0.04, length: [2, 12], depth: 0.3 },
@@ -55,7 +56,8 @@ export function finishPatch(
 	strength: number
 ): { key: string; patch: ShaderPatch } | null {
 	const recipe = RECIPES[finish];
-	if (!recipe || !(strength > 0)) return null;
+	if (!recipe) return surfacePatch(finish, strength);
+	if (!(strength > 0)) return null;
 
 	const fibres =
 		recipe.fibres

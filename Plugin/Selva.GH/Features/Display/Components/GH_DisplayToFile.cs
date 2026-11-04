@@ -87,7 +87,7 @@ public class GH_DisplayToFile : GH_Component
 
             using (var fs = File.Create(path))
             {
-                SlvmFile.Write(fs, batch);
+                SlvmFile.Write(fs, batch, DisplayUnits.ActiveDocModelUnits());
             }
         }
         catch (Exception ex)

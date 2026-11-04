@@ -3,7 +3,7 @@
 // ============================================================================
 //
 // A merged mesh draws many source members in one call. Two features draw only part of it: hiding
-// a member (`scene/`) and tinting the selected member (`render/`). Both need geometry groups, and
+// a member (`scene/`) and tinting a selected or hovered member (`render/`). Both need geometry groups, and
 // three honours groups only when `material` is an array: with a single material it draws the whole
 // index range and ignores them. So one owner builds the groups and the material array from both
 // states together. Two writers each replacing the groups would undo each other.
@@ -11,22 +11,32 @@
 // Members are addressed by their index in `userData.members`, which carries each member's window
 // into the index buffer (`finalizeMergedMesh`).
 
-import type * as THREE from 'three';
+import * as THREE from 'three';
+
+import { borrowGeometry, isCachedGeometry } from './gpu-ownership.js';
 
 interface MemberWindow {
 	indexStart?: number;
 	indexCount?: number;
 }
 
-interface DrawState {
+export type HighlightKind = 'selection' | 'hover';
+
+interface Highlight {
+	members: ReadonlySet<number>;
+	material: THREE.Material;
+}
+
+interface DrawState extends Record<HighlightKind, Highlight | null> {
 	/** The mesh's own material, restored once nothing is hidden or highlighted. */
 	base: THREE.Material;
 	hidden: ReadonlySet<number>;
-	highlight: { index: number; material: THREE.Material } | null;
 }
 
 const states = new WeakMap<THREE.Mesh, DrawState>();
 const listeners = new WeakMap<THREE.Mesh, Set<() => void>>();
+
+const tintOrigins = new WeakMap<THREE.Material, THREE.Material>();
 
 const NONE: ReadonlySet<number> = new Set();
 
@@ -42,21 +52,43 @@ function stateOf(mesh: THREE.Mesh): DrawState {
 	let state = states.get(mesh);
 	if (!state) {
 		const base = Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material;
-		state = { base, hidden: NONE, highlight: null };
+		state = { base, hidden: NONE, selection: null, hover: null };
 		states.set(mesh, state);
 	}
 	return state;
 }
 
+// Groups live on the geometry, and a cached geometry can back two meshes at once (two identical
+// branches), so a mesh gets its own geometry over the same attributes before writing any.
+function ownGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
+	const shared = mesh.geometry;
+	if (!isCachedGeometry(shared)) return shared;
+
+	const own = new THREE.BufferGeometry();
+	own.setIndex(shared.index);
+	for (const [name, attribute] of Object.entries(shared.attributes))
+		own.setAttribute(name, attribute);
+	own.boundingBox = shared.boundingBox?.clone() ?? null;
+	own.boundingSphere = shared.boundingSphere?.clone() ?? null;
+	borrowGeometry(own, shared);
+	mesh.geometry = own;
+	return own;
+}
+
 function rebuild(mesh: THREE.Mesh, windows: Required<MemberWindow>[], state: DrawState): void {
-	const { geometry } = mesh;
+	const geometry = ownGeometry(mesh);
 	geometry.clearGroups();
 
-	if (state.hidden.size === 0 && !state.highlight) {
+	const { selection, hover } = state;
+	if (state.hidden.size === 0 && !selection && !hover) {
 		mesh.material = state.base;
 		states.delete(mesh);
 		return;
 	}
+
+	const materials = [state.base];
+	const selectionSlot = selection ? materials.push(selection.material) - 1 : 0;
+	const hoverSlot = hover ? materials.push(hover.material) - 1 : 0;
 
 	// Coalesce neighbours with the same material, so hiding one member costs two draws, not N.
 	let runStart = -1;
@@ -72,7 +104,12 @@ function rebuild(mesh: THREE.Mesh, windows: Required<MemberWindow>[], state: Dra
 			continue;
 		}
 		const { indexStart, indexCount } = windows[i]!;
-		const material = state.highlight?.index === i ? 1 : 0;
+		// Selection wins, so pointing at a selected member doesn't make it look unselected.
+		const material = selection?.members.has(i)
+			? selectionSlot
+			: hover?.members.has(i)
+				? hoverSlot
+				: 0;
 		if (runStart < 0 || material !== runMaterial || indexStart !== runEnd) {
 			flush();
 			runStart = indexStart;
@@ -82,7 +119,7 @@ function rebuild(mesh: THREE.Mesh, windows: Required<MemberWindow>[], state: Dra
 	}
 	flush();
 
-	mesh.material = state.highlight ? [state.base, state.highlight.material] : [state.base];
+	mesh.material = materials;
 }
 
 function update(mesh: THREE.Mesh, change: (state: DrawState) => void): void {
@@ -109,26 +146,34 @@ export function setHiddenMembers(mesh: THREE.Mesh, hidden: ReadonlySet<number>):
 
 /** The material `mesh` draws with when nothing is highlighted. */
 export function getBaseMaterial(mesh: THREE.Mesh): THREE.Material {
-	return (
-		states.get(mesh)?.base ?? (Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material)
-	);
+	const material =
+		states.get(mesh)?.base ?? (Array.isArray(mesh.material) ? mesh.material[0]! : mesh.material);
+	return tintOrigins.get(material) ?? material;
 }
 
-/** Draws member `index` with `material`. The caller owns `material` and disposes it. */
+/** A clone to tint and swap onto a mesh. `getBaseMaterial` keeps answering with `material`. */
+export function cloneForTint(material: THREE.Material): THREE.Material {
+	const clone = material.clone();
+	tintOrigins.set(clone, tintOrigins.get(material) ?? material);
+	return clone;
+}
+
+/** Draws `members` with `material`. The caller owns `material` and disposes it. */
 export function setMemberHighlight(
 	mesh: THREE.Mesh,
-	index: number,
-	material: THREE.Material
+	members: ReadonlySet<number>,
+	material: THREE.Material,
+	kind: HighlightKind = 'selection'
 ): void {
 	update(mesh, (state) => {
-		state.highlight = { index, material };
+		state[kind] = { members, material };
 	});
 }
 
-export function clearMemberHighlight(mesh: THREE.Mesh): void {
-	if (!states.get(mesh)?.highlight) return;
+export function clearMemberHighlight(mesh: THREE.Mesh, kind: HighlightKind = 'selection'): void {
+	if (!states.get(mesh)?.[kind]) return;
 	update(mesh, (state) => {
-		state.highlight = null;
+		state[kind] = null;
 	});
 }
 

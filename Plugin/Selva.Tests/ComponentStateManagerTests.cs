@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Selva.GH.Features.UIBuilder.Services;
 
@@ -213,5 +214,84 @@ public class ComponentStateManagerTests
         Assert.False(sm.IsBusy);
         Assert.False(sm.IsSolving);
         Assert.False(sm.HasPendingValues);
+    }
+
+    // -------------------------------------------------------------------------
+    // Stale schedule watchdog
+    // -------------------------------------------------------------------------
+
+    private sealed class FakeClock
+    {
+        public DateTime Now = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        public DateTime Read() => Now;
+    }
+
+    [Fact]
+    public void Schedule_GoesStale_WhenNoSolveStarts()
+    {
+        var clock = new FakeClock();
+        var sm = new ComponentStateManager(() => false, clock.Read);
+        sm.MarkSolveScheduled();
+
+        clock.Now = clock.Now.AddMilliseconds(ComponentStateManager.ScheduledStaleMs - 1);
+        Assert.True(sm.IsBusy);
+        Assert.True(sm.IsStartPending);
+
+        clock.Now = clock.Now.AddMilliseconds(1);
+        Assert.False(sm.IsBusy);
+        Assert.False(sm.IsStartPending);
+    }
+
+    [Fact]
+    public void StaleSchedule_LetsPendingValuesBeTaken()
+    {
+        var clock = new FakeClock();
+        var sm = new ComponentStateManager(() => false, clock.Read);
+        sm.MarkSolveScheduled();
+        sm.MergePendingValues(Values(("a", 1)));
+        clock.Now = clock.Now.AddMilliseconds(ComponentStateManager.ScheduledStaleMs);
+
+        Assert.False(sm.IsBusy);
+        Assert.Equal(1, sm.TakePendingValues()!["a"]);
+    }
+
+    [Fact]
+    public void RunningSolve_IsNeverStale()
+    {
+        var clock = new FakeClock();
+        var sm = new ComponentStateManager(() => false, clock.Read);
+        sm.MarkSolveScheduled();
+        sm.SetSolving(true);
+
+        clock.Now = clock.Now.AddMilliseconds(ComponentStateManager.ScheduledStaleMs * 10);
+
+        Assert.True(sm.IsBusy);
+        Assert.False(sm.IsStartPending);
+    }
+
+    [Fact]
+    public void RescheduleAfterStale_RestartsTheWindow()
+    {
+        var clock = new FakeClock();
+        var sm = new ComponentStateManager(() => false, clock.Read);
+        sm.MarkSolveScheduled();
+        clock.Now = clock.Now.AddMilliseconds(ComponentStateManager.ScheduledStaleMs);
+        Assert.False(sm.IsBusy);
+
+        sm.MarkSolveScheduled();
+
+        Assert.True(sm.IsBusy);
+    }
+
+    [Fact]
+    public void IsStartPending_FalseOnceTheSolveStarted()
+    {
+        var sm = NewManager();
+        sm.MarkSolveScheduled();
+        Assert.True(sm.IsStartPending);
+
+        sm.SetSolving(true);
+
+        Assert.False(sm.IsStartPending);
     }
 }

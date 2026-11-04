@@ -1,5 +1,6 @@
-import { DataTreeDefault, DataTreePath, InputParam, DataTree, InnerTreeData } from '../types';
-import { ComputeError, ErrorCodes, getLogger } from '@/core';
+import type { DataTreeDefault, DataTreePath, InputParam, DataTree, InnerTreeData } from '../types';
+import { ComputeError, ErrorCodes } from '@/core/errors';
+import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
 import { booleanTransformer, numericTransformer } from '../io/input/transformers';
 import { isDataTreeDefault, TREE_PATH_RE } from './tree-path';
@@ -46,11 +47,13 @@ export class TreeBuilder {
 		this.innerTree = {} as ComputeInnerTreeData;
 	}
 
-	/** Append values to the branch at `path` (`[0, 1]` is `{0;1}`). */
+	/** Append values to the branch at `path` (`[0, 1]` is `{0;1}`). A `null` item is skipped. */
 	public append(path: number[], items: DataTreeValue[]): this {
 		const branch = (this.innerTree[TreeBuilder.formatPathString(path)] ??= []);
 		// A loop, not push(...items): spreading a few hundred thousand items overflows the stack.
-		for (const item of items) branch.push({ data: TreeBuilder.serializeValue(item) });
+		for (const item of items) {
+			if (item !== null) branch.push({ data: TreeBuilder.serializeValue(item) });
+		}
 		return this;
 	}
 
@@ -73,21 +76,6 @@ export class TreeBuilder {
 		return this.append([0], items);
 	}
 
-	/** Every value across all branches. */
-	public flatten(): DataTreeValue[] {
-		const result: DataTreeValue[] = [];
-
-		for (const items of Object.values(this.innerTree)) {
-			if (Array.isArray(items)) {
-				for (const item of items) {
-					result.push(TreeBuilder.deserializeValue(item.data));
-				}
-			}
-		}
-
-		return result;
-	}
-
 	/** The tree in the shape a solve request sends. */
 	public toComputeFormat(): DataTree {
 		return {
@@ -95,10 +83,6 @@ export class TreeBuilder {
 			// `DataTree` types the response item shape; a request item is looser.
 			InnerTree: this.innerTree as unknown as InnerTreeData
 		};
-	}
-
-	public getParamName(): string {
-		return this.paramName;
 	}
 
 	/**
@@ -289,14 +273,10 @@ export class TreeBuilder {
 	}
 
 	/** Booleans and numbers stay primitives: Grasshopper reads them typed. */
-	private static serializeValue(value: DataTreeValue): string | boolean | number {
-		if (typeof value === 'boolean') return value;
-		if (typeof value === 'number') return value;
-		if (typeof value === 'string') return value;
-		if (typeof value === 'object' && value !== null) {
-			return JSON.stringify(value);
-		}
-		return String(value);
+	private static serializeValue(
+		value: string | number | boolean | object
+	): ComputeDataItem['data'] {
+		return typeof value === 'object' ? JSON.stringify(value) : value;
 	}
 
 	private static deserializeValue(data: unknown): DataTreeValue {

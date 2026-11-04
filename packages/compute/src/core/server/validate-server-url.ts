@@ -1,4 +1,5 @@
 import { ComputeError, ErrorCodes } from '@/core/errors';
+import { redactToOrigin } from '@/core/utils/redact-url';
 
 /**
  * The public McNeel endpoint, blocked by default: users must point at their own server. Its raw IP
@@ -16,8 +17,7 @@ export interface ValidateServerUrlOptions {
 }
 
 /**
- * Validate a compute `serverUrl` and return it trimmed, without trailing slashes. Every entry point
- * that takes a server URL calls this, so a URL is accepted or rejected the same way everywhere.
+ * Validate a compute `serverUrl` and return it trimmed, without trailing slashes.
  *
  * @throws {ComputeError} `INVALID_CONFIG` when the URL is empty, isn't http(s), doesn't parse,
  *   embeds credentials, has a query or fragment, or names a blocked host.
@@ -30,10 +30,10 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 		});
 	}
 
-	const invalid = (reason: string, originalError?: unknown) =>
-		new ComputeError(`Invalid serverUrl: "${trimmed}". ${reason}`, ErrorCodes.INVALID_CONFIG, {
-			context: { receivedServerUrl: raw },
-			originalError
+	const redacted = redactToOrigin(trimmed);
+	const invalid = (reason: string) =>
+		new ComputeError(`Invalid serverUrl: "${redacted}". ${reason}`, ErrorCodes.INVALID_CONFIG, {
+			context: { receivedServerUrl: redacted }
 		});
 
 	if (!/^https?:\/\//i.test(trimmed)) {
@@ -46,11 +46,9 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 	let parsed: URL;
 	try {
 		parsed = new URL(trimmed);
-	} catch (err) {
-		throw invalid(
-			`Must be a valid URL. Received error: ${err instanceof Error ? err.message : String(err)}`,
-			err
-		);
+	} catch {
+		// Not the cause: a URL error carries its input, and some engines quote it in the message.
+		throw invalid('Must be a valid URL.');
 	}
 
 	if (parsed.username !== '' || parsed.password !== '') {
@@ -79,7 +77,7 @@ export function validateServerUrl(raw: string, options?: ValidateServerUrlOption
 		throw new ComputeError(
 			'serverUrl must be set to your Compute server URL. The shared public endpoint is not allowed.',
 			ErrorCodes.INVALID_CONFIG,
-			{ context: { receivedServerUrl: raw } }
+			{ context: { receivedServerUrl: redacted } }
 		);
 	}
 

@@ -1,5 +1,78 @@
 # @selvajs/ui
 
+## 6.6.0-beta.18
+
+### Minor Changes
+
+- 056cb01: One typeface, one content width, one dropdown.
+
+  - **Hanken Grotesk is the UI typeface.** `base.css` loads it from `@fontsource-variable/hanken-grotesk` and sets `--font-sans`, so every app importing it (including the plugin UI embedded in the `.gha`) gets it self-hosted, no network fetch.
+  - **`PageContent` is the shared page frame:** centred, `max-w-6xl`, page padding. It now renders a `<div>` instead of a `<main>`, because `AppShell` already provides the `<main>`. A consumer relying on full width can override it with `class`.
+  - **`FilterableDropdown` gains `name`** (hidden input for a plain form post), **`size`** (`'default' | 'sm'`), **`aria-label`** and a per-item **`disabled`**.
+  - **Selva:** settings, team, Library and Projects share one content width. The Projects page is a single scrolling column titled with the selected project, and new projects are created in a dialog. Every native `<select>` is now a `FilterableDropdown`, and lint rejects new ones. The landing page wires are easier to see and its hero is tighter.
+
+## 6.6.0-beta.17
+
+### Minor Changes
+
+- 57189d6: Export `visibleInputItems(schema, values)`: the input items the form shows for these values, after item, group and tab visibility. For a host that repeats the form back, such as a summary before a commit.
+
+## 6.6.0-beta.16
+
+### Minor Changes
+
+- ebae55e: One surface system for light and dark. Cards, rows, menus and fields sit on a fixed set of roles (canvas, surface, raised, well, field), hover and selection are overlays that work on any surface, and every field edge and slider track reaches 3:1 in both modes. Corners follow one concentric radius scale.
+
+  New tokens: `raised`, `field`, `hover`, `selected`, `border-strong`, `faint-foreground`, `shadow-raised`, `shadow-popover`, `rounded-inner`. Removed: `accent` and `accent-foreground` (use `hover` or `selected`), the `sidebar-*` tokens, `inputparam`, `outputparam` and the `--radius` base variable. The alternate themes are gone too: the `@selvajs/ui/styles/themes/*` export, `ThemeSwitcher` and the theme store.
+
+## 6.6.0-beta.15
+
+### Minor Changes
+
+- 3ff7284: Schema 2.19.0: an optional `viewerOptions.look` sets the look a definition opens in. A new `night` look lights the scene from what the model emits: a material carrying `emissive` and `emissiveIntensity` gets a shadow-casting point light and bloom. `emissiveLight` sets that light's intensity directly. The plugin's new Emissive Material component makes any material glow, from a colour and strength, or from a real source's Kelvin and Lumens.
+
+### Patch Changes
+
+- 3ff7284: A segmented input's selected option now stands out on dark panels, and a tile's label wraps to two lines instead of truncating.
+
+## 6.6.0-beta.14
+
+### Minor Changes
+
+- a9a8704: Scene manager: hovering a row tints that object amber in the viewport, and selecting rows tints them with the selection color. A surface already close to the tint turns blue instead. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 6.6.0-beta.13
+
+### Minor Changes
+
+- b500603: Scene manager: hovering a row outlines that object in the viewport, and selecting rows tints them. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 6.6.0-beta.12
+
+### Patch Changes
+
+- a60f6f4: Image outputs show SVGs on white instead of a checkerboard when no background colour is set. Raster images keep the checkerboard so their transparency stays visible.
+
+## 6.6.0-beta.11
+
+### Minor Changes
+
+- e0aa942: A solve that ends within 400 ms no longer shows a solving indicator. Once shown, the indicator stays for at least 500 ms so it never flashes. `createSolvingIndicator` replaces its averaged adaptive delay with this fixed rule, so a slow solve after a run of fast ones is no longer left without an indicator, and it now also returns `slow` (past 2 s). The viewer shows a thin progress bar along its top edge instead of blurring the model on every solve, and dims the stale result only while a solve is slow (`Viewer` `isSlow`, `AppLayout` `solveIsSlow`). `AppLayout` now hides the solving chip itself when the definition has a Calculate button, so hosts pass `createSolvingIndicator(...).show` without that check. In a host that freezes while it solves (the Rhino panel), the indicator shows on every solve, since a delay can't run there.
+
+### Patch Changes
+
+- e0aa942: Without a viewer, a layout narrower than 900px renders as one edge-to-edge column with the Calculate row pinned underneath, instead of a framed card in its own margins. Fixes the cramped look in a docked Rhino panel. Inline solve messages render as a footer row with their buttons beside the title, not as a framed card.
+- e0aa942: Esc aborts a running solve and says so the same way in every host: the Rhino panel, a browser tab and Rhino.Compute. Before, a browser tab ignored Esc and only the panel showed the hint, and only after a slow solve. The live panel's Abort button and the Calculate button while solving show an Esc key, and the floating solving indicator reads "Esc aborts the solve" instead of "This can take a moment…".
+- e0aa942: Closing a `Viewer` no longer logs "WebGL: INVALID_OPERATION: loseContext: context already lost". It released its WebGL context a second time after `dispose()` had already done so.
+
+## 6.6.0-beta.10
+
+### Patch Changes
+
+- d5376af: Parsing a mesh batch whose geometry is byte-identical to an earlier one reuses its `BufferGeometry` and extracted edges, so a solve that only changed materials, names or layers neither re-decodes the scene nor uploads it to the GPU again. The cache owns those geometries: `updateScene` frees the GPU copy of every cached geometry the new scene doesn't draw, so switching back to a cached variant costs an upload but no decode. New `clearGeometryCache()` from `/parse` empties the cache; `Viewer` calls it when it is destroyed.
+
+  Merging by material now gathers every group of a material, wherever it sits in the batch, into one mesh. The plugin keeps meshes in input order, so a material can head several groups.
+
 ## 6.6.0-beta.9
 
 ### Minor Changes

@@ -211,6 +211,12 @@ export class WebSocketState {
 
 					// If solving just finished, handle pending/batched updates
 					if (!this.isSolving) {
+						// Either send starts the next solve. The clear above dropped the awaiting flag,
+						// and without it the panel can't show that solve before it freezes the page.
+						if (this.inRhinoPanel && (this.batchTimer || this._pendingValueUpdate)) {
+							this.markAwaitingSolve();
+						}
+
 						// First, flush any batched updates
 						if (this.batchTimer) {
 							clearTimeout(this.batchTimer);

@@ -119,8 +119,8 @@
 				aria-current={active ? 'page' : undefined}
 				class={`group gap-2 py-1.5 pr-2.5 relative flex w-full items-center text-left transition-colors ${
 					active
-						? 'pl-4 rounded-r-md bg-accent text-accent-foreground'
-						: 'mx-2 pl-2.5 rounded-md text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+						? 'pl-4 rounded-r-md bg-selected text-foreground'
+						: 'mx-2 pl-2.5 rounded-md text-muted-foreground hover:bg-hover hover:text-foreground'
 				}`}
 			>
 				{#if active}
@@ -138,7 +138,7 @@
 	</nav>
 
 	{#if footer}
-		<div class="px-3 py-3 sm:block hidden border-t border-border/60">
+		<div class="px-3 py-3 sm:block hidden border-t border-border">
 			{@render footer()}
 		</div>
 	{/if}

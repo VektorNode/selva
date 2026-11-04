@@ -10,7 +10,8 @@
 // it. `__tests__/doctor-config-parity.test.js` asserts both against one fixture
 // table, so a rule changed here and not there fails CI.
 
-import { RENAMED_ENV_VARS, REPLACED_ENV_VARS } from '../env.js';
+import { RENAMED_ENV_VARS, RETIRED_ENV_VARS } from '../env.js';
+import { keyRotationStatus } from '../generated/config.js';
 import { green, red, yellow } from './result.js';
 
 const HEX_64 = /^[0-9a-f]{64}$/i;
@@ -28,8 +29,31 @@ const VALID_DATA = ['local', 'supabase'];
 export function checkSecret(value, label) {
 	if (!value) return red(`${label} — unset`);
 	if (value === PLACEHOLDER) return red(`${label} — still the placeholder`);
-	if (!HEX_64.test(value)) return red(`${label} — not 64 hex chars`);
+	if (!HEX_64.test(value) && !isBase64Of32Bytes(value)) {
+		return red(`${label} — not 32 bytes as 64 hex chars or base64`);
+	}
 	return green(label);
+}
+
+/**
+ * SELVA_HMAC_KEY takes any string of 32+ characters (the token codec's rule),
+ * not only hex: reding a valid key would send an operator rotating it.
+ */
+export function checkHmacKey(value) {
+	const label = 'SELVA_HMAC_KEY is at least 32 characters';
+	if (!value) return red(`${label} — unset`);
+	if (value === PLACEHOLDER) return red(`${label} — still the placeholder`);
+	if (value.length < 32) return red(`${label} — only ${value.length}`);
+	return green(label);
+}
+
+// Mirrors decodeSecretKey in @selvajs/platform: only a round trip proves the
+// whole string was base64, since Buffer.from skips what it can't decode.
+function isBase64Of32Bytes(value) {
+	const buf = Buffer.from(value, 'base64');
+	return (
+		buf.length === 32 && buf.toString('base64').replace(/=+$/, '') === value.replace(/=+$/, '')
+	);
 }
 
 // Lowercased and defaulted the same way create-selva-providers.ts defaults them.
@@ -197,10 +221,10 @@ export function parseBodySizeLimit(raw) {
 	return bytes;
 }
 
-// The app's own default for COMPUTE_REQUEST_MAX_BYTES (packages/server
+// The app's solve request cap (COMPUTE_REQUEST_MAX_BYTES in packages/server
 // compute/limits.ts). Duplicated rather than imported: the CLI installs the
 // runtime and cannot import from it.
-const COMPUTE_REQUEST_DEFAULT_BYTES = 256 * 1024 * 1024;
+const COMPUTE_REQUEST_MAX_BYTES = 256 * 1024 * 1024;
 
 /**
  * BODY_SIZE_LIMIT has to clear the compute request cap, or adapter-node's global
@@ -210,7 +234,7 @@ const COMPUTE_REQUEST_DEFAULT_BYTES = 256 * 1024 * 1024;
  */
 export function checkBodySizeLimit(env) {
 	const raw = env.BODY_SIZE_LIMIT;
-	const requestCap = Number(env.COMPUTE_REQUEST_MAX_BYTES) || COMPUTE_REQUEST_DEFAULT_BYTES;
+	const requestCap = COMPUTE_REQUEST_MAX_BYTES;
 	const asMb = (bytes) => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 	if (raw == null || raw === '') {
@@ -231,9 +255,9 @@ export function checkBodySizeLimit(env) {
 
 	if (bytes < requestCap) {
 		return yellow(
-			`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below COMPUTE_REQUEST_MAX_BYTES ` +
-				`(${asMb(requestCap)}) — the global cap rejects first, making the compute cap ` +
-				`dead config. Raise it to at least ${asMb(requestCap)}.`
+			`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below the ` +
+				`${asMb(requestCap)} a solve may send — larger solves fail with 413 before Selva ` +
+				`sees them. Raise it to at least ${asMb(requestCap)}.`
 		);
 	}
 
@@ -291,12 +315,23 @@ export function checkClientAddress(env) {
 		);
 	}
 
+	// A trusted address header is only safe if every request passes through the
+	// proxy: on a public bind a direct caller sets the header itself and picks
+	// its own rate-limit bucket.
+	const host = env.HOST ?? '0.0.0.0';
+	if (!['127.0.0.1', 'localhost', '::1'].includes(host)) {
+		return yellow(
+			`ADDRESS_HEADER=${header} is trusted but HOST=${host} leaves the app reachable ` +
+				`without the proxy, so a direct caller can set the header and pick its own ` +
+				`rate-limit bucket. Set HOST=127.0.0.1 and keep port 3000 closed in the ` +
+				`firewall (ignore this only if the proxy runs on another host behind network isolation).`
+		);
+	}
+
 	return green(`ADDRESS_HEADER=${header}${depth ? ` (XFF_DEPTH=${depth})` : ''}`);
 }
 
-// A rename is auto-fixable (`selva migrate` rewrites the key). A replacement
-// encodes a value in the new name, so migrate leaves it alone rather than
-// guessing — it's reported here and nowhere else.
+// Both are auto-fixable: `selva migrate` renames old names and removes retired keys.
 export function checkDeprecatedEnv(env) {
 	const checks = [];
 
@@ -309,10 +344,40 @@ export function checkDeprecatedEnv(env) {
 		);
 	}
 
-	for (const [oldName, replacement] of Object.entries(REPLACED_ENV_VARS)) {
-		if (env[oldName] === undefined) continue;
-		checks.push(yellow(`${oldName} is deprecated — replace it with ${replacement}`));
+	for (const [key, now] of Object.entries(RETIRED_ENV_VARS)) {
+		if (env[key] === undefined) continue;
+		checks.push(yellow(`${key} is no longer read (${now}) — \`selva migrate\` removes it`));
 	}
 
 	return checks;
+}
+
+/** Where each root key's rotation overlap stands. Nothing while no rotation is in progress. */
+export function checkKeyRotation(env, now = Date.now()) {
+	return keyRotationStatus(env, now).flatMap(({ key, state, expires, daysLeft }) => {
+		const previous = `${key}_PREVIOUS`;
+		const target = key === 'SELVA_HMAC_KEY' ? 'hmac' : 'at-rest';
+		if (state === 'active') {
+			return [
+				green(`${previous} accepted for ${daysLeft} more days (until ${expires.slice(0, 10)})`)
+			];
+		}
+		if (state === 'expired') {
+			return [
+				yellow(
+					`${previous} passed its deadline (${expires}) and is no longer accepted. ` +
+						`Remove it: npx selva keys rotate ${target} --finish`
+				)
+			];
+		}
+		if (state === 'no-deadline') {
+			return [
+				yellow(
+					`${previous} has no deadline, so the old key is accepted for good. Set ` +
+						`${previous}_EXPIRES, or remove it: npx selva keys rotate ${target} --finish`
+				)
+			];
+		}
+		return [];
+	});
 }

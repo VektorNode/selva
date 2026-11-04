@@ -9,8 +9,8 @@ import { orgPaths, ProviderError, withCacheBust } from '@selvajs/platform';
  * Every upload is rasterized to WebP by the shared transcoder inside
  * `IStorageProvider.put`, so the stored blob is always
  * `orgs/{id}/branding/{kind}.webp` (the `branding/` segment marks the public
- * asset class — see `classifyAssetPath`). SVG inputs are flattened to a
- * 1200px raster — no vector blob is persisted, which keeps the served bytes
+ * asset class — see `classifyAssetPath`). SVG inputs are flattened to a raster
+ * of at most 1200px — no vector blob is persisted, which keeps the served bytes
  * XSS-free without a sanitizer. Re-uploads overwrite in place. The org's
  * `assets` map is the source of truth for which kinds exist and their public
  * URLs; we read-merge-write it so concurrent edits to *different* kinds don't

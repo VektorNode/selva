@@ -2,7 +2,7 @@
 
 Forward-auth implementation of `@selvajs/platform`'s `IAuthProvider`. Trusts identity headers set by an upstream reverse proxy (Caddy `forward_auth`, oauth2-proxy, Authelia, Pomerium, Traefik forward-auth, …).
 
-**Auth-only.** No data store, no storage, no permissions. Pair it with whatever data provider you want — `@selvajs/local-provider` for filesystem JSON, `@selvajs/supabase-provider` for Postgres.
+**Auth-only.** No data store, no storage, no permissions. Pair it with `@selvajs/local-provider` (filesystem JSON). Supabase data needs a Supabase session token that header auth does not issue, so queries would run as the anon role; see [Mixing providers](../../../docs/self-hosting/providers/overview.md#mixing-providers).
 
 **Operator setup — a full Entra + oauth2-proxy + Caddy walkthrough, with troubleshooting:** [docs/self-hosting/providers/header-auth-entra.md](../../../docs/self-hosting/providers/header-auth-entra.md).
 
@@ -225,7 +225,7 @@ Custom runtimes that wire `HeaderAuthProvider` themselves call
 
 ## Adding users (post-bootstrap)
 
-Admin → **Users → New user** → enter the UPN in the email field. For M365 /
+Admin → **Users → Allowlist user** → enter the UPN in the email field. For M365 /
 Entra deployments the UPN usually IS the email
 (`alice@company.onmicrosoft.com`); for other IdPs document the format in
 your onboarding.

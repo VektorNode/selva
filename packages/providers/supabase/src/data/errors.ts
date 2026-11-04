@@ -4,8 +4,10 @@ import { ProviderError } from '@selvajs/platform';
  * PostgREST/Postgres error translation shared by every Supabase store.
  *
  * `PGRST116` (the code `.single()` raises when a selector matches zero rows)
- * maps to 404 — that's almost always what a store's caller wants. Unique and
- * FK violations map to 409. Anything else becomes a plain `Error` (500
+ * maps to 404 — that's almost always what a store's caller wants. So does
+ * `P0002`, which our RPCs raise for a missing row. `42501` (RLS or a privilege
+ * refusing the caller) maps to 403. Unique and FK violations map to 409.
+ * Anything else becomes a plain `Error` (500
  * downstream via `api-errors`), with `details`/`hint`/`code` preserved on the
  * error object for logs.
  */
@@ -20,7 +22,10 @@ export function mapPostgrestError(e: unknown): Error {
 	const pg = e as PostgrestErrorShape;
 	switch (pg?.code) {
 		case 'PGRST116':
+		case 'P0002':
 			return new ProviderError(pg.message ?? 'Not found', 404);
+		case '42501':
+			return new ProviderError(pg.message ?? 'Forbidden', 403);
 		case '23505':
 			return new ProviderError(pg.message ?? 'Duplicate record', 409);
 		case '23503':

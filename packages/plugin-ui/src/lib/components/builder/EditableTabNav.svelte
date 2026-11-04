@@ -18,6 +18,7 @@
 		liftDraggedElement
 	} from '#lib/dnd/dndzone-helpers.js';
 	import { captureDragFootprint, dragFootprint } from '#lib/dnd/drag-footprint.svelte.js';
+	import { builderSelection } from '#lib/features/builder/selection.svelte.js';
 
 	interface EditableTabNavProps {
 		tabs: TabConfig[];
@@ -129,6 +130,57 @@
 		setPendingTarget(null);
 	}
 
+	// A parameter or card dragged over another tab opens that tab's drop list under it. The list is
+	// plain DOM read with elementsFromPoint, like the tabs above, and the row under the pointer
+	// becomes the pending target; the drag's origin zone commits it on release.
+	let dropList = $state<{ tabId: string; left: number; top: number } | null>(null);
+	let dropListEl = $state<HTMLElement | null>(null);
+	const dropListTab = $derived(dropList ? tabs.find((t) => t.id === dropList?.tabId) : undefined);
+
+	function handleItemDragMove(e: PointerEvent) {
+		const stack = document.elementsFromPoint(e.clientX, e.clientY);
+		if (dropList && dropListEl && stack.some((el) => dropListEl?.contains(el))) {
+			const row = stack.find(
+				(el): el is HTMLElement =>
+					el instanceof HTMLElement && el.dataset.tabDropGroup !== undefined
+			);
+			builderSelection.setTabDrop(
+				row ? { tabId: dropList.tabId, groupId: row.dataset.tabDropGroup || null } : null
+			);
+			return;
+		}
+		builderSelection.setTabDrop(null);
+		for (const el of stack) {
+			for (const [tabId, tabEl] of Object.entries(tabRefs)) {
+				if (!tabEl || !(tabEl === el || tabEl.contains(el))) continue;
+				if (tabId === activeTabId) dropList = null;
+				else if (dropList?.tabId !== tabId) {
+					const rect = tabEl.getBoundingClientRect();
+					dropList = { tabId, left: rect.left, top: rect.bottom };
+				}
+				return;
+			}
+		}
+		dropList = null;
+	}
+
+	// The dragged clone sits on the cursor and would cover the list it is being dropped on.
+	$effect(() => {
+		const root = document.documentElement;
+		root.classList.toggle('tab-drop-open', !!dropList);
+		return () => root.classList.remove('tab-drop-open');
+	});
+
+	$effect(() => {
+		if (!builderSelection.dragging) return;
+		document.addEventListener('pointermove', handleItemDragMove);
+		return () => {
+			document.removeEventListener('pointermove', handleItemDragMove);
+			dropList = null;
+			builderSelection.setTabDrop(null);
+		};
+	});
+
 	$effect(() => {
 		if (!groupDragActive) {
 			setPendingTarget(null);
@@ -168,15 +220,15 @@
 					<div
 						use:trackTabEl={tab.id}
 						class="group/tab relative flex h-10 items-center rounded-t-lg transition-colors {pendingTargetTabId ===
-						tab.id
+							tab.id || dropList?.tabId === tab.id
 							? 'bg-primary/10 ring-primary ring-2 ring-inset'
-							: 'hover:bg-muted/60'}"
+							: 'hover:bg-hover'}"
 						role="presentation"
 					>
 						{#if onReorderTabs}
 							<div
 								use:dragHandle
-								class="text-muted-foreground/60 hover:text-foreground flex cursor-grab items-center self-stretch pl-1.5 opacity-0 transition-opacity group-hover/tab:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
+								class="text-faint-foreground hover:text-foreground flex cursor-grab items-center self-stretch pl-1.5 opacity-0 transition-opacity group-hover/tab:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
 								role="button"
 								tabindex="0"
 								aria-label="Drag to reorder tab"
@@ -211,3 +263,43 @@
 		</Button>
 	</div>
 </div>
+
+{#if dropList && dropListTab}
+	{@const target = builderSelection.tabDrop}
+	<!-- eslint-disable-next-line shadcn/no-inline-styles -- pinned under the hovered tab, which scrolls -->
+	<div
+		bind:this={dropListEl}
+		style:left="{dropList.left}px"
+		style:top="{dropList.top}px"
+		class="bg-popover border-border-strong shadow-popover fixed z-50 flex min-w-52 flex-col gap-0.5 rounded-lg border p-1 text-sm"
+	>
+		<p class="text-muted-foreground px-2 pt-1 pb-0.5 text-xs">
+			Drop into {dropListTab.label || 'Untitled tab'}
+		</p>
+		{#each dropListTab.groups as group (group.id)}
+			<div
+				data-tab-drop-group={group.id}
+				class="truncate rounded-md px-2 py-1.5 {target?.groupId === group.id
+					? 'bg-primary text-primary-foreground'
+					: ''}"
+			>
+				{group.label || 'Untitled group'}
+			</div>
+		{/each}
+		<div
+			data-tab-drop-group=""
+			class="rounded-md px-2 py-1.5 {target && target.groupId === null
+				? 'bg-primary text-primary-foreground'
+				: 'text-muted-foreground'}"
+		>
+			+ New group
+		</div>
+	</div>
+{/if}
+
+<style>
+	:global(html.tab-drop-open #dnd-action-dragged-el) {
+		opacity: 0.25 !important;
+		transition: opacity 120ms ease;
+	}
+</style>

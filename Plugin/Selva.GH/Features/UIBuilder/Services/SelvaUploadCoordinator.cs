@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -33,7 +34,11 @@ public sealed class SelvaUploadCoordinator : IDisposable
         Path.Combine(Folders.AppDataFolder, "Selva", "selva-accounts.json"),
         SelvaApiClient.CreateHandler,
         UserAgent(),
-        OpenInBrowser));
+        OpenInBrowser,
+        ConfirmNewOrigin));
+
+    // Shared like the accounts: a retried upload from any bridge reuses the project it created.
+    private static readonly ConcurrentDictionary<string, string> CreatedProjects = new();
 
     private readonly WebSocketTransport _transport;
     private readonly object _uploadLock = new();
@@ -44,6 +49,9 @@ public sealed class SelvaUploadCoordinator : IDisposable
     private Func<List<SelvaDefinitionLink>> _getLinks;
     private Func<UISchema> _getSchema;
     private Action<List<SelvaDefinitionLink>> _setLinks;
+    // Touched on the UI thread only, inside CaptureDocument.
+    private (string Key, int Size)? _sizeCache;
+    private CancellationTokenSource _signIn;
     private CancellationTokenSource _upload;
 
     public SelvaUploadCoordinator(WebSocketTransport transport)
@@ -67,6 +75,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
 
         lock (_uploadLock)
         {
+            _signIn?.Cancel();
             _upload?.Cancel();
         }
     }
@@ -107,13 +116,13 @@ public sealed class SelvaUploadCoordinator : IDisposable
         switch (message.Kind)
         {
             case InboundKind.SelvaGetAccount:
-                RunAccount(_ => Task.CompletedTask);
+                RunAccount(VerifyUncheckedAsync);
                 break;
             case InboundKind.SelvaConnect:
                 RunAccount(ct => Accounts().ConnectAsync(message.Origin, ct));
                 break;
             case InboundKind.SelvaSignIn:
-                RunAccount(ct => Accounts().SignInAsync(ct));
+                StartSignIn();
                 break;
             case InboundKind.SelvaUseApiKey:
                 // Off the dispatch chain: on Mac, InvokeOnUiThread waits for the modal dialog to close.
@@ -129,14 +138,45 @@ public sealed class SelvaUploadCoordinator : IDisposable
                 StartUpload(message.UploadRequest);
                 break;
             case InboundKind.SelvaCancel:
-                Accounts().Cancel();
+                // Only what this bridge started: the account manager is shared by every bridge.
                 lock (_uploadLock)
                 {
+                    _signIn?.Cancel();
                     _upload?.Cancel();
                 }
 
                 break;
         }
+    }
+
+    private void StartSignIn()
+    {
+        var signIn = new CancellationTokenSource();
+        lock (_uploadLock)
+        {
+            _signIn?.Cancel();
+            _signIn = signIn;
+        }
+
+        RunAccount(async _ =>
+        {
+            try
+            {
+                await Accounts().SignInAsync(signIn.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (_uploadLock)
+                {
+                    if (_signIn == signIn)
+                    {
+                        _signIn = null;
+                    }
+                }
+
+                signIn.Dispose();
+            }
+        });
     }
 
     private void PromptForApiKey()
@@ -156,6 +196,16 @@ public sealed class SelvaUploadCoordinator : IDisposable
             : Task.CompletedTask);
     }
 
+    // Upload is offered only for a key Selva accepted in this session, so an unchecked or
+    // refused one is asked about whenever the page asks for the account.
+    private Task VerifyUncheckedAsync(CancellationToken cancellationToken)
+    {
+        var account = Accounts().Snapshot();
+        return account.Status == "signedIn" && account.Verified != true
+            ? Accounts().VerifyAsync(cancellationToken)
+            : Task.CompletedTask;
+    }
+
     private async Task ListTargetsAsync(CancellationToken cancellationToken)
     {
         var session = Accounts().Session();
@@ -165,15 +215,15 @@ public sealed class SelvaUploadCoordinator : IDisposable
             return;
         }
 
-        var capture = await OnUiThread(CaptureDocument).ConfigureAwait(false);
+        var capture = await OnUiThread(() => CaptureDocument(false)).ConfigureAwait(false);
         var defaults = Defaults(capture);
-        var file = new SelvaUploadFile { Name = capture.FileName, SizeBytes = capture.Bytes?.Length ?? 0 };
+        var file = new SelvaUploadFile { Name = capture.FileName, SizeBytes = capture.SizeBytes };
 
         SelvaTargets targets;
         try
         {
             using var client = Client(session);
-            targets = await new SelvaUploadService(client, session.Record.UserId, session.Record.OrgId)
+            targets = await Service(client, session)
                 .ListTargetsAsync(SelvaDefinitionLinks.For(capture.Links, session.Origin), capture.DocumentId,
                     defaults, file, cancellationToken)
                 .ConfigureAwait(false);
@@ -185,9 +235,15 @@ public sealed class SelvaUploadCoordinator : IDisposable
         }
         catch (SelvaApiException ex)
         {
+            if (ex.Status == 403)
+            {
+                await Accounts().VerifyAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             targets = new SelvaTargets
             {
                 Origin = session.Origin,
+                TokenId = session.Record.TokenId ?? string.Empty,
                 Projects = new List<SelvaProject>(),
                 Matches = new List<SelvaVersionTarget>(),
                 Defaults = defaults,
@@ -249,7 +305,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
         }
 
         _ = _transport.BroadcastSelvaUploadProgress("preparing");
-        var capture = await OnUiThread(CaptureDocument).ConfigureAwait(false);
+        var capture = await OnUiThread(() => CaptureDocument(true)).ConfigureAwait(false);
         if (capture.BlockedReason != null)
         {
             return new SelvaUploadResult { Ok = false, Error = capture.BlockedReason };
@@ -258,10 +314,16 @@ public sealed class SelvaUploadCoordinator : IDisposable
         try
         {
             using var client = Client(session);
-            var (result, link) = await new SelvaUploadService(client, session.Record.UserId, session.Record.OrgId)
+            var (result, link) = await Service(client, session)
                 .UploadAsync(request, capture.Bytes, capture.FileName,
                     stage => _ = _transport.BroadcastSelvaUploadProgress(stage), cancellationToken)
                 .ConfigureAwait(false);
+
+            // A refusal may mean the key itself stopped qualifying; /me says which.
+            if (!result.Ok && result.Cancelled != true)
+            {
+                await Accounts().VerifyAsync(cancellationToken).ConfigureAwait(false);
+            }
 
             if (link != null)
             {
@@ -289,6 +351,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
     private sealed class DocumentCapture
     {
         public byte[] Bytes;
+        public int SizeBytes;
         public string FileName = "definition.gh";
         public string DocumentId;
         public UISchema Schema;
@@ -300,7 +363,7 @@ public sealed class SelvaUploadCoordinator : IDisposable
     ///     Runs on the UI thread: the document is serialised in memory, so unsaved canvas changes go
     ///     up and the file on disk isn't touched.
     /// </summary>
-    private DocumentCapture CaptureDocument()
+    private DocumentCapture CaptureDocument(bool forUpload)
     {
         var capture = new DocumentCapture { Links = _getLinks() ?? new List<SelvaDefinitionLink>() };
         var document = _component.OnPingDocument();
@@ -319,8 +382,26 @@ public sealed class SelvaUploadCoordinator : IDisposable
             return capture;
         }
 
+        // Listing targets only shows the size, so an unchanged document isn't serialised again.
+        var key = DocumentStateKey(document) + "|" + capture.Schema.LastModified.Ticks;
+        if (!forUpload && _sizeCache?.Key == key)
+        {
+            capture.SizeBytes = _sizeCache.Value.Size;
+            return capture;
+        }
+
         capture.Bytes = Serialize(document);
+        capture.SizeBytes = capture.Bytes.Length;
+        _sizeCache = (key, capture.SizeBytes);
         return capture;
+    }
+
+    // Any recorded edit moves the undo stack. A display hint only: the upload always serialises afresh.
+    private static string DocumentStateKey(GH_Document document)
+    {
+        var undo = document.UndoServer;
+        return $"{document.DocumentID}|{document.ObjectCount}|{undo.UndoCount}|{undo.RedoCount}|" +
+               $"{undo.FirstUndoName}|{undo.FirstRedoName}|{document.IsModified}";
     }
 
     /// <summary>
@@ -396,6 +477,12 @@ public sealed class SelvaUploadCoordinator : IDisposable
             $"Your sign-in to {SelvaOrigin.DisplayHost(origin)} ended: it ran out or was revoked. Sign in again.");
     }
 
+    private static SelvaUploadService Service(SelvaApiClient client, SelvaSession session)
+    {
+        return new SelvaUploadService(client, session.Record.UserId, session.Record.OrgId, session.Record.TokenId,
+            CreatedProjects);
+    }
+
     private static SelvaApiClient Client(SelvaSession session)
     {
         return new SelvaApiClient(session.Origin, session.Token, UserAgent(), SelvaApiClient.CreateHandler());
@@ -447,6 +534,14 @@ public sealed class SelvaUploadCoordinator : IDisposable
             }
         }));
         return completion.Task;
+    }
+
+    private static Task<bool> ConfirmNewOrigin(string host)
+    {
+        return OnUiThread(() => Dialogs.ShowMessage(
+            $"Connect to {host}?\n\nThis computer hasn't signed in to it before. Only continue if you typed " +
+            "this address yourself and trust it: your Grasshopper definitions will be uploaded there.",
+            "Selva", ShowMessageButton.YesNo, ShowMessageIcon.Question) == ShowMessageResult.Yes);
     }
 
     /// <summary>Lets Selva refuse plugin versions it knows are broken.</summary>

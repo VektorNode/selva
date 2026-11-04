@@ -82,8 +82,10 @@ export function canView(input: ProjectAccessInput): boolean {
 		);
 	}
 
-	if (project.visibility === 'private') return member !== null;
-	if (project.visibility === 'org') return orgMember !== null;
+	// A project member sees the project at any visibility. Leaving the org ends the
+	// membership, so this only widens access for someone who reclaimed from outside.
+	if (member !== null) return true;
+	if (project.visibility === 'org') return orgMember !== null && actingOrgId === project.orgId;
 	if (project.visibility === 'public') return allowCrossOrgPublic ? true : orgMember !== null;
 	return false;
 }
@@ -126,7 +128,8 @@ export function canSolve(input: ProjectAccessInput): boolean {
  */
 export function canEdit(input: ProjectAccessInput): boolean {
 	const { member, project, enablePlatformProjects, platformPermissions } = input;
-	if (project?.visibility === 'platform') {
+	if (!project) return false;
+	if (project.visibility === 'platform') {
 		if (!enablePlatformProjects) return false;
 		return isInstanceAdmin(platformPermissions);
 	}
@@ -135,16 +138,17 @@ export function canEdit(input: ProjectAccessInput): boolean {
 
 /**
  * Adding a new definition. Commons projects (`autoJoinOnUpload`) take uploads
- * from anyone who reaches them, and the uploader owns what they upload;
- * everywhere else it needs {@link canEdit}.
+ * from anyone who can {@link canView} them, and the uploader owns what they
+ * upload; everywhere else it needs {@link canEdit}.
  */
 export function canCreateDefinition(input: ProjectAccessInput): boolean {
-	return input.project?.autoJoinOnUpload === true || canEdit(input);
+	return (input.project?.autoJoinOnUpload === true && canView(input)) || canEdit(input);
 }
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canManage(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') {
+	if (!input.project) return false;
+	if (input.project.visibility === 'platform') {
 		if (!input.enablePlatformProjects) return false;
 		return isInstanceAdmin(input.platformPermissions);
 	}
@@ -153,11 +157,7 @@ export function canManage(input: ProjectAccessInput): boolean {
 
 /** Platform projects: `instance_admin` only. All other visibilities: project owner. */
 export function canEditProjectSettings(input: ProjectAccessInput): boolean {
-	if (input.project?.visibility === 'platform') {
-		if (!input.enablePlatformProjects) return false;
-		return isInstanceAdmin(input.platformPermissions);
-	}
-	return input.member?.role === 'owner';
+	return canManage(input);
 }
 
 export interface VisibilityChangeInput {
@@ -212,6 +212,7 @@ export function canEditDefinition(input: DefinitionAccessInput): boolean {
 		enablePlatformProjects
 	} = input;
 	if (!project || !definition) return false;
+	if (definition.projectId !== project.id) return false;
 
 	if (project.visibility === 'platform') {
 		if (!enablePlatformProjects) return false;
@@ -284,18 +285,12 @@ export interface OrgOwnerAuthorityInput {
 }
 
 /**
- * Whether the actor may hand out or take away org `owner`/`admin` standing (§3).
+ * Whether the actor may hand out or take away org `owner`/`admin` standing.
+ * Inviting someone as owner/admin, changing a member's role and removing an owner
+ * are one rule, so all three read it here.
  *
- * Three routes decide this — inviting someone as owner/admin, changing an
- * existing member's role, and removing an owner — and all three had written it
- * out longhand. Two of them had drifted by the time the access audit found
- * them: the invite route let an admin mint an `owner` invite for themselves,
- * and DELETE let an admin remove an owner that PATCH would not let them demote.
- * They are one rule, so they read it from one place.
- *
- * Reads the actor's **membership row**. `Organization.ownerId` is a separate
- * field that can disagree with it — see the sole-`instance_admin` finding — and
- * is not authority for this decision.
+ * Reads the actor's **membership row**. `Organization.ownerId` is a separate field
+ * that can disagree with it and is not authority for this decision.
  */
 export function canChangeOrgRole(input: OrgOwnerAuthorityInput): boolean {
 	if (input.role === 'member') return true;

@@ -42,3 +42,5 @@ export { SupabaseAuthProvider } from './auth/index.js';
 export type { SupabaseAuthProviderConfig } from './auth/index.js';
 
 export { SupabasePlatformPermissionStore } from './permissions/index.js';
+
+export { supabaseUpstream } from './upstream.js';

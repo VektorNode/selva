@@ -24,6 +24,7 @@
 <ToggleGroup.Root
 	type="single"
 	variant="outline"
+	spacing={0}
 	size={hasIcons ? 'stacked' : 'default'}
 	class="w-full"
 	aria-labelledby={labelId}

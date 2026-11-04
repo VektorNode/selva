@@ -73,6 +73,15 @@ export interface RunHandlerOptions {
 	idempotent?: boolean;
 }
 
+function errorResponse(err: ApiError): Response {
+	const retryAfter = err.details?.retryAfter;
+	return toResponse({
+		status: err.status,
+		body: toErrorBody(err),
+		...(retryAfter !== undefined ? { headers: { 'Retry-After': String(retryAfter) } } : {})
+	});
+}
+
 /** Run a handler and serialize whatever comes out, including failures. */
 export async function runHandler(
 	handler: ApiHandler,
@@ -80,14 +89,8 @@ export async function runHandler(
 	{ fallback, mapError, action, scopeTarget, anyScope, idempotent }: RunHandlerOptions
 ): Promise<Response> {
 	const fail = (err: unknown): Response => {
-		if (isApiError(err)) {
-			return toResponse({ status: err.status, body: toErrorBody(err) });
-		}
-
-		const mapped = mapError?.(err);
-		if (mapped) {
-			return toResponse({ status: mapped.status, body: toErrorBody(mapped) });
-		}
+		const known = isApiError(err) ? err : mapError?.(err);
+		if (known) return errorResponse(known);
 
 		// Never `console.error(…, err)`: provider adapters stash connection
 		// details on `cause`, and a raw console call hands the whole object to

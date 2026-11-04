@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Badge, Button, Callout } from '@selvajs/ui';
+	import { Badge, Button, Callout, FilterableDropdown } from '@selvajs/ui';
 	import type { PageData } from './$types';
 
 	interface Props {
@@ -14,8 +14,20 @@
 		read: 'Read: browse definitions and their inputs',
 		solve: 'Read and run solves: spends your compute budget',
 		upload:
-			'Upload definitions: create definitions and new versions where you can, and make a version live. It can’t delete or share anything.'
+			'Upload definitions: create definitions and new versions where you can, and make a version live. It can’t delete or share anything.',
+		uploadAndCreate:
+			'Upload definitions: create private projects, definitions and new versions where you can, and make a version live. It can’t delete or share anything.'
 	} as const;
+
+	// The widest level is preselected; each level lists only the orgs it may be granted in.
+	let picked = $state<string | undefined>();
+	const level = $derived(
+		data.ok ? (data.levels.find((l) => l.access === picked) ?? data.levels.at(-1)) : undefined
+	);
+	let pickedOrgId = $state<string | undefined>();
+	const orgId = $derived(
+		level?.orgs.some((o) => o.id === pickedOrgId) ? pickedOrgId : level?.orgId
+	);
 </script>
 
 <svelte:head>
@@ -60,35 +72,34 @@
 			{/if}
 
 			<form method="POST" action="?{data.query}&/approve" class="space-y-4">
-				{#if data.orgs.length > 1}
+				{#if level && level.orgs.length > 1}
 					<label class="block space-y-2 text-sm">
 						<span class="text-foreground font-medium">Organization</span>
-						<select
+						<FilterableDropdown
 							name="orgId"
-							class="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-						>
-							{#each data.orgs as org (org.id)}
-								<option value={org.id} selected={org.id === data.orgId}>{org.name}</option>
-							{/each}
-						</select>
+							items={level.orgs.map((org) => ({ id: org.id, label: org.name }))}
+							value={orgId}
+							onChange={(v) => (pickedOrgId = v)}
+						/>
 					</label>
-				{:else}
-					<input type="hidden" name="orgId" value={data.orgId} />
+				{:else if level}
+					<input type="hidden" name="orgId" value={orgId} />
 					<p class="text-muted-foreground text-sm">
-						In <span class="text-foreground font-medium">{data.orgs[0]?.name}</span>.
+						In <span class="text-foreground font-medium">{level.orgs[0]?.name}</span>.
 					</p>
 				{/if}
 				<fieldset class="space-y-2">
 					<legend class="text-foreground text-sm font-medium">Access</legend>
-					{#each data.choices as access, i (access)}
+					{#each data.levels as { access, createsProjects } (access)}
 						<label class="flex items-start gap-2 text-sm">
 							<input
 								type="radio"
 								name="access"
 								value={access}
-								checked={i === data.choices.length - 1}
+								checked={access === level?.access}
+								onchange={() => (picked = access)}
 							/>
-							<span>{ACCESS_TEXT[access]}</span>
+							<span>{ACCESS_TEXT[createsProjects ? 'uploadAndCreate' : access]}</span>
 						</label>
 					{/each}
 				</fieldset>

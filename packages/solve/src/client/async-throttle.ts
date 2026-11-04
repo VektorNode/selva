@@ -12,7 +12,7 @@ interface AsyncThrottleOptions {
 	 * How long one run may take before it is aborted (ms). Required and deliberately
 	 * undefaulted: this is a generic throttle, so it has no basis for guessing what
 	 * the caller's work costs. Callers driving a Selva solve pass the deadline the
-	 * server enforces (`COMPUTE_SOLVE_DEADLINE_MS`) — a shorter local guess would abort
+	 * server enforces (the compute server's own timeout) — a shorter local guess would abort
 	 * solves the server would have finished.
 	 */
 	runDeadlineMs: number;
@@ -26,6 +26,7 @@ export interface AsyncThrottle<T> {
 	cancel: () => void;
 }
 
+/** `run` must settle once its signal fires: the slot frees only then. */
 export function createAsyncThrottle<T>(
 	run: (values: T, signal: AbortSignal) => Promise<void>,
 	options: AsyncThrottleOptions
@@ -39,42 +40,39 @@ export function createAsyncThrottle<T>(
 	function setRunning(next: boolean) {
 		if (isRunning === next) return;
 		isRunning = next;
-		onChange?.();
-	}
-
-	function abortCurrent() {
-		currentAbortController?.abort();
-		currentAbortController = null;
+		// A host's bug must not strand `isRunning`, or throw out of `finally` below.
+		try {
+			onChange?.();
+		} catch (err) {
+			console.error('[Solve/throttle] onChange threw:', err);
+		}
 	}
 
 	async function execute(values: T) {
-		abortCurrent();
-
-		currentAbortController = new AbortController();
-		const { signal } = currentAbortController;
+		const controller = new AbortController();
+		currentAbortController = controller;
 		const deadlineId = setTimeout(() => {
-			// Cleared in `finally` on every other path, so firing means a genuine timeout.
 			console.warn(`[Solve/throttle] run exceeded ${runDeadlineMs}ms — aborting`);
 			// The reason tells `run` a timeout from a cancel: one is a failure, the other not.
-			currentAbortController?.abort(new DOMException('Run deadline exceeded', 'TimeoutError'));
+			controller.abort(new DOMException('Run deadline exceeded', 'TimeoutError'));
 		}, runDeadlineMs);
 
 		setRunning(true);
 		try {
-			await run(values, signal);
+			await run(values, controller.signal);
 		} catch (err) {
-			// AbortError is expected (timeout or cancel). Non-abort errors must be
-			// handled inside `run` — re-throwing here would produce an unhandled
-			// rejection because `execute` is always called fire-and-forget.
+			// `execute` is called fire-and-forget, so re-throwing would be an unhandled rejection.
 			if (!(err instanceof Error) || (err.name !== 'AbortError' && err.name !== 'TimeoutError')) {
 				console.error('[Solve/throttle] unhandled error in run:', err);
 			}
 		} finally {
 			clearTimeout(deadlineId);
+			// Before `setRunning`: a subscriber can start the next run from inside it, and that
+			// run's controller must survive this cleanup.
+			if (currentAbortController === controller) currentAbortController = null;
 			setRunning(false);
-			currentAbortController = null;
 
-			if (pendingValues !== null) {
+			if (pendingValues !== null && !isRunning) {
 				const next = pendingValues;
 				pendingValues = null;
 				execute(next);
@@ -85,10 +83,7 @@ export function createAsyncThrottle<T>(
 	function trigger(values: T) {
 		if (isRunning) {
 			if (pendingValues !== null) {
-				// Latest-wins: the previously-queued values are dropped, not run.
-				// `debug`, not `info`: a slider scrub fires this per frame, and it is a trace of
-				// normal operation. Promoting it would spam a host's console on every drag.
-				// eslint-disable-next-line no-console -- see above
+				// eslint-disable-next-line no-console -- fires per frame during a slider scrub
 				console.debug('[Solve/throttle] superseded pending run (latest-wins)');
 			}
 			pendingValues = values;
@@ -99,7 +94,8 @@ export function createAsyncThrottle<T>(
 
 	function cancel() {
 		pendingValues = null;
-		abortCurrent();
+		currentAbortController?.abort();
+		currentAbortController = null;
 	}
 
 	return {

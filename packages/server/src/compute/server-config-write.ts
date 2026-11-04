@@ -13,6 +13,8 @@
  * build time.
  */
 
+import { GuidSchema } from '@selvajs/platform';
+import { isEncryptedSecret } from '@selvajs/platform/computeServer';
 import { isLinkLocalUrl } from './safe-url.js';
 import { apiError, ApiErrorCode } from '../api/errors.js';
 
@@ -74,8 +76,6 @@ export interface IncomingServerBase {
 	 * non-empty string → replace it. See {@link resolveApiKey}.
 	 */
 	apiKey?: string | null;
-	timeoutMs?: number;
-	retryCount?: number;
 }
 
 /**
@@ -84,9 +84,15 @@ export interface IncomingServerBase {
  * are the caller's business.
  */
 export function validateIncomingServers(servers: readonly IncomingServerBase[]): void {
+	const seen = new Set<string>();
 	for (const s of servers) {
 		if (!s.id || typeof s.id !== 'string')
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs an id');
+		if (!GuidSchema.safeParse(s.id).success)
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Server id must be a UUID: ${s.id}`);
+		if (seen.has(s.id))
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, `Server id appears more than once: ${s.id}`);
+		seen.add(s.id);
 		if (!s.label || typeof s.label !== 'string')
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'Each server needs a label');
 		if (!s.serverUrl || typeof s.serverUrl !== 'string')
@@ -94,6 +100,32 @@ export function validateIncomingServers(servers: readonly IncomingServerBase[]):
 		assertUsableServerUrl(s.serverUrl);
 		if (s.apiKey !== undefined && s.apiKey !== null && typeof s.apiKey !== 'string')
 			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a string, null, or omitted');
+		// Clients never receive stored keys, so an envelope here is someone else's
+		// ciphertext being replayed against a URL they control.
+		if (s.apiKey && isEncryptedSecret(s.apiKey))
+			apiError(400, ApiErrorCode.VALIDATION_FAILED, 'apiKey must be a plaintext key');
+	}
+}
+
+/**
+ * A key that failed to decrypt reads as `hasApiKey` with no `apiKey`. Saving with
+ * the field omitted would write `undefined` over the ciphertext, destroying the
+ * key the logs tell the operator to recover by restoring `SELVA_AT_REST_KEY`.
+ * Replacing or clearing it is a decision, so those pass.
+ */
+export function assertStoredKeysReadable(
+	incoming: readonly Pick<IncomingServerBase, 'id' | 'apiKey'>[],
+	stored: readonly { id: string; apiKey?: string; hasApiKey?: boolean }[]
+): void {
+	const unreadable = new Set(stored.filter((s) => s.hasApiKey && !s.apiKey).map((s) => s.id));
+	for (const s of incoming) {
+		if (unreadable.has(s.id) && (s.apiKey === undefined || s.apiKey === '')) {
+			apiError(
+				409,
+				ApiErrorCode.CONFLICT,
+				`The stored key for server ${s.id} cannot be decrypted. Restore the original SELVA_AT_REST_KEY, or re-enter the key.`
+			);
+		}
 	}
 }
 

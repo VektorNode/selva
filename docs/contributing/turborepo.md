@@ -1,32 +1,15 @@
 # Turborepo
 
-Selva uses [Turborepo](https://turborepo.com) to run workspace tasks in dependency order with caching.
+[Turborepo](https://turborepo.com) runs the workspace tasks in dependency order with caching. Task wiring and cache inputs live in [turbo.json](../../turbo.json); the root `package.json` scripts wrap it.
 
-## Commands
+## The website is separate
 
-| Command                              | What it does                           |
-| ------------------------------------ | -------------------------------------- |
-| `pnpm build`                         | Build all packages except `website`    |
-| `pnpm build --filter=@selvajs/selva` | Build one package and its deps         |
-| `pnpm check`                         | `svelte-check` across the workspace    |
-| `pnpm type-check`                    | TypeScript checks across the workspace |
-| `pnpm test`                          | Package tests                          |
-| `pnpm generate`                      | Regenerate schema TS + C# types        |
+`@selvajs/website` is filtered out of `build`, `check`, `type-check`, `lint` and `lint:types`. It has its own `build:website`, `check:website` and `lint:website`. `test` and `generate` run across every package.
 
-`build`, `check`, and `type-check` all filter out `@selvajs/website`; it has its own
-`build:website` / `check:website` scripts.
+Its `build` re-runs when `docs/**/*.md` (except `docs/adr/`) or the `compute` sources change, because it renders them. Docs are not a global dependency, so editing one doesn't invalidate any other package's cache.
 
-`pnpm lint` runs each package's own `lint` script through turbo, again without `website`
-(`lint:website` covers it). `dev:*` scripts run directly.
+On Windows, `vite build` can occasionally fail with `ENOTEMPTY` in `@selvajs/ui` or `@selvajs/selva`; re-running fixes it.
 
-## Key behaviors
+## When to edit turbo.json
 
-- `build` depends on `^build`: upstream packages build first.
-- `schemas#build` depends on `generate`: codegen runs before `tsc`.
-- Cache lives in `.turbo/`. Invalidated by `pnpm-workspace.yaml`, `pnpm-lock.yaml`, `tsconfig.base.json`, `tsconfig.node.json`, `docs/**`, and per-task env vars (`ADAPTER`, `NODE_ENV`, `SELVA_HMAC_KEY`, `SELVA_AT_REST_KEY`, `DATA_PATH` for `build`).
-- `turbo run build --force` bypasses the cache.
-- On Windows, `vite build` can occasionally fail with `ENOTEMPTY` in `@selvajs/ui` or `@selvajs/selva`; re-running fixes it.
-
-## When to edit [turbo.json](../../turbo.json)
-
-Only when a task needs explicit deps, outputs, inputs, or env tracking. Adding a script to a package is usually enough. A package can override the root config with its own `turbo.json` that `extends: ["//"]`; `packages/schemas` does this to add the `generate` dependency.
+Only when a task needs explicit deps, outputs, inputs, or env tracking. Adding a script to a package is usually enough. A package can override the root config with its own `turbo.json` that `extends: ["//"]`; `packages/schemas` does this so `build` waits for `generate`.

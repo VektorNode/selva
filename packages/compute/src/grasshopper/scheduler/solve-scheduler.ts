@@ -1,8 +1,6 @@
-import { ComputeError, ErrorCodes } from '@/core/errors';
+import { abortedByCaller, ComputeError, ErrorCodes } from '@/core/errors';
 import type { RetryPolicy } from '@/core/types';
 import { getLogger } from '@/core/utils/logger';
-import { readField } from '@/core/utils/read-field';
-import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 
 import type {
 	DataTree,
@@ -11,9 +9,11 @@ import type {
 	SelvaEventTarget
 } from '../types';
 import { isDefinitionUrl, type SolveDefinition } from '@/core/definition-ref';
+import { ResponseCache } from './response-cache';
 import { hashSolveInputForDefinition, hashDefinition } from './stable-hash';
 
 import type {
+	CacheStats,
 	SchedulerMode,
 	SchedulerSolveOptions,
 	SolveContext,
@@ -22,13 +22,6 @@ import type {
 	SolveResult,
 	SolveSchedulerOptions
 } from './types';
-
-interface CacheEntry {
-	response: GrasshopperComputeResponse;
-	insertedAt: number;
-	/** Wire size (or stringify-fallback estimate) counted against `maxBytes`. */
-	sizeBytes: number;
-}
 
 const SERVER_CACHE_KEYS_MAX = 100;
 
@@ -44,14 +37,26 @@ interface PendingItem {
 	externalSignal?: AbortSignal;
 	selvaevents?: SelvaEventTarget;
 	onServerTiming?: SchedulerSolveOptions['onServerTiming'];
-	/** Settles the item as ABORTED if its signal fires while it waits in a queue. */
-	queuedAbortHandler?: () => void;
+	/** On `externalSignal`: aborts a running item, settles a queued one as ABORTED. */
+	onExternalAbort?: () => void;
+	/** Set once the item runs. */
+	controller?: AbortController;
 	queueWaitTimer?: ReturnType<typeof setTimeout>;
 	settled?: { error: ComputeError } | { ok: true };
 }
 
 interface InFlightItem extends PendingItem {
 	controller: AbortController;
+}
+
+/** `NaN` passes `Math.max` and fails every `inFlight < limit`, so nothing would ever dispatch. */
+function concurrencyLimit(value: number): number {
+	if (Number.isNaN(value)) {
+		throw new ComputeError('maxConcurrent must be a number', ErrorCodes.INVALID_CONFIG, {
+			context: { maxConcurrent: value }
+		});
+	}
+	return Math.max(1, Math.floor(value));
 }
 
 const u8DefinitionHashes = new WeakMap<Uint8Array, string>();
@@ -138,18 +143,6 @@ class SolveQueue {
 }
 
 /**
- * For a response that never crossed the fetch boundary (custom executor), so carries no
- * wire-size hint. An unserializable response is sized 0 rather than failing the solve.
- */
-function estimateResponseSize(response: GrasshopperComputeResponse): number {
-	try {
-		return JSON.stringify(response)?.length ?? 0;
-	} catch {
-		return 0;
-	}
-}
-
-/**
  * Adds to a plain solve call:
  * - Scheduling (latest-wins for sliders, queue for jobs)
  * - Backpressure (bounded queue depth + queue-wait deadline)
@@ -185,15 +178,7 @@ export class SolveScheduler {
 	private readonly timeoutMs: number | undefined;
 	private readonly retry: RetryPolicy | undefined;
 
-	private readonly cacheEnabled: boolean;
-	private readonly cacheMaxBytes: number;
-	private readonly cacheTtl: number;
-	private readonly cacheErroredSolves: boolean;
-	private readonly cache = new Map<string, CacheEntry>();
-	private cacheBytes = 0;
-	private cacheHits = 0;
-	private cacheMisses = 0;
-	private cacheEvictions = 0;
+	private readonly cache: ResponseCache;
 
 	private readonly reuseServerDefinitionCache: boolean;
 	/** Definition hash → the server's cache key (`pointer`) for it. */
@@ -236,7 +221,7 @@ export class SolveScheduler {
 				{ context: { mode: this.mode } }
 			);
 		}
-		this.maxConcurrent = Math.max(1, options.maxConcurrent ?? 1);
+		this.maxConcurrent = concurrencyLimit(options.maxConcurrent ?? 1);
 		// A non-positive maxQueueDepth means unbounded, not "reject everything".
 		this.maxQueueDepth =
 			options.maxQueueDepth !== undefined && options.maxQueueDepth > 0
@@ -249,14 +234,7 @@ export class SolveScheduler {
 		this.timeoutMs = options.timeoutMs;
 		this.retry = options.retry;
 
-		const cacheOpt = options.cache;
-		const cacheConfig = typeof cacheOpt === 'object' ? cacheOpt : null;
-		this.cacheMaxBytes = Math.max(0, cacheConfig?.maxBytes ?? 0);
-		// A zero budget retains nothing, so treat it as off rather than running a
-		// cache that can only ever miss.
-		this.cacheEnabled = this.cacheMaxBytes > 0;
-		this.cacheTtl = cacheConfig?.ttlMs ?? 0;
-		this.cacheErroredSolves = cacheConfig?.cacheErroredSolves ?? true;
+		this.cache = new ResponseCache(options.cache);
 
 		this.reuseServerDefinitionCache = options.reuseServerDefinitionCache ?? true;
 
@@ -300,18 +278,15 @@ export class SolveScheduler {
 	 * Raising it drains queued work immediately. Lowering it never interrupts work
 	 * already in flight — those finish above the new limit, and the cap applies from
 	 * the next dispatch. Values below 1 are clamped, since 0 would wedge the queue.
+	 *
+	 * @throws {ComputeError} `INVALID_CONFIG` for `NaN`, which would wedge it too.
 	 */
 	setMaxConcurrent(value: number): void {
-		const next = Math.max(1, Math.floor(value));
+		const next = concurrencyLimit(value);
 		if (next === this.maxConcurrent) return;
 		const raised = next > this.maxConcurrent;
 		this.maxConcurrent = next;
 		if (raised) this.drainNext();
-	}
-
-	/** Current concurrency cap — reflects any {@link setMaxConcurrent} adjustment. */
-	getMaxConcurrent(): number {
-		return this.maxConcurrent;
 	}
 
 	/** Subscribe to state changes. */
@@ -381,7 +356,7 @@ export class SolveScheduler {
 		// Only the cache and the hooks read the key. Without them, hashing a multi-MB tree would be
 		// the costliest step of the call.
 		let key = '';
-		if (this.cacheEnabled || this.onStart || this.onSettle || this.onSuperseded) {
+		if (this.cache.enabled || this.onStart || this.onSettle || this.onSuperseded) {
 			try {
 				key = hashes.key;
 			} catch (error) {
@@ -402,7 +377,7 @@ export class SolveScheduler {
 			return Promise.reject(this.makeAbortError(ctx));
 		}
 
-		const cached = this.readCache(key);
+		const cached = this.cache.get(key);
 		if (cached) {
 			// In latest-wins an older in-flight solve is now stale: left running, its
 			// completion would overwrite this hit and snap the UI back.
@@ -437,8 +412,11 @@ export class SolveScheduler {
 			};
 
 			if (item.externalSignal) {
-				item.queuedAbortHandler = () => this.abortQueuedItem(item);
-				item.externalSignal.addEventListener('abort', item.queuedAbortHandler, { once: true });
+				item.onExternalAbort = () => {
+					if (item.controller) item.controller.abort();
+					else this.abortQueuedItem(item);
+				};
+				item.externalSignal.addEventListener('abort', item.onExternalAbort, { once: true });
 			}
 
 			this.enqueue(item);
@@ -538,7 +516,7 @@ export class SolveScheduler {
 			case 'latest-wins': {
 				this.supersedeCurrent();
 				if (this.inFlight.size === 0) {
-					this.execute(item);
+					void this.execute(item);
 				} else {
 					this.pendingForLatestWins = item;
 				}
@@ -547,7 +525,7 @@ export class SolveScheduler {
 
 			case 'queue': {
 				if (this.inFlight.size < this.maxConcurrent) {
-					this.execute(item);
+					void this.execute(item);
 				} else if (this.maxQueueDepth !== undefined && this.fifo.size >= this.maxQueueDepth) {
 					// Shed the newest call, so already-accepted work keeps its place.
 					this.shedAsQueueFull(item);
@@ -570,9 +548,6 @@ export class SolveScheduler {
 		item.ctx.startedAt = Date.now();
 
 		this.clearQueueWaitTimer(item);
-		this.removeQueuedAbortHandler(item);
-		const externalAbortHandler = () => controller.abort();
-		item.externalSignal?.addEventListener('abort', externalAbortHandler, { once: true });
 
 		this.runHook(this.onStart, item.ctx);
 		this.notify();
@@ -601,7 +576,8 @@ export class SolveScheduler {
 			const { response, definitionReuploaded } = await this.runExecutor(item, config);
 			const durationMs = performance.now() - startTime;
 
-			this.writeCache(item.ctx.key, response);
+			// Disposed: a late result must not refill the cache `dispose()` emptied.
+			if (!this.disposed) this.cache.set(item.ctx.key, response);
 
 			if (
 				!this.settleSuccess(item, { response, fromCache: false, definitionReuploaded, durationMs })
@@ -624,7 +600,6 @@ export class SolveScheduler {
 			this.writeLastState(item.seq, { error: err, durationMs });
 			this.fail(item, err, durationMs);
 		} finally {
-			item.externalSignal?.removeEventListener('abort', externalAbortHandler);
 			this.inFlight.delete(inflight);
 			this.drainNext();
 			this.notify();
@@ -672,13 +647,13 @@ export class SolveScheduler {
 			if (this.pendingForLatestWins && this.inFlight.size === 0) {
 				const next = this.pendingForLatestWins;
 				this.pendingForLatestWins = null;
-				this.execute(next);
+				void this.execute(next);
 			}
 			return;
 		}
 
 		while (this.fifo.size > 0 && this.inFlight.size < this.maxConcurrent) {
-			this.execute(this.fifo.shift()!);
+			void this.execute(this.fifo.shift()!);
 		}
 	}
 
@@ -692,9 +667,7 @@ export class SolveScheduler {
 	}
 
 	private makeAbortError(ctx: SolveContext): ComputeError {
-		return new ComputeError('Request aborted by caller', ErrorCodes.ABORTED, {
-			context: { enqueuedAt: ctx.enqueuedAt }
-		});
+		return abortedByCaller({ enqueuedAt: ctx.enqueuedAt });
 	}
 
 	/**
@@ -704,10 +677,7 @@ export class SolveScheduler {
 	 * here or {@link settleSuccess}.
 	 */
 	private settleError(item: PendingItem, err: ComputeError): boolean {
-		if (item.settled) return false;
-		item.settled = { error: err };
-		this.clearQueueWaitTimer(item);
-		this.removeQueuedAbortHandler(item);
+		if (!this.claimSettle(item, { error: err })) return false;
 		item.reject(err);
 		return true;
 	}
@@ -723,19 +693,19 @@ export class SolveScheduler {
 	}
 
 	private settleSuccess(item: PendingItem, detail: SolveDetail): boolean {
-		if (item.settled) return false;
-		item.settled = { ok: true };
-		this.clearQueueWaitTimer(item);
-		this.removeQueuedAbortHandler(item);
+		if (!this.claimSettle(item, { ok: true })) return false;
 		item.resolve(detail);
 		return true;
 	}
 
-	private removeQueuedAbortHandler(item: PendingItem): void {
-		if (item.queuedAbortHandler && item.externalSignal) {
-			item.externalSignal.removeEventListener('abort', item.queuedAbortHandler);
+	private claimSettle(item: PendingItem, settled: NonNullable<PendingItem['settled']>): boolean {
+		if (item.settled) return false;
+		item.settled = settled;
+		this.clearQueueWaitTimer(item);
+		if (item.onExternalAbort) {
+			item.externalSignal?.removeEventListener('abort', item.onExternalAbort);
 		}
-		item.queuedAbortHandler = undefined;
+		return true;
 	}
 
 	private normalizeExecutionError(error: unknown, item: InFlightItem): ComputeError {
@@ -784,53 +754,8 @@ export class SolveScheduler {
 	// Cache
 	// ============================================================================
 
-	private readCache(key: string): GrasshopperComputeResponse | null {
-		if (!this.cacheEnabled) return null;
-		const entry = this.cache.get(key);
-		if (!entry) {
-			this.cacheMisses += 1;
-			return null;
-		}
-		if (this.cacheTtl > 0 && Date.now() - entry.insertedAt > this.cacheTtl) {
-			this.dropCacheEntry(key);
-			this.cacheMisses += 1;
-			return null;
-		}
-		// LRU touch
-		this.cache.delete(key);
-		this.cache.set(key, entry);
-		this.cacheHits += 1;
-		return entry.response;
-	}
-
-	private writeCache(key: string, response: GrasshopperComputeResponse): void {
-		if (!this.cacheEnabled) return;
-		const solveErrors = readField<unknown[]>(response, 'errors');
-		if (!this.cacheErroredSolves && Array.isArray(solveErrors) && solveErrors.length > 0) return;
-		const sizeBytes = getResponseWireSize(response) ?? estimateResponseSize(response);
-		// Retaining it would evict everything else and then itself.
-		if (sizeBytes > this.cacheMaxBytes) return;
-		this.dropCacheEntry(key); // replace-in-place: release the old copy's bytes
-		this.cache.set(key, { response, insertedAt: Date.now(), sizeBytes });
-		this.cacheBytes += sizeBytes;
-		while (this.cacheBytes > this.cacheMaxBytes && this.cache.size > 0) {
-			const oldest = this.cache.keys().next().value;
-			if (oldest === undefined) break;
-			this.dropCacheEntry(oldest);
-			this.cacheEvictions += 1;
-		}
-	}
-
-	private dropCacheEntry(key: string): void {
-		const entry = this.cache.get(key);
-		if (!entry) return;
-		this.cache.delete(key);
-		this.cacheBytes -= entry.sizeBytes;
-	}
-
 	clearCache(): void {
 		this.cache.clear();
-		this.cacheBytes = 0;
 	}
 
 	/**
@@ -843,20 +768,8 @@ export class SolveScheduler {
 	 * replace-in-place writes or TTL expiry, which are not capacity signals.
 	 * Counters are cumulative and survive `clearCache()`.
 	 */
-	cacheStats(): {
-		entries: number;
-		bytes: number;
-		hits: number;
-		misses: number;
-		evictions: number;
-	} {
-		return {
-			entries: this.cache.size,
-			bytes: this.cacheBytes,
-			hits: this.cacheHits,
-			misses: this.cacheMisses,
-			evictions: this.cacheEvictions
-		};
+	cacheStats(): CacheStats {
+		return this.cache.stats();
 	}
 
 	// ============================================================================

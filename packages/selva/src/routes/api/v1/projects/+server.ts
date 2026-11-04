@@ -4,5 +4,6 @@ import { createProject, listProjects } from '@selvajs/server/handlers';
 
 export const GET: RequestHandler = mount('Failed to list projects', listProjects);
 export const POST: RequestHandler = mount('Failed to create project', createProject, {
+	action: 'create_projects',
 	idempotent: true
 });

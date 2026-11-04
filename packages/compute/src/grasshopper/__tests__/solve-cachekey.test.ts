@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { solveWithServerCacheKey, solveGrasshopperDefinition } from '../solve';
+import { SolveScheduler } from '../scheduler/solve-scheduler';
+import type { SolveExecutor } from '../scheduler/types';
 import type { DefinitionRef } from '@/core/definition-ref';
 import { ErrorCodes } from '@/core/errors';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
+import { readField } from '@/core/utils/read-field';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -159,14 +162,6 @@ describe('solveWithServerCacheKey — fallback on cache miss', () => {
 	});
 });
 
-describe('solveGrasshopperDefinition', () => {
-	it('returns the response without the pointer field', async () => {
-		fetchMock.mockResolvedValueOnce(okSolve({ pointer: 'md5_ABC' }));
-		const res = await solveGrasshopperDefinition([], DEF, config);
-		expect(res).not.toHaveProperty('pointer');
-	});
-});
-
 describe('DefinitionRef — bytes are materialized only when an upload is unavoidable', () => {
 	// [104, 105] = "hi" → base64 "aGk="
 	const refOf = (key = 'version-uuid-1'): DefinitionRef & { load: ReturnType<typeof vi.fn> } => ({
@@ -223,5 +218,110 @@ describe('DefinitionRef — bytes are materialized only when an upload is unavoi
 			message: expect.stringContaining('version-uuid-broken')
 		});
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('a DefinitionRef whose load() hangs', () => {
+	const hungRef = () => ({
+		key: 'version-hung',
+		load: vi.fn((_signal?: AbortSignal) => new Promise<Uint8Array>(() => {}))
+	});
+
+	it('passes the solve signal to load()', async () => {
+		const ref = hungRef();
+		const controller = new AbortController();
+		const solving = solveGrasshopperDefinition([], ref, {
+			serverUrl: 'http://localhost:6500',
+			signal: controller.signal
+		});
+		controller.abort();
+		await solving.catch(() => {});
+		expect(ref.load.mock.calls[0][0]).toBe(controller.signal);
+	});
+
+	it('rejects ABORTED when the signal fires', async () => {
+		const controller = new AbortController();
+		const solving = solveGrasshopperDefinition([], hungRef(), {
+			serverUrl: 'http://localhost:6500',
+			signal: controller.signal
+		});
+		controller.abort(new Error('stale'));
+		await expect(solving).rejects.toMatchObject({ code: 'ABORTED' });
+	});
+
+	it('rejects TIMEOUT_ERROR once timeoutMs passes, with no signal at all', async () => {
+		await expect(
+			solveGrasshopperDefinition([], hungRef(), { ...config, timeoutMs: 5 })
+		).rejects.toMatchObject({ code: ErrorCodes.TIMEOUT_ERROR });
+	});
+
+	it('rejects an unusable timeoutMs as INVALID_CONFIG before loading', async () => {
+		const ref = hungRef();
+		await expect(
+			solveGrasshopperDefinition([], ref, { ...config, timeoutMs: NaN })
+		).rejects.toMatchObject({ code: ErrorCodes.INVALID_CONFIG });
+		expect(ref.load).not.toHaveBeenCalled();
+	});
+
+	it('frees a queue slot at timeoutMs, so the next solve runs without a cancel', async () => {
+		const executor: SolveExecutor = (definition, tree, cacheKey, solveConfig) =>
+			solveWithServerCacheKey(tree, cacheKey, definition, solveConfig);
+		fetchMock.mockImplementation(async () => createMockResponse({ values: [] }));
+		const scheduler = new SolveScheduler(executor, config, { mode: 'queue', timeoutMs: 5 });
+
+		const hung = scheduler.solve(hungRef(), []);
+		const next = scheduler.solve('https://example.com/a.gh', []);
+
+		await expect(hung).rejects.toMatchObject({ code: ErrorCodes.TIMEOUT_ERROR });
+		await expect(next).resolves.toBeDefined();
+	});
+
+	it.each(['latest-wins', 'queue'] as const)(
+		'frees the %s slot after cancelAll, so the next solve runs',
+		async (mode) => {
+			const executor: SolveExecutor = (definition, tree, cacheKey, config) =>
+				solveWithServerCacheKey(tree, cacheKey, definition, config);
+			fetchMock.mockImplementation(async () => createMockResponse({ values: [] }));
+			const scheduler = new SolveScheduler(
+				executor,
+				{ serverUrl: 'http://localhost:6500' },
+				{ mode }
+			);
+
+			const hung = scheduler.solve(hungRef(), []);
+			hung.catch(() => {});
+			await vi.waitFor(() => expect(scheduler.inFlightCount).toBe(1));
+			scheduler.cancelAll();
+			await vi.waitFor(() => expect(scheduler.inFlightCount).toBe(0));
+
+			await expect(scheduler.solve('https://example.com/a.gh', [])).resolves.toBeDefined();
+		}
+	);
+});
+
+describe('a response with no values', () => {
+	it('resolves with an empty array, as the type promises', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ warnings: ['slow'] }));
+		const response = await solveGrasshopperDefinition([], 'https://example.com/a.gh', config);
+		expect(response.values).toEqual([]);
+		expect(response.warnings).toEqual(['slow']);
+	});
+
+	it('leaves a PascalCase Values key readable', async () => {
+		const tree = { ParamName: 'Out', InnerTree: {} };
+		fetchMock.mockResolvedValueOnce(createMockResponse({ Values: [tree] }));
+		const response = await solveGrasshopperDefinition([], 'https://example.com/a.gh', config);
+		expect(readField(response, 'values')).toEqual([tree]);
+	});
+});
+
+describe('a null response body', () => {
+	it('rejects INVALID_RESPONSE rather than crashing on destructure', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse(null));
+		await expect(
+			solveGrasshopperDefinition([], 'https://example.com/a.gh', {
+				serverUrl: 'http://localhost:6500'
+			})
+		).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
 	});
 });

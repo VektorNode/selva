@@ -1,10 +1,12 @@
 import type {
+	InputLayoutItem,
 	LayoutItem,
 	OutputLayoutItem,
 	VisibilityRule,
 	VisibilityCondition,
 	GroupVisibilityCondition,
-	TabConfig
+	TabConfig,
+	UISchema
 } from '@selvajs/schemas';
 import { isFileData } from '../utils/file-download';
 
@@ -146,6 +148,30 @@ export function isTabVisible(tab: TabConfig, values: Record<string, unknown>): b
 	return (
 		tab.visible !== false && tab.groups.some((group) => evaluateGroupVisibility(group, values))
 	);
+}
+
+/**
+ * The input items the form shows for these values: each passes its own condition, inside a
+ * shown group and, when tabbed, a shown tab. For a host that repeats the form back, such as a
+ * summary before a commit, without re-deriving the renderer's rules.
+ */
+export function visibleInputItems(
+	schema: UISchema,
+	values: Record<string, unknown>
+): InputLayoutItem[] {
+	const layout = schema?.layout;
+	const groups =
+		layout?.type === 'tabbed'
+			? (layout.tabs ?? []).filter((t) => isTabVisible(t, values)).flatMap((t) => t.groups ?? [])
+			: layout?.type === 'flat'
+				? (layout.groups ?? [])
+				: [];
+	return groups
+		.filter((g) => evaluateGroupVisibility(g, values))
+		.flatMap((g) => g.items ?? [])
+		.filter(
+			(i): i is InputLayoutItem => i.type === 'input' && evaluateVisibility(i, values).visible
+		);
 }
 
 /**

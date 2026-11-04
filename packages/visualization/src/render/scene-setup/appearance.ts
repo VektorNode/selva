@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 
 import {
-	LOOK_PRESETS,
+	OWN_EMISSIVE,
 	OWN_ENV_MAP_INTENSITY,
 	lookEnvMapIntensity,
+	lookPreset,
 	materialAppearanceForLook
 } from '../../shared/index.js';
 import { SOURCE_COMPUTE } from '../scene-ownership.js';
+import { createEmissiveLights } from './emissive-lights.js';
 import { applyReflectionEnvironment } from './reflection-environment.js';
 import type {
 	Look,
@@ -26,6 +28,7 @@ type MaterialBaseline = {
 	color: number;
 	metalness: number;
 	roughness: number;
+	emissiveIntensity: number;
 	opacity: number;
 	transparent: boolean;
 	depthWrite: boolean;
@@ -39,6 +42,7 @@ type OverridableMaterial = THREE.Material & {
 	color?: THREE.Color;
 	metalness?: number;
 	roughness?: number;
+	emissiveIntensity?: number;
 	wireframe?: boolean;
 	[BASELINE_KEY]?: MaterialBaseline;
 };
@@ -47,6 +51,7 @@ function applyBaseline(target: OverridableMaterial, baseline: MaterialBaseline):
 	target.color?.setHex(baseline.color);
 	if (target.metalness !== undefined) target.metalness = baseline.metalness;
 	if (target.roughness !== undefined) target.roughness = baseline.roughness;
+	if (target.emissiveIntensity !== undefined) target.emissiveIntensity = baseline.emissiveIntensity;
 	target.opacity = baseline.opacity;
 	target.transparent = baseline.transparent;
 	target.depthWrite = baseline.depthWrite;
@@ -92,6 +97,7 @@ export function applyMaterialOverride(
 			color: target.color?.getHex() ?? 0xffffff,
 			metalness: target.metalness ?? 0,
 			roughness: target.roughness ?? 1,
+			emissiveIntensity: target.emissiveIntensity ?? 0,
 			opacity: target.opacity,
 			transparent: target.transparent,
 			depthWrite: target.depthWrite,
@@ -109,6 +115,10 @@ export function applyMaterialOverride(
 	}
 	if (override.roughness !== undefined && target.roughness !== undefined) {
 		target.roughness = override.roughness;
+	}
+	// Only the wire's glow: a selection tint uses the same channel and has to stay readable.
+	if (override.emissiveIntensity !== undefined && target.userData[OWN_EMISSIVE]) {
+		target.emissiveIntensity = override.emissiveIntensity;
 	}
 	if (override.opacity !== undefined) {
 		target.opacity = override.opacity;
@@ -133,6 +143,18 @@ export function envMapIntensityForLook(material: THREE.Material, preset: LookPre
 	return lookEnvMapIntensity(preset.envMapIntensity, metalness);
 }
 
+export type SetLookOptions = {
+	/**
+	 * Skips the sync, which walks every glowing part. The caller runs `syncEmissiveLights()` itself
+	 * once visibility settles.
+	 */
+	deferEmissiveLights?: boolean;
+};
+
+export function lookPixelRatio(fullPixelRatio: number, preset: LookPreset): number {
+	return Math.min(fullPixelRatio, preset.maxPixelRatio ?? fullPixelRatio);
+}
+
 /** The runtime lighting/material dials — everything a host can retune without rebuilding the scene. */
 export interface AppearanceController {
 	setFillLights(opts: {
@@ -144,7 +166,10 @@ export interface AppearanceController {
 	setEnvironmentIntensity(intensity: number): void;
 	setToneMappingExposure(exposure: number): void;
 	setAoIntensity(intensity: number): void;
-	setLook(look: Look): void;
+	setLook(look: Look, options?: SetLookOptions): void;
+	syncEmissiveLights(): void;
+	jitterEmissiveLights(index: number): void;
+	settleEmissiveLights(): void;
 	getMaterialAppearance(): MaterialAppearanceOptions;
 }
 
@@ -156,11 +181,38 @@ export function createAppearanceController(params: {
 	lights: SceneLights;
 	config: ResolvedOptions;
 	pipeline: PipelineController;
+	/** Before any look's cap. */
+	fullPixelRatio: number;
 	requestRender: () => void;
 }): AppearanceController {
-	const { scene, renderer, lights, config, pipeline, requestRender } = params;
+	const { scene, renderer, lights, config, pipeline, fullPixelRatio, requestRender } = params;
 
+	const presetOf = (look: Look) => lookPreset(look, config.render.lowPower);
 	let activeLook: Look = config.look;
+	const emissiveLights = createEmissiveLights(scene);
+	// VSM can't shadow a point light, and three then drops the shadow with only a console warning.
+	const ownShadowType = renderer.shadowMap.type;
+	const applyShadowType = (preset: LookPreset) => {
+		const type = preset.emissiveLights ? THREE.PCFShadowMap : ownShadowType;
+		if (renderer.shadowMap.type === type) return;
+		renderer.shadowMap.type = type;
+		renderer.shadowMap.needsUpdate = true;
+	};
+
+	// The scene's own background, held while a look replaces it.
+	let ownBackground: THREE.Scene['background'] | undefined;
+
+	const applyBackground = (preset: LookPreset) => {
+		if (preset.background === undefined) {
+			if (ownBackground !== undefined) scene.background = ownBackground;
+			ownBackground = undefined;
+			return;
+		}
+		ownBackground ??= scene.background;
+		scene.background = new THREE.Color(preset.background);
+	};
+	applyBackground(presetOf(activeLook));
+	applyShadowType(presetOf(activeLook));
 
 	const setFillLights: AppearanceController['setFillLights'] = (opts) => {
 		if (opts.ambientIntensity !== undefined) {
@@ -209,8 +261,14 @@ export function createAppearanceController(params: {
 		if (pipeline.get()) pipeline.rebuild();
 	};
 
-	const setLook = (look: Look) => {
-		const preset = LOOK_PRESETS[look];
+	const syncEmissiveLights = () => {
+		const { emissiveLights: enabled, maxEmissiveLights } = presetOf(activeLook);
+		emissiveLights.sync(!!enabled, maxEmissiveLights);
+		requestRender();
+	};
+
+	const setLook: AppearanceController['setLook'] = (look, options) => {
+		const preset = presetOf(look);
 		activeLook = look;
 
 		renderer.toneMapping = preset.toneMapping;
@@ -231,11 +289,14 @@ export function createAppearanceController(params: {
 			config.lighting.sunlightIntensity = preset.sunlightIntensity;
 		}
 
-		// Rebuild on top of setAmbientOcclusion so an already-live composer's OutputPass adopts the
-		// new tone mapping too.
-		const hadPipeline = pipeline.get() !== null;
+		applyBackground(preset);
+		applyShadowType(preset);
+		config.render.bloom = preset.bloom;
+		// The render loop's resize check applies it; set before the rebuild so the composer starts right.
+		config.render.pixelRatio = lookPixelRatio(fullPixelRatio, preset);
+
+		// Also rebuilds a live composer whose tone mapping or bloom just changed.
 		pipeline.setAmbientOcclusion(preset.ambientOcclusion);
-		if (hadPipeline) pipeline.rebuild();
 
 		// Solve output only. Host-added geometry (`user`/`app:` scopes) owns its own materials —
 		// a point cloud or draft line has a deliberate look that a render-style switch must not
@@ -260,7 +321,7 @@ export function createAppearanceController(params: {
 		});
 		// An override can zero metalness, and lifting it restores it.
 		applyReflectionEnvironment(scene, scene);
-		requestRender();
+		if (!options?.deferEmissiveLights) syncEmissiveLights();
 	};
 
 	return {
@@ -269,6 +330,9 @@ export function createAppearanceController(params: {
 		setToneMappingExposure,
 		setAoIntensity,
 		setLook,
+		syncEmissiveLights,
+		jitterEmissiveLights: emissiveLights.jitter,
+		settleEmissiveLights: emissiveLights.settle,
 		getMaterialAppearance: () => materialAppearanceForLook(activeLook)
 	};
 }

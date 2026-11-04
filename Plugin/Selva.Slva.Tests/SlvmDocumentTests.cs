@@ -106,11 +106,10 @@ public class SlvmDocumentTests
     }
 
     [Fact]
-    public void Ids_SurviveTheMaterialSortReorder()
+    public void Ids_SurviveAnyTableOrder()
     {
-        // The assembler sorts meshes by material id, so table order diverges from GH input order
-        // on any multi-material batch. The id attr rides each object row, so the reorder cannot
-        // rewire web pick identity.
+        // Table order is the writer's choice and need not follow GH slot order. The id attr rides
+        // each object row, so no order can rewire web pick identity.
         var decoded = RoundTrip(BatchWithMeshes(
             (0, "m2", "", "src/2", null), (0, "m0", "", "src/0", null), (1, "m1", "", "src/1", null)));
 
@@ -285,6 +284,8 @@ public class SlvmDocumentTests
         var batch = BatchWithMeshes((0, "m", "", "src/0", null));
         var m = batch.Materials[0];
         m.EnvMapIntensity = 1.0;
+        m.Emissive = "#FFD8A0";
+        m.EmissiveIntensity = 4.0;
         m.Clearcoat = 0.0;
         m.ClearcoatRoughness = 0.2;
         m.Anisotropy = 0.7;
@@ -297,6 +298,8 @@ public class SlvmDocumentTests
         var decoded = RoundTrip(batch).Materials[0];
 
         Assert.Equal(1.0, decoded.EnvMapIntensity);
+        Assert.Equal("#FFD8A0", decoded.Emissive);
+        Assert.Equal(4.0, decoded.EmissiveIntensity);
         Assert.Equal(0.0, decoded.Clearcoat);
         Assert.Equal(0.2, decoded.ClearcoatRoughness);
         Assert.Equal(0.7, decoded.Anisotropy);
@@ -307,6 +310,7 @@ public class SlvmDocumentTests
         Assert.Equal(1.52, decoded.Ior);
 
         var plain = JsonConvert.SerializeObject(new SerializableMaterial { Color = "#FFFFFF" });
+        Assert.DoesNotContain("emissive", plain);
         Assert.DoesNotContain("clearcoat", plain);
         Assert.DoesNotContain("anisotropy", plain);
         Assert.DoesNotContain("envMapIntensity", plain);

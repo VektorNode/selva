@@ -1,9 +1,7 @@
 # ADR 0008: A Per-Document Solve Runtime Owns the Solve, Not the UI Builder
 
-> **Status: Accepted (2026-09-29).** Tracked in the plan
-> [solve-events-structure.md](../../plans/features/solve-events-structure.md). Builds on
-> [ADR 0002](./0002-grasshopper-bridge-seam.md): the solve runtime described here sits below the
-> bridge that ADR splits.
+> **Status: Accepted (2026-09-29).** Builds on [ADR 0002](./0002-grasshopper-bridge-seam.md): the
+> solve runtime described here sits below the bridge that ADR splits.
 
 ## Problem
 
@@ -26,8 +24,8 @@ Three things go wrong because of that:
 - **The Compute hook depends on canvas order.** The callback session starts from the UI Builder's
   `SolveInstance`, and Grasshopper solves in document order, not dependency order. When the
   component is late in the object list, the heartbeat and abort polling start late.
-- **Other components already need it.** `GH_Message` emits events today, and progress,
-  value lists and file exports will too. Each one would reach into UI Builder internals.
+- **Other components already need it.** `GH_Message` and `GH_ReportProgress` emit events today,
+  and value lists and file exports will too. Each one would reach into UI Builder internals.
 
 ## Decision
 
@@ -59,10 +57,10 @@ Solve runtime          one per GH_Document, works on both local and Compute:
 
 ## Consequences
 
-- **Adding a solve feature (progress, probe mode, per-solve context) is a runtime change** plus
+- **Adding a solve feature (probe mode, per-solve context) is a runtime change** plus
   an emitter. The bridge and the UI Builder don't change.
-- **A canvas component exists only for something an author does.** A "Report Progress"
-  component, for example, is an emitter like `GH_Message`, with no wire to the UI Builder.
+- **A canvas component exists only for something an author does.** `GH_ReportProgress`, for
+  example, is an emitter like `GH_Message`, with no wire to the UI Builder.
 - **Lazy creation still depends on the first Selva component to solve.** On Compute the runtime
   reads the per-request constants whenever it starts, so a late start costs heartbeat time, not
   correctness. The fork could make the start order-independent by invoking a plugin hook before

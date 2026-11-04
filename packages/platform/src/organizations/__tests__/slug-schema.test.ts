@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { SlugSchema, RESERVED_SLUGS, slugify } from '../schemas.js';
+import {
+	CreateOrgSchema,
+	SlugSchema,
+	RESERVED_SLUGS,
+	orgSlugFromName,
+	slugify
+} from '../schemas.js';
 
-/**
- * Reserved-slug guard (audit D4). A tenant slug must never equal a top-level
- * route segment, or it could shadow (or be shadowed by) a route once flat
- * tenant URLs — `/o/{slug}/…` per ADR 0006 — exist. These tests pin that the
- * guard rejects every reserved word and still accepts ordinary slugs, so the
- * reservation can't silently regress before the multi-org routing is built.
- */
 describe('SlugSchema', () => {
 	it('accepts a normal lowercase-hyphenated slug', () => {
 		expect(SlugSchema.safeParse('acme-studio').success).toBe(true);
@@ -64,5 +63,48 @@ describe('slugify', () => {
 
 	it('produces slugs that SlugSchema accepts for ordinary names', () => {
 		expect(SlugSchema.safeParse(slugify('Acme Studio')).success).toBe(true);
+	});
+});
+
+describe('slugify', () => {
+	it('never ends in a hyphen after cutting to length', () => {
+		const slug = slugify(`${'a'.repeat(62)} b`);
+		expect(slug).toBe('a'.repeat(62));
+		expect(SlugSchema.safeParse(slug).success).toBe(true);
+	});
+
+	it('folds accents instead of turning them into hyphens', () => {
+		expect(slugify('Müller GmbH')).toBe('muller-gmbh');
+		expect(slugify('Crème Brûlée')).toBe('creme-brulee');
+	});
+
+	it('gives up on a name with no latin letters or digits', () => {
+		expect(slugify('日本')).toBe('');
+	});
+});
+
+describe('orgSlugFromName', () => {
+	it('keeps a valid slug', () => {
+		expect(orgSlugFromName('Acme Studio')).toBe('acme-studio');
+	});
+
+	it('moves off a reserved word', () => {
+		expect(orgSlugFromName('Admin')).toBe('admin-org');
+		expect(SlugSchema.safeParse(orgSlugFromName('Admin')).success).toBe(true);
+	});
+
+	it('falls back when the name yields too little', () => {
+		expect(orgSlugFromName('日本')).toBe('default');
+		expect(orgSlugFromName('ab')).toBe('default');
+	});
+});
+
+describe('name schemas', () => {
+	it('refuses a name of only whitespace', () => {
+		expect(CreateOrgSchema.safeParse({ name: '   ', slug: 'acme' }).success).toBe(false);
+	});
+
+	it('trims a real name', () => {
+		expect(CreateOrgSchema.parse({ name: '  Acme  ', slug: 'acme' }).name).toBe('Acme');
 	});
 });

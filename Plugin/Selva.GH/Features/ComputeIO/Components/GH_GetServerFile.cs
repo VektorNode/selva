@@ -1,23 +1,17 @@
-
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using GH_IO.Serialization;
-using Grasshopper;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
-using Rhino.Geometry;
-using Selva.Schema.Models;
+using Selva.FileIO;
 using Selva.GH.Features.FileIO.Services;
 using Selva.GH.Properties;
-using Point = Rhino.Geometry.Point;
-using Selva.FileIO;
+using Selva.Schema.Models;
 
 namespace Selva.GH.Features.ComputeIO.Components;
 
@@ -35,34 +29,30 @@ namespace Selva.GH.Features.ComputeIO.Components;
 ///     machine. That absolute path is a per-machine override, never persisted to the .gh, and
 ///     Selva-injected context always wins over it once present.
 /// </summary>
-public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_ContextualParameter
+public class GetServerFileParameter : SelvaContextualParameter<IGH_GeometricGoo>
 {
-    private const int MaxContextualDataItems = 100;
     private const int MaxPathLength = 32767; // Windows MAX_PATH ceiling.
 
     // Persisted in the .gh; may also arrive from a wired source.
     private string _relativePath = string.Empty;
 
-    // Assigned at solve time (web UI / Rhino.Compute), never persisted.
-    private string _serverDataPath;
-
     // Set via the right-click menu; never persisted, never wins over Selva context.
     private string _localFilePath;
 
+    // This collect's relative path: a wired source's, else the authored one.
+    private string _collectRelativePath;
+
     public GetServerFileParameter()
         : base("Get Server File", "Get Server File",
-            "Import geometry from a file relative to the server's data directory", "Params", "Util",
-            GH_ParamAccess.list)
+            "Import geometry from a file relative to the server's data directory", GH_ParamAccess.list,
+            "Server data path")
     {
     }
-
-    public override GH_Exposure Exposure => GH_Exposure.quinary;
 
     public override string TypeName => "ServerFile";
     public override Guid ComponentGuid => new Guid("C8E1A7F4-2D63-4B95-9E08-7A1C5F3D6B92");
 
     protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.CreateFile);
-    public bool TreeAccess { get; set; }
 
     /// <summary>Relative path to the file, e.g. "geometry/bracket.3dm".</summary>
     public string RelativePath
@@ -71,110 +61,38 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
         set => _relativePath = value ?? string.Empty;
     }
 
-    // IGH_ContextualParameter properties
-    public string Prompt { get; set; } = "Server data path";
-    public int AtLeast { get; set; } = 1;
-    public int AtMost { get; set; } = 1;
-    public bool Immediate { get; set; } = true;
-
-    public IEnumerable<object> ContextualData
+    // The base path comes from the server, never from the user, so there is nothing to ask.
+    public override bool AutoAssignContextualData(GH_ParameterContext context)
     {
-        get
-        {
-            if (!string.IsNullOrEmpty(_serverDataPath))
-            {
-                yield return new GH_String(_serverDataPath);
-            }
-        }
+        return true;
     }
 
-    /// <summary>
-    ///     Receives the server data path from the web UI. Only the base directory arrives
-    ///     here — the relative path is part of the definition.
-    /// </summary>
-    public void AssignContextualData(IEnumerable data)
+    protected override void BeforeCollect()
     {
-        _serverDataPath = null;
-
-        if (data == null)
-        {
-            ExpireSolution(false);
-            return;
-        }
-
-        try
-        {
-            var count = 0;
-            foreach (var item in data)
-            {
-                if (++count > MaxContextualDataItems)
-                {
-                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "Too many contextual data items");
-                    break;
-                }
-
-                var path = ExtractPathString(item);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    _serverDataPath = path;
-                    break; // AtMost = 1
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error assigning contextual data: {ex.Message}");
-        }
-
-        ExpireSolution(false);
+        var sourcePath = Sources
+            .Where(source => source is Param_FilePath or Param_String && source.VolatileData != null)
+            .SelectMany(source => source.VolatileData.AllData(true))
+            .Select(ExtractPathString)
+            .FirstOrDefault(path => !string.IsNullOrWhiteSpace(path));
+        _collectRelativePath = sourcePath ?? _relativePath;
     }
 
-    public bool AutoAssignContextualData(GH_ParameterContext context)
+    protected override IEnumerable<IGH_GeometricGoo> FromContextual(object value)
     {
-        return !string.IsNullOrEmpty(_serverDataPath);
+        var basePath = ExtractPathString(value);
+        return string.IsNullOrWhiteSpace(basePath)
+            ? Enumerable.Empty<IGH_GeometricGoo>()
+            : ResolveAndImport(basePath, _collectRelativePath);
     }
 
-    /// <summary>
-    ///     Assigns the server data path as a tree — called by Rhino.Compute via reflection.
-    /// </summary>
-    public void AssignContextualDataTree(DataTree<GH_String> data)
+    protected override void CollectFromSources()
     {
-        _serverDataPath = null;
-
-        if (data == null || data.BranchCount == 0)
-        {
-            ExpireSolution(false);
-            return;
-        }
-
-        try
-        {
-            var firstPath = data.Paths.FirstOrDefault();
-            if (firstPath != null)
-            {
-                var branch = data.Branch(firstPath);
-                if (branch != null && branch.Count > 0)
-                {
-                    // AtMost = 1: first item of the first path.
-                    var path = ExtractPathString(branch[0]);
-                    if (!string.IsNullOrWhiteSpace(path))
-                    {
-                        _serverDataPath = path;
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error assigning contextual data tree: {ex.Message}");
-        }
-
-        ExpireSolution(false);
+        m_data.AppendRange(ResolveAndImport(null, _collectRelativePath));
     }
 
-    public void ClearContextualData()
+    protected override void CollectWithoutSources()
     {
-        _serverDataPath = null;
+        m_data.AppendRange(ResolveAndImport(null, _collectRelativePath));
     }
 
     public override void AppendAdditionalMenuItems(ToolStripDropDown menu)
@@ -214,38 +132,19 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
         ExpireSolution(true);
     }
 
-    protected override void CollectVolatileData_Custom()
-    {
-        m_data.Clear();
-        ResolveAndImport(_serverDataPath, _relativePath);
-    }
-
-    protected override void CollectVolatileData_FromSources()
-    {
-        m_data.Clear();
-
-        var relativePath = _relativePath;
-        var sourcePath = ReadFirstStringFromSources();
-        if (!string.IsNullOrWhiteSpace(sourcePath))
-        {
-            relativePath = sourcePath;
-        }
-
-        ResolveAndImport(_serverDataPath, relativePath);
-    }
-
     /// <summary>
     ///     Resolves the file to import. The server data path wins whenever present; the
     ///     locally-picked file is only a fallback for testing before that context exists.
     /// </summary>
-    private void ResolveAndImport(string basePath, string relativePath)
+    private List<IGH_GeometricGoo> ResolveAndImport(string basePath, string relativePath)
     {
+        var none = new List<IGH_GeometricGoo>();
         if (!string.IsNullOrWhiteSpace(basePath))
         {
             if (string.IsNullOrWhiteSpace(relativePath))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No relative file path set");
-                return;
+                return none;
             }
 
             string resolvedPath;
@@ -256,23 +155,22 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
             catch (ArgumentException ex)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
-                return;
+                return none;
             }
 
             if (resolvedPath.Length > MaxPathLength)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Resolved path exceeds the maximum length");
-                return;
+                return none;
             }
 
             if (!File.Exists(resolvedPath))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"File not found on server: {resolvedPath}");
-                return;
+                return none;
             }
 
-            ImportAndOutputGeometry(FileInputData.FromPath(resolvedPath));
-            return;
+            return FileImporter.ImportAsGoo(FileInputData.FromPath(resolvedPath), AddRuntimeMessage);
         }
 
         if (!string.IsNullOrWhiteSpace(_localFilePath))
@@ -280,125 +178,25 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
             if (!File.Exists(_localFilePath))
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Local file not found: {_localFilePath}");
-                return;
+                return none;
             }
 
-            ImportAndOutputGeometry(FileInputData.FromPath(_localFilePath));
+            var imported = FileImporter.ImportAsGoo(FileInputData.FromPath(_localFilePath), AddRuntimeMessage);
             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
                 "Using local test file. Selva will resolve the relative path on the server.");
-            return;
+            return imported;
         }
 
         if (string.IsNullOrWhiteSpace(relativePath))
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No relative file path set");
-            return;
+            return none;
         }
 
         AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
             "No server data path provided. Solve over Selva to resolve relative to the server's data " +
             "directory, or right-click → \"Pick local file…\" to test on this machine.");
-    }
-
-    private void ImportAndOutputGeometry(FileInputData fileData)
-    {
-        var result = FileImporter.ImportFromFileInputData(fileData);
-
-        if (!result.Success)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, result.ErrorMessage);
-            return;
-        }
-
-        if (result.Geometry.Count == 0)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry found in file");
-            return;
-        }
-
-        var ghGeometry = new List<IGH_GeometricGoo>();
-        foreach (var item in result.Geometry)
-        {
-            var geo = item.Geometry;
-            if (geo == null)
-            {
-                continue;
-            }
-
-            IGH_GeometricGoo goo = geo switch
-            {
-                Curve curve => new GH_Curve(curve),
-                Brep brep => new GH_Brep(brep),
-                Mesh mesh => new GH_Mesh(mesh),
-                Surface surface => new GH_Surface(surface),
-                Point point => new GH_Point(point.Location),
-                _ => null
-            };
-
-            if (goo != null)
-            {
-                ghGeometry.Add(goo);
-            }
-        }
-
-        m_data.AppendRange(ghGeometry, new GH_Path(0));
-
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-            $"Imported {ghGeometry.Count} objects from {result.DetectedFormat}");
-    }
-
-    private string ReadFirstStringFromSources()
-    {
-        foreach (var source in Sources)
-        {
-            if (source == null)
-            {
-                continue;
-            }
-
-            try
-            {
-                IGH_Goo firstItem = null;
-
-                if (source is Param_FilePath filePathParam)
-                {
-                    var persistentData = filePathParam.PersistentData;
-                    if (persistentData != null && !persistentData.IsEmpty)
-                    {
-                        firstItem = persistentData.AllData(true).FirstOrDefault();
-                    }
-                }
-                else if (source is Param_String stringParam)
-                {
-                    var persistentData = stringParam.PersistentData;
-                    if (persistentData != null && !persistentData.IsEmpty)
-                    {
-                        firstItem = persistentData.AllData(true).FirstOrDefault();
-                    }
-                    else
-                    {
-                        var volatileData = stringParam.VolatileData;
-                        if (volatileData != null && !volatileData.IsEmpty)
-                        {
-                            firstItem = volatileData.AllData(true).FirstOrDefault();
-                        }
-                    }
-                }
-
-                var path = ExtractPathString(firstItem);
-                if (!string.IsNullOrWhiteSpace(path))
-                {
-                    return path;
-                }
-            }
-            catch (Exception ex)
-            {
-                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
-                    $"Error reading from source '{source.NickName}': {ex.Message}");
-            }
-        }
-
-        return null;
+        return none;
     }
 
     private static string ExtractPathString(object item)
@@ -416,51 +214,12 @@ public class GetServerFileParameter : GH_Param<IGH_GeometricGoo>, IGH_Contextual
     public override bool Write(GH_IWriter writer)
     {
         writer.SetString("RelativePath", _relativePath ?? string.Empty);
-        writer.SetString("Prompt", Prompt ?? string.Empty);
-        writer.SetInt32("AtLeast", AtLeast);
-        writer.SetInt32("AtMost", AtMost);
-        writer.SetBoolean("TreeAccess", TreeAccess);
-        writer.SetBoolean("Immediate", Immediate);
-
         return base.Write(writer);
     }
 
     public override bool Read(GH_IReader reader)
     {
-        try
-        {
-            _relativePath = reader.ItemExists("RelativePath") ? reader.GetString("RelativePath") : string.Empty;
-            Prompt = reader.GetString("Prompt") ?? "Server data path";
-
-            var atLeast = 1;
-            if (reader.TryGetInt32("AtLeast", ref atLeast))
-            {
-                AtLeast = atLeast;
-            }
-
-            var atMost = 1;
-            if (reader.TryGetInt32("AtMost", ref atMost))
-            {
-                AtMost = atMost;
-            }
-
-            var treeAccess = false;
-            if (reader.TryGetBoolean("TreeAccess", ref treeAccess))
-            {
-                TreeAccess = treeAccess;
-            }
-
-            var immediate = true;
-            if (reader.TryGetBoolean("Immediate", ref immediate))
-            {
-                Immediate = immediate;
-            }
-        }
-        catch (Exception ex)
-        {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Error reading saved data: {ex.Message}");
-        }
-
+        _relativePath = reader.ItemExists("RelativePath") ? reader.GetString("RelativePath") : string.Empty;
         return base.Read(reader);
     }
 }

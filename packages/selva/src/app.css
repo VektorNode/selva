@@ -1,22 +1,24 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@source '../../ui/dist';
+@source '../../ui/src/lib';
 @import '@selvajs/ui/styles/base.css';
 
 /* Cover-image fallback for library tool cards. The hues come in as inline
    custom properties (--tool-h1, --tool-h2); saturation + lightness shift
    between modes so the gradient stays pastel-noticeable in both. */
 .tool-cover-fallback {
-	background: linear-gradient(
-		135deg,
-		hsl(var(--tool-h1), 38%, 86%),
-		hsl(var(--tool-h2), 30%, 78%)
-	);
+	background: linear-gradient(135deg, hsl(var(--tool-h1), 38%, 86%), hsl(var(--tool-h2), 30%, 78%));
 }
 .dark .tool-cover-fallback {
-	background: linear-gradient(
-		135deg,
-		hsl(var(--tool-h1), 32%, 24%),
-		hsl(var(--tool-h2), 26%, 18%)
-	);
+	background: linear-gradient(135deg, hsl(var(--tool-h1), 32%, 24%), hsl(var(--tool-h2), 26%, 18%));
+}
+
+/* Project badge on a tool card: one hue per project name (--project-h). */
+.project-chip {
+	background: hsl(var(--project-h), 45%, 92%);
+	color: hsl(var(--project-h), 45%, 28%);
+}
+.dark .project-chip {
+	background: hsl(var(--project-h), 30%, 24%);
+	color: hsl(var(--project-h), 55%, 82%);
 }

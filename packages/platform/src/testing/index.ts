@@ -1,5 +1,15 @@
-export { runAuthProviderConformance } from './suites/authProviderSuite.js';
+export {
+	runAuthCoreConformance,
+	runAuthProviderConformance,
+	runPasswordAuthConformance
+} from './suites/authProviderSuite.js';
 export type { AuthProviderConformanceOptions } from './suites/authProviderSuite.js';
+
+export { runOAuthAuthConformance } from './suites/oauthAuthSuite.js';
+export type { OAuthAuthConformanceOptions } from './suites/oauthAuthSuite.js';
+
+export { runAuditQueryConformance } from './suites/auditQuerySuite.js';
+export type { AuditQueryConformanceOptions } from './suites/auditQuerySuite.js';
 
 export { runEmailLinkAuthConformance } from './suites/emailLinkAuthSuite.js';
 export type { EmailLinkAuthConformanceOptions } from './suites/emailLinkAuthSuite.js';

@@ -12,7 +12,8 @@ export const LOOKS = [
 	'arctic',
 	'xray',
 	'lineart',
-	'wireframe'
+	'wireframe',
+	'night'
 ] as const;
 
 export type Look = (typeof LOOKS)[number];
@@ -30,6 +31,8 @@ export type LookMaterialOverride = {
 	color?: number;
 	metalness?: number;
 	roughness?: number;
+	/** Replaces the glow of a material that emits from the wire. A selection tint keeps its own. */
+	emissiveIntensity?: number;
 	/** Forces `transparent: true` when below 1. */
 	opacity?: number;
 	/**
@@ -51,6 +54,8 @@ export type LookMaterialOverride = {
 	 */
 	side?: THREE.Side;
 };
+
+export type BloomOptions = { strength: number; radius: number; threshold: number };
 
 /**
  * The lighting/material dials a {@link Look} sets. It still never *drives* the edge overlay or the
@@ -75,6 +80,20 @@ export type LookPreset = {
 	sunlightIntensity: number;
 	/** Absent on the looks that only retune lighting. */
 	materialOverride?: LookMaterialOverride;
+	/** Replaces the scene's background while the look is active. */
+	background?: number;
+	/** Glow around anything brighter than `threshold` in linear light, so only emissive parts bloom. */
+	bloom?: BloomOptions;
+	/** Emissive meshes light the scene, through a shadow-casting point light each. */
+	emissiveLights?: boolean;
+	/** How many emissive sources get a light. Default 3. */
+	maxEmissiveLights?: number;
+	/** Caps the render resolution while this look is active. */
+	maxPixelRatio?: number;
+	/** Replaces these fields on a phone (see `RenderConfig.lowPower`). */
+	lowPower?: Partial<
+		Pick<LookPreset, 'ambientOcclusion' | 'bloom' | 'maxEmissiveLights' | 'maxPixelRatio'>
+	>;
 	/**
 	 * This look is a line drawing: without the edge overlay it renders as blank white shapes. Set
 	 * only by `lineart`. A declaration, not an action — `setLook` still touches no overlay, so a

@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2-beta.5] - 2026-11-04
+
+### Changed
+
+- The Compute render switch moved from the builder's Compute panel to a new Rendering section in the Viewer panel.
+- The viewer no longer shows a progress bar along its top edge while a solve runs.
+- Dropdowns open up to a fixed height instead of filling the space left on screen.
+- Shorter wording in the Selva upload dialog and its result screen for live and draft versions.
+
+## [0.24.2-beta.4] - 2026-11-03
+
+### Added
+
+- The schema builder selects several rows at once: Shift-click parameters in the sidebar or items on the canvas, then drag them together.
+- Dragging a parameter or item over another tab opens that tab's group list, so you can drop it into a group there or into a new group without switching tabs first.
+
+### Changed
+
+- The UI typeface is Hanken Grotesk, replacing Familjen Grotesk.
+
+## [0.24.2-beta.3] - 2026-11-03
+
+### Added
+
+- Display To File records the document's units in the `.slvm`, and Display From File and Combine Display warn when a file's units differ from the open document's. Before, a file from a millimetre document loaded into a metre document displayed 1000 times too large with no message.
+
+## [0.24.2-beta.2] - 2026-10-30
+
+### Fixed
+
+- The release build's Rhino 8 verification found no Rhino SDK assemblies, which blocked 0.24.2-beta.1 from publishing. It has the same content as that release.
+
+## [0.24.2-beta.1] - 2026-10-30
+
+### Fixed
+
+- The Selva panel follows the Grasshopper canvas. Switching tabs or opening another definition moves the panel to that document's UI Bridge, or back to the launcher if it has none. Before, it stayed on the old document and its input went unanswered.
+
+## [0.24.1] - 2026-10-30
+
+**Requirements:** Rhino 9, or Rhino 8.21 or later. The plugin targets .NET 10 on Rhino 9 and .NET 8 on Rhino 8. The .NET Framework 4.8 build is gone, so Rhino 8 in .NET Framework mode and Rhino 8 before 8.21 can't load it. Earlier releases stay installable there.
+
+### Changed
+
+- Builds against the stable Rhino 9 SDK (9.0.26300) instead of the first Rhino 9 beta.
+
+## [0.24.0-beta.2] - 2026-10-30
+
 **Requirements:** Rhino 8.12 or later. On Rhino 8 the plugin targets .NET Framework 4.8 and .NET 8 (was .NET 7), and on Rhino 9 it targets .NET 10.
 
 **Older plugins and new schemas:** a schema with geometry inputs or button-style checkboxes loses them when saved by a plugin older than this release. A schema with option icons or thumbnails needs plugin 0.24.0, so 0.23.0 betas refuse it and don't strip the pictures. Update the plugin on every machine that edits these files.
@@ -21,12 +69,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A boolean input can show as a button (`displayAs: 'button'`). Pressing it sets the toggle for one solve.
 - Value lists show as a button row or as image tiles, and each option can carry an icon or a thumbnail (schema 2.17.0). The `.gh` stores each picture once.
 - In the panel, file inputs, presets and downloads use Rhino's own open and save dialogs.
+- `SchemaLayout.Read` and `Apply` lay out a definition's form by parameter nickname, for scripts and AI agents: the whole layout as one JSON spec, ids kept for what survives, refused with every error named.
 
 - Upload to Selva: the builder signs in to a hosted Selva instance through your browser, or with a pasted API key, and uploads the open definition as a new definition or as a new version of the one this file went to before. The key stays in your system's credential store (Credential Manager on Windows, the keychain on macOS) and never reaches the web UI. An upload lands as the draft unless Make live is on.
 - Builder: the App panel sets the definition's category and tags next to its name and description, marked Compute since only Selva uses them. Selva copies all four in when the definition is uploaded.
 
 ### Changed
 
+- Display meshes Breps and surfaces with Rhino's Default meshing when nothing is wired to Meshing Settings, instead of FastRenderMesh. On Rhino 9 a sphere drops from about 9,900 vertices to 560, so curved geometry meshes, sends and caches roughly 18 times faster and smaller, and looks slightly more faceted. Wire a Meshing Settings value to get the old density back.
+- Display stops filling the mesh cache with geometry that changes every solve. After three solves in which under a tenth of its items were reused (a slider moving every object, say), it stores only items that repeat from the solve before, so a drag no longer evicts meshes other solves would reuse. One solve that mostly reuses its meshes turns full caching back on.
 - Builder: the sidebar splits into Parameters, App, Local and Compute panels that remember their folds and filters, each tab gets a settings bar (icon, name, panel side, visibility), and a Save button highlights while there are unsaved edits. App holds what applies everywhere, Local what only this plugin's preview uses (Local render), Compute what only Selva uses (Compute render, and a list of inputs filled by something other than the form). The panel tabs shrink to icons when the sidebar is narrow.
 - Builder: an input's value source sits in a Compute only section at the end of its card, picked with Form, Client app or Server buttons, and a collapsed card shows a chip when its value comes from a client app or the server.
 - PDF export runs on PDFsharp 6.2.4 instead of PdfSharpCore and ImageSharp, and renders about twice as fast on large drawings. Rendering the same drawing twice on the same machine gives identical bytes. Windows and Mac re-encode images differently, so the same drawing gives different bytes on each. A JPEG from Draw Image now embeds at quality 92 instead of being re-compressed to quality 75, so photos look sharper and files with many photos get somewhat larger.
@@ -34,17 +85,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Render PDF warns when it can't make the file deterministic, instead of writing a dated file without saying so.
 - UI Bridge: Open UI in Browser is now Open UI and shows the Selva panel. The browser option appears when you hold Shift.
 - Local render and Compute render each drive one host: the plugin's preview shows the 3D viewer only with Local render on, Selva only with Compute render on. Either switch used to turn the viewer on in both.
+- Get Color, Get File, Get Image, Get Server File, Get Value List and Get Dynamic Value List behave like Rhino's own Get params. Right-clicking one sets Prompt, At least, At most and Tree Access. They pass on as many values as At most allows instead of only the first, and keep the branches Rhino.Compute sends. In Grasshopper Player each asks for its value (a color picker, an open-file dialog, or a pick from the list's options) instead of ending the command. Saved files open unchanged.
+- Get Image passes on every item of a wired source instead of only the first.
+- Three Material, Title Block, Path Style, Layout Override, Table, Text Style, Linear Dimension and Angular Dimension show only their common inputs when placed, like Rhino 8's Model components. Zoom in and click the chevron under the inputs, Shift + double-click, or right-click > Show all parameters for the rest; the chevron above, Ctrl + double-click or Hide unused parameters hides every input that is neither wired nor changed from its default. A hidden input keeps its default. The zoomed-in + and − between inputs add or remove one at a time.
 
 ### Fixed
 
+- With the panel and a browser tab both open, one page that stops reading (the panel while Rhino solves) no longer holds up the other, and no message is dropped for it: each page has its own send queue, and a page that falls hundreds of megabytes behind is disconnected and reconnects with the current state. A solve's result and its mesh frames go out back to back, so a following solve can no longer slip between them and show the previous solve's meshes as the new result.
+- A number or integer value outside its widget's min/max is clamped to the range before it reaches Grasshopper, with a warning. The page already clamped, but a stale page or a hand-written request didn't, and a sphere count of 9999 against a maximum of 250 froze Rhino for over a minute.
+- A rejected value (not a number, an unknown value-list item) no longer leaves an error on the UI Bridge that every later solve reported as its own until the bridge restarted. The page shows the rejection as a notification instead.
+- A cancel that arrives just after a value change, before the solve has started, now stops that solve. It used to be lost and the solve ran to the end.
+- The UI no longer goes dead when a scheduled solve never starts (a disabled solver, say). Updates held back for it apply after two seconds instead of waiting forever.
+- An error while collecting or sending a solve's results no longer leaves pressed buttons latched or drops the value updates held back during that solve.
+- Cancelling a solve stops Display from meshing the remaining items, and Display leaves a core free for Rhino while it works.
+- A cancelled solve no longer flashes full progress before it ends.
 - Builder: dragging a tab or group two or more places forward drops it where you let go, instead of only one place forward.
 - Builder: an item card's Span field shows 1 when the item has no span saved, instead of an empty box.
 - Builder: tab and group edits mark the draft unsaved and can be undone, so the unsaved-changes prompt fires and a Grasshopper broadcast no longer drops them. Edits made while a save is in flight stay unsaved.
+- Get Image receives its value on Rhino.Compute. It solved on its wired fallback, because Compute had no handler for it. Needs a Rhino.Compute fork build with the generic contextual handler; value lists keep working on older fork builds.
 
 ### Security
 
 - PDF export no longer bundles ImageSharp, which had five unfixed advisories on the version PdfSharpCore could use. Draw Image decodes PNG and JPEG with System.Drawing and re-encodes them, so the PDF library only ever reads images that encoder wrote.
 - UI Bridge: the local WebSocket only talks to the page the component opened. It refuses connections from any other origin or with a forged `Host`, and a socket must first send the secret the plugin puts in the page URL's fragment. Until now any web page open in the same browser could connect while the bridge was enabled, read the schema and values, and change inputs, the saved schema and parameter names. A browser tab opened before this update has to be reopened from the component.
+
+### Obsolete components
+
+- **Three Material** (`31100A9A` → `8313D290`), **Title Block** (`A2501A92` → `B0FA5F7E`), **Path Style** (`3F5C21A9` → `4CEFA814`), **Layout Override** (`3F5F0E10` → `6B443A70`), **Table** (`2B7C8D3E` → `2CF47AC1`), **Text Style** (`D37B61DB` → `6D5CCE51`), **Linear Dimension** (`90160C4E` → `1F0FE0F9`) and **Angular Dimension** (`A90C4D76` → `2D0CD233`): same inputs in the same order, rarely used ones hidden until asked for. Old definitions keep working and upgrade on request; the upgrade keeps every wire and value and hides the unused inputs.
+
+### Upgraders
+
+- `GH_ThreeMaterialUpgrader_To_0_24`, `GH_TitleBlockUpgrader_To_0_24`, `GH_PathStyleUpgrader_To_0_24`, `GH_LayoutOverrideUpgrader_To_0_24`, `GH_TableUpgrader_To_0_24`, `GH_TextStyleUpgrader_To_0_24`, `GH_LinearDimensionUpgrader_To_0_24`, `GH_AngularDimensionUpgrader_To_0_24`: one hop each to the hiding version.
 
 ## [0.23.0-beta.3] - 2026-10-13
 

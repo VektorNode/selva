@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import type { DefinitionChannel, RequestContext, ShareLink } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import { flag, getDefinitionMeta, getProjectProvider, providers } from '../providers.server';
-import { hashToken, looksLikeShareToken } from './token.server';
+import { findByRawToken, looksLikeShareToken } from './token.server';
 
 /**
  * Resolved share-link context attached to `locals` after successful token
@@ -54,11 +54,12 @@ export async function tryResolveShareToken(
 	const raw = readShareToken(request, url);
 	if (!raw) return null;
 
-	const tokenHash = hashToken(raw);
 	// System ctx: the token IS the credential, and the synthetic ctx returned
 	// below has no `auth.uid()`. Without `system: true` the Supabase adapter
 	// falls back to the anon client and RLS scopes every read to nothing.
-	const link = await providers.data.shareLinks.getByTokenHash(SYSTEM_CONTEXT, tokenHash);
+	const link = await findByRawToken(raw, (h) =>
+		providers.data.shareLinks.getByTokenHash(SYSTEM_CONTEXT, h)
+	);
 
 	if (!link) throw error(401, 'Invalid or revoked share token.');
 

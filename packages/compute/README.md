@@ -21,6 +21,8 @@ objects, use [`@selvajs/visualization`](https://www.npmjs.com/package/@selvajs/v
 npm install @selvajs/compute
 ```
 
+The package is ESM only, with two entrypoints: `/core` and `/grasshopper`.
+
 Two entrypoints: `@selvajs/compute/grasshopper` (client, scheduler, data trees, IO parsing) and
 `@selvajs/compute/core` (low-level fetch, errors, config). There is no root entry: import a
 subpath.
@@ -65,6 +67,10 @@ scheduler.subscribe(() => {
 });
 ```
 
+New here? [How the client works](https://selva.dev/docs/packages/build/how-it-works) explains the pieces, and [Common tasks](https://selva.dev/docs/packages/build/common-tasks) has copy-ready examples.
+
+> `client.solve` throws on solver errors; `scheduler.solve` resolves with them. See [Errors](#errors).
+
 ## Configuring the scheduler
 
 Pick the row that matches what the user is doing:
@@ -72,7 +78,7 @@ Pick the row that matches what the user is doing:
 | Workload                          | `mode`          | `timeoutMs`      | `retry`           | Notes                                                                                                                    |
 | --------------------------------- | --------------- | ---------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **Slider scrubs / live previews** | `'latest-wins'` | `30_000`         | default           | Aborts in-flight solves when newer values arrive. Add `cache: { maxBytes: 64 * 1024 * 1024 }` for instant repeats.       |
-| **Submit / long-running jobs**    | `'queue'`       | `0` (no timeout) | `{ attempts: 1 }` | Serial queue. Pass a caller `signal` so users can hit Cancel. See [Long jobs behind a proxy](#long-jobs-behind-a-proxy). |
+| **Submit / long-running jobs**    | `'queue'`       | `0` (no timeout) | default           | Serial queue. Pass a caller `signal` so users can hit Cancel. See [Long jobs behind a proxy](#long-jobs-behind-a-proxy). |
 | **Background / batch parallel**   | `'queue'`       | `60_000`         | `{ attempts: 2 }` | Set `maxConcurrent` (e.g. 4) to run that many solves at once; queue mode defaults to 1.                                  |
 
 Create one scheduler per UI surface: their queues, cancel scopes and caches are independent.
@@ -109,6 +115,20 @@ A proxy in front of Compute closes idle connections after its own timeout, and t
 work around that: raise the proxy's idle timeout before running long solves from a browser. For
 solves longer than a couple of minutes, run this library server-side behind your own job queue
 and expose a status endpoint to the browser.
+
+On Node, undici stops waiting for response headers at 300 s, and neither `timeoutMs` nor `0` lifts
+that: the solve fails with `NETWORK_ERROR` while it is still running on the server, and a retry
+would run it a second time. Past 300 s, keep `retry` off and pass a `fetch` with a longer limit:
+
+```ts
+import { Agent, fetch as undiciFetch } from 'undici';
+
+const dispatcher = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+const client = await GrasshopperClient.create({
+	serverUrl,
+	fetch: (url, init) => undiciFetch(url, { ...init, dispatcher })
+});
+```
 
 ## Errors
 
@@ -147,17 +167,16 @@ Read outputs through `GrasshopperResponseProcessor`, or a whole tree with
 `getTreeValue` is the shortcut for a one-branch param: it unwraps a single item and throws when
 the param has more than one branch.
 
-Pass a rhino3dm module as `{ rhino }` in the `getValues` / `getValue` options to decode geometry. Its objects live on the WASM
-heap, which garbage collection never frees: release them with `disposeRhinoObjects`. Install
-`rhino3dm` yourself; this package doesn't depend on it.
+Pass a rhino3dm module as `{ rhino }` in the `getValues` / `getValue` options to decode geometry.
+Its objects live on the WASM heap, which garbage collection never frees: release them with
+`disposeRhinoObjects`. Install `rhino3dm` yourself; this package doesn't depend on it.
 
 ## File outputs
 
-File outputs need the [Selva plugin](https://www.food4rhino.com/en/app/selva?lang=en) and the
-[VektorNode compute fork](https://github.com/VektorNode/compute.rhino3d); standard Rhino Compute
-drops them. Read one with `getValue` and it comes back as `FileData`.
+File outputs need the Selva plugin and the VektorNode fork (see [Requirements](#requirements));
+standard Rhino Compute drops them. Read one with `getValue` and it comes back as `FileData`.
 
-Each file component has a `Sub Folder` input, where `::` nests (as in Rhino layer names). The
+Each file component has a `Sub Folder` input, where `/` or `::` nests (as in Rhino layer names). The
 first segment is the root: `downloadFileDataByRoot` from `/core` turns each root into its own
 archive and puts files without one in the fallback archive. With `'export'` as the fallback name:
 
@@ -174,8 +193,6 @@ archive and puts files without one in the fallback archive. With `'export'` as t
 
 ## Requirements
 
-**Node.js >= 24.**
-
 The [official McNeel Rhino Compute](https://github.com/mcneel/compute.rhino3d) handles plain
 Grasshopper solving. The [VektorNode compute fork](https://github.com/VektorNode/compute.rhino3d)
 adds input grouping (`groupName`), persistent input ids keyed on Grasshopper object GUIDs, file
@@ -185,7 +202,9 @@ file-export components those features read.
 
 ## Troubleshooting
 
-**`Network error: Failed to fetch`** means the browser couldn't reach the server. Check that
+**`CORS_ERROR` (`Request failed: Failed to fetch`)** means the browser got no response, which it
+reports the same way for a CORS block and for an unreachable server. Outside a browser the same
+failure is `NETWORK_ERROR`. Check that
 `curl http://localhost:6500/` returns 200; that a server on another origin sends
 `Access-Control-Allow-Origin` (standard Rhino Compute doesn't: put a proxy in front that adds it,
 or use the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d)); that an HTTPS app

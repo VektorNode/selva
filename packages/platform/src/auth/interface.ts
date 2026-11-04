@@ -34,9 +34,8 @@ export interface IPasswordAuth {
  *      `getOAuthAuthorizationUrl` and 303s to the result.
  *   2. IdP redirects back to `/auth/{provider}/callback?code=...` → server
  *      calls `exchangeOAuthCode` to mint the session pair.
- *   3. When the access token expires, session-refresh middleware in
- *      `hooks.server.ts` calls `refreshSession` to swap in a fresh pair
- *      without bouncing the user.
+ *
+ * Keeping the session alive afterwards is `ISessionRefresh`'s job.
  *
  * Each method returns `null` rather than throwing on irrecoverable
  * credential failures, so the route layer can pick the right HTTP shape
@@ -70,24 +69,6 @@ export interface IOAuthAuth {
 	 */
 	exchangeOAuthCode(code: string): Promise<{
 		user: AuthUser;
-		sessionToken: string;
-		refreshToken: string;
-	} | null>;
-
-	/**
-	 * Swap a refresh token for a fresh access/refresh pair. Returns null on
-	 * irrecoverable failure (revoked, expired, signed by a different secret);
-	 * the session-refresh middleware treats null as "force re-login" by
-	 * clearing the refresh cookie.
-	 *
-	 * @deprecated Session refresh is session lifecycle, not OAuth — a consumer
-	 * that brokers no OAuth still needs it (refreshing a password session, or
-	 * revoking on logout). Moved to `IAuthProvider.sessionRefresh`
-	 * (`ISessionRefresh`). This member delegates for one release and will be
-	 * removed in the next minor; migrate callers to
-	 * `auth.sessionRefresh?.refreshSession(...)`.
-	 */
-	refreshSession(refreshToken: string): Promise<{
 		sessionToken: string;
 		refreshToken: string;
 	} | null>;
@@ -260,8 +241,8 @@ export interface IDelegatedSession {
 	status(): Promise<DelegatedSessionStatus>;
 
 	/**
-	 * A session token acting as `userId` inside `orgId`, valid for about a
-	 * minute. It carries no instance-admin rights, whatever the user holds: those
+	 * A session token acting as `userId` inside `orgId`, valid for `ttlSeconds`
+	 * (default 60 s). It carries no instance-admin rights, whatever the user holds: those
 	 * never ride on a bearer key. Throws if `status` isn't ok.
 	 */
 	mint(userId: string, opts: { orgId: string }): Promise<string>;

@@ -21,6 +21,8 @@ export interface AssemblyWindow {
 	vertexCount: number;
 	indexStart: number;
 	indexCount: number;
+	/** The writer's closed-solid verdict for this member, when it sent one. */
+	closed?: boolean;
 }
 
 export interface AssemblyJob {
@@ -66,14 +68,21 @@ export interface FinishedGeometry extends CreasedGeometry {
 
 /**
  * The shared tail of both parse paths, so the worker and the main-thread fallback can't drift.
- * Closedness is judged before the crease split, which only appends copies of existing positions.
+ * Closedness is judged before the crease split, which rewires corners to new vertex slots.
  * Tangents come after it, so each split copy takes only its own side's faces.
  */
 export function finishGeometry(
 	geometry: AssembledGeometry,
-	memberIndexCounts: number[]
+	members: { indexCount: number; closed?: boolean }[]
 ): FinishedGeometry {
-	const closed = isClosedSolid(geometry.positions, geometry.indices, memberIndexCounts);
+	// The writer's verdicts, when every member has one: computing it was the costliest finish step.
+	const closed = members.every((m) => typeof m.closed === 'boolean')
+		? members.length > 0 && members.every((m) => m.closed)
+		: isClosedSolid(
+				geometry.positions,
+				geometry.indices,
+				members.map((m) => m.indexCount)
+			);
 	const creased = splitCreases(geometry.positions, geometry.indices, geometry.uvs, geometry.colors);
 	const tangents = creased.uvs
 		? grainTangents(creased.positions, creased.normals, creased.indices, creased.uvs)
@@ -291,8 +300,11 @@ export function meshAssemblyWorkerSource(): string {
 		`  try {`,
 		// Mirrors finishGeometry, which can't be stringified: it captures the functions above.
 		`    const geometries = assemble(input).map((g, i) => {`,
-		`      const counts = input.jobs[i].windows.map((w) => w.indexCount);`,
-		`      const closed = isClosedSolid(g.positions, g.indices, counts);`,
+		`      const windows = input.jobs[i].windows;`,
+		`      const known = windows.every((w) => typeof w.closed === 'boolean');`,
+		`      const closed = known`,
+		`        ? windows.length > 0 && windows.every((w) => w.closed)`,
+		`        : isClosedSolid(g.positions, g.indices, windows.map((w) => w.indexCount));`,
 		`      const c = splitCreases(g.positions, g.indices, g.uvs, g.colors);`,
 		`      const tangents = c.uvs ? grainTangents(c.positions, c.normals, c.indices, c.uvs) : null;`,
 		`      return { ...c, closed, tangents };`,

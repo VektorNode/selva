@@ -1,13 +1,13 @@
 import type { RequestHandler } from './$types';
 import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
-import type { PipelineInput } from '@selvajs/solve/server';
 import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
 import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
 import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
 import { runSolve, mapSolveError, type SolveAccess } from '#lib/server/compute/solve.server.js';
 
 interface ComputeRequest {
-	inputs: PipelineInput[];
+	/** Read for a remote `definitionUrl` only: a stored definition's inputs come from its schema. */
+	inputs?: unknown;
 	values: Record<string, unknown>;
 	definitionUrl: string;
 	/** Spec §6 channel selector. Defaults to 'live'. 'draft' requires editor. */
@@ -52,11 +52,11 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		const channel: 'live' | 'draft' = body.channel ?? 'live';
 		const explicitVersionId = body.versionId ?? null;
 
-		if (!inputs || !values || !definitionUrl) {
+		if (!values || !definitionUrl) {
 			apiError(
 				400,
 				ApiErrorCode.VALIDATION_FAILED,
-				'Missing required fields: inputs, values, or definitionUrl'
+				'Missing required fields: values or definitionUrl'
 			);
 		}
 		if (channel !== 'live' && channel !== 'draft') {

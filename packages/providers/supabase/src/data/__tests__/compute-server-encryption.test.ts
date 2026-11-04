@@ -45,6 +45,7 @@ function fakeBundle(selectRows: Record<string, unknown[]> = {}) {
 							then: (resolve: (v: unknown) => unknown) => resolve({ data: matched, error: null })
 						};
 					},
+					in: async () => result,
 					then: (resolve: (v: unknown) => unknown) => resolve(result)
 				};
 			},
@@ -59,7 +60,13 @@ function fakeBundle(selectRows: Record<string, unknown[]> = {}) {
 		return chain;
 	}
 
-	const client = { from: (t: string) => builder(t) };
+	const client = {
+		from: (t: string) => builder(t),
+		rpc: async (_fn: string, args: { servers: unknown[] }) => {
+			inserted['compute_servers'] = (inserted['compute_servers'] ?? []).concat(args.servers);
+			return { error: null };
+		}
+	};
 	const bundle = {
 		serviceClient: client,
 		forRequest: () => client
@@ -93,7 +100,7 @@ describe('SupabaseComputeServerStore — apiKey encryption at rest', () => {
 		expect(rows).toHaveLength(1);
 		expect(rows[0].api_key).not.toBe('super-secret-key');
 		expect(isEncryptedSecret(rows[0].api_key)).toBe(true);
-		expect(decryptSecret(rows[0].api_key, KEY)).toBe('super-secret-key');
+		expect(decryptSecret(rows[0].api_key, KEY, 's1')).toBe('super-secret-key');
 	});
 
 	it('decrypts apiKey on read — callers see plaintext', async () => {

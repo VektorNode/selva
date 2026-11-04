@@ -15,5 +15,4 @@ keywords:
 
 icon: icon.png
 targetframeworks:
-  - 'net48'
   - 'net8.0'

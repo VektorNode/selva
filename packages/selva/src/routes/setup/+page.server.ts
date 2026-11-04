@@ -19,7 +19,7 @@ import {
 } from '#lib/server/providers.server.js';
 import { setSessionCookie } from '#lib/server/admin-auth.server.js';
 import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
-import { slugify } from '@selvajs/platform';
+import { orgSlugFromName, slugify } from '@selvajs/platform';
 import { env } from '#lib/server/env.js';
 
 // Redirect away if a platform admin already exists — setup is only for a
@@ -66,12 +66,18 @@ export const actions = {
 		if (requireCompany && !companyName) {
 			return fail(400, { error: 'Company name is required' });
 		}
-		const slug = requireCompany ? slugify(companyName) : '';
-		if (requireCompany && slug.length < 3) {
+		if (requireCompany && slugify(companyName).length < 3) {
 			return fail(400, { error: 'Company name must contain at least 3 letters or digits' });
 		}
 		if (!email || !email.includes('@')) {
 			return fail(400, { error: 'Valid email is required' });
+		}
+		// Same rule as the OAuth and proxy bootstrap: when the operator pinned an
+		// admin email, only that address may claim the empty instance. Unpinned,
+		// whoever reaches /setup first owns it.
+		const pinnedEmail = env.BOOTSTRAP_INSTANCE_ADMIN_EMAIL?.trim().toLowerCase();
+		if (pinnedEmail && email.trim().toLowerCase() !== pinnedEmail) {
+			return fail(403, { error: 'Setup is restricted to the configured admin email.' });
 		}
 		if (!password || password.length < 8) {
 			return fail(400, { error: 'Password must be at least 8 characters' });
@@ -127,7 +133,7 @@ export const actions = {
 				const org: Organization = {
 					id: randomUUID(),
 					name: companyName,
-					slug,
+					slug: orgSlugFromName(companyName),
 					ownerId: user.id,
 					createdBy: user.id,
 					updatedBy: user.id,

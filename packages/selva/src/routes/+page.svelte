@@ -1,142 +1,214 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { Button, PageContent, EmptyState } from '@selvajs/ui';
-	import { ArrowRight, LayoutGrid, Star } from '@lucide/svelte';
-	import type { DefinitionRecord } from '@selvajs/platform';
+	import { Button } from '@selvajs/ui';
+	import { ArrowRight } from '@lucide/svelte';
 	import AppHeader from '#lib/components/AppHeader.svelte';
-	import DefinitionCard from '#lib/components/definitions/DefinitionCard.svelte';
-	import { formatRelative } from '#lib/format/relativeTime.js';
-	import type { PageData } from './$types';
 
-	let { data }: { data: PageData } = $props();
-
-	const isAuthed = $derived(!!page.data.user);
 	const branding = $derived(page.data.branding);
-	const dashboard = $derived(data.dashboard);
 
-	const greetingName = $derived(
-		page.data.profile?.displayName ?? page.data.user?.email?.split('@')[0] ?? ''
-	);
+	// Grasshopper-style graph on a 1400×700 canvas centred on the hero: input nodes wire into three
+	// ports left of the logo, outputs fan out from mirrored ports on the right. Each port runs its own
+	// cycle (in, then out on every wire it feeds), with periods that don't divide evenly so the
+	// pattern drifts and ports overlap instead of firing in turn.
+	// Ports hug the hero lockup so the wires visibly feed it instead of ending in empty space.
+	const PORT_X = 580;
+	const ports = [
+		{ y: 320, dur: 11, delay: 2 },
+		{ y: 350, dur: 13.5, delay: 4.5 },
+		{ y: 380, dur: 9.5, delay: 6.5 }
+	];
 
-	const projectList = $derived(Object.values(dashboard?.projects ?? {}));
+	type WireSpec = { x: number; y: number; port: number };
 
-	let loadingGuid = $state<string | null>(null);
+	const toWire = ({ x, y, port }: WireSpec, i: number) => ({
+		x,
+		y,
+		port,
+		// Slight jitter so parallel wires on one port don't move as a rigid block.
+		jitter: (i % 3) * 0.12,
+		d: `M-10,${y} H${x} C${x + 190},${y} ${PORT_X - 160},${ports[port].y} ${PORT_X},${ports[port].y}`
+	});
 
-	function open(guid: string) {
-		loadingGuid = guid;
-		goto(`/library/${guid}`).catch(() => {
-			loadingGuid = null;
-		});
-	}
+	const inputs = [
+		{ x: 200, y: 110, port: 0 },
+		{ x: 110, y: 235, port: 0 },
+		{ x: 250, y: 350, port: 1 },
+		{ x: 130, y: 465, port: 2 },
+		{ x: 210, y: 590, port: 2 }
+	].map(toWire);
 
-	function projectName(record: DefinitionRecord) {
-		return projectList.length > 1 ? dashboard?.projects[record.projectId]?.name : undefined;
-	}
+	// One column: with shared control-point x the curves keep their vertical order and never cross.
+	const outputs = [
+		{ y: 90, port: 0 },
+		{ y: 185, port: 0 },
+		{ y: 270, port: 1 },
+		{ y: 350, port: 1 },
+		{ y: 430, port: 1 },
+		{ y: 515, port: 2 },
+		{ y: 610, port: 2 }
+	].map((o, i) => toWire({ x: 190, ...o }, i));
+
+	const sides = [
+		{ out: false, wires: inputs },
+		{ out: true, wires: outputs }
+	];
 </script>
 
 <svelte:head>
 	<title>{branding.name}</title>
 </svelte:head>
 
-<AppHeader showSignIn={isAuthed}>
-	{#if isAuthed}
-		<PageContent class="mx-auto w-full max-w-6xl space-y-10">
-			<div>
-				<h1 class="text-2xl font-semibold tracking-tight">
-					{greetingName ? `Welcome back, ${greetingName}` : 'Welcome back'}
-				</h1>
-				<p class="text-muted-foreground mt-1 text-sm">{branding.tagline}</p>
-			</div>
+<AppHeader showSignIn={false}>
+	<div
+		class="relative isolate flex min-h-[80vh] w-full items-center justify-center overflow-hidden"
+	>
+		<svg
+			aria-hidden="true"
+			viewBox="0 0 1400 700"
+			class="text-faint-foreground pointer-events-none absolute top-1/2 left-1/2 -z-10 hidden h-175 w-350 max-w-none -translate-x-1/2 -translate-y-1/2 mask-[linear-gradient(90deg,transparent,#000_14%,#000_86%,transparent)] md:block"
+		>
+			{#each sides as side (side.out)}
+				<g transform={side.out ? 'translate(1400 0) scale(-1 1)' : undefined}>
+					{#each side.wires as wire, i (wire.d)}
+						<path
+							d={wire.d}
+							pathLength="1"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.25"
+							class="wire"
+							style="--d: {300 + i * 110}ms"
+						/>
+						<path
+							d={wire.d}
+							pathLength="1"
+							fill="none"
+							stroke-width="1.75"
+							stroke-linecap="round"
+							class="pulse"
+							class:out={side.out}
+							style="--dur: {ports[wire.port].dur}s; --d: {ports[wire.port].delay +
+								(side.out ? wire.jitter : 0)}s"
+						/>
+						<rect
+							x={wire.x - 16}
+							y={wire.y - 8}
+							width="32"
+							height="16"
+							rx="4"
+							class="node fill-background stroke-current"
+							style="--d: {200 + i * 110}ms"
+						/>
+					{/each}
+					{#each ports as port (port.y)}
+						<circle
+							cx={PORT_X}
+							cy={port.y}
+							r="3.5"
+							class="node fill-background stroke-current"
+							style="--d: 1100ms"
+						/>
+					{/each}
+				</g>
+			{/each}
+		</svg>
 
-			{#if dashboard && dashboard.recentRuns.length > 0}
-				<section>
-					<div class="mb-3 flex items-baseline justify-between">
-						<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-							Pick up where you left off
-						</span>
-					</div>
-					<div class="border-border bg-card overflow-hidden rounded-md border">
-						{#each dashboard.recentRuns as run, i (run.runId)}
-							<button
-								onclick={() => open(run.definitionId)}
-								disabled={loadingGuid === run.definitionId}
-								class={`group hover:bg-muted/40 grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-									i < dashboard.recentRuns.length - 1 ? 'border-border border-b' : ''
-								}`}
-								style="grid-template-columns: minmax(0, 1fr) auto auto"
-							>
-								<span class="truncate font-medium">{run.definitionName}</span>
-								<span class="text-muted-foreground font-mono text-xs">
-									{formatRelative(run.timestamp)}
-								</span>
-								<span
-									class="flex items-center gap-1 text-xs font-medium opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
-								>
-									<span class="hidden sm:inline">Resume</span>
-									<ArrowRight class="h-3 w-3" />
-								</span>
-							</button>
-						{/each}
-					</div>
-				</section>
+		<div class="flex w-full max-w-xl flex-col items-center px-4 text-center">
+			<img
+				src="/favicon/favicon.svg"
+				alt=""
+				class="rise size-20 drop-shadow-md dark:filter-[drop-shadow(0_0_0.5px_oklch(1_0_0/0.45))]"
+				style="--d: 0ms"
+			/>
+			<h1 class="rise mt-6 text-5xl font-bold tracking-tighter sm:text-6xl" style="--d: 100ms">
+				{branding.name}
+			</h1>
+			{#if branding.tagline}
+				<p class="text-muted-foreground mt-3 text-base text-balance">{branding.tagline}</p>
 			{/if}
-
-			{#if dashboard && dashboard.starred.length > 0}
-				<section>
-					<div class="mb-3 flex items-baseline justify-between">
-						<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
-							Starred
-						</span>
-						<a href="/library" class="text-muted-foreground hover:text-foreground text-xs">
-							View library
-						</a>
-					</div>
-					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-						{#each dashboard.starred as record (record.guid)}
-							<DefinitionCard
-								{record}
-								starred
-								loading={loadingGuid === record.guid}
-								projectName={projectName(record)}
-								onOpen={(r) => open(r.guid)}
-							/>
-						{/each}
-					</div>
-				</section>
-			{/if}
-
-			{#if dashboard && dashboard.recentRuns.length === 0 && dashboard.starred.length === 0}
-				<EmptyState
-					icon={dashboard.visibleCount > 0 ? LayoutGrid : Star}
-					title={dashboard.visibleCount > 0 ? 'Nothing pinned yet' : 'No tools available yet'}
-					description={dashboard.visibleCount > 0
-						? 'Star a definition in the library and it will show up here.'
-						: 'Once a definition is published to a project you can reach, it appears here.'}
-				>
-					{#snippet actions()}
-						<Button href="/library">Browse library</Button>
-					{/snippet}
-				</EmptyState>
-			{:else}
-				<div>
-					<Button href="/library" variant="outline">
-						Browse all Definitions <ArrowRight class="ml-1 h-4 w-4" />
-					</Button>
-				</div>
-			{/if}
-		</PageContent>
-	{:else}
-		<div class="flex flex-col items-center px-4 py-24 text-center">
-			<div class="max-w-md space-y-6">
-				<h1 class="text-4xl font-bold tracking-tight">{branding.name}</h1>
-				{#if branding.tagline}
-					<p class="text-muted-foreground text-lg">{branding.tagline}</p>
-				{/if}
-				<div class="flex justify-center gap-3">
-					<Button href="/login">Sign in</Button>
-				</div>
-			</div>
+			<Button href="/login" size="lg" class="rise group mt-8" style="--d: 200ms">
+				Sign in
+				<ArrowRight class="ml-1 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+			</Button>
 		</div>
-	{/if}
+	</div>
 </AppHeader>
+
+<style>
+	@keyframes rise {
+		from {
+			opacity: 0;
+			transform: translateY(12px);
+		}
+	}
+	.rise {
+		animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms) backwards;
+	}
+	@keyframes draw {
+		to {
+			stroke-dashoffset: 0;
+		}
+	}
+	.wire {
+		stroke-dasharray: 1;
+		stroke-dashoffset: 1;
+		animation: draw 1.6s cubic-bezier(0.3, 0.6, 0.2, 1) var(--d, 0ms) forwards;
+	}
+	@keyframes fade-in {
+		from {
+			opacity: 0;
+		}
+	}
+	.node {
+		animation: fade-in 0.5s ease-out var(--d, 0ms) backwards;
+	}
+	/* A brand-green dash travels in along a left wire; as it reaches the port, its mirrored right
+	   wire carries it back out. Both share one cycle so the hand-off stays in sync. */
+	@keyframes flow-in {
+		0% {
+			stroke-dashoffset: 0.05;
+		}
+		45%,
+		100% {
+			stroke-dashoffset: -1;
+		}
+	}
+	@keyframes flow-out {
+		0%,
+		45% {
+			stroke-dashoffset: -1;
+		}
+		90%,
+		100% {
+			stroke-dashoffset: 0.05;
+		}
+	}
+	.pulse {
+		stroke: oklch(0.68 0.13 130);
+		stroke-dasharray: 0.05 1;
+		stroke-dashoffset: 0.05;
+		animation: flow-in var(--dur, 11s) ease-in-out var(--d, 0ms) infinite backwards;
+	}
+	.pulse.out {
+		animation-name: flow-out;
+	}
+	/* Dimmer wires and a brighter, softly lit pulse: on near-black the grey wires read as noise and
+	   the light-mode green sinks into the background. */
+	:global(.dark) .pulse {
+		stroke: oklch(0.82 0.15 128);
+		filter: drop-shadow(0 0 3px oklch(0.82 0.15 128 / 0.6));
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.rise,
+		.node {
+			animation: none;
+		}
+		.wire {
+			animation: none;
+			stroke-dashoffset: 0;
+		}
+		.pulse {
+			display: none;
+		}
+	}
+</style>

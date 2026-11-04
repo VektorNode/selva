@@ -1,9 +1,10 @@
-export { createMcpServer } from './server.js';
+export { createMcpServer, refuseEarly } from './server.js';
 export type {
 	McpServerOptions,
 	PromptDefinition,
 	ResourceDefinition,
-	SelvaMcpServer
+	SelvaMcpServer,
+	ToolCallRecord
 } from './server.js';
 export { tool, toolkit, fromOperation, inputFrom } from './tool.js';
 export type {
@@ -15,6 +16,7 @@ export type {
 } from './tool.js';
 export type {
 	Api,
+	ApiCallRecord,
 	ApiClientOptions,
 	BinaryBody,
 	TypedApi,

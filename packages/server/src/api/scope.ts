@@ -1,5 +1,5 @@
 import type { ApiScopeAction, RequestContext, ScopeTarget } from '@selvajs/platform';
-import { outsideTokenOrg, scopeAllows } from '@selvajs/platform';
+import { apiScopeActionCovers, outsideTokenOrg, scopeAllows } from '@selvajs/platform';
 import { apiError, ApiErrorCode } from './errors.js';
 import type { ApiRequest } from './types.js';
 
@@ -25,6 +25,19 @@ export function assertScope(
 	apiError(403, ApiErrorCode.FORBIDDEN, `This API token doesn't allow ${action} here.`, undefined, {
 		requiredScope: requiredScope(ctx, action, target)
 	});
+}
+
+/**
+ * Refuse an API-token request whose key holds `action` on nothing at all. For
+ * routes that act only on the caller's own solves and streams, which name no
+ * project: a key that may solve in one project must still cancel and watch
+ * those solves.
+ */
+export function assertScopeAnywhere(ctx: RequestContext | undefined, action: ApiScopeAction): void {
+	if (!ctx?.apiScope) return;
+	if (ctx.apiScope.scopes.some((s) => apiScopeActionCovers(s.action, action))) return;
+	recordRefusal(ctx.apiScope.tokenId);
+	apiError(403, ApiErrorCode.FORBIDDEN, `This API token doesn't allow ${action}.`);
 }
 
 // Per process and per UTC day, so the token page can flag a misconfigured

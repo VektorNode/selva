@@ -25,13 +25,14 @@ import {
 } from 'node:crypto';
 
 /** The scopes a grant can carry. Each maps to one org-wide API scope. */
-export const OAUTH_SCOPES = ['read', 'solve', 'upload'] as const;
+export const OAUTH_SCOPES = ['read', 'solve', 'upload', 'create_projects'] as const;
 export type OAuthScope = (typeof OAUTH_SCOPES)[number];
 
 /**
  * All a registered (DCR or CIMD) client can be granted. Its name and redirects
  * are whatever the registrant chose, so `upload`, which puts code on the org's
- * Compute server, stays with the built-in client and a look-alike can't phish for it.
+ * Compute server, and `create_projects` stay with the built-in client and a
+ * look-alike can't phish for them.
  */
 export const REGISTERED_CLIENT_SCOPES = ['read', 'solve'] as const satisfies readonly OAuthScope[];
 
@@ -45,12 +46,12 @@ const GRASSHOPPER_CLIENT: OAuthClient = {
 	name: 'Selva for Grasshopper',
 	redirectUris: ['http://127.0.0.1/callback'],
 	builtIn: true,
-	scopes: ['read', 'upload']
+	scopes: ['read', 'upload', 'create_projects']
 };
 
 export const MCP_PATH = '/mcp';
 
-const CODE_TTL_MS = 60_000;
+export const CODE_TTL_MS = 60_000;
 const CLIENT_NAME_MAX = 100;
 const REDIRECT_URIS_MAX = 10;
 const CIMD_TTL_MS = 60 * 60_000;
@@ -108,8 +109,10 @@ export interface Grant {
 export interface OAuthServerOptions {
 	/** This instance's origin, e.g. `https://selva.example.com`. */
 	origin: string;
-	/** `SELVA_HMAC_KEY`. Rotating it invalidates registered clients and live codes. */
+	/** `SELVA_HMAC_KEY`. Signs client ids and seals codes. */
 	secret: string;
+	/** The key before the last rotation: client ids and codes it made still verify. */
+	previousSecret?: string;
 	/**
 	 * Fetches a Client ID Metadata Document. The URL comes from an unknown client,
 	 * so the host must guard it against SSRF. Without it, URL client ids are refused.
@@ -120,6 +123,8 @@ export interface OAuthServerOptions {
 	 * rebuilt server (a new origin, a rotated secret) still refuses a replay.
 	 */
 	redeemedCodes?: Map<string, number>;
+	/** Called once a code is exchanged, with the token its grant carries. */
+	onRedeemed?: (tokenId: string) => void;
 	now?: () => number;
 }
 
@@ -179,6 +184,9 @@ export function createOAuthServer(options: OAuthServerOptions) {
 	const now = options.now ?? Date.now;
 	const signKey = derive(options.secret, 'selva-oauth-client');
 	const codeKey = derive(options.secret, `selva-oauth-code:${origin}`);
+	const previous = options.previousSecret;
+	const previousSignKey = previous ? derive(previous, 'selva-oauth-client') : undefined;
+	const previousCodeKey = previous ? derive(previous, `selva-oauth-code:${origin}`) : undefined;
 	const redeemed = options.redeemedCodes ?? new Map<string, number>();
 	const metadataCache = new Map<
 		string,
@@ -226,7 +234,9 @@ export function createOAuthServer(options: OAuthServerOptions) {
 
 	function registeredClient(clientId: string): OAuthClient {
 		const [payload, signature] = clientId.slice('dcr_'.length).split('.');
-		if (!payload || !signature || !safeEqual(signature, sign(signKey, payload))) {
+		const signedBy = (key: Buffer | undefined) =>
+			key !== undefined && safeEqual(signature, sign(key, payload));
+		if (!payload || !signature || !(signedBy(signKey) || signedBy(previousSignKey))) {
 			throw new OAuthError('invalid_client', 'Unknown client.');
 		}
 		const meta = JSON.parse(unb64(payload)) as { n: string; r: string[] };
@@ -335,7 +345,8 @@ export function createOAuthServer(options: OAuthServerOptions) {
 				throw new OAuthError('unsupported_grant_type', 'Only authorization_code is supported.');
 			}
 			const code = form.get('code') ?? '';
-			const sealed = open(codeKey, code) as {
+			const sealed = (open(codeKey, code) ??
+				(previousCodeKey ? open(previousCodeKey, code) : null)) as {
 				c: string;
 				r: string;
 				p: string;
@@ -360,6 +371,7 @@ export function createOAuthServer(options: OAuthServerOptions) {
 				throw new OAuthError('invalid_grant', 'The code was already used.');
 			}
 			const { g } = sealed;
+			options.onRedeemed?.(g.tokenId);
 			return {
 				status: 200,
 				body: {
@@ -440,15 +452,18 @@ async function readMetadata(
 /**
  * What the request asks for, within what its client may have. A scope outside
  * that is dropped, not refused, so a client that asks for every advertised
- * scope still signs in with what it may have. Asking for none of them means all
- * of them. `read` rides along with `solve`, which the consent page offers as
+ * scope still signs in with what it may have. No `scope` at all means all of
+ * them. Asking only for scopes it may not have gets `read`, never more than it
+ * asked for. `read` rides along with `solve`, which the consent page offers as
  * "read and run solves".
  */
 function parseScopes(raw: string | null, allowed: readonly OAuthScope[]): OAuthScope[] {
-	const asked = (raw ?? '')
-		.split(' ')
-		.filter((s): s is OAuthScope => (allowed as readonly string[]).includes(s));
-	if (!asked.length) return [...allowed];
+	const requested = (raw ?? '').split(' ').filter(Boolean);
+	if (!requested.length) return [...allowed];
+	const asked = requested.filter((s): s is OAuthScope =>
+		(allowed as readonly string[]).includes(s)
+	);
+	if (!asked.length) return allowed.includes('read') ? ['read'] : [];
 	return allowed.filter((s) => asked.includes(s) || (s === 'read' && asked.includes('solve')));
 }
 
@@ -555,7 +570,10 @@ function seal(key: Buffer, value: unknown): string {
 function open(key: Buffer, sealed: string): unknown {
 	try {
 		const raw = Buffer.from(sealed, 'base64url');
-		const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12));
+		// Without the length, a short code is checked against however many tag bytes it has.
+		const decipher = createDecipheriv('aes-256-gcm', key, raw.subarray(0, 12), {
+			authTagLength: 16
+		});
 		decipher.setAuthTag(raw.subarray(12, 28));
 		const body = Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]);
 		return JSON.parse(body.toString('utf8'));

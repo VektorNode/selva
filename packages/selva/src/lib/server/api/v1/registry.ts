@@ -50,7 +50,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 			'The calling identity, its acting org, its effective permissions, and for a token its id, scopes and expiry.',
 		response: 'object',
 		returns:
-			'`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token.'
+			'`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token. `capabilities.createProjects` says whether `POST /projects` would accept this caller, narrowed to the key; `orgPermissions` is the owner’s and is not.'
 	},
 	// Every key may call it, whatever its scopes; `read` is the action every key holds.
 	{
@@ -269,9 +269,10 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/projects',
-		scope: 'write',
+		scope: 'create_projects',
 		idempotent: true,
-		summary: 'Create a project.',
+		summary:
+			'Create a project. A key with `create_projects` but not `write` may create private projects only, with `autoJoinOnUpload` off.',
 		response: 'object',
 		status: 201,
 		requestBody: CreateProjectBodySchema,

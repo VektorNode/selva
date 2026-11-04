@@ -5,8 +5,8 @@
 // One case per known kind. An unknown kind is kept in `other`, untouched, so a newer plugin's
 // events reach a host that knows them without this package having to.
 
-import type { ProgressPayload, SolveEvent } from '@selvajs/schemas';
-import { decodeOutcome } from '../../shared/outcome.js';
+import type { ProgressPayload, SolveEndedKind, SolveEvent } from '@selvajs/schemas';
+import { decodeDiagnostic } from '../../shared/outcome.js';
 import type { SolveDiagnostic } from '../../shared/solve-fn.js';
 
 export interface LiveSolveState {
@@ -18,8 +18,8 @@ export interface LiveSolveState {
 	readonly diagnostics: readonly SolveDiagnostic[];
 	/** The newest `progress` per source. A report without a source is keyed by `''`. */
 	readonly progress: ReadonlyMap<string, ProgressPayload>;
-	/** `solveEnded`'s payload once it arrives: `ok`, `blocked`, `aborted` or `error`. */
-	readonly ended: { readonly kind: string } | null;
+	/** `solveEnded`'s payload once it arrives. */
+	readonly ended: { readonly kind: SolveEndedKind } | null;
 	/** Events of kinds this package does not know, oldest first. */
 	readonly other: readonly SolveEvent[];
 	/** Highest `seq` applied for this solve. A late or repeated delivery at or below it is ignored. */
@@ -36,7 +36,17 @@ export const EMPTY_LIVE_SOLVE: LiveSolveState = Object.freeze({
 	lastSeq: 0
 });
 
+function readEndedKind(payload: Record<string, unknown>): SolveEndedKind {
+	const { kind } = payload;
+	// `error`, not `ok`: a payload this package can't read must not look like a clean finish.
+	return kind === 'ok' || kind === 'blocked' || kind === 'aborted' ? kind : 'error';
+}
+
 export function reduceLiveSolve(state: LiveSolveState, event: SolveEvent): LiveSolveState {
+	// A late end for a solve already replaced says nothing about the one on screen.
+	if (event.type === 'solveEnded' && state.solveId !== null && event.solveId !== state.solveId) {
+		return state;
+	}
 	// A new id starts a new solve: nothing the previous one said carries over.
 	const base: LiveSolveState =
 		event.solveId === state.solveId
@@ -51,16 +61,12 @@ export function reduceLiveSolve(state: LiveSolveState, event: SolveEvent): LiveS
 			return { ...next, running: true };
 
 		case 'solveEnded':
-			return {
-				...next,
-				running: false,
-				ended: { kind: typeof payload.kind === 'string' ? payload.kind : 'ok' }
-			};
+			return { ...next, running: false, ended: { kind: readEndedKind(payload) } };
 
 		case 'diagnostic': {
 			// Same normalization as a finished solve's messages, so a live row and its final
 			// counterpart are the same object shape.
-			const [diagnostic] = decodeOutcome({ diagnostics: [payload] })?.diagnostics ?? [];
+			const diagnostic = decodeDiagnostic(payload);
 			return diagnostic ? { ...next, diagnostics: [...next.diagnostics, diagnostic] } : next;
 		}
 
@@ -70,9 +76,7 @@ export function reduceLiveSolve(state: LiveSolveState, event: SolveEvent): LiveS
 			const report = readProgress(payload);
 			// A bar that jumps back reads as broken. Within one solve a source only moves forward.
 			const previous = next.progress.get(source)?.fraction;
-			if (previous !== undefined && report.fraction !== undefined && report.fraction < previous) {
-				report.fraction = previous;
-			}
+			if (previous !== undefined && (report.fraction ?? 0) < previous) report.fraction = previous;
 			progress.set(source, report);
 			return { ...next, progress };
 		}

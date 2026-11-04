@@ -46,8 +46,7 @@ function param(params: string[], key: string): string | undefined {
 export function fireServerTiming(
 	response: Response,
 	requestId: string,
-	onServerTiming: ((timing: ServerTiming, requestId: string) => void) | undefined,
-	debug?: boolean
+	onServerTiming: ((timing: ServerTiming, requestId: string) => void) | undefined
 ): void {
 	if (!onServerTiming) return;
 	const timing = parseServerTiming(response.headers.get('Server-Timing'));
@@ -55,6 +54,8 @@ export function fireServerTiming(
 	try {
 		onServerTiming(timing, requestId);
 	} catch (err) {
-		if (debug) getLogger().debug(`   onServerTiming callback threw: ${err}`);
+		getLogger().debug(
+			`onServerTiming callback threw ${err instanceof Error ? err.name : typeof err}`
+		);
 	}
 }

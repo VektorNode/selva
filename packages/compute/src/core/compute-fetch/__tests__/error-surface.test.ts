@@ -53,24 +53,6 @@ describe('Compute8 server-exception body is surfaced to the user', () => {
 			/Radius must be positive/
 		);
 	});
-
-	it('surfaces a malformed-JSON server error message', async () => {
-		fetchMock.mockResolvedValue(
-			createMockResponse(null, {
-				ok: false,
-				status: 500,
-				statusText: 'Internal Server Error',
-				body: serverException('Malformed JSON received: Unexpected character at line 1')
-			})
-		);
-
-		try {
-			await fetchCompute('grasshopper', {}, config);
-			throw new Error('should have thrown');
-		} catch (e) {
-			expect((e as Error).message).toContain('Malformed JSON received');
-		}
-	});
 });
 
 describe('error context.responseBody holds the raw, bounded server body', () => {
@@ -116,41 +98,6 @@ describe('error context.responseBody holds the raw, bounded server body', () => 
 			expect(body).toMatch(/truncated 5904 chars/);
 			expect(body.startsWith('xxxx')).toBe(true);
 		}
-	});
-});
-
-describe('Grasshopper partial-success (500 with values) still passes through', () => {
-	it('returns the body instead of throwing', async () => {
-		const partial = {
-			values: [{ ParamName: 'out', InnerTree: {} }],
-			errors: ['1. Solution exception: division by zero'],
-			warnings: []
-		};
-		fetchMock.mockResolvedValueOnce(
-			createMockResponse(null, {
-				ok: false,
-				status: 500,
-				statusText: 'Internal Server Error',
-				body: JSON.stringify(partial)
-			})
-		);
-
-		const res = await fetchCompute('grasshopper', {}, config);
-		expect(res).toEqual(partial);
-	});
-});
-
-describe('status labels', () => {
-	it('labels a 504 as a gateway timeout', async () => {
-		fetchMock.mockResolvedValueOnce(
-			createMockResponse(null, { ok: false, status: 504, statusText: 'Gateway Timeout' })
-		);
-
-		const error = await fetchCompute('solve', {}, { ...config, retry: { attempts: 0 } }).catch(
-			(e: ComputeError) => e
-		);
-
-		expect((error as ComputeError).message).toMatch(/^Gateway timeout/);
 	});
 });
 

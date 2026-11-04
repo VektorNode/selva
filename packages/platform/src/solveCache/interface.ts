@@ -7,8 +7,8 @@ import type { RequestContext } from '../context.js';
  *
  * Design contract:
  *
- * - **Async from day one.** The in-memory backend returns promises too, so a
- *   network store (Redis) drops in later without any call site changing shape.
+ * - **Async.** The in-memory backend returns promises too, so a network store
+ *   (Redis) fits without any call site changing shape.
  * - **Entries are opaque bytes** — the pre-gzipped response envelope plus a
  *   small metadata header. The backend never inspects them, so a hit stays
  *   near-CPU-free in either backend and there's no serialization drift between

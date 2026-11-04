@@ -1,0 +1,5 @@
+---
+'@selvajs/visualization': minor
+---
+
+Built-in wood, concrete, plaster, brick and corten surfaces, drawn at real size with no texture files. Sun shadows are softer and lighter. Lights now survive a solve: `clearScene` was removing them, which left only the environment map after the first solve. The sun stays outside building-sized scenes, so everything casts a shadow. Night's fill light no longer blows out large models, and a glow spread across a facade no longer burns a hot spot into it. While the camera rests, the viewer averages 32 frames with the lights moving within their real size, for true penumbras and clean edges at no cost to orbiting; `render.idleRefineFrames` sets the count, and 0 turns it off. Night's bloom is tighter, so it no longer washes over a dark shade. Metals reflect a softbox studio instead of three's `RoomEnvironment`, so they show contour rather than an even sheen. three is now 0.187, whose point light shadows have no seams. Once orbiting runs slower than `render.lightOrbitFrameMs` (default 22), ambient occlusion fades out while the camera moves and back in as it rests.

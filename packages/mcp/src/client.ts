@@ -72,10 +72,28 @@ export interface ApiClientOptions {
 	fetch?: typeof fetch;
 	/** Default 30 s. */
 	timeoutMs?: number;
-	/** For `solve` operations, which run a whole Compute solve. Default 5 min. */
+	/**
+	 * For operations that run Compute: `solve`-scoped ones and those marked `x-long-running`.
+	 * Default 5 min.
+	 */
 	solveTimeoutMs?: number;
 	/** A 429 with a longer `Retry-After` goes back to the model instead of waiting. Default 10 s. */
 	maxRetryWaitSeconds?: number;
+	/** Told of every call once it settles, retries included. Must not throw; a throw is dropped. */
+	onCall?: (call: ApiCallRecord) => void;
+}
+
+/** One `api.call` as `onCall` sees it: what it reached and how long it took, never its data. */
+export interface ApiCallRecord {
+	operationId: string;
+	method: string;
+	durationMs: number;
+	/** The final HTTP status; 0 when none came back. */
+	status: number;
+	/** The error code when it failed (`TIMEOUT`, `UNREACHABLE`, the envelope's `code`). */
+	code?: string;
+	/** Requests sent, retries included. */
+	attempts: number;
 }
 
 const RATE_RETRIES = 2;
@@ -92,6 +110,39 @@ export function createApiClient(
 	const maxWait = options.maxRetryWaitSeconds ?? 10;
 
 	async function call(operationId: string, args: UntypedCallArgs = {}): Promise<unknown> {
+		if (!options.onCall) return send(operationId, args, { attempts: 0 });
+		const started = performance.now();
+		const tally: { attempts: number; status?: number } = { attempts: 0 };
+		const settle = (status: number, code?: string) => {
+			try {
+				options.onCall?.({
+					operationId,
+					method: index.get(operationId)?.method ?? '',
+					durationMs: Math.round(performance.now() - started),
+					status,
+					...(code && { code }),
+					attempts: tally.attempts
+				});
+			} catch {
+				// An observer's failure is not the call's.
+			}
+		};
+		try {
+			const out = await send(operationId, args, tally);
+			settle(tally.status ?? 200);
+			return out;
+		} catch (err) {
+			if (err instanceof ApiCallError) settle(err.status, err.code);
+			else settle(0, err instanceof Error ? err.name : 'Error');
+			throw err;
+		}
+	}
+
+	async function send(
+		operationId: string,
+		args: UntypedCallArgs,
+		tally: { attempts: number; status?: number }
+	): Promise<unknown> {
 		const op = index.get(operationId);
 		if (!op)
 			throw new Error(`Unknown operation ${operationId}: not in the host's OpenAPI document`);
@@ -112,7 +163,9 @@ export function createApiClient(
 
 		const timeoutMs =
 			args.timeoutMs ??
-			(op.scope === 'solve' ? (options.solveTimeoutMs ?? 300_000) : (options.timeoutMs ?? 30_000));
+			(op.scope === 'solve' || op.longRunning
+				? (options.solveTimeoutMs ?? 300_000)
+				: (options.timeoutMs ?? 30_000));
 		const canRetryNetwork = op.idempotent || op.method === 'GET';
 
 		let rateRetries = 0;
@@ -121,6 +174,7 @@ export function createApiClient(
 			const timeout = AbortSignal.timeout(timeoutMs);
 			const signal = args.signal ? AbortSignal.any([args.signal, timeout]) : timeout;
 			let res: Response;
+			tally.attempts += 1;
 			try {
 				res = await doFetch(url, {
 					method: op.method,
@@ -153,6 +207,7 @@ export function createApiClient(
 				throw await toError(operationId, res, wait);
 			}
 			if (!res.ok) throw await toError(operationId, res);
+			tally.status = res.status;
 			return readBody(res);
 		}
 	}

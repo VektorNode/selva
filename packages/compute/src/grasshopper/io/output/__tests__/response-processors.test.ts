@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { getValues, getValue, extractFileData } from '@/grasshopper/io/output/response-processors';
+import type { RhinoRuntime } from '@/grasshopper/io/output/rhino-decoder';
 import { disposeRhinoObjects } from '@/grasshopper/io/output/rhino-objects';
 import type { DataItem, GrasshopperComputeResponse } from '@/grasshopper/types';
 
@@ -21,30 +22,16 @@ function response(...params: ReturnType<typeof param>[]): GrasshopperComputeResp
 // --- decode by system type ---------------------------------------------------
 
 describe('getValues — system type decoding', () => {
-	it('decodes System.Int32 to a number', () => {
-		const res = response(param('n', [item('System.Int32', '42')]));
-		expect(getValues(res).values.n).toBe(42);
-	});
-
-	it('decodes System.Double to a float', () => {
-		const res = response(param('x', [item('System.Double', '3.14')]));
-		expect(getValues(res).values.x).toBe(3.14);
-	});
-
-	it('decodes System.Boolean to a boolean (case-insensitive)', () => {
-		const res = response(param('b', [item('System.Boolean', 'True')]));
-		expect(getValues(res).values.b).toBe(true);
-	});
-
-	it('strips surrounding quotes from System.String', () => {
-		const res = response(param('s', [item('System.String', '"hello"')]));
-		expect(getValues(res).values.s).toBe('hello');
-	});
-
-	it('leaves an unknown type untouched when no rhino instance is given', () => {
-		const res = response(param('g', [item('Rhino.Geometry.Point3d', '{"X":1,"Y":2,"Z":3}')]));
-		// parseValues default true → tryDecodeJSON parses it; no rhino → returned as the parsed object
-		expect(getValues(res).values.g).toEqual({ X: 1, Y: 2, Z: 3 });
+	it.each([
+		['System.Int32', '42', 42],
+		['System.Double', '3.14', 3.14],
+		['System.Boolean', 'True', true],
+		['System.String', '"hello"', 'hello'],
+		// parseValues default true → tryDecodeJSON parses it; no rhino → the parsed object.
+		['Rhino.Geometry.Point3d', '{"X":1,"Y":2,"Z":3}', { X: 1, Y: 2, Z: 3 }]
+	])('decodes %s %s', (type, data, expected) => {
+		const res = response(param('v', [item(type, data)]));
+		expect(getValues(res).values.v).toEqual(expected);
 	});
 });
 
@@ -135,19 +122,14 @@ describe('getValues — filtering', () => {
 // --- getValue ----------------------------------------------------------------
 
 describe('getValue', () => {
-	it('returns a single value byName', () => {
-		const res = response(param('radius', [item('System.Double', '5')]));
-		expect(getValue(res, { byName: 'radius' })).toBe(5);
-	});
-
 	it('returns an array byName when the param has multiple items', () => {
 		const res = response(param('xs', [item('System.Int32', '1'), item('System.Int32', '2')]));
 		expect(getValue(res, { byName: 'xs' })).toEqual([1, 2]);
 	});
 
-	it('returns undefined for an unknown name', () => {
-		const res = response(param('a', [item('System.Int32', '1')]));
-		expect(getValue(res, { byName: 'missing' })).toBeUndefined();
+	it.each([[{ byName: 'missing' }], [{ byId: 'nope' }]])('returns undefined for %j', (selector) => {
+		const res = response(param('a', [item('System.Int32', '1', 'id-a')]));
+		expect(getValue(res, selector)).toBeUndefined();
 	});
 
 	it('returns the matching item byId', () => {
@@ -155,11 +137,6 @@ describe('getValue', () => {
 			param('p', [item('System.Int32', '1', 'id-a'), item('System.Int32', '2', 'id-b')])
 		);
 		expect(getValue(res, { byId: 'id-b' })).toBe(2);
-	});
-
-	it('returns undefined for an unknown id', () => {
-		const res = response(param('p', [item('System.Int32', '1', 'id-a')]));
-		expect(getValue(res, { byId: 'nope' })).toBeUndefined();
 	});
 });
 
@@ -183,16 +160,14 @@ describe('resilience to missing or alternate-cased response fields', () => {
 		expect(extractFileData(res)).toEqual([]);
 	});
 
-	it('reads camelCase paramName/innerTree (server-branch casing drift)', () => {
+	it('reads camelCase fields, and tolerates a null InnerTree or no values array', () => {
 		const res = {
 			values: [{ paramName: 'n', innerTree: { '{0}': [item('System.Int32', '7')] } }]
 		} as unknown as GrasshopperComputeResponse;
 
 		expect(getValues(res).values.n).toBe(7);
 		expect(getValue(res, { byName: 'n' })).toBe(7);
-	});
 
-	it('tolerates a null InnerTree and a response with no values array', () => {
 		const nullTree = {
 			values: [{ ParamName: 'x', InnerTree: null }]
 		} as unknown as GrasshopperComputeResponse;
@@ -374,7 +349,7 @@ describe('getValues().dispose / disposeRhinoObjects', () => {
 			])
 		);
 
-		const result = getValues(res, false, { rhino: fakeRhino(created) });
+		const result = getValues(res, false, { rhino: fakeRhino(created) as unknown as RhinoRuntime });
 		expect(created).toHaveLength(3);
 		expect(created.every((o) => !o.isDeleted())).toBe(true);
 
@@ -402,7 +377,11 @@ describe('getValues().dispose / disposeRhinoObjects', () => {
 			])
 		);
 
-		const value = getValue(res, { byName: 'pts' }, { rhino: fakeRhino(created) });
+		const value = getValue(
+			res,
+			{ byName: 'pts' },
+			{ rhino: fakeRhino(created) as unknown as RhinoRuntime }
+		);
 		expect(Array.isArray(value)).toBe(true);
 
 		disposeRhinoObjects(value);
@@ -436,5 +415,74 @@ describe('getValues — outputs named after Object.prototype members', () => {
 			param('constructor', [item('System.String', 'b')])
 		);
 		expect(getValues(wire).values.constructor).toEqual(['a', 'b']);
+	});
+});
+
+describe('getValues — text outputs keep their type', () => {
+	const textOutput = (data: string) =>
+		({
+			values: [
+				{ ParamName: 'Out', InnerTree: { '{0}': [{ type: 'System.String', data, id: 'i' }] } }
+			]
+		}) as unknown as GrasshopperComputeResponse;
+
+	it.each([
+		['"12345678901234567890"', '12345678901234567890'],
+		['"123"', '123'],
+		['"true"', 'true'],
+		['"null"', 'null'],
+		['"01234"', '01234']
+	])('leaves %s as a string', (data, expected) => {
+		expect(getValues(textOutput(data)).values.Out).toBe(expected);
+	});
+
+	it('still unwraps JSON held in a JSON string', () => {
+		expect(getValues(textOutput('"{\\"a\\":1}"')).values.Out).toEqual({ a: 1 });
+		expect(getValues(textOutput('"[1,2]"')).values.Out).toEqual([1, 2]);
+	});
+});
+
+describe('getValues — numeric CLR types', () => {
+	it.each([
+		['System.Int64', '42', 42],
+		['System.Single', '1.5', 1.5],
+		['System.Decimal', '2.25', 2.25]
+	])('parses %s', (type, data, expected) => {
+		const response = {
+			values: [{ ParamName: 'Out', InnerTree: { '{0}': [{ type, data, id: 'i' }] } }]
+		} as unknown as GrasshopperComputeResponse;
+		expect(getValues(response).values.Out).toBe(expected);
+	});
+});
+
+describe('getValues — a System.Int64 past the safe integer range', () => {
+	it('keeps the digits as a string rather than rounding them', () => {
+		const data = '12345678901234567890';
+		const res = response(param('Out', [item('System.Int64', data)]));
+		expect(getValues(res).values.Out).toBe(data);
+	});
+});
+
+describe('getValue — scan boundaries', () => {
+	const item = (data: string, id = 'i') => ({ type: 'System.Double', data, id });
+	const duplicated = {
+		values: [
+			{ ParamName: 'Out', InnerTree: { '{0}': [item('1')] } },
+			{ ParamName: 'Out', InnerTree: { '{0}': [item('2')] } }
+		]
+	} as unknown as GrasshopperComputeResponse;
+
+	it('stops at the first param with the name, while getValues aggregates', () => {
+		expect(getValue(duplicated, { byName: 'Out' })).toBe(1);
+		expect(getValues(duplicated).values.Out).toEqual([1, 2]);
+	});
+
+	it('stringOnly filters out FileData', () => {
+		const response = {
+			values: [
+				{ ParamName: 'F', InnerTree: { '{0}': [{ type: 'FileData', data: '{}', id: 'f' }] } }
+			]
+		} as unknown as GrasshopperComputeResponse;
+		expect(getValue(response, { byName: 'F' }, { stringOnly: true })).toBeUndefined();
 	});
 });

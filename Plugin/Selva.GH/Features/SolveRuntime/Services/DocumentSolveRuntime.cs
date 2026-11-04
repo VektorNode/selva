@@ -51,6 +51,7 @@ public sealed class DocumentSolveRuntime
 
     private readonly StepProgress _steps = new StepProgress();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly AbortArm _abortAtStart;
 
     /// <summary>The one bar Report Progress components share.</summary>
     private const string StepsSource = "steps";
@@ -58,6 +59,7 @@ public sealed class DocumentSolveRuntime
     internal DocumentSolveRuntime(GH_Document document)
     {
         _document = document;
+        _abortAtStart = new AbortArm(() => _clock.ElapsedMilliseconds);
         _compute = new ComputeCallbackTransport(document.RequestAbortSolution);
 
         // Subscribed once per document, not per solve: compute.geometry caches the live
@@ -123,7 +125,8 @@ public sealed class DocumentSolveRuntime
     /// <param name="skipped">It got no data, so the step it describes will not run either.</param>
     public void ReportStep(Guid reporterId, string message, bool skipped)
     {
-        var snapshot = _steps.Step(reporterId, message, skipped, _clock.ElapsedMilliseconds);
+        var snapshot = _steps.Step(reporterId, message, skipped, _clock.ElapsedMilliseconds,
+            _document.AbortRequested);
         if (snapshot is not StepProgress.Snapshot s) return;
         var payload = ProgressFields(StepsSource, s.Fraction, s.Step, s.Total, s.Label);
         payload["nextFraction"] = s.NextFraction;
@@ -173,6 +176,13 @@ public sealed class DocumentSolveRuntime
     public void RequestAbort() => _document.RequestAbortSolution();
 
     /// <summary>
+    ///     For a cancel that lands after a solve is scheduled and before it starts, where
+    ///     <see cref="RequestAbort" /> would be wiped by the start. Callers must arm only while a solve
+    ///     is scheduled: a cancel while idle would abort some later, unrelated solve.
+    /// </summary>
+    public void AbortAtNextStart() => _abortAtStart.Arm();
+
+    /// <summary>
     ///     What the last finished solution reported, and whether its outputs may be shown.
     ///     Collected on first ask after SolutionEnd and kept until the next solution starts, so
     ///     the live <c>solveEnded</c>, the outputs envelope and Compute's constant agree.
@@ -186,6 +196,11 @@ public sealed class DocumentSolveRuntime
         _localSolveId = Guid.NewGuid().ToString("N");
         Interlocked.Exchange(ref _localSeq, 0);
         _verdict = null;
+
+        if (_abortAtStart.Consume())
+        {
+            _document.RequestAbortSolution();
+        }
 
         // A step re-runs whenever any of its inputs changed, not only the one its reporter sits on
         // (a delay slider feeding the step directly). Re-run that reporter too, or the step runs
@@ -216,6 +231,9 @@ public sealed class DocumentSolveRuntime
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
+        // Armed just after the start it was meant for: it must not carry over to the next solve.
+        _abortAtStart.Clear();
+
         _steps.End(_clock.ElapsedMilliseconds, learn: !_document.AbortRequested);
 
         if (_localTransport != null)

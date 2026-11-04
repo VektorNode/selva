@@ -38,7 +38,7 @@
 	});
 </script>
 
-<div class="bottom-0 mt-3 pb-3 pt-2 backdrop-blur-sm px-2 sticky border-t border-border/50">
+<div class="bottom-0 mt-3 pb-3 pt-2 backdrop-blur-sm px-2 sticky border-t border-border">
 	<span class="sr-only" role="status" aria-live="polite">{announcement}</span>
 	<div class="gap-2 flex">
 		<Button
@@ -54,6 +54,12 @@
 			{#if isSolving}
 				<Loader class="h-4 w-4 animate-spin" />
 				{t.solvingEllipsis}
+				<kbd
+					class="px-1 rounded-sm border border-current/30 font-sans text-2xs opacity-70"
+					title={t.solveMessagesEscHint}
+				>
+					Esc
+				</kbd>
 			{:else if hasNeverSolved}
 				<Play class="h-4 w-4" />
 				{t.pressToCalculate}

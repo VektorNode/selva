@@ -15,6 +15,10 @@ public static class AppConfig
         public const int MaxConcurrentClients = 10;
         public const int HeartbeatIntervalMs = 30_000; // 30 s
         public const int BroadcastTimeoutMs = 30_000; // 30 s — covers large file uploads
+
+        // A client with this much unsent is closed rather than queued further; it reconnects and
+        // gets the current state replayed. Far above a solve's worth of mesh frames.
+        public const long MaxQueuedSendBytes = 256L * 1024 * 1024;
         public const int ClientCloseTimeoutMs = 1_000; //  1 s
         public const int PingTimeoutMs = 5_000; //  5 s
         public const int ServerStartupTimeoutMs = 5_000; //  5 s

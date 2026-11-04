@@ -104,6 +104,7 @@ components:
             - API_TOKENS_UNAVAILABLE
             - RATE_LIMITED
             - API_TOKEN_HOLDER_REFUSED
+            - SIGN_IN_REQUIRED
         fields:
           type: object
           description: "Per-field messages, keyed by dotted path. Present on validation failures."
@@ -171,7 +172,7 @@ paths:
       x-scope: read
       responses:
         "200":
-          description: "`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token."
+          description: "`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token. `capabilities.createProjects` says whether `POST /projects` would accept this caller, narrowed to the key; `orgPermissions` is the owner’s and is not."
           content:
             application/json:
               schema:
@@ -700,7 +701,7 @@ paths:
               type: object
               properties:
                 inputs:
-                  default: []
+                  deprecated: true
                   type: array
                   items: {}
                 values:
@@ -1528,11 +1529,11 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
     post:
-      summary: Create a project.
+      summary: "Create a project. A key with `create_projects` but not `write` may create private projects only, with `autoJoinOnUpload` off."
       operationId: postProjects
       tags:
         - Projects
-      x-scope: write
+      x-scope: create_projects
       parameters:
         - $ref: "#/components/parameters/idempotencyKey"
       requestBody:
@@ -2998,10 +2999,6 @@ paths:
                         type:
                           - string
                           - "null"
-                      timeoutMs:
-                        type: number
-                      retryCount:
-                        type: number
                     required:
                       - id
                       - label

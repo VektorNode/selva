@@ -2,11 +2,17 @@
 	import { type VariantProps, tv } from 'tailwind-variants';
 
 	export const toggleVariants = tv({
-		base: "hover:text-foreground aria-pressed:bg-muted focus-visible:border-ring focus-visible:ring-ring aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive data-[state=on]:bg-muted gap-1 rounded-lg text-sm font-medium transition-all [&_svg:not([class*='size-'])]:size-4 group/toggle inline-flex items-center justify-center whitespace-nowrap outline-none hover:bg-muted focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+		base: "hover:text-foreground aria-pressed:bg-selected focus-visible:border-ring focus-visible:ring-ring aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive data-[state=on]:bg-selected gap-1 rounded-md text-sm font-medium transition-all [&_svg:not([class*='size-'])]:size-4 group/toggle inline-flex items-center justify-center whitespace-nowrap outline-none hover:bg-hover focus-visible:ring-3 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
 		variants: {
 			variant: {
 				default: 'bg-transparent',
-				outline: 'border-input hover:bg-muted border bg-transparent'
+				// Item inside a segmented track: the chosen value sits raised above the track.
+				segmented:
+					'rounded-inner bg-transparent text-muted-foreground data-[state=on]:bg-raised data-[state=on]:text-foreground data-[state=on]:shadow-raised data-[state=on]:ring-1 data-[state=on]:ring-border-strong',
+				outline: 'border-input hover:bg-hover border bg-field',
+				// Filled accent for the active item; a bare bg-muted is too faint on a form.
+				accent:
+					'border-input hover:bg-hover border bg-transparent data-[state=on]:bg-primary/15 data-[state=on]:ring-1 data-[state=on]:ring-primary data-[state=on]:ring-inset'
 			},
 			size: {
 				default:

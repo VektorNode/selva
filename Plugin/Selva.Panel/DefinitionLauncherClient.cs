@@ -8,6 +8,14 @@ using Rhino.UI;
 
 namespace Selva.RhinoPanel;
 
+/// <summary>What an open is waiting for, in order. Each one blocks the UI thread.</summary>
+internal enum OpenStep
+{
+    LoadingGrasshopper,
+    Solving,
+    StartingUI
+}
+
 /// <summary>
 ///     The .rhp's half of opening a definition from the panel: loads Grasshopper if it isn't yet,
 ///     hands the file to the .gha through <see cref="PanelContract.LauncherSlot" />, and keeps
@@ -30,11 +38,14 @@ internal sealed class DefinitionLauncherClient
         _settings = settings;
     }
 
-    /// <summary>The idle panel re-reads <see cref="Status" />, <see cref="Error" /> and <see cref="Recent" />.</summary>
+    /// <summary>The idle panel re-reads <see cref="Step" />, <see cref="Error" /> and <see cref="Recent" />.</summary>
     public event Action? Changed;
 
-    /// <summary>What's happening while a definition opens; null when nothing is.</summary>
-    public string? Status { get; private set; }
+    /// <summary>Where the open is; null when nothing is opening.</summary>
+    public OpenStep? Step { get; private set; }
+
+    /// <summary>The file being opened while <see cref="Step" /> is set.</summary>
+    public string? OpeningPath { get; private set; }
 
     /// <summary>Why the last open failed; null when it didn't.</summary>
     public string? Error { get; private set; }
@@ -45,8 +56,8 @@ internal sealed class DefinitionLauncherClient
         .Where(File.Exists)
         .ToList();
 
-    /// <summary>From the start of an open until its session shows or it fails.</summary>
-    public bool IsOpening => Status != null;
+    /// <summary>From the start of an open until its page has loaded or it fails.</summary>
+    public bool IsOpening => Step != null;
 
     /// <summary>Set by the plug-in: true while the panel shows a session rather than the launcher.</summary>
     public Func<bool> IsShowingSession { get; set; } = () => false;
@@ -73,10 +84,8 @@ internal sealed class DefinitionLauncherClient
         }
 
         Error = null;
-        SetStatus("Loading Grasshopper…");
-
-        // The first load blocks the UI thread for seconds; give the label a chance to paint.
-        Application.Instance.RunIteration();
+        OpeningPath = path;
+        SetStep(OpenStep.LoadingGrasshopper);
 
         var open = FindOpenDelegate(out var unavailable);
         if (open == null)
@@ -85,7 +94,7 @@ internal sealed class DefinitionLauncherClient
             return;
         }
 
-        SetStatus($"Opening {Path.GetFileName(path)}…");
+        SetStep(OpenStep.Solving);
         string? refusal;
         try
         {
@@ -103,16 +112,19 @@ internal sealed class DefinitionLauncherClient
         }
 
         RememberRecent(path);
+
+        // Armed first: painting the step runs the .gha's queued show, which can end the wait.
         WaitForSession();
+        SetStep(OpenStep.StartingUI);
     }
 
-    /// <summary>The panel took a session: whatever the launcher was waiting for is done.</summary>
+    /// <summary>A session's page has loaded: whatever the launcher was waiting for is done.</summary>
     public void SessionShown()
     {
         StopWaiting();
-        if (Status != null || Error != null)
+        if (Step != null || Error != null)
         {
-            Status = null;
+            Step = null;
             Error = null;
             Changed?.Invoke();
         }
@@ -194,7 +206,7 @@ internal sealed class DefinitionLauncherClient
     private void Fail(string message)
     {
         StopWaiting();
-        Status = null;
+        Step = null;
 
         // A session is still showing, so the launcher isn't on screen.
         if (IsShowingSession())
@@ -208,10 +220,12 @@ internal sealed class DefinitionLauncherClient
         Changed?.Invoke();
     }
 
-    private void SetStatus(string status)
+    /// <summary>Paints before returning: every step blocks the UI thread for up to seconds.</summary>
+    private void SetStep(OpenStep step)
     {
-        Status = status;
+        Step = step;
         Changed?.Invoke();
+        Application.Instance.RunIteration();
     }
 
     private void RememberRecent(string path)

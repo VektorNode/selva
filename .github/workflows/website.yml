@@ -18,6 +18,16 @@ on:
       - 'packages/config/**'
       - '.github/workflows/website.yml'
       - 'pnpm-lock.yaml'
+  # Direct pushes skip the PR trigger; an override pushed straight to beta
+  # broke this build unnoticed.
+  push:
+    branches: [main, beta]
+    paths:
+      - 'packages/website/**'
+      - 'packages/ui/src/lib/styles/**'
+      - 'packages/config/**'
+      - '.github/workflows/website.yml'
+      - 'pnpm-lock.yaml'
 
 # Read-only: this workflow only builds the site, never writes to the repo.
 permissions:
@@ -49,14 +59,14 @@ jobs:
       # on the installed playwright version so it's only re-downloaded on bump.
       - name: Resolve Playwright version
         id: pw
-        run: echo "version=$(node -p "require('playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(pnpm --filter @selvajs/website exec node -p "require('playwright/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-website-${{ steps.pw.outputs.version }}
-          restore-keys: |
-            playwright-website-
 
       - run: pnpm check:website
       - run: pnpm build:website

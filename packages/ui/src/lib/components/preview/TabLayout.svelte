@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-	import * as Card from '#lib/components/primitives/card/index.js';
 	import * as Tabs from '#lib/components/primitives/tabs/index.js';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
@@ -81,7 +80,7 @@
 {#snippet tabs()}
 	<Tabs.Root value={activeTabId} variant="line" class="min-h-0 flex-1">
 		{#if showTabBar}
-			<TabBar tabs={visibleTabs} {activeTabId} onTabChange={handleTabChange} />
+			<TabBar tabs={visibleTabs} {activeTabId} onTabChange={handleTabChange} {bare} />
 		{/if}
 
 		{#each visibleTabs as tab (tab.id)}
@@ -104,7 +103,7 @@
 {#if bare}
 	{@render tabs()}
 {:else}
-	<Card.Root variant="flush" class="min-h-0 mx-1 flex-1">
+	<div class="min-h-0 flex flex-1 flex-col">
 		{@render tabs()}
-	</Card.Root>
+	</div>
 {/if}

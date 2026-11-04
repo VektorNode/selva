@@ -29,11 +29,8 @@ export interface ProbeFailure {
 }
 
 /**
- * `ECONNREFUSED` arrives spelled differently depending on the runtime and how
- * many layers wrapped it: Node puts the code on the error, undici nests it under
- * `cause`, and browsers collapse everything into an opaque "Failed to fetch".
- * Matching the stringified probe error covers all of them without the caller
- * having to normalize first.
+ * Matched against the probe's error string, which `probeServer` builds with undici's `cause` in
+ * it. A browser collapses every failure into an opaque "Failed to fetch", which reads as unknown.
  */
 const REFUSED_PATTERN = /ECONNREFUSED|ERR_CONNECTION_REFUSED|connection refused/i;
 const DNS_PATTERN = /ENOTFOUND|EAI_AGAIN|getaddrinfo|ERR_NAME_NOT_RESOLVED|dns/i;
@@ -41,7 +38,7 @@ const TIMEOUT_PATTERN =
 	/TimeoutError|ETIMEDOUT|ECONNRESET|EHOSTUNREACH|ENETUNREACH|abort|timed? ?out/i;
 
 /**
- * Classify a {@link ComputeServerStats.probeServer} result.
+ * Classify a `ComputeServerStats.probeServer` result.
  *
  * A DNS failure is treated as retryable even though a missing record won't fix
  * itself: `EAI_AGAIN` is a *timeout* talking to the resolver, and the two are

@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/selva",
-	"version": "4.20.0-beta.12",
+	"version": "4.20.0-beta.25",
 	"description": "Selva — self-contained Grasshopper-driven web app. Install, configure via .env, deploy.",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -34,7 +34,7 @@
 	"scripts": {
 		"dev": "vite dev",
 		"dev:lan": "vite dev --host",
-		"build": "rimraf build && vite build && node ./scripts/generate-templates.js",
+		"build": "rimraf build && vite build && node ./scripts/generate-templates.js && node ./scripts/write-runtime-meta.js",
 		"preview": "vite preview",
 		"start": "node build/index.js",
 		"clean": "rimraf build templates",
@@ -45,16 +45,17 @@
 		"openapi:generate": "node scripts/generate-openapi.js",
 		"test:e2e": "playwright test",
 		"lint": "eslint .",
-		"lint:types": "eslint . --config eslint.typed.config.js"
+		"lint:types": "eslint . --config eslint.typed.config.js",
+		"generate:cli-config": "node scripts/generate-cli-config.js"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",
-		"@supabase/supabase-js": "^2.118.0",
+		"@supabase/supabase-js": "catalog:",
 		"@sveltejs/kit": "catalog:",
 		"bits-ui": "catalog:",
 		"clsx": "catalog:",
 		"mode-watcher": "catalog:",
-		"nodemailer": "^10.2.1",
+		"nodemailer": "catalog:",
 		"pino": "^10.4.0",
 		"rhino3dm": "catalog:",
 		"sharp": "catalog:",
@@ -82,7 +83,7 @@
 		"@selvajs/ui": "workspace:*",
 		"@selvajs/visualization": "workspace:*",
 		"@sveltejs/adapter-node": "catalog:",
-		"@types/nodemailer": "^8.0.2",
+		"@types/nodemailer": "catalog:",
 		"@types/three": "catalog:",
 		"rimraf": "catalog:",
 		"tw-animate-css": "catalog:",

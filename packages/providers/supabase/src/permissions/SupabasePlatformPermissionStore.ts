@@ -4,19 +4,19 @@ import type {
 	RequestContext,
 	UserManagementResult
 } from '@selvajs/platform';
+import { ProviderError, ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 import {
-	ProviderError,
-	hasPermission,
-	assertNotShareContext,
-	ALL_PLATFORM_PERMISSIONS
-} from '@selvajs/platform';
+	assertCanManagePermissions,
+	assertCanReadPermissions,
+	assertCanReadPermissionsBatch
+} from '@selvajs/platform/permissions';
 import type { ClientBundle } from '../data/client.js';
 
 /**
  * Reads and writes `public.user_profiles.platform_permissions` (auto-seeded
  * by the `handle_new_auth_user` trigger). Service-role throughout — RLS on
- * `user_profiles` is too coarse for cross-user reads, so `assertAdmin` /
- * `assertCanRead` enforce the auth boundary here instead.
+ * `user_profiles` is too coarse for cross-user reads, so `assertCanManagePermissions` /
+ * `assertCanReadPermissions` enforce the auth boundary here instead.
  *
  * `user_profiles.disabled` mirrors `auth.users.user_metadata.disabled` via
  * the `sync_auth_user_disabled` trigger, so admin-count queries can exclude
@@ -31,7 +31,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 	}
 
 	async getFor(ctx: RequestContext, userId: string): Promise<PlatformPermission[]> {
-		assertCanRead(ctx, userId);
+		assertCanReadPermissions(ctx, userId);
 		const { data, error } = await this.client()
 			.from('user_profiles')
 			.select('platform_permissions')
@@ -45,7 +45,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		ctx: RequestContext,
 		userIds: readonly string[]
 	): Promise<Map<string, PlatformPermission[]>> {
-		assertCanReadBatch(ctx);
+		assertCanReadPermissionsBatch(ctx);
 		const out = new Map<string, PlatformPermission[]>();
 		if (userIds.length === 0) return out;
 		const { data, error } = await this.client()
@@ -64,12 +64,10 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		userId: string,
 		permissions: readonly PlatformPermission[]
 	): Promise<UserManagementResult> {
-		assertAdmin(ctx);
+		assertCanManagePermissions(ctx);
 
-		// The §2 last-admin check lives inside the UPDATE's WHERE clause, so it
-		// is evaluated under the row lock that guards the write. Doing it here
-		// as count-then-update let two concurrent demotions each observe the
-		// other as "another admin exists" and both commit, leaving zero admins.
+		// The last-admin check runs inside the RPC, under the locks that guard the
+		// write. A count here would let two demotions each see the other survive.
 		const { data, error } = await this.client().rpc('set_platform_permissions', {
 			p_user_id: userId,
 			p_permissions: [...permissions]
@@ -93,7 +91,7 @@ export class SupabasePlatformPermissionStore implements IPlatformPermissionStore
 		userId: string,
 		permissions: readonly PlatformPermission[]
 	): Promise<boolean> {
-		// No `assertAdmin`: by definition nobody holds `instance_admin` when this
+		// No `assertCanManagePermissions`: by definition nobody holds `instance_admin` when this
 		// succeeds. The RPC takes an advisory lock and re-reads inside it, so a
 		// second concurrent signer blocks and then correctly loses.
 		const { data, error } = await this.client().rpc('claim_first_instance_admin', {
@@ -134,38 +132,6 @@ const VALID_PERMISSIONS = new Set<string>(ALL_PLATFORM_PERMISSIONS);
 
 function filterValid(raw: readonly string[]): PlatformPermission[] {
 	return raw.filter((p): p is PlatformPermission => VALID_PERMISSIONS.has(p));
-}
-
-// Reading one row and reading many must agree, and both must match the local
-// provider — §8 gives `manage_instance_users` the user-admin surface, which
-// cannot render its locks without knowing who holds `instance_admin`. This
-// store denied both until now, so on Supabase `/admin/users` failed for exactly
-// the role it exists to serve.
-//
-// Read access is not authority: `set` stays `instance_admin`-only via
-// `assertAdmin`, and the delete/disable routes gate separately.
-function assertCanRead(ctx: RequestContext, userId: string): void {
-	assertNotShareContext(ctx, 'read permissions');
-	if (ctx.system) return;
-	if (ctx.userId === userId) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	if (hasPermission(ctx, 'manage_instance_users')) return;
-	throw new ProviderError('Forbidden: cannot read another user’s permissions', 403);
-}
-
-function assertCanReadBatch(ctx: RequestContext): void {
-	assertNotShareContext(ctx, 'read permissions');
-	if (ctx.system) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	if (hasPermission(ctx, 'manage_instance_users')) return;
-	throw new ProviderError('Forbidden: instance admin or manage_instance_users required', 403);
-}
-
-function assertAdmin(ctx: RequestContext): void {
-	assertNotShareContext(ctx, 'manage permissions');
-	if (ctx.system) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	throw new ProviderError('Forbidden: instance admin required', 403);
 }
 
 interface PostgrestError {

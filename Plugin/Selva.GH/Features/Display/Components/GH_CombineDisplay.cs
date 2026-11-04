@@ -85,7 +85,7 @@ public class GH_CombineDisplay : GH_Component
             DisplayBatchCombiner.Result combined;
             try
             {
-                combined = DisplayBatchCombiner.Combine(batches);
+                combined = DisplayBatchCombiner.Combine(batches, DisplayUnits.ActiveDocMetersPerUnit());
             }
             catch (Exception ex)
             {
@@ -102,6 +102,16 @@ public class GH_CombineDisplay : GH_Component
             foreach (var failure in combined.Failures)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"{path}: skipped an unreadable payload — {failure}");
+            }
+
+            var docUnits = DisplayUnits.ActiveDocModelUnits();
+            foreach (var units in combined.ModelUnits)
+            {
+                if (units != docUnits)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        $"{path}: an input was saved in {units} but the document is in {docUnits}: it will display at the wrong size.");
+                }
             }
 
             output.Append(new WebDisplayGoo(combined.Batch), path);

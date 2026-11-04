@@ -224,7 +224,6 @@ internal static class DefinitionLauncher
         _current = null;
         UnwatchEditor();
         session.Document.ModifiedChanged -= KeepUnmodified;
-        session.Document.ForcePreview(false);
 
         if (RhinoApp.GetPlugInObject("Grasshopper") is GH_RhinoScriptInterface grasshopper)
         {
@@ -275,7 +274,7 @@ internal static class DefinitionLauncher
         }
     }
 
-    private static bool IsEditorVisible()
+    internal static bool IsEditorVisible()
     {
         return (Instances.DocumentEditor as Control)?.Visible == true;
     }

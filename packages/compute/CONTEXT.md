@@ -31,11 +31,13 @@ concept, it is the concept named here.
 
 ## Core seams
 
-The transport in `core/` knows no backend. What a backend needs arrives through three seams; add
-a fourth here rather than naming a backend inside `core/`:
+The transport in `core/` knows no backend. What a backend needs arrives through these seams; add
+one here rather than naming a backend inside `core/`:
 
 - `ComputeConfig.apiKeyHeader`: the name of the header that carries `apiKey` (default
   `RhinoComputeKey`).
+- `ComputeConfig.fetch`: replaces the global `fetch` for solves, for a host that needs its own
+  dispatcher.
 - `ComputeConfig.serverErrorCodes`: the backend's wire error codes mapped to `ErrorCodes`,
   outranking the status mapping. Grasshopper's table is in `grasshopper/solve.ts`.
 - `validateServerUrl(url, { blockedHosts })`: the shared public endpoint a caller must not target

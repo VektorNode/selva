@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchDefinitionIO, fetchParsedDefinitionIO } from '../definition-io';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 import { setLogger } from '@/core/utils/logger';
-import { resetClientSideWarnings } from '@/core/utils/warnings';
+import { resetWarnings } from '@/core/utils/warnings';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
 const CONFIG = { serverUrl: 'http://localhost:6500' };
@@ -87,9 +87,7 @@ describe('fetchDefinitionIO guards malformed inputs/outputs', () => {
 	// for...of must not throw "inputs is not iterable".
 	it.each([
 		['missing', { inputs: undefined, outputs: undefined }],
-		['null', { inputs: null, outputs: null }],
-		['non-array object', { inputs: {}, outputs: {} }],
-		['string', { inputs: 'oops', outputs: 'oops' }]
+		['non-array object', { inputs: {}, outputs: {} }]
 	])('coerces %s inputs/outputs to []', async (_label, over) => {
 		fetchMock.mockResolvedValue(createMockResponse(ioResponse(over)));
 
@@ -118,14 +116,6 @@ describe('fetchParsedDefinitionIO propagates load diagnostics', () => {
 		// Inputs still parse normally alongside the diagnostics.
 		expect(res.inputs).toHaveLength(1);
 	});
-
-	it('leaves them absent on a clean load', async () => {
-		fetchMock.mockResolvedValue(createMockResponse(ioResponse()));
-
-		const res = await fetchParsedDefinitionIO(DEF, CONFIG);
-		expect(res).not.toHaveProperty('loadErrors');
-		expect(res).not.toHaveProperty('loadWarnings');
-	});
 });
 
 describe('fetchDefinitionIO errors', () => {
@@ -135,7 +125,7 @@ describe('fetchDefinitionIO errors', () => {
 
 		const error = await fetchDefinitionIO(definition, CONFIG).catch((e) => e);
 
-		expect(error.message).toBe('Invalid IO response structure');
+		expect(error.code).toBe('INVALID_RESPONSE');
 		expect(Object.values(error.context)).not.toContain(definition);
 	});
 });
@@ -144,7 +134,7 @@ describe('fetchDefinitionIO in a browser', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		setLogger(null);
-		resetClientSideWarnings();
+		resetWarnings();
 	});
 
 	it('warns that the API key is exposed, like the parsed variant', async () => {

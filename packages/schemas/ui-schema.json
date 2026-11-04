@@ -778,6 +778,21 @@
 					"pattern": "^#[0-9A-Fa-f]{6}$",
 					"default": "#ffffff",
 					"description": "Background color for the 3D viewer as hex string (e.g., '#ffffff')"
+				},
+				"look": {
+					"type": "string",
+					"enum": [
+						"technical",
+						"studio",
+						"showcase",
+						"arctic",
+						"xray",
+						"lineart",
+						"wireframe",
+						"night"
+					],
+					"default": "technical",
+					"description": "The viewer look a definition opens in. A viewer can still switch look from its display menu."
 				}
 			},
 			"additionalProperties": false
@@ -833,7 +848,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.18.0",
+					"default": "2.19.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {

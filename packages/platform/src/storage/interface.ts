@@ -11,12 +11,21 @@ export interface IStorageProvider {
 	/** Returns null if the path does not exist. */
 	get(path: string): Promise<Uint8Array | null>;
 
-	put(path: string, data: Uint8Array, contentType?: string): Promise<void>;
+	/**
+	 * Stores the bytes, replacing what is there, and returns the path they landed
+	 * at. Images go through `transcodeImageIfNeeded` first: they are stored as WebP
+	 * and a `.png` or similar path becomes `.webp`, so read back with the returned
+	 * path. Throws `ProviderError(422)` for an image the transcoder refuses.
+	 */
+	put(path: string, data: Uint8Array, contentType?: string): Promise<string>;
 
 	/** No-op if the path does not exist. */
 	delete(path: string): Promise<void>;
 
-	/** Delete every file whose path starts with `prefix`. */
+	/**
+	 * Delete every file under the directory `prefix`, so `a/b` does not reach
+	 * `a/bc`. Throws on an empty prefix or `/`, which would name the whole store.
+	 */
 	deletePrefix(prefix: string): Promise<void>;
 
 	/**

@@ -5,7 +5,12 @@ import type {
 	RequestContext,
 	UserManagementResult
 } from '@selvajs/platform';
-import { ProviderError, hasPermission, assertNotShareContext } from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
+import {
+	assertCanManagePermissions,
+	assertCanReadPermissions,
+	assertCanReadPermissionsBatch
+} from '@selvajs/platform/permissions';
 import { createLocalUserDataStore, type LocalUserDataStore } from '../data/userData.js';
 
 /**
@@ -53,7 +58,7 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 	}
 
 	async getFor(ctx: RequestContext, userId: string): Promise<PlatformPermission[]> {
-		assertCanRead(ctx, userId);
+		assertCanReadPermissions(ctx, userId);
 		const row = await this.data.findById(userId);
 		return row?.platformPermissions ?? [];
 	}
@@ -62,7 +67,7 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		ctx: RequestContext,
 		userIds: readonly string[]
 	): Promise<Map<string, PlatformPermission[]>> {
-		assertCanReadBatch(ctx);
+		assertCanReadPermissionsBatch(ctx);
 		const all = await this.data.listAll();
 		const wanted = new Set(userIds);
 		const out = new Map<string, PlatformPermission[]>();
@@ -77,7 +82,7 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		userId: string,
 		permissions: readonly PlatformPermission[]
 	): Promise<UserManagementResult> {
-		assertAdmin(ctx);
+		assertCanManagePermissions(ctx);
 		// The count and the write have to be indivisible — checking here and
 		// writing after would let two concurrent demotions each see the other
 		// as the surviving admin. `updatePermissionsGuarded` owns both.
@@ -94,7 +99,7 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 		userId: string,
 		permissions: readonly PlatformPermission[]
 	): Promise<boolean> {
-		// No `assertAdmin`: by definition nobody holds `instance_admin` when this
+		// No `assertCanManagePermissions`: by definition nobody holds `instance_admin` when this
 		// succeeds. The guard is the store's own no-admin-yet condition, which is
 		// why the check cannot be hoisted into the caller.
 		return this.data.claimFirstInstanceAdminGuarded(userId, [...permissions]);
@@ -116,33 +121,4 @@ export class LocalPlatformPermissionStore implements IPlatformPermissionStore {
 			(u) => u.userId !== excludeUserId && u.platformPermissions.includes('instance_admin')
 		).length;
 	}
-}
-
-// Reading one row and reading many must agree: `manage_instance_users` runs the
-// user-admin surface, which needs to know who holds `instance_admin` in order
-// to render locks correctly. Denying the single read while allowing the batch
-// (as this file previously did) made the delete/disable routes throw a 500
-// where they meant to return 403.
-function assertCanRead(ctx: RequestContext, userId: string): void {
-	assertNotShareContext(ctx, 'read permissions');
-	if (ctx.system) return;
-	if (ctx.userId === userId) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	if (hasPermission(ctx, 'manage_instance_users')) return;
-	throw new ProviderError('Forbidden: cannot read another user’s permissions', 403);
-}
-
-function assertAdmin(ctx: RequestContext): void {
-	assertNotShareContext(ctx, 'manage permissions');
-	if (ctx.system) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	throw new ProviderError('Forbidden: instance admin required', 403);
-}
-
-function assertCanReadBatch(ctx: RequestContext): void {
-	assertNotShareContext(ctx, 'read permissions');
-	if (ctx.system) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	if (hasPermission(ctx, 'manage_instance_users')) return;
-	throw new ProviderError('Forbidden: instance admin or manage_instance_users required', 403);
 }

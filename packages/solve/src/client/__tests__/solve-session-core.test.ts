@@ -1,23 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
 	buildInitialValues,
-	makeInitialFlags,
+	createInitialState,
+	applyLoadedValues,
 	applyValueChange,
 	applySolveResult,
 	commitSolveResult,
+	ensureSolvedStep,
+	inputsChangedSince,
 	needsAcknowledgement,
 	type SolveSessionState
 } from '../session/solve-session-core.js';
 import type { UISchema } from '@selvajs/schemas';
 
-// These tests pin the lifecycle state machine that used to live inline in
-// ComputeApp.svelte: how values are seeded (incl. client-sourced hydration), when a
-// value change should dispatch a solve vs. defer it, and what a reported solve result
-// does to the flags. Reactivity is NOT exercised here — that's the thin rune wrapper's
-// job. This is the pure decision layer.
-
-// Minimal schema factory. `inputs`/`outputs` are the flat lists ComputeApp reads;
-// `layout` is what getExternalInputs walks for client-sourced inputs.
+// Minimal schema factory. `inputs`/`outputs` are the flat lists a host reads; `layout` is what
+// getExternalInputs walks for client-sourced inputs.
 function schema(partial: {
 	inputs?: { id: string; paramType: string; default?: unknown }[];
 	outputs?: { id: string }[];
@@ -74,16 +71,21 @@ describe('buildInitialValues', () => {
 	});
 });
 
-describe('makeInitialFlags', () => {
+describe('createInitialState', () => {
+	const create = (instanceSolve?: boolean) =>
+		createInitialState(schema({ instanceSolve }), 'scope', () => undefined);
+
 	it('starts pending+never-solved when instanceSolve === false', () => {
-		expect(makeInitialFlags(false)).toEqual({ hasPendingChanges: true, hasNeverSolved: true });
+		expect(create(false)).toMatchObject({ hasPendingChanges: true, hasNeverSolved: true });
 	});
+
 	it('starts clean when instanceSolve is true or absent', () => {
-		expect(makeInitialFlags(true)).toEqual({ hasPendingChanges: false, hasNeverSolved: false });
-		expect(makeInitialFlags(undefined)).toEqual({
-			hasPendingChanges: false,
-			hasNeverSolved: false
-		});
+		for (const instanceSolve of [true, undefined]) {
+			expect(create(instanceSolve)).toMatchObject({
+				hasPendingChanges: false,
+				hasNeverSolved: false
+			});
+		}
 	});
 });
 
@@ -95,13 +97,12 @@ function state(overrides: Partial<SolveSessionState> = {}): SolveSessionState {
 		computeWarnings: [],
 		diagnostics: [],
 		blocked: false,
-		awaitingAck: false,
 		heldResult: null,
 		meshes: [],
-		pendingValues: {},
 		hasPendingChanges: false,
 		hasNeverSolved: false,
 		lastResult: null,
+		unsolved: null,
 		...overrides
 	};
 }
@@ -109,134 +110,217 @@ function state(overrides: Partial<SolveSessionState> = {}): SolveSessionState {
 describe('applyValueChange', () => {
 	it('in auto-solve mode, records the value and asks to dispatch', () => {
 		const s = state({ values: { a: 1 } });
-		const out = applyValueChange(s, 'a', 2, /* instanceSolve */ true);
-		expect(out.state.values.a).toBe(2);
-		expect(out.shouldSolve).toBe(true);
-		expect(out.state.hasPendingChanges).toBe(false);
+		expect(applyValueChange(s, 'a', 2, /* instanceSolve */ true)).toBe(true);
+		expect(s.values.a).toBe(2);
+		expect(s.hasPendingChanges).toBe(false);
 	});
 
-	it('in manual mode, defers: records pending + sets the flag, no dispatch', () => {
+	it('in manual mode, defers: sets the flag, no dispatch', () => {
 		const s = state({ values: { a: 1 } });
-		const out = applyValueChange(s, 'a', 2, /* instanceSolve */ false);
-		expect(out.state.values.a).toBe(2);
-		expect(out.state.pendingValues.a).toBe(2);
-		expect(out.state.hasPendingChanges).toBe(true);
-		expect(out.shouldSolve).toBe(false);
+		expect(applyValueChange(s, 'a', 2, /* instanceSolve */ false)).toBe(false);
+		expect(s.values.a).toBe(2);
+		expect(s.hasPendingChanges).toBe(true);
+	});
+
+	it('force overrides manual mode, and the solve covers every pending edit', () => {
+		const s = state({ values: { a: 1 }, hasPendingChanges: true });
+		expect(applyValueChange(s, 'a', 2, false, true)).toBe(true);
+		expect(s.hasPendingChanges).toBe(false);
+	});
+});
+
+describe('applyLoadedValues', () => {
+	it('dispatches in auto mode', () => {
+		const s = state();
+		expect(applyLoadedValues(s, { a: 1 }, true)).toBe(true);
+		expect(s.values.a).toBe(1);
+		expect(s.hasPendingChanges).toBe(false);
+	});
+
+	it('marks dirty in manual mode', () => {
+		const s = state();
+		expect(applyLoadedValues(s, { a: 1 }, false)).toBe(false);
+		expect(s.hasPendingChanges).toBe(true);
+	});
+});
+
+describe('inputsChangedSince', () => {
+	const s = schema({ inputs: [{ id: 'a', paramType: 'number' }], outputs: [{ id: 'o' }] });
+
+	it('is false for the inputs that were sent, whatever the outputs did', () => {
+		expect(inputsChangedSince(s, { a: 1, o: 'solved' }, { a: 1 })).toBe(false);
+	});
+
+	it('is true for a value edited after dispatch', () => {
+		expect(inputsChangedSince(s, { a: 2 }, { a: 1 })).toBe(true);
+	});
+
+	it('is true for an input the dispatch did not carry', () => {
+		expect(inputsChangedSince(s, { a: 1 }, {})).toBe(true);
+	});
+
+	it('is false with nothing sent: an unsolicited push frame covers what it covers', () => {
+		expect(inputsChangedSince(s, { a: 1 }, null)).toBe(false);
 	});
 });
 
 describe('applySolveResult', () => {
+	const gate = { level: 'warning' as const, message: 'w', isGate: true };
+
 	it('merges outputs into values and clears the lifecycle flags', () => {
 		const s = state({
 			values: { a: 1, out: null },
-			pendingValues: { a: 1 },
 			hasPendingChanges: true,
 			hasNeverSolved: true,
 			error: 'stale'
 		});
-		const out = applySolveResult(s, {
-			outputs: { out: 42 },
-			meshes: [{ id: 'm' }]
-		});
-		expect(out.values.out).toBe(42);
-		expect(out.values.a).toBe(1);
-		expect(out.meshes).toEqual([{ id: 'm' }]);
-		expect(out.pendingValues).toEqual({});
-		expect(out.hasPendingChanges).toBe(false);
-		expect(out.hasNeverSolved).toBe(false);
-		expect(out.error).toBe('');
-		expect(out.awaitingAck).toBe(false);
+		applySolveResult(s, { outputs: { out: 42 }, meshes: [{ id: 'm' }] }, false);
+		expect(s.values.out).toBe(42);
+		expect(s.values.a).toBe(1);
+		expect(s.meshes).toEqual([{ id: 'm' }]);
+		expect(s.hasPendingChanges).toBe(false);
+		expect(s.hasNeverSolved).toBe(false);
+		expect(s.error).toBe('');
+		expect(s.heldResult).toBe(null);
+	});
+
+	it('keeps the dirty flag for a value edited while the solve ran', () => {
+		const s = state({ hasPendingChanges: true });
+		applySolveResult(s, { outputs: {} }, true);
+		expect(s.hasPendingChanges).toBe(true);
+	});
+
+	it('never raises the dirty flag in auto mode', () => {
+		const s = state({ hasPendingChanges: false });
+		applySolveResult(s, { outputs: {} }, true);
+		expect(s.hasPendingChanges).toBe(false);
 	});
 
 	it('holds the result when the solve raised messages, and reports them regardless', () => {
 		const s = state({
 			values: { out: null },
-			pendingValues: { a: 1 },
 			hasPendingChanges: true,
 			meshes: [{ id: 'previous' }]
 		});
-		const out = applySolveResult(s, {
-			outputs: { out: 42 },
-			errors: ['e'],
-			warnings: ['w'],
-			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
-			meshes: [{ id: 'm' }]
-		});
+		applySolveResult(
+			s,
+			{
+				outputs: { out: 42 },
+				errors: ['e'],
+				warnings: ['w'],
+				diagnostics: [gate],
+				meshes: [{ id: 'm' }]
+			},
+			false
+		);
 		// Messages surface immediately — the panel needs them to render.
-		expect(out.computeErrors).toEqual(['e']);
-		expect(out.computeWarnings).toEqual(['w']);
-		expect(out.awaitingAck).toBe(true);
+		expect(s.computeErrors).toEqual(['e']);
+		expect(s.computeWarnings).toEqual(['w']);
 		// The result itself waits: the viewer keeps showing what it had.
-		expect(out.values.out).toBe(null);
-		expect(out.meshes).toEqual([{ id: 'previous' }]);
-		expect(out.heldResult?.outputs).toEqual({ out: 42 });
+		expect(s.values.out).toBe(null);
+		expect(s.meshes).toEqual([{ id: 'previous' }]);
+		expect(s.heldResult?.outputs).toEqual({ out: 42 });
 		// The inputs were solved, so they must not stay dirty and re-dispatch.
-		expect(out.pendingValues).toEqual({});
-		expect(out.hasPendingChanges).toBe(false);
+		expect(s.hasPendingChanges).toBe(false);
+	});
+
+	it('keeps the dirty flag on a held result too, for a value edited since', () => {
+		const s = state({ hasPendingChanges: true });
+		applySolveResult(s, { outputs: {}, diagnostics: [gate] }, true);
+		expect(s.heldResult).not.toBe(null);
+		expect(s.hasPendingChanges).toBe(true);
 	});
 
 	it('treats missing result arrays as empty', () => {
-		const out = applySolveResult(state(), { outputs: {} });
-		expect(out.computeErrors).toEqual([]);
-		expect(out.computeWarnings).toEqual([]);
-		expect(out.meshes).toEqual([]);
-		expect(out.blocked).toBe(false);
+		const s = state();
+		applySolveResult(s, { outputs: {} }, false);
+		expect(s.computeErrors).toEqual([]);
+		expect(s.computeWarnings).toEqual([]);
+		expect(s.meshes).toEqual([]);
+		expect(s.blocked).toBe(false);
 	});
 
 	it('applies a blocked solve at once, clearing the previous meshes instead of holding', () => {
-		const out = applySolveResult(state({ meshes: [{ id: 'stale' }] }), {
-			outputs: {},
-			errors: ['Wall too thin'],
-			blocked: true
-		});
-		expect(out.blocked).toBe(true);
-		expect(out.computeErrors).toEqual(['Wall too thin']);
-		expect(out.awaitingAck).toBe(false);
-		expect(out.heldResult).toBe(null);
-		expect(out.meshes).toEqual([]);
+		const s = state({ meshes: [{ id: 'stale' }] });
+		applySolveResult(
+			s,
+			{ outputs: {}, errors: ['Wall too thin'], blocked: true, diagnostics: [gate] },
+			false
+		);
+		expect(s.blocked).toBe(true);
+		expect(s.computeErrors).toEqual(['Wall too thin']);
+		expect(s.heldResult).toBe(null);
+		expect(s.meshes).toEqual([]);
 	});
 
 	it('clears blocked once a later clean solve arrives', () => {
-		const blocked = applySolveResult(state(), {
-			outputs: {},
-			errors: ['nope'],
-			blocked: true
-		});
-		const out = applySolveResult(blocked, { outputs: { a: 1 } });
-		expect(out.blocked).toBe(false);
-		expect(out.awaitingAck).toBe(false);
-		expect(out.heldResult).toBe(null);
+		const s = state();
+		applySolveResult(s, { outputs: {}, errors: ['nope'], blocked: true }, false);
+		applySolveResult(s, { outputs: { a: 1 } }, false);
+		expect(s.blocked).toBe(false);
+		expect(s.heldResult).toBe(null);
 	});
 
 	it('a newer held result replaces an older one, so confirming applies the latest', () => {
-		const first = applySolveResult(state(), {
-			outputs: { out: 1 },
-			warnings: ['w'],
-			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
-			meshes: [{ id: 'first' }]
-		});
-		const second = applySolveResult(first, {
-			outputs: { out: 2 },
-			warnings: ['w'],
-			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
-			meshes: [{ id: 'second' }]
-		});
-		expect(second.heldResult?.outputs).toEqual({ out: 2 });
+		const s = state();
+		applySolveResult(s, { outputs: { out: 1 }, diagnostics: [gate] }, false);
+		applySolveResult(s, { outputs: { out: 2 }, diagnostics: [gate] }, false);
+		expect(s.heldResult?.outputs).toEqual({ out: 2 });
+	});
+
+	it('marks an aborted result unsolved, and the next clean one clears that', () => {
+		const s = state();
+		applySolveResult(s, { outputs: {}, blocked: true, aborted: true }, false);
+		expect(s.unsolved).toBe('aborted');
+		applySolveResult(s, { outputs: {} }, false);
+		expect(s.unsolved).toBe(null);
 	});
 });
 
 describe('commitSolveResult', () => {
-	it('applies a held result verbatim', () => {
-		const held = applySolveResult(state({ values: { out: null } }), {
-			outputs: { out: 42 },
-			warnings: ['w'],
-			diagnostics: [{ level: 'warning', message: 'w', isGate: true }],
-			meshes: [{ id: 'm' }]
-		});
-		const out = commitSolveResult(held, held.heldResult!);
-		expect(out.values.out).toBe(42);
-		expect(out.meshes).toEqual([{ id: 'm' }]);
-		expect(out.hasNeverSolved).toBe(false);
+	it('keeps meshes off the retained result', () => {
+		const s = state();
+		commitSolveResult(s, { outputs: {}, meshes: [{ id: 'm' }], source: 'raw' }, false);
+		expect(s.lastResult).toEqual({ outputs: {}, source: 'raw' });
+	});
+});
+
+describe('ensureSolvedStep', () => {
+	const solved = { lastResult: { outputs: {} } };
+
+	it('waits on a busy driver, and on a held result', () => {
+		expect(ensureSolvedStep(state(solved), true)).toBe('wait');
+		expect(ensureSolvedStep(state({ heldResult: { outputs: {} } }), false)).toBe('wait');
+	});
+
+	it('answers from the screen when nothing changed', () => {
+		expect(ensureSolvedStep(state(solved), false)).toBe('applied');
+	});
+
+	it.each<[string, Partial<SolveSessionState>]>([
+		['pending edits', { ...solved, hasPendingChanges: true }],
+		['a first solve in manual mode', { ...solved, hasNeverSolved: true }],
+		['a failed last solve', { ...solved, error: 'boom' }],
+		['an aborted last solve', { ...solved, unsolved: 'aborted' }],
+		['nothing on screen', {}]
+	])('solves for %s', (_name, overrides) => {
+		expect(ensureSolvedStep(state(overrides), false)).toBe('solve');
+	});
+
+	it('settles a discarded result rather than ask the user again', () => {
+		expect(ensureSolvedStep(state({ ...solved, unsolved: 'discarded' }), false)).toBe('discarded');
+		expect(ensureSolvedStep(state({ unsolved: 'discarded', hasNeverSolved: true }), false)).toBe(
+			'discarded'
+		);
+	});
+
+	it('solves an edit made after a discard', () => {
+		const s = state({ ...solved, unsolved: 'discarded', hasPendingChanges: true });
+		expect(ensureSolvedStep(s, false)).toBe('solve');
+	});
+
+	it('reports a refused solve as blocked', () => {
+		expect(ensureSolvedStep(state({ ...solved, blocked: true }), false)).toBe('blocked');
 	});
 });
 
@@ -245,7 +329,6 @@ describe('needsAcknowledgement', () => {
 
 	it('is false for a clean solve', () => {
 		expect(needsAcknowledgement([])).toBe(false);
-		expect(needsAcknowledgement(undefined)).toBe(false);
 	});
 
 	it('gates on a Message component', () => {
@@ -265,10 +348,5 @@ describe('needsAcknowledgement', () => {
 
 	it('does not gate on a remark, even an authored one', () => {
 		expect(needsAcknowledgement([{ level: 'remark', message: 'fyi', isGate: true }])).toBe(false);
-	});
-
-	it('asks again for a repeated message: every solve is its own checkpoint', () => {
-		expect(needsAcknowledgement([gate])).toBe(true);
-		expect(needsAcknowledgement([gate])).toBe(true);
 	});
 });

@@ -30,7 +30,8 @@ export function scopeAllows(
 
 /** Does a scope granting `granted` allow `wanted`? */
 export function apiScopeActionCovers(granted: ApiScopeAction, wanted: ApiScopeAction): boolean {
-	return granted === wanted || wanted === 'read' || (granted === 'write' && wanted === 'upload');
+	if (granted === wanted || wanted === 'read') return true;
+	return granted === 'write' && (wanted === 'upload' || wanted === 'create_projects');
 }
 
 function resourceCovers(scope: ApiScope, ctx: RequestContext, target?: ScopeTarget): boolean {

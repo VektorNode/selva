@@ -154,6 +154,10 @@ describe('authorize', () => {
 		expect((await authorized()).request.scopes).toEqual(['read', 'solve']);
 	});
 
+	it('grants only read when no scope asked for is one the client may have', async () => {
+		expect((await authorized(server(), { scope: 'foo bar' })).request.scopes).toEqual(['read']);
+	});
+
 	it('redirects a denial with access_denied, the state and the issuer', async () => {
 		const { oauth, request } = await authorized();
 		const url = new URL(oauth.deny(request));
@@ -325,6 +329,15 @@ describe('the built-in Grasshopper client', () => {
 		expect(consentChoices(request.scopes)).toEqual([{ access: 'upload', scopes: ['upload'] }]);
 	});
 
+	it('grants project creation alongside upload when it asks, offered as one choice', async () => {
+		const request = await ask(server(), { scope: 'read upload create_projects' });
+		expect(request.scopes).toEqual(['read', 'upload', 'create_projects']);
+		expect(apiScopesFor(request.scopes)).toEqual(['read:all', 'upload:all', 'create_projects:all']);
+		expect(consentChoices(request.scopes)).toEqual([
+			{ access: 'upload', scopes: ['read', 'upload', 'create_projects'] }
+		]);
+	});
+
 	it('accepts any port on 127.0.0.1/callback', async () => {
 		for (const port of ['1', '53121', '65535']) {
 			await expect(
@@ -375,14 +388,17 @@ describe('the built-in Grasshopper client', () => {
 
 describe('registered clients and upload', () => {
 	it('drops upload for a DCR client: it gets read and solve at most', async () => {
-		expect((await authorized(server(), { scope: 'upload' })).request.scopes).toEqual([
-			'read',
-			'solve'
-		]);
+		expect((await authorized(server(), { scope: 'upload' })).request.scopes).toEqual(['read']);
 		expect((await authorized(server(), { scope: 'read upload' })).request.scopes).toEqual(['read']);
 		expect((await authorized(server(), { scope: 'read solve upload' })).request.scopes).toEqual([
 			'read',
 			'solve'
+		]);
+	});
+
+	it('drops create_projects for a DCR client', async () => {
+		expect((await authorized(server(), { scope: 'read create_projects' })).request.scopes).toEqual([
+			'read'
 		]);
 	});
 

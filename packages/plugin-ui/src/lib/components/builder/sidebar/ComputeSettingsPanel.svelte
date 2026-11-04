@@ -1,56 +1,27 @@
 <script lang="ts">
-	import type { UISchema, ViewerOptions } from '@selvajs/schemas';
-	import { Switch } from '@selvajs/ui';
+	import type { UISchema } from '@selvajs/schemas';
 	import { listSourcedInputs, SOURCE_KIND_LABELS } from '#lib/features/builder/index.js';
-	import ScopeNote from '../scope/ScopeNote.svelte';
 	import ScopeChip from '../scope/ScopeChip.svelte';
 	import SettingsSection from './SettingsSection.svelte';
-	import SettingRow from './SettingRow.svelte';
 
 	interface Props {
 		schema: UISchema;
-		onSchemaChange: (schema: UISchema) => void;
 		onRevealItem: (tabId: string, groupId: string, itemId: string) => void;
 	}
 
-	let { schema, onSchemaChange, onRevealItem }: Props = $props();
+	let { schema, onRevealItem }: Props = $props();
 
 	const sourcedInputs = $derived(listSourcedInputs(schema));
-
-	function updateSchema(updates: Partial<UISchema>) {
-		onSchemaChange({ ...schema, ...updates });
-	}
-
-	function updateViewerOptions(updates: Partial<ViewerOptions>) {
-		updateSchema({ viewerOptions: { ...schema.viewerOptions, ...updates } });
-	}
 </script>
 
-<ScopeNote scope="compute">Used when Selva solves this definition on Rhino.Compute.</ScopeNote>
-
-<SettingsSection id="compute.rendering" title="Rendering">
-	<SettingRow
-		label="Compute render"
-		for="enable-remote-rendering"
-		layout="inline"
-		hint="Show the geometry Rhino.Compute returns in Selva's viewer."
-	>
-		<Switch
-			id="enable-remote-rendering"
-			checked={schema.viewerOptions?.enableRemote ?? false}
-			onCheckedChange={(checked) => updateViewerOptions({ enableRemote: checked })}
-		/>
-	</SettingRow>
-</SettingsSection>
-
-<SettingsSection
-	id="compute.sources"
-	title="Input sources"
-	description="Inputs filled by something other than the form."
->
+<SettingsSection id="compute.sources" title="Input sources" collapsible={false}>
 	{#if sourcedInputs.length === 0}
-		<p class="border-border text-muted-foreground rounded-md border px-3 py-2.5 text-xs">
-			Every input comes from the form.
+		<p
+			class="border-border text-muted-foreground rounded-md border border-dashed px-3 py-3 text-xs"
+		>
+			No input has a source. Open an input's card and set <span class="text-foreground"
+				>Value source</span
+			>.
 		</p>
 	{:else}
 		<ul class="flex flex-col gap-1.5">
@@ -58,7 +29,7 @@
 				<li>
 					<button
 						type="button"
-						class="border-border bg-background hover:bg-accent/50 flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-colors"
+						class="border-border bg-background hover:bg-hover flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left transition-colors"
 						onclick={() => onRevealItem(tabId, groupId, item.id)}
 					>
 						<span class="min-w-0 truncate text-sm font-medium">{item.displayName}</span>
@@ -73,5 +44,4 @@
 			{/each}
 		</ul>
 	{/if}
-	<p class="text-muted-foreground text-xs">Set a source on the input's card, under Compute only.</p>
 </SettingsSection>

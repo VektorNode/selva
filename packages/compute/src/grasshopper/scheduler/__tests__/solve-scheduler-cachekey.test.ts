@@ -40,16 +40,22 @@ describe('scheduler server-definition-cache reuse', () => {
 		s.dispose();
 	});
 
-	it('records a refreshed key after a miss (fallback returns a new key)', async () => {
+	it.each<[string, () => SolveDefinition]>([
+		['a string', () => 'def'],
+		[
+			'a DefinitionRef, by key across distinct objects and without calling load()',
+			() => ({ key: 'version-1', load: () => Promise.reject(new Error('load() called')) })
+		]
+	])('records a refreshed key after a miss for %s', async (_name, definition) => {
 		// Call 1 learns md5_A. Call 2 (sent md5_A) misses and the server reassigns md5_B.
 		const ex = recordingExecutor(({ n }) =>
 			n === 1 ? { cacheKey: 'md5_A', missed: false } : { cacheKey: 'md5_B', missed: true }
 		);
 		const s = new SolveScheduler(ex.executor, baseConfig, { mode: 'queue' });
 
-		await s.solve('def', []);
-		await s.solve('def', []);
-		await s.solve('def', []);
+		await s.solve(definition(), []);
+		await s.solve(definition(), []);
+		await s.solve(definition(), []);
 
 		expect(ex.calls.map((c) => c.cacheKey)).toEqual([null, 'md5_A', 'md5_B']);
 		s.dispose();
@@ -69,44 +75,21 @@ describe('scheduler server-definition-cache reuse', () => {
 		s.dispose();
 	});
 
-	it('reports definitionReuploaded from the executor while reuse is on', async () => {
-		const ex = recordingExecutor(({ n }) => ({ cacheKey: 'md5_A', missed: n === 1 }));
-		const s = new SolveScheduler(ex.executor, baseConfig, { mode: 'queue' });
+	it.each([
+		['a URL definition', 'https://example.com/d.gh', {}],
+		['reuseServerDefinitionCache: false', 'def', { reuseServerDefinitionCache: false }]
+	])(
+		'never passes a key for %s, and leaves definitionReuploaded undefined',
+		async (_name, definition, options) => {
+			const ex = recordingExecutor(() => ({ cacheKey: 'md5_X', missed: true }));
+			const s = new SolveScheduler(ex.executor, baseConfig, { mode: 'queue', ...options });
 
-		const first = await s.solveDetailed('def', []);
-		const second = await s.solveDetailed('def', []);
+			await s.solve(definition, []);
+			const detail = await s.solveDetailed(definition, [{ ParamName: 'x', InnerTree: {} }]);
 
-		expect(first.definitionReuploaded).toBe(true);
-		expect(second.definitionReuploaded).toBe(false);
-		s.dispose();
-	});
-
-	it('never passes a key for URL definitions, and leaves definitionReuploaded undefined', async () => {
-		const ex = recordingExecutor(() => ({ cacheKey: 'https://example.com/d.gh', missed: true }));
-		const s = new SolveScheduler(ex.executor, baseConfig, { mode: 'queue' });
-
-		await s.solve('https://example.com/d.gh', []);
-		const detail = await s.solveDetailed('https://example.com/d.gh', [
-			{ ParamName: 'x', InnerTree: {} }
-		]);
-
-		expect(ex.calls.map((c) => c.cacheKey)).toEqual([null, null]);
-		expect(detail.definitionReuploaded).toBeUndefined();
-		s.dispose();
-	});
-
-	it('respects reuseServerDefinitionCache: false (opt-out)', async () => {
-		const ex = recordingExecutor(() => ({ cacheKey: 'md5_X', missed: true }));
-		const s = new SolveScheduler(ex.executor, baseConfig, {
-			mode: 'queue',
-			reuseServerDefinitionCache: false
-		});
-
-		await s.solve('def', []);
-		const detail = await s.solveDetailed('def', [{ ParamName: 'x', InnerTree: {} }]);
-
-		expect(ex.calls.map((c) => c.cacheKey)).toEqual([null, null]);
-		expect(detail.definitionReuploaded).toBeUndefined();
-		s.dispose();
-	});
+			expect(ex.calls.map((c) => c.cacheKey)).toEqual([null, null]);
+			expect(detail.definitionReuploaded).toBeUndefined();
+			s.dispose();
+		}
+	);
 });

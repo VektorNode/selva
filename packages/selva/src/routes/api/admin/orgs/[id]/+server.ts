@@ -1,6 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getOrganizationProvider } from '#lib/server/providers.server.js';
+import {
+	getDefinitionMeta,
+	getOrganizationProvider,
+	getProjectProvider,
+	getStorageProvider
+} from '#lib/server/providers.server.js';
+import { deleteOrgWithBlobs } from '@selvajs/server/projects';
 import { requireInstanceAdmin } from '#lib/server/access.server.js';
 import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { apiRoute, noContent, parseBody, requireParams } from '#lib/server/api/http.js';
@@ -35,7 +41,16 @@ export const DELETE: RequestHandler = apiRoute(
 		requireInstanceAdmin(locals);
 		const { id } = requireParams(params, 'id');
 
-		await getOrganizationProvider().deleteOrg(locals.ctx!, id);
+		await deleteOrgWithBlobs(
+			{
+				orgs: getOrganizationProvider(),
+				projects: getProjectProvider(),
+				definitions: getDefinitionMeta(),
+				storage: getStorageProvider()
+			},
+			locals.ctx!,
+			id
+		);
 		return noContent();
 	}
 );

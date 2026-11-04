@@ -57,4 +57,11 @@ describe('isCrossSiteFormSubmission with a non-Selva Authorization header', () =
 			)
 		).toBe(true);
 	});
+
+	// `resolveApiToken` reads no key from this and falls back to the cookie session.
+	it('still checks a Selva key followed by trailing junk', () => {
+		expect(
+			isCrossSiteFormSubmission(post('/login', { ...form, Authorization: 'Bearer selva_k extra' }))
+		).toBe(true);
+	});
 });

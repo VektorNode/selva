@@ -5,37 +5,19 @@
 
 import { SolveEngine, type CachedClient } from '@selvajs/solve/server';
 import { env } from '#lib/server/env.js';
-import { getLogger, lazyLogger } from '#lib/server/providers.server.js';
+import { getLogger } from '#lib/server/providers.server.js';
 import { computeLimits } from '#lib/server/computeLimits.js';
 import type { ComputeServerConfig } from '@selvajs/platform';
 
 /**
  * `SELVA_FLAG_COMPUTE_DEBUG` is a three-way knob, not a boolean: `off` (default),
- * `on` (concise cache/timing logs), or `verbose` (adds full lib-level request/
- * response dumps, incl. base64 geometry). `verbose` implies `on`.
- *
- * `SELVA_FLAG_COMPUTE_DEBUG_VERBOSE` still honoured (as `verbose`) so an
- * operator's existing `.env` degrades to a warning instead of silently losing
- * the verbose logging they asked for.
+ * `on` (concise cache/timing logs), or `verbose` (adds lib-level request logs and
+ * Compute's raw error bodies). `verbose` implies `on`.
  */
 const COMPUTE_DEBUG_MODE = (() => {
 	const raw = (env.SELVA_FLAG_COMPUTE_DEBUG ?? '').toLowerCase();
 	if (raw === 'verbose') return 'verbose';
-	const on = ['true', '1', 'yes', 'on'].includes(raw);
-
-	const oldVerbose = ['true', '1', 'yes'].includes(
-		(env.SELVA_FLAG_COMPUTE_DEBUG_VERBOSE ?? '').toLowerCase()
-	);
-	if (oldVerbose) {
-		getLogger().warn('Deprecated env var: rename it', {
-			component: 'selva',
-			envVar: 'SELVA_FLAG_COMPUTE_DEBUG_VERBOSE',
-			renamedTo: 'SELVA_FLAG_COMPUTE_DEBUG=verbose'
-		});
-		return 'verbose';
-	}
-
-	return on ? 'on' : 'off';
+	return ['true', '1', 'yes', 'on'].includes(raw) ? 'on' : 'off';
 })();
 
 export const COMPUTE_DEBUG = COMPUTE_DEBUG_MODE !== 'off';
@@ -43,7 +25,6 @@ export const COMPUTE_DEBUG_VERBOSE = COMPUTE_DEBUG_MODE === 'verbose';
 
 export const engine = new SolveEngine({
 	limits: computeLimits,
-	logger: lazyLogger,
 	debug: COMPUTE_DEBUG ? (COMPUTE_DEBUG_VERBOSE ? 'verbose' : true) : false,
 	onDebugLog: (message) => getLogger().debug(message, { component: 'Compute/client-cache' }),
 	onSolveCoalesced: (key) => {

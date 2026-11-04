@@ -52,25 +52,26 @@ selva/
 
 ### Project boundaries
 
-| Project                | Target             | Rhino/GH deps | Purpose                                                          |
-| ---------------------- | ------------------ | ------------- | ---------------------------------------------------------------- |
-| `Selva.Schema`         | `netstandard2.0`   | none          | Generated schema, validation, migration, shared constants        |
-| `Selva.Slva`           | `netstandard2.0`   | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
-| `Selva.Drawing`        | `netstandard2.0`   | none          | Document model + SVG/PDF renderers                               |
-| `Selva.FileIO`         | `netstandard2.0`   | none          | File in/out contract + its rules; referenced by other repos      |
-| `Selva.Rhino`          | `net48/net8/net10` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
-| `Selva.GH`             | `net48/net8/net10` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
-| `Selva.Panel`          | `net48/net8/net10` | RhinoCommon   | `.rhp` hosting the UI in a Rhino panel; loads before Grasshopper |
-| `Selva.PluginVerifier` | `net48/net8/net10` | yes           | Loads the merged `.gha` and the `.rhp` after a Release build     |
-| `Selva.Tests`          | `net8.0` (xUnit)   | none          | Tests for `Selva.GH`, `Selva.Schema` and the panel's nav policy  |
-| `Selva.Slva.Tests`     | `net8.0` (xUnit)   | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
-| `Selva.Drawing.Tests`  | `net8.0` (xUnit)   | none          | Tests for `Selva.Drawing`                                        |
+| Project                | Target            | Rhino/GH deps | Purpose                                                          |
+| ---------------------- | ----------------- | ------------- | ---------------------------------------------------------------- |
+| `Selva.Schema`         | `netstandard2.0`  | none          | Generated schema, validation, migration, shared constants        |
+| `Selva.Slva`           | `netstandard2.0`  | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
+| `Selva.Drawing`        | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                               |
+| `Selva.FileIO`         | `netstandard2.0`  | none          | File in/out contract + its rules; referenced by other repos      |
+| `Selva.Rhino`          | `net8/net10`      | yes           | Rhino interop adapter for `Selva.Drawing`                        |
+| `Selva.GH`             | `net8/net10`      | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
+| `Selva.Panel`          | `net8/net10`      | RhinoCommon   | `.rhp` hosting the UI in a Rhino panel; loads before Grasshopper |
+| `Selva.PluginVerifier` | `net8/net10`      | yes           | Loads the merged `.gha` and the `.rhp` after a Release build     |
+| `Selva.Tests`          | `net10.0` (xUnit) | none          | Tests for `Selva.GH`, `Selva.Schema` and the panel's nav policy  |
+| `Selva.Slva.Tests`     | `net10.0` (xUnit) | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
+| `Selva.Drawing.Tests`  | `net10.0` (xUnit) | none          | Tests for `Selva.Drawing`                                        |
 
-Rhino 8 loads `net48` + `net8.0`; Rhino 9 loads `net10.0`. Rhino 7 is not supported.
+Rhino 9 loads `net10.0`; Rhino 8.21+ loads `net8.0`. Rhino 9 is the primary development and test platform. Rhino 7 is not supported.
 The Rhino-coupled TFMs and Rhino SDK versions live once in `Plugin/Directory.Build.props`
 (`SelvaTargetFrameworks`, `Rhino8RefVersion`, `Rhino9RefVersion`); the SDK is pinned to .NET 10 in
-`global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. On
-non-Windows, the Rhino-coupled projects build `net8.0` only.
+`global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. Both TFMs build on
+macOS too (`EnableWindowsTargeting` resolves the WindowsForms reference); only loading and testing
+needs Rhino on the matching OS.
 
 `Selva.Panel` references RhinoCommon only, because it must load before Grasshopper. Its root
 namespace is `Selva.RhinoPanel`: `Selva.Panel` would shadow every Eto/WinForms `Panel` inside
@@ -279,8 +280,9 @@ Assets for `examples/` demos aren't fixtures in this sense and stay under
 `examples/`.
 
 The repo-root `fixtures/` is for local development aids no test reads:
-Grasshopper definitions for manual plugin testing and their rhino-mcp
-regeneration recipes. If a test starts reading one of these files, it becomes
+Grasshopper definitions for manual plugin testing, their rhino-mcp
+regeneration recipes, and the recorded solves in `viewer-scenes/` that
+[the viewer lab](packages/visualization/lab/README.md) replays. If a test starts reading one of these files, it becomes
 a test fixture: move it to the scope its consumers share.
 
 Every package's `vitest.config.ts` starts from `createVitestConfig()` in
@@ -309,7 +311,7 @@ config, the provider conformance kits, and why `@selvajs/cli` is exempt.
 - `CONTRIBUTING.md` is for human contributors.
 - `STRUCTURE.md` (this file) is the source of truth for layout/naming.
 - [docs/contributing/plugin-context.md](./docs/contributing/plugin-context.md) is the source of truth for Grasshopper canvas wiring and schema identity.
-- Package-level developer notes and deep-dives go in `docs/contributing/`, not scattered through package folders. A spec, backlog, or format reference under `packages/` or `Plugin/` is misplaced: move it.
+- Package-level developer notes and deep-dives go in `docs/contributing/`, not scattered through package folders. A spec or format reference under `packages/` or `Plugin/` is misplaced: move it. Backlogs and designs for unbuilt work go in `plans/`, not here (see [plans/CONVENTIONS.md](./plans/CONVENTIONS.md)).
 - A package's `README.md` stays with the package: it's the published API surface, and npm renders it.
 - `CONTEXT.md` beside its code is the one documented exception: source comments reference it by bare filename, so it has to sit next to what it describes.
 - Keep `examples/` for runnable artifacts only.

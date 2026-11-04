@@ -31,7 +31,7 @@
 
 {#if layout === 'inline'}
 	<div class="flex items-start justify-between gap-4">
-		<div class="flex min-w-0 flex-col gap-1">
+		<div class="flex min-w-0 flex-col gap-1.5">
 			{@render heading()}
 			{#if hint}
 				<p class="text-muted-foreground text-xs">{hint}</p>
@@ -42,7 +42,7 @@
 		</div>
 	</div>
 {:else}
-	<div class="flex flex-col gap-1.5">
+	<div class="flex flex-col gap-2">
 		{@render heading()}
 		{@render children()}
 		{#if hint}

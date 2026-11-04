@@ -57,9 +57,6 @@ In your `app.css`:
 @import '@selvajs/ui/styles/base.css';
 ```
 
-Themes are available under `@selvajs/ui/styles/themes/*` — `selva`, `neutral`, `ocean`, and
-`cyberpunk`.
-
 ## Schema types
 
 Types generated from `packages/schemas/ui-schema.json` are published by `@selvajs/schemas`, not

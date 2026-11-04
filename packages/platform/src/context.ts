@@ -60,7 +60,7 @@ export function hasPermission(
 	ctx: RequestContext,
 	permission: PlatformPermission | OrgPermission
 ): boolean {
-	if (ctx.system) return true;
+	if (ctx.system && !isShareContext(ctx)) return true;
 	if (ctx.platformPermissions.includes('instance_admin')) return true;
 	if (isPlatformPermission(permission)) {
 		return ctx.platformPermissions.includes(permission);
@@ -86,6 +86,49 @@ export function assertNotShareContext(ctx: RequestContext, what: string): void {
 	if (isShareContext(ctx)) {
 		throw new ProviderError(`Forbidden: a share link cannot ${what}`, 403);
 	}
+}
+
+// For provider authors: `IPlatformPermissionStore` adapters whose backing store is
+// too coarse to enforce this themselves. Reading one row and reading many agree, and
+// read access is not authority: `set` stays `instance_admin`-only.
+
+/** May `ctx` read `userId`'s platform permissions? Throws `ProviderError(403)` if not. */
+export function assertCanReadPermissions(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'read permissions');
+	if (ctx.system) return;
+	if (ctx.userId === userId) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
+	throw new ProviderError('Forbidden: cannot read another user’s permissions', 403);
+}
+
+/** May `ctx` read several users' platform permissions? Throws `ProviderError(403)` if not. */
+export function assertCanReadPermissionsBatch(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'read permissions');
+	if (ctx.system) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	if (hasPermission(ctx, 'manage_instance_users')) return;
+	throw new ProviderError('Forbidden: instance admin or manage_instance_users required', 403);
+}
+
+/** May `ctx` change platform permissions? Throws `ProviderError(403)` if not. */
+export function assertCanManagePermissions(ctx: RequestContext): void {
+	assertNotShareContext(ctx, 'manage permissions');
+	if (ctx.system) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	throw new ProviderError('Forbidden: instance admin required', 403);
+}
+
+/**
+ * For provider authors: may `ctx` read or change `userId`'s profile? Throws
+ * `ProviderError(403)` if not.
+ */
+export function assertCanAccessProfile(ctx: RequestContext, userId: string): void {
+	assertNotShareContext(ctx, 'access user profiles');
+	if (ctx.system) return;
+	if (ctx.userId === userId) return;
+	if (hasPermission(ctx, 'instance_admin')) return;
+	throw new ProviderError('Forbidden: cannot access another user’s profile', 403);
 }
 
 const PLATFORM_PERMISSION_VALUES = new Set<string>(ALL_PLATFORM_PERMISSIONS);

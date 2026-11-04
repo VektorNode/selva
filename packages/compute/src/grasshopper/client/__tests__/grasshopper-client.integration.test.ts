@@ -4,6 +4,7 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import GrasshopperClient from '@/grasshopper/client/grasshopper-client';
+import { setLogger } from '@/core/utils/logger';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -33,24 +34,17 @@ describe('GrasshopperClient.create', () => {
 		await client.dispose();
 	});
 
-	it('throws NETWORK_ERROR when the server is offline', async () => {
-		route({
-			'/': () => createMockResponse({}, { ok: false, status: 503, statusText: 'down' })
-		});
-		await expect(
-			GrasshopperClient.create({ serverUrl: SERVER }, { probe: { attempts: 0 } })
-		).rejects.toMatchObject({
-			code: 'NETWORK_ERROR'
-		});
-	});
-
 	it('stops retrying a refused connection instead of spending the whole ladder', async () => {
 		// A powered-off Rhino.Compute refuses immediately. Retrying cannot help, and
 		// the wait is paid by whoever clicked Solve.
 		let probes = 0;
 		fetchMock.mockImplementation(() => {
 			probes += 1;
-			return Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:6500'));
+			return Promise.reject(
+				new TypeError('fetch failed', {
+					cause: Object.assign(new Error(''), { code: 'ECONNREFUSED' })
+				})
+			);
 		});
 		await expect(
 			GrasshopperClient.create({ serverUrl: SERVER }, { probe: { attempts: 5 } })
@@ -193,30 +187,6 @@ describe('GrasshopperClient.solve (e2e through transport)', () => {
 		await client.dispose();
 	});
 
-	it('surfaces a partial-success response (values + errors) as COMPUTATION_ERROR', async () => {
-		const partial = {
-			values: [{ ParamName: 'out' }],
-			errors: ['Solve exception: bad'],
-			warnings: []
-		};
-		route({
-			'/': onlineServer,
-			'/grasshopper': () =>
-				createMockResponse(null, {
-					ok: false,
-					status: 500,
-					statusText: 'Internal Server Error',
-					body: JSON.stringify(partial)
-				})
-		});
-
-		const client = await GrasshopperClient.create({ serverUrl: SERVER });
-		await expect(client.solve('http://example.com/def.gh', [])).rejects.toMatchObject({
-			code: 'COMPUTATION_ERROR'
-		});
-		await client.dispose();
-	});
-
 	it('preserves partial-success values and summarizes inputs on the thrown error ', async () => {
 		const partial = {
 			values: [
@@ -323,28 +293,26 @@ describe('GrasshopperClient.createScheduler', () => {
 
 describe('GrasshopperClient.getIO (e2e through transport + parser pipeline)', () => {
 	it('fetches IO and parses raw inputs into typed InputParams', async () => {
-		// camelCase to match the real Compute8 server contract (pinned by
-		// tests/contract/server-contract.test.ts) — fetchDefinitionIO reads these
-		// straight through with no key conversion.
+		// PascalCase as every server branch sends it; only the fork's `groupName` is camelCase.
 		const ioResponse = {
-			inputnames: [],
-			outputnames: [],
-			inputs: [
+			InputNames: [],
+			OutputNames: [],
+			Inputs: [
 				{
-					name: 'Radius',
-					nickname: 'R',
-					description: '',
-					paramType: 'Number',
-					treeAccess: false,
+					Name: 'Radius',
+					Nickname: 'R',
+					Description: '',
+					ParamType: 'Number',
+					TreeAccess: false,
 					groupName: null,
-					minimum: 0,
-					maximum: 10,
-					atLeast: 1,
-					atMost: 1,
-					default: '5'
+					Minimum: 0,
+					Maximum: 10,
+					AtLeast: 1,
+					AtMost: 1,
+					Default: '5'
 				}
 			],
-			outputs: []
+			Outputs: []
 		};
 		route({
 			'/': onlineServer,
@@ -362,5 +330,68 @@ describe('GrasshopperClient.getIO (e2e through transport + parser pipeline)', ()
 		expect(input.default).toBe(5);
 
 		await client.dispose();
+	});
+});
+
+describe('GrasshopperClient.create cancellation', () => {
+	it('stops the probe ladder when config.signal fires during a backoff', async () => {
+		fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+		const controller = new AbortController();
+		const creating = GrasshopperClient.create(
+			{ serverUrl: SERVER, signal: controller.signal },
+			{ probe: { attempts: 5, baseDelayMs: 60_000, maxDelayMs: 60_000 } }
+		);
+		const assertion = expect(creating).rejects.toMatchObject({ code: 'ABORTED' });
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		controller.abort();
+		await assertion;
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('GrasshopperClient.dispose', () => {
+	it('disposes the schedulers it created', async () => {
+		route({ '/': onlineServer });
+		const client = await GrasshopperClient.create({ serverUrl: SERVER });
+		const scheduler = client.createScheduler();
+		await client.dispose();
+		await expect(scheduler.solve('https://example.com/a.gh', [])).rejects.toMatchObject({
+			code: 'INVALID_STATE'
+		});
+	});
+});
+
+describe('GrasshopperClient.solve errors', () => {
+	const solveFailure = (extra: Record<string, unknown> = {}) => ({
+		errors: ['boom'],
+		values: [{ ParamName: 'secret-output', InnerTree: {} }],
+		...extra
+	});
+
+	it('keeps a URL query out of the error context', async () => {
+		route({
+			'/': onlineServer,
+			'/grasshopper': () => createMockResponse(solveFailure())
+		});
+		const client = await GrasshopperClient.create({ serverUrl: SERVER });
+		await expect(client.solve('https://example.com/a.gh?token=hunter2', [])).rejects.toMatchObject({
+			context: { definition: 'https://example.com/a.gh' }
+		});
+	});
+
+	it('logs the code in debug mode, never the outputs on the error', async () => {
+		route({
+			'/': onlineServer,
+			'/grasshopper': () => createMockResponse(solveFailure())
+		});
+		const error = vi.fn();
+		setLogger({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error });
+		const client = await GrasshopperClient.create({ serverUrl: SERVER, debug: true });
+		await client.solve('https://example.com/a.gh', []).catch(() => {});
+		setLogger(null);
+		expect(error).toHaveBeenCalledTimes(1);
+		expect(JSON.stringify(error.mock.calls)).toContain('COMPUTATION_ERROR');
+		expect(JSON.stringify(error.mock.calls)).not.toContain('secret-output');
+		expect(error.mock.calls[0].every((arg: unknown) => typeof arg === 'string')).toBe(true);
 	});
 });

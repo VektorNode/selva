@@ -4,7 +4,7 @@
  * document is ignored, so a host can describe more without the engine caring.
  */
 
-export type ScopeAction = 'read' | 'write' | 'solve' | 'upload';
+export type ScopeAction = 'read' | 'write' | 'solve' | 'upload' | 'create_projects';
 
 /** A JSON Schema object, as the spec carries it. */
 export type JsonSchema = Record<string, unknown>;
@@ -18,6 +18,8 @@ export interface Operation {
 	scope: ScopeAction;
 	internal: boolean;
 	idempotent: boolean;
+	/** Runs Compute without the `solve` scope (`x-long-running`): it gets the solve timeout. */
+	longRunning: boolean;
 	pathParams: string[];
 	queryParams: { name: string; description?: string; schema: JsonSchema }[];
 	/** JSON body schema. Absent for no body; multipart bodies are not callable as tools. */
@@ -41,6 +43,7 @@ interface RawOperation {
 	summary?: string;
 	'x-scope'?: ScopeAction;
 	'x-internal'?: boolean;
+	'x-long-running'?: boolean;
 	parameters?: RawParameter[];
 	requestBody?: { content?: Record<string, { schema?: JsonSchema }> };
 }
@@ -77,6 +80,7 @@ export function indexOperations(document: unknown): OperationIndex {
 				summary: op.summary ?? '',
 				scope: op['x-scope'],
 				internal: op['x-internal'] === true,
+				longRunning: op['x-long-running'] === true,
 				idempotent: params.some((p) => p.in === 'header' && p.name === 'Idempotency-Key'),
 				pathParams: params.filter((p) => p.in === 'path').map((p) => p.name!),
 				queryParams: params

@@ -9,7 +9,13 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { DEFAULT_ORG_PERMISSIONS, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
+import {
+	DEFAULT_ORG_PERMISSIONS,
+	ERASED_ACTOR_ID,
+	ProviderError,
+	actorOf,
+	NoopEventSink
+} from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, orderColumn, toRange } from './pagination.js';
@@ -387,37 +393,11 @@ export class SupabaseOrgStore implements IOrgStore {
 	}
 
 	async removeOrgMember(ctx: RequestContext, orgId: string, userId: string): Promise<void> {
-		// Losing org membership ends every project membership scoped to that
-		// tenant. Run the project_members cascade BEFORE the org_member update —
-		// RLS policies gate project_members writes on org_member existence, so
-		// reversing the order would fail partway through under user-scoped RLS.
-		const client = this.clients.forRequest(ctx);
-		const stampRow = stampSoftDelete(ctx);
-
-		const { data: orgProjects, error: projError } = await client
-			.from('projects')
-			.select('id')
-			.eq('org_id', orgId)
-			.is('deleted_at', null);
-		if (projError) throw mapPostgrestError(projError);
-
-		const projectIds = (orgProjects ?? []).map((p) => p.id as string);
-		if (projectIds.length > 0) {
-			const { error: pmError } = await client
-				.from('project_members')
-				.update(stampRow)
-				.in('project_id', projectIds)
-				.eq('user_id', userId)
-				.is('deleted_at', null);
-			if (pmError) throw mapPostgrestError(pmError);
-		}
-
-		const { error } = await client
-			.from('org_members')
-			.update(stampRow)
-			.eq('org_id', orgId)
-			.eq('user_id', userId)
-			.is('deleted_at', null);
+		// An RPC because RLS hides private projects from an admin who is not in them,
+		// so a cascade run from here would leave the leaver's access intact.
+		const { error } = await this.clients
+			.forRequest(ctx)
+			.rpc('remove_org_member', { o: orgId, u: userId });
 		if (error) throw mapPostgrestError(error);
 		await this.events.emit({
 			type: 'org_member.removed',
@@ -442,7 +422,7 @@ interface OrgRow {
 	id: string;
 	name: string;
 	slug: string;
-	owner_id: string;
+	owner_id: string | null;
 	assets?: Record<string, string> | null;
 	created_by?: string | null;
 	updated_by?: string | null;
@@ -463,14 +443,15 @@ interface OrgMemberRow {
 }
 
 function rowToOrg(row: OrgRow): Organization {
+	const owner = row.owner_id ?? ERASED_ACTOR_ID;
 	return {
 		id: row.id,
 		name: row.name,
 		slug: row.slug,
-		ownerId: row.owner_id,
+		ownerId: owner,
 		assets: row.assets ?? undefined,
-		createdBy: row.created_by ?? row.owner_id,
-		updatedBy: row.updated_by ?? row.owner_id,
+		createdBy: row.created_by ?? owner,
+		updatedBy: row.updated_by ?? owner,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null

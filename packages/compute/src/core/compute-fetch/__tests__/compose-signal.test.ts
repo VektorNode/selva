@@ -2,16 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 import { composeSignal } from '../signal';
 
 describe('composeSignal', () => {
-	it('returns undefined signal when no caller signal and no timeout', () => {
+	it('passes the caller signal through, or nothing, when no timeout is requested', () => {
+		const callerCtrl = new AbortController();
+		expect(composeSignal(callerCtrl.signal, undefined).signal).toBe(callerCtrl.signal);
+
 		const { signal, cleanup } = composeSignal(undefined, undefined);
 		expect(signal).toBeUndefined();
 		expect(() => cleanup()).not.toThrow();
-	});
-
-	it('returns the caller signal itself when no timeout is requested', () => {
-		const callerCtrl = new AbortController();
-		const { signal } = composeSignal(callerCtrl.signal, undefined);
-		expect(signal).toBe(callerCtrl.signal);
 	});
 
 	// An app that reuses one AbortController across many solves must not accumulate a

@@ -49,7 +49,13 @@ await server.listen({ transport: 'stdio' }); // checks the live spec first
 - **Over HTTP, each request brings its own key.** `handle` sends the request's
   `Authorization: Bearer` key to `/api/v1` and never the configured `apiKey`; a request without
   one gets 401. `apiKey` is only for `listen` and `verify`.
+- **A call waits 30 s by default**, `solveTimeoutMs` (5 min) for a `solve`-scoped operation or
+  one marked `longRunning` in the registry (`x-long-running`), which runs Compute without the
+  `solve` scope.
 - **The key is redacted** from every tool output.
+- **`onToolCall` sees every tool call** once it settles: outcome, the `/api/v1` calls with their
+  status and duration, and argument names with their sizes, never values. `onCall` sees each
+  API call alone.
 - **`listen` checks the live spec** at `/api/v1/openapi.json`: every declared call must exist
   with the same scope, or the server refuses to start.
 - **A browser `Origin` must be the host's own** or listed in `allowedOrigins`; anything else gets 403. Native clients send none.

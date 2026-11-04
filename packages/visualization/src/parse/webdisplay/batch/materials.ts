@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 
-import { OWN_ENV_MAP_INTENSITY, lookEnvMapIntensity, parseColor } from '../../../shared/index.js';
+import {
+	EMISSIVE_LIGHT,
+	OWN_EMISSIVE,
+	OWN_ENV_MAP_INTENSITY,
+	lookEnvMapIntensity,
+	parseColor
+} from '../../../shared/index.js';
 
 import { applyTexture } from '../apply-texture.js';
 import { finishPatch, type ShaderPatch } from './finish.js';
@@ -83,6 +89,13 @@ export function createMaterial(
 		material.userData[OWN_ENV_MAP_INTENSITY] = matData.envMapIntensity;
 	} else if (appearance?.envMapIntensity != null) {
 		material.envMapIntensity = lookEnvMapIntensity(appearance.envMapIntensity, matData.metalness);
+	}
+
+	if (matData.emissive != null) {
+		material.emissive.set(matData.emissive);
+		material.emissiveIntensity = matData.emissiveIntensity ?? 1;
+		material.userData[OWN_EMISSIVE] = true;
+		if (matData.emissiveLight != null) material.userData[EMISSIVE_LIGHT] = matData.emissiveLight;
 	}
 
 	if (matData.clearcoat != null) {

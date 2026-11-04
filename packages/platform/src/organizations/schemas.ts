@@ -2,12 +2,9 @@ import { z } from 'zod';
 
 /**
  * Top-level path segments a tenant slug must never equal, so a slug can never
- * shadow (or be shadowed by) a route. `/o/{slug}/` is the planned shape for
- * per-org URLs, so `o` is reserved even though the length gate below already
- * makes a 1-char slug impossible — that keeps a future move to `/o/{slug}/…`
- * collision-free before any external link is minted against a slug.
- * Lowercase; matching is case-insensitive so `Admin` can't slip through. Keep
- * in sync with the route tree's top-level directories.
+ * shadow (or be shadowed by) a route. `o` is reserved for `/o/{slug}/` even though
+ * the length gate below already makes a 1-char slug impossible.
+ * `reserved-slugs.test.ts` in the selva app holds this to the route tree.
  */
 export const RESERVED_SLUGS: readonly string[] = [
 	'o',
@@ -17,11 +14,13 @@ export const RESERVED_SLUGS: readonly string[] = [
 	'login',
 	'logout',
 	'setup',
-	'settings',
 	'team',
 	'library',
 	'projects',
-	'accept-invite'
+	'accept-invite',
+	'docs',
+	'mcp',
+	'oauth'
 ];
 
 const RESERVED_SLUG_SET = new Set(RESERVED_SLUGS);
@@ -33,11 +32,20 @@ const RESERVED_SLUG_SET = new Set(RESERVED_SLUGS);
  */
 export function slugify(name: string): string {
 	return name
+		.normalize('NFKD')
+		.replace(/\p{M}/gu, '')
 		.trim()
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '')
-		.slice(0, 63);
+		.slice(0, 63)
+		.replace(/^-+|-+$/g, '');
+}
+
+/** A slug for an org named without a slug of its own. Always passes `SlugSchema`. */
+export function orgSlugFromName(name: string, fallback = 'default'): string {
+	const slug = slugify(name);
+	if (slug.length < 3) return fallback;
+	return RESERVED_SLUG_SET.has(slug) ? `${slug}-org` : slug;
 }
 
 /** Lowercase alphanumeric with internal hyphens, 3–63 chars, not a reserved word. */
@@ -47,7 +55,7 @@ export const SlugSchema = z
 	.max(63, 'Slug must be at most 63 characters')
 	.regex(
 		/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/,
-		'Slug must be lowercase alphanumeric with hyphens (no leading/trailing/consecutive hyphens)'
+		'Slug must be lowercase alphanumeric with hyphens (no leading or trailing hyphen)'
 	)
 	.refine((s) => !RESERVED_SLUG_SET.has(s), {
 		message: 'Slug is reserved and cannot be used'
@@ -91,7 +99,7 @@ export const DEFAULT_ORG_PERMISSIONS: Record<OrgRole, readonly OrgPermission[]> 
 };
 
 export const CreateOrgSchema = z.object({
-	name: z.string().min(1, 'Organization name is required').max(128),
+	name: z.string().trim().min(1, 'Organization name is required').max(128),
 	slug: SlugSchema
 });
 

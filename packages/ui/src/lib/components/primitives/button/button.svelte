@@ -8,17 +8,16 @@
 		variants: {
 			variant: {
 				default: 'bg-primary text-primary-foreground shadow-xs hover:bg-primary/90',
-				destructive:
-					'bg-destructive shadow-xs hover:bg-destructive/90 dark:bg-destructive/60 text-destructive-foreground',
+				destructive: 'bg-destructive shadow-xs hover:bg-destructive/90 text-destructive-foreground',
 				outline:
-					'bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 border',
+					'border border-border-strong bg-transparent shadow-xs hover:bg-hover hover:text-foreground',
 				// Outline with an opaque dark fill: the translucent one washes out over the light 3D canvas.
 				overlay:
-					'bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:border-input border',
-				secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80',
-				ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+					'border border-border-strong bg-raised shadow-raised hover:bg-muted hover:text-foreground',
+				secondary: 'bg-secondary text-secondary-foreground shadow-xs hover:bg-selected',
+				ghost: 'hover:bg-hover hover:text-foreground',
 				dashed:
-					'border border-dashed border-input bg-background text-muted-foreground hover:bg-muted hover:text-foreground',
+					'border border-dashed border-border-strong bg-transparent text-muted-foreground hover:border-input hover:bg-hover hover:text-foreground',
 				link: 'text-primary underline-offset-4 hover:underline'
 			},
 			size: {

@@ -28,6 +28,7 @@
 		onReorderGroups: (tabId: string, fromIndex: number, toIndex: number) => void;
 		onMoveGroupToTab: (sourceTabId: string, groupId: string, targetTabId: string) => void;
 		onParameterDrop: (tabId: string, groupId: string, event: CustomEvent) => void;
+		onCarrySelection: (groupId: string, anchorItemId: string) => void;
 		onReorder: (items: LayoutItem[], tabId: string, groupId: string) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
 		onAddLineBreak: (tabId: string, groupId: string) => void;
@@ -38,6 +39,8 @@
 		outputValues?: Record<string, unknown>;
 		/** Ids of the open item cards. */
 		expandedItems: SvelteSet<string>;
+		/** Ids of collapsed groups shown open for now; see EditableGroup. */
+		peekedGroups: SvelteSet<string>;
 	}
 
 	let {
@@ -52,6 +55,7 @@
 		onReorderGroups,
 		onMoveGroupToTab,
 		onParameterDrop,
+		onCarrySelection,
 		onReorder,
 		onRemoveItem,
 		onAddLineBreak,
@@ -59,7 +63,8 @@
 		availableInputs,
 		getParameterInfo,
 		outputValues = {},
-		expandedItems
+		expandedItems,
+		peekedGroups
 	}: Props = $props();
 
 	const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
@@ -197,6 +202,7 @@
 									{onEdit}
 									onFinalize={(items) => onReorder(items, activeTab.id, group.id)}
 									onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
+									onCarrySelection={(anchorId) => onCarrySelection(group.id, anchorId)}
 									onRemove={() => onRemoveGroup(activeTab.id, group.id)}
 									onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
 									onRemoveItem={(itemId) => onRemoveItem(activeTab.id, group.id, itemId)}
@@ -204,6 +210,7 @@
 									{getParameterInfo}
 									{outputValues}
 									{expandedItems}
+									{peekedGroups}
 								/>
 							{/if}
 						</div>

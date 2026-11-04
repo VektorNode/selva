@@ -7,10 +7,11 @@
 		EmptyState,
 		Input,
 		SectionHeader,
-		toast
+		toast,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Plus, Trash2, FolderKanban, ExternalLink } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { ProjectVisibility } from '@selvajs/platform';
 	import type { ProjectRow } from './+page.server';
 
@@ -54,7 +55,7 @@
 				newDescription = '';
 				newVisibility = 'private';
 				showCreateForm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to create project');
@@ -72,7 +73,7 @@
 			const res = await fetch(`/api/v1/projects/${project.id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success(`Deleted "${project.name}"`);
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to delete project');
@@ -120,14 +121,11 @@
 				</div>
 				<div class="grid gap-3 sm:grid-cols-2">
 					<Input placeholder="Project name" bind:value={newName} />
-					<select
-						bind:value={newVisibility}
-						class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-					>
-						{#each VISIBILITY_OPTIONS as v (v)}
-							<option value={v}>{v}</option>
-						{/each}
-					</select>
+					<FilterableDropdown
+						items={VISIBILITY_OPTIONS.map((v) => ({ id: v, label: v }))}
+						value={newVisibility}
+						onChange={(v) => (newVisibility = v as ProjectVisibility)}
+					/>
 				</div>
 				<Input placeholder="Description (optional)" bind:value={newDescription} />
 				<div class="flex gap-2">

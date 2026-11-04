@@ -1,5 +1,15 @@
 {
 	"profiles": {
+		"Rhino 9 (Windows)": {
+			"commandName": "Executable",
+			"executablePath": "C:\\Program Files\\Rhino 9\\System\\Rhino.exe",
+			"commandLineArgs": "/runscript=\"_Grasshopper\"",
+			"workingDirectory": "$(ProjectDir)",
+			"environmentVariables": {
+				"RHINO_PACKAGE_DIRS": "$(ProjectDir)/bin/Debug"
+			},
+			"nativeDebugging": true
+		},
 		"Rhino 8 - netcore (OSX)": {
 			"commandName": "Executable",
 			"executablePath": "/Applications/Rhino 8.app/Contents/MacOS/Rhinoceros",

@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { ArrowRight, Server, Star } from '@lucide/svelte';
 	import type { DefinitionRecord, ProjectVisibility } from '@selvajs/platform';
-	import { huesFor, monogram, formatUpdated } from './cardStyles';
+	import { huesFor, monogram } from './cardStyles';
+	import { formatRelative } from '#lib/format/relativeTime.js';
 	import { statusRing, statusDot } from '../../../routes/projects/_components/statusStyles';
 
 	interface Props {
@@ -42,6 +43,8 @@
 	}: Props = $props();
 
 	const hues = $derived(huesFor(record.guid));
+	// Same project, same colour, so look-alike tools from different projects tell apart at a glance.
+	const projectHue = $derived(projectName ? huesFor(projectName).h1 : 0);
 
 	function activate() {
 		if (loading) return;
@@ -61,9 +64,9 @@
 	aria-disabled={loading}
 	onclick={activate}
 	onkeydown={handleKey}
-	class="group border-border bg-card focus-visible:ring-ring flex flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition-shadow hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] focus:outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
+	class="group border-border bg-card focus-visible:ring-ring flex cursor-pointer flex-col overflow-hidden rounded-xl border text-left shadow-[0_1px_0_rgba(0,0,0,0.03)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-16px_rgba(0,0,0,0.18)] focus:outline-none focus-visible:ring-2 aria-disabled:cursor-not-allowed aria-disabled:opacity-60"
 >
-	<div class="border-border relative aspect-4/3 overflow-hidden border-b">
+	<div class="border-border relative aspect-16/10 overflow-hidden border-b">
 		{#if record.coverImage}
 			<img
 				src={record.coverImage}
@@ -76,7 +79,9 @@
 				style:--tool-h1={hues.h1}
 				style:--tool-h2={hues.h2}
 			>
-				<span class="text-foreground/40 text-4xl font-semibold">
+				<span
+					class="bg-card/70 text-foreground flex size-16 items-center justify-center rounded-xl text-3xl font-semibold shadow-sm backdrop-blur-sm"
+				>
 					{monogram(record.displayName)}
 				</span>
 			</div>
@@ -128,13 +133,21 @@
 
 	<div class="flex flex-1 flex-col p-3.5">
 		{#if projectName}
-			<p class="text-muted-foreground mb-1 truncate font-mono text-[10.5px]">
-				{projectName}{#if projectVisibility}&nbsp;·&nbsp;{projectVisibility}{/if}
+			<p class="mb-1.5 flex items-center gap-1.5 text-xs">
+				<span
+					class="project-chip max-w-full truncate rounded-full px-2 py-0.5 font-medium"
+					style:--project-h={projectHue}
+				>
+					{projectName}
+				</span>
+				{#if projectVisibility}
+					<span class="text-muted-foreground shrink-0">{projectVisibility}</span>
+				{/if}
 			</p>
 		{/if}
 		<p class="truncate text-[14px] font-semibold">{record.displayName}</p>
 		{#if record.description}
-			<p class="text-muted-foreground mt-1 line-clamp-2 text-[12.5px] leading-relaxed">
+			<p class="text-muted-foreground mt-1 line-clamp-2 text-[13px] leading-relaxed">
 				{record.description}
 			</p>
 		{/if}
@@ -142,9 +155,7 @@
 		{#if record.tags?.length}
 			<div class="mt-2.5 flex flex-wrap gap-1">
 				{#each record.tags.slice(0, 3) as tag (tag)}
-					<span class="bg-muted text-muted-foreground rounded px-1.5 py-px font-mono text-[10.5px]"
-						>#{tag}</span
-					>
+					<span class="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs">{tag}</span>
 				{/each}
 			</div>
 		{/if}
@@ -160,17 +171,14 @@
 				</div>
 			{/if}
 			<hr class="border-border my-3" />
-			<div class="text-muted-foreground flex items-center justify-between text-[11.5px]">
-				<span class="font-mono">
-					{#if showStatus}
-						{formatUpdated(record.updatedAt)} · {record.solveCount.toLocaleString()} runs
-					{:else}
-						{record.solveCount > 0 ? `${record.solveCount.toLocaleString()} runs` : 'No runs yet'}
-					{/if}
+			<div class="text-muted-foreground flex items-center justify-between text-xs">
+				<span>
+					Updated {formatRelative(record.updatedAt)}
+					· {record.solveCount > 0 ? `${record.solveCount.toLocaleString()} runs` : 'No runs yet'}
 				</span>
 				{#if onToggleStar}
 					<span
-						class="text-foreground flex items-center gap-1 font-medium opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100"
+						class="text-foreground flex items-center gap-1 font-medium opacity-60 transition-opacity group-hover:opacity-100"
 					>
 						Open <ArrowRight class="h-3 w-3" />
 					</span>

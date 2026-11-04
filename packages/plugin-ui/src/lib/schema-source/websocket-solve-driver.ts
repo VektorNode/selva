@@ -148,6 +148,8 @@ export function createWebSocketSolveDriver(
 					if (myToken === outputsToken) {
 						const all: THREE.Object3D[] = [];
 						for (const blob of blobs) {
+							// A parse can't be stopped once running, but a newer solve means the rest of these never show.
+							if (myToken !== outputsToken) break;
 							// Merged by material (the parser's default): an imported building model arrives
 							// as thousands of small meshes, and per-object render cost, not triangle
 							// count, is what makes it unusable. Per-object identity survives the merge
@@ -204,11 +206,15 @@ export function createWebSocketSolveDriver(
 					outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
 					meshes: sceneObjects
 				},
-				outcome
+				// A message on the solve: it still applied, and `reportError` would settle it again.
+				displayError
+					? {
+							...outcome,
+							diagnostics: [...outcome.diagnostics, { level: 'error', message: displayError }]
+						}
+					: outcome
 			)
 		);
-		// After the report, so the solve settles once, as applied; the error still shows.
-		if (displayError) getReporter().reportError(displayError);
 	}
 
 	// Live events ride their own frame; the session decides what to do with them.
@@ -250,8 +256,10 @@ export function createWebSocketSolveDriver(
 			return wsState.isSolving || wsState.awaitingSolve;
 		},
 		primeFromInitialData(message) {
-			// Same parse-and-report path as a live frame; initialData carries the same
-			// outputs/binaryBatchCount/modelUnits fields.
+			// Same parse-and-report path as a live frame. initialData itself carries no mesh
+			// fields; a real binaryBatchCount only shows up on the outputs broadcast the server
+			// schedules right after connecting (BridgeOrchestrator.ClientConnected), caught by
+			// handleOutputs the normal way once it arrives.
 			void handleOutputs(message);
 		},
 		dispose() {

@@ -15,6 +15,8 @@
  * both test suites, so a rule changed on one side fails CI on the other.
  */
 
+import { COMPUTE_REQUEST_MAX_BYTES } from '../compute/limits.js';
+
 /** Neutral severity. Callers map it onto their own presentation. */
 export type ConfigVerdict = 'ok' | 'warn' | 'fail';
 
@@ -32,8 +34,8 @@ export interface DeploymentEnv {
 	ORIGIN?: string;
 	ADDRESS_HEADER?: string;
 	XFF_DEPTH?: string;
+	HOST?: string;
 	BODY_SIZE_LIMIT?: string;
-	COMPUTE_REQUEST_MAX_BYTES?: string;
 	// Callers hand over a whole env bag (`process.env`, `$env/dynamic/private`),
 	// which carries far more than these keys. Without this, an env bag typed as a
 	// bare index signature has no declared property in common with an all-optional
@@ -62,9 +64,6 @@ export function parseBodySizeLimit(raw: string | undefined | null): number | nul
 	return bytes;
 }
 
-/** The app's own default for COMPUTE_REQUEST_MAX_BYTES (compute/limits.ts). */
-const COMPUTE_REQUEST_DEFAULT_BYTES = 256 * 1024 * 1024;
-
 const asMb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 
 /**
@@ -76,7 +75,7 @@ const asMb = (bytes: number) => `${Math.round(bytes / (1024 * 1024))} MB`;
 export function checkBodySizeLimit(env: DeploymentEnv): ConfigFinding {
 	const base = { id: 'body-size-limit', label: 'Upload size limit' };
 	const raw = env.BODY_SIZE_LIMIT;
-	const requestCap = Number(env.COMPUTE_REQUEST_MAX_BYTES) || COMPUTE_REQUEST_DEFAULT_BYTES;
+	const requestCap = COMPUTE_REQUEST_MAX_BYTES;
 
 	if (raw == null || raw === '') {
 		return {
@@ -104,8 +103,8 @@ export function checkBodySizeLimit(env: DeploymentEnv): ConfigFinding {
 			...base,
 			verdict: 'warn',
 			summary:
-				`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below COMPUTE_REQUEST_MAX_BYTES ` +
-				`(${asMb(requestCap)}) — the global cap rejects first, making the compute cap dead config.`,
+				`BODY_SIZE_LIMIT=${raw} (${asMb(bytes)}) is below the ` +
+				`${asMb(requestCap)} a solve may send — larger solves fail with 413 before Selva sees them.`,
 			remediation: `Raise BODY_SIZE_LIMIT to at least ${asMb(requestCap)} and restart.`
 		};
 	}
@@ -182,6 +181,24 @@ export function checkClientAddress(env: DeploymentEnv): ConfigFinding {
 			verdict: 'fail',
 			summary: `XFF_DEPTH="${depth}" is not a positive integer.`,
 			remediation: 'It counts proxies from the outside in — use 1 for a single reverse proxy.'
+		};
+	}
+
+	// A trusted address header is only safe if every request passes through the
+	// proxy: on a public bind a direct caller sets the header itself and picks
+	// its own rate-limit bucket.
+	const host = env.HOST ?? '0.0.0.0';
+	if (!['127.0.0.1', 'localhost', '::1'].includes(host)) {
+		return {
+			...base,
+			verdict: 'warn',
+			summary:
+				`ADDRESS_HEADER=${header} is trusted but HOST=${host} leaves the app reachable ` +
+				'without the proxy, so a direct caller can set the header and pick its own ' +
+				'rate-limit bucket.',
+			remediation:
+				'Set HOST=127.0.0.1 and keep port 3000 closed in the firewall. Ignore this only ' +
+				'if the proxy runs on another host and network isolation keeps everything else out.'
 		};
 	}
 

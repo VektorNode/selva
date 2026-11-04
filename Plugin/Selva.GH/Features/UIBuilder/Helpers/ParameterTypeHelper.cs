@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Special;
@@ -36,25 +37,29 @@ public static class ParameterTypeHelper
         return string.Equals(typeName, "ContextBakeComponent", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    ///     True when an ISelvaFileOutput feeds this param through wires and relays, or when FileData
+    ///     arrived through a data-passing component. Merge and friends can't be walked, because a
+    ///     component that reads a file and emits something else looks identical on the graph, so
+    ///     they're judged by the goo on the input and qualify only once a solve has produced it.
+    /// </summary>
     public static bool IsSourcedFromFileOutput(IGH_Param inputParam)
     {
-        if (inputParam == null)
-        {
-            return false;
-        }
-
-        foreach (var source in inputParam.Sources)
-        {
-            if (source?.Attributes?.GetTopLevel?.DocObject is ISelvaFileOutput)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return WalkUpstreamFor<ISelvaFileOutput>(inputParam, new HashSet<Guid>()) != null
+               || IsSourcedFromGooTypeName(inputParam, "FileData");
     }
 
-    /// <summary>A ContextBake fed by an ISelvaFileOutput component — a file download output.</summary>
+    /// <summary>
+    ///     True when a wired input holds no data. Goo-detected outputs can't be judged then, so a
+    ///     solve that culls the data must not read as the output being unwired.
+    /// </summary>
+    public static bool IsAwaitingBakeData(GH_Component component)
+    {
+        return component?.Params.Input != null
+               && component.Params.Input.Any(p => p.SourceCount > 0 && p.VolatileData.IsEmpty);
+    }
+
+    /// <summary>A ContextBake carrying file data — a file download output.</summary>
     public static bool IsFileOutputBakeComponent(GH_Component component)
     {
         if (component == null || !IsContextBakeComponent(component))
@@ -107,9 +112,8 @@ public static class ParameterTypeHelper
 
     /// <summary>
     ///     A ContextBake fed by a "Set Dynamic Value List" (GH_DynamicValueListOutput). Detected by
-    ///     upstream component type, not goo TypeName: the Set component's output is a generic param,
-    ///     so the goo's TypeName is only visible in volatile data after a solve — component-type
-    ///     detection also works pre-solve.
+    ///     upstream component type, which works pre-solve, or by the goo once a solve has carried it
+    ///     through a data-passing component such as Merge.
     /// </summary>
     public static bool IsDynamicValueListBakeComponent(GH_Component component)
     {
@@ -118,7 +122,9 @@ public static class ParameterTypeHelper
             return false;
         }
 
-        return FindUpstreamDynamicValueListOutput(component) != null;
+        return component.Params.Input.Any(inputParam =>
+            WalkUpstreamFor<GH_DynamicValueListOutput>(inputParam, new HashSet<Guid>()) != null
+            || IsSourcedFromGooTypeName(inputParam, "Dynamic Value List"));
     }
 
     /// <summary>
@@ -162,8 +168,10 @@ public static class ParameterTypeHelper
     }
 
     /// <summary>
-    ///     Finds the "Set Dynamic Value List" component feeding a ContextBake, walking sources
-    ///     upward through the bake's inputs, or null when none is wired.
+    ///     Finds the "Set Dynamic Value List" component feeding a ContextBake, or null when none is
+    ///     wired. Walks through components too, so the Set is reachable behind a Merge. Only call
+    ///     this on a bake already known to carry a DVL: anywhere else the walk can hit a Set whose
+    ///     data never reaches the bake.
     /// </summary>
     public static GH_DynamicValueListOutput FindUpstreamDynamicValueListOutput(GH_Component bakeComponent)
     {
@@ -174,7 +182,7 @@ public static class ParameterTypeHelper
 
         foreach (var inputParam in bakeComponent.Params.Input)
         {
-            var found = WalkUpstreamFor<GH_DynamicValueListOutput>(inputParam, new HashSet<Guid>());
+            var found = WalkUpstreamFor<GH_DynamicValueListOutput>(inputParam, new HashSet<Guid>(), true);
             if (found != null)
             {
                 return found;
@@ -187,9 +195,11 @@ public static class ParameterTypeHelper
     /// <summary>
     ///     Walks a param's sources upward for a producing component of type <typeparamref name="T" />,
     ///     passing transparently through wire relays and generic pass-through params (e.g.
-    ///     Param_GenericObject, param painters). Cycle-guarded by visited instance ids.
+    ///     Param_GenericObject, param painters). Cycle-guarded by visited instance ids. With
+    ///     <paramref name="throughComponents" />, also continues through every other component's inputs.
     /// </summary>
-    private static T WalkUpstreamFor<T>(IGH_Param param, HashSet<Guid> visited) where T : class
+    private static T WalkUpstreamFor<T>(IGH_Param param, HashSet<Guid> visited, bool throughComponents = false)
+        where T : class
     {
         if (param?.Sources == null)
         {
@@ -210,14 +220,25 @@ public static class ParameterTypeHelper
             }
 
             // A bare param (relay/generic) just forwards data, so keep walking up through it.
-            // A param owned by a real (non-T) component stops the search on this branch — we
-            // don't tunnel through arbitrary components, only wire-forwarding params.
+            // A param owned by a real (non-T) component stops the search on this branch unless the
+            // caller opted in: reaching a producer doesn't prove its data arrives here.
             if (owner == null || ReferenceEquals(owner, source))
             {
-                var deeper = WalkUpstreamFor<T>(source, visited);
+                var deeper = WalkUpstreamFor<T>(source, visited, throughComponents);
                 if (deeper != null)
                 {
                     return deeper;
+                }
+            }
+            else if (throughComponents && owner is IGH_Component component)
+            {
+                foreach (var input in component.Params.Input)
+                {
+                    var deeper = WalkUpstreamFor<T>(input, visited, true);
+                    if (deeper != null)
+                    {
+                        return deeper;
+                    }
                 }
             }
         }
@@ -539,6 +560,13 @@ public static class ParameterTypeHelper
             return false;
         }
 
+        if (obj is IGH_ContextualParameter2 contextual)
+        {
+            contextual.ClearContextualData();
+            return true;
+        }
+
+        // Contextual components (not params) declare the method without the interface.
         var method = GetCachedMethod(obj.GetType(), "ClearContextualData", ClearContextualDataMethodCache);
         if (method == null)
         {

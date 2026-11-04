@@ -11,6 +11,7 @@
 		label: string;
 		icon?: Component;
 		iconClass?: string;
+		disabled?: boolean;
 	}
 
 	interface Props {
@@ -24,6 +25,10 @@
 		/** Above this many items the list gets a filter box. */
 		searchThreshold?: number;
 		disabled?: boolean;
+		/** Submits the picked id with a plain <form>, like a native select's name. */
+		name?: string;
+		size?: 'default' | 'sm';
+		'aria-label'?: string;
 		class?: string;
 	}
 
@@ -37,6 +42,9 @@
 		searchPlaceholder = 'Filter...',
 		searchThreshold = 4,
 		disabled = false,
+		name,
+		size = 'default',
+		'aria-label': ariaLabel,
 		class: className
 	}: Props = $props();
 
@@ -51,14 +59,17 @@
 	}
 </script>
 
+{#if name}<input type="hidden" {name} value={value ?? ''} />{/if}
+
 <Popover.Root bind:open>
 	<Popover.Trigger
 		{id}
 		{disabled}
 		role="combobox"
 		aria-expanded={open}
+		aria-label={ariaLabel}
 		class={cn(
-			buttonVariants({ variant: 'outline' }),
+			buttonVariants({ variant: 'outline', size }),
 			'font-normal w-full justify-start',
 			className
 		)}
@@ -85,6 +96,7 @@
 						value={item.id}
 						keywords={[item.label]}
 						data-checked={item.id === value}
+						disabled={item.disabled}
 						onSelect={() => pick(item)}
 					>
 						{#if ItemIcon}

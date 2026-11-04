@@ -10,10 +10,11 @@
 		Tabs,
 		Textarea,
 		toast,
-		ConfirmDialog
+		ConfirmDialog,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { ArrowLeft, FileText, Plus, Settings, Shield, Trash2, X } from '@lucide/svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import type { GrantRow, OrgOption, UserOption, DefinitionRow } from './+page.server';
 	import type { Project } from '@selvajs/platform';
 	import { primaryLabel, emailSubtitle } from '#lib/user-display.js';
@@ -29,7 +30,7 @@
 
 	// ============================================================================
 	// Settings — initial values seeded from data.project; the $effect below
-	// resyncs after every invalidateAll. The svelte-ignore is needed because
+	// resyncs after every refreshAll. The svelte-ignore is needed because
 	// the seeders pre-date the effect (warned but correct).
 	// ============================================================================
 	/* svelte-ignore state_referenced_locally */
@@ -65,7 +66,7 @@
 				throw new Error(body.message ?? `HTTP ${res.status}`);
 			}
 			toast.success('Saved');
-			await invalidateAll();
+			await refreshAll();
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -141,7 +142,7 @@
 			showAddGrant = false;
 			granteeId = '';
 			canSolveNew = true;
-			await invalidateAll();
+			await refreshAll();
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -160,7 +161,7 @@
 				throw new Error(body.message ?? `HTTP ${res.status}`);
 			}
 			toast.success('Grant revoked');
-			await invalidateAll();
+			await refreshAll();
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -224,7 +225,7 @@
 					</div>
 
 					{#if showAddGrant}
-						<div class="bg-muted/30 space-y-3 rounded-lg border p-4">
+						<div class="bg-raised shadow-raised space-y-3 rounded-lg border p-4">
 							<div class="space-y-1.5">
 								<Label>Grantee type</Label>
 								<div class="flex gap-2">
@@ -246,19 +247,16 @@
 							</div>
 							<div class="space-y-1.5">
 								<Label for="grantee-id">{granteeType === 'org' ? 'Organization' : 'User'}</Label>
-								<select
+								<FilterableDropdown
 									id="grantee-id"
-									bind:value={granteeId}
-									class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-								>
-									{#each granteeOptions as opt (opt.id)}
-										<option value={opt.id} disabled={usedGranteeIds.has(opt.id)}>
-											{opt.label}{opt.sub ? ` — ${opt.sub}` : ''}{usedGranteeIds.has(opt.id)
-												? ' (already granted)'
-												: ''}
-										</option>
-									{/each}
-								</select>
+									items={granteeOptions.map((opt) => ({
+										id: opt.id,
+										label: `${opt.label}${opt.sub ? ` — ${opt.sub}` : ''}${usedGranteeIds.has(opt.id) ? ' (already granted)' : ''}`,
+										disabled: usedGranteeIds.has(opt.id)
+									}))}
+									value={granteeId}
+									onChange={(v) => (granteeId = v)}
+								/>
 							</div>
 							<label class="flex items-center gap-2 text-sm">
 								<input type="checkbox" bind:checked={canSolveNew} />

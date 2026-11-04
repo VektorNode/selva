@@ -7,7 +7,8 @@ import type { OrgShareLink, ShareLink } from './types.js';
  * (definitionId, channel). The store sees only the HMAC hash; the raw token
  * is generated and shown to the minter at the route layer.
  *
- * Reads filter `revokedAt IS NULL` defensively.
+ * List and token reads treat a revoked or expired link as gone. `getById` does
+ * not, so a caller can tell a dead link from a missing one.
  */
 export interface IShareLinkStore {
 	/** Caller has already hashed the raw token. */
@@ -34,7 +35,10 @@ export interface IShareLinkStore {
 	getById(ctx: RequestContext, id: string): Promise<ShareLink | null>;
 	/** Returns null when the link doesn't exist, is revoked, or its parent definition is soft-deleted. */
 	getByTokenHash(ctx: RequestContext, tokenHash: string): Promise<ShareLink | null>;
-	/** Soft-delete (set `revokedAt`). Idempotent. */
+	/**
+	 * Soft-delete (set `revokedAt`). Idempotent: emits once, and a repeat is a no-op.
+	 * Throws `ProviderError` when the caller may not revoke it.
+	 */
 	revoke(ctx: RequestContext, id: string): Promise<void>;
 	/**
 	 * Atomic check-and-increment; must be a single statement, since

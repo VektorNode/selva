@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using Newtonsoft.Json;
@@ -29,7 +30,12 @@ public static class SlvmFile
     public const uint LegacyMagic = 0x31464D44; // "DMF1" little-endian
     private const uint LegacyVersion = 1;
 
-    public static void Write(Stream output, DisplayBatch batch)
+    /// <param name="modelUnits">
+    ///     Rhino unit system name the batch's coordinates are in, stored so a reader in another
+    ///     document can tell. A batch that was itself loaded from a file keeps the units it came
+    ///     with: its geometry is copied verbatim, so they still describe it.
+    /// </param>
+    public static void Write(Stream output, DisplayBatch batch, string modelUnits = null)
     {
         if (output == null)
         {
@@ -47,17 +53,37 @@ public static class SlvmFile
         byte[] geometryBlob = null;
         if (batch.CompressedData != null && batch.CompressedData.Length > 0)
         {
-            geometryBlob = SlvmDocument.IsSlvm(batch.CompressedData)
-                ? SlvmDocument.Read(batch.CompressedData).GeometryBlob
-                : batch.CompressedData; // legacy SLVA/SLVZ blob from an old .gh — adopt as-is
+            if (SlvmDocument.IsSlvm(batch.CompressedData))
+            {
+                var doc = SlvmDocument.Read(batch.CompressedData);
+                geometryBlob = doc.GeometryBlob;
+                modelUnits = doc.ModelUnits ?? modelUnits;
+            }
+            else
+            {
+                geometryBlob = batch.CompressedData; // legacy SLVA/SLVZ blob from an old .gh — adopt as-is
+            }
         }
 
-        var fileBytes = SlvmDocument.Write(batch, geometryBlob, includeItems: true);
+        var extensions = string.IsNullOrEmpty(modelUnits)
+            ? null
+            : new Dictionary<string, byte[]>
+            {
+                [SlvmDocument.ModelUnitsNamespace] = Encoding.UTF8.GetBytes(modelUnits)
+            };
+        var fileBytes = SlvmDocument.Write(batch, geometryBlob, includeItems: true, extensions);
         output.Write(fileBytes, 0, fileBytes.Length);
     }
 
-    public static DisplayBatch Read(Stream input)
+    public static DisplayBatch Read(Stream input) => Read(input, out _);
+
+    /// <param name="modelUnits">
+    ///     The unit system the file was written in, or null for a legacy file or one that
+    ///     recorded none.
+    /// </param>
+    public static DisplayBatch Read(Stream input, out string modelUnits)
     {
+        modelUnits = null;
         if (input == null)
         {
             throw new ArgumentNullException(nameof(input));
@@ -71,6 +97,7 @@ public static class SlvmFile
             if (SlvmDocument.IsSlvm(bytes))
             {
                 var doc = SlvmDocument.Read(bytes);
+                modelUnits = doc.ModelUnits;
                 // In-memory CompressedData is the wire shape: items travel as JSON alongside, so
                 // strip their chunks or a re-broadcast would carry them twice.
                 doc.Batch.CompressedData = SlvmDocument.StripItems(bytes);

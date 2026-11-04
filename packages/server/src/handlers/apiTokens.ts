@@ -43,6 +43,8 @@ import {
 import type { ApiHandler, ApiRequest } from '../api/index.js';
 import { requireActingOrg, requireCanViewProject } from '../access/index.js';
 import { canHoldApiTokens, type ApiTokenCodec } from '../tokens/index.js';
+import { signInIsStale } from '../http/sign-in-age.js';
+import type { ApiTokenResolutionCache } from '../http/api-token.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -230,6 +232,11 @@ export async function mintApiToken(
 			'API tokens can only be created from a signed-in session.'
 		);
 	}
+	// A key minted on a stale sign-in would be refused on its first request.
+	const signedIn = await req.deps.auth.getUser(user.id);
+	if (signInIsStale(signedIn?.lastLoginAt, req.deps.tokens.signInMaxAgeMs, Date.now())) {
+		apiError(401, ApiErrorCode.SIGN_IN_REQUIRED, 'Sign in again to create an API token.');
+	}
 	if (!(await mayHoldApiTokens(req.deps, ctx, input.scopes))) {
 		apiError(
 			403,
@@ -293,6 +300,7 @@ export const revokeApiToken: ApiHandler = async (req) => {
 		apiError(404, ApiErrorCode.NOT_FOUND, 'API token not found');
 	}
 	await store.revoke(ctx, tokenId, own ? 'owner' : 'admin');
+	req.deps.tokens.resolutionCache?.forget(tokenId);
 	return noContent();
 };
 
@@ -311,6 +319,7 @@ export const revokeOwnApiToken: ApiHandler = async (req) => {
 		);
 	}
 	await storeOf(req).revoke(ctx, ctx.apiScope.tokenId, 'owner');
+	req.deps.tokens.resolutionCache?.forget(ctx.apiScope.tokenId);
 	return noContent();
 };
 
@@ -327,12 +336,23 @@ export async function revokeUserApiTokens(
 	store: IApiTokenStore | undefined,
 	ctx: RequestContext,
 	userId: string,
-	opts: { orgId?: string; reason: ApiTokenRevokeReason },
+	opts: {
+		orgId?: string;
+		reason: ApiTokenRevokeReason;
+		/** Dropped from first, so this instance stops answering the keys at once. */
+		resolutionCache?: ApiTokenResolutionCache;
+	},
 	log: ILogger
 ): Promise<void> {
+	opts.resolutionCache?.forgetUser(userId);
 	if (!store) return;
 	try {
-		await store.revokeAllForUser(ctx, userId, opts);
+		// The caller is already authorized. As `system`, so RLS cannot quietly match no
+		// rows for an operator without a grant on the org, while `userId` stays the actor.
+		await store.revokeAllForUser({ ...ctx, system: true }, userId, {
+			orgId: opts.orgId,
+			reason: opts.reason
+		});
 	} catch (err) {
 		log.error('Failed to revoke API tokens', {
 			component: 'ApiTokens',

@@ -16,7 +16,8 @@ const COMMANDS = {
 	update: () => import('./commands/pm2.js').then((m) => m.runUpdate),
 	migrate: () => import('./commands/migrate.js').then((m) => m.runMigrate),
 	'setup-proxy': () => import('./commands/proxy.js').then((m) => m.runSetupProxy),
-	keys: () => import('./commands/keys.js').then((m) => keysDispatch(m))
+	keys: () => import('./commands/keys.js').then((m) => keysDispatch(m)),
+	config: () => import('./commands/config.js').then((m) => m.runConfig)
 };
 
 // `selva doctor --help` used to run the full doctor: commands own their argv,
@@ -49,9 +50,13 @@ const USAGE = {
 			'npm update @selvajs/cli + @selvajs/selva, then restart. Rolls the\ndependency tree back if the install fails.'
 	},
 	migrate: {
-		usage: 'selva migrate',
+		usage: 'selva migrate [--dry-run | --undo]',
 		blurb:
-			'Bring package.json and the deployment layout onto the current release.\nRewrites keys, never comments.'
+			'Bring package.json, the deployment layout and .env onto the current release.\nRenames old keys and proves every setting keeps its meaning before writing.',
+		flags: [
+			['--dry-run', 'Show what would change. Writes nothing.'],
+			['--undo', 'Restore the newest .env backup.']
+		]
 	},
 	'setup-proxy': {
 		usage: 'selva setup-proxy [--domain <fqdn>] [--acme-email <addr>]',
@@ -62,10 +67,20 @@ const USAGE = {
 			['--acme-email', "Address Let's Encrypt sends expiry notices to."]
 		]
 	},
-	keys: {
-		usage: 'selva keys rotate <hmac|at-rest>',
+	config: {
+		usage: 'selva config <show [--all] | set KEY=VALUE | unset KEY>',
 		blurb:
-			'Rotate one secret in .env. Destructive and not reversible — the command\nspells out the blast radius and asks before writing.'
+			'Show what .env sets, what is default and what is wrong; set or unset one\nkey after checking it. Edits only that line and keeps a backup.',
+		flags: [['--all', 'show: list every setting, defaults included.']]
+	},
+	keys: {
+		usage: 'selva keys rotate <hmac|at-rest> [--finish | --leaked]',
+		blurb:
+			'Rotate one secret in .env. The old key stays accepted as <KEY>_PREVIOUS, so\nnothing breaks; --finish drops it later. --leaked drops it at once.',
+		flags: [
+			['--finish', 'Remove <KEY>_PREVIOUS once the overlap has passed.'],
+			['--leaked', 'Replace the key and drop the old one now. Breaks what it signed.']
+		]
 	}
 };
 
@@ -85,7 +100,7 @@ function keysDispatch(m) {
 	return async (argv) => {
 		const sub = argv[0];
 		if (sub === 'rotate') return m.runKeysRotate(argv.slice(1));
-		console.error(`Usage: selva keys rotate <hmac|at-rest>`);
+		console.error(`Usage: selva keys rotate <hmac|at-rest> [--finish | --leaked]`);
 		process.exit(1);
 	};
 }
@@ -140,7 +155,8 @@ function printHelp() {
 			'  update                  npm update @selvajs/cli + @selvajs/selva, then restart',
 			'  migrate                 Bring package.json onto the current layout',
 			'  setup-proxy             Install + configure Caddy with TLS for this deployment',
-			'  keys rotate <hmac|at-rest>   Rotate a secret in .env (destructive)',
+			'  config show|set|unset   What .env sets; change one key safely',
+			'  keys rotate <hmac|at-rest>   Rotate a secret; the old one keeps working',
 			'',
 			pc.dim('`npx selva <command> --help` explains one command.'),
 			'',

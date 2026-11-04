@@ -1,7 +1,12 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getProjectProvider } from '#lib/server/providers.server.js';
+import {
+	getDefinitionMeta,
+	getProjectProvider,
+	getStorageProvider
+} from '#lib/server/providers.server.js';
+import { deleteProjectWithBlobs } from '@selvajs/server/projects';
 import { requireInstanceAdmin } from '#lib/server/access.server.js';
 import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { apiRoute, noContent, parseBody, requireParams } from '#lib/server/api/http.js';
@@ -44,7 +49,9 @@ export const PATCH: RequestHandler = apiRoute(
 		const patch: { name?: string; slug?: string; description?: string } = {};
 		if (input.name !== undefined) {
 			patch.name = input.name;
-			patch.slug = slugify(input.name);
+			// A name with no usable letters yields '', which keeps the current slug.
+			const slug = slugify(input.name);
+			if (slug) patch.slug = slug;
 		}
 		if (input.description !== undefined) {
 			patch.description = input.description ?? undefined;
@@ -62,7 +69,15 @@ export const DELETE: RequestHandler = apiRoute(
 		const { id } = requireParams(params, 'id');
 
 		await loadPlatformProjectOr404(id);
-		await getProjectProvider().deleteProject(SYSTEM_CONTEXT, id);
+		await deleteProjectWithBlobs(
+			{
+				projects: getProjectProvider(),
+				definitions: getDefinitionMeta(),
+				storage: getStorageProvider()
+			},
+			SYSTEM_CONTEXT,
+			id
+		);
 		return noContent();
 	}
 );

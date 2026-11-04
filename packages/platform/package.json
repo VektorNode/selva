@@ -1,7 +1,7 @@
 {
 	"name": "@selvajs/platform",
-	"version": "0.21.0-beta.3",
-	"description": "Pure TypeScript interfaces for Selva platform providers (auth, definitions, compute)",
+	"version": "1.0.0-beta.11",
+	"description": "Interfaces, access rules and conformance suites for Selva platform providers",
 	"license": "MIT",
 	"author": "VektorNode",
 	"homepage": "https://selva.dev",
@@ -25,6 +25,7 @@
 		"node": ">=24.0.0"
 	},
 	"type": "module",
+	"sideEffects": false,
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"exports": {
@@ -97,6 +98,11 @@
 			"selva-source": "./src/computeServer/index.ts",
 			"types": "./dist/computeServer/index.d.ts",
 			"import": "./dist/computeServer/index.js"
+		},
+		"./config": {
+			"selva-source": "./src/config/index.ts",
+			"types": "./dist/config/index.d.ts",
+			"import": "./dist/config/index.js"
 		},
 		"./access": {
 			"selva-source": "./src/access/index.ts",

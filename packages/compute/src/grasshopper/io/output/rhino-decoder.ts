@@ -1,5 +1,4 @@
-import type { RhinoModule } from 'rhino3dm';
-import { getLogger } from '@/core';
+import { getLogger } from '@/core/utils/logger';
 import { makeDecodeError } from './rhino-objects';
 
 interface XYZ {
@@ -8,7 +7,17 @@ interface XYZ {
 	Z: number;
 }
 
-type RhinoDecoder = (rhino: RhinoModule, data: unknown) => unknown;
+/**
+ * The part of rhino3dm the decoders call. Structural so the public types don't name `rhino3dm`, a
+ * dev dependency here. A loaded `RhinoModule` satisfies it.
+ */
+export interface RhinoRuntime {
+	Point: new (location: number[]) => unknown;
+	Line: new (from: number[], to: number[]) => unknown;
+	CommonObject: { decode(jsonObject: object): unknown };
+}
+
+type RhinoDecoder = (rhino: RhinoRuntime, data: unknown) => unknown;
 
 const decoders = new Map<string, RhinoDecoder>([
 	[
@@ -29,19 +38,11 @@ const decoders = new Map<string, RhinoDecoder>([
 	]
 ]);
 
-function findDecoder(rhinoType: string): RhinoDecoder | undefined {
-	if (decoders.has(rhinoType)) return decoders.get(rhinoType);
-	for (const [key, dec] of decoders) {
-		if (rhinoType.startsWith(key)) return dec;
-	}
-	return undefined;
-}
-
 /**
  * Whether the parsed item looks like a rhino3dm serialization envelope
  * (`{version, archive3dm, opennurbs, data: "<base64>"}`). `CommonObject.decode` expects the WHOLE
  * envelope — unwrapping `.data` first hands it the bare base64 string, which throws or decodes to
- * garbage (see the correct usage in display-items-parser.ts).
+ * garbage.
  */
 function isDecodableEnvelope(parsedData: unknown): parsedData is object {
 	return Boolean(
@@ -68,17 +69,14 @@ function isDecodableEnvelope(parsedData: unknown): parsedData is object {
  *    `CommonObject.decode` threw). Detect with {@link isRhinoDecodeError}.
  *
  * A decoder returning `null` is a soft miss, never an error: it falls through
- * to the envelope fallback. This matters for prefix collisions — e.g.
- * `Rhino.Geometry.LineCurve` matches the `Rhino.Geometry.Line` decoder but is
- * a CommonObject envelope, not a `{From, To}` pair, and must reach
- * `CommonObject.decode`.
+ * to the envelope fallback.
  */
 export function decodeRhinoGeometry(
 	parsedData: unknown,
 	rhinoType: string,
-	rhino: RhinoModule
+	rhino: RhinoRuntime
 ): unknown {
-	const decoder = findDecoder(rhinoType);
+	const decoder = decoders.get(rhinoType);
 	// A throwing decoder is a hard failure (unlike a null return, which is a
 	// soft "not my shape" miss) — remember it so that when no envelope fallback
 	// can recover we return the error sentinel instead of silently passing the

@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars (gitignored).
+project_id   = "your-gcp-project"
+# name       = "selva-compute"   # prefix of every resource and the ssh alias
+# machine_type = "e2-standard-2"
+public_https = true                # serve https://<sslip_domain> through deploy-server.sh's proxy
+# Every deploy machine's public key (cat ~/.ssh/google_compute_engine.pub), so an apply from one
+# machine doesn't revoke another's.
+ssh_public_keys = []

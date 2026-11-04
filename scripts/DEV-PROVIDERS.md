@@ -166,8 +166,7 @@ these files.
 sent.
 
 The API port is **54421**, not the 54321 in Supabase's own docs — set in
-`packages/providers/supabase/supabase/config.toml`. (`.env.example:210` and the
-provider README still say 54321; they're wrong.)
+`packages/providers/supabase/supabase/config.toml`.
 
 ## Keys
 

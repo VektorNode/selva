@@ -126,16 +126,30 @@
 	// Keyed on the diagnostics array's identity, which every report renews, rather than on a
 	// solve id: only the live channel has one, and on the Compute path remarks arrive with the
 	// result. Once per array, so remarks that sat behind a review do not reappear after Continue.
+	//
+	// A remark is shown once while it stays raised, not after every solve. Every report repeats
+	// it: Grasshopper keeps runtime messages on a Message component an input change did not
+	// reach, and Compute re-solves the whole definition. It shows again once a solve stops
+	// raising it and a later one raises it anew.
 	let lingering = $state(false);
 	let lingeredFor: SolveDiagnostic[] | null = null;
+	let shownRemarks: ReadonlySet<string> = new Set();
+	let freshRemarks = $state.raw<SolveDiagnostic[]>([]);
+	const remarkKey = (d: SolveDiagnostic) => `${d.source ?? ''}\u0000${d.message}`;
 	$effect(() => {
 		if (phase === 'live') {
 			lingering = false;
 			return;
 		}
-		if (authoredRemarks.length === 0 || lingeredFor === diagnostics) return;
+		if (lingeredFor === diagnostics) return;
 		lingeredFor = diagnostics;
-		if (phase !== 'idle') return;
+		const raised = authoredRemarks.map(remarkKey);
+		const stillShown = raised.filter((k) => shownRemarks.has(k));
+		const fresh = authoredRemarks.filter((d) => !shownRemarks.has(remarkKey(d)));
+		const showNow = phase === 'idle' && fresh.length > 0;
+		shownRemarks = new Set(showNow ? [...stillShown, ...fresh.map(remarkKey)] : stillShown);
+		if (!showNow) return;
+		freshRemarks = fresh;
 		lingering = true;
 		const timer = setTimeout(() => (lingering = false), REMARK_LINGER_MS);
 		return () => clearTimeout(timer);
@@ -181,7 +195,7 @@
 	// While solving, the live channel is all there is. Once the result lands it is authoritative
 	// — it carries remarks too — so the live list is dropped entirely and nothing is shown twice.
 	const rows = $derived<SolveDiagnostic[]>(
-		view === 'live' ? [...live.diagnostics] : view === 'idle' ? authoredRemarks : authoredGating
+		view === 'live' ? [...live.diagnostics] : view === 'idle' ? freshRemarks : authoredGating
 	);
 
 	// A remark states something without asking anything, so it reads as a quiet note.
@@ -245,10 +259,14 @@
 	}
 
 	// Escape resolves to the safe side — discard, keeping what is on screen — never to silently
-	// applying a result the user has not accepted.
+	// applying a result the user has not accepted. A frozen host gets no keydown until the solve
+	// ends; there the plugin aborts on the key state, which only counts while Rhino is in front, so
+	// a browser tab (local or Compute) has to abort from the page.
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key !== 'Escape') return;
-		if (phase === 'review') ondiscard();
+		if (phase === 'live') {
+			if (!freezesDuringSolve) onabort();
+		} else if (phase === 'review') ondiscard();
 		else if (phase === 'blocked') dismiss();
 	}
 </script>
@@ -269,13 +287,12 @@
 		</p>
 	{/if}
 {:else if visible}
+	<!-- Inline, it is a row of the host's footer like the Calculate row under it, not a card: a
+	     framed box inside an edge-to-edge column reads as a dialog glued into the page. -->
 	<div
-		class="p-3 border {placement === 'inline'
-			? 'mt-3 rounded-md bg-muted/40'
-			: 'bottom-4 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg bg-background'} {view ===
-		'blocked'
-			? 'border-destructive/50'
-			: ''}"
+		class={placement === 'inline'
+			? `px-2 py-2 border-t ${view === 'blocked' ? 'border-destructive/40' : 'border-border'}`
+			: `p-3 bottom-4 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg border bg-background ${view === 'blocked' ? 'border-destructive/50' : ''}`}
 		role={view === 'review' || view === 'blocked' ? 'alert' : undefined}
 		data-testid="solve-messages"
 		data-view={view}
@@ -298,8 +315,13 @@
 							class="-my-1 shrink-0"
 							disabled={finishing}
 							onclick={onabort}
+							aria-keyshortcuts="Escape"
+							title={t.solveMessagesEscHint}
 						>
 							{t.solveMessagesAbort}
+							<kbd class="px-1 rounded-sm border border-border font-sans text-2xs opacity-70">
+								Esc
+							</kbd>
 						</Button>
 					</div>
 					{#each progress as p, i (p.source ?? '')}
@@ -338,6 +360,30 @@
 					{/each}
 				</div>
 			</div>
+		{:else if (view === 'review' || view === 'blocked') && placement === 'inline'}
+			<!-- Each message carries its own icon, so the label goes without one; the buttons share
+			     its row rather than adding one under a single line of text. -->
+			<div class="mb-1.5 gap-2 flex items-center">
+				<span
+					class="min-w-0 text-xs font-medium flex-1 truncate {view === 'blocked'
+						? 'text-destructive'
+						: 'text-muted-foreground'}"
+				>
+					{view === 'blocked' ? t.solveBlockedTitle : t.solveMessagesTitle}
+				</span>
+				{#if view === 'blocked'}
+					<Button variant="ghost" size="xs" class="-my-1 shrink-0" onclick={dismiss}>
+						{t.solveMessagesDismiss}
+					</Button>
+				{:else}
+					<Button variant="ghost" size="xs" class="-my-1 shrink-0" onclick={ondiscard}>
+						{t.solveMessagesDiscard}
+					</Button>
+					<Button size="xs" class="-my-1 shrink-0" onclick={onconfirm}>
+						{t.solveMessagesConfirm}
+					</Button>
+				{/if}
+			</div>
 		{:else if view === 'review' || view === 'blocked'}
 			<div class="mb-2">
 				<div class="gap-2 text-sm font-medium flex items-center">
@@ -361,7 +407,7 @@
 			</div>
 		{/if}
 
-		{#if view === 'review' || view === 'blocked'}
+		{#if (view === 'review' || view === 'blocked') && placement === 'floating'}
 			<div class="mt-3 gap-2 flex justify-end">
 				{#if view === 'blocked'}
 					<Button variant="outline" size="sm" onclick={dismiss}>{t.solveMessagesDismiss}</Button>

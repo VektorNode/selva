@@ -28,8 +28,9 @@ import type { AllowlistStore, AllowlistEntry } from './users.js';
 //      from inbound requests before adding its own.
 //
 // If any of those fails, anyone on the network can spoof the headers and
-// become anyone. See README.md for a working Caddy config and a curl-based
-// self-test.
+// become anyone. The working Caddy config is in
+// docs/self-hosting/providers/header-auth-entra.md; the curl-based self-test
+// is in README.md.
 //
 // One of the three is partly self-detecting: a proxy that doesn't strip (3)
 // leaves two values in the UPN header, which `identifyFromHeaders` refuses
@@ -74,9 +75,11 @@ export interface HeaderAuthProviderConfig {
 	/** Absolute path to the allowlist JSON file (e.g. `/data/header-allowlist.json`). */
 	allowlistFilePath: string;
 	/**
-	 * Header names the proxy sets. Defaults match the README's Caddy example
+	 * Header names the proxy sets. Defaults match the Caddyfile in
+	 * docs/self-hosting/providers/header-auth-entra.md
 	 * (`SELVA-UserPrincipalName`, `SELVA-Email`, `SELVA-DisplayName`). Override
-	 * to match a different proxy (e.g. oauth2-proxy uses `X-Auth-Request-User`).
+	 * to match a different proxy (e.g. oauth2-proxy sends the UPN as
+	 * `X-Auth-Request-Preferred-Username`; its `X-Auth-Request-User` is the OIDC `sub`).
 	 */
 	headers?: Partial<HeaderNames>;
 	/**

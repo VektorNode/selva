@@ -5,6 +5,7 @@
 	import TagEditor from '#lib/components/TagEditor.svelte';
 	import type { SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
 	import {
+		PROJECT_NAME_MAX,
 		canCreateDefinition,
 		selectedVersionTarget,
 		versionTargets
@@ -23,6 +24,9 @@
 	const canCreate = $derived(canCreateDefinition(targets));
 	const selectedVersion = $derived(selectedVersionTarget(uploadState));
 	const selectedProject = $derived(targets.projects.find((p) => p.id === form.projectId));
+	const newProject = $derived(form.createProject && targets.canCreateProjects);
+	// A value no project id can take: ids are uuids.
+	const NEW_PROJECT = ':new';
 
 	function isSuggestion(target: SelvaVersionTarget): boolean {
 		return target.definitionGuid === targets.suggestion?.definitionGuid;
@@ -53,7 +57,7 @@
 	}
 
 	const optionClass =
-		'flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors hover:bg-accent/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:disabled]:hover:bg-transparent';
+		'flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-3 transition-colors hover:bg-hover has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-60 has-[:disabled]:hover:bg-transparent';
 </script>
 
 <fieldset class="flex flex-col gap-2">
@@ -99,7 +103,9 @@
 			<span class="text-sm font-semibold">New definition</span>
 			<span class="text-muted-foreground text-xs">
 				{canCreate
-					? 'Starts a definition of its own, in a project you pick.'
+					? targets.canCreateProjects
+						? 'Starts a definition of its own, in a project you pick or a new one.'
+						: 'Starts a definition of its own, in a project you pick.'
 					: "You can't create definitions in any project."}
 			</span>
 		</span>
@@ -120,8 +126,7 @@
 			{/each}
 		</ul>
 		<p class="mt-1">
-			Your upload goes on top as the newest version. It's made from this file alone, so it won't
-			have those changes unless this file has them too.
+			Your upload becomes the newest version, without those changes unless this file has them.
 		</p>
 	</Callout>
 {/if}
@@ -140,9 +145,18 @@
 	<div class="flex flex-col gap-4">
 		<div class="flex flex-col gap-1.5">
 			<Label for="selva-project">Project</Label>
-			<Select.Root type="single" value={form.projectId} onValueChange={(v) => (form.projectId = v)}>
+			<Select.Root
+				type="single"
+				value={newProject ? NEW_PROJECT : form.projectId}
+				onValueChange={(v) => {
+					form.createProject = v === NEW_PROJECT;
+					if (v !== NEW_PROJECT) form.projectId = v;
+				}}
+			>
 				<Select.Trigger id="selva-project" class="w-full">
-					{#if selectedProject}
+					{#if newProject}
+						New project…
+					{:else if selectedProject}
 						{selectedProject.name}
 					{:else}
 						<span class="text-muted-foreground">Pick a project</span>
@@ -152,9 +166,25 @@
 					{#each targets.projects as project (project.id)}
 						<Select.Item value={project.id} label={project.name} />
 					{/each}
+					{#if targets.canCreateProjects}
+						<Select.Item value={NEW_PROJECT} label="New project…" />
+					{/if}
 				</Select.Content>
 			</Select.Root>
 		</div>
+		{#if newProject}
+			<div class="flex flex-col gap-1.5">
+				<Label for="selva-project-name">Project name</Label>
+				<Input
+					id="selva-project-name"
+					bind:value={form.newProjectName}
+					maxlength={PROJECT_NAME_MAX}
+				/>
+				<p class="text-muted-foreground text-xs">
+					Private: only you see it until you share it in Selva.
+				</p>
+			</div>
+		{/if}
 		<div class="flex flex-col gap-1.5">
 			<Label for="selva-name">Name</Label>
 			<Input id="selva-name" bind:value={form.displayName} />
@@ -179,7 +209,7 @@
 			</div>
 		</div>
 		<p class="text-muted-foreground -mt-2 text-xs">
-			Filled in from the schema's settings. Up to {MAX_TAGS} tags.
+			Up to {MAX_TAGS} tags.
 		</p>
 	</div>
 {/if}

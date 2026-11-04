@@ -38,7 +38,7 @@
 		Checking your Selva sign-in…
 	</div>
 {:else if account.status === 'signedIn'}
-	<div class="bg-muted/30 flex items-center gap-3 rounded-lg border px-3.5 py-3">
+	<div class="bg-muted flex items-center gap-3 rounded-lg border px-3.5 py-3">
 		<div
 			class="bg-primary/10 text-primary flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold"
 			aria-hidden="true"
@@ -67,6 +67,13 @@
 		</Button>
 	</div>
 
+	{#if account.verified === undefined && !account.message}
+		<div class="text-muted-foreground flex items-center gap-2 text-xs">
+			<Spinner />
+			Checking with Selva…
+		</div>
+	{/if}
+
 	{#if account.extraScopes.length > 0}
 		<Callout tone="warning" title="This key can do more than upload">
 			<p>Anyone who copies it from this computer can also:</p>
@@ -91,7 +98,7 @@
 		</Callout>
 	{/if}
 {:else if account.status === 'signingIn'}
-	<div class="bg-muted/30 flex items-center gap-3 rounded-lg border px-3.5 py-3">
+	<div class="bg-muted flex items-center gap-3 rounded-lg border px-3.5 py-3">
 		<Spinner class="size-5" />
 		<div class="min-w-0 flex-1">
 			<p class="text-sm font-medium">Waiting for you to approve in your browser…</p>
@@ -120,13 +127,16 @@
 				autocomplete="url"
 				spellcheck={false}
 			/>
+			{#if uploadState.originError}
+				<p class="text-destructive text-xs" role="alert">{uploadState.originError}</p>
+			{/if}
 			{#if otherKnownOrigins.length > 0}
 				<div class="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs">
 					Used before:
 					{#each otherKnownOrigins as origin (origin)}
 						<button
 							type="button"
-							class="hover:bg-accent hover:text-foreground rounded-sm border px-1.5 py-0.5 font-mono transition-colors"
+							class="hover:bg-hover hover:text-foreground rounded-sm border px-1.5 py-0.5 font-mono transition-colors"
 							onclick={() => (uploadState.originInput = origin)}
 						>
 							{origin}
@@ -153,9 +163,7 @@
 				Use an API key
 			</button>
 		</div>
-		<p class="text-muted-foreground text-xs">
-			Your browser opens to sign in. Rhino keeps the sign-in; this page never sees it.
-		</p>
+		<p class="text-muted-foreground text-xs">Your browser opens to sign in.</p>
 	</form>
 
 	{#if uploadState.awaitingKeyDialog}

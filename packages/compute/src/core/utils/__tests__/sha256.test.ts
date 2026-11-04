@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
-import { sha256Hex, sha256HexPortable } from '../sha256';
+import { sha256HexPortable } from '../sha256';
 
 const ascii = (s: string) => new TextEncoder().encode(s);
 const nodeHex = (input: string | Uint8Array) =>
@@ -35,17 +35,5 @@ describe('sha256HexPortable', () => {
 	it('hashes strings as UTF-16LE, past the internal chunk size', () => {
 		const samples = ['', 'a', 'ü€😀', '\ud800', '\udc00x', 'x'.repeat(40_000) + '日本'];
 		for (const s of samples) expect(sha256HexPortable(s)).toBe(nodeHex(s));
-	});
-});
-
-describe('sha256Hex', () => {
-	it('gives the portable result on Node', () => {
-		for (const input of ['hello', '\ud800', ascii('hello')]) {
-			expect(sha256Hex(input)).toBe(sha256HexPortable(input));
-		}
-	});
-
-	it('keeps lone surrogates distinct', () => {
-		expect(sha256Hex('\ud800')).not.toBe(sha256Hex('\ud801'));
 	});
 });

@@ -63,7 +63,7 @@
 							role="menuitem"
 							onclick={() => (open = false)}
 							class={`flex items-start gap-2.5 rounded-sm px-2.5 py-2 text-sm transition-colors ${
-								active ? 'bg-accent text-accent-foreground' : 'text-foreground hover:bg-muted/60'
+								active ? 'bg-selected text-foreground' : 'text-foreground hover:bg-hover'
 							}`}
 						>
 							<Icon class="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-70" />

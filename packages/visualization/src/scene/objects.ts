@@ -9,7 +9,13 @@
 import * as THREE from 'three';
 
 // Viewer aids tagged by `userData.id` in `render/`; live in the scene graph but are not solve output.
-export const HELPER_IDS: ReadonlySet<string> = new Set(['grid', 'floor', 'label-layer', 'measure']);
+export const HELPER_IDS: ReadonlySet<string> = new Set([
+	'grid',
+	'floor',
+	'label-layer',
+	'measure',
+	'sun-target'
+]);
 
 export function isSceneContent(object: THREE.Object3D): boolean {
 	return (

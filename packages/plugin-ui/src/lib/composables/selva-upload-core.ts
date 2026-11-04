@@ -26,6 +26,9 @@ export type UploadStage = SelvaUploadProgress['stage'];
 export interface UploadForm {
 	/** Empty until the user picks one, unless the user can create in exactly one project. */
 	projectId: string;
+	/** Upload into a new private project named `newProjectName` instead of `projectId`. */
+	createProject: boolean;
+	newProjectName: string;
 	displayName: string;
 	description: string;
 	category: string;
@@ -35,11 +38,16 @@ export interface UploadForm {
 }
 
 export interface SelvaUploadState {
+	/** The upload dialog. */
 	open: boolean;
+	/** The Selva connection dialog: instance, sign-in and sign-out. */
+	connectionOpen: boolean;
 	/** Null until the plugin first answers. */
 	account: SelvaAccount | null;
 	/** The instance URL field, as typed. */
 	originInput: string;
+	/** Why the typed instance wasn't sent to the plugin. */
+	originError: string | null;
 	/** What to send once the plugin accepts the instance the user typed. */
 	afterConnect: 'signIn' | 'useApiKey' | null;
 	/** Rhino has a dialog open for pasting a key. */
@@ -71,6 +79,8 @@ export interface SelvaUploadDeps {
 function emptyForm(): UploadForm {
 	return {
 		projectId: '',
+		createProject: false,
+		newProjectName: '',
 		displayName: '',
 		description: '',
 		category: '',
@@ -83,8 +93,10 @@ function emptyForm(): UploadForm {
 export function createInitialSelvaUploadState(): SelvaUploadState {
 	return {
 		open: false,
+		connectionOpen: false,
 		account: null,
 		originInput: '',
+		originError: null,
 		afterConnect: null,
 		awaitingKeyDialog: false,
 		targets: null,
@@ -111,8 +123,13 @@ export function versionTargets(targets: SelvaTargets): SelvaVersionTarget[] {
 	];
 }
 
+/** Upload is offered only for a key Selva accepted in this Rhino session. */
+export function uploadAvailable(state: SelvaUploadState): boolean {
+	return state.account?.status === 'signedIn' && state.account.verified === true;
+}
+
 export function canCreateDefinition(targets: SelvaTargets): boolean {
-	return targets.projects.length > 0;
+	return targets.projects.length > 0 || targets.canCreateProjects === true;
 }
 
 export function nowhereToUpload(targets: SelvaTargets): boolean {
@@ -132,6 +149,7 @@ export function formFromDefaults(targets: SelvaTargets): UploadForm {
 	return {
 		...emptyForm(),
 		projectId: projects.length === 1 ? projects[0].id : '',
+		createProject: projects.length === 0 && targets.canCreateProjects === true,
 		displayName: defaults.displayName,
 		description: defaults.description ?? '',
 		category: defaults.category ?? '',
@@ -152,6 +170,31 @@ function isOffered(target: UploadTarget, targets: SelvaTargets): boolean {
 	return versionTargets(targets).some((t) => t.definitionGuid === target.definitionGuid);
 }
 
+/** `CreateProjectBodySchema` in `@selvajs/server` enforces it too. */
+export const PROJECT_NAME_MAX = 128;
+
+/**
+ * Why the instance field can't be sent, or null. A pasted key would otherwise travel as a host
+ * name to DNS and the system proxy. The plugin checks the same, this saves the round trip.
+ */
+export function originInputError(input: string): string | null {
+	const text = input.trim();
+	if (/selva_/i.test(text)) {
+		return 'That’s a Selva key, not an address. Sign in with the browser, or use Rhino’s key dialog.';
+	}
+	let host: string;
+	try {
+		host = new URL(text.includes('://') ? text : `https://${text}`).hostname;
+	} catch {
+		return 'That isn’t a web address.';
+	}
+	const loopback = host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+	if (!loopback && !host.includes('.') && !host.startsWith('[')) {
+		return 'Enter the full address, such as selva.example.com.';
+	}
+	return null;
+}
+
 const SCOPE_ACTIONS: Record<string, string> = {
 	write: 'change and delete definitions and projects, and create share links',
 	solve: 'run solves on Rhino.Compute'
@@ -170,7 +213,7 @@ export function describeExtraScope(scope: string): string {
 export function uploadBlocker(state: SelvaUploadState, deps: SelvaUploadDeps): string | null {
 	if (!deps.source.connected) return 'Not connected to Grasshopper.';
 	if (deps.isSchemaDirty()) return 'Save the schema first.';
-	if (state.account?.status !== 'signedIn') return 'Sign in first.';
+	if (!uploadAvailable(state)) return 'Sign in first.';
 	if (state.uploading) return 'Already uploading.';
 	const targets = state.targets;
 	if (!targets) return 'Still checking where you can upload.';
@@ -178,19 +221,34 @@ export function uploadBlocker(state: SelvaUploadState, deps: SelvaUploadDeps): s
 	const target = state.target;
 	if (!target || !isOffered(target, targets)) return 'Pick where to upload.';
 	if (target.kind === 'newDefinition') {
-		if (!targets.projects.some((p) => p.id === state.form.projectId)) return 'Pick a project.';
+		if (newProjectChosen(state)) {
+			const name = state.form.newProjectName.trim();
+			if (!name) return 'Name the new project.';
+			if (name.length > PROJECT_NAME_MAX) {
+				return `Project names are at most ${PROJECT_NAME_MAX} characters.`;
+			}
+		} else if (!targets.projects.some((p) => p.id === state.form.projectId)) {
+			return 'Pick a project.';
+		}
 		if (!state.form.displayName.trim()) return 'Give the definition a name.';
 	}
 	return null;
 }
 
+function newProjectChosen(state: SelvaUploadState): boolean {
+	return state.form.createProject && state.targets?.canCreateProjects === true;
+}
+
+/** Carries the instance and key the targets came from, so the plugin can refuse a mismatch. */
 export function buildUploadRequest(state: SelvaUploadState): SelvaUploadRequest | null {
-	const { target, form } = state;
-	if (!target) return null;
+	const { target, form, targets } = state;
+	if (!target || !targets) return null;
+	const echo = { origin: targets.origin, tokenId: targets.tokenId };
 
 	if (target.kind === 'newVersion') {
 		const request: SelvaUploadRequest = {
 			kind: 'newVersion',
+			...echo,
 			definitionGuid: target.definitionGuid,
 			makeLive: form.makeLive
 		};
@@ -201,7 +259,10 @@ export function buildUploadRequest(state: SelvaUploadState): SelvaUploadRequest 
 
 	const request: SelvaUploadRequest = {
 		kind: 'newDefinition',
-		projectId: form.projectId,
+		...echo,
+		...(newProjectChosen(state)
+			? { newProjectName: form.newProjectName.trim() }
+			: { projectId: form.projectId }),
 		displayName: form.displayName.trim(),
 		tags: [...form.tags],
 		makeLive: form.makeLive
@@ -237,6 +298,23 @@ export function closeDialog(state: SelvaUploadState): void {
 	state.open = false;
 }
 
+/** The plugin checks the key again whenever it's asked for the account and hasn't accepted it yet. */
+export function loadAccount(deps: SelvaUploadDeps): void {
+	deps.source.getAccount(deps.sessionId);
+}
+
+export function openConnection(state: SelvaUploadState, deps: SelvaUploadDeps): void {
+	state.connectionOpen = true;
+	state.originError = null;
+	state.afterConnect = null;
+	state.awaitingKeyDialog = false;
+	loadAccount(deps);
+}
+
+export function closeConnection(state: SelvaUploadState): void {
+	state.connectionOpen = false;
+}
+
 function connectThen(
 	state: SelvaUploadState,
 	deps: SelvaUploadDeps,
@@ -244,6 +322,8 @@ function connectThen(
 ): void {
 	const origin = state.originInput.trim();
 	if (!origin) return;
+	state.originError = originInputError(origin);
+	if (state.originError) return;
 	state.afterConnect = next;
 	deps.source.connectInstance(deps.sessionId, origin);
 }
@@ -292,7 +372,7 @@ function requestTargets(state: SelvaUploadState, deps: SelvaUploadDeps): void {
 
 /** The plugin also blocks when it couldn't list targets at all, so asking again can help. */
 export function retryTargets(state: SelvaUploadState, deps: SelvaUploadDeps): void {
-	if (state.account?.status !== 'signedIn' || state.targetsLoading || state.uploading) return;
+	if (!uploadAvailable(state) || state.targetsLoading || state.uploading) return;
 	state.targets = null;
 	state.target = null;
 	requestTargets(state, deps);
@@ -330,10 +410,15 @@ export function handleAccount(
 		}
 	}
 
-	if (account.status !== 'signedIn') {
+	if (!uploadAvailable(state)) {
 		state.targets = null;
 		state.targetsLoading = false;
 		state.target = null;
+		// The connection says why; an upload in flight keeps its dialog to report the result.
+		if (state.open && !state.uploading) {
+			state.open = false;
+			state.connectionOpen = true;
+		}
 		return;
 	}
 
@@ -353,7 +438,7 @@ export function handleTargets(
 
 	const targets = message.targets;
 	const account = state.account;
-	if (account?.status !== 'signedIn' || targets.origin !== account.origin) return;
+	if (!uploadAvailable(state) || targets.origin !== account?.origin) return;
 
 	const firstForThisOpening = state.targets === null;
 	state.targets = targets;

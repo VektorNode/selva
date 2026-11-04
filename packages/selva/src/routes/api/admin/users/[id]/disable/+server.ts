@@ -3,6 +3,7 @@ import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { apiRoute, noContent, requireParams } from '#lib/server/api/http.js';
 import { getAuthProvider, providers } from '#lib/server/providers.server.js';
 import { revokeUserApiTokens } from '@selvajs/server/handlers';
+import { apiTokenResolutions } from '#lib/server/apiTokens/token.server.js';
 import { requireManageInstanceUsers } from '#lib/server/access.server.js';
 import { requireCanRemoveInstanceAdmin } from '#lib/server/admin/instanceAdmins.server.js';
 import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
@@ -74,7 +75,7 @@ export const POST: RequestHandler = apiRoute(
 			providers.data.apiTokens,
 			locals.ctx!,
 			id,
-			{ reason: 'user_disabled' },
+			{ reason: 'user_disabled', resolutionCache: apiTokenResolutions },
 			locals.log
 		);
 

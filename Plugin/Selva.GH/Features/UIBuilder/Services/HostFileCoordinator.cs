@@ -102,6 +102,15 @@ internal sealed class HostFileCoordinator
         });
     }
 
+    /// <summary>Fails a save the transport won't hand over. Without a requestId nothing can be matched, so nothing is sent.</summary>
+    public void RefuseSave(string? requestId, string error, IHostFileReply reply)
+    {
+        if (requestId != null)
+        {
+            Send(reply, SaveResult(requestId, PromptOutcome.Failed, error));
+        }
+    }
+
     public void HandlePick(string requestId, IEnumerable<string> accept, IHostFileReply reply)
     {
         if (!_gate.TryEnter())

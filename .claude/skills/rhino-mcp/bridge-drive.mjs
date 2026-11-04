@@ -2,14 +2,20 @@
 // Prefer this to the in-Rhino recorder in reference.csx for timing questions: any run_csharp
 // call runs on Rhino's UI thread and releases whatever was queued there, so it hides stalls.
 //
-// Usage: node bridge-drive.mjs <session> '<steps json>' [total ms]
+// Usage: node bridge-drive.mjs '<UI Bridge URL output>' '<steps json>' [total ms]
 //   steps: [{ "at": ms, "send": { "<input id>": value, ... } | "cancel" }]
-//   node bridge-drive.mjs yd91OOmb '[{"at":300,"send":{"03398815-...":210}},{"at":3000,"send":"cancel"}]' 8000
-// The session is the `session` query param of the UI Bridge's URL output.
-const [session, stepsJson, totalArg] = process.argv.slice(2);
+//   node bridge-drive.mjs 'http://localhost:60045/?session=yd91OOmb&wsPort=8765#s=...' '[{"at":300,"send":{"03398815-...":210}},{"at":3000,"send":"cancel"}]' 8000
+// Pass the whole URL: the bridge refuses an upgrade without the page's Origin, and closes a socket
+// whose first message isn't `authenticate` with the secret from the fragment.
+const [urlArg, stepsJson, totalArg] = process.argv.slice(2);
+const url = new URL(urlArg);
+const session = url.searchParams.get('session');
 const steps = JSON.parse(stepsJson);
 const total = Number(totalArg ?? 15000);
-const ws = new WebSocket('ws://localhost:8765');
+// Node's WebSocket (undici) takes headers as a non-standard second argument.
+const ws = new WebSocket(`ws://localhost:${url.searchParams.get('wsPort') ?? 8765}`, {
+	headers: { Origin: url.origin }
+});
 const t0 = Date.now();
 const log = (s) => console.log(String(Date.now() - t0).padStart(6), s);
 ws.binaryType = 'arraybuffer';
@@ -28,6 +34,12 @@ ws.onmessage = (m) => {
 	log(r.type);
 };
 ws.onopen = () => {
+	ws.send(
+		JSON.stringify({
+			type: 'authenticate',
+			secret: new URLSearchParams(url.hash.slice(1)).get('s')
+		})
+	);
 	for (const s of steps)
 		setTimeout(() => {
 			const frame =

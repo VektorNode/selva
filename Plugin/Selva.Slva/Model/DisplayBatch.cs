@@ -86,6 +86,13 @@ public class MeshMetadata
     public int IndexStart { get; set; }
 
     [JsonProperty("metadata")] public Dictionary<string, string> Metadata { get; set; }
+
+    /// <summary>
+    ///     The writer's <see cref="ClosedSolid" /> verdict, so readers can skip computing it. Null when
+    ///     unknown: readers then compute it themselves.
+    /// </summary>
+    [JsonProperty("closed", NullValueHandling = NullValueHandling.Ignore)]
+    public bool? Closed { get; set; }
 }
 
 /// <summary>Serializable material: same shape as <see cref="ThreeMaterial"/> but with Color as a hex string.</summary>
@@ -113,6 +120,15 @@ public class SerializableMaterial
 
     [JsonProperty("envMapIntensity", NullValueHandling = NullValueHandling.Ignore)]
     public double? EnvMapIntensity { get; set; }
+
+    [JsonProperty("emissive", NullValueHandling = NullValueHandling.Ignore)]
+    public string Emissive { get; set; }
+
+    [JsonProperty("emissiveIntensity", NullValueHandling = NullValueHandling.Ignore)]
+    public double? EmissiveIntensity { get; set; }
+
+    [JsonProperty("emissiveLight", NullValueHandling = NullValueHandling.Ignore)]
+    public double? EmissiveLight { get; set; }
 
     [JsonProperty("clearcoat", NullValueHandling = NullValueHandling.Ignore)]
     public double? Clearcoat { get; set; }
@@ -154,6 +170,9 @@ public class SerializableMaterial
             RoughnessMap = NullIfEmpty(material.RoughnessMap),
             NormalMap = NullIfEmpty(material.NormalMap),
             EnvMapIntensity = material.EnvMapIntensity,
+            Emissive = NullIfEmpty(material.Emissive),
+            EmissiveIntensity = material.EmissiveIntensity,
+            EmissiveLight = material.EmissiveLight,
             Clearcoat = material.Clearcoat,
             ClearcoatRoughness = material.ClearcoatRoughness,
             Anisotropy = material.Anisotropy,
@@ -206,6 +225,9 @@ public class SerializableMaterial
             RoughnessMap = RoughnessMap,
             NormalMap = NormalMap,
             EnvMapIntensity = EnvMapIntensity,
+            Emissive = Emissive,
+            EmissiveIntensity = EmissiveIntensity,
+            EmissiveLight = EmissiveLight,
             Clearcoat = Clearcoat,
             ClearcoatRoughness = ClearcoatRoughness,
             Anisotropy = Anisotropy,

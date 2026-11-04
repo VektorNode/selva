@@ -23,6 +23,7 @@ export type {
 	SolveContext,
 	SolveResult,
 	SolveDetail,
+	CacheStats,
 	SchedulerSolveOptions,
 	SolveExecutor
 } from './scheduler/types';
@@ -37,7 +38,7 @@ export { solveGrasshopperDefinition } from './solve';
 // SERVER MONITORING
 // ============================================================================
 export { default as ComputeServerStats } from './server/compute-server-stats';
-export type { ServerVersion, ServerStats } from './server/compute-server-stats';
+export type { ServerVersion, ServerStats, ServerLimits } from './server/compute-server-stats';
 
 // ============================================================================
 // I/O PROCESSING
@@ -54,6 +55,7 @@ export type {
 } from './io/output/response-processors';
 export { disposeRhinoObjects, isRhinoDecodeError } from './io/output/rhino-objects';
 export type { RhinoDecodeError } from './io/output/rhino-objects';
+export type { RhinoRuntime } from './io/output/rhino-decoder';
 
 // ============================================================================
 // DATA STRUCTURES

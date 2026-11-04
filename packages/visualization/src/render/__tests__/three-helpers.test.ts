@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { SUN_TARGET_ID } from '../scene-setup/setup-lighting.js';
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -137,5 +138,67 @@ describe('clearScene', () => {
 		clearScene(scene);
 
 		expect(scene.children).toEqual([grid]);
+	});
+
+	it('detaches removed objects the way Object3D.remove does', () => {
+		const scene = new THREE.Scene();
+		const kept = meshAt(0, 0, 0);
+		kept.userData.id = 'floor';
+		const gone = meshAt(1, 1, 1);
+		scene.add(gone, kept);
+		const removedEvents: THREE.Object3D[] = [];
+		const childRemovedEvents: THREE.Object3D[] = [];
+		gone.addEventListener('removed', () => removedEvents.push(gone));
+		scene.addEventListener('childremoved', (event) => childRemovedEvents.push(event.child));
+
+		clearScene(scene);
+
+		expect(scene.children).toEqual([kept]);
+		expect(gone.parent).toBeNull();
+		expect(kept.parent).toBe(scene);
+		expect(removedEvents).toEqual([gone]);
+		expect(childRemovedEvents).toEqual([gone]);
+	});
+
+	it('clears meshes in linear time', () => {
+		// Regression: removeFromParent per child is indexOf + splice, O(n²). A ratio, not a
+		// wall-clock budget, which varies too much across CI runners: 4x the meshes costs ~4x
+		// when linear, ~16x when quadratic.
+		const geometry = new THREE.BufferGeometry();
+		const material = new THREE.MeshBasicMaterial();
+		const timeClear = (count: number) => {
+			const scene = new THREE.Scene();
+			for (let i = 0; i < count; i++) scene.children.push(new THREE.Mesh(geometry, material));
+			for (const child of scene.children) child.parent = scene;
+			const start = performance.now();
+			clearScene(scene);
+			const elapsed = performance.now() - start;
+			expect(scene.children).toHaveLength(0);
+			return elapsed;
+		};
+
+		// Building the meshes dominates on slow runners, so keep the counts modest and the timeout loose.
+		timeClear(5_000);
+		const small = Math.max(timeClear(20_000), 1);
+		const large = timeClear(80_000);
+
+		expect(large / small).toBeLessThan(8);
+	}, 60_000);
+});
+
+describe('clearScene and lights', () => {
+	it('keeps every light and the target of the sun across a solve', () => {
+		const scene = new THREE.Scene();
+		const sun = new THREE.DirectionalLight();
+		sun.target.userData.id = SUN_TARGET_ID;
+		const fill = new THREE.AmbientLight();
+		const sky = new THREE.HemisphereLight();
+		const solved = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+		scene.add(sun, sun.target, fill, sky, solved);
+
+		clearScene(scene);
+
+		expect(scene.children).toEqual(expect.arrayContaining([sun, sun.target, fill, sky]));
+		expect(scene.children).not.toContain(solved);
 	});
 });

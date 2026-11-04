@@ -9,7 +9,7 @@
 		toast
 	} from '@selvajs/ui';
 	import { RotateCcw, FolderOpen } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { ReclaimRow } from './+page.server';
 
 	interface PageData {
@@ -32,7 +32,7 @@
 			const res = await fetch(`/api/v1/projects/${project.id}/reclaim`, { method: 'POST' });
 			if (res.ok) {
 				toast.success(`Reclaimed "${project.name}"`);
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to reclaim');

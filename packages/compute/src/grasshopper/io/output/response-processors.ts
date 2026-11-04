@@ -1,19 +1,26 @@
 import { isBase64Flag } from '@/core/files/handle-files';
-import type { RhinoModule } from 'rhino3dm';
-import { FileData } from '@/core/files/types';
+import type { FileData } from '@/core/files/types';
 import { hasField, readField } from '@/core/utils/read-field';
 import { setOwnField } from '@/core/utils/set-own-field';
-import { GrasshopperComputeResponse, DataItem } from '../../types';
-import { decodeRhinoGeometry } from './rhino-decoder';
+import { tryParseJson } from '@/core/utils/try-parse-json';
+import type { GrasshopperComputeResponse, DataItem } from '../../types';
+import {
+	BOOLEAN_ITEM_TYPE,
+	INTEGER_ITEM_TYPES,
+	NUMERIC_ITEM_TYPES,
+	STRING_ITEM_TYPE
+} from '../wire-item-types';
+import { decodeRhinoGeometry, type RhinoRuntime } from './rhino-decoder';
 import { disposeRhinoObjects } from './rhino-objects';
 
 export interface ParsedContext {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- output shapes are the definition's; `T` narrows them
 	[key: string]: any;
 }
 
 export interface GetValuesOptions {
 	parseValues?: boolean;
-	rhino?: any;
+	rhino?: RhinoRuntime;
 	/**
 	 * If true, only include values of type System.String in the result.
 	 * Non-string types are filtered out.
@@ -33,74 +40,53 @@ export interface GetValuesResult<T = ParsedContext> {
 	dispose: () => void;
 }
 
-const SYSTEM_TYPES = {
-	STRING: 'System.String',
-	INT: 'System.Int32',
-	DOUBLE: 'System.Double',
-	BOOL: 'System.Boolean'
-};
-
 const RHINO_GEOMETRY_PREFIX = 'Rhino.Geometry.';
 
 const FILE_DATA_TYPE = 'FileData';
 
 /** WebDisplay items are skipped entirely: kept, they would write `null` into the result. */
 function skipItem(type: string, stringOnly: boolean): boolean {
-	return type.includes('WebDisplay') || (stringOnly && type !== SYSTEM_TYPES.STRING);
+	return type.includes('WebDisplay') || (stringOnly && type !== STRING_ITEM_TYPE);
 }
+
+const looksStructured = (text: string): boolean => text.startsWith('{') || text.startsWith('[');
 
 function tryDecodeJSON(value: string): unknown {
 	if (typeof value !== 'string') return value;
 
 	const trimmed = value.trim();
-	const looksJson = trimmed.startsWith('{') || trimmed.startsWith('[') || trimmed.startsWith('"');
-	if (!looksJson) return value;
+	if (!looksStructured(trimmed) && !trimmed.startsWith('"')) return value;
 
-	try {
-		const first = JSON.parse(trimmed);
-		if (typeof first === 'string') {
-			try {
-				return JSON.parse(first);
-			} catch {
-				return first;
-			}
-		}
-		return first;
-	} catch {
-		return value;
-	}
+	const first = tryParseJson(trimmed) ?? value;
+	// Only structure is decoded twice: a text output of `"123"` or `"true"` stays text, and a long
+	// digit string keeps its digits.
+	return typeof first === 'string' && looksStructured(first.trim())
+		? (tryParseJson(first) ?? first)
+		: first;
 }
 
-function decodeBySystemType(raw: unknown, type: string, rhino?: RhinoModule): unknown {
-	switch (type) {
-		case SYSTEM_TYPES.STRING:
-			if (typeof raw !== 'string') return raw;
-			return raw.replace(/^"(.*)"$/, '$1');
-
-		case SYSTEM_TYPES.INT:
-			return Number.parseInt(String(raw), 10);
-
-		case SYSTEM_TYPES.DOUBLE:
-			return Number.parseFloat(String(raw));
-
-		case SYSTEM_TYPES.BOOL: {
-			const str = String(raw).toLowerCase();
-			return str === 'true';
-		}
-
-		default:
-			if (rhino && type.startsWith(RHINO_GEOMETRY_PREFIX)) {
-				return decodeRhinoGeometry(raw, type, rhino);
-			}
-			return raw;
+function decodeBySystemType(raw: unknown, type: string, rhino?: RhinoRuntime): unknown {
+	if (type === STRING_ITEM_TYPE) {
+		return typeof raw === 'string' ? raw.replace(/^"(.*)"$/, '$1') : raw;
 	}
+	if (INTEGER_ITEM_TYPES.has(type)) {
+		const value = Number.parseInt(String(raw), 10);
+		// A `System.Int64` past 2^53 stays as its digits: as a number it would silently round.
+		return Number.isNaN(value) || Number.isSafeInteger(value) ? value : raw;
+	}
+	if (NUMERIC_ITEM_TYPES.has(type)) return Number.parseFloat(String(raw));
+	if (type === BOOLEAN_ITEM_TYPE) return String(raw).toLowerCase() === 'true';
+	if (rhino && type.startsWith(RHINO_GEOMETRY_PREFIX)) {
+		return decodeRhinoGeometry(raw, type, rhino);
+	}
+	return raw;
 }
 
 function extractItemValue(
 	item: DataItem,
 	type: string,
 	parseValues: boolean,
-	rhino?: RhinoModule
+	rhino?: RhinoRuntime
 ): unknown {
 	if (typeof item.data !== 'string') return item.data;
 
@@ -201,7 +187,7 @@ export function getValues<T = ParsedContext>(
 			const value = extractItemValue(item, type, parseValues, rhino);
 
 			// Own keys only: an output named `constructor` must not find Object.prototype's.
-			if (!Object.prototype.hasOwnProperty.call(result, key)) {
+			if (!Object.hasOwn(result, key)) {
 				setOwnField(result, key, value);
 			} else if (aggregated.has(key)) {
 				result[key].push(value);
@@ -249,6 +235,7 @@ export function getValue(
 	response: GrasshopperComputeResponse,
 	options: { byName: string } | { byId: string },
 	parseOptions: GetValuesOptions = {}
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the shape is the definition's
 ): any {
 	const { parseValues = true, rhino, stringOnly = false } = parseOptions;
 

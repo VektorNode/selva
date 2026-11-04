@@ -100,13 +100,15 @@ cd packages/providers/supabase
 npx supabase start
 
 cat > .env.test <<EOF
-SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_URL=http://127.0.0.1:54421
 SUPABASE_ANON_KEY=<publishable key>
 SUPABASE_SERVICE_ROLE_KEY=<secret key>
 EOF
 
 pnpm test
 ```
+
+CI's `supabase` job does the same, with `SELVA_REQUIRE_SUPABASE=1` so an unreachable stack fails rather than skips.
 
 `.env.test` is gitignored and separate from your app's `.env`. `vitest.config.ts` loads it if present and probes `SUPABASE_URL` before the run; if the file is missing or the stack is unreachable it strips the three vars so every suite takes its no-credentials skip path and prints a warning.
 

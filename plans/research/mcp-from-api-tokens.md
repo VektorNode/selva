@@ -22,7 +22,7 @@ response is) and in text encoding on upload.
   `write` does **not** include `solve`. A refusal is 403 with `details.requiredScope`
   (e.g. `write:org:<id>`), which the MCP server can show the user verbatim.
 - 401 means the key is invalid, expired, revoked, or its owner left the org. 503
-  `API_TOKENS_UNAVAILABLE` means tokens are off on that server (Supabase until #330).
+  `API_TOKENS_UNAVAILABLE` means tokens are off on that server (no token store on its provider).
 - Key management (`/orgs/{orgId}/tokens`) is session-only. The MCP server can't mint keys.
 - **Check the base URL is Selva before trusting a 401.** On the dev machine another app (a host
   app on Vite's default port) answered `/api/v1/projects` with its own `401 UNAUTHORIZED`, which
@@ -149,7 +149,7 @@ it.
   schema for the chosen version itself rather than accept one from the model.
 - An input missing from `values` falls back to the schema default; one missing from `inputs` falls
   back to whatever the `.gh` file saved.
-- `Idempotency-Key` is honoured on this route (per user today; per token after #329).
+- `Idempotency-Key` is honoured on this route (namespaced per token).
 
 ### Response
 
@@ -391,6 +391,5 @@ wiped description), and most of the time went on about 40 Rhino round trips, not
 ## Not covered here
 
 - Share links and project membership: not exercised.
-- Rate limits (#214) and token idempotency namespacing (#329) aren't built yet.
 - Whether a `Display` payload can be requested smaller, or skipped, server-side: _unverified_, and
   probably worth an option on the solve route before an MCP server ships.

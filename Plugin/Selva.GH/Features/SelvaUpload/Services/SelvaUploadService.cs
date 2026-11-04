@@ -21,19 +21,29 @@ public sealed class SelvaUploadService
     private const int MaxMatches = 5;
 
     private readonly SelvaApiClient _client;
+    private readonly IDictionary<string, string> _createdProjects;
     private readonly string _orgId;
+    private readonly string? _tokenId;
     private readonly string? _userId;
 
-    public SelvaUploadService(SelvaApiClient client, string? userId, string orgId)
+    /// <param name="createdProjects">
+    ///     Projects this Rhino session created, by origin, key and name, so uploading again after a
+    ///     failure goes into the same project rather than meeting its own name as a conflict.
+    /// </param>
+    public SelvaUploadService(SelvaApiClient client, string? userId, string orgId, string? tokenId,
+        IDictionary<string, string> createdProjects)
     {
         _client = client;
         _userId = userId;
         _orgId = orgId;
+        _tokenId = tokenId;
+        _createdProjects = createdProjects;
     }
 
     public async Task<SelvaTargets> ListTargetsAsync(SelvaDefinitionLink? link, string? documentId,
         SelvaDefinitionDefaults defaults, SelvaUploadFile file, CancellationToken cancellationToken)
     {
+        var me = await _client.GetJsonAsync("/api/v1/me", cancellationToken).ConfigureAwait(false);
         var projects = await ListProjectsAsync(cancellationToken).ConfigureAwait(false);
         var projectNames = projects.ToDictionary(p => p.Id, p => p.Name);
 
@@ -70,8 +80,10 @@ public sealed class SelvaUploadService
         return new SelvaTargets
         {
             Origin = _client.Origin,
+            TokenId = _tokenId ?? string.Empty,
             Projects = projects.Where(p => p.CanCreate).Select(p => new SelvaProject { Id = p.Id, Name = p.Name })
                 .ToList(),
+            CanCreateProjects = IsTrue(me["capabilities"]?["createProjects"]),
             Suggestion = suggestion,
             Matches = matches,
             Defaults = defaults,
@@ -98,14 +110,22 @@ public sealed class SelvaUploadService
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
-            onStage("uploading");
 
             if (request.Kind == "newDefinition")
             {
+                var projectId = request.ProjectId;
+                if (string.IsNullOrWhiteSpace(projectId))
+                {
+                    onStage("creatingProject");
+                    projectId = await EnsureProjectAsync(request.NewProjectName!.Trim(), cancellationToken)
+                        .ConfigureAwait(false);
+                }
+
+                onStage("uploading");
                 var created = await _client.PostMultipartAsync("/api/v1/definitions", () =>
                 {
                     var form = FileForm(file, fileName);
-                    form.Add(new StringContent(request.ProjectId!), "projectId");
+                    form.Add(new StringContent(projectId!), "projectId");
                     form.Add(new StringContent(request.DisplayName!.Trim()), "displayName");
                     AddIfPresent(form, "description", request.Description);
                     AddIfPresent(form, "category", request.Category);
@@ -121,6 +141,7 @@ public sealed class SelvaUploadService
             }
             else
             {
+                onStage("uploading");
                 guid = request.DefinitionGuid!;
                 var uploaded = await _client.PostMultipartAsync(
                     $"/api/v1/definitions/{guid}/versions", () =>
@@ -191,8 +212,14 @@ public sealed class SelvaUploadService
         public bool CanCreate;
     }
 
-    private static string? Validate(SelvaUploadRequest request)
+    private string? Validate(SelvaUploadRequest request)
     {
+        // The page could have listed targets on another instance or key than the one signed in now.
+        if (request.Origin != _client.Origin || _tokenId == null || request.TokenId != _tokenId)
+        {
+            return "Your Selva sign-in changed since this dialog opened. Open it again.";
+        }
+
         if (request.Kind == "newVersion")
         {
             return Guid.TryParse(request.DefinitionGuid, out _) ? null : "Pick the definition to add a version to.";
@@ -203,12 +230,54 @@ public sealed class SelvaUploadService
             return "Pick where to upload.";
         }
 
-        if (string.IsNullOrWhiteSpace(request.ProjectId))
+        if (string.IsNullOrWhiteSpace(request.ProjectId) && string.IsNullOrWhiteSpace(request.NewProjectName))
         {
             return "Pick a project.";
         }
 
+        if (request.NewProjectName?.Trim().Length > 128)
+        {
+            return "Project names are at most 128 characters.";
+        }
+
         return string.IsNullOrWhiteSpace(request.DisplayName) ? "Give the definition a name." : null;
+    }
+
+    /// <summary>
+    ///     A private project nobody joins on upload: what a key without <c>write</c> may create.
+    ///     A conflict on a retry is the first attempt having gone through, so the project is looked
+    ///     up by name; a conflict on the first attempt is someone else's project.
+    /// </summary>
+    private async Task<string> EnsureProjectAsync(string name, CancellationToken cancellationToken)
+    {
+        var key = _client.Origin + "\n" + _tokenId + "\n" + name;
+        if (_createdProjects.TryGetValue(key, out var known))
+        {
+            return known;
+        }
+
+        string? id;
+        try
+        {
+            var created = await _client.PostJsonIdempotentAsync("/api/v1/projects", new JObject
+            {
+                ["name"] = name, ["visibility"] = "private", ["autoJoinOnUpload"] = false
+            }, cancellationToken).ConfigureAwait(false);
+            id = (string?)created["id"];
+        }
+        catch (SelvaApiException ex) when (ex.Status == 409 && ex.AfterRetry)
+        {
+            var projects = await ListProjectsAsync(cancellationToken).ConfigureAwait(false);
+            id = projects.FirstOrDefault(p => p.CanCreate && p.Name == name)?.Id;
+        }
+
+        if (id == null)
+        {
+            throw new SelvaApiException("Selva didn't say which project it created.");
+        }
+
+        _createdProjects[key] = id;
+        return id;
     }
 
     private async Task<List<ProjectRow>> ListProjectsAsync(CancellationToken cancellationToken)
@@ -233,8 +302,7 @@ public sealed class SelvaUploadService
                 {
                     Id = id,
                     Name = (string?)item["name"] ?? id,
-                    CanCreate = item["canCreateDefinitions"]?.Type != JTokenType.Boolean ||
-                                (bool)item["canCreateDefinitions"]!
+                    CanCreate = IsTrue(item["canCreateDefinitions"])
                 });
             }
 
@@ -268,7 +336,7 @@ public sealed class SelvaUploadService
             return null;
         }
 
-        if (definition["canEdit"]?.Type == JTokenType.Boolean && !(bool)definition["canEdit"]!)
+        if (!IsTrue(definition["canEdit"]))
         {
             return null;
         }
@@ -278,11 +346,8 @@ public sealed class SelvaUploadService
             .Where(v => v["versionNumber"]?.Type == JTokenType.Integer)
             .ToList();
 
-        var latest = new[]
-            {
-                (int?)definition["draftVersion"]?["versionNumber"],
-                (int?)definition["liveVersion"]?["versionNumber"]
-            }
+        var live = VersionNumberOf(definition["liveVersion"]);
+        var latest = new[] { VersionNumberOf(definition["draftVersion"]), live }
             .Concat(versions.Select(v => (int?)v["versionNumber"]))
             .Max() ?? 0;
 
@@ -293,7 +358,7 @@ public sealed class SelvaUploadService
             DisplayName = (string?)definition["displayName"] ?? guid,
             ProjectName = projectId != null && projectNames.TryGetValue(projectId, out var name) ? name : null,
             LatestVersionNumber = latest,
-            LiveVersionNumber = (int?)definition["liveVersion"]?["versionNumber"],
+            LiveVersionNumber = live,
             LinkedVersionNumber = linkedVersion,
             NewerVersions = linkedVersion == null
                 ? new List<SelvaVersionSummary>()
@@ -309,6 +374,20 @@ public sealed class SelvaUploadService
                     })
                     .ToList()
         };
+    }
+
+    // A capability Selva doesn't state is one it doesn't grant: an older server never offers more
+    // than it can do.
+    private static bool IsTrue(JToken? token)
+    {
+        return token?.Type == JTokenType.Boolean && (bool)token;
+    }
+
+    // `liveVersion` is JSON null until the first publish, and indexing a JValue throws.
+    private static int? VersionNumberOf(JToken? version)
+    {
+        var number = (version as JObject)?["versionNumber"];
+        return number?.Type == JTokenType.Integer ? (int)number : null;
     }
 
     private static IEnumerable<JObject> Items(JObject collection)

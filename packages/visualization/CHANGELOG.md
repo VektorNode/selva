@@ -1,5 +1,45 @@
 # @selvajs/visualization
 
+## 1.6.0-beta.9
+
+### Minor Changes
+
+- 3ff7284: Schema 2.19.0: an optional `viewerOptions.look` sets the look a definition opens in. A new `night` look lights the scene from what the model emits: a material carrying `emissive` and `emissiveIntensity` gets a shadow-casting point light and bloom. `emissiveLight` sets that light's intensity directly. The plugin's new Emissive Material component makes any material glow, from a colour and strength, or from a real source's Kelvin and Lumens.
+- 3ff7284: The `night` look now runs lighter on phones: one emissive source casts light, with no bloom or ambient occlusion, capped at 1.5x pixel ratio. A phone is a coarse pointer on a screen under 600px wide. Set `render.lowPower` to force the tier on or off.
+- 3ff7284: Built-in wood, concrete, plaster, brick and corten surfaces, drawn at real size with no texture files. Sun shadows are softer and lighter. Lights now survive a solve: `clearScene` was removing them, which left only the environment map after the first solve. The sun stays outside building-sized scenes, so everything casts a shadow. Night's fill light no longer blows out large models, and a glow spread across a facade no longer burns a hot spot into it.
+
+## 1.6.0-beta.8
+
+### Minor Changes
+
+- a9a8704: Scene manager: hovering a row tints that object amber in the viewport, and selecting rows tints them with the selection color. A surface already close to the tint turns blue instead. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 1.6.0-beta.7
+
+### Minor Changes
+
+- b500603: Scene manager: hovering a row outlines that object in the viewport, and selecting rows tints them. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 1.6.0-beta.6
+
+### Patch Changes
+
+- 7c8e1e1: Edge overlays build up to 18x faster on dense meshes and now cover meshes up to 8M triangles (was 4M). Dense meshes parse about 2x faster when the plugin sends its closed-solid verdict (new optional `CLSD` container chunk; older containers are computed as before). Clearing a scene of 100k meshes no longer takes seconds, merging 100k+ meshes of one material no longer overflows the stack, and box-like parts carry 40% fewer vertices after crease splitting.
+
+## 1.6.0-beta.5
+
+### Patch Changes
+
+- e0aa942: Large meshes decode faster and no longer freeze the page while they unpack. For a 2.7M-triangle frame, decoding takes about 20% less time and the time the page is blocked per solve drops from about 70 ms to under 2 ms, because the geometry is now decompressed in a worker instead of on the main thread. The decoder also copies roughly 40 MB less per solve.
+
+## 1.6.0-beta.4
+
+### Minor Changes
+
+- d5376af: Parsing a mesh batch whose geometry is byte-identical to an earlier one reuses its `BufferGeometry` and extracted edges, so a solve that only changed materials, names or layers neither re-decodes the scene nor uploads it to the GPU again. The cache owns those geometries: `updateScene` frees the GPU copy of every cached geometry the new scene doesn't draw, so switching back to a cached variant costs an upload but no decode. New `clearGeometryCache()` from `/parse` empties the cache; `Viewer` calls it when it is destroyed.
+
+  Merging by material now gathers every group of a material, wherever it sits in the batch, into one mesh. The plugin keeps meshes in input order, so a material can head several groups.
+
 ## 1.6.0-beta.3
 
 ### Patch Changes

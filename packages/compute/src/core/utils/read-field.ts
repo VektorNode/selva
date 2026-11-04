@@ -12,7 +12,7 @@
 /** Own keys only: a payload probed for `constructor` must not find `Object.prototype`'s. */
 function findOwnKey(obj: unknown, name: string): string | undefined {
 	if (!obj || typeof obj !== 'object') return undefined;
-	if (Object.prototype.hasOwnProperty.call(obj, name)) return name;
+	if (Object.hasOwn(obj, name)) return name;
 	const lower = name.toLowerCase();
 	return Object.keys(obj).find((key) => key.toLowerCase() === lower);
 }

@@ -1,9 +1,6 @@
 /**
- * Tests for the GrasshopperResponseProcessor class — the public wrapper consumers
- * use to read solve results. The underlying free functions (`getValues`,
- * `getValue`, `extractFileData`) are tested in response-processors.test.ts; here we
- * pin the CLASS behavior: that it threads the response through to them, exposes it for
- * renderer-side mesh parsing, and forwards extracted files to the downloader.
+ * The value-reading functions are tested in response-processors.test.ts; this pins what the class
+ * adds, forwarding extracted files to the downloader.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
@@ -43,29 +40,6 @@ beforeEach(() => {
 	downloadFileData.mockClear();
 });
 
-describe('GrasshopperResponseProcessor — value access', () => {
-	it('reads all values keyed by name through the bound response', () => {
-		const proc = new GrasshopperResponseProcessor(
-			response(param('radius', [item('System.Double', '2.5')]))
-		);
-		expect(proc.getValues().values.radius).toBe(2.5);
-	});
-
-	it('reads a single value by name', () => {
-		const proc = new GrasshopperResponseProcessor(
-			response(param('label', [item('System.String', '"hello"')]))
-		);
-		expect(proc.getValue({ byName: 'label' })).toBe('hello');
-	});
-
-	it('returns undefined for a parameter that is not present', () => {
-		const proc = new GrasshopperResponseProcessor(
-			response(param('a', [item('System.Int32', '1')]))
-		);
-		expect(proc.getValue({ byName: 'missing' })).toBeUndefined();
-	});
-});
-
 describe('GrasshopperResponseProcessor — file download', () => {
 	it('extracts file entries from the response and forwards them to downloadFileData', async () => {
 		const proc = new GrasshopperResponseProcessor(response(param('files', [fileItem('out.bin')])));
@@ -89,16 +63,5 @@ describe('GrasshopperResponseProcessor — file download', () => {
 		const [files, , additional] = downloadFileData.mock.calls[0];
 		expect(files).toHaveLength(0); // no file items in the response
 		expect(additional).toBe(extra);
-	});
-});
-
-// Mesh decoding lives in `@selvajs/visualization`: callers pass the raw response to
-// `getThreeObjectsFromComputeResponse` themselves, so this class must keep exposing it.
-describe('GrasshopperResponseProcessor — renderer hand-off', () => {
-	it('exposes the bound response so a renderer-side parser can consume it', () => {
-		const res = response(param('m', []));
-		const proc = new GrasshopperResponseProcessor(res);
-
-		expect(proc.response).toBe(res);
 	});
 });

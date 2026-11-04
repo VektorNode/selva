@@ -80,7 +80,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
     }
 
-    private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
+    internal bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
     public override Guid ComponentGuid => new Guid("593BC967-797A-4B1A-9B76-C2133F6B08E2");
 
@@ -97,6 +97,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             _embeddedSchema = value;
             ExpireSolution(false);
         }
+    }
+
+    /// <summary>
+    ///     A scripted layout is the author's intent, as an editor save is: a widget it leaves out must
+    ///     not spring back from a tombstone.
+    /// </summary>
+    internal void ApplyAuthoredSchema(UISchema schema)
+    {
+        RecordUndoEvent("Apply Layout");
+        _service?.SchemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
+        _service?.SchemaSynchronizer.ClearMetadataCache();
+        Schema = schema;
     }
 
     protected override Bitmap Icon => Resources.UIBridge;
@@ -296,45 +308,32 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 #if DEBUG
             Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
 #endif
-            if (wasActuallySolving)
+            // A throw escaping into Grasshopper would skip the cleanup below, leaving presses
+            // latched and pending values stranded, so each stage is contained.
+            try
             {
-                _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
-                _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
-
-                // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
-                if (_embeddedSchema != null)
+                if (wasActuallySolving)
                 {
-                    var document = OnPingDocument();
-                    var (addedIds, removedIds) =
-                        _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
-                    if (addedIds.Count > 0 || removedIds.Count > 0)
-                    {
-                        if (addedIds.Count > 0)
-                        {
-                            _service.EventManager.RegisterWatchedIds(addedIds);
-                        }
-
-                        _ = _service.WebSocketTransport
-                            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
-                            .ContinueWith(t =>
-                            {
-                                if (t.IsFaulted)
-                                {
-                                    Logger.Error("Failed to broadcast schema update after bake output sync",
-                                        t.Exception);
-                                }
-                            });
-                        GHDocumentMutator.ScheduleComponentExpire(document, this,
-                            _service.WebSocketTransport.ScheduleSolutionDelayMs, true);
-                    }
+                    PublishSolveResults();
                 }
             }
-
-            ClearAllContextualParameters();
-            if (_service.TriggerPresses.ResetPressed(OnPingDocument(),
-                    _service.WebSocketTransport.ScheduleSolutionDelayMs))
+            catch (Exception ex)
             {
-                _service.StateManager.MarkSolveScheduled();
+                Logger.Error("[UIBuilder] Publishing solve results failed", ex);
+            }
+
+            try
+            {
+                ClearAllContextualParameters();
+                if (_service.TriggerPresses.ResetPressed(OnPingDocument(),
+                        _service.WebSocketTransport.ScheduleSolutionDelayMs))
+                {
+                    _service.StateManager.MarkSolveScheduled();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("[UIBuilder] Resetting inputs after the solve failed", ex);
             }
 
             // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
@@ -358,6 +357,43 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _service.EventManager.DocumentModified += _onDocumentModified;
     }
 
+
+    private void PublishSolveResults()
+    {
+        _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
+        _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+
+        // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
+        if (_embeddedSchema == null)
+        {
+            return;
+        }
+
+        var document = OnPingDocument();
+        var (addedIds, removedIds) =
+            _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
+        if (addedIds.Count == 0 && removedIds.Count == 0)
+        {
+            return;
+        }
+
+        if (addedIds.Count > 0)
+        {
+            _service.EventManager.RegisterWatchedIds(addedIds);
+        }
+
+        _ = _service.WebSocketTransport
+            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
+            .ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    Logger.Error("Failed to broadcast schema update after bake output sync", t.Exception);
+                }
+            });
+        GHDocumentMutator.ScheduleComponentExpire(document, this,
+            _service.WebSocketTransport.ScheduleSolutionDelayMs, true);
+    }
 
     private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind, bool startOutOfPanel)
     {
@@ -387,7 +423,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                                 return;
                             }
 
-                            var refusal = ShowInPanel();
+                            var refusal = ShowInPanel(raise: false);
                             AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, refusal ??
                                 "Web UI open in the Selva panel. Right-click the component and choose Open UI to bring it back.");
                             if (refusal != null)
@@ -544,7 +580,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        var refusal = ShowInPanel();
+        var refusal = ShowInPanel(raise: false);
         if (refusal != null)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal);
@@ -560,13 +596,20 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        if (command == InboundKind.CloseDefinition)
+        try
         {
-            DefinitionLauncher.Close();
+            if (command == InboundKind.CloseDefinition)
+            {
+                DefinitionLauncher.Close();
+            }
+            else if (command == InboundKind.EditInGrasshopper)
+            {
+                DefinitionLauncher.EditInGrasshopper();
+            }
         }
-        else if (command == InboundKind.EditInGrasshopper)
+        catch (Exception ex)
         {
-            DefinitionLauncher.EditInGrasshopper();
+            Logger.Error($"[UIBuilder] Player command {command} failed", ex);
         }
     }
 
@@ -603,17 +646,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     /// <summary>Null when the panel took the session; otherwise why not, for the user.</summary>
-    private string ShowInPanel()
+    private string ShowInPanel(bool raise)
     {
         var url = TryBuildSessionUrl("rhino");
-        if (url == null)
+        var document = OnPingDocument();
+        if (url == null || document == null)
         {
             return "The web UI isn't running yet.";
         }
 
         try
         {
-            return RhinoPanelHost.TryShow(url, _sessionId);
+            return RhinoPanelHost.TryShow(url, _sessionId, document, raise);
         }
         catch (Exception ex)
         {
@@ -621,12 +665,22 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
+    internal void FollowCanvas()
+    {
+        var url = TryBuildSessionUrl("rhino");
+        var document = OnPingDocument();
+        if (url != null && document != null)
+        {
+            RhinoPanelHost.Follow(url, _sessionId, document);
+        }
+    }
+
     private void OpenUIInPanel()
     {
-        var refusal = ShowInPanel();
+        var refusal = ShowInPanel(raise: true);
         if (refusal != null)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal + " Opened the browser instead.");
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal +" Opened the browser instead.");
             OpenUI();
         }
     }

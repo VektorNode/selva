@@ -2,7 +2,7 @@
 
 **Tracked in: unfiled.**
 
-This builds on the [MCP package plan](./mcp-package.md). The spec and client requirements behind
+This builds on the [MCP package plan](../archive/mcp-package.md). The spec and client requirements behind
 every step are in [mcp-best-practices.md](../research/mcp-best-practices.md); this file says how
 Selva meets them and in what order.
 
@@ -104,7 +104,7 @@ The metadata advertises:
 - `token_endpoint_auth_methods_supported: ["none"]`
 - `authorization_response_iss_parameter_supported: true`
 - `scopes_supported: ["read", "solve", "upload"]`; only the built-in Grasshopper client is ever
-  granted `upload` ([publish-from-plugin.md](./publish-from-plugin.md)), so the `/mcp`
+  granted `upload` ([publish-from-plugin.md](../archive/publish-from-plugin.md)), so the `/mcp`
   resource metadata lists `read` and `solve` alone
 
 Claude picks CIMD only when both the second and third are present.

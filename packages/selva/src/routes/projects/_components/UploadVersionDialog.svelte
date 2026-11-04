@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, Dialog, Label, Textarea, toast } from '@selvajs/ui';
 	import { Upload, FileUp } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 
 	interface Props {
 		definitionGuid: string;
@@ -48,7 +48,7 @@
 				const result = await res.json();
 				toast.success(`v${result.version?.versionNumber ?? nextVersionNumber} uploaded as draft`);
 				onUploaded();
-				await invalidateAll();
+				await refreshAll();
 				onOpenChange(false);
 			} else {
 				const e = await res.json().catch(() => ({}));
@@ -77,7 +77,7 @@
 				<Label for="upload-file">Grasshopper file</Label>
 				<label
 					for="upload-file"
-					class="border-border hover:bg-accent/30 flex cursor-pointer items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 transition-colors"
+					class="border-border hover:bg-hover flex cursor-pointer items-center gap-3 rounded-md border-2 border-dashed px-4 py-5 transition-colors"
 				>
 					<FileUp class="text-muted-foreground h-5 w-5 shrink-0" />
 					<div class="min-w-0 flex-1">

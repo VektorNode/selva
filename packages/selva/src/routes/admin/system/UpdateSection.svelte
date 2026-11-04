@@ -80,7 +80,7 @@
 		info: {
 			text: 'text-foreground',
 			border: 'border-border',
-			bg: 'bg-muted/50',
+			bg: 'bg-muted',
 			icon: Info
 		},
 		warning: {
@@ -98,7 +98,7 @@
 		pending: {
 			text: 'text-muted-foreground',
 			border: 'border-border',
-			bg: 'bg-muted/50',
+			bg: 'bg-muted',
 			icon: RefreshCw
 		}
 	};
@@ -214,7 +214,7 @@
 		</Button>
 		{#if isRestarting && exitCode === null}
 			<div
-				class="border-border bg-muted/50 text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+				class="border-border bg-muted text-muted-foreground flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
 			>
 				<RefreshCw class="h-4 w-4 animate-spin" />
 				<span>PM2 is restarting the app — waiting for the new process to come online…</span>

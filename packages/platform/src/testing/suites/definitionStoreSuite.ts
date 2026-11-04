@@ -9,8 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import type { IDefinitionStore } from '../../definitions/interface.js';
 import type { DefinitionRecord, DefinitionVersion } from '../../definitions/types.js';
-import { makeCtx, makeUuid } from './helpers.js';
-import type { RequestContext } from '../../context.js';
+import { makeSeedHelpers, makeUuid } from './helpers.js';
 
 /**
  * Scope the suite needs to reference from each test. Adapters that enforce
@@ -32,6 +31,8 @@ export interface DefinitionTestScope {
 	 * Must reference a real row for FK-enforcing adapters.
 	 */
 	secondaryProjectId: string;
+	/** Used by the ctx-isolation cases when `projectId` is one anyone can see. */
+	privateProjectId?: string;
 	/** Optional third user id for ctx-isolation tests. Required when ctxIsolation is set. */
 	secondaryUserId?: string;
 	/** Token for `secondaryUserId`, when used. */
@@ -63,26 +64,14 @@ const DEFAULT_SCOPE: DefinitionTestScope = {
 	secondaryUserId: 'user-b'
 };
 
-// Suite-wide token map. `scopeFor` populates it from the scope; `ctx`
-// auto-attaches the matching token so adapters with DB-side auth (Supabase
-// RLS) run as the right user. Local providers ignore tokens entirely.
-const tokens = new Map<string, string>();
-
-function ctx(
-	userId: string,
-	opts: {
-		actingOrgId?: string;
-		platformPermissions?: RequestContext['platformPermissions'];
-		orgPermissions?: RequestContext['orgPermissions'];
-	} = {}
-): RequestContext {
-	return makeCtx(userId, { ...opts, sessionToken: tokens.get(userId) });
-}
+// `scopeFor` registers the scope's tokens, so `ctx` runs as the right user on an
+// adapter with DB-side auth (Supabase RLS). This suite seeds nobody itself.
+const { ctx, registerToken } = makeSeedHelpers(async (userId) => ({ userId }));
 
 function recordTokensFromScope(scope: DefinitionTestScope): void {
-	if (scope.ownerSessionToken) tokens.set(scope.ownerId, scope.ownerSessionToken);
+	if (scope.ownerSessionToken) registerToken(scope.ownerId, scope.ownerSessionToken);
 	if (scope.secondaryUserId && scope.secondaryUserSessionToken) {
-		tokens.set(scope.secondaryUserId, scope.secondaryUserSessionToken);
+		registerToken(scope.secondaryUserId, scope.secondaryUserSessionToken);
 	}
 }
 
@@ -153,6 +142,20 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const scope = await scopeFor();
 			const got = await store.get(ctx(scope.ownerId), makeUuid());
 			expect(got).toBeNull();
+		});
+
+		it('getDefinitionsFor returns the live record per guid, leaving out missing and deleted', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const [a, b, gone] = [makeUuid(), makeUuid(), makeUuid()];
+			for (const guid of [a, b, gone])
+				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			await store.delete(ctx(scope.ownerId), gone);
+
+			const found = await store.getDefinitionsFor(ctx(scope.ownerId), [a, b, gone, makeUuid()]);
+			expect([...found.keys()].sort()).toEqual([a, b].sort());
+			expect(found.get(a)?.guid).toBe(a);
+			expect((await store.getDefinitionsFor(ctx(scope.ownerId), [])).size).toBe(0);
 		});
 
 		it('list filters pending by default', async () => {
@@ -262,6 +265,17 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const got = await store.get(ctx(scope.ownerId), guid);
 			expect(got?.displayName).toBe('New');
 			expect(got!.updatedAt >= created.updatedAt).toBe(true);
+		});
+
+		it('update with null tags clears them', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const guid = makeUuid();
+			await store.create(ctx(scope.ownerId), record(scope, { guid, tags: ['roof'] }));
+
+			await store.update(ctx(scope.ownerId), guid, { tags: null });
+			const got = await store.get(ctx(scope.ownerId), guid);
+			expect(got?.tags ?? []).toEqual([]);
 		});
 
 		it('solveCacheLimit round-trips: absent → inherit, set → value, null → cleared', async () => {
@@ -389,9 +403,8 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 		});
 
 		it('reserveNextVersionNumber mints a FRESH number after delete-latest (fileKeys never collide)', async () => {
-			// The whole reason the counter exists: max(existing)+1 reused a number
-			// after deleting the latest version, colliding the fileKey. The monotonic
-			// counter must hand out a number BEYOND any deleted version's.
+			// The counter exists because max(existing)+1 would reuse a deleted number
+			// and collide the fileKey, so it must go beyond any deleted version's.
 			const store = await createStore();
 			const scope = await scopeFor();
 			const guid = makeUuid();
@@ -451,6 +464,29 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 			const page = await store.listVersions(ctx(scope.ownerId), guid);
 			expect(page.items.map((v) => v.versionNumber)).toEqual([2, 1]);
 			expect(page.items.map((v) => v.id)).toEqual([v2.id, v1.id]);
+		});
+
+		it('listVersionsFor returns each definition’s versions newest-first, without the schema', async () => {
+			const store = await createStore();
+			const scope = await scopeFor();
+			const [a, b, none] = [makeUuid(), makeUuid(), makeUuid()];
+			for (const guid of [a, b, none])
+				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+			const a1 = version(a, 1, scope.ownerId);
+			const a2 = version(a, 2, scope.ownerId);
+			const b1 = version(b, 1, scope.ownerId);
+			for (const v of [a1, b1, a2]) await store.createVersion(ctx(scope.ownerId), v);
+			await store.setVersionSchema(ctx(scope.ownerId), a2.id, {
+				name: 'Test',
+				inputs: [],
+				outputs: []
+			} as unknown as Parameters<typeof store.setVersionSchema>[2]);
+
+			const byDefinition = await store.listVersionsFor(ctx(scope.ownerId), [a, b, none]);
+			expect(byDefinition.get(a)?.map((v) => v.id)).toEqual([a2.id, a1.id]);
+			expect(byDefinition.get(b)?.map((v) => v.id)).toEqual([b1.id]);
+			expect(byDefinition.get(none)).toEqual([]);
+			expect(byDefinition.get(a)?.[0]?.schema).toBeUndefined();
 		});
 
 		it('getVersion returns the row by id', async () => {
@@ -751,7 +787,10 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				const otherUser = scope.secondaryUserId;
 				if (!otherUser) throw new Error('ctxIsolation requires scope.secondaryUserId');
 				const guid = makeUuid();
-				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+				await store.create(
+					ctx(scope.ownerId),
+					record(scope, { guid, projectId: scope.privateProjectId ?? scope.projectId })
+				);
 
 				const page = await store.list(ctx(otherUser));
 				expect(page.items.map((r) => r.guid)).not.toContain(guid);
@@ -763,7 +802,10 @@ export function runDefinitionStoreConformance(opts: DefinitionStoreConformanceOp
 				const otherUser = scope.secondaryUserId;
 				if (!otherUser) throw new Error('ctxIsolation requires scope.secondaryUserId');
 				const guid = makeUuid();
-				await store.create(ctx(scope.ownerId), record(scope, { guid }));
+				await store.create(
+					ctx(scope.ownerId),
+					record(scope, { guid, projectId: scope.privateProjectId ?? scope.projectId })
+				);
 
 				const got = await store.get(ctx(otherUser), guid);
 				expect(got).toBeNull();

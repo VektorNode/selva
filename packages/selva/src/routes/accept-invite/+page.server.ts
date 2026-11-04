@@ -7,11 +7,12 @@ import {
 	getOrganizationProvider,
 	getUserProfileStore
 } from '#lib/server/providers.server.js';
-import { getAuthProvider } from '#lib/server/providers.server.js';
+import { getAuthProvider, getPermissionStore } from '#lib/server/providers.server.js';
 import { findAuthUserByEmail } from '@selvajs/server/providers';
+import { inviterStillVouches } from '@selvajs/server/handlers';
 import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
 import { setSessionCookie } from '#lib/server/admin-auth.server.js';
-import { hashToken } from '#lib/server/invites/token.server.js';
+import { findByRawToken } from '#lib/server/invites/token.server.js';
 import { renderThrown } from '@selvajs/server/logging';
 
 /**
@@ -40,14 +41,24 @@ function signupMode(auth: ReturnType<typeof getAuthProvider>): 'password' | 'pro
  * anonymously would let anyone holding a forwarded link join an org as someone
  * else.
  */
+function inviteDeps() {
+	return {
+		auth: getAuthProvider(),
+		orgs: getOrganizationProvider(),
+		permissions: getPermissionStore()
+	};
+}
+
 export const load: PageServerLoad = async ({ url, locals }) => {
 	const token = url.searchParams.get('token')?.trim();
 	if (!token) {
 		return { ok: false as const, reason: 'This invite link is missing a token.' };
 	}
 
-	const invite = await getInviteStore().getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
-	if (!invite) {
+	const invite = await findByRawToken(token, (h) =>
+		getInviteStore().getByTokenHash(SYSTEM_CONTEXT, h)
+	);
+	if (!invite || !(await inviterStillVouches(invite, inviteDeps()))) {
 		return { ok: false as const, reason: 'This invite link is invalid or has expired.' };
 	}
 
@@ -82,11 +93,13 @@ export const actions = {
 
 		let invite: Invite | null;
 		try {
-			invite = await getInviteStore().getByTokenHash(SYSTEM_CONTEXT, hashToken(token));
+			invite = await findByRawToken(token, (h) =>
+				getInviteStore().getByTokenHash(SYSTEM_CONTEXT, h)
+			);
 		} catch {
 			return fail(500, { error: 'Could not validate the invite. Please try again.' });
 		}
-		if (!invite) {
+		if (!invite || !(await inviterStillVouches(invite, inviteDeps()))) {
 			return fail(410, { error: 'This invite link is invalid or has expired.' });
 		}
 
@@ -145,11 +158,10 @@ export const actions = {
 				// `ensureUser` on the first authed request — one the invitee has not
 				// made yet. Without this the grant returns `not_found` and vanishes.
 				await getDataProvider().ensureUser(SYSTEM_CONTEXT, user.id);
-				const granted = await setUserPlatformPermissions(
-					SYSTEM_CONTEXT,
-					user.id,
-					invite.platformPermissions
-				);
+				const held = await getPermissionStore().getFor(SYSTEM_CONTEXT, user.id);
+				const granted = await setUserPlatformPermissions(SYSTEM_CONTEXT, user.id, [
+					...new Set([...held, ...invite.platformPermissions])
+				]);
 				if (granted !== 'ok') {
 					throw new Error(`Platform permission grant failed: ${granted}`);
 				}
@@ -173,7 +185,15 @@ export const actions = {
 					deletedAt: null
 				});
 			}
-			await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
+			const claimed = await getInviteStore().markAccepted(SYSTEM_CONTEXT, invite.id, user.id);
+			if (!claimed) {
+				// A double submit: membership upserts, so the outcome is the same either way.
+				locals.log.info('Invite was already accepted', {
+					component: 'accept-invite',
+					inviteId: invite.id,
+					userId: user.id
+				});
+			}
 		} catch (err) {
 			locals.log.error('Post-signup wiring failed', {
 				component: 'accept-invite',

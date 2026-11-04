@@ -41,10 +41,15 @@ export const load: PageServerLoad = async (event) => {
 	};
 	if (!store || !orgId) return { ...base, mine: [] as TokenRow[], roster: [] as RosterRow[] };
 
-	const mine = await listOrgApiTokens(store, ctx, orgId, { limit: 200 });
-	if (!canManageRoster) return { ...base, mine: mine.items.map(toRow), roster: [] as RosterRow[] };
+	if (!canManageRoster) {
+		const mine = await listOrgApiTokens(store, ctx, orgId, { limit: 200 });
+		return { ...base, mine: mine.items.map(toRow), roster: [] as RosterRow[] };
+	}
 
-	const all = await listOrgApiTokens(store, ctx, orgId, { limit: 500, roster: true });
+	const [mine, all] = await Promise.all([
+		listOrgApiTokens(store, ctx, orgId, { limit: 200 }),
+		listOrgApiTokens(store, ctx, orgId, { limit: 500, roster: true })
+	]);
 	const ownerIds = [...new Set(all.items.map((t) => t.userId))];
 	const profiles = await getUserProfileStore().getProfiles(SYSTEM_CONTEXT, ownerIds);
 	const nameById = new Map(profiles.map((p) => [p.userId, p.displayName ?? null]));

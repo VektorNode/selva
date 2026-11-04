@@ -1,7 +1,7 @@
 /**
  * Adapter conformance suite for IComputeServerStore.
  *
- * Architecture spec §4.8 — servers are scoped (platform vs. org-private), with a global
+ * Servers are scoped (platform vs. org-private), with a global
  * `defaultServerId` and per-org `orgDefaults`. The store surface exposes
  * scope-targeted mutations; visibility filtering is done by callers via
  * the pure helpers in `@selvajs/platform`.
@@ -38,9 +38,7 @@ function platformServer(
 		sharedWith: overrides.sharedWith ?? 'all',
 		label: overrides.label ?? 'Test Server',
 		serverUrl: overrides.serverUrl ?? 'http://localhost:5000',
-		apiKey: overrides.apiKey,
-		timeoutMs: overrides.timeoutMs,
-		retryCount: overrides.retryCount
+		apiKey: overrides.apiKey
 	};
 }
 
@@ -54,9 +52,7 @@ function orgServer(
 		ownerOrgId,
 		label: overrides.label ?? 'Org Server',
 		serverUrl: overrides.serverUrl ?? 'http://localhost:5001',
-		apiKey: overrides.apiKey,
-		timeoutMs: overrides.timeoutMs,
-		retryCount: overrides.retryCount
+		apiKey: overrides.apiKey
 	};
 }
 
@@ -100,12 +96,98 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 		it('getConfig on empty returns an empty servers list', async () => {
 			const store = await createStore();
 			const got = await store.getConfig(SYSTEM_CONTEXT);
-			expect(Array.isArray(got.servers)).toBe(true);
+			expect(got.servers).toEqual([]);
+		});
+
+		it('getConfig hides keys unless asked, and reports that one is stored', async () => {
+			const store = await createStore();
+			const id = makeUuid();
+			await store.savePlatformServers(
+				SYSTEM_CONTEXT,
+				[
+					{
+						id,
+						scope: 'platform',
+						sharedWith: 'all',
+						label: 'Keyed',
+						serverUrl: 'http://compute.test',
+						apiKey: 'rhino-key'
+					}
+				],
+				id
+			);
+
+			const plain = await store.getConfig(SYSTEM_CONTEXT);
+			expect(plain.servers[0].apiKey).toBeUndefined();
+			expect(plain.servers[0].hasApiKey).toBe(true);
+
+			const keyed = await store.getConfig(SYSTEM_CONTEXT, { includeApiKeys: true });
+			expect(keyed.servers[0].apiKey).toBe('rhino-key');
+		});
+
+		it('getServerApiKey returns one key, and undefined for an unknown server', async () => {
+			const store = await createStore();
+			const id = makeUuid();
+			await store.savePlatformServers(
+				SYSTEM_CONTEXT,
+				[
+					{
+						id,
+						scope: 'platform',
+						sharedWith: 'all',
+						label: 'Keyed',
+						serverUrl: 'http://compute.test',
+						apiKey: 'rhino-key'
+					}
+				],
+				id
+			);
+
+			expect(await store.getServerApiKey(SYSTEM_CONTEXT, id)).toBe('rhino-key');
+			expect(await store.getServerApiKey(SYSTEM_CONTEXT, makeUuid())).toBeUndefined();
+		});
+
+		it('verifySecrets passes on keys this store wrote', async () => {
+			const store = await createStore();
+			const id = makeUuid();
+			await store.savePlatformServers(
+				SYSTEM_CONTEXT,
+				[
+					{
+						id,
+						scope: 'platform',
+						sharedWith: 'all',
+						label: 'Keyed',
+						serverUrl: 'http://compute.test',
+						apiKey: 'rhino-key'
+					}
+				],
+				id
+			);
+
+			const report = await store.verifySecrets?.();
+			if (report) expect(report).toEqual({ ok: true, failures: [], plaintextFound: false });
 		});
 
 		// ============================================================================
-		// Org-private servers + orgDefaults (Architecture spec §4.8)
+		// Org-private servers + orgDefaults
 		// ============================================================================
+
+		it('saveOrgServers ignores an entry that is not an org server', async () => {
+			const store = await createStore();
+			const orgId = await seed();
+			const stray = {
+				id: makeUuid(),
+				scope: 'platform',
+				sharedWith: 'all',
+				label: 'Stray',
+				serverUrl: 'http://compute.test'
+			} as ComputeServerConfig;
+
+			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [stray]);
+
+			expect((await store.getConfig(SYSTEM_CONTEXT)).servers).toEqual([]);
+		});
 
 		it('saveOrgServers stores rows owned by the org', async () => {
 			const store = await createStore();
@@ -143,6 +225,47 @@ export function runComputeServerStoreConformance(opts: ComputeServerStoreConform
 			expect(orgIds).toEqual([orgS.id]);
 			expect(got.defaultServerId).toBe(replacement.id);
 			expect(got.orgDefaults?.[orgId]).toBe(orgS.id);
+		});
+
+		it('saveOrgServers refuses an id the platform or another org already uses', async () => {
+			const store = await createStore();
+			const orgId = await seed();
+			const otherOrgId = await seed();
+			const platS = platformServer({ sharedWith: [otherOrgId], apiKey: 'platform-key' });
+			const otherS = orgServer(otherOrgId, { apiKey: 'other-org-key' });
+			await store.savePlatformServers(SYSTEM_CONTEXT, [platS], platS.id);
+			await store.saveOrgServers(SYSTEM_CONTEXT, otherOrgId, [otherS]);
+
+			for (const takenId of [platS.id, otherS.id]) {
+				const squat = orgServer(orgId, {
+					id: takenId,
+					serverUrl: 'https://attacker.test',
+					apiKey: 'dummy'
+				});
+				await expect(store.saveOrgServers(SYSTEM_CONTEXT, orgId, [squat])).rejects.toMatchObject({
+					statusCode: 409,
+					message: expect.stringMatching(/already in use/)
+				});
+			}
+
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			expect(got.servers.filter((s) => isOrgServer(s) && s.ownerOrgId === orgId)).toEqual([]);
+			expect(await store.getServerApiKey(SYSTEM_CONTEXT, platS.id)).toBe('platform-key');
+			expect(await store.getServerApiKey(SYSTEM_CONTEXT, otherS.id)).toBe('other-org-key');
+		});
+
+		it('savePlatformServers refuses an id an org server already uses', async () => {
+			const store = await createStore();
+			const orgId = await seed();
+			const orgS = orgServer(orgId);
+			await store.saveOrgServers(SYSTEM_CONTEXT, orgId, [orgS]);
+
+			await expect(
+				store.savePlatformServers(SYSTEM_CONTEXT, [platformServer({ id: orgS.id })], undefined)
+			).rejects.toMatchObject({ statusCode: 409 });
+
+			const got = await store.getConfig(SYSTEM_CONTEXT);
+			expect(got.servers.filter(isPlatformServer)).toEqual([]);
 		});
 
 		it('setOrgDefault updates and clears the per-org default', async () => {

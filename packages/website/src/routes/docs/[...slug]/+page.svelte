@@ -1,6 +1,9 @@
 <script lang="ts">
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import Pencil from '@lucide/svelte/icons/pencil';
+	import { page } from '$app/state';
+	import { GITHUB_URL } from '#lib/nav.js';
 
 	let { data } = $props();
 	const Content = $derived(data.content);
@@ -16,7 +19,7 @@
 {#if data.pending}
 	<div class="not-prose">
 		<p class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">Coming soon</p>
-		<h1 class="mt-3 text-4xl font-bold tracking-tight">{data.title}</h1>
+		<h1 class="text-foreground mt-3 text-4xl font-semibold tracking-tight">{data.title}</h1>
 		<p class="text-muted-foreground mt-4 max-w-xl text-lg text-pretty">
 			This page isn't public yet. Selva is pre-release — the plugin, provider, and deployment guides
 			are published with the first release.
@@ -32,6 +35,16 @@
 	</div>
 {:else}
 	<Content />
+	<p class="not-prose mt-12">
+		<a
+			href={`${GITHUB_URL}/edit/main/docs/${page.params.slug}.md`}
+			target="_blank"
+			rel="noreferrer"
+			class="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-sm transition"
+		>
+			<Pencil class="size-3.5" /> Edit this page on GitHub
+		</a>
+	</p>
 {/if}
 
 <!-- Prev / next, in reading order. Sits outside the article prose so it isn't
@@ -41,7 +54,7 @@
 		{#if data.prev}
 			<a
 				href={`/docs/${data.prev.slug}`}
-				class="group border-border hover:border-muted-foreground/40 hover:bg-muted/40 flex flex-col rounded-lg border p-4 transition"
+				class="group border-border hover:border-input hover:bg-hover flex flex-col rounded-lg border p-4 transition"
 			>
 				<span class="text-muted-foreground inline-flex items-center gap-1 text-xs">
 					<ArrowLeft class="size-3.5" /> Previous
@@ -56,7 +69,7 @@
 		{#if data.next}
 			<a
 				href={`/docs/${data.next.slug}`}
-				class="group border-border hover:border-muted-foreground/40 hover:bg-muted/40 flex flex-col rounded-lg border p-4 text-right transition"
+				class="group border-border hover:border-input hover:bg-hover flex flex-col rounded-lg border p-4 text-right transition"
 			>
 				<span class="text-muted-foreground inline-flex items-center justify-end gap-1 text-xs">
 					Next <ArrowRight class="size-3.5" />

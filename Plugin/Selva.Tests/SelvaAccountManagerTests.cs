@@ -28,10 +28,27 @@ public sealed class SelvaAccountManagerTests : IDisposable
         }
     }
 
+    private readonly List<string> _confirmed = new();
+    private bool _confirmNewOrigins = true;
+
     private SelvaAccountManager Manager(Action<string>? browser = null, ICredentialStore? store = null,
         Func<DateTimeOffset>? now = null) =>
         new(store ?? _os, Path.Combine(_dir, "accounts.json"), () => _selva, "ua",
-            browser ?? (url => Approve(url)), now ?? (() => DateTimeOffset.Parse("2026-01-01T00:00:00Z")));
+            browser ?? (url => Approve(url)),
+            host =>
+            {
+                _confirmed.Add(host);
+                return Task.FromResult(_confirmNewOrigins);
+            },
+            now ?? (() => DateTimeOffset.Parse("2026-01-01T00:00:00Z")));
+
+    private async Task<SelvaAccountManager> SignedIn()
+    {
+        var manager = Manager();
+        await manager.ConnectAsync(Origin, CancellationToken.None);
+        await manager.SignInAsync(CancellationToken.None);
+        return manager;
+    }
 
     [Fact]
     public async Task Connect_RemembersTheNormalisedInstance()
@@ -57,6 +74,25 @@ public sealed class SelvaAccountManagerTests : IDisposable
         var account = manager.Snapshot();
         Assert.Equal(Origin, account.Origin);
         Assert.NotNull(account.Message);
+    }
+
+    [Fact]
+    public async Task Connect_ToAnInstanceThisMachineNeverUsed_IsConfirmedInRhinoFirst()
+    {
+        var manager = Manager();
+        await manager.ConnectAsync(Origin, CancellationToken.None);
+        Assert.Equal(new[] { "selva.example.com" }, _confirmed);
+
+        _confirmNewOrigins = false;
+        var before = _selva.Requests;
+        await manager.ConnectAsync("https://other.example.com", CancellationToken.None);
+        Assert.Equal(before, _selva.Requests);
+        Assert.Equal(Origin, manager.Snapshot().Origin);
+        Assert.NotNull(manager.Snapshot().Message);
+
+        await manager.ConnectAsync(Origin, CancellationToken.None);
+        Assert.Equal(new[] { "selva.example.com", "other.example.com" }, _confirmed);
+        Assert.Equal(Origin, manager.Snapshot().Origin);
     }
 
     [Fact]
@@ -94,10 +130,120 @@ public sealed class SelvaAccountManagerTests : IDisposable
 
         Assert.StartsWith("https://selva.example.com/oauth/authorize?", opened);
         Assert.Contains("client_id=selva-grasshopper", opened);
-        Assert.Contains("scope=upload", opened);
+        Assert.Contains("scope=upload%20create_projects", opened);
         Assert.Contains("code_challenge_method=S256", opened);
         Assert.Contains("resource=https%3A%2F%2Fselva.example.com", opened);
         Assert.Contains("redirect_uri=http%3A%2F%2F127.0.0.1%3A", opened);
+    }
+
+    // -------------------------------------------------------------------------
+    // Whether Selva still takes the key
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task SignIn_LeavesTheKeyVerified()
+    {
+        var manager = await SignedIn();
+        Assert.True(manager.Snapshot().Verified);
+    }
+
+    [Fact]
+    public async Task AfterARestart_TheKeyIsUnverifiedUntilSelvaAcceptsIt()
+    {
+        await SignedIn();
+        var next = Manager();
+        Assert.Equal("signedIn", next.Snapshot().Status);
+        Assert.False(next.Snapshot().Verified);
+
+        await next.VerifyAsync(CancellationToken.None);
+        Assert.True(next.Snapshot().Verified);
+    }
+
+    [Fact]
+    public async Task Verify_RecordsTheTokenIdOfAnOlderSignIn()
+    {
+        await SignedIn();
+        var path = Path.Combine(_dir, "accounts.json");
+        var file = JObject.Parse(File.ReadAllText(path));
+        foreach (var account in file["accounts"]!)
+        {
+            ((JObject)account).Remove("tokenId");
+        }
+
+        File.WriteAllText(path, file.ToString());
+        var next = Manager();
+        Assert.Null(next.Session()!.Record.TokenId);
+
+        await next.VerifyAsync(CancellationToken.None);
+
+        Assert.Equal("token-1", next.Session()!.Record.TokenId);
+    }
+
+    [Fact]
+    public async Task Verify_RefusedHolder_KeepsTheKeyAndSaysWhy()
+    {
+        var manager = await SignedIn();
+        _selva.MeStatus = HttpStatusCode.Forbidden;
+
+        await manager.VerifyAsync(CancellationToken.None);
+
+        var account = manager.Snapshot();
+        Assert.Equal("signedIn", account.Status);
+        Assert.False(account.Verified);
+        Assert.Contains("no longer use API tokens", account.Message);
+        Assert.Equal(IssuedKey, _os.Load(Origin));
+    }
+
+    [Fact]
+    public async Task Verify_RefusedHolder_CanStillSignOut()
+    {
+        var manager = await SignedIn();
+        _selva.MeStatus = HttpStatusCode.Forbidden;
+        await manager.VerifyAsync(CancellationToken.None);
+
+        await manager.SignOutAsync(CancellationToken.None);
+
+        Assert.True(_selva.Revoked);
+        Assert.Equal("signedOut", manager.Snapshot().Status);
+    }
+
+    [Fact]
+    public async Task Verify_InvalidKey_ForgetsIt()
+    {
+        var manager = await SignedIn();
+        _selva.MeStatus = HttpStatusCode.Unauthorized;
+
+        await manager.VerifyAsync(CancellationToken.None);
+
+        Assert.Equal("signedOut", manager.Snapshot().Status);
+        Assert.Null(_os.Load(Origin));
+    }
+
+    [Fact]
+    public async Task Verify_WhenSelvaCannotBeReached_KeepsTheLastVerdict()
+    {
+        var manager = await SignedIn();
+        _selva.MeUnreachable = true;
+
+        await manager.VerifyAsync(CancellationToken.None);
+
+        Assert.True(manager.Snapshot().Verified);
+        Assert.Equal(IssuedKey, _os.Load(Origin));
+    }
+
+    [Fact]
+    public async Task PastedKey_ThatCannotUpload_IsKeptButNotVerified()
+    {
+        _selva.Scopes = new[] { "read:all" };
+        var manager = Manager();
+        await manager.ConnectAsync(Origin, CancellationToken.None);
+
+        await manager.UseApiKeyAsync(Origin, IssuedKey, CancellationToken.None);
+
+        var account = manager.Snapshot();
+        Assert.Equal("signedIn", account.Status);
+        Assert.False(account.Verified);
+        Assert.Contains("can't upload", account.Message);
     }
 
     [Fact]
@@ -297,7 +443,9 @@ public sealed class SelvaAccountManagerTests : IDisposable
     {
         public HttpStatusCode MetadataStatus = HttpStatusCode.OK;
         public HttpStatusCode RevokeStatus = HttpStatusCode.NoContent;
-        public string[] Scopes = { "upload:all" };
+        public string[] Scopes = { "upload:all", "create_projects:all" };
+        public HttpStatusCode MeStatus = HttpStatusCode.OK;
+        public bool MeUnreachable;
         public string? Challenge;
         public bool VerifierMatchedChallenge;
         public bool TokenEndpointCalled;
@@ -345,6 +493,19 @@ public sealed class SelvaAccountManagerTests : IDisposable
                         })
                         : Json(new JObject { ["error"] = "invalid_grant" }, HttpStatusCode.BadRequest);
                 }
+
+                case ("GET", "/api/v1/me") when authorized && MeUnreachable:
+                    throw new HttpRequestException("Connection refused");
+
+                case ("GET", "/api/v1/me") when authorized && MeStatus == HttpStatusCode.Forbidden:
+                    return Json(new JObject
+                    {
+                        ["code"] = "API_TOKEN_HOLDER_REFUSED",
+                        ["message"] = "This API token’s owner may no longer use API tokens in this org."
+                    }, HttpStatusCode.Forbidden);
+
+                case ("GET", "/api/v1/me") when authorized && MeStatus != HttpStatusCode.OK:
+                    return Json(new JObject { ["message"] = "Invalid" }, MeStatus);
 
                 case ("GET", "/api/v1/me") when authorized:
                     return Json(new JObject

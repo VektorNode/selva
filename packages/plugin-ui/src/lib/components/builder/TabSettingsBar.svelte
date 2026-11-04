@@ -22,11 +22,11 @@
 	}
 </script>
 
-<div class="border-border bg-muted/40 flex flex-wrap items-center gap-2 border-b px-4 py-2">
+<div class="bg-card flex flex-wrap items-center gap-x-5 gap-y-3 border-b px-5 py-4">
 	<Popover.Root bind:open={iconOpen}>
 		<Popover.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} variant="outline" size="icon-sm" aria-label="Tab icon" title="Tab icon">
+				<Button {...props} variant="outline" size="icon" aria-label="Tab icon" title="Tab icon">
 					<TabIcon icon={tab.icon} fallback={ImageIcon} />
 				</Button>
 			{/snippet}
@@ -75,13 +75,15 @@
 			onEdit(() => (tab.label = label), `tab-label:${tab.id}`);
 		}}
 		placeholder="Tab name"
-		class="w-48"
+		class="border-border-strong h-9 w-56"
 	/>
+
+	<div class="bg-border hidden h-6 w-px sm:block"></div>
 
 	<ToggleGroup.Root
 		type="single"
 		variant="outline"
-		size="sm"
+		size="lg"
 		bind:value={
 			() => (tab.position === 'right' ? 'right' : 'left'),
 			(side) => {
@@ -89,6 +91,7 @@
 			}
 		}
 		aria-label="Panel side"
+		class="[&_[data-slot=toggle-group-item]]:border-border-strong"
 	>
 		<ToggleGroup.Item value="left" aria-label="Left panel" title="Left panel">
 			<PanelLeft />
@@ -98,16 +101,16 @@
 		</ToggleGroup.Item>
 	</ToggleGroup.Root>
 
-	<div class="flex items-center gap-2">
+	<div class="border-border-strong flex h-9 items-center gap-2.5 rounded-md border px-3">
 		<Switch
 			id="tab-visible"
 			checked={tab.visible !== false}
 			onCheckedChange={(visible) => onEdit(() => (tab.visible = visible ? undefined : false))}
 		/>
-		<Label for="tab-visible">Visible</Label>
+		<Label for="tab-visible" class="cursor-pointer">Visible</Label>
 	</div>
 
-	<div class="ml-auto flex items-center gap-2">
+	<div class="ml-auto flex items-center gap-3">
 		<Button variant="ghost" size="sm" onclick={onRemove}>
 			<Trash2 />
 			Delete tab

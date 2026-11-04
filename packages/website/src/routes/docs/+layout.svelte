@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getDocsSidebar } from '#lib/docs.js';
+	import { getDoc, getDocsSidebar } from '#lib/docs.js';
+	import Breadcrumbs from '#lib/components/docs/Breadcrumbs.svelte';
+	import DocsBar from '#lib/components/docs/DocsBar.svelte';
+	import DocsNav from '#lib/components/docs/DocsNav.svelte';
+	import TableOfContents from '#lib/components/docs/TableOfContents.svelte';
 
 	let { children } = $props();
 
 	const docsNav = getDocsSidebar();
+
+	const entry = $derived(page.params.slug ? getDoc(page.params.slug) : undefined);
+	const crumbs = $derived(
+		entry ? [{ label: 'Docs', href: '/docs' }, { label: entry.group }, { label: entry.title }] : []
+	);
 
 	let article = $state<HTMLElement>();
 
@@ -59,41 +68,29 @@
 	});
 </script>
 
-<div class="mx-auto flex max-w-7xl gap-10 px-6 py-12">
+<div class="mx-auto flex max-w-(--docs-max-w) gap-10 px-4 py-6 md:px-6 md:py-12">
 	<!-- Sidebar -->
-	<aside class="hidden w-56 shrink-0 md:block">
-		<nav class="sticky top-24 space-y-6">
-			{#each docsNav as section (section.title)}
-				<div>
-					<h3 class="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-						{section.title}
-					</h3>
-					<ul class="mt-2 space-y-1">
-						{#each section.links as link (link.href)}
-							{@const active = page.url.pathname === link.href}
-							<li>
-								<a
-									href={link.href}
-									class="block rounded-md px-3 py-1.5 text-sm transition {active
-										? 'bg-muted text-foreground font-medium'
-										: 'text-muted-foreground hover:text-foreground hover:bg-muted/60'}"
-								>
-									{link.label}
-								</a>
-							</li>
-						{/each}
-					</ul>
-				</div>
-			{/each}
-
-			<p class="text-muted-foreground border-border border-t pt-4 text-xs leading-relaxed">
-				More docs — plugin, providers, deployment — arrive with the first release.
-			</p>
-		</nav>
+	<aside class="hidden w-(--docs-nav-w) shrink-0 md:block">
+		<div class="sticky top-(--docs-top) max-h-(--docs-sticky-h) overflow-y-auto pr-2">
+			<DocsNav groups={docsNav} />
+		</div>
 	</aside>
 
 	<!-- Content -->
-	<article bind:this={article} class="prose prose-headings:scroll-mt-24 max-w-none min-w-0 flex-1">
-		{@render children()}
-	</article>
+	<div class="min-w-0 flex-1">
+		<div class="mx-auto max-w-(--docs-measure)">
+			<DocsBar groups={docsNav} {article} />
+			<Breadcrumbs items={crumbs} />
+			<article bind:this={article} class="prose prose-headings:scroll-mt-32 max-w-none">
+				{@render children()}
+			</article>
+		</div>
+	</div>
+
+	<!-- On this page -->
+	<aside class="hidden w-(--docs-toc-w) shrink-0 xl:block">
+		<div class="sticky top-(--docs-top) max-h-(--docs-sticky-h) overflow-y-auto">
+			<TableOfContents {article} path={page.url.pathname} />
+		</div>
+	</aside>
 </div>

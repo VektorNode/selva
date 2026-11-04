@@ -1,18 +1,16 @@
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { createVitestConfig } from '@selvajs/config/vitest';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
 export default createVitestConfig({
 	test: {
-		setupFiles: ['./tests/setup.ts']
+		setupFiles: ['./tests/setup.ts'],
+		clearMocks: true
 	},
 	resolve: {
 		alias: {
-			'@': path.resolve(__dirname, './src'),
-			'@tests': path.resolve(__dirname, './tests')
+			'@': path.resolve(import.meta.dirname, './src'),
+			'@tests': path.resolve(import.meta.dirname, './tests')
 		}
 	}
 });

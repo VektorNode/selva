@@ -61,13 +61,15 @@
 		<div class="bg-border h-5 w-px shrink-0" aria-hidden="true"></div>
 
 		<!-- Styled like the Tabs list, and as tall as the header's small buttons. -->
-		<nav class="bg-muted flex h-8 shrink-0 items-center gap-0.5 rounded-lg p-0.5">
+		<nav
+			class="bg-muted border-input flex h-8 shrink-0 items-center gap-0.5 rounded-md border p-px"
+		>
 			{#each MODES as mode (mode.id)}
 				{@const active = mode.id === current}
 				<button
 					type="button"
-					class="focus-visible:ring-ring flex h-7 w-8 items-center justify-center rounded-md border transition-colors focus-visible:ring-3 focus-visible:outline-none [&_svg]:size-4 {active
-						? 'bg-background text-foreground dark:border-input dark:bg-input/30 shadow-sm'
+					class="focus-visible:ring-ring rounded-inner flex h-7 w-8 items-center justify-center border transition-colors focus-visible:ring-3 focus-visible:outline-none [&_svg]:size-4 {active
+						? 'bg-raised text-foreground shadow-raised border-transparent'
 						: 'text-muted-foreground hover:text-foreground border-transparent'}"
 					title={mode.label}
 					aria-current={active ? 'page' : undefined}

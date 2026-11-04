@@ -1,5 +1,78 @@
 # @selvajs/solve
 
+## 2.0.0-beta.12
+
+### Major Changes
+
+- 9240690: A review of `@selvajs/solve`: smaller public API, one owner for each solve rule, and the bugs it found.
+
+  **Breaking in `@selvajs/solve`:**
+
+  - The server `SolveOutcome` is now `SolveEngineOutcome`, and `PipelineInput` is gone: use `SolveInput`. The `SolveOutcome` on `/shared` and `/client`, the plugin's verdict, is unchanged.
+  - `/server` no longer exports `runSolvePipeline`, `SolvePipelineArgs`, `adaptEnvelopeToEncoding`, `buildSolveInputTree`, `createClientCache`, `createDefinitionByteCache`, `createSolveCacheSingleFlight`, their handle types, `serverIdentity`, `ServerIdentity` or `isDefinitionRef`. Use `SolveEngine`. `SolveEngine.toResponse` and `FrameworkAgnosticResponse` are gone: use `toWebResponse`.
+  - `definitionSource` no longer takes `{ versionId, load }`: pass `engine.definitionRef(versionId, load)`.
+  - `SolveEngine` drops the `logger` option and the `@selvajs/platform` dependency. A host that passed `logger` must pass `onDebugLog`, or its debug lines stop silently.
+  - `SolveEngine` throws a `RangeError` on a limit that is not a finite number in range.
+  - `/client` no longer exports `applyValueChange`, `makeInitialFlags`, `pickInputValues`, `applySolveResult`, `solvePhase`, `buildInitialValues`, `SolveSessionState`, `ExternalReader`, `reduceLiveSolve`, `createAsyncThrottle`, `AsyncThrottle`, `createSolveMemo`, `SolveMemo` or `SolveMemoOptions`. `/shared` no longer exports `SOLVE_BLOCKED_MARKER` or `outcomeFromComputeMessages`.
+  - `SolveDriver.clearCache` is now `reset`, and also stops the running solve. A custom driver implementing `clearCache` must rename it.
+  - A rejected solve's `SolveResult` no longer carries `source`: it held the outputs the verdict withheld.
+
+  **New:** `solveInputsFromSchema` and `acceptsGzip` on `/server`, `loginPath` on `createComputeFetchSolveFn`, and `signal` passed to `meshes.extract`. `shed` gains the reason `interrupted`, retryable, for a solve that lost its client.
+
+  **Fixed, client:** a hung solve no longer wedges the session; a rebuild stops the old definition's solve and drops its result; `ensureSolved` no longer returns a result for older inputs after an abort or a discard; a value edited during a manual solve stays dirty; an aborted result is not memoized, so a retry solves again; `dispose` stops the running and queued solves; a held result is dropped when a newer solve starts, and settles as `discarded`; a throwing listener or `onChange` no longer breaks a solve's one settlement; a solve started from a subscriber keeps its abort and deadline; a non-200 no longer closes the event stream for good; a 503 with `Retry-After` starts the cooldown, and that header's other forms parse; a network failure no longer claims the session expired; valid but wrong JSON and a truncated body read as errors; `stableInputKey` honours `toJSON` and treats an `undefined` property as absent; blocked or quota-full `sessionStorage` no longer throws; a late `solveEnded` no longer wipes the next solve's state; a verdict of `blocked` with no diagnostics no longer unblocks.
+
+  **Fixed, server:** a flight aborts when its last caller leaves and frees its key then, so an orphaned solve no longer holds a Rhino slot and a live caller no longer gets a 499 from someone else's disconnect; an already-aborted caller doesn't solve; an eviction no longer aborts running solves as a false 504, it drains them; a build in flight when a server is evicted no longer installs old credentials; handshake failures return `compute_error` instead of throwing; `gzip;q=0` is honoured; the response cap counts bytes, not UTF-16 units; concurrent definition loads share one read and honour the signal; a call with no deadline of its own keeps a 300 s ceiling on the long-deadline fetch.
+
+  **`@selvajs/selva`, behaviour change:** a solve of a stored definition reads its inputs from the version's schema and ignores the request's, so a caller can no longer forge a slot or drop a bound. Number widget bounds are enforced on the server. `inputs` on `POST /api/v1/definitions/{guid}/solve` is deprecated and ignored; omitting it now solves the stored inputs instead of the file's defaults. A version whose schema can't be read or backfilled now answers 503 instead of solving on the request's inputs. Remote-URL solves still read `inputs` from the body, and reject a malformed list with a 400. A failed Compute records a `compute_error` metric. A display error in the local preview is shown as a message on an applied solve.
+
+  **`@selvajs/compute`:** a redirect error no longer quotes credentials or a query string from `Location`.
+
+### Minor Changes
+
+- a7c12ee: Shared helpers for what every host was writing itself.
+
+  - `@selvajs/platform`: `walkPages` and `listAll` read a cursor-paged list to its end. One call stops at `MAX_PAGE_LIMIT` without saying so.
+  - `@selvajs/server`: `createBoundedTtlCache` and `createSessionRefresher` in `/http`, and `isUsableCachedSchema` in `/definitions`. `runHandler` now sends a thrown error's `details.retryAfter` as `Retry-After`.
+  - `@selvajs/solve`: `SolvePhaseMetrics` carries everything in the `Server-Timing` header (`defLoadMs`, `rhino`, `settle`, `defBytes`), so a host logs the data rather than parsing the header.
+  - `@selvajs/selva`: requests that arrive together with an expired session share one token exchange. A provider that rotates refresh tokens could otherwise refuse all but the first, which cleared the cookie and signed the user out.
+
+### Patch Changes
+
+- Updated dependencies [9240690]
+  - @selvajs/compute@5.0.0-beta.9
+
+## 2.0.0-beta.11
+
+### Patch Changes
+
+- Updated dependencies [b6935ce]
+- Updated dependencies [817af19]
+- Updated dependencies [cc081b1]
+- Updated dependencies [eebd2f6]
+- Updated dependencies [35e5c67]
+- Updated dependencies [77780c7]
+- Updated dependencies [5ab63df]
+- Updated dependencies [ff7e2a0]
+- Updated dependencies [1fb3914]
+  - @selvajs/platform@1.0.0-beta.4
+
+## 2.0.0-beta.10
+
+### Patch Changes
+
+- e0aa942: `session.setValue` no longer solves again when an input is set to the value the last solve already sent. A field that reports its value on input and again on blur used to solve twice, and Grasshopper re-applies every dynamic value list on each update, so the repeat was a real solve. The value still solves when `forceSolve` is passed, after a failed or aborted solve, for file and dynamic value list inputs, and for object values.
+
+## 2.0.0-beta.9
+
+### Patch Changes
+
+- 2256395: Removed the `cacheerroredsolves` request option and the `COMPUTE_CACHE_ERRORED_SOLVES` setting. Only the VektorNode Rhino.Compute fork honored the flag, and the fork dropped it to stay closer to McNeel's server, which never caches an errored solve. Selva's own solve cache still keeps errored solves by default (`cache.cacheErroredSolves` on the scheduler).
+
+  The scheduler's solve cache no longer stores a solve the Selva plugin aborted (`selva.outcome.aborted`): it stopped partway, so the same inputs solve again instead of replaying a partial result.
+
+- Updated dependencies [2256395]
+  - @selvajs/compute@5.0.0-beta.8
+
 ## 2.0.0-beta.8
 
 ### Patch Changes

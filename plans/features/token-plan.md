@@ -42,7 +42,7 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
   only read and upload**, which needs only the right to create a definition in one project of the
   token's org: it can do nothing the owner's browser session can't. That exception lets a designer
   sign the Grasshopper plugin in without an admin also handing them the right to mint broad keys
-  ([publish-from-plugin.md](./publish-from-plugin.md)). A key can never exceed the creator's live
+  ([publish-from-plugin.md](../archive/publish-from-plugin.md)). A key can never exceed the creator's live
   rights. A host can decide instead: it passes
   `mayHoldApiTokens: (ctx, scopes) => boolean | Promise<boolean>` in `depsFromConfig`'s `tokens`
   and to `resolveApiToken`, and that replaces both rules. The check runs at mint and again on every
@@ -53,10 +53,12 @@ the Selva app) can mint, resolve and enforce them. Terms (**API token**, **scope
 
 ### Scopes and enforcement
 
-- **Actions are `read`, `write`, `solve` and `upload`.** `write`, `solve` and `upload` include
-  `read`, and `write` includes `upload`. `upload` covers exactly creating a definition, uploading a
-  version, making a version live and previewing a file's schema, so the Grasshopper plugin holds a
-  key that can't delete, edit metadata or share ([publish-from-plugin.md](./publish-from-plugin.md)).
+- **Actions are `read`, `write`, `solve`, `upload` and `create_projects`.** Each includes `read`,
+  and `write` includes `upload` and `create_projects`. `upload` covers exactly creating a
+  definition, uploading a version, making a version live and previewing a file's schema, so the
+  Grasshopper plugin holds a key that can't delete, edit metadata or share
+  ([publish-from-plugin.md](../archive/publish-from-plugin.md)). `create_projects` covers creating
+  private projects only ([plugin-upload-next.md](./plugin-upload-next.md)).
   A host app maps its own scopes onto these and accepts the cost: it can't grant writes on one of
   its resources without the others. Host-registered actions were rejected as more engine surface
   than anything needs today. Scopes are stored as strings, so an action is added without migrating
@@ -167,8 +169,8 @@ depends on it.
 - **`ApiErrorCode` merges into `@selvajs/server`;** the app's duplicate copy goes.
 - **Wiring.** `SelvaDeps.apiRateLimiter`: absent uses a process-wide default (600 per 60 s),
   `null` turns it off, or pass any `ApiRateLimiter` (`hit(key)`, may be async). The Selva app
-  builds one with `resolveApiRateLimitConfig` from `API_TOKEN_RATE_LIMIT_MAX` (`0` = off) and
-  `API_TOKEN_RATE_LIMIT_WINDOW_MS`. The bucket is charged before the scope check so a throttled
+  builds one with `resolveApiRateLimitConfig` from `API_TOKEN_RATE_LIMIT_MAX` (per minute, `0` =
+  off). The bucket is charged before the scope check so a throttled
   key never reaches `scopeTarget`'s database read. Routes that build their own response call
   `chargeApiRateLimit`, `rateLimitedResponse` and `withRateLimitHeaders`; the solve core does.
   The compute and share-cap 429s also carry `RATE_LIMITED`.
@@ -275,7 +277,7 @@ migration) as the template for the token roster.
   plain `/api/v1` client with no admin commands, because instance administration stays
   cookie-only.
 - **The MCP server:** [#216](https://github.com/VektorNode/selva/issues/216), designed in
-  [mcp-package.md](mcp-package.md). It is a client of `/api/v1` with a key, so it acts with that
+  [mcp-package.md](../archive/mcp-package.md). It is a client of `/api/v1` with a key, so it acts with that
   key's principal and scopes. OAuth 2.1 for a remote MCP connector should resolve to the same.
 - **Service accounts:** [service-accounts.md](service-accounts.md). Only the door is kept open
   here.

@@ -80,7 +80,7 @@
 		{:else if block.kind === 'demo'}
 			{@const Demo = DEMOS[block.component]}
 			{#if Demo}
-				<div class="border-border bg-muted/30 rounded-md border p-3">
+				<div class="border-border bg-muted rounded-md border p-3">
 					<p class="text-muted-foreground mb-2.5 text-[11px] font-medium tracking-wide uppercase">
 						Try it
 					</p>

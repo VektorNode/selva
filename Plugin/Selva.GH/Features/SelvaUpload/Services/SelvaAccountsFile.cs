@@ -22,6 +22,9 @@ public sealed class SelvaAccountRecord
     [JsonProperty("orgName")] public string? OrgName { get; set; }
     [JsonProperty("expiresAt")] public string? ExpiresAt { get; set; }
     [JsonProperty("scopes")] public List<string> Scopes { get; set; } = new();
+
+    /// <summary>Not secret: an id, which the upload request must echo.</summary>
+    [JsonProperty("tokenId")] public string? TokenId { get; set; }
     [JsonProperty("storage")] public string? Storage { get; set; }
 }
 

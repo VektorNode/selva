@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { canDisposeMaterial } from './gpu-ownership.js';
+import { cachedSourceOf, canDisposeMaterial } from './gpu-ownership.js';
 
 // ============================================================================
 // The disposal walkers — every teardown path in the package goes through these
@@ -31,6 +31,11 @@ export interface DisposeOptions {
 	materials?: boolean;
 	/** Called for each geometry before disposal, so a subsystem can free derived resources keyed on it (e.g. edge caches). */
 	onGeometry?: (geometry: THREE.BufferGeometry) => void;
+	/**
+	 * Cached geometries whose GPU copy survives. When given, every other cached geometry this walk
+	 * reaches loses its GPU copy.
+	 */
+	keepUploaded?: ReadonlySet<THREE.BufferGeometry>;
 }
 
 /**
@@ -38,16 +43,31 @@ export interface DisposeOptions {
  * should dispose scene content** — a second disposing `traverse` risks missing an ownership guard.
  */
 export function disposeObjectTree(root: THREE.Object3D, options: DisposeOptions = {}): void {
-	const { materials = true } = options;
+	const { materials = true, keepUploaded } = options;
 
 	root.traverse((object) => {
 		const renderable = object as Partial<THREE.Mesh> & THREE.Object3D;
 		if (!renderable.geometry && !renderable.material) return;
 
-		if (renderable.geometry) {
-			renderable.geometry?.dispose();
-		}
+		if (renderable.geometry) disposeGeometry(renderable.geometry, keepUploaded);
 
 		if (materials) disposeMaterials(renderable.material);
 	});
+}
+
+function disposeGeometry(
+	geometry: THREE.BufferGeometry,
+	keepUploaded: ReadonlySet<THREE.BufferGeometry> | undefined
+): void {
+	const source = cachedSourceOf(geometry);
+	if (source !== geometry) {
+		// three's dispose frees the GPU buffers of whatever attributes are attached, so a borrower
+		// lets go of the cache's attributes first.
+		if (source) {
+			geometry.setIndex(null);
+			for (const name of Object.keys(geometry.attributes)) geometry.deleteAttribute(name);
+		}
+		geometry.dispose();
+	}
+	if (source && keepUploaded && !keepUploaded.has(source)) source.dispose();
 }

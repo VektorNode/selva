@@ -50,11 +50,19 @@ export interface CacheOptions {
 	 * Cache responses that carry Grasshopper `errors`. Default `true`: an
 	 * errored solve is a valid, deterministic result — definitions raise GH
 	 * errors by design (guarded components, validation branches), so replaying
-	 * one from cache is correct. Set `false` for parity with Rhino's opt-in
-	 * `cacheerroredsolves` server flag, e.g. when a definition's errors are
+	 * one from cache is correct. Set `false` when a definition's errors are
 	 * transient (external data sources) rather than functions of the inputs.
 	 */
 	cacheErroredSolves?: boolean;
+}
+
+/** What {@link SolveScheduler.cacheStats} reports. */
+export interface CacheStats {
+	entries: number;
+	bytes: number;
+	hits: number;
+	misses: number;
+	evictions: number;
 }
 
 export interface SolveSchedulerOptions {
@@ -121,8 +129,7 @@ export type SolveResult =
 			 */
 			definitionReuploaded?: boolean;
 	  }
-	| { status: 'error'; error: ComputeError; durationMs: number }
-	| { status: 'superseded' };
+	| { status: 'error'; error: ComputeError; durationMs: number };
 
 /**
  * Solves by `cacheKey` when given one, otherwise uploads. Reports the server's

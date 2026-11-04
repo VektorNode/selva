@@ -29,7 +29,8 @@ import {
 // ============================================================================
 
 export const SolveBodySchema = z.object({
-	inputs: z.array(z.unknown()).default([]),
+	/** Ignored: the solve reads the inputs from the version's stored schema. */
+	inputs: z.array(z.unknown()).optional().meta({ deprecated: true }),
 	values: z.record(z.string(), z.unknown()).default({}),
 	channel: z.enum(['live', 'draft']).default('live'),
 	versionId: z.string().optional(),
@@ -87,9 +88,7 @@ const IncomingComputeServerSchema = z.object({
 	id: z.string().min(1),
 	label: z.string().min(1),
 	serverUrl: z.string().min(1),
-	apiKey: z.string().nullable().optional(),
-	timeoutMs: z.number().optional(),
-	retryCount: z.number().optional()
+	apiKey: z.string().nullable().optional()
 });
 
 export const OrgComputePatchBodySchema = z.object({

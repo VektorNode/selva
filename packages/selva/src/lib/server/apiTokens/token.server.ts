@@ -1,14 +1,15 @@
-import { env } from '#lib/server/env.js';
 import {
 	createApiTokenCodec,
 	MIN_TOKEN_SECRET_LENGTH,
 	type ApiTokenCodec
 } from '@selvajs/server/tokens';
+import { createApiTokenResolutionCache } from '@selvajs/server/http';
+import { hmacKeys } from '#lib/server/keys.server.js';
 
 // Lazy and re-keyed on the secret, like the invite and share-link codecs, so a
 // rotated SELVA_HMAC_KEY applies without a restart. Rotating it invalidates
 // every API token.
-let cached: { secret: string; codec: ApiTokenCodec } | null = null;
+let cached: { cacheKey: string; codec: ApiTokenCodec } | null = null;
 
 /**
  * Undefined without a usable SELVA_HMAC_KEY (missing or too short): token
@@ -16,10 +17,17 @@ let cached: { secret: string; codec: ApiTokenCodec } | null = null;
  * it must not throw.
  */
 export function apiTokenCodec(): ApiTokenCodec | undefined {
-	const secret = env.SELVA_HMAC_KEY;
+	const { current: secret, previous } = hmacKeys();
 	if (!secret || secret.length < MIN_TOKEN_SECRET_LENGTH) return undefined;
-	if (cached?.secret !== secret) {
-		cached = { secret, codec: createApiTokenCodec(secret) };
+	const cacheKey = `${secret}\n${previous ?? ''}`;
+	if (cached?.cacheKey !== cacheKey) {
+		cached = { cacheKey, codec: createApiTokenCodec(secret, previous) };
 	}
 	return cached.codec;
 }
+
+/**
+ * Resolved keys, one window per process: the hook reads it, and the revoke handlers and the
+ * user-disable route drop from it, so a revoke here takes effect at once.
+ */
+export const apiTokenResolutions = createApiTokenResolutionCache();

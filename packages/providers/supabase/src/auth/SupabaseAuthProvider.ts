@@ -2,6 +2,7 @@ import { createClient, type SupabaseClient, type User } from '@supabase/supabase
 import { NoopLogger, type ILogger } from '@selvajs/platform';
 import { DEFAULT_SCHEMA, type SelvaSchemaClient } from '../data/client.js';
 import { SupabaseDelegatedSession } from './SupabaseDelegatedSession.js';
+import { resolveSupabaseEnv } from '../config.js';
 import type {
 	IAuthProvider,
 	IDelegatedSession,
@@ -65,12 +66,6 @@ export interface SupabaseAuthProviderConfig {
 
 const DEFAULT_REVALIDATE_MS = 60_000;
 
-function parsePositiveInt(raw: string | undefined): number | undefined {
-	if (!raw) return undefined;
-	const n = Number.parseInt(raw, 10);
-	return Number.isFinite(n) && n > 0 ? n : undefined;
-}
-
 export class SupabaseAuthProvider implements IAuthProvider {
 	readonly name = 'Supabase Auth';
 	readonly passwordAuth: IPasswordAuth;
@@ -129,8 +124,7 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		this.oauth = new SupabaseOAuthAuth(
 			this.anon,
 			(user) => this.hydrate(user),
-			config.oauthProviders ?? [],
-			this.sessionRefresh
+			config.oauthProviders ?? []
 		);
 		this.emailLink = new SupabaseEmailLinkAuth(
 			this.anon,
@@ -154,30 +148,21 @@ export class SupabaseAuthProvider implements IAuthProvider {
 		logger?: ILogger,
 		options: Pick<SupabaseAuthProviderConfig, 'delegatedSessionTtlSeconds'> = {}
 	): SupabaseAuthProvider {
-		const supabaseUrl = env.SUPABASE_URL;
-		const anonKey = env.SUPABASE_ANON_KEY;
-		const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
-		if (!supabaseUrl) throw new Error('Missing required env var: SUPABASE_URL');
-		if (!anonKey) throw new Error('Missing required env var: SUPABASE_ANON_KEY');
-		if (!serviceRoleKey) throw new Error('Missing required env var: SUPABASE_SERVICE_ROLE_KEY');
-		const oauthProviders = (env.SUPABASE_OAUTH_PROVIDERS ?? '')
-			.split(',')
-			.map((p) => p.trim().toLowerCase())
-			.filter((p) => p.length > 0);
-		const tokenVerification = env.SUPABASE_TOKEN_VERIFICATION === 'strict' ? 'strict' : 'hybrid';
-		const revalidateMs = parsePositiveInt(env.SUPABASE_REVALIDATE_MS);
+		// Strict parsing: a sign-up control that read anything but "false" as on
+		// let `=no` open sign-ups. A bad value now stops boot.
+		const v = resolveSupabaseEnv(env);
+		const jwtSigningKey = v.SUPABASE_JWT_SIGNING_KEY as string | undefined;
+		const jwtSecret = v.SUPABASE_JWT_SECRET as string | undefined;
 		return new SupabaseAuthProvider({
-			supabaseUrl,
-			anonKey,
-			serviceRoleKey,
-			enableSelfSignup: env.SUPABASE_ENABLE_SELF_SIGNUP === 'true',
-			oauthProviders,
-			allowEmailLinkSignup: env.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP !== 'false',
-			tokenVerification,
-			...(revalidateMs !== undefined ? { revalidateMs } : {}),
+			supabaseUrl: v.SUPABASE_URL as string,
+			anonKey: v.SUPABASE_ANON_KEY as string,
+			serviceRoleKey: v.SUPABASE_SERVICE_ROLE_KEY as string,
+			enableSelfSignup: v.SUPABASE_ENABLE_SELF_SIGNUP as boolean,
+			oauthProviders: (v.SUPABASE_OAUTH_PROVIDERS as string[]).map((p) => p.toLowerCase()),
+			allowEmailLinkSignup: v.SUPABASE_ALLOW_EMAIL_LINK_SIGNUP as boolean,
 			...(logger ? { logger } : {}),
-			...(env.SUPABASE_JWT_SIGNING_KEY ? { jwtSigningKey: env.SUPABASE_JWT_SIGNING_KEY } : {}),
-			...(env.SUPABASE_JWT_SECRET ? { jwtSecret: env.SUPABASE_JWT_SECRET } : {}),
+			...(jwtSigningKey ? { jwtSigningKey } : {}),
+			...(jwtSecret ? { jwtSecret } : {}),
 			...options
 		});
 	}
@@ -189,8 +174,9 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	 *
 	 * `'hybrid'` (default): `getClaims(token)` verifies the JWT locally with
 	 * asymmetric signing keys (the modern Supabase default — the SDK checks
-	 * against the cached JWKS via Web Crypto, no GoTrue call), and falls back
-	 * to a network verify for legacy symmetric HS256 projects. Either way, a
+	 * against the cached JWKS via Web Crypto, no GoTrue call). A legacy
+	 * symmetric HS256 token can only be checked by GoTrue, so it gets one
+	 * `getUser` per call, as in `'strict'`. For an asymmetric token, a
 	 * local check can't see a server-side sign-out or `disabled` flip that
 	 * happened after the token was issued — the claims are a snapshot — so we
 	 * also re-check against GoTrue via `getUser`, at most once per
@@ -203,7 +189,9 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	async verifyToken(token: string): Promise<AuthUser | null> {
 		if (!token) return null;
 
-		if (this.tokenVerification === 'strict') {
+		// A symmetric (HS256) token has no local check: `getClaims` would ask GoTrue, and the
+		// recheck would ask again. One `getUser` answers both.
+		if (this.tokenVerification === 'strict' || isSymmetricJwt(token)) {
 			return this.verifyViaGetUser(token);
 		}
 
@@ -393,6 +381,16 @@ export class SupabaseAuthProvider implements IAuthProvider {
 	}
 }
 
+/** Whether a JWT's header names an HMAC algorithm. Unverified: it only picks the check. */
+function isSymmetricJwt(token: string): boolean {
+	try {
+		const header = JSON.parse(Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8'));
+		return typeof header?.alg === 'string' && header.alg.startsWith('HS');
+	} catch {
+		return false;
+	}
+}
+
 class SupabasePasswordAuth implements IPasswordAuth {
 	constructor(
 		private readonly admin: SupabaseClient,
@@ -438,8 +436,7 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 	constructor(
 		private readonly anon: SupabaseClient,
 		private readonly hydrate: (user: User) => AuthUser,
-		private readonly providers: readonly string[],
-		private readonly sessionRefresh: ISessionRefresh
+		private readonly providers: readonly string[]
 	) {}
 
 	listProviders(): readonly string[] {
@@ -471,14 +468,6 @@ class SupabaseOAuthAuth implements IOAuthAuth {
 			sessionToken: data.session.access_token,
 			refreshToken: data.session.refresh_token
 		};
-	}
-
-	/** @deprecated Delegates to `IAuthProvider.sessionRefresh`. Removed next minor. */
-	async refreshSession(refreshToken: string): Promise<{
-		sessionToken: string;
-		refreshToken: string;
-	} | null> {
-		return this.sessionRefresh.refreshSession(refreshToken);
 	}
 }
 

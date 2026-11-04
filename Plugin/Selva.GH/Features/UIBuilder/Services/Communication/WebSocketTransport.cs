@@ -74,6 +74,9 @@ public class WebSocketTransport : IDisposable
     // front of it, when the bridge looks idle, so unmerged a slider drag costs a solve per step.
     private Dictionary<string, object> _queuedValues;
 
+    // A value update is running on the UI thread and may not have scheduled its solve yet.
+    private bool _applyingValues;
+
     private bool _disposed;
     private int _initialDataInFlight;
     private bool? _lastBroadcastedSolvingState;
@@ -343,23 +346,12 @@ public class WebSocketTransport : IDisposable
         }
 
         // `displayItems` is null when empty so mesh-only solves stay unchanged on the wire.
-        // ConfigureAwait(false) on both awaits: this starts on Rhino's UI thread, and resuming there
-        // queues the mesh frames behind the viewport redraw and the next scheduled solve.
+        // ConfigureAwait(false): this starts on Rhino's UI thread, and resuming there waits behind
+        // the viewport redraw and the next scheduled solve.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
             _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
             displayItems.Count > 0 ? displayItems : null,
-            (diagnostics ?? new SolveDiagnostics()).ToOutcome())).ConfigureAwait(false);
-
-        // WebSocket preserves order, so these binary frames always arrive after the JSON envelope.
-        // Capture the server field once: Stop() can null it from another thread mid-loop.
-        var server = _webSocketServer;
-        if (server != null && server.IsRunning)
-        {
-            foreach (var blob in binaryBlobs)
-            {
-                await server.BroadcastBinaryAsync(blob).ConfigureAwait(false);
-            }
-        }
+            (diagnostics ?? new SolveDiagnostics()).ToOutcome()), binaryBlobs).ConfigureAwait(false);
     }
 
     public Task BroadcastCurrentValues(Dictionary<string, object> values)
@@ -548,7 +540,7 @@ public class WebSocketTransport : IDisposable
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private Task BroadcastAsync(object payload)
+    private Task BroadcastAsync(object payload, IReadOnlyList<byte[]> binaryFrames = null)
     {
         // Capture once — Stop() can null the field from another thread between check and use.
         var server = _webSocketServer;
@@ -558,7 +550,7 @@ public class WebSocketTransport : IDisposable
         }
 
         var json = JsonConvert.SerializeObject(payload, SecureSerializerSettings);
-        return server.BroadcastAsync(json);
+        return server.BroadcastAsync(json, binaryFrames);
     }
 
     private void HandleClientConnected(object sender, WebSocket _)
@@ -597,12 +589,7 @@ public class WebSocketTransport : IDisposable
     {
         try
         {
-            if (BridgeAccess.IsRefusedFrom(InboundKind.HostSaveFile, frame.Host))
-            {
-                Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
-                return;
-            }
-
+            // No header means no requestId to answer.
             if (!HostFileFrame.TryDecode(frame.Data, out var headerJson, out var body))
             {
                 Logger.Warn("[WebSocketTransport] Dropped a binary frame that isn't a host file frame.");
@@ -610,13 +597,27 @@ public class WebSocketTransport : IDisposable
             }
 
             var inbound = _inboundParser.Parse(headerJson, _sessionId);
-            if (inbound.Kind != InboundKind.HostSaveFile)
+            var reply = new SocketReply(this, frame.Client);
+            if (BridgeAccess.IsRefusedFrom(InboundKind.HostSaveFile, frame.Host))
             {
-                Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
+                Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
+                _hostFiles.RefuseSave(inbound.RequestId, "Saving through Rhino works only in the Rhino panel.",
+                    reply);
                 return;
             }
 
-            _hostFiles.HandleSave(inbound.RequestId, inbound.FileName, body, new SocketReply(this, frame.Client));
+            if (inbound.Kind != InboundKind.HostSaveFile)
+            {
+                Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
+                _hostFiles.RefuseSave(inbound.RequestId,
+                    inbound.Kind == InboundKind.SessionMismatch
+                        ? "This page belongs to another Grasshopper session. Reload it and try again."
+                        : "Could not save the file.",
+                    reply);
+                return;
+            }
+
+            _hostFiles.HandleSave(inbound.RequestId, inbound.FileName, body, reply);
         }
         catch (Exception ex)
         {
@@ -697,6 +698,19 @@ public class WebSocketTransport : IDisposable
                     // marshalled cancel would queue behind the very solve it is meant to stop.
                     // The handler only flips the document's abort flag, which is safe here.
                     OnCancelSolveRequested?.Invoke(this, EventArgs.Empty);
+
+                    // An update sent just before the cancel may still be waiting for the UI thread, or
+                    // be applying there, with no solve scheduled yet for the cancel to catch. Cancel
+                    // again once it has been applied.
+                    lock (_uiLock)
+                    {
+                        if (_queuedValues != null || _applyingValues)
+                        {
+                            _queuedValues = null;
+                            Enqueue(() => OnCancelSolveRequested?.Invoke(this, EventArgs.Empty));
+                        }
+                    }
+
                     break;
 
                 case InboundKind.SelvaGetAccount:
@@ -851,9 +865,21 @@ public class WebSocketTransport : IDisposable
                     {
                         _queuedValues = null;
                     }
+
+                    _applyingValues = true;
                 }
 
-                OnValuesReceived?.Invoke(this, queued);
+                try
+                {
+                    OnValuesReceived?.Invoke(this, queued);
+                }
+                finally
+                {
+                    lock (_uiLock)
+                    {
+                        _applyingValues = false;
+                    }
+                }
             });
         }
     }

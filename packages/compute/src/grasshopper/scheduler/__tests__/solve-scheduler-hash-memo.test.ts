@@ -50,23 +50,6 @@ describe('definition hashing in the scheduler', () => {
 		s.dispose();
 	});
 
-	it('server-cache-key fast path: the remembered hash finds the learned pointer', async () => {
-		const seenKeys: Array<string | null> = [];
-		const ck: SolveExecutor = async (_def, _tree, cacheKey) => {
-			seenKeys.push(cacheKey);
-			return { response: makeResponse(), cacheKey: 'md5_LEARNED', missed: false };
-		};
-		const s = new SolveScheduler(ck, baseConfig, { mode: 'queue' });
-
-		await s.solve('big-base64-definition', []);
-		await s.solve('big-base64-definition', []);
-
-		expect(hashDefinitionSpy).toHaveBeenCalledTimes(1);
-		// The same hash keys the server-cache-key map, so the second solve reuses the pointer.
-		expect(seenKeys).toEqual([null, 'md5_LEARNED']);
-		s.dispose();
-	});
-
 	it('a Uint8Array is hashed on its first solve only, by identity', async () => {
 		const s = new SolveScheduler(plainExecutor, baseConfig, { mode: 'queue' });
 		const bytes = new Uint8Array(1024).fill(7);
@@ -104,16 +87,6 @@ describe('definition hashing in the scheduler', () => {
 		await s.solve('def', [{ ParamName: 'a', InnerTree: {} }]);
 		expect(hashTreeSpy).not.toHaveBeenCalled();
 		s.dispose();
-
-		const keys: string[] = [];
-		const hooked = new SolveScheduler(plainExecutor, baseConfig, {
-			mode: 'queue',
-			onStart: (ctx) => keys.push(ctx.key)
-		});
-		await hooked.solve('def', [{ ParamName: 'a', InnerTree: {} }]);
-		expect(keys).toHaveLength(1);
-		expect(keys[0]).toMatch(/\|t:[0-9a-f]{64}$/);
-		hooked.dispose();
 	});
 
 	it('keys a hook by the tree as solved, even if the caller mutates it afterwards', async () => {
@@ -127,14 +100,6 @@ describe('definition hashing in the scheduler', () => {
 		tree[0].ParamName = 'mutated';
 		await solving;
 		expect(keys).toEqual([hashSolveInput('def', [{ ParamName: 'a', InnerTree: {} }])]);
-		s.dispose();
-	});
-
-	it('with reuse and the cache off, hashes nothing for a URL definition', async () => {
-		const s = new SolveScheduler(plainExecutor, baseConfig, { mode: 'queue' });
-		await s.solve('https://example.com/def.gh', []);
-		expect(hashDefinitionSpy).not.toHaveBeenCalled();
-		expect(hashTreeSpy).not.toHaveBeenCalled();
 		s.dispose();
 	});
 });

@@ -7,7 +7,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { actorOf, NoopEventSink } from '@selvajs/platform';
+import { actorOf, NoopEventSink, ProviderError } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -76,27 +76,18 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 		orgId: string,
 		opts?: ListOptions
 	): Promise<Page<OrgShareLink>> {
-		// `!inner` makes the embeds a filtering join, so `projects.org_id` scopes
-		// the whole query — links whose definition or project is soft-deleted drop
-		// out for free. RLS narrows this further to orgs the caller leads.
+		// An RPC because `definitions` and `projects` RLS would hide private projects
+		// from the leadership reading this, and those are the links offboarding needs.
 		const range = toRange(opts);
-		const { data, error, count } = await this.clients
-			.forRequest(ctx)
-			.from('share_links')
-			.select(
-				`${SHARE_LINK_COLUMNS}, definitions!inner(display_name, deleted_at, projects!inner(id, name, org_id, deleted_at))`,
-				{ count: 'exact' }
-			)
-			.is('revoked_at', null)
-			.or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
-			.is('definitions.deleted_at', null)
-			.is('definitions.projects.deleted_at', null)
-			.eq('definitions.projects.org_id', orgId)
-			.order('created_at', { ascending: false })
-			.range(range.from, range.to);
+		const { data, error } = await this.clients.forRequest(ctx).rpc('org_share_link_roster', {
+			o: orgId,
+			page_limit: range.limit,
+			page_offset: range.from
+		});
 		if (error) throw mapPostgrestError(error);
-		const items = (data ?? []).map((row) => rowToOrgLink(row as unknown as OrgShareLinkRow));
-		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
+		const rows = (data ?? []) as OrgShareLinkRow[];
+		const nextCursor = nextCursorFromRange(range, rows.length, rows[0]?.total_count ?? 0);
+		return { items: rows.map(rowToOrgLink), nextCursor };
 	}
 
 	async getById(ctx: RequestContext, id: string): Promise<ShareLink | null> {
@@ -126,14 +117,27 @@ export class SupabaseShareLinkStore implements IShareLinkStore {
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
-		// `.is('revoked_at', null)` makes a re-revoke a no-op instead of an error.
-		const { error } = await this.clients
-			.forRequest(ctx)
+		const client = this.clients.forRequest(ctx);
+		const { data, error } = await client
 			.from('share_links')
 			.update({ revoked_at: new Date().toISOString() })
 			.eq('id', id)
-			.is('revoked_at', null);
+			.is('revoked_at', null)
+			.select('id');
 		if (error) throw mapPostgrestError(error);
+		if (!data || data.length === 0) {
+			// No rows means already revoked, which is fine, or refused by RLS, which is
+			// not: PostgREST reports both the same way.
+			const { data: existing, error: readError } = await client
+				.from('share_links')
+				.select('revoked_at')
+				.eq('id', id)
+				.maybeSingle();
+			if (readError) throw mapPostgrestError(readError);
+			if (!existing) throw new ProviderError(`Share link '${id}' not found`, 404);
+			if (existing.revoked_at) return;
+			throw new ProviderError(`Forbidden: cannot revoke share link '${id}'`, 403);
+		}
 		await this.events.emit({ type: 'share_link.revoked', linkId: id, ...actorOf(ctx) });
 	}
 
@@ -167,37 +171,23 @@ interface ShareLinkRow {
 	solve_count: number;
 }
 
-/**
- * `listByOrg`'s row. PostgREST returns an embed as an object for a to-one
- * relationship and an array for to-many; both shapes are accepted because the
- * choice depends on how it infers the FK, not on anything this store controls.
- */
+/** A row of the `org_share_link_roster` RPC. */
 interface OrgShareLinkRow extends ShareLinkRow {
-	definitions:
-		| { display_name: string; projects: ProjectEmbed | ProjectEmbed[] }
-		| { display_name: string; projects: ProjectEmbed | ProjectEmbed[] }[];
-}
-
-interface ProjectEmbed {
-	id: string;
-	name: string;
-}
-
-function one<T>(embed: T | T[]): T {
-	return Array.isArray(embed) ? embed[0] : embed;
+	definition_name: string;
+	project_id: string;
+	project_name: string;
+	total_count: number;
 }
 
 function rowToOrgLink(row: OrgShareLinkRow): OrgShareLink {
-	const definition = one(row.definitions);
-	const project = one(definition.projects);
 	// `tokenHash` is dropped rather than carried: this row is built for a page
 	// spanning every definition in the tenant.
 	const { tokenHash: _tokenHash, ...rest } = rowToLink(row);
 	return {
 		...rest,
-		definitionName: definition.display_name,
-		projectId: project.id,
-		projectName: project.name
+		definitionName: row.definition_name,
+		projectId: row.project_id,
+		projectName: row.project_name
 	};
 }
 

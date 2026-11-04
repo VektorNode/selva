@@ -3,12 +3,14 @@
 	"sessionId": "session-fixture",
 	"targets": {
 		"origin": "https://selva.example.com",
+		"tokenId": "token-1",
 		"projects": [
 			{
 				"id": "project-1",
 				"name": "Tower"
 			}
 		],
+		"canCreateProjects": true,
 		"suggestion": {
 			"definitionGuid": "44444444-4444-4444-8444-444444444444",
 			"displayName": "Facade panel",

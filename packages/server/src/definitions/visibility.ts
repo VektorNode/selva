@@ -20,7 +20,8 @@ import {
 	canEditDefinition,
 	canView,
 	outsideTokenOrg,
-	scopeAllows
+	scopeAllows,
+	walkPages
 } from '@selvajs/platform';
 import type {
 	DefinitionListOptions,
@@ -133,15 +134,12 @@ export async function canCreateDefinitionInOrg(
 	orgId: string,
 	deps: VisibilityDeps
 ): Promise<boolean> {
-	let cursor: string | undefined;
-	do {
-		const page = await deps.projects.listProjects(SYSTEM_CONTEXT, orgId, {
-			limit: SCAN_LIMIT,
-			cursor
-		});
+	const orgMember =
+		(await deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [orgId], ctx.userId)).get(orgId) ?? null;
+	const pages = walkPages((page) => deps.projects.listProjects(SYSTEM_CONTEXT, orgId, page));
+	for await (const page of pages) {
 		const platformIds = page.items.filter((p) => p.visibility === 'platform').map((p) => p.id);
-		const [orgMembers, members, grants] = await Promise.all([
-			deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [orgId], ctx.userId),
+		const [members, grants] = await Promise.all([
 			deps.projects.getProjectMembersFor(
 				SYSTEM_CONTEXT,
 				page.items.map((p) => p.id),
@@ -155,14 +153,13 @@ export async function canCreateDefinitionInOrg(
 			canCreateDefinition(
 				projectAccessInputFromRowsWith({ deps }, ctx, project, {
 					member: members.get(project.id) ?? null,
-					orgMember: orgMembers.get(orgId) ?? null,
+					orgMember,
 					platformGrants: grants.get(project.id) ?? []
 				})
 			)
 		);
 		if (allowed) return true;
-		cursor = page.nextCursor;
-	} while (cursor);
+	}
 	return false;
 }
 

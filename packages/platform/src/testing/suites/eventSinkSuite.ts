@@ -248,6 +248,17 @@ export function runEventSinkConformance(opts: EventSinkConformanceOptions): void
 			expect(sink.ofType('org.created')).toHaveLength(0);
 		});
 
+		it('stamps tokenId on an event from an API-token request', async () => {
+			const tokenId = makeUuid();
+			const keyed: RequestContext = {
+				...ctx,
+				apiScope: { tokenId, scopes: [], expiresAt: '2099-01-01T00:00:00.000Z' }
+			};
+			await provider.orgs.createOrg(keyed, makeOrg({ id: makeUuid(), ownerId: actorId }));
+
+			expect(sink.ofType('org.created')[0]).toMatchObject({ actorId, tokenId });
+		});
+
 		it('system-context mutations emit with actorId="system"', async () => {
 			const sysCtx: RequestContext = {
 				userId: '',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { ApiCallError } from '../errors.js';
-import { createMcpServer, type McpServerOptions } from '../server.js';
+import { createMcpServer, type McpServerOptions, type ToolCallRecord } from '../server.js';
 import { fromOperation, inputFrom, tool } from '../tool.js';
 import { KEY, SPEC, fakeFetch, json } from './fixtures.js';
 
@@ -404,5 +404,57 @@ describe('createMcpServer', () => {
 		await expect(server.verify()).rejects.toThrow(
 			/getOrdersById is missing[\s\S]*postJobsByIdSolve needs `write`/
 		);
+	});
+});
+
+describe('onToolCall', () => {
+	it('reports each tool call with its API calls and sizes, never argument values', async () => {
+		const seen: ToolCallRecord[] = [];
+		const f = fakeFetch([json({ items: [] }), json({ id: 'o1' }, 201)]);
+		const server = createMcpServer({
+			name: 'test',
+			version: '0.0.0',
+			baseUrl: 'https://host',
+			apiKey: KEY,
+			fetch: f.fetch,
+			openapi: SPEC,
+			tools: [createOrder],
+			onToolCall: (c) => seen.push(c)
+		});
+
+		await rpc(server, 'tools/call', {
+			name: 'create_order',
+			arguments: { name: 'Kunde Muster AG', externalRef: 'E1' }
+		});
+
+		expect(seen).toEqual([
+			expect.objectContaining({
+				tool: 'create_order',
+				outcome: 'ok',
+				calls: [
+					expect.objectContaining({ operationId: 'getOrders', status: 200 }),
+					expect.objectContaining({ operationId: 'postOrders', status: 201 })
+				],
+				argumentBytes: { name: 17, externalRef: 4 }
+			})
+		]);
+		expect(seen[0].responseBytes).toBeGreaterThan(0);
+		expect(JSON.stringify(seen)).not.toContain('Muster');
+	});
+
+	it('reports invalid arguments without a call', async () => {
+		const seen: ToolCallRecord[] = [];
+		const server = createMcpServer({
+			name: 'test',
+			version: '0.0.0',
+			baseUrl: 'https://host',
+			apiKey: KEY,
+			fetch: fakeFetch([]).fetch,
+			openapi: SPEC,
+			tools: [release],
+			onToolCall: (c) => seen.push(c)
+		});
+		await rpc(server, 'tools/call', { name: 'release_job', arguments: {} });
+		expect(seen[0]).toMatchObject({ outcome: 'invalid_arguments', calls: [] });
 	});
 });

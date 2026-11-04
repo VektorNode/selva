@@ -77,7 +77,7 @@
 	Remove once header-auth deployments have stabilized.
 -->
 {#snippet requestHeaderDump(headers: Array<{ name: string; value: string }>)}
-	<details class="border-border rounded border p-3 text-xs">
+	<details class="border-border rounded-sm border p-3 text-xs">
 		<summary class="text-muted-foreground cursor-pointer font-medium">
 			Request headers ({headers.length})
 		</summary>
@@ -98,6 +98,10 @@
 			<h2 class="text-foreground text-2xl font-bold tracking-tight">Sign in</h2>
 			<p class="text-muted-foreground text-sm">Sign in to your account</p>
 		</div>
+
+		{#if page.url.searchParams.get('reauth') === '1' && !form?.error}
+			<Callout tone="info">Your sign-in is too old for this. Sign in again to continue.</Callout>
+		{/if}
 
 		{#if form?.error}
 			{#key attempt}

@@ -1,19 +1,22 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		AlertDialog,
 		Button,
 		EmptyState,
+		PageContent,
 		Search,
 		SectionHeader,
 		ViewToggle,
-		toast
+		toast,
+		FilterableDropdown
 	} from '@selvajs/ui';
-	import { Plus, Settings } from '@lucide/svelte';
+	import { FolderPlus, Plus, Settings } from '@lucide/svelte';
 	import AddDefinitionDialog from '#lib/components/definitions/AddDefinitionDialog.svelte';
 	import ProjectSidebar from './_components/ProjectSidebar.svelte';
+	import CreateProjectDialog from './_components/CreateProjectDialog.svelte';
 	import ProjectSettingsDialog from './_components/ProjectSettingsDialog.svelte';
 	import DefinitionCard from '#lib/components/definitions/DefinitionCard.svelte';
 	import DefinitionListView from './_components/DefinitionListView.svelte';
@@ -26,6 +29,7 @@
 		ComputeServerConfig,
 		AuthUser
 	} from './+page.server';
+	import { pickServer } from '@selvajs/platform';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
 
 	interface PageData {
@@ -65,6 +69,7 @@
 	let editingProjectId = $state<string | null>(null);
 	let deletingProjectId = $state<string | null>(null);
 	let showAddModal = $state(false);
+	let showCreateProject = $state(false);
 	// True when edit was opened from the detail drawer — surfaces a Back link.
 	let editCameFromDetail = $state(false);
 	let editInitialTab = $state<'versions' | 'details' | 'shares'>('versions');
@@ -116,17 +121,9 @@
 		return data.projects.find((p) => p.id === id)?.visibility;
 	}
 
-	// Resolve the compute server a definition solves on: its pin (if still
-	// visible) → the org/global default. Mirrors resolveServerForOrg's order
-	// using the already-visibility-filtered server list from the loader.
 	function serverNameFor(record: DefinitionRecord): string | undefined {
-		const servers = data.computeServers;
-		if (servers.length === 0) return undefined;
-		const pinned = record.computeServerId
-			? servers.find((s) => s.id === record.computeServerId)
-			: undefined;
-		const fallback = servers.find((s) => s.id === data.defaultComputeServerId) ?? servers[0];
-		return (pinned ?? fallback)?.label;
+		return pickServer(data.computeServers, data.defaultComputeServerId, record.computeServerId)
+			?.label;
 	}
 
 	function recordCanEdit(record: DefinitionRecord) {
@@ -156,7 +153,7 @@
 				toast.success('Definition saved');
 				editingDefinitionId = null;
 				drawerRecord = null;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				toast.error(await errorMessage(res, 'Save failed'));
 			}
@@ -174,7 +171,7 @@
 			if (res.ok) {
 				toast.success(`"${rec?.displayName ?? 'Definition'}" deleted`);
 				editingDefinitionId = null;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				toast.error(await errorMessage(res, 'Delete failed'));
 			}
@@ -190,7 +187,7 @@
 			if (res.ok) {
 				toast.success(`"${formData.get('displayName')}" created`);
 				showAddModal = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const msg = await errorMessage(res, 'Failed to create definition');
 				toast.error(msg);
@@ -227,7 +224,7 @@
 		if (res.ok) {
 			const created = (await res.json().catch(() => null)) as { id: string } | null;
 			toast.success(`Project "${p.name}" created`);
-			await invalidateAll();
+			await refreshAll();
 			if (created?.id) activeProjectId = created.id;
 		} else {
 			toast.error(await errorMessage(res, 'Failed to create project'));
@@ -247,7 +244,7 @@
 		if (res.ok) {
 			toast.success('Project saved');
 			editingProjectId = null;
-			await invalidateAll();
+			await refreshAll();
 		} else {
 			toast.error(await errorMessage(res, 'Failed to save project'));
 		}
@@ -262,7 +259,7 @@
 			}
 			deletingProjectId = null;
 			editingProjectId = null;
-			await invalidateAll();
+			await refreshAll();
 		} else {
 			toast.error(await errorMessage(res, 'Failed to delete project'));
 		}
@@ -279,7 +276,7 @@
 		});
 		if (res.ok) {
 			toast.success('Member added');
-			await invalidateAll();
+			await refreshAll();
 		} else {
 			toast.error(await errorMessage(res, 'Failed to add member'));
 		}
@@ -291,7 +288,7 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ role })
 		});
-		if (res.ok) await invalidateAll();
+		if (res.ok) await refreshAll();
 		else toast.error('Failed to update role');
 	}
 
@@ -299,7 +296,7 @@
 		const res = await fetch(`/api/v1/projects/${projectId}/members/${userId}`, {
 			method: 'DELETE'
 		});
-		if (res.ok) await invalidateAll();
+		if (res.ok) await refreshAll();
 		else toast.error('Failed to remove member');
 	}
 </script>
@@ -315,28 +312,29 @@
 		{activeProjectId}
 		canManageProjects={data.canManageProjects}
 		onSelect={selectProject}
-		onCreate={createProject}
+		onNewProject={() => (showCreateProject = true)}
 	/>
 
-	<div class="flex min-w-0 flex-1 flex-col overflow-hidden">
-		<div class="border-border bg-background shrink-0 border-b px-(--page-px) py-5">
-			<select
+	<div class="min-w-0 flex-1 overflow-y-auto">
+		<PageContent class="space-y-6">
+			<FilterableDropdown
 				aria-label="Project"
+				items={[
+					{ id: '', label: 'All projects' },
+					...data.projects.map((p) => ({ id: p.id, label: p.name }))
+				]}
 				value={activeProjectId ?? ''}
-				onchange={(e) => selectProject(e.currentTarget.value || null)}
-				class="border-input bg-background mb-4 h-10 w-full rounded-md border px-3 text-sm sm:hidden"
-			>
-				<option value="">All projects</option>
-				{#each data.projects as project (project.id)}
-					<option value={project.id}>{project.name}</option>
-				{/each}
-			</select>
+				onChange={(v) => selectProject(v || null)}
+				class="sm:hidden"
+			/>
+
 			<SectionHeader
 				class="mb-0"
-				eyebrow={activeProject ? activeProject.name : 'All projects'}
-				title="Definitions"
-				description={activeProject?.description ??
-					(!activeProject ? 'Definitions across every project in this organization.' : undefined)}
+				eyebrow="Projects"
+				title={activeProject?.name ?? 'All projects'}
+				description={activeProject
+					? activeProject.description || undefined
+					: 'Definitions across every project in this organization.'}
 			>
 				{#snippet actions()}
 					{#if data.canManageProjects && activeProject?.canManage}
@@ -346,7 +344,12 @@
 							onclick={() => (editingProjectId = activeProject.id)}
 						>
 							<Settings class="mr-1.5 h-3.5 w-3.5" />
-							Project settings
+							Settings
+						</Button>
+					{:else if data.canManageProjects && !activeProject}
+						<Button variant="outline" size="sm" onclick={() => (showCreateProject = true)}>
+							<FolderPlus class="mr-1.5 h-3.5 w-3.5" />
+							New project
 						</Button>
 					{/if}
 					{#if canAddDefinition}
@@ -356,18 +359,12 @@
 					{/if}
 				{/snippet}
 			</SectionHeader>
-		</div>
 
-		<div class="flex-1 overflow-y-auto px-(--page-px) py-5">
-			<div class="mb-5 flex flex-wrap items-center gap-3">
-				<div class="max-w-lg min-w-0 flex-1 basis-full sm:basis-auto">
-					<Search
-						bind:value={searchQuery}
-						placeholder="Search by name, description, tags…"
-						clearable
-					/>
+			<div class="flex items-center gap-3">
+				<div class="max-w-sm min-w-0 flex-1">
+					<Search bind:value={searchQuery} placeholder="Search definitions…" clearable />
 				</div>
-				<span class="text-muted-foreground font-mono text-xs tabular-nums">
+				<span class="text-muted-foreground hidden font-mono text-xs tabular-nums sm:inline">
 					{filtered.length} definition{filtered.length === 1 ? '' : 's'}
 				</span>
 				<div class="ml-auto">
@@ -405,9 +402,15 @@
 					onOpen={(r) => (drawerRecord = r)}
 				/>
 			{/if}
-		</div>
+		</PageContent>
 	</div>
 </div>
+
+<CreateProjectDialog
+	open={showCreateProject}
+	onOpenChange={(o) => (showCreateProject = o)}
+	onCreate={createProject}
+/>
 
 {#if drawerRecord}
 	<DefinitionDetailDrawer

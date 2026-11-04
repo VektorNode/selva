@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
-	processInput,
 	processInputsWithErrors,
 	processInputWithError
 } from '@/grasshopper/io/input/input-processors';
-import type { NumericInputType, ValueListInputType } from '@/grasshopper/types';
+import type { FileInputType, NumericInputType, ValueListInputType } from '@/grasshopper/types';
 import { createInputSchema } from '@tests/helpers/test-data-builders';
 
 describe('tree-access defaults use the scalar parsing rules', () => {
@@ -84,6 +83,18 @@ describe('tree-access defaults use the scalar parsing rules', () => {
 		expect(errors).toMatchObject([{ code: 'MALFORMED_DEFAULT' }]);
 		expect(errors[0].message).toContain('1,5');
 	});
+
+	it('uses step size 1 for a tree-access Integer default', () => {
+		const { input } = processInputWithError(
+			createInputSchema({
+				paramType: 'Integer',
+				treeAccess: true,
+				default: { innerTree: { '{0}': [{ data: '5', type: 'System.Int32' }] } }
+			})
+		);
+		expect(input.default).toEqual({ '{0}': [5] });
+		expect((input as NumericInputType).stepSize).toBe(1);
+	});
 });
 
 describe('array defaults', () => {
@@ -93,11 +104,6 @@ describe('array defaults', () => {
 		]);
 		expect(parseErrors).toEqual([]);
 		expect(inputs[0].default).toEqual([1, 2, 3]);
-	});
-
-	it('supports string-array defaults through processInput', () => {
-		const input = processInput(createInputSchema({ paramType: 'Text', default: ['a', 'b'] }));
-		expect(input.default).toEqual(['a', 'b']);
 	});
 });
 
@@ -138,40 +144,28 @@ describe('server-provided stepSize is honored', () => {
 });
 
 describe('scalar transformer edge cases', () => {
-	it("rejects 'Infinity' and hex strings as numeric defaults with a parse error", () => {
-		for (const bad of ['Infinity', '-Infinity', '0x10']) {
+	it("rejects 'Infinity', hex and locale-comma strings as numeric defaults with a parse error", () => {
+		for (const bad of ['Infinity', '-Infinity', '0x10', '1,5']) {
 			const { input, errors } = processInputWithError(
 				createInputSchema({ paramType: 'Number', default: bad })
 			);
 			expect(errors, bad).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
+			expect(errors[0].message).toContain(bad);
 			// Fallback, never Infinity/16 sneaking through.
 			expect(input.default).toBe(0);
 		}
 	});
 
-	it('surfaces a parse error for a locale-comma number instead of silent undefined', () => {
-		const { input, errors } = processInputWithError(
-			createInputSchema({ paramType: 'Number', default: '1,5' })
-		);
-		expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
-		expect(errors[0].message).toContain('1,5');
-		expect(input.default).toBe(0);
-	});
+	it('trims before parsing: a blank numeric string is "no default", a padded boolean parses', () => {
+		const blank = processInputWithError(createInputSchema({ paramType: 'Number', default: '   ' }));
+		expect(blank.errors).toEqual([]);
+		expect(blank.input.default).toBeUndefined();
 
-	it('still treats a blank numeric string as "no default" without an error', () => {
-		const { input, errors } = processInputWithError(
-			createInputSchema({ paramType: 'Number', default: '   ' })
-		);
-		expect(errors).toEqual([]);
-		expect(input.default).toBeUndefined();
-	});
-
-	it('trims boolean strings like the numeric transformer', () => {
-		const { input, errors } = processInputWithError(
+		const padded = processInputWithError(
 			createInputSchema({ paramType: 'Boolean', default: ' true ' })
 		);
-		expect(errors).toEqual([]);
-		expect(input.default).toBe(true);
+		expect(padded.errors).toEqual([]);
+		expect(padded.input.default).toBe(true);
 	});
 
 	it('filters a bad boolean array item like non-string junk instead of aborting the array', () => {
@@ -188,6 +182,115 @@ describe('scalar transformer edge cases', () => {
 		);
 		expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
 		expect(input.default).toBe(false);
+	});
+
+	it('falls back to [false] when a Boolean is list-shaped (atMost > 1)', () => {
+		const { input, errors } = processInputWithError(
+			createInputSchema({ paramType: 'Boolean', default: 'maybe', atMost: 5 })
+		);
+		expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
+		expect(input.default).toEqual([false]);
+	});
+});
+
+describe('paramType', () => {
+	// Selva schemas send "valueList", the plugin "ValueList".
+	it('accepts a lowercase "valueList" and canonicalizes it', () => {
+		const { input, errors } = processInputWithError(
+			createInputSchema({
+				paramType: 'valueList',
+				values: { Abstand: '0', Länge: '1' },
+				default: 'Abstand'
+			})
+		);
+		expect(errors).toEqual([]);
+		expect(input.paramType).toBe('ValueList');
+	});
+
+	it('reports an unknown paramType and falls back to a Geometry safe default', () => {
+		const { input, errors } = processInputWithError(
+			createInputSchema({ paramType: 'definitelyNotAType' })
+		);
+		expect(errors).toMatchObject([{ code: 'VALIDATION_ERROR' }]);
+		expect(errors[0].message).toContain('definitelyNotAType');
+		expect(input.paramType).toBe('Geometry');
+	});
+});
+
+describe('type-specific fields reach the typed param', () => {
+	it('carries minimum/maximum/atLeast/atMost through', () => {
+		const { input } = processInputWithError(
+			createInputSchema({
+				paramType: 'Number',
+				default: 5,
+				minimum: 0,
+				maximum: 10,
+				atLeast: 1,
+				atMost: 1
+			})
+		);
+		expect(input).toMatchObject({
+			paramType: 'Number',
+			minimum: 0,
+			maximum: 10,
+			atLeast: 1,
+			atMost: 1
+		});
+		// step source falls back to maximum (10) -> integer-magnitude -> step 1
+		expect((input as NumericInputType).stepSize).toBe(1);
+	});
+
+	it('carries acceptedFormats through onto a File param', () => {
+		const { input } = processInputWithError(
+			createInputSchema({
+				paramType: 'File',
+				default: null,
+				acceptedFormats: ['.3dm', '.obj']
+			})
+		);
+		expect(input.paramType).toBe('File');
+		expect((input as FileInputType).acceptedFormats).toEqual(['.3dm', '.obj']);
+	});
+
+	it('builds a ValueList with its values map', () => {
+		const { input, errors } = processInputWithError(
+			createInputSchema({
+				paramType: 'ValueList',
+				values: { A: '0', B: '1' },
+				default: 'A'
+			})
+		);
+		expect(errors).toEqual([]);
+		expect(input.paramType).toBe('ValueList');
+		expect((input as ValueListInputType).values).toEqual({ A: '0', B: '1' });
+		expect(input.default).toBe('A');
+	});
+
+	it('parses a JSON-string Geometry default into an object', () => {
+		const { input } = processInputWithError(
+			createInputSchema({ paramType: 'Geometry', default: '{"x":1}' })
+		);
+		expect(input.paramType).toBe('Geometry');
+		expect(input.default).toEqual({ x: 1 });
+	});
+
+	it('trims and unquotes a color string', () => {
+		const { input } = processInputWithError(
+			createInputSchema({ paramType: 'Color', default: '"255, 0, 0"' })
+		);
+		expect(input.paramType).toBe('Color');
+		expect(input.default).toBe('255, 0, 0');
+	});
+});
+
+describe('batches', () => {
+	it('maps a batch and preserves order', () => {
+		const { inputs } = processInputsWithErrors([
+			createInputSchema({ name: 'a', paramType: 'Number', default: 1 }),
+			createInputSchema({ name: 'b', paramType: 'Text', default: 'y' })
+		]);
+		expect(inputs.map((r) => r.paramType)).toEqual(['Number', 'Text']);
+		expect(inputs.map((r) => r.name)).toEqual(['a', 'b']);
 	});
 });
 

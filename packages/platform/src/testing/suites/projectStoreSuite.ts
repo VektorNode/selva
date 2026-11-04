@@ -29,6 +29,11 @@ export interface ProjectStoreConformanceOptions {
 	 * actually stored — callers use that, not the suggested one.
 	 */
 	seedUser?: SeedUserFn;
+	/**
+	 * Seeds the other party in the ctx-isolation cases. Needed where `seedUser` makes
+	 * instance admins, who see everything by design.
+	 */
+	seedOutsider?: SeedUserFn;
 	/** If true, run ctx-isolation tests (adapters with row-level security). */
 	ctxIsolation?: boolean;
 }
@@ -66,8 +71,15 @@ function member(projectId: string, userId: string, role: ProjectMember['role']):
 }
 
 export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions): void {
-	const { name, createStore: rawCreateStore, seedUser = noopSeedUser, ctxIsolation = false } = opts;
+	const {
+		name,
+		createStore: rawCreateStore,
+		seedUser = noopSeedUser,
+		seedOutsider = seedUser,
+		ctxIsolation = false
+	} = opts;
 	const { seed, ctx, registerToken } = makeSeedHelpers(seedUser);
+	const outsider = makeSeedHelpers(seedOutsider);
 	const createStore = async () => {
 		const result = await rawCreateStore();
 		if (result.ownerSessionToken) registerToken(result.ownerId, result.ownerSessionToken);
@@ -392,22 +404,22 @@ export function runProjectStoreConformance(opts: ProjectStoreConformanceOptions)
 			it('ctx isolation: projects created by one user are not visible to another', async () => {
 				const { store, orgId } = await createStore();
 				const userA = await seed();
-				const userB = await seed();
+				const userB = await outsider.seed();
 				const pA = project(orgId, userA);
 				await store.createProject(ctx(userA), pA);
 
-				const page = await store.listProjects(ctx(userB), orgId);
+				const page = await store.listProjects(outsider.ctx(userB), orgId);
 				expect(page.items.map((p) => p.id)).not.toContain(pA.id);
 			});
 
 			it('ctx isolation: user cannot get a project they do not own', async () => {
 				const { store, orgId } = await createStore();
 				const userA = await seed();
-				const userB = await seed();
+				const userB = await outsider.seed();
 				const pA = project(orgId, userA);
 				await store.createProject(ctx(userA), pA);
 
-				const got = await store.getProject(ctx(userB), pA.id);
+				const got = await store.getProject(outsider.ctx(userB), pA.id);
 				expect(got).toBeNull();
 			});
 		}

@@ -52,6 +52,21 @@ public class ThreeMaterial
     [JsonProperty("envMapIntensity", NullValueHandling = NullValueHandling.Ignore)]
     public double? EnvMapIntensity { get; set; }
 
+    /// <summary>Hex colour the surface emits. Null: no emission.</summary>
+    [JsonProperty("emissive", NullValueHandling = NullValueHandling.Ignore)]
+    public string Emissive { get; set; }
+
+    /// <summary>Above 1 it blooms in the viewer's night look. Null: 1.</summary>
+    [JsonProperty("emissiveIntensity", NullValueHandling = NullValueHandling.Ignore)]
+    public double? EmissiveIntensity { get; set; }
+
+    /// <summary>
+    ///     Intensity of the light this surface casts in the night look. Null: the viewer scales it
+    ///     from <see cref="EmissiveIntensity" /> and the model's size.
+    /// </summary>
+    [JsonProperty("emissiveLight", NullValueHandling = NullValueHandling.Ignore)]
+    public double? EmissiveLight { get; set; }
+
     /// <summary>0.0 to 1.0. Null: no coat.</summary>
     [JsonProperty("clearcoat", NullValueHandling = NullValueHandling.Ignore)]
     public double? Clearcoat { get; set; }

@@ -128,32 +128,7 @@ describe('createRequestResponseDriver — client memo', () => {
 		expect(reporter.reports[2]).toEqual({ outputs: { echo: 1 }, values: { a: 1 } });
 	});
 
-	// The memo short-circuits without calling onSolve, so a consumer that captured the
-	// artifact and its inputs inside its own SolveFn would still be holding B's when the
-	// viewer is showing A's — and a commit path would freeze that mismatch. Both must
-	// travel with the result through the memo.
-	it('a memo hit reports the source and values that produced the cached result', async () => {
-		const onSolve = async (values: Record<string, unknown>): Promise<SolveResult> => ({
-			outputs: { echo: values.a },
-			source: { raw: values.a }
-		});
-		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter, {
-			solveDeadlineMs: 100_000
-		});
-
-		driver.solve({ a: 'A' });
-		await flush();
-		driver.solve({ a: 'B' });
-		await flush();
-		driver.solve({ a: 'A' }); // memo hit
-		await flush();
-
-		expect(reporter.reports[2].source).toEqual({ raw: 'A' });
-		expect(reporter.reports[2].values).toEqual({ a: 'A' });
-	});
-
-	it('clearCache drops the memo so the next identical solve re-runs', async () => {
+	it('reset drops the memo so the next identical solve re-runs', async () => {
 		const onSolve = vi.fn(async (): Promise<SolveResult> => ({ outputs: {} }));
 		const reporter = collectingReporter();
 		const driver = createRequestResponseDriver(onSolve, () => reporter, {
@@ -162,33 +137,33 @@ describe('createRequestResponseDriver — client memo', () => {
 
 		driver.solve({ a: 1 });
 		await flush();
-		driver.clearCache?.();
+		driver.reset?.();
 		driver.solve({ a: 1 }); // memo cleared → real solve again
 		await flush();
 
 		expect(onSolve).toHaveBeenCalledTimes(2);
 	});
 
-	it('session.rebuild clears the driver memo (no cross-definition stale hit)', async () => {
+	it('a second definition re-solves inputs the first one already answered', async () => {
 		const onSolve = vi.fn(async (): Promise<SolveResult> => ({ outputs: {} }));
-		const reporter = collectingReporter();
-		let clears = 0;
-		// Wrap the real driver to observe clearCache being invoked from rebuild.
-		const base = createRequestResponseDriver(onSolve, () => reporter, { solveDeadlineMs: 100_000 });
-		const driver: SolveDriver = {
-			solve: base.solve,
-			cancel: base.cancel,
-			get isSolving() {
-				return base.isSolving;
-			},
-			clearCache() {
-				clears += 1;
-				base.clearCache?.();
-			}
-		};
+		const held: { session?: ReturnType<typeof createSolveSession> } = {};
+		const driver = createRequestResponseDriver(onSolve, () => held.session!, {
+			solveDeadlineMs: 100_000
+		});
 		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		held.session = session;
+
+		session.setValue('a', 'same');
+		await flush();
 		session.rebuild(schema(true), 's2');
-		expect(clears).toBe(1);
+		session.setValue('a', 'same');
+		await flush();
+		await flush();
+
+		const solvedSame = onSolve.mock.calls.filter(([v]: unknown[]) => {
+			return (v as Record<string, unknown>).a === 'same';
+		});
+		expect(solvedSame).toHaveLength(2);
 	});
 });
 
@@ -394,6 +369,7 @@ describe('createSolveSession — holding a result behind its messages', () => {
 		expect(session.awaitingAck).toBe(false);
 		expect(session.values.out).toBe('flagged');
 		expect(session.meshes).toEqual([{ id: 'flagged' }]);
+		expect(session.hasNeverSolved).toBe(false);
 	});
 
 	it('discard() drops it, leaving the last accepted result on screen', () => {
@@ -735,5 +711,69 @@ describe('createRequestResponseDriver — ending a solve', () => {
 		await flush();
 		await flush();
 		expect(seen).toEqual([true, false]);
+	});
+});
+
+describe('createSolveSession.setValue with an unchanged value', () => {
+	function typedSchema(paramType: string): UISchema {
+		return {
+			...schema(true),
+			inputs: [{ id: 'a', paramId: 'a', paramType, default: 'x' }]
+		} as unknown as UISchema;
+	}
+
+	function solvedWith(paramType: string, value: unknown) {
+		const driver = recordingDriver();
+		const session = createSolveSession({ schema: typedSchema(paramType), scopeKey: 's', driver });
+		session.setValue('a', value);
+		return { driver, session, solvesBefore: driver.solves.length };
+	}
+
+	// A field reporting on input and again on blur.
+	it('does not solve again for the value the last solve sent', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore);
+	});
+
+	it('solves a value changed and changed back', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'z');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 2);
+	});
+
+	it('retries the same value after a failed solve', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.reportError('boom');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('retries the same value after an aborted solve', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.reportAborted();
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('solves when forced', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'y', true);
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	// Options can change under the same selection; a file can be re-picked after a clear.
+	it.each(['dynamicValueList', 'file'])('re-sends an unchanged %s', (paramType) => {
+		const { driver, session, solvesBefore } = solvedWith(paramType, 'y');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('treats an object value as changed', () => {
+		const value = { name: 'f.txt' };
+		const { driver, session, solvesBefore } = solvedWith('text', value);
+		session.setValue('a', value);
+		expect(driver.solves.length).toBe(solvesBefore + 1);
 	});
 });

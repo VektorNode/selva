@@ -14,7 +14,7 @@ namespace Selva.GH.Features.SolveRuntime.Services;
 ///     Message component's error blocks the outputs. Blocking on every error would break working
 ///     definitions: Selva's own ValueApplicator raises Error for routine input coercion, and some
 ///     definitions error by design while still producing correct geometry (the same reason
-///     `cacheerroredsolves` exists on the Compute path).
+///     Selva's solve cache keeps errored solves).
 /// </remarks>
 public static class SolveDiagnosticsCollector
 {

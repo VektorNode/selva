@@ -2,11 +2,23 @@ using System;
 using Grasshopper.Kernel;
 using SheepMetal.PluginGrasshopper.Upgraders;
 using Selva.Slva;
+using Selva.GH.Utilities;
 
 namespace Selva.GH.Features.Display.OBSOLETE;
 
 /// <summary>
-///     Upgrades OBSOLETE_ThreeMaterial_UntilV0_21_0 (80CD38E5) to GH_ThreeMaterial (31100A9A), which
+///     Upgrades OBSOLETE_ThreeMaterial_UntilV0_23_0 (31100A9A) to GH_ThreeMaterial (8313D290), which hides
+///     rarely used inputs. Every input keeps its index; the unused ones hide.
+/// </summary>
+public class GH_ThreeMaterialUpgrader_To_0_24 : SelvaZuiUpgrader
+{
+    public override DateTime Version => new DateTime(2026, 10, 28);
+    public override Guid UpgradeFrom => new Guid("31100A9A-AA13-43EF-9C2C-8F3C56BC6D68");
+    public override Guid UpgradeTo => new Guid("8313D290-839F-489C-A86D-DD2A2ED3237B");
+}
+
+/// <summary>
+///     Upgrades OBSOLETE_ThreeMaterial_UntilV0_21_0 (80CD38E5) to the v0.22 Three Material (31100A9A), which
 ///     appends Base, Mapping, Texture Size, Finish, Transmission and IOR. All optional and left empty,
 ///     so the material is unchanged.
 /// </summary>

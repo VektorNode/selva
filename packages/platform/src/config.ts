@@ -69,8 +69,6 @@ export function isFlagEnabled(config: SelvaConfig, flag: keyof SelvaFlags): bool
 }
 
 /** Identity function for type inference and IDE autocomplete. */
-export function defineConfig(
-	config: SelvaConfig | SelvaConfigFactory
-): SelvaConfig | SelvaConfigFactory {
+export function defineConfig<T extends SelvaConfig | SelvaConfigFactory>(config: T): T {
 	return config;
 }

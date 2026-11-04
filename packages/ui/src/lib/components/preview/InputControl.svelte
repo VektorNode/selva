@@ -283,7 +283,7 @@
 
 {#if isClientSlot}
 	{#if clientSlot}
-		<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
+		<div role="group" class="group/field gap-2 min-w-0 flex flex-col">
 			{@render fieldHeader()}
 			{@render clientSlot({
 				inputId: item.paramId,
@@ -294,7 +294,7 @@
 		</div>
 	{/if}
 {:else if isGeometry}
-	<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
+	<div role="group" class="group/field gap-2 min-w-0 flex flex-col">
 		{@render fieldHeader(inputId)}
 		<GeometryInput
 			{inputId}
@@ -322,7 +322,7 @@
 		{@render helpButton()}
 	</div>
 {:else if !hideDynamicListWhenEmpty}
-	<div role="group" class="group/field gap-1.5 min-w-0 flex flex-col">
+	<div role="group" class="group/field gap-2 min-w-0 flex flex-col">
 		{#if !isCheckboxWidget(item)}
 			{@render fieldHeader(inputId)}
 		{/if}
@@ -378,6 +378,7 @@
 				{inputId}
 				value={typeof value === 'string' ? value : '#000000'}
 				onChange={(newValue) => commit(newValue)}
+				{disabled}
 			/>
 		{/if}
 	</div>

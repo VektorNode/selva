@@ -17,7 +17,7 @@ import {
 	getProjectProvider,
 	getComputeServerConfigStore
 } from '../providers.server';
-import { resolveServerForOrg } from '@selvajs/server/compute';
+import { serverResolver } from '../compute/serverResolver.server';
 import { getClient, COMPUTE_DEBUG } from '../compute/engine.server';
 
 export { DefinitionLoadError };
@@ -34,7 +34,7 @@ export async function loadDefinitionForRender(
 		definitions: getDefinitionMeta(),
 		projects: getProjectProvider(),
 		resolveServer: (ctx, orgId, opts) =>
-			resolveServerForOrg(ctx, orgId, getComputeServerConfigStore(), opts),
+			serverResolver.resolve(ctx, orgId, getComputeServerConfigStore(), opts),
 		getClient,
 		computeDebug: COMPUTE_DEBUG
 	});

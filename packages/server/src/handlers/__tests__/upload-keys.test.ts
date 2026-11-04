@@ -23,7 +23,7 @@ import {
 } from '../../testing/index.js';
 import type { ApiRequest } from '../../api/index.js';
 import { createApiTokenCodec } from '../../tokens/index.js';
-import { resolveApiToken } from '../../http/index.js';
+import { createApiTokenResolutionCache, resolveApiToken } from '../../http/index.js';
 import { createApiToken, listApiTokens, revokeApiToken, revokeOwnApiToken } from '../apiTokens.js';
 import { listProjects } from '../projects.js';
 import { getDefinition, listDefinitions } from '../definitions.js';
@@ -173,6 +173,34 @@ describe('who may hold a key that only reads and uploads', () => {
 // ============================================================================
 // Write rights in listings
 // ============================================================================
+
+describe('minting needs a recent sign-in', () => {
+	const DAY = 86_400_000;
+
+	async function signedInAgo(days: number) {
+		const w = await world();
+		w.h.deps = { ...w.h.deps, tokens: { ...w.h.deps!.tokens, signInMaxAgeMs: 7 * DAY } };
+		const auth = w.h.config.auth;
+		const getUser = auth.getUser.bind(auth);
+		vi.spyOn(auth, 'getUser').mockImplementation(async (id) => {
+			const user = await getUser(id);
+			return user && { ...user, lastLoginAt: new Date(Date.now() - days * DAY).toISOString() };
+		});
+		return { w, locals: await actAs(w.h, w.dana.id) };
+	}
+
+	it('mints within the max age', async () => {
+		const { w, locals } = await signedInAgo(1);
+		expect((await mint(locals, w.acme.id, ['upload:all'])).status).toBe(201);
+	});
+
+	it('asks for a new sign-in past it, so a key is never born lapsed', async () => {
+		const { w, locals } = await signedInAgo(8);
+		const res = await mint(locals, w.acme.id, ['upload:all']);
+		expect(res.status).toBe(401);
+		expect(res.json).toMatchObject({ code: 'SIGN_IN_REQUIRED' });
+	});
+});
 
 describe('canCreateDefinitions on GET /projects', () => {
 	async function flags(locals: ActingLocals) {
@@ -343,6 +371,52 @@ describe('GET /definitions?documentId=', () => {
 // DELETE /me/token
 // ============================================================================
 
+describe('a revoke with a resolution cache', () => {
+	async function cachedWorld() {
+		const w = await world();
+		const cache = createApiTokenResolutionCache();
+		w.h.deps = { ...w.h.deps, tokens: { ...w.h.deps!.tokens, resolutionCache: cache } };
+		const resolveCached = (raw: string) => {
+			vi.spyOn(w.h.config.data.apiTokens!, 'touchLastUsed').mockResolvedValue();
+			return resolveApiToken(
+				new Request('http://selva.test/api/v1/projects', {
+					headers: { authorization: `Bearer ${raw}` }
+				}),
+				{ codec, auth: w.h.config.auth, data: w.h.config.data, resolutionCache: cache }
+			);
+		};
+		return { w, resolveCached };
+	}
+
+	it('stops a key revoking itself at once, though it was cached', async () => {
+		const { w, resolveCached } = await cachedWorld();
+		const raw = await mintedSecret(w, w.dana.id, ['upload:all']);
+		const cachedKey = await resolveCached(raw);
+		if (cachedKey.kind !== 'ok') throw new Error('key rejected');
+		const res = await callHandler(revokeOwnApiToken, {
+			locals: { ...(await actAs(w.h, w.dana.id)), ctx: cachedKey.ctx },
+			method: 'DELETE',
+			mount: { anyScope: true }
+		});
+		expect(res.status).toBe(204);
+		expect(await resolveCached(raw)).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+
+	it('stops a key its owner revokes from the web app at once, though it was cached', async () => {
+		const { w, resolveCached } = await cachedWorld();
+		const raw = await mintedSecret(w, w.dana.id, ['upload:all']);
+		const cachedKey = await resolveCached(raw);
+		if (cachedKey.kind !== 'ok') throw new Error('key rejected');
+		const res = await callHandler(revokeApiToken, {
+			locals: await actAs(w.h, w.dana.id),
+			params: { orgId: w.acme.id, tokenId: cachedKey.token.id },
+			method: 'DELETE'
+		});
+		expect(res.status).toBe(204);
+		expect(await resolveCached(raw)).toMatchObject({ kind: 'rejected', status: 401 });
+	});
+});
+
 describe('a key revoking itself', () => {
 	it('revokes the key that sent the request, which then gets 401', async () => {
 		const w = await world();
@@ -377,6 +451,26 @@ describe('a key revoking itself', () => {
 		expect(open.status).toBe(204);
 	});
 
+	it('works for a key whose owner may no longer hold it, so signing out still revokes', async () => {
+		const w = await world();
+		const raw = await mintedSecret(w, w.dana.id, ['upload:all']);
+		await setRole(w, w.acmeOrg.id, w.dana.id, 'viewer');
+		vi.spyOn(w.h.config.data.apiTokens!, 'touchLastUsed').mockResolvedValue();
+		const at = (method: string, path: string) =>
+			resolveApiToken(
+				new Request(`http://selva.test/api/v1/${path}`, {
+					method,
+					headers: { authorization: `Bearer ${raw}` }
+				}),
+				{ codec, auth: w.h.config.auth, data: w.h.config.data }
+			);
+
+		expect(await at('GET', 'me')).toMatchObject({ code: 'API_TOKEN_HOLDER_REFUSED' });
+		expect(await at('GET', 'me/token')).toMatchObject({ code: 'API_TOKEN_HOLDER_REFUSED' });
+		const own = await at('DELETE', 'me/token');
+		expect(own.kind).toBe('ok');
+	});
+
 	it('gives a browser session 400', async () => {
 		const w = await world();
 		const res = await callHandler(revokeOwnApiToken, {
@@ -392,7 +486,8 @@ describe('a key revoking itself', () => {
 // Consent
 // ============================================================================
 
-describe('consent in an org the user picks', () => {
+// The token page lists and revokes keys in the acting org only.
+describe('consent in the acting org', () => {
 	async function twoOrgs() {
 		const w = await world();
 		const big = await seedBigClient(w.h);
@@ -403,33 +498,35 @@ describe('consent in an org the user picks', () => {
 	const run = <T>(locals: ActingLocals, fn: (req: ApiRequest) => Promise<T>) =>
 		callHandler(async (req) => ({ body: await fn(req) }), { locals });
 
-	it('offers only the orgs where the user may hold the key', async () => {
+	it('offers the acting org, and only where the user may hold the key', async () => {
 		const w = await twoOrgs();
 		const locals = await actAs(w.h, w.dana.id);
+		expect(locals.ctx.actingOrgId).toBe(w.acme.id);
 		const upload = await run(locals, (req) => consentOrgs(req, ['upload:all']));
 		expect(upload.json).toEqual([{ id: w.acme.id, name: 'Acme' }]);
 
+		// May hold the key in both orgs, still offered only the acting one.
 		await grantPlatformPermissions(w.h, w.dana.id, ['manage_api_tokens']);
 		const broad = await run(await actAs(w.h, w.dana.id), (req) => consentOrgs(req, ['upload:all']));
-		expect((broad.json as { id: string }[]).map((o) => o.id).sort()).toEqual(
-			[w.acme.id, w.big.bigClient.id].sort()
-		);
+		expect(broad.json).toEqual([{ id: w.acme.id, name: 'Acme' }]);
 	});
 
-	it('mints in the picked org, not the session’s', async () => {
+	it('mints in the acting org and refuses another of the user’s orgs', async () => {
 		const w = await twoOrgs();
 		await grantPlatformPermissions(w.h, w.dana.id, ['manage_api_tokens']);
-		const locals = await actAs(w.h, w.dana.id);
-		const picked = locals.ctx.actingOrgId === w.acme.id ? w.big.bigClient.id : w.acme.id;
-		const res = await run(locals, (req) =>
-			mintConsentToken(req, picked, {
-				name: 'Selva for Grasshopper (OAuth)',
-				scopes: ['upload:all'],
-				expiresInDays: 30
-			})
-		);
+		const mint = async (orgId: string) =>
+			run(await actAs(w.h, w.dana.id), (req) =>
+				mintConsentToken(req, orgId, {
+					name: 'Selva for Grasshopper (OAuth)',
+					scopes: ['upload:all'],
+					expiresInDays: 30
+				})
+			);
+
+		const res = await mint(w.acme.id);
 		expect(res.status).toBe(200);
-		expect(res.json).toMatchObject({ token: { orgId: picked, scopes: ['upload:all'] } });
+		expect(res.json).toMatchObject({ token: { orgId: w.acme.id, scopes: ['upload:all'] } });
+		expect((await mint(w.big.bigClient.id)).status).toBe(403);
 	});
 
 	it('refuses an org the user doesn’t belong to', async () => {

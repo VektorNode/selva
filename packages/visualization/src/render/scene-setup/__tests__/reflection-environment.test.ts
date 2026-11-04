@@ -26,6 +26,17 @@ function setup() {
 }
 
 describe('reflection environment', () => {
+	it('keeps a clear coat on the scene environment: the studio would wash out the paint under it', () => {
+		const { scene } = setup();
+		const mesh = solveMesh(0);
+		(mesh.material as THREE.MeshPhysicalMaterial).clearcoat = 0.5;
+		scene.add(mesh);
+
+		applyReflectionEnvironment(scene, scene);
+
+		expect((mesh.material as THREE.MeshPhysicalMaterial).envMap).toBeNull();
+	});
+
 	it('gives metals the studio probe and leaves dielectrics on the scene environment', () => {
 		const { scene, studio } = setup();
 		const metal = solveMesh(1);

@@ -33,10 +33,11 @@ describe('createApiTokenCodec', () => {
 		expect(codec.hasValidChecksum(mangle(codec.mintRawToken()))).toBe(false);
 	});
 
-	it('hashes with the instance secret, so another secret gives another hash', () => {
+	it('a rotated secret keeps tokens resolving: new hashes are unkeyed, old ones match under the previous key', () => {
 		const raw = codec.mintRawToken();
-		const other = createApiTokenCodec('y'.repeat(32));
-		expect(codec.hashToken(raw)).not.toBe(other.hashToken(raw));
-		expect(codec.hashToken(raw)).toBe(codec.hashToken(raw));
+		const rotated = createApiTokenCodec('y'.repeat(32), 'x'.repeat(32));
+		expect(rotated.hashToken(raw)).toBe(codec.hashToken(raw));
+		const legacyUnderOldKey = codec.lookupHashes(raw)[1];
+		expect(rotated.lookupHashes(raw)).toContain(legacyUnderOldKey);
 	});
 });

@@ -18,8 +18,8 @@
 </script>
 
 {#if user}
-	<div class="border-border bg-card flex items-center gap-px rounded-full border shadow-sm">
-		<div class="flex items-center gap-2 py-1 pr-3 pl-1">
+	<div class="border-border bg-card flex h-9 items-center gap-px rounded-full border shadow-sm">
+		<div class="flex items-center gap-2 pr-3 pl-1">
 			<div
 				class="bg-primary text-primary-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold"
 			>
@@ -36,7 +36,7 @@
 					type="submit"
 					title="Log out"
 					aria-label="Log out"
-					class="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full p-2 transition-colors"
+					class="text-muted-foreground hover:text-foreground hover:bg-hover flex h-full items-center rounded-full px-2.5 transition-colors"
 				>
 					<LogOut class="h-3.5 w-3.5" />
 				</button>
@@ -47,7 +47,7 @@
 	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 	<a
 		href={loginHref}
-		class="border-border bg-card text-muted-foreground hover:text-foreground flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium shadow-sm transition-colors"
+		class="border-border bg-card text-muted-foreground hover:text-foreground flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium shadow-sm transition-colors"
 	>
 		<LogIn class="h-3.5 w-3.5" />
 		<span class="hidden sm:block">Log in</span>

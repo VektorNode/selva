@@ -11,7 +11,7 @@ import type {
 } from '@selvajs/platform';
 import { NoopEventSink, actorOf } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
-import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { readJsonFile, writeJsonFile, withFileLock } from './fsJson.js';
 
 interface ApiTokensFile {
 	tokens: ApiToken[];
@@ -23,11 +23,6 @@ const empty = (): ApiTokensFile => ({ tokens: [] });
 function isLive(t: ApiToken, now: number): boolean {
 	return t.revokedAt === null && Date.parse(t.expiresAt) > now;
 }
-
-// Every write is load, modify, save of one file, so writes on the same path
-// queue here: an interleaved `touchLastUsed` would otherwise save a stale copy
-// and un-revoke a key. Single-process only, like the rest of this provider.
-const writeLocks = new Map<string, Promise<unknown>>();
 
 function summarize({ tokenHash: _hash, ...rest }: ApiToken): ApiTokenSummary {
 	return rest;
@@ -61,14 +56,7 @@ export class LocalApiTokenStore implements IApiTokenStore {
 	}
 
 	private locked<T>(fn: () => Promise<T>): Promise<T> {
-		// Chain onto the tail however the previous write settled, so one
-		// rejection can't wedge the queue.
-		const next = (writeLocks.get(this.filePath) ?? Promise.resolve()).then(fn, fn);
-		writeLocks.set(
-			this.filePath,
-			next.catch(() => {})
-		);
-		return next;
+		return withFileLock(this.filePath, fn);
 	}
 
 	async create(ctx: RequestContext, token: ApiToken): Promise<void> {

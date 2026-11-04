@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
 import {
-	highlightMemberRange,
+	highlightMembers,
 	memberBounds,
 	resolveHitMember,
 	type PickableMember
@@ -74,13 +74,13 @@ describe('resolveHitMember', () => {
 	});
 });
 
-describe('highlightMemberRange', () => {
+describe('highlightMembers', () => {
 	it('draws only the member range with the highlight material', () => {
-		const { mesh, members } = mergedMesh();
+		const { mesh } = mergedMesh();
 		const base = mesh.material as THREE.Material;
 		const highlight = new THREE.MeshStandardMaterial();
 
-		highlightMemberRange(mesh, members[1]!, highlight);
+		highlightMembers(mesh, new Set([1]), highlight);
 
 		expect(mesh.material).toEqual([base, highlight]);
 		const highlighted = mesh.geometry.groups.filter((g) => g.materialIndex === 1);
@@ -89,22 +89,22 @@ describe('highlightMemberRange', () => {
 	});
 
 	it('restores the original material and groups', () => {
-		const { mesh, members } = mergedMesh();
+		const { mesh } = mergedMesh();
 		const base = mesh.material;
 
-		const restore = highlightMemberRange(mesh, members[0]!, new THREE.MeshStandardMaterial());
+		const restore = highlightMembers(mesh, new Set([0]), new THREE.MeshStandardMaterial());
 		restore();
 
 		expect(mesh.material).toBe(base);
 		expect(mesh.geometry.groups).toHaveLength(0);
 	});
 
-	it('is a no-op for a member without an index window', () => {
-		const { mesh } = mergedMesh();
+	it('is a no-op when a member has no index window', () => {
+		const { mesh, members } = mergedMesh();
 		const base = mesh.material;
-		const member: PickableMember = { name: 'x', layer: '', metadata: {} };
+		delete members[1]!.indexStart;
 
-		highlightMemberRange(mesh, member, new THREE.MeshStandardMaterial());
+		highlightMembers(mesh, new Set([0]), new THREE.MeshStandardMaterial());
 
 		expect(mesh.material).toBe(base);
 	});

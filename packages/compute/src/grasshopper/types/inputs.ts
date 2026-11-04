@@ -9,7 +9,8 @@ export type DataTreePath = `{${string}}`;
 export interface DataItem {
 	type: string;
 	data: string;
-	id: string;
+	/** **Requires:** the VektorNode compute fork. A stock server sends none. */
+	id?: string;
 }
 
 // Grasshopper-style data tree for input defaults: { "{0}": [1, 2, 3], "{0;0}": [4, 5] }
@@ -59,13 +60,15 @@ export interface BaseInputType {
 
 	/**
 	 * Name of the group this parameter belongs to.
-	 * @requires Custom branch of compute.rhino3d
+	 *
+	 * **Requires:** the VektorNode compute fork.
 	 */
 	groupName?: string;
 
 	/**
 	 * Unique identifier for the parameter.
-	 * @requires Custom branch of compute.rhino3d
+	 *
+	 * **Requires:** the VektorNode compute fork.
 	 */
 	id?: string;
 }

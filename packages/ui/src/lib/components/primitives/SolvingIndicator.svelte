@@ -6,8 +6,7 @@
 		/**
 		 * `floating` overlays the bottom-left corner. `inline` is a compact chip the size of an
 		 * icon button, for a narrow host whose corner holds its content and whose action row
-		 * already reserves the chip's place. That host freezes while it solves, so the chip says
-		 * Esc aborts: a frozen page can't offer a button.
+		 * already reserves the chip's place. Both say Esc aborts, as every host does.
 		 */
 		placement?: 'floating' | 'inline';
 	}
@@ -53,7 +52,8 @@
 			</div>
 			<div class="leading-tight flex flex-col">
 				<span class="text-sm font-semibold">{t.solving}</span>
-				<span class="text-xs opacity-70">{t.solvingSubtitle}</span>
+				<span class="text-xs opacity-70" data-testid="solve-esc-hint">{t.solveMessagesEscHint}</span
+				>
 			</div>
 		</div>
 	{/if}

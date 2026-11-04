@@ -45,7 +45,9 @@
 
 	$effect(() => {
 		if (sessionId) {
-			preview.initialize();
+			// Untracked: initialize reads connection state, and each change of it would otherwise
+			// tear the session down and connect again.
+			untrack(() => preview.initialize());
 			return () => preview.cleanup();
 		}
 	});
@@ -151,8 +153,8 @@
 					showViewer={!!preview.state.schema.viewerOptions?.enableLocal && !isInRhinoPanel()}
 					meshes={preview.displayMeshes}
 					isSolving={preview.isSolving}
-					showSolvingIndicator={preview.state.schema.instanceSolve !== false &&
-						solvingIndicator.show}
+					showSolvingIndicator={solvingIndicator.show}
+					solveIsSlow={solvingIndicator.slow}
 					solvingIndicatorPlacement={panel ? 'inline' : 'floating'}
 					solveMessages={panel ? solveMessages : undefined}
 					hasPendingChanges={preview.hasPendingChanges}

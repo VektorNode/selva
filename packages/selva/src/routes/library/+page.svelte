@@ -1,6 +1,14 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
-	import { Search, toast, PageContent, SectionHeader, ViewToggle, EmptyState } from '@selvajs/ui';
+	import { goto, refreshAll } from '$app/navigation';
+	import {
+		Search,
+		toast,
+		PageContent,
+		SectionHeader,
+		ViewToggle,
+		EmptyState,
+		FilterableDropdown
+	} from '@selvajs/ui';
 	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
@@ -95,7 +103,7 @@
 				method: isStarred ? 'DELETE' : 'PUT'
 			});
 			if (!res.ok) throw new Error(`${res.status}`);
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error(isStarred ? 'Failed to unstar' : 'Failed to star');
 		} finally {
@@ -146,8 +154,8 @@
 						onclick={() => (showFilters = !showFilters)}
 						class={`relative inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-sm transition-colors ${
 							showFilters || activeFilterCount > 0
-								? 'border-border bg-accent text-accent-foreground'
-								: 'border-input bg-background text-foreground hover:bg-muted/40'
+								? 'border-border bg-selected text-foreground'
+								: 'border-input bg-background text-foreground hover:bg-hover'
 						}`}
 					>
 						<FilterIcon class="h-3.5 w-3.5" />
@@ -182,16 +190,16 @@
 								<label class="text-muted-foreground text-xs font-medium" for="filter-project">
 									Project
 								</label>
-								<select
+								<FilterableDropdown
 									id="filter-project"
-									bind:value={activeProjectId}
-									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-								>
-									<option value={null}>All projects</option>
-									{#each projectList as p (p.id)}
-										<option value={p.id}>{p.name}</option>
-									{/each}
-								</select>
+									items={[
+										{ id: '', label: 'All projects' },
+										...projectList.map((p) => ({ id: p.id, label: p.name }))
+									]}
+									value={activeProjectId ?? ''}
+									onChange={(v) => (activeProjectId = v || null)}
+									size="sm"
+								/>
 							</div>
 						{/if}
 
@@ -200,16 +208,16 @@
 								<label class="text-muted-foreground text-xs font-medium" for="filter-category">
 									Category
 								</label>
-								<select
+								<FilterableDropdown
 									id="filter-category"
-									bind:value={activeCategory}
-									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-								>
-									<option value={null}>All categories</option>
-									{#each availableCategories as cat (cat)}
-										<option value={cat}>{cat}</option>
-									{/each}
-								</select>
+									items={[
+										{ id: '', label: 'All categories' },
+										...availableCategories.map((cat) => ({ id: cat, label: cat }))
+									]}
+									value={activeCategory ?? ''}
+									onChange={(v) => (activeCategory = v || null)}
+									size="sm"
+								/>
 							</div>
 						{/if}
 
@@ -218,16 +226,16 @@
 								<label class="text-muted-foreground text-xs font-medium" for="filter-tag">
 									Tag
 								</label>
-								<select
+								<FilterableDropdown
 									id="filter-tag"
-									bind:value={activeTag}
-									class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-								>
-									<option value={null}>All tags</option>
-									{#each availableTags as tag (tag)}
-										<option value={tag}>#{tag}</option>
-									{/each}
-								</select>
+									items={[
+										{ id: '', label: 'All tags' },
+										...availableTags.map((tag) => ({ id: tag, label: `#${tag}` }))
+									]}
+									value={activeTag ?? ''}
+									onChange={(v) => (activeTag = v || null)}
+									size="sm"
+								/>
 							</div>
 						{/if}
 					</div>
@@ -248,7 +256,7 @@
 							<button
 								onclick={() => open(run.definitionId)}
 								disabled={loadingGuid === run.definitionId}
-								class={`group hover:bg-muted/40 grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+								class={`group hover:bg-hover grid w-full items-center gap-4 px-4 py-3 text-left text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
 									i < Math.min(data.recentRuns.length, 5) - 1 ? 'border-border border-b' : ''
 								}`}
 								style="grid-template-columns: minmax(0, 1fr) auto auto"

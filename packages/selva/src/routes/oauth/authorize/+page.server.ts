@@ -1,9 +1,14 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { requireRecentSignIn } from '#lib/server/signInMaxAge.server.js';
 import { apiScopesFor, isLoopbackRedirect, OAuthError } from '@selvajs/server/oauth';
-import { consentOffer, mintConsentToken } from '@selvajs/server/handlers';
+import {
+	consentOffer,
+	mintConsentToken,
+	revokeUnredeemedConsentToken
+} from '@selvajs/server/handlers';
 import { isApiError } from '@selvajs/server/api';
 import { toApiRequest } from '#lib/server/api/sveltekit.js';
-import { oauthServer } from '#lib/server/oauth/server.js';
+import { expectRedemption, oauthServer } from '#lib/server/oauth/server.js';
 import { publicUrl } from '#lib/server/origin.js';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -45,15 +50,16 @@ export const load: PageServerLoad = async (event) => {
 	if (!locals.user || !locals.ctx) {
 		redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
 	}
+	await requireRecentSignIn(event);
 
 	const offer = await consentOffer(toApiRequest(event), request.scopes);
 	if (!offer) {
 		return {
 			ok: false as const,
-			problem: 'Your account can’t give an app this access in any of your organizations.'
+			problem: 'Your account can’t give an app this access in your current organization.'
 		};
 	}
-	const acting = offer.orgs.find((o) => o.id === locals.ctx?.actingOrgId);
+	const actingOrgId = locals.ctx?.actingOrgId;
 
 	return {
 		ok: true as const,
@@ -62,15 +68,19 @@ export const load: PageServerLoad = async (event) => {
 		builtIn: request.client.builtIn,
 		redirectHost: new URL(request.redirectUri).host,
 		loopback: isLoopbackRedirect(request.redirectUri),
-		choices: offer.choices.map((c) => c.access),
-		orgs: offer.orgs,
-		orgId: (acting ?? offer.orgs[0]!).id,
+		levels: offer.levels.map(({ choice, orgs }) => ({
+			access: choice.access,
+			createsProjects: choice.scopes.includes('create_projects'),
+			orgs,
+			orgId: (orgs.find((o) => o.id === actingOrgId) ?? orgs[0]!).id
+		})),
 		days: TOKEN_DAYS
 	};
 };
 
 export const actions: Actions = {
 	approve: async (event) => {
+		await requireRecentSignIn(event);
 		const form = await event.request.formData();
 		const { request } = await parse(event.url);
 		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
@@ -78,7 +88,7 @@ export const actions: Actions = {
 
 		const api = toApiRequest(event);
 		const offer = await consentOffer(api, request.scopes);
-		const choice = offer?.choices.find((c) => c.access === form.get('access'));
+		const choice = offer?.levels.find((l) => l.choice.access === form.get('access'))?.choice;
 		if (!choice) return fail(400, { error: 'That access isn’t available to you.' });
 		let minted;
 		try {
@@ -91,6 +101,7 @@ export const actions: Actions = {
 			if (isApiError(err)) return fail(err.status, { error: err.message });
 			throw err;
 		}
+		expectRedemption(minted.token.id, () => revokeUnredeemedConsentToken(api, minted.token.id));
 		redirect(
 			303,
 			serverFor(publicUrl(event.url).origin).approve(request, {

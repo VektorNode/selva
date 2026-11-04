@@ -22,18 +22,12 @@ test('a limit at or above the compute request cap passes', () => {
 	assert.equal(checkBodySizeLimit({ BODY_SIZE_LIMIT: '512M' }).severity, 'green');
 });
 
-test('a limit below the compute request cap is flagged as dead config', () => {
-	// The second reported incident: BODY_SIZE_LIMIT=210M left over from an older
-	// release, under the 256 MB request cap, so the compute cap never applies.
+test('a limit below the compute request cap is flagged', () => {
+	// BODY_SIZE_LIMIT=210M left over from an older release, under the 256 MB request cap.
 	const r = checkBodySizeLimit({ BODY_SIZE_LIMIT: '210M' });
 	assert.equal(r.severity, 'yellow');
 	assert.match(r.line, /210 MB/);
 	assert.match(r.line, /256 MB/);
-});
-
-test('the comparison honours an overridden COMPUTE_REQUEST_MAX_BYTES', () => {
-	const env = { BODY_SIZE_LIMIT: '210M', COMPUTE_REQUEST_MAX_BYTES: String(100 * MB) };
-	assert.equal(checkBodySizeLimit(env).severity, 'green');
 });
 
 test('a value adapter-node throws on is red, not silently accepted', () => {

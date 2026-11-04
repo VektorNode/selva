@@ -14,7 +14,7 @@
 		toast
 	} from '@selvajs/ui';
 	import { Check, Copy, KeyRound, Trash2 } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { API_TOKEN_LIFETIME_DAYS, describeApiScope } from '@selvajs/platform';
 	import {
 		ACCESS_PRESETS,
@@ -23,6 +23,7 @@
 		type AccessPreset,
 		type TokenRow
 	} from '#lib/apiTokens.js';
+	import McpConnectCard from '#lib/components/McpConnectCard.svelte';
 	import type { PageData } from './$types';
 	import type { RosterRow } from './+page.server';
 
@@ -64,6 +65,10 @@
 				})
 			});
 			const body = await res.json().catch(() => ({}));
+			if (body.code === 'SIGN_IN_REQUIRED') {
+				await goto(`/login?reauth=1&redirectTo=${encodeURIComponent('/team/tokens')}`);
+				return;
+			}
 			if (!res.ok) {
 				toast.error(body.message || 'Failed to create the token');
 				return;
@@ -72,7 +77,7 @@
 			copied = false;
 			name = '';
 			access = data.presets[0] ?? 'read';
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error('Failed to create the token');
 		} finally {
@@ -95,7 +100,7 @@
 			});
 			if (res.ok) {
 				toast.success('Token revoked');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || 'Failed to revoke the token');
@@ -154,7 +159,7 @@
 	</div>
 {/snippet}
 
-<div class="mx-auto max-w-4xl space-y-6">
+<div class="space-y-6">
 	<SectionHeader
 		eyebrow="Settings"
 		title="API tokens"
@@ -181,7 +186,7 @@
 				{#if secret}
 					<Callout tone="success" title="Copy your token now. You won't see it again.">
 						<div class="flex items-center gap-2">
-							<code class="bg-muted min-w-0 flex-1 truncate rounded px-2 py-1 font-mono text-sm">
+							<code class="bg-muted min-w-0 flex-1 truncate rounded-sm px-2 py-1 font-mono text-sm">
 								{secret}
 							</code>
 							<Button size="sm" variant="outline" onclick={copySecret}>
@@ -246,6 +251,8 @@
 				{/if}
 			</Card.Content>
 		</Card.Root>
+
+		<McpConnectCard {secret} />
 	{/if}
 
 	{#if data.available && data.orgId}

@@ -9,12 +9,13 @@ import { describe, it, expect } from 'vitest';
 import {
 	resolveApiKey,
 	storedKeysById,
+	assertStoredKeysReadable,
 	validateIncomingServers,
 	type IncomingServerBase
 } from '../server-config-write.js';
 
 const server = (over: Partial<IncomingServerBase> = {}): IncomingServerBase => ({
-	id: 'srv-1',
+	id: '11111111-1111-4111-8111-111111111111',
 	label: 'Compute A',
 	serverUrl: 'https://compute.example.test',
 	...over
@@ -60,7 +61,9 @@ describe('storedKeysById', () => {
 
 describe('validateIncomingServers', () => {
 	it('accepts a well-formed set', () => {
-		expect(() => validateIncomingServers([server(), server({ id: 'srv-2' })])).not.toThrow();
+		expect(() =>
+			validateIncomingServers([server(), server({ id: '22222222-2222-4222-8222-222222222222' })])
+		).not.toThrow();
 	});
 
 	it.each([
@@ -123,5 +126,59 @@ describe('validateIncomingServers — SSRF guard on serverUrl', () => {
 		['public https', 'https://compute.example.test']
 	])('allows %s', (_case, serverUrl) => {
 		expect(() => validateIncomingServers([server({ serverUrl })])).not.toThrow();
+	});
+});
+
+describe('validateIncomingServers apiKey', () => {
+	const server = {
+		id: '11111111-1111-4111-8111-111111111111',
+		label: 'x',
+		serverUrl: 'http://compute.example'
+	};
+
+	it('refuses ciphertext, which a client has no business sending back', () => {
+		for (const apiKey of ['enc:v1:abc', 'enc:v2:abc']) {
+			expect(() => validateIncomingServers([{ ...server, apiKey }])).toThrow(/apiKey/);
+		}
+	});
+
+	it('accepts a plain key, null and omitted', () => {
+		for (const apiKey of ['plain', null, undefined]) {
+			expect(() => validateIncomingServers([{ ...server, apiKey }])).not.toThrow();
+		}
+	});
+});
+
+describe('validateIncomingServers shape', () => {
+	const id = '11111111-1111-4111-8111-111111111111';
+	const server = { id, label: 'x', serverUrl: 'http://compute.example' };
+
+	it('refuses an id that is not a UUID', () => {
+		expect(() => validateIncomingServers([{ ...server, id: 'prod-1' }])).toThrow(/UUID/);
+	});
+
+	it('refuses the same id twice', () => {
+		expect(() => validateIncomingServers([server, server])).toThrow(/more than once/);
+	});
+});
+
+describe('assertStoredKeysReadable', () => {
+	const unreadable = [{ id: 'a', hasApiKey: true, apiKey: undefined }];
+
+	it('refuses to overwrite a key it could not decrypt by leaving it out', () => {
+		expect(() => assertStoredKeysReadable([{ id: 'a' }], unreadable)).toThrow(/SELVA_AT_REST_KEY/);
+	});
+
+	it('lets the operator replace or clear that key', () => {
+		expect(() => assertStoredKeysReadable([{ id: 'a', apiKey: 'new' }], unreadable)).not.toThrow();
+		expect(() => assertStoredKeysReadable([{ id: 'a', apiKey: null }], unreadable)).not.toThrow();
+	});
+
+	it('ignores servers with a readable key or none', () => {
+		const stored = [
+			{ id: 'a', hasApiKey: true, apiKey: 'k' },
+			{ id: 'b', hasApiKey: false }
+		];
+		expect(() => assertStoredKeysReadable([{ id: 'a' }, { id: 'b' }], stored)).not.toThrow();
 	});
 });

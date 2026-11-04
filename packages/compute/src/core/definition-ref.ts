@@ -6,8 +6,12 @@ export interface DefinitionRef {
 	 * each other's solves, with no diagnostic.
 	 */
 	key: string;
-	/** Called when the solve runs, not when it is scheduled: a solve aborted while queued never loads. */
-	load: () => Promise<Uint8Array>;
+	/**
+	 * Called when the solve runs, not when it is scheduled: a solve aborted while queued never
+	 * loads. `signal` fires on an abort or at `timeoutMs`, and the solve stops waiting then; pass it
+	 * on to stop the read as well.
+	 */
+	load: (signal?: AbortSignal) => Promise<Uint8Array>;
 }
 
 /**

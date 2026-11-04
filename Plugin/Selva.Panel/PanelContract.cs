@@ -16,16 +16,23 @@ internal static class PanelContract
     /// <summary>The .rhp's plug-in id (its assembly Guid).</summary>
     public const string PlugInId = "7649CEEB-F498-4E01-B967-7902C427FDD7";
 
-    public const int Version = 2;
+    public const int Version = 4;
 
     /// <summary><see cref="int" />: the .rhp's <see cref="Version" />.</summary>
     public const string VersionKey = "version";
 
     /// <summary>
-    ///     <c>Action&lt;string url, string sessionId&gt;</c>: point the panel at a session and open it.
-    ///     UI thread only.
+    ///     <c>Action&lt;string url, string sessionId, bool raise&gt;</c>: point the panel at a session
+    ///     and open it. Without <c>raise</c>, a panel or pop-out already on screen keeps its place in
+    ///     the z-order. UI thread only.
     /// </summary>
     public const string ShowKey = "show";
+
+    /// <summary>
+    ///     <c>Action&lt;string url, string sessionId&gt;</c>: point the panel at a session without
+    ///     opening or raising it, for a switch the user made on the canvas. UI thread only.
+    /// </summary>
+    public const string FollowKey = "follow";
 
     /// <summary>
     ///     <c>Action&lt;string sessionId&gt;</c>: empty the panel, only if it still shows that
@@ -36,7 +43,7 @@ internal static class PanelContract
     /// <summary>
     ///     <c>Action&lt;string message&gt;</c>: a player session failed after the launcher handed
     ///     the file over, where its runtime messages would land on a hidden canvas. The panel
-    ///     shows the message in place of "Loading…". UI thread only.
+    ///     shows the message in place of its progress. UI thread only.
     /// </summary>
     public const string NotifyKey = "notify";
 

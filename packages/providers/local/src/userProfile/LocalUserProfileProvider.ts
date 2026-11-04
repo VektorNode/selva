@@ -6,7 +6,8 @@ import type {
 	UserManagementResult,
 	UserProfile
 } from '@selvajs/platform';
-import { ProviderError, hasPermission, assertNotShareContext } from '@selvajs/platform';
+import { ProviderError } from '@selvajs/platform';
+import { assertCanAccessProfile } from '@selvajs/platform/userProfile';
 import {
 	createLocalUserDataStore,
 	type LocalUserDataStore,
@@ -50,7 +51,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 	}
 
 	async getProfile(ctx: RequestContext, userId: string): Promise<UserProfile | null> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		const u = await this.data.findById(userId);
 		return u ? toProfile(u) : null;
 	}
@@ -68,7 +69,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		patch: { displayName?: string }
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		try {
 			if (patch.displayName !== undefined) {
 				await this.data.updateDisplayName(userId, patch.displayName);
@@ -85,7 +86,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		definitionId: string
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		try {
 			await this.data.starDefinition(userId, definitionId);
 			return 'ok';
@@ -100,7 +101,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		definitionId: string
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		try {
 			await this.data.unstarDefinition(userId, definitionId);
 			return 'ok';
@@ -115,7 +116,7 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 		userId: string,
 		run: RecentRun
 	): Promise<UserManagementResult> {
-		assertCanAccess(ctx, userId);
+		assertCanAccessProfile(ctx, userId);
 		try {
 			await this.data.recordRun(userId, run);
 			return 'ok';
@@ -127,10 +128,3 @@ export class LocalUserProfileProvider implements IUserProfileStore {
 }
 
 /** Scoped to the user themselves; `instance_admin` and `system: true` callers bypass. */
-function assertCanAccess(ctx: RequestContext, userId: string): void {
-	assertNotShareContext(ctx, 'access user profiles');
-	if (ctx.system) return;
-	if (ctx.userId === userId) return;
-	if (hasPermission(ctx, 'instance_admin')) return;
-	throw new ProviderError('Forbidden: cannot access another user’s profile', 403);
-}

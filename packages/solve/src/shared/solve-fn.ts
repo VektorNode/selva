@@ -8,12 +8,6 @@ import type { SolveDiagnostic } from '@selvajs/schemas';
  */
 
 /**
- * `TMesh` is deliberately opaque and defaults to `unknown`: this package never inspects meshes, and
- * typing them would drag a renderer dependency into a package whose whole point is not having one.
- * The app that owns assembly (parse → `THREE.Object3D[]`) is the only place that knows the concrete
- * type, and it narrows by writing `SolveResult<THREE.Object3D>` at its own seam.
- */
-/**
  * Marker the Grasshopper Message component prepends to a blocking error.
  *
  * Rhino.Compute flattens runtime messages to plain strings with no component attribution, so
@@ -49,6 +43,12 @@ export const SOLVE_LOG_ONLY_MARKER = '[Selva:log]';
  */
 export type { SolveDiagnostic };
 
+/**
+ * `TMesh` is deliberately opaque and defaults to `unknown`: this package never inspects meshes, and
+ * typing them would drag a renderer dependency into a package whose whole point is not having one.
+ * The app that owns assembly (parse → `THREE.Object3D[]`) is the only place that knows the concrete
+ * type, and it narrows by writing `SolveResult<THREE.Object3D>` at its own seam.
+ */
 export interface SolveResult<TMesh = unknown, TSource = unknown> {
 	outputs: Record<string, unknown>;
 	meshes?: TMesh[];

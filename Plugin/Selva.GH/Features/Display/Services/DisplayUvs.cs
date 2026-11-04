@@ -21,21 +21,15 @@ public static class DisplayUvs
     public static void Apply(Mesh mesh, ThreeMaterial material, string id, double mmPerUnit,
         bool authoredUvs = false)
     {
-        if (material is not { NeedsUvs: true })
+        switch (UvSteps.For(material, authoredUvs))
         {
-            return;
-        }
-
-        switch (material.ResolvedMapping)
-        {
-            case UvMapping.Part or UvMapping.Authored when authoredUvs:
+            case UvStep.ScaleAuthored:
                 ScaleToMm(mesh, mmPerUnit);
                 break;
-            case UvMapping.Authored:
-            case UvMapping.Part:
+            case UvStep.Grain:
                 GrainUvs.Apply(mesh, mmPerUnit, GrainUvs.Offset(id, material.MapSize));
                 break;
-            case UvMapping.World:
+            case UvStep.Box:
                 BoxUvs.Apply(mesh, mmPerUnit);
                 break;
         }

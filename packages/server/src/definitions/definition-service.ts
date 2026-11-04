@@ -9,7 +9,12 @@ import type {
 	UpdateMetadataInput,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, definitionPaths, toSourceDocumentId } from '@selvajs/platform';
+import {
+	ProviderError,
+	definitionPaths,
+	toSourceDocumentId,
+	withCacheBust
+} from '@selvajs/platform';
 
 /**
  * Not the HTTP body — that's `CreateDefinitionInputSchema` in
@@ -203,7 +208,8 @@ export class DefinitionService {
 	async saveCoverImage(ctx: RequestContext, guid: string, imageData: Uint8Array): Promise<string> {
 		const path = definitionPaths.image(guid);
 		await this.storage.put(path, imageData, 'image/webp');
-		const url = this.storage.getPublicUrl(path);
+		// Same path every time, so a new cover needs a new URL or caches keep the old one.
+		const url = withCacheBust(this.storage.getPublicUrl(path), Date.now());
 		await this.data.definitions.update(ctx, guid, { coverImage: url });
 		return url;
 	}

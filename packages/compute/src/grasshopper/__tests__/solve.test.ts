@@ -17,17 +17,6 @@ describe('solve', () => {
 			expect(result.values).toEqual(dataTree);
 		});
 
-		it('should encode plain string definition to base64', () => {
-			const definition = 'plain text definition';
-			const dataTree: DataTree[] = [];
-
-			const result = prepareGrasshopperArgs(definition, dataTree);
-
-			expect(result.algo).toBeTruthy();
-			expect(result.pointer).toBeNull();
-			expect(result.algo).toMatch(BASE64);
-		});
-
 		it('should pass through existing base64 string (realistic definition-sized input)', () => {
 			// Real definitions are KB–MB; the detection floor is 64 base64 chars.
 			const base64Definition = Buffer.from(
@@ -43,8 +32,9 @@ describe('solve', () => {
 
 		// Sent raw, a short base64-shaped string ("test", "dGVzdA==") would be decoded by the
 		// server into garbage instead of being treated as the plain string it is.
-		it('encodes short base64-shaped strings as plain text', () => {
-			for (const definition of ['test', 'Data2024', Buffer.from('test').toString('base64')]) {
+		it('encodes plain and short base64-shaped strings as text', () => {
+			const shortBase64 = Buffer.from('test').toString('base64');
+			for (const definition of ['plain text definition', 'test', 'Data2024', shortBase64]) {
 				const result = prepareGrasshopperArgs(definition, []);
 				expect(result.algo).toBe(Buffer.from(definition, 'utf-8').toString('base64'));
 				expect(result.pointer).toBeNull();
@@ -74,45 +64,15 @@ describe('solve', () => {
 			expect(result.pointer).toBeNull();
 			expect(result.algo).toMatch(BASE64);
 		});
-
-		it('should preserve data tree values', () => {
-			const definition = 'http://example.com/test.gh';
-			const dataTree: DataTree[] = [
-				{ ParamName: 'Input1', InnerTree: {} },
-				{ ParamName: 'Input2', InnerTree: {} }
-			];
-
-			const result = prepareGrasshopperArgs(definition, dataTree);
-
-			expect(result.values).toEqual(dataTree);
-			expect(result.values).toHaveLength(2);
-		});
 	});
 
 	describe('applyOptionalComputeSettings', () => {
 		const base = (): GrasshopperRequestSchema => ({ algo: null, pointer: null, values: [] });
 
-		it('forwards cacheerroredsolves when set', () => {
+		it('forwards cachesolve when set', () => {
 			const args = base();
-			applyOptionalComputeSettings(args, { serverUrl: 'http://x', cacheerroredsolves: true });
-			expect(args.cacheerroredsolves).toBe(true);
-		});
-
-		it('omits cacheerroredsolves when unset (back-compat: older servers never see it)', () => {
-			const args = base();
-			applyOptionalComputeSettings(args, { serverUrl: 'http://x' });
-			expect('cacheerroredsolves' in args).toBe(false);
-		});
-
-		it('forwards cachesolve and cacheerroredsolves independently', () => {
-			const args = base();
-			applyOptionalComputeSettings(args, {
-				serverUrl: 'http://x',
-				cachesolve: true,
-				cacheerroredsolves: false
-			});
+			applyOptionalComputeSettings(args, { serverUrl: 'http://x', cachesolve: true });
 			expect(args.cachesolve).toBe(true);
-			expect(args.cacheerroredsolves).toBe(false);
 		});
 	});
 });

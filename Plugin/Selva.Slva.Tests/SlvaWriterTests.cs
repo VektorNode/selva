@@ -137,6 +137,69 @@ public class SlvaWriterTests
         }
     }
 
+    [Theory]
+    // 10 m job in mm: step ~0.15 mm. Read as metres (the old behaviour) it is ~15 cm and goes float32.
+    [InlineData(0.001, false)]
+    [InlineData(1.0, true)]
+    public void Write_FallbackThresholdIsInMetres(double metersPerUnit, bool expectFloat32)
+    {
+        var vertices = new float[] { 0, 0, 0, 10000, 0, 0, 10000, 10000, 0 };
+
+        using var ms = new MemoryStream();
+        var result = SlvaWriter.Write(ms, "{}", vertices, new[] { 0, 1, 2 }, metersPerUnit: metersPerUnit);
+
+        Assert.Equal(expectFloat32, result.UsedFloat32);
+    }
+
+    [Fact]
+    public void Write_MmJobWithinQuantizationError()
+    {
+        // 20 m in mm: step = 20000 / 65534 ≈ 0.3 mm, so the error is at most half that.
+        var vertices = new float[] { 0, 0, 0, 20000, 0, 0, 12345.6f, 7777.7f, 333.3f };
+
+        using var ms = new MemoryStream();
+        var result = SlvaWriter.Write(ms, "{}", vertices, new[] { 0, 1, 2 }, metersPerUnit: 0.001);
+
+        Assert.False(result.UsedFloat32);
+        var (decoded, _, _) = ReadGeometry(ms.ToArray());
+        for (var i = 0; i < vertices.Length; i++)
+        {
+            Assert.True(Math.Abs(vertices[i] - decoded[i]) <= 0.16, $"component {i}: {decoded[i]} vs {vertices[i]}");
+        }
+    }
+
+    [Theory]
+    // uint16 and uint32 indices, with and without the UV/colour chunks.
+    [InlineData(100, false, false)]
+    [InlineData(70_000, false, false)]
+    [InlineData(100, true, true)]
+    [InlineData(70_000, true, true)]
+    public void QuantizedLength_MatchesTheWrittenBlob(int vertexCount, bool withUvs, bool withColors)
+    {
+        var vertices = SyntheticCloud(vertexCount);
+        var indices = Enumerable.Range(0, 300).Select(i => i % vertexCount).ToArray();
+        var uvs = withUvs ? new float[vertexCount * 2] : null;
+        var colors = withColors ? new byte[vertexCount * 3] : null;
+
+        using var ms = new MemoryStream();
+        var result = SlvaWriter.Write(ms, "{\"a\":1}", vertices, indices, uvs: uvs, colors: colors);
+
+        Assert.False(result.UsedFloat32);
+        Assert.Equal(ms.Length, SlvaWriter.QuantizedLength(7, vertexCount, indices.Length, withUvs, withColors));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-1.0)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void Write_RejectsInvalidMetersPerUnit(double metersPerUnit)
+    {
+        using var ms = new MemoryStream();
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            SlvaWriter.Write(ms, "{}", new float[] { 0, 0, 0 }, new int[0], metersPerUnit: metersPerUnit));
+    }
+
     [Fact]
     public void Write_ForceFloat32_BypassesQuantization()
     {

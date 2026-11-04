@@ -181,8 +181,8 @@ describe('§11 — commons model', () => {
 		);
 	});
 
-	it('Peter uploads his own NEW definition to commons — OK (autoJoinOnUpload bypass)', async () => {
-		tp = await freshProviders();
+	it('Peter uploads his own NEW definition to commons — OK with cross-org public on', async () => {
+		tp = await freshProviders({ flags: { ALLOW_CROSS_ORG_PUBLIC: true } });
 		const { acme, alice } = await seedAcme(tp);
 		const { commonsProject, peter } = await seedCommons(tp, {
 			acmeId: acme.id,
@@ -192,6 +192,18 @@ describe('§11 — commons model', () => {
 
 		const result = await requireCanCreateDefinition(peterLocals, commonsProject.id);
 		expect(result.user.id).toBe(peter.id);
+	});
+
+	it('Peter cannot upload to commons from outside the org with cross-org public off', async () => {
+		tp = await freshProviders({ flags: { ALLOW_CROSS_ORG_PUBLIC: false } });
+		const { acme, alice } = await seedAcme(tp);
+		const { commonsProject, peter } = await seedCommons(tp, {
+			acmeId: acme.id,
+			aliceId: alice.id
+		});
+		const peterLocals = await actAs(tp, peter.id);
+
+		await expectHttpError(requireCanCreateDefinition(peterLocals, commonsProject.id), 403);
 	});
 
 	it("Alice (project owner on commons) moderates Peter's definition — OK", async () => {

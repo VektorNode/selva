@@ -16,8 +16,8 @@
 
 	<Card.Root>
 		<Card.Content class="pt-6">
-			<div class="bg-muted/30 flex items-start gap-4 rounded-lg border p-5">
-				<div class="bg-accent text-accent-foreground rounded-md p-2.5">
+			<div class="bg-muted flex items-start gap-4 rounded-lg border p-5">
+				<div class="bg-selected text-foreground rounded-md p-2.5">
 					<ShieldCheck class="h-4 w-4" />
 				</div>
 				<div class="min-w-0 flex-1">

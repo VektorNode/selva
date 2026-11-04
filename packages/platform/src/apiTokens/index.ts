@@ -10,7 +10,6 @@ export type {
 export {
 	ApiScopeActionSchema,
 	ApiScopeStringSchema,
-	ApiTokenRevokeReasonSchema,
 	API_TOKEN_LIFETIME_DAYS,
 	parseApiScope,
 	formatApiScope,

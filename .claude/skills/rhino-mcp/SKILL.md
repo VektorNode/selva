@@ -134,7 +134,7 @@ have no equivalent graft path — hand-edit that one.
 
 ## C# Script components (Rhino 8, `b6ba1144-…`)
 
-Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Three traps:
+Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Four traps:
 
 - **`SetParametersFromScript()` does not parse the `RunScript` signature.** The params stay
   `x`, `y` → `out`, `a`. Rename them yourself (`Name`, `NickName`, `Access`); `VariableName`
@@ -145,6 +145,10 @@ Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Three traps:
 - **Value List items are expressions.** `new GH_ValueListItem("none", "none")` yields `none`;
   quoting the expression (`"\"none\""`) yields the quotes too. Only the local canvas sees them:
   Compute takes the value from the schema, so a server solve won't reveal it.
+- **`new Sphere(center, r).IsValid` is false on Compute** (Rhino 9.1.26300.1000) for a finite
+  centre and positive radius; local Rhino 9.0 says true. Every sphere mesher (`CreateIcoSphere`,
+  `CreateFromSphere`) then throws "sphere is invalid". Build sphere meshes from vertices yourself.
+  A local solve that passes proves nothing about Compute's Rhino build.
 
 Adding your own params: remove the defaults with `Params.UnregisterInputParameter`, then for each
 one call `((IGH_VariableParameterComponent)c).CreateParameter(side, i)`, set `Name`/`NickName`/
@@ -176,6 +180,19 @@ a PNG from `run_csharp` and read the file instead:
 - To show solved geometry, bake it to temporary layers with layer materials, capture, then delete
   the objects and layers. Set `doc.PreviewMode = GH_PreviewMode.Disabled` first, or every
   intermediate component's preview is in the shot.
+
+## Laying out a form
+
+Use `SchemaLayout` ([plugin-context.md](../../../docs/contributing/plugin-context.md#laying-out-a-form-from-a-script)),
+not the reflection below: it takes nicknames, and one spec can carry `assets`, `viewerOptions` and
+visibility rules, refusing a rule on a value the list doesn't have. Traps when building for it:
+
+- **Write value list items unquoted**, `new GH_ValueListItem("Two-Joint", "Two-Joint")`. A quoted
+  expression puts the quotes in the option's value, and rules must then match them.
+- **Three Material shows 7 inputs by default.** Index past `Base` throws: clearcoat, transmission and
+  the rest are hidden until zoomed in.
+- **Viewer looks differ a lot.** `technical`, the default, renders upward faces mid-grey. Pick
+  Showcase or Studio from the viewer's Display menu before capturing.
 
 ## Authoring the embedded UI schema
 

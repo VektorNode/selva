@@ -16,14 +16,21 @@ namespace Selva.GH.Features.SelvaUpload.Services;
 public sealed class SelvaApiException : Exception
 {
     public SelvaApiException(string message, int? status = null, bool invalidToken = false,
-        Exception? inner = null)
+        Exception? inner = null, bool afterRetry = false)
         : base(message, inner)
     {
         Status = status;
         InvalidToken = invalidToken;
+        AfterRetry = afterRetry;
     }
 
     public int? Status { get; }
+
+    /// <summary>
+    ///     Selva answered a retry of a request whose first attempt lost its connection, so the
+    ///     first attempt may have gone through.
+    /// </summary>
+    public bool AfterRetry { get; }
 
     /// <summary>Selva no longer accepts the key: expired, revoked, or its owner lost the right to hold it.</summary>
     public bool InvalidToken { get; }
@@ -69,16 +76,12 @@ public sealed class SelvaApiClient : IDisposable
     /// <summary>Redirects off, cookies off, the system proxy and certificate checks as they are.</summary>
     public static HttpMessageHandler CreateHandler()
     {
-#if NET7_0_OR_GREATER
         return new SocketsHttpHandler
         {
             AllowAutoRedirect = false,
             UseCookies = false,
             ConnectTimeout = TimeSpan.FromSeconds(15)
         };
-#else
-        return new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false };
-#endif
     }
 
     public Task<JObject> GetJsonAsync(string path, CancellationToken cancellationToken)
@@ -101,12 +104,30 @@ public sealed class SelvaApiClient : IDisposable
             cancellationToken);
     }
 
+    public Task<JObject> PostMultipartAsync(string path, Func<HttpContent> content,
+        CancellationToken cancellationToken)
+    {
+        return PostIdempotentAsync(path, content, UploadTimeout, cancellationToken);
+    }
+
+    /// <summary>
+    ///     A JSON post that creates something, sent like <see cref="PostMultipartAsync" />. Selva's
+    ///     replay store is per process and short-lived, so a retry can still meet the first
+    ///     attempt's result as a conflict: see <see cref="SelvaApiException.AfterRetry" />.
+    /// </summary>
+    public Task<JObject> PostJsonIdempotentAsync(string path, JObject body, CancellationToken cancellationToken)
+    {
+        return PostIdempotentAsync(path,
+            () => new StringContent(body.ToString(Formatting.None), Encoding.UTF8, "application/json"), JsonTimeout,
+            cancellationToken);
+    }
+
     /// <summary>
     ///     One Idempotency-Key for the attempt, reused by its retries, so a retry after a dropped
-    ///     connection can't create the definition twice. Only connection failures are retried; an
-    ///     answer from Selva, even an error, is final.
+    ///     connection can't create the thing twice. Only connection failures are retried; an answer
+    ///     from Selva, even an error, is final.
     /// </summary>
-    public async Task<JObject> PostMultipartAsync(string path, Func<HttpContent> content,
+    private async Task<JObject> PostIdempotentAsync(string path, Func<HttpContent> content, TimeSpan timeout,
         CancellationToken cancellationToken)
     {
         var url = Resolve(path);
@@ -121,12 +142,16 @@ public sealed class SelvaApiClient : IDisposable
                     var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content() };
                     request.Headers.TryAddWithoutValidation("Idempotency-Key", idempotencyKey);
                     return request;
-                }, UploadTimeout, cancellationToken).ConfigureAwait(false);
+                }, timeout, cancellationToken).ConfigureAwait(false);
             }
             catch (SelvaApiException ex) when (ex.Status == null && ex.InnerException is HttpRequestException &&
                                                attempt < UploadAttempts)
             {
                 await Task.Delay(TimeSpan.FromSeconds(attempt), cancellationToken).ConfigureAwait(false);
+            }
+            catch (SelvaApiException ex) when (ex.Status != null && attempt > 1)
+            {
+                throw new SelvaApiException(ex.Message, ex.Status, ex.InvalidToken, ex, afterRetry: true);
             }
         }
     }
@@ -227,7 +252,9 @@ public sealed class SelvaApiClient : IDisposable
                 return ParseObject(body) ?? new JObject();
             }
 
-            var message = (string?)ParseObject(body)?["message"] ??
+            // The OAuth token endpoint answers RFC 6749's `error_description`, /api/v1 its `message`.
+            var error = ParseObject(body);
+            var message = StringOf(error?["message"]) ?? StringOf(error?["error_description"]) ??
                           $"Selva answered {status} {response.ReasonPhrase}.";
             var invalidToken = status == 401 && response.Headers.WwwAuthenticate.Any(h =>
                 h.Parameter != null && h.Parameter.Contains("invalid_token"));
@@ -284,5 +311,10 @@ public sealed class SelvaApiClient : IDisposable
         {
             return null;
         }
+    }
+
+    private static string? StringOf(JToken? token)
+    {
+        return token?.Type == JTokenType.String ? (string?)token : null;
     }
 }

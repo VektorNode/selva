@@ -23,6 +23,8 @@ public static class MaterialPresets
         public double? FinishStrength;
         public double? Transmission;
         public double? Ior;
+        public double? Clearcoat;
+        public double? ClearcoatRoughness;
 
         /// <summary>The material the Material Preset component outputs.</summary>
         public ThreeMaterial ToMaterial()
@@ -38,6 +40,8 @@ public static class MaterialPresets
                 FinishStrength = FinishStrength,
                 Transmission = Transmission,
                 Ior = Ior,
+                Clearcoat = Clearcoat,
+                ClearcoatRoughness = ClearcoatRoughness,
                 Mapping = Mapping
             };
         }
@@ -77,17 +81,17 @@ public static class MaterialPresets
         new()
         {
             Name = "Coil-coated (RAL)", Color = Color.FromArgb(0x38, 0x3E, 0x42), Metalness = 0,
-            Roughness = 0.45, Mapping = UvMapping.Surface
+            Roughness = 0.45, Mapping = UvMapping.Surface, Clearcoat = 0.3, ClearcoatRoughness = 0.3
         },
         new()
         {
             Name = "Wood", Color = Color.FromArgb(0xA6, 0x7B, 0x50), Metalness = 0,
-            Roughness = 0.6, Mapping = UvMapping.Part
+            Roughness = 0.6, Mapping = UvMapping.Part, Finish = "wood"
         },
         new()
         {
             Name = "Concrete", Color = Linear(0.51, 0.51, 0.51), Metalness = 0,
-            Roughness = 0.85, Mapping = UvMapping.World
+            Roughness = 0.85, Mapping = UvMapping.World, Finish = "concrete"
         },
         new()
         {
@@ -104,6 +108,26 @@ public static class MaterialPresets
         {
             Name = "Titanium", Color = Linear(0.539, 0.497, 0.451), Metalness = 1,
             Roughness = 0.4, Anisotropy = 0.3, Mapping = UvMapping.Part, Finish = "rolled"
+        },
+        new()
+        {
+            Name = "Walnut", Color = Color.FromArgb(0x6B, 0x47, 0x2E), Metalness = 0,
+            Roughness = 0.5, Mapping = UvMapping.Part, Finish = "wood", Clearcoat = 0.35, ClearcoatRoughness = 0.3
+        },
+        new()
+        {
+            Name = "Brick", Color = Color.FromArgb(0x9C, 0x4E, 0x3A), Metalness = 0,
+            Roughness = 0.85, Mapping = UvMapping.World, Finish = "brick"
+        },
+        new()
+        {
+            Name = "Plaster", Color = Color.FromArgb(0xE6, 0xE1, 0xD6), Metalness = 0,
+            Roughness = 0.9, Mapping = UvMapping.World, Finish = "plaster"
+        },
+        new()
+        {
+            Name = "Corten steel", Color = Color.FromArgb(0x8E, 0x4C, 0x2A), Metalness = 0.2,
+            Roughness = 0.8, Mapping = UvMapping.World, Finish = "corten"
         }
     };
 

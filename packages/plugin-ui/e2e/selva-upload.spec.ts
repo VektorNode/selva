@@ -9,10 +9,10 @@ const SESSION = 'e2e-session';
 test.describe('Upload to Selva', () => {
 	test('uploads a new version of the suggested definition', async ({ page }) => {
 		await page.goto(`/builder?session=${SESSION}&wsPort=${STUB_PORT}#s=${STUB_SECRET}`);
-		await page.getByRole('button', { name: 'Upload to Selva' }).click();
+		await page.getByRole('button', { name: 'Upload to Selva' }).click({ timeout: 15_000 });
 
 		const dialog = page.getByRole('dialog', { name: 'Upload to Selva' });
-		await expect(dialog.getByText('ada@example.com')).toBeVisible({ timeout: 10_000 });
+		await expect(dialog.getByText('Studio')).toBeVisible({ timeout: 10_000 });
 		await expect(dialog.getByText('selva.example.com')).toBeVisible();
 
 		await expect(

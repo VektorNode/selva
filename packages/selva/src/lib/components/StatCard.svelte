@@ -13,10 +13,10 @@
 </script>
 
 <a {href} class="block">
-	<Card.Root class="hover:bg-accent/40 h-full transition-colors">
+	<Card.Root class="hover:bg-hover h-full transition-colors">
 		<Card.Content class="flex items-center justify-between gap-4 py-6">
 			<div class="flex items-center gap-4">
-				<div class="bg-accent text-accent-foreground rounded-md p-2.5">
+				<div class="bg-selected text-foreground rounded-md p-2.5">
 					<Icon class="h-4 w-4" />
 				</div>
 				<div>

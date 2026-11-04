@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import {
 		AlertDialog,
 		Badge,
@@ -159,7 +159,7 @@
 			});
 			if (res.ok) {
 				toast.success('Cover image updated');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const e = await res.json().catch(() => ({}));
 				toast.error(e.message || 'Image upload failed');

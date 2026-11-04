@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/schemas';
 	import { Button, Callout, Search, Select } from '@selvajs/ui';
-	import { Layers, RefreshCw } from '@lucide/svelte';
+	import { Layers, RefreshCw, SlidersHorizontal } from '@lucide/svelte';
 	import type { GroupBy } from '#lib/utils/paramGrouping.js';
 	import { usePersisted } from '#lib/composables/usePersisted.svelte.js';
 	import AvailableItemList from '../AvailableItemList.svelte';
@@ -14,6 +14,10 @@
 		placedIds: Set<string>;
 		syncNeeded: boolean;
 		onSync: () => void;
+		/** Opens the sync preview; unlike `onSync`, available whether or not a change was detected. */
+		onSyncPreview: () => void;
+		/** Opens the batch processors dialog. */
+		onBatch: () => void;
 		onAddToGroup: (
 			tabId: string,
 			groupId: string,
@@ -35,6 +39,8 @@
 		placedIds,
 		syncNeeded,
 		onSync,
+		onSyncPreview,
+		onBatch,
 		onAddToGroup,
 		onAddToNewGroup,
 		onImportGhGroups
@@ -77,9 +83,15 @@
 				? activeTypes[0]
 				: `${activeTypes.length} types`
 	);
+
+	/** Narrows the list to one parameter, dropping any type filter that would hide it. */
+	export function showParameter(nickname: string) {
+		query = nickname;
+		types.value = [];
+	}
 </script>
 
-<div class="flex flex-col gap-3">
+<div class="flex flex-col gap-6">
 	{#if syncNeeded}
 		<Callout tone="warning" title="Definition changed">
 			<div class="flex flex-col items-start gap-2">
@@ -91,6 +103,17 @@
 			</div>
 		</Callout>
 	{/if}
+
+	<div class="grid grid-cols-2 gap-2">
+		<Button variant="outline" size="sm" onclick={onSyncPreview}>
+			<RefreshCw />
+			<span class="truncate">Sync</span>
+		</Button>
+		<Button variant="outline" size="sm" onclick={onBatch}>
+			<SlidersHorizontal />
+			<span class="truncate">Batch</span>
+		</Button>
+	</div>
 
 	<div class="flex flex-col gap-2">
 		<Search bind:value={query} clearable placeholder="Search parameters" />
@@ -130,7 +153,7 @@
 		{/if}
 	</div>
 
-	<div class="flex flex-col">
+	<div class="flex flex-col gap-3">
 		<AvailableItemList
 			id="inputs"
 			title="Inputs"
@@ -156,10 +179,6 @@
 			{onAddToNewGroup}
 		/>
 	</div>
-
-	<p class="text-muted-foreground text-xs">
-		Drag onto a group on the canvas, or right-click to pick a group.
-	</p>
 </div>
 
 <GhGroupImportDialog

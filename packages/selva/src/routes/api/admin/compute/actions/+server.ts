@@ -4,7 +4,7 @@ import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import { getComputeServerConfigStore } from '#lib/server/providers.server.js';
 import { findServerById } from '@selvajs/platform';
 import { requireManageCompute } from '#lib/server/access.server.js';
-import { ComputeServerStats } from '@selvajs/compute/grasshopper';
+import { openServerStats } from '#lib/server/compute/serverStats.server.js';
 import {
 	clearSolveResultCache,
 	clearDefinitionCache,
@@ -75,7 +75,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	if (!server) apiError(404, ApiErrorCode.NOT_FOUND, 'Server not found');
 
 	const apiKey = server.hasApiKey ? await store.getServerApiKey(locals.ctx!, server.id) : undefined;
-	const stats = new ComputeServerStats(server.serverUrl, apiKey);
+	const { stats, misconfigured } = openServerStats(server.serverUrl, apiKey);
+	if (!stats) apiError(422, ApiErrorCode.UNPROCESSABLE, misconfigured);
 	try {
 		if (action === 'purge') {
 			const result = await stats.purgeAllChildren();

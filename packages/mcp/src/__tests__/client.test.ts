@@ -103,3 +103,54 @@ describe('api.call', () => {
 		expect(f.calls).toHaveLength(0);
 	});
 });
+
+describe('call budget and observer', () => {
+	/** A fetch that answers after `ms`, or rejects when the request's signal fires first. */
+	const slowFetch = (ms: number) =>
+		((_url: string, init?: RequestInit) =>
+			new Promise<Response>((resolve, reject) => {
+				const timer = setTimeout(() => resolve(json({ ok: true })), ms);
+				init?.signal?.addEventListener('abort', () => {
+					clearTimeout(timer);
+					reject(init.signal?.reason);
+				});
+			})) as typeof fetch;
+
+	it('gives an x-long-running operation the solve budget, not the default', async () => {
+		const api = createApiClient(spec, {
+			baseUrl: 'https://host',
+			apiKey: KEY,
+			fetch: slowFetch(60),
+			timeoutMs: 20,
+			solveTimeoutMs: 1000
+		});
+		expect(spec.get('postJobsByIdPreview')!.longRunning).toBe(true);
+		await expect(api.call('postJobsByIdPreview', { params: { id: 'j' } })).resolves.toEqual({
+			ok: true
+		});
+		await expect(api.call('postOrders', { body: { name: 'A' } })).rejects.toMatchObject({
+			code: 'TIMEOUT'
+		});
+	});
+
+	it('tells onCall of each call once it settles, retries counted', async () => {
+		const seen: unknown[] = [];
+		const f = fakeFetch([new TypeError('reset'), json({ id: 'o1' })]);
+		const api = createApiClient(spec, {
+			baseUrl: 'https://host',
+			apiKey: KEY,
+			fetch: f.fetch,
+			onCall: (c) => seen.push(c)
+		});
+		await api.call('getOrdersById', { params: { id: '1' } });
+		expect(seen).toEqual([
+			{
+				operationId: 'getOrdersById',
+				method: 'GET',
+				durationMs: expect.any(Number),
+				status: 200,
+				attempts: 2
+			}
+		]);
+	});
+});

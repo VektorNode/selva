@@ -1,23 +1,19 @@
-// Minimal .env parser/serializer (no dotenv; runtime uses node --env-file).
+// .env reading and writing. Reads go through Node's own parser, the one
+// `node --env-file` boots the app with, so the CLI never sees a value the app
+// doesn't.
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, chmodSync } from 'node:fs';
+import { parseEnv as nodeParseEnv } from 'node:util';
+import { ALL_SETTINGS, RETIRED_KEYS } from './generated/config.js';
 
 // Old env name → its replacement, for keys renamed without changing meaning.
-// The server still reads each old name for one minor version and warns at
-// boot; keep this in sync with the server's list and drop an entry once the
-// server stops reading it.
-export const RENAMED_ENV_VARS = {
-	COMPUTE_DEFINITION_BYTE_CACHE_MB: 'COMPUTE_DEFINITION_CACHE_MB',
-	COMPUTE_RESPONSE_CACHE_MB: 'COMPUTE_SOLVE_CACHE_MB',
-	DEFINITION_CACHE_TTL_MS: 'REMOTE_DEFINITION_CACHE_TTL_MS',
-	MAX_SOLVE_DURATION_MS: 'COMPUTE_SOLVE_DEADLINE_MS'
-};
+// From the manifest's `aliases`, the same list the server reads old names by.
+export const RENAMED_ENV_VARS = Object.fromEntries(
+	ALL_SETTINGS.flatMap((s) => (s.aliases ?? []).map((alias) => [alias, s.key]))
+);
 
-// Deprecated vars whose replacement changes the VALUE too, so a simple key
-// rename can't migrate them — `selva migrate` leaves these alone rather than guessing.
-export const REPLACED_ENV_VARS = {
-	SELVA_FLAG_COMPUTE_DEBUG_VERBOSE: 'SELVA_FLAG_COMPUTE_DEBUG=verbose'
-};
+// Keys the app no longer reads → what took their place. `selva migrate` removes them.
+export const RETIRED_ENV_VARS = RETIRED_KEYS;
 
 // Header written above the settings in a stripped .env. The pointer matters:
 // without it the operator has no way back to what a var means, and the reflex
@@ -156,23 +152,7 @@ export function countEnvCommentLines(text) {
 }
 
 export function parseEnv(text) {
-	const out = {};
-	for (const rawLine of text.split(/\r?\n/)) {
-		const line = rawLine.trim();
-		if (!line || line.startsWith('#')) continue;
-		const eq = line.indexOf('=');
-		if (eq === -1) continue;
-		const key = line.slice(0, eq).trim();
-		let value = line.slice(eq + 1).trim();
-		if (
-			(value.startsWith('"') && value.endsWith('"')) ||
-			(value.startsWith("'") && value.endsWith("'"))
-		) {
-			value = value.slice(1, -1);
-		}
-		out[key] = value;
-	}
-	return out;
+	return nodeParseEnv(text);
 }
 
 export function readEnvFile(path) {
@@ -196,7 +176,7 @@ export function readEnvFile(path) {
 const SEEDED_TEMPLATE_DEFAULTS = ['BODY_SIZE_LIMIT'];
 
 /** The subset of the template's live `KEY=value` lines that are safe to seed. */
-function seededTemplateDefaults(template) {
+export function seededTemplateDefaults(template) {
 	const parsed = parseEnv(template);
 	const out = {};
 	for (const key of SEEDED_TEMPLATE_DEFAULTS) {
@@ -253,15 +233,65 @@ export function renderEnvValues(template, values, { header = ENV_HEADER } = {}) 
 		// operator has deliberately blanked one out.
 		const value = Object.prototype.hasOwnProperty.call(values, key) ? values[key] : defaults[key];
 		if (value === undefined || value === null || value === '') continue;
-		lines.push(`${key}=${quoteIfNeeded(value)}`);
+		lines.push(`${key}=${encodeEnvValue(value)}`);
 	}
 
 	return header ? `${header}\n\n${lines.join('\n')}\n` : `${lines.join('\n')}\n`;
 }
 
-/** Writes the deployment `.env` — values only, in the template's key order. */
+/** Writes a fresh deployment `.env`, values only, in the template's key order. */
 export function writeEnvFile(path, template, values) {
-	writeFileSync(path, renderEnvValues(template, values), 'utf8');
+	writeEnvText(path, renderEnvValues(template, values));
+}
+
+/** `.env` holds both root keys, so it is the owner's alone. */
+export function writeEnvText(path, text) {
+	writeFileSync(path, text, { encoding: 'utf8', mode: 0o600 });
+	// `mode` applies only when the file is created; an existing file keeps its own.
+	if (process.platform !== 'win32') chmodSync(path, 0o600);
+}
+
+/**
+ * Set or remove keys in an existing `.env`, touching only their lines.
+ *
+ * Re-rendering the whole file drops the operator's comments and re-encodes
+ * every value. `undefined` or `null` removes the key; a key not yet present is
+ * appended.
+ */
+export function setEnvValues(text, updates) {
+	const pending = new Map(Object.entries(updates));
+	const lines = text.split(/\r?\n/);
+	// Node reads the last line for a key that appears twice, so that is the one
+	// to edit; earlier duplicates would only mislead the next reader of the file.
+	const last = new Map();
+	lines.forEach((line, i) => {
+		const key = keyOfLine(line);
+		if (key !== null && pending.has(key)) last.set(key, i);
+	});
+	const out = [];
+	lines.forEach((line, i) => {
+		const key = keyOfLine(line);
+		if (key === null || !pending.has(key)) {
+			out.push(line);
+			return;
+		}
+		if (last.get(key) !== i) return;
+		const value = pending.get(key);
+		if (value !== undefined && value !== null) out.push(`${key}=${encodeEnvValue(value)}`);
+	});
+	for (const key of last.keys()) pending.delete(key);
+	// The split leaves '' for the final newline; appended keys go above it.
+	while (out.length > 0 && out[out.length - 1] === '') out.pop();
+	for (const [key, value] of pending) {
+		if (value === undefined || value === null) continue;
+		out.push(`${key}=${encodeEnvValue(value)}`);
+	}
+	return out.length === 0 ? '' : `${out.join('\n')}\n`;
+}
+
+function keyOfLine(line) {
+	const match = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/.exec(line);
+	return match ? match[1] : null;
 }
 
 /**
@@ -304,9 +334,17 @@ export function renameEnvKeys(text, renames) {
 	return { text: out.join('\n'), changes };
 }
 
-function quoteIfNeeded(value) {
+/**
+ * Quote a value so Node's parser reads it back unchanged. Node does not
+ * unescape `\"` inside double quotes, so `JSON.stringify` corrupts JSON values,
+ * and an unquoted `#` starts a comment. Single quotes are literal, so they come
+ * first; the other two quote kinds cover values that contain them.
+ */
+export function encodeEnvValue(value) {
 	const s = String(value);
-	if (s === '') return '""';
-	if (/[\s"'#=]/.test(s)) return JSON.stringify(s);
-	return s;
+	if (s === '') return "''";
+	if (!/[\s"'`#\\]/.test(s)) return s;
+	if (s.includes('\n')) throw new Error('Multi-line .env values are not supported');
+	for (const q of ["'", '"', '`']) if (!s.includes(q)) return `${q}${s}${q}`;
+	throw new Error('Value contains every quote character and cannot be written to .env');
 }

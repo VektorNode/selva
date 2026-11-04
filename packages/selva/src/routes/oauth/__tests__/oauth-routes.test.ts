@@ -226,7 +226,7 @@ describe('consent', () => {
 		const data = await load(
 			event(`/oauth/authorize?${query}`, { locals: await actAs(tp, w.dana.id) }) as AnyEvent
 		);
-		expect(data).toMatchObject({ ok: true, choices: ['read'] });
+		expect(data).toMatchObject({ ok: true, levels: [{ access: 'read' }] });
 	});
 
 	it('never grants upload to a registered client', async () => {
@@ -236,7 +236,10 @@ describe('consent', () => {
 		const data = await load(
 			event(`/oauth/authorize?${query}`, { locals: await actAs(tp, w.alice.id) }) as AnyEvent
 		);
-		expect(data).toMatchObject({ ok: true, choices: ['read', 'solve'] });
+		expect(data).toMatchObject({
+			ok: true,
+			levels: [{ access: 'read' }, { access: 'solve' }]
+		});
 		// A forged form field can't pick an access level the page didn't offer.
 		const forged = await approve(query, await actAs(tp, w.alice.id), {
 			access: 'upload',
@@ -256,8 +259,7 @@ describe('the Grasshopper plugin', () => {
 			clientName: 'Selva for Grasshopper',
 			builtIn: true,
 			loopback: true,
-			choices: ['upload'],
-			orgs: [{ id: w.acme.id, name: 'Acme' }]
+			levels: [{ access: 'upload', orgs: [{ id: w.acme.id, name: 'Acme' }] }]
 		});
 
 		const back = await redirected(() =>
@@ -307,7 +309,8 @@ describe('the Grasshopper plugin', () => {
 	);
 });
 
-describe('the org picker', () => {
+// The token page lists and revokes keys in the acting org only, so consent mints nowhere else.
+describe('the consent org', () => {
 	async function twoOrgs() {
 		const w = await world();
 		const big = await seedBigClient(tp);
@@ -316,25 +319,32 @@ describe('the org picker', () => {
 		return { ...w, big };
 	}
 
-	it('offers every org the user may hold the key in, and mints in the one they pick', async () => {
+	it('offers and mints in the acting org only, though the user may hold the key in both', async () => {
 		const w = await twoOrgs();
 		const locals = await actAs(tp, w.dana.id);
-		const data = (await load(
-			event(`/oauth/authorize?${pluginQuery()}`, { locals }) as AnyEvent
-		)) as { orgs: { id: string }[]; orgId: string };
-		expect(data.orgs.map((o) => o.id).sort()).toEqual([w.acme.id, w.big.bigClient.id].sort());
-		expect(data.orgId).toBe(locals.ctx.actingOrgId);
+		const acting = locals.ctx.actingOrgId!;
+		const {
+			levels: [data]
+		} = (await load(event(`/oauth/authorize?${pluginQuery()}`, { locals }) as AnyEvent)) as {
+			levels: { orgs: { id: string }[]; orgId: string }[];
+		};
+		expect(data.orgs.map((o) => o.id)).toEqual([acting]);
+		expect(data.orgId).toBe(acting);
 
-		const other = data.orgs.find((o) => o.id !== locals.ctx.actingOrgId)!.id;
+		const other = acting === w.acme.id ? w.big.bigClient.id : w.acme.id;
+		expect(await approve(pluginQuery(), locals, { access: 'upload', orgId: other })).toMatchObject({
+			status: 403
+		});
+
 		const back = await redirected(() =>
-			approve(pluginQuery(), locals, { access: 'upload', orgId: other })
+			approve(pluginQuery(), locals, { access: 'upload', orgId: acting })
 		);
 		const res = await redeem(back.searchParams.get('code')!, 'selva-grasshopper', LOOPBACK, ORIGIN);
 		const resolved = await resolveKey(
 			((await res.json()) as { access_token: string }).access_token
 		);
 		expect(resolved).toMatchObject({ kind: 'ok' });
-		if (resolved.kind === 'ok') expect(resolved.token.orgId).toBe(other);
+		if (resolved.kind === 'ok') expect(resolved.token.orgId).toBe(acting);
 	});
 
 	it('refuses an org the user doesn’t belong to, and mints nothing', async () => {

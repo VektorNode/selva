@@ -114,12 +114,10 @@ describe('rate limit config', () => {
 		expect(resolveApiRateLimitConfig({})).toEqual(DEFAULT_API_RATE_LIMIT);
 		const off = resolveApiRateLimitConfig({ API_TOKEN_RATE_LIMIT_MAX: '0' });
 		expect(createApiRateLimiter(off)).toBeNull();
-		expect(
-			resolveApiRateLimitConfig({
-				API_TOKEN_RATE_LIMIT_MAX: '10',
-				API_TOKEN_RATE_LIMIT_WINDOW_MS: '1000'
-			})
-		).toEqual({ windowMs: 1000, maxPerWindow: 10 });
+		expect(resolveApiRateLimitConfig({ API_TOKEN_RATE_LIMIT_MAX: '10' })).toEqual({
+			windowMs: DEFAULT_API_RATE_LIMIT.windowMs,
+			maxPerWindow: 10
+		});
 	});
 
 	it('adds headers to an immutable response', async () => {

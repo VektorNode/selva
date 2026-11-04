@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 
-import { clearMemberHighlight, setMemberHighlight } from '../../shared/index.js';
+import {
+	clearMemberHighlight,
+	setMemberHighlight,
+	type HighlightKind
+} from '../../shared/index.js';
 
 // ============================================================================
 // Picking inside a merged mesh
@@ -85,17 +89,15 @@ export function memberBounds(mesh: THREE.Mesh, member: PickableMember): THREE.Bo
 }
 
 /**
- * Draws one member of a merged mesh with `highlight`. Returns a restore function; call it before
+ * Draws members of a merged mesh with `highlight`. Returns a restore function; call it before
  * applying a different highlight. Members hidden by the outliner stay hidden either way.
  */
-export function highlightMemberRange(
+export function highlightMembers(
 	mesh: THREE.Mesh,
-	member: PickableMember,
-	highlight: THREE.Material
+	members: ReadonlySet<number>,
+	highlight: THREE.Material,
+	kind?: HighlightKind
 ): () => void {
-	const index = membersOf(mesh)?.indexOf(member) ?? -1;
-	if (index < 0 || member.indexStart == null || member.indexCount == null) return () => {};
-
-	setMemberHighlight(mesh, index, highlight);
-	return () => clearMemberHighlight(mesh);
+	setMemberHighlight(mesh, members, highlight, kind);
+	return () => clearMemberHighlight(mesh, kind);
 }

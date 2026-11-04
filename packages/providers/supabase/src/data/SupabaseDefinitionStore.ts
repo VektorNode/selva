@@ -12,7 +12,7 @@ import type {
 	Page,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
+import { ERASED_ACTOR_ID, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -35,6 +35,9 @@ const DEFINITION_VERSION_COLUMNS =
  * type from the literal column string, and a template literal degrades it to
  * `string`.
  */
+/** PostgREST's default `max-rows`: a longer read comes back cut at it. */
+const VERSIONS_PAGE = 1000;
+
 const DEFINITION_VERSION_COLUMNS_WITH_SCHEMA =
 	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, schema';
 
@@ -146,6 +149,23 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			.maybeSingle();
 		if (error) throw mapPostgrestError(error);
 		return data ? rowToRecord(data) : null;
+	}
+
+	async getDefinitionsFor(
+		ctx: RequestContext,
+		guids: readonly string[]
+	): Promise<Map<string, DefinitionRecord>> {
+		const found = new Map<string, DefinitionRecord>();
+		if (guids.length === 0) return found;
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('definitions')
+			.select(DEFINITION_COLUMNS)
+			.in('guid', [...new Set(guids)])
+			.is('deleted_at', null);
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) found.set(row.guid, rowToRecord(row));
+		return found;
 	}
 
 	async create(ctx: RequestContext, record: DefinitionRecord): Promise<void> {
@@ -270,6 +290,29 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToVersion);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
+	}
+
+	async listVersionsFor(
+		ctx: RequestContext,
+		definitionIds: readonly string[]
+	): Promise<Map<string, DefinitionVersion[]>> {
+		const byDefinition = new Map<string, DefinitionVersion[]>(definitionIds.map((id) => [id, []]));
+		if (definitionIds.length === 0) return byDefinition;
+		// Paged by PostgREST's row cap; the order keeps each definition's versions newest first.
+		for (let from = 0; ; from += VERSIONS_PAGE) {
+			const { data, error } = await this.clients
+				.forRequest(ctx)
+				.from('definition_versions')
+				.select(DEFINITION_VERSION_COLUMNS)
+				.in('definition_guid', [...new Set(definitionIds)])
+				.order('definition_guid')
+				.order('version_number', { ascending: false })
+				.range(from, from + VERSIONS_PAGE - 1);
+			if (error) throw mapPostgrestError(error);
+			const rows = data ?? [];
+			for (const row of rows) byDefinition.get(row.definition_guid)?.push(rowToVersion(row));
+			if (rows.length < VERSIONS_PAGE) return byDefinition;
+		}
 	}
 
 	async getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null> {
@@ -411,7 +454,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 interface DefinitionRow {
 	guid: string;
 	project_id: string;
-	owner_id: string;
+	owner_id: string | null;
 	created_by?: string | null;
 	updated_by?: string | null;
 	compute_server_id: string | null;
@@ -439,7 +482,7 @@ interface DefinitionVersionRow {
 	file_ext: DefinitionFileExt;
 	file_key: string;
 	original_filename: string | null;
-	uploaded_by: string;
+	uploaded_by: string | null;
 	uploaded_at: string;
 	change_note?: string | null;
 	schema?: UISchema | null;
@@ -447,12 +490,13 @@ interface DefinitionVersionRow {
 }
 
 function rowToRecord(row: DefinitionRow): DefinitionRecord {
+	const owner = row.owner_id ?? ERASED_ACTOR_ID;
 	return {
 		guid: row.guid,
 		projectId: row.project_id,
-		ownerId: row.owner_id,
-		createdBy: row.created_by ?? row.owner_id,
-		updatedBy: row.updated_by ?? row.owner_id,
+		ownerId: owner,
+		createdBy: row.created_by ?? owner,
+		updatedBy: row.updated_by ?? owner,
 		liveVersionId: row.live_version_id,
 		draftVersionId: row.draft_version_id,
 		computeServerId: row.compute_server_id ?? undefined,
@@ -512,7 +556,7 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.displayName !== undefined) row.display_name = patch.displayName;
 	if (patch.description !== undefined) row.description = patch.description;
 	if (patch.category !== undefined) row.category = patch.category;
-	if (patch.tags !== undefined) row.tags = patch.tags;
+	if (patch.tags !== undefined) row.tags = patch.tags ?? [];
 	if (patch.coverImage !== undefined) row.cover_image = patch.coverImage;
 	if (patch.projectId !== undefined) row.project_id = patch.projectId;
 	if (patch.computeServerId !== undefined) row.compute_server_id = patch.computeServerId;
@@ -531,7 +575,7 @@ function rowToVersion(row: DefinitionVersionRow): DefinitionVersion {
 		fileExt: row.file_ext,
 		fileKey: row.file_key,
 		originalFilename: row.original_filename ?? undefined,
-		uploadedBy: row.uploaded_by,
+		uploadedBy: row.uploaded_by ?? ERASED_ACTOR_ID,
 		uploadedAt: row.uploaded_at,
 		changeNote: row.change_note ?? undefined,
 		schema: row.schema ?? undefined,

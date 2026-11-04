@@ -68,8 +68,26 @@ export type RenderConfig = {
 	toneMapping?: THREE.ToneMapping;
 	toneMappingExposure?: number;
 	preserveDrawingBuffer?: boolean;
+	/**
+	 * Cuts what the look's `lowPower` fields name; only `night` has any. Default: on for a touch
+	 * device with a phone-sized screen. Set it to force the tier on or off.
+	 */
+	lowPower?: boolean;
+	/**
+	 * Frames averaged while the camera rests, for soft shadows and clean edges. Needs the composer,
+	 * so looks without AO or bloom skip it. Costs nothing while orbiting. Default 32, or 0 on a
+	 * `lowPower` device; 0 turns it off.
+	 */
+	idleRefineFrames?: number;
+	/**
+	 * Orbit frames slower than this fade ambient occlusion out while the camera moves, its largest
+	 * cost. Needs `idleRefineFrames` to fade back in. Default 22. 0 always does; `Infinity` never does.
+	 */
+	lightOrbitFrameMs?: number;
 	/** Default false — switches rendering from `renderer.render` to an EffectComposer, which costs more. */
 	ambientOcclusion?: boolean;
+	/** Glow around emissive parts. The look decides; `night` sets it. */
+	bloom?: BloomOptions;
 	/** AO strength 0–1 when {@link RenderConfig.ambientOcclusion} is on. Default 1. */
 	aoIntensity?: number;
 	/**
@@ -86,7 +104,7 @@ export type RenderConfig = {
 	onDemand?: boolean;
 };
 
-import type { Look } from '../shared/index.js';
+import type { BloomOptions, Look } from '../shared/index.js';
 
 /**
  * A named bundle of lighting/material defaults, independent of CAD overlays (edges, grid). 'technical'
@@ -117,7 +135,7 @@ export type EdgesConfig = {
 	thresholdAngle?: number;
 	/** Default true. */
 	distanceFade?: boolean;
-	/** Default 4M. */
+	/** Default 8M. */
 	maxTriangles?: number;
 	/** Default 2M. */
 	maxSegments?: number;

@@ -55,3 +55,6 @@ vite.config.ts.timestamp-*
 /playwright/.cache
 /.e2e
 /e2e/.auth
+
+# Written at boot beside .env (lib/server/config/boot.server.ts).
+.selva-config-snapshot.json

@@ -44,7 +44,8 @@ One raw IO parameter in, one typed `InputParam` out. All of it lives in
 - `normalize-default.ts` flattens the raw `innerTree` default into a scalar, array or tree,
   depending on `treeAccess` / `atMost` and never on the type. Parsers get it already flattened.
 - `input-type-parsers.ts` holds one `InputTypeParser` per type and the `INPUT_TYPE_PARSERS`
-  registry. An unknown `paramType` goes to the Geometry parser.
+  registry. An unknown `paramType` adds a `VALIDATION_ERROR` to `parseErrors`, then takes the
+  Geometry fallback.
 
 Steps:
 
@@ -63,7 +64,7 @@ Steps:
    consumers can't name is a type they can't narrow to.
 5. **Test** the parser through `INPUT_TYPE_PARSERS.get('CustomType')!.parse(schema, base)`, with
    `createInputSchema` from `tests/helpers/test-data-builders.ts`. Add a case to
-   `process-inputs.characterization.test.ts` so the full pipeline, fallback included, is pinned.
+   `process-input.test.ts` so the full pipeline, fallback included, is pinned.
 
 A parser must:
 

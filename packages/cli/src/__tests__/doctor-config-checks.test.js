@@ -16,7 +16,7 @@ import {
 	checkTenancy,
 	resolveProviders
 } from '../checks/config.js';
-import { RENAMED_ENV_VARS, REPLACED_ENV_VARS } from '../env.js';
+import { RENAMED_ENV_VARS, RETIRED_ENV_VARS } from '../env.js';
 
 // ── Providers ───────────────────────────────────────────────────────────
 
@@ -161,27 +161,22 @@ test('a renamed var whose replacement is already set says the old one is ignored
 	assert.match(checks[0].line, new RegExp(`${newName} is set and wins`));
 });
 
-test('every replaced var is reported with its replacement value', () => {
-	// These encode a value in the new name, so `selva migrate` will not guess —
-	// doctor is the only place an operator hears about them.
-	for (const [oldName, replacement] of Object.entries(REPLACED_ENV_VARS)) {
-		const checks = checkDeprecatedEnv({ [oldName]: 'true' });
-		assert.equal(checks.length, 1, `${oldName} should be reported`);
+test('every retired var is reported with what replaced it', () => {
+	for (const [key, now] of Object.entries(RETIRED_ENV_VARS)) {
+		const checks = checkDeprecatedEnv({ [key]: 'true' });
+		assert.equal(checks.length, 1, `${key} should be reported`);
 		assert.equal(checks[0].severity, 'yellow');
-		assert.ok(
-			checks[0].line.includes(replacement),
-			`${oldName} should name its replacement "${replacement}"`
-		);
-		assert.ok(!checks[0].line.includes('selva migrate'), 'must not promise an automatic fix');
+		assert.ok(checks[0].line.includes(now), `${key} should name "${now}"`);
+		assert.match(checks[0].line, /selva migrate/);
 	}
 });
 
 test('deprecated vars are reported together, not just the first', () => {
 	const renamed = Object.keys(RENAMED_ENV_VARS);
-	const replaced = Object.keys(REPLACED_ENV_VARS);
+	const retired = Object.keys(RETIRED_ENV_VARS);
 	const env = {};
-	for (const k of [...renamed, ...replaced]) env[k] = '1';
-	assert.equal(checkDeprecatedEnv(env).length, renamed.length + replaced.length);
+	for (const k of [...renamed, ...retired]) env[k] = '1';
+	assert.equal(checkDeprecatedEnv(env).length, renamed.length + retired.length);
 });
 
 // ── Client address (login rate-limit bucketing) ─────────────────────────
@@ -214,9 +209,24 @@ test('accepts a configured pair', () => {
 	const r = checkClientAddress({
 		ORIGIN: 'https://selva.example.test',
 		ADDRESS_HEADER: 'X-Forwarded-For',
-		XFF_DEPTH: '1'
+		XFF_DEPTH: '1',
+		HOST: '127.0.0.1'
 	});
 	assert.equal(r.severity, 'green');
+});
+
+test('warns when a trusted address header sits on a public bind', () => {
+	// Without the loopback bind a direct caller sets the header itself.
+	for (const HOST of [undefined, '0.0.0.0']) {
+		const r = checkClientAddress({
+			ORIGIN: 'https://selva.example.test',
+			ADDRESS_HEADER: 'X-Forwarded-For',
+			XFF_DEPTH: '1',
+			HOST
+		});
+		assert.equal(r.severity, 'yellow');
+		assert.match(r.line, /HOST=127\.0\.0\.1/);
+	}
 });
 
 test('does not demand XFF_DEPTH for a single-value header', () => {
@@ -224,7 +234,8 @@ test('does not demand XFF_DEPTH for a single-value header', () => {
 	// is meaningless there — asking for it would push operators to set noise.
 	const r = checkClientAddress({
 		ORIGIN: 'https://selva.example.test',
-		ADDRESS_HEADER: 'CF-Connecting-IP'
+		ADDRESS_HEADER: 'CF-Connecting-IP',
+		HOST: '127.0.0.1'
 	});
 	assert.equal(r.severity, 'green');
 });

@@ -60,7 +60,7 @@
 				accept="image/*"
 				{disabled}
 				onchange={onFileSelected}
-				class="h-10 px-3 py-2 text-sm file:text-sm file:font-medium flex flex-1 rounded-md border border-input bg-background file:border-0 file:bg-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+				class="h-10 px-3 py-2 text-sm file:text-sm file:font-medium flex flex-1 rounded-md border border-input bg-field file:border-0 file:bg-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
 			/>
 			<Button
 				size="sm"

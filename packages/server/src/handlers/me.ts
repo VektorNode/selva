@@ -6,6 +6,7 @@
 
 import { formatApiScope } from '@selvajs/platform';
 import { requireCaller, type ApiHandler } from '../api/index.js';
+import { canCreateProjectIn } from '../access/index.js';
 
 export const getMe: ApiHandler = async (req) => {
 	const { ctx, user } = requireCaller(req);
@@ -19,6 +20,9 @@ export const getMe: ApiHandler = async (req) => {
 			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
 			starredDefinitions: req.profile?.starredDefinitions ?? [],
+			capabilities: {
+				createProjects: !!ctx.actingOrgId && (await canCreateProjectIn(req, ctx, ctx.actingOrgId))
+			},
 			...(ctx.apiScope && {
 				apiToken: {
 					id: ctx.apiScope.tokenId,

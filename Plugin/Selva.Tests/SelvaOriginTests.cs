@@ -15,6 +15,7 @@ public class SelvaOriginTests
     [InlineData("http://127.0.0.1:5199", "http://127.0.0.1:5199")]
     [InlineData("http://[::1]:5199", "http://[::1]:5199")]
     [InlineData("https://bücher.example", "https://xn--bcher-kva.example")]
+    [InlineData("https://[2001:db8::1]", "https://[2001:db8::1]")]
     public void Normalize_ReducesToAnOrigin(string input, string expected)
     {
         Assert.True(SelvaOrigin.TryNormalize(input, out var origin, out var error), error);
@@ -34,6 +35,10 @@ public class SelvaOriginTests
     [InlineData("https://user@selva.example.com")]
     [InlineData("https://")]
     [InlineData("not a web address")]
+    [InlineData("selva_Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z")]
+    [InlineData("https://selva_ab3def6hij9klm2nop5qrs8tuv1wxy4z")]
+    [InlineData("selva.example.com/selva_Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4z")]
+    [InlineData("intranet")]
     public void Normalize_RefusesWithAReason(string input)
     {
         Assert.False(SelvaOrigin.TryNormalize(input, out var origin, out var error));

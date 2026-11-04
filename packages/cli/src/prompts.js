@@ -143,6 +143,11 @@ export function collectConfigFromEnv(env = process.env) {
 	}
 	values.ORIGIN = origin;
 
+	// Behind a proxy the app must only be reachable through it: ADDRESS_HEADER
+	// trusts client-supplied X-Forwarded-For, so a direct caller on a public
+	// bind picks its own rate-limit bucket.
+	if (origin && !values.HOST) values.HOST = env.HOST || '127.0.0.1';
+
 	// An explicitly-set flag is preserved verbatim even when tenancy makes it
 	// inert: rewriting it to '' would hide the operator's misconfiguration
 	// rather than fix it, and the server already reads every key as opt-in.
@@ -482,6 +487,10 @@ export async function collectConfig({ defaults = {}, mode = 'create' } = {}) {
 		required: false
 	});
 	cancelOn(flags);
+
+	// Same reason as in collectConfigFromEnv: behind a proxy, bind loopback
+	// unless an existing .env already chose a host.
+	if (behindProxy && !providerValues.HOST) providerValues.HOST = defaults.HOST || '127.0.0.1';
 
 	const values = {
 		SELVA_TENANCY: tenancy,

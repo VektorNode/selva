@@ -131,7 +131,7 @@
 					></span>
 					<div class="border-border bg-card overflow-hidden rounded-lg border">
 						<button
-							class="hover:bg-muted/50 block w-full px-4 py-3.5 text-left transition"
+							class="hover:bg-hover block w-full px-4 py-3.5 text-left transition"
 							aria-expanded={expanded === step.id}
 							onclick={() => toggle(step.id)}
 						>

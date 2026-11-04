@@ -27,6 +27,8 @@ export interface SupabaseStorageProviderConfig {
 	privateUrlPrefix?: string;
 }
 
+const LIST_PAGE_SIZE = 1000;
+
 export class SupabaseStorageProvider implements IStorageProvider {
 	private readonly client: SupabaseClient;
 	private readonly publicBucket: string;
@@ -43,8 +45,7 @@ export class SupabaseStorageProvider implements IStorageProvider {
 			supabaseUrl,
 			serviceRoleKey,
 			publicBucket: env.SUPABASE_PUBLIC_BUCKET,
-			privateBucket: env.SUPABASE_PRIVATE_BUCKET,
-			privateUrlPrefix: env.SUPABASE_PRIVATE_URL_PREFIX
+			privateBucket: env.SUPABASE_PRIVATE_BUCKET
 		});
 	}
 
@@ -62,13 +63,13 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	 * `.gh`/`.ghx` source files are always private, regardless of what
 	 * `classifyAssetPath` says — confidentiality by extension means a
 	 * path-scheme rename can't silently move sources into the public bucket.
-	 * Everything else routes by asset class.
+	 * Everything else routes by asset class, and only a `public` class reaches
+	 * the public bucket: an unclassified path stays private.
 	 */
 	private bucketFor(storagePath: string): string {
 		if (/\.(gh|ghx)$/i.test(storagePath)) return this.privateBucket;
 		const cls = classifyAssetPath(storagePath);
-		if (cls && cls.class.visibility !== 'public') return this.privateBucket;
-		return this.publicBucket;
+		return cls?.class.visibility === 'public' ? this.publicBucket : this.privateBucket;
 	}
 
 	async get(storagePath: string): Promise<Uint8Array | null> {
@@ -84,18 +85,20 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		return new Uint8Array(buffer);
 	}
 
-	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<void> {
+	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<string> {
 		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
 		const bucket = this.bucketFor(transcoded.path);
 		const { error } = await this.client.storage
 			.from(bucket)
 			.upload(transcoded.path, transcoded.data, {
 				contentType: transcoded.contentType,
-				// Objects are content-addressed and immutable — cache for a year.
+				// `put` upserts, so a changed object needs a new URL: `withCacheBust` is
+				// how callers get one. A year is safe only because of that.
 				cacheControl: '31536000',
 				upsert: true
 			});
 		if (error) throw error;
+		return transcoded.path;
 	}
 
 	async delete(storagePath: string): Promise<void> {
@@ -105,6 +108,9 @@ export class SupabaseStorageProvider implements IStorageProvider {
 	}
 
 	async deletePrefix(prefix: string): Promise<void> {
+		if (prefix.replace(/\/+$/, '') === '') {
+			throw new Error(`Refusing to delete the whole store: prefix ${JSON.stringify(prefix)}`);
+		}
 		// A definition's GUID prefix may have files in either bucket.
 		await Promise.all([
 			this.deletePrefixInBucket(this.publicBucket, prefix),
@@ -130,19 +136,24 @@ export class SupabaseStorageProvider implements IStorageProvider {
 		const stack: string[] = [prefix];
 		while (stack.length > 0) {
 			const dir = stack.pop()!;
-			const { data, error } = await this.client.storage.from(bucket).list(dir, {
-				limit: 1000,
-				sortBy: { column: 'name', order: 'asc' }
-			});
-			if (error) throw error;
-			for (const entry of data ?? []) {
-				const full = dir ? `${dir}/${entry.name}` : entry.name;
-				// storage-js marks folder entries with id === null.
-				if (entry.id === null) {
-					stack.push(full);
-				} else {
-					out.push(full);
+			for (let offset = 0; ; offset += LIST_PAGE_SIZE) {
+				const { data, error } = await this.client.storage.from(bucket).list(dir, {
+					limit: LIST_PAGE_SIZE,
+					offset,
+					sortBy: { column: 'name', order: 'asc' }
+				});
+				if (error) throw error;
+				const entries = data ?? [];
+				for (const entry of entries) {
+					const full = dir ? `${dir}/${entry.name}` : entry.name;
+					// storage-js marks folder entries with id === null.
+					if (entry.id === null) {
+						stack.push(full);
+					} else {
+						out.push(full);
+					}
 				}
+				if (entries.length < LIST_PAGE_SIZE) break;
 			}
 		}
 		return out;

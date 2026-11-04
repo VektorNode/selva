@@ -1,6 +1,6 @@
 # One schema, two hosts: geometry inputs, triggers and bake
 
-Sibling of [rhino-player](./rhino-player.md).
+Sibling of [rhino-player](../archive/rhino-player.md).
 
 A Selva UI runs in two hosts:
 

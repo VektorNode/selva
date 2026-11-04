@@ -99,7 +99,9 @@
 				<Separator class="mb-4" />
 				<div class="flex flex-wrap gap-1.5">
 					{#each record.tags as tag (tag)}
-						<span class="bg-muted text-muted-foreground rounded px-2 py-0.5 font-mono text-[11px]">
+						<span
+							class="bg-muted text-muted-foreground rounded-sm px-2 py-0.5 font-mono text-[11px]"
+						>
 							#{tag}
 						</span>
 					{/each}

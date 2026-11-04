@@ -303,6 +303,33 @@ describe('version resolution', () => {
 	});
 });
 
+describe('read order', () => {
+	it('resolves the compute server while the version is still being read', async () => {
+		const { deps, mocks } = makeDeps();
+		let answer: (v: DefinitionVersion) => void = () => {};
+		mocks.definitions.getVersion.mockImplementation(
+			() => new Promise<DefinitionVersion>((resolve) => (answer = resolve))
+		);
+
+		const pending = createDefinitionLoader(deps)(ctx, record, 'live');
+		await flushMicrotasks();
+		expect(mocks.resolveServer).toHaveBeenCalled();
+
+		answer(version());
+		await expect(pending).resolves.toMatchObject({ computeServer });
+	});
+
+	it("reports a missing version as 'data' even when no server is configured", async () => {
+		const { deps, mocks } = makeDeps();
+		mocks.definitions.getVersion.mockResolvedValue(null as never);
+		mocks.resolveServer.mockRejectedValue(new Error('no server'));
+
+		await expect(createDefinitionLoader(deps)(ctx, record, 'live')).rejects.toMatchObject({
+			kind: 'data'
+		});
+	});
+});
+
 describe('error classification', () => {
 	it("no pointer for the channel → 'data'", async () => {
 		const { deps } = makeDeps();

@@ -7,7 +7,8 @@ import {
 	handleGroupItemDrop,
 	handleItemDrop,
 	batchSetNumberWidgetType,
-	removeItem
+	removeItem,
+	moveItemsToGroup
 } from '../operations';
 import type { DiscoveredOutput, GroupConfig, UISchema } from '@selvajs/schemas';
 
@@ -160,5 +161,48 @@ describe('removeItem', () => {
 		removeItem(s, '', 'g1', 'i1');
 		expect((s.layout as { groups: { items: unknown[] }[] }).groups[0].items).toHaveLength(0);
 		expect((s as { inputs: unknown[] }).inputs).toHaveLength(0);
+	});
+});
+
+describe('moveItemsToGroup', () => {
+	const ids = (g: unknown) => (g as GroupConfig).items.map((i) => i.id);
+
+	it('gathers selected items from several groups in layout order, after the anchor', () => {
+		const a = group('a', [item('a1', 'p1'), item('a2', 'p2')]);
+		const b = group('b', [item('b1', 'p3')]);
+		const t = group('t', [item('t1', 'p4'), item('t2', 'p5')]);
+		const s = tabbed([
+			{ id: 'x', groups: [a] },
+			{ id: 'y', groups: [b, t] }
+		]);
+
+		const moved = moveItemsToGroup(s, new Set(['a2', 'b1', 't1']), 't', 't1');
+
+		expect(moved).toBe(2);
+		expect(ids(t)).toEqual(['t1', 'a2', 'b1', 't2']);
+		expect(ids(a)).toEqual(['a1']);
+		expect(ids(b)).toEqual([]);
+	});
+
+	it('appends when there is no anchor', () => {
+		const a = group('a', [item('a1', 'p1')]);
+		const t = group('t', [item('t1', 'p2')]);
+		moveItemsToGroup(flat([a, t]), new Set(['a1']), 't');
+		expect(ids(t)).toEqual(['t1', 'a1']);
+	});
+
+	it('leaves an item whose parameter the target already holds', () => {
+		const a = group('a', [item('a1', 'p1'), item('a2', 'p1')]);
+		const t = group('t', [item('t1', 'p1')]);
+		expect(moveItemsToGroup(flat([a, t]), new Set(['a1', 'a2']), 't')).toBe(0);
+		expect(ids(a)).toEqual(['a1', 'a2']);
+	});
+
+	it('moves only one of two selected items that share a parameter', () => {
+		const a = group('a', [item('a1', 'p1'), item('a2', 'p1')]);
+		const t = group('t');
+		expect(moveItemsToGroup(flat([a, t]), new Set(['a1', 'a2']), 't')).toBe(1);
+		expect(ids(t)).toEqual(['a1']);
+		expect(ids(a)).toEqual(['a2']);
 	});
 });

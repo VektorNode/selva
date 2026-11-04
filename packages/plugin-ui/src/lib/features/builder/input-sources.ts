@@ -1,4 +1,4 @@
-import type { InputLayoutItem, InputSource, UISchema } from '@selvajs/schemas';
+import type { GroupConfig, InputLayoutItem, InputSource, UISchema } from '@selvajs/schemas';
 
 export type SourceKind = InputSource['kind'];
 
@@ -16,17 +16,20 @@ export interface SourcedInput {
 	kind: Exclude<SourceKind, 'user'>;
 }
 
+/** The layout's group lists, under one shape for both layouts. `tabId` is '' in a flat layout. */
+export function layoutContainers(
+	schema: UISchema
+): { tabId: string; tabLabel?: string; groups: GroupConfig[] }[] {
+	const layout = schema.layout;
+	if (layout?.type === 'tabbed') {
+		return layout.tabs.map((tab) => ({ tabId: tab.id, tabLabel: tab.label, groups: tab.groups }));
+	}
+	return layout?.type === 'flat' ? [{ tabId: '', groups: layout.groups }] : [];
+}
+
 /** Placed inputs whose value comes from somewhere other than the form, in layout order. */
 export function listSourcedInputs(schema: UISchema): SourcedInput[] {
-	const layout = schema.layout;
-	const containers =
-		layout?.type === 'tabbed'
-			? layout.tabs.map((tab) => ({ tabId: tab.id, groups: tab.groups }))
-			: layout?.type === 'flat'
-				? [{ tabId: '', groups: layout.groups }]
-				: [];
-
-	return containers.flatMap(({ tabId, groups }) =>
+	return layoutContainers(schema).flatMap(({ tabId, groups }) =>
 		groups.flatMap((group) =>
 			group.items.flatMap((item): SourcedInput[] => {
 				if (item.type !== 'input') return [];

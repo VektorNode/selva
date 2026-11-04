@@ -203,7 +203,7 @@
 							<button
 								type="button"
 								onclick={() => selectListedState(preset)}
-								class="p-3 w-full rounded-lg border text-left transition-colors hover:bg-muted"
+								class="p-3 w-full rounded-lg border text-left transition-colors hover:bg-hover"
 							>
 								<div class="text-sm font-medium">{preset.name}</div>
 								{#if preset.description}

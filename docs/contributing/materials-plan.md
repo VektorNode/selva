@@ -1,26 +1,10 @@
-# Materials in the web viewer: plan
-
-Status 2026-10-01: steps 1-5 built; metals checked by eye on repro strips, not yet on a real project.
-Open: `Unroller` for curved parts, one HDR per look for dielectrics, texture sets as assets, and
-tuning preset roughness against photos.
+# Materials in the web viewer
 
 A material is three things:
 
 1. **Surface response**: colour, metalness, roughness, clearcoat, anisotropy, transmission.
 2. **Texture set**: colour / roughness / normal maps, with one real-world size (`mapSize`, mm).
 3. **Mapping**: where the texture coordinates come from (`UvMapping`, C# only).
-
-## What was wrong
-
-- **UVs were Rhino's surface parameters.** 0-1 per Brep face, U pointing wherever the surface was
-  built. Anisotropy grain flipped between two identical strips side by side, and any texture
-  stretched once across each face.
-- **Looks dimmed metal reflection.** Every look scales image-based lighting (technical:
-  `envMapIntensity` 0.55 × `environmentIntensity` 0.6), and a metal is almost all reflection. An
-  automatic satin clearcoat compensated, and made bare metal read lacquered.
-- **No micro-variation.** Uniform roughness reads as CG.
-- **Coil-coated sheet is paint, not metal**, and nothing steered a user to metalness 0.
-- **Tangents came from screen-space UV derivatives**, noisy on long thin triangles.
 
 ## Mapping
 
@@ -51,27 +35,17 @@ whole kilometres so float32 UVs keep 0.06 mm steps on survey coordinates; it cla
 so a smooth surface turning through 45° smears one row of triangles. `Part` assumes one Display item
 is one part; a joined assembly gets one grain for all of it.
 
-**`GrainUvs` measured** in a live Rhino (doc in mm, `QualityRenderMesh`; ratio = UV edge length /
-3D edge length, 1.000 is undistorted):
-
-| Part                       | Before                                          | Now                           |
-| -------------------------- | ----------------------------------------------- | ----------------------------- |
-| Plate 1000×200×2           | grain 11° off the long edge; end caps 0.19–1.00 | 1.000, grain along the edge   |
-| Plate, one end cut at 45°  | 0.19–1.00                                       | 1.000                         |
-| L angle 100×100, 1000 long | 1.000                                           | 1.000                         |
-| Rolled half-tube, R 100    | V spans 136 for a 314 arc; 0.09–1.00            | unchanged; `Unroller` is open |
-
-The grain now comes from each triangle's exact second moment, `A/12 · (aaᵀ + bbᵀ + ccᵀ + 9mmᵀ)`:
+The grain comes from each triangle's exact second moment, `A/12 · (aaᵀ + bbᵀ + ccᵀ + 9mmᵀ)`:
 centroids alone put both of a two-triangle rectangle's samples on its diagonal. U projects the
 grain into the face first, `grain − (grain·n) n`.
 
 **Open: V on curved faces.** `p · (n × grain)` with a per-vertex normal is not arc length and
-collapses on a roll centred on its axis. Tangents no longer depend on V (below), so this only
-matters for textures on rolled parts. `Unroller(brep)` with the mesh vertices as
-`AddFollowingGeometry` returned every point exactly unrolled for an open half-tube and a closed
-8-face L solid. It needs a developable Brep, and the unrolled layout still has to be rotated so its
-U matches the projected U. `MeshUnwrapper` (LSCM, ABF++, ARAP) handles any mesh but returns 0-1 and
-is conformal: rescale by √(3D area / UV area).
+collapses on a roll centred on its axis: on an R 100 half-tube, V spans 136 for a 314 arc. Tangents
+don't depend on V (below), so this only matters for textures on rolled parts. `Unroller(brep)` with
+the mesh vertices as `AddFollowingGeometry` returned every point exactly unrolled for an open
+half-tube and a closed 8-face L solid. It needs a developable Brep, and the unrolled layout still
+has to be rotated so its U matches the projected U. `MeshUnwrapper` (LSCM, ABF++, ARAP) handles any
+mesh but returns 0-1 and is conformal: rescale by √(3D area / UV area).
 
 ## Tangents
 
@@ -82,63 +56,51 @@ bit, a version gate and fixtures for the same result.
 
 ## Presets
 
-`MaterialPresets.cs`, output by the **Material Preset** component as a finished material. Three
-Material takes it as `Base` and overrides whatever is wired, every property included: Finish,
-Transmission and IOR have inputs of their own. Color, Metalness, Roughness, Opacity and Transparent
-have no persistent defaults, or the default would count as wired and beat the base. The preset index
-is saved in definitions, so the list is append only. Metal and concrete base colours are physicallybased.info's measured
-linear values. Roughness, anisotropy and the weathered-zinc patina are starting points: tune them
-against photos of the real product, never against another render.
-
-| Preset                   | Metalness | Anisotropy | Mapping | Finish  |
-| ------------------------ | --------- | ---------- | ------- | ------- |
-| Stainless steel, brushed | 1         | 0.8        | Part    | brushed |
-| Aluminium, mill finish   | 1         | 0.3        | Part    | rolled  |
-| Galvanised steel         | 1         | 0          | World   |         |
-| Titanium zinc, weathered | 0.6       | 0.2        | Part    | rolled  |
-| Copper                   | 1         | 0.3        | Part    | rolled  |
-| Coil-coated (RAL)        | 0         | 0          | Surface |         |
-| Wood                     | 0         | 0          | Part    |         |
-| Concrete                 | 0         | 0          | World   |         |
-| Glass                    | 0         | 0          | Surface |         |
-| Brass                    | 1         | 0.3        | Part    | rolled  |
-| Titanium                 | 1         | 0.3        | Part    | rolled  |
+The presets live in `MaterialPresets.cs` and come out of the **Material Preset** component as a
+finished material. Three Material takes one as `Base`, and any wired input beats the base, Finish,
+Transmission and IOR included. So Color, Metalness, Roughness, Opacity and Transparent have no
+persistent defaults: a default would count as wired and beat the base. The preset index is saved in
+definitions, so the list is append only.
 
 Glass uses `transmission` 1 and `ior` 1.52, not opacity, so it keeps its reflections. Transmission
 costs an extra render pass of the opaque scene.
 
-**Procedural finish** (`batch/finish.ts`), from the UVs in mm, in roughness, brightness (by half)
-and the normal. Fibres are hard-edged across the grain, 2-40 mm long, each its own depth (most faint, a few
-deep) and tapered at both ends; one depth per row read as a single streak the height of the part; the normal tilts across the grain by the
-fibre depth, so single fibres glint. Only rolled gets bands (long soft streaks); on brushed, bands
-1.5-6 mm wide and 150-500 mm long read as full-height streaks on a profile wall. Past pixel size a fibre layer switches to coarser cells standing for the rows they
-cover, so distance keeps the texture without shimmer. Fading octaves out instead, as the first
-version did, left only the widest, softest one at wall distance: soft full-height bands, nothing
-like the photos. Tuned by eye against photos of brushed stainless at 120 mm, 350 mm and 0.9 m;
-`finishStrength` scales the whole finish (0 off). Shader patches chain through `addShaderPatch`, which extends `customProgramCacheKey`:
-three keys programs on it, and it defaults to the `onBeforeCompile` source, which a chain doesn't
-change. Galvanised spangle, wood, concrete and patina need real scans: CC0 sets (ambientCG,
-Poly Haven) shipped as plugin assets.
+**Procedural finish.** `brushed` and `rolled` (`batch/finish.ts`) work from the UVs in mm and scale
+roughness, brightness (by half) and the normal. Fibres are hard-edged across the grain, 2-40 mm long,
+each its own depth (most faint, a few deep) and tapered at both ends; one depth per row read as a
+single streak the height of the part. The normal tilts across the grain by the fibre depth, so single
+fibres glint. Only `rolled` gets bands (long soft streaks): on brushed, bands 1.5-6 mm wide and
+150-500 mm long read as full-height streaks on a profile wall. Past pixel size a fibre layer switches
+to coarser cells standing for the rows they cover, so distance keeps the texture without shimmer.
+Fading octaves out instead left only the widest, softest one at wall distance: soft full-height
+bands, nothing like the photos. Tuned by eye against photos of brushed stainless at 120 mm, 350 mm
+and 0.9 m; `finishStrength` scales the whole finish (0 off).
+
+Wood, concrete, plaster, brick and corten are procedural patterns in `batch/surface-finish.ts`, also
+in mm, so a brick is brick-sized at any model scale. Galvanised spangle and the weathered-zinc patina
+need real scans: CC0 sets (ambientCG, Poly Haven) shipped as plugin assets.
 
 ## Environment and looks
 
 - **Metals reflect a studio room, not the HDR** (`reflection-environment.ts`). The HDR is an
   outdoor sky with a hard horizon over a near-black ground: a metal face mirrored a blown-out white
   band over a black one, the split jagged wherever the finish varied roughness. Metallic solve
-  materials (metalness > 0.5) get a PMREM of three's `RoomEnvironment` as their own `envMap`;
-  everything else keeps the HDR, so the tuned looks don't move for dielectrics. Re-applied in
-  `updateScene` and after `setLook`, since an override zeroes metalness.
+  materials (metalness > 0.5) get a PMREM of a custom studio scene (`studio-environment.ts`:
+  softboxes on a dark room) as their own `envMap`. three's `RoomEnvironment` is bright on all sides,
+  so a metal has no contour and looks like flat paint. Everything else keeps the HDR, so the tuned
+  looks don't move for dielectrics. Re-applied in `updateScene` and after `setLook`, since an
+  override zeroes metalness.
 - **three ignores `envMapIntensity` without a material `envMap`**: it overwrites the uniform with
   `scene.environmentIntensity` on every draw. So a look's `envMapIntensity` and Three Material's
   Reflection only act on metals, through the studio probe. There a look's value blends toward 1 by
   metalness (`lookEnvMapIntensity`).
 - `disposeMaterial` skips `envMap`: the probe is shared, and every solve disposes its materials.
-- The automatic metal clearcoat is gone; `clearcoat` on the wire is the only coat.
-- Checked by eye on repro strips (`examples/fixtures/repro_*.slvm`, written from Rhino through the
-  real `GrainUvs` and SLVM writer) in the example viewer, technical and studio looks.
+- `clearcoat` on the wire is the only coat; the viewer adds none to metals.
+- Repro strips: `packages/visualization/examples/fixtures/repro_*.slvm`, written from Rhino through the
+  real `GrainUvs` and SLVM writer. View them in the example viewer, technical and studio looks.
 - Open: one HDR per look for dielectrics, overcast outdoor for site context.
-- Neutral tone mapping keeps RAL colours true. ACES (studio, showcase) shifts saturated colours, so a
-  RAL swatch will not match the chart there.
+- Neutral tone mapping keeps RAL colours true. ACES (studio, showcase, night) shifts saturated
+  colours, so a RAL swatch will not match the chart there.
 
 ## Authored UVs from a sheet-metal unroll
 

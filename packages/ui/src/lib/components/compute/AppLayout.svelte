@@ -34,7 +34,13 @@
 		showViewer: boolean;
 		meshes?: any[];
 		isSolving: boolean;
+		/**
+		 * `createSolvingIndicator(...).show`, not `isSolving`: drives the solving chip and the
+		 * viewer's progress bar, which would otherwise flash on every sub-second solve.
+		 */
 		showSolvingIndicator?: boolean;
+		/** `createSolvingIndicator(...).slow`: the viewer dims its result as stale. */
+		solveIsSlow?: boolean;
 		/** `SolvingIndicator`'s `placement`; `inline` puts it in the action row. */
 		solvingIndicatorPlacement?: 'floating' | 'inline';
 		/** Rendered above the action row, for a host that keeps the solve's messages in the flow. */
@@ -68,6 +74,7 @@
 		meshes = [],
 		isSolving,
 		showSolvingIndicator = false,
+		solveIsSlow = false,
 		solvingIndicatorPlacement = 'floating',
 		solveMessages,
 		hasPendingChanges = false,
@@ -93,6 +100,8 @@
 	let presets = $state<ParameterPresetManager | null>(null);
 	const hasMenu = $derived(showSaveButton || showLoadButton || panelActions.length > 0);
 	const resultIsStale = $derived(hasPendingChanges || hasNeverSolved);
+	// With a Calculate button the button itself says it is solving.
+	const showSolvingChip = $derived(showSolvingIndicator && schema.instanceSolve !== false);
 
 	const shownTabs = $derived(
 		schema.layout.type === 'tabbed'
@@ -149,6 +158,14 @@
 		mqMobile.addEventListener('change', update);
 		return () => mqMobile.removeEventListener('change', update);
 	});
+
+	// Without a viewer there's nothing to sit beside, so a narrow host (a docked Rhino panel) gets
+	// the phone's single edge-to-edge column instead of a card floating in its own margins.
+	const STACK_BELOW_WIDTH = 900;
+	let rootWidth = $state(0);
+	const stacked = $derived(
+		isMobile || (!hasViewer && rootWidth > 0 && rootWidth < STACK_BELOW_WIDTH)
+	);
 
 	let leftCollapsed = $state(false);
 	let rightCollapsed = $state(false);
@@ -255,9 +272,9 @@
 <!-- One primary action and one menu. A definition that solves on every change has no Calculate,
      so the menu sits alone at the end of the row. -->
 {#snippet footer()}
-	{#if solveMessages}
-		<div class="px-2">{@render solveMessages()}</div>
-	{/if}
+	<!-- No wrapper: it would always render (the messages' live region is never empty) and pick up
+	     the drawer footer's row padding, leaving a gap above Calculate with nothing in it. -->
+	{@render solveMessages?.()}
 	{#if schema.instanceSolve === false}
 		<CalculateButton
 			{hasPendingChanges}
@@ -267,9 +284,9 @@
 			trailing={hasMenu ? actionsMenu : undefined}
 		/>
 	{:else if hasMenu || solvingIndicatorPlacement === 'inline'}
-		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border/50">
+		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border">
 			{#if solvingIndicatorPlacement === 'inline'}
-				<SolvingIndicator show={showSolvingIndicator} placement="inline" />
+				<SolvingIndicator show={showSolvingChip} placement="inline" />
 			{/if}
 			{#if hasMenu}
 				<div class="ml-auto">{@render actionsMenu()}</div>
@@ -287,9 +304,9 @@
 )}
 	<div class="panel-content-wrapper">
 		{#if schema.layout.type === 'tabbed'}
-			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} bare={isMobile} />
+			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} bare={stacked} />
 		{/if}
-		{#if hostsFooter && !isMobile}
+		{#if hostsFooter && !stacked}
 			<div class="panel-footer px-1">
 				{@render footer()}
 			</div>
@@ -306,15 +323,16 @@
 
 <main
 	data-layout-root
-	class="min-h-0 sm:flex-row sm:py-(--page-py) flex flex-1 flex-col overflow-hidden {leftCollapsed
-		? 'sm:pl-0'
-		: 'sm:pl-(--page-px)'} {rightCollapsed ? 'sm:pr-0' : 'sm:pr-(--page-px)'}"
+	class="min-h-0 flex flex-1 flex-col overflow-hidden {stacked
+		? ''
+		: `sm:flex-row sm:py-2 ${leftCollapsed ? 'sm:pl-0' : 'sm:pl-2'} ${rightCollapsed ? 'sm:pr-0' : 'sm:pr-2'}`}"
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
-	class:mobile-root={isMobile}
+	class:mobile-root={stacked}
+	bind:clientWidth={rootWidth}
 >
-	{#if isMobile}
-		{#if hasViewer}
+	{#if stacked}
+		{#if isMobile && hasViewer}
 			<!-- Ends above the drawer rather than behind it, so the model stays centred in what is
 			     visible. It jumps straight to its new size: animating it would resize the canvas,
 			     and its render targets, on every frame of the drawer's slide. -->
@@ -322,20 +340,22 @@
 				<Viewer
 					{meshes}
 					bind:isFullscreen={isViewerFullscreen}
-					{isSolving}
+					isSolving={showSolvingIndicator}
+					isSlow={solveIsSlow}
 					drawerOpen={drawer === 'full'}
 					{logoUrl}
 					{onViewerReady}
 					viewerConfig={{
 						...viewerConfig,
-						backgroundColor: schema?.viewerOptions?.backgroundColor,
+						backgroundColor: schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
+						look: schema?.viewerOptions?.look ?? viewerConfig.look,
 						showSceneManager: false
 					}}
 				/>
 			</div>
 
 			<div
-				class="drawer-container rounded-t-2xl z-40 border-t bg-background shadow-sheet drawer-{drawer}"
+				class="drawer-container z-40 rounded-t-xl border-t bg-background shadow-sheet drawer-{drawer}"
 			>
 				<!-- Named by its visible label; aria-expanded carries the open/closed state. -->
 				<button
@@ -381,7 +401,7 @@
 			</div>
 		{:else}
 			<div class="flex flex-1 flex-col overflow-hidden">
-				<div class="px-3 pt-3 flex-1 overflow-y-auto">
+				<div class="px-3 pt-3 sm:px-5 flex-1 overflow-y-auto">
 					{#if hasLeftPanel}
 						{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
 					{/if}
@@ -401,7 +421,7 @@
 		{/if}
 	{:else if !hasViewer && !isTwoPanelMode && hasLeftPanel !== hasRightPanel}
 		<!-- Single centered panel (left-only or right-only), no viewer -->
-		<div class="min-h-0 flex h-full flex-1 justify-center">
+		<div class="min-h-0 p-1 flex h-full flex-1 justify-center">
 			<div class="min-h-0 flex h-full w-4/5 flex-col">
 				{@render panelContent(
 					hasRightPanel ? 'right' : undefined,
@@ -428,7 +448,7 @@
 			<Resizable.PaneGroup
 				direction="horizontal"
 				autoSaveId="selva-layout-{layoutKey}"
-				class="min-h-0 flex-1"
+				class="min-h-0 m-1 flex-1"
 			>
 				{#if hasLeftPanel}
 					<Resizable.Pane
@@ -441,7 +461,6 @@
 						collapsedSize={0}
 						onCollapse={() => (leftCollapsed = true)}
 						onExpand={() => (leftCollapsed = false)}
-						class="ml-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
@@ -454,6 +473,7 @@
 					<Resizable.Handle
 						withHandle
 						line={false}
+						class="translate-x-1.5 z-20"
 						data-collapsed={leftCollapsed}
 						onclick={() => {
 							if (leftCollapsed) leftPaneRef?.expand();
@@ -462,30 +482,36 @@
 				{/if}
 
 				{#if hasViewer}
-					<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
+					<Resizable.Pane order={2} minSize={20} class="min-h-0 flex flex-col">
 						<Viewer
 							{meshes}
 							bind:isFullscreen={isViewerFullscreen}
-							{isSolving}
+							isSolving={showSolvingIndicator}
+							isSlow={solveIsSlow}
 							{logoUrl}
 							{onViewerReady}
 							viewerConfig={{
 								...viewerConfig,
-								backgroundColor: schema?.viewerOptions?.backgroundColor
+								backgroundColor:
+									schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
+								look: schema?.viewerOptions?.look ?? viewerConfig.look
 							}}
 						/>
 					</Resizable.Pane>
 				{/if}
 
 				{#if hasRightPanel}
-					<Resizable.Handle
-						withHandle
-						line={false}
-						data-collapsed={rightCollapsed}
-						onclick={() => {
-							if (rightCollapsed) rightPaneRef?.expand();
-						}}
-					/>
+					{#if hasViewer || !hasLeftPanel}
+						<Resizable.Handle
+							withHandle
+							line={false}
+							class="-translate-x-1.5 z-20"
+							data-collapsed={rightCollapsed}
+							onclick={() => {
+								if (rightCollapsed) rightPaneRef?.expand();
+							}}
+						/>
+					{/if}
 					<Resizable.Pane
 						bind:this={rightPaneRef}
 						order={3}
@@ -496,7 +522,6 @@
 						collapsedSize={0}
 						onCollapse={() => (rightCollapsed = true)}
 						onExpand={() => (rightCollapsed = false)}
-						class="mr-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed
@@ -525,7 +550,7 @@
 	{/if}
 
 	{#if solvingIndicatorPlacement === 'floating'}
-		<SolvingIndicator show={showSolvingIndicator} />
+		<SolvingIndicator show={showSolvingChip} />
 	{/if}
 </main>
 

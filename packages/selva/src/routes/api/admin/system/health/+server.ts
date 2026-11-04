@@ -5,7 +5,7 @@ import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { env as privateEnv } from '#lib/server/env.js';
 import { LocalComputeServerStore } from '@selvajs/local-provider';
-import { ComputeServerStats } from '@selvajs/compute/grasshopper';
+import { openServerStats } from '#lib/server/compute/serverStats.server.js';
 import {
 	findServerById,
 	type SchemaVersionReport,
@@ -197,7 +197,15 @@ async function computeReachabilityCheck(locals: App.Locals): Promise<HealthCheck
 	const apiKey = server.hasApiKey
 		? await getComputeServerConfigStore().getServerApiKey(locals.ctx!, server.id)
 		: undefined;
-	const stats = new ComputeServerStats(server.serverUrl, apiKey ?? undefined);
+	const { stats, misconfigured } = openServerStats(server.serverUrl, apiKey ?? undefined);
+	if (!stats) {
+		return {
+			...base,
+			status: 'error',
+			summary: `"${server.label}" can't be used: ${misconfigured}`,
+			remediation: 'Fix the server URL or API key in /admin/compute.'
+		};
+	}
 	try {
 		const online = await stats.isServerOnline(COMPUTE_PING_TIMEOUT_MS);
 		if (online) {

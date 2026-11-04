@@ -239,9 +239,6 @@ export function installOAuthShim(
 		},
 		async getOAuthAuthorizationUrl() {
 			throw new Error('OAuth shim: getOAuthAuthorizationUrl not implemented for tests');
-		},
-		async refreshSession() {
-			throw new Error('OAuth shim: refreshSession not implemented for tests');
 		}
 	};
 	// `oauth` on IAuthProvider is `readonly` — cast needed to patch the test

@@ -30,6 +30,25 @@ export function splitGroupByLayer(group: MaterialGroup): MaterialGroup[] {
 }
 
 /**
+ * The groups a merge-by-material draws: every group of one material gathered into one, in order of
+ * first appearance, then split by layer. The writer keeps meshes in input order, so one material
+ * can head several groups.
+ */
+export function mergeGroupsOf(groups: MaterialGroup[]): MaterialGroup[] {
+	const byMaterial = new Map<number, MeshMetadata[]>();
+	for (const group of groups) {
+		const meshes = byMaterial.get(group.materialId);
+		// A loop, not push(...spread): spreading passes every mesh as an argument and overflows the
+		// stack past ~100k meshes.
+		if (meshes) for (const mesh of group.meshes) meshes.push(mesh);
+		else byMaterial.set(group.materialId, group.meshes.slice());
+	}
+	return [...byMaterial].flatMap(([materialId, meshes]) =>
+		splitGroupByLayer({ materialId, meshes })
+	);
+}
+
+/**
  * Merges a material group's meshes into one BufferGeometry. Parser indices already address the
  * combined vertex array (rebased by the C# pipeline during batch assembly), so this copies each
  * mesh's vertex/index slices into a fresh contiguous buffer and shifts indices to match.
@@ -101,7 +120,7 @@ export function createMergedMesh(
 
 	const finished = finishGeometry(
 		{ positions: mergedVertices, indices: mergedIndices, uvs: mergedUvs, colors: mergedColors },
-		group.meshes.map((m) => m.indexCount)
+		group.meshes
 	);
 	return finalizeMergedMesh(
 		geometryFrom(finished),
@@ -240,7 +259,7 @@ export function createIndividualMeshes(
 				uvs: allUvs ? allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2) : null,
 				colors: allColors ? allColors.slice(componentStart, componentStart + componentLen) : null
 			},
-			[rebasedIndices.length]
+			[meshMeta]
 		);
 		meshes.push(
 			finalizeSingleMesh(

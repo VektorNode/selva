@@ -23,8 +23,10 @@ describe('readSchemaResults', () => {
 		expect(results.flatMap((r) => r.schemas ?? [])).toHaveLength(3);
 	});
 
-	it('accepts a bare object as a single entry', () => {
+	it('accepts a bare object as a single entry, reading missing keys as undefined', () => {
 		expect(readSchemaResults({ Schemas: [schema] })[0].schemas).toEqual([schema]);
+		expect(readSchemaResults([{}])[0]).toEqual({ schemas: undefined, error: undefined });
+		expect(readSchemaResults(null)[0]).toEqual({ schemas: undefined, error: undefined });
 	});
 
 	it('surfaces a per-file error (compute answers 200 with one)', () => {
@@ -39,10 +41,5 @@ describe('readSchemaResults', () => {
 		const authored = { ...schema, Display3d: true, 'Option A': 1 };
 
 		expect(readSchemaResults([{ Schemas: [authored] }])[0].schemas?.[0]).toEqual(authored);
-	});
-
-	it('reports missing keys as undefined rather than throwing', () => {
-		expect(readSchemaResults([{}])[0]).toEqual({ schemas: undefined, error: undefined });
-		expect(readSchemaResults(null)[0]).toEqual({ schemas: undefined, error: undefined });
 	});
 });

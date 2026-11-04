@@ -411,7 +411,7 @@ public class SchemaSynchronizer
         // GH_Colour.ScriptVariable() returns System.Drawing.Color, which Newtonsoft can't
         // serialize on Mono/macOS (throws ArgumentNullException 'key'). Emit hex instead —
         // GetColorParameter parses hex the same way on the way in.
-        input.Default = raw is Color color ? ColorTranslator.ToHtml(color) : raw;
+        input.Default = raw is Color color ? ColorHex.Of(color) : raw;
     }
 
     /// <summary>
@@ -888,7 +888,8 @@ public class SchemaSynchronizer
         // fighting the canonicalizer and producing spurious "1 parameter removed" churn.
         var toRemove = schema.Outputs
             .Where(o => bakeComponents.TryGetValue(o.Id, out var c)
-                        && !ParameterTypeHelper.IsQualifyingBakeOutput(c))
+                        && !ParameterTypeHelper.IsQualifyingBakeOutput(c)
+                        && !ParameterTypeHelper.IsAwaitingBakeData(c))
             .Select(o => o.Id)
             .ToList();
 
