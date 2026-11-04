@@ -27,6 +27,7 @@
 				"package.json",
 				"tsconfig.json",
 				"svelte.config.js",
+				"kit.config.ts",
 				"vite.config.ts",
 				"vite.config.js",
 				"tsdown.config.ts"
@@ -61,7 +62,7 @@
 		"check": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "tsconfig.json", "svelte.config.js"]
+			"inputs": ["src/**", "tsconfig.json", "svelte.config.js", "kit.config.ts"]
 		},
 		"type-check": {
 			"dependsOn": ["^build"],
@@ -89,7 +90,14 @@
 		"test": {
 			"dependsOn": ["^build"],
 			"outputs": [],
-			"inputs": ["src/**", "tests/**", "scripts/**", "vitest.config.ts", ".env.test"]
+			"inputs": [
+				"src/**",
+				"tests/**",
+				"scripts/**",
+				"vitest.config.ts",
+				"kit.config.ts",
+				".env.test"
+			]
 		},
 		"test:e2e": {
 			"dependsOn": ["build"],

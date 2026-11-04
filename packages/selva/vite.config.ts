@@ -1,8 +1,8 @@
-import adapterNode from '@sveltejs/adapter-node';
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { createViteConfig } from '@selvajs/config/vite';
 import { fileURLToPath } from 'node:url';
 import { loadEnv, type Plugin } from 'vite';
+
+import { kit } from './kit.config.js';
 
 // The server reads process.env (#lib/server/env.ts), which the deployed app is started with.
 // Under `vite dev` SvelteKit keeps .env to itself, so load it here; a value already in the
@@ -24,19 +24,7 @@ function loadDotenvIntoProcess(): Plugin {
 // time, and a port Vite picked by falling back is one Rhino.Compute cannot be told about in
 // advance. `strictPort` makes a clash fail loudly instead of silently moving the callback target.
 export default createViteConfig({
-	kit: {
-		preprocess: vitePreprocess(),
-		compilerOptions: {
-			runes: true
-		},
-		adapter: adapterNode({
-			out: 'build',
-			precompress: true
-		}),
-		// The form-CSRF check runs in hooks.server.ts instead, which can exempt the
-		// OAuth token endpoint and bearer-authenticated uploads. `*` turns this one off.
-		csrf: { trustedOrigins: ['*'] }
-	},
+	kit,
 	plugins: [loadDotenvIntoProcess()],
 	server: {
 		port: 5199,
