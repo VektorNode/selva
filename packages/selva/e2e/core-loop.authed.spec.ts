@@ -43,12 +43,13 @@ test('core loop: upload → solve → binary geometry renders and tracks input',
 	test.setTimeout(240_000);
 
 	// -- Register the compute server (fake by default, live via env) -----------
+	const serverId = '00000000-0000-4000-8000-0000000000e2';
 	const put = await request.put('/api/admin/compute', {
 		data: {
-			defaultServerId: 'e2e-compute',
+			defaultServerId: serverId,
 			servers: [
 				{
-					id: 'e2e-compute',
+					id: serverId,
 					label: 'E2E compute',
 					serverUrl: REAL_COMPUTE_URL ?? fake!.url,
 					sharedWith: 'all',

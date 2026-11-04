@@ -1120,6 +1120,45 @@
 			]
 		},
 		{
+			"guid": "7D3C1F52-9A64-4E0B-8C27-5B1E6A0F42D9",
+			"class": "GH_EmissiveMaterial",
+			"file": "Plugin/Selva.GH/Features/Display/Components/GH_EmissiveMaterial.cs",
+			"inputs": [
+				{
+					"kind": "AddColourParameter",
+					"name": "Color",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Strength",
+					"access": "item"
+				},
+				{
+					"kind": "AddParameter:Param_ThreeMaterial",
+					"name": "Base",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Kelvin",
+					"access": "item"
+				},
+				{
+					"kind": "AddNumberParameter",
+					"name": "Lumens",
+					"access": "item"
+				}
+			],
+			"outputs": [
+				{
+					"kind": "AddParameter:Param_ThreeMaterial",
+					"name": "Material",
+					"access": "item"
+				}
+			]
+		},
+		{
 			"guid": "7E4C1B92-2D6A-4F88-9C31-5A0E7B3F1C44",
 			"class": "GH_DocumentInfo",
 			"file": "Plugin/Selva.GH/Features/Drawing/Components/GH_DocumentInfo.cs",

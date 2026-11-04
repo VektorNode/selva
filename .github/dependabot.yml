@@ -7,6 +7,7 @@ version: 2
 updates:
   - package-ecosystem: 'npm'
     directory: '/'
+    target-branch: 'beta'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -43,6 +44,7 @@ updates:
     directories:
       - '/'
       - '/.github/actions/setup'
+    target-branch: 'beta'
     schedule:
       interval: 'weekly'
       day: 'monday'
@@ -58,6 +60,7 @@ updates:
   # bump can no longer land in one project and leave its consumers behind.
   - package-ecosystem: 'nuget'
     directory: '/Plugin'
+    target-branch: 'beta'
     schedule:
       interval: 'weekly'
       day: 'monday'
