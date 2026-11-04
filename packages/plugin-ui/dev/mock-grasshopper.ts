@@ -1158,13 +1158,16 @@ wss.on('connection', (ws) => {
 			case 'valueUpdate':
 				Object.assign(values, msg.values as Record<string, unknown>);
 				clearTimeout(pendingSolve);
+				send(ws, { type: 'solvingState', sessionId, isSolving: true });
 				pendingSolve = setTimeout(() => {
 					sendOutputsWithMesh(ws, sessionId);
+					send(ws, { type: 'solvingState', sessionId, isSolving: false });
 				}, SOLVE_LATENCY_MS);
 				break;
 
 			case 'cancelSolve':
 				clearTimeout(pendingSolve);
+				send(ws, { type: 'solvingState', sessionId, isSolving: false });
 				break;
 
 			case 'requestSyncPreview':

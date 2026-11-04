@@ -155,7 +155,6 @@
 					isSolving={preview.isSolving}
 					showSolvingIndicator={solvingIndicator.show}
 					solveIsSlow={solvingIndicator.slow}
-					solvingIndicatorPlacement={panel ? 'inline' : 'floating'}
 					solveMessages={panel ? solveMessages : undefined}
 					hasPendingChanges={preview.hasPendingChanges}
 					bind:isViewerFullscreen

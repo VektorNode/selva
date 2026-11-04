@@ -46,9 +46,12 @@
 	interface Props {
 		meshes: any[];
 		isFullscreen?: boolean;
-		/** Shows a progress bar along the top edge. Pass a delayed flag (`createSolvingIndicator`). */
+		/**
+		 * Dims the stale result and runs a line along the bottom edge. Pass a delayed flag
+		 * (`createSolvingIndicator`).
+		 */
 		isSolving?: boolean;
-		/** Dims the stale result while a long solve runs. */
+		/** Same treatment as `isSolving`. */
 		isSlow?: boolean;
 		isBlurred?: boolean;
 		drawerOpen?: boolean;
@@ -85,6 +88,7 @@
 	let {
 		meshes,
 		isFullscreen = $bindable(false),
+		isSolving = false,
 		isSlow = false,
 		isBlurred = false,
 		drawerOpen = false,
@@ -166,6 +170,26 @@
 		}))
 	);
 	const nightOn = $derived(renderStyle === 'night');
+
+	// The canvas paints its own ground whatever the page theme, so the solve overlay takes its
+	// colours from that ground: a look may override the configured background.
+	const viewerGround = $derived.by(() => {
+		const lookBackground = LOOK_PRESETS[renderStyle].background;
+		if (lookBackground !== undefined) return `#${lookBackground.toString(16).padStart(6, '0')}`;
+		// Hosts pass `backgroundColor: undefined` when the schema sets none, and the spread into
+		// `config` keeps it.
+		return config.backgroundColor ?? defaultViewerConfig.backgroundColor;
+	});
+	const groundIsDark = $derived(isDarkHex(viewerGround));
+
+	// Anything but #rgb/#rrggbb reads as light, the default viewer ground.
+	function isDarkHex(color: string): boolean {
+		const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color.trim())?.[1];
+		if (!hex) return false;
+		const full = hex.length === 3 ? [...hex].map((c) => c + c).join('') : hex;
+		const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16));
+		return 0.299 * r + 0.587 * g + 0.114 * b < 128;
+	}
 	// What the night toggle returns to.
 	let dayLook: Look = $state(openingLook === 'night' ? defaultViewerConfig.look : openingLook);
 
@@ -524,11 +548,14 @@
 						: 'blur-overlay-inactive'}"
 				></div>
 
-				{#if isSlow}
-					<div
-						class="inset-0 animate-in fade-in pointer-events-none absolute z-10 bg-background/25 duration-500"
-					></div>
-				{/if}
+				<!-- Always mounted so it fades out instead of vanishing when the solve lands. -->
+				<div
+					class="solve-overlay"
+					class:solve-overlay-active={isSolving || isSlow}
+					class:solve-overlay-dark={groundIsDark}
+					style:--solve-ground={viewerGround}
+					aria-hidden="true"
+				></div>
 
 				{#if logoUrl}
 					<!-- pointer-events:none so it never intercepts canvas drags. -->
@@ -624,6 +651,58 @@
 
 	.blur-overlay {
 		pointer-events: none;
+	}
+
+	/* Fades the stale model toward the viewer's ground rather than toward the page colour. */
+	.solve-overlay {
+		position: absolute;
+		inset: 0;
+		z-index: 10;
+		overflow: hidden;
+		pointer-events: none;
+		--solve-ink: oklch(0.25 0 0);
+		background: color-mix(in srgb, var(--solve-ground) 45%, transparent);
+		opacity: 0;
+		transition: opacity 0.4s ease;
+	}
+
+	.solve-overlay-dark {
+		--solve-ink: oklch(0.92 0 0);
+	}
+
+	.solve-overlay-active {
+		opacity: 1;
+	}
+
+	/* Indeterminate on purpose: a solve reports no progress the viewer could show. */
+	.solve-overlay::before {
+		content: '';
+		position: absolute;
+		bottom: 0;
+		left: -35%;
+		width: 35%;
+		height: 2px;
+		background: linear-gradient(90deg, transparent, var(--solve-ink), transparent);
+		animation: solve-sweep 1.4s cubic-bezier(0.45, 0, 0.55, 1) infinite paused;
+	}
+
+	.solve-overlay-active::before {
+		animation-play-state: running;
+	}
+
+	@keyframes solve-sweep {
+		to {
+			left: 100%;
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.solve-overlay::before {
+			animation: none;
+			left: 0;
+			width: 100%;
+			opacity: 0.5;
+		}
 	}
 
 	.blur-overlay-active {

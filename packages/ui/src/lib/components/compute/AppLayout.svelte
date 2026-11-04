@@ -35,13 +35,13 @@
 		meshes?: any[];
 		isSolving: boolean;
 		/**
-		 * `createSolvingIndicator(...).show`, not `isSolving`: drives the solving chip and the
-		 * viewer's progress bar, which would otherwise flash on every sub-second solve.
+		 * `createSolvingIndicator(...).show`, not `isSolving`: drives the action row's solving status
+		 * and the viewer's dim and line, which would otherwise flash on every sub-second solve.
 		 */
 		showSolvingIndicator?: boolean;
 		/** `createSolvingIndicator(...).slow`: the viewer dims its result as stale. */
 		solveIsSlow?: boolean;
-		/** `SolvingIndicator`'s `placement`; `inline` puts it in the action row. */
+		/** @deprecated Ignored: the solving status always sits in the action row. */
 		solvingIndicatorPlacement?: 'floating' | 'inline';
 		/** Rendered above the action row, for a host that keeps the solve's messages in the flow. */
 		solveMessages?: Snippet;
@@ -75,7 +75,6 @@
 		isSolving,
 		showSolvingIndicator = false,
 		solveIsSlow = false,
-		solvingIndicatorPlacement = 'floating',
 		solveMessages,
 		hasPendingChanges = false,
 		hasNeverSolved = false,
@@ -283,11 +282,9 @@
 			{oncalculate}
 			trailing={hasMenu ? actionsMenu : undefined}
 		/>
-	{:else if hasMenu || solvingIndicatorPlacement === 'inline'}
+	{:else}
 		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border">
-			{#if solvingIndicatorPlacement === 'inline'}
-				<SolvingIndicator show={showSolvingChip} placement="inline" />
-			{/if}
+			<SolvingIndicator show={showSolvingChip} />
 			{#if hasMenu}
 				<div class="ml-auto">{@render actionsMenu()}</div>
 			{/if}
@@ -547,10 +544,6 @@
 				/>
 			{/if}
 		</div>
-	{/if}
-
-	{#if solvingIndicatorPlacement === 'floating'}
-		<SolvingIndicator show={showSolvingChip} />
 	{/if}
 </main>
 

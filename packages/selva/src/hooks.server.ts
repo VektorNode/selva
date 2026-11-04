@@ -1,5 +1,6 @@
 import { redirect, type RequestEvent } from '@sveltejs/kit';
 import type { ServerInit } from '@sveltejs/kit/hooks';
+import { dev } from '$app/env';
 import { isApiError } from '@selvajs/server/api';
 import type { AuthUser } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
@@ -39,6 +40,7 @@ import { getBootHealth } from '#lib/server/bootHealth.server.js';
 import { checkConfigAtBoot } from '#lib/server/config/boot.server.js';
 import { env } from '#lib/server/env.js';
 import { publicUrl } from '#lib/server/origin.js';
+import { closeAllSolveEventStreams } from '#lib/server/solveEvents/sse.server.js';
 import { findDeploymentDir, startUpdateOutcomeReconciler } from '#lib/server/selfUpdate.server.js';
 import {
 	bootstrapUserSession,
@@ -69,6 +71,11 @@ let proxyAuthLoginMissWarned = false;
 export const init: ServerInit = () => {
 	checkConfigAtBoot();
 	requestTiming.markBooted();
+	// Not in dev: Vite owns the signals there, and HMR would stack a listener per reload.
+	if (!dev) {
+		process.once('SIGINT', closeAllSolveEventStreams);
+		process.once('SIGTERM', closeAllSolveEventStreams);
+	}
 };
 
 // One-way transition (zero users → at least one). Once true, permanent —

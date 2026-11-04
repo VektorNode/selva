@@ -28,7 +28,8 @@
 		<!-- Not merged: PDFsharp needs System.Memory, which net48 hosts get from Selva.GH's own
 		     reference and .NET hosts from the framework. -->
 		<PackageReference Include="System.Memory"/>
-		<PackageReference Include="System.Drawing.Common"/>
+		<!-- Per-Rhino override, like Selva.GH: the central 10.0.14 would flow to Rhino 8 consumers and fail their .gha. -->
+		<PackageReference Include="System.Drawing.Common" VersionOverride="$(DrawingCommonRefVersion)"/>
 		<!-- Provides the <ILRepack> MSBuild task used by the Release merge target below. -->
 		<PackageReference Include="ILRepack.Lib.MSBuild.Task" PrivateAssets="all" Condition="'$(Configuration)' == 'Release'"/>
 	</ItemGroup>

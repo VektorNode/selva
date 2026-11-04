@@ -1,17 +1,10 @@
 <script lang="ts">
+	import { LoaderCircle } from '@lucide/svelte';
 	import { getLocaleContext } from '../../i18n/localeContext.svelte';
 
-	interface Props {
-		show: boolean;
-		/**
-		 * `floating` overlays the bottom-left corner. `inline` is a compact chip the size of an
-		 * icon button, for a narrow host whose corner holds its content and whose action row
-		 * already reserves the chip's place. Both say Esc aborts, as every host does.
-		 */
-		placement?: 'floating' | 'inline';
-	}
-
-	let { show, placement = 'floating' }: Props = $props();
+	// Sits in a panel's action row, beside the controls that started the solve. Says Esc aborts,
+	// as every host does.
+	let { show }: { show: boolean } = $props();
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -23,38 +16,16 @@
 	role="status"
 	aria-live="polite"
 	aria-atomic="true"
-	class={placement === 'inline' ? 'h-10 gap-3 min-w-0 flex items-center' : undefined}
+	class="h-9 gap-2 min-w-0 flex items-center"
 >
-	{#if show && placement === 'inline'}
-		<div
-			class="gap-2 px-3 h-10 text-sm font-semibold flex shrink-0 items-center rounded-md bg-primary text-primary-foreground"
-		>
-			<div
-				class="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"
-				aria-hidden="true"
-			></div>
-			{t.solvingEllipsis}
-		</div>
-		<span class="text-xs min-w-0 truncate text-muted-foreground" data-testid="solve-esc-hint">
-			{t.solveMessagesEscHint}
-		</span>
-	{:else if show}
-		<div
-			class="bottom-6 left-6 gap-3 px-5 py-3 shadow-xl animate-in fade-in slide-in-from-left fixed z-50 flex items-center rounded-lg border border-primary/20 bg-primary text-primary-foreground duration-200"
-		>
-			<div class="h-5 w-5 relative flex shrink-0 items-center justify-center" aria-hidden="true">
-				<div
-					class="animate-ping absolute h-full w-full rounded-full bg-primary-foreground opacity-30"
-				></div>
-				<div
-					class="h-3 w-3 animate-spin rounded-full border-2 border-primary-foreground border-t-transparent"
-				></div>
-			</div>
-			<div class="leading-tight flex flex-col">
-				<span class="text-sm font-semibold">{t.solving}</span>
-				<span class="text-xs opacity-70" data-testid="solve-esc-hint">{t.solveMessagesEscHint}</span
-				>
-			</div>
+	{#if show}
+		<LoaderCircle class="h-4 w-4 animate-spin shrink-0 text-muted-foreground" aria-hidden="true" />
+		<!-- Baseline, not centre: the two sizes centred put the smaller text visibly high. -->
+		<div class="gap-2 min-w-0 flex items-baseline">
+			<span class="text-sm font-medium shrink-0 text-foreground">{t.solvingEllipsis}</span>
+			<span class="text-xs min-w-0 truncate text-muted-foreground" data-testid="solve-esc-hint">
+				{t.solveMessagesEscHint}
+			</span>
 		</div>
 	{/if}
 </div>
