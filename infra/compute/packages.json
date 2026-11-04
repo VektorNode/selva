@@ -1,0 +1,5 @@
+{
+	"$comment": "Yak packages on Selva's Compute server. Selva itself ships as a local build (DEPLOY_PLUGINS), so it must not be listed here too: the container refuses a duplicate .gha.",
+	"yak": [],
+	"local": []
+}
