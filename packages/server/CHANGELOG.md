@@ -1,5 +1,11 @@
 # @selvajs/server
 
+## 2.0.0-beta.24
+
+### Patch Changes
+
+- 4e55a69: `SentryErrorReporter.create` sets `traceLifecycle: 'static'`. Sentry 11 streams spans by default, and streamed spans skip `beforeSendTransaction`, so the transaction scrubber never ran on them.
+
 ## 2.0.0-beta.23
 
 ### Minor Changes
