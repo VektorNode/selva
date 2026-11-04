@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.24.2-beta.5] - 2026-11-04
+
 ### Changed
 
 - The Compute render switch moved from the builder's Compute panel to a new Rendering section in the Viewer panel.
