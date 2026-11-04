@@ -293,27 +293,26 @@ describe('GrasshopperClient.createScheduler', () => {
 
 describe('GrasshopperClient.getIO (e2e through transport + parser pipeline)', () => {
 	it('fetches IO and parses raw inputs into typed InputParams', async () => {
-		// camelCase to match a real Compute8 server: fetchDefinitionIO reads these
-		// straight through with no key conversion.
+		// PascalCase as every server branch sends it; only the fork's `groupName` is camelCase.
 		const ioResponse = {
-			inputnames: [],
-			outputnames: [],
-			inputs: [
+			InputNames: [],
+			OutputNames: [],
+			Inputs: [
 				{
-					name: 'Radius',
-					nickname: 'R',
-					description: '',
-					paramType: 'Number',
-					treeAccess: false,
+					Name: 'Radius',
+					Nickname: 'R',
+					Description: '',
+					ParamType: 'Number',
+					TreeAccess: false,
 					groupName: null,
-					minimum: 0,
-					maximum: 10,
-					atLeast: 1,
-					atMost: 1,
-					default: '5'
+					Minimum: 0,
+					Maximum: 10,
+					AtLeast: 1,
+					AtMost: 1,
+					Default: '5'
 				}
 			],
-			outputs: []
+			Outputs: []
 		};
 		route({
 			'/': onlineServer,

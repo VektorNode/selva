@@ -10,7 +10,7 @@ const CONFIG = { serverUrl: 'http://localhost:6500' };
 
 afterEach(() => fetchMock.mockReset());
 
-/** A realistic camelCase /io response with a value-list input. */
+/** A camelCase /io response (older 9.x.selva builds) with a value-list input. */
 function ioResponse() {
 	return {
 		description: '',
@@ -62,10 +62,9 @@ describe('fetchDefinitionIO casing seam', () => {
 });
 
 /**
- * A PascalCase `/io` body as emitted by an upstream-tracking server branch
- * (`8.x.selva`): top-level `Inputs`/`Outputs`, per-param `ParamType`/`Minimum`/
- * `Name`/… with only `id`/`groupName`/`values` lowercased (the fields that DO
- * carry `[JsonProperty]`).
+ * A PascalCase `/io` body as every server branch emits it: top-level
+ * `Inputs`/`Outputs`, per-param `ParamType`/`Minimum`/`Name`/… with only
+ * `id`/`groupName`/`values` lowercased (the fields that carry `[JsonProperty]`).
  */
 function pascalIoResponse() {
 	return {
@@ -97,7 +96,7 @@ function pascalIoResponse() {
 	};
 }
 
-describe('fetchDefinitionIO parses a PascalCase server response (8.x.selva)', () => {
+describe('fetchDefinitionIO parses a PascalCase server response', () => {
 	it('reads top-level Inputs/Outputs and per-param PascalCase fields', async () => {
 		fetchMock.mockResolvedValue(createMockResponse(pascalIoResponse()));
 

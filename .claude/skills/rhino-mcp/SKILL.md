@@ -134,7 +134,7 @@ have no equivalent graft path — hand-edit that one.
 
 ## C# Script components (Rhino 8, `b6ba1144-…`)
 
-Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Three traps:
+Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Four traps:
 
 - **`SetParametersFromScript()` does not parse the `RunScript` signature.** The params stay
   `x`, `y` → `out`, `a`. Rename them yourself (`Name`, `NickName`, `Access`); `VariableName`
@@ -145,6 +145,10 @@ Scriptable from `run_csharp`: `((dynamic)comp).SetSource(code)`. Three traps:
 - **Value List items are expressions.** `new GH_ValueListItem("none", "none")` yields `none`;
   quoting the expression (`"\"none\""`) yields the quotes too. Only the local canvas sees them:
   Compute takes the value from the schema, so a server solve won't reveal it.
+- **`new Sphere(center, r).IsValid` is false on Compute** (Rhino 9.1.26300.1000) for a finite
+  centre and positive radius; local Rhino 9.0 says true. Every sphere mesher (`CreateIcoSphere`,
+  `CreateFromSphere`) then throws "sphere is invalid". Build sphere meshes from vertices yourself.
+  A local solve that passes proves nothing about Compute's Rhino build.
 
 Adding your own params: remove the defaults with `Params.UnregisterInputParameter`, then for each
 one call `((IGH_VariableParameterComponent)c).CreateParameter(side, i)`, set `Name`/`NickName`/
