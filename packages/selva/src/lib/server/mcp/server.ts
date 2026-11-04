@@ -4,6 +4,7 @@ import { env } from '$env/dynamic/private';
 import { REGISTERED_CLIENT_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
 import { oauthConfigured } from '$lib/server/oauth/server';
 import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
+import { getLogger } from '$lib/server/providers.server';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
 /** Every action the key's scopes cover, as `scopeAllows` decides at /api/v1. */
@@ -67,7 +68,10 @@ function serverFor(origin: string): ReturnType<typeof createMcpServer> {
 		tools: selvaTools(origin),
 		grantedActions,
 		allowedOrigins: mcpAllowedOrigins(),
-		challenge: challengeFor(origin)
+		challenge: challengeFor(origin),
+		// One `[mcp]` record per tool call: argument names and sizes, never values.
+		onToolCall: (call) =>
+			getLogger().info(`[mcp] ${call.tool} ${call.outcome} ${call.durationMs}ms`, { mcp: call })
 	});
 	if (servers.size >= MAX_CACHED_ORIGINS) servers.delete(servers.keys().next().value!);
 	servers.set(origin, server);

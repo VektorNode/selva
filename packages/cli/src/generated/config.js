@@ -1162,7 +1162,18 @@ var APP_SETTINGS = composeManifest([
 		onInvalid: 'fail',
 		class: 'secret',
 		sensitive: true,
-		description: 'Ship unexpected server errors to Sentry.'
+		description:
+			'Ship unexpected server errors to Sentry, scrubbed of cookies, auth headers, bodies and query strings.'
+	}),
+	defineSetting({
+		key: 'SENTRY_TRACES_SAMPLE_RATE',
+		label: 'Sentry trace sampling',
+		type: 'string',
+		default: '0',
+		onInvalid: 'default',
+		class: 'tunable',
+		description:
+			'Share of requests traced to Sentry, 0–1 (out of range is clamped). 0 sends errors only.'
 	}),
 	defineSetting({
 		key: 'SELVA_RELEASE',

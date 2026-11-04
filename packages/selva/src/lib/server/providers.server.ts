@@ -282,7 +282,8 @@ if (env.SENTRY_DSN) {
 	void SentryErrorReporter.create({
 		dsn: env.SENTRY_DSN,
 		environment: env.NODE_ENV,
-		release: env.SELVA_RELEASE
+		release: env.SELVA_RELEASE,
+		tracesSampleRate: env.SENTRY_TRACES_SAMPLE_RATE
 	}).then((reporter) => {
 		if (reporter) {
 			_errorReporter = reporter;

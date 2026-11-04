@@ -40,6 +40,14 @@ const ENDPOINTS: Endpoint[] = [
 	},
 	{
 		method: 'POST',
+		path: '/jobs/{id}/preview',
+		scope: 'write',
+		longRunning: true,
+		summary: 'Solve without releasing.',
+		response: 'object'
+	},
+	{
+		method: 'POST',
 		path: '/uploads',
 		scope: 'write',
 		summary: 'Upload.',

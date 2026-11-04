@@ -26,6 +26,7 @@ import { signInMaxAgeMs } from '$lib/server/signInMaxAge.server';
 import { apiTokenCodec, apiTokenResolutions } from '$lib/server/apiTokens/token.server';
 import { MCP_PATH } from '$lib/server/mcp/path';
 import { requestMemo } from '$lib/server/requestMemo.server';
+import { requestTiming } from '$lib/server/requestTiming.server';
 
 const OAUTH_TOKEN_PATH = '/oauth/token';
 const holderVerdicts = createHolderVerdictCache();
@@ -63,6 +64,7 @@ let proxyAuthLoginMissWarned = false;
 // Once at server start, never in tests that import this module for `handle`.
 export const init: ServerInit = () => {
 	checkConfigAtBoot();
+	requestTiming.markBooted();
 };
 
 // One-way transition (zero users → at least one). Once true, permanent —
@@ -223,9 +225,21 @@ const routeClassifier = createRouteClassifier({
 // bug in either is security-relevant.
 export const { isStaticAsset, isSelfGatingApiRoute, isPublicRoute } = routeClassifier;
 
-// Every request runs inside its read memo, so a layout and its page share repeated reads.
-export const handle: import('@sveltejs/kit').Handle = (input) =>
-	requestMemo.run(input.event.request.method, () => gate(input));
+// Every request runs inside its read memo, so a layout and its page share repeated reads, and
+// inside its timing store; static assets skip the timing.
+export const handle: import('@sveltejs/kit').Handle = (input) => {
+	const { event } = input;
+	const run = () => requestMemo.run(event.request.method, () => gate(input));
+	if (isStaticAsset(event.url.pathname)) return run();
+	return requestTiming.timeRequest(
+		{
+			method: event.request.method,
+			route: event.route.id ?? event.url.pathname,
+			isDataRequest: event.isDataRequest
+		},
+		async () => run()
+	);
+};
 
 const gate: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;

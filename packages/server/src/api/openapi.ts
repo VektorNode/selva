@@ -2,7 +2,7 @@
  * Builds an OpenAPI 3.1 document for a host's `/api/v1` from its route registry.
  *
  * Shared so every host publishes the same shape: `@selvajs/mcp` reads
- * `operationId`, `x-scope`, `x-internal` and the `Idempotency-Key` parameter
+ * `operationId`, `x-scope`, `x-internal`, `x-long-running` and the `Idempotency-Key` parameter
  * from it, and nothing else.
  *
  * Request schemas come from `z.toJSONSchema` over the actual validators, so a
@@ -52,6 +52,11 @@ export interface Endpoint {
 	errors?: number[];
 	/** Honours `Idempotency-Key`; must match the route's `idempotent` mount option. */
 	idempotent?: boolean;
+	/**
+	 * Runs a Compute solve or schema read without the `solve` scope (a preview, an upload).
+	 * Emitted as `x-long-running`; MCP clients give it the solve timeout.
+	 */
+	longRunning?: boolean;
 }
 
 export interface OpenApiOptions {
@@ -188,6 +193,7 @@ function operationFor(
 	};
 
 	if (ep.internal) op['x-internal'] = true;
+	if (ep.longRunning) op['x-long-running'] = true;
 
 	const params = parametersFor(ep);
 	if (params.length) op.parameters = params;

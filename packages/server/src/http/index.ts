@@ -39,3 +39,11 @@ export {
 	type ResolveApiTokenOptions
 } from './api-token.js';
 export { createRequestMemo, type RequestMemo } from './request-memo.js';
+export {
+	createRequestTiming,
+	parseServerTimingHeader,
+	type RequestTiming,
+	type RequestTimingOptions,
+	type TimedRequest,
+	type Upstream
+} from './request-timing.js';

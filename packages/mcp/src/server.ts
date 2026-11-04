@@ -7,7 +7,13 @@ import {
 } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { z } from 'zod';
-import { createApiClient, type Api, type ApiClientOptions, type UntypedApi } from './client.js';
+import {
+	createApiClient,
+	type Api,
+	type ApiCallRecord,
+	type ApiClientOptions,
+	type UntypedApi
+} from './client.js';
 import { ApiCallError, describeError, type ErrorHint } from './errors.js';
 import type { ToolOutput } from './output.js';
 import { indexOperations, type JsonSchema, type OperationIndex, type ScopeAction } from './spec.js';
@@ -72,6 +78,27 @@ export interface McpServerOptions extends Omit<ApiClientOptions, 'apiKey'> {
 	grantedActions?: (api: UntypedApi) => Promise<Iterable<ScopeAction>>;
 	/** Advertised on 401 and 403, so OAuth clients can find the authorization server. */
 	challenge?: { resourceMetadataUrl: string; scopes: string[] };
+	/**
+	 * Told of every tool call once it settles: for logs and traces. Its record carries
+	 * argument names and sizes, never values. Must not throw; a throw is dropped.
+	 */
+	onToolCall?: (call: ToolCallRecord) => void;
+}
+
+/** One `tools/call` as `onToolCall` sees it. */
+export interface ToolCallRecord {
+	tool: string;
+	durationMs: number;
+	/** `invalid_arguments`: refused before any call; `timeout`: a call got no answer in time. */
+	outcome: 'ok' | 'error' | 'timeout' | 'invalid_arguments';
+	/** The failing call's code, or the thrown error's name. */
+	code?: string;
+	/** The host API calls it made, in the order they settled. */
+	calls: ApiCallRecord[];
+	/** Each argument's JSON length, by name. */
+	argumentBytes: Record<string, number>;
+	/** The text and structured content returned, in characters. */
+	responseBytes: number;
 }
 
 interface ResolvedTool {
@@ -194,15 +221,43 @@ export function createMcpServer(options: McpServerOptions): SelvaMcpServer {
 								.catch(() => {});
 						}, HEARTBEAT_MS);
 
+			const calls: ApiCallRecord[] = [];
+			let ended: Pick<ToolCallRecord, 'outcome' | 'code'> = { outcome: 'ok' };
+			let result: CallToolResult | undefined;
 			try {
-				const api = createApiClient(spec, clientOptions, new Set(resolved.def.calls));
+				const api = createApiClient(
+					spec,
+					{
+						...clientOptions,
+						onCall: (call) => {
+							calls.push(call);
+							clientOptions.onCall?.(call);
+						}
+					},
+					new Set(resolved.def.calls)
+				);
 				const args: unknown = resolved.input.parse(req.params.arguments ?? {});
 				const out = await resolved.def.run(api, args, { signal: ctx.mcpReq.signal, spec });
-				return toResult(typeof out === 'string' ? { text: out } : out);
+				result = toResult(typeof out === 'string' ? { text: out } : out);
+				return result;
 			} catch (err) {
-				return errorResult(describe(err, resolved.def.errorHint ?? options.errorHint));
+				ended = outcomeOf(err);
+				result = errorResult(describe(err, resolved.def.errorHint ?? options.errorHint));
+				return result;
 			} finally {
 				clearInterval(heartbeat);
+				if (options.onToolCall) {
+					report(options.onToolCall, {
+						tool: resolved.def.name,
+						durationMs: Date.now() - started,
+						...ended,
+						calls,
+						argumentBytes: sizes(req.params.arguments),
+						responseBytes: result
+							? jsonLength(result.content) + jsonLength(result.structuredContent)
+							: 0
+					});
+				}
 			}
 		});
 
@@ -493,6 +548,35 @@ function checkCalls(owner: string, calls: string[], spec: OperationIndex): void 
 		if (!op) throw new Error(`${owner} calls ${id}, which is not in the host's OpenAPI document`);
 		// Internal operations carry no stability promise; a tool built on one breaks silently.
 		if (op.internal) throw new Error(`${owner} calls ${id}, which is x-internal`);
+	}
+}
+
+function outcomeOf(err: unknown): Pick<ToolCallRecord, 'outcome' | 'code'> {
+	if (err instanceof ApiCallError) {
+		return { outcome: err.code === 'TIMEOUT' ? 'timeout' : 'error', code: err.code };
+	}
+	if (err instanceof z.ZodError) return { outcome: 'invalid_arguments' };
+	return { outcome: 'error', code: err instanceof Error ? err.name : 'Error' };
+}
+
+function jsonLength(value: unknown): number {
+	if (value === undefined) return 0;
+	try {
+		return JSON.stringify(value).length;
+	} catch {
+		return 0;
+	}
+}
+
+function sizes(args: Record<string, unknown> | undefined): Record<string, number> {
+	return Object.fromEntries(Object.entries(args ?? {}).map(([k, v]) => [k, jsonLength(v)]));
+}
+
+function report(observer: (call: ToolCallRecord) => void, call: ToolCallRecord): void {
+	try {
+		observer(call);
+	} catch {
+		// An observer's failure is not the tool call's.
 	}
 }
 
