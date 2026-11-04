@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Compute render switch moved from the builder's Compute panel to a new Rendering section in the Viewer panel.
+- The viewer no longer shows a progress bar along its top edge while a solve runs.
+- Dropdowns open up to a fixed height instead of filling the space left on screen.
+- Shorter wording in the Selva upload dialog and its result screen for live and draft versions.
+
 ## [0.24.2-beta.4] - 2026-11-03
 
 ### Added
