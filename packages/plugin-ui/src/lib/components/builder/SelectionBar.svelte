@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { TabConfig } from '@selvajs/schemas';
 	import { Button, DropdownMenu } from '@selvajs/ui';
-	import { builderSelection } from '$lib/features/builder/selection.svelte';
+	import { builderSelection } from '#lib/features/builder/selection.svelte.js';
 	import { X } from '@lucide/svelte';
 	import { untrack } from 'svelte';
 

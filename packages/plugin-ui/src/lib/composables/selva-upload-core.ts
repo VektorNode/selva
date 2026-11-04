@@ -10,13 +10,13 @@ import type {
 	SelvaUploadResult,
 	SelvaVersionTarget
 } from '@selvajs/schemas';
-import type { SelvaSource } from '$lib/selva-source/selva-source';
+import type { SelvaSource } from '#lib/selva-source/selva-source.js';
 import type {
 	WsSelvaAccountMessage,
 	WsSelvaTargetsMessage,
 	WsSelvaUploadProgressMessage,
 	WsSelvaUploadResultMessage
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 
 export type UploadTarget =
 	{ kind: 'newVersion'; definitionGuid: string } | { kind: 'newDefinition' };

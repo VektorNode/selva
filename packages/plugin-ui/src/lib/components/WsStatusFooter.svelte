@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Circle } from '@lucide/svelte';
-	import { isRhinoPanel } from '$lib/utils/session';
+	import { isRhinoPanel } from '#lib/utils/session.js';
 
 	interface Props {
 		connected: boolean;

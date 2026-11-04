@@ -12,12 +12,12 @@
 		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Plus, ShieldCheck, X, Search, Users } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { OrgRole, PlatformPermission } from '@selvajs/platform';
 	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
 	import UserListItem from './UserListItem.svelte';
-	import { PERMISSION_LABELS, ORG_ROLES } from '$lib/permission-labels';
+	import { PERMISSION_LABELS, ORG_ROLES } from '#lib/permission-labels.js';
 
 	interface PageData {
 		users: UserRow[] | null;
@@ -152,7 +152,7 @@
 				newEmail = '';
 				newPermissions = [];
 				showAddForm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({ error: 'Unknown error' }));
 				toast.error(err.message || err.error || 'Failed to create user');
@@ -174,11 +174,11 @@
 			});
 			if (res.ok) {
 				toast.success('Permissions updated');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to update permissions');
-				await invalidateAll();
+				await refreshAll();
 			}
 		} catch {
 			toast.error('Failed to update permissions');
@@ -201,7 +201,7 @@
 			if (res.ok) {
 				toast.success(`User "${email}" disabled`);
 				showDisableConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to disable user');
@@ -220,7 +220,7 @@
 			if (res.ok) {
 				toast.success(`User "${email}" deleted`);
 				showDeleteConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to delete user');

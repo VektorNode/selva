@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, Dialog, Label, Textarea, toast } from '@selvajs/ui';
 	import { Upload, FileUp } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 
 	interface Props {
 		definitionGuid: string;
@@ -48,7 +48,7 @@
 				const result = await res.json();
 				toast.success(`v${result.version?.versionNumber ?? nextVersionNumber} uploaded as draft`);
 				onUploaded();
-				await invalidateAll();
+				await refreshAll();
 				onOpenChange(false);
 			} else {
 				const e = await res.json().catch(() => ({}));

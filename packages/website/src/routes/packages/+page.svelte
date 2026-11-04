@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { apiDocsUrl, npmUrl, packagesByCategory, readmeUrl } from '$lib/packages';
+	import { apiDocsUrl, npmUrl, packagesByCategory, readmeUrl } from '#lib/packages.js';
 
 	const groups = packagesByCategory();
 

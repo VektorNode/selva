@@ -7,7 +7,7 @@
 		KeyRotation,
 		ReportRow
 	} from '@selvajs/platform/config';
-	import type { ConfigCheck } from '$lib/server/config/checks';
+	import type { ConfigCheck } from '#lib/server/config/checks.js';
 
 	let {
 		report,

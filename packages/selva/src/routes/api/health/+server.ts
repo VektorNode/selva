@@ -2,7 +2,7 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'crypto';
 import { createRequire } from 'module';
-import { getBootHealth, isDegraded } from '$lib/server/bootHealth.server';
+import { getBootHealth, isDegraded } from '#lib/server/bootHealth.server.js';
 
 // Per-process fingerprint generated fresh on every boot, so a client polling
 // after a restart can confirm the *new* process is answering by watching for

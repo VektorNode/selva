@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, Card, toast, ConfirmDialog } from '@selvajs/ui';
 	import { ImageUp, Trash2, Building2 } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { OrgAssetKind } from '@selvajs/platform';
 
 	interface Props {
@@ -49,7 +49,7 @@
 			const res = await fetch(endpoint, { method: 'POST', body });
 			if (res.ok) {
 				toast.success(`${title} updated`);
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || `Upload failed (${res.status})`);
@@ -68,7 +68,7 @@
 			if (res.ok) {
 				toast.success(`${title} removed`);
 				confirmingRemove = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				toast.error(`Remove failed (${res.status})`);
 			}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { InputGroup } from '@selvajs/ui';
 	import { Search } from '@lucide/svelte';
-	import { iconNodeToPath, listIcons, type IconNode } from '$lib/features/builder/option-assets';
+	import { iconNodeToPath, listIcons, type IconNode } from '#lib/features/builder/option-assets.js';
 
 	interface Props {
 		/** The icon already in use; a `lucide:<name>` is ringed in the grid. */

@@ -18,7 +18,7 @@ import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DomainEvent } from '@selvajs/platform';
 import { renderThrown } from '@selvajs/server/logging';
-import { deriveOutcome } from '$lib/update-outcome';
+import { deriveOutcome } from '#lib/update-outcome.js';
 import { getLogger } from './providers.server.js';
 
 // ============================================================================

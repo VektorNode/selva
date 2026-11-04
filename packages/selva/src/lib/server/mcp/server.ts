@@ -1,10 +1,10 @@
 import { createMcpServer, refuseEarly, type ScopeAction, type UntypedApi } from '@selvajs/mcp';
 import { ApiScopeActionSchema, apiScopeActionCovers, parseApiScope } from '@selvajs/platform';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { REGISTERED_CLIENT_SCOPES, resourceMetadataUrl } from '@selvajs/server/oauth';
-import { oauthConfigured } from '$lib/server/oauth/server';
-import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
-import { getLogger } from '$lib/server/providers.server';
+import { oauthConfigured } from '#lib/server/oauth/server.js';
+import { buildOpenApiDocument } from '#lib/server/api/v1/openapi.js';
+import { getLogger } from '#lib/server/providers.server.js';
 import { INSTRUCTIONS, selvaTools } from './tools';
 
 /** Every action the key's scopes cover, as `scopeAllows` decides at /api/v1. */

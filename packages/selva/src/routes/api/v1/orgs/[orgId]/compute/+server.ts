@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { mount } from '$lib/server/api/sveltekit';
+import { mount } from '#lib/server/api/sveltekit.js';
 import { getOrgCompute, updateOrgCompute } from '@selvajs/server/handlers';
 
 export const GET: RequestHandler = mount('Failed to load org compute config', getOrgCompute);

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import type { DocSidebarGroup } from '$lib/docs';
+	import type { DocSidebarGroup } from '#lib/docs.js';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
 	let { groups }: { groups: DocSidebarGroup[] } = $props();

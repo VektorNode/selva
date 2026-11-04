@@ -1,5 +1,8 @@
 <script lang="ts">
-	import { builderSelection, preventShiftTextSelect } from '$lib/features/builder/selection.svelte';
+	import {
+		builderSelection,
+		preventShiftTextSelect
+	} from '#lib/features/builder/selection.svelte.js';
 	import type {
 		InputLayoutItem,
 		OutputLayoutItem,
@@ -34,7 +37,7 @@
 	import { getBuilderDraft } from './draft-context';
 	import ScopeChip from './scope/ScopeChip.svelte';
 	import ScopeSection from './scope/ScopeSection.svelte';
-	import { SOURCE_KIND_LABELS, type SourceKind } from '$lib/features/builder';
+	import { SOURCE_KIND_LABELS, type SourceKind } from '#lib/features/builder/index.js';
 	import { dragHandle } from 'svelte-dnd-action';
 
 	const SOURCE_KINDS = Object.keys(SOURCE_KIND_LABELS) as SourceKind[];

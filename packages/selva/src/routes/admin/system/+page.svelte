@@ -9,8 +9,8 @@
 	import NetworkSection from './NetworkSection.svelte';
 	import ConfigSection from './ConfigSection.svelte';
 	import type { ConfigChange, ConfigReport, KeyRotation } from '@selvajs/platform/config';
-	import type { ConfigCheck } from '$lib/server/config/checks';
-	import { pollForRestart, type RestartHealth } from '$lib/update-restart-poll';
+	import type { ConfigCheck } from '#lib/server/config/checks.js';
+	import { pollForRestart, type RestartHealth } from '#lib/update-restart-poll.js';
 
 	interface PageData {
 		canManageUpdates: boolean;
@@ -68,7 +68,7 @@
 
 	function selectTab(id: string) {
 		requestedTab = id;
-		const url = new URL(page.url);
+		const url = new URL(page.url.href);
 		url.searchParams.set('tab', id);
 		replaceState(url, page.state);
 	}
@@ -247,7 +247,7 @@
 	}
 
 	// Poll until the new process is serving. The loop itself lives in
-	// `$lib/update-restart-poll` so it can be tested against a clock and probes
+	// `#lib/update-restart-poll.js` so it can be tested against a clock and probes
 	// that misbehave on demand; this wrapper owns only the `$state` writes.
 	async function waitForAppRestart(previousInstanceId: string | null | undefined) {
 		// The daemonized runner never streams over SSE, so the SSE `restarting`

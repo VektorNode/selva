@@ -18,7 +18,7 @@ import type {
 	ConnectResult,
 	PreviewSolveDriver
 } from './schema-source';
-import type { SyncChange } from '$lib/websocket/websocket.svelte';
+import type { SyncChange } from '#lib/websocket/websocket.svelte.js';
 
 /** A SolveDriver stand-in that records solves and exposes its reporter for the test to use. */
 export interface FakeSolveDriver extends PreviewSolveDriver {

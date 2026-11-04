@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getDoc, getDocsSidebar } from '$lib/docs';
-	import Breadcrumbs from '$lib/components/docs/Breadcrumbs.svelte';
-	import DocsBar from '$lib/components/docs/DocsBar.svelte';
-	import DocsNav from '$lib/components/docs/DocsNav.svelte';
-	import TableOfContents from '$lib/components/docs/TableOfContents.svelte';
+	import { getDoc, getDocsSidebar } from '#lib/docs.js';
+	import Breadcrumbs from '#lib/components/docs/Breadcrumbs.svelte';
+	import DocsBar from '#lib/components/docs/DocsBar.svelte';
+	import DocsNav from '#lib/components/docs/DocsNav.svelte';
+	import TableOfContents from '#lib/components/docs/TableOfContents.svelte';
 
 	let { children } = $props();
 
@@ -17,7 +17,7 @@
 
 	let article = $state<HTMLElement>();
 
-	// Wire up the copy button baked into every Shiki code block (see svelte.config.js).
+	// Wire up the copy button baked into every Shiki code block (see mdsvex.config.js).
 	// Re-runs on navigation since page.url changes when the rendered doc swaps.
 	$effect(() => {
 		// Touch page.url so this re-runs when the route (and thus the markup) changes.

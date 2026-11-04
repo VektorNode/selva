@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, ENV_VAR_GROUPS, type Mode } from '$lib/architecture';
+	import {
+		CLOUD_STEPS,
+		LOCAL_STEPS,
+		LAYERS,
+		ENV_VAR_GROUPS,
+		type Mode
+	} from '#lib/architecture.js';
 	import DetailBlocks from './DetailBlocks.svelte';
 	import SolveWalkthrough from './SolveWalkthrough.svelte';
 	import LocalWalkthrough from './LocalWalkthrough.svelte';

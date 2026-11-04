@@ -1,20 +1,20 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getAuthProvider } from '$lib/server/providers.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
 import {
 	getEventSink,
 	getOrganizationProvider,
 	getPermissionStore
-} from '$lib/server/providers.server';
+} from '#lib/server/providers.server.js';
 import {
 	assertCanGrantPlatformPermissions,
 	requireManageInstanceUsers
-} from '$lib/server/access.server';
+} from '#lib/server/access.server.js';
 import { listAllOrgMembers } from '@selvajs/server/organizations';
-import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, created, parseBody } from '$lib/server/api/http';
+import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, created, parseBody } from '#lib/server/api/http.js';
 import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,

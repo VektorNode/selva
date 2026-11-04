@@ -3,9 +3,9 @@
 
 import { untrack } from 'svelte';
 import { toast } from '@selvajs/ui';
-import { getWebSocketPortFromUrl } from '$lib/utils/session';
-import { getGrasshopperSelvaSource } from '$lib/selva-source/grasshopper-selva-source';
-import type { SelvaSource } from '$lib/selva-source/selva-source';
+import { getWebSocketPortFromUrl } from '#lib/utils/session.js';
+import { getGrasshopperSelvaSource } from '#lib/selva-source/grasshopper-selva-source.js';
+import type { SelvaSource } from '#lib/selva-source/selva-source.js';
 import {
 	createInitialSelvaUploadState,
 	openDialog,

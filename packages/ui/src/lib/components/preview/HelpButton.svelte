@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { HelpCircle } from '@lucide/svelte';
-	import * as Dialog from '$lib/components/primitives/dialog';
+	import * as Dialog from '#lib/components/primitives/dialog/index.js';
 
 	interface Props {
 		/** The field's label: the dialog title and the button's accessible name. */

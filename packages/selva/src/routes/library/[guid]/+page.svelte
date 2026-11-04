@@ -3,10 +3,10 @@
 	import { ComputeApp } from '@selvajs/ui';
 	import { createComputeFetchSolveFn, createSolveEventStream } from '@selvajs/solve/client';
 	import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
-	import ServerFooter from '$lib/components/ServerFooter.svelte';
-	import UserChip from '$lib/components/UserChip.svelte';
-	import MainNav from '$lib/components/MainNav.svelte';
-	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import ServerFooter from '#lib/components/ServerFooter.svelte';
+	import UserChip from '#lib/components/UserChip.svelte';
+	import MainNav from '#lib/components/MainNav.svelte';
+	import SettingsMenu from '#lib/components/SettingsMenu.svelte';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';

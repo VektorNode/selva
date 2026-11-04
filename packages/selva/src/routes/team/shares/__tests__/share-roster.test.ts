@@ -21,7 +21,7 @@ import {
 	seedShareLink,
 	actAs,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { load, type ShareRow } from '../+page.server.js';
 
 let tp: TestProviders | null = null;

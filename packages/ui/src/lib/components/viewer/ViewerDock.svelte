@@ -16,8 +16,8 @@
 		Cuboid
 	} from '@lucide/svelte';
 	import type { CameraProjection, Look, ViewPreset } from '@selvajs/visualization/render';
-	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
-	import type { ViewerMessages } from '$lib/i18n/messages';
+	import * as DropdownMenu from '#lib/components/primitives/dropdown-menu/index.js';
+	import type { ViewerMessages } from '#lib/i18n/messages.js';
 
 	interface Props {
 		t: ViewerMessages;

@@ -3,9 +3,9 @@
 	import { onMount, tick } from 'svelte';
 	import { mode } from 'mode-watcher';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
-	import { loadScript } from '$lib/utils/loadScript';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatMessage } from '$lib/i18n/messages';
+	import { loadScript } from '#lib/utils/loadScript.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
 		item: OutputChartLayoutItem;

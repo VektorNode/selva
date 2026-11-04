@@ -5,16 +5,16 @@
 // session (loadValues, session.values mutation).
 
 import type { DiscoveredInput, UISchema } from '@selvajs/schemas';
-import { ensureSchemaLayoutDefaults } from '$lib/utils/schema-defaults';
+import { ensureSchemaLayoutDefaults } from '#lib/utils/schema-defaults.js';
 import {
 	initializeValues,
 	processOutputUpdate,
 	updateParameterMetadata
-} from '$lib/features/preview/handlers';
+} from '#lib/features/preview/handlers.js';
 import {
 	formatParameterUpdateMessage,
 	formatMetadataUpdateMessage
-} from '$lib/features/preview/notifications.svelte';
+} from '#lib/features/preview/notifications.svelte.js';
 import type {
 	WsInitialDataMessage,
 	WsOutputsMessage,
@@ -22,7 +22,7 @@ import type {
 	WsMetadataUpdatedMessage,
 	WsCurrentValuesMessage,
 	WsSessionMessage
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 
 export interface PreviewState {
 	schema: UISchema | null;

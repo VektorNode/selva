@@ -5,10 +5,10 @@ import {
 	listOrgApiTokens,
 	type ApiTokenRow
 } from '@selvajs/server/handlers';
-import { getUserProfileStore, providers } from '$lib/server/providers.server';
-import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
-import { offeredTokenPresets } from '$lib/server/apiTokens/presets.server';
-import type { TokenRow } from '$lib/apiTokens';
+import { getUserProfileStore, providers } from '#lib/server/providers.server.js';
+import { apiTokenCodec } from '#lib/server/apiTokens/token.server.js';
+import { offeredTokenPresets } from '#lib/server/apiTokens/presets.server.js';
+import type { TokenRow } from '#lib/apiTokens.js';
 import type { PageServerLoad } from './$types';
 
 export interface RosterRow extends TokenRow {

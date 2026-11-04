@@ -1,5 +1,5 @@
-import { getBranding, flag, getAuthProvider } from '$lib/server/providers.server';
-import { offeredTokenPresets } from '$lib/server/apiTokens/presets.server';
+import { getBranding, flag, getAuthProvider } from '#lib/server/providers.server.js';
+import { offeredTokenPresets } from '#lib/server/apiTokens/presets.server.js';
 import type { LayoutServerLoad } from './$types';
 
 // Expose the authenticated user to every route in the app.

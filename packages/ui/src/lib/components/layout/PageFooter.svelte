@@ -2,11 +2,11 @@
 	import type { Snippet } from 'svelte';
 	import { CircleAlert, TriangleAlert, Info } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
-	import { useFooter } from '$lib/contexts/footerContext.svelte';
+	import { useFooter } from '#lib/contexts/footerContext.svelte.js';
 	import ComputeMessagesDialog from '../compute/ComputeMessagesDialog.svelte';
 	import FooterItemRenderer from './FooterItemRenderer.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatCount, formatMessage } from '$lib/i18n/messages';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatCount, formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
 		errors?: string[];

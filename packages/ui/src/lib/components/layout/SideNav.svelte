@@ -15,7 +15,7 @@
 	import { page } from '$app/state';
 	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
 	import Check from '@lucide/svelte/icons/check';
-	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
+	import * as DropdownMenu from '#lib/components/primitives/dropdown-menu/index.js';
 
 	interface SideNavProps {
 		items: SideNavItem[];

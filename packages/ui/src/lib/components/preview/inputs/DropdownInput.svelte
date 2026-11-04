@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, SupportedTypes, UISchema } from '@selvajs/schemas';
-	import * as Select from '$lib/components/primitives/select';
-	import { optionGlyph } from '$lib/schema/option-display';
+	import * as Select from '#lib/components/primitives/select/index.js';
+	import { optionGlyph } from '#lib/schema/option-display.js';
 	import OptionGlyph from './OptionGlyph.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	interface Props {
 		value?: string;

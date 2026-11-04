@@ -20,7 +20,7 @@ import type {
 	WsSyncPreviewMessage,
 	WsSyncAppliedMessage,
 	SyncChange
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 import type { UISchema } from '@selvajs/schemas';
 
 /**

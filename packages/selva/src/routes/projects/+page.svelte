@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { goto, refreshAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { SvelteURLSearchParams } from 'svelte/reactivity';
 	import {
 		AlertDialog,
@@ -14,11 +14,11 @@
 		FilterableDropdown
 	} from '@selvajs/ui';
 	import { FolderPlus, Plus, Settings } from '@lucide/svelte';
-	import AddDefinitionDialog from '$lib/components/definitions/AddDefinitionDialog.svelte';
+	import AddDefinitionDialog from '#lib/components/definitions/AddDefinitionDialog.svelte';
 	import ProjectSidebar from './_components/ProjectSidebar.svelte';
 	import CreateProjectDialog from './_components/CreateProjectDialog.svelte';
 	import ProjectSettingsDialog from './_components/ProjectSettingsDialog.svelte';
-	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
+	import DefinitionCard from '#lib/components/definitions/DefinitionCard.svelte';
 	import DefinitionListView from './_components/DefinitionListView.svelte';
 	import DefinitionDetailDrawer from './_components/DefinitionDetailDrawer.svelte';
 	import DefinitionEditDrawer from './_components/DefinitionEditDrawer.svelte';
@@ -40,12 +40,13 @@
 		users: AuthUser[];
 		canManageProjects: boolean;
 	}
+
 	interface Props {
 		data: PageData;
 	}
-	let { data }: Props = $props();
 
-	const enableSharing = $derived(!!$page.data.flags?.enableSharing);
+	let { data }: Props = $props();
+	const enableSharing = $derived(!!page.data.flags?.enableSharing);
 
 	// View state
 	let searchQuery = $state('');
@@ -53,7 +54,7 @@
 	let viewMode = $state<'grid' | 'list'>('grid');
 
 	$effect(() => {
-		const projectSlug = $page.url.searchParams.get('project');
+		const projectSlug = page.url.searchParams.get('project');
 		if (projectSlug) {
 			const project = data.projects.find((p) => p.slug === projectSlug);
 			if (project) {
@@ -152,7 +153,7 @@
 				toast.success('Definition saved');
 				editingDefinitionId = null;
 				drawerRecord = null;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				toast.error(await errorMessage(res, 'Save failed'));
 			}
@@ -170,7 +171,7 @@
 			if (res.ok) {
 				toast.success(`"${rec?.displayName ?? 'Definition'}" deleted`);
 				editingDefinitionId = null;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				toast.error(await errorMessage(res, 'Delete failed'));
 			}
@@ -186,7 +187,7 @@
 			if (res.ok) {
 				toast.success(`"${formData.get('displayName')}" created`);
 				showAddModal = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const msg = await errorMessage(res, 'Failed to create definition');
 				toast.error(msg);
@@ -204,7 +205,7 @@
 		activeProjectId = id;
 		const project = data.projects.find((p) => p.id === id);
 		if (project) {
-			const params = new SvelteURLSearchParams($page.url.search);
+			const params = new SvelteURLSearchParams(page.url.search);
 			params.set('project', project.slug);
 			window.history.replaceState(null, '', `?${params}`);
 		}
@@ -223,7 +224,7 @@
 		if (res.ok) {
 			const created = (await res.json().catch(() => null)) as { id: string } | null;
 			toast.success(`Project "${p.name}" created`);
-			await invalidateAll();
+			await refreshAll();
 			if (created?.id) activeProjectId = created.id;
 		} else {
 			toast.error(await errorMessage(res, 'Failed to create project'));
@@ -243,7 +244,7 @@
 		if (res.ok) {
 			toast.success('Project saved');
 			editingProjectId = null;
-			await invalidateAll();
+			await refreshAll();
 		} else {
 			toast.error(await errorMessage(res, 'Failed to save project'));
 		}
@@ -258,7 +259,7 @@
 			}
 			deletingProjectId = null;
 			editingProjectId = null;
-			await invalidateAll();
+			await refreshAll();
 		} else {
 			toast.error(await errorMessage(res, 'Failed to delete project'));
 		}
@@ -275,7 +276,7 @@
 		});
 		if (res.ok) {
 			toast.success('Member added');
-			await invalidateAll();
+			await refreshAll();
 		} else {
 			toast.error(await errorMessage(res, 'Failed to add member'));
 		}
@@ -287,7 +288,7 @@
 			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ role })
 		});
-		if (res.ok) await invalidateAll();
+		if (res.ok) await refreshAll();
 		else toast.error('Failed to update role');
 	}
 
@@ -295,7 +296,7 @@
 		const res = await fetch(`/api/v1/projects/${projectId}/members/${userId}`, {
 			method: 'DELETE'
 		});
-		if (res.ok) await invalidateAll();
+		if (res.ok) await refreshAll();
 		else toast.error('Failed to remove member');
 	}
 </script>
@@ -352,10 +353,9 @@
 						</Button>
 					{/if}
 					{#if canAddDefinition}
-						<Button size="sm" onclick={() => (showAddModal = true)}>
-							<Plus class="mr-1.5 h-3.5 w-3.5" />
-							Add definition
-						</Button>
+						<Button size="sm" onclick={() => (showAddModal = true)}
+							><Plus class="mr-1.5 h-3.5 w-3.5" />Add definition</Button
+						>
 					{/if}
 				{/snippet}
 			</SectionHeader>

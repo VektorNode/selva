@@ -16,10 +16,10 @@
 	import { LoaderCircle } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import type { LiveSolveState, SolvePhase } from '@selvajs/solve/client';
-	import { Button } from '$lib/components/primitives/button';
-	import IssueList, { type Issue } from '$lib/components/primitives/IssueList.svelte';
-	import SeverityIcon from '$lib/components/primitives/SeverityIcon.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import IssueList, { type Issue } from '#lib/components/primitives/IssueList.svelte';
+	import SeverityIcon from '#lib/components/primitives/SeverityIcon.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	interface Props {
 		/** What the running (or most recent) solve has said over the live channel. */

@@ -15,7 +15,7 @@ import {
 	call,
 	grantPlatformPermissions,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { DELETE, PATCH } from '../[id]/+server.js';
 import { POST as DISABLE } from '../[id]/disable/+server.js';
 

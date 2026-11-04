@@ -4,9 +4,9 @@
 	import type { Component } from 'svelte';
 	import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
 	import { tick } from 'svelte';
-	import { usePersisted } from '$lib/composables/usePersisted.svelte';
-	import type { SearchTarget } from '$lib/features/builder';
-	import { bringIntoView, setSectionOpeners, type SectionOpeners } from './reveal';
+	import { usePersisted } from '#lib/composables/usePersisted.svelte.js';
+	import type { SearchTarget } from '#lib/features/builder/index.js';
+	import { bringIntoView, setSectionOpeners, type SectionOpeners } from './reveal.js';
 	import { SCOPES } from './scope/scopes';
 	import ParameterPanel from './sidebar/ParameterPanel.svelte';
 	import AppSettingsPanel from './sidebar/AppSettingsPanel.svelte';

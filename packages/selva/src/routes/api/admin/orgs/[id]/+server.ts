@@ -5,11 +5,11 @@ import {
 	getOrganizationProvider,
 	getProjectProvider,
 	getStorageProvider
-} from '$lib/server/providers.server';
+} from '#lib/server/providers.server.js';
 import { deleteOrgWithBlobs } from '@selvajs/server/projects';
-import { requireInstanceAdmin } from '$lib/server/access.server';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, noContent, parseBody, requireParams } from '$lib/server/api/http';
+import { requireInstanceAdmin } from '#lib/server/access.server.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, noContent, parseBody, requireParams } from '#lib/server/api/http.js';
 import { UpdateOrgSchema, ProviderError } from '@selvajs/platform';
 
 export const PATCH: RequestHandler = apiRoute(

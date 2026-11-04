@@ -29,9 +29,9 @@
 		isDiscoveredInput,
 		isDiscoveredOutput,
 		liftWithCount
-	} from '$lib/dnd/dndzone-helpers';
-	import { builderSelection } from '$lib/features/builder/selection.svelte';
-	import { captureDragFootprint, dragFootprint } from '$lib/dnd/drag-footprint.svelte';
+	} from '#lib/dnd/dndzone-helpers.js';
+	import { builderSelection } from '#lib/features/builder/selection.svelte.js';
+	import { captureDragFootprint, dragFootprint } from '#lib/dnd/drag-footprint.svelte.js';
 
 	type ZoneItem = (LayoutItem | DiscoveredInput | DiscoveredOutput) & {
 		isDndShadowItem?: true;

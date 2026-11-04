@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import {
 		AlertDialog,
 		Badge,
@@ -17,7 +17,7 @@
 	} from '@selvajs/ui';
 	import { ArrowLeft, Circle, Image, Trash2, X } from '@lucide/svelte';
 	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
-	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
+	import ProjectPicker from '#lib/components/definitions/ProjectPicker.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selvajs/platform';
 	import VersionsSection from './VersionsSection.svelte';
@@ -159,7 +159,7 @@
 			});
 			if (res.ok) {
 				toast.success('Cover image updated');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const e = await res.json().catch(() => ({}));
 				toast.error(e.message || 'Image upload failed');

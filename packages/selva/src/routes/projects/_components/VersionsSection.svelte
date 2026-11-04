@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, AlertDialog, toast } from '@selvajs/ui';
 	import { Upload, Play, CloudUpload, Trash2 } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { DefinitionVersion } from '@selvajs/platform';
 	import UploadVersionDialog from './UploadVersionDialog.svelte';
 
@@ -80,7 +80,7 @@
 			const result = await res.json();
 			toast.success(`v${result.version?.versionNumber ?? '?'} is now live`);
 			await loadVersions();
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error('Failed to publish');
 		} finally {
@@ -107,7 +107,7 @@
 			}
 			toast.success(`v${version.versionNumber} deleted`);
 			await loadVersions();
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error('Failed to delete version');
 		} finally {

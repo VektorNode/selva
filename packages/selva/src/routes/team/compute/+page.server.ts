@@ -6,7 +6,7 @@ import type {
 	OrgComputeServer,
 	PlatformComputeServer
 } from '@selvajs/platform';
-import { flag, getComputeServerConfigStore } from '$lib/server/providers.server';
+import { flag, getComputeServerConfigStore } from '#lib/server/providers.server.js';
 
 /**
  * Org-scope compute settings. Spec §3.

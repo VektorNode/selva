@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Button, Callout, Input, Label, Spinner } from '@selvajs/ui';
 	import { KeyRound } from '@lucide/svelte';
-	import type { SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
-	import { describeExtraScope, safeHttpUrl } from '$lib/composables/selva-upload-core';
+	import type { SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
+	import { describeExtraScope, safeHttpUrl } from '#lib/composables/selva-upload-core.js';
 
 	interface Props {
 		upload: SelvaUpload;

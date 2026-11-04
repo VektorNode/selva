@@ -3,7 +3,7 @@
 	import type { DefinitionRecord, ProjectWithMembers } from '../+page.server';
 	import StatusBadge from './StatusBadge.svelte';
 	import { formatUpdated } from './statusStyles';
-	import { huesFor, monogram } from '$lib/components/definitions/cardStyles';
+	import { huesFor, monogram } from '#lib/components/definitions/cardStyles.js';
 
 	interface Props {
 		records: DefinitionRecord[];

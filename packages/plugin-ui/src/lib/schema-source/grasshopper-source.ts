@@ -2,7 +2,7 @@
 // WebSocket quirk (event-name dispatch, the saveSchema request/response handshake with
 // its timeout) stays inside this adapter. The builder state never touches the socket.
 
-import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
+import { getWebSocketState, type WebSocketState } from '#lib/websocket/websocket.svelte.js';
 import type { UISchema } from '@selvajs/schemas';
 import type { SolveReporter } from '@selvajs/ui';
 import type {
@@ -14,13 +14,13 @@ import type {
 	PreviewSolveDriver
 } from './schema-source';
 import { createWebSocketSolveDriver } from './websocket-solve-driver';
-import { bridgeSecretForPage } from '$lib/websocket/bridge-secret';
-import { isRhinoPanel } from '$lib/utils/session';
+import { bridgeSecretForPage } from '#lib/websocket/bridge-secret.js';
+import { isRhinoPanel } from '#lib/utils/session.js';
 import type {
 	WsSchemaSavedMessage,
 	WsSchemaSaveRejectedMessage,
 	SyncChange
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 
 const SAVE_TIMEOUT_MS = 10000;
 

@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import {
 	diffSnapshots,
 	type ConfigChange,
@@ -8,8 +8,8 @@ import {
 	type ConfigSnapshot,
 	type KeyRotation
 } from '@selvajs/platform/config';
-import { getLogger } from '$lib/server/providers.server';
-import { findDeploymentDir } from '$lib/server/selfUpdate.server';
+import { getLogger } from '#lib/server/providers.server.js';
+import { findDeploymentDir } from '#lib/server/selfUpdate.server.js';
 import {
 	deploymentReport,
 	deploymentSnapshot,

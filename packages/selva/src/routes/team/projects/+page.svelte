@@ -11,7 +11,7 @@
 		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Plus, Trash2, FolderKanban, ExternalLink } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { ProjectVisibility } from '@selvajs/platform';
 	import type { ProjectRow } from './+page.server';
 
@@ -55,7 +55,7 @@
 				newDescription = '';
 				newVisibility = 'private';
 				showCreateForm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to create project');
@@ -73,7 +73,7 @@
 			const res = await fetch(`/api/v1/projects/${project.id}`, { method: 'DELETE' });
 			if (res.ok) {
 				toast.success(`Deleted "${project.name}"`);
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to delete project');

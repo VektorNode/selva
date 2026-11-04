@@ -8,10 +8,10 @@
 
 	import type { Snippet } from 'svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
-	import * as Dialog from '$lib/components/primitives/dialog';
-	import IssueList, { type Issue } from '$lib/components/primitives/IssueList.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatCount } from '$lib/i18n/messages';
+	import * as Dialog from '#lib/components/primitives/dialog/index.js';
+	import IssueList, { type Issue } from '#lib/components/primitives/IssueList.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatCount } from '#lib/i18n/messages.js';
 
 	interface Props {
 		/** The last solve's messages. Preferred over `errors`/`warnings` when both are given. */

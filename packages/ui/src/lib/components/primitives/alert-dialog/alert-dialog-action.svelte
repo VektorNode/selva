@@ -4,8 +4,8 @@
 		buttonVariants,
 		type ButtonSize,
 		type ButtonVariant
-	} from '$lib/components/primitives/button/index.js';
-	import { cn } from '$lib/utils.js';
+	} from '#lib/components/primitives/button/index.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),

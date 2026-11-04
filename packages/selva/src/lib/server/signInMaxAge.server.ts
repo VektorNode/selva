@@ -1,8 +1,8 @@
 import { redirect, type RequestEvent } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { resolveSignInMaxAgeMs, signInIsStale } from '@selvajs/server/http';
-import { getAuthProvider } from '$lib/server/providers.server';
-import { destroySession, getSessionToken } from '$lib/server/admin-auth.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
+import { destroySession, getSessionToken } from '#lib/server/admin-auth.server.js';
 
 // Throws on a malformed value, so a typo stops the boot instead of switching
 // the check off.

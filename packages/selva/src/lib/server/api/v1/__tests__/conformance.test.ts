@@ -82,7 +82,9 @@ function stripComments(source: string): string {
  * assertion below passing vacuously against a one-line route file.
  */
 function mountedSources(source: string): string[] {
-	const appImports = [...source.matchAll(/from\s+'\$lib\/server\/api\/handlers\/([\w.-]+)'/g)];
+	const appImports = [
+		...source.matchAll(/from\s+'#lib\/server\/api\/handlers\/([\w-]+)(?:\.js)?'/g)
+	];
 	const bodies = appImports.map(([, name]) => {
 		const file = join(handlersDir, `${name}.ts`);
 		if (!existsSync(file)) throw new Error(`route mounts a missing handler module: ${file}`);
@@ -251,7 +253,7 @@ describe('openapi/v1.yaml', () => {
 		const expected = toYaml(buildOpenApiDocument());
 
 		// The spec is generated *here* rather than by a standalone script: the
-		// generator needs `$lib` resolution and the workspace `source` condition,
+		// generator needs `#lib` resolution and the workspace `source` condition,
 		// which are configured for vitest. A second runner with its own resolver
 		// could build the document from a different module graph than the check
 		// that verifies it — so generate and verify share one.

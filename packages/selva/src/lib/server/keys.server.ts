@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { previousKey } from '@selvajs/platform/config';
 
 /**

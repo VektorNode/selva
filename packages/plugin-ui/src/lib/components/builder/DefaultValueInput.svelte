@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ParamType, DiscoveredInput } from '@selvajs/schemas';
 	import { Input, Select, Switch } from '@selvajs/ui';
-	import { validateDefaultValue } from '$lib/utils/validation';
+	import { validateDefaultValue } from '#lib/utils/validation.js';
 
 	interface DefaultValueInputProps {
 		paramType?: ParamType;

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { DropdownWidgetConfig, SupportedTypes, UISchema } from '@selvajs/schemas';
-	import * as ToggleGroup from '$lib/components/primitives/toggle-group';
-	import { optionGlyph } from '$lib/schema/option-display';
+	import * as ToggleGroup from '#lib/components/primitives/toggle-group/index.js';
+	import { optionGlyph } from '#lib/schema/option-display.js';
 	import OptionGlyph from './OptionGlyph.svelte';
 
 	interface Props {

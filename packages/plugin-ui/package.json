@@ -25,7 +25,7 @@
 		"@lucide/svelte": "catalog:",
 		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",
-		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/adapter-static": "catalog:",
 		"@sveltejs/kit": "catalog:",
 		"svelte-check": "catalog:",
 		"@types/three": "catalog:",
@@ -46,5 +46,8 @@
 		"tailwind-variants": "catalog:",
 		"three": "catalog:",
 		"zod": "catalog:"
+	},
+	"imports": {
+		"#lib/*": "./src/lib/*"
 	}
 }

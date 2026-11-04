@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const solve = vi.hoisted(() => vi.fn());
 
-vi.mock('$lib/server/compute/engine.server', async (importOriginal) => ({
+vi.mock('#lib/server/compute/engine.server.js', async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	engine: {
 		solve,
@@ -36,8 +36,8 @@ import {
 	seedAcme,
 	seedDefinition,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { resetComputeRateLimit } from '$lib/server/computeRateLimit.server.js';
+} from '#lib/server/__tests__/fixtures.js';
+import { resetComputeRateLimit } from '#lib/server/computeRateLimit.server.js';
 import { POST } from '../+server.js';
 
 const schema = {

@@ -12,9 +12,9 @@
 		ZoomIn,
 		ZoomOut
 	} from '@lucide/svelte';
-	import { downloadFiles, isFileData, MIME_BY_EXT } from '$lib/utils/file-download';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatMessage } from '$lib/i18n/messages';
+	import { downloadFiles, isFileData, MIME_BY_EXT } from '#lib/utils/file-download.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
 		item: OutputImageLayoutItem;

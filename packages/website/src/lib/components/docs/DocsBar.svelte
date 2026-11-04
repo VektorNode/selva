@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import type { DocSidebarGroup } from '$lib/docs';
+	import type { DocSidebarGroup } from '#lib/docs.js';
 	import DocsNav from './DocsNav.svelte';
 	import TableOfContents from './TableOfContents.svelte';
 	import Menu from '@lucide/svelte/icons/menu';

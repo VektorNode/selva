@@ -14,7 +14,7 @@
  * who the caller is.
  */
 
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import {
 	ApiError,
 	assertScope,
@@ -29,9 +29,9 @@ import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
 import type { ComputeServerConfig, RequestContext, SolveFailureKind } from '@selvajs/platform';
 import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
 import { serverResolver } from './serverResolver.server';
-import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '$lib/server/compute/engine.server';
-import { computeErrorLogFields } from '$lib/server/compute/errorLogFields';
-import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
+import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '#lib/server/compute/engine.server.js';
+import { computeErrorLogFields } from '#lib/server/compute/errorLogFields.js';
+import { loadRemoteDefinition } from '#lib/server/compute/remoteDefinition.server.js';
 import {
 	solveInputsFromSchema,
 	type ByteCacheRef,
@@ -40,9 +40,9 @@ import {
 	type SolveInput
 } from '@selvajs/solve/server';
 import type { UISchema } from '@selvajs/schemas';
-import { apiRateLimiter, checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
-import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
-import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/access.server';
+import { apiRateLimiter, checkComputeRateLimit } from '#lib/server/computeRateLimit.server.js';
+import { getStorageProvider, getSolveMetricSink, providers } from '#lib/server/providers.server.js';
+import { requireCanSolve, requireCanEditDefinition, scoped } from '#lib/server/access.server.js';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ShareLink } from '@selvajs/platform';
@@ -51,7 +51,7 @@ import {
 	bindLiveSolve,
 	liveOwnerKey,
 	solveEndedKind
-} from '$lib/server/solveEvents/liveSolve.server';
+} from '#lib/server/solveEvents/liveSolve.server.js';
 
 export type SolveChannel = 'live' | 'draft';
 

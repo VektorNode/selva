@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import {
 		Search,
 		toast,
@@ -12,10 +12,10 @@
 	import { ArrowRight, Filter as FilterIcon, X } from '@lucide/svelte';
 	import type { DefinitionRecord } from '@selvajs/platform';
 	import type { PageData } from './$types';
-	import DefinitionCard from '$lib/components/definitions/DefinitionCard.svelte';
+	import DefinitionCard from '#lib/components/definitions/DefinitionCard.svelte';
 	import ToolListView from './_components/ToolListView.svelte';
-	import { formatRelative } from '$lib/format/relativeTime';
-	import AppHeader from '$lib/components/AppHeader.svelte';
+	import { formatRelative } from '#lib/format/relativeTime.js';
+	import AppHeader from '#lib/components/AppHeader.svelte';
 
 	type ViewMode = 'grid' | 'list';
 
@@ -103,7 +103,7 @@
 				method: isStarred ? 'DELETE' : 'PUT'
 			});
 			if (!res.ok) throw new Error(`${res.status}`);
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error(isStarred ? 'Failed to unstar' : 'Failed to star');
 		} finally {

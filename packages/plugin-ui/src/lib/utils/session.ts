@@ -7,10 +7,10 @@ import {
 	PLAYER_MODE,
 	RHINO_PANEL_HOST,
 	WEBSOCKET_PORT_QUERY_PARAM
-} from '$lib/app.config';
+} from '#lib/app.config.js';
 
 // Pure schema-normalisation helpers live in schema-defaults.ts (node-importable, no
-// SvelteKit/WS coupling). Re-exported here so existing `$lib/utils/session` imports keep
+// SvelteKit/WS coupling). Re-exported here so existing `#lib/utils/session.js` imports keep
 // working.
 export { ensureSchemaLayoutDefaults, processInitialDataSchema } from './schema-defaults';
 

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UISchema } from '@selvajs/schemas';
-	import { listSourcedInputs, SOURCE_KIND_LABELS } from '$lib/features/builder';
+	import { listSourcedInputs, SOURCE_KIND_LABELS } from '#lib/features/builder/index.js';
 	import ScopeChip from '../scope/ScopeChip.svelte';
 	import SettingsSection from './SettingsSection.svelte';
 

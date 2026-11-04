@@ -3,17 +3,17 @@ import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { env as privateEnv } from '$env/dynamic/private';
+import { env as privateEnv } from '#lib/server/env.js';
 import { LocalComputeServerStore } from '@selvajs/local-provider';
-import { openServerStats } from '$lib/server/compute/serverStats.server';
+import { openServerStats } from '#lib/server/compute/serverStats.server.js';
 import {
 	findServerById,
 	type SchemaVersionReport,
 	type SecretVerificationReport
 } from '@selvajs/platform';
 import { checkDeploymentConfig, type ConfigFinding } from '@selvajs/server/ops';
-import { providers, getComputeServerConfigStore } from '$lib/server/providers.server';
-import { requirePermission } from '$lib/server/access.server';
+import { providers, getComputeServerConfigStore } from '#lib/server/providers.server.js';
+import { requirePermission } from '#lib/server/access.server.js';
 
 /**
  * On-demand admin health check. Unlike `/api/health` (which serves the cached

@@ -33,7 +33,7 @@ import {
 	seedDefinition,
 	seedShareLink,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 
 let tp: TestProviders | null = null;

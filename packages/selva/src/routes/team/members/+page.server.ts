@@ -2,13 +2,13 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { AuthUser, Invite, OrgMember, OrgRole } from '@selvajs/platform';
 import { hasPermission } from '@selvajs/platform';
-import { getAuthProvider } from '$lib/server/providers.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
 import {
 	getInviteStore,
 	getNotificationProvider,
 	getOrganizationProvider,
 	getUserProfileStore
-} from '$lib/server/providers.server';
+} from '#lib/server/providers.server.js';
 
 export interface MemberRow extends OrgMember {
 	email?: string;

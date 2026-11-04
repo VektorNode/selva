@@ -11,9 +11,9 @@
 	import SolvingIndicator from '../primitives/SolvingIndicator.svelte';
 	import TabLayout from '../preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
-	import * as Resizable from '$lib/components/primitives/resizable';
-	import * as DropdownMenu from '$lib/components/primitives/dropdown-menu/index.js';
-	import { Button } from '$lib';
+	import * as Resizable from '#lib/components/primitives/resizable/index.js';
+	import * as DropdownMenu from '#lib/components/primitives/dropdown-menu/index.js';
+	import { Button } from '#lib';
 	import ParameterPresetManager from './ParameterPresetManager.svelte';
 	import { runPanelAction } from '../../compute/run-panel-action';
 	import { getLocaleContext } from '../../i18n/localeContext.svelte';

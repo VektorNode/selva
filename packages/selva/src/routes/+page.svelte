@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { Button } from '@selvajs/ui';
 	import { ArrowRight } from '@lucide/svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppHeader from '#lib/components/AppHeader.svelte';
 
 	const branding = $derived(page.data.branding);
 

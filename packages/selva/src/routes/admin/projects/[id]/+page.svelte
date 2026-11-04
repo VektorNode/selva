@@ -14,10 +14,10 @@
 		FilterableDropdown
 	} from '@selvajs/ui';
 	import { ArrowLeft, FileText, Plus, Settings, Shield, Trash2, X } from '@lucide/svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import type { GrantRow, OrgOption, UserOption, DefinitionRow } from './+page.server';
 	import type { Project } from '@selvajs/platform';
-	import { primaryLabel, emailSubtitle } from '$lib/user-display';
+	import { primaryLabel, emailSubtitle } from '#lib/user-display.js';
 
 	interface PageData {
 		project: Project;
@@ -30,7 +30,7 @@
 
 	// ============================================================================
 	// Settings — initial values seeded from data.project; the $effect below
-	// resyncs after every invalidateAll. The svelte-ignore is needed because
+	// resyncs after every refreshAll. The svelte-ignore is needed because
 	// the seeders pre-date the effect (warned but correct).
 	// ============================================================================
 	/* svelte-ignore state_referenced_locally */
@@ -66,7 +66,7 @@
 				throw new Error(body.message ?? `HTTP ${res.status}`);
 			}
 			toast.success('Saved');
-			await invalidateAll();
+			await refreshAll();
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -142,7 +142,7 @@
 			showAddGrant = false;
 			granteeId = '';
 			canSolveNew = true;
-			await invalidateAll();
+			await refreshAll();
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -161,7 +161,7 @@
 				throw new Error(body.message ?? `HTTP ${res.status}`);
 			}
 			toast.success('Grant revoked');
-			await invalidateAll();
+			await refreshAll();
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {

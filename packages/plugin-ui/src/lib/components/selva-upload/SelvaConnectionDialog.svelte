@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Button, Dialog } from '@selvajs/ui';
-	import type { SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
+	import type { SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
 	import SelvaAccountSection from './SelvaAccountSection.svelte';
 
 	interface Props {

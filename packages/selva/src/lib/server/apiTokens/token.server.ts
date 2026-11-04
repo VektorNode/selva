@@ -4,7 +4,7 @@ import {
 	type ApiTokenCodec
 } from '@selvajs/server/tokens';
 import { createApiTokenResolutionCache } from '@selvajs/server/http';
-import { hmacKeys } from '$lib/server/keys.server';
+import { hmacKeys } from '#lib/server/keys.server.js';
 
 // Lazy and re-keyed on the secret, like the invite and share-link codecs, so a
 // rotated SELVA_HMAC_KEY applies without a restart. Rotating it invalidates

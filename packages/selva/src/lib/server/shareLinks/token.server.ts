@@ -1,5 +1,5 @@
 import { createTokenCodec, findByToken, type TokenCodec } from '@selvajs/server/tokens';
-import { hmacKeys } from '$lib/server/keys.server';
+import { hmacKeys } from '#lib/server/keys.server.js';
 
 /**
  * Share-link token primitives — thin binding over `@selvajs/server/tokens`'s

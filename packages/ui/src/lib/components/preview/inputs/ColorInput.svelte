@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { Check, Pipette } from '@lucide/svelte';
-	import * as Popover from '$lib/components/primitives/popover';
-	import { Input } from '$lib/components/primitives/input';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatMessage } from '$lib/i18n/messages';
-	import { debounce } from '$lib/utils/debounce';
+	import * as Popover from '#lib/components/primitives/popover/index.js';
+	import { Input } from '#lib/components/primitives/input/index.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatMessage } from '#lib/i18n/messages.js';
+	import { debounce } from '#lib/utils/debounce.js';
 	import {
 		contrastRatio,
 		hexToHsv,
 		hsvToHex,
 		normalizeHex,
 		type Hsv
-	} from '$lib/utils/color-space';
+	} from '#lib/utils/color-space.js';
 
 	interface Props {
 		inputId: string;

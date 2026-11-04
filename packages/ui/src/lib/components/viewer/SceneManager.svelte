@@ -14,7 +14,7 @@
 		type SceneEntry,
 		type SceneOutliner
 	} from '@selvajs/visualization/scene';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);

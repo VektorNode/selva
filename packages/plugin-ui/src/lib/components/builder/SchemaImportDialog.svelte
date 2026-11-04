@@ -5,7 +5,7 @@
 		validateImportedSchema,
 		prepareImportedSchema,
 		type ExportedSchema
-	} from '$lib/utils/schema-exporter';
+	} from '#lib/utils/schema-exporter.js';
 
 	interface SchemaImportDialogProps {
 		importedSchema: ExportedSchema;

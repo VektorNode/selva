@@ -1,10 +1,10 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
-import { getOrganizationProvider } from '$lib/server/providers.server';
-import { requireInstanceAdmin } from '$lib/server/access.server';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, created, parseBody } from '$lib/server/api/http';
+import { getOrganizationProvider } from '#lib/server/providers.server.js';
+import { requireInstanceAdmin } from '#lib/server/access.server.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, created, parseBody } from '#lib/server/api/http.js';
 import {
 	CreateOrgSchema,
 	MAX_PAGE_LIMIT,

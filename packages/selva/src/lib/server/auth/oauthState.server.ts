@@ -18,7 +18,7 @@
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { cookiesAreSecure } from '$lib/server/admin-auth.server';
+import { cookiesAreSecure } from '#lib/server/admin-auth.server.js';
 import type { Cookies } from '@sveltejs/kit';
 
 const STATE_COOKIE_NAME = 'oauth_state';

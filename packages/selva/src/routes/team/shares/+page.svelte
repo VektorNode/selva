@@ -10,7 +10,7 @@
 		toast
 	} from '@selvajs/ui';
 	import { Link2, Trash2, ExternalLink } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { ShareRow } from './+page.server';
 
 	interface PageData {
@@ -46,7 +46,7 @@
 			});
 			if (res.ok) {
 				toast.success('Share link revoked');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to revoke share link');

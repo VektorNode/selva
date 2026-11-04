@@ -15,8 +15,8 @@ import {
 	resolveApiRateLimitConfig,
 	type ApiRateLimiter
 } from '@selvajs/server/api';
-import { env } from '$env/dynamic/private';
-import { lazyLogger } from '$lib/server/providers.server';
+import { env } from '#lib/server/env.js';
+import { lazyLogger } from '#lib/server/providers.server.js';
 
 const limiter = createComputeRateLimiter({
 	windowMs: RATE_LIMIT_WINDOW_MS,

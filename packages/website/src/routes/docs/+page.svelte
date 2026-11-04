@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { getDocsFlat, getDocsIndex } from '$lib/docs';
+	import { getDocsFlat, getDocsIndex } from '#lib/docs.js';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Search from '@lucide/svelte/icons/search';
 

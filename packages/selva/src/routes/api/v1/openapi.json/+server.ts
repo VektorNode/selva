@@ -1,6 +1,6 @@
 import type { RequestHandler } from './$types';
-import { mount } from '$lib/server/api/sveltekit';
-import { buildOpenApiDocument } from '$lib/server/api/v1/openapi';
+import { mount } from '#lib/server/api/sveltekit.js';
+import { buildOpenApiDocument } from '#lib/server/api/v1/openapi.js';
 
 // Public, like `/docs/api/openapi.yaml`: it documents the API's shape, not tenant data.
 // `@selvajs/mcp` checks its tools against this at startup.

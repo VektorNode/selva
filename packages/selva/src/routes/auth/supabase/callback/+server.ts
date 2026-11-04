@@ -1,14 +1,14 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getAuthProvider } from '$lib/server/providers.server';
-import { bootstrapUserSession } from '$lib/server/auth-bootstrap.server';
-import { consumeOAuthState } from '$lib/server/auth/oauthState.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getAuthProvider } from '#lib/server/providers.server.js';
+import { bootstrapUserSession } from '#lib/server/auth-bootstrap.server.js';
+import { consumeOAuthState } from '#lib/server/auth/oauthState.server.js';
 import {
 	safeRedirectTarget,
 	setSessionCookie,
 	setRefreshCookie
-} from '$lib/server/admin-auth.server';
+} from '#lib/server/admin-auth.server.js';
 
 /**
  * GET /auth/supabase/callback?code=...&redirectTo=/library

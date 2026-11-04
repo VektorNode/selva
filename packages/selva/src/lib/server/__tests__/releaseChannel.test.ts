@@ -3,10 +3,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync, readFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 // Import the env stub through the SAME alias the module under test uses
-// ($env/dynamic/private → env-stub) so mutating INSTALL_DIR here is visible to
+// (#lib/server/env.js → env-stub) so mutating INSTALL_DIR here is visible to
 // releaseChannel.server's deployment-dir probe — `setEnv`'s direct import of
 // './env-stub.js' can resolve to a different module record than this alias.
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import {
 	readChannel,
 	writeChannel,

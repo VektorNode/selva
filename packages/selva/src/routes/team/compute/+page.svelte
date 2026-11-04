@@ -14,7 +14,7 @@
 		type FilterableDropdownItem
 	} from '@selvajs/ui';
 	import { Server, Plus, Trash2, Star } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { CatalogEntry, OrgServerListing } from './+page.server';
 
 	const brandName = $derived(page.data.branding.name);
@@ -122,7 +122,7 @@
 
 			if (res.ok) {
 				toast.success('Compute settings saved');
-				await invalidateAll();
+				await refreshAll();
 				dirty = false;
 			} else {
 				const err = await res.json().catch(() => ({ error: 'Unknown error' }));

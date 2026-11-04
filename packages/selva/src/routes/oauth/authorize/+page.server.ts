@@ -1,5 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { requireRecentSignIn } from '$lib/server/signInMaxAge.server';
+import { requireRecentSignIn } from '#lib/server/signInMaxAge.server.js';
 import { apiScopesFor, isLoopbackRedirect, OAuthError } from '@selvajs/server/oauth';
 import {
 	consentOffer,
@@ -7,8 +7,9 @@ import {
 	revokeUnredeemedConsentToken
 } from '@selvajs/server/handlers';
 import { isApiError } from '@selvajs/server/api';
-import { toApiRequest } from '$lib/server/api/sveltekit';
-import { expectRedemption, oauthServer } from '$lib/server/oauth/server';
+import { toApiRequest } from '#lib/server/api/sveltekit.js';
+import { expectRedemption, oauthServer } from '#lib/server/oauth/server.js';
+import { publicUrl } from '#lib/server/origin.js';
 import type { Actions, PageServerLoad } from './$types';
 
 // The shortest lifetime the token page offers. No refresh tokens: on expiry
@@ -32,7 +33,7 @@ function authorizeQuery(url: URL): string {
 async function parse(url: URL) {
 	try {
 		const query = new URLSearchParams(authorizeQuery(url));
-		return { request: await serverFor(url.origin).parseAuthorizeRequest(query) };
+		return { request: await serverFor(publicUrl(url).origin).parseAuthorizeRequest(query) };
 	} catch (err) {
 		if (err instanceof OAuthError) return { problem: err.message };
 		throw err;
@@ -103,18 +104,20 @@ export const actions: Actions = {
 		expectRedemption(minted.token.id, () => revokeUnredeemedConsentToken(api, minted.token.id));
 		redirect(
 			303,
-			serverFor(event.url.origin).approve(request, {
+			serverFor(publicUrl(event.url).origin).approve(request, {
 				tokenId: minted.token.id,
 				secret: minted.secret,
 				scopes: choice.scopes,
 				expiresAt: minted.token.expiresAt
-			})
+			}),
+			// The client's registered redirect_uri, which the OAuth core already checked.
+			{ external: true }
 		);
 	},
 
 	deny: async ({ url }) => {
 		const { request } = await parse(url);
 		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
-		redirect(303, serverFor(url.origin).deny(request));
+		redirect(303, serverFor(publicUrl(url).origin).deny(request), { external: true });
 	}
 };

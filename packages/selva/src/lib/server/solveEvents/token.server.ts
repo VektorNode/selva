@@ -1,5 +1,5 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { hmacKeys } from '$lib/server/keys.server';
+import { hmacKeys } from '#lib/server/keys.server.js';
 
 /**
  * Per-solve bearer for the Compute → Selva callback. Stateless on purpose: the

@@ -8,16 +8,16 @@
 		InputLayoutItem,
 		OutputLayoutItem
 	} from '@selvajs/schemas';
-	import * as Tabs from '$lib/components/primitives/tabs';
-	import { ScrollArea } from '$lib/components/primitives/scroll-area';
+	import * as Tabs from '#lib/components/primitives/tabs/index.js';
+	import { ScrollArea } from '#lib/components/primitives/scroll-area/index.js';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import Group from './Group.svelte';
 	import InputControl from './InputControl.svelte';
 	import OutputDisplay from './OutputDisplay.svelte';
-	import { evaluateGroupVisibility } from '$lib/schema/visibility-rules';
-	import { isSupportedOn, layoutItemKind } from '$lib/schema/host-support';
-	import { getHostContext } from '$lib/contexts/hostContext.svelte';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { evaluateGroupVisibility } from '#lib/schema/visibility-rules.js';
+	import { isSupportedOn, layoutItemKind } from '#lib/schema/host-support.js';
+	import { getHostContext } from '#lib/contexts/hostContext.svelte.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);

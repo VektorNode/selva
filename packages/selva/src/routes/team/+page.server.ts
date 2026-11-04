@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
-import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider, getProjectProvider } from '#lib/server/providers.server.js';
 
 // The acting org's id is on `ctx`, so the counts don't wait for the layout's org read. Each is
 // non-fatal: a failed read counts zero.

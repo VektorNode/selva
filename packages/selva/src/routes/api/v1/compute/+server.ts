@@ -1,9 +1,9 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
-import { requireMaxBodySize } from '$lib/server/admin-auth.server';
-import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
-import { runSolve, mapSolveError, type SolveAccess } from '$lib/server/compute/solve.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
+import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
+import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
+import { runSolve, mapSolveError, type SolveAccess } from '#lib/server/compute/solve.server.js';
 
 interface ComputeRequest {
 	/** Read for a remote `definitionUrl` only: a stored definition's inputs come from its schema. */

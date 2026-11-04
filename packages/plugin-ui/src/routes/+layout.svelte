@@ -10,16 +10,20 @@
 		setHostContext
 	} from '@selvajs/ui';
 	import { onMount } from 'svelte';
-	import { getSessionIdFromUrl, getWebSocketPortFromUrl, isRhinoPanel } from '$lib/utils/session';
-	import { rememberBridgeSecret } from '$lib/websocket/bridge-secret';
-	import { MAX_HOST_FILE_BYTES } from '$lib/websocket/bridge-handshake';
-	import { createHostFilesClient } from '$lib/websocket/host-files-client';
-	import { createGeometryPicksClient } from '$lib/websocket/geometry-picks-client';
-	import { getWebSocketState } from '$lib/websocket/websocket.svelte';
+	import {
+		getSessionIdFromUrl,
+		getWebSocketPortFromUrl,
+		isRhinoPanel
+	} from '#lib/utils/session.js';
+	import { rememberBridgeSecret } from '#lib/websocket/bridge-secret.js';
+	import { MAX_HOST_FILE_BYTES } from '#lib/websocket/bridge-handshake.js';
+	import { createHostFilesClient } from '#lib/websocket/host-files-client.js';
+	import { createGeometryPicksClient } from '#lib/websocket/geometry-picks-client.js';
+	import { getWebSocketState } from '#lib/websocket/websocket.svelte.js';
 	import { afterNavigate, replaceState } from '$app/navigation';
 	import { page } from '$app/state';
-	import HostWindowToggle from '$lib/components/HostWindowToggle.svelte';
-	import { RHINO_PANEL_HOST } from '$lib/app.config';
+	import HostWindowToggle from '#lib/components/HostWindowToggle.svelte';
+	import { RHINO_PANEL_HOST } from '#lib/app.config.js';
 
 	const footer = initializeFooterContext();
 
@@ -44,6 +48,10 @@
 	// Not in onMount: the router can't replace history until hydration has finished. Even here the
 	// first call runs just before the router counts as started, and a dev build throws then, which
 	// aborts startup and makes the next navigation mount a second copy of the app. Hence the microtask.
+	//
+	// `replaceState`, not the shallow `goto` that replaces it in SvelteKit 3: a `goto` is a
+	// navigation, so it aborts the start page's redirect to /preview and the panel stays on
+	// "Connecting". `replaceState` only rewrites the history entry.
 	afterNavigate(() => {
 		const sessionId = getSessionIdFromUrl();
 		if (sessionId && rememberBridgeSecret(sessionId)) {

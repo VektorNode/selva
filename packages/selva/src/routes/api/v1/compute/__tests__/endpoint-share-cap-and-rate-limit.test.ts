@@ -34,12 +34,12 @@ import {
 	anon,
 	call,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 import {
 	computeRateLimitCount,
 	resetComputeRateLimit
-} from '$lib/server/computeRateLimit.server.js';
+} from '#lib/server/computeRateLimit.server.js';
 import { POST } from '../+server.js';
 
 let tp: TestProviders | null = null;

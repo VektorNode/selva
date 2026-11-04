@@ -11,8 +11,8 @@
 		useFooterItem
 	} from '@selvajs/ui';
 	import { Save, RefreshCw, CloudUpload, PlugZap } from '@lucide/svelte';
-	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import ModeHeader from '$lib/components/ModeHeader.svelte';
+	import WsStatusFooter from '#lib/components/WsStatusFooter.svelte';
+	import ModeHeader from '#lib/components/ModeHeader.svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
 	import {
 		BuilderSearch,
@@ -20,21 +20,21 @@
 		SelectionBar,
 		TabEditor,
 		SyncDialog
-	} from '$lib/components/builder';
-	import { bringIntoView } from '$lib/components/builder/reveal';
-	import type { SearchTarget } from '$lib/features/builder';
-	import SelvaUploadDialog from '$lib/components/selva-upload/SelvaUploadDialog.svelte';
-	import SelvaConnectionDialog from '$lib/components/selva-upload/SelvaConnectionDialog.svelte';
-	import { buildSessionParams } from '$lib/utils/session';
-	import { currentRole } from '$lib/utils/session-role.svelte';
-	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
+	} from '#lib/components/builder/index.js';
+	import { bringIntoView } from '#lib/components/builder/reveal.js';
+	import type { SearchTarget } from '#lib/features/builder/index.js';
+	import SelvaUploadDialog from '#lib/components/selva-upload/SelvaUploadDialog.svelte';
+	import SelvaConnectionDialog from '#lib/components/selva-upload/SelvaConnectionDialog.svelte';
+	import { buildSessionParams } from '#lib/utils/session.js';
+	import { currentRole } from '#lib/utils/session-role.svelte.js';
+	import { rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
 	import { onMount, tick } from 'svelte';
-	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
-	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
-	import { builderSelection } from '$lib/features/builder/selection.svelte';
-	import { setBuilderDraft } from '$lib/components/builder/draft-context';
-	import { putAsset } from '$lib/features/builder/option-assets';
-	import { useSelvaUpload, type SelvaUpload } from '$lib/composables/useSelvaUpload.svelte';
+	import { useBuilderState } from '#lib/composables/useBuilderState.svelte.js';
+	import { useBuilderActions } from '#lib/composables/useBuilderActions.svelte.js';
+	import { builderSelection } from '#lib/features/builder/selection.svelte.js';
+	import { setBuilderDraft } from '#lib/components/builder/draft-context.js';
+	import { putAsset } from '#lib/features/builder/option-assets.js';
+	import { useSelvaUpload, type SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
 
 	let sessionId = $state('');
 	let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
@@ -78,7 +78,7 @@
 
 	function performNavigate(route: '/' | '/preview') {
 		const url = `${route}?${buildSessionParams()}`;
-		goto(url, { noScroll: true }).catch(() => {});
+		goto(url, { reset: false }).catch(() => {});
 	}
 
 	async function navPromptSave() {
@@ -202,7 +202,7 @@
 	// A player session has no builder: the plugin would refuse its saves anyway.
 	$effect(() => {
 		if (currentRole() === 'player') {
-			goto(`/preview?${buildSessionParams()}`, { replaceState: true }).catch(() => {});
+			goto(`/preview?${buildSessionParams()}`, { replace: true }).catch(() => {});
 		}
 	});
 

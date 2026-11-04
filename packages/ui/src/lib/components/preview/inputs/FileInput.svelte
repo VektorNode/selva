@@ -1,14 +1,19 @@
 <script lang="ts">
-	import { Input } from '$lib/components/primitives/input';
-	import { Button } from '$lib/components/primitives/button';
-	import { Label } from '$lib/components/primitives/label';
-	import { toast } from '$lib/components/primitives/sonner';
+	import { Input } from '#lib/components/primitives/input/index.js';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import { Label } from '#lib/components/primitives/label/index.js';
+	import { toast } from '#lib/components/primitives/sonner/index.js';
 	import { FileUp, Link, CircleAlert, CircleCheck } from '@lucide/svelte';
-	import { APP_DEFAULTS } from '$lib/constants';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { formatMessage } from '$lib/i18n/messages';
-	import { pickFile } from '$lib/utils/host-files';
-	import { acceptsFileEnding, isWebp, shouldConvertWebp, webpToPng } from '$lib/utils/webp-to-png';
+	import { APP_DEFAULTS } from '#lib/constants.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatMessage } from '#lib/i18n/messages.js';
+	import { pickFile } from '#lib/utils/host-files.js';
+	import {
+		acceptsFileEnding,
+		isWebp,
+		shouldConvertWebp,
+		webpToPng
+	} from '#lib/utils/webp-to-png.js';
 
 	interface Props {
 		value?: string;

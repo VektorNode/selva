@@ -5,7 +5,7 @@
  */
 
 import { json, type RequestEvent } from '@sveltejs/kit';
-import { hmacKeys } from '$lib/server/keys.server';
+import { hmacKeys } from '#lib/server/keys.server.js';
 import {
 	assertSafeRemoteDefinitionUrl,
 	createComputeRateLimiter,

@@ -3,7 +3,7 @@
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import { page } from '$app/state';
-	import { GITHUB_URL } from '$lib/nav';
+	import { GITHUB_URL } from '#lib/nav.js';
 
 	let { data } = $props();
 	const Content = $derived(data.content);

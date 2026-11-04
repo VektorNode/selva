@@ -23,8 +23,8 @@
 	} from '@lucide/svelte';
 	import type { PlatformComputeServer } from '@selvajs/platform/computeServer';
 	import type { TenancyMode } from '@selvajs/platform';
-	import { useServerHealth } from '$lib/composables/useServerHealth.svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { useServerHealth } from '#lib/composables/useServerHealth.svelte.js';
+	import { refreshAll } from '$app/navigation';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { untrack, onDestroy } from 'svelte';
 
@@ -277,7 +277,7 @@
 						: 'Compute config saved'
 				);
 				for (const id of removedIds) forgetHealth(id);
-				await invalidateAll();
+				await refreshAll();
 				dirtyIds.clear();
 				removedIds.clear();
 				// Reset health to idle after save (URL/key may have changed) without
@@ -370,7 +370,7 @@
 			);
 			showLocalCacheConfirm = false;
 			// Counters just changed — reload so the panel doesn't show stale entries.
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error(`Failed to clear ${label}`);
 		} finally {

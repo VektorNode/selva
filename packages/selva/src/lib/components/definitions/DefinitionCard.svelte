@@ -2,7 +2,7 @@
 	import { ArrowRight, Server, Star } from '@lucide/svelte';
 	import type { DefinitionRecord, ProjectVisibility } from '@selvajs/platform';
 	import { huesFor, monogram } from './cardStyles';
-	import { formatRelative } from '$lib/format/relativeTime';
+	import { formatRelative } from '#lib/format/relativeTime.js';
 	import { statusRing, statusDot } from '../../../routes/projects/_components/statusStyles';
 
 	interface Props {

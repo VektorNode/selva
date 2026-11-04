@@ -7,7 +7,7 @@
 		searchEntries,
 		type SearchEntry,
 		type SearchTarget
-	} from '$lib/features/builder';
+	} from '#lib/features/builder/index.js';
 
 	interface Props {
 		open: boolean;

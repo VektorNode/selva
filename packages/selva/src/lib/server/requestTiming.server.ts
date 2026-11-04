@@ -2,8 +2,8 @@
 // record for a slow, sampled or cold request, with each upstream's calls.
 import { createRequestTiming } from '@selvajs/server/http';
 import { supabaseUpstream } from '@selvajs/supabase-provider';
-import { env } from '$env/dynamic/private';
-import { getLogger } from '$lib/server/providers.server';
+import { env } from '#lib/server/env.js';
+import { getLogger } from '#lib/server/providers.server.js';
 
 export const requestTiming = createRequestTiming({
 	log: (message, fields) => getLogger().info(message, fields),

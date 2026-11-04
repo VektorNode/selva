@@ -1,7 +1,7 @@
 // The first exchange on every socket. The plugin's BridgeAccess speaks the other side; both are
 // pinned to packages/schemas/fixtures/bridge-handshake.json.
 
-import { RHINO_PANEL_HOST } from '$lib/app.config';
+import { RHINO_PANEL_HOST } from '#lib/app.config.js';
 
 /** The plugin closes a socket with this code when it didn't send the right secret first. */
 export const BRIDGE_UNAUTHORIZED_CLOSE_CODE = 4401;

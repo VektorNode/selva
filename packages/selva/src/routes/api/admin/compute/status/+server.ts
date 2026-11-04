@@ -1,11 +1,11 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getComputeServerConfigStore } from '$lib/server/providers.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getComputeServerConfigStore } from '#lib/server/providers.server.js';
 import { findServerById } from '@selvajs/platform';
-import { requireManageCompute } from '$lib/server/access.server';
+import { requireManageCompute } from '#lib/server/access.server.js';
 import { classifyProbeFailure } from '@selvajs/compute/core';
-import { openServerStats } from '$lib/server/compute/serverStats.server';
+import { openServerStats } from '#lib/server/compute/serverStats.server.js';
 
 /** The response for a server that can't be read, whatever stopped it. */
 function unreachable(failure: {

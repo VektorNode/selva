@@ -2,8 +2,8 @@
 	import Sun from '@lucide/svelte/icons/sun';
 	import Moon from '@lucide/svelte/icons/moon';
 	import { toggleMode } from 'mode-watcher';
-	import { Button } from '$lib/components/primitives/button';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	const locale = getLocaleContext();
 </script>

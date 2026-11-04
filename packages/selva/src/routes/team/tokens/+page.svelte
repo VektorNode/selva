@@ -14,7 +14,7 @@
 		toast
 	} from '@selvajs/ui';
 	import { Check, Copy, KeyRound, Trash2 } from '@lucide/svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import { API_TOKEN_LIFETIME_DAYS, describeApiScope } from '@selvajs/platform';
 	import {
 		ACCESS_PRESETS,
@@ -22,8 +22,8 @@
 		tokenWarnings,
 		type AccessPreset,
 		type TokenRow
-	} from '$lib/apiTokens';
-	import McpConnectCard from '$lib/components/McpConnectCard.svelte';
+	} from '#lib/apiTokens.js';
+	import McpConnectCard from '#lib/components/McpConnectCard.svelte';
 	import type { PageData } from './$types';
 	import type { RosterRow } from './+page.server';
 
@@ -77,7 +77,7 @@
 			copied = false;
 			name = '';
 			access = data.presets[0] ?? 'read';
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error('Failed to create the token');
 		} finally {
@@ -100,7 +100,7 @@
 			});
 			if (res.ok) {
 				toast.success('Token revoked');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || 'Failed to revoke the token');

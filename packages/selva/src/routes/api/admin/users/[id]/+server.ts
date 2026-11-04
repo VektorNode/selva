@@ -1,26 +1,26 @@
 import type { RequestHandler } from './$types';
 import { z } from 'zod';
-import { getAuthProvider } from '$lib/server/providers.server';
-import { getDataProvider, getEventSink, getPermissionStore } from '$lib/server/providers.server';
+import { getAuthProvider } from '#lib/server/providers.server.js';
+import { getDataProvider, getEventSink, getPermissionStore } from '#lib/server/providers.server.js';
 import {
 	assertCanGrantPlatformPermissions,
 	requireManageInstanceUsers
-} from '$lib/server/access.server';
+} from '#lib/server/access.server.js';
 import {
 	requireCanRemoveInstanceAdmin,
 	requireEnabledToBecomeAdmin,
 	requireNotSoleOrgOwner
-} from '$lib/server/admin/instanceAdmins.server';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, noContent, parseBody, requireParams } from '$lib/server/api/http';
+} from '#lib/server/admin/instanceAdmins.server.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, noContent, parseBody, requireParams } from '#lib/server/api/http.js';
 import {
 	PlatformPermissionSchema,
 	SYSTEM_CONTEXT,
 	type PlatformPermission,
 	actorFrom
 } from '@selvajs/platform';
-import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { apiTokenResolutions } from '$lib/server/apiTokens/token.server';
+import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
+import { apiTokenResolutions } from '#lib/server/apiTokens/token.server.js';
 
 const UpdatePermissionsBody = z.object({
 	permissions: z.array(PlatformPermissionSchema)

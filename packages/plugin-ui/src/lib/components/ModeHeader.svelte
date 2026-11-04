@@ -2,9 +2,9 @@
 	import type { Snippet } from 'svelte';
 	import { Button, DropdownMenu, ModeToggle } from '@selvajs/ui';
 	import { Ellipsis, FolderOpen, Play, SquarePen, Wrench, X } from '@lucide/svelte';
-	import { rhinoShellProps } from '$lib/utils/rhino-host.svelte';
-	import { isRhinoPanel } from '$lib/utils/session';
-	import { RHINO_OPEN_DEFINITION_URL } from '$lib/app.config';
+	import { rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
+	import { isRhinoPanel } from '#lib/utils/session.js';
+	import { RHINO_OPEN_DEFINITION_URL } from '#lib/app.config.js';
 
 	interface Props {
 		homeUrl: string;

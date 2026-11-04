@@ -2,7 +2,10 @@
 	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/schemas';
 	import { ContextMenu, Input } from '@selvajs/ui';
 	import { ArrowDownToLine, ArrowUpFromLine, FolderPlus, GripVertical } from '@lucide/svelte';
-	import { builderSelection, preventShiftTextSelect } from '$lib/features/builder/selection.svelte';
+	import {
+		builderSelection,
+		preventShiftTextSelect
+	} from '#lib/features/builder/selection.svelte.js';
 
 	interface Props {
 		item: DiscoveredInput | DiscoveredOutput;

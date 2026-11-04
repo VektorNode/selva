@@ -2,8 +2,8 @@
 	import type { Snippet } from 'svelte';
 	import { Collapsible } from '@selvajs/ui';
 	import { ChevronDown } from '@lucide/svelte';
-	import { usePersisted } from '$lib/composables/usePersisted.svelte';
-	import { getSectionOpeners } from '../reveal';
+	import { usePersisted } from '#lib/composables/usePersisted.svelte.js';
+	import { getSectionOpeners } from '../reveal.js';
 
 	interface Props {
 		/** Stable id; the open/closed state is remembered under it. */

@@ -1,13 +1,13 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import {
 	GuidSchema,
 	definitionPaths,
 	classifyAssetPath,
 	COVER_IMAGE_CONTENT_TYPES
 } from '@selvajs/platform';
-import { getDefinitionMeta, getStorageProvider } from '$lib/server/providers.server';
-import { asHttpError, requireCanViewProject, scoped } from '$lib/server/access.server';
+import { getDefinitionMeta, getStorageProvider } from '#lib/server/providers.server.js';
+import { asHttpError, requireCanViewProject, scoped } from '#lib/server/access.server.js';
 
 /**
  * Authenticated/­public blob proxy. The set of servable paths is the closed

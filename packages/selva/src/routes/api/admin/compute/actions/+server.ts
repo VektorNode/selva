@@ -1,16 +1,16 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getComputeServerConfigStore } from '$lib/server/providers.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getComputeServerConfigStore } from '#lib/server/providers.server.js';
 import { findServerById } from '@selvajs/platform';
-import { requireManageCompute } from '$lib/server/access.server';
-import { openServerStats } from '$lib/server/compute/serverStats.server';
+import { requireManageCompute } from '#lib/server/access.server.js';
+import { openServerStats } from '#lib/server/compute/serverStats.server.js';
 import {
 	clearSolveResultCache,
 	clearDefinitionCache,
 	solveCacheStats,
 	definitionByteCacheStats
-} from '$lib/server/compute/engine.server';
+} from '#lib/server/compute/engine.server.js';
 
 /**
  * Admin compute actions — `manage_compute` only. Operator-initiated, mutating

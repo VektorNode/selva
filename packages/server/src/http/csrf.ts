@@ -27,6 +27,8 @@ const FORM_TYPES = [
 export interface CsrfOptions {
 	/** Exact paths that accept cross-site form bodies. */
 	exemptPaths?: readonly string[];
+	/** The app's public origin, when the host knows it better than `request.url` does. */
+	origin?: string;
 }
 
 export function isCrossSiteFormSubmission(request: Request, options: CsrfOptions = {}): boolean {
@@ -38,5 +40,5 @@ export function isCrossSiteFormSubmission(request: Request, options: CsrfOptions
 	if (bearerOf(request)?.startsWith(API_TOKEN_PREFIX)) return false;
 	const url = new URL(request.url);
 	if (options.exemptPaths?.includes(url.pathname)) return false;
-	return request.headers.get('origin') !== url.origin;
+	return request.headers.get('origin') !== (options.origin ?? url.origin);
 }

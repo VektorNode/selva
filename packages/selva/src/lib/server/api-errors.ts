@@ -30,7 +30,7 @@ export function apiError(
 	fields?: Record<string, string>,
 	details?: Record<string, string>
 ): never {
-	throw error(status, { message, code, ...(fields && { fields }), ...(details && { details }) });
+	throw error(status, message, { code, ...(fields && { fields }), ...(details && { details }) });
 }
 
 // Postgres unique-constraint names → friendly explanations. Postgrest surfaces

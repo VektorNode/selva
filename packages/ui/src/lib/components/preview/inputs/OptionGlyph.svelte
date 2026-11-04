@@ -1,6 +1,6 @@
 <script lang="ts">
-	import type { GlyphSource } from '$lib/schema/option-display';
-	import { cn } from '$lib/utils.js';
+	import type { GlyphSource } from '#lib/schema/option-display.js';
+	import { cn } from '#lib/utils.js';
 
 	interface Props {
 		glyph: GlyphSource;

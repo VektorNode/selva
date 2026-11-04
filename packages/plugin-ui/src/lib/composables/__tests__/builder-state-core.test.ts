@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { UISchema } from '@selvajs/schemas';
-import { createFakeSource, type FakeSource } from '$lib/schema-source/fake-source';
+import { createFakeSource, type FakeSource } from '#lib/schema-source/fake-source.js';
 import {
 	createInitialBuilderState,
 	handleInitialData,

@@ -11,7 +11,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import { isNewer, satisfiesRange } from '@selvajs/server/ops';
 import { channelRegistryUrl, type ReleaseChannel } from './releaseChannel.server';
 

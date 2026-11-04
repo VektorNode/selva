@@ -20,9 +20,9 @@ import {
 	call,
 	grantPlatformPermissions,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { POST as mintInvite } from '../../api/v1/orgs/[orgId]/invites/+server.js';
-import { hashToken } from '$lib/server/invites/token.server.js';
+import { hashToken } from '#lib/server/invites/token.server.js';
 import { load, actions } from '../+page.server.js';
 import { findAuthUserByEmail } from '@selvajs/server/providers';
 

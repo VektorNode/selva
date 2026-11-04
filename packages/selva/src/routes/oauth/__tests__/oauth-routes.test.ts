@@ -12,8 +12,8 @@ import {
 	seedOrgMember,
 	seedUser,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures';
-import { apiTokenCodec } from '$lib/server/apiTokens/token.server';
+} from '#lib/server/__tests__/fixtures.js';
+import { apiTokenCodec } from '#lib/server/apiTokens/token.server.js';
 
 const { POST: register } = await import('../register/+server');
 const { POST: token } = await import('../token/+server');

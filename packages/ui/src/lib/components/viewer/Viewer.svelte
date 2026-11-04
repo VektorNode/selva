@@ -23,10 +23,10 @@
 	import SceneManager from './SceneManager.svelte';
 	import ViewerDock from './ViewerDock.svelte';
 	import MeshMetadataPanel from './MeshMetadataPanel.svelte';
-	import * as Resizable from '$lib/components/primitives/resizable/index.js';
-	import type { Locale } from '$lib/i18n/messages';
-	import { layerLocaleContext } from '$lib/i18n/localeContext.svelte';
-	import { saveBlob } from '$lib/utils/host-files';
+	import * as Resizable from '#lib/components/primitives/resizable/index.js';
+	import type { Locale } from '#lib/i18n/messages.js';
+	import { layerLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { saveBlob } from '#lib/utils/host-files.js';
 
 	export interface ViewerConfig {
 		showScreenshotButton?: boolean;

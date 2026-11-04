@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Inbox } from '@lucide/svelte';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import * as Empty from './empty';
 	import { Spinner } from './spinner';
 	import SeverityIcon from './SeverityIcon.svelte';

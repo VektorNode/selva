@@ -16,7 +16,7 @@ import {
 	anon,
 	call,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { GET } from '../+server.js';
 
 let tp: TestProviders | null = null;

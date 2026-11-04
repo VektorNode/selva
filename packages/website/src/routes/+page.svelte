@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { GITHUB_URL } from '$lib/nav';
+	import { GITHUB_URL } from '#lib/nav.js';
 
 	// Shared shell for the frosted panels so every card reads as the same glass.
 	const glass =

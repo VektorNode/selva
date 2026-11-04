@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
 	import { ChevronDown } from '@lucide/svelte';
-	import { cn } from '$lib/utils.js';
+	import { cn } from '#lib/utils.js';
 	import { buttonVariants } from './button';
 	import * as Popover from './popover';
 	import * as Command from './command';

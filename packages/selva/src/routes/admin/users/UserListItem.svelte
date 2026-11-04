@@ -4,11 +4,11 @@
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
 	import { ALL_PLATFORM_PERMISSIONS } from '@selvajs/platform';
 	import type { UserRow } from './+page.server';
-	import UserRowIdentity from '$lib/components/UserRowIdentity.svelte';
+	import UserRowIdentity from '#lib/components/UserRowIdentity.svelte';
 	import {
 		PERMISSION_LABELS as PERM_LABEL,
 		PERMISSION_DESCRIPTIONS as PERM_DESC
-	} from '$lib/permission-labels';
+	} from '#lib/permission-labels.js';
 
 	interface Props {
 		user: UserRow;

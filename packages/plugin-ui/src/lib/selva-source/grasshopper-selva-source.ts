@@ -1,5 +1,5 @@
 import type { SelvaUploadRequest } from '@selvajs/schemas';
-import { getWebSocketState, type WebSocketState } from '$lib/websocket/websocket.svelte';
+import { getWebSocketState, type WebSocketState } from '#lib/websocket/websocket.svelte.js';
 import type { SelvaSource, SelvaSourceEvent, SelvaSourceHandler } from './selva-source';
 
 /** Rides the builder's socket: `connected` is true only once the plugin accepted the page's secret. */

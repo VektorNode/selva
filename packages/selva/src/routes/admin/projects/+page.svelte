@@ -11,7 +11,7 @@
 		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Folders, Plus } from '@lucide/svelte';
-	import { goto, invalidateAll } from '$app/navigation';
+	import { goto, refreshAll } from '$app/navigation';
 	import type { PlatformProjectRow, OrgOption } from './+page.server';
 
 	interface PageData {
@@ -57,7 +57,7 @@
 			showCreate = false;
 			newName = '';
 			newDescription = '';
-			await invalidateAll();
+			await refreshAll();
 			goto(`/admin/projects/${project.id}`);
 		} catch (err) {
 			toast.error((err as Error).message);

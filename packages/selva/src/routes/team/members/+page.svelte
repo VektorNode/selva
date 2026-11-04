@@ -11,7 +11,7 @@
 		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Mail, Trash2, Copy, X, UserPlus, Send, Search } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';
 	import {
 		ALL_ORG_PERMISSIONS,
@@ -20,8 +20,8 @@
 	} from '@selvajs/platform';
 	import type { MemberRow } from './+page.server';
 	import { removalBlockReason } from './removal-gate';
-	import UserRowIdentity from '$lib/components/UserRowIdentity.svelte';
-	import { PERMISSION_LABELS, ROLE_TONE, ORG_ROLES } from '$lib/permission-labels';
+	import UserRowIdentity from '#lib/components/UserRowIdentity.svelte';
+	import { PERMISSION_LABELS, ROLE_TONE, ORG_ROLES } from '#lib/permission-labels.js';
 
 	interface PageData {
 		members: MemberRow[];
@@ -57,7 +57,7 @@
 			});
 			if (res.ok) {
 				toast.success('Member updated');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Could not update member');
@@ -178,7 +178,7 @@
 				inviteRole = 'member';
 				invitePermissions = [];
 				showInviteForm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({ error: 'Unknown error' }));
 				toast.error(err.message || err.error || 'Failed to create invite');
@@ -218,7 +218,7 @@
 			if (res.ok) {
 				toast.success(`${who} removed from the organization`);
 				showRemoveConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Could not remove member');
@@ -248,7 +248,7 @@
 					delivery === 'sent' ? `Invite resent to ${invite.email}` : 'New invite link issued'
 				);
 				showResendConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Could not resend invite');
@@ -267,7 +267,7 @@
 			if (res.ok) {
 				toast.success('Invite revoked');
 				showRevokeConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				toast.error('Failed to revoke invite');
 			}
