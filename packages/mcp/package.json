@@ -50,7 +50,7 @@
 		"lint:types": "eslint . --config eslint.typed.config.js"
 	},
 	"dependencies": {
-		"@modelcontextprotocol/server": "^2.3.1",
+		"@modelcontextprotocol/server": "^2.4.0",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
