@@ -65,7 +65,19 @@ overrides:
   # declared ranges, so this picks a version mermaid already accepts.
   mermaid@<11.16.1: ^11.16.1
   dompurify@<3.4.13: ^3.4.13
-  minimatch@<11.0.1: ^11.0.1
+  # minimatch: patch within each major, never across. 3–6 export the matcher
+  # as the module itself, 10+ export { minimatch }: firebase-tools and
+  # superstatic call require('minimatch')() and throw on 10+. 10 → 11 is the
+  # one safe jump (same exports) and the only fix for GHSA-g3hv-75wg-m249,
+  # which reaches the --prod audit through eslint (@selvajs/config). The old
+  # majors keep that moderate advisory; they are dev-only (firebase deploy).
+  minimatch@<3.1.4: ^3.1.4
+  minimatch@>=5.0.0 <5.1.8: ^5.1.8
+  minimatch@>=6.0.0 <6.2.2: ^6.2.2
+  minimatch@>=10.0.0 <11.0.1: ^11.0.1
+  # 11.x removed matchOne, which TypeDoc calls. Docs-build only. Drop once a
+  # TypeDoc release accepts minimatch 11.
+  typedoc>minimatch: ^10.2.5
   glob@>=9.0.0 <14.0.2: ^14.0.2
   devalue@<5.9.3: ^5.9.4
   # pm2 pins js-yaml to an exact 4.3.0, so this deliberately overrules that

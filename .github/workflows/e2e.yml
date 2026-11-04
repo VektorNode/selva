@@ -31,23 +31,23 @@ jobs:
 
       # Keyed on the installed Playwright version so Chromium is only
       # re-downloaded when @playwright/test bumps.
+      # Resolved from @selvajs/selva: the root doesn't hoist @playwright/test.
+      # Assigned first so a failed lookup fails the step; inside echo it
+      # yielded an empty key that matched a stale cache with no browser.
       - name: Resolve Playwright version
         id: pw
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(pnpm --filter @selvajs/selva exec node -p "require('@playwright/test/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v6
-        id: pw-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ steps.pw.outputs.version }}
-          restore-keys: |
-            playwright-
 
-      # On a cache hit the browser is present but its OS libraries aren't.
+      # Always run: it skips the download when the cached browser matches, and
+      # the OS libraries are never cached.
       - run: pnpm --filter @selvajs/selva exec playwright install --with-deps chromium
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-      - run: pnpm --filter @selvajs/selva exec playwright install-deps chromium
-        if: steps.pw-cache.outputs.cache-hit == 'true'
 
       # Via turbo so the `build` dependency fires — Playwright's webServer
       # serves build/index.js (adapter-node).
