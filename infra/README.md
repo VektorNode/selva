@@ -42,7 +42,17 @@ public npm registry.
 
 ## Setup
 
-### 1. Fill in `terraform.tfvars`
+### 1. Set the variables
+
+Variables come from the repo-root `.env` through `./tf.sh`, a `terraform`
+wrapper (`./tf.sh plan`, `./tf.sh apply`): a `TF_VAR_project_id=...` line sets
+`project_id`, and the app's own `SELVA_*_PROVIDER`, `SELVA_TENANCY`,
+`BOOTSTRAP_INSTANCE_ADMIN_EMAIL` and `SUPABASE_*` lines fill the matching
+variables unless a `TF_VAR_` line sets them. Set `TF_VAR_auth_provider` when
+production differs from local dev. Plain `terraform` with a
+`terraform.tfvars` still works and takes precedence.
+
+The examples below use tfvars syntax; write the same names as `TF_VAR_<name>=value`.
 
 ```bash
 cp terraform.tfvars.example terraform.tfvars
