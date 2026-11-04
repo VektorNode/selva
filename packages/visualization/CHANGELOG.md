@@ -1,5 +1,11 @@
 # @selvajs/visualization
 
+## 1.6.0-beta.10
+
+### Patch Changes
+
+- a565aae: chore(deps): bump the npm group across 1 directory with 20 updates
+
 ## 1.6.0-beta.9
 
 ### Minor Changes
