@@ -8,8 +8,8 @@ catalogs:
     '@iconify/svelte': ^5.2.1
     '@lucide/svelte': ^1.48.0
     '@playwright/test': ^1.63.0
-    '@sveltejs/adapter-auto': ^7.0.1
-    '@sveltejs/kit': 2.70.3
+    '@sveltejs/adapter-auto': ^8.0.0
+    '@sveltejs/kit': 3.1.1
     '@sveltejs/vite-plugin-svelte': ^7.3.1
     '@tailwindcss/vite': ^4.3.3
     # Track the runtime (.nvmrc / engines.node), not the newest Node line —
@@ -27,7 +27,7 @@ catalogs:
     svelte-check: ^4.7.6
     svelte-sonner: ^1.2.1
     tailwind-merge: ^3.7.0
-    tailwind-variants: ^3.3.1
+    tailwind-variants: ^4.0.1
     tailwindcss: ^4.3.3
     three: ^0.186.1
     tsdown: ^0.23.0
@@ -61,7 +61,7 @@ overrides:
 
 peerDependencyRules:
   allowedVersions:
-    '@sveltejs/kit': 2.70.3
+    '@sveltejs/kit': 3.1.1
 
 preferWorkspacePackages: true
 
