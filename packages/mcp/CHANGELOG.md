@@ -1,5 +1,11 @@
 # @selvajs/mcp
 
+## 0.1.0-beta.8
+
+### Patch Changes
+
+- a565aae: chore(deps): bump the npm group across 1 directory with 20 updates
+
 ## 0.1.0-beta.7
 
 ### Minor Changes

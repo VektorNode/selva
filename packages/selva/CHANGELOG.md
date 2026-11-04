@@ -1,5 +1,11 @@
 # @selvajs/selva
 
+## 4.20.0-beta.26
+
+### Patch Changes
+
+- a565aae: chore(deps): bump the npm group across 1 directory with 20 updates
+
 ## 4.20.0-beta.25
 
 ### Patch Changes
