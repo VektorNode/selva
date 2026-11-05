@@ -1,5 +1,17 @@
 # @selvajs/notifications
 
+## 0.3.0
+
+### Minor Changes
+
+- edb568d: `renderApiTokenCreatedEmail`, sent to a key's owner when a key is minted.
+
+### Patch Changes
+
+- Updated dependencies [90d0073]
+- Updated dependencies [edb568d]
+  - @selvajs/platform@1.0.0
+
 ## 0.3.0-beta.12
 
 ### Patch Changes

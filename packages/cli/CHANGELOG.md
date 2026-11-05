@@ -1,5 +1,25 @@
 # @selvajs/cli
 
+## 4.20.0
+
+### Minor Changes
+
+- edb568d: Config inspection, safe key rotation, `.env` migration, and updates that catch a database behind the app.
+
+  - `selva config show` lists what `.env` sets, what is default, what is invalid, keys Selva doesn't read (with the likely intended name), and what differs from the last boot. `selva config set KEY=VALUE` validates the value and edits only that line, with a backup.
+  - `selva keys rotate hmac|at-rest` moves the old key to `SELVA_HMAC_KEY_PREVIOUS` / `SELVA_AT_REST_KEY_PREVIOUS`, accepted for 30 days (`<KEY>_PREVIOUS_EXPIRES`). `--finish` ends the overlap early, `--leaked` drops the old key at once. `selva doctor` counts down to expiry.
+  - `selva migrate --dry-run` shows the `.env` rewrite (renamed keys, values a looser reader used to accept) and proves every setting keeps its meaning before writing. `--undo` restores the backup.
+  - `selva update` installs `@selvajs/supabase-provider` on the runtime's channel, polls `/api/health` after the restart, and exits non-zero with the migration commands when the app comes up degraded. `selva doctor` checks the database against the migration head the app expects.
+  - Fixed: rewriting `.env` no longer corrupts JSON values or pulls inline comments into a value. `.env` and its backups are written `0600`. `selva doctor` accepts a 32-byte base64 key.
+
+### Patch Changes
+
+- 420bccb: Deployments pin pm2 7.1.2 (was 7.0.3). It drops the proxy-agent and FTP dependencies behind five high-severity `npm audit` findings (basic-ftp, get-uri, pac-proxy-agent, proxy-agent, js-yaml).
+
+  **Action needed:** the in-app update doesn't change pm2. After updating, run `selva migrate` and then `npx pm2 update` in the deployment, as in [Upgrading pm2](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/deployment/prerequisites.md#upgrading-pm2). Until then `selva doctor` reports the old pm2.
+
+- 5ced834: The in-app update and `selva update` move pm2 to the version the new release pins and swap the daemon, so a pm2 bump needs no `selva migrate`. Under systemd the in-app update can't swap the daemon: it finishes with a warning to run `npx pm2 update` from a shell. `selva doctor` now fails when `selva-compute` is missing from pm2 or not online, which an interrupted `pm2 update` leaves behind while every other check passes.
+
 ## 4.20.0-beta.30
 
 ### Patch Changes
