@@ -20,6 +20,7 @@
 	import IssueList, { type Issue } from '#lib/components/primitives/IssueList.svelte';
 	import SeverityIcon from '#lib/components/primitives/SeverityIcon.svelte';
 	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { createLiveProgress } from '#lib/compute/liveProgress.svelte.js';
 
 	interface Props {
 		/** What the running (or most recent) solve has said over the live channel. */
@@ -38,6 +39,11 @@
 		freezesDuringSolve?: boolean;
 		/** `floating` overlays the bottom centre; `inline` sits in the flow below the host's content. */
 		placement?: 'floating' | 'inline';
+		/**
+		 * The host shows progress and Abort itself (`AppLayout`'s solve status), so the live view
+		 * keeps only the messages that arrive mid-solve.
+		 */
+		progressShownByHost?: boolean;
 	}
 
 	let {
@@ -48,7 +54,8 @@
 		onconfirm,
 		ondiscard,
 		freezesDuringSolve = false,
-		placement = 'floating'
+		placement = 'floating',
+		progressShownByHost = false
 	}: Props = $props();
 
 	const locale = getLocaleContext();
@@ -56,50 +63,10 @@
 
 	const REMARK_LINGER_MS = 6000;
 
-	const progress = $derived([...live.progress.values()]);
-
-	// A report only arrives when a step starts, so a bar that just shows `fraction` stands still
-	// through the step and then jumps. When the plugin knows how long the step took last time, the
-	// bar runs linearly to where the step will end, over that time. Steps are weighted by time, so
-	// linear gives one steady speed across the solve; any easing curve visibly speeds up and
-	// crawls within each step. A slower run waits at the step's end; a faster one snaps ahead.
-	let bars = $state.raw<Record<string, { width: number; ms: number }>>({});
-	// Any live event re-runs the effect below. Only a source with a new report may re-snap;
-	// the rest keep easing where they are.
-	let seen = new Map<string, unknown>();
-	let targets: Record<string, { width: number; ms: number }> = {};
-	$effect(() => {
-		const snapped: Record<string, { width: number; ms: number }> = {};
-		const eased: Record<string, { width: number; ms: number }> = {};
-		const current = untrack(() => bars);
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- bookkeeping for this effect; reactive reads here would re-trigger it
-		const nextSeen = new Map<string, unknown>();
-		for (const p of progress) {
-			if (p.fraction === undefined) continue;
-			const key = p.source ?? '';
-			nextSeen.set(key, p);
-			if (seen.get(key) === p && current[key]) {
-				snapped[key] = current[key];
-				// This run's cleanup cancelled the frame that would have started the ease.
-				if (targets[key] && current[key] !== targets[key]) eased[key] = targets[key];
-				continue;
-			}
-			snapped[key] = { width: p.fraction, ms: 150 };
-			if (p.nextFraction !== undefined && p.stepMs !== undefined) {
-				eased[key] = { width: p.nextFraction, ms: p.stepMs };
-			}
-		}
-		seen = nextSeen;
-		targets = eased;
-		bars = snapped;
-		if (Object.keys(eased).length === 0) return;
-		// Two frames: the snapped width must be painted before the eased one is set, or the
-		// browser folds both into one style change and there is nothing to transition from.
-		let frame = requestAnimationFrame(() => {
-			frame = requestAnimationFrame(() => (bars = { ...snapped, ...eased }));
-		});
-		return () => cancelAnimationFrame(frame);
-	});
+	const liveProgress = createLiveProgress(() => live);
+	const progress = $derived(liveProgress.progress);
+	const bars = $derived(liveProgress.bars);
+	const headline = $derived(liveProgress.headline);
 	// Grasshopper's own complaints stay in the footer log; this panel shows what the author wrote.
 	const authored = $derived(diagnostics.filter((d) => d.isGate));
 
@@ -207,37 +174,11 @@
 		}))
 	);
 
-	// Steps a few milliseconds long would swap the headline faster than it can be read. Each one
-	// stays up for at least this long; steps that end sooner are skipped in the label but still
-	// count in the bar. The label and its step count move together so they never disagree.
-	const HEADLINE_MIN_MS = 200;
-	let headline = $state.raw<(typeof progress)[number] | undefined>(undefined);
-	let headlineAt = 0;
-	$effect(() => {
-		const next = progress[0];
-		const shown = untrack(() => headline);
-		if (next?.label === shown?.label && next?.done === shown?.done) {
-			headline = next;
-			return;
-		}
-		const show = () => {
-			headline = next;
-			headlineAt = performance.now();
-		};
-		const wait = HEADLINE_MIN_MS - (performance.now() - headlineAt);
-		if (!shown || wait <= 0) {
-			show();
-			return;
-		}
-		const timer = setTimeout(show, wait);
-		return () => clearTimeout(timer);
-	});
-
 	const visible = $derived(
 		view === 'review' || view === 'blocked'
 			? true
 			: view === 'live'
-				? revealed && (rows.length > 0 || progress.length > 0)
+				? revealed && (rows.length > 0 || (!progressShownByHost && progress.length > 0))
 				: rows.length > 0 && lingering
 	);
 
@@ -297,7 +238,7 @@
 		data-testid="solve-messages"
 		data-view={view}
 	>
-		{#if view === 'live'}
+		{#if view === 'live' && !progressShownByHost}
 			{@const head = headline ?? progress[0]}
 			<div>
 				<div>
@@ -402,7 +343,11 @@
 		{/if}
 
 		{#if rows.length > 0}
-			<div class="max-h-40 overflow-y-auto {view === 'live' ? 'mt-3 pt-3 border-t' : ''}">
+			<div
+				class="max-h-40 overflow-y-auto {view === 'live' && !progressShownByHost
+					? 'mt-3 pt-3 border-t'
+					: ''}"
+			>
 				<IssueList {issues} variant="plain" />
 			</div>
 		{/if}

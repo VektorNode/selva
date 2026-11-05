@@ -288,6 +288,8 @@
 					isSolving={session.isSolving}
 					showSolvingIndicator={solvingIndicator.show}
 					solveIsSlow={solvingIndicator.slow}
+					live={session.live}
+					onabort={() => session.abort()}
 					hasPendingChanges={session.hasPendingChanges}
 					hasNeverSolved={session.hasNeverSolved}
 					bind:isViewerFullscreen
@@ -318,4 +320,5 @@
 	onabort={() => session.abort()}
 	onconfirm={() => session.acknowledge()}
 	ondiscard={() => session.discard()}
+	progressShownByHost={schema?.instanceSolve !== false}
 />

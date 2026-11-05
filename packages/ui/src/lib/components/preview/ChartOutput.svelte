@@ -6,6 +6,7 @@
 	import { loadScript } from '#lib/utils/loadScript.js';
 	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 	import { formatMessage } from '#lib/i18n/messages.js';
+	import { upgradePlotlyFigure, type PlotlyFigure } from '#lib/features/chart/plotly-compat.js';
 
 	interface Props {
 		item: OutputChartLayoutItem;
@@ -17,19 +18,18 @@
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
 
-	const MAP_TYPE_SET = new Set(['scattermap', 'scattermapbox', 'choropleth', 'scattergeo']);
-
-	type PlotlyTrace = Record<string, unknown>;
-	type PlotlyFigure = {
-		data: PlotlyTrace[];
-		layout: Record<string, unknown>;
-		config?: Record<string, unknown>;
-	};
+	const MAP_TYPE_SET = new Set([
+		'scattermap',
+		'choroplethmap',
+		'densitymap',
+		'choropleth',
+		'scattergeo'
+	]);
 
 	const figData = $derived.by(() => {
 		if (!value) return null;
 		try {
-			return JSON.parse(value) as PlotlyFigure;
+			return upgradePlotlyFigure(JSON.parse(value) as PlotlyFigure);
 		} catch {
 			return null;
 		}
@@ -47,9 +47,9 @@
 		if (window.Plotly) return window.Plotly;
 
 		// Pinned by hash: the plugin's web UI runs this on the origin that holds its bridge secret.
-		await loadScript('https://cdn.plot.ly/plotly-3.4.0.min.js', {
+		await loadScript('https://cdn.plot.ly/plotly-4.1.2.min.js', {
 			crossOrigin: 'anonymous',
-			integrity: 'sha384-pFOQ7loGBChmUyS4Tszy+he8OWeYkwTFjc2xii4aJUWWiGwf2u2OEc04T5iDRpMp'
+			integrity: 'sha384-hHv6D3tTUUBpp4tVv6t2Dc3oGuRhphmWOTKUR8jWyN0Pnon1g3iebKCNDNmKmxo8'
 		});
 		// @ts-expect-error — Plotly is loaded dynamically onto window
 		return window.Plotly;
@@ -113,8 +113,13 @@
 		return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
 	}
 
-	function getThemeColors(): { textColor: string; gridColor: string } {
-		if (!containerEl) return { textColor: '#333', gridColor: '#eee' };
+	function getThemeColors(): {
+		textColor: string;
+		gridColor: string;
+		fontFamily: string;
+		colorway: string[];
+	} {
+		if (!containerEl) return { textColor: '#333', gridColor: '#eee', fontFamily: '', colorway: [] };
 		const style = getComputedStyle(containerEl);
 		const textColor = toRgb(style.getPropertyValue('color').trim() || '#333');
 		const gridColor = toRgb(
@@ -122,7 +127,12 @@
 				style.getPropertyValue('--color-border')?.trim() ||
 				'rgba(128,128,128,0.2)'
 		);
-		return { textColor, gridColor };
+		// Figures that leave colours unset take Selva's chart palette rather than Plotly's.
+		const colorway = [1, 2, 3, 4, 5]
+			.map((i) => style.getPropertyValue(`--chart-${i}`).trim())
+			.filter(Boolean)
+			.map(toRgb);
+		return { textColor, gridColor, fontFamily: style.fontFamily, colorway };
 	}
 
 	async function renderChart() {
@@ -131,7 +141,7 @@
 		loading = true;
 		try {
 			const Plotly = await loadPlotly();
-			const { textColor, gridColor } = getThemeColors();
+			const { textColor, gridColor, fontFamily, colorway } = getThemeColors();
 			const isMapFigure = figData.data?.some((t) => MAP_TYPE_SET.has(t.type as string));
 
 			const {
@@ -151,7 +161,8 @@
 				...layoutRest,
 				autosize: true,
 				margin: { t: 24, r: 8, b: 40, l: 60, pad: 0 },
-				font: { color: textColor },
+				font: { color: textColor, ...(fontFamily ? { family: fontFamily } : {}) },
+				...(colorway.length && !layoutRest.colorway ? { colorway } : {}),
 				paper_bgcolor: layoutRest.paper_bgcolor ?? 'transparent',
 				plot_bgcolor: layoutRest.plot_bgcolor ?? 'transparent',
 				// Plotly's axis tick/label color doesn't inherit the top-level `font.color`, so this
@@ -166,12 +177,20 @@
 					: {})
 			};
 
-			Plotly.react(containerEl, figData.data, layout, {
-				responsive: true,
-				displayModeBar: 'hover',
-				displaylogo: false,
-				modeBarButtonsToRemove: ['sendDataToCloud', 'lasso2d', 'select2d'],
-				...figData.config
+			Plotly.react(containerEl, {
+				data: figData.data,
+				layout,
+				// Animated figures (e.g. Canopy's Animate) carry their frames here.
+				frames: figData.frames ?? [],
+				config: {
+					responsive: true,
+					displayModeBar: 'hover',
+					displaylogo: false,
+					// Plotly 4's "Share chart" button uploads the figure to Plotly's cloud.
+					showSendToCloud: false,
+					modeBarButtonsToRemove: ['sendDataToCloud', 'lasso2d', 'select2d'],
+					...figData.config
+				}
 			});
 		} catch (e) {
 			error = e instanceof Error ? e.message : t.chartRenderFailed;

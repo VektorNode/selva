@@ -58,6 +58,7 @@ Each plan below links to its tracking issue at the top of the file.
 | [scaling-roadmap](./features/scaling-roadmap.md)                             | **unfiled** — design only; nothing built                                        |
 | [drawing-backlog](./fixes/drawing-backlog.md)                                | **unfiled** — three small items                                                 |
 | [deployment-config](./features/deployment-config.md)                         | **unfiled** — design only                                                       |
+| [canvas-add-to-ui](./features/canvas-add-to-ui.md)                           | **unfiled** — design only; hook and tab tested on Rhino 8 Mac                   |
 
 The unfiled plans have no issue on purpose. presolve-bundle and cloud-binary-transport are
 blocked, and an issue for work nobody can start is noise; they stay as design documents until

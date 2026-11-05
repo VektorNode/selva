@@ -79,6 +79,10 @@ export interface ViewerMessages {
 	solveMessagesEscHint: string;
 	solveMessagesDismiss: string;
 	solveSolving: string;
+	/** A visible solve has landed; followed by how long it took. */
+	solveDone: string;
+	/** A visible solve was aborted; the previous result stays. */
+	solveStopped: string;
 	parametersTab: string;
 	moreTab: string;
 	scrollTabsBack: string;
@@ -314,6 +318,8 @@ const en: ViewerMessages = {
 	solveMessagesEscHint: 'Esc aborts the solve',
 	solveMessagesDismiss: 'Dismiss',
 	solveSolving: 'Solving…',
+	solveDone: 'Done',
+	solveStopped: 'Stopped',
 	parametersTab: 'Parameters',
 	moreTab: 'More',
 	scrollTabsBack: 'Previous tabs',
@@ -518,6 +524,8 @@ const de: ViewerMessages = {
 	solveMessagesEscHint: 'Esc bricht die Berechnung ab',
 	solveMessagesDismiss: 'Schliessen',
 	solveSolving: 'Berechnung läuft…',
+	solveDone: 'Fertig',
+	solveStopped: 'Abgebrochen',
 	parametersTab: 'Parameter',
 	moreTab: 'Mehr',
 	scrollTabsBack: 'Vorherige Tabs',

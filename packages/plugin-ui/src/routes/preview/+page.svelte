@@ -112,6 +112,7 @@
 		ondiscard={() => preview.discard()}
 		freezesDuringSolve={panel}
 		placement={panel ? 'inline' : 'floating'}
+		progressShownByHost={preview.state.schema?.instanceSolve !== false}
 	/>
 {/snippet}
 
@@ -155,6 +156,9 @@
 					isSolving={preview.isSolving}
 					showSolvingIndicator={solvingIndicator.show}
 					solveIsSlow={solvingIndicator.slow}
+					live={preview.live}
+					onabort={() => preview.abort()}
+					freezesDuringSolve={panel}
 					solveMessages={panel ? solveMessages : undefined}
 					hasPendingChanges={preview.hasPendingChanges}
 					bind:isViewerFullscreen

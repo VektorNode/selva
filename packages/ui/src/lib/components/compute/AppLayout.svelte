@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { UISchema, SupportedTypes, ParameterPreset } from '@selvajs/schemas';
-	import type { SolveSettlement } from '@selvajs/solve/client';
+	import type { LiveSolveState, SolveSettlement } from '@selvajs/solve/client';
 	import type { ActionButton } from '../../types/actionButton';
 	import type { PresetLabels } from '../../types/presetLabels';
 	import { ChevronUp, Download, Ellipsis, Upload } from '@lucide/svelte';
@@ -35,12 +35,18 @@
 		meshes?: any[];
 		isSolving: boolean;
 		/**
-		 * `createSolvingIndicator(...).show`, not `isSolving`: drives the action row's solving status
-		 * and the viewer's dim and line, which would otherwise flash on every sub-second solve.
+		 * `createSolvingIndicator(...).show`, not `isSolving`: grows the action row's solve status,
+		 * which would otherwise flash on every sub-second solve.
 		 */
 		showSolvingIndicator?: boolean;
-		/** `createSolvingIndicator(...).slow`: the viewer dims its result as stale. */
+		/** `createSolvingIndicator(...).slow`: the solve status grows into a card with progress. */
 		solveIsSlow?: boolean;
+		/** The session's live channel: step, count and bar for that card. */
+		live?: LiveSolveState;
+		/** Abort in that card. The host's `SolveMessages` should then take `progressShownByHost`. */
+		onabort?: () => void;
+		/** As passed to `createSolvingIndicator`. */
+		freezesDuringSolve?: boolean;
 		/** @deprecated Ignored: the solving status always sits in the action row. */
 		solvingIndicatorPlacement?: 'floating' | 'inline';
 		/** Rendered above the action row, for a host that keeps the solve's messages in the flow. */
@@ -75,6 +81,9 @@
 		isSolving,
 		showSolvingIndicator = false,
 		solveIsSlow = false,
+		live,
+		onabort,
+		freezesDuringSolve = false,
 		solveMessages,
 		hasPendingChanges = false,
 		hasNeverSolved = false,
@@ -99,8 +108,6 @@
 	let presets = $state<ParameterPresetManager | null>(null);
 	const hasMenu = $derived(showSaveButton || showLoadButton || panelActions.length > 0);
 	const resultIsStale = $derived(hasPendingChanges || hasNeverSolved);
-	// With a Calculate button the button itself says it is solving.
-	const showSolvingChip = $derived(showSolvingIndicator && schema.instanceSolve !== false);
 
 	const shownTabs = $derived(
 		schema.layout.type === 'tabbed'
@@ -284,9 +291,16 @@
 		/>
 	{:else}
 		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border">
-			<SolvingIndicator show={showSolvingChip} />
+			<SolvingIndicator
+				{isSolving}
+				show={showSolvingIndicator}
+				slow={solveIsSlow}
+				{live}
+				{onabort}
+				{freezesDuringSolve}
+			/>
 			{#if hasMenu}
-				<div class="ml-auto">{@render actionsMenu()}</div>
+				{@render actionsMenu()}
 			{/if}
 		</div>
 	{/if}
@@ -337,8 +351,6 @@
 				<Viewer
 					{meshes}
 					bind:isFullscreen={isViewerFullscreen}
-					isSolving={showSolvingIndicator}
-					isSlow={solveIsSlow}
 					drawerOpen={drawer === 'full'}
 					{logoUrl}
 					{onViewerReady}
@@ -483,8 +495,6 @@
 						<Viewer
 							{meshes}
 							bind:isFullscreen={isViewerFullscreen}
-							isSolving={showSolvingIndicator}
-							isSlow={solveIsSlow}
 							{logoUrl}
 							{onViewerReady}
 							viewerConfig={{
