@@ -71,7 +71,7 @@ function publishablePackages() {
 
 // Plain GET rather than `npm view`: spawning npm per package costs seconds each.
 async function publishedVersion(name, version) {
-	const url = `https://registry.npmjs.org/${name.replace('/', '%2f')}/${version}`;
+	const url = `https://registry.npmjs.org/${name.replaceAll('/', '%2f')}/${version}`;
 	try {
 		const res = await fetch(url, {
 			headers: { accept: 'application/json', 'cache-control': 'no-cache' }

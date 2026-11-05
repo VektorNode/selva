@@ -676,8 +676,10 @@ export class WebSocketState {
 				// Shape only — `issues` carries the offending value in `input`, and
 				// `payload` is the whole message. Neither can reach stdout: erasure
 				// does not follow a log collector.
+				// `type` comes off the wire: a `%s` in it would be read as a format directive.
 				console.error(
-					`[WebSocket] Rejected malformed '${validation.type}' message:`,
+					'[WebSocket] Rejected malformed message of type %s:',
+					validation.type,
 					validation.error.issues.map((i) => ({
 						path: i.path.join('.'),
 						code: i.code,

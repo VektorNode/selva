@@ -1,4 +1,5 @@
 import { createHmac, createPrivateKey, randomUUID, sign } from 'node:crypto';
+import { trimTrailing } from '../trim.js';
 import {
 	NoopLogger,
 	ProviderError,
@@ -67,7 +68,7 @@ export class SupabaseDelegatedSession implements IDelegatedSession {
 	private check: CheckEntry | null = null;
 
 	constructor(private readonly config: SupabaseDelegatedSessionConfig) {
-		this.baseUrl = config.supabaseUrl.replace(/\/+$/, '');
+		this.baseUrl = trimTrailing(config.supabaseUrl, '/');
 		this.logger = config.logger ?? new NoopLogger();
 		this.fetchFn = config.fetch ?? fetch;
 		this.now = config.now ?? Date.now;

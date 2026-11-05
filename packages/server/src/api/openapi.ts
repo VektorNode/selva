@@ -227,7 +227,7 @@ function operationFor(
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // A file-like segment (`/openapi.json`) drops its extension in names.
-const stem = (s: string) => s.replace(/\..*$/, '');
+const stem = (s: string) => s.split('.')[0];
 
 function tagFor(path: string): string {
 	return cap(stem(path.split('/')[1] ?? 'root'));

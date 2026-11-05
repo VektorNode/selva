@@ -1,4 +1,5 @@
 import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
+import { trimTrailing } from '../utils/trim.js';
 
 const ALGO = 'aes-256-gcm';
 const IV_BYTES = 12;
@@ -80,7 +81,7 @@ export function decodeSecretKey(raw: string): Buffer {
 	// `Buffer.from` skips what it can't decode, so only a round trip proves the
 	// whole string was base64 rather than 32 bytes of it.
 	const buf = Buffer.from(key, 'base64');
-	if (buf.length === 32 && buf.toString('base64').replace(/=+$/, '') === key.replace(/=+$/, '')) {
+	if (buf.length === 32 && trimTrailing(buf.toString('base64'), '=') === trimTrailing(key, '=')) {
 		return buf;
 	}
 	throw new Error(

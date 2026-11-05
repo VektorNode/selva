@@ -1,4 +1,5 @@
 import type { Manifest, SettingSpec } from './manifest.js';
+import { trimTrailing } from '../utils/trim.js';
 
 export type EnvRecord = Record<string, string | undefined>;
 
@@ -61,7 +62,7 @@ function parse(spec: SettingSpec, raw: string): Parsed {
 		case 'url':
 			try {
 				new URL(v);
-				return { ok: true, value: v.replace(/\/+$/, '') };
+				return { ok: true, value: trimTrailing(v, '/') };
 			} catch {
 				return { ok: false, problem: 'must be an absolute URL' };
 			}
@@ -103,7 +104,7 @@ function parse(spec: SettingSpec, raw: string): Parsed {
 function isKey32(v: string): boolean {
 	if (/^[0-9a-fA-F]{64}$/.test(v)) return true;
 	const buf = Buffer.from(v, 'base64');
-	return buf.length === 32 && buf.toString('base64').replace(/=+$/, '') === v.replace(/=+$/, '');
+	return buf.length === 32 && trimTrailing(buf.toString('base64'), '=') === trimTrailing(v, '=');
 }
 
 /** What `raw` meant to the reader before it parsed strictly. */
