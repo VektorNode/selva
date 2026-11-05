@@ -1,5 +1,12 @@
 # @selvajs/visualization
 
+## 1.6.1-beta.0
+
+### Patch Changes
+
+- 61ca6b3: The viewer works better on phones. A phone held sideways gets the parameters as a sheet on the right instead of the desktop columns. The viewer no longer runs under the drawer, so its tools button stays clear of the drawer handle. On touch, the viewer tools stay open until you tap elsewhere, and holding a tool shows its name. A tap just beside a thin or small object selects it, and a double-tap works on iOS too. The header is shorter on phones, and the footer drops the copyright line there.
+- 61ca6b3: On touch, only a deliberate tap selects or measures: a pinch, a one-finger orbit that drifts more than a few pixels, a long press, or a cancelled touch no longer counts, however close the finger lifts to where it landed.
+
 ## 1.6.0
 
 ### Minor Changes
