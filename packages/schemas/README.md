@@ -78,6 +78,8 @@ UPDATE_SLVA_FIXTURES=1 dotnet test --filter SlvaFixtureContractTests
 
 The remaining fixtures (`dynamic-value-list-payload.json`) are shared the same way by `packages/ui` and the C# `OutputPayloadContractTests`.
 
+`fixtures/definitions/` holds Grasshopper definitions that tests in more than one package solve: `bench-display.gh` backs the compute live contract test and the Selva core-loop e2e.
+
 ## Testing
 
 ```bash

@@ -1,3 +1,6 @@
+/** How many entries `recordRun` keeps per user. */
+export const MAX_RECENT_RUNS = 20;
+
 export interface RecentRun {
 	definitionId: string;
 	runId: string;

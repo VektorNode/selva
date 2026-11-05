@@ -19,7 +19,7 @@ export default defineConfig({
 	server: {
 		port: 5173,
 		open: '/index.html',
-		// The DMF fixtures live under `examples/fixtures`, inside the root — but allow the parent so
+		// Demo inputs live under `examples/data`, inside the root — but allow the parent so
 		// `?url` imports that reach outside it keep resolving.
 		fs: { allow: ['..'] }
 	}

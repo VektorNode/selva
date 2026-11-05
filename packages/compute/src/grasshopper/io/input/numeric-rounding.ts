@@ -1,62 +1,36 @@
-// Numeric step-size and precision handling for slider-backed inputs.
-
 import type { InputParamSchema } from '../../types';
 
-export function applyRounding(value: number, decimalPlaces: number, tolerance: number): number {
+/** Snap float noise (`0.30000000000000004`) to `decimalPlaces`; a real difference is kept. */
+export function applyRounding(value: number, decimalPlaces: number): number {
 	const rounded = Number(value.toFixed(decimalPlaces));
-	if (Math.abs(value - rounded) < tolerance) return rounded;
-	return value;
+	return Math.abs(value - rounded) < 1e-8 ? rounded : value;
 }
 
-export function getInputStepSize(value: number, roundingTolerance: number): number {
-	if (!Number.isFinite(value)) return 0.1;
-	if (value === 0) return 0.1;
-
-	const abs = Math.abs(value);
-
-	if (abs >= 1) {
-		const str = String(value);
-		const decimalPart = str.split('.')[1];
-		if (decimalPart && decimalPart.length > 0) {
-			const decimals = Math.min(decimalPart.length, 12);
-			const step = Math.pow(10, -decimals);
-			const rounded = Number(step.toFixed(decimals));
-			return Math.abs(rounded - step) < roundingTolerance ? rounded : step;
-		}
-		return 1;
-	}
-
-	// Handle exponential notation
-	const s = String(value);
-	const expMatch = s.toLowerCase().match(/e(-?\d+)/);
-	if (expMatch) {
-		const exp = Number(expMatch[1]);
-		if (exp < 0 || s.toLowerCase().includes('e-')) {
-			const absExp = Math.abs(exp);
-			const step = Math.pow(10, -absExp);
-			const rounded = Number(step.toFixed(absExp));
-			return Math.abs(rounded - step) < roundingTolerance ? rounded : step;
-		}
-		return 0.1;
-	}
-
-	// Handle standard decimal notation
-	const MAX_DECIMALS = 12;
-	const fixed = abs.toFixed(MAX_DECIMALS);
-	const trimmed = fixed.replace(/0+$/, '');
-	const decimals = Math.min((trimmed.split('.')[1] || '').length, MAX_DECIMALS);
-
-	if (decimals === 0) return 0.1;
-
-	const step = Math.pow(10, -decimals);
-	const rounded = Number(step.toFixed(decimals));
-	return Math.abs(rounded - step) < roundingTolerance ? rounded : step;
-}
+const MAX_DECIMALS = 12;
+// A double holds 15 significant digits exactly. Fixed places would not do: from 1e4 up,
+// `toFixed(12)` prints the float's own noise (`16384.200000000001`).
+const SIGNIFICANT_DIGITS = 15;
 
 /**
- * A server-authored `stepSize` (read off the wire by `normalizeInputSchema`),
- * or `undefined` when absent/unusable — callers fall back to the heuristic.
+ * Decimal places `x` is written with, ignoring float noise, at most 12:
+ * `0.30000000000000004` → 1, `16384.2` → 1, `1e-7` → 7, `1.5e21` → 0.
  */
+export function decimalsOf(x: number): number {
+	if (!Number.isFinite(x)) return 0;
+	const clean = Number(Math.abs(x).toPrecision(SIGNIFICANT_DIGITS));
+	const [mantissa, exponent = '0'] = String(clean).split('e');
+	const decimals = (mantissa.split('.')[1]?.length ?? 0) - Number(exponent);
+	return Math.min(Math.max(decimals, 0), MAX_DECIMALS);
+}
+
+export function getInputStepSize(value: number): number {
+	if (!Number.isFinite(value) || value === 0) return 0.1;
+	const decimals = decimalsOf(value);
+	if (decimals === 0) return Math.abs(value) >= 1 ? 1 : 0.1;
+	return Number((10 ** -decimals).toFixed(decimals));
+}
+
+/** A server-authored `stepSize`, or `undefined` when absent or unusable. */
 export function serverStepSize(schema: InputParamSchema): number | undefined {
 	return typeof schema.stepSize === 'number' &&
 		Number.isFinite(schema.stepSize) &&
@@ -64,10 +38,3 @@ export function serverStepSize(schema: InputParamSchema): number | undefined {
 		? schema.stepSize
 		: undefined;
 }
-
-/**
- * Computes the coerced default + stepSize for a Number/Integer input.
- * Mirrors the old `processNumericInput`, plus: a server-provided
- * `schema.stepSize` is honored verbatim; the default/min/max heuristic is
- * only the fallback when the server didn't author one.
- */

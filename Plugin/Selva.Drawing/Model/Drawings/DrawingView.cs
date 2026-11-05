@@ -48,7 +48,7 @@ public sealed class DrawingView : LayoutElement
 	public TextStyle CaptionStyle { get; init; } = new TextStyle { FontSize = 2.5 };
 	public double CaptionGap { get; init; } = 1.5;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		// Flatten the whole geometry subtree, not just a LayoutElement sitting at its root.
 		// Counter-scaling below rewrites primitives; an unresolved Frame/Stack/Grid one level
@@ -68,6 +68,34 @@ public sealed class DrawingView : LayoutElement
 		// 19.05 mm and two views of the same geometry at different weights would not align.
 		var geomBounds = GeometryExtent(resolvedGeometry);
 
+		// Dimensions, leaders and text are sized in paper mm, so only their anchors count toward
+		// the model extent above; what they draw past the geometry is reserved here, in paper mm,
+		// once the scale is known. Measuring them in model units let an 8 mm dimension offset
+		// count as 8 m in a model drawn in metres, shrinking a Length=170 plan to 52 mm, and in a
+		// millimetre model at 1:100 reserved 0.08 mm, so the labels hung outside the frame.
+		var annotations = new List<Annotation>();
+		CollectAnnotations(resolvedGeometry, Transform.Identity, annotations);
+		Margins Overhang(double scale) => AnnotationOverhang(annotations, geomBounds, scale);
+
+		// Fits the geometry plus its annotations into a budget. The first pass reserves each
+		// annotation's full paper extent, which can only overstate the room it needs; the second
+		// re-fits with the overhang at that scale, which then stays inside the budget because
+		// overhang only shrinks as the scale grows.
+		double FitWithAnnotations(double? width, double? height)
+		{
+			double FitTo(Margins reserve)
+			{
+				double? w = width.HasValue ? Math.Max(0, width.Value - reserve.Left - reserve.Right) : null;
+				double? h = height.HasValue ? Math.Max(0, height.Value - reserve.Bottom - reserve.Top) : null;
+				if (w.HasValue && h.HasValue) return FitScale(w.Value, h.Value, geomBounds);
+				if (w.HasValue) return AxisScale(w.Value, geomBounds.Width);
+				if (h.HasValue) return AxisScale(h.Value, geomBounds.Height);
+				return 1.0;
+			}
+
+			return annotations.Count == 0 ? FitTo(default) : FitTo(Overhang(FitTo(Overhang(0))));
+		}
+
 		// The caption hangs below the frame and is part of what the view occupies, so its cost
 		// has to come out of the budget BEFORE the geometry is fitted — not be stapled on after.
 		// Adding it afterwards pushed an auto-fit view 4.5 mm past the content rect and straight
@@ -77,10 +105,8 @@ public sealed class DrawingView : LayoutElement
 		double innerWidth, innerHeight, effectiveScale;
 		if (Length.HasValue && Length.Value > 0 && !geomBounds.IsEmpty)
 		{
-			var longest = Math.Max(geomBounds.Width, geomBounds.Height);
-			effectiveScale = longest > 0 ? Length.Value / longest : 1.0;
-			innerWidth = geomBounds.Width * effectiveScale;
-			innerHeight = geomBounds.Height * effectiveScale;
+			effectiveScale = ScaleForLength(geomBounds, Length.Value);
+			(innerWidth, innerHeight) = ContentSize(effectiveScale);
 		}
 		else if (Size.HasValue)
 		{
@@ -90,7 +116,7 @@ public sealed class DrawingView : LayoutElement
 			effectiveScale = Scale > 0 ? Scale : 1.0;
 			if (Scale <= 0 && !geomBounds.IsEmpty && innerWidth > 0 && innerHeight > 0)
 			{
-				effectiveScale = FitScale(innerWidth, innerHeight, geomBounds);
+				effectiveScale = FitWithAnnotations(innerWidth, innerHeight);
 			}
 		}
 		else if (Scale <= 0 && !geomBounds.IsEmpty && (context.HasFiniteAvailableWidth || context.HasFiniteAvailableHeight))
@@ -114,16 +140,8 @@ public sealed class DrawingView : LayoutElement
 			double? availH = context.HasFiniteAvailableHeight
 				? Math.Max(0, context.AvailableHeight - captionReserve - availPadY)
 				: null;
-			if (availW.HasValue && availH.HasValue)
-				effectiveScale = FitScale(availW.Value, availH.Value, geomBounds);
-			else if (availW.HasValue)
-				effectiveScale = AxisScale(availW.Value, geomBounds.Width);
-			else if (availH.HasValue)
-				effectiveScale = AxisScale(availH.Value, geomBounds.Height);
-			else
-				effectiveScale = 1.0;
-			innerWidth = geomBounds.Width * effectiveScale;
-			innerHeight = geomBounds.Height * effectiveScale;
+			effectiveScale = FitWithAnnotations(availW, availH);
+			(innerWidth, innerHeight) = ContentSize(effectiveScale);
 		}
 		else if (geomBounds.IsEmpty)
 		{
@@ -134,8 +152,14 @@ public sealed class DrawingView : LayoutElement
 		else
 		{
 			effectiveScale = Scale > 0 ? Scale : 1.0;
-			innerWidth = geomBounds.Width * effectiveScale;
-			innerHeight = geomBounds.Height * effectiveScale;
+			(innerWidth, innerHeight) = ContentSize(effectiveScale);
+		}
+
+		(double Width, double Height) ContentSize(double scale)
+		{
+			var over = Overhang(scale);
+			return (geomBounds.Width * scale + over.Left + over.Right,
+				geomBounds.Height * scale + over.Bottom + over.Top);
 		}
 
 		// Re-derive the padding actually used for the branch we took above (Size vs. context
@@ -201,12 +225,15 @@ public sealed class DrawingView : LayoutElement
 			//   1) translate so geometry's min corner ends up at (0,0)
 			//   2) scale uniformly by effectiveScale
 			//   3) translate to inner-rect bottom-left + centring offset
-			var scaledW = geomBounds.Width * effectiveScale;
-			var scaledH = geomBounds.Height * effectiveScale;
+			// The annotations' overhang sits beside the geometry inside the inner rect, so the
+			// geometry is offset by the overhang on its low sides.
+			var over = Overhang(effectiveScale);
+			var contentW = geomBounds.Width * effectiveScale + over.Left + over.Right;
+			var contentH = geomBounds.Height * effectiveScale + over.Bottom + over.Top;
 			var innerLeft = Origin.X + Padding.Left;
 			var innerBottom = Origin.Y + Padding.Bottom;
-			var dx = innerLeft + (innerWidth - scaledW) / 2.0;
-			var dy = innerBottom + (innerHeight - scaledH) / 2.0;
+			var dx = innerLeft + (innerWidth - contentW) / 2.0 + over.Left;
+			var dy = innerBottom + (innerHeight - contentH) / 2.0 + over.Bottom;
 
 			var t = Transform.Translate(-geomBounds.MinX, -geomBounds.MinY)
 				.Then(Transform.Scale(effectiveScale))
@@ -547,10 +574,119 @@ public sealed class DrawingView : LayoutElement
 		};
 	}
 
-	// Bounds of the geometry itself, with PathElement's stroke inflation unwound. PathElement is
-	// the only element that pads its bounds by the drawn line width; DimensionElement and
-	// LeaderElement also inflate, but they pad for arrowheads and label text, which are real
-	// extent the view has to make room for.
+	/// <summary>The scale that puts <paramref name="geometry" />'s longest model side at <paramref name="length" /> mm.</summary>
+	public static double ScaleForLength(DrawElement geometry, double length) =>
+		ScaleForLength(GeometryExtent(geometry), length);
+
+	private static double ScaleForLength(BoundingBox geomBounds, double length)
+	{
+		var longest = Math.Max(geomBounds.Width, geomBounds.Height);
+		return longest > 0 ? length / longest : 1.0;
+	}
+
+	// An annotation's anchors in model space, and how far it draws past them on each side in
+	// paper mm.
+	private readonly record struct Annotation(BoundingBox Anchor, Margins Reach);
+
+	private static void CollectAnnotations(DrawElement element, Transform toView, List<Annotation> into)
+	{
+		switch (element)
+		{
+			case DimensionElement or LeaderElement or TextElement:
+				var anchor = AnchorBounds(element);
+				if (anchor.IsEmpty) return;
+				var reach = element is DimensionElement { Kind: DimensionKind.Linear } linear
+					? LinearDimensionReach(linear)
+					: BoundsReach(element, anchor);
+				into.Add(new Annotation(toView.IsIdentity ? anchor : TransformBounds(anchor, toView), reach));
+				return;
+			case GroupElement group:
+				var inner = group.Transform.IsIdentity ? toView : group.Transform.Then(toView);
+				foreach (var child in group.Children) CollectAnnotations(child, inner, into);
+				return;
+		}
+	}
+
+	// The element's own bounds pad its anchors by paper mm on every side: conservative, but all
+	// a leader, text or angular dimension tells us.
+	private static Margins BoundsReach(DrawElement element, BoundingBox anchor)
+	{
+		var b = element.ComputeBounds();
+		return new Margins(
+			Math.Max(0, b.MaxY - anchor.MaxY), Math.Max(0, b.MaxX - anchor.MaxX),
+			Math.Max(0, anchor.MinY - b.MinY), Math.Max(0, anchor.MinX - b.MinX));
+	}
+
+	// A linear dimension draws on one side of A→B: its line at Offset, the label past it.
+	// Arrows and a label wider than the dimension can run a little past either end. The
+	// uniform pad from ComputeBounds would reserve that full depth on all four sides.
+	private static Margins LinearDimensionReach(DimensionElement dim)
+	{
+		var ts = dim.Style?.TextSize ?? 2.5;
+		var dx = dim.B.X - dim.A.X;
+		var dy = dim.B.Y - dim.A.Y;
+		var len = Math.Sqrt(dx * dx + dy * dy);
+		if (len <= 0) return Margins.Uniform(Math.Abs(dim.Offset) + ts * 4);
+		dx /= len;
+		dy /= len;
+		// Positive Offset is left of A→B.
+		var side = dim.Offset >= 0 ? 1.0 : -1.0;
+		var nx = -dy * side;
+		var ny = dx * side;
+		var depth = Math.Abs(dim.Offset) + ts * 2;
+		var along = ts * 2;
+		double top = 0, right = 0, bottom = 0, left = 0;
+		foreach (var (vx, vy) in new[]
+		         {
+			         (nx * depth + dx * along, ny * depth + dy * along),
+			         (nx * depth - dx * along, ny * depth - dy * along),
+			         (dx * along, dy * along),
+			         (-dx * along, -dy * along),
+		         })
+		{
+			top = Math.Max(top, vy);
+			bottom = Math.Max(bottom, -vy);
+			right = Math.Max(right, vx);
+			left = Math.Max(left, -vx);
+		}
+		return new Margins(top, right, bottom, left);
+	}
+
+	// Paper mm the annotations draw past the scaled geometry, per side.
+	private static Margins AnnotationOverhang(List<Annotation> annotations, BoundingBox geom, double scale)
+	{
+		double top = 0, right = 0, bottom = 0, left = 0;
+		foreach (var a in annotations)
+		{
+			top = Math.Max(top, a.Reach.Top - (geom.MaxY - a.Anchor.MaxY) * scale);
+			right = Math.Max(right, a.Reach.Right - (geom.MaxX - a.Anchor.MaxX) * scale);
+			bottom = Math.Max(bottom, a.Reach.Bottom - (a.Anchor.MinY - geom.MinY) * scale);
+			left = Math.Max(left, a.Reach.Left - (a.Anchor.MinX - geom.MinX) * scale);
+		}
+		return new Margins(top, right, bottom, left);
+	}
+
+	private static BoundingBox AnchorBounds(DrawElement element)
+	{
+		switch (element)
+		{
+			case DimensionElement dim:
+				var b = BoundingBox.FromPoint(dim.A).Union(dim.B);
+				return dim.Kind == DimensionKind.Angular ? b.Union(dim.Vertex) : b;
+			case LeaderElement leader:
+				var l = BoundingBox.Empty;
+				foreach (var p in leader.Points) l = l.Union(p);
+				return l;
+			case TextElement text:
+				return BoundingBox.FromPoint(text.Position);
+			default:
+				return BoundingBox.Empty;
+		}
+	}
+
+	// Bounds of the model geometry: PathElement's stroke inflation unwound, and annotations
+	// (dimensions, leaders, text) reduced to their anchors, since what they draw around those is
+	// paper-space and reserved separately (CollectAnnotations).
 	private static BoundingBox GeometryExtent(DrawElement element)
 	{
 		switch (element)
@@ -559,6 +695,8 @@ public sealed class DrawingView : LayoutElement
 				return BoundingBox.Empty;
 			case PathElement path:
 				return path.Path.ComputeBounds();
+			case DimensionElement or LeaderElement or TextElement:
+				return AnchorBounds(element);
 			case GroupElement group:
 				var union = BoundingBox.Empty;
 				foreach (var child in group.Children)

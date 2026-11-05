@@ -1,17 +1,13 @@
 import { defineConfig } from 'tsdown';
 
-const entries = {
-	index: 'src/index.ts',
-	grasshopper: 'src/grasshopper/index.ts',
-	core: 'src/core/index.ts'
-};
-
 export default defineConfig({
-	entry: entries,
-	format: ['esm', 'cjs'],
+	entry: {
+		grasshopper: 'src/grasshopper/index.ts',
+		core: 'src/core/index.ts'
+	},
+	format: ['esm'],
 	dts: true,
-	minify: true,
 	sourcemap: true,
-	clean: true,
+	// On `platform: 'node'` the default emits `core.mjs`, which `exports` doesn't name.
 	fixedExtension: false
 });

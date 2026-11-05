@@ -47,6 +47,7 @@ public class SchemaArchiveSerializer
                 }
 
                 schema.LastModified = DateTime.UtcNow;
+                MinPluginVersionStamp.Apply(schema);
 
                 var schemaJson = JsonConvert.SerializeObject(schema, SchemaSerializationSettings);
                 writer.SetString("Schema", schemaJson);
@@ -117,7 +118,7 @@ public class SchemaArchiveSerializer
                         }
                     }
 
-                    jObject = SchemaMigrator.MigrateJson(jObject);
+                    jObject = SchemaMigrator.MigrateJson(jObject, _pluginVersion);
                     var rawSchema = jObject.ToObject<UISchema>();
                     schema = SchemaMigrator.MigrateToCurrentVersion(rawSchema, _pluginVersion);
 

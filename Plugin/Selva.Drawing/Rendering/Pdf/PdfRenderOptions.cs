@@ -1,6 +1,6 @@
 namespace Selva.Drawing.Rendering.Pdf;
 
-// PdfSharpCore picks the colour operator per content stream (`rg/RG` for RGB, `k/K` for
+// PDFsharp picks the colour operator per content stream (`rg/RG` for RGB, `k/K` for
 // CMYK) from this mode, set once for the whole document — no per-page override. Choose
 // `Cmyk` for print-shop output, `Rgb` (default) for screen/digital.
 public enum PdfColorMode { Rgb, Cmyk }
@@ -31,6 +31,6 @@ public sealed class PdfRenderOptions
 	public bool EmitHyperlinks { get; init; } = true;
 
 	// `Cmyk` is required for print-shop preflight in Acrobat (RGB triggers warnings).
-	// PdfSharpCore has no per-page override, so a mixed-mode document needs two render passes.
+	// PDFsharp has no per-page override, so a mixed-mode document needs two render passes.
 	public PdfColorMode ColorMode { get; init; } = PdfColorMode.Rgb;
 }

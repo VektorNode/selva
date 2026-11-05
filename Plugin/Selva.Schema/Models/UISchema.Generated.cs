@@ -26,7 +26,7 @@ namespace Selva.Schema.Models
     // ============================================================================
 
     // String-enum types are represented as 'string' in C# for compatibility
-    // ParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic"
+    // ParamType valid values: "number", "integer", "boolean", "text", "valueList", "dynamicValueList", "file", "color", "generic", "geometry", "point", "line", "plane"
     // InputStructure valid values: "item", "list", "tree"
 
 // ============================================================================
@@ -65,13 +65,13 @@ namespace Selva.Schema.Models
         public string PluginVersion { get; set; }
 
 /// <summary>
-/// User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])
+/// Tags for the Selva library (e.g., ['architecture', 'facade']). Selva copies them into the definition when it is uploaded; after that the definition's own tags win. At most MAX_TAGS, none containing a comma.
 /// </summary>
         [JsonProperty("tags")]
         public List<string> Tags { get; set; } = new List<string>();
 
 /// <summary>
-/// Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')
+/// Category for the Selva library (e.g., 'architecture', 'structural'). Selva copies it into the definition when it is uploaded; after that the definition's own category wins. At most MAX_CATEGORY_LENGTH characters.
 /// </summary>
         [JsonProperty("category")]
         public string Category { get; set; }
@@ -115,6 +115,9 @@ namespace Selva.Schema.Models
         [JsonProperty("viewerOptions", NullValueHandling = NullValueHandling.Ignore)]
         public ViewerOptions ViewerOptions { get; set; }
 
+        [JsonProperty("localOptions", NullValueHandling = NullValueHandling.Ignore)]
+        public LocalOptions LocalOptions { get; set; }
+
 /// <summary>
 /// If true, changes trigger immediate solving. If false, user must press Calculate button.
 /// </summary>
@@ -132,6 +135,12 @@ namespace Selva.Schema.Models
 
         [JsonProperty("layout")]
         public LayoutConfigBase Layout { get; set; }
+
+/// <summary>
+/// Icons and thumbnails referenced by optionMedia, keyed by a hash of their content so a shared one is stored once.
+/// </summary>
+        [JsonProperty("assets")]
+        public Dictionary<string, OptionAsset> Assets { get; set; }
     }
 
 // ============================================================================
@@ -157,7 +166,7 @@ namespace Selva.Schema.Models
         public bool? RenderAsSlider { get; set; }
 
 /// <summary>
-/// Hide the min/max range hint shown next to the label / under the input
+/// Never show the min/max hint. Without it, a number box shows the hint beside its label while focused; sliders never show it.
 /// </summary>
         [JsonProperty("hideRange")]
         public bool? HideRange { get; set; }
@@ -204,10 +213,16 @@ namespace Selva.Schema.Models
         public bool? Required { get; set; }
 
 /// <summary>
-/// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter.
+/// How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter. 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails.
 /// </summary>
         [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string DisplayAs { get; set; } = "dropdown";
+
+/// <summary>
+/// Icon and thumbnail per option, keyed by option name. Grasshopper owns options; this map is the author's and survives a re-sync.
+/// </summary>
+        [JsonProperty("optionMedia")]
+        public Dictionary<string, OptionMedia> OptionMedia { get; set; }
     }
 
     public class DynamicValueListWidgetConfig
@@ -226,14 +241,26 @@ namespace Selva.Schema.Models
         public string EmptyBehavior { get; set; } = "hide";
 
 /// <summary>
-/// How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]).
+/// How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]). 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails.
 /// </summary>
         [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string DisplayAs { get; set; } = "dropdown";
+
+/// <summary>
+/// Icon and thumbnail per option, keyed by option name. Names without an entry show text only.
+/// </summary>
+        [JsonProperty("optionMedia")]
+        public Dictionary<string, OptionMedia> OptionMedia { get; set; }
     }
 
     public class CheckboxWidgetConfig
     {
+
+/// <summary>
+/// 'checkbox' = a toggle whose value is sent with every solve. 'button' = a trigger: a press solves once with true, then the input goes back to false. A button holds no value in the form, so presets and value updates skip it.
+/// </summary>
+        [JsonProperty("displayAs", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string DisplayAs { get; set; } = "checkbox";
     }
 
     public class FileWidgetConfig
@@ -446,6 +473,56 @@ namespace Selva.Schema.Models
         public object DefaultValue { get; set; }
     }
 
+    public class OptionMedia
+    {
+
+/// <summary>
+/// Asset holding the option's icon (an OptionAsset with d).
+/// </summary>
+        [JsonProperty("icon")]
+        public string Icon { get; set; }
+
+/// <summary>
+/// Asset holding the option's thumbnail (an OptionAsset with img).
+/// </summary>
+        [JsonProperty("image")]
+        public string Image { get; set; }
+
+/// <summary>
+/// Iconify name the icon was picked as (e.g. 'lucide:house'), so the builder can reopen the picker on it. Never rendered.
+/// </summary>
+        [JsonProperty("iconName")]
+        public string IconName { get; set; }
+    }
+
+    public class OptionAsset
+    {
+
+/// <summary>
+/// SVG path data on a 24x24 grid, drawn as a stroke (width 2, round caps and joins, no fill). Rendered as a path's d attribute, never as markup.
+/// </summary>
+        [JsonProperty("d")]
+        public string D { get; set; }
+
+/// <summary>
+/// Thumbnail as a base64 data URI. Only WebP, JPEG and PNG are accepted.
+/// </summary>
+        [JsonProperty("img")]
+        public string Img { get; set; }
+
+/// <summary>
+/// Thumbnail width in pixels
+/// </summary>
+        [JsonProperty("w")]
+        public int? W { get; set; }
+
+/// <summary>
+/// Thumbnail height in pixels
+/// </summary>
+        [JsonProperty("h")]
+        public int? H { get; set; }
+    }
+
     public class DynamicValueListOutputConfig
     {
 
@@ -542,13 +619,13 @@ namespace Selva.Schema.Models
     {
 
 /// <summary>
-/// If true, display mesh data is sent to the web preview for local rendering
+/// If true, the plugin streams display meshes to its local web preview, which then shows the 3D viewer. Selva ignores it.
 /// </summary>
         [JsonProperty("enableLocal", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? EnableLocal { get; set; } = false;
 
 /// <summary>
-/// If true, enables remote rendering via Rhino Compute
+/// If true, Selva draws the display meshes in the Rhino.Compute response and shows the 3D viewer. The plugin's local preview ignores it.
 /// </summary>
         [JsonProperty("enableRemote", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public bool? EnableRemote { get; set; } = false;
@@ -558,6 +635,22 @@ namespace Selva.Schema.Models
 /// </summary>
         [JsonProperty("backgroundColor", DefaultValueHandling = DefaultValueHandling.Ignore)]
         public string BackgroundColor { get; set; } = "#ffffff";
+
+/// <summary>
+/// The viewer look a definition opens in. A viewer can still switch look from its display menu.
+/// </summary>
+        [JsonProperty("look", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public string Look { get; set; } = "technical";
+    }
+
+    public class LocalOptions
+    {
+
+/// <summary>
+/// If true, geometry picked in the Rhino viewport follows the Rhino objects it came from: editing or moving one re-solves with its new shape, deleting one drops it. If false, a pick is a snapshot.
+/// </summary>
+        [JsonProperty("trackPickedObjects", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool? TrackPickedObjects { get; set; } = false;
     }
 
 // ============================================================================
@@ -732,6 +825,31 @@ public override string Type => "linebreak";
 public override string WidgetType => null;
     }
 
+/// <summary>
+    /// A LayoutItem variant from a newer schema than this build knows. Kept as its raw JSON and
+    /// written back unchanged, so an older plugin re-saving the schema doesn't drop it.
+    /// </summary>
+    public sealed class UnknownLayoutItem : LayoutItemBase
+    {
+        public UnknownLayoutItem(JObject raw)
+        {
+            Raw = raw;
+            Id = LenientJson.String(raw, "id") ?? Id;
+            ParamId = LenientJson.Guid(raw, "paramId") ?? ParamId;
+            DisplayName = LenientJson.String(raw, "displayName") ?? DisplayName;
+            Description = LenientJson.String(raw, "description") ?? Description;
+            Order = LenientJson.Int(raw, "order") ?? Order;
+            Span = LenientJson.Int(raw, "span") ?? Span;
+            Visible = LenientJson.Bool(raw, "visible") ?? Visible;
+        }
+
+        [JsonIgnore]
+        public JObject Raw { get; }
+
+        public override string Type => LenientJson.String(Raw, "type");
+        public override string WidgetType => LenientJson.String(Raw, "widgetType");
+    }
+
 // ============================================================================
     // LAYOUTCONFIG (Discriminated Union)
     // ============================================================================
@@ -766,6 +884,24 @@ public override string Type => "flat";
         public List<GroupConfig> Groups { get; set; } = new List<GroupConfig>();
     }
 
+/// <summary>
+    /// A LayoutConfig variant from a newer schema than this build knows. Kept as its raw JSON and
+    /// written back unchanged, so an older plugin re-saving the schema doesn't drop it.
+    /// </summary>
+    public sealed class UnknownLayoutConfig : LayoutConfigBase
+    {
+        public UnknownLayoutConfig(JObject raw)
+        {
+            Raw = raw;
+            Gap = LenientJson.Int(raw, "gap") ?? Gap;
+        }
+
+        [JsonIgnore]
+        public JObject Raw { get; }
+
+        public override string Type => LenientJson.String(Raw, "type");
+    }
+
 // ============================================================================
     // JSON CONVERTERS FOR DISCRIMINATED UNIONS
     // ============================================================================
@@ -779,8 +915,8 @@ public override string Type => "flat";
         public override LayoutItemBase ReadJson(JsonReader reader, Type objectType, LayoutItemBase existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var jsonObject = JObject.Load(reader);
-var type = jsonObject["type"]?.Value<string>();
-var widgetType = jsonObject["widgetType"]?.Value<string>();
+var type = LenientJson.String(jsonObject, "type");
+var widgetType = LenientJson.String(jsonObject, "widgetType");
 
             // Check if all discriminators are null or empty
             var allEmpty = string.IsNullOrEmpty(type) && string.IsNullOrEmpty(widgetType);
@@ -819,7 +955,7 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
             else if (type == "linebreak")
                 item = new LineBreakLayoutItem();
             else
-                throw new JsonSerializationException($"Unknown LayoutItem variant: {type}/{widgetType}. JSON: {jsonObject.ToString()}");
+                return new UnknownLayoutItem(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
@@ -827,6 +963,14 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
 
         public override void WriteJson(JsonWriter writer, LayoutItemBase value, JsonSerializer serializer)
         {
+            // The explicit array matters: Rhino 8 loads its own Newtonsoft, which lacks the
+            // one-argument WriteTo, and a missing overload fails this whole method at JIT time.
+            if (value is UnknownLayoutItem unknown)
+            {
+                unknown.Raw.WriteTo(writer, Array.Empty<JsonConverter>());
+                return;
+            }
+
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 
@@ -882,7 +1026,7 @@ var widgetType = jsonObject["widgetType"]?.Value<string>();
         public override LayoutConfigBase ReadJson(JsonReader reader, Type objectType, LayoutConfigBase existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var jsonObject = JObject.Load(reader);
-var type = jsonObject["type"]?.Value<string>();
+var type = LenientJson.String(jsonObject, "type");
 
             // Check if all discriminators are null or empty
             var allEmpty = string.IsNullOrEmpty(type);
@@ -897,7 +1041,7 @@ var type = jsonObject["type"]?.Value<string>();
             else if (type == "flat")
                 item = new FlatLayoutConfig();
             else
-                throw new JsonSerializationException($"Unknown LayoutConfig variant: {type}. JSON: {jsonObject.ToString()}");
+                return new UnknownLayoutConfig(jsonObject);
 
             serializer.Populate(jsonObject.CreateReader(), item);
             return item;
@@ -905,6 +1049,14 @@ var type = jsonObject["type"]?.Value<string>();
 
         public override void WriteJson(JsonWriter writer, LayoutConfigBase value, JsonSerializer serializer)
         {
+            // The explicit array matters: Rhino 8 loads its own Newtonsoft, which lacks the
+            // one-argument WriteTo, and a missing overload fails this whole method at JIT time.
+            if (value is UnknownLayoutConfig unknown)
+            {
+                unknown.Raw.WriteTo(writer, Array.Empty<JsonConverter>());
+                return;
+            }
+
             // Serialize by writing properties directly to avoid converter recursion
             writer.WriteStartObject();
 

@@ -4,6 +4,7 @@ export { LocalProjectStore } from './LocalProjectStore.js';
 export type { LocalProjectStoreOptions } from './LocalProjectStore.js';
 export { LocalDefinitionStore } from './LocalDefinitionStore.js';
 export { LocalInviteStore } from './LocalInviteStore.js';
+export { LocalApiTokenStore } from './LocalApiTokenStore.js';
 export { LocalComputeServerStore } from './LocalComputeServerStore.js';
 export type {
 	SecretVerificationFailure,

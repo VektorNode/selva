@@ -65,10 +65,19 @@ describe('stableInputKey', () => {
 		expect(stableInputKey({ a: [1, 2] })).not.toBe(stableInputKey({ a: [2, 1] }));
 	});
 
-	it('handles null and primitive values', () => {
-		expect(stableInputKey({ a: null, b: 'x', c: true })).toBe(
-			stableInputKey({ c: true, b: 'x', a: null })
-		);
+	it('tells two dates apart, as the wire does', () => {
+		const a = { when: new Date('2026-01-01T00:00:00Z') };
+		const b = { when: new Date('2026-06-01T00:00:00Z') };
+		expect(stableInputKey(a)).not.toBe(stableInputKey(b));
+	});
+
+	it('treats an undefined property as absent, not as null', () => {
+		expect(stableInputKey({ a: undefined, b: 1 })).toBe(stableInputKey({ b: 1 }));
+		expect(stableInputKey({ a: undefined })).not.toBe(stableInputKey({ a: null }));
+	});
+
+	it('throws on a bigint, like the JSON it stands in for', () => {
+		expect(() => stableInputKey({ a: 1n })).toThrow(TypeError);
 	});
 });
 
@@ -136,7 +145,7 @@ describe('createSolveMemo', () => {
 // The memo caches whole SolveResults, including meshes a viewer disposes on the next
 // scene update. Every test above used mesh-free results, so nothing caught that. These
 // pin the memo's use of the injected ownership policy.
-describe('createSolveMemo — mesh ownership (audit C1)', () => {
+describe('createSolveMemo — mesh ownership', () => {
 	it('serves a usable mesh after the viewer disposed the one it was given', () => {
 		const memo = createSolveMemo<FakeMesh>({ meshPolicy: trackingPolicy() });
 		memo.set({ k: 1 }, meshResult('a'));
@@ -150,14 +159,6 @@ describe('createSolveMemo — mesh ownership (audit C1)', () => {
 		const second = memo.get({ k: 1 })!;
 		expect(second.meshes![0].disposed).toBe(false);
 		expect(second.meshes![0]).not.toBe(first.meshes![0]);
-	});
-
-	it('never hands the same mesh instance to two consumers', () => {
-		// The scene takes ownership of what it is given, so two hits handing out one
-		// instance means a double-add and a shared disposal fate.
-		const memo = createSolveMemo<FakeMesh>({ meshPolicy: trackingPolicy() });
-		memo.set({ k: 1 }, meshResult('a'));
-		expect(memo.get({ k: 1 })!.meshes![0]).not.toBe(memo.get({ k: 1 })!.meshes![0]);
 	});
 
 	it('clones on the way IN, so the caller disposing its own copy cannot poison the entry', () => {

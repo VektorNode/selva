@@ -59,6 +59,9 @@ An unrecognised unit logs a warning once and leaves geometry unscaled.
 - Malformed data throws. A parse failure is a bug in the payload, not something to paper over.
 - Missing display items are fine — you just get fewer objects back.
 - The parser never rotates geometry. The viewer owns orientation.
+- A mesh batch whose geometry bytes match an earlier one gets the same `BufferGeometry` back, so
+  never write to a parsed geometry's attributes. The cache lives as long as the page: call
+  `clearGeometryCache()` when your viewer goes away.
 
 ## Adding a new display item type
 

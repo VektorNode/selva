@@ -1,4 +1,4 @@
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 export interface ServerHealthState {
 	state: 'idle' | 'checking' | 'loading' | 'ok' | 'warning' | 'error';
@@ -14,6 +14,8 @@ export interface ServerHealthState {
 	plugins: Record<string, string>;
 	activeChildren: number | null;
 	idleSpanSeconds: number | null;
+	/** What the server reports from `/limits`; `null` when it can't. */
+	limits: { timeoutSeconds: number; maxRequestBytes: number } | null;
 	/**
 	 * Why the last probe failed, when the server classified it. Null while
 	 * reachable. Shown to the operator instead of a bare "error" pill.
@@ -42,6 +44,7 @@ export function useServerHealth(serverId: () => string) {
 		plugins: {},
 		activeChildren: null,
 		idleSpanSeconds: null,
+		limits: null,
 		failureSummary: null
 	});
 
@@ -79,6 +82,7 @@ export function useServerHealth(serverId: () => string) {
 				plugins: data.plugins ?? {},
 				activeChildren: data.activeChildren ?? null,
 				idleSpanSeconds: data.idleSpanSeconds ?? null,
+				limits: data.limits ?? null,
 				// Reachable but not ready = a booting server still loading plugins.
 				// Show 'loading' (progress), not 'warning' (misconfiguration), so the
 				// operator isn't alarmed while add-ons enumerate. Only once the

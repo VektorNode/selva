@@ -1,13 +1,14 @@
 {
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
-		"outDir": "dist",
+		"target": "ES2022",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"verbatimModuleSyntax": true,
 		"paths": {
 			"@/*": ["./src/*"],
 			"@tests/*": ["./tests/*"]
 		},
 		"types": ["node"]
 	},
-	"include": ["src/**/*", "tests/**/*"],
-	"exclude": ["node_modules", "dist"]
+	"include": ["src/**/*", "tests/**/*", "examples/**/*"]
 }

@@ -6,7 +6,7 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { NoopEventSink, actorFrom } from '@selvajs/platform';
+import { NoopEventSink, actorOf } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -40,7 +40,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			inviteId: invite.id,
 			orgId: invite.orgId,
 			email: invite.email,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -71,8 +71,8 @@ export class SupabaseInviteStore implements IInviteStore {
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
 	}
 
-	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<void> {
-		// Idempotent: `.is('accepted_at', null)` means a second call just no-ops.
+	async markAccepted(ctx: RequestContext, id: string, userId: string): Promise<boolean> {
+		// `.is('accepted_at', null)` makes this the claim: a second call matches nothing.
 		const { data, error } = await this.clients
 			.forRequest(ctx)
 			.from('invites')
@@ -82,14 +82,15 @@ export class SupabaseInviteStore implements IInviteStore {
 			.select('org_id');
 		if (error) throw mapPostgrestError(error);
 		const row = data?.[0];
-		if (!row) return;
+		if (!row) return false;
 		await this.events.emit({
 			type: 'invite.accepted',
 			inviteId: id,
 			orgId: (row as { org_id: string }).org_id,
 			userId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
+		return true;
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
@@ -107,7 +108,7 @@ export class SupabaseInviteStore implements IInviteStore {
 			type: 'invite.revoked',
 			inviteId: id,
 			orgId: (row as { org_id: string }).org_id,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -129,7 +130,7 @@ export class SupabaseInviteStore implements IInviteStore {
 				type: 'invite.revoked',
 				inviteId: id,
 				orgId,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 		return ids;

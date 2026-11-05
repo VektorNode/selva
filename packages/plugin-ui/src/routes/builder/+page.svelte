@@ -10,18 +10,39 @@
 		toast,
 		useFooterItem
 	} from '@selvajs/ui';
-	import { Save, RefreshCw } from '@lucide/svelte';
-	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
-	import { SvelteSet } from 'svelte/reactivity';
-	import { BuilderSidebar, TabEditor, SyncDialog } from '$lib/components/builder';
-	import { buildSessionParams } from '$lib/utils/session';
-	import { onMount } from 'svelte';
-	import { useBuilderState } from '$lib/composables/useBuilderState.svelte';
-	import { useBuilderActions } from '$lib/composables/useBuilderActions.svelte';
+	import { Save, RefreshCw, CloudUpload, PlugZap, Undo2, Redo2 } from '@lucide/svelte';
+	import WsStatusFooter from '#lib/components/WsStatusFooter.svelte';
+	import ModeHeader from '#lib/components/ModeHeader.svelte';
+	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
+	import {
+		BuilderSearch,
+		BuilderSidebar,
+		SelectionBar,
+		TabEditor,
+		SyncDialog
+	} from '#lib/components/builder/index.js';
+	import { bringIntoView, flashPlaced } from '#lib/components/builder/reveal.js';
+	import type { SearchTarget } from '#lib/features/builder/index.js';
+	import SelvaUploadDialog from '#lib/components/selva-upload/SelvaUploadDialog.svelte';
+	import SelvaConnectionDialog from '#lib/components/selva-upload/SelvaConnectionDialog.svelte';
+	import { buildSessionParams } from '#lib/utils/session.js';
+	import { currentRole } from '#lib/utils/session-role.svelte.js';
+	import { rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
+	import { onMount, tick, untrack } from 'svelte';
+	import { useBuilderState } from '#lib/composables/useBuilderState.svelte.js';
+	import { useBuilderActions } from '#lib/composables/useBuilderActions.svelte.js';
+	import { builderSelection } from '#lib/features/builder/selection.svelte.js';
+	import { locateParam } from '#lib/features/builder/operations.js';
+	import { setBuilderDraft } from '#lib/components/builder/draft-context.js';
+	import { putAsset } from '#lib/features/builder/option-assets.js';
+	import { useSelvaUpload, type SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
 
 	let sessionId = $state('');
 	let builderState = $state<ReturnType<typeof useBuilderState> | null>(null);
+	let selvaUpload = $state<SelvaUpload | null>(null);
 	let showBatchProcessor = $state(false);
+	let searchOpen = $state(false);
+	let sidebar = $state<BuilderSidebar>();
 	let saveInFlight: Promise<boolean> | null = null;
 
 	// Navigation confirmation. When the user clicks "Interactive Preview" with
@@ -30,6 +51,22 @@
 	let pendingNavRoute = $state<'/preview' | null>(null);
 
 	const actions = useBuilderActions(() => builderState);
+
+	$effect(() => {
+		builderSelection.setTabDropHandler(actions.onDropOnTab);
+		return () => builderSelection.setTabDropHandler(null);
+	});
+	setBuilderDraft({
+		edit: (apply) => builderState?.editDraft(apply),
+		get assets() {
+			return builderState?.state.draft?.assets;
+		},
+		putAsset: (asset) => {
+			const draft = builderState?.state.draft;
+			if (!draft) throw new Error('No schema to add the asset to');
+			return putAsset(draft, asset);
+		}
+	});
 
 	async function navigateTo(route: '/' | '/preview') {
 		if (route === '/preview' && builderState?.state.isDirty) {
@@ -42,7 +79,7 @@
 
 	function performNavigate(route: '/' | '/preview') {
 		const url = `${route}?${buildSessionParams()}`;
-		goto(url, { noScroll: true }).catch(() => {});
+		goto(url, { reset: false }).catch(() => {});
 	}
 
 	async function navPromptSave() {
@@ -68,6 +105,29 @@
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
 
+	// Side by side under 1024px, the sidebar's quarter is too narrow to read a parameter name, and
+	// a docked Rhino panel is narrower still. Stacked, a parameter can still be dragged from the
+	// sidebar onto a group. The two arrangements save their sizes separately.
+	const stacked = new MediaQuery('width < 64rem');
+	const split = $derived(
+		stacked.current
+			? {
+					direction: 'vertical' as const,
+					autoSaveId: 'builder-sidebar-layout-stacked',
+					sidebar: { defaultSize: 40, minSize: 20, maxSize: 75 },
+					canvas: { defaultSize: 60, minSize: 25 }
+				}
+			: {
+					direction: 'horizontal' as const,
+					autoSaveId: 'builder-sidebar-layout',
+					sidebar: { defaultSize: 25, minSize: 18, maxSize: 42 },
+					canvas: { defaultSize: 75, minSize: 40 }
+				}
+	);
+
+	// An upload already running can still be watched; a new one waits for the save.
+	const uploadNeedsSave = $derived(!!builderState?.state.isDirty && !selvaUpload?.state.uploading);
+
 	const placedInLayoutIds = $derived.by(() => {
 		const ids = new SvelteSet<string>();
 		const layout = builderState?.state.draft?.layout;
@@ -92,6 +152,21 @@
 		return ids;
 	});
 
+	const canvasSelection = $derived.by(() => {
+		const state = builderState?.state;
+		const draft = state?.draft;
+		if (!state || !draft) return [];
+		return state.canvasSelection.map((id) => {
+			const label =
+				state.availableInputs.find((p) => p.id === id)?.nickname ||
+				state.availableOutputs.find((o) => o.id === id)?.nickname ||
+				draft.inputs.find((p) => p.id === id)?.nickname ||
+				draft.outputs.find((o) => o.id === id)?.nickname ||
+				id;
+			return { id, label, placedIn: locateParam(draft, id)?.group.label };
+		});
+	});
+
 	const availableInputs = $derived(builderState?.state.availableInputs || []);
 	const availableOutputsUnplaced = $derived(builderState?.state.availableOutputs || []);
 	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
@@ -110,45 +185,67 @@
 		return promise;
 	}
 
+	function undo() {
+		if (!builderState?.history.canUndo() || !builderState.state.draft) return;
+		const prev = builderState.history.undo($state.snapshot(builderState.state.draft));
+		if (!prev) return;
+		builderState.state.draft = prev;
+		builderState.markDirty();
+		toast.success('Undo');
+	}
+
+	function redo() {
+		if (!builderState?.history.canRedo() || !builderState.state.draft) return;
+		const next = builderState.history.redo($state.snapshot(builderState.state.draft));
+		if (!next) return;
+		builderState.state.draft = next;
+		builderState.markDirty();
+		toast.success('Redo');
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
 			e.preventDefault();
-			if (builderState?.history.canUndo() && builderState.state.draft) {
-				const prev = builderState.history.undo($state.snapshot(builderState.state.draft));
-				if (prev) {
-					builderState.state.draft = prev;
-					builderState.markDirty();
-					toast.success('Undo');
-				}
-			}
+			undo();
 		} else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
 			e.preventDefault();
-			if (builderState?.history.canRedo() && builderState.state.draft) {
-				const next = builderState.history.redo($state.snapshot(builderState.state.draft));
-				if (next) {
-					builderState.state.draft = next;
-					builderState.markDirty();
-					toast.success('Redo');
-				}
-			}
+			redo();
 		} else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 			e.preventDefault();
 			saveSchema().catch(() => {});
+		} else if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+			e.preventDefault();
+			if (builderState?.state.draft) searchOpen = !searchOpen;
 		}
 	}
 
+	$effect(() => builderState?.publishDraftLayout());
+
+	// A player session has no builder: the plugin would refuse its saves anyway.
+	$effect(() => {
+		if (currentRole() === 'player') {
+			goto(`/preview?${buildSessionParams()}`, { replace: true }).catch(() => {});
+		}
+	});
+
 	onMount(() => {
+		if (currentRole() === 'player') return;
 		const urlSessionId = page.url.searchParams.get('session') || '';
 		sessionId = urlSessionId;
 
 		builderState = useBuilderState(urlSessionId);
 		// initialize() now owns the connect handshake (via the SchemaSource) and the first fetch.
 		builderState.initialize();
+		selvaUpload = useSelvaUpload(urlSessionId, {
+			isSchemaDirty: () => builderState?.state.isDirty ?? false
+		});
+		selvaUpload.initialize();
 		window.addEventListener('keydown', handleKeydown);
 
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
 			builderState?.cleanup();
+			selvaUpload?.cleanup();
 		};
 	});
 
@@ -159,6 +256,64 @@
 	function handleTabChange(tabId: string) {
 		if (builderState) {
 			builderState.state.activeTabId = tabId;
+		}
+	}
+
+	const expandedItems = new SvelteSet<string>();
+	const peekedGroups = new SvelteSet<string>();
+
+	async function revealGroup(tabId: string, groupId: string) {
+		if (tabId) handleTabChange(tabId);
+		await tick();
+		const target = document.querySelector(`[data-builder-group-id="${CSS.escape(groupId)}"]`);
+		if (target) bringIntoView(target);
+	}
+
+	async function revealItem(tabId: string, groupId: string, itemId: string) {
+		if (tabId) handleTabChange(tabId);
+		peekedGroups.add(groupId);
+		expandedItems.add(itemId);
+		await tick();
+		const target = document.querySelector(`[data-builder-item-id="${CSS.escape(itemId)}"]`);
+		if (target) bringIntoView(target);
+	}
+
+	// Items placed from the canvas or asked for from it: open their groups, scroll to the first, flash all.
+	async function spotlight(itemIds: string[]) {
+		const draft = builderState?.state.draft;
+		if (!draft) return;
+		const groups =
+			draft.layout?.type === 'tabbed' ? draft.layout.tabs.flatMap((t) => t.groups) : [];
+		for (const group of groups) {
+			if (group.items.some((i) => itemIds.includes(i.id))) peekedGroups.add(group.id);
+		}
+		await tick();
+		const targets = itemIds.flatMap((id) => {
+			const el = document.querySelector(`[data-builder-item-id="${CSS.escape(id)}"]`);
+			return el ? [el] : [];
+		});
+		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		targets[0]?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+		targets.forEach(flashPlaced);
+	}
+
+	$effect(() => {
+		const request = builderState?.state.spotlight;
+		if (request) untrack(() => spotlight(request.itemIds));
+	});
+
+	function revealSearchResult(target: SearchTarget) {
+		switch (target.kind) {
+			case 'item':
+				return revealItem(target.tabId, target.groupId, target.itemId);
+			case 'group':
+				return revealGroup(target.tabId, target.groupId);
+			case 'tab':
+				return handleTabChange(target.tabId);
+			case 'param':
+				return sidebar?.revealParameter(target.nickname);
+			case 'setting':
+				return sidebar?.revealSetting(target);
 		}
 	}
 
@@ -174,35 +329,68 @@
 	});
 </script>
 
-<AppShell {homeUrl} title="Schema Builder" mode="fixed" showFooter>
-	{#snippet navItems()}
-		<Button variant="default" size="sm">Schema Builder</Button>
-		<Button variant="ghost" size="sm" onclick={() => navigateTo('/preview')}>
-			Interactive Preview
-		</Button>
-	{/snippet}
-	{#snippet rightContent()}
-		{#if builderState?.state.syncNeeded}
-			<Button
-				variant="default"
-				size="sm"
-				onclick={() => builderState?.syncParameters()}
-				class="animate-pulse bg-amber-500 hover:bg-amber-600"
-			>
-				⚡ Sync Parameters
-			</Button>
-		{/if}
+{#snippet headerActions()}
+	<div class="flex items-center">
 		<Button
-			variant="outline"
-			size="sm"
-			onclick={() => builderState?.requestSyncPreview()}
-			disabled={!builderState?.state.draft}
+			variant="ghost"
+			size="icon-sm"
+			onclick={undo}
+			disabled={!builderState?.history.canUndo()}
+			aria-label="Undo"
+			title="Undo (Ctrl+Z)"
 		>
-			Sync with Grasshopper
+			<Undo2 />
 		</Button>
-		<Button variant="outline" size="sm" onclick={() => (showBatchProcessor = !showBatchProcessor)}>
-			Batch Processors
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			onclick={redo}
+			disabled={!builderState?.history.canRedo()}
+			aria-label="Redo"
+			title="Redo (Ctrl+Y)"
+		>
+			<Redo2 />
 		</Button>
+	</div>
+	<Button
+		variant={builderState?.state.isDirty ? 'default' : 'outline'}
+		size="sm"
+		onclick={() => saveSchema().catch(() => {})}
+		disabled={!builderState?.state.draft}
+		title="Save schema (Ctrl+S)"
+	>
+		<Save class="h-4 w-4" /><span class="max-sm:sr-only">Save</span>
+	</Button>
+	{#if selvaUpload?.available}
+		<!-- The title sits on a wrapper: a disabled button gets no hover, so its own title never shows. -->
+		<span title={uploadNeedsSave ? 'Save the schema first' : undefined}>
+			<Button
+				variant="outline"
+				size="sm"
+				onclick={() => selvaUpload?.open()}
+				disabled={!builderState?.state.draft || uploadNeedsSave}
+			>
+				<CloudUpload class="h-4 w-4" /><span class="max-lg:sr-only">Upload to Selva</span>
+			</Button>
+		</span>
+	{:else}
+		<Button variant="outline" size="sm" onclick={() => selvaUpload?.openConnection()}>
+			<PlugZap class="h-4 w-4" /><span class="max-lg:sr-only">Connect to Selva…</span>
+		</Button>
+	{/if}
+{/snippet}
+
+<AppShell {...rhinoShellProps()} mode="fixed" showFooter>
+	{#snippet header()}
+		<ModeHeader
+			{homeUrl}
+			current="builder"
+			onSwitch={() => navigateTo('/preview')}
+			title={builderState?.state.draft?.name ?? null}
+			syncNeeded={builderState?.state.syncNeeded}
+			onSync={() => builderState?.syncParameters()}
+			actions={headerActions}
+		/>
 	{/snippet}
 
 	<div class="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -225,74 +413,94 @@
 				</div>
 			{/if}
 
-			<Resizable.PaneGroup
-				direction="horizontal"
-				autoSaveId="builder-sidebar-layout"
-				class="min-h-0 flex-1"
-			>
-				<Resizable.Pane defaultSize={25} minSize={18} maxSize={42}>
-					<div class="h-full px-(--page-px) py-(--page-py)">
-						<BuilderSidebar
-							schema={builderState.state.draft}
-							{availableInputs}
-							availableOutputs={availableOutputsUnplaced}
-							placedIds={placedInLayoutIds}
-							syncNeeded={builderState.state.syncNeeded}
-							onSchemaChange={(updatedSchema) => {
-								if (builderState && builderState.state.draft) {
-									builderState.history.push($state.snapshot(builderState.state.draft));
-									builderState.state.draft = updatedSchema;
-									builderState.markDirty();
-									if (
-										updatedSchema.layout?.type === 'tabbed' &&
-										updatedSchema.layout.tabs.length > 0
-									) {
-										builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
+			{#key stacked.current}
+				<Resizable.PaneGroup
+					direction={split.direction}
+					autoSaveId={split.autoSaveId}
+					class="min-h-0 flex-1"
+				>
+					<Resizable.Pane {...split.sidebar}>
+						<div class="h-full px-(--page-px) py-(--page-py) max-lg:py-2">
+							<BuilderSidebar
+								bind:this={sidebar}
+								schema={builderState.state.draft}
+								{availableInputs}
+								availableOutputs={availableOutputsUnplaced}
+								placedIds={placedInLayoutIds}
+								{canvasSelection}
+								syncNeeded={builderState.state.syncNeeded}
+								onSchemaChange={(updatedSchema) => {
+									if (builderState && builderState.state.draft) {
+										builderState.history.push($state.snapshot(builderState.state.draft));
+										builderState.state.draft = updatedSchema;
+										builderState.markDirty();
+										if (
+											updatedSchema.layout?.type === 'tabbed' &&
+											updatedSchema.layout.tabs.length > 0
+										) {
+											builderState.state.activeTabId = updatedSchema.layout.tabs[0].id;
+										}
 									}
-								}
-							}}
-							onSync={() => builderState?.syncParameters()}
-							onAddToGroup={actions.onAddToGroup}
-							onAddToNewGroup={actions.onAddToNewGroup}
-							onImportGhGroups={actions.onImportGhGroups}
-						/>
-					</div>
-				</Resizable.Pane>
-
-				<Resizable.Handle withHandle />
-
-				<Resizable.Pane defaultSize={75} minSize={40}>
-					<main class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py)">
-						{#if builderState.state.draft.layout?.type === 'tabbed'}
-							<TabEditor
-								bind:tabs={builderState.state.draft.layout.tabs}
-								activeTabId={builderState.state.activeTabId}
-								onTabChange={handleTabChange}
-								onAddTab={actions.onAddTab}
-								onRemoveTab={actions.onRemoveTab}
-								onReorderTabs={actions.onReorderTabs}
-								onAddGroup={actions.onAddGroup}
-								onRemoveGroup={actions.onRemoveGroup}
-								onReorderGroups={actions.onReorderGroups}
-								onMoveGroupToTab={actions.onMoveGroupToTab}
-								onParameterDrop={actions.onParameterDrop}
-								onReorder={actions.onReorder}
-								onRemoveItem={actions.onRemoveItem}
-								onAddLineBreak={actions.onAddLineBreak}
-								availableInputs={allAvailableInputs}
-								{getParameterInfo}
-								outputValues={builderState.state.outputValues}
+								}}
+								onSync={() => builderState?.syncParameters()}
+								onSyncPreview={() => builderState?.requestSyncPreview()}
+								onBatch={() => (showBatchProcessor = true)}
+								onAddToGroup={actions.onAddToGroup}
+								onAddToNewGroup={actions.onAddToNewGroup}
+								onImportGhGroups={actions.onImportGhGroups}
+								onRevealItem={revealItem}
+								onSearch={() => (searchOpen = true)}
 							/>
-						{/if}
-
-						<div class="mb-20 flex justify-end gap-4">
-							<Button onclick={() => saveSchema().catch(() => {})}>
-								<Save class="mr-2 h-4 w-4" />Save Schema
-							</Button>
 						</div>
-					</main>
-				</Resizable.Pane>
-			</Resizable.PaneGroup>
+					</Resizable.Pane>
+
+					<Resizable.Handle withHandle />
+
+					<Resizable.Pane {...split.canvas}>
+						<main
+							class="flex h-full flex-col gap-6 overflow-y-auto px-(--page-px) py-(--page-py) max-lg:py-3"
+						>
+							{#if builderState.state.draft.layout?.type === 'tabbed'}
+								<TabEditor
+									bind:tabs={builderState.state.draft.layout.tabs}
+									activeTabId={builderState.state.activeTabId}
+									onTabChange={handleTabChange}
+									onAddTab={actions.onAddTab}
+									onRemoveTab={actions.onRemoveTab}
+									onReorderTabs={actions.onReorderTabs}
+									onAddGroup={actions.onAddGroup}
+									onRemoveGroup={actions.onRemoveGroup}
+									onReorderGroups={actions.onReorderGroups}
+									onMoveGroupToTab={actions.onMoveGroupToTab}
+									onParameterDrop={actions.onParameterDrop}
+									onCarrySelection={actions.onCarrySelection}
+									onReorder={actions.onReorder}
+									onRemoveItem={actions.onRemoveItem}
+									onAddLineBreak={actions.onAddLineBreak}
+									canvasSelection={builderState.state.canvasSelection}
+									onAddCanvasSelection={actions.onAddCanvasSelection}
+									onEdit={(apply, coalesceKey) => builderState?.editDraft(apply, coalesceKey)}
+									availableInputs={allAvailableInputs}
+									{getParameterInfo}
+									outputValues={builderState.state.outputValues}
+									{expandedItems}
+									{peekedGroups}
+								/>
+								<SelectionBar
+									tabs={builderState.state.draft.layout.tabs}
+									placedParamIds={placedInLayoutIds}
+									onAdd={actions.onAddSelectedToGroup}
+									onMove={actions.onMoveSelectedToGroup}
+								/>
+							{/if}
+						</main>
+					</Resizable.Pane>
+				</Resizable.PaneGroup>
+			{/key}
+		{:else if builderState?.state.error}
+			<div class="flex min-h-100 items-center justify-center px-6">
+				<StateDisplay type="error" size="large" message={builderState.state.error} />
+			</div>
 		{/if}
 	</div>
 
@@ -344,6 +552,21 @@
 			</Dialog.Footer>
 		</Dialog.Content>
 	</Dialog.Root>
+
+	{#if selvaUpload}
+		<SelvaUploadDialog upload={selvaUpload} schema={builderState?.state.draft} />
+		<SelvaConnectionDialog upload={selvaUpload} />
+	{/if}
+
+	{#if builderState?.state.draft}
+		<BuilderSearch
+			bind:open={searchOpen}
+			schema={builderState.state.draft}
+			availableInputs={allAvailableInputs}
+			availableOutputs={availableOutputsUnplaced}
+			onPick={revealSearchResult}
+		/>
+	{/if}
 
 	{#if builderState}
 		<SyncDialog

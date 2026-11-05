@@ -1,14 +1,94 @@
 <script lang="ts">
 	import '../app.css';
-	import { ModeWatcher } from 'mode-watcher';
-	import { Toaster, toast, initializeFooterContext } from '@selvajs/ui';
+	import { ModeWatcher, setMode } from 'mode-watcher';
+	import {
+		Toaster,
+		toast,
+		initializeFooterContext,
+		setBlobSaver,
+		setFilePicker,
+		setHostContext
+	} from '@selvajs/ui';
 	import { onMount } from 'svelte';
+	import {
+		getSessionIdFromUrl,
+		getWebSocketPortFromUrl,
+		isRhinoPanel
+	} from '#lib/utils/session.js';
+	import { rememberBridgeSecret } from '#lib/websocket/bridge-secret.js';
+	import { MAX_HOST_FILE_BYTES } from '#lib/websocket/bridge-handshake.js';
+	import { createHostFilesClient } from '#lib/websocket/host-files-client.js';
+	import { createGeometryPicksClient } from '#lib/websocket/geometry-picks-client.js';
+	import { getWebSocketState } from '#lib/websocket/websocket.svelte.js';
+	import { afterNavigate, replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import HostWindowToggle from '#lib/components/HostWindowToggle.svelte';
+	import { RHINO_PANEL_HOST } from '#lib/app.config.js';
 
-	initializeFooterContext();
+	const footer = initializeFooterContext();
+
+	// This page always solves in the user's own Grasshopper, in a browser tab too, so geometry
+	// inputs and buttons render. Picks and presses go to the plugin; their results never come
+	// back as form values. Only the panel may pick: the plugin refuses a pick from a browser tab,
+	// which still shows what the panel picked.
+	const hostSocket = getWebSocketState(getWebSocketPortFromUrl());
+	const geometryPicks = createGeometryPicksClient(hostSocket, getSessionIdFromUrl);
+	setHostContext({
+		host: 'rhino',
+		...(isRhinoPanel() && {
+			pickGeometry: geometryPicks.pickGeometry,
+			clearGeometry: geometryPicks.clearGeometry
+		}),
+		onGeometrySummary: geometryPicks.onGeometrySummary,
+		trigger: (paramId) => hostSocket.sendTrigger(getSessionIdFromUrl(), paramId)
+	});
 
 	let { children } = $props();
 
+	// Not in onMount: the router can't replace history until hydration has finished. Even here the
+	// first call runs just before the router counts as started, and a dev build throws then, which
+	// aborts startup and makes the next navigation mount a second copy of the app. Hence the microtask.
+	//
+	// `replaceState`, not the shallow `goto` that replaces it in SvelteKit 3: a `goto` is a
+	// navigation, so it aborts the start page's redirect to /preview and the panel stays on
+	// "Connecting". `replaceState` only rewrites the history entry.
+	afterNavigate(() => {
+		const sessionId = getSessionIdFromUrl();
+		if (sessionId && rememberBridgeSecret(sessionId)) {
+			queueMicrotask(() => replaceState(page.url.pathname + page.url.search, page.state));
+		}
+	});
+
 	onMount(() => {
+		if (isRhinoPanel()) {
+			// The WebView reports Rhino's appearance as the system colour scheme.
+			setMode('system');
+			document.documentElement.dataset.host = RHINO_PANEL_HOST;
+
+			footer.register({
+				id: 'host-window-toggle',
+				component: HostWindowToggle,
+				getProps: () => ({}),
+				position: 'right'
+			});
+
+			// The panel's WebView replaces the app with a downloaded file and can crash Rhino
+			// from a file picker, so saves and picks go to the plugin's native dialogs instead.
+			const hostFiles = createHostFilesClient(hostSocket, getSessionIdFromUrl, MAX_HOST_FILE_BYTES);
+			setBlobSaver((blob, fileName) =>
+				hostFiles.saveBlob(blob, fileName).catch((error: Error) => {
+					toast.error(error.message);
+					return false;
+				})
+			);
+			setFilePicker((options) =>
+				hostFiles.pickFile(options).catch((error: Error) => {
+					toast.error(error.message);
+					return null;
+				})
+			);
+		}
+
 		const handleRuntimeMessage = (event: CustomEvent<{ level: string; message: string }>) => {
 			const { level, message } = event.detail;
 
@@ -28,13 +108,25 @@
 			}
 		};
 
+		// In the Rhino panel an Esc the page leaves unhandled goes on to Rhino, which moves focus
+		// out of the panel. Marking it handled keeps focus here. Grasshopper's solve abort reads
+		// the key's state rather than the event, so Esc still aborts a solve. A viewport pick
+		// cancels on the event, so during one Esc goes on to Rhino.
+		const keepEscapeInPanel = (event: KeyboardEvent) => {
+			if (event.key === 'Escape' && isRhinoPanel() && !geometryPicks.picking) {
+				event.preventDefault();
+			}
+		};
+
 		window.addEventListener('grasshopper-runtime-message', handleRuntimeMessage as EventListener);
+		window.addEventListener('keydown', keepEscapeInPanel);
 
 		return () => {
 			window.removeEventListener(
 				'grasshopper-runtime-message',
 				handleRuntimeMessage as EventListener
 			);
+			window.removeEventListener('keydown', keepEscapeInPanel);
 		};
 	});
 </script>

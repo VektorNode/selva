@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 
+import { hideGlass } from '../shared/index.js';
+
 /**
  * Screen-space edge detection (Roberts cross on depth + normal discontinuities), O(pixels)
  * regardless of triangle count. Fallback for meshes too heavy for geometry edge overlays
@@ -172,7 +174,9 @@ export class EdgeDetectionPass extends Pass {
 		renderer.setClearColor(0x7777ff, 1);
 		renderer.autoClear = true;
 		this.scene.overrideMaterial = this.normalMaterial;
+		const showGlass = hideGlass(this.scene);
 		renderer.render(this.scene, this.camera);
+		showGlass();
 		this.scene.overrideMaterial = previousOverride;
 		renderer.setClearColor(previousClearColor, previousClearAlpha);
 		renderer.autoClear = previousAutoClear;

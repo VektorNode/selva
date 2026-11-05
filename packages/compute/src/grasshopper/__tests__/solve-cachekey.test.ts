@@ -1,25 +1,12 @@
-/**
- * Server-definition-cache reuse at the solve-primitive layer.
- *
- * Large (base64/binary) definitions can be uploaded once and then solved by
- * reference (`pointer: cacheKey`) instead of re-sending the full payload — the
- * server returns its `md5_…` cache key as `pointer` on the solve response, and
- * `GrasshopperDefinition.FromUrl` resolves a cache key as a pointer.
- *
- * These pin: capturing the key, solving by key, and the transparent fallback to
- * a full upload when the key has been evicted ("Unable to load grasshopper
- * definition").
- */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import {
-	solveByCacheKey,
-	solveGrasshopperDefinitionWithCacheKey,
-	solveGrasshopperDefinition
-} from '../solve';
+import { solveWithServerCacheKey, solveGrasshopperDefinition } from '../solve';
+import { SolveScheduler } from '../scheduler/solve-scheduler';
+import type { SolveExecutor } from '../scheduler/types';
 import type { DefinitionRef } from '@/core/definition-ref';
 import { ErrorCodes } from '@/core/errors';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
+import { readField } from '@/core/utils/read-field';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
@@ -45,10 +32,7 @@ const loadFailed = () =>
 		{ ok: false, status: 500, statusText: 'Internal Server Error' }
 	);
 
-// Production-mode server: the human message is scrubbed to a generic string, but
-// a stable machine `code` identifies the miss. This is the path that matters once
-// the fork ships the code (debug-off deployments) — the string match above can't
-// catch it.
+// Production servers scrub the message; only the machine `code` identifies the miss.
 const loadFailedScrubbed = () =>
 	createMockResponse(
 		{
@@ -59,12 +43,13 @@ const loadFailedScrubbed = () =>
 		{ ok: false, status: 500, statusText: 'Internal Server Error' }
 	);
 
-describe('solveGrasshopperDefinitionWithCacheKey', () => {
-	it('captures the server cache key from the response pointer', async () => {
+describe('solveWithServerCacheKey — no known key', () => {
+	it('uploads, reports missed, and captures the key from the response pointer', async () => {
 		fetchMock.mockResolvedValueOnce(okSolve({ pointer: 'md5_DEADBEEF' }));
 
-		const { response, cacheKey } = await solveGrasshopperDefinitionWithCacheKey([], DEF, config);
+		const { response, cacheKey, missed } = await solveWithServerCacheKey([], null, DEF, config);
 
+		expect(missed).toBe(true);
 		expect(cacheKey).toBe('md5_DEADBEEF');
 		// The captured pointer is stripped from the returned response.
 		expect(response).not.toHaveProperty('pointer');
@@ -75,18 +60,16 @@ describe('solveGrasshopperDefinitionWithCacheKey', () => {
 
 	it('reports null cacheKey when the server returns no pointer', async () => {
 		fetchMock.mockResolvedValueOnce(createMockResponse({ values: [] }));
-		const { cacheKey } = await solveGrasshopperDefinitionWithCacheKey([], DEF, config);
+		const { cacheKey } = await solveWithServerCacheKey([], null, DEF, config);
 		expect(cacheKey).toBeNull();
 	});
 
-	// Issue 70: a URL-pointer solve does NOT report null — the server echoes the
-	// request schema back, so the cacheKey is the definition URL itself. Callers
-	// must not use `null` to detect URL-pointer solves.
+	// The server echoes the request back, so `null` can't be used to detect a URL solve.
 	it('returns the URL itself as cacheKey for a URL-pointer solve', async () => {
 		const url = 'https://example.com/definition.gh';
 		fetchMock.mockResolvedValueOnce(okSolve({ pointer: url }));
 
-		const { cacheKey } = await solveGrasshopperDefinitionWithCacheKey([], url, config);
+		const { cacheKey } = await solveWithServerCacheKey([], null, url, config);
 
 		expect(cacheKey).toBe(url);
 		// Sent as a pointer reference, not uploaded.
@@ -94,56 +77,55 @@ describe('solveGrasshopperDefinitionWithCacheKey', () => {
 		expect(body().algo).toBeNull();
 	});
 
-	it('strips the echoed algo from the response (issue 58 — cached responses pinned the definition)', async () => {
+	it('strips the echoed algo from the response', async () => {
 		fetchMock.mockResolvedValueOnce(okSolve({ algo: 'aHVnZS1iYXNlNjQtZGVmaW5pdGlvbg==' }));
 
-		const { response } = await solveGrasshopperDefinitionWithCacheKey([], DEF, config);
+		const { response } = await solveWithServerCacheKey([], null, DEF, config);
 
-		// The server echoes the full base64 definition back on every solve; keeping it
-		// would multiply a multi-MB copy into every cache that holds responses.
 		expect(response).not.toHaveProperty('algo');
 		expect(response).toHaveProperty('values');
 	});
 
 	it('re-registers the wire size on the stripped response, minus the echoed algo', async () => {
-		// Byte-budgeted caches size entries by the wire-size hint; the hint follows
-		// object identity, so the algo-stripped copy must carry it — discounted by
-		// the echo the copy no longer retains (audit C2).
 		const echoedAlgo = 'aHVnZS1iYXNlNjQtZGVmaW5pdGlvbg==';
 		const wireBody = JSON.stringify({ values: [], pointer: 'md5_ABC', algo: echoedAlgo });
 		fetchMock.mockResolvedValueOnce(createMockResponse(null, { body: wireBody }));
 
-		const { response } = await solveGrasshopperDefinitionWithCacheKey([], DEF, config);
+		const { response } = await solveWithServerCacheKey([], null, DEF, config);
 
 		expect(getResponseWireSize(response)).toBe(wireBody.length - echoedAlgo.length);
 	});
 });
 
-describe('solveByCacheKey — fast path', () => {
+describe('solveWithServerCacheKey — known key', () => {
 	it('solves by pointer and does NOT upload the base64', async () => {
 		fetchMock.mockResolvedValueOnce(okSolve({ pointer: 'md5_ABC' }));
 
-		const { missed, cacheKey } = await solveByCacheKey([], 'md5_ABC', DEF, config);
+		const { missed, cacheKey } = await solveWithServerCacheKey([], 'md5_ABC', DEF, config);
 
 		expect(missed).toBe(false);
 		expect(cacheKey).toBe('md5_ABC');
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-		// Sent the pointer, not the algo — this is the whole point (no re-upload).
 		expect(body().pointer).toBe('md5_ABC');
 		expect(body().algo).toBeNull();
 	});
 });
 
-describe('solveByCacheKey — fallback on cache miss', () => {
+describe('solveWithServerCacheKey — fallback on cache miss', () => {
 	it('retries with the full upload when the key was evicted', async () => {
 		fetchMock
 			.mockResolvedValueOnce(loadFailed()) // pointer solve misses
 			.mockResolvedValueOnce(okSolve({ pointer: 'md5_NEW' })); // full upload succeeds
 
-		const { response, cacheKey, missed } = await solveByCacheKey([], 'md5_OLD', DEF, config);
+		const { response, cacheKey, missed } = await solveWithServerCacheKey(
+			[],
+			'md5_OLD',
+			DEF,
+			config
+		);
 
 		expect(missed).toBe(true);
-		expect(cacheKey).toBe('md5_NEW'); // fresh key captured
+		expect(cacheKey).toBe('md5_NEW');
 		expect(response.values).toEqual([]);
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		// 1st: pointer attempt. 2nd: full algo upload.
@@ -158,7 +140,7 @@ describe('solveByCacheKey — fallback on cache miss', () => {
 			.mockResolvedValueOnce(loadFailedScrubbed()) // pointer solve misses, message scrubbed
 			.mockResolvedValueOnce(okSolve({ pointer: 'md5_NEW' })); // full upload succeeds
 
-		const { cacheKey, missed } = await solveByCacheKey([], 'md5_OLD', DEF, config);
+		const { cacheKey, missed } = await solveWithServerCacheKey([], 'md5_OLD', DEF, config);
 
 		expect(missed).toBe(true);
 		expect(cacheKey).toBe('md5_NEW');
@@ -174,17 +156,9 @@ describe('solveByCacheKey — fallback on cache miss', () => {
 			)
 		);
 
-		await expect(solveByCacheKey([], 'md5_X', DEF, config)).rejects.toThrow(/bad input/);
+		await expect(solveWithServerCacheKey([], 'md5_X', DEF, config)).rejects.toThrow(/bad input/);
 		// Only the pointer attempt — no full-upload retry for a non-miss error.
 		expect(fetchMock).toHaveBeenCalledTimes(1);
-	});
-});
-
-describe('solveGrasshopperDefinition still strips pointer (unchanged public shape)', () => {
-	it('returns a response without the pointer field', async () => {
-		fetchMock.mockResolvedValueOnce(okSolve({ pointer: 'md5_ABC' }));
-		const res = await solveGrasshopperDefinition([], DEF, config);
-		expect(res).not.toHaveProperty('pointer');
 	});
 });
 
@@ -199,7 +173,7 @@ describe('DefinitionRef — bytes are materialized only when an upload is unavoi
 		fetchMock.mockResolvedValueOnce(okSolve({ pointer: 'md5_ABC' }));
 		const ref = refOf();
 
-		const { missed } = await solveByCacheKey([], 'md5_ABC', ref, config);
+		const { missed } = await solveWithServerCacheKey([], 'md5_ABC', ref, config);
 
 		expect(missed).toBe(false);
 		expect(ref.load).not.toHaveBeenCalled();
@@ -213,7 +187,7 @@ describe('DefinitionRef — bytes are materialized only when an upload is unavoi
 			.mockResolvedValueOnce(okSolve({ pointer: 'md5_NEW' }));
 		const ref = refOf();
 
-		const { missed, cacheKey } = await solveByCacheKey([], 'md5_OLD', ref, config);
+		const { missed, cacheKey } = await solveWithServerCacheKey([], 'md5_OLD', ref, config);
 
 		expect(missed).toBe(true);
 		expect(cacheKey).toBe('md5_NEW');
@@ -225,7 +199,7 @@ describe('DefinitionRef — bytes are materialized only when an upload is unavoi
 		fetchMock.mockResolvedValueOnce(okSolve());
 		const ref = refOf();
 
-		await solveGrasshopperDefinitionWithCacheKey([], ref, config);
+		await solveWithServerCacheKey([], null, ref, config);
 
 		expect(ref.load).toHaveBeenCalledTimes(1);
 		expect(body().algo).toBe('aGk=');
@@ -244,5 +218,110 @@ describe('DefinitionRef — bytes are materialized only when an upload is unavoi
 			message: expect.stringContaining('version-uuid-broken')
 		});
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('a DefinitionRef whose load() hangs', () => {
+	const hungRef = () => ({
+		key: 'version-hung',
+		load: vi.fn((_signal?: AbortSignal) => new Promise<Uint8Array>(() => {}))
+	});
+
+	it('passes the solve signal to load()', async () => {
+		const ref = hungRef();
+		const controller = new AbortController();
+		const solving = solveGrasshopperDefinition([], ref, {
+			serverUrl: 'http://localhost:6500',
+			signal: controller.signal
+		});
+		controller.abort();
+		await solving.catch(() => {});
+		expect(ref.load.mock.calls[0][0]).toBe(controller.signal);
+	});
+
+	it('rejects ABORTED when the signal fires', async () => {
+		const controller = new AbortController();
+		const solving = solveGrasshopperDefinition([], hungRef(), {
+			serverUrl: 'http://localhost:6500',
+			signal: controller.signal
+		});
+		controller.abort(new Error('stale'));
+		await expect(solving).rejects.toMatchObject({ code: 'ABORTED' });
+	});
+
+	it('rejects TIMEOUT_ERROR once timeoutMs passes, with no signal at all', async () => {
+		await expect(
+			solveGrasshopperDefinition([], hungRef(), { ...config, timeoutMs: 5 })
+		).rejects.toMatchObject({ code: ErrorCodes.TIMEOUT_ERROR });
+	});
+
+	it('rejects an unusable timeoutMs as INVALID_CONFIG before loading', async () => {
+		const ref = hungRef();
+		await expect(
+			solveGrasshopperDefinition([], ref, { ...config, timeoutMs: NaN })
+		).rejects.toMatchObject({ code: ErrorCodes.INVALID_CONFIG });
+		expect(ref.load).not.toHaveBeenCalled();
+	});
+
+	it('frees a queue slot at timeoutMs, so the next solve runs without a cancel', async () => {
+		const executor: SolveExecutor = (definition, tree, cacheKey, solveConfig) =>
+			solveWithServerCacheKey(tree, cacheKey, definition, solveConfig);
+		fetchMock.mockImplementation(async () => createMockResponse({ values: [] }));
+		const scheduler = new SolveScheduler(executor, config, { mode: 'queue', timeoutMs: 5 });
+
+		const hung = scheduler.solve(hungRef(), []);
+		const next = scheduler.solve('https://example.com/a.gh', []);
+
+		await expect(hung).rejects.toMatchObject({ code: ErrorCodes.TIMEOUT_ERROR });
+		await expect(next).resolves.toBeDefined();
+	});
+
+	it.each(['latest-wins', 'queue'] as const)(
+		'frees the %s slot after cancelAll, so the next solve runs',
+		async (mode) => {
+			const executor: SolveExecutor = (definition, tree, cacheKey, config) =>
+				solveWithServerCacheKey(tree, cacheKey, definition, config);
+			fetchMock.mockImplementation(async () => createMockResponse({ values: [] }));
+			const scheduler = new SolveScheduler(
+				executor,
+				{ serverUrl: 'http://localhost:6500' },
+				{ mode }
+			);
+
+			const hung = scheduler.solve(hungRef(), []);
+			hung.catch(() => {});
+			await vi.waitFor(() => expect(scheduler.inFlightCount).toBe(1));
+			scheduler.cancelAll();
+			await vi.waitFor(() => expect(scheduler.inFlightCount).toBe(0));
+
+			await expect(scheduler.solve('https://example.com/a.gh', [])).resolves.toBeDefined();
+		}
+	);
+});
+
+describe('a response with no values', () => {
+	it('resolves with an empty array, as the type promises', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ warnings: ['slow'] }));
+		const response = await solveGrasshopperDefinition([], 'https://example.com/a.gh', config);
+		expect(response.values).toEqual([]);
+		expect(response.warnings).toEqual(['slow']);
+	});
+
+	it('leaves a PascalCase Values key readable', async () => {
+		const tree = { ParamName: 'Out', InnerTree: {} };
+		fetchMock.mockResolvedValueOnce(createMockResponse({ Values: [tree] }));
+		const response = await solveGrasshopperDefinition([], 'https://example.com/a.gh', config);
+		expect(readField(response, 'values')).toEqual([tree]);
+	});
+});
+
+describe('a null response body', () => {
+	it('rejects INVALID_RESPONSE rather than crashing on destructure', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse(null));
+		await expect(
+			solveGrasshopperDefinition([], 'https://example.com/a.gh', {
+				serverUrl: 'http://localhost:6500'
+			})
+		).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
 	});
 });

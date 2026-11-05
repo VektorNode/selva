@@ -21,6 +21,7 @@ namespace Selva.GH.Features.UIBuilder.Services;
 public class DocumentEventManager : IDisposable
 {
     private const int DOCUMENT_MODIFIED_DEBOUNCE_MS = 600;
+    private readonly BridgePerf _perf;
     private readonly WebSocketTransport _webSocketTransport;
     private readonly SchemaSynchronizer _schemaSynchronizer;
     private readonly ValueCollector _valueCollector;
@@ -47,8 +48,9 @@ public class DocumentEventManager : IDisposable
     private bool _eventsRegistered;
 
     public DocumentEventManager(SchemaSynchronizer schemaSynchronizer, ValueCollector valueCollector,
-        WebSocketTransport webSocketTransport)
+        WebSocketTransport webSocketTransport, BridgePerf perf)
     {
+        _perf = perf ?? throw new ArgumentNullException(nameof(perf));
         _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueCollector = valueCollector ?? throw new ArgumentNullException(nameof(valueCollector));
         _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
@@ -127,12 +129,13 @@ public class DocumentEventManager : IDisposable
             return;
         }
 
-        if (_currentDocument != null && _currentDocument.DocumentID != document.DocumentID)
+        // By reference, not DocumentID: two open copies of one file share their persisted id.
+        if (_currentDocument != null && _currentDocument != document)
         {
             UnregisterEvents();
         }
 
-        if (_eventsRegistered && _currentDocument != null && _currentDocument.DocumentID == document.DocumentID)
+        if (_eventsRegistered && _currentDocument == document)
         {
             return;
         }
@@ -212,7 +215,7 @@ public class DocumentEventManager : IDisposable
 
     private void OnDocumentRemoved(GH_DocumentServer sender, GH_Document doc)
     {
-        if (_currentDocument != null && doc != null && doc.DocumentID == _currentDocument.DocumentID)
+        if (_currentDocument != null && doc == _currentDocument)
         {
             UnregisterEvents();
             _currentDocument = null;
@@ -221,6 +224,7 @@ public class DocumentEventManager : IDisposable
 
     private void OnSolutionStart(object sender, GH_SolutionEventArgs e)
     {
+        _perf.SolveStarted();
         SolutionStarted?.Invoke(this, EventArgs.Empty);
 
         if (_webSocketTransport.IsRunning)
@@ -232,7 +236,9 @@ public class DocumentEventManager : IDisposable
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
+        _perf.SolveEnded();
         SolutionEnded?.Invoke(this, EventArgs.Empty);
+        _perf.SolveHandled();
 
         if (!_webSocketTransport.IsRunning)
         {
@@ -406,8 +412,16 @@ public class DocumentEventManager : IDisposable
             return false;
         }
 
-        _ = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
+        var send = _webSocketTransport.BroadcastOutputsWithFilesAndDisplay(outputValues, fileOutputs, displayData,
             includeDisplayData, diagnostics);
+        _perf.Sending(send, displayData);
+
+        // Not awaited, so a fault (serializing the outputs, say) would otherwise vanish with them.
+        send.ContinueWith(task =>
+        {
+            var error = task.Exception?.GetBaseException();
+            Logger.Error($"[DocumentEventManager] Broadcasting outputs failed: {error?.Message}", error);
+        }, TaskContinuationOptions.OnlyOnFaulted);
 
         // Reports whether OUTPUTS went out, not whether anything did: ScheduleOutputBroadcast
         // regenerates display data on a false, and a diagnostics-only broadcast must not pass for

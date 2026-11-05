@@ -127,4 +127,29 @@ public class StepProgressTests
         p.Step(A, "a", false, 0);
         Assert.Equal(0.5, p.Step(B, "b", false, 1000)!.Value.Fraction, 6);
     }
+
+    [Fact]
+    public void SkippedStep_DuringAbort_IsNotCounted()
+    {
+        var p = new StepProgress();
+        p.Begin(new[] { A, B });
+        p.Step(A, "a", false, 0);
+
+        Assert.Null(p.Step(B, "b", skipped: true, 10, aborted: true));
+
+        // B can still report for real; the abort left no mark on it.
+        var later = p.Step(B, "b", skipped: false, 20)!.Value;
+        Assert.Equal(0.5, later.Fraction);
+    }
+
+    [Fact]
+    public void SkippedStep_WithoutAbort_StillCounts()
+    {
+        var p = new StepProgress();
+        p.Begin(new[] { A, B });
+        p.Step(A, "a", false, 0);
+
+        var skipped = p.Step(B, "b", skipped: true, 10)!.Value;
+        Assert.Equal(1, skipped.Fraction);
+    }
 }

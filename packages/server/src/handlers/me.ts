@@ -4,7 +4,9 @@
  * derived per request from the caller's membership, not frozen at mint time.
  */
 
+import { formatApiScope } from '@selvajs/platform';
 import { requireCaller, type ApiHandler } from '../api/index.js';
+import { canCreateProjectIn } from '../access/index.js';
 
 export const getMe: ApiHandler = async (req) => {
 	const { ctx, user } = requireCaller(req);
@@ -17,7 +19,17 @@ export const getMe: ApiHandler = async (req) => {
 			actingOrgId: ctx.actingOrgId,
 			platformPermissions: ctx.platformPermissions,
 			orgPermissions: ctx.orgPermissions,
-			starredDefinitions: req.profile?.starredDefinitions ?? []
+			starredDefinitions: req.profile?.starredDefinitions ?? [],
+			capabilities: {
+				createProjects: !!ctx.actingOrgId && (await canCreateProjectIn(req, ctx, ctx.actingOrgId))
+			},
+			...(ctx.apiScope && {
+				apiToken: {
+					id: ctx.apiScope.tokenId,
+					scopes: ctx.apiScope.scopes.map(formatApiScope),
+					expiresAt: ctx.apiScope.expiresAt
+				}
+			})
 		}
 	};
 };

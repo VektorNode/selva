@@ -1,21 +1,57 @@
-import { redirect } from '@sveltejs/kit';
-import { isHttpError } from '@sveltejs/kit';
+import { redirect, type RequestEvent } from '@sveltejs/kit';
+import type { ServerInit } from '@sveltejs/kit/hooks';
+import { dev } from '$app/env';
 import { isApiError } from '@selvajs/server/api';
-import type { AuthUser, RequestContext } from '@selvajs/platform';
+import type { AuthUser } from '@selvajs/platform';
 import { SYSTEM_CONTEXT, emptyProfile } from '@selvajs/platform';
-import { applySecurityHeaders, createRouteClassifier } from '@selvajs/server/http';
+import {
+	applySecurityHeaders,
+	buildRequestContext,
+	createHolderVerdictCache,
+	createRouteClassifier,
+	createSessionRefresher,
+	createSessionResolver,
+	isCrossSiteFormSubmission,
+	resolveApiToken
+} from '@selvajs/server/http';
 import { renderThrown, resolveRequestId, REQUEST_ID_HEADER } from '@selvajs/server/logging';
-import { providers, getErrorReporter, getEventSink, getLogger } from '$lib/server/providers.server';
-import { getBootHealth } from '$lib/server/bootHealth.server';
-import { env } from '$env/dynamic/private';
-import { findDeploymentDir, startUpdateOutcomeReconciler } from '$lib/server/selfUpdate.server';
-import { bootstrapUserSession, wireHeaderAuthBootstrap } from '$lib/server/auth-bootstrap.server';
+import {
+	providers,
+	flag,
+	getErrorReporter,
+	getEventSink,
+	getLogger,
+	lazyLogger
+} from '#lib/server/providers.server.js';
+import { signInMaxAgeMs } from '#lib/server/signInMaxAge.server.js';
+import { apiTokenCodec, apiTokenResolutions } from '#lib/server/apiTokens/token.server.js';
+import { MCP_PATH } from '#lib/server/mcp/path.js';
+import { requestMemo } from '#lib/server/requestMemo.server.js';
+import { requestTiming } from '#lib/server/requestTiming.server.js';
+
+const OAUTH_TOKEN_PATH = '/oauth/token';
+const holderVerdicts = createHolderVerdictCache();
+lazyLogger.info('Sign-in max age', { component: 'auth', maxAgeMs: signInMaxAgeMs ?? 'off' });
+const refreshSession = createSessionRefresher(() => providers.auth.sessionRefresh, {
+	signInMaxAgeMs,
+	auth: () => providers.auth
+});
+import { getBootHealth } from '#lib/server/bootHealth.server.js';
+import { checkConfigAtBoot } from '#lib/server/config/boot.server.js';
+import { env } from '#lib/server/env.js';
+import { publicUrl } from '#lib/server/origin.js';
+import { closeAllSolveEventStreams } from '#lib/server/solveEvents/sse.server.js';
+import { findDeploymentDir, startUpdateOutcomeReconciler } from '#lib/server/selfUpdate.server.js';
+import {
+	bootstrapUserSession,
+	wireHeaderAuthBootstrap
+} from '#lib/server/auth-bootstrap.server.js';
 import {
 	getRefreshToken,
 	setSessionCookie,
 	setRefreshCookie,
 	clearRefreshCookie
-} from '$lib/server/admin-auth.server';
+} from '#lib/server/admin-auth.server.js';
 
 // Wired lazily on first real request, not at module import, so test files
 // that import helpers from this module don't trigger provider lookups
@@ -31,9 +67,16 @@ let bootHealthKicked = false;
 // single log line rather than one per anonymous request.
 let proxyAuthLoginMissWarned = false;
 
-// Env validation is owned by each provider's `fromEnv()` (throws on missing
-// vars, e.g. DATA_PATH for local, SUPABASE_URL for supabase) — no app-level
-// check needed here.
+// Once at server start, never in tests that import this module for `handle`.
+export const init: ServerInit = () => {
+	checkConfigAtBoot();
+	requestTiming.markBooted();
+	// Not in dev: Vite owns the signals there, and HMR would stack a listener per reload.
+	if (!dev) {
+		process.once('SIGINT', closeAllSolveEventStreams);
+		process.once('SIGTERM', closeAllSolveEventStreams);
+	}
+};
 
 // One-way transition (zero users → at least one). Once true, permanent —
 // caching it skips a per-request listUsers DB read after the first user exists.
@@ -66,54 +109,68 @@ async function ensureUserOnce(userId: string): Promise<void> {
 	ensuredUserIds.add(userId);
 }
 
+type SessionRows = Awaited<ReturnType<typeof readSessionRows>>;
+
+interface Session {
+	user: AuthUser;
+	profile: App.Locals['profile'];
+	ctx: App.Locals['ctx'];
+}
+
 /**
- * Builds a per-request context from an authenticated user: resolves active-org
- * membership and its OrgPermissions.
- *
- * Active-org resolution: single tenancy picks the deployment's one org; multi
- * tenancy picks the first org the user belongs to (URL-prefix resolution via
- * `/o/{slug}/...` will replace this once routes are tenant-namespaced).
- *
- * Exported for tests: the fixture's `actAs()` mirrors this logic, so a direct
- * test pins the production function against drift.
+ * Profile, platform permissions and membership: independent and keyed only by the user id, so
+ * they run together as SYSTEM_CONTEXT (`ctx` isn't built yet), and for a JWT session beside
+ * `verifyToken`. Reads only: they run before the token is checked.
  */
-export async function buildContext(
+function readSessionRows(userId: string) {
+	return Promise.all([
+		providers.data.userProfile.getProfile(SYSTEM_CONTEXT, userId),
+		providers.data.permissions.getFor(SYSTEM_CONTEXT, userId),
+		providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, userId)
+	]);
+}
+
+/**
+ * The acting org is the user's first membership, or an instance admin's fallback. `ensureUser`
+ * is the local equivalent of Supabase's `handle_new_auth_user` trigger, memoized per process.
+ * The rows may have been read before it seeded a brand-new user's row: each fails soft to
+ * empty, the correct state for a user with nothing yet.
+ */
+async function buildSession(
 	user: AuthUser,
-	// Forwarded as `adapterContext` so adapters needing the upstream auth token
-	// (e.g. Supabase RLS) can pull it off the context.
-	sessionToken: string | undefined,
-	// Pre-fetched by the hook so the four independent per-request reads
-	// (ensureUser, getProfile, getFor, findUserMembership) run in one
-	// `Promise.all` instead of serially, all as SYSTEM_CONTEXT since the
-	// user's own ctx isn't built yet.
-	platformPermissions: RequestContext['platformPermissions'],
-	membership: Awaited<ReturnType<typeof providers.data.orgs.findUserMembership>>
-): Promise<RequestContext> {
-	let actingOrgId: string | undefined;
-	let orgPermissions: RequestContext['orgPermissions'] = [];
-
-	if (membership) {
-		actingOrgId = membership.org.id;
-		orgPermissions = membership.member.permissions;
-	}
-
-	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
-		// Instance admins without a membership row fall back to the first org so
-		// admin tooling stays usable before a switcher exists. Depends on the
-		// reads above (only fires with no membership + instance_admin), so it
-		// stays sequential.
-		const firstOrgPage = await providers.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
-		const firstOrg = firstOrgPage.items[0];
-		if (firstOrg) actingOrgId = firstOrg.id;
-	}
-
+	[profile, platformPermissions, membership]: SessionRows,
+	// Forwarded so adapters scoping by the upstream token (Supabase RLS) get it.
+	sessionToken: string | undefined
+): Promise<Session> {
+	await ensureUserOnce(user.id);
 	return {
-		userId: user.id,
-		actingOrgId,
-		platformPermissions,
-		orgPermissions,
-		adapterContext: sessionToken ? { sessionToken } : undefined
+		user,
+		profile: profile ?? emptyProfile(user.id),
+		ctx: await buildRequestContext(
+			{ user, sessionToken, platformPermissions, membership: membership?.member ?? null },
+			{ orgs: providers.data.orgs }
+		)
 	};
+}
+
+// No window: every request resolves its own session, since what it holds (stars, recent
+// runs, memberships) changes under many writes that don't invalidate. Requests carrying one
+// token at once still share one resolution, and a JWT's rows are read beside its check.
+const sessions = createSessionResolver({
+	verify: (token) => providers.auth.verifyToken(token),
+	read: readSessionRows,
+	build: buildSession
+});
+
+/** For a user identified without a session token (forward-auth headers). */
+async function sessionFor(user: AuthUser, sessionToken: string | undefined): Promise<Session> {
+	return buildSession(user, await readSessionRows(user.id), sessionToken);
+}
+
+function attachSession(event: RequestEvent, session: Session): void {
+	event.locals.user = session.user;
+	event.locals.profile = session.profile;
+	event.locals.ctx = session.ctx;
 }
 
 // ============================================================================
@@ -142,8 +199,22 @@ const routeClassifier = createRouteClassifier({
 	// gating it would hide it from callers deciding whether to integrate.
 	publicPrefixes: ['/auth/', '/logout', '/docs/'],
 	// Must answer without a session: load-balancer liveness probe, and the
-	// readiness probe the post-update poller waits on across a restart.
-	publicApis: ['/api/health', '/api/health/ready'],
+	// readiness probe the post-update poller waits on across a restart. The v1
+	// spec is public for the same reason `/docs/` is. `/mcp` gates itself: it needs a
+	// key and passes it through to `/api/v1`, which authenticates every call.
+	// OAuth discovery, registration and token exchange are called server-to-server
+	// by MCP clients, with no session.
+	publicApis: [
+		'/api/health',
+		'/api/health/ready',
+		'/api/v1/openapi.json',
+		MCP_PATH,
+		'/.well-known/oauth-protected-resource',
+		'/.well-known/oauth-protected-resource/mcp',
+		'/.well-known/oauth-authorization-server',
+		'/oauth/register',
+		OAUTH_TOKEN_PATH
+	],
 	// Self-gating routes authorize each request themselves; the hook must not
 	// deny them up front. `/api/files/[...path]` classifies each path against
 	// the asset-class registry (public branding serves to anyone, org/project
@@ -165,7 +236,23 @@ const routeClassifier = createRouteClassifier({
 // bug in either is security-relevant.
 export const { isStaticAsset, isSelfGatingApiRoute, isPublicRoute } = routeClassifier;
 
-export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve }) => {
+// Every request runs inside its read memo, so a layout and its page share repeated reads, and
+// inside its timing store; static assets skip the timing.
+export const handle: import('@sveltejs/kit/hooks').Handle = (input) => {
+	const { event } = input;
+	const run = () => requestMemo.run(event.request.method, () => gate(input));
+	if (isStaticAsset(event.url.pathname)) return run();
+	return requestTiming.timeRequest(
+		{
+			method: event.request.method,
+			route: event.route.id ?? event.url.pathname,
+			isDataRequest: event.isDataRequest
+		},
+		async () => run()
+	);
+};
+
+const gate: import('@sveltejs/kit/hooks').Handle = async ({ event, resolve }) => {
 	event.locals.providers = providers;
 
 	// Bound once per request; every downstream `locals.log` record inherits
@@ -202,6 +289,24 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 
 	const { pathname } = event.url;
 
+	// SvelteKit's own check is off (vite.config.ts) because it can't exempt the
+	// token endpoint or bearer requests; this is the same check with those exemptions.
+	if (
+		!import.meta.env.DEV &&
+		isCrossSiteFormSubmission(event.request, {
+			exemptPaths: [OAUTH_TOKEN_PATH],
+			origin: publicUrl(event.url).origin
+		})
+	) {
+		return applyResponseHeaders(
+			new Response(`Cross-site ${event.request.method} form submissions are forbidden`, {
+				status: 403
+			}),
+			pathname,
+			requestId
+		);
+	}
+
 	// Static assets bypass every gate below — no auth, no first-run check.
 	if (isStaticAsset(pathname)) {
 		return applyResponseHeaders(await resolve(event), pathname, requestId);
@@ -211,6 +316,44 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	// is still live and ready, and the first-run 503 below would tell a load
 	// balancer (or the post-update poller) the opposite.
 	if (pathname === '/api/health' || pathname === '/api/health/ready') {
+		return applyResponseHeaders(await resolve(event), pathname, requestId);
+	}
+
+	// A `selva_` key decides the request on its own: it never falls back to the
+	// cookie, so a broken key can't quietly run as whoever is signed in.
+	// `/mcp` carries a key but isn't under `/api/v1`, so the resolver would refuse it.
+	const tokenResult =
+		pathname === MCP_PATH
+			? ({ kind: 'none' } as const)
+			: await resolveApiToken(event.request, {
+					codec: apiTokenCodec(),
+					auth: providers.auth,
+					data: providers.data,
+					flag,
+					holderVerdicts,
+					signInMaxAgeMs,
+					resolutionCache: apiTokenResolutions,
+					log: event.locals.log
+				});
+	if (tokenResult.kind === 'rejected') {
+		const { status, code, message } = tokenResult;
+		const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+		if (status === 401) headers['WWW-Authenticate'] = 'Bearer error="invalid_token"';
+		return applyResponseHeaders(
+			new Response(JSON.stringify({ message, code }), { status, headers }),
+			pathname,
+			requestId
+		);
+	}
+	if (tokenResult.kind === 'ok') {
+		const { user, ctx, token } = tokenResult;
+		event.locals.log = event.locals.log.child({ tokenId: token.id });
+		event.locals.user = user;
+		event.locals.ctx = ctx;
+		event.locals.profile =
+			(await providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ??
+			emptyProfile(user.id);
+
 		return applyResponseHeaders(await resolve(event), pathname, requestId);
 	}
 
@@ -242,21 +385,20 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 	const needsAuth = !publicRoute;
 	if (needsAuth) {
 		let token = event.cookies.get('admin_session') ?? '';
-		let user = await providers.auth.verifyToken(token);
+		let session = await sessions.resolve(token);
 
 		// When the access token expired but a refresh token is present (Supabase
 		// OAuth flow), swap silently for a fresh pair and rotate the cookies.
 		// Local/HMAC sessions never set a refresh cookie, so this is a no-op there.
-		if (!user) {
+		if (!session) {
 			const refreshToken = getRefreshToken(event.cookies);
-			const oauth = providers.auth.oauth;
-			if (refreshToken && oauth) {
-				const refreshed = await oauth.refreshSession(refreshToken);
+			if (refreshToken && providers.auth.sessionRefresh) {
+				const refreshed = await refreshSession(refreshToken);
 				if (refreshed) {
 					setSessionCookie(event.cookies, refreshed.sessionToken);
 					setRefreshCookie(event.cookies, refreshed.refreshToken);
 					token = refreshed.sessionToken;
-					user = await providers.auth.verifyToken(token);
+					session = await sessions.resolve(token);
 				} else {
 					// Refresh failed — clear the stale cookie so the next request
 					// goes through the login flow cleanly.
@@ -268,6 +410,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		// Forward-proxy fallback: providers that derive identity from trusted
 		// upstream-proxy signals (Caddy forward_auth, oauth2-proxy, etc.) get a
 		// chance to identify the request. See IProxyAuth for the trust contract.
+		let user = session?.user ?? null;
 		if (!user && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
 			// First-admin bootstrap for forward-auth deployments: OAuth and
@@ -294,35 +437,11 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 					requestId
 				);
 			}
-			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname)}`);
+			// With the query: an OAuth authorize request is nothing without it.
+			redirect(303, `/login?redirectTo=${encodeURIComponent(pathname + event.url.search)}`);
 		}
 
-		// Four independent per-request reads, keyed only by `user.id` with no
-		// dependency between them, so they run in one `Promise.all` — hook
-		// latency becomes ~the slowest read instead of the sum of four. All run
-		// as SYSTEM_CONTEXT since `ctx` isn't built yet.
-		//
-		//  1. ensureUser — local equivalent of Supabase's `handle_new_auth_user`
-		//     trigger, guarantees a `user-data.json` row exists. Memoized
-		//     per-process (`ensureUserOnce`); Supabase makes it a no-op.
-		//  2. getProfile — display name / starred / recent runs.
-		//  3. getFor — platform permissions.
-		//  4. findUserMembership — acting org + org permissions.
-		//
-		// Racing ensureUser (a write-guard) against 2–4 is safe: on a brand-new
-		// user's first request the reads may land before the row is seeded, but
-		// each fails soft to empty (`null` profile → emptyProfile, `[]`
-		// permissions, no membership) — the correct state for a user with nothing yet.
-		const [, profile, platformPermissions, membership] = await Promise.all([
-			ensureUserOnce(user.id),
-			providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
-			providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
-			providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
-		]);
-
-		event.locals.user = user;
-		event.locals.profile = profile ?? emptyProfile(user.id);
-		event.locals.ctx = await buildContext(user, token, platformPermissions, membership);
+		attachSession(event, session ?? (await sessionFor(user, token)));
 	} else {
 		// Public page route (e.g. `/`): best-effort session attach. If a valid
 		// session cookie is present, populate locals so the UI reflects authed
@@ -333,7 +452,8 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 		const isPublicPage = PUBLIC_PAGE_ROUTES.has(pathname);
 		const wantsSessionAttach = isPublicPage || isSelfGatingApiRoute(pathname);
 		const token = wantsSessionAttach ? (event.cookies.get('admin_session') ?? '') : '';
-		let user = token ? await providers.auth.verifyToken(token) : null;
+		const session = token ? await sessions.resolve(token) : null;
+		let user = session?.user ?? null;
 		if (!user && wantsSessionAttach && providers.auth.proxyAuth) {
 			user = await providers.auth.proxyAuth.identifyFromHeaders(event.request.headers);
 
@@ -360,18 +480,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 				}
 			}
 		}
-		if (user) {
-			// Same four-read parallelization as the gated path above (see there).
-			const [, profile, platformPermissions, membership] = await Promise.all([
-				ensureUserOnce(user.id),
-				providers.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id),
-				providers.data.permissions.getFor(SYSTEM_CONTEXT, user.id),
-				providers.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id)
-			]);
-			event.locals.user = user;
-			event.locals.profile = profile ?? emptyProfile(user.id);
-			event.locals.ctx = await buildContext(user, token, platformPermissions, membership);
-		}
+		if (user) attachSession(event, session ?? (await sessionFor(user, token)));
 	}
 
 	return applyResponseHeaders(await resolve(event), pathname, requestId);
@@ -391,7 +500,7 @@ export const handle: import('@sveltejs/kit').Handle = async ({ event, resolve })
 // framable (embedding is what Selva-engine apps are for), but the operator
 // surfaces below hold an authenticated admin session, where a framable page is
 // a UI-redress attack.
-const FRAME_DENIED_PREFIXES = ['/admin', '/setup', '/login'];
+const FRAME_DENIED_PREFIXES = ['/admin', '/setup', '/login', '/oauth'];
 
 function deniesFraming(pathname: string): boolean {
 	return FRAME_DENIED_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -422,27 +531,26 @@ function applyResponseHeaders(response: Response, pathname: string, requestId: s
 	return response;
 }
 
-export const handleError: import('@sveltejs/kit').HandleServerError = ({
+export const handleError: import('@sveltejs/kit/hooks').HandleServerError = ({
+	kind,
 	error,
-	status,
 	event
 }) => {
-	// Expected HTTP errors (thrown via error(4xx, body)) pass their structured
-	// body through unchanged so `code`/`fields` reach the client. Unexpected
-	// errors get a generic message to avoid leaking internals.
-	if (isHttpError(error)) {
-		const body = error.body as App.Error;
-		return { message: body.message, code: body.code, fields: body.fields };
+	// `error(...)` bodies already carry `code`/`fields`, so they reach the client as thrown.
+	if (kind === 'app') return error;
+	if (kind !== 'unknown') {
+		return error.status === 404 ? { message: 'Page not found.', code: 'NOT_FOUND' } : error;
 	}
 	// Backstop only. `ApiError` reaching here means a page load called a guard
-	// without going through `asHttpError()` — SvelteKit's `get_status` returns 500
-	// for anything that isn't its own `HttpError`, and `handleError` cannot
-	// change the status, so the message below is right but the status is not.
+	// without going through `asHttpError()`.
 	if (isApiError(error)) {
-		return { message: error.message, code: error.code, fields: error.fields };
-	}
-	if (status === 404) {
-		return { message: 'Page not found.', code: 'NOT_FOUND' };
+		return {
+			status: error.status,
+			message: error.message,
+			code: error.code,
+			fields: error.fields,
+			details: error.details
+		};
 	}
 	// SvelteKit's default logging drops `cause`, which is where provider
 	// adapters tend to stash the real reason (Supabase network error, fs
@@ -457,7 +565,6 @@ export const handleError: import('@sveltejs/kit').HandleServerError = ({
 		getLogger().child({ method: event.request.method, route: event.url.pathname });
 	log.error('Unhandled error', {
 		component: 'handleError',
-		status,
 		err: renderThrown(error),
 		cause: error instanceof Error && error.cause ? String(error.cause) : undefined
 	});

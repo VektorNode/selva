@@ -1,30 +1,11 @@
 /**
- * Tests for `runSolvePipeline` — the transport-agnostic solve core (K3).
- *
- * `@selvajs/compute` is mocked so the pipeline runs without a live compute
- * server: `TreeBuilder.fromInputParams` returns a marker tree and the scheduler
- * is a stub whose `solve` we script per test (resolve a response, throw an
- * AbortError, etc.). That isolates the pipeline's own behavior — outcome
- * classification, size cap, gzip, and the Server-Timing / version envelope.
+ * `@selvajs/compute` is mocked so the pipeline runs without a live compute server: the scheduler
+ * is a stub whose `solveDetailed` each test scripts. That isolates what is shared across
+ * coalesced callers: how a solve ended, and what it carries for them to encode.
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { gunzipSync } from 'node:zlib';
-import type { GrasshopperClient, InputParam, SolveScheduler } from '@selvajs/compute/grasshopper';
-
-// vi.mock factories are hoisted above module top-level, so ComputeError is
-// declared INSIDE this one. The pipeline classifies shed outcomes with
-// `err instanceof ComputeError && err.code === ErrorCodes.QUEUE_*`, so the
-// mock must export a real class plus the code constants.
-vi.mock('@selvajs/compute/grasshopper', () => {
-	return {
-		TreeBuilder: {
-			fromInputParams: (params: unknown[]) => ({ __tree: true, count: params.length })
-		},
-		processInput: (raw: InputParam) => raw,
-		stableStringify: (value: unknown) => JSON.stringify(value)
-	};
-});
+import type { DataTree, GrasshopperClient, SolveScheduler } from '@selvajs/compute/grasshopper';
 
 vi.mock('@selvajs/compute/core', () => {
 	class MockComputeError extends Error {
@@ -49,387 +30,224 @@ vi.mock('@selvajs/compute/core', () => {
 			QUEUE_FULL: 'QUEUE_FULL',
 			QUEUE_TIMEOUT: 'QUEUE_TIMEOUT',
 			ABORTED: 'ABORTED',
-			TIMEOUT_ERROR: 'TIMEOUT_ERROR'
+			TIMEOUT_ERROR: 'TIMEOUT_ERROR',
+			RESPONSE_TOO_LARGE: 'RESPONSE_TOO_LARGE',
+			UNKNOWN_ERROR: 'UNKNOWN_ERROR'
 		}
 	};
 });
 
-import { ComputeError as MockComputeError } from '@selvajs/compute/core';
-const makeShedError = (
-	message: string,
-	code: 'QUEUE_FULL' | 'QUEUE_TIMEOUT' | 'ABORTED' | 'TIMEOUT_ERROR' | 'UNKNOWN_ERROR',
+import { ComputeError, type ServerTiming } from '@selvajs/compute/core';
+import { runSolvePipeline, type SolvePipelineArgs } from '../solve-pipeline.js';
+import type { CachedClient } from '../client-cache.js';
+import { createDefinitionByteCache } from '../definition-byte-cache.js';
+
+const computeError = (
+	code: string,
 	options?: { statusCode?: number; context?: Record<string, unknown> }
 ) =>
-	new (
-		MockComputeError as unknown as new (
-			m: string,
-			c: string,
-			o?: { statusCode?: number; context?: Record<string, unknown> }
-		) => Error
-	)(message, code, options);
+	new (ComputeError as unknown as new (m: string, c: string, o?: typeof options) => Error)(
+		`failed: ${code}`,
+		code,
+		options
+	);
 
-import {
-	runSolvePipeline,
-	buildSolveInputTree,
-	adaptEnvelopeToEncoding,
-	COMPUTE_CONTRACT_VERSION,
-	COMPUTE_VERSION_HEADER,
-	type SolvePipelineArgs,
-	type PipelineInput,
-	type CachedClient
-} from '../index.js';
-
-/**
- * A scripted solve stub. The pipeline only JSON-serializes and reads
- * `errors`/`warnings`, so tests return arbitrary fake payloads — the return is a
- * loose record rather than the full `GrasshopperComputeResponse`.
- */
 type SolveStub = (
-	def: string | Uint8Array,
+	def: unknown,
 	tree: unknown,
-	opts: { signal?: AbortSignal }
+	opts: { signal?: AbortSignal; onServerTiming?: (timing: ServerTiming) => void }
 ) => Promise<Record<string, unknown>>;
 
-/** A CachedClient stub whose scheduler.solve is scripted per test. */
-function fakeClient(solve: SolveStub): CachedClient {
+function fakeClient(
+	solve: SolveStub,
+	verdict: { fromCache: boolean; definitionReuploaded?: boolean } = { fromCache: false }
+): CachedClient {
+	const solveDetailed = async (...args: Parameters<SolveStub>) => ({
+		response: await solve(...args),
+		durationMs: 0,
+		...verdict
+	});
 	return {
 		client: {} as GrasshopperClient,
-		scheduler: { solve } as unknown as SolveScheduler,
-		rhinoTiming: { last: null, seq: 0 },
-		solveMeta: { last: null, seq: 0 }
+		scheduler: { solveDetailed } as unknown as SolveScheduler,
+		limits: {
+			solveDeadlineMs: 42_000,
+			maxRequestBytes: 50 * 1024 * 1024,
+			reuseDefinitionCache: true
+		}
 	};
 }
 
-function baseArgs(over: Partial<SolvePipelineArgs> = {}): SolvePipelineArgs {
+const throws = (err: unknown) =>
+	fakeClient(async () => {
+		throw err;
+	});
+
+function args(over: Partial<SolvePipelineArgs> = {}): SolvePipelineArgs {
 	return {
 		definitionSource: new Uint8Array([1, 2, 3]),
-		inputs: [{ id: 'a', paramType: 'number', nickname: 'A' } as PipelineInput],
-		values: { a: 5 },
+		inputTree: [],
 		client: fakeClient(async () => ({ values: [], errors: [], warnings: [] })),
 		responseMaxBytes: 10 * 1024 * 1024,
-		solveDeadlineMs: 100_000,
-		acceptEncoding: '',
 		signal: new AbortController().signal,
-		loadStartMs: performance.now(),
-		defLoadMs: 1.5,
-		prepMarks: [['body', 0.2]],
 		...over
 	};
 }
 
-describe('runSolvePipeline — success', () => {
-	it('returns an ok envelope with a JSON body and the version header', async () => {
-		const result = { values: [{ id: 'out' }], errors: [], warnings: ['w'] };
-		const outcome = await runSolvePipeline(baseArgs({ client: fakeClient(async () => result) }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.errorCount).toBe(0);
-		expect(outcome.warningCount).toBe(1);
-		expect(outcome.envelope.encoding).toBeUndefined();
-		expect(JSON.parse(outcome.envelope.body as string)).toEqual(result);
-		expect(outcome.envelope.headers[COMPUTE_VERSION_HEADER]).toBe(String(COMPUTE_CONTRACT_VERSION));
-		expect(outcome.envelope.headers['Content-Type']).toBe('application/json');
-		expect(outcome.envelope.headers['Content-Length']).toBe(
-			String(Buffer.byteLength(outcome.envelope.body as string))
-		);
-	});
-
-	it('only sends inputs with a paramType to the tree builder', async () => {
-		let seenTree: unknown;
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				inputs: [
-					{ id: 'a', paramType: 'number', nickname: 'A' } as PipelineInput,
-					{ id: 'b', nickname: 'B' } as PipelineInput // no paramType → filtered out
-				],
-				client: fakeClient(async (_def, tree) => {
-					seenTree = tree;
-					return { errors: [], warnings: [] };
-				})
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		expect(seenTree).toEqual({ __tree: true, count: 1 });
-	});
-
-	it('solves the caller-supplied tree instead of rebuilding one', async () => {
-		let seenTree: unknown;
-		const prebuilt = { __tree: true, count: 99 } as unknown as SolvePipelineArgs['inputTree'];
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				inputs: [{ id: 'a', paramType: 'number', nickname: 'A' } as PipelineInput],
-				inputTree: prebuilt,
-				client: fakeClient(async (_def, tree) => {
-					seenTree = tree;
-					return { errors: [], warnings: [] };
-				})
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		expect(seenTree).toBe(prebuilt); // the exact object, not a rebuild
-	});
-
-	it('builds its own tree when the caller supplies none', async () => {
-		let seenTree: unknown;
-		await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async (_def, tree) => {
-					seenTree = tree;
-					return { errors: [], warnings: [] };
-				})
-			})
-		);
-		expect(seenTree).toEqual({ __tree: true, count: 1 });
-	});
-
-	it('buildSolveInputTree produces what the pipeline would have built', () => {
-		const inputs = [
-			{ id: 'a', paramType: 'number', nickname: 'A' } as PipelineInput,
-			{ id: 'b', nickname: 'B' } as PipelineInput // no paramType → filtered out
-		];
-		expect(buildSolveInputTree(inputs, { a: 5 })).toEqual({ __tree: true, count: 1 });
-	});
-
-	it('forwards the abort signal to the scheduler', async () => {
+describe('runSolvePipeline — a solve that ran', () => {
+	it('solves the tree it was given, with its signal', async () => {
 		const controller = new AbortController();
-		let seenSignal: AbortSignal | undefined;
+		const tree = [{ ParamName: 'a' }] as unknown as DataTree[];
+		let seen: { tree: unknown; signal?: AbortSignal } | undefined;
 		await runSolvePipeline(
-			baseArgs({
+			args({
+				inputTree: tree,
 				signal: controller.signal,
-				client: fakeClient(async (_d, _t, opts) => {
-					seenSignal = opts.signal;
-					return { errors: [], warnings: [] };
+				client: fakeClient(async (_d, t, opts) => {
+					seen = { tree: t, signal: opts.signal };
+					return {};
 				})
 			})
 		);
-		expect(seenSignal).toBe(controller.signal);
-	});
-});
-
-describe('runSolvePipeline — gzip', () => {
-	it('compresses when Accept-Encoding allows and the body is over 1 KB', async () => {
-		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
-		const outcome = await runSolvePipeline(
-			baseArgs({ acceptEncoding: 'gzip, br', client: fakeClient(async () => big) })
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.encoding).toBe('gzip');
-		expect(outcome.envelope.headers['Content-Encoding']).toBe('gzip');
-		expect(outcome.envelope.headers['Vary']).toBe('Accept-Encoding');
-		const inflated = gunzipSync(Buffer.from(outcome.envelope.body as Uint8Array)).toString();
-		expect(JSON.parse(inflated)).toEqual(big);
-		expect(outcome.envelope.metrics.compressedBytes).toBeGreaterThan(0);
+		expect(seen?.tree).toBe(tree);
+		expect(seen?.signal).toBe(controller.signal);
 	});
 
-	it('does NOT compress when Accept-Encoding lacks gzip', async () => {
-		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
-		const outcome = await runSolvePipeline(
-			baseArgs({ acceptEncoding: 'br', client: fakeClient(async () => big) })
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.encoding).toBeUndefined();
-		expect(outcome.envelope.headers['Content-Encoding']).toBeUndefined();
-		expect(outcome.envelope.metrics.compressedBytes).toBeNull();
-	});
-
-	it('does NOT compress a tiny body even with gzip advertised', async () => {
-		const outcome = await runSolvePipeline(
-			baseArgs({ acceptEncoding: 'gzip', client: fakeClient(async () => ({ ok: 1 })) })
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.encoding).toBeUndefined();
-	});
-});
-
-describe('adaptEnvelopeToEncoding — single-flight per-waiter re-key', () => {
-	// Build a real gzip envelope the way the pipeline does, so the adapter is
-	// exercised against genuine compressed bytes rather than a hand-rolled stub.
-	async function gzipEnvelope() {
-		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
-		const outcome = await runSolvePipeline(
-			baseArgs({ acceptEncoding: 'gzip', client: fakeClient(async () => big) })
-		);
-		if (outcome.kind !== 'ok') throw new Error('expected ok');
-		return { envelope: outcome.envelope, body: big };
-	}
-
-	it('gunzips a gzip envelope for a non-gzip waiter (the C5 bug)', async () => {
-		const { envelope, body } = await gzipEnvelope();
-		expect(envelope.encoding).toBe('gzip'); // first caller's flight was gzip
-
-		// A waiter that did not advertise gzip joins the same flight and must get
-		// decodable JSON, not the mislabelled gzip bytes.
-		const wire = adaptEnvelopeToEncoding(envelope, 'br');
-		expect(typeof wire.body).toBe('string');
-		expect(JSON.parse(wire.body as string)).toEqual(body);
-		expect(wire.headers['Content-Encoding']).toBeUndefined();
-		expect(wire.headers['Content-Length']).toBe(String(Buffer.byteLength(wire.body as string)));
-		// The shared envelope is not mutated — other waiters still see gzip.
-		expect(envelope.headers['Content-Encoding']).toBe('gzip');
-	});
-
-	it('gunzips for a waiter with an empty Accept-Encoding', async () => {
-		const { envelope, body } = await gzipEnvelope();
-		const wire = adaptEnvelopeToEncoding(envelope, '');
-		expect(typeof wire.body).toBe('string');
-		expect(JSON.parse(wire.body as string)).toEqual(body);
-		expect(wire.headers['Content-Encoding']).toBeUndefined();
-	});
-
-	it('passes a gzip envelope through untouched for a gzip waiter', async () => {
-		const { envelope } = await gzipEnvelope();
-		const wire = adaptEnvelopeToEncoding(envelope, 'gzip, br');
-		expect(wire.body).toBe(envelope.body); // same reference — no re-encode
-		expect(wire.headers).toBe(envelope.headers);
-		expect(wire.headers['Content-Encoding']).toBe('gzip');
-	});
-
-	it('passes a plain-JSON envelope through untouched for any waiter', async () => {
-		const big = { values: Array.from({ length: 500 }, (_, i) => ({ i, s: 'xxxxxxxxxx' })) };
-		const outcome = await runSolvePipeline(
-			baseArgs({ acceptEncoding: 'br', client: fakeClient(async () => big) })
-		);
-		if (outcome.kind !== 'ok') throw new Error('expected ok');
-		expect(outcome.envelope.encoding).toBeUndefined();
-
-		// A gzip-capable waiter joining a plain flight gets the plain body: correct,
-		// if not maximally small — gzip is an optimisation, not a guarantee.
-		const wire = adaptEnvelopeToEncoding(outcome.envelope, 'gzip');
-		expect(wire.body).toBe(outcome.envelope.body);
-		expect(wire.headers['Content-Encoding']).toBeUndefined();
-	});
-});
-
-describe('runSolvePipeline — failure outcomes', () => {
-	it('classifies the scheduler deadline (AbortError, signal NOT aborted) as timeout', async () => {
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				solveDeadlineMs: 42_000,
-				client: fakeClient(async () => {
-					const e = new Error('aborted');
-					e.name = 'AbortError';
-					throw e;
-				})
+	it('carries the response, cache verdict and Rhino timing for its callers', async () => {
+		const response = { values: [] };
+		const timing: ServerTiming = { solve: 20, raw: '' };
+		const flight = await runSolvePipeline(
+			args({
+				client: fakeClient(
+					async (_d, _t, opts) => {
+						opts.onServerTiming?.(timing);
+						return response;
+					},
+					{ fromCache: true, definitionReuploaded: false }
+				)
 			})
 		);
+		if (flight.kind !== 'solved') throw new Error(flight.kind);
+		expect(flight.response).toBe(response);
+		expect(flight.rhino).toBe(timing);
+		expect(flight.settle).toEqual({ fromCache: true, definitionReuploaded: false });
+	});
+
+	it('keeps overlapping solves on one warm client apart', async () => {
+		// Each call reports through its own callback, so a concurrent solve on the same
+		// client can't leak its timing into this one's.
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		const timings = [
+			{ solve: 20, raw: '' },
+			{ solve: 1, raw: '' }
+		];
+		let n = 0;
+		const client = fakeClient(async (_d, _t, opts) => {
+			const timing = timings[n++];
+			await gate;
+			opts.onServerTiming?.(timing);
+			return {};
+		});
+		const a = runSolvePipeline(args({ client }));
+		const b = runSolvePipeline(args({ client }));
+		release();
+		const [flightA, flightB] = await Promise.all([a, b]);
+		if (flightA.kind !== 'solved' || flightB.kind !== 'solved') throw new Error('expected solved');
+		expect(flightA.rhino?.solve).toBe(20);
+		expect(flightB.rhino?.solve).toBe(1);
+	});
+
+	it('omits defBytes for a raw-bytes solve', async () => {
+		const flight = await runSolvePipeline(args());
+		if (flight.kind !== 'solved') throw new Error(flight.kind);
+		expect(flight.defBytes).toBeUndefined();
+	});
+
+	it.each([
+		['skipped', false, false],
+		['miss', true, false],
+		['hit', true, true]
+	])('reads defBytes %s from a byte-cache ref', async (verdict, loaded, fromCache) => {
+		const ref = createDefinitionByteCache(0).getOrLoad('v', async () => new Uint8Array());
+		ref.outcome.loaded = loaded;
+		ref.outcome.fromCache = fromCache;
+		const flight = await runSolvePipeline(args({ definitionSource: ref }));
+		if (flight.kind !== 'solved') throw new Error(flight.kind);
+		expect(flight.defBytes).toBe(verdict);
+	});
+});
+
+describe('runSolvePipeline — how a solve fails', () => {
+	it("reads the compute server's 413 as request_too_large, naming its cap", async () => {
+		const err = new ComputeError('Request too large', 'VALIDATION_ERROR', { statusCode: 413 });
+		const outcome = await runSolvePipeline(args({ client: throws(err) }));
+		expect(outcome.kind).toBe('request_too_large');
+		if (outcome.kind !== 'request_too_large') return;
+		expect(outcome.message).toContain('50 MB');
+		expect(outcome.message).toContain('RHINO_COMPUTE_MAX_REQUEST_SIZE');
+	});
+
+	it("reads the scheduler's own deadline as a timeout, phrased from the server's limit", async () => {
+		const outcome = await runSolvePipeline(args({ client: throws(computeError('TIMEOUT_ERROR')) }));
 		expect(outcome.kind).toBe('timeout');
 		if (outcome.kind !== 'timeout') return;
 		expect(outcome.message).toContain('42s');
 		expect(outcome.durationMs).toBeGreaterThanOrEqual(0);
 	});
 
-	it('classifies a ComputeError TIMEOUT_ERROR (the real transport deadline shape) as timeout', async () => {
-		// The scheduler normalizes its deadline into ComputeError TIMEOUT_ERROR,
-		// not a raw AbortError — this must not fall through to compute_error/500.
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				solveDeadlineMs: 42_000,
-				client: fakeClient(async () => {
-					throw makeShedError('Request timed out after 42000ms', 'TIMEOUT_ERROR');
-				})
-			})
-		);
-		expect(outcome.kind).toBe('timeout');
-		if (outcome.kind !== 'timeout') return;
-		expect(outcome.message).toContain('42s');
-	});
-
-	it('classifies a ComputeError ABORTED with the request signal aborted as client_abort', async () => {
-		// The scheduler normalizes caller aborts into ComputeError ABORTED — a
-		// client disconnect must read as client_abort, never compute_error/500.
+	it('reads ABORTED with the signal aborted as client_abort', async () => {
 		const controller = new AbortController();
 		controller.abort();
 		const outcome = await runSolvePipeline(
-			baseArgs({
-				signal: controller.signal,
-				client: fakeClient(async () => {
-					throw makeShedError('Request aborted by caller', 'ABORTED');
-				})
-			})
+			args({ signal: controller.signal, client: throws(computeError('ABORTED')) })
 		);
 		expect(outcome.kind).toBe('client_abort');
 	});
 
-	it('classifies AbortError with the request signal aborted as client_abort', async () => {
+	it('settles a disconnect while queued as client_abort, with the signal handed over', async () => {
 		const controller = new AbortController();
-		controller.abort();
+		let seen: AbortSignal | undefined;
 		const outcome = await runSolvePipeline(
-			baseArgs({
-				signal: controller.signal,
-				client: fakeClient(async () => {
-					const e = new Error('aborted');
-					e.name = 'AbortError';
-					throw e;
-				})
-			})
-		);
-		expect(outcome.kind).toBe('client_abort');
-	});
-
-	it('R3: a client disconnect while QUEUED forwards the signal and settles client_abort without a result', async () => {
-		// Models the queued-disconnect path the package fix (ISSUES 46) closes: the
-		// signal fires while the item waits in the FIFO, the scheduler settles it
-		// ABORTED (rejects with AbortError) and never runs compute. The pipeline's
-		// job — verified here — is to (a) hand the request signal to scheduler.solve
-		// so that prune can happen, and (b) classify the aborted-signal reject as
-		// client_abort (→ 499), never leaking a compute result.
-		const controller = new AbortController();
-		let seenSignal: AbortSignal | undefined;
-		const outcome = await runSolvePipeline(
-			baseArgs({
+			args({
 				signal: controller.signal,
 				client: fakeClient(async (_d, _t, opts) => {
-					seenSignal = opts.signal;
-					// The disconnect arrives while queued: abort, then settle ABORTED —
-					// compute output is never produced (the loader throws, never returns).
+					seen = opts.signal;
 					controller.abort();
-					const e = new Error('aborted while queued');
-					e.name = 'AbortError';
-					throw e;
+					throw computeError('ABORTED');
 				})
 			})
 		);
-		expect(seenSignal).toBe(controller.signal); // scheduler CAN observe the disconnect
-		expect(outcome.kind).toBe('client_abort'); // → 499, not a 500/compute_error
+		expect(seen).toBe(controller.signal);
+		expect(outcome.kind).toBe('client_abort');
+	});
+
+	it('never reads an abort nobody asked for as a deadline', async () => {
+		const outcome = await runSolvePipeline(args({ client: throws(computeError('ABORTED')) }));
+		expect(outcome.kind).toBe('shed');
+		if (outcome.kind !== 'shed') return;
+		expect(outcome.reason).toBe('interrupted');
+		expect(outcome.retryAfterSeconds).toBeGreaterThan(0);
 	});
 
 	it('classifies any other throw as compute_error carrying the original error', async () => {
 		const boom = new TypeError('fetch failed');
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async () => {
-					throw boom;
-				})
-			})
-		);
+		const outcome = await runSolvePipeline(args({ client: throws(boom) }));
 		expect(outcome.kind).toBe('compute_error');
 		if (outcome.kind !== 'compute_error') return;
 		expect(outcome.error).toBe(boom);
 	});
 
-	it('returns too_large when the serialized result exceeds responseMaxBytes', async () => {
+	it('returns too_large when compute cut the download at its byte cap', async () => {
 		const outcome = await runSolvePipeline(
-			baseArgs({
-				responseMaxBytes: 10, // tiny cap
-				client: fakeClient(async () => ({ values: 'a bigger than ten bytes payload' }))
-			})
+			args({ client: throws(computeError('RESPONSE_TOO_LARGE', { statusCode: 200 })) })
 		);
 		expect(outcome.kind).toBe('too_large');
 	});
 
 	it('classifies a QUEUE_FULL rejection as shed(queue_full) with a Retry-After hint', async () => {
 		const outcome = await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async () => {
-					throw makeShedError('queue full', 'QUEUE_FULL', {
-						statusCode: 503,
-						context: { queueDepth: 8, maxQueueDepth: 8 }
-					});
-				})
-			})
+			args({ client: throws(computeError('QUEUE_FULL', { statusCode: 503 })) })
 		);
 		expect(outcome.kind).toBe('shed');
 		if (outcome.kind !== 'shed') return;
@@ -440,200 +258,18 @@ describe('runSolvePipeline — failure outcomes', () => {
 
 	it('classifies a QUEUE_TIMEOUT rejection as shed(queue_timeout)', async () => {
 		const outcome = await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async () => {
-					throw makeShedError('queued too long', 'QUEUE_TIMEOUT', {
-						statusCode: 503,
-						context: { waitedMs: 5000, queueWaitMs: 3000 }
-					});
-				})
-			})
+			args({ client: throws(computeError('QUEUE_TIMEOUT', { statusCode: 503 })) })
 		);
 		expect(outcome.kind).toBe('shed');
 		if (outcome.kind !== 'shed') return;
 		expect(outcome.reason).toBe('queue_timeout');
-		expect(outcome.retryAfterSeconds).toBeGreaterThan(0);
 	});
 
-	it('does NOT shed a ComputeError with an unrelated code (stays compute_error)', async () => {
-		const boom = makeShedError('server exploded', 'UNKNOWN_ERROR', {
-			statusCode: 500
-		});
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				client: fakeClient(async () => {
-					throw boom;
-				})
-			})
-		);
+	it('does NOT shed a ComputeError with an unrelated code', async () => {
+		const boom = computeError('UNKNOWN_ERROR', { statusCode: 500 });
+		const outcome = await runSolvePipeline(args({ client: throws(boom) }));
 		expect(outcome.kind).toBe('compute_error');
 		if (outcome.kind !== 'compute_error') return;
 		expect(outcome.error).toBe(boom);
 	});
 });
-
-describe('runSolvePipeline — Server-Timing', () => {
-	it('emits the core phases and echoes prep marks as p_*', async () => {
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				defLoadMs: 12.3,
-				prepMarks: [
-					['body', 0.5],
-					['client', 3.1]
-				],
-				client: fakeClient(async () => ({ errors: [], warnings: [] }))
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		const st = outcome.envelope.headers['Server-Timing'];
-		expect(st).toContain('load;dur=12.3');
-		expect(st).toContain('tree;dur=');
-		expect(st).toContain('solve;dur=');
-		expect(st).toContain('serialize;dur=');
-		expect(st).toContain('total;dur=');
-		expect(st).toContain('p_body;dur=0.5');
-		expect(st).toContain('p_client;dur=3.1');
-	});
-
-	it('splits solve into rhino_* + compute_link when the client reported server timing', async () => {
-		// The real callbacks fire DURING the solve: onServerTiming per compute
-		// call, onSettle per settle — each bumps its seq. Mimic both so the
-		// pipeline's attribution guard (exactly one write since the snapshot,
-		// settle not fromCache) sees this request's own telemetry.
-		const client: CachedClient = fakeClient(async () => {
-			client.rhinoTiming.seq += 1;
-			client.rhinoTiming.last = { decode: 5, solve: 20, encode: 3 };
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: false, definitionReuploaded: false };
-			return { errors: [], warnings: [] };
-		});
-		const outcome = await runSolvePipeline(baseArgs({ client }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		const st = outcome.envelope.headers['Server-Timing'];
-		expect(st).toContain('rhino_decode;dur=5.0');
-		expect(st).toContain('rhino_solve;dur=20.0');
-		expect(st).toContain('rhino_encode;dur=3.0');
-		expect(st).toContain('compute_link;dur=');
-	});
-
-	it('surfaces selva_cache + def_reupload verdicts as 0/1 flags', async () => {
-		const client: CachedClient = fakeClient(async () => {
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: true, definitionReuploaded: false };
-			return { errors: [], warnings: [] };
-		});
-		const outcome = await runSolvePipeline(baseArgs({ client }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		const st = outcome.envelope.headers['Server-Timing'];
-		expect(st).toContain('selva_cache;dur=1');
-		expect(st).toContain('def_reupload;dur=0');
-	});
-
-	it('does not attribute stale telemetry a previous request left on the warm client', async () => {
-		// The holders are shared per-server. Data written before this solve's
-		// snapshot (seq unchanged during the solve) must not leak into this
-		// request's Server-Timing.
-		const client = fakeClient(async () => ({ errors: [], warnings: [] }));
-		client.rhinoTiming = { last: { decode: 99, solve: 99, encode: 99 }, seq: 3 };
-		client.solveMeta = { last: { fromCache: true }, seq: 5 };
-		const outcome = await runSolvePipeline(baseArgs({ client }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.headers['Server-Timing']).not.toContain('rhino_decode');
-		expect(outcome.envelope.headers['Server-Timing']).not.toContain('selva_cache');
-	});
-
-	it('drops telemetry when a concurrent request also settled in the window (audit B6)', async () => {
-		// With the scheduler's maxConcurrent > 1 two solves can interleave. More than one
-		// settle since this request's snapshot makes the shared slots ambiguous —
-		// the pipeline must omit the segments rather than report another
-		// request's cache verdict / rhino timing as ours.
-		const client: CachedClient = fakeClient(async () => {
-			// Our own solve's callbacks…
-			client.rhinoTiming.seq += 1;
-			client.rhinoTiming.last = { decode: 5, solve: 20, encode: 3 };
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: false, definitionReuploaded: false };
-			// …then a concurrent request settles before we read.
-			client.rhinoTiming.seq += 1;
-			client.rhinoTiming.last = { decode: 1, solve: 1, encode: 1 };
-			client.solveMeta.seq += 1;
-			client.solveMeta.last = { fromCache: true };
-			return { errors: [], warnings: [] };
-		});
-		const outcome = await runSolvePipeline(baseArgs({ client }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		const st = outcome.envelope.headers['Server-Timing'];
-		expect(st).not.toContain('selva_cache');
-		expect(st).not.toContain('rhino_decode');
-	});
-
-	it('emits def_bytes=skipped when the byteRefOutcome shows load() never ran (pointer solve)', async () => {
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				byteRefOutcome: { loaded: false, fromCache: false },
-				client: fakeClient(async () => ({ errors: [], warnings: [] }))
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.headers['Server-Timing']).toContain('def_bytes;desc=skipped');
-	});
-
-	it('emits def_bytes=hit when bytes were served from the warm cache', async () => {
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				byteRefOutcome: { loaded: true, fromCache: true },
-				client: fakeClient(async () => ({ errors: [], warnings: [] }))
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.headers['Server-Timing']).toContain('def_bytes;desc=hit');
-	});
-
-	it('emits def_bytes=miss when the loader was called', async () => {
-		const outcome = await runSolvePipeline(
-			baseArgs({
-				byteRefOutcome: { loaded: true, fromCache: false },
-				client: fakeClient(async () => ({ errors: [], warnings: [] }))
-			})
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.headers['Server-Timing']).toContain('def_bytes;desc=miss');
-	});
-
-	it('omits def_bytes entirely for a raw-bytes solve (no byteRefOutcome)', async () => {
-		const outcome = await runSolvePipeline(
-			baseArgs({ client: fakeClient(async () => ({ errors: [], warnings: [] })) })
-		);
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		expect(outcome.envelope.headers['Server-Timing']).not.toContain('def_bytes');
-	});
-
-	it('never attributes rhino timing to a Selva-cache hit (no compute call of ours)', async () => {
-		// Our request was served from the in-process cache while a concurrent
-		// request's compute call produced the only rhino timing in the window.
-		const client: CachedClient = fakeClient(async () => {
-			client.rhinoTiming.seq += 1; // the OTHER request's compute call
-			client.rhinoTiming.last = { decode: 7, solve: 70, encode: 7 };
-			client.solveMeta.seq += 1; // our own settle — a cache hit
-			client.solveMeta.last = { fromCache: true };
-			return { errors: [], warnings: [] };
-		});
-		const outcome = await runSolvePipeline(baseArgs({ client }));
-		expect(outcome.kind).toBe('ok');
-		if (outcome.kind !== 'ok') return;
-		const st = outcome.envelope.headers['Server-Timing'];
-		expect(st).toContain('selva_cache;dur=1');
-		expect(st).not.toContain('rhino_decode');
-	});
-});
-
-// ============================================================================

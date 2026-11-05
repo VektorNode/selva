@@ -60,9 +60,9 @@ public class SlvmFixtureContractTests
                 new SlvaMeshInput { Vertices = QuadAt(2, 0, 0), Faces = QuadFaces, Name = "2", Material = red }
             }));
 
-        // Materials interleaved in input order (red, blue, red): the assembler's material sort
-        // reorders the table, and only the per-object id attr keeps identity attached. Names,
-        // layers, ids and per-mesh metadata exercise the pool and the sparse attr columns.
+        // Materials interleaved in input order (red, blue, red): three material runs, red twice,
+        // with meshes left in input order. Names, layers, ids and per-mesh metadata exercise the
+        // pool and the sparse attr columns.
         var blue = Material(Color.Blue);
         yield return ("multi-material.slvm", MeshBatchAssembler.CreateBatch(
             new List<SlvaMeshInput>
@@ -85,6 +85,29 @@ public class SlvmFixtureContractTests
                     Id = "fixture-multi/{0;1}/0",
                     Vertices = QuadAt(4, 0, 0), Faces = QuadFaces, Name = "wall2",
                     Layer = "Structure/Walls", Material = red
+                }
+            }));
+
+        // CLSD: a closed tetrahedron, an open quad, and a mesh with no verdict (readers compute it).
+        var tetrahedron = new float[] { 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1 };
+        var tetrahedronFaces = new[] { 0, 2, 1, 0, 1, 3, 0, 3, 2, 1, 2, 3 };
+        yield return ("closed-flags.slvm", MeshBatchAssembler.CreateBatch(
+            new List<SlvaMeshInput>
+            {
+                new SlvaMeshInput
+                {
+                    Id = "fixture-closed/{0}/0", Vertices = tetrahedron, Faces = tetrahedronFaces, Name = "solid",
+                    Material = red, Closed = ClosedSolid.IsClosed(tetrahedron, tetrahedronFaces)
+                },
+                new SlvaMeshInput
+                {
+                    Id = "fixture-closed/{0}/1", Vertices = QuadAt(2, 0, 0), Faces = QuadFaces, Name = "sheet",
+                    Material = red, Closed = ClosedSolid.IsClosed(QuadAt(2, 0, 0), QuadFaces)
+                },
+                new SlvaMeshInput
+                {
+                    Id = "fixture-closed/{0}/2", Vertices = QuadAt(4, 0, 0), Faces = QuadFaces, Name = "unknown",
+                    Material = red
                 }
             }));
 
@@ -174,6 +197,13 @@ public class SlvmFixtureContractTests
             if (!writtenIds.SequenceEqual(readIds))
             {
                 failures.Add($"{fileName}: reader lost object ids.");
+            }
+
+            var writtenClosed = batch.Groups.SelectMany(g => g.Meshes).Select(m => m.Closed);
+            var readClosed = decoded.Batch.Groups.SelectMany(g => g.Meshes).Select(m => m.Closed);
+            if (!writtenClosed.SequenceEqual(readClosed))
+            {
+                failures.Add($"{fileName}: reader lost closed-solid verdicts.");
             }
         }
 

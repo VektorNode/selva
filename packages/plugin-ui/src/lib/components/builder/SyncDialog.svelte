@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Dialog, Button, Badge, Checkbox, Label } from '@selvajs/ui';
-	import type { SyncChange, SyncDiff } from '$lib/websocket/websocket.svelte';
+	import type { SyncChange, SyncDiff } from '#lib/websocket/websocket.svelte.js';
 	import { ChevronDown, ChevronUp, ArrowRight } from '@lucide/svelte';
 
 	interface Props {
@@ -185,7 +185,7 @@
 									</div>
 								</div>
 
-								<div class="overflow-x-auto rounded border bg-white dark:bg-gray-900">
+								<div class="overflow-x-auto rounded-sm border bg-white dark:bg-gray-900">
 									<table class="w-full text-sm">
 										<thead class="bg-blue-100 dark:bg-blue-900">
 											<tr class="text-left">
@@ -282,7 +282,7 @@
 									</div>
 								</div>
 
-								<div class="overflow-x-auto rounded border bg-white dark:bg-gray-900">
+								<div class="overflow-x-auto rounded-sm border bg-white dark:bg-gray-900">
 									<table class="w-full text-sm">
 										<thead class="bg-green-100 dark:bg-green-900">
 											<tr class="text-left">

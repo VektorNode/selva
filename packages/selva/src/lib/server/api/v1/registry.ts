@@ -12,8 +12,9 @@
  * instead of silently disagreeing with the validator.
  */
 
-import type { ZodType } from 'zod';
 import {
+	type Endpoint,
+	type HttpMethod,
 	SolveBodySchema,
 	CreateProjectBodySchema,
 	UpdateProjectBodySchema,
@@ -21,53 +22,50 @@ import {
 	UpdateProjectMemberBodySchema,
 	CreateInviteBodySchema,
 	UpdateOrgMemberBodySchema,
-	OrgComputePatchBodySchema
+	OrgComputePatchBodySchema,
+	CreateApiTokenBodySchema
 } from '@selvajs/server/api';
 
-export type HttpMethod = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
-
-/**
- * `collection` is the paginated `{ items, nextCursor? }` envelope and implies
- * the `limit`/`cursor` query params. The conformance test keys its pagination
- * assertion off this — mislabelling a list endpoint as `object` is how an
- * unpaginated collection ships.
- */
-export type ResponseKind = 'collection' | 'object' | 'empty' | 'binary';
-
-export interface Endpoint {
-	method: HttpMethod;
-	/** OpenAPI path with `{param}` placeholders — not SvelteKit's `[param]`. */
-	path: string;
-	summary: string;
-	/** Excluded from published docs; may change without notice. */
-	internal?: boolean;
-	response: ResponseKind;
-	/** Success status when it isn't 200 (or 204 for `empty`). */
-	status?: number;
-	requestBody?: ZodType;
-	/** Multipart form fields, for handlers that take `FormData` instead of JSON. */
-	multipart?: { field: string; required: boolean; description: string }[];
-	/** Query params beyond the standard pagination set. */
-	query?: { name: string; description: string }[];
-	/** Documented failure statuses beyond the always-possible 401/500. */
-	errors?: number[];
-}
+export type { Endpoint, HttpMethod };
 
 const solveErrors = [400, 401, 404, 429, 503];
 
 export const V1_ENDPOINTS: Endpoint[] = [
+	{
+		method: 'GET',
+		path: '/openapi.json',
+		scope: 'read',
+		summary: 'This document, as JSON.',
+		response: 'object'
+	},
+
 	// ==========================================================================
 	// Me
 	// ==========================================================================
 	{
 		method: 'GET',
 		path: '/me',
-		summary: 'The calling identity, its acting org, and its effective permissions.',
-		response: 'object'
+		scope: 'read',
+		summary:
+			'The calling identity, its acting org, its effective permissions, and for a token its id, scopes and expiry.',
+		response: 'object',
+		returns:
+			'`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token. `capabilities.createProjects` says whether `POST /projects` would accept this caller, narrowed to the key; `orgPermissions` is the owner’s and is not.'
+	},
+	// Every key may call it, whatever its scopes; `read` is the action every key holds.
+	{
+		method: 'DELETE',
+		path: '/me/token',
+		scope: 'read',
+		summary:
+			'Revoke the API token that sent this request. A key can revoke itself and nothing else; a browser session gets 400.',
+		response: 'empty',
+		errors: [400, 503]
 	},
 	{
 		method: 'PUT',
 		path: '/me/starred/{guid}',
+		scope: 'write',
 		summary: 'Star a definition. Idempotent.',
 		response: 'empty',
 		errors: [404]
@@ -75,6 +73,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/me/starred/{guid}',
+		scope: 'write',
 		summary: 'Unstar a definition. Idempotent.',
 		response: 'empty'
 	},
@@ -85,16 +84,27 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/definitions',
+		scope: 'read',
 		summary: 'List definitions the caller can see.',
 		response: 'collection',
+		returns:
+			'Each item has `sourceDocumentId`: the Grasshopper document GUID the definition was last uploaded from, or null.',
 		query: [
 			{ name: 'projectId', description: 'Restrict to one project.' },
-			{ name: 'status', description: 'One of `draft`, `published`, `archived`.' }
-		]
+			{ name: 'status', description: 'One of `draft`, `published`, `archived`.' },
+			{
+				name: 'documentId',
+				description:
+					'A Grasshopper document GUID. Returns only definitions last uploaded from that document which the caller can upload a new version of. Not a GUID: 400.'
+			}
+		],
+		errors: [400]
 	},
 	{
 		method: 'POST',
 		path: '/definitions',
+		scope: 'upload',
+		idempotent: true,
 		summary: 'Create a definition from a Grasshopper file.',
 		response: 'object',
 		status: 201,
@@ -113,13 +123,17 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/definitions/{guid}',
+		scope: 'read',
 		summary: 'Definition record plus its live and draft version summaries.',
 		response: 'object',
+		returns:
+			'`canEdit` is true when the caller can upload a version and make one live; for an API token that includes its scopes. `sourceDocumentId` is the Grasshopper document GUID it was last uploaded from, or null.',
 		errors: [404]
 	},
 	{
 		method: 'PATCH',
 		path: '/definitions/{guid}',
+		scope: 'write',
 		summary: 'Update definition metadata.',
 		response: 'empty',
 		errors: [400, 404]
@@ -127,6 +141,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/definitions/{guid}',
+		scope: 'write',
 		summary: 'Soft-delete a definition.',
 		response: 'empty',
 		errors: [404]
@@ -134,6 +149,8 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/solve',
+		scope: 'solve',
+		idempotent: true,
 		summary: 'Solve a definition. The primary action of the API.',
 		response: 'object',
 		requestBody: SolveBodySchema,
@@ -142,6 +159,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/definitions/{guid}/schema',
+		scope: 'read',
 		summary: "The live version's UI schema. 404 when nothing is published.",
 		response: 'object',
 		errors: [404]
@@ -149,6 +167,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/definitions/{guid}/versions',
+		scope: 'read',
 		summary: 'List versions, newest first.',
 		response: 'collection',
 		errors: [404]
@@ -156,6 +175,8 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/versions',
+		scope: 'upload',
+		idempotent: true,
 		summary: 'Upload a new version.',
 		response: 'object',
 		status: 201,
@@ -168,6 +189,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/definitions/{guid}/versions/{versionId}',
+		scope: 'read',
 		summary: 'One version, without its cached schema.',
 		response: 'object',
 		errors: [404]
@@ -175,6 +197,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/definitions/{guid}/versions/{versionId}',
+		scope: 'write',
 		summary: 'Delete a version. 409 when it is the live or draft pointer.',
 		response: 'empty',
 		errors: [404, 409]
@@ -182,6 +205,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/definitions/{guid}/versions/{versionId}/schema',
+		scope: 'read',
 		summary: "That version's cached UI schema. No compute round-trip.",
 		response: 'object',
 		errors: [404]
@@ -189,6 +213,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/publish',
+		scope: 'upload',
 		summary: 'Promote a version to live.',
 		response: 'object',
 		errors: [400, 404]
@@ -196,6 +221,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/image',
+		scope: 'write',
 		summary: 'Upload a cover image.',
 		response: 'object',
 		multipart: [{ field: 'image', required: true, description: 'PNG, JPEG, WebP or GIF.' }],
@@ -204,6 +230,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/definitions/{guid}/share-links',
+		scope: 'read',
 		summary: 'List share links. 404 when sharing is disabled on the instance.',
 		response: 'collection',
 		errors: [404]
@@ -211,6 +238,8 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/definitions/{guid}/share-links',
+		scope: 'write',
+		idempotent: true,
 		summary: 'Create a share link. The raw token is returned once and never again.',
 		response: 'object',
 		status: 201,
@@ -219,6 +248,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/definitions/{guid}/share-links/{linkId}',
+		scope: 'write',
 		summary: 'Revoke a share link.',
 		response: 'empty',
 		errors: [404]
@@ -230,13 +260,19 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/projects',
+		scope: 'read',
 		summary: 'List projects the caller can view.',
-		response: 'collection'
+		response: 'collection',
+		returns:
+			'Each item has `canCreateDefinitions`: whether `POST /definitions` would accept this project from the caller, scopes included for an API token.'
 	},
 	{
 		method: 'POST',
 		path: '/projects',
-		summary: 'Create a project.',
+		scope: 'create_projects',
+		idempotent: true,
+		summary:
+			'Create a project. A key with `create_projects` but not `write` may create private projects only, with `autoJoinOnUpload` off.',
 		response: 'object',
 		status: 201,
 		requestBody: CreateProjectBodySchema,
@@ -245,6 +281,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/projects/{id}',
+		scope: 'read',
 		summary: "Project record plus the caller's effective role and capabilities.",
 		response: 'object',
 		errors: [404]
@@ -252,6 +289,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'PATCH',
 		path: '/projects/{id}',
+		scope: 'write',
 		summary: 'Update project settings. Owner-only.',
 		response: 'empty',
 		requestBody: UpdateProjectBodySchema,
@@ -260,6 +298,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/projects/{id}',
+		scope: 'write',
 		summary: 'Delete a project.',
 		response: 'empty',
 		errors: [403, 404]
@@ -267,6 +306,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/projects/{id}/members',
+		scope: 'read',
 		summary: 'List project members.',
 		response: 'collection',
 		errors: [403, 404]
@@ -274,6 +314,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/projects/{id}/members',
+		scope: 'write',
 		summary: 'Add a member. The target must already belong to the org.',
 		response: 'object',
 		status: 201,
@@ -283,6 +324,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'PATCH',
 		path: '/projects/{id}/members/{userId}',
+		scope: 'write',
 		summary: 'Change a member role.',
 		response: 'empty',
 		requestBody: UpdateProjectMemberBodySchema,
@@ -291,6 +333,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/projects/{id}/members/{userId}',
+		scope: 'write',
 		summary: 'Remove a member. Idempotent.',
 		response: 'empty',
 		query: [
@@ -304,6 +347,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/projects/{id}/reclaim',
+		scope: 'write',
 		summary: 'Claim ownership of an unowned project.',
 		response: 'object',
 		status: 201,
@@ -316,6 +360,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/orgs/{orgId}',
+		scope: 'read',
 		summary: "Org record. The org must be the caller's acting org.",
 		response: 'object',
 		errors: [403, 404]
@@ -323,6 +368,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/orgs/{orgId}/members',
+		scope: 'read',
 		summary: 'List org members.',
 		response: 'collection',
 		errors: [403]
@@ -330,6 +376,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'PATCH',
 		path: '/orgs/{orgId}/members/{userId}',
+		scope: 'write',
 		summary: 'Change an org role or permission set. The sole owner cannot be demoted.',
 		response: 'empty',
 		requestBody: UpdateOrgMemberBodySchema,
@@ -338,6 +385,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/orgs/{orgId}/members/{userId}',
+		scope: 'write',
 		summary: 'Remove an org member. The sole owner cannot be removed.',
 		response: 'empty',
 		errors: [403, 404, 409]
@@ -345,6 +393,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/orgs/{orgId}/invites',
+		scope: 'read',
 		summary: 'List pending invites.',
 		response: 'collection',
 		errors: [403]
@@ -352,6 +401,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/orgs/{orgId}/invites',
+		scope: 'write',
 		summary: 'Invite someone to the org. The accept URL is returned once.',
 		response: 'object',
 		status: 201,
@@ -361,6 +411,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/orgs/{orgId}/invites/{id}',
+		scope: 'write',
 		summary: 'Revoke an invite.',
 		response: 'empty',
 		errors: [403, 404]
@@ -368,15 +419,50 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/orgs/{orgId}/invites/{id}/resend',
+		scope: 'write',
 		summary:
 			'Re-send an invite. Issues a replacement and revokes the original, so the previous link stops working.',
 		response: 'object',
 		status: 201,
 		errors: [403, 404, 409]
 	},
+	// Internal and session-only: a key can never manage keys.
+	{
+		method: 'GET',
+		path: '/orgs/{orgId}/tokens',
+		scope: 'read',
+		summary: 'Your API tokens in this org, revoked and expired included.',
+		internal: true,
+		response: 'collection',
+		query: [
+			{ name: 'all', description: "`true` for every member's tokens. Needs `manage_org_members`." }
+		],
+		errors: [403, 503]
+	},
+	{
+		method: 'POST',
+		path: '/orgs/{orgId}/tokens',
+		scope: 'write',
+		summary: 'Create an API token acting as you. The raw key is returned once, as `secret`.',
+		internal: true,
+		response: 'object',
+		status: 201,
+		requestBody: CreateApiTokenBodySchema,
+		errors: [400, 403, 503]
+	},
+	{
+		method: 'DELETE',
+		path: '/orgs/{orgId}/tokens/{tokenId}',
+		scope: 'write',
+		summary: 'Revoke an API token: your own, or any in the org with `manage_org_members`.',
+		internal: true,
+		response: 'empty',
+		errors: [403, 404, 503]
+	},
 	{
 		method: 'GET',
 		path: '/orgs/{orgId}/compute',
+		scope: 'read',
 		summary: 'Org compute-server overrides and the shared catalog.',
 		internal: true,
 		response: 'object',
@@ -385,6 +471,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'PATCH',
 		path: '/orgs/{orgId}/compute',
+		scope: 'write',
 		summary: 'Replace the org compute-server overrides.',
 		internal: true,
 		response: 'empty',
@@ -394,6 +481,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/orgs/{orgId}/assets/{kind}',
+		scope: 'write',
 		summary: 'Upload an org branding asset.',
 		internal: true,
 		response: 'object',
@@ -403,6 +491,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'DELETE',
 		path: '/orgs/{orgId}/assets/{kind}',
+		scope: 'write',
 		summary: 'Remove an org branding asset.',
 		internal: true,
 		response: 'empty',
@@ -419,6 +508,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/compute',
+		scope: 'solve',
 		summary: 'Generic solve, including remote definition URLs and share-token access.',
 		internal: true,
 		response: 'object',
@@ -427,6 +517,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/compute/schema',
+		scope: 'upload',
 		summary: 'Extract UI schemas from an uploaded file before it becomes a definition.',
 		internal: true,
 		response: 'object',
@@ -447,6 +538,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'GET',
 		path: '/solve-events',
+		scope: 'read',
 		summary: "The tab's live event stream (SSE). Solves that name its `streamId` report here.",
 		internal: true,
 		response: 'object',
@@ -456,6 +548,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/solve-events/{solveId}',
+		scope: 'write',
 		summary: "The plugin's callback from inside a Compute solve. The reply carries `abort`.",
 		internal: true,
 		response: 'object',
@@ -464,6 +557,7 @@ export const V1_ENDPOINTS: Endpoint[] = [
 	{
 		method: 'POST',
 		path: '/solve/{solveId}/cancel',
+		scope: 'solve',
 		summary: 'Ask a running solve to abort. Cooperative: it stops at the next component.',
 		internal: true,
 		response: 'empty',

@@ -4,17 +4,17 @@
 // sync-needed flag, and the push-event handlers that feed schema/value changes into the
 // session (loadValues, session.values mutation).
 
-import type { UISchema } from '@selvajs/schemas';
-import { ensureSchemaLayoutDefaults } from '$lib/utils/schema-defaults';
+import type { DiscoveredInput, UISchema } from '@selvajs/schemas';
+import { ensureSchemaLayoutDefaults } from '#lib/utils/schema-defaults.js';
 import {
 	initializeValues,
 	processOutputUpdate,
 	updateParameterMetadata
-} from '$lib/features/preview/handlers';
+} from '#lib/features/preview/handlers.js';
 import {
 	formatParameterUpdateMessage,
 	formatMetadataUpdateMessage
-} from '$lib/features/preview/notifications.svelte';
+} from '#lib/features/preview/notifications.svelte.js';
 import type {
 	WsInitialDataMessage,
 	WsOutputsMessage,
@@ -22,10 +22,12 @@ import type {
 	WsMetadataUpdatedMessage,
 	WsCurrentValuesMessage,
 	WsSessionMessage
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 
 export interface PreviewState {
 	schema: UISchema | null;
+	/** What the plugin discovered on the canvas at the last initialData: a geometry input's filter, its count. */
+	discoveredInputs: DiscoveredInput[];
 	loading: boolean;
 	error: string;
 	syncNeeded: boolean;
@@ -54,7 +56,7 @@ export interface PreviewDeps {
 }
 
 export function createInitialPreviewState(): PreviewState {
-	return { schema: null, loading: true, error: '', syncNeeded: false };
+	return { schema: null, discoveredInputs: [], loading: true, error: '', syncNeeded: false };
 }
 
 /**
@@ -89,6 +91,7 @@ export function handleInitialData(
 	});
 
 	state.schema = processedSchema;
+	state.discoveredInputs = message.availableParams?.inputs ?? [];
 	state.loading = false;
 
 	// loadValues merges + dispatches the initial solve (auto mode) or marks pending (manual).

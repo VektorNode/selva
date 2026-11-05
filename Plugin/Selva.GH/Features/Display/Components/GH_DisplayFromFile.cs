@@ -56,17 +56,27 @@ public class GH_DisplayFromFile : GH_Component
         }
 
         DisplayBatch batch;
+        string fileUnits;
         try
         {
             using (var fs = File.OpenRead(path))
             {
-                batch = SlvmFile.Read(fs);
+                batch = SlvmFile.Read(fs, out fileUnits);
             }
         }
         catch (Exception ex)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to read mesh file: {ex.Message}");
             return;
+        }
+
+        // The viewer scales every blob by this document's units, so a file from another unit
+        // system shows at the wrong size.
+        var docUnits = DisplayUnits.ActiveDocModelUnits();
+        if (fileUnits != null && fileUnits != docUnits)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                $"This file was saved in {fileUnits} but the document is in {docUnits}: it will display at the wrong size.");
         }
 
         DA.SetData(0, new WebDisplayGoo(batch));

@@ -1,13 +1,42 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { page } from '$app/state';
+	import { FileDown } from '@lucide/svelte';
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-	import AppLayout from '$lib/components/compute/AppLayout.svelte';
-	import exampleSchema from '../demo/example-schema.json';
-	import AppShell from '$lib/components/layout/AppShell.svelte';
-	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../demo/dummy-output-values';
-	import { APP_DEFAULTS } from '$lib/constants';
+	import AppLayout from '#lib/components/compute/AppLayout.svelte';
+	import exampleSchema from '../../dev/example-schema.json';
+	import AppShell from '#lib/components/layout/AppShell.svelte';
+	import { cubeMesh, getParsedMeshes, dummyOutputValues } from '../../dev/dummy-output-values';
+	import { APP_DEFAULTS } from '#lib/constants.js';
+	import { createSolvingIndicator } from '#lib/compute/solving.svelte.js';
+	import type { ActionButton } from '#lib/types/actionButton.js';
+	import { setLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
-	let schema = $state(exampleSchema as UISchema);
+	// `?lang=de` switches the chrome; `?preview` swaps the right-hand tabs for one holding only the
+	// image output, which stays empty until Calculate, to show the pane closing while it waits.
+	setLocaleContext(() => (page.url.searchParams.get('lang') === 'de' ? 'de' : 'en'));
+	const previewOnly = page.url.searchParams.has('preview');
+	const IMAGE_OUTPUT_ID = 'output-009';
+
+	function withPreviewTab(base: UISchema): UISchema {
+		if (base.layout.type !== 'tabbed') return base;
+		const image = base.layout.tabs
+			.flatMap((tab) => tab.groups.flatMap((group) => group.items))
+			.find((item) => item.type === 'output' && item.paramId === IMAGE_OUTPUT_ID);
+		if (!image) return base;
+		const tabs = base.layout.tabs.filter((tab) => tab.position !== 'right');
+		tabs.push({
+			id: 'tab-preview',
+			label: 'Preview',
+			position: 'right',
+			groups: [{ id: 'group-preview', label: 'Preview', items: [image] }]
+		});
+		return { ...base, layout: { ...base.layout, tabs } };
+	}
+
+	let schema = $state(
+		previewOnly ? withPreviewTab(exampleSchema as UISchema) : (exampleSchema as UISchema)
+	);
 
 	// The cube stands in until the async parse of the example batch resolves.
 	let meshes = $state([cubeMesh]);
@@ -40,9 +69,11 @@
 	]);
 	let values = $state<Record<string, unknown>>({
 		...initialValues,
-		...dummyOutputValues
+		...dummyOutputValues,
+		...(previewOnly ? { [IMAGE_OUTPUT_ID]: null } : {})
 	});
 	let isSolving = $state(false);
+	const solvingIndicator = createSolvingIndicator(() => isSolving);
 	let hasPendingChanges = $state(false);
 	let isViewerFullscreen = $state(false);
 
@@ -56,9 +87,21 @@
 	function handleCalculate() {
 		isSolving = true;
 		hasPendingChanges = false;
-		setTimeout(() => (isSolving = false), APP_DEFAULTS.TIMEOUTS.SOLVE_STATE_DURATION);
+		setTimeout(() => {
+			isSolving = false;
+			values[IMAGE_OUTPUT_ID] = dummyOutputValues[IMAGE_OUTPUT_ID];
+		}, APP_DEFAULTS.TIMEOUTS.SOLVE_STATE_DURATION);
 	}
+
+	// A host action: it lands in the footer's ⋯ menu, after saving and loading inputs.
+	const panelActions: ActionButton[] = [
+		{ id: 'export', label: 'Export drawings…', icon: FileDown, onclick: () => {} }
+	];
 </script>
+
+<svelte:head>
+	<title>@selvajs/ui demo</title>
+</svelte:head>
 
 <AppShell
 	mode="fixed"
@@ -72,10 +115,13 @@
 	<div class="flex flex-1 flex-col overflow-hidden bg-background">
 		<AppLayout
 			{schema}
+			showViewer={!!schema.viewerOptions?.enableRemote}
 			{meshes}
 			{isSolving}
-			showSolvingIndicator={schema.instanceSolve !== false}
+			showSolvingIndicator={solvingIndicator.show}
+			solveIsSlow={solvingIndicator.slow}
 			{hasPendingChanges}
+			{panelActions}
 			bind:isViewerFullscreen
 			{values}
 			onValueChange={handleValueChange}

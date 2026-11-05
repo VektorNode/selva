@@ -137,7 +137,7 @@ now logs `entries/bytes/hits/misses` via the existing debug-only `Logger.Log` af
 Then verified against a real Grasshopper canvas via `rhino-mcp` (dev build,
 `Plugin/Selva.GH/bin/Debug/net7.0/Selva.gha`). The one-off check fixture was later superseded by the
 general-purpose
-[fixtures/grasshopper/display_pipeline_debug.ghx](../../fixtures/grasshopper/display_pipeline_debug.ghx),
+[dev/grasshopper/display-pipeline-debug.ghx](../../dev/grasshopper/display-pipeline-debug.ghx),
 whose random-mesh branch covers the same case:
 
 - A regular grid mesh (Mesh Box, up to 10k verts) never triggered a `Store` at all — DEFLATE

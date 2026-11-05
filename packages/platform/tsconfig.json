@@ -3,7 +3,9 @@
 	"compilerOptions": {
 		"outDir": "./dist",
 		"rootDir": "./src",
-		"tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo.json"
+		"tsBuildInfoFile": "./node_modules/.cache/tsbuildinfo.json",
+		"sourceMap": false,
+		"declarationMap": false
 	},
 	"include": ["src/**/*"],
 	"exclude": ["node_modules", "dist"]

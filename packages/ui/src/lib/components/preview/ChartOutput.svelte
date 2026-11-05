@@ -1,8 +1,14 @@
 <script lang="ts">
 	import type { OutputChartLayoutItem } from '@selvajs/schemas';
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
+	import { mode } from 'mode-watcher';
 	import { Loader, Maximize, Minimize } from '@lucide/svelte';
-	import { loadScript } from '$lib/utils/loadScript';
+	import { loadScript } from '#lib/utils/loadScript.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatMessage } from '#lib/i18n/messages.js';
+	import { upgradePlotlyFigure, type PlotlyFigure } from '#lib/features/chart/plotly-compat.js';
+	import { saveBlob } from '#lib/utils/host-files.js';
+	import { toast } from '#lib/components/primitives/sonner/index.js';
 
 	interface Props {
 		item: OutputChartLayoutItem;
@@ -11,19 +17,21 @@
 
 	let { item: _item, value }: Props = $props();
 
-	const MAP_TYPE_SET = new Set(['scattermap', 'scattermapbox', 'choropleth', 'scattergeo']);
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
-	type PlotlyTrace = Record<string, unknown>;
-	type PlotlyFigure = {
-		data: PlotlyTrace[];
-		layout: Record<string, unknown>;
-		config?: Record<string, unknown>;
-	};
+	const MAP_TYPE_SET = new Set([
+		'scattermap',
+		'choroplethmap',
+		'densitymap',
+		'choropleth',
+		'scattergeo'
+	]);
 
 	const figData = $derived.by(() => {
 		if (!value) return null;
 		try {
-			return JSON.parse(value) as PlotlyFigure;
+			return upgradePlotlyFigure(JSON.parse(value) as PlotlyFigure);
 		} catch {
 			return null;
 		}
@@ -40,20 +48,40 @@
 		// @ts-expect-error — Plotly is loaded dynamically onto window
 		if (window.Plotly) return window.Plotly;
 
-		await loadScript('https://cdn.plot.ly/plotly-3.4.0.min.js', { crossOrigin: 'anonymous' });
+		// Pinned by hash: the plugin's web UI runs this on the origin that holds its bridge secret.
+		await loadScript('https://cdn.plot.ly/plotly-4.1.2.min.js', {
+			crossOrigin: 'anonymous',
+			integrity: 'sha384-hHv6D3tTUUBpp4tVv6t2Dc3oGuRhphmWOTKUR8jWyN0Pnon1g3iebKCNDNmKmxo8'
+		});
 		// @ts-expect-error — Plotly is loaded dynamically onto window
 		return window.Plotly;
+	}
+
+	// Some embedded WebViews (WKWebView in the Rhino panel) ship without the Fullscreen API at all.
+	const fullscreenSupported = typeof document !== 'undefined' && !!document.fullscreenEnabled;
+
+	// `Plots.resize()`/`relayout({autosize: true})` ask Plotly to re-measure the container itself,
+	// which it silently fails to do across a Fullscreen transition — _fullLayout keeps the
+	// pre-toggle width/height even though clientWidth/clientHeight are already correct. Passing
+	// the measured size explicitly is the only call that actually takes.
+	function resizeChart() {
+		// @ts-expect-error — Plotly is loaded dynamically onto window
+		if (!containerEl || !window.Plotly) return;
+		const { width, height } = containerEl.getBoundingClientRect();
+		if (width === 0 || height === 0) return;
+		// @ts-expect-error — Plotly is loaded dynamically onto window
+		window.Plotly.relayout(containerEl, { width, height });
 	}
 
 	function toggleFullscreen() {
 		if (!wrapperEl) return;
 		if (!document.fullscreenElement) {
 			wrapperEl.requestFullscreen().catch((err) => {
-				error = `Fullscreen unavailable: ${err.message}`;
+				error = formatMessage(t.fullscreenUnavailable, { error: err.message });
 			});
 		} else {
 			document.exitFullscreen().catch((err) => {
-				error = `Exit fullscreen failed: ${err.message}`;
+				error = formatMessage(t.exitFullscreenFailed, { error: err.message });
 			});
 		}
 	}
@@ -61,27 +89,67 @@
 	$effect(() => {
 		function onFullscreenChange() {
 			isFullscreen = !!document.fullscreenElement;
-			Promise.resolve().then(() => {
-				// @ts-expect-error — Plotly is loaded dynamically onto window
-				if (containerEl && window.Plotly) {
-					// @ts-expect-error — Plotly is loaded dynamically onto window
-					window.Plotly.Plots.resize(containerEl);
-				}
-			});
+			// `tick()` waits for the h-dvh/h-95 class swap this state drives to actually reach the
+			// DOM before resizeChart measures it.
+			tick().then(resizeChart);
 		}
 		document.addEventListener('fullscreenchange', onFullscreenChange);
 		return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
 	});
 
-	function getThemeColors(): { textColor: string; gridColor: string } {
-		if (!containerEl) return { textColor: '#333', gridColor: '#eee' };
+	// Chromium's getComputedStyle returns color values in whatever function the CSS used to
+	// declare them — oklch() here, since base.css's theme tokens are oklch(). Plotly's own color
+	// parser doesn't recognize oklch() and silently falls back to its #444 default instead of
+	// erroring, so every chart read dark axis text even in dark mode. `fillStyle` alone just
+	// echoes the oklch() string back unconverted; actually rasterizing a pixel and reading its
+	// bytes is what forces a real rgb() value Plotly can parse.
+	function toRgb(cssColor: string): string {
+		const canvas = document.createElement('canvas');
+		canvas.width = 1;
+		canvas.height = 1;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return cssColor;
+		ctx.fillStyle = cssColor;
+		ctx.fillRect(0, 0, 1, 1);
+		const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+		return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
+	}
+
+	function getThemeColors(): {
+		textColor: string;
+		gridColor: string;
+		fontFamily: string;
+		colorway: string[];
+	} {
+		if (!containerEl) return { textColor: '#333', gridColor: '#eee', fontFamily: '', colorway: [] };
 		const style = getComputedStyle(containerEl);
-		const textColor = style.getPropertyValue('color').trim() || '#333';
-		const gridColor =
+		const textColor = toRgb(style.getPropertyValue('color').trim() || '#333');
+		const gridColor = toRgb(
 			style.getPropertyValue('--border')?.trim() ||
-			style.getPropertyValue('--color-border')?.trim() ||
-			'rgba(128,128,128,0.2)';
-		return { textColor, gridColor };
+				style.getPropertyValue('--color-border')?.trim() ||
+				'rgba(128,128,128,0.2)'
+		);
+		// Figures that leave colours unset take Selva's chart palette rather than Plotly's.
+		const colorway = [1, 2, 3, 4, 5]
+			.map((i) => style.getPropertyValue(`--chart-${i}`).trim())
+			.filter(Boolean)
+			.map(toRgb);
+		return { textColor, gridColor, fontFamily: style.fontFamily, colorway };
+	}
+
+	async function saveChartImage(
+		Plotly: Awaited<ReturnType<typeof loadPlotly>>,
+		gd: HTMLElement,
+		options: { format?: string; filename?: string } = {}
+	) {
+		const format = options.format ?? 'png';
+		try {
+			const dataUrl: string = await Plotly.toImage(gd, { ...options, format });
+			const blob = await (await fetch(dataUrl)).blob();
+			await saveBlob(blob, `${options.filename ?? 'chart'}.${format}`);
+		} catch {
+			toast.error(t.downloadFailed);
+		}
 	}
 
 	async function renderChart() {
@@ -90,7 +158,7 @@
 		loading = true;
 		try {
 			const Plotly = await loadPlotly();
-			const { textColor, gridColor } = getThemeColors();
+			const { textColor, gridColor, fontFamily, colorway } = getThemeColors();
 			const isMapFigure = figData.data?.some((t) => MAP_TYPE_SET.has(t.type as string));
 
 			const {
@@ -110,26 +178,61 @@
 				...layoutRest,
 				autosize: true,
 				margin: { t: 24, r: 8, b: 40, l: 60, pad: 0 },
-				font: { color: textColor },
+				font: { color: textColor, ...(fontFamily ? { family: fontFamily } : {}) },
+				...(colorway.length && !layoutRest.colorway ? { colorway } : {}),
 				paper_bgcolor: layoutRest.paper_bgcolor ?? 'transparent',
 				plot_bgcolor: layoutRest.plot_bgcolor ?? 'transparent',
-				...(!isMapFigure && layoutRest.xaxis
-					? { xaxis: { ...(layoutRest.xaxis as object), gridcolor: gridColor, color: textColor } }
-					: {}),
-				...(!isMapFigure && layoutRest.yaxis
-					? { yaxis: { ...(layoutRest.yaxis as object), gridcolor: gridColor, color: textColor } }
+				// Plotly's axis tick/label color doesn't inherit the top-level `font.color`, so this
+				// has to be set even when the figure's own JSON never declared an xaxis/yaxis —
+				// which the mock's figures don't. Gating on `layoutRest.xaxis` existing left every
+				// axis on Plotly's built-in #444 default, light or dark mode.
+				...(!isMapFigure
+					? {
+							xaxis: { ...(layoutRest.xaxis as object), gridcolor: gridColor, color: textColor },
+							yaxis: { ...(layoutRest.yaxis as object), gridcolor: gridColor, color: textColor }
+						}
 					: {})
 			};
 
-			Plotly.react(containerEl, figData.data, layout, {
-				responsive: true,
-				displayModeBar: 'hover',
-				displaylogo: false,
-				modeBarButtonsToRemove: ['sendDataToCloud', 'lasso2d', 'select2d'],
-				...figData.config
+			const figConfig = (figData.config ?? {}) as {
+				modeBarButtonsToRemove?: string[];
+				modeBarButtonsToAdd?: unknown[];
+				toImageButtonOptions?: { format?: string; filename?: string };
+			};
+			Plotly.react(containerEl, {
+				data: figData.data,
+				layout,
+				// Animated figures (e.g. Canopy's Animate) carry their frames here.
+				frames: figData.frames ?? [],
+				config: {
+					responsive: true,
+					displayModeBar: 'hover',
+					displaylogo: false,
+					// Plotly 4's "Share chart" button uploads the figure to Plotly's cloud.
+					showSendToCloud: false,
+					...figConfig,
+					// Plotly's own toImage button downloads through an <a download>, which the Rhino
+					// panel's WebView blocks; this one saves through saveBlob like every other file.
+					modeBarButtonsToRemove: [
+						'sendDataToCloud',
+						'lasso2d',
+						'select2d',
+						'toImage',
+						...(figConfig.modeBarButtonsToRemove ?? [])
+					],
+					modeBarButtonsToAdd: [
+						{
+							name: 'toImage',
+							title: t.downloadChartImage,
+							icon: Plotly.Icons.camera,
+							click: (gd: HTMLElement) => saveChartImage(Plotly, gd, figConfig.toImageButtonOptions)
+						},
+						...(figConfig.modeBarButtonsToAdd ?? [])
+					]
+				}
 			});
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to render chart';
+			error = e instanceof Error ? e.message : t.chartRenderFailed;
 		} finally {
 			loading = false;
 		}
@@ -142,11 +245,7 @@
 		const ro = new ResizeObserver(() => {
 			if (resizeTimer) clearTimeout(resizeTimer);
 			resizeTimer = setTimeout(() => {
-				// @ts-expect-error — Plotly is loaded dynamically onto window
-				if (containerEl && window.Plotly) {
-					// @ts-expect-error — Plotly is loaded dynamically onto window
-					window.Plotly.Plots.resize(containerEl);
-				}
+				resizeChart();
 				resizeTimer = null;
 			}, 150);
 		});
@@ -163,6 +262,10 @@
 	let renderTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
+		// Re-reads mode.current so a theme toggle re-renders with the new axis/font colors —
+		// getThemeColors() only reads the DOM once, at render time, and nothing else repaints an
+		// already-drawn chart when the page's color scheme changes under it.
+		void mode.current;
 		if (!value || !mounted || !containerEl) return;
 		if (renderTimeout) clearTimeout(renderTimeout);
 		renderTimeout = setTimeout(() => {
@@ -177,48 +280,46 @@
 
 <div
 	bind:this={wrapperEl}
-	class="group rounded relative overflow-hidden border border-border {isFullscreen
+	class="group relative overflow-hidden rounded-lg border border-border-strong {isFullscreen
 		? 'bg-background'
 		: ''}"
 >
 	{#if error}
 		<div class="px-4 py-3 text-sm text-destructive">{error}</div>
-	{:else if !figData && value}
-		<div class="px-4 py-8 text-sm text-center text-muted-foreground">Receiving chart data...</div>
 	{:else if !figData}
-		<div class="px-4 py-8 text-sm text-center text-muted-foreground">Waiting for chart data...</div>
+		<!-- The layout hides this output while it has no data, so this is data that doesn't parse yet. -->
+		<div class="px-4 py-8 text-sm text-center text-muted-foreground">{t.chartReceiving}</div>
 	{:else}
-		<div
-			bind:this={containerEl}
-			class="w-full"
-			style="height: {isFullscreen ? '100vh' : '380px'};"
-		></div>
+		<div bind:this={containerEl} class="w-full {isFullscreen ? 'h-dvh' : 'h-95'}"></div>
 
 		<div
-			class="gap-1 left-2 top-2 absolute z-10 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 {isFullscreen
+			class="gap-1 left-2 top-2 absolute z-10 flex items-center opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100 {isFullscreen
 				? 'opacity-100'
 				: ''}"
 		>
 			{#if loading}
 				<div
-					class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-muted-foreground"
+					class="p-1.5 backdrop-blur-sm flex items-center rounded-sm border border-border-strong bg-background/80 text-muted-foreground"
 				>
 					<Loader size={14} class="animate-spin" />
 				</div>
 			{/if}
 
-			<button
-				onclick={toggleFullscreen}
-				disabled={loading}
-				title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-				class="rounded p-1.5 backdrop-blur-sm flex items-center border border-border bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
-			>
-				{#if isFullscreen}
-					<Minimize size={14} />
-				{:else}
-					<Maximize size={14} />
-				{/if}
-			</button>
+			{#if fullscreenSupported}
+				<button
+					onclick={toggleFullscreen}
+					disabled={loading}
+					title={isFullscreen ? t.exitFullscreen : t.fullscreen}
+					aria-label={isFullscreen ? t.exitFullscreen : t.fullscreen}
+					class="p-1.5 backdrop-blur-sm flex items-center rounded-sm border border-border-strong bg-background/80 text-foreground transition-colors hover:bg-background disabled:cursor-not-allowed disabled:opacity-50"
+				>
+					{#if isFullscreen}
+						<Minimize size={14} />
+					{:else}
+						<Maximize size={14} />
+					{/if}
+				</button>
+			{/if}
 		</div>
 	{/if}
 </div>

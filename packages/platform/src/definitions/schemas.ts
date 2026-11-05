@@ -6,35 +6,26 @@ export const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 // regex is what keeps `__proto__` and `constructor` out of a key position.
 // Relaxing it to a looser string re-opens prototype pollution in every store
 // that does `config.definitions[guid]`.
-export const GuidSchema = z.string().regex(UUID_REGEX, 'Invalid GUID format');
+//
+// Lowercases because local keys by raw string while Postgres compares `uuid`
+// columns case-insensitively, so one GUID in two cases is two records on local.
+export const GuidSchema = z.string().toLowerCase().regex(UUID_REGEX, 'Invalid GUID format');
+
+/** A Grasshopper document GUID as stores keep and compare it (lowercase), or null for anything else. */
+export function toSourceDocumentId(value: unknown): string | null {
+	return typeof value === 'string' && UUID_REGEX.test(value) ? value.toLowerCase() : null;
+}
 
 // Intentionally omits `pending` (see `DefinitionStatus` in ./types.ts): it's a
 // create-internal state `DefinitionService.create` writes during the
 // metadata-first window, and a client must never hand-set it through an update.
 export const DefinitionStatusSchema = z.enum(['draft', 'published', 'archived']);
 
-export const DefinitionFileExtSchema = z.enum(['gh', 'ghx']);
-
-export const DefinitionVersionSchema = z.object({
-	id: GuidSchema,
-	definitionId: GuidSchema,
-	versionNumber: z.number().int().min(1),
-	fileExt: DefinitionFileExtSchema,
-	fileKey: z.string().min(1),
-	originalFilename: z.string().max(256).optional(),
-	uploadedBy: z.string().min(1),
-	uploadedAt: z.string(),
-	changeNote: z.string().max(1000).optional(),
-	// Rhino.Compute validates structural correctness at upload; this only asserts it's an object.
-	schema: z.record(z.string(), z.unknown()).optional(),
-	schemaExtractedAt: z.string().optional()
-});
-
 export const DefinitionChannelSchema = z.enum(['live', 'draft']);
 
 /** HTTP-body validator for new-definition input. */
 export const CreateDefinitionInputSchema = z.object({
-	displayName: z.string().min(1, 'Display name is required').max(256),
+	displayName: z.string().trim().min(1, 'Display name is required').max(256),
 	description: z.string().max(2000).optional(),
 	coverImage: z.string().max(2048).optional(),
 	category: z.string().max(128).optional(),
@@ -50,7 +41,7 @@ export const CreateDefinitionInputSchema = z.object({
  * - value — set
  */
 export const UpdateMetadataInputSchema = z.object({
-	displayName: z.string().min(1, 'Display name is required').max(256).optional(),
+	displayName: z.string().trim().min(1, 'Display name is required').max(256).optional(),
 	description: z.string().max(2000).nullable().optional(),
 	coverImage: z.string().max(2048).nullable().optional(),
 	category: z.string().max(128).nullable().optional(),

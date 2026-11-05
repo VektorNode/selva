@@ -15,14 +15,17 @@ const expectInvalidConfig = (fn: () => unknown) => {
 };
 
 describe('validateServerUrl', () => {
-	it('accepts a well-formed http(s) URL and returns it normalized', () => {
-		expect(validateServerUrl('http://localhost:6500')).toBe('http://localhost:6500');
-		expect(validateServerUrl('https://example.com')).toBe('https://example.com');
-	});
-
-	it('strips trailing slashes', () => {
-		expect(validateServerUrl('http://localhost:6500/')).toBe('http://localhost:6500');
-		expect(validateServerUrl('http://localhost:6500///')).toBe('http://localhost:6500');
+	// WHATWG `new URL` trims before parsing; returning the raw string would make every
+	// later fetch("http://host /version") throw.
+	it.each([
+		['http://localhost:6500', 'http://localhost:6500'],
+		['https://example.com', 'https://example.com'],
+		['http://localhost:6500/', 'http://localhost:6500'],
+		['http://localhost:6500///', 'http://localhost:6500'],
+		['  http://localhost:6500  ', 'http://localhost:6500'],
+		['http://localhost:6500/ \n', 'http://localhost:6500']
+	])('normalizes %j to %j', (input, expected) => {
+		expect(validateServerUrl(input)).toBe(expected);
 	});
 
 	it('rejects empty / whitespace-only URLs', () => {
@@ -31,21 +34,17 @@ describe('validateServerUrl', () => {
 		expectInvalidConfig(() => validateServerUrl(undefined as unknown as string));
 	});
 
-	// Scheme check — previously enforced by ComputeServerStats but MISSING from the
-	// client's validator. Unifying must enforce it on both paths.
 	it('rejects URLs without an http(s):// scheme', () => {
 		expectInvalidConfig(() => validateServerUrl('ftp://example.com'));
 		expectInvalidConfig(() => validateServerUrl('example.com'));
 		expectInvalidConfig(() => validateServerUrl('ws://localhost:6500'));
 	});
 
-	// Public-endpoint check — previously enforced by the client but MISSING from
-	// ComputeServerStats. Unifying must enforce it on both paths.
 	it('rejects the default public McNeel endpoint', () => {
 		expectInvalidConfig(() => validateServerUrl('https://compute.rhino3d.com/'));
 	});
 
-	// Issue 112: hostname comparisons are case-insensitive and the trailing-dot
+	// Hostname comparisons are case-insensitive and the trailing-dot
 	// FQDN form resolves to the same host — neither may bypass the block.
 	it('rejects the public endpoint in casing and trailing-dot FQDN variants', () => {
 		expectInvalidConfig(() => validateServerUrl('https://COMPUTE.RHINO3D.COM'));
@@ -55,63 +54,75 @@ describe('validateServerUrl', () => {
 
 	// The blocked host is a backend's shared public endpoint, not a property of
 	// the transport — a non-Rhino backend names its own (or none).
-	it('blocks a caller-supplied host list instead of the Rhino default', () => {
+	it('checks a caller-supplied host list instead of the Rhino default', () => {
 		expectInvalidConfig(() =>
 			validateServerUrl('https://api.example.com', { blockedHosts: ['api.example.com'] })
+		);
+		expectInvalidConfig(() =>
+			validateServerUrl('https://api.example.com.', { blockedHosts: ['API.Example.com'] })
 		);
 		expect(
 			validateServerUrl('https://compute.rhino3d.com', { blockedHosts: ['api.example.com'] })
 		).toBe('https://compute.rhino3d.com');
-	});
-
-	it('blocks nothing when given an empty host list', () => {
 		expect(validateServerUrl('https://compute.rhino3d.com/', { blockedHosts: [] })).toBe(
 			'https://compute.rhino3d.com'
 		);
 	});
 
-	it('normalizes caller-supplied hosts the same way as the parsed hostname', () => {
-		expectInvalidConfig(() =>
-			validateServerUrl('https://api.example.com.', { blockedHosts: ['API.Example.com'] })
-		);
-	});
-
-	// Issue 112: URL schemes are case-insensitive per RFC 3986.
+	// URL schemes are case-insensitive per RFC 3986.
 	it('accepts an uppercase or mixed-case http(s) scheme', () => {
 		expect(validateServerUrl('HTTP://localhost:6500')).toBe('HTTP://localhost:6500');
 		expect(validateServerUrl('HttpS://example.com/')).toBe('HttpS://example.com');
 	});
 
-	// Issue 97: endpoint paths are appended to the URL, so query/fragment suffixes
+	// Endpoint paths are appended to the URL, so query/fragment suffixes
 	// would corrupt every request ("…?x=1/version").
-	it('rejects URLs with a query string', () => {
-		expectInvalidConfig(() => validateServerUrl('http://localhost:6500?x=1'));
-		expectInvalidConfig(() => validateServerUrl('http://localhost:6500/?'));
+	it.each([
+		'http://localhost:6500?x=1',
+		'http://localhost:6500/?',
+		'http://localhost:6500#frag',
+		'http://localhost:6500/#'
+	])('rejects %s', (url) => {
+		expectInvalidConfig(() => validateServerUrl(url));
 	});
 
-	it('rejects URLs with a fragment', () => {
-		expectInvalidConfig(() => validateServerUrl('http://localhost:6500#frag'));
-		expectInvalidConfig(() => validateServerUrl('http://localhost:6500/#'));
-	});
-
-	it('explains why query/fragment URLs are rejected', () => {
-		try {
-			validateServerUrl('http://localhost:6500?x=1');
-			throw new Error('expected validateServerUrl to throw');
-		} catch (err) {
-			expect((err as Error).message).toMatch(/query string or fragment/i);
-		}
-	});
-
-	// Issue 98: WHATWG `new URL` trims before parsing, but the raw string was
-	// returned — every later fetch("http://host /version") then threw.
-	it('trims surrounding whitespace and returns the trimmed form', () => {
-		expect(validateServerUrl('  http://localhost:6500  ')).toBe('http://localhost:6500');
-		expect(validateServerUrl('http://localhost:6500/ \n')).toBe('http://localhost:6500');
-	});
-
-	// Issue 98: fetch/new Request reject credentialed URLs at runtime, so the
+	// fetch/new Request reject credentialed URLs at runtime, so the
 	// validator must reject them up front with a clear message.
+	it.each([
+		['credentials', 'https://admin:hunter2@my.server'],
+		['a query string', 'https://my.server?api_key=hunter2'],
+		['a fragment', 'https://my.server#hunter2'],
+		['a bad scheme', 'ftp://admin:hunter2@my.server']
+	])('keeps the secret out of the error for %s', (_case, url) => {
+		let thrown: ComputeError | undefined;
+		try {
+			validateServerUrl(url);
+		} catch (err) {
+			thrown = err as ComputeError;
+		}
+		expect(thrown?.code).toBe(ErrorCodes.INVALID_CONFIG);
+		expect(thrown?.message).not.toContain('hunter2');
+		expect(JSON.stringify(thrown?.context)).not.toContain('hunter2');
+		expect(thrown?.message).toContain('my.server');
+	});
+
+	it.each([
+		['a slash in the password', 'https://admin:hun/ter2@my.server', 'ter2'],
+		['a question mark in the password', 'https://admin:hun?ter2@my.server', 'admin'],
+		['a secret in the path', 'https://my.server/hunter2/x?bad', 'hunter2']
+	])('reports no more than the origin with %s', (_case, url, secret) => {
+		const error = (() => {
+			try {
+				return validateServerUrl(url);
+			} catch (err) {
+				return err as ComputeError;
+			}
+		})() as ComputeError;
+		expect(error.code).toBe(ErrorCodes.INVALID_CONFIG);
+		expect(error.message).not.toContain(secret);
+		expect(JSON.stringify(error.context)).not.toContain(secret);
+	});
+
 	it('rejects credentials embedded in the URL', () => {
 		expectInvalidConfig(() => validateServerUrl('http://user:pass@localhost:6500'));
 		expectInvalidConfig(() => validateServerUrl('http://user@localhost:6500'));
@@ -125,5 +136,18 @@ describe('validateServerUrl', () => {
 
 	it('accepts IPv6 literal hosts', () => {
 		expect(validateServerUrl('http://[::1]:6500')).toBe('http://[::1]:6500');
+	});
+});
+
+describe('validateServerUrl — long runs', () => {
+	// `/x+$/` retries from every position of a run, so these took seconds when trimmed by regex.
+	it('trims a URL holding long runs of slashes and dots in linear time', () => {
+		const started = performance.now();
+		expect(validateServerUrl('http://h/' + '/'.repeat(200_000) + 'a')).toMatch(/a$/);
+		expect(validateServerUrl('http://h' + '/'.repeat(200_000))).toBe('http://h');
+		expect(() =>
+			validateServerUrl('http://compute.rhino3d.com' + '.'.repeat(100_000))
+		).toThrowError(ComputeError);
+		expect(performance.now() - started).toBeLessThan(1000);
 	});
 });

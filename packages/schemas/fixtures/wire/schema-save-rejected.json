@@ -19,7 +19,8 @@
 		"instanceSolve": true,
 		"inputs": [],
 		"outputs": [],
-		"layout": null
+		"layout": null,
+		"assets": null
 	},
 	"schemaHash": "hash-1",
 	"reason": "Schema changed in Grasshopper since you started editing."

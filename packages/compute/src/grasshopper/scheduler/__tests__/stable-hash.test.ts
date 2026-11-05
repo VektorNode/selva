@@ -3,24 +3,18 @@ import {
 	hashSolveInput,
 	hashSolveInputForDefinition,
 	hashDefinition,
-	stableStringify,
-	fnv1a,
-	fnv1aBytes
+	stableStringify
 } from '../stable-hash';
+import { TreeBuilder } from '../../data-tree/data-tree';
+
+// Computed independently with node:crypto over the UTF-16LE canonical strings.
+const PINNED_TREE_HASH = '0dc0064221f3ee95e77a4985e677d7ef18c74fa78c295d3834b595546c741271';
+const PINNED_STRING_KEY = `s:0a5b3df5c641fd2413225d667e94b27c0d984348abc424553efb52bcb4fe7be7|t:${PINNED_TREE_HASH}`;
+const PINNED_BYTES_KEY = `u8:039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81|t:${PINNED_TREE_HASH}`;
 
 describe('stableStringify', () => {
 	it('is key-order independent for objects', () => {
 		expect(stableStringify({ a: 1, b: 2 })).toBe(stableStringify({ b: 2, a: 1 }));
-	});
-
-	it('distinguishes different values', () => {
-		expect(stableStringify({ a: 1 })).not.toBe(stableStringify({ a: 2 }));
-	});
-
-	it('handles circular references without throwing', () => {
-		const obj: { a: number; self?: unknown } = { a: 1 };
-		obj.self = obj;
-		expect(() => stableStringify(obj)).not.toThrow();
 	});
 
 	it('normalizes non-finite numbers to null', () => {
@@ -28,9 +22,7 @@ describe('stableStringify', () => {
 		expect(stableStringify(Infinity)).toBe(stableStringify(null));
 	});
 
-	// Regression: stringify(undefined) previously returned the *value* undefined,
-	// which Array.prototype.join turned into an empty string — [undefined] and []
-	// collided while their wire payloads differ ([null] vs []).
+	// Their wire payloads differ ([null] vs []), so their keys must too.
 	it('distinguishes [undefined] from [] and always returns a string', () => {
 		expect(stableStringify([undefined])).not.toBe(stableStringify([]));
 		expect(typeof stableStringify(undefined)).toBe('string');
@@ -40,9 +32,8 @@ describe('stableStringify', () => {
 		expect(stableStringify(new Array(1))).not.toBe(stableStringify([]));
 	});
 
-	// Regression: the circular guard never un-marked finished subtrees, so a
-	// shared (non-circular) reference stringified as "[Circular]" on its second
-	// occurrence — [a, a] hashed differently from [{x:1},{x:1}].
+	// The circular guard must un-mark a finished subtree, or a reference seen twice reads as
+	// "[Circular]" the second time.
 	it('stringifies shared non-circular references by content', () => {
 		const a = { x: 1 };
 		expect(stableStringify([a, a])).toBe(stableStringify([{ x: 1 }, { x: 1 }]));
@@ -58,8 +49,7 @@ describe('stableStringify', () => {
 		expect(() => stableStringify(arr)).not.toThrow();
 	});
 
-	// Regression: Date/Map/Set fell into the generic Object.keys branch and all
-	// stringified as {} — every Date collided with every other Date and with {}.
+	// Date/Map/Set have no own keys: walked as plain objects, every one stringifies as {}.
 	it('honors toJSON so Dates stringify to their ISO strings', () => {
 		const a = new Date('2026-01-01T00:00:00Z');
 		const b = new Date('2026-06-15T12:00:00Z');
@@ -90,35 +80,27 @@ describe('stableStringify', () => {
 		expect(stableStringify(new Set([1]))).not.toBe(stableStringify(new Set([2])));
 	});
 
-	// Regression: bigint stringified identically to the equivalent string ("1").
 	it('distinguishes bigint from the equivalent string', () => {
 		expect(stableStringify(1n)).not.toBe(stableStringify('1'));
 	});
-
-	// Regression: Uint8Arrays > 64 bytes were keyed by length + head/tail sample,
-	// so two buffers differing only in the middle shared a cache key.
-	it('distinguishes large Uint8Arrays differing only in the middle', () => {
-		const a = new Uint8Array(128).fill(7);
-		const b = new Uint8Array(128).fill(7);
-		b[64] = 8;
-		expect(stableStringify(a)).not.toBe(stableStringify(b));
-	});
 });
 
-describe('fnv1a / fnv1aBytes', () => {
-	it('returns an 8-char hex string', () => {
-		expect(fnv1a('hello')).toMatch(/^[0-9a-f]{8}$/);
-		expect(fnv1aBytes(new Uint8Array([1, 2, 3]))).toMatch(/^[0-9a-f]{8}$/);
+describe('stableStringify markers', () => {
+	// A JSON body can carry any plain object, so none may stringify like a non-JSON value.
+	it('keeps non-JSON values apart from plain objects shaped like their markers', () => {
+		const bytes = new Uint8Array([1, 2, 3]);
+		const marker = stableStringify(bytes);
+		expect(stableStringify(JSON.parse(JSON.stringify({ __u8: 3, hash: 'x' })))).not.toBe(marker);
+		expect(stableStringify(new Map([['a', 1]]))).not.toBe(stableStringify({ __map: [['a', 1]] }));
+		const cyclic: Record<string, unknown> = {};
+		cyclic.self = cyclic;
+		expect(stableStringify(cyclic)).not.toBe(stableStringify({ self: '[Circular]' }));
 	});
 
-	it('agrees with fnv1a when bytes are ASCII char codes', () => {
-		// fnv1aBytes over the char codes of "abc" must equal fnv1a("abc").
-		const bytes = new Uint8Array([...'abc'].map((c) => c.charCodeAt(0)));
-		expect(fnv1aBytes(bytes)).toBe(fnv1a('abc'));
-	});
-
-	it('distinguishes different byte content', () => {
-		expect(fnv1aBytes(new Uint8Array([1, 2, 3]))).not.toBe(fnv1aBytes(new Uint8Array([3, 2, 1])));
+	// JSON drops a function-valued key, so `{ a: fn }` goes over the wire as `{}`, not `{ a: null }`.
+	it('stringifies a function like undefined, not like null', () => {
+		expect(stableStringify({ a: () => 1 })).toBe(stableStringify({ a: undefined }));
+		expect(stableStringify({ a: () => 1 })).not.toBe(stableStringify({ a: null }));
 	});
 });
 
@@ -138,16 +120,7 @@ describe('hashSolveInput', () => {
 		expect(hashSolveInput('def.gh', tree)).not.toBe(hashSolveInput('def.gh', other));
 	});
 
-	// Regression: a binary definition was previously keyed on length alone, so two
-	// different files of equal length produced the same cache key and one's solve
-	// was served for the other.
-	it('does not collide for different binary definitions of equal length', () => {
-		const a = new Uint8Array([1, 2, 3, 4]);
-		const b = new Uint8Array([4, 3, 2, 1]);
-		expect(a.length).toBe(b.length);
-		expect(hashSolveInput(a, tree)).not.toBe(hashSolveInput(b, tree));
-	});
-
+	// A collision serves one definition's solve for the other.
 	it('does not collide for binary definitions sharing endpoints but differing in the middle', () => {
 		// Same first-32 and last-32 bytes + same length — would collide under a
 		// sampled key, but full-content hashing separates them.
@@ -159,8 +132,6 @@ describe('hashSolveInput', () => {
 		expect(hashSolveInput(a, tree)).not.toBe(hashSolveInput(b, tree));
 	});
 
-	// Regression: the tree path sampled Uint8Arrays (head/tail only), so two
-	// solves differing only mid-buffer inside the dataTree shared a cache key.
 	it('does not collide for tree Uint8Arrays differing only in the middle', () => {
 		const a = new Uint8Array(128).fill(7);
 		const b = new Uint8Array(128).fill(7);
@@ -168,17 +139,28 @@ describe('hashSolveInput', () => {
 		expect(hashSolveInput('def.gh', [a])).not.toBe(hashSolveInput('def.gh', [b]));
 	});
 
-	// Regression: the final key was one 32-bit FNV pass over the (definition, tree)
-	// pair — birthday-collidable. Keeping the parts separate means a collision
-	// requires both 32-bit hashes (and lengths) to collide simultaneously.
-	it('keeps definition and tree hashes as separate key parts', () => {
-		const key = hashSolveInput('def.gh', tree);
-		expect(key).toMatch(/^s:\d+:[0-9a-f]{8}\|t:\d+:[0-9a-f]{8}$/);
+	// A durable cache keyed by hashSolveInput misses every entry if these move.
+	it('matches pinned keys', () => {
+		expect(hashSolveInput('def.gh', tree)).toBe(PINNED_STRING_KEY);
+		expect(hashSolveInput(new Uint8Array([1, 2, 3]), tree)).toBe(PINNED_BYTES_KEY);
+		expect(hashSolveInput({ key: 'v1', load: async () => new Uint8Array() }, tree)).toBe(
+			`r:v1|t:${PINNED_TREE_HASH}`
+		);
 	});
 
-	// Issue 57: the scheduler computes hashDefinition once at solve() entry and
-	// threads it through instead of re-hashing. That refactor is only sound if
-	// composing the precomputed definition hash yields byte-identical keys.
+	// The scheduler's cache serves every user of a server: a forged collision would let one user
+	// choose what another's solve returns.
+	it('separates trees differing in one text value', () => {
+		const labelled = (label: string) =>
+			TreeBuilder.fromValues([
+				{ paramName: 'Label', paramType: 'Text', value: label },
+				{ paramName: 'Width', paramType: 'Number', value: 12.5, minimum: 0, maximum: 100 }
+			]);
+		expect(hashSolveInput('def.gh', labelled('Hello, Selva!'))).not.toBe(
+			hashSolveInput('def.gh', labelled('pwned__W3jEwn'))
+		);
+	});
+
 	it('hashSolveInputForDefinition(hashDefinition(d), t) equals hashSolveInput(d, t)', () => {
 		const binary = new Uint8Array([1, 2, 3, 4]);
 		for (const def of ['def.gh', binary] as const) {

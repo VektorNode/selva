@@ -1,25 +1,24 @@
-import { ErrorCodes, ComputeError } from '@/core/errors';
+import { sleep } from '@/core/compute-fetch/retry';
+import { abortedByCaller, ErrorCodes, ComputeError } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
 import { readField } from '@/core/utils/read-field';
+import { redactUrl } from '@/core/utils/redact-url';
 import ComputeServerStats from '../server/compute-server-stats';
 import { validateServerUrl } from '@/core/server/validate-server-url';
 import { classifyProbeFailure, type ProbeFailure } from '@/core/server/classify-probe-failure';
-import { ComputeConfig, RetryPolicy } from '@/core/types';
+import type { RetryPolicy } from '@/core/types';
 
-import { fetchDefinitionIO, fetchParsedDefinitionIO, solveGrasshopperDefinition } from '..';
-import { solveByCacheKey, solveGrasshopperDefinitionWithCacheKey } from '../solve';
-import {
+import { fetchDefinitionIO, fetchParsedDefinitionIO } from '../io/definition-io';
+import { solveGrasshopperDefinition, solveWithServerCacheKey } from '../solve';
+import type {
 	GrasshopperComputeConfig,
 	GrasshopperComputeResponse,
 	DataTree,
 	SelvaEventTarget
 } from '../types';
-import { isDefinitionRef, type SolveDefinition } from '@/core/definition-ref';
-import {
-	SolveScheduler,
-	SolveSchedulerOptions,
-	CacheKeyExecutor
-} from '../scheduler/solve-scheduler';
+import { isDefinitionRef, isDefinitionUrl, type SolveDefinition } from '@/core/definition-ref';
+import { SolveScheduler } from '../scheduler/solve-scheduler';
+import type { SolveSchedulerOptions } from '../scheduler/types';
 
 /**
  * Per-call options that override the client's default ComputeConfig values.
@@ -37,32 +36,42 @@ export interface SolveOptions {
 	selvaevents?: SelvaEventTarget;
 }
 
-/** Compact description of a definition for error context — never the full payload. */
-function describeDefinition(definition: SolveDefinition): string {
-	if (isDefinitionRef(definition)) return `ref:${definition.key}`;
-	if (typeof definition === 'string' && definition.length < 200) return definition;
-	return '...content...';
+/** Options for {@link GrasshopperClient.create} that shape construction, not the solves. */
+export interface CreateClientOptions {
+	/**
+	 * Retry ladder for the liveness probe: `attempts` retries after the first probe (default 2),
+	 * with exponential backoff from `baseDelayMs` (default 250) capped at `maxDelayMs` (default 1000).
+	 * Independent of `config.retry`, which governs solves only.
+	 */
+	probe?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number };
 }
 
-/** One input parameter's footprint in the error-context summary (issue 83). */
-export interface DataTreeSummaryEntry {
-	/** The input's `ParamName` (`<unnamed>` when absent). */
+function describeDefinition(definition: SolveDefinition): string {
+	if (isDefinitionRef(definition)) return `ref:${definition.key}`;
+	if (typeof definition !== 'string' || definition.length >= 200) return '...content...';
+	return isDefinitionUrl(definition) ? redactUrl(definition) : definition;
+}
+
+/** Identifiers only: the error's `context` holds outputs and its message the server's words. */
+function describeFailure(error: unknown): string {
+	if (!(error instanceof ComputeError)) {
+		return `Compute failed: ${error instanceof Error ? error.name : typeof error}`;
+	}
+	const status = error.statusCode === undefined ? '' : ` HTTP ${error.statusCode}`;
+	const requestId = error.context?.requestId;
+	return `Compute failed: ${error.code}${status}${requestId ? ` [${requestId}]` : ''}`;
+}
+
+interface DataTreeSummaryEntry {
 	param: string;
-	/** Total items across all branches. */
 	items: number;
-	/** Approximate payload size: summed `data` string lengths across items. */
+	/** Summed `data` string lengths. */
 	bytes: number;
 }
 
 /**
- * Compact summary of the input data tree for error context — never the full
- * payload (issue 83). Trees can embed multi-MB geometry/base64; attaching them
- * to thrown errors pins those buffers in every logger/telemetry/error-boundary
- * that retains the error. Param names, item counts, and byte sizes are enough
- * to correlate a failure with its inputs.
- *
- * Reads `ParamName`/`InnerTree` case-insensitively and never throws — error
- * construction must not fail on a malformed tree.
+ * Stands in for the input tree on errors: the tree can hold multi-MB geometry, and every logger
+ * or telemetry sink that keeps the error would pin it. Never throws on a malformed tree.
  */
 function summarizeDataTree(dataTree: DataTree[]): DataTreeSummaryEntry[] {
 	if (!Array.isArray(dataTree)) return [];
@@ -88,13 +97,10 @@ function summarizeDataTree(dataTree: DataTree[]): DataTreeSummaryEntry[] {
 }
 
 /**
- * GrasshopperClient provides a simple API for interacting with a Rhino Compute server and grasshopper.
+ * The high-level API for solving Grasshopper definitions on a Rhino Compute server.
  *
- * @public This is the recommended high-level API for Rhino Compute operations.
- *
- * **Security Warning:**
- * Using this client in a browser environment exposes your server URL and API key to users.
- * For production, use this library server-side or proxy requests through your own backend.
+ * In a browser, the server URL and API key are exposed to users: run it server-side, or proxy
+ * requests through your own backend.
  *
  * @example
  * ```typescript
@@ -104,7 +110,8 @@ function summarizeDataTree(dataTree: DataTree[]): DataTreeSummaryEntry[] {
  * });
  *
  * try {
- *   const result = await client.solve(definitionUrl, { x: 1, y: 2 });
+ *   const io = await client.getIO(definitionUrl);
+ *   const result = await client.solve(definitionUrl, TreeBuilder.fromInputParams(io.inputs));
  * } finally {
  *   await client.dispose(); // Clean up resources
  * }
@@ -113,58 +120,55 @@ function summarizeDataTree(dataTree: DataTree[]): DataTreeSummaryEntry[] {
 export default class GrasshopperClient {
 	private readonly config: GrasshopperComputeConfig;
 	public readonly serverStats: ComputeServerStats;
+	private readonly schedulers = new Set<SolveScheduler>();
 	private disposed = false;
 
 	/**
-	 * Per-probe timeout for the `create()` liveness gate. A healthy `GET /` on the
-	 * proxy answers in milliseconds; this bound only ever applies to a server that
-	 * is not answering, where every extra second is multiplied by the retry count
-	 * and paid by whoever is waiting on the solve.
+	 * Per-probe timeout for the `create()` liveness gate: a healthy `GET /` answers in milliseconds,
+	 * so this only bounds a silent server, and every extra second is paid once per retry.
 	 */
 	private static readonly CREATE_PROBE_TIMEOUT_MS = 2000;
 
 	private constructor(config: GrasshopperComputeConfig) {
-		this.config = this.normalizeComputeConfig(config);
-		this.serverStats = new ComputeServerStats(this.config.serverUrl, this.config.apiKey);
+		this.config = {
+			...config,
+			serverUrl: validateServerUrl(config.serverUrl),
+			debug: config.debug ?? false
+		};
+		this.serverStats = new ComputeServerStats(this.config.serverUrl, this.config);
 	}
 
 	/**
-	 * Creates and initializes a GrasshopperClient with server validation.
+	 * Creates a client once a liveness probe (`GET /`) says the server is up. A cold server can read
+	 * as offline, so the probe retries with a short backoff, stopping early when
+	 * {@link classifyProbeFailure} says waiting can't change the answer. `config.signal` cancels the
+	 * ladder.
 	 *
-	 * The pre-flight liveness probe (a GET on the proxy root `/`) is a
-	 * single-sample boolean gate that reads a cold or briefly-busy-but-up server
-	 * as offline. To avoid failing construction on that transient class, the probe
-	 * is retried with a short exponential backoff before giving up.
-	 *
-	 * Retries stop early when {@link classifyProbeFailure} says waiting cannot
-	 * change the answer — connection refused, or a 401/403. This runs in front of
-	 * a user who clicked Solve, so the retry ladder must not spend its whole
-	 * budget confirming that a machine is switched off.
-	 *
-	 * Each probe is bounded by {@link CREATE_PROBE_TIMEOUT_MS} rather than the
-	 * stats default: a healthy `GET /` answers in milliseconds, so a longer
-	 * per-probe timeout only multiplies the wait when the server is unreachable.
-	 *
-	 * @throws {ComputeError} with code NETWORK_ERROR if the server stays
-	 *   unreachable across all attempts. `context.probeVerdict` carries the
-	 *   {@link ProbeVerdict} so callers can render a specific cause.
-	 * @throws {ComputeError} with code INVALID_CONFIG if configuration is invalid
+	 * @throws {ComputeError} `NETWORK_ERROR` if the server stays unreachable across all attempts.
+	 *   `context.probeVerdict` carries the verdict, so a caller can render a specific cause.
+	 * @throws {ComputeError} `ABORTED` if `config.signal` fires first.
+	 * @throws {ComputeError} `INVALID_CONFIG` if the configuration is invalid.
 	 */
-	static async create(config: GrasshopperComputeConfig): Promise<GrasshopperClient> {
+	static async create(
+		config: GrasshopperComputeConfig,
+		options: CreateClientOptions = {}
+	): Promise<GrasshopperClient> {
 		const client = new GrasshopperClient(config);
+		const { signal } = config;
 
-		// A single liveness miss isn't authoritative — a cold/busy-but-up
-		// server flickers non-200. Retry a few times with backoff before failing.
-		const attempts = Math.max(1, (config.retry?.attempts ?? 2) + 1);
-		const baseDelayMs = config.retry?.baseDelayMs ?? 250;
-		const maxDelayMs = config.retry?.maxDelayMs ?? 1000;
+		const attempts = Math.max(1, (options.probe?.attempts ?? 2) + 1);
+		const baseDelayMs = options.probe?.baseDelayMs ?? 250;
+		const maxDelayMs = options.probe?.maxDelayMs ?? 1000;
 
 		let lastProbe: Awaited<ReturnType<ComputeServerStats['probeServer']>> | undefined;
 		let failure: ProbeFailure | null = null;
 		let used = 0;
-		for (let attempt = 0; attempt < attempts; attempt++) {
+		for (let attempt = 0; attempt < attempts && !signal?.aborted; attempt++) {
 			used = attempt + 1;
-			lastProbe = await client.serverStats.probeServer(GrasshopperClient.CREATE_PROBE_TIMEOUT_MS);
+			lastProbe = await client.serverStats.probeServer(
+				GrasshopperClient.CREATE_PROBE_TIMEOUT_MS,
+				signal
+			);
 			if (lastProbe.online) {
 				return client;
 			}
@@ -176,11 +180,15 @@ export default class GrasshopperClient {
 
 			if (attempt < attempts - 1) {
 				const delay = Math.min(baseDelayMs * 2 ** attempt, maxDelayMs);
-				await new Promise((resolve) => setTimeout(resolve, delay));
+				// An abort rejects the sleep; the loop condition then ends the ladder.
+				await sleep(delay, signal).catch(() => {});
 			}
 		}
 
 		await client.dispose();
+		if (signal?.aborted) {
+			throw abortedByCaller({ serverUrl: client.config.serverUrl, attempts: used });
+		}
 		const status = lastProbe?.status;
 		const message = failure
 			? `Rhino Compute server is not available. ${failure.summary}`
@@ -198,15 +206,6 @@ export default class GrasshopperClient {
 				...(lastProbe?.error !== undefined && { lastProbeError: lastProbe.error })
 			}
 		});
-	}
-
-	/**
-	 * Gets the client's configuration.
-	 * Useful for passing to lower-level functions.
-	 */
-	public getConfig(): GrasshopperComputeConfig {
-		this.ensureNotDisposed();
-		return { ...this.config };
 	}
 
 	/**
@@ -241,9 +240,13 @@ export default class GrasshopperClient {
 	): Promise<GrasshopperComputeResponse> {
 		this.ensureNotDisposed();
 
+		const describeCall = () => ({
+			definition: describeDefinition(definition),
+			inputSummary: summarizeDataTree(dataTree)
+		});
+
 		try {
-			// Validate inputs
-			if (typeof definition === 'string' && !definition?.trim()) {
+			if (typeof definition === 'string' && !definition.trim()) {
 				throw new ComputeError('Definition URL/content is required', ErrorCodes.INVALID_INPUT, {
 					context: { receivedUrl: definition }
 				});
@@ -253,7 +256,6 @@ export default class GrasshopperClient {
 				throw new ComputeError('DefinitionRef key is empty', ErrorCodes.INVALID_INPUT);
 			}
 
-			// Per-call options override the client's stored config for this request only
 			const effectiveConfig: GrasshopperComputeConfig = {
 				...this.config,
 				...(options?.signal !== undefined && { signal: options.signal }),
@@ -262,15 +264,9 @@ export default class GrasshopperClient {
 				...(options?.selvaevents !== undefined && { selvaevents: options.selvaevents })
 			};
 
-			// Skip the redundant pre-flight healthcheck — fetchCompute already surfaces
-			// network failures with a NETWORK_ERROR code, so adding a roundtrip here only
-			// doubles latency on every solve.
 			const result = await solveGrasshopperDefinition(dataTree, definition, effectiveConfig);
 
-			// Compute may return a partial-success response (HTTP 500 with a body
-			// containing both `values` and `errors`/`warnings`). Surface that as a
-			// COMPUTATION_ERROR so callers don't silently consume a broken result.
-			// Read case-insensitively — stock mcneel servers serialize `Errors`.
+			// A partial success (HTTP 500 carrying both `values` and `errors`) must not pass as a result.
 			const solveErrors = readField<unknown[]>(result, 'errors');
 			if (Array.isArray(solveErrors) && solveErrors.length > 0) {
 				throw new ComputeError(
@@ -278,16 +274,9 @@ export default class GrasshopperClient {
 					ErrorCodes.COMPUTATION_ERROR,
 					{
 						context: {
-							definition: describeDefinition(definition),
-							// Summary only — attaching the full dataTree would pin
-							// multi-MB input buffers in telemetry (issue 83).
-							inputSummary: summarizeDataTree(dataTree),
+							...describeCall(),
 							errors: solveErrors,
 							warnings: readField<unknown[]>(result, 'warnings'),
-							// The outputs that DID compute (issue 63): the transport
-							// parses partial values out of the 500 body, so hand them
-							// to callers who want to render what succeeded and inspect
-							// what failed (e.g. via getValues on { values }).
 							values: result.values
 						}
 					}
@@ -297,7 +286,7 @@ export default class GrasshopperClient {
 			return result;
 		} catch (error) {
 			if (this.config.debug) {
-				getLogger().error('Compute failed:', error);
+				getLogger().error(describeFailure(error));
 			}
 
 			if (error instanceof ComputeError) {
@@ -307,14 +296,7 @@ export default class GrasshopperClient {
 			throw new ComputeError(
 				error instanceof Error ? error.message : String(error),
 				ErrorCodes.COMPUTATION_ERROR,
-				{
-					context: {
-						definition: describeDefinition(definition),
-						// Summary only — never the full dataTree (issue 83).
-						inputSummary: summarizeDataTree(dataTree)
-					},
-					originalError: error instanceof Error ? error : new Error(String(error))
-				}
+				{ context: describeCall(), originalError: error }
 			);
 		}
 	}
@@ -330,45 +312,31 @@ export default class GrasshopperClient {
 	 * @example
 	 * ```ts
 	 * const sliderScheduler = client.createScheduler({ mode: 'latest-wins' });
-	 * const submitScheduler = client.createScheduler({ mode: 'queue', timeoutMs: 0, retry: { attempts: 1 } });
+	 * const submitScheduler = client.createScheduler({ mode: 'queue', timeoutMs: 0 });
 	 * ```
 	 */
 	public createScheduler(options?: SolveSchedulerOptions): SolveScheduler {
 		this.ensureNotDisposed();
-		const executor = (
-			definition: SolveDefinition,
-			dataTree: DataTree[],
-			config: GrasshopperComputeConfig
-		) => solveGrasshopperDefinition(dataTree, definition, config);
-
-		// Cache-key-aware executor: solve by `pointer: cacheKey` when known (skips
-		// re-uploading large definitions), capturing/refreshing the key and
-		// falling back to a full upload on a server cache miss.
-		const cacheKeyExecutor: CacheKeyExecutor = (definition, dataTree, cacheKey, config) =>
-			cacheKey === null
-				? solveGrasshopperDefinitionWithCacheKey(dataTree, definition, config).then((r) => ({
-						...r,
-						missed: false
-					}))
-				: solveByCacheKey(dataTree, cacheKey, definition, config);
-
-		return new SolveScheduler(executor, this.config, options, cacheKeyExecutor);
+		const scheduler = new SolveScheduler(
+			(definition, dataTree, cacheKey, config) =>
+				solveWithServerCacheKey(dataTree, cacheKey, definition, config),
+			this.config,
+			options
+		);
+		this.schedulers.add(scheduler);
+		return scheduler;
 	}
 
-	/**
-	 * Disposes of client resources.
-	 * Call this when you're done using the client.
-	 */
+	/** Disposes of client resources, including every scheduler it created. */
 	public async dispose(): Promise<void> {
 		if (this.disposed) return;
 
 		this.disposed = true;
+		for (const scheduler of this.schedulers) scheduler.dispose();
+		this.schedulers.clear();
 		await this.serverStats.dispose();
 	}
 
-	/**
-	 * Ensures the client hasn't been disposed.
-	 */
 	private ensureNotDisposed(): void {
 		if (this.disposed) {
 			throw new ComputeError(
@@ -376,21 +344,5 @@ export default class GrasshopperClient {
 				ErrorCodes.INVALID_STATE
 			);
 		}
-	}
-
-	/**
-	 * Validates and normalizes a compute configuration.
-	 *
-	 * @throws {ComputeError} with code INVALID_CONFIG if configuration is invalid
-	 */
-	private normalizeComputeConfig<T extends ComputeConfig | GrasshopperComputeConfig>(config: T): T {
-		return {
-			...config,
-			serverUrl: validateServerUrl(config.serverUrl),
-			apiKey: config.apiKey,
-			authToken: config.authToken,
-			debug: config.debug ?? false,
-			suppressBrowserWarning: config.suppressBrowserWarning
-		} as T;
 	}
 }

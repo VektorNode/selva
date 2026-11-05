@@ -15,17 +15,28 @@ import type { SolveResult } from '../../shared/solve-fn.js';
  * frames that arrive unsolicited (a replay on connect, a recompute triggered outside the web
  * UI) would otherwise be stamped with an unrelated input set, which is precisely the stale
  * pairing the field exists to prevent.
+ *
+ * **Every solve asked for ends in exactly one report**: `report`, `reportError` or
+ * `reportAborted`. A host awaiting `session.solve()` waits for it, so a driver that drops a
+ * request silently leaves that promise unresolved until the session is rebuilt or disposed.
  */
 export interface SolveDriver {
 	solve(values: Record<string, unknown>): void;
 	cancel(): void;
 	readonly isSolving: boolean;
 	/**
-	 * Drops cached solve results. Optional — only the request/response driver has a
-	 * client-side memo to clear. Call on rebuild: a definition swap must not serve a
-	 * stale result from the prior definition's input space.
+	 * A newer solve is waiting behind the one now reporting, so the session holds back its
+	 * settlement until that one lands. Optional: a push transport with no client-side queue
+	 * leaves it undefined, and every report settles.
 	 */
-	clearCache?(): void;
+	readonly hasQueued?: boolean;
+	/**
+	 * Forgets the current definition: stops its running solve, drops its cached results, and
+	 * never reports for it again. The session calls this on rebuild and dispose, where a late
+	 * result would land in the wrong definition. Optional: a push transport leaves it out, because
+	 * the solve it would stop belongs to the Grasshopper canvas, not to this session.
+	 */
+	reset?(): void;
 	/**
 	 * Live events from the running solve, when the transport carries them (a WebSocket frame
 	 * locally, an SSE stream in cloud mode). Returns the unsubscribe. A driver without a live
@@ -49,4 +60,6 @@ export interface SolveEventSource {
 export interface SolveReporter<TMesh = unknown> {
 	report(result: SolveResult<TMesh>): void;
 	reportError(message: string): void;
+	/** The solve was cancelled before it produced anything. Nothing on screen changes. */
+	reportAborted(): void;
 }

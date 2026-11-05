@@ -1,48 +1,52 @@
-import { log } from './log';
+import { getLogger } from '../utils/logger';
 
 import type { ServerTiming } from '../types';
 
 /**
- * Parse a `Server-Timing` header value into typed durations (ms).
- *
- * Header grammar (RFC 9110 §10.1.10), as emitted by the solve endpoint:
- *   `decode;dur=3, solve;dur=120, encode;dur=8`
- *
- * Returns null when the header is absent or carries no recognizable metric, so
- * the caller can skip the callback entirely.
- *
- * @internal exported for tests
+ * Parse a W3C Server Timing header, as the solve endpoint emits it:
+ * `decode;dur=3, solve;dur=120, gh;dur=110, encode;dur=8, recomputed;desc="4/97"`, or
+ * `cache;desc="hit"` when the server answered from its result cache. Null when it carries no
+ * recognised metric.
  */
 export function parseServerTiming(headerValue: string | null): ServerTiming | null {
 	if (!headerValue) return null;
 	const timing: ServerTiming = { raw: headerValue };
 	let sawMetric = false;
 	for (const part of headerValue.split(',')) {
-		const [name, ...params] = part.trim().split(';');
-		const durParam = params.find((p) => p.trim().toLowerCase().startsWith('dur'));
-		if (!durParam) continue;
-		const dur = Number(durParam.split('=')[1]);
-		if (!Number.isFinite(dur)) continue;
-		const key = name.trim().toLowerCase();
-		if (key === 'decode' || key === 'solve' || key === 'encode') {
-			timing[key] = dur;
+		const [rawName, ...params] = part.trim().split(';');
+		const name = rawName.trim().toLowerCase();
+		if (name === 'decode' || name === 'solve' || name === 'encode' || name === 'gh') {
+			const dur = Number(param(params, 'dur'));
+			if (!Number.isFinite(dur)) continue;
+			timing[name] = dur;
+			sawMetric = true;
+		} else if (name === 'recomputed') {
+			const [ran, total] = (param(params, 'desc') ?? '').split('/').map(Number);
+			if (!Number.isInteger(ran) || !Number.isInteger(total)) continue;
+			timing.recomputed = { ran, total };
+			sawMetric = true;
+		} else if (name === 'cache' && param(params, 'desc') === 'hit') {
+			timing.cacheHit = true;
 			sawMetric = true;
 		}
 	}
 	return sawMetric ? timing : null;
 }
 
-/**
- * Surface the server's per-request timing breakdown (if it sent one and a
- * caller is listening). Best-effort: a throwing callback must not fail the
- * request. Called on the success path AND the 500-with-values partial-success
- * path — solves that completed with Grasshopper errors carry real timings too.
- */
+function param(params: string[], key: string): string | undefined {
+	for (const p of params) {
+		const [k, ...v] = p.split('=');
+		if (k.trim().toLowerCase() !== key) continue;
+		const value = v.join('=').trim();
+		return value.replace(/^"(.*)"$/, '$1');
+	}
+	return undefined;
+}
+
 export function fireServerTiming(
 	response: Response,
 	requestId: string,
-	onServerTiming: ((timing: ServerTiming, requestId: string) => void) | undefined,
-	debug?: boolean
+	onServerTiming: ((timing: ServerTiming, requestId: string) => void) | undefined
 ): void {
 	if (!onServerTiming) return;
 	const timing = parseServerTiming(response.headers.get('Server-Timing'));
@@ -50,6 +54,8 @@ export function fireServerTiming(
 	try {
 		onServerTiming(timing, requestId);
 	} catch (err) {
-		if (debug) log(`   onServerTiming callback threw: ${err}`, true);
+		getLogger().debug(
+			`onServerTiming callback threw ${err instanceof Error ? err.name : typeof err}`
+		);
 	}
 }

@@ -1,6 +1,6 @@
 using System.IO;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Drawings;
 using Selva.Drawing.Model.Elements;
@@ -31,7 +31,7 @@ public class PdfOutlinesTests
 		var bytes = new PdfRenderer().Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(3, reopened.Outlines.Count);
 		Assert.Equal("Cover", reopened.Outlines[0].Title);
 		Assert.Equal("Details", reopened.Outlines[1].Title);
@@ -77,12 +77,45 @@ public class PdfOutlinesTests
 		var bytes = new PdfRenderer().Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		var top = Assert.Single(reopened.Outlines);
 		Assert.Equal("Sheet 1", top.Title);
 		Assert.Collection(top.Outlines,
 			o => Assert.Equal("VIEW A", o.Title),
 			o => Assert.Equal("VIEW B", o.Title));
+	}
+
+	[Fact]
+	public void Consecutive_pages_of_a_chapter_nest_under_it()
+	{
+		var doc = new Document
+		{
+			Pages = new[]
+			{
+				new Page { Title = "Cover", Content = new GroupElement() },
+				new Page { Title = "A", Chapter = "Parts", Content = new GroupElement() },
+				new Page { Title = "B", Chapter = "Parts", Content = new GroupElement() },
+				new Page { Title = "Plan", Chapter = "Mounting", Content = new GroupElement() },
+			},
+		};
+		var bytes = new PdfRenderer().Render(doc);
+
+		using var ms = new MemoryStream(bytes);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
+		Assert.Collection(reopened.Outlines,
+			o => Assert.Equal("Cover", o.Title),
+			o =>
+			{
+				Assert.Equal("Parts", o.Title);
+				Assert.Collection(o.Outlines,
+					p => Assert.Equal("A", p.Title),
+					p => Assert.Equal("B", p.Title));
+			},
+			o =>
+			{
+				Assert.Equal("Mounting", o.Title);
+				Assert.Equal("Plan", Assert.Single(o.Outlines).Title);
+			});
 	}
 
 	[Fact]
@@ -95,7 +128,7 @@ public class PdfOutlinesTests
 		var bytes = new PdfRenderer(new PdfRenderOptions { EmitOutlines = false }).Render(doc);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Empty(reopened.Outlines);
 	}
 }

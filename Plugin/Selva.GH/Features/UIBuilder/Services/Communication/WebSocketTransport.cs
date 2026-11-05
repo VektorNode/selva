@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using Grasshopper.Kernel;
 using Newtonsoft.Json;
 using Rhino;
 using Selva.Schema.Models;
@@ -41,12 +42,17 @@ public class WebSocketTransport : IDisposable
     private static readonly JsonSerializer SecureSerializer =
         JsonSerializer.Create(SecureSerializerSettings);
 
+    private const string PromptOpenMessage = "Rhino is already asking for something. Finish or cancel that first.";
+
     private readonly int _port;
     private readonly string _sessionId;
+    private readonly string _bridgeSecret;
 
     // Parsing/classifying inbound frames is pure (InboundMessageParser, unit-tested separately);
     // this class owns only the socket, thread marshalling, and event raising.
     private readonly InboundMessageParser _inboundParser = new InboundMessageParser(SecureSerializer);
+
+    private readonly HostFileCoordinator _hostFiles;
 
     // Guards all mutable state touched from multiple threads.
     private readonly object _stateLock = new object();
@@ -56,6 +62,21 @@ public class WebSocketTransport : IDisposable
     private readonly object _dispatchLock = new object();
     private Task _dispatchChain = Task.CompletedTask;
 
+    // UI-thread work leaves the dispatch chain through a queue of its own, in the same order. On
+    // Mac, InvokeOnUiThread waits until the main thread has run the callback, and the main thread
+    // can sit in a viewport prompt or a long solve: called on the dispatch chain, it would hold up
+    // every later message, cancelSolve and the busy refusals included.
+    private readonly object _uiLock = new object();
+    private Task _uiChain = Task.CompletedTask;
+
+    // The value update at the tail of _uiChain, still waiting for the UI thread; later ones merge
+    // into it, latest wins. On Mac a queued update only reaches the UI thread after the solve in
+    // front of it, when the bridge looks idle, so unmerged a slider drag costs a solve per step.
+    private Dictionary<string, object> _queuedValues;
+
+    // A value update is running on the UI thread and may not have scheduled its solve yet.
+    private bool _applyingValues;
+
     private bool _disposed;
     private int _initialDataInFlight;
     private bool? _lastBroadcastedSolvingState;
@@ -63,14 +84,42 @@ public class WebSocketTransport : IDisposable
 
     private WebSocketServer _webSocketServer;
 
-    public WebSocketTransport(string sessionId, int port = 8765)
+    // Read at acknowledgement and at every filtered message, never captured: Edit in Grasshopper
+    // turns a running player session into an author one.
+    private Func<BridgeRole> _role = () => BridgeRole.Author;
+
+    public WebSocketTransport(string sessionId, string bridgeSecret, int port = AppConfig.WebSocket.DefaultPort)
     {
         _sessionId = sessionId;
+        _bridgeSecret = bridgeSecret ?? throw new ArgumentNullException(nameof(bridgeSecret));
         _port = port;
+        _hostFiles = new HostFileCoordinator(new EtoHostFileDialogs(), ModalGate.Shared, MarshalToMainThread,
+            sessionId, AppConfig.ValueLimits.MaxFileSizeBytes);
+    }
+
+    /// <summary>Where the session's role comes from: the component that owns this transport.</summary>
+    public void BindRole(Func<BridgeRole> role)
+    {
+        _role = role ?? throw new ArgumentNullException(nameof(role));
     }
 
     public bool IsRunning => _webSocketServer?.IsRunning ?? false;
     public int WebSocketPort => _webSocketServer?.Port ?? _port;
+
+    /// <summary>
+    ///     How long a solve the page asked for waits to start. Longer while the Rhino panel is
+    ///     connected: its WebView paints on the UI thread the solve takes.
+    /// </summary>
+    public int ScheduleSolutionDelayMs
+    {
+        get
+        {
+            var server = _webSocketServer;
+            return server != null && server.HasClientFrom(BridgeAccess.PanelHost)
+                ? AppConfig.ComponentLifecycle.PanelScheduleSolutionDelayMs
+                : AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs;
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -88,7 +137,8 @@ public class WebSocketTransport : IDisposable
 
     public event EventHandler<Dictionary<string, object>> OnValuesReceived;
     public event EventHandler OnCurrentValuesRequested;
-    public event EventHandler OnClientConnected;
+    /// <summary>`requestInitialData`, on the UI thread.</summary>
+    public event EventHandler<InboundMessage> OnClientConnected;
     public event EventHandler<SchemaSaveRequest> OnSchemaSaveRequested;
     public event EventHandler<UISchema> OnSyncPreviewRequested;
     public event EventHandler<List<SyncChange>> OnSyncChangesApply;
@@ -98,6 +148,48 @@ public class WebSocketTransport : IDisposable
     ///     holds it). Handlers may only flip the document's abort flag.
     /// </summary>
     public event EventHandler OnCancelSolveRequested;
+
+    /// <summary>
+    ///     The selva* commands, raised on the socket's dispatch thread: each starts network work,
+    ///     and the handler hops to the UI thread itself where it touches the document.
+    /// </summary>
+    public event EventHandler<InboundMessage> OnSelvaCommand;
+
+    /// <summary>
+    ///     Where the open editor's unsaved draft places each param, on the UI thread. Null once the
+    ///     draft matches the saved schema, or when the socket that sent it is gone.
+    /// </summary>
+    public event EventHandler<Dictionary<Guid, LayoutPlacement.Location>> OnDraftLayout;
+
+    // The socket whose draft the canvas shows: with two editors open, the last to send wins, and
+    // only that one leaving clears it.
+    private WebSocket _draftClient;
+
+    /// <summary>
+    ///     `readLayout` and `applyLayout`, on the UI thread. The handler answers the socket that
+    ///     asked through <see cref="LayoutRequest.Reply" />.
+    /// </summary>
+    public event EventHandler<LayoutRequest> OnLayoutRequested;
+
+    public sealed class LayoutRequest
+    {
+        public InboundMessage Message { get; init; }
+        public Func<object, Task> Reply { get; init; }
+    }
+
+    /// <summary>`pickGeometry`, on the UI thread. Answered with <see cref="BroadcastPickGeometryResult" />.</summary>
+    public event EventHandler<InboundMessage> OnPickGeometryRequested;
+
+    /// <summary>`clearGeometry`, on the UI thread. Answered with <see cref="BroadcastGeometrySummary" />.</summary>
+    public event EventHandler<Guid> OnClearGeometryRequested;
+
+    /// <summary>A `clearGeometry` refused because a prompt is open, on the UI thread.</summary>
+    public event EventHandler<Guid> OnClearGeometryRefused;
+
+    public event EventHandler<Guid> OnTriggerRequested;
+
+    /// <summary>`closeDefinition` and `editInGrasshopper`, on the UI thread, from a player session only.</summary>
+    public event EventHandler<InboundKind> OnPlayerCommand;
 
     protected virtual void Dispose(bool disposing)
     {
@@ -114,7 +206,8 @@ public class WebSocketTransport : IDisposable
         _disposed = true;
     }
 
-    public async Task StartAsync(Action<string> logMessage)
+    /// <param name="allowedOrigins">Origins whose pages may open a socket: wherever the web UI is served from.</param>
+    public async Task StartAsync(Action<string> logMessage, IReadOnlyCollection<string> allowedOrigins)
     {
         if (_webSocketServer?.IsRunning == true)
         {
@@ -123,8 +216,10 @@ public class WebSocketTransport : IDisposable
 
         try
         {
-            _webSocketServer = new WebSocketServer(_port);
+            _webSocketServer = new WebSocketServer(_bridgeSecret, allowedOrigins, _port,
+                () => BridgeAccess.AuthenticatedMessage(_role()));
             _webSocketServer.OnClientConnected += HandleClientConnected;
+            _webSocketServer.OnClientDisconnected += HandleClientDisconnected;
             _webSocketServer.OnMessageReceived += HandleMessageReceived;
 
             var startTask = _webSocketServer.StartAsync();
@@ -165,6 +260,7 @@ public class WebSocketTransport : IDisposable
         finally
         {
             _webSocketServer = null;
+            ClearDraft();
 
             lock (_stateLock)
             {
@@ -274,21 +370,12 @@ public class WebSocketTransport : IDisposable
         }
 
         // `displayItems` is null when empty so mesh-only solves stay unchanged on the wire.
+        // ConfigureAwait(false): this starts on Rhino's UI thread, and resuming there waits behind
+        // the viewport redraw and the next scheduled solve.
         await BroadcastAsync(OutboundEnvelopes.Outputs(
             _sessionId, outputs, fileOutputs, binaryBlobs.Count, modelUnits,
             displayItems.Count > 0 ? displayItems : null,
-            (diagnostics ?? new SolveDiagnostics()).ToOutcome()));
-
-        // WebSocket preserves order, so these binary frames always arrive after the JSON envelope.
-        // Capture the server field once: Stop() can null it from another thread mid-loop.
-        var server = _webSocketServer;
-        if (server != null && server.IsRunning)
-        {
-            foreach (var blob in binaryBlobs)
-            {
-                await server.BroadcastBinaryAsync(blob);
-            }
-        }
+            (diagnostics ?? new SolveDiagnostics()).ToOutcome()), binaryBlobs).ConfigureAwait(false);
     }
 
     public Task BroadcastCurrentValues(Dictionary<string, object> values)
@@ -300,6 +387,23 @@ public class WebSocketTransport : IDisposable
     {
         return BroadcastAsync(OutboundEnvelopes.SchemaUpdated(
             _sessionId, schema, SchemaHash.Compute(schema), removedIds));
+    }
+
+    public Task BroadcastLayoutPlaced(UISchema schema, IReadOnlyList<LayoutPlacement.Placed> placements,
+        IReadOnlyList<Guid> removedIds, string summary)
+    {
+        return BroadcastAsync(OutboundEnvelopes.LayoutPlaced(
+            _sessionId, schema, SchemaHash.Compute(schema), placements, removedIds, summary));
+    }
+
+    public Task BroadcastCanvasSelection(IReadOnlyList<Guid> ids)
+    {
+        return BroadcastAsync(OutboundEnvelopes.CanvasSelection(_sessionId, ids));
+    }
+
+    public Task BroadcastRevealItem(Guid paramId)
+    {
+        return BroadcastAsync(OutboundEnvelopes.RevealItem(_sessionId, paramId));
     }
 
     public Task BroadcastInitialData(
@@ -381,10 +485,20 @@ public class WebSocketTransport : IDisposable
         return envelope == null ? Task.CompletedTask : BroadcastAsync(envelope);
     }
 
-    public Task BroadcastRuntimeMessage(string level, string messageText)
+    public Task BroadcastRuntimeMessage(GH_RuntimeMessageLevel level, string messageText)
     {
         return BroadcastAsync(OutboundEnvelopes.RuntimeMessage(
-            _sessionId, level, messageText, DateTime.UtcNow));
+            _sessionId, LevelName(level), messageText, DateTime.UtcNow));
+    }
+
+    private static string LevelName(GH_RuntimeMessageLevel level)
+    {
+        return level switch
+        {
+            GH_RuntimeMessageLevel.Error => "error",
+            GH_RuntimeMessageLevel.Warning => "warning",
+            _ => "info"
+        };
     }
 
     /// <summary>
@@ -430,11 +544,44 @@ public class WebSocketTransport : IDisposable
         return BroadcastAsync(OutboundEnvelopes.SyncApplied(_sessionId, success, message));
     }
 
+    public Task BroadcastPickGeometryResult(string requestId, Guid paramId, GeometryPickOutcome outcome)
+    {
+        return BroadcastAsync(OutboundEnvelopes.PickGeometryResult(_sessionId, requestId, paramId,
+            outcome.Kind, outcome.Summary, outcome.Error));
+    }
+
+    /// <summary>What `paramId` holds now, null when nothing is picked into it.</summary>
+    public Task BroadcastGeometrySummary(Guid paramId, string summary)
+    {
+        return BroadcastAsync(OutboundEnvelopes.GeometrySummary(_sessionId, paramId, summary));
+    }
+
+    public Task BroadcastSelvaAccount(SelvaAccount account)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaAccount(_sessionId, account));
+    }
+
+    public Task BroadcastSelvaTargets(SelvaTargets targets)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaTargets(_sessionId, targets));
+    }
+
+    public Task BroadcastSelvaUploadProgress(string stage)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaUploadProgress(_sessionId,
+            new SelvaUploadProgress { Stage = stage }));
+    }
+
+    public Task BroadcastSelvaUploadResult(SelvaUploadResult result)
+    {
+        return BroadcastAsync(OutboundEnvelopes.SelvaUploadResult(_sessionId, result));
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
 
-    private Task BroadcastAsync(object payload)
+    private Task BroadcastAsync(object payload, IReadOnlyList<byte[]> binaryFrames = null)
     {
         // Capture once — Stop() can null the field from another thread between check and use.
         var server = _webSocketServer;
@@ -444,40 +591,120 @@ public class WebSocketTransport : IDisposable
         }
 
         var json = JsonConvert.SerializeObject(payload, SecureSerializerSettings);
-        return server.BroadcastAsync(json);
+        return server.BroadcastAsync(json, binaryFrames);
+    }
+
+    private void HandleClientDisconnected(object sender, WebSocket client)
+    {
+        if (Interlocked.CompareExchange(ref _draftClient, null, client) == client)
+        {
+            MarshalToMainThread(() => OnDraftLayout?.Invoke(this, null));
+        }
+    }
+
+    private void ClearDraft()
+    {
+        if (Interlocked.Exchange(ref _draftClient, null) != null)
+        {
+            MarshalToMainThread(() => OnDraftLayout?.Invoke(this, null));
+        }
     }
 
     private void HandleClientConnected(object sender, WebSocket _)
     {
 #if DEBUG
-        Logger.Log("[WebSocketTransport] WebSocket client connected (waiting for requestInitialData).");
+        Logger.Log("[WebSocketTransport] WebSocket client authenticated (waiting for requestInitialData).");
 #endif
     }
 
-    private void HandleMessageReceived(object sender, string message)
+    private void HandleMessageReceived(object sender, ClientFrame frame)
     {
         // Process on a thread-pool thread so we never block the receive loop, but chain
         // messages so they are handled strictly in arrival order.
         lock (_dispatchLock)
         {
             _dispatchChain = _dispatchChain.ContinueWith(
-                _ => ProcessInboundMessage(message),
+                _ =>
+                {
+                    if (frame.Data != null)
+                    {
+                        ProcessHostFileFrame(frame);
+                    }
+                    else
+                    {
+                        ProcessInboundMessage(frame);
+                    }
+                },
                 CancellationToken.None,
                 TaskContinuationOptions.None,
                 TaskScheduler.Default);
         }
     }
 
-    private void ProcessInboundMessage(string message)
+    // The only binary frame a page sends is a file to save.
+    private void ProcessHostFileFrame(ClientFrame frame)
     {
         try
         {
-            var inbound = _inboundParser.Parse(message, _sessionId);
+            // No header means no requestId to answer.
+            if (!HostFileFrame.TryDecode(frame.Data, out var headerJson, out var body))
+            {
+                Logger.Warn("[WebSocketTransport] Dropped a binary frame that isn't a host file frame.");
+                return;
+            }
+
+            var inbound = _inboundParser.Parse(headerJson, _sessionId);
+            var reply = new SocketReply(this, frame.Client);
+            if (BridgeAccess.IsRefusedFrom(InboundKind.HostSaveFile, frame.Host))
+            {
+                Logger.Warn("[WebSocketTransport] Refused a binary frame from a browser tab.");
+                _hostFiles.RefuseSave(inbound.RequestId, "Saving through Rhino works only in the Rhino panel.",
+                    reply);
+                return;
+            }
+
+            if (inbound.Kind != InboundKind.HostSaveFile)
+            {
+                Logger.Warn($"[WebSocketTransport] Dropped a host file frame of kind {inbound.Kind}.");
+                _hostFiles.RefuseSave(inbound.RequestId,
+                    inbound.Kind == InboundKind.SessionMismatch
+                        ? "This page belongs to another Grasshopper session. Reload it and try again."
+                        : "Could not save the file.",
+                    reply);
+                return;
+            }
+
+            _hostFiles.HandleSave(inbound.RequestId, inbound.FileName, body, reply);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"[WebSocketTransport] Host file frame error: {ex.Message}");
+        }
+    }
+
+    private void ProcessInboundMessage(ClientFrame frame)
+    {
+        try
+        {
+            var inbound = _inboundParser.Parse(frame.Text, _sessionId);
+
+            // Hiding the builder on the page isn't enough: the socket itself must not write.
+            if (BridgeAccess.IsRefused(inbound.Kind, _role()))
+            {
+                Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' in a {BridgeAccess.RoleName(_role())} session.");
+                return;
+            }
+
+            if (BridgeAccess.IsRefusedFrom(inbound.Kind, frame.Host))
+            {
+                Logger.Warn($"[WebSocketTransport] Refused '{inbound.MessageType}' from a browser tab.");
+                return;
+            }
 
             switch (inbound.Kind)
             {
                 case InboundKind.ValueUpdate:
-                    MarshalToMainThread(() => OnValuesReceived?.Invoke(this, inbound.Values));
+                    QueueValues(inbound.Values);
                     break;
 
                 case InboundKind.RequestCurrentValues:
@@ -495,7 +722,7 @@ public class WebSocketTransport : IDisposable
                     {
                         try
                         {
-                            OnClientConnected?.Invoke(this, EventArgs.Empty);
+                            OnClientConnected?.Invoke(this, inbound);
                         }
                         finally
                         {
@@ -528,7 +755,112 @@ public class WebSocketTransport : IDisposable
                     // marshalled cancel would queue behind the very solve it is meant to stop.
                     // The handler only flips the document's abort flag, which is safe here.
                     OnCancelSolveRequested?.Invoke(this, EventArgs.Empty);
+
+                    // An update sent just before the cancel may still be waiting for the UI thread, or
+                    // be applying there, with no solve scheduled yet for the cancel to catch. Cancel
+                    // again once it has been applied.
+                    lock (_uiLock)
+                    {
+                        if (_queuedValues != null || _applyingValues)
+                        {
+                            _queuedValues = null;
+                            Enqueue(() => OnCancelSolveRequested?.Invoke(this, EventArgs.Empty));
+                        }
+                    }
+
                     break;
+
+                case InboundKind.SelvaGetAccount:
+                case InboundKind.SelvaConnect:
+                case InboundKind.SelvaSignIn:
+                case InboundKind.SelvaUseApiKey:
+                case InboundKind.SelvaSignOut:
+                case InboundKind.SelvaListTargets:
+                case InboundKind.SelvaUpload:
+                case InboundKind.SelvaCancel:
+                    OnSelvaCommand?.Invoke(this, inbound);
+                    break;
+
+                case InboundKind.HostPickFile:
+                    _hostFiles.HandlePick(inbound.RequestId, inbound.Accept, new SocketReply(this, frame.Client));
+                    break;
+
+                case InboundKind.HostSaveFile:
+                    Logger.Warn("[WebSocketTransport] Dropped a hostSaveFile sent as text; it travels as a binary frame.");
+                    break;
+
+                case InboundKind.PickGeometry:
+                    // Taken here, not on the UI thread: on Mac, Rhino runs no queued UI-thread work
+                    // while a prompt is open, so a second pick would wait and open its own prompt
+                    // once the first one closes.
+                    if (!ModalGate.Shared.TryEnter())
+                    {
+                        _ = BroadcastPickGeometryResult(inbound.RequestId, inbound.ParamId,
+                            GeometryPickOutcome.Failed(PromptOpenMessage));
+                        break;
+                    }
+
+                    MarshalToMainThread(() =>
+                    {
+                        try
+                        {
+                            OnPickGeometryRequested?.Invoke(this, inbound);
+                        }
+                        finally
+                        {
+                            ModalGate.Shared.Exit();
+                        }
+                    });
+                    break;
+
+                case InboundKind.ClearGeometry:
+                    // Gated like a pick: on Windows, Rhino runs queued UI-thread work inside an
+                    // open prompt, and the clear would land in the middle of a pick.
+                    if (!ModalGate.Shared.TryEnter())
+                    {
+                        _ = BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Warning, PromptOpenMessage);
+                        MarshalToMainThread(() => OnClearGeometryRefused?.Invoke(this, inbound.ParamId));
+                        break;
+                    }
+
+                    MarshalToMainThread(() =>
+                    {
+                        try
+                        {
+                            OnClearGeometryRequested?.Invoke(this, inbound.ParamId);
+                        }
+                        finally
+                        {
+                            ModalGate.Shared.Exit();
+                        }
+                    });
+                    break;
+
+                case InboundKind.Trigger:
+                    MarshalToMainThread(() => OnTriggerRequested?.Invoke(this, inbound.ParamId));
+                    break;
+
+                case InboundKind.CloseDefinition:
+                case InboundKind.EditInGrasshopper:
+                    MarshalToMainThread(() => OnPlayerCommand?.Invoke(this, inbound.Kind));
+                    break;
+
+                case InboundKind.DraftLayout:
+                    Volatile.Write(ref _draftClient, inbound.DraftLocations != null ? frame.Client : null);
+                    MarshalToMainThread(() => OnDraftLayout?.Invoke(this, inbound.DraftLocations));
+                    break;
+
+                case InboundKind.ReadLayout:
+                case InboundKind.ApplyLayout:
+                    {
+                        var request = new LayoutRequest
+                        {
+                            Message = inbound,
+                            Reply = new SocketReply(this, frame.Client).SendAsync
+                        };
+                        MarshalToMainThread(() => OnLayoutRequested?.Invoke(this, request));
+                        break;
+                    }
 
                 case InboundKind.SessionMismatch:
                     Logger.Warn($"[WebSocketTransport] Session ID mismatch for '{inbound.MessageType}'.");
@@ -553,8 +885,101 @@ public class WebSocketTransport : IDisposable
         }
     }
 
+    /// <summary>Sends to the socket the request came from, through whichever server is running at reply time.</summary>
+    private sealed class SocketReply : IHostFileReply
+    {
+        private readonly WebSocket _client;
+        private readonly WebSocketTransport _transport;
+
+        public SocketReply(WebSocketTransport transport, WebSocket client)
+        {
+            _transport = transport;
+            _client = client;
+        }
+
+        public Task SendAsync(object envelope)
+        {
+            var server = _transport._webSocketServer;
+            return server == null
+                ? Task.CompletedTask
+                : server.SendAsync(_client, JsonConvert.SerializeObject(envelope, SecureSerializerSettings));
+        }
+
+        public Task SendFileAsync(object header, byte[] body)
+        {
+            var server = _transport._webSocketServer;
+            return server == null
+                ? Task.CompletedTask
+                : server.SendBinaryAsync(_client,
+                    HostFileFrame.Encode(JsonConvert.SerializeObject(header, SecureSerializerSettings), body));
+        }
+    }
+
+    private void QueueValues(Dictionary<string, object> values)
+    {
+        lock (_uiLock)
+        {
+            if (_queuedValues != null)
+            {
+                foreach (var kvp in values)
+                {
+                    _queuedValues[kvp.Key] = kvp.Value;
+                }
+
+                return;
+            }
+
+            var queued = new Dictionary<string, object>(values);
+            _queuedValues = queued;
+            Enqueue(() =>
+            {
+                lock (_uiLock)
+                {
+                    if (_queuedValues == queued)
+                    {
+                        _queuedValues = null;
+                    }
+
+                    _applyingValues = true;
+                }
+
+                try
+                {
+                    OnValuesReceived?.Invoke(this, queued);
+                }
+                finally
+                {
+                    lock (_uiLock)
+                    {
+                        _applyingValues = false;
+                    }
+                }
+            });
+        }
+    }
+
+    private void MarshalToMainThread(Action callback)
+    {
+        lock (_uiLock)
+        {
+            // Anything queued behind a value update ends the merge: later values must not jump it.
+            _queuedValues = null;
+            Enqueue(callback);
+        }
+    }
+
+    // Caller holds _uiLock.
+    private void Enqueue(Action callback)
+    {
+        _uiChain = _uiChain.ContinueWith(
+            _ => InvokeOnUiThread(callback),
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
+    }
+
     // RhinoApp.InvokeOnUiThread is always safe to call — no thread-ID check needed.
-    private static void MarshalToMainThread(Action callback)
+    private static void InvokeOnUiThread(Action callback)
     {
         try
         {

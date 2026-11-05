@@ -19,7 +19,8 @@
 		"instanceSolve": true,
 		"inputs": [],
 		"outputs": [],
-		"layout": null
+		"layout": null,
+		"assets": null
 	},
 	"schemaHash": "hash-1",
 	"availableParams": {
@@ -40,7 +41,8 @@
 				"treeAccess": false,
 				"options": null,
 				"acceptedFormats": [],
-				"groupName": null
+				"groupName": null,
+				"geometryTypes": []
 			}
 		],
 		"outputs": [

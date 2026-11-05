@@ -1,7 +1,7 @@
 using System.IO;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.Advanced;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.Advanced;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -43,7 +43,7 @@ public class PdfHyperlinkTests
 		var bytes = new PdfRenderer().Render(BuildDocWithLink("https://example.com"));
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		var page = reopened.Pages[0];
 		var annots = page.Elements["/Annots"] as PdfArray;
 		Assert.NotNull(annots);
@@ -68,7 +68,7 @@ public class PdfHyperlinkTests
 			.Render(BuildDocWithLink("https://example.com"));
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		var page = reopened.Pages[0];
 		Assert.False(page.Elements.ContainsKey("/Annots"));
 	}

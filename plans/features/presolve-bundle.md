@@ -166,7 +166,7 @@ Two pure-ish pieces, colocated with the cache machinery they reuse:
   their current/default value and reported in `skipped`. Count is computed before
   materializing combos (guardrail rejects without allocating the full list).
 - **`runPresolve({ combos, solve, sink, signal, onProgress })`** — per combo, call
-  `solve(combo)` (`runSolvePipeline` with definition/client already resolved),
+  `solve(combo)` (`engine.solve` with the definition and server already resolved),
   route the result to `sink`, emit `onProgress(done, total)`. Best-effort: one
   combo's failure is recorded and the batch continues.
 

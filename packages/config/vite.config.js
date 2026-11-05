@@ -2,11 +2,14 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { mergeConfig, defaultClientConditions, defaultServerConditions } from 'vite';
 
-/** @param {import('vite').UserConfig} overrides */
-export function createViteConfig(overrides = {}) {
+/**
+ * @param {import('vite').UserConfig & { kit?: Parameters<typeof sveltekit>[0] }} options
+ *   `kit` goes to the SvelteKit plugin; the rest is merged into the Vite config.
+ */
+export function createViteConfig({ kit, ...overrides } = {}) {
 	return mergeConfig(
 		{
-			plugins: [tailwindcss(), sveltekit()],
+			plugins: [tailwindcss(), sveltekit(kit)],
 			// Resolve @selvajs/* through the "selva-source" export condition (monorepo dev vs npm consumers).
 			resolve: {
 				conditions: ['selva-source', ...defaultClientConditions],

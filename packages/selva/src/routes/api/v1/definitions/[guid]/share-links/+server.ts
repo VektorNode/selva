@@ -1,6 +1,14 @@
 import type { RequestHandler } from './$types';
-import { mount } from '$lib/server/api/sveltekit';
+import { mount } from '#lib/server/api/sveltekit.js';
+import { definitionScopeTarget } from '@selvajs/server/api';
 import { createShareLink, listShareLinks } from '@selvajs/server/handlers';
 
-export const GET: RequestHandler = mount('Failed to list share links', listShareLinks);
-export const POST: RequestHandler = mount('Failed to create share link', createShareLink);
+const scopeTarget = definitionScopeTarget('guid');
+
+export const GET: RequestHandler = mount('Failed to list share links', listShareLinks, {
+	scopeTarget
+});
+export const POST: RequestHandler = mount('Failed to create share link', createShareLink, {
+	scopeTarget,
+	idempotent: true
+});

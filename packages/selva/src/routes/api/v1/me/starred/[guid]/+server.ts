@@ -1,5 +1,5 @@
 import type { RequestHandler } from './$types';
-import { mount } from '$lib/server/api/sveltekit';
+import { mount } from '#lib/server/api/sveltekit.js';
 import { starDefinition, unstarDefinition } from '@selvajs/server/handlers';
 
 export const PUT: RequestHandler = mount('Failed to star definition', starDefinition);

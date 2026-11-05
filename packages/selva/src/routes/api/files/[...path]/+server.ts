@@ -1,18 +1,13 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
 import {
 	GuidSchema,
 	definitionPaths,
 	classifyAssetPath,
 	COVER_IMAGE_CONTENT_TYPES
 } from '@selvajs/platform';
-import { getDefinitionMeta, getStorageProvider } from '$lib/server/providers.server';
-import {
-	asHttpError,
-	requireCanViewProject,
-	requireCanViewOrg,
-	scoped
-} from '$lib/server/access.server';
+import { getDefinitionMeta, getStorageProvider } from '#lib/server/providers.server.js';
+import { asHttpError, requireCanViewProject, scoped } from '#lib/server/access.server.js';
 
 /**
  * Authenticated/­public blob proxy. The set of servable paths is the closed
@@ -23,8 +18,6 @@ import {
  *   - `public`  (org branding — logo/favicon): served to anyone, incl.
  *     logged-out visitors, with no auth. Cacheable. The bytes are always a
  *     rasterized WebP, so there is no XSS surface to gate.
- *   - `org`     (org-private blobs, e.g. pricing sheets under
- *     `orgs/{id}/private/*`): `requireCanViewOrg(orgId)`.
  *   - `project` (definition covers): `requireCanViewProject(projectId)` — the
  *     M5 hardening, unchanged.
  *
@@ -33,7 +26,7 @@ import {
  * "is the extension allowed" fallthrough. Authorization lives here (the route),
  * not in the storage layer, per `IStorageProvider`'s contract.
  *
- * Why a single proxy for all three: with the registry, the route is no longer a
+ * Why a single proxy: with the registry, the route is no longer a
  * pile of per-shape branches — it classifies once and dispatches on visibility,
  * so the cover-only contract that this route used to pin now generalizes
  * without re-opening the M5 hole.
@@ -41,16 +34,12 @@ import {
 
 // Content types we set on served blobs. Image types are reused from the
 // canonical `COVER_IMAGE_CONTENT_TYPES` so cover/branding stay in lockstep with
-// the upload validation. `.pdf` is added for the org-private tier (pricing
-// sheets under `orgs/{id}/private/*`). Deliberately NO `image/svg+xml`: no
+// the upload validation. Deliberately NO `image/svg+xml`: no
 // registered class serves SVG (branding is always rasterized WebP), and
 // serving raw SVG would reintroduce the XSS surface the transcoder removes.
 // Anything not listed falls back to `application/octet-stream` (download, not
 // inline-render).
-const CONTENT_TYPE_BY_EXT: Record<string, string> = {
-	...COVER_IMAGE_CONTENT_TYPES,
-	'.pdf': 'application/pdf'
-};
+const CONTENT_TYPE_BY_EXT: Record<string, string> = COVER_IMAGE_CONTENT_TYPES;
 
 function contentTypeFor(storagePath: string): string {
 	const dot = storagePath.lastIndexOf('.');
@@ -77,14 +66,6 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 			// No auth — branding is world-readable. The registry's anchored,
 			// safe-alphabet pattern is the only gate the path needs.
 			break;
-
-		case 'org': {
-			if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');
-			const orgId = match.scopeId;
-			if (!orgId) apiError(404, ApiErrorCode.NOT_FOUND, 'File not found');
-			await asHttpError(() => requireCanViewOrg(scoped(locals), orgId));
-			break;
-		}
 
 		case 'project': {
 			if (!locals.ctx) apiError(401, ApiErrorCode.UNAUTHORIZED, 'Unauthorized');

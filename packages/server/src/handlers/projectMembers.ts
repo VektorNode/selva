@@ -24,6 +24,7 @@ import {
 import type { ApiHandler, ApiRequest } from '../api/index.js';
 import { checkOwnerRemoval, type ProjectMember, type ProjectRole } from '@selvajs/platform';
 import { requireCanManage, requireTargetIsOrgMember } from '../access/index.js';
+import { serializeOwnerChanges } from './ownerChanges.js';
 
 export const listProjectMembers: ApiHandler = async (req) => {
 	const { id } = requireParams(req.params, 'id');
@@ -106,15 +107,17 @@ export const updateProjectMemberRole: ApiHandler = async (req) => {
 	// it runs the same guard DELETE does. Without this a sole owner can PATCH
 	// themselves to `viewer` and lock the project — `canManage`,
 	// `canEditProjectSettings` and `canEdit` all go false at once.
-	if (role !== 'owner') {
-		const target = await req.deps.projects.getProjectMember(ctx, id, userId);
-		if (target?.role === 'owner') {
-			await assertOwnerRemovable(req, id, target, 'demote');
+	return serializeOwnerChanges(id, async () => {
+		if (role !== 'owner') {
+			const target = await req.deps.projects.getProjectMember(ctx, id, userId);
+			if (target?.role === 'owner') {
+				await assertOwnerRemovable(req, id, target, 'demote');
+			}
 		}
-	}
 
-	await req.deps.projects.updateProjectMemberRole(ctx, id, userId, role);
-	return noContent();
+		await req.deps.projects.updateProjectMemberRole(ctx, id, userId, role);
+		return noContent();
+	});
 };
 
 export const removeProjectMember: ApiHandler = async (req) => {
@@ -122,14 +125,16 @@ export const removeProjectMember: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
 	await requireCanManage(req, id, 'members');
 
-	const target = await req.deps.projects.getProjectMember(ctx, id, userId);
-	// Idempotent: already gone, or never there.
-	if (!target) return noContent();
+	return serializeOwnerChanges(id, async () => {
+		const target = await req.deps.projects.getProjectMember(ctx, id, userId);
+		// Idempotent: already gone, or never there.
+		if (!target) return noContent();
 
-	if (target.role === 'owner') {
-		await assertOwnerRemovable(req, id, target, 'remove');
-	}
+		if (target.role === 'owner') {
+			await assertOwnerRemovable(req, id, target, 'remove');
+		}
 
-	await req.deps.projects.removeProjectMember(ctx, id, userId);
-	return noContent();
+		await req.deps.projects.removeProjectMember(ctx, id, userId);
+		return noContent();
+	});
 };

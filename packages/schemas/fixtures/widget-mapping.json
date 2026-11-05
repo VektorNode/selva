@@ -1,0 +1,25 @@
+{
+	"inputs": {
+		"number": "number",
+		"integer": "number",
+		"boolean": "checkbox",
+		"text": "text",
+		"valueList": "dropdown",
+		"dynamicValueList": "dynamicValueList",
+		"file": "file",
+		"color": "color",
+		"generic": "text",
+		"geometry": "text",
+		"point": "text",
+		"line": "text",
+		"plane": "text"
+	},
+	"outputs": {
+		"number": "number",
+		"integer": "number",
+		"text": "text",
+		"file": "file",
+		"chart": "chart",
+		"dynamicValueList": "dynamicValueList"
+	}
+}

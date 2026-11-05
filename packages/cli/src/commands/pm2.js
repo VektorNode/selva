@@ -8,6 +8,9 @@ import { spawnSync, execSync } from 'node:child_process';
 import * as p from '@clack/prompts';
 import pc from 'picocolors';
 import { requireDeploymentDir, resolveDeploymentDir } from '../paths.js';
+import { readEnvFile } from '../env.js';
+import { needsSupabaseProvider } from '../deployment-package.js';
+import { checkSupabaseMigrations, providerTagFor } from '../checks/migrations.js';
 
 export const APP_NAME = 'selva-compute';
 
@@ -147,10 +150,10 @@ export async function runUpdate() {
 	const before = readRuntimeVersion(dir);
 	p.log.info(`Current @selvajs/selva: ${before ?? 'unknown'}`);
 
-	// Providers are bundled into @selvajs/selva — the only @selvajs/* packages
-	// an operator install carries are the runtime and the CLI. The admin-center
-	// "Run update" button runs the same list — keep them in sync if you edit.
+	// The admin-center "Run update" button runs the same list: keep them in sync.
 	const packages = ['@selvajs/cli', '@selvajs/selva'];
+	const env = readEnvFile(join(dir, '.env'));
+	const supabase = needsSupabaseProvider(env);
 
 	const confirmed = await p.confirm({
 		message: 'Refresh all @selvajs/* packages and restart the app?',
@@ -185,6 +188,23 @@ export async function runUpdate() {
 	const after = readRuntimeVersion(dir);
 	p.log.info(`New @selvajs/selva:     ${after ?? 'unknown'}`);
 
+	realignPm2Pin(dir, s);
+
+	if (supabase) {
+		// Provider code is bundled into @selvajs/selva, but the migration SQL ships
+		// here. Left behind, `selva-supabase` copies nothing new. Installed by tag,
+		// not `npm update`d: its pin can sit on another channel than the runtime's.
+		const spec = `@selvajs/supabase-provider@${providerTagFor(after)}`;
+		s.start(`npm install ${spec}`);
+		try {
+			execSync(`npm install --save --prefer-online ${spec}`, { cwd: dir, stdio: 'pipe' });
+			s.stop(`${spec} installed`);
+		} catch (err) {
+			s.stop(`npm install ${spec} failed`);
+			p.log.warn(String(err.stderr ?? err.message ?? err).trim());
+		}
+	}
+
 	if (before && after && before === after) {
 		p.log.warn(
 			[
@@ -199,12 +219,115 @@ export async function runUpdate() {
 		);
 	}
 
+	// Migrations are not applied here: they aren't reversible, and the old build
+	// is already gone. The app serves on an old schema (degraded), so start it and
+	// say what is left to do.
+	const schema = supabase ? await checkSupabaseMigrations(dir, env, after) : null;
+
 	const status = runPm2(dir, ['start', APP_NAME, '--update-env'], { inherit: false });
-	if (status === 0) {
-		p.outro(pc.green('Started ' + APP_NAME));
-	} else {
+	if (status !== 0) {
 		p.outro(pc.yellow(`Start failed — investigate with \`pm2 logs ${APP_NAME}\`.`));
+		process.exitCode = 1;
+		return;
 	}
+
+	const health = await waitForHealth(env);
+	if (schema && schema.severity !== 'green') p.log.message(schema.line);
+	if (health.ok) {
+		p.outro(pc.green(`Started ${APP_NAME}`));
+		return;
+	}
+	p.outro(
+		pc.red(
+			health.status
+				? `Started ${APP_NAME}, but /api/health returned ${health.status}: ${health.reason}`
+				: `Started ${APP_NAME}, but /api/health did not answer within 30s. Check \`pm2 logs ${APP_NAME}\`.`
+		)
+	);
+	process.exitCode = 1;
+}
+
+// Moves the deployment onto the pm2 the just-installed CLI pins, then swaps the
+// daemon. Without it a release that bumps pm2 needs `selva migrate` and
+// `pm2 update` by hand on every host. Runs from the OLD CLI, so the pin is read
+// from the new one on disk. The app is stopped here, so the swap costs no
+// extra downtime. A failure leaves the old pm2 working: warn, don't abort.
+function readPm2Pins(dir) {
+	const read = (path) => {
+		try {
+			return JSON.parse(readFileSync(path, 'utf8'));
+		} catch {
+			return null;
+		}
+	};
+	return {
+		declared: read(join(dir, 'package.json'))?.dependencies?.pm2 ?? null,
+		pinned:
+			read(join(dir, 'node_modules', '@selvajs', 'cli', 'package.json'))?.devDependencies?.pm2 ??
+			null
+	};
+}
+
+function realignPm2Pin(dir, s) {
+	const { declared, pinned } = readPm2Pins(dir);
+	if (!pinned || pinned === declared) return;
+
+	s.start(`npm install pm2@${pinned}`);
+	try {
+		execSync(`npm install --save --save-exact --prefer-online pm2@${pinned}`, {
+			cwd: dir,
+			stdio: 'pipe'
+		});
+		s.stop(`pm2 ${declared ?? '(none)'} → ${pinned}`);
+	} catch (err) {
+		s.stop(`npm install pm2@${pinned} failed`);
+		p.log.warn(
+			`${String(err.stderr ?? err.message ?? err).trim()}\n` +
+				'The previous pm2 still runs the app. Retry with `npx selva migrate`.'
+		);
+		return;
+	}
+	try {
+		ensurePm2InSync(dir);
+	} catch (err) {
+		p.log.warn(`${err instanceof Error ? err.message : err}`);
+	}
+}
+
+// The app was stopped before the update, so the first answer is the new process.
+async function waitForHealth(env, timeoutMs = 30_000) {
+	const host = !env.HOST || env.HOST === '0.0.0.0' || env.HOST === '::' ? '127.0.0.1' : env.HOST;
+	const url = `http://${host.includes(':') ? `[${host}]` : host}:${env.PORT || 3000}/api/health`;
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		try {
+			const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+			if (res.ok) return { ok: true };
+			return {
+				ok: false,
+				status: res.status,
+				reason: degradedReason(await res.json().catch(() => null))
+			};
+		} catch {
+			await new Promise((r) => setTimeout(r, 1000));
+		}
+	}
+	return { ok: false };
+}
+
+/** Names the cause a 503 from /api/health reports in `boot`. */
+export function degradedReason(body) {
+	const boot = body?.boot;
+	if (boot?.schemaVersion?.ok === false) {
+		return (
+			boot.schemaVersion.message ??
+			`database migration head ${boot.schemaVersion.actual} is behind ${boot.schemaVersion.expected}`
+		);
+	}
+	if (boot?.atRestSecrets?.ok === false) {
+		return 'stored compute API keys cannot be decrypted under the current SELVA_AT_REST_KEY';
+	}
+	return 'see `pm2 logs selva-compute`';
 }
 
 function readRuntimeVersion(dir) {

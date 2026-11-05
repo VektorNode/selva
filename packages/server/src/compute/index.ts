@@ -11,6 +11,7 @@
 
 export {
 	resolveComputeLimits,
+	COMPUTE_REQUEST_MAX_BYTES,
 	readPositiveInt,
 	readNonNegativeInt,
 	readBool,
@@ -47,19 +48,18 @@ export {
 	type RemoteDefinitionConfig
 } from './remote-definition.js';
 
-export { resolveServerForOrg } from './resolve-server.js';
+export {
+	createServerResolver,
+	resolveServerForOrg,
+	type ServerResolver
+} from './resolve-server.js';
 export { ComputeServerUnconfiguredError } from './errors.js';
 export { evictChangedServers, type ServerConnection } from './evict-changed-servers.js';
 export {
+	assertStoredKeysReadable,
+	assertKeyNotRetargeted,
 	validateIncomingServers,
 	resolveApiKey,
 	storedKeysById,
 	type IncomingServerBase
 } from './server-config-write.js';
-export {
-	idempotencyKey,
-	toStoredResponse,
-	fromStoredResponse,
-	IDEMPOTENCY_REPLAYED_HEADER,
-	type StoredResponse
-} from './idempotency-http.js';

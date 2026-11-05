@@ -49,3 +49,10 @@ export interface OrgShareLink extends Omit<ShareLink, 'tokenHash'> {
  * worst-case denial-of-wallet damage.
  */
 export const DEFAULT_SHARE_LINK_MAX_SOLVES = 1000;
+
+/**
+ * Days until a link minted without an expiry stops working. A link that never
+ * expires outlives the key it was hashed under and anyone's memory of handing
+ * it out; the minter can still pass `expiresAt: null` deliberately.
+ */
+export const DEFAULT_SHARE_LINK_TTL_DAYS = 90;

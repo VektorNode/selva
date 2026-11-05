@@ -34,7 +34,7 @@ public sealed class LegendBlock : LayoutElement
 
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var descriptionWidth = Math.Max(10, Width - SwatchColumnWidth);
 

@@ -22,8 +22,9 @@ export interface SolveMetricSinkOptions {
 	/** Flush a non-empty buffer after this many ms, even if under `maxBatchSize`. */
 	flushIntervalMs?: number;
 	/**
-	 * Hard cap on buffered rows. Past this, the oldest rows are dropped so a
-	 * stalled or failing backend cannot grow the buffer without bound.
+	 * Hard cap on rows not yet written, counting batches waiting their turn. Past
+	 * this, the oldest rows are dropped so a stalled or failing backend cannot grow
+	 * memory without bound.
 	 */
 	maxBufferSize?: number;
 	/**
@@ -54,8 +55,11 @@ const DEFAULT_MAX_BUFFER_SIZE = 10_000;
  */
 export class SupabaseSolveMetricSink implements ISolveMetricSink {
 	private buffer: MetricRow[] = [];
+	/** Claimed batches, oldest first, not counting the one being written. */
+	private queued: MetricRow[][] = [];
 	private timer: ReturnType<typeof setTimeout> | null = null;
-	private inFlight: Promise<void> = Promise.resolve();
+	private draining = false;
+	private drained: Promise<void> = Promise.resolve();
 	private closed = false;
 
 	private readonly maxBatchSize: number;
@@ -90,14 +94,7 @@ export class SupabaseSolveMetricSink implements ISolveMetricSink {
 			warning_count: metric.warningCount
 		});
 
-		if (this.buffer.length > this.maxBufferSize) {
-			const dropped = this.buffer.length - this.maxBufferSize;
-			this.buffer.splice(0, dropped);
-			this.logger.error('Metric buffer full, dropped oldest metrics', {
-				component: 'SupabaseSolveMetricSink',
-				dropped
-			});
-		}
+		this.enforceCap();
 
 		if (this.buffer.length >= this.maxBatchSize) {
 			void this.flush();
@@ -115,13 +112,40 @@ export class SupabaseSolveMetricSink implements ISolveMetricSink {
 		// Claim the buffered rows synchronously, before yielding — otherwise a
 		// record() landing between here and the write joins a batch already
 		// counted as claimed, and the row is written twice or not at all.
-		const batch = this.buffer;
+		if (this.buffer.length > 0) this.queued.push(this.buffer);
 		this.buffer = [];
 		this.clearTimer();
-		if (batch.length === 0) return this.inFlight;
+		if (!this.draining) this.drained = this.drain();
+		return this.drained;
+	}
 
-		this.inFlight = this.inFlight.then(() => this.write(batch));
-		return this.inFlight;
+	/** Rows held in memory waiting to be written. */
+	get pendingRows(): number {
+		return this.buffer.length + this.queued.reduce((total, batch) => total + batch.length, 0);
+	}
+
+	private async drain(): Promise<void> {
+		this.draining = true;
+		for (let batch = this.queued.shift(); batch; batch = this.queued.shift()) {
+			await this.write(batch);
+		}
+		this.draining = false;
+	}
+
+	private enforceCap(): void {
+		const overflow = this.pendingRows - this.maxBufferSize;
+		if (overflow <= 0) return;
+		let remaining = overflow;
+		while (remaining > 0 && this.queued.length > 0) {
+			const oldest = this.queued[0];
+			remaining -= oldest.splice(0, remaining).length;
+			if (oldest.length === 0) this.queued.shift();
+		}
+		this.buffer.splice(0, remaining);
+		this.logger.error('Metric buffer full, dropped oldest metrics', {
+			component: 'SupabaseSolveMetricSink',
+			dropped: overflow
+		});
 	}
 
 	/**

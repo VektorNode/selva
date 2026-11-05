@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { SideNav, type SideNavItem } from '@selvajs/ui';
+	import { page } from '$app/state';
+	import { PageContent, SideNav, type SideNavItem } from '@selvajs/ui';
 	import {
 		Gauge,
 		Users,
@@ -9,14 +9,15 @@
 		Link2,
 		SlidersHorizontal,
 		RotateCcw,
-		Server
+		Server,
+		KeyRound
 	} from '@lucide/svelte';
-	import AppHeader from '$lib/components/AppHeader.svelte';
+	import AppHeader from '#lib/components/AppHeader.svelte';
 	import type { Organization, OrgPermission } from '@selvajs/platform';
 
 	interface LayoutProps {
 		data: {
-			ctx: { orgPermissions: OrgPermission[] } | null;
+			ctx: { orgPermissions: OrgPermission[]; mayHoldApiTokens: boolean } | null;
 			org: Organization | null;
 		};
 		children?: import('svelte').Snippet;
@@ -25,7 +26,7 @@
 
 	const orgPerms = $derived<OrgPermission[]>(data.ctx?.orgPermissions ?? []);
 	const can = (p: OrgPermission) => orgPerms.includes(p);
-	const enableSharing = $derived(!!$page.data.flags?.enableSharing);
+	const enableSharing = $derived(!!page.data.flags?.enableSharing);
 
 	const items = $derived(
 		[
@@ -71,6 +72,13 @@
 				show: enableSharing && can('manage_definitions')
 			},
 			{
+				href: '/team/tokens',
+				label: 'API tokens',
+				icon: KeyRound,
+				match: 'prefix' as const,
+				show: !!data.ctx?.mayHoldApiTokens
+			},
+			{
 				href: '/team/compute',
 				label: 'Compute',
 				icon: Server,
@@ -107,10 +115,10 @@
 			{#snippet header()}
 				{#if data.org}
 					<div
-						class="border-border bg-accent/40 flex items-center gap-2 rounded-md border px-2.5 py-2"
+						class="border-border bg-selected flex items-center gap-2 rounded-md border px-2.5 py-2"
 					>
 						<span
-							class="bg-primary/15 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded font-mono text-[11px] font-semibold"
+							class="bg-primary/15 text-primary flex h-6 w-6 shrink-0 items-center justify-center rounded-sm font-mono text-[11px] font-semibold"
 						>
 							{orgInitials(data.org.name)}
 						</span>
@@ -126,7 +134,7 @@
 		</SideNav>
 	{/snippet}
 
-	<div class="px-(--page-px) py-(--page-py)">
+	<PageContent>
 		{@render children?.()}
-	</div>
+	</PageContent>
 </AppHeader>

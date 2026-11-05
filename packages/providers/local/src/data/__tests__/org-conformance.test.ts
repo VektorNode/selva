@@ -5,6 +5,7 @@ import * as os from 'node:os';
 import { runOrgStoreConformance } from '@selvajs/platform/testing';
 import { LocalOrgStore, LocalOrgStoreLoader } from '../LocalOrgStore.js';
 import { LocalInviteStore } from '../LocalInviteStore.js';
+import { LocalApiTokenStore } from '../LocalApiTokenStore.js';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 import { LocalPlatformProjectGrantStore } from '../LocalPlatformProjectGrantStore.js';
 
@@ -32,6 +33,7 @@ describe('LocalOrgStore', () => {
 			new LocalOrgStore({
 				loader: new LocalOrgStoreLoader(tempDir),
 				invites: makeInvites(),
+				apiTokens: new LocalApiTokenStore(tempDir),
 				computeServer: makeCompute(),
 				grants: makeGrants()
 			}),

@@ -14,32 +14,44 @@
  * who the caller is.
  */
 
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { isApiError } from '@selvajs/server/api';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import {
+	ApiError,
+	assertScope,
+	chargeApiRateLimit,
+	isApiError,
+	rateLimitedResponse,
+	toErrorBody,
+	withRateLimitHeaders
+} from '@selvajs/server/api';
 import { isHttpError } from '@sveltejs/kit';
 import { ComputeError, ErrorCodes } from '@selvajs/compute/core';
-import type { RequestContext, SolveFailureKind } from '@selvajs/platform';
-import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
-import { engine, COMPUTE_DEBUG } from '$lib/server/compute/engine.server';
-import { loadRemoteDefinition } from '$lib/server/compute/remoteDefinition.server';
-import type {
-	ByteCacheRef,
-	PipelineInput,
-	SolveDefinition,
-	SolveEnvelope
+import type { ComputeServerConfig, RequestContext, SolveFailureKind } from '@selvajs/platform';
+import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
+import { serverResolver } from './serverResolver.server';
+import { engine, COMPUTE_DEBUG, COMPUTE_DEBUG_VERBOSE } from '#lib/server/compute/engine.server.js';
+import { computeErrorLogFields } from '#lib/server/compute/errorLogFields.js';
+import { loadRemoteDefinition } from '#lib/server/compute/remoteDefinition.server.js';
+import {
+	solveInputsFromSchema,
+	type ByteCacheRef,
+	type SolveDefinition,
+	type SolveEnvelope,
+	type SolveInput
 } from '@selvajs/solve/server';
-import { checkComputeRateLimit } from '$lib/server/computeRateLimit.server';
-import { getStorageProvider, getSolveMetricSink, providers } from '$lib/server/providers.server';
-import { requireCanSolve, requireCanEditDefinition, scoped } from '$lib/server/access.server';
+import type { UISchema } from '@selvajs/schemas';
+import { apiRateLimiter, checkComputeRateLimit } from '#lib/server/computeRateLimit.server.js';
+import { getStorageProvider, getSolveMetricSink, providers } from '#lib/server/providers.server.js';
+import { requireCanSolve, requireCanEditDefinition, scoped } from '#lib/server/access.server.js';
 import { fetchSchemaFromCompute } from '@selvajs/server/definitions';
 import { renderThrown } from '@selvajs/server/logging';
 import type { ShareLink } from '@selvajs/platform';
-import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
+import { MAX_SOLVE_DEADLINE_MS } from '@selvajs/solve/server';
 import {
 	bindLiveSolve,
 	liveOwnerKey,
 	solveEndedKind
-} from '$lib/server/solveEvents/liveSolve.server';
+} from '#lib/server/solveEvents/liveSolve.server.js';
 
 export type SolveChannel = 'live' | 'draft';
 
@@ -57,7 +69,12 @@ export type SolveAccess =
 export interface SolveParams {
 	access: SolveAccess;
 	definitionUrl: string;
-	inputs: PipelineInput[];
+	/**
+	 * The request body's inputs, read for a remote URL only. A stored definition's come from its
+	 * version's schema: a caller, a share-link visitor included, must not choose its ids, types or
+	 * bounds.
+	 */
+	inputs?: unknown;
 	values: Record<string, unknown>;
 	channel: SolveChannel;
 	/** Explicit version pick; editor-only, never share-token accessible. */
@@ -84,6 +101,31 @@ export interface SolveParams {
 	 * definition, and a 403 is the more useful answer.
 	 */
 	concealAccessFailure?: boolean;
+	/**
+	 * The route already charged the key's request bucket, ahead of any idempotent
+	 * replay that would skip this function, so it must not be charged twice.
+	 */
+	tokenCharged?: boolean;
+}
+
+function readRemoteInputs(inputs: unknown): SolveInput[] {
+	const valid =
+		Array.isArray(inputs) &&
+		inputs.every(
+			(input) =>
+				typeof input === 'object' &&
+				input !== null &&
+				typeof (input as SolveInput).id === 'string' &&
+				typeof (input as SolveInput).nickname === 'string'
+		);
+	if (!valid) {
+		apiError(
+			400,
+			ApiErrorCode.VALIDATION_FAILED,
+			'A remote definitionUrl needs inputs: a list of { id, nickname, paramType }.'
+		);
+	}
+	return inputs as SolveInput[];
 }
 
 /**
@@ -106,7 +148,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		loadStart,
 		prepMarks,
 		concealAccessFailure = false,
-		streamId = null
+		streamId = null,
+		tokenCharged = false
 	} = params;
 	const storage = getStorageProvider();
 	const sharedAccess = access.kind === 'share' ? access : null;
@@ -126,9 +169,12 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// `def_bytes` Server-Timing verdict. Null for remote-URL solves.
 	let localDefinitionRef: ByteCacheRef | null = null;
 	let localVersionForBackfill: { id: string; hasSchema: boolean } | null = null;
+	let storedSchema: UISchema | undefined;
 	// BYO compute routing per org; null for remote definitions.
 	let solveOrgId: string | null = null;
 	let definitionPin: string | null = null;
+	// Started once the project is known; null for remote definitions.
+	let pendingServer: Promise<ComputeServerConfig> | null = null;
 	// Solve-metric attribution; null for remote-URL solves.
 	let metricDefinitionId: string | null = null;
 	let metricVersionId: string | null = null;
@@ -167,23 +213,33 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			);
 	};
 
-	// Per-key rate limit; runs before DB reads so throttled callers don't burn quota.
+	// Both limits run before DB reads so throttled callers don't burn quota. A
+	// token pays its own request bucket and its owner's compute bucket, so ten
+	// keys of one user never buy ten times the compute.
+	const tokenVerdict = tokenCharged
+		? undefined
+		: await chargeApiRateLimit(access.ctx, apiRateLimiter);
+	if (tokenVerdict && !tokenVerdict.allowed) {
+		recordMetric('rate_limited');
+		return rateLimitedResponse(tokenVerdict);
+	}
 	const rateLimit = checkComputeRateLimit(access.rateLimitKey);
 	if (!rateLimit.allowed) {
 		recordMetric('rate_limited');
-		const retryAfter = rateLimit.retryAfter ?? 1;
-		return new Response(
-			JSON.stringify({
-				message: `Too many compute requests. Retry in ${retryAfter}s.`,
-				retryAfter
-			}),
-			{
+		const retryAfter = String(rateLimit.retryAfter ?? 1);
+		const err = new ApiError(
+			429,
+			ApiErrorCode.RATE_LIMITED,
+			`Too many compute requests. Retry in ${retryAfter}s.`,
+			undefined,
+			{ retryAfter }
+		);
+		return withRateLimitHeaders(
+			new Response(JSON.stringify(toErrorBody(err)), {
 				status: 429,
-				headers: {
-					'Content-Type': 'application/json',
-					'Retry-After': String(retryAfter)
-				}
-			}
+				headers: { 'Content-Type': 'application/json', 'Retry-After': retryAfter }
+			}),
+			tokenVerdict
 		);
 	}
 
@@ -202,13 +258,30 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		if (!record) apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' not found`);
 		mark('defRecord');
 
+		// The version and the server need only the record and its project, so they are read
+		// while access is checked, and awaited after it in their old order: a caller refused
+		// access learns nothing from a missing version or server.
+		const versionId =
+			explicitVersionId ?? (channel === 'live' ? record.liveVersionId : record.draftVersionId);
+		const pendingVersion = versionId
+			? providers.data.definitions.getVersion(solveCtx, versionId)
+			: null;
+		pendingVersion?.catch(() => {});
 		const project = await providers.data.projects.getProject(solveCtx, record.projectId);
 		solveOrgId = project?.orgId ?? null;
 		definitionPin = record.computeServerId ?? null;
+		pendingServer = serverResolver.resolve(
+			solveCtx,
+			solveOrgId,
+			locals.providers.data.computeServer,
+			{ definitionPin }
+		);
+		pendingServer.catch(() => {});
 		mark('project');
 
 		if (!sharedAccess) {
 			try {
+				assertScope(access.ctx, 'solve', { projectId: record.projectId, definitionId: guid });
 				if (channel === 'draft' || explicitVersionId) {
 					await requireCanEditDefinition(scoped(locals), record.projectId, guid, {
 						project,
@@ -230,16 +303,15 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		}
 		mark('access');
 
-		const versionId =
-			explicitVersionId ?? (channel === 'live' ? record.liveVersionId : record.draftVersionId);
-		if (!versionId) {
+		if (!versionId || !pendingVersion) {
 			apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' has no ${channel} version yet`);
 		}
-		const version = await providers.data.definitions.getVersion(solveCtx, versionId);
+		const version = await pendingVersion;
 		if (!version || version.definitionId !== guid) {
 			apiError(404, ApiErrorCode.NOT_FOUND, `Definition '${guid}' version is missing`);
 		}
 		localVersionForBackfill = { id: version.id, hasSchema: version.schema !== undefined };
+		storedSchema = version.schema;
 		metricDefinitionId = guid;
 		metricVersionId = version.id;
 		mark('version');
@@ -256,6 +328,9 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		definitionSource = localDefinitionRef;
 		mark('blob');
 	} else {
+		// A remote URL names no project, so only an org-wide key may solve it.
+		assertScope(access.ctx, 'solve');
+		readRemoteInputs(inputs);
 		try {
 			definitionSource = await loadRemoteDefinition(definitionUrl);
 		} catch (err) {
@@ -285,17 +360,15 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		);
 		if (next === null) {
 			recordMetric('share_cap');
-			apiError(429, ApiErrorCode.INTERNAL, 'Share link solve cap reached.');
+			apiError(429, ApiErrorCode.RATE_LIMITED, 'Share link solve cap reached.');
 		}
 		mark('shareCap');
 	}
 
-	const serverConfig = await resolveServerForOrg(
-		solveCtx,
-		solveOrgId,
-		locals.providers.data.computeServer,
-		{ definitionPin }
-	);
+	const serverConfig = await (pendingServer ??
+		serverResolver.resolve(solveCtx, solveOrgId, locals.providers.data.computeServer, {
+			definitionPin
+		}));
 	mark('resolveServer');
 
 	// BRIDGE: remove ~2026-09 — lazy backfill for versions uploaded before schema
@@ -307,8 +380,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		try {
 			// Warms the byte-cache entry the upcoming solve's `load()` would hit anyway.
 			const bytes = await localDefinitionRef.load();
-			const schema = await fetchSchemaFromCompute(bytes, serverConfig);
-			await providers.data.definitions.setVersionSchema(solveCtx, versionId, schema);
+			storedSchema = await fetchSchemaFromCompute(bytes, serverConfig);
+			await providers.data.definitions.setVersionSchema(solveCtx, versionId, storedSchema);
 		} catch (err) {
 			locals.log.warn('Schema backfill failed', {
 				component: 'API/Compute',
@@ -321,18 +394,27 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		mark('schemaBackfill');
 	}
 
-	// `SolveEngine.solve` owns warm-client lookup, input-tree build,
-	// single-flight coalescing, the abort/hasWaiters dance (a coalesced solve
-	// must not follow one caller's disconnect and 499 every waiter), and
-	// per-caller Accept-Encoding re-keying. Remote-URL solves have no version
-	// id, so the URL stands in as coalesce-key identity (`definitionKey`);
-	// local solves already carry that identity on `localDefinitionRef.key`.
+	if (isLocal && !storedSchema) {
+		apiError(
+			503,
+			ApiErrorCode.COMPUTE_UNAVAILABLE,
+			"This version's inputs could not be read. Retry shortly."
+		);
+	}
+	const solveInputs = storedSchema ? solveInputsFromSchema(storedSchema) : readRemoteInputs(inputs);
+
+	// `SolveEngine.solve` owns warm-client lookup, input-tree build, single-flight
+	// coalescing (a coalesced solve aborts only when its last caller leaves), and
+	// per-caller encoding. Remote-URL solves have no version id, so the URL stands
+	// in as coalesce-key identity (`definitionKey`); local solves already carry
+	// that identity on `localDefinitionRef.key`.
 	const live = bindLiveSolve({
 		ownerKey: liveOwnerKey(access.kind === 'user' ? access.ctx.userId : null),
 		streamId,
 		request,
-		// Outlives the deadline by a margin so a callback racing the response is not refused.
-		tokenTtlMs: SOLVE_DEADLINE_MS + 60_000
+		// Outlives any server's deadline by a margin, so a callback racing the response is not
+		// refused. Minted before the warm client that knows this server's deadline.
+		tokenTtlMs: MAX_SOLVE_DEADLINE_MS + 60_000
 	});
 
 	let outcome: Awaited<ReturnType<typeof engine.solve>> | undefined;
@@ -341,7 +423,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 			server: serverConfig,
 			definitionSource,
 			definitionKey: isLocal ? undefined : definitionUrl,
-			inputs,
+			inputs: solveInputs,
 			values,
 			signal: request.signal,
 			acceptEncoding: request.headers.get('accept-encoding') ?? '',
@@ -366,6 +448,8 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 		recordMetric('too_large');
 	} else if (outcome.kind === 'shed') {
 		recordMetric('shed', { durationMs: outcome.durationMs });
+	} else if (outcome.kind === 'compute_error') {
+		recordMetric('compute_error', { durationMs: outcome.durationMs });
 	} else if (outcome.kind === 'ok') {
 		recordMetric('ok', {
 			durationMs: outcome.solveMs,
@@ -391,7 +475,7 @@ export async function runSolve(params: SolveParams): Promise<Response> {
 	// Builds the Response itself (incl. `Retry-After` on a rejected `shed`,
 	// which `apiError` cannot set) and still throws `compute_error` through to
 	// the caller's outer catch.
-	return engine.toWebResponse(outcome);
+	return withRateLimitHeaders(engine.toWebResponse(outcome), tokenVerdict);
 }
 
 /**
@@ -406,7 +490,7 @@ export function mapSolveError(err: unknown, locals: App.Locals): never {
 	// which gives anything that isn't an `HttpError` a 500, turning a working
 	// permission check into an operator error page.
 	if (isApiError(err)) {
-		apiError(err.status, err.code, err.message);
+		apiError(err.status, err.code, err.message, err.fields, err.details);
 	}
 
 	if (err instanceof ComputeServerUnconfiguredError) {
@@ -417,13 +501,7 @@ export function mapSolveError(err: unknown, locals: App.Locals): never {
 	locals.log.error('Solve request failed', {
 		component: 'API/Compute',
 		err: renderThrown(err),
-		// The compute server's raw error body (bounded by the transport) — the
-		// message alone can be scrubbed to a generic string in the server's
-		// production mode, so this is often the only diagnostic that survives.
-		...(err instanceof ComputeError &&
-			typeof err.context?.responseBody === 'string' && {
-				computeResponseBody: err.context.responseBody
-			})
+		...computeErrorLogFields(err, COMPUTE_DEBUG_VERBOSE)
 	});
 
 	// The compute transport classifies its failures — map the classes the caller

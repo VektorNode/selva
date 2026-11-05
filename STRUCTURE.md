@@ -30,6 +30,7 @@ selva/
 │   │   ├── supabase/               # Supabase provider (@selvajs/supabase-provider)
 │   │   └── header-auth/            # Forward-auth provider (@selvajs/header-auth-provider)
 │   ├── server/                     # @selvajs/server: server building blocks (limits, rate limit, SSRF guard, definitions)
+│   ├── mcp/                        # @selvajs/mcp: MCP server over a host's /api/v1
 │   ├── ui/                         # Shared Svelte components, theme, primitives
 │   ├── plugin-ui/                  # Plugin UI: schema designer + preview, embedded into Selva.gha
 │   ├── selva/                      # @selvajs/selva: deployable Selva app (cloud mode)
@@ -42,8 +43,10 @@ selva/
 │   ├── packages/                   # Developers building on @selvajs/*
 │   ├── contributing/               # Repo-only: build, test, release
 │   └── adr/                        # Architecture decision records
+├── examples/                       # Grasshopper definitions for users (inventory: examples/README.md)
+├── dev/                            # Manual-test definitions and viewer-lab scenes (inventory: dev/README.md)
 ├── infra/                          # Terraform, deployment configs
-├── scripts/                        # Build and setup scripts
+├── scripts/                        # Build, release and dev tooling (index: scripts/README.md)
 └── .github/                        # Issue templates, workflows
 ```
 
@@ -57,16 +60,25 @@ selva/
 | `Selva.Slva`           | `netstandard2.0`  | none          | SLVA/SLVM mesh codec, batch model, Rhino-free assembly pipeline  |
 | `Selva.Drawing`        | `netstandard2.0`  | none          | Document model + SVG/PDF renderers                               |
 | `Selva.FileIO`         | `netstandard2.0`  | none          | File in/out contract + its rules; referenced by other repos      |
-| `Selva.Rhino`          | `net48/net7/net9` | yes           | Rhino interop adapter for `Selva.Drawing`                        |
-| `Selva.GH`             | `net48/net7/net9` | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
-| `Selva.PluginVerifier` | `net48/net7/net9` | yes           | Loads the merged `.gha` after a Release build; Windows-only      |
-| `Selva.Tests`          | `net8.0` (xUnit)  | none          | Tests for `Selva.GH` + `Selva.Schema`                            |
-| `Selva.Slva.Tests`     | `net8.0` (xUnit)  | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
-| `Selva.Drawing.Tests`  | `net8.0` (xUnit)  | none          | Tests for `Selva.Drawing`                                        |
+| `Selva.Rhino`          | `net8/net10`      | yes           | Rhino interop adapter for `Selva.Drawing`                        |
+| `Selva.GH`             | `net8/net10`      | yes           | `.gha` plugin: all GH components, params, Goos, server lifecycle |
+| `Selva.Panel`          | `net8/net10`      | RhinoCommon   | `.rhp` hosting the UI in a Rhino panel; loads before Grasshopper |
+| `Selva.PluginVerifier` | `net8/net10`      | yes           | Loads the merged `.gha` and the `.rhp` after a Release build     |
+| `Selva.Tests`          | `net10.0` (xUnit) | none          | Tests for `Selva.GH`, `Selva.Schema` and the panel's nav policy  |
+| `Selva.Slva.Tests`     | `net10.0` (xUnit) | none          | Tests for `Selva.Slva`, incl. the cross-stack fixture contracts  |
+| `Selva.Drawing.Tests`  | `net10.0` (xUnit) | none          | Tests for `Selva.Drawing`                                        |
 
-Rhino 8 loads `net48` + `net7.0`; Rhino 9 loads `net9.0`. Rhino 7 is not supported.
-`Selva.Rhino` and `Selva.PluginVerifier` use the `-windows` variants (`net7.0-windows`,
-`net9.0-windows`) since they pull in WinForms. On non-Windows, `Selva.GH` builds `net7.0` only.
+Rhino 9 loads `net10.0`; Rhino 8.21+ loads `net8.0`. Rhino 9 is the primary development and test platform. Rhino 7 is not supported.
+The Rhino-coupled TFMs and Rhino SDK versions live once in `Plugin/Directory.Build.props`
+(`SelvaTargetFrameworks`, `Rhino8RefVersion`, `Rhino9RefVersion`); the SDK is pinned to .NET 10 in
+`global.json`. `Selva.PluginVerifier` uses the `-windows` variants since it hosts WinForms. Both TFMs build on
+macOS too (`EnableWindowsTargeting` resolves the WindowsForms reference); only loading and testing
+needs Rhino on the matching OS.
+
+`Selva.Panel` references RhinoCommon only, because it must load before Grasshopper. Its root
+namespace is `Selva.RhinoPanel`: `Selva.Panel` would shadow every Eto/WinForms `Panel` inside
+`Selva.GH`. The `.gha` and the `.rhp` never reference each other. They share one file,
+`PanelContract.cs`, which `Selva.GH` compiles in as a link.
 
 ### NuGet versions live in one file
 
@@ -79,15 +91,15 @@ This is central package management, adopted because a split version is invisible
 bump once landed in `Selva.Drawing` alone and left `Selva.GH`/`Selva.Rhino` behind, and the solution
 stopped restoring entirely with NU1605. One declaration per package makes that unrepresentable.
 
-Two packages are deliberately held back, each with the reason inline in the props file, and both are
-in `dependabot.yml`'s ignore list so the bump is not re-proposed weekly:
+**`Grasshopper`** and **`RhinoCommon`** are held back and both sit in `dependabot.yml`'s ignore list:
+they share `Rhino8RefVersion`, and raising it raises the minimum Rhino for every user. References
+carry `VersionOverride="$(RhinoRefVersion)"`, which picks the Rhino 9 `-beta` line on `net10.0`. This
+is the only legitimate per-TFM split; use `VersionOverride` on the reference rather than a second
+`<PackageVersion>` entry.
 
-- **`System.Drawing.Common`**: 8.0.0. On `net7.0`, 10.x duplicates types already in the framework's
-  `System.Drawing.Primitives`, so every `ColorTranslator` use fails with CS0433. Gated on dropping
-  Rhino 8.
-- **`Grasshopper`**: the Rhino 8 SDK by default, with `VersionOverride` on the `net9.0` references
-  for the Rhino 9 `-wip` line. This is the one package with a legitimate per-TFM split; use
-  `VersionOverride` on the reference rather than a second `<PackageVersion>` entry.
+**`PDFsharp`** is pinned at 6.2.4 and ignored by Dependabot: 6.5.0 relicensed to AGPL-3.0, which would
+put the whole plugin under AGPL. It gets no fixes, so it must only parse bytes Selva wrote: user images
+reach it re-encoded by `RasterSanitizer` in Selva.GH.
 
 ### Naming rules
 
@@ -126,7 +138,7 @@ A feature folder may also have a small growth area beyond this base layout (e.g.
 
 Cosmetic edits (description, nickname, default value, `SolveInstance` behaviour) do **not** need this: only changes to the number, order, type, or access of params do.
 
-**CI enforces this.** `scripts/check-component-signatures.mjs --check` compares every live component's param signature against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID. After following the procedure below (or adding a new component), bless the new state with `node scripts/check-component-signatures.mjs --update`.
+**CI enforces this.** `scripts/plugin/check-component-signatures.mjs --check` compares every live component's param signature against the committed snapshot ([Plugin/Selva.GH/component-signatures.json](./Plugin/Selva.GH/component-signatures.json)) and fails on a structural change to an existing GUID. After following the procedure below (or adding a new component), bless the new state with `node scripts/plugin/check-component-signatures.mjs --update`.
 
 The procedure:
 
@@ -238,7 +250,7 @@ container, read-only forever. Decoders sniff by the leading magic.
 Naming rule for new formats: human name **"Selva _thing_ file"**, extension **`slv` + one
 mnemonic letter**, magic four ASCII bytes. Retired extensions (`.dmf`, `.sps`) stay accepted on
 every read path; only writers moved to the `slv*` names. Cross-stack golden fixtures for these
-formats live in `packages/schemas/fixtures/` (see "Where fixtures live").
+formats live in `packages/schemas/fixtures/` (see "Test data, examples and dev scenes").
 
 ## Where TypeScript tests live
 
@@ -247,32 +259,57 @@ Unit tests go in a `__tests__/` folder beside the code, named `*.test.ts`
 `*.spec.ts` is reserved for Playwright specs under `e2e/`. Cross-suite fixtures
 and setup files go in a package-level `tests/`.
 
-### Where fixtures live
+### Test data, examples and dev scenes
 
-A fixture goes in a `fixtures/` directory at the narrowest scope all its
-consumers share:
+Every file that exists to be loaded, rather than to be code or docs, is one of four kinds. Who
+reads it decides the kind, and the kind decides where it lives. `node scripts/develop/check-fixtures.mjs`
+enforces the locations, the names and the inventories below; CI runs it.
 
-- **One suite** → `__tests__/fixtures/` beside the test that reads it.
-- **Several suites in one package** → `tests/fixtures/` (data) or
-  `tests/helpers/` (code that builds test data).
-- **Both stacks (TS + C#)** → `packages/schemas/fixtures/`. This is the only
-  cross-stack location: `Selva.Tests` and `Selva.Slva.Tests` resolve it from
-  the repo root, so it must stay outside `src/`. These are contract artifacts with an update
-  procedure (see the schemas README), not test-private data.
-- **Playwright** → `packages/selva/e2e/fixtures/`. Binary `.gh` files there
-  need the `.gitignore` negation, since the blanket `*.gh` rule swallows them
-  otherwise.
+| Kind          | Read by                                                  | Lives in                                                                                      |
+| ------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Test fixture  | an automated test                                        | a `fixtures/` folder at the narrowest test scope (below)                                      |
+| Golden output | a test, compared with what the code produces             | beside its input as `<name>.expected.json`; C# snapshot tests in `Snapshots/` beside the test |
+| Example       | a person learning Selva or a package                     | repo-root `examples/`, or `packages/<pkg>/examples/` with its inputs in `examples/data/`      |
+| Dev scene     | a developer by hand, the viewer lab, a dev server's mock | repo-root `dev/` when several packages use it, else `packages/<pkg>/dev/`                     |
 
-Don't promote a fixture to a wider scope speculatively; move it when a second
-consumer appears. Code that constructs test data is a helper, not a data
-fixture: colocate it (`__tests__/fixtures.ts`) or put it in `tests/helpers/`.
-Assets for `examples/` demos aren't fixtures in this sense and stay under
-`examples/`.
+**`fixtures/` means test data, nothing else.** It may only appear as:
 
-The repo-root `fixtures/` is for local development aids no test reads:
-Grasshopper definitions for manual plugin testing and their rhino-mcp
-regeneration recipes. If a test starts reading one of these files, it becomes
-a test fixture: move it to the scope its consumers share.
+- `__tests__/fixtures/` beside the one suite that reads it;
+- `tests/fixtures/` when several suites in one package read it (code that builds test data is
+  a helper: `__tests__/fixtures.ts` or `tests/helpers/`);
+- `packages/schemas/fixtures/` when more than one package, or both stacks, read it. `Selva.Tests`
+  and `Selva.Slva.Tests` resolve it from the repo root. The wire, SLVA and SLVM contracts here have
+  an update procedure in the schemas README;
+- `packages/selva/e2e/fixtures/` for Playwright.
+
+Don't promote a fixture speculatively: move it when a second consumer appears. A test that starts
+reading an example or a dev scene moves the file into the test scope; nothing is read from two
+kinds at once. One file, one copy.
+
+**Names are kebab-case**: lowercase letters, digits and hyphens, then the extension
+(`multi-material.slvm`, `multi-material.expected.json`, `studio-task-lamp.gh`). Name the file
+for what it covers, not where it came from. Exempt: `README.md`, C# snapshots (named after their
+test), and shared assets under `assets/` whose names the runtime loads (`baseHDR.hdr`).
+
+**Formats.** Prefer text a diff can review:
+
+- Data is JSON.
+- A Grasshopper definition someone maintains by hand is `.ghx`. `.gh` only for a file a generator
+  writes (the generator is the source) and for examples users download.
+- Binary wire formats (`.slva`, `.slvm`, `.slvz`, `.slhf`) only where that format is what the
+  test or the lab exercises. A golden binary is paired with `<name>.expected.json`.
+
+**Provenance.** A generated or recorded file names its generator: a script such as
+`scripts/plugin/example-definitions`, or `pnpm lab:record`. Never hand-edit generated output; change the
+generator and rerun it.
+
+**Inventory.** `dev/` and `examples/` each keep a `README.md` that lists every file in them:
+what it is for and how to regenerate it. A file the README doesn't list fails the check. Test
+fixtures need no list: the test that reads one is its inventory, and a fixture no test reads is
+deleted.
+
+Code that builds a scene (the lab's `glass-scene.js`, `metal-scene.js`) is code, not data: it
+lives beside what runs it.
 
 Every package's `vitest.config.ts` starts from `createVitestConfig()` in
 `@selvajs/config/vitest` and overrides only what it can justify.
@@ -300,7 +337,7 @@ config, the provider conformance kits, and why `@selvajs/cli` is exempt.
 - `CONTRIBUTING.md` is for human contributors.
 - `STRUCTURE.md` (this file) is the source of truth for layout/naming.
 - [docs/contributing/plugin-context.md](./docs/contributing/plugin-context.md) is the source of truth for Grasshopper canvas wiring and schema identity.
-- Package-level developer notes and deep-dives go in `docs/contributing/`, not scattered through package folders. A spec, backlog, or format reference under `packages/` or `Plugin/` is misplaced: move it.
+- Package-level developer notes and deep-dives go in `docs/contributing/`, not scattered through package folders. A spec or format reference under `packages/` or `Plugin/` is misplaced: move it. Backlogs and designs for unbuilt work go in `plans/`, not here (see [plans/CONVENTIONS.md](./plans/CONVENTIONS.md)).
 - A package's `README.md` stays with the package: it's the published API surface, and npm renders it.
 - `CONTEXT.md` beside its code is the one documented exception: source comments reference it by bare filename, so it has to sit next to what it describes.
 - Keep `examples/` for runnable artifacts only.

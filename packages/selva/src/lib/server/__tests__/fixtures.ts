@@ -4,7 +4,7 @@
  * `freshProviders()` builds a real LocalDataProvider stack rooted in a fresh
  * tmpdir per test — no mocks, no stubs. `setTestProviders()` from
  * ./test-providers makes that stack visible to the mocked
- * `$lib/server/providers.server` so route handlers and access helpers see
+ * `#lib/server/providers.server.js` so route handlers and access helpers see
  * this test's providers when they call `getProjectProvider()` etc.
  *
  * Workspace packages resolve through `dist/`, not source: tests import
@@ -40,6 +40,7 @@ import { isApiError } from '@selvajs/server/api';
 import { mapAppError } from '../api/sveltekit.js';
 import { shareLinkCodec } from '../shareLinks/token.server.js';
 import { inviteCodec } from '../invites/token.server.js';
+import { apiTokenCodec } from '../apiTokens/token.server.js';
 import { setTestProviders, clearTestProviders } from './test-providers.js';
 import { accessDepsFromConfig, type AccessDeps } from '../access.server.js';
 
@@ -128,7 +129,11 @@ export async function freshProviders(opts: FreshProvidersOpts = {}): Promise<Tes
 			// The app's own codecs, not fresh ones — a second codec would hash under
 			// a different secret than the seeders use, so lookups would miss and
 			// read as a broken handler rather than a broken fixture.
-			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
+			tokens: {
+				shareLinks: shareLinkCodec(),
+				invites: inviteCodec(),
+				apiTokens: apiTokenCodec()
+			},
 			services: { definitions: definitionService }
 		},
 		log: silentLog,
@@ -234,9 +239,6 @@ export function installOAuthShim(
 		},
 		async getOAuthAuthorizationUrl() {
 			throw new Error('OAuth shim: getOAuthAuthorizationUrl not implemented for tests');
-		},
-		async refreshSession() {
-			throw new Error('OAuth shim: refreshSession not implemented for tests');
 		}
 	};
 	// `oauth` on IAuthProvider is `readonly` — cast needed to patch the test
@@ -267,7 +269,7 @@ export function installSessionRefreshShim(tp: TestProviders): { revoked: string[
 }
 
 /**
- * Set an env-stub key visible to code that imports `$env/dynamic/private`.
+ * Set an env-stub key visible to code that imports `#lib/server/env.js`.
  * Mutates the shared stub object — restore in afterEach if needed.
  */
 export async function setEnv(key: string, value: string | undefined): Promise<void> {
@@ -286,7 +288,13 @@ export async function setEnv(key: string, value: string | undefined): Promise<vo
  * they take a `TestHarness`, which `TestProviders` extends, so call sites
  * pass `tp` unchanged.
  */
-export { seedAcme, seedBigClient, seedThirdOrg, seedCommons } from '@selvajs/server/testing';
+export {
+	seedAcme,
+	seedAcmeDesigner,
+	seedBigClient,
+	seedThirdOrg,
+	seedCommons
+} from '@selvajs/server/testing';
 export type {
 	AcmeFixture,
 	BigClientFixture,
@@ -338,6 +346,8 @@ type AnyHandler = (event: any) => unknown | Promise<unknown>;
 
 export interface CallOpts {
 	locals: unknown;
+	/** Defaults to POST with a body, GET without. */
+	method?: string;
 	params?: Record<string, string>;
 	url?: string;
 	body?: unknown;
@@ -353,7 +363,7 @@ export interface CallOpts {
 export async function call(handler: AnyHandler, opts: CallOpts): Promise<CallResult> {
 	const url = new URL(opts.url ?? 'http://test.local/');
 	const init: RequestInit = {
-		method: opts.body !== undefined ? 'POST' : 'GET',
+		method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
 		headers: opts.headers ?? {}
 	};
 	if (opts.body !== undefined) {

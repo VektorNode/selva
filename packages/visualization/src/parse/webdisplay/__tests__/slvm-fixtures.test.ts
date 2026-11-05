@@ -55,19 +55,20 @@ describe('SLVM v3 fixtures (written by C#)', () => {
 		expect(parsed.indices.length).toBe(expected.totalIndexCount);
 	});
 
-	it('multi-material: ids survive the material sort, attrs land sparsely', () => {
+	it('multi-material: meshes keep input order, ids and sparse attrs survive', () => {
 		const { parsed, expected } = loadFixture('multi-material.slvm');
 
 		expect(parsed.metadata.groups).toEqual(expected.groups);
 		expect(parsed.metadata.materials).toEqual(expected.materials);
 
 		const meshes = parsed.metadata.groups.flatMap((g) => g.meshes);
-		// Input order was wall(red), window(blue), wall2(red); the sort groups the two reds first.
-		expect(meshes.map((m) => m.name)).toEqual(['wall', 'wall2', 'window']);
+		// wall(red), window(blue), wall2(red): three groups, red twice, in input order.
+		expect(parsed.metadata.groups.map((g) => g.materialId)).toEqual([0, 1, 0]);
+		expect(meshes.map((m) => m.name)).toEqual(['wall', 'window', 'wall2']);
 		expect(meshes.map((m) => m.id)).toEqual([
 			'fixture-multi/{0;0}/0',
-			'fixture-multi/{0;1}/0',
-			'fixture-multi/{0;0}/1'
+			'fixture-multi/{0;0}/1',
+			'fixture-multi/{0;1}/0'
 		]);
 		expect(meshes[0]!.metadata).toEqual({ fire: 'REI60' });
 		expect(meshes[1]!.metadata).toEqual({});
@@ -81,6 +82,21 @@ describe('SLVM v3 fixtures (written by C#)', () => {
 		expect(parsed.metadata.materials[0]!.map).toMatch(/^data:image\/png;base64,/);
 		expect(parsed.uvs).not.toBeNull();
 		expect(parsed.uvs!.length).toBe(expected.totalVertexCount * 2);
+	});
+
+	it('closed-flags: the CLSD chunk carries the writer verdict per mesh, absent where unknown', () => {
+		const { parsed, expected } = loadFixture('closed-flags.slvm');
+
+		expect(parsed.metadata.groups).toEqual(expected.groups);
+		const meshes = parsed.metadata.groups.flatMap((g) => g.meshes);
+		expect(meshes.map((m) => m.closed)).toEqual([true, false, undefined]);
+		expect('closed' in meshes[2]!).toBe(false);
+	});
+
+	it('containers without CLSD carry no verdicts', () => {
+		const { parsed } = loadFixture('multi-material.slvm');
+
+		expect(parsed.metadata.groups.flatMap((g) => g.meshes).some((m) => 'closed' in m)).toBe(false);
 	});
 
 	it('geometry decodes through the nested blob with correct world positions', () => {

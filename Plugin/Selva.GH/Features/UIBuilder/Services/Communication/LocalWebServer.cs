@@ -219,6 +219,14 @@ public class LocalWebServer : IDisposable
                     return;
                 }
 
+                if (!BridgeAccess.IsAllowedHost(request.GetHeader("Host"), Port))
+                {
+                    await WriteResponseAsync(stream, 403, "Forbidden", "text/plain; charset=utf-8",
+                        Encoding.UTF8.GetBytes("403 - Forbidden"), false, cancellationToken: cancellationToken)
+                        .ConfigureAwait(false);
+                    return;
+                }
+
                 if (request.Method != "GET" && request.Method != "HEAD")
                 {
                     var allow = new Dictionary<string, string> { { "Allow", "GET, HEAD" } };
@@ -401,6 +409,9 @@ public class LocalWebServer : IDisposable
         sb.Append("Content-Type: ").Append(contentType).Append("\r\n");
         sb.Append("Content-Length: ").Append(contentLength).Append("\r\n");
         sb.Append("Connection: close\r\n");
+        sb.Append("X-Frame-Options: DENY\r\n");
+        sb.Append("X-Content-Type-Options: nosniff\r\n");
+        sb.Append("Referrer-Policy: no-referrer\r\n");
 
         if (extraHeaders != null)
         {

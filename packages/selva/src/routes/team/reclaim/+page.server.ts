@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Project } from '@selvajs/platform';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
+import { getOrganizationProvider, getProjectProvider } from '#lib/server/providers.server.js';
 
 export interface ReclaimRow extends Project {
 	memberCount: number;

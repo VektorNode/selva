@@ -1,11 +1,3 @@
-/**
- * The wrapper-key unwrap for `/grasshopper/schema`.
- *
- * This exists because three separate call sites hand-rolled it and all three got
- * it wrong the same way — passing the response ARRAY to a shallow key-rewriter,
- * which returns arrays untouched, so `schemas` was never read and every upload
- * reported "no schemas found". These pin both casings and the pass-through.
- */
 import { describe, expect, it } from 'vitest';
 
 import { readSchemaResults } from '../schema-endpoint';
@@ -21,8 +13,7 @@ describe('readSchemaResults', () => {
 		expect(camel[0].schemas).toEqual([schema]);
 	});
 
-	// The regression that motivated this helper: a shallow key-rewrite over the
-	// array is a no-op, so every entry silently read back as `undefined`.
+	// A shallow key-rewrite over the array is a no-op: every entry would read `undefined`.
 	it('unwraps every entry of a multi-file response', () => {
 		const results = readSchemaResults([
 			{ FileName: 'a.gh', Schemas: [schema] },
@@ -32,8 +23,10 @@ describe('readSchemaResults', () => {
 		expect(results.flatMap((r) => r.schemas ?? [])).toHaveLength(3);
 	});
 
-	it('accepts a bare object as a single entry', () => {
+	it('accepts a bare object as a single entry, reading missing keys as undefined', () => {
 		expect(readSchemaResults({ Schemas: [schema] })[0].schemas).toEqual([schema]);
+		expect(readSchemaResults([{}])[0]).toEqual({ schemas: undefined, error: undefined });
+		expect(readSchemaResults(null)[0]).toEqual({ schemas: undefined, error: undefined });
 	});
 
 	it('surfaces a per-file error (compute answers 200 with one)', () => {
@@ -48,10 +41,5 @@ describe('readSchemaResults', () => {
 		const authored = { ...schema, Display3d: true, 'Option A': 1 };
 
 		expect(readSchemaResults([{ Schemas: [authored] }])[0].schemas?.[0]).toEqual(authored);
-	});
-
-	it('reports missing keys as undefined rather than throwing', () => {
-		expect(readSchemaResults([{}])[0]).toEqual({ schemas: undefined, error: undefined });
-		expect(readSchemaResults(null)[0]).toEqual({ schemas: undefined, error: undefined });
 	});
 });

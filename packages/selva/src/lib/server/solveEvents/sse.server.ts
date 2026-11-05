@@ -4,6 +4,17 @@ import type { SolveEventBus } from './bus.server';
 /** Comment frames keep idle proxies from closing the connection. */
 const HEARTBEAT_MS = 20_000;
 
+const openStreams = new Set<() => void>();
+
+/**
+ * Ends every open stream. adapter-node drains open connections before exiting, and these never
+ * end on their own, so without this a restart sits out PM2's whole `kill_timeout` and ends in a
+ * SIGKILL. EventSource reconnects to the next process.
+ */
+export function closeAllSolveEventStreams(): void {
+	for (const close of [...openStreams]) close();
+}
+
 /**
  * The SSE response for one browser stream: registers it on the bus, frames each event as
  * `event: solve`, and unregisters when the client goes. Null when another owner holds `streamId`.
@@ -40,6 +51,7 @@ export function openSolveEventStream(args: {
 			close = () => {
 				if (closed) return;
 				closed = true;
+				openStreams.delete(close);
 				clearInterval(heartbeat);
 				unsubscribe();
 				try {
@@ -48,6 +60,7 @@ export function openSolveEventStream(args: {
 					// Already closed by the client.
 				}
 			};
+			openStreams.add(close);
 			signal.addEventListener('abort', close, { once: true });
 			if (signal.aborted) close();
 

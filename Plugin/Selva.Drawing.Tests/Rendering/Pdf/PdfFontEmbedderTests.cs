@@ -1,9 +1,9 @@
 using System;
 using System.IO;
 using System.Text;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.Advanced;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.Advanced;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;

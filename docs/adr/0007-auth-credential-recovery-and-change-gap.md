@@ -18,7 +18,7 @@ createUserWithPassword(email, password): Promise<AuthUser>;
 registerUser?(email, password): Promise<AuthUser | null>;
 ```
 
-There is **no** surface anywhere on `IAuthProvider` (or any of its five
+There is **no** surface anywhere on `IAuthProvider` (or any of its six optional
 sub-interfaces) for the rest of the credential lifecycle:
 
 1. **Password recovery**: send a reset link / initiate recovery for a
@@ -42,14 +42,11 @@ Because the capability isn't on the contract, a consuming app that needs
 underlying auth SDK directly** (build its own anon Supabase client, call
 `resetPasswordForEmail` / `updateUser`). That is a layering violation forced by
 the contract: credential lifecycle is auth-provider concern, exactly like
-`verifyLogin`, and it should not leak into the driving adapter or the route
-layer. It also means each consumer re-implements recovery, re-derives the
-redirect/callback handling, and couples itself to Supabase specifics the
-provider abstraction exists to hide.
+`verifyLogin`. Each consumer would also re-derive the redirect/callback handling
+and couple itself to Supabase specifics the provider abstraction exists to hide.
 
-Selva is pre-first-release: the contract can still grow required-ish methods
-cheaply, and the shape is worth fixing before multiple consumers each grow their
-own bypass.
+Selva is pre-first-release: the contract can still grow cheaply, and the shape is
+worth fixing before multiple consumers each grow their own bypass.
 
 ## Decision
 
@@ -79,11 +76,8 @@ Result types reuse the house style: `UserManagementResult`
 (`'ok' | 'not_found' | 'not_supported' | 'last_admin'`) and discriminated-union
 outcomes, not booleans or throws.
 
-**The implementation is NOT built in this ADR.** No consumer in-tree needs it
-today, and speccing the exact method set is cheaper once the first real caller
-exists to validate the redirect/callback ergonomics. This ADR fixes _where the
-capability lives_ (behind the provider) so the first implementer doesn't put it
-in the wrong layer.
+**The implementation is NOT built in this ADR.** This ADR fixes _where the capability
+lives_ (behind the provider) so the first implementer doesn't put it in the wrong layer.
 
 ## Consequences
 
@@ -97,16 +91,13 @@ in the wrong layer.
   `IAuthProvider` implementers**: it wants a Changeset entry and per-provider
   fan-out: the Supabase impl
   ([SupabaseAuthProvider.ts](../../packages/providers/supabase/src/auth/SupabaseAuthProvider.ts)),
-  plus `LocalAuthProvider` and `HeaderAuthProvider`, and the conformance suite
-  ([authProviderSuite.ts](../../packages/platform/src/testing/suites/authProviderSuite.ts)).
-  Making them optional (`?`) on `IPasswordAuth` avoids the break for providers
-  that genuinely can't offer recovery (header/proxy auth), and matches how
-  `registerUser?` is already optional.
-- The Supabase impl needs no new configuration: it already has the anon and
-  service-role clients required for `resetPasswordForEmail` and
-  `admin.updateUserById`.
-- The conformance suite gains recovery/change coverage, so every provider that
-  advertises the capability is held to the same contract.
+  plus `LocalAuthProvider` and `HeaderAuthProvider`. Making them optional (`?`) on
+  `IPasswordAuth` avoids the break for providers that genuinely can't offer recovery
+  (header/proxy auth), and matches how `registerUser?` is already optional.
+- The conformance suite
+  ([authProviderSuite.ts](../../packages/platform/src/testing/suites/authProviderSuite.ts))
+  gains recovery/change coverage, so every provider that advertises the capability is held
+  to the same contract.
 
 ## Alternatives considered
 

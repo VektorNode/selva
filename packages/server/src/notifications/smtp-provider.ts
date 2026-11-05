@@ -1,3 +1,4 @@
+import { createHmac, randomBytes } from 'node:crypto';
 import {
 	NoopLogger,
 	type ILogger,
@@ -6,6 +7,13 @@ import {
 	type SendResult
 } from '@selvajs/platform';
 import { readSmtpConfig, type SmtpEnv } from './smtp-config.js';
+
+// Per process: the hash only has to match up within one run of the logs.
+const RECIPIENT_HASH_KEY = randomBytes(32);
+
+function recipientHash(to: string): string {
+	return createHmac('sha256', RECIPIENT_HASH_KEY).update(to).digest('hex').slice(0, 16);
+}
 
 /**
  * SMTP transport. Any server works — a transactional provider, an internal
@@ -52,16 +60,17 @@ export class SmtpNotificationProvider implements INotificationProvider {
 			});
 			return { status: 'sent' };
 		} catch (err) {
-			const reason = err instanceof Error ? err.message : String(err);
-			// Recipient is personal data — logged at warn only, as the minimum
-			// needed to diagnose a bounce. Never the subject or body.
+			// Never the raw message: an SMTP rejection quotes the address, and erasure
+			// can't reach stdout. The keyed hash still matches up failures to one person.
+			const { code, responseCode } = err as { code?: string; responseCode?: number };
 			log.warn('Failed to send mail', {
 				component: 'SmtpNotificationProvider',
-				to: message.to,
+				recipient: recipientHash(message.to),
 				kind: message.kind,
-				reason
+				code,
+				responseCode
 			});
-			return { status: 'failed', reason };
+			return { status: 'failed', reason: code ?? 'send-failed' };
 		}
 	}
 

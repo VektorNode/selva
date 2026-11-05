@@ -1,11 +1,37 @@
 import { ComputeError, ErrorCodes } from '@/core/errors';
 import { getLogger } from '@/core/utils/logger';
+import { tryParseJson } from '@/core/utils/try-parse-json';
 import { validateServerUrl } from '@/core/server/validate-server-url';
+import { buildAuthHeaders, withJsonContentType } from '@/core/compute-fetch/request';
+import { readBodyText } from '@/core/compute-fetch/read-body';
+import { isRedirect } from '@/core/compute-fetch/response';
+import { composeSignal } from '@/core/compute-fetch/signal';
+import type { ComputeAuth } from '@/core/types';
+
+export interface ServerVersion {
+	rhino: string;
+	compute: string;
+	git_sha: string | null;
+}
+
+/** What `GET /limits` reports. Only the VektorNode fork answers it. */
+export interface ServerLimits {
+	/** Longest the server lets one request run (`RHINO_COMPUTE_TIMEOUT`, `--timeout`). */
+	timeoutSeconds: number;
+	/** Largest request body it accepts (`RHINO_COMPUTE_MAX_REQUEST_SIZE`, `--max-request-size`). */
+	maxRequestBytes: number;
+	/** A stale definition pointer answers `definition_not_cached`, so pointer reuse is safe. */
+	signalsStaleDefinition: boolean;
+}
+
+export interface ServerStats {
+	isOnline: boolean;
+	version?: ServerVersion;
+	activeChildren?: number;
+}
 
 /**
- * ComputeServerStats provides methods to query Rhino Compute server statistics.
- *
- * @public Use this for server health monitoring and statistics.
+ * Server health and control: liveness, version, child processes, cache purges.
  *
  * @example
  * ```typescript
@@ -25,10 +51,9 @@ import { validateServerUrl } from '@/core/server/validate-server-url';
  */
 export default class ComputeServerStats {
 	private readonly serverUrl: string;
-	private readonly apiKey?: string;
+	private readonly headers: Record<string, string>;
 	private disposed = false;
 	private activeMonitors: Set<() => void> = new Set();
-	private activeTimeouts: Set<ReturnType<typeof setTimeout>> = new Set();
 
 	/** Timeout (ms) for the fast read/monitoring endpoints. */
 	private static readonly DEFAULT_TIMEOUT_MS = 5000;
@@ -39,67 +64,77 @@ export default class ComputeServerStats {
 	/** Floor for `monitor()`'s `intervalMs` — anything lower hot-loops the server. */
 	private static readonly MIN_MONITOR_INTERVAL_MS = 100;
 
+	/** Every control-plane answer is a count, a version or a short map. */
+	private static readonly MAX_BODY_BYTES = 1 << 20;
+
 	/**
 	 * @param serverUrl - Base URL of the Rhino Compute server with http:// or https:// scheme (e.g., 'http://localhost:6500')
-	 * @param apiKey - Optional API key for authentication
+	 * @param auth - An API key, or the same auth fields a solve's `ComputeConfig` carries
+	 *   (`apiKey`, `apiKeyHeader`, `authToken`, `headers`).
 	 */
-	constructor(serverUrl: string, apiKey?: string) {
+	constructor(serverUrl: string, auth?: string | ComputeAuth) {
 		this.serverUrl = validateServerUrl(serverUrl);
-		this.apiKey = apiKey;
+		this.headers = buildAuthHeaders(typeof auth === 'string' ? { apiKey: auth } : (auth ?? {}));
 	}
 
 	/**
-	 * Build request headers with optional API key.
+	 * Aborts after `timeoutMs` so a hung connection can't stall a probe or `monitor()`; `0` disables
+	 * it. Redirects are not followed: fetch would carry the API key header to the target.
 	 */
-	private buildHeaders(): Record<string, string> {
-		const headers: Record<string, string> = {
-			'Content-Type': 'application/json'
-		};
-
-		if (this.apiKey) {
-			headers['RhinoComputeKey'] = this.apiKey;
-		}
-
-		return headers;
-	}
-
-	/**
-	 * `fetch` wrapper that aborts after `timeoutMs` so a hung connection can't stall
-	 * a probe (or the `monitor()` loop) forever. Pass `0` to disable the timeout.
-	 */
-	private fetchWithTimeout(
+	private async fetchWithTimeout(
 		url: string,
 		init: RequestInit = {},
 		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS
 	): Promise<Response> {
-		// Merge caller headers OVER the defaults instead of `{ headers: …, ...init }`,
-		// where any `init.headers` would silently replace the whole set (dropping
-		// the API key). BOTH sides go through `new Headers()` so every key is
-		// normalized (lowercased) identically — a caller's `Content-Type` replaces
-		// the default instead of coexisting as a differently-cased duplicate that
-		// the runtime would combine into "application/json, text/plain".
-		const merged = new Headers(this.buildHeaders());
-		if (init.headers) {
-			new Headers(init.headers).forEach((value, key) => {
-				merged.set(key, value);
+		const { signal, cleanup } = composeSignal(init.signal ?? undefined, timeoutMs);
+		try {
+			return await fetch(url, {
+				...init,
+				// Only a POST: on a GET the header forces a CORS preflight and describes no body.
+				headers: init.method === 'POST' ? withJsonContentType(this.headers) : this.headers,
+				redirect: 'manual',
+				signal
 			});
+		} finally {
+			cleanup();
 		}
-		const headers: Record<string, string> = {};
-		merged.forEach((value, key) => {
-			headers[key] = value;
-		});
-		const requestInit: RequestInit = { ...init, headers };
-		if (timeoutMs > 0 && !requestInit.signal) {
-			requestInit.signal = AbortSignal.timeout(timeoutMs);
+	}
+
+	/**
+	 * The response body of `path`, or `null` (logged) on a non-2xx or a network
+	 * failure. Throws only when disposed.
+	 */
+	private async getText(
+		path: string,
+		init: RequestInit = {},
+		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS
+	): Promise<string | null> {
+		this.ensureNotDisposed();
+		const label = `${init.method ?? 'GET'} ${path}`;
+		try {
+			const response = await this.fetchWithTimeout(`${this.serverUrl}${path}`, init, timeoutMs);
+			if (!response.ok) {
+				getLogger().warn(`[ComputeServerStats] ${label} failed:`, response.status);
+				await response.body?.cancel().catch(() => {});
+				return null;
+			}
+			const { text, truncated } = await readBodyText(response, ComputeServerStats.MAX_BODY_BYTES);
+			if (truncated) {
+				getLogger().warn(`[ComputeServerStats] ${label} answered with an oversized body`);
+				return null;
+			}
+			return text;
+		} catch (err) {
+			getLogger().warn(`[ComputeServerStats] ${label} errored:`, err);
+			return null;
 		}
-		return fetch(url, requestInit);
 	}
 
 	/**
 	 * Check if the server is online.
 	 *
-	 * This is a single-sample probe: it returns `true` only on a 2xx from the
-	 * proxy liveness root `/`, and `false` for every other outcome (non-2xx,
+	 * This is a single-sample probe: it returns `true` only on a 2xx or a redirect
+	 * from the proxy liveness root `/`, and `false` for every other outcome (4xx/5xx,
 	 * network error, or timeout). A cold or briefly-busy-but-up server can therefore
 	 * read as offline — callers that gate on this (e.g. client construction)
 	 * should retry rather than treat a single `false` as authoritative.
@@ -108,7 +143,9 @@ export default class ComputeServerStats {
 	 *   Pass `0` to disable the timeout. Prevents a hung connection from
 	 *   stalling the caller indefinitely.
 	 */
-	public async isServerOnline(timeoutMs: number = 5000): Promise<boolean> {
+	public async isServerOnline(
+		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS
+	): Promise<boolean> {
 		return (await this.probeServer(timeoutMs)).online;
 	}
 
@@ -122,30 +159,32 @@ export default class ComputeServerStats {
 	 *
 	 * @param timeoutMs - Abort the probe after this many ms (default: 5000).
 	 *   Pass `0` to disable the timeout.
+	 * @param signal - Cancels the probe, which then reports the abort as its `error`.
 	 * @returns `online` plus either the HTTP `status` the server answered with,
 	 *   or the `error` the connection attempt failed with.
 	 */
 	public async probeServer(
-		timeoutMs: number = 5000
+		timeoutMs: number = ComputeServerStats.DEFAULT_TIMEOUT_MS,
+		signal?: AbortSignal
 	): Promise<{ online: boolean; status?: number; error?: string }> {
 		this.ensureNotDisposed();
 
 		// The rhino.compute proxy has no `/healthcheck` route; its real liveness
 		// signal is `GET /`, which returns "compute.rhino3d running". Probing an
 		// unknown path would instead be forwarded to a child and only tells us the
-		// proxy can reach one.
+		// proxy can reach one. Some builds redirect `/` to rhino3d.com instead:
+		// answering with a redirect is alive.
 		const url = `${this.serverUrl}/`;
 
 		try {
-			const response = await this.fetchWithTimeout(url, { method: 'GET' }, timeoutMs);
-
-			return { online: response.ok, status: response.status };
+			const response = await this.fetchWithTimeout(url, { method: 'GET', signal }, timeoutMs);
+			// Unread, the body would hold its connection until garbage collection.
+			await response.body?.cancel().catch(() => {});
+			return { online: response.ok || isRedirect(response), status: response.status };
 		} catch (err) {
-			getLogger().debug('[ComputeServerStats] Fetch error:', err);
-			return {
-				online: false,
-				error: err instanceof Error ? `${err.name}: ${err.message}` : String(err)
-			};
+			const error = describeProbeError(err);
+			getLogger().debug(`[ComputeServerStats] Fetch error: ${error}`);
+			return { online: false, error };
 		}
 	}
 
@@ -163,39 +202,52 @@ export default class ComputeServerStats {
 	 * @returns Number of active children, or null if unavailable
 	 */
 	public async getActiveChildren(options: { initialize?: boolean } = {}): Promise<number | null> {
-		this.ensureNotDisposed();
-
 		const { initialize = true } = options;
-		const url = initialize
-			? `${this.serverUrl}/activechildren`
-			: `${this.serverUrl}/activechildren?initialize=false`;
+		// `initialize` may spawn children before answering: give it the lifecycle budget.
+		const body = initialize
+			? await this.getText('/activechildren', {}, ComputeServerStats.LIFECYCLE_TIMEOUT_MS)
+			: await this.getText('/activechildren?initialize=false');
+		if (body === null) return null;
 
-		// `initialize` mode may spawn children before answering — give it the
-		// lifecycle budget; the passive read stays on the short default.
-		const timeoutMs = initialize
-			? ComputeServerStats.LIFECYCLE_TIMEOUT_MS
-			: ComputeServerStats.DEFAULT_TIMEOUT_MS;
-
-		try {
-			const response = await this.fetchWithTimeout(url, {}, timeoutMs);
-			if (!response.ok) {
-				getLogger().warn('[ComputeServerStats] Failed to fetch active children:', response.status);
-				return null;
-			}
-
-			// Strict integer parse: `parseInt` would accept garbage-prefixed bodies
-			// (e.g. an HTML error page starting "302 Found" → 302 children).
-			const text = (await response.text()).trim();
-			if (!/^\d+$/.test(text)) {
-				getLogger().warn('[ComputeServerStats] Invalid active children response:', text);
-				return null;
-			}
-
-			return parseInt(text, 10);
-		} catch (err) {
-			getLogger().warn('[ComputeServerStats] Error fetching active children:', err);
+		// Strict: `parseInt` would read an error page starting "302 Found" as 302 children.
+		const text = body.trim();
+		if (!/^\d+$/.test(text)) {
+			getLogger().warn('[ComputeServerStats] /activechildren answered with a non-numeric body');
 			return null;
 		}
+		return parseInt(text, 10);
+	}
+
+	/**
+	 * The server's request limits, or `null` when it can't report them: a standard rhino.compute
+	 * has no `/limits`, and neither does an older fork. A missing route is expected, so it isn't
+	 * logged as a failure.
+	 */
+	public async getLimits(): Promise<ServerLimits | null> {
+		this.ensureNotDisposed();
+		let text: string;
+		try {
+			const response = await this.fetchWithTimeout(`${this.serverUrl}/limits`);
+			if (!response.ok) {
+				await response.body?.cancel().catch(() => {});
+				return null;
+			}
+			const read = await readBodyText(response, ComputeServerStats.MAX_BODY_BYTES);
+			if (read.truncated) return null;
+			text = read.text;
+		} catch (err) {
+			getLogger().debug(`[ComputeServerStats] GET /limits errored: ${describeProbeError(err)}`);
+			return null;
+		}
+		const json = tryParseJson(text) as Partial<ServerLimits> | null;
+		const positive = (n: unknown): n is number =>
+			typeof n === 'number' && Number.isFinite(n) && n > 0;
+		if (!json || !positive(json.timeoutSeconds) || !positive(json.maxRequestBytes)) return null;
+		return {
+			timeoutSeconds: json.timeoutSeconds,
+			maxRequestBytes: json.maxRequestBytes,
+			signalsStaleDefinition: json.signalsStaleDefinition === true
+		};
 	}
 
 	/**
@@ -203,38 +255,18 @@ export default class ComputeServerStats {
 	 *
 	 * @returns Version object with rhino, compute, and git_sha, or null if unavailable
 	 */
-	public async getVersion(): Promise<{
-		rhino: string;
-		compute: string;
-		git_sha: string | null;
-	} | null> {
-		this.ensureNotDisposed();
+	public async getVersion(): Promise<ServerVersion | null> {
+		const text = await this.getText('/version');
+		if (text === null) return null;
 
-		try {
-			const response = await this.fetchWithTimeout(`${this.serverUrl}/version`);
-
-			if (!response.ok) {
-				getLogger().warn('[ComputeServerStats] Failed to fetch version:', response.status);
-				return null;
-			}
-
-			// Read body as text first, then try JSON.parse — avoids the
-			// "Body has already been read" error if response.json() fails.
-			const text = await response.text();
-			try {
-				const json = JSON.parse(text);
-				return {
-					rhino: json.rhino ?? '',
-					compute: json.compute ?? '',
-					git_sha: json.git_sha ?? null
-				};
-			} catch {
-				return { rhino: text, compute: '', git_sha: null };
-			}
-		} catch (err) {
-			getLogger().warn('[ComputeServerStats] Error fetching version:', err);
-			return null;
-		}
+		// A non-JSON body is a bare version string.
+		const json = tryParseJson(text) as {
+			rhino?: string;
+			compute?: string;
+			git_sha?: string | null;
+		} | null;
+		if (json == null) return { rhino: text, compute: '', git_sha: null };
+		return { rhino: json.rhino ?? '', compute: json.compute ?? '', git_sha: json.git_sha ?? null };
 	}
 
 	/**
@@ -259,28 +291,9 @@ export default class ComputeServerStats {
 	public async getInstalledPlugins(
 		kind: 'gh' | 'rhino' = 'gh'
 	): Promise<Record<string, string> | null> {
-		this.ensureNotDisposed();
-
-		try {
-			const response = await this.fetchWithTimeout(`${this.serverUrl}/plugins/${kind}/installed`);
-
-			if (!response.ok) {
-				getLogger().warn(`[ComputeServerStats] Failed to fetch ${kind} plugins:`, response.status);
-				return null;
-			}
-
-			// Text-first so a non-JSON body can't throw "body already read".
-			const text = await response.text();
-			try {
-				const json = JSON.parse(text);
-				return json && typeof json === 'object' ? (json as Record<string, string>) : null;
-			} catch {
-				return null;
-			}
-		} catch (err) {
-			getLogger().warn(`[ComputeServerStats] Error fetching ${kind} plugins:`, err);
-			return null;
-		}
+		const text = await this.getText(`/plugins/${kind}/installed`);
+		const json = text === null ? undefined : tryParseJson(text);
+		return json && typeof json === 'object' ? (json as Record<string, string>) : null;
 	}
 
 	/**
@@ -289,11 +302,7 @@ export default class ComputeServerStats {
 	 *
 	 * @returns Object containing server status and available stats
 	 */
-	public async getServerStats(): Promise<{
-		isOnline: boolean;
-		version?: { rhino: string; compute: string; git_sha: string | null };
-		activeChildren?: number;
-	}> {
+	public async getServerStats(): Promise<ServerStats> {
 		this.ensureNotDisposed();
 
 		const isOnline = await this.isServerOnline();
@@ -338,30 +347,10 @@ export default class ComputeServerStats {
 	 * ```
 	 */
 	public async purgeCache(): Promise<number | null> {
-		this.ensureNotDisposed();
-
-		try {
-			const response = await this.fetchWithTimeout(`${this.serverUrl}/cache/purge`, {
-				method: 'POST'
-			});
-
-			if (!response.ok) {
-				getLogger().warn('[ComputeServerStats] Failed to purge cache:', response.status);
-				return null;
-			}
-
-			// Read text-first so a non-JSON body can't throw "body already read".
-			const text = await response.text();
-			try {
-				const json = JSON.parse(text);
-				return typeof json.purged === 'number' ? json.purged : null;
-			} catch {
-				return null;
-			}
-		} catch (err) {
-			getLogger().warn('[ComputeServerStats] Error purging cache:', err);
-			return null;
-		}
+		const text = await this.getText('/cache/purge', { method: 'POST' });
+		const json = text === null ? undefined : tryParseJson(text);
+		const purged = (json as { purged?: unknown } | null | undefined)?.purged;
+		return typeof purged === 'number' ? purged : null;
 	}
 
 	/**
@@ -438,23 +427,11 @@ export default class ComputeServerStats {
 	 * @returns A `Date` for the server's UTC time, or `null` on failure.
 	 */
 	public async getServerTime(): Promise<Date | null> {
-		this.ensureNotDisposed();
-
-		try {
-			const response = await this.fetchWithTimeout(`${this.serverUrl}/servertime`);
-			if (!response.ok) {
-				getLogger().warn('[ComputeServerStats] Failed to fetch server time:', response.status);
-				return null;
-			}
-
-			// Body is a JSON string ("2026-…Z"); strip surrounding quotes if present.
-			const text = (await response.text()).trim().replace(/^"|"$/g, '');
-			const date = new Date(text);
-			return isNaN(date.getTime()) ? null : date;
-		} catch (err) {
-			getLogger().warn('[ComputeServerStats] Error fetching server time:', err);
-			return null;
-		}
+		const text = await this.getText('/servertime');
+		if (text === null) return null;
+		// The body is a JSON string: strip its quotes.
+		const date = new Date(text.trim().replace(/^"|"$/g, ''));
+		return isNaN(date.getTime()) ? null : date;
 	}
 
 	/**
@@ -468,20 +445,10 @@ export default class ComputeServerStats {
 	 * @returns Idle time in seconds, or `null` on failure.
 	 */
 	public async getIdleSpan(): Promise<number | null> {
-		this.ensureNotDisposed();
-
-		try {
-			const response = await this.fetchWithTimeout(`${this.serverUrl}/idlespan`);
-			if (!response.ok) {
-				getLogger().warn('[ComputeServerStats] Failed to fetch idle span:', response.status);
-				return null;
-			}
-			const seconds = parseFloat((await response.text()).trim());
-			return isNaN(seconds) ? null : seconds;
-		} catch (err) {
-			getLogger().warn('[ComputeServerStats] Error fetching idle span:', err);
-			return null;
-		}
+		const text = await this.getText('/idlespan');
+		if (text === null) return null;
+		const seconds = parseFloat(text.trim());
+		return isNaN(seconds) ? null : seconds;
 	}
 
 	/**
@@ -555,36 +522,14 @@ export default class ComputeServerStats {
 		return this.postJson(path);
 	}
 
-	/**
-	 * POST a control endpoint that replies with a JSON object and return it,
-	 * degrading to `null` on any non-2xx, non-JSON, or network failure. Shared by
-	 * the child-lifecycle methods so their failure semantics stay identical. Uses
-	 * the longer lifecycle timeout since a spawn/recycle can take ~30s.
-	 */
+	/** A child-lifecycle POST: a spawn or recycle can take ~30 s. */
 	private async postJson<T>(path: string): Promise<T | null> {
-		this.ensureNotDisposed();
-
-		try {
-			const response = await this.fetchWithTimeout(
-				`${this.serverUrl}${path}`,
-				{ method: 'POST' },
-				ComputeServerStats.LIFECYCLE_TIMEOUT_MS
-			);
-			if (!response.ok) {
-				getLogger().warn(`[ComputeServerStats] POST ${path} failed:`, response.status);
-				return null;
-			}
-			// Text-first so a non-JSON body can't throw "body already read".
-			const text = await response.text();
-			try {
-				return JSON.parse(text) as T;
-			} catch {
-				return null;
-			}
-		} catch (err) {
-			getLogger().warn(`[ComputeServerStats] Error on POST ${path}:`, err);
-			return null;
-		}
+		const text = await this.getText(
+			path,
+			{ method: 'POST' },
+			ComputeServerStats.LIFECYCLE_TIMEOUT_MS
+		);
+		return text === null ? null : ((tryParseJson(text) ?? null) as T | null);
 	}
 
 	/**
@@ -606,10 +551,7 @@ export default class ComputeServerStats {
 	 * stopMonitoring();
 	 * ```
 	 */
-	public monitor(
-		callback: (stats: Awaited<ReturnType<typeof this.getServerStats>>) => void,
-		intervalMs: number = 5000
-	): () => void {
+	public monitor(callback: (stats: ServerStats) => void, intervalMs: number = 5000): () => void {
 		this.ensureNotDisposed();
 
 		if (!Number.isFinite(intervalMs) || intervalMs < ComputeServerStats.MIN_MONITOR_INTERVAL_MS) {
@@ -629,18 +571,12 @@ export default class ComputeServerStats {
 		getLogger().info(`🔄 Starting server stats monitoring every ${intervalMs}ms`);
 
 		const check = async () => {
-			// Clear current timeout from tracking since it has fired
-			if (currentTimeoutId !== null) {
-				this.activeTimeouts.delete(currentTimeoutId);
-				currentTimeoutId = null;
-			}
-
+			currentTimeoutId = null;
 			if (!active || this.disposed) return;
 
 			try {
 				const _stats = await this.getServerStats();
 
-				// Check again after async operation to prevent race condition
 				if (!active || this.disposed) return;
 
 				try {
@@ -660,17 +596,13 @@ export default class ComputeServerStats {
 
 			if (active && !this.disposed) {
 				currentTimeoutId = setTimeout(() => void check(), intervalMs);
-				this.activeTimeouts.add(currentTimeoutId);
 			}
 		};
 
 		const stopMonitoring = () => {
 			active = false;
-
-			// Clear any pending timeout
 			if (currentTimeoutId !== null) {
 				clearTimeout(currentTimeoutId);
-				this.activeTimeouts.delete(currentTimeoutId);
 				currentTimeoutId = null;
 			}
 
@@ -679,7 +611,6 @@ export default class ComputeServerStats {
 
 		this.activeMonitors.add(stopMonitoring);
 
-		// Explicitly mark as fire-and-forget since we don't need to await the initial call
 		void check();
 
 		return stopMonitoring;
@@ -693,30 +624,30 @@ export default class ComputeServerStats {
 		if (this.disposed) return;
 
 		this.disposed = true;
-
-		// Stop all active monitors (this will also clear their timeouts)
 		for (const stopMonitor of this.activeMonitors) {
 			stopMonitor();
 		}
 		this.activeMonitors.clear();
-
-		// Clear any remaining timeouts (defensive cleanup)
-		for (const timeoutId of this.activeTimeouts) {
-			clearTimeout(timeoutId);
-		}
-		this.activeTimeouts.clear();
 	}
 
-	/**
-	 * Ensures the instance hasn't been disposed.
-	 */
 	private ensureNotDisposed(): void {
 		if (this.disposed) {
 			throw new ComputeError(
 				'ComputeServerStats has been disposed and cannot be used',
-				ErrorCodes.INVALID_STATE,
-				{ context: { disposed: this.disposed } }
+				ErrorCodes.INVALID_STATE
 			);
 		}
 	}
+}
+
+/**
+ * undici reports every connection failure as `TypeError: fetch failed` and keeps what happened on
+ * `cause`, whose message is empty when several addresses failed: its `code` is the one sure field.
+ */
+function describeProbeError(err: unknown): string {
+	if (!(err instanceof Error)) return String(err);
+	const summary = `${err.name}: ${err.message}`;
+	if (!(err.cause instanceof Error)) return summary;
+	const { code } = err.cause as { code?: unknown };
+	return `${summary}: ${typeof code === 'string' ? `${code} ` : ''}${err.cause.message}`.trim();
 }

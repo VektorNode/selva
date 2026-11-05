@@ -17,8 +17,15 @@ public abstract class LayoutElement : DrawElement
 			"or ensure the page content was passed through a renderer that resolves layout automatically.");
 	}
 
-	// Must be deterministic for a given context — the layout pass may call this once per render.
-	public abstract DrawElement Resolve(LayoutContext context);
+	// Inside a layout pass the result is reused for the same element and context: containers
+	// measure a child, then resolve it again, so nesting would otherwise multiply the work.
+	public DrawElement Resolve(LayoutContext context) => LayoutCache.Resolve(this, context);
+
+	// Must be deterministic for a given context, and the element must not change after it is
+	// first resolved: a layout pass returns the cached result.
+	protected abstract DrawElement ResolveCore(LayoutContext context);
+
+	internal DrawElement ResolveUncached(LayoutContext context) => ResolveCore(context);
 
 	public override BoundingBox ComputeBounds()
 		=> Resolve(new LayoutContext(BoundingBox.Empty)).ComputeBounds();

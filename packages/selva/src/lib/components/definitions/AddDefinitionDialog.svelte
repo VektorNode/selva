@@ -7,9 +7,11 @@
 		Input,
 		Label,
 		Textarea,
-		toast
+		toast,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { X } from '@lucide/svelte';
+	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
 	import ProjectPicker from './ProjectPicker.svelte';
 
 	interface Project {
@@ -169,7 +171,9 @@
 			validationSchema = schema;
 			if (schema.name) displayName = schema.name;
 			if (schema.description) description = schema.description;
-			if (schema.tags?.length) tags = schema.tags;
+			// The schema comes from an uploaded .gh, so it may hold more than this form allows.
+			if (schema.category) category = schema.category.slice(0, MAX_CATEGORY_LENGTH);
+			if (schema.tags?.length) tags = schema.tags.slice(0, MAX_TAGS);
 		} catch {
 			validationError = 'Compute server is unreachable. It must be online to upload a definition.';
 		} finally {
@@ -287,21 +291,17 @@
 					{#if computeServers.length > 0}
 						<div class="space-y-1">
 							<Label for="new-server">Compute Server</Label>
-							<select
+							<FilterableDropdown
 								id="new-server"
+								items={computeServers.map((s) => ({
+									id: s.id,
+									label: `${s.label}${s.id === defaultComputeServerId ? ' (Default)' : ''}`
+								}))}
 								value={selectedComputeServerId || (defaultComputeServerId ?? '')}
-								onchange={(e) => {
-									const picked = (e.currentTarget as HTMLSelectElement).value;
+								onChange={(picked) => {
 									selectedComputeServerId = picked === defaultComputeServerId ? '' : picked;
 								}}
-								class="border-input bg-background focus-visible:ring-ring h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-							>
-								{#each computeServers as s (s.id)}
-									<option value={s.id}>
-										{s.label}{s.id === defaultComputeServerId ? ' (Default)' : ''}
-									</option>
-								{/each}
-							</select>
+							/>
 						</div>
 					{/if}
 				</div>
@@ -382,12 +382,14 @@
 				<div class="space-y-1">
 					<div class="flex items-center justify-between">
 						<Label for="new-cat">Category</Label>
-						<p class="text-muted-foreground text-xs">{category?.length ?? 0}/40</p>
+						<p class="text-muted-foreground text-xs">
+							{category?.length ?? 0}/{MAX_CATEGORY_LENGTH}
+						</p>
 					</div>
 					<Input
 						id="new-cat"
 						type="text"
-						maxlength={40}
+						maxlength={MAX_CATEGORY_LENGTH}
 						bind:value={category}
 						placeholder="e.g., Architecture"
 					/>
@@ -395,7 +397,7 @@
 				<div class="space-y-1">
 					<div class="flex items-center justify-between">
 						<Label for="new-tags">Tags</Label>
-						<p class="text-muted-foreground text-xs">{tags.length}/5</p>
+						<p class="text-muted-foreground text-xs">{tags.length}/{MAX_TAGS}</p>
 					</div>
 					{#if tags.length > 0}
 						<div class="mb-2 flex flex-wrap gap-2">
@@ -420,13 +422,13 @@
 						id="new-tags"
 						type="text"
 						placeholder="Add tag and press Enter"
-						disabled={tags.length >= 5}
+						disabled={tags.length >= MAX_TAGS}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault();
 								const input = e.currentTarget as HTMLInputElement;
 								const tag = input.value.trim();
-								if (tag && !tags.includes(tag) && tags.length < 5) {
+								if (tag && !tags.includes(tag) && tags.length < MAX_TAGS) {
 									tags = [...tags, tag];
 									input.value = '';
 								}

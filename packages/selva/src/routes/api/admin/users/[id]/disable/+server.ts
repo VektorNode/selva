@@ -1,11 +1,13 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, noContent, requireParams } from '$lib/server/api/http';
-import { getAuthProvider } from '$lib/server/providers.server';
-import { requireManageInstanceUsers } from '$lib/server/access.server';
-import { requireCanRemoveInstanceAdmin } from '$lib/server/admin/instanceAdmins.server';
-import { setUserPlatformPermissions } from '$lib/server/permissions.server';
-import { getEventSink } from '$lib/server/providers.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, noContent, requireParams } from '#lib/server/api/http.js';
+import { getAuthProvider, providers } from '#lib/server/providers.server.js';
+import { revokeUserApiTokens } from '@selvajs/server/handlers';
+import { apiTokenResolutions } from '#lib/server/apiTokens/token.server.js';
+import { requireManageInstanceUsers } from '#lib/server/access.server.js';
+import { requireCanRemoveInstanceAdmin } from '#lib/server/admin/instanceAdmins.server.js';
+import { setUserPlatformPermissions } from '#lib/server/permissions.server.js';
+import { getEventSink } from '#lib/server/providers.server.js';
 import { actorFrom } from '@selvajs/platform';
 
 /**
@@ -68,6 +70,14 @@ export const POST: RequestHandler = apiRoute(
 			userId: id,
 			actorId: actorFrom(locals.ctx!)
 		});
+
+		await revokeUserApiTokens(
+			providers.data.apiTokens,
+			locals.ctx!,
+			id,
+			{ reason: 'user_disabled', resolutionCache: apiTokenResolutions },
+			locals.log
+		);
 
 		return noContent();
 	}

@@ -40,7 +40,14 @@ import {
 } from '@selvajs/platform';
 import type { CreateDefinitionRecord } from '../definitions/index.js';
 import { depsFromConfig, runHandler } from '../api/index.js';
-import type { ApiError, ApiHandler, ApiRequest, SelvaDeps } from '../api/index.js';
+import type {
+	ApiError,
+	ApiHandler,
+	ApiRequest,
+	RunHandlerOptions,
+	SelvaDeps
+} from '../api/index.js';
+import { buildRequestContext } from '../http/request-context.js';
 import type { SeedAuthAdapter } from './seed-adapter.js';
 
 export interface TestHarness {
@@ -48,8 +55,13 @@ export interface TestHarness {
 	auth: SeedAuthAdapter;
 	/** Folds host domain errors into the envelope, exactly as the host's adapter does. */
 	mapError?: (err: unknown) => ApiError | undefined;
-	/** Overrides merged onto the deps `callHandler` builds — token codecs, services, upload caps. */
-	deps?: Partial<Pick<SelvaDeps, 'tokens' | 'uploadLimits' | 'services'>>;
+	/** Overrides merged onto the deps `callHandler` builds — token codecs, services, upload caps, limiters. */
+	deps?: Partial<
+		Pick<
+			SelvaDeps,
+			'tokens' | 'uploadLimits' | 'services' | 'projectCreateLimiter' | 'onComputeConfigSaved'
+		>
+	>;
 	log?: ILogger;
 }
 
@@ -234,6 +246,8 @@ export async function seedDefinition(
 		ownerId: string;
 		displayName?: string;
 		guid?: string;
+		/** The Grasshopper document GUID the extracted schema carries. */
+		documentId?: string;
 	}
 ): Promise<SeededDefinition> {
 	const service = h.deps?.services?.definitions;
@@ -255,9 +269,12 @@ export async function seedDefinition(
 		platformPermissions: ['instance_admin'],
 		orgPermissions: []
 	};
-	const schema = { name: 'Test', inputs: [], outputs: [] } as unknown as Parameters<
-		typeof service.create
-	>[3];
+	const schema = {
+		name: 'Test',
+		inputs: [],
+		outputs: [],
+		...(opts.documentId && { documentId: opts.documentId })
+	} as unknown as Parameters<typeof service.create>[3];
 	return service.create(ctx, input, file, schema);
 }
 
@@ -352,19 +369,17 @@ export async function actAs(h: TestHarness, userId: string): Promise<ActingLocal
 
 	const platformPermissions = await h.config.data.permissions.getFor(SYSTEM_CONTEXT, user.id);
 	const membership = await h.config.data.orgs.findUserMembership(SYSTEM_CONTEXT, user.id);
-	let actingOrgId: string | undefined = membership?.org.id;
-	const orgPermissions: OrgPermission[] = membership ? [...membership.member.permissions] : [];
-	if (!actingOrgId && platformPermissions.includes('instance_admin')) {
-		const firstOrgPage = await h.config.data.orgs.listOrgs(SYSTEM_CONTEXT, { limit: 1 });
-		actingOrgId = firstOrgPage.items[0]?.id;
-	}
+	const ctx = await buildRequestContext(
+		{ user, platformPermissions, membership: membership?.member ?? null },
+		{ orgs: h.config.data.orgs }
+	);
 
 	const profile =
 		(await h.config.data.userProfile.getProfile(SYSTEM_CONTEXT, user.id)) ?? emptyProfile(user.id);
 
 	return {
 		user,
-		ctx: { userId: user.id, actingOrgId, platformPermissions, orgPermissions },
+		ctx,
 		profile,
 		providers: h.config,
 		log: h.log ?? silentLog,
@@ -386,6 +401,10 @@ export interface CallHandlerOpts {
 	url?: string;
 	body?: unknown;
 	headers?: Record<string, string>;
+	/** Defaults to POST with a body, GET without. */
+	method?: string;
+	/** The options a route passes to `mount`, so scope checks run as they do in production. */
+	mount?: Pick<RunHandlerOptions, 'action' | 'scopeTarget' | 'anyScope'>;
 }
 
 export interface CallResult {
@@ -407,7 +426,7 @@ export interface CallResult {
 export async function callHandler(handler: ApiHandler, opts: CallHandlerOpts): Promise<CallResult> {
 	const url = new URL(opts.url ?? 'http://test.local/');
 	const init: RequestInit = {
-		method: opts.body !== undefined ? 'POST' : 'GET',
+		method: opts.method ?? (opts.body !== undefined ? 'POST' : 'GET'),
 		headers: opts.headers ?? {}
 	};
 	if (opts.body !== undefined) {
@@ -442,11 +461,15 @@ export async function callHandler(handler: ApiHandler, opts: CallHandlerOpts): P
 		request: new Request(url.toString(), init),
 		deps: depsFromConfig(locals.providers, h.deps?.services ?? {}, {
 			tokens: h.deps?.tokens,
-			uploadLimits: h.deps?.uploadLimits
+			uploadLimits: h.deps?.uploadLimits,
+			projectCreateLimiter: h.deps?.projectCreateLimiter,
+			onComputeConfigSaved: h.deps?.onComputeConfigSaved
 		})
 	};
 
-	return readResponse(await runHandler(handler, req, { fallback: 'Test', mapError: h.mapError }));
+	return readResponse(
+		await runHandler(handler, req, { fallback: 'Test', mapError: h.mapError, ...opts.mount })
+	);
 }
 
 async function readResponse(res: Response): Promise<CallResult> {

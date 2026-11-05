@@ -13,7 +13,6 @@ export default defineConfig({
 	entry: entries,
 	format: ['esm', 'cjs'],
 	dts: true,
-	minify: true,
 	sourcemap: true,
 	clean: true,
 	fixedExtension: false,

@@ -55,10 +55,13 @@ describe('createAllowlistStore — findByEmail', () => {
 		expect((await store.findByEmail('ALICE@example.com'))?.id).toBe(created.id);
 	});
 
-	it('matches a materialized email that differs from the upn', async () => {
+	it('ignores the header-written email column', async () => {
+		// The column mirrors whatever the proxy last sent. Matching on it hands a
+		// reassigned address to the departed holder's row; a renamed UPN is
+		// allowlisted again instead.
 		const created = await store.createUser('alice@tenant.onmicrosoft.com');
 		await store.syncFromHeaders(created.id, { email: 'alice@company.com' });
-		expect((await store.findByEmail('alice@company.com'))?.id).toBe(created.id);
+		expect(await store.findByEmail('alice@company.com')).toBeNull();
 	});
 
 	it('returns null when nothing matches', async () => {
@@ -182,5 +185,26 @@ describe('createAllowlistStore — durability', () => {
 		await store.createUser('alice@example.com');
 		const siblings = await fs.readdir(path.dirname(filePath));
 		expect(siblings.some((f) => f.endsWith('.tmp'))).toBe(false);
+	});
+});
+
+describe('createAllowlistStore — concurrent writes', () => {
+	it('creates one entry for a double submit, with a clean 409 for the loser', async () => {
+		const results = await Promise.allSettled([
+			store.createUser('new@acme.test'),
+			store.createUser('new@acme.test')
+		]);
+
+		expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+		const rejected = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
+		expect(rejected.reason).toBeInstanceOf(ProviderError);
+		expect(await store.listUsers()).toHaveLength(1);
+	});
+
+	it('keeps every entry from different users created at once', async () => {
+		await Promise.all(
+			Array.from({ length: 10 }, (_, i) => store.createUser(`user-${i}@acme.test`))
+		);
+		expect(await store.listUsers()).toHaveLength(10);
 	});
 });

@@ -10,4 +10,7 @@ public sealed class Page
 	public Margins Margins { get; init; } = Margins.Uniform(10);
 	public DrawElement Content { get; init; }
 	public string Title { get; init; }
+
+	// Consecutive pages sharing a Chapter nest under one outline entry; null keeps the page top-level.
+	public string Chapter { get; init; }
 }

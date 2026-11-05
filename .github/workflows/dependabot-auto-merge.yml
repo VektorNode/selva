@@ -88,7 +88,7 @@ jobs:
           # Same base the `test` job diffs against, so this sees exactly the set
           # of packages the guard will demand a changeset for.
           git fetch --depth=1 origin "$BASE_REF"
-          mapfile -t bumped < <(node scripts/changed-publishable-packages.mjs --base FETCH_HEAD)
+          mapfile -t bumped < <(node scripts/release/changed-publishable-packages.mjs --base FETCH_HEAD)
 
           # Rewritten from scratch each run, not appended: Dependabot force-
           # pushes this branch on rebase, and the set of touched packages can

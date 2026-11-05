@@ -15,9 +15,8 @@ const entries = {
 
 export default defineConfig({
 	entry: entries,
-	format: ['esm', 'cjs'],
+	format: ['esm'],
 	dts: true,
-	minify: true,
 	sourcemap: true,
 	clean: true,
 	fixedExtension: false

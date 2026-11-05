@@ -1,5 +1,10 @@
 import { describe, beforeEach, it } from 'vitest';
-import { runAuthProviderConformance, runEmailLinkAuthConformance } from '@selvajs/platform/testing';
+import { createClient } from '@supabase/supabase-js';
+import {
+	runAuthProviderConformance,
+	runEmailLinkAuthConformance,
+	runOAuthAuthConformance
+} from '@selvajs/platform/testing';
 import { SupabaseAuthProvider } from '../SupabaseAuthProvider.js';
 import { readEnv, resetAllData } from '../../data/__tests__/test-helpers.js';
 
@@ -57,7 +62,22 @@ if (!envCtx) {
 				const { provider, adminPassword } = await makeProvider();
 				return { provider, adminPassword, adminEmail: ADMIN_EMAIL };
 			},
-			userManagement: true
+			userManagement: true,
+			signInContract: true,
+			signInWithRefreshToken: async (email, password) => {
+				const anon = createClient(ctx.url, ctx.anonKey, { auth: { persistSession: false } });
+				const { data, error } = await anon.auth.signInWithPassword({ email, password });
+				if (error || !data.session) throw error ?? new Error('no session');
+				return { userId: data.user.id, refreshToken: data.session.refresh_token };
+			}
+		});
+
+		runOAuthAuthConformance({
+			name: 'SupabaseOAuthAuth',
+			createAdapter: async () => {
+				const { provider } = await makeProvider();
+				return { oauth: provider.oauth, sessionRefresh: provider.sessionRefresh };
+			}
 		});
 
 		runEmailLinkAuthConformance({
@@ -66,10 +86,6 @@ if (!envCtx) {
 				const { provider } = await makeProvider();
 				return {
 					adapter: provider.emailLink,
-					// `validEmail` isn't used by the suite for live mail delivery;
-					// it just needs to look like a real address. The malformed
-					// case is what we actually assert on.
-					validEmail: 'real-looking@conformance.test',
 					invalidEmail: 'not-an-email-address'
 				};
 			}

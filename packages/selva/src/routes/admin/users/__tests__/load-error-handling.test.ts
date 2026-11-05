@@ -20,8 +20,8 @@ import {
 	seedOrgMember,
 	actAs,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { getLogger } from '$lib/server/providers.server';
+} from '#lib/server/__tests__/fixtures.js';
+import { getLogger } from '#lib/server/providers.server.js';
 import { load } from '../+page.server.js';
 
 let tp: TestProviders | null = null;

@@ -36,7 +36,8 @@ function fakeEnv({
 	pm2Version = PM2_VERSION,
 	declaredPm2 = PM2_VERSION,
 	daemonAlive = true,
-	ping = { status: 0, stdout: 'pong\n' }
+	ping = { status: 0, stdout: 'pong\n' },
+	jlist = { status: 0, stdout: appList('online') }
 } = {}) {
 	const present = new Set(files);
 	return {
@@ -62,9 +63,14 @@ function fakeEnv({
 			if (cmd === 'npm') return npm;
 			if (cmd === 'which') return { status: 0, stdout: whichNode ? whichNode + '\n' : '' };
 			if (args?.[0] === 'ping') return ping;
+			if (args?.[0] === 'jlist') return jlist;
 			return { status: 0, stdout: '' };
 		}
 	};
+}
+
+function appList(status) {
+	return JSON.stringify([{ name: 'selva-compute', pm2_env: { status } }]);
 }
 
 const lines = (checks) => checks.map((c) => c.line).join('\n');
@@ -75,7 +81,7 @@ const find = (checks, re) => checks.find((c) => re.test(c.line));
 
 test('a correctly provisioned host passes every runtime check', () => {
 	const checks = checkRuntimeEnvironment(DIR, fakeEnv());
-	assert.deepEqual(severities(checks), ['green', 'green', 'green', 'green', 'green']);
+	assert.deepEqual(severities(checks), ['green', 'green', 'green', 'green', 'green', 'green']);
 	assert.match(lines(checks), /npm 10\.9\.2 on PATH/);
 	assert.match(lines(checks), /matches the pinned version/);
 	assert.match(lines(checks), /daemon responds and matches/);
@@ -250,6 +256,39 @@ test('unparseable skew output falls back to the resync warning, not a false red'
 	const checks = checkRuntimeEnvironment(DIR, fakeEnv({ ping }));
 	const daemon = find(checks, /differs from the local pm2/);
 	assert.equal(daemon.severity, 'yellow');
+});
+
+test('a live daemon without the app is red: an interrupted `pm2 update` leaves exactly this', () => {
+	const jlist = {
+		status: 0,
+		stdout: JSON.stringify([{ name: 'pm2-logrotate', pm2_env: { status: 'online' } }])
+	};
+	const app = find(checkRuntimeEnvironment(DIR, fakeEnv({ jlist })), /selva-compute/);
+	assert.equal(app.severity, 'red');
+	assert.match(app.line, /not registered/);
+	assert.match(app.line, /npx selva start && npx pm2 save/);
+});
+
+test('a stopped app is red', () => {
+	const app = find(
+		checkRuntimeEnvironment(DIR, fakeEnv({ jlist: { status: 0, stdout: appList('stopped') } })),
+		/selva-compute/
+	);
+	assert.equal(app.severity, 'red');
+	assert.match(app.line, /'stopped'/);
+});
+
+test('the app check reads past the out-of-date banner a skewed daemon prints', () => {
+	const ping = {
+		status: 0,
+		stderr: 'out-of-date\nIn memory PM2 version: 7.0.3\nLocal PM2 version: 7.1.2\n'
+	};
+	const jlist = {
+		status: 0,
+		stdout: `>>>> In-memory PM2 is out-of-date, do:\n>>>> $ pm2 update\n${appList('online')}\n`
+	};
+	const app = find(checkRuntimeEnvironment(DIR, fakeEnv({ ping, jlist })), /selva-compute/);
+	assert.equal(app.severity, 'green');
 });
 
 test('the daemon check is skipped when the deployment has no pm2 binary', () => {

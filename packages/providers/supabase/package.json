@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/supabase-provider",
-	"version": "0.19.7",
+	"version": "0.20.0",
 	"description": "Supabase (Auth + Postgres + Storage) implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -60,6 +60,11 @@
 			"selva-source": "./src/userProfile/index.ts",
 			"types": "./dist/userProfile/index.d.ts",
 			"import": "./dist/userProfile/index.js"
+		},
+		"./config": {
+			"selva-source": "./src/config.ts",
+			"types": "./dist/config.d.ts",
+			"import": "./dist/config.js"
 		}
 	},
 	"files": [
@@ -82,13 +87,14 @@
 	},
 	"dependencies": {
 		"@selvajs/platform": "workspace:^",
-		"@supabase/supabase-js": "^2.117.2",
+		"@supabase/supabase-js": "catalog:",
 		"sharp": "catalog:"
 	},
 	"devDependencies": {
+		"@electric-sql/pglite": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
-		"supabase": "^2.118.0",
+		"supabase": "^2.122.0",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

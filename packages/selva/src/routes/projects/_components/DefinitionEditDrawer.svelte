@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import {
 		AlertDialog,
 		Badge,
@@ -16,7 +16,8 @@
 		type FilterableDropdownItem
 	} from '@selvajs/ui';
 	import { ArrowLeft, Circle, Image, Trash2, X } from '@lucide/svelte';
-	import ProjectPicker from '$lib/components/definitions/ProjectPicker.svelte';
+	import { MAX_CATEGORY_LENGTH, MAX_TAGS } from '@selvajs/schemas';
+	import ProjectPicker from '#lib/components/definitions/ProjectPicker.svelte';
 	import type { DefinitionRecord, ProjectWithMembers, ComputeServerConfig } from '../+page.server';
 	import type { DefinitionStatus } from '@selvajs/platform';
 	import VersionsSection from './VersionsSection.svelte';
@@ -129,13 +130,13 @@
 			id: 'draft',
 			label: 'Draft — work in progress',
 			icon: Circle,
-			iconStyle: 'color: var(--muted-foreground); fill: var(--muted-foreground);'
+			iconClass: 'fill-muted-foreground text-muted-foreground'
 		},
 		{
 			id: 'published',
 			label: 'Published — live and visible to runners',
 			icon: Circle,
-			iconStyle: 'color: #22c55e; fill: #22c55e;'
+			iconClass: 'fill-success text-success'
 		}
 	];
 
@@ -158,7 +159,7 @@
 			});
 			if (res.ok) {
 				toast.success('Cover image updated');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const e = await res.json().catch(() => ({}));
 				toast.error(e.message || 'Image upload failed');
@@ -252,12 +253,17 @@
 			<div class="grid grid-cols-2 gap-3">
 				<div class="space-y-1.5">
 					<Label for="edit-cat">Category</Label>
-					<Input id="edit-cat" maxlength={40} bind:value={category} placeholder="e.g. Facade" />
+					<Input
+						id="edit-cat"
+						maxlength={MAX_CATEGORY_LENGTH}
+						bind:value={category}
+						placeholder="e.g. Facade"
+					/>
 				</div>
 				<div class="space-y-1.5">
 					<div class="flex items-center justify-between">
 						<Label for="edit-tags">Tags</Label>
-						<span class="text-muted-foreground text-xs">{tags.length}/5</span>
+						<span class="text-muted-foreground text-xs">{tags.length}/{MAX_TAGS}</span>
 					</div>
 					{#if tags.length > 0}
 						<div class="mb-1 flex flex-wrap gap-1">
@@ -278,13 +284,13 @@
 					<Input
 						id="edit-tags"
 						placeholder="Add tag + Enter"
-						disabled={tags.length >= 5}
+						disabled={tags.length >= MAX_TAGS}
 						onkeydown={(e) => {
 							if (e.key === 'Enter') {
 								e.preventDefault();
 								const el = e.currentTarget as HTMLInputElement;
 								const tag = el.value.trim();
-								if (tag && !tags.includes(tag) && tags.length < 5) {
+								if (tag && !tags.includes(tag) && tags.length < MAX_TAGS) {
 									tags = [...tags, tag];
 									el.value = '';
 								}

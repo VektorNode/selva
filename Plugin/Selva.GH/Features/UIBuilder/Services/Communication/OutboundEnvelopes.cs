@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using Newtonsoft.Json.Linq;
 using Selva.Schema.Models;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.SolveRuntime.Services;
@@ -38,6 +40,57 @@ public static class OutboundEnvelopes
     /// </summary>
     public static object SolveEvent(string sessionId, SolveEvent @event) =>
         new { type = "solveEvent", sessionId, @event };
+
+    // The Selva envelopes nest their payload because each payload type is shared with the
+    // generated TS types; none of them carries the token.
+
+    public static object SelvaAccount(string sessionId, SelvaAccount account) =>
+        new { type = "selvaAccount", sessionId, account };
+
+    public static object SelvaTargets(string sessionId, SelvaTargets targets) =>
+        new { type = "selvaTargets", sessionId, targets };
+
+    public static object SelvaUploadProgress(string sessionId, SelvaUploadProgress progress) =>
+        new { type = "selvaUploadProgress", sessionId, progress };
+
+    public static object SelvaUploadResult(string sessionId, SelvaUploadResult result) =>
+        new { type = "selvaUploadResult", sessionId, result };
+
+    // The host-file replies go only to the Rhino panel socket that asked. `error` is shown to the
+    // user and is null unless the outcome is `failed`.
+
+    /// <summary>
+    ///     The answer to a `readLayout` or `applyLayout`: SchemaLayout's JSON result, which carries
+    ///     `ok` and `errors` when it refused, the spec when read, and `unplaced` params.
+    /// </summary>
+    public static object LayoutResult(string sessionId, string requestId, JToken result) =>
+        new { type = "layoutResult", sessionId, requestId, result };
+
+    public static object HostSaveFileResult(string sessionId, string requestId, PromptOutcome outcome, string error) =>
+        new { type = "hostSaveFileResult", sessionId, requestId, outcome = outcome.WireName(), error };
+
+    public static object HostPickFileResult(string sessionId, string requestId, PromptOutcome outcome, string error) =>
+        new { type = "hostPickFileResult", sessionId, requestId, outcome = outcome.WireName(), error };
+
+    /// <summary>The header of a picked file's <see cref="HostFileFrame" />; the file follows it in the same frame.</summary>
+    public static object HostPickedFile(string sessionId, string requestId, string name) =>
+        new { type = "hostPickedFile", sessionId, requestId, name };
+
+    /// <summary>
+    ///     The answer to a `pickGeometry`. `outcome` is `picked`, `cancelled` or `failed`; `summary`
+    ///     ("2 curves") is set when picked, `error` when failed. The geometry itself never leaves
+    ///     Grasshopper.
+    /// </summary>
+    public static object PickGeometryResult(string sessionId, string requestId, Guid paramId,
+        PromptOutcome outcome, string summary, string error) =>
+        new { type = "pickGeometryResult", sessionId, requestId, paramId, outcome = outcome.WireName(), summary, error };
+
+    /// <summary>
+    ///     What a geometry input holds after a clear, sent whether or not the clear went through, so
+    ///     every page shows what Grasshopper has. `summary` is null when nothing is picked into it.
+    /// </summary>
+    public static object GeometrySummary(string sessionId, Guid paramId, string summary) =>
+        new { type = "geometrySummary", sessionId, paramId, summary };
 
     public static object ParametersAdded(string sessionId, DiscoveredParameters availableParams) =>
         new { type = "parametersAdded", sessionId, availableParams };
@@ -82,6 +135,41 @@ public static class OutboundEnvelopes
             schemaHash,
             reason = reason ?? "Schema changed in Grasshopper since you started editing."
         };
+
+    /// <summary>
+    ///     A layout change made from the canvas. Carries the new canonical like `schemaUpdated`, plus
+    ///     the placements themselves, so an editor with unsaved edits can replay them on its draft
+    ///     instead of conflicting with them. A new tab or group arrives with the id the plugin gave
+    ///     it, so the replayed draft and the canonical agree.
+    /// </summary>
+    public static object LayoutPlaced(string sessionId, UISchema schema, string schemaHash,
+        IReadOnlyList<LayoutPlacement.Placed> placements, IReadOnlyList<Guid> removedIds, string summary) =>
+        new
+        {
+            type = "layoutPlaced",
+            sessionId,
+            schema,
+            schemaHash,
+            placements = (placements ?? Array.Empty<LayoutPlacement.Placed>()).Select(p => new
+            {
+                paramId = p.ParamId,
+                itemType = p.IsOutput ? "output" : "input",
+                tabId = p.TabId,
+                tabLabel = p.TabLabel,
+                groupId = p.GroupId,
+                groupLabel = p.GroupLabel
+            }).ToList(),
+            removedIds = removedIds ?? Array.Empty<Guid>(),
+            summary
+        };
+
+    /// <summary>The publishable params selected on the canvas, in canvas order.</summary>
+    public static object CanvasSelection(string sessionId, IReadOnlyList<Guid> ids) =>
+        new { type = "canvasSelection", sessionId, ids = ids ?? Array.Empty<Guid>() };
+
+    /// <summary>Asks the editor to show one layout item: its tab, scrolled to and highlighted.</summary>
+    public static object RevealItem(string sessionId, Guid paramId) =>
+        new { type = "revealItem", sessionId, paramId };
 
     public static object SolvingState(string sessionId, bool isSolving) =>
         new { type = "solvingState", sessionId, isSolving };

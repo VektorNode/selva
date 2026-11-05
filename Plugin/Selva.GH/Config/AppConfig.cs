@@ -15,10 +15,15 @@ public static class AppConfig
         public const int MaxConcurrentClients = 10;
         public const int HeartbeatIntervalMs = 30_000; // 30 s
         public const int BroadcastTimeoutMs = 30_000; // 30 s — covers large file uploads
+
+        // A client with this much unsent is closed rather than queued further; it reconnects and
+        // gets the current state replayed. Far above a solve's worth of mesh frames.
+        public const long MaxQueuedSendBytes = 256L * 1024 * 1024;
         public const int ClientCloseTimeoutMs = 1_000; //  1 s
         public const int PingTimeoutMs = 5_000; //  5 s
         public const int ServerStartupTimeoutMs = 5_000; //  5 s
         public const int ReceiveTimeoutMs = 120_000; // 2 min — covers large file uploads
+        public const int AuthTimeoutMs = 5_000; //  5 s — a socket that hasn't sent the secret by then is closed
     }
 
     // -------------------------------------------------------------------------
@@ -36,6 +41,11 @@ public static class AppConfig
     public static class ComponentLifecycle
     {
         public const int ScheduleSolutionDelayMs = 10;
+
+        // While the Rhino panel is connected. A solve holds the UI thread the panel's WebView paints
+        // on, so the page's "Solving…" must reach the screen before it starts: two 60 Hz frames, one
+        // to paint and one to present.
+        public const int PanelScheduleSolutionDelayMs = 35;
         public const int SchemaCleanupBroadcastTimeoutMs = 100;
     }
 
@@ -46,6 +56,9 @@ public static class AppConfig
     {
         // Lets Grasshopper finish its current solution before output data is read.
         public const int InitialOutputBroadcastDelayMs = 100;
+
+        // `pnpm dev:plugin`. Used when the build has no embedded web assets.
+        public const int DevServerPort = 5173;
     }
 
     // -------------------------------------------------------------------------

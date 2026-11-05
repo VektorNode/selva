@@ -1,5 +1,212 @@
 # @selvajs/compute
 
+## 5.0.0
+
+### Major Changes
+
+- edb568d: Smaller public API, ESM only, and security hardening of the solve path.
+
+  **Breaking**
+
+  - No root entry: import `@selvajs/compute/core` or `@selvajs/compute/grasshopper`. `/grasshopper` no longer re-exports `/core`; import `extractFilesFromComputeResponse`, `downloadFileData`, `ProcessedFile`, `FileData`, `FileBaseInfo`, `isDefinitionRef`, `DefinitionRef` and `SolveDefinition` from `/core`.
+  - ESM only. On Node 24 a CommonJS project can still `require()` it.
+  - `rhino3dm` is no longer a dependency; install it yourself to decode geometry.
+  - Redirects are not followed, since fetch keeps a custom API key header across origins. A 3xx rejects with `INVALID_CONFIG` and names the target in `context.location`.
+  - Solve-cache keys are SHA-256 (`hashSolveInput`, `hashDefinition` return a new format), so a durable cache keyed by them misses once.
+  - `fetchCompute`, `solveGrasshopperDefinition` and `fetchDefinitionIO` validate `serverUrl` before any request.
+  - The `'parallel'` scheduler mode is gone: use `{ mode: 'queue', maxConcurrent: n }`. `new SolveScheduler(executor, config, options)` takes one executor. `GrasshopperClient.create(config, { probe })` has its own retry ladder.
+  - The `cacheerroredsolves` request option is removed.
+  - `TreeBuilder`: `getTreeValue` and `replaceTreeValue` take `DataTree[]` only and throw on more than one branch (use `getTree`); `appendSingle`, `getInnerTree`, `fromInputParam`, `getPaths`, `getPath`, `getParamName` and `flatten` are removed. `fromInputParams` coerces defaults like `fromValues` and drops items that fail.
+  - Removed: `GrasshopperClient.getConfig`, `SolveScheduler.getMaxConcurrent`, `ComputeError.missingValues` / `unknownParamType`, `OutputType`, `GrasshopperRequestSchema`, `getResponseWireSize` / `setResponseWireSize`, and the `debug` argument of `GrasshopperResponseProcessor`.
+  - The scheduler remembers a `Uint8Array` definition's hash by identity: pass a new buffer instead of mutating one.
+  - Values: repeated `getValue(s)` reads return fresh objects. A text output of `"123"` stays a string; `Int64` past 2^53 keeps its digits as a string. A solve always returns `values`. `SolveResult` loses `superseded`; `DataItem.id` is optional.
+  - Errors no longer carry secrets or bodies: rejected URLs show scheme and host only, `context.responseHeaders` is an allowlist, query strings are stripped, and scheduler errors no longer carry `context.key`.
+
+  **Added**
+
+  - `scheduler.solveDetailed()` with `{ response, fromCache, definitionReuploaded, durationMs }` and per-call `onServerTiming`. `ServerTiming` reads the VektorNode fork's `gh`, `recomputed` and `cacheHit`.
+  - `TreeBuilder.getTree` and `TreeBuilder.fromValues`.
+  - `ComputeConfig.maxResponseBytes` (`RESPONSE_TOO_LARGE`) and `ComputeConfig.fetch` for long solves on Node.
+  - Request bodies of 1 KB or more are gzipped for servers that advertise it.
+  - `downloadFileData(…, { saveBlob })` for WebViews where anchor downloads don't work.
+  - Cancellation reaches `DefinitionRef.load()`, `create()` and `probeServer`; `client.dispose()` disposes its schedulers.
+
+  **Fixed**
+
+  - A timeout or abort during the body download rejects as `TIMEOUT_ERROR` / `ABORTED`, not a retryable `NETWORK_ERROR`.
+  - The liveness probe authenticates with the client's auth settings and treats a root redirect as online.
+  - List-access input defaults expand into branches. `TreeBuilder` handles any branch length. Prototype-named outputs and archive files are kept. Step sizes ignore float noise.
+  - `dist` is no longer minified.
+
+## 5.0.0-beta.10
+
+### Patch Changes
+
+- 926d708: Request bodies of 1 KB or more are gzipped for a server whose last response advertised `Accept-Encoding: gzip`, as Rhino.Compute does since `RHINO_COMPUTE_COMPRESSION`. Other servers get plain JSON as before. A non-500 JSON error body is read for its `message`, so a Compute 400 reads `Bad request: Bad Request — <message>` rather than quoting the raw JSON.
+
+## 5.0.0-beta.9
+
+### Patch Changes
+
+- 9240690: A review of `@selvajs/solve`: smaller public API, one owner for each solve rule, and the bugs it found.
+
+  **Breaking in `@selvajs/solve`:**
+
+  - The server `SolveOutcome` is now `SolveEngineOutcome`, and `PipelineInput` is gone: use `SolveInput`. The `SolveOutcome` on `/shared` and `/client`, the plugin's verdict, is unchanged.
+  - `/server` no longer exports `runSolvePipeline`, `SolvePipelineArgs`, `adaptEnvelopeToEncoding`, `buildSolveInputTree`, `createClientCache`, `createDefinitionByteCache`, `createSolveCacheSingleFlight`, their handle types, `serverIdentity`, `ServerIdentity` or `isDefinitionRef`. Use `SolveEngine`. `SolveEngine.toResponse` and `FrameworkAgnosticResponse` are gone: use `toWebResponse`.
+  - `definitionSource` no longer takes `{ versionId, load }`: pass `engine.definitionRef(versionId, load)`.
+  - `SolveEngine` drops the `logger` option and the `@selvajs/platform` dependency. A host that passed `logger` must pass `onDebugLog`, or its debug lines stop silently.
+  - `SolveEngine` throws a `RangeError` on a limit that is not a finite number in range.
+  - `/client` no longer exports `applyValueChange`, `makeInitialFlags`, `pickInputValues`, `applySolveResult`, `solvePhase`, `buildInitialValues`, `SolveSessionState`, `ExternalReader`, `reduceLiveSolve`, `createAsyncThrottle`, `AsyncThrottle`, `createSolveMemo`, `SolveMemo` or `SolveMemoOptions`. `/shared` no longer exports `SOLVE_BLOCKED_MARKER` or `outcomeFromComputeMessages`.
+  - `SolveDriver.clearCache` is now `reset`, and also stops the running solve. A custom driver implementing `clearCache` must rename it.
+  - A rejected solve's `SolveResult` no longer carries `source`: it held the outputs the verdict withheld.
+
+  **New:** `solveInputsFromSchema` and `acceptsGzip` on `/server`, `loginPath` on `createComputeFetchSolveFn`, and `signal` passed to `meshes.extract`. `shed` gains the reason `interrupted`, retryable, for a solve that lost its client.
+
+  **Fixed, client:** a hung solve no longer wedges the session; a rebuild stops the old definition's solve and drops its result; `ensureSolved` no longer returns a result for older inputs after an abort or a discard; a value edited during a manual solve stays dirty; an aborted result is not memoized, so a retry solves again; `dispose` stops the running and queued solves; a held result is dropped when a newer solve starts, and settles as `discarded`; a throwing listener or `onChange` no longer breaks a solve's one settlement; a solve started from a subscriber keeps its abort and deadline; a non-200 no longer closes the event stream for good; a 503 with `Retry-After` starts the cooldown, and that header's other forms parse; a network failure no longer claims the session expired; valid but wrong JSON and a truncated body read as errors; `stableInputKey` honours `toJSON` and treats an `undefined` property as absent; blocked or quota-full `sessionStorage` no longer throws; a late `solveEnded` no longer wipes the next solve's state; a verdict of `blocked` with no diagnostics no longer unblocks.
+
+  **Fixed, server:** a flight aborts when its last caller leaves and frees its key then, so an orphaned solve no longer holds a Rhino slot and a live caller no longer gets a 499 from someone else's disconnect; an already-aborted caller doesn't solve; an eviction no longer aborts running solves as a false 504, it drains them; a build in flight when a server is evicted no longer installs old credentials; handshake failures return `compute_error` instead of throwing; `gzip;q=0` is honoured; the response cap counts bytes, not UTF-16 units; concurrent definition loads share one read and honour the signal; a call with no deadline of its own keeps a 300 s ceiling on the long-deadline fetch.
+
+  **`@selvajs/selva`, behaviour change:** a solve of a stored definition reads its inputs from the version's schema and ignores the request's, so a caller can no longer forge a slot or drop a bound. Number widget bounds are enforced on the server. `inputs` on `POST /api/v1/definitions/{guid}/solve` is deprecated and ignored; omitting it now solves the stored inputs instead of the file's defaults. A version whose schema can't be read or backfilled now answers 503 instead of solving on the request's inputs. Remote-URL solves still read `inputs` from the body, and reject a malformed list with a 400. A failed Compute records a `compute_error` metric. A display error in the local preview is shown as a message on an applied solve.
+
+  **`@selvajs/compute`:** a redirect error no longer quotes credentials or a query string from `Location`.
+
+## 5.0.0-beta.8
+
+### Major Changes
+
+- 2256395: Removed the `cacheerroredsolves` request option and the `COMPUTE_CACHE_ERRORED_SOLVES` setting. Only the VektorNode Rhino.Compute fork honored the flag, and the fork dropped it to stay closer to McNeel's server, which never caches an errored solve. Selva's own solve cache still keeps errored solves by default (`cache.cacheErroredSolves` on the scheduler).
+
+  The scheduler's solve cache no longer stores a solve the Selva plugin aborted (`selva.outcome.aborted`): it stopped partway, so the same inputs solve again instead of replaying a partial result.
+
+## 5.0.0-beta.7
+
+### Patch Changes
+
+- 69ff76a: - **Breaking:** OAuth consent offers and mints a key only in the session's acting org. `consentOrgs` returns at most that org and `mintConsentToken` refuses any other, since the token page can list and revoke keys only there.
+  - `readForm` parses a request's form body once. The idempotency fingerprint and the upload handlers share it, so a definition upload is no longer buffered and parsed twice. On an idempotent route, read forms through it: `request.formData()` throws once the fingerprint has used the body.
+  - The CSRF exemption reads the bearer as `resolveApiToken` does, so `Bearer selva_x extra` no longer skips the Origin check.
+  - OAuth codes are opened with a fixed 16-byte GCM tag.
+  - `@selvajs/mcp` exports `refuseEarly`, the origin and key checks `handle` runs first. Selva's `/mcp` runs it against the configured origins before building a server, so neither an anonymous request nor a page on a rebound name can trigger a build.
+  - Step sizes count decimals at 15 significant digits: `16384.2` gets a step of 0.1, not 1e-12.
+
+## 5.0.0-beta.6
+
+### Patch Changes
+
+- e39d929: chore(deps): bump the npm group across 1 directory with 34 updates
+
+## 5.0.0-beta.5
+
+### Minor Changes
+
+- 5e17d67: `ServerTiming` reads three more fields that a VektorNode-fork Rhino.Compute sends: `gh` (the part of `solve` spent inside Grasshopper), `recomputed` (`{ ran, total }` objects) and `cacheHit` (the server answered from its result cache). A cache hit now reaches `onServerTiming`; it carries no durations, so the callback used to stay silent.
+
+  The solve pipeline's `Server-Timing` adds `rhino_gh`, `rhino_recomputed` and `rhino_cache` (1 on a compute cache hit) beside the other `rhino_*` entries.
+
+## 5.0.0-beta.4
+
+### Minor Changes
+
+- 07e6808: `downloadFileData` and `downloadFileDataByRoot` take an optional `{ saveBlob }` as their last argument. When it's given, each finished archive goes to it instead of an `<a download>` click. Use it in an embedded WebView where anchor downloads don't work. Calls without it behave as before.
+
+### Patch Changes
+
+- 33ef891: Schema 2.17.0: value lists gain `segmented` and `tiles` display modes and an optional `optionMedia` map that gives an option an icon or a thumbnail. The icons and thumbnails live in a new root `assets` table, keyed by a hash of their content, so the `.gh` carries each one once. Icons are stored as SVG path data and thumbnails as small WebP, JPEG or PNG data URIs. Each option shows one picture, its thumbnail or else its icon, in every display mode. A button row with more than six options shows as a dropdown. The plugin marks a schema that has assets as needing plugin 0.24.0, so an older plugin refuses it instead of saving it without them. `normalizeUISchemaCasing` keeps option names in `optionMedia` and asset ids as they are.
+
+## 5.0.0-beta.3
+
+### Major Changes
+
+- 2322937: Security and performance hardening. What changes for a caller:
+
+  - **Redirects are not followed.** fetch keeps a custom API key header such as `RhinoComputeKey` across origins, so following a redirect handed the key to its target. A 3xx now rejects with `INVALID_CONFIG`, naming the target in `context.location`: set `serverUrl` to that address. `ComputeServerStats` reads return `null` on a redirect. The liveness probe still reads one as online.
+  - **Solve-cache keys are SHA-256.** The 32-bit FNV-1a key could be collided on purpose in milliseconds, so one user of a shared scheduler could choose what another user's solve returned. `hashSolveInput` and `hashDefinition` return a new format (`s:`, `u8:` or `r:` part, then `|t:` and 64 hex chars), so a durable cache keyed by them misses once. `stableStringify` marks non-JSON values with tokens no JSON value produces (`{u8:…}`, `{map:[…]}`, `{set:[…]}`, `[Circular]`), and stringifies a function like `undefined`.
+  - **`fetchCompute`, `solveGrasshopperDefinition` and `fetchDefinitionIO` validate `serverUrl`**, throwing `INVALID_CONFIG` before any request. The two Grasshopper functions also refuse `compute.rhino3d.com`, as `GrasshopperClient` does.
+  - Scheduler `SUPERSEDED`, `ABORTED`, `QUEUE_FULL` and `QUEUE_TIMEOUT` errors no longer carry `context.key`. Read `ctx.key` in a hook instead.
+
+  Added:
+
+  - `ComputeConfig.maxResponseBytes`. The download is cancelled once the body passes it, rejecting with the new `RESPONSE_TOO_LARGE`. A solve doesn't count the uploaded definition the server echoes back. An error body other than a 500 is read only up to 1 MB.
+
+  Fixed:
+
+  - `getValues` returns an output named `constructor`, `toString` or `__proto__` as its value. It returned `[ƒ, value]`, or swapped the result's prototype. `normalizeUISchemaCasing` and input-default normalization keep a `__proto__` key as data.
+  - A downloaded archive keeps a root file named `__proto__`, as `__proto__-2`. It was dropped.
+  - `TreeBuilder` appends branches of any length. Around 150k items it threw `RangeError`.
+  - When the cache or a hook needs the key, `scheduler.solve()` rejects an input too deep to hash with `INVALID_INPUT`. It threw synchronously.
+
+  Faster:
+
+  - With the cache off and no hooks, the scheduler doesn't hash the input tree. A string definition re-sent unchanged is hashed once, not on every solve.
+  - Aborting a queued solve is constant-time; aborting n of them was quadratic.
+  - `decodeBase64ToBinary` in Node is about 4× faster on large payloads, and returns a large result without copying it.
+  - `validateServerUrl` trims trailing slashes and dots in linear time.
+
+## 5.0.0-beta.2
+
+### Major Changes
+
+- 9a7d371: The public API changes in one major. Migration:
+
+  - **No root entry.** `import '@selvajs/compute'` fails; import `@selvajs/compute/core` or `@selvajs/compute/grasshopper`.
+  - **`/grasshopper` no longer re-exports `/core`.** Import `extractFilesFromComputeResponse`, `downloadFileData`, `ProcessedFile`, `FileData`, `FileBaseInfo`, `isDefinitionRef`, `DefinitionRef` and `SolveDefinition` from `/core`. `OutputType` and `GrasshopperRequestSchema` are gone.
+  - **`/core` no longer exports `getResponseWireSize` / `setResponseWireSize`.**
+  - **`new GrasshopperResponseProcessor(response)`** takes no `debug` argument, and the `debug` property is gone.
+  - **`'parallel'` scheduler mode is gone.** Use `{ mode: 'queue', maxConcurrent: 4 }`; an unknown mode throws `INVALID_CONFIG`.
+  - **`new SolveScheduler(executor, config, options)`** takes one executor, `(definition, tree, cacheKey | null, config) => { response, cacheKey, missed }`. `GrasshopperClient.createScheduler()` is unchanged.
+  - **`GrasshopperClient.create(config, { probe })`**: the liveness probe has its own ladder (defaults 2 retries, 250 ms, 1000 ms). `config.retry` no longer shortens it.
+  - **`TreeBuilder`**:
+    - `getTreeValue` and `replaceTreeValue` take `DataTree[]` only, and match `ParamName` in any casing.
+    - `getTreeValue` throws `INVALID_INPUT` when the param has more than one branch; read those with the new `getTree`.
+    - `appendSingle`, `getInnerTree`, `fromInputParam`, `getPaths` and `getPath` are removed.
+    - `fromInputParams` coerces defaults by the same rules as the new `fromValues`: `paramType` matches in any casing, Integer defaults round, and an item that fails coercion is dropped with a warning instead of sent as-is.
+  - **The scheduler remembers a `Uint8Array` definition's hash by identity.** Don't mutate a buffer after solving it: the scheduler keeps the old hash and serves the old content's cached responses. Pass a new buffer instead.
+  - **`ComputeError.missingValues` / `unknownParamType` are removed.** `originalError` accepts any thrown value.
+  - **Repeated `getValue` / `getValues` reads of one response return fresh objects**; they were shared.
+  - **`rhino3dm` is no longer a dependency.** Install it yourself to decode geometry.
+
+  Added:
+
+  - `scheduler.solveDetailed()` resolves `{ response, fromCache, definitionReuploaded, durationMs }` for that call and takes a per-call `onServerTiming(timing, requestId)`.
+  - `TreeBuilder.getTree(trees, paramName)` returns the whole tree as a `Map` from branch path to items.
+  - `TreeBuilder.fromValues(entries)` builds trees from plain values: Number, Integer and Boolean items are coerced and clamped, values it can't coerce are dropped, every other type passes through.
+  - Exports: `disposeRhinoObjects`, `isRhinoDecodeError`, `RhinoDecodeError`, `ColorInputType`, `InputParseError`, `ServerVersion`, `ServerStats`, `TreeValueEntry`, `SolveDetail`, `SchedulerSolveOptions`, `SolveExecutor`, `CreateClientOptions`.
+
+### Patch Changes
+
+- 7304b28: Internal cleanup of `@selvajs/compute` with no API change. Two things are visible:
+
+  - Transport errors share one `context` shape (`serverUrl`, `url`, `endpoint`, `requestId`, `requestSize`, plus `timeoutMs` on a timeout), so some errors carry more keys than before. Input parse messages name an unnamed input `"unknown"`.
+  - `@selvajs/ui`'s file download decodes base64 with `decodeBase64ToBinary`, so invalid base64 throws a `ComputeError` with code `ENCODING_ERROR` instead of a `DOMException`.
+
+- 414e9bc: Defect fixes:
+
+  - A definition's first solve through `createScheduler()` now reports `definitionReuploaded: true`. It uploads the full definition, but was reported as a server cache hit.
+  - A server error `code` that names an `Object.prototype` member (`"constructor"`) no longer resolves to a prototype function. It is ignored like any undeclared code.
+  - `config.headers` can no longer double a transport header by using different casing. A caller `rhinocomputekey`, `authorization`, `content-type` or `x-request-id` is dropped instead of being sent next to the real one.
+  - `fetchDefinitionIO` errors no longer carry the whole definition in `context`.
+  - An input default that is already a branch-path map (`{ '{0}': [1, 2] }`) is kept, not dropped as malformed.
+  - Numeric step sizes come from one decimal count that ignores float noise and handles exponent notation: `3.3000000000000003` gives step `0.1` (was `1e-12`), `1.5e21` gives `1` (was `0.00001`).
+  - `fetchDefinitionIO` warns when it runs in a browser, as `fetchParsedDefinitionIO` already did. A 504 is labelled "Gateway timeout".
+  - README, the example and JSDoc examples fixed: `cache` takes `maxBytes`, a definition is a URL or bytes rather than a file name, cancellations are matched by `err.code`, the liveness probe is `GET /`, and the default port is 6500.
+
+## 4.3.0-beta.1
+
+### Minor Changes
+
+- 594da9c: Three fixes in the solve path:
+
+  - A timeout or caller abort that fires while a response body is still downloading now rejects with `TIMEOUT_ERROR` or `ABORTED`. Before, it surfaced as a retryable `NETWORK_ERROR` "Failed to parse JSON response", so a solve that hit its deadline mid-download read as a compute failure.
+  - `TreeBuilder.fromInputParams` expands a list-access input's default (`atMost > 1` without tree access) into its branches. Before, the whole tree was sent to Grasshopper as a single JSON string item.
+  - `GrasshopperClient.create()` authenticates its liveness probe with the client's `authToken`, `apiKeyHeader` and `headers`, not only `apiKey` under `RhinoComputeKey`. A server behind a token-checking gateway no longer fails `create()` with a 401. `ComputeServerStats` takes these fields as its second argument (`ComputeAuth`, exported from `/core`); passing a plain API key string still works.
+
+## 4.2.2-beta.0
+
+### Patch Changes
+
+- 90ba461: The liveness probe no longer follows a redirect from `/`: a Compute build that redirects its root (to rhino3d.com) reads as online at once, instead of timing out on the public internet and sending the `RhinoComputeKey` header along.
+
 ## 4.2.1
 
 ### Patch Changes

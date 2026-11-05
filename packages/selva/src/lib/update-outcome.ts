@@ -186,6 +186,10 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 		const actual = firstMatch(logs, /this database is at (\S+?)\./);
 		const skew =
 			expected && actual ? ` The database is at ${actual}; ${to ?? 'it'} needs ${expected}.` : '';
+		// `latest` is the stable line, which ships none of a beta's migrations.
+		const providerTag =
+			firstMatch(logs, /@selvajs\/supabase-provider@([\w.-]+)/) ??
+			(has(logs, 'channel: beta') ? 'beta' : 'latest');
 		return {
 			severity: 'warning',
 			title: `Update rolled back — the database migrations for ${to ?? 'the new version'} have not been applied.${skew} The app is online${from ? ` on ${from}` : ''}.`,
@@ -194,11 +198,11 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 				'during an update, because they cannot be rolled back — auto-migrating ' +
 				'and then rolling the code back would leave the app and database on ' +
 				'different heads. Apply them on the server, then re-run this update: ' +
-				'`npm install --prefer-online @selvajs/supabase-provider@latest`, then ' +
+				`\`npm install --prefer-online @selvajs/supabase-provider@${providerTag}\`, then ` +
 				'`npx selva-supabase`, then `npx supabase db push`. The provider install ' +
 				'is not optional — the migration SQL ships inside that package, and the ' +
-				'rollback pinned it back to the old version, so a sync without it copies ' +
-				'nothing and the push reports "up to date" having done nothing. ' +
+				'update only moves @selvajs/cli and @selvajs/selva, so a sync without it ' +
+				'copies nothing and the push reports "up to date" having done nothing. ' +
 				'Retrying without this will fail in exactly the same way.',
 			from,
 			to
@@ -246,6 +250,31 @@ export function deriveOutcome(exitCode: number | null, logs: string): UpdateOutc
 				'npm installed it anyway (engine-strict is off) and the health check ' +
 				'passed, but it does not exercise the newer APIs — routes that do will ' +
 				'throw at request time. Upgrade Node on the server, then re-run the update.',
+			from,
+			to
+		};
+	}
+	// The runner moved pm2 to the release's pin but could not swap the daemon
+	// (refused under systemd, or `pm2 update` failed). The app runs; the next
+	// pm2 command warns about the skew until someone runs the swap by hand.
+	if (has(logs, 'PM2_RESYNC_NEEDED')) {
+		return {
+			severity: 'warning',
+			title: `Updated${to ? ` to ${to}` : ''}, but the pm2 daemon still runs the old pm2.`,
+			detail:
+				'The app is online. On the server, run `npx pm2 update` in the deployment ' +
+				'directory, let it finish, then check `npx pm2 list` shows selva-compute online.',
+			from,
+			to
+		};
+	}
+	if (has(logs, 'PM2_PIN_FAILED')) {
+		return {
+			severity: 'warning',
+			title: `Updated${to ? ` to ${to}` : ''}, but pm2 stayed on the previous version.`,
+			detail:
+				'The app is online on the old pm2. On the server, run `npx selva migrate` in ' +
+				'the deployment directory to move it to the pinned version.',
 			from,
 			to
 		};

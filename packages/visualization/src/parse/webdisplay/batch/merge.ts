@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 
+import { isGlass } from '../../../shared/index.js';
+
 import { finishGeometry, type FinishedGeometry } from '../mesh-assembly.js';
 
 import { indexOutOfWindow } from './metadata.js';
@@ -27,6 +29,25 @@ export function splitGroupByLayer(group: MaterialGroup): MaterialGroup[] {
 		bucket.push(meshMeta);
 	}
 	return [...byLayer.values()].map((meshes) => ({ materialId: group.materialId, meshes }));
+}
+
+/**
+ * The groups a merge-by-material draws: every group of one material gathered into one, in order of
+ * first appearance, then split by layer. The writer keeps meshes in input order, so one material
+ * can head several groups.
+ */
+export function mergeGroupsOf(groups: MaterialGroup[]): MaterialGroup[] {
+	const byMaterial = new Map<number, MeshMetadata[]>();
+	for (const group of groups) {
+		const meshes = byMaterial.get(group.materialId);
+		// A loop, not push(...spread): spreading passes every mesh as an argument and overflows the
+		// stack past ~100k meshes.
+		if (meshes) for (const mesh of group.meshes) meshes.push(mesh);
+		else byMaterial.set(group.materialId, group.meshes.slice());
+	}
+	return [...byMaterial].flatMap(([materialId, meshes]) =>
+		splitGroupByLayer({ materialId, meshes })
+	);
 }
 
 /**
@@ -101,7 +122,7 @@ export function createMergedMesh(
 
 	const finished = finishGeometry(
 		{ positions: mergedVertices, indices: mergedIndices, uvs: mergedUvs, colors: mergedColors },
-		group.meshes.map((m) => m.indexCount)
+		group.meshes
 	);
 	return finalizeMergedMesh(
 		geometryFrom(finished),
@@ -172,7 +193,7 @@ export function finalizeMergedMesh(
 	const firstMesh = group.meshes[0];
 	const meshNames = group.meshes.map((m) => m.name).filter((name) => name && name.length > 0);
 	threeMesh.name = meshNames.length > 0 ? meshNames[0]! : `merged_material_${group.materialId}`;
-	threeMesh.castShadow = true;
+	threeMesh.castShadow = !isGlass(material);
 	threeMesh.receiveShadow = true;
 
 	threeMesh.userData = {
@@ -240,7 +261,7 @@ export function createIndividualMeshes(
 				uvs: allUvs ? allUvs.slice(uvStart, uvStart + meshMeta.vertexCount * 2) : null,
 				colors: allColors ? allColors.slice(componentStart, componentStart + componentLen) : null
 			},
-			[rebasedIndices.length]
+			[meshMeta]
 		);
 		meshes.push(
 			finalizeSingleMesh(
@@ -270,7 +291,7 @@ export function finalizeSingleMesh(
 		trackingKey: meshMeta.id,
 		metadata: meshMeta.metadata ?? {}
 	};
-	mesh.castShadow = true;
+	mesh.castShadow = !isGlass(material);
 	mesh.receiveShadow = true;
 	return mesh;
 }

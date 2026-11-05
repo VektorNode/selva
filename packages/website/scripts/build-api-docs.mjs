@@ -23,8 +23,8 @@ const siteRoot = '/docs/api/compute/';
 // Self-hosted so the reference doesn't depend on a hashed path from the
 // SvelteKit build; the subset covers the Latin text typedoc emits.
 const fontSrc = resolve(
-	repoRoot,
-	'node_modules/.pnpm/@fontsource-variable+familjen-grotesk@5.3.0/node_modules/@fontsource-variable/familjen-grotesk/files/familjen-grotesk-latin-wght-normal.woff2'
+	here,
+	'../node_modules/@fontsource-variable/hanken-grotesk/files/hanken-grotesk-latin-wght-normal.woff2'
 );
 
 // Root-relative so they resolve on whatever domain the site is served from.
@@ -91,5 +91,5 @@ try {
 }
 rmSync(dest, { recursive: true, force: true });
 cpSync(src, dest, { recursive: true });
-copyFileSync(fontSrc, join(dest, 'assets/familjen-grotesk-latin.woff2'));
+copyFileSync(fontSrc, join(dest, 'assets/hanken-grotesk-latin.woff2'));
 pinBase(dest);

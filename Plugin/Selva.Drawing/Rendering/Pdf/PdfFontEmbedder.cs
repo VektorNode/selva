@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using PdfSharpCore.Fonts;
+using PdfSharp.Fonts;
 
 namespace Selva.Drawing.Rendering.Pdf;
 
-// Bridges Selva's bundled Inter fonts into PdfSharpCore's global IFontResolver. PdfSharpCore
+// Bridges Selva's bundled Inter fonts into PDFsharp's global IFontResolver. PDFsharp
 // requires the resolver to be set once before any XFont is constructed and refuses to swap
 // it out later, so install is idempotent: the first PdfRenderer wins, later calls are no-ops.
 internal sealed class PdfFontEmbedder : IFontResolver
@@ -58,7 +58,7 @@ internal sealed class PdfFontEmbedder : IFontResolver
 			}
 			catch
 			{
-				// PdfSharpCore refuses to swap an in-use resolver. Cache our wrap anyway
+				// PDFsharp refuses to swap an in-use resolver. Cache our wrap anyway
 				// so later installs are no-ops; Inter falls through to the host's
 				// substitution here, but at least we don't crash.
 				_installed = wrap;
@@ -78,7 +78,7 @@ internal sealed class PdfFontEmbedder : IFontResolver
 		}
 
 		// Anything else: delegate to the wrapped resolver if we have one. If we don't,
-		// returning null lets PdfSharpCore fall through to its platform font cache.
+		// returning null lets PDFsharp fall through to its platform font cache.
 		return _next?.ResolveTypeface(familyName, isBold, isItalic);
 	}
 

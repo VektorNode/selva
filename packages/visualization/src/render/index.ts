@@ -13,6 +13,7 @@
 
 export { initThree } from './scene-setup/init-three.js';
 export type { ThreeViewer } from './scene-setup/viewer.js';
+export type { SetLookOptions } from './scene-setup/appearance.js';
 
 // ============================================================================
 // Viewer toolkit — handle types (instances come from `initThree`)

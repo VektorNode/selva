@@ -63,6 +63,32 @@ describe('reduceLiveSolve', () => {
 		expect(state.progress.get('steps')).toEqual({ source: 'steps', fraction: 0.6, label: 'b' });
 	});
 
+	it('keeps a bar where it was on a report with no fraction', () => {
+		const state = fold([
+			ev('progress', { source: 'steps', fraction: 0.6 }),
+			ev('progress', { source: 'steps', label: 'Writing' })
+		]);
+		expect(state.progress.get('steps')).toEqual({
+			source: 'steps',
+			fraction: 0.6,
+			label: 'Writing'
+		});
+	});
+
+	it('reads an end it cannot understand as an error, never as a clean finish', () => {
+		for (const payload of [{}, { kind: 'finished' }, { kind: 7 }]) {
+			expect(fold([ev('solveEnded', payload)]).ended).toEqual({ kind: 'error' });
+		}
+	});
+
+	it("ignores a late end from a replaced solve, keeping the new one's messages", () => {
+		const newer = fold([
+			ev('solveStarted', {}, 'B'),
+			ev('diagnostic', { level: 'warning', message: 'from B' }, 'B')
+		]);
+		expect(reduceLiveSolve(newer, ev('solveEnded', { kind: 'ok' }, 'A'))).toBe(newer);
+	});
+
 	it('resets on a new solve id and passes unknown kinds through', () => {
 		seq = 0;
 		const first = fold([

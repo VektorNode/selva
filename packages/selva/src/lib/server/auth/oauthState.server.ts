@@ -18,7 +18,7 @@
  */
 
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { env } from '$env/dynamic/private';
+import { cookiesAreSecure } from '#lib/server/admin-auth.server.js';
 import type { Cookies } from '@sveltejs/kit';
 
 const STATE_COOKIE_NAME = 'oauth_state';
@@ -34,7 +34,7 @@ export function issueOAuthState(cookies: Cookies): string {
 		path: '/',
 		httpOnly: true,
 		sameSite: 'lax',
-		secure: process.env.NODE_ENV === 'production' && env.ALLOW_INSECURE_COOKIES !== 'true',
+		secure: cookiesAreSecure(),
 		maxAge: STATE_MAX_AGE_S
 	});
 	return state;
@@ -47,7 +47,7 @@ export function issueOAuthState(cookies: Cookies): string {
  */
 export function consumeOAuthState(cookies: Cookies, submitted: string | null): boolean {
 	const expected = cookies.get(STATE_COOKIE_NAME);
-	cookies.delete(STATE_COOKIE_NAME, { path: '/' });
+	cookies.delete(STATE_COOKIE_NAME, { path: '/', secure: cookiesAreSecure() });
 	if (!expected || !submitted) return false;
 
 	// `submitted` is attacker-controlled and may be any length; timingSafeEqual

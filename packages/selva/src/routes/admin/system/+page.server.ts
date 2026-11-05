@@ -1,11 +1,10 @@
 import { fail } from '@sveltejs/kit';
 import { hasPermission } from '@selvajs/platform';
-import { flag } from '$lib/server/providers.server';
-import { checkForUpdate } from '$lib/server/updateCheck.server';
-import { readChannel, writeChannel } from '$lib/server/releaseChannel.server';
-import { asHttpError, requirePermission } from '$lib/server/access.server';
+import { flag } from '#lib/server/providers.server.js';
+import { checkForUpdate } from '#lib/server/updateCheck.server.js';
+import { readChannel, writeChannel } from '#lib/server/releaseChannel.server.js';
+import { asHttpError, requirePermission } from '#lib/server/access.server.js';
 import {
-	SOLVE_DEADLINE_MS,
 	RATE_LIMIT_WINDOW_MS,
 	RATE_LIMIT_MAX_REQUESTS,
 	MAX_DEFINITION_FILE_SIZE,
@@ -17,7 +16,16 @@ import {
 	REMOTE_DEFINITION_CACHE_TTL_MS,
 	COMPUTE_DEFINITION_CACHE_BYTES,
 	COMPUTE_SOLVE_CACHE_BYTES
-} from '$lib/server/computeLimits';
+} from '#lib/server/computeLimits.js';
+import { dev } from '$app/env';
+import {
+	getChangesSinceLastBoot,
+	getConfigChecks,
+	getConfigReport,
+	getKeyRotation
+} from '#lib/server/config/boot.server.js';
+import { requestFacts } from '#lib/server/config/checks.js';
+import { getBootHealth } from '#lib/server/bootHealth.server.js';
 import pkg from '../../../../package.json';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -31,7 +39,7 @@ import type { Actions, PageServerLoad } from './$types';
  * after an admin update the new build embeds the new constant. No need to
  * shell out to `npm` or read node_modules at request time.
  */
-export const load: PageServerLoad = async ({ locals, fetch }) => {
+export const load: PageServerLoad = async ({ locals, fetch, request, url }) => {
 	const ctx = locals.ctx;
 	const canManageUpdates = ctx ? hasPermission(ctx, 'manage_updates') : false;
 	// The on-demand health check endpoint is instance_admin-only; gate the UI
@@ -50,7 +58,6 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 	// truth — each value here reflects the env override or its default). Surfaced
 	// read-only so operators can see what's enforced without reading the .env.
 	const limits = {
-		SOLVE_DEADLINE_MS,
 		RATE_LIMIT_WINDOW_MS,
 		RATE_LIMIT_MAX_REQUESTS,
 		MAX_DEFINITION_FILE_SIZE,
@@ -90,11 +97,31 @@ export const load: PageServerLoad = async ({ locals, fetch }) => {
 		isInstanceAdmin,
 		flags,
 		limits,
+		// Hosts, ports and addresses: instance admins only, like the health check.
+		config: isInstanceAdmin ? await configView(request, url) : null,
 		version: pkg.version,
 		channel,
 		update
 	};
 };
+
+async function configView(request: Request, url: URL) {
+	// Set only while SELVA_AT_REST_KEY_PREVIOUS is: what `--finish` would strand.
+	const atRestOnPreviousKey = (await getBootHealth()).atRestSecrets?.onPreviousKey ?? null;
+	const facts = requestFacts(request.headers, url);
+	return {
+		report: getConfigReport(),
+		changes: getChangesSinceLastBoot(),
+		rotation: getKeyRotation(),
+		proxied: facts.proxied,
+		checks: getConfigChecks({
+			atRestOnPreviousKey,
+			request: facts,
+			computeRequestMaxBytes: COMPUTE_REQUEST_MAX_BYTES,
+			dev
+		})
+	};
+}
 
 export const actions: Actions = {
 	// Persist the release channel. Switch-only: this does NOT trigger an update —

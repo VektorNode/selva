@@ -1,0 +1,84 @@
+import type { RequestContext } from '../context.js';
+import { ProviderError } from '../errors.js';
+import { parseApiScope, type ApiScope, type ApiScopeAction, type ApiToken } from './types.js';
+
+/** The rows a request touches, when the route knows them. */
+export interface ScopeTarget {
+	projectId?: string;
+	definitionId?: string;
+}
+
+/**
+ * May this request perform `action` on `target`?
+ *
+ * Without a target this is an org-level check, which only `all` and org scopes
+ * pass: a project key must never reach a route that can't say which project it
+ * touches. Requests without an API token always pass; their permissions are
+ * checked elsewhere.
+ */
+export function scopeAllows(
+	ctx: RequestContext,
+	action: ApiScopeAction,
+	target?: ScopeTarget
+): boolean {
+	const api = ctx.apiScope;
+	if (!api) return true;
+	return api.scopes.some(
+		(s) => apiScopeActionCovers(s.action, action) && resourceCovers(s, ctx, target)
+	);
+}
+
+/** Does a scope granting `granted` allow `wanted`? */
+export function apiScopeActionCovers(granted: ApiScopeAction, wanted: ApiScopeAction): boolean {
+	if (granted === wanted || wanted === 'read') return true;
+	return granted === 'write' && (wanted === 'upload' || wanted === 'create_projects');
+}
+
+function resourceCovers(scope: ApiScope, ctx: RequestContext, target?: ScopeTarget): boolean {
+	const { resource } = scope;
+	switch (resource.kind) {
+		case 'all':
+			return true;
+		case 'org':
+			return resource.id === ctx.actingOrgId;
+		case 'project':
+			return target?.projectId === resource.id;
+		case 'definition':
+			return target?.definitionId === resource.id;
+	}
+}
+
+/**
+ * Narrow the owner's live context to what the token grants. Only removes
+ * rights:
+ *
+ * - Platform permissions are dropped. Instance authority never rides on a
+ *   bearer key, so an operator's leaked key can't reach other tenants.
+ * - `apiScope` is attached, which `scopeAllows` reads.
+ *
+ * Scopes this version can't parse are dropped, so they grant nothing.
+ */
+export function narrowApiTokenContext(
+	ctx: RequestContext,
+	token: Pick<ApiToken, 'id' | 'orgId' | 'scopes' | 'expiresAt'>
+): RequestContext {
+	if (ctx.actingOrgId !== token.orgId) {
+		throw new ProviderError('API token context must act in the token’s org', 500);
+	}
+	const scopes = token.scopes.map(parseApiScope).filter((s): s is ApiScope => s !== null);
+	return {
+		...ctx,
+		platformPermissions: [],
+		apiScope: { tokenId: token.id, scopes, expiresAt: token.expiresAt }
+	};
+}
+
+/**
+ * True when an API-token request reaches for something owned by an org other
+ * than the token's. A token is bound to one org, so that resource doesn't
+ * exist for it, even when the owner belongs to the other org too. Treat it as
+ * not found. Session requests are never outside.
+ */
+export function outsideTokenOrg(ctx: RequestContext, orgId: string): boolean {
+	return ctx.apiScope !== undefined && orgId !== ctx.actingOrgId;
+}

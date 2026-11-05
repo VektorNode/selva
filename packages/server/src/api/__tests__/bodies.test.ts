@@ -46,8 +46,8 @@ describe('OrgComputePatchBodySchema', () => {
 });
 
 describe('SolveBodySchema', () => {
-	it('defaults an empty body to a live solve with no inputs', () => {
-		expect(SolveBodySchema.parse({})).toEqual({ inputs: [], values: {}, channel: 'live' });
+	it('defaults an empty body to a live solve with no values', () => {
+		expect(SolveBodySchema.parse({})).toEqual({ values: {}, channel: 'live' });
 	});
 
 	it('rejects a channel that is neither live nor draft', () => {

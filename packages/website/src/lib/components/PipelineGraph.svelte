@@ -49,7 +49,7 @@
 				<!-- Param-style header, the way a GH component labels its ports. -->
 				<div class="flex items-center gap-2">
 					<span
-						class="bg-muted-foreground/40 group-hover:bg-primary size-2 rounded-full transition-colors duration-300"
+						class="bg-faint-foreground group-hover:bg-primary size-2 rounded-full transition-colors duration-300"
 					></span>
 					<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase">
 						{node.step}

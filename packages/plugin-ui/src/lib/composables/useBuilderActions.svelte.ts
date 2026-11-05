@@ -1,7 +1,21 @@
 import { toast } from '@selvajs/ui';
-import type { DiscoveredInput, DiscoveredOutput, GroupConfig, LayoutItem } from '@selvajs/schemas';
+import type {
+	DiscoveredInput,
+	DiscoveredOutput,
+	GroupConfig,
+	LayoutItem,
+	UISchema
+} from '@selvajs/schemas';
+import { getGroups } from '@selvajs/schemas';
+import { SvelteSet } from 'svelte/reactivity';
+import {
+	builderSelection,
+	type DragKind,
+	type TabDropTarget
+} from '#lib/features/builder/selection.svelte.js';
 import {
 	handleItemDrop,
+	moveItemsToGroup,
 	type ItemDropOptions,
 	type ItemDropResult,
 	addTab,
@@ -13,9 +27,10 @@ import {
 	reorderGroups,
 	moveGroupToTab,
 	batchSetNumberWidgetType,
-	isInputItem
-} from '$lib/features/builder/operations';
-import { mapParamTypeToWidgetType } from '$lib/features/builder/widget-config';
+	isInputItem,
+	locateParam
+} from '#lib/features/builder/operations.js';
+import { mapParamTypeToWidgetType } from '#lib/features/builder/widget-config.js';
 import type { useBuilderState } from './useBuilderState.svelte';
 
 // Map a discovered output's type to its layout widgetType (file/chart/dynamicValueList/text...).
@@ -98,6 +113,164 @@ export function useBuilderActions(
 				outputType: output.type
 			});
 		}
+
+		// Dragging one row of a shift-selection brings the rest along. Dragging any other row leaves
+		// the selection alone.
+		if (builderSelection.params.has(data.id)) {
+			const rest = [...builderSelection.params].filter((id) => id !== data.id);
+			const added = dropSelected(builderState, schema, group, rest, targetItem, dropPosition);
+			if (added > 0) toast.success(`Added ${added + 1} to ${group.label}`);
+			builderSelection.clear();
+		}
+	}
+
+	/**
+	 * A drag released on another tab's drop list. Moves the dragged row, or its whole selection,
+	 * into the picked group (a new one when `groupId` is null) and opens that tab.
+	 */
+	function onDropOnTab(target: TabDropTarget, draggedId: string, kind: DragKind) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+		if (schema.layout.type !== 'tabbed') return;
+		const tab = schema.layout.tabs.find((t) => t.id === target.tabId);
+		if (!tab) return;
+
+		builderState.history.push($state.snapshot(schema));
+
+		let group = target.groupId ? tab.groups.find((g) => g.id === target.groupId) : undefined;
+		if (!group) {
+			addGroup(schema, tab.id);
+			group = tab.groups[tab.groups.length - 1];
+		}
+		if (!group) return;
+
+		let count: number;
+		if (kind === 'param') {
+			const ids = builderSelection.params.has(draggedId)
+				? [draggedId, ...[...builderSelection.params].filter((id) => id !== draggedId)]
+				: [draggedId];
+			count = dropSelected(builderState, schema, group, ids);
+			if (builderSelection.params.has(draggedId)) builderSelection.clear();
+		} else {
+			const ids: ReadonlySet<string> = builderSelection.placed.has(draggedId)
+				? builderSelection.placed
+				: new SvelteSet([draggedId]);
+			count = moveItemsToGroup(schema, ids, group.id);
+			if (builderSelection.placed.has(draggedId)) builderSelection.clear();
+		}
+
+		builderState.state.activeTabId = tab.id;
+		if (count > 0)
+			toast.success(
+				`${kind === 'param' ? 'Added' : 'Moved'} ${count} to ${tab.label} / ${group.label}`
+			);
+	}
+
+	function lookupDiscovered(
+		builderState: ReturnType<typeof useBuilderState>,
+		id: string
+	): DiscoveredInput | DiscoveredOutput | undefined {
+		return (
+			builderState.state.availableInputs.find((i) => i.id === id) ??
+			builderState.state.availableOutputs.find((o) => o.id === id)
+		);
+	}
+
+	function dropSelected(
+		builderState: ReturnType<typeof useBuilderState>,
+		schema: UISchema,
+		group: GroupConfig,
+		ids: string[],
+		targetItem?: LayoutItem,
+		dropPosition?: 'before' | 'after'
+	): number {
+		const items = ids
+			.map((id) => lookupDiscovered(builderState, id))
+			.filter((i): i is DiscoveredInput | DiscoveredOutput => !!i);
+		// Each 'after' insert lands right behind the target, which would reverse the batch.
+		const ordered = dropPosition === 'after' ? items.reverse() : items;
+		let added = 0;
+		for (const item of ordered) {
+			const asInput = isInputItem(item);
+			const result = dropItem({
+				schema,
+				group,
+				targetItem,
+				dropPosition,
+				paramId: item.id,
+				displayName: item.nickname || (asInput ? item.name : 'Unknown'),
+				itemType: asInput ? 'input' : 'output',
+				availableInputs: builderState.state.availableInputs,
+				availableOutputs: builderState.state.availableOutputs,
+				paramType: asInput ? item.type : undefined,
+				widgetType: asInput ? undefined : outputWidgetType(item.type as DiscoveredOutput['type']),
+				outputType: asInput ? undefined : item.type
+			});
+			if (result.added) added++;
+		}
+		return added;
+	}
+
+	function onAddSelectedToGroup(groupId: string) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+		const group = getGroups(schema).find((g) => g.id === groupId);
+		if (!group) return;
+
+		builderState.history.push($state.snapshot(schema));
+		const added = dropSelected(builderState, schema, group, [...builderSelection.params]);
+		builderSelection.clear();
+		if (added > 0) toast.success(`Added ${added} to ${group.label}`);
+	}
+
+	function onAddCanvasSelection(groupId: string) {
+		const builderState = getBuilderState();
+		const draft = builderState?.state.draft;
+		if (!builderState || !draft) return;
+		const group = getGroups(draft).find((g) => g.id === groupId);
+		if (!group) return;
+		const selection = builderState.state.canvasSelection;
+		const moving = selection.filter((id) => {
+			const at = locateParam(draft, id);
+			return at !== undefined && at.group.id !== groupId;
+		}).length;
+		const count = builderState.placeParamsInGroup(groupId, selection);
+		if (count === 0) return;
+		const added = count - moving;
+		const what =
+			moving === 0
+				? `Added ${added}`
+				: added === 0
+					? `Moved ${moving}`
+					: `Added ${added}, moved ${moving}`;
+		toast.success(`${what} to ${group.label}`);
+	}
+
+	function onMoveSelectedToGroup(groupId: string) {
+		const context = ensureSchema();
+		if (!context) return;
+		const { builderState, schema } = context;
+		const group = getGroups(schema).find((g) => g.id === groupId);
+		if (!group) return;
+
+		builderState.history.push($state.snapshot(schema));
+		const moved = moveItemsToGroup(schema, builderSelection.placed, groupId);
+		builderSelection.clear();
+		if (moved > 0) toast.success(`Moved ${moved} to ${group.label}`);
+	}
+
+	/**
+	 * A selected card was dragged into `groupId`; the rest of the selection follows it there. The
+	 * drag's own reorders already pushed history, so this joins that undo step.
+	 */
+	function onCarrySelection(groupId: string, anchorItemId: string) {
+		const context = ensureSchema();
+		if (!context) return;
+		const moved = moveItemsToGroup(context.schema, builderSelection.placed, groupId, anchorItemId);
+		builderSelection.clear();
+		if (moved > 0) toast.success(`Moved ${moved + 1} items`);
 	}
 
 	function onReorder(newItems: LayoutItem[], tabId: string, groupId: string) {
@@ -105,7 +278,7 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		builderState.history.push($state.snapshot(schema));
+		builderState.history.push($state.snapshot(schema), builderSelection.dragUndoKey);
 
 		let group: GroupConfig | undefined;
 		if (schema.layout.type === 'tabbed') {
@@ -313,6 +486,12 @@ export function useBuilderActions(
 
 		builderState.history.push($state.snapshot(schema));
 
+		const sourceTab =
+			schema.layout.type === 'tabbed'
+				? schema.layout.tabs.find((t) => t.id === sourceTabId)
+				: undefined;
+		const labelBefore = sourceTab?.groups.find((g) => g.id === groupId)?.label;
+
 		const moved = moveGroupToTab(schema, sourceTabId, groupId, targetTabId);
 		if (!moved) return;
 
@@ -320,7 +499,12 @@ export function useBuilderActions(
 			const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
 			if (targetTab) {
 				builderState.state.activeTabId = targetTabId;
-				toast.success(`Moved group to ${targetTab.label}`);
+				const label = targetTab.groups.find((g) => g.id === groupId)?.label;
+				toast.success(
+					label !== labelBefore
+						? `Moved group to ${targetTab.label} as “${label}”: that tab already had a “${labelBefore}”`
+						: `Moved group to ${targetTab.label}`
+				);
 			}
 		}
 	}
@@ -508,6 +692,11 @@ export function useBuilderActions(
 		onParameterDrop,
 		onReorder,
 		onAddToGroup,
+		onAddSelectedToGroup,
+		onMoveSelectedToGroup,
+		onAddCanvasSelection,
+		onCarrySelection,
+		onDropOnTab,
 		onAddToNewGroup,
 		onAddTab,
 		onRemoveTab,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { UISchema } from '@selvajs/schemas';
-import { createFakeSource, type FakeSource } from '$lib/schema-source/fake-source';
+import { createFakeSource, type FakeSource } from '#lib/schema-source/fake-source.js';
 import {
 	createInitialBuilderState,
 	handleInitialData,
@@ -13,7 +13,12 @@ import {
 	syncParameters,
 	saveDraft,
 	markDirty,
+	editDraft,
 	discardDraft,
+	handleLayoutPlaced,
+	handleCanvasSelection,
+	handleRevealItem,
+	placeParamsInGroup,
 	type BuilderDeps,
 	type BuilderNotifier
 } from '../builder-state-core';
@@ -47,7 +52,7 @@ function makeNotifier(): BuilderNotifier & { calls: Record<string, string[]> } {
 function setup() {
 	const source = createFakeSource();
 	const notify = makeNotifier();
-	const history = { clearHistory: vi.fn() };
+	const history = { push: vi.fn(), clearHistory: vi.fn() };
 	const state = createInitialBuilderState();
 	const deps: BuilderDeps = { sessionId: SESSION, source, history, notify, clone: plainClone };
 	return { source, notify, history, state, deps };
@@ -269,6 +274,21 @@ describe('saveDraft', () => {
 		expect(notify.calls.error.some((m) => m.includes('stale base'))).toBe(true);
 	});
 
+	it('keeps dirty when the draft was edited while the save was in flight', async () => {
+		const { state, deps, source, notify } = setup();
+		state.draft = schema();
+		markDirty(state);
+
+		const pending = saveDraft(state, deps);
+		markDirty(state);
+		await resolveLastSave(source, true);
+		const result = await pending;
+
+		expect(result).toBe(true);
+		expect(state.isDirty).toBe(true);
+		expect(notify.calls.success).toHaveLength(1);
+	});
+
 	it('refuses to save when disconnected', async () => {
 		const { state, deps, source, notify } = setup();
 		state.draft = schema();
@@ -288,6 +308,31 @@ describe('markDirty / discardDraft', () => {
 		expect(state.isDirty).toBe(true);
 	});
 
+	it('editDraft snapshots the draft before the edit, then marks it dirty', () => {
+		const { state, deps, history } = setup();
+		state.draft = schema({ documentId: 'before' } as never);
+
+		editDraft(state, deps, () => (state.draft!.documentId = 'after'), 'doc-id');
+
+		expect(history.push).toHaveBeenCalledWith(
+			expect.objectContaining({ documentId: 'before' }),
+			'doc-id'
+		);
+		expect(state.draft.documentId).toBe('after');
+		expect(state.isDirty).toBe(true);
+	});
+
+	it('editDraft does nothing before a draft exists', () => {
+		const { state, deps, history } = setup();
+		const apply = vi.fn();
+
+		editDraft(state, deps, apply);
+
+		expect(apply).not.toHaveBeenCalled();
+		expect(history.push).not.toHaveBeenCalled();
+		expect(state.isDirty).toBe(false);
+	});
+
 	it('discardDraft re-clones canonical and clears dirty', () => {
 		const { state, deps, history } = setup();
 		state.canonical = schema({ documentId: 'canon' } as never);
@@ -300,5 +345,328 @@ describe('markDirty / discardDraft', () => {
 		expect(state.draft).not.toBe(state.canonical);
 		expect(state.isDirty).toBe(false);
 		expect(history.clearHistory).toHaveBeenCalled();
+	});
+});
+
+describe('canvas placement', () => {
+	// Draft: tab t1 with group g1 holding a and b. c is discovered but unplaced.
+	function layoutSchema(): UISchema {
+		return schema({
+			inputs: [
+				{ id: 'a', nickname: 'A', paramType: 'number' },
+				{ id: 'b', nickname: 'B', paramType: 'number' },
+				{ id: 'c', nickname: 'C', paramType: 'number' }
+			] as never,
+			layout: {
+				type: 'tabbed',
+				gap: 16,
+				tabs: [
+					{
+						id: 't1',
+						label: 'General',
+						icon: '',
+						groups: [
+							{
+								id: 'g1',
+								label: 'Size',
+								columns: 1,
+								items: [
+									{
+										id: 'item-a',
+										type: 'input',
+										paramId: 'a',
+										displayName: 'A',
+										widgetType: 'number'
+									},
+									{
+										id: 'item-b',
+										type: 'input',
+										paramId: 'b',
+										displayName: 'B',
+										widgetType: 'number'
+									}
+								]
+							},
+							{ id: 'g2', label: 'Other', columns: 1, items: [] }
+						]
+					}
+				]
+			} as never
+		});
+	}
+
+	function ready() {
+		const ctx = setup();
+		ctx.state.availableInputs = ['a', 'b', 'c'].map((id) => ({
+			id,
+			name: id.toUpperCase(),
+			nickname: id.toUpperCase(),
+			type: 'number',
+			description: ''
+		})) as never;
+		ctx.state.canonical = layoutSchema();
+		ctx.state.canonicalHash = 'h1';
+		ctx.state.draft = layoutSchema();
+		return ctx;
+	}
+
+	function groupsOf(s: UISchema | null) {
+		if (s?.layout.type !== 'tabbed') throw new Error('expected tabbed');
+		return s.layout.tabs.flatMap((t) => t.groups);
+	}
+	const paramIdsIn = (s: UISchema | null, groupId: string) =>
+		groupsOf(s)
+			.find((g) => g.id === groupId)!
+			.items.map((i) => (i.type === 'linebreak' ? '' : i.paramId));
+
+	function placed(overrides: Partial<Parameters<typeof handleLayoutPlaced>[2]> = {}) {
+		return {
+			type: 'layoutPlaced',
+			sessionId: SESSION,
+			schema: layoutSchema(),
+			schemaHash: 'h2',
+			placements: [
+				{
+					paramId: 'c',
+					itemType: 'input',
+					tabId: 't1',
+					tabLabel: 'General',
+					groupId: 'g-new',
+					groupLabel: 'Depth'
+				},
+				{
+					paramId: 'a',
+					itemType: 'input',
+					tabId: 't1',
+					tabLabel: 'General',
+					groupId: 'g-new',
+					groupLabel: 'Depth'
+				}
+			],
+			removedIds: [],
+			summary: 'Added C, A to General › Depth',
+			...overrides
+		} as Parameters<typeof handleLayoutPlaced>[2];
+	}
+
+	it('replays onto a dirty draft that has not diverged, as one history step', () => {
+		const { state, deps, history, notify } = ready();
+		editDraft(state, deps, () => (groupsOf(state.draft)[0].label = 'My edit'));
+		history.push.mockClear();
+
+		handleLayoutPlaced(state, deps, placed());
+
+		expect(history.push).toHaveBeenCalledTimes(1);
+		expect(groupsOf(state.draft)[0].label).toBe('My edit');
+		const created = groupsOf(state.draft).find((g) => g.id === 'g-new')!;
+		expect(created.label).toBe('Depth');
+		expect(paramIdsIn(state.draft, 'g-new')).toEqual(['c', 'a']);
+		// a moved, keeping its layout item.
+		expect(paramIdsIn(state.draft, 'g1')).toEqual(['b']);
+		expect(created.items[1].id).toBe('item-a');
+		expect(state.canonicalHash).toBe('h2');
+		expect(state.isDirty).toBe(true);
+		expect(state.divergedSinceFork).toBe(false);
+		expect(notify.calls.success).toEqual(['Added C, A to General › Depth']);
+		expect(notify.calls.warning).toHaveLength(0);
+		expect(state.activeTabId).toBe('t1');
+		expect(state.spotlight?.itemIds).toHaveLength(2);
+	});
+
+	it('creates a missing tab with the given id and label', () => {
+		const { state, deps } = ready();
+		markDirty(state);
+		handleLayoutPlaced(
+			state,
+			deps,
+			placed({
+				placements: [
+					{
+						paramId: 'c',
+						itemType: 'input',
+						tabId: 't-new',
+						tabLabel: 'Extra',
+						groupId: 'g-x',
+						groupLabel: 'X'
+					}
+				]
+			})
+		);
+		const layout = state.draft!.layout as Extract<UISchema['layout'], { type: 'tabbed' }>;
+		expect(layout.tabs.at(-1)).toMatchObject({ id: 't-new', label: 'Extra' });
+		expect(layout.tabs.at(-1)!.groups.map((g) => g.id)).toEqual(['g-x']);
+		expect(state.activeTabId).toBe('t-new');
+	});
+
+	it('removes the layout items of removedIds but keeps the params', () => {
+		const { state, deps } = ready();
+		markDirty(state);
+		handleLayoutPlaced(state, deps, placed({ placements: [], removedIds: ['b'] }));
+		expect(paramIdsIn(state.draft, 'g1')).toEqual(['a']);
+		expect(state.draft!.inputs.some((i) => i.id === 'b')).toBe(true);
+	});
+
+	it('copies a new param’s layout item from the plugin’s canonical, keeping its config', () => {
+		const { state, deps } = ready();
+		markDirty(state);
+		const committed = layoutSchema();
+		committed.outputs = [
+			{ id: 'dvl', nickname: 'Pick', type: 'dynamicValueList', targetInputId: 'a' }
+		] as never;
+		groupsOf(committed)[1].items = [
+			{
+				id: 'item-dvl',
+				type: 'output',
+				paramId: 'dvl',
+				displayName: 'Pick',
+				widgetType: 'dynamicValueList',
+				config: { targetInputId: 'a' }
+			} as never
+		];
+		handleLayoutPlaced(
+			state,
+			deps,
+			placed({
+				schema: committed,
+				placements: [
+					{
+						paramId: 'dvl',
+						itemType: 'output',
+						tabId: 't1',
+						tabLabel: 'General',
+						groupId: 'g2',
+						groupLabel: 'Other'
+					}
+				]
+			})
+		);
+		const item = groupsOf(state.draft).find((g) => g.id === 'g2')!.items[0];
+		expect(item).toMatchObject({ paramId: 'dvl', config: { targetInputId: 'a' } });
+		expect(item).not.toBe(groupsOf(committed)[1].items[0]);
+		expect(state.draft!.outputs).toContainEqual(
+			expect.objectContaining({ id: 'dvl', targetInputId: 'a' })
+		);
+	});
+
+	it('falls back to the dirty warning when the draft has diverged', () => {
+		const { state, deps, notify } = ready();
+		markDirty(state);
+		handleSchemaUpdated(state, deps, {
+			sessionId: SESSION,
+			type: 'schemaUpdated',
+			schema: layoutSchema(),
+			schemaHash: 'h-other'
+		});
+		expect(state.divergedSinceFork).toBe(true);
+		const before = structuredClone(state.draft);
+
+		handleLayoutPlaced(state, deps, placed());
+
+		expect(state.draft).toEqual(before);
+		expect(state.canonicalHash).toBe('h2');
+		expect(notify.calls.warning.length).toBeGreaterThan(0);
+		expect(notify.calls.success).toContain('Added C, A to General › Depth');
+	});
+
+	it('replaces a clean draft with the plugin canonical', () => {
+		const { state, deps } = ready();
+		const next = layoutSchema();
+		groupsOf(next)[1].items = [
+			{ id: 'item-c', type: 'input', paramId: 'c', displayName: 'C', widgetType: 'number' } as never
+		];
+
+		handleLayoutPlaced(
+			state,
+			deps,
+			placed({
+				schema: next,
+				placements: [
+					{
+						paramId: 'c',
+						itemType: 'input',
+						tabId: 't1',
+						tabLabel: 'General',
+						groupId: 'g2',
+						groupLabel: 'Other'
+					}
+				]
+			})
+		);
+
+		expect(state.draft).toEqual(next);
+		expect(state.draft).not.toBe(next);
+		expect(state.isDirty).toBe(false);
+		expect(state.canonicalHash).toBe('h2');
+		expect(state.spotlight?.itemIds).toEqual(['item-c']);
+	});
+
+	it('refetches discovery when the schema names an unknown param', () => {
+		const { state, deps, source } = ready();
+		const next = layoutSchema();
+		next.inputs.push({ id: 'new', nickname: 'New', paramType: 'number' } as never);
+		handleLayoutPlaced(state, deps, placed({ schema: next, placements: [] }));
+		expect(source.initialDataRequests).toEqual([SESSION]);
+	});
+
+	it('a discard or a save clears divergence', async () => {
+		const { state, deps, source } = ready();
+		markDirty(state);
+		handleSchemaSaveRejected(state, deps, {
+			sessionId: SESSION,
+			type: 'schemaSaveRejected',
+			schema: layoutSchema(),
+			schemaHash: 'h3'
+		});
+		expect(state.divergedSinceFork).toBe(true);
+		discardDraft(state, deps);
+		expect(state.divergedSinceFork).toBe(false);
+
+		markDirty(state);
+		state.divergedSinceFork = true;
+		const pending = saveDraft(state, deps);
+		await Promise.resolve();
+		source.saves.at(-1)!.resolve({ ok: true });
+		await pending;
+		expect(state.divergedSinceFork).toBe(false);
+	});
+
+	it('stores the canvas selection', () => {
+		const { state, deps } = ready();
+		handleCanvasSelection(state, deps, {
+			sessionId: SESSION,
+			type: 'canvasSelection',
+			ids: ['c', 'a']
+		});
+		expect(state.canvasSelection).toEqual(['c', 'a']);
+	});
+
+	it('reveals a placed param on its tab', () => {
+		const { state, deps, notify } = ready();
+		state.activeTabId = null;
+		handleRevealItem(state, deps, { sessionId: SESSION, type: 'revealItem', paramId: 'b' });
+		expect(state.activeTabId).toBe('t1');
+		expect(state.spotlight?.itemIds).toEqual(['item-b']);
+
+		handleRevealItem(state, deps, { sessionId: SESSION, type: 'revealItem', paramId: 'c' });
+		expect(notify.calls.info).toHaveLength(1);
+	});
+
+	it('Add here moves placed params and adds new ones as one step', () => {
+		const { state, deps, history } = ready();
+
+		const count = placeParamsInGroup(state, deps, 'g2', ['c', 'a', 'unknown']);
+
+		expect(count).toBe(2);
+		expect(history.push).toHaveBeenCalledTimes(1);
+		expect(paramIdsIn(state.draft, 'g2')).toEqual(['c', 'a']);
+		expect(paramIdsIn(state.draft, 'g1')).toEqual(['b']);
+		expect(state.isDirty).toBe(true);
+	});
+
+	it('Add here skips params already in the group', () => {
+		const { state, deps, history } = ready();
+		expect(placeParamsInGroup(state, deps, 'g1', ['a', 'b'])).toBe(0);
+		expect(history.push).not.toHaveBeenCalled();
+		expect(paramIdsIn(state.draft, 'g1')).toEqual(['a', 'b']);
 	});
 });

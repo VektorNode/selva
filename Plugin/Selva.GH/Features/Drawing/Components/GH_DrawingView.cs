@@ -102,11 +102,8 @@ public class GH_DrawingView : GH_Component
             // Auto-fit views only resolve their scale once placed on a page.
             if (length > 0)
             {
-                var b = geometry.ComputeBounds();
-                var longest = Math.Max(b.Width, b.Height);
-                scaleLabels.Add(longest > 0
-                    ? DrawingView.FormatScaleLabel(length / longest).Replace("SCALE ", "")
-                    : "");
+                scaleLabels.Add(DrawingView.FormatScaleLabel(DrawingView.ScaleForLength(geometry, length))
+                    .Replace("SCALE ", ""));
             }
             else
             {

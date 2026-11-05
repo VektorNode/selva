@@ -12,7 +12,7 @@ import type {
 	Page,
 	UISchema
 } from '@selvajs/platform';
-import { ProviderError, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ERASED_ACTOR_ID, ProviderError, actorOf, NoopEventSink } from '@selvajs/platform';
 import type { ClientBundle } from './client.js';
 import { mapPostgrestError } from './errors.js';
 import { nextCursorFromRange, toRange } from './pagination.js';
@@ -20,7 +20,7 @@ import { stampSoftDelete, stampUpdate } from './rowStamp.js';
 
 /** Explicit column list for `definitions` — every field `rowToRecord` consumes. */
 const DEFINITION_COLUMNS =
-	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, created_at, updated_at, deleted_at';
+	'guid, project_id, owner_id, created_by, updated_by, compute_server_id, solve_cache_limit, display_name, description, category, tags, cover_image, status, run_count, next_version_number, live_version_id, draft_version_id, source_document_id, created_at, updated_at, deleted_at';
 /**
  * Explicit column list for `definition_versions`, minus the `schema` JSONB.
  * `schema` can be hundreds of KB per row, so the list projection leaves it out
@@ -35,6 +35,9 @@ const DEFINITION_VERSION_COLUMNS =
  * type from the literal column string, and a template literal degrades it to
  * `string`.
  */
+/** PostgREST's default `max-rows`: a longer read comes back cut at it. */
+const VERSIONS_PAGE = 1000;
+
 const DEFINITION_VERSION_COLUMNS_WITH_SCHEMA =
 	'id, definition_guid, version_number, file_ext, file_key, original_filename, uploaded_by, uploaded_at, change_note, schema_extracted_at, schema';
 
@@ -110,6 +113,8 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			query = query.in('project_id', [...opts.projectIds]);
 		}
 
+		if (opts?.sourceDocumentId) query = query.eq('source_document_id', opts.sourceDocumentId);
+
 		if (opts?.statuses?.length) {
 			query = query.in('status', opts.statuses);
 		} else {
@@ -146,6 +151,23 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		return data ? rowToRecord(data) : null;
 	}
 
+	async getDefinitionsFor(
+		ctx: RequestContext,
+		guids: readonly string[]
+	): Promise<Map<string, DefinitionRecord>> {
+		const found = new Map<string, DefinitionRecord>();
+		if (guids.length === 0) return found;
+		const { data, error } = await this.clients
+			.forRequest(ctx)
+			.from('definitions')
+			.select(DEFINITION_COLUMNS)
+			.in('guid', [...new Set(guids)])
+			.is('deleted_at', null);
+		if (error) throw mapPostgrestError(error);
+		for (const row of data ?? []) found.set(row.guid, rowToRecord(row));
+		return found;
+	}
+
 	async create(ctx: RequestContext, record: DefinitionRecord): Promise<void> {
 		const { error } = await this.clients
 			.forRequest(ctx)
@@ -156,7 +178,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			type: 'definition.created',
 			definitionId: record.guid,
 			projectId: record.projectId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -190,7 +212,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition.deleted',
 			definitionId: guid,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -210,7 +232,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			await this.events.emit({
 				type: 'definition.deleted',
 				definitionId: row.guid,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 	}
@@ -248,7 +270,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			type: 'definition_version.created',
 			versionId: version.id,
 			definitionId: version.definitionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -268,6 +290,29 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		if (error) throw mapPostgrestError(error);
 		const items = (data ?? []).map(rowToVersion);
 		return { items, nextCursor: nextCursorFromRange(range, items.length, count) };
+	}
+
+	async listVersionsFor(
+		ctx: RequestContext,
+		definitionIds: readonly string[]
+	): Promise<Map<string, DefinitionVersion[]>> {
+		const byDefinition = new Map<string, DefinitionVersion[]>(definitionIds.map((id) => [id, []]));
+		if (definitionIds.length === 0) return byDefinition;
+		// Paged by PostgREST's row cap; the order keeps each definition's versions newest first.
+		for (let from = 0; ; from += VERSIONS_PAGE) {
+			const { data, error } = await this.clients
+				.forRequest(ctx)
+				.from('definition_versions')
+				.select(DEFINITION_VERSION_COLUMNS)
+				.in('definition_guid', [...new Set(definitionIds)])
+				.order('definition_guid')
+				.order('version_number', { ascending: false })
+				.range(from, from + VERSIONS_PAGE - 1);
+			if (error) throw mapPostgrestError(error);
+			const rows = data ?? [];
+			for (const row of rows) byDefinition.get(row.definition_guid)?.push(rowToVersion(row));
+			if (rows.length < VERSIONS_PAGE) return byDefinition;
+		}
 	}
 
 	async getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null> {
@@ -303,7 +348,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition_version.deleted',
 			versionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -319,7 +364,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 			type: 'definition.published',
 			definitionId,
 			versionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -409,7 +454,7 @@ export class SupabaseDefinitionStore implements IDefinitionStore {
 interface DefinitionRow {
 	guid: string;
 	project_id: string;
-	owner_id: string;
+	owner_id: string | null;
 	created_by?: string | null;
 	updated_by?: string | null;
 	compute_server_id: string | null;
@@ -424,6 +469,7 @@ interface DefinitionRow {
 	next_version_number: number | string;
 	live_version_id: string | null;
 	draft_version_id: string | null;
+	source_document_id?: string | null;
 	created_at: string;
 	updated_at: string;
 	deleted_at?: string | null;
@@ -436,7 +482,7 @@ interface DefinitionVersionRow {
 	file_ext: DefinitionFileExt;
 	file_key: string;
 	original_filename: string | null;
-	uploaded_by: string;
+	uploaded_by: string | null;
 	uploaded_at: string;
 	change_note?: string | null;
 	schema?: UISchema | null;
@@ -444,12 +490,13 @@ interface DefinitionVersionRow {
 }
 
 function rowToRecord(row: DefinitionRow): DefinitionRecord {
+	const owner = row.owner_id ?? ERASED_ACTOR_ID;
 	return {
 		guid: row.guid,
 		projectId: row.project_id,
-		ownerId: row.owner_id,
-		createdBy: row.created_by ?? row.owner_id,
-		updatedBy: row.updated_by ?? row.owner_id,
+		ownerId: owner,
+		createdBy: row.created_by ?? owner,
+		updatedBy: row.updated_by ?? owner,
 		liveVersionId: row.live_version_id,
 		draftVersionId: row.draft_version_id,
 		computeServerId: row.compute_server_id ?? undefined,
@@ -470,6 +517,7 @@ function rowToRecord(row: DefinitionRow): DefinitionRecord {
 			typeof row.next_version_number === 'string'
 				? Number(row.next_version_number)
 				: row.next_version_number,
+		sourceDocumentId: row.source_document_id ?? undefined,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		deletedAt: row.deleted_at ?? null
@@ -494,6 +542,7 @@ function recordToRow(r: DefinitionRecord): Record<string, unknown> {
 		status: r.status,
 		run_count: r.solveCount,
 		next_version_number: r.nextVersionNumber,
+		source_document_id: r.sourceDocumentId ?? null,
 		created_at: r.createdAt,
 		updated_at: r.updatedAt,
 		deleted_at: r.deletedAt ?? null
@@ -507,13 +556,14 @@ function patchToRow(patch: DefinitionRecordPatch): Record<string, unknown> {
 	if (patch.displayName !== undefined) row.display_name = patch.displayName;
 	if (patch.description !== undefined) row.description = patch.description;
 	if (patch.category !== undefined) row.category = patch.category;
-	if (patch.tags !== undefined) row.tags = patch.tags;
+	if (patch.tags !== undefined) row.tags = patch.tags ?? [];
 	if (patch.coverImage !== undefined) row.cover_image = patch.coverImage;
 	if (patch.projectId !== undefined) row.project_id = patch.projectId;
 	if (patch.computeServerId !== undefined) row.compute_server_id = patch.computeServerId;
 	if (patch.solveCacheLimit !== undefined) row.solve_cache_limit = patch.solveCacheLimit;
 	if (patch.status !== undefined) row.status = patch.status;
 	if (patch.ownerId !== undefined) row.owner_id = patch.ownerId;
+	if (patch.sourceDocumentId !== undefined) row.source_document_id = patch.sourceDocumentId;
 	return row;
 }
 
@@ -525,7 +575,7 @@ function rowToVersion(row: DefinitionVersionRow): DefinitionVersion {
 		fileExt: row.file_ext,
 		fileKey: row.file_key,
 		originalFilename: row.original_filename ?? undefined,
-		uploadedBy: row.uploaded_by,
+		uploadedBy: row.uploaded_by ?? ERASED_ACTOR_ID,
 		uploadedAt: row.uploaded_at,
 		changeNote: row.change_note ?? undefined,
 		schema: row.schema ?? undefined,

@@ -9,14 +9,24 @@
  *
  * Time is controlled with fake timers so backoff sleeps resolve instantly.
  */
+import { gunzipSync, strFromU8 } from 'fflate';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchCompute } from '@/core/compute-fetch/compute-fetch';
+import { ComputeError } from '@/core/errors';
 import { getResponseWireSize } from '@/core/compute-fetch/wire-size';
 import { setLogger } from '@/core/utils/logger';
 import { createMockResponse } from '@tests/helpers/mock-fetch';
 
 const fetchMock = global.fetch as unknown as ReturnType<typeof vi.fn>;
 const config = { serverUrl: 'http://localhost:6500' };
+
+const rejection = (call: Promise<unknown>): Promise<ComputeError> =>
+	call.then(
+		() => {
+			throw new Error('expected a rejection');
+		},
+		(error: ComputeError) => error
+	);
 
 afterEach(() => {
 	fetchMock.mockReset();
@@ -134,9 +144,36 @@ describe('fetchCompute — request shape', () => {
 		expect(headers['X-Request-ID']).not.toBe('forged');
 	});
 
+	it('drops a caller header that differs from a transport header only in case', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+
+		await fetchCompute(
+			'grasshopper',
+			{},
+			{
+				...config,
+				apiKey: 'real-key',
+				authToken: 'Bearer real',
+				headers: {
+					rhinocomputekey: 'attacker-key',
+					authorization: 'Bearer forged',
+					'content-type': 'text/plain',
+					'x-request-id': 'forged',
+					'x-selva-definition': 'guid-123'
+				}
+			}
+		);
+
+		// fetch joins same-name headers that differ in case: read them the way it sends them.
+		const headers = new Headers(fetchMock.mock.calls[0][1].headers);
+		expect(headers.get('RhinoComputeKey')).toBe('real-key');
+		expect(headers.get('Authorization')).toBe('Bearer real');
+		expect(headers.get('Content-Type')).toBe('application/json');
+		expect(headers.get('X-Request-ID')).not.toContain('forged');
+		expect(headers.get('X-Selva-Definition')).toBe('guid-123');
+	});
+
 	it('does not warn about missing credentials when an auth token is configured', async () => {
-		// Regression: the warning only checked apiKey, so authToken-authenticated
-		// requests to remote servers logged a spurious "no API key" warning.
 		const warn = vi.fn();
 		setLogger({ debug: () => {}, info: () => {}, warn, error: () => {} });
 		try {
@@ -177,7 +214,9 @@ describe('fetchCompute — HTTP status → error code mapping', () => {
 		[404, 'Not Found', 'NOT_FOUND'],
 		[413, 'Payload Too Large', 'VALIDATION_ERROR'],
 		[429, 'Too Many Requests', 'RATE_LIMIT'],
-		[500, 'Internal Server Error', 'COMPUTATION_ERROR']
+		[500, 'Internal Server Error', 'COMPUTATION_ERROR'],
+		[504, 'Gateway Timeout', 'NETWORK_ERROR'],
+		[418, "I'm a teapot", 'UNKNOWN_ERROR']
 	];
 
 	it.each(cases)('maps HTTP %i (%s) to %s', async (status, statusText, code) => {
@@ -188,16 +227,6 @@ describe('fetchCompute — HTTP status → error code mapping', () => {
 		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 			code,
 			statusCode: status
-		});
-	});
-
-	it('maps an unmapped status (418) to UNKNOWN_ERROR', async () => {
-		fetchMock.mockResolvedValueOnce(
-			createMockResponse({}, { ok: false, status: 418, statusText: "I'm a teapot" })
-		);
-		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
-			code: 'UNKNOWN_ERROR',
-			statusCode: 418
 		});
 	});
 
@@ -212,11 +241,64 @@ describe('fetchCompute — HTTP status → error code mapping', () => {
 		);
 		await expect(fetchCompute('grasshopper', {}, config)).rejects.toThrow(/invalid api key/);
 	});
+
+	it("reads a 400's message out of its JSON body and does not retry it", async () => {
+		fetchMock.mockResolvedValue(
+			createMockResponse(
+				{ error: 'Bad Request', message: "The algo isn't valid base64", code: 'bad_request' },
+				{ ok: false, status: 400, statusText: 'Bad Request' }
+			)
+		);
+
+		const error = await rejection(
+			fetchCompute('grasshopper', {}, { ...config, retry: { attempts: 2, baseDelayMs: 0 } })
+		);
+
+		expect(error.code).toBe('VALIDATION_ERROR');
+		expect(error.message).toBe("Bad request: Bad Request — The algo isn't valid base64");
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('fetchCompute — request compression', () => {
+	const big = { values: 'x'.repeat(4096) };
+	const advertising = () => createMockResponse({}, { headers: { 'Accept-Encoding': 'gzip' } });
+
+	it('gzips a large body once the server advertised gzip, and stops when it no longer does', async () => {
+		const gz = { serverUrl: 'http://gzip-server:6500' };
+		fetchMock
+			.mockResolvedValueOnce(advertising())
+			.mockResolvedValueOnce(createMockResponse({}))
+			.mockResolvedValueOnce(createMockResponse({}));
+
+		await fetchCompute('grasshopper', big, gz);
+		await fetchCompute('grasshopper', big, gz);
+		await fetchCompute('grasshopper', big, gz);
+
+		const [first, second, third] = fetchMock.mock.calls.map(([, init]) => init as RequestInit);
+		expect(typeof first.body).toBe('string');
+		expect((second.headers as Record<string, string>)['Content-Encoding']).toBe('gzip');
+		expect(JSON.parse(strFromU8(gunzipSync(second.body as Uint8Array)))).toEqual(big);
+		expect(typeof third.body).toBe('string');
+		expect(third.headers as Record<string, string>).not.toHaveProperty('Content-Encoding');
+	});
+
+	it('sends a small body uncompressed', async () => {
+		const gz = { serverUrl: 'http://gzip-small:6500' };
+		fetchMock.mockResolvedValueOnce(advertising()).mockResolvedValueOnce(createMockResponse({}));
+
+		await fetchCompute('grasshopper', {}, gz);
+		await fetchCompute('grasshopper', { a: 1 }, gz);
+
+		expect(typeof (fetchMock.mock.calls[1][1] as RequestInit).body).toBe('string');
+	});
 });
 
 describe('fetchCompute — partial success (HTTP 500 with values)', () => {
-	it('returns the body instead of throwing when a 500 carries values + errors', async () => {
-		const partial = { values: [{ ParamName: 'out' }], errors: ['boom'], warnings: [] };
+	it.each([
+		['camelCase', { values: [{ ParamName: 'out' }], errors: ['boom'], warnings: [] }],
+		['PascalCase (stock mcneel)', { Values: [{ ParamName: 'out' }], Errors: ['boom'] }]
+	])('returns a %s partial success instead of throwing', async (_casing, partial) => {
 		fetchMock.mockResolvedValueOnce(
 			createMockResponse(null, {
 				ok: false,
@@ -228,45 +310,6 @@ describe('fetchCompute — partial success (HTTP 500 with values)', () => {
 
 		const res = await fetchCompute('grasshopper', {}, config);
 		expect(res).toEqual(partial);
-	});
-
-	it('detects a PascalCase partial success (stock mcneel casing) too', async () => {
-		const partial = { Values: [{ ParamName: 'out' }], Errors: ['boom'] };
-		fetchMock.mockResolvedValueOnce(
-			createMockResponse(null, {
-				ok: false,
-				status: 500,
-				statusText: 'Internal Server Error',
-				body: JSON.stringify(partial)
-			})
-		);
-
-		const res = await fetchCompute('grasshopper', {}, config);
-		expect(res).toEqual(partial);
-	});
-
-	it('still throws COMPUTATION_ERROR for a 500 with no values', async () => {
-		// Real Compute8 exception shape: { error, message, stackTrace? }. The
-		// detailed `message` must surface to the caller (regression-pinned in
-		// error-surface.test.ts), not be swallowed by the generic "error" label.
-		fetchMock.mockResolvedValue(
-			createMockResponse(null, {
-				ok: false,
-				status: 500,
-				statusText: 'Internal Server Error',
-				body: JSON.stringify({
-					error: 'Internal Server Error',
-					message: 'Invalid argument: bad input'
-				})
-			})
-		);
-		await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
-			code: 'COMPUTATION_ERROR',
-			statusCode: 500
-		});
-		await expect(fetchCompute('grasshopper', {}, config)).rejects.toThrow(
-			/Invalid argument: bad input/
-		);
 	});
 });
 
@@ -282,7 +325,7 @@ describe('fetchCompute — malformed responses', () => {
 		});
 	});
 
-	it('does NOT retry a 200 that declares a non-JSON body — INVALID_RESPONSE (issue 87)', async () => {
+	it('does NOT retry a 200 that declares a non-JSON body — INVALID_RESPONSE', async () => {
 		// A captive portal / reverse-proxy login page is deterministic: retrying
 		// refetches the same HTML. It must fail immediately with an honest code
 		// instead of burning the backoff schedule as NETWORK_ERROR + statusCode 200.
@@ -311,18 +354,28 @@ describe('fetchCompute — malformed responses', () => {
 		});
 	});
 
-	it('classifies a fetch TypeError as CORS_ERROR in a browser context (issue 90)', async () => {
-		// tests/setup.ts stubs `window = {}` (no document), which the transport
-		// treats as non-browser; adding a document simulates a real browser, where
-		// an opaque fetch TypeError is most likely a CORS misconfiguration.
-		(globalThis as any).window.document = {};
+	it('treats a bare window with no document as non-browser', async () => {
+		vi.stubGlobal('window', {});
+		try {
+			fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+			await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
+				code: 'NETWORK_ERROR'
+			});
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	// In a real browser an opaque fetch TypeError is most likely a CORS misconfiguration.
+	it('classifies a fetch TypeError as CORS_ERROR in a browser context', async () => {
+		vi.stubGlobal('window', { document: {} });
 		try {
 			fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 			await expect(fetchCompute('grasshopper', {}, config)).rejects.toMatchObject({
 				code: 'CORS_ERROR'
 			});
 		} finally {
-			delete (globalThis as any).window.document;
+			vi.unstubAllGlobals();
 		}
 	});
 });
@@ -369,7 +422,7 @@ describe('fetchCompute — retry', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('honors a Retry-After header ABOVE maxDelayMs — the server window wins (issue 101)', async () => {
+	it('honors a Retry-After header ABOVE maxDelayMs — the server window wins', async () => {
 		fetchMock
 			.mockResolvedValueOnce(
 				createMockResponse(
@@ -396,7 +449,7 @@ describe('fetchCompute — retry', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 
-	it('caps a pathological Retry-After at the 60s absolute bound (issue 101)', async () => {
+	it('caps a pathological Retry-After at the 60s absolute bound', async () => {
 		fetchMock
 			.mockResolvedValueOnce(
 				createMockResponse(
@@ -484,6 +537,54 @@ describe('fetchCompute — retry', () => {
 });
 
 describe('fetchCompute — abort and timeout', () => {
+	// Real fetch rejects with `signal.reason`, whatever the caller aborted with.
+	const rejectWithReason = (_url: unknown, init: unknown) =>
+		new Promise((_resolve, reject) => {
+			const { signal } = init as RequestInit;
+			signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+		});
+
+	it.each([
+		['an Error', new Error('user left the page')],
+		['a TypeError', new TypeError('stale')],
+		['a string', 'stale']
+	])('aborting with %s as the reason still rejects ABORTED, unretried', async (_name, reason) => {
+		fetchMock.mockImplementation(rejectWithReason);
+		const controller = new AbortController();
+		const promise = fetchCompute('grasshopper', {}, { ...config, signal: controller.signal });
+		const assertion = expect(promise).rejects.toMatchObject({ code: 'ABORTED' });
+		controller.abort(reason);
+		await assertion;
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('aborting with a reason while the body streams rejects ABORTED, unretried', async () => {
+		const controller = new AbortController();
+		fetchMock.mockImplementation(async () => {
+			const stream = new ReadableStream<Uint8Array>({
+				start(body) {
+					controller.signal.addEventListener('abort', () => body.error(controller.signal.reason));
+					body.enqueue(new TextEncoder().encode('{"values":'));
+				}
+			});
+			return new Response(stream, { status: 200 });
+		});
+		const promise = fetchCompute(
+			'grasshopper',
+			{},
+			{
+				...config,
+				signal: controller.signal,
+				maxResponseBytes: 1024
+			}
+		);
+		const assertion = expect(promise).rejects.toMatchObject({ code: 'ABORTED' });
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalled());
+		controller.abort(new Error('user left the page'));
+		await assertion;
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it('a caller-aborted request rejects and is never retried', async () => {
 		const controller = new AbortController();
 		controller.abort();
@@ -566,7 +667,44 @@ describe('fetchCompute — abort and timeout', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('a runtime-internal abort with no armed timeout is not reported as a timeout (issue 88)', async () => {
+	/** A 200 whose body never finishes streaming; `text()` rejects with the signal's reason. */
+	function stalledBodyResponse(signal: AbortSignal | null | undefined): Response {
+		return {
+			...createMockResponse(null, { headers: { 'Content-Type': 'application/json' } }),
+			text: () =>
+				new Promise<string>((_resolve, reject) => {
+					signal?.addEventListener('abort', () => reject(signal.reason), { once: true });
+				})
+		} as Response;
+	}
+
+	it('a timeout while the body streams is TIMEOUT_ERROR, not a JSON parse failure', async () => {
+		fetchMock.mockImplementation((_url, init) =>
+			Promise.resolve(stalledBodyResponse((init as RequestInit).signal))
+		);
+
+		await expect(
+			fetchCompute('grasshopper', {}, { ...config, timeoutMs: 20 })
+		).rejects.toMatchObject({ code: 'TIMEOUT_ERROR' });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
+	it('a caller abort while the body streams is ABORTED, not a JSON parse failure', async () => {
+		fetchMock.mockImplementation((_url, init) =>
+			Promise.resolve(stalledBodyResponse((init as RequestInit).signal))
+		);
+
+		const controller = new AbortController();
+		const promise = fetchCompute('grasshopper', {}, { ...config, signal: controller.signal });
+		const assertion = expect(promise).rejects.toMatchObject({ code: 'ABORTED' });
+
+		await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		controller.abort();
+
+		await assertion;
+	});
+
+	it('a runtime-internal abort with no armed timeout is not reported as a timeout', async () => {
 		vi.useFakeTimers();
 		try {
 			// No timeoutMs configured and no caller signal: an AbortError here comes
@@ -595,7 +733,7 @@ describe('fetchCompute — abort and timeout', () => {
 		}
 	});
 
-	it('re-arms the timeout per attempt — each retry composes a fresh signal (issue 89 doc pin)', async () => {
+	it('re-arms the timeout per attempt — each retry composes a fresh signal', async () => {
 		vi.useFakeTimers();
 		try {
 			fetchMock
@@ -625,5 +763,87 @@ describe('fetchCompute — abort and timeout', () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+});
+
+describe('fetchCompute — config validation', () => {
+	it.each([
+		['timeoutMs Infinity', { timeoutMs: Infinity }],
+		['timeoutMs NaN', { timeoutMs: NaN }],
+		['timeoutMs past what AbortSignal.timeout takes', { timeoutMs: 2 ** 32 }],
+		['retry.attempts NaN', { retry: { attempts: NaN } }],
+		['retry.attempts Infinity', { retry: { attempts: Infinity } }],
+		['retry.attempts negative', { retry: { attempts: -1 } }],
+		['retry.baseDelayMs NaN', { retry: { baseDelayMs: NaN } }],
+		['retry.maxDelayMs NaN', { retry: { maxDelayMs: NaN } }],
+		['maxResponseBytes NaN', { maxResponseBytes: NaN }]
+	])('rejects %s before touching the network', async (_name, bad) => {
+		await expect(fetchCompute('grasshopper', {}, { ...config, ...bad })).rejects.toMatchObject({
+			code: 'INVALID_CONFIG'
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('accepts a fractional timeoutMs', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+		await expect(
+			fetchCompute('grasshopper', {}, { ...config, timeoutMs: 1500.5 })
+		).resolves.toEqual({ ok: true });
+	});
+
+	it('still treats timeoutMs 0 as no timeout', async () => {
+		fetchMock.mockResolvedValueOnce(createMockResponse({ ok: true }));
+		await fetchCompute('grasshopper', {}, { ...config, timeoutMs: 0 });
+		expect((fetchMock.mock.calls[0][1] as RequestInit).signal).toBeUndefined();
+	});
+});
+
+describe('fetchCompute — invalid header values', () => {
+	it.each([
+		['apiKey', { apiKey: 'super-secret\nkey' }],
+		['authToken', { authToken: 'Bearer super-secret\nkey' }],
+		['a caller header', { headers: { 'X-Tenant': 'super-secret\nkey' } }]
+	])('rejects a bad %s with INVALID_CONFIG, never quoting it', async (_name, bad) => {
+		const error = await rejection(
+			fetchCompute('grasshopper', {}, { ...config, ...bad, retry: { attempts: 3, baseDelayMs: 1 } })
+		);
+		expect(error).toBeInstanceOf(ComputeError);
+		expect(error.code).toBe('INVALID_CONFIG');
+		expect(JSON.stringify({ message: error.message, context: error.context })).not.toContain(
+			'super-secret'
+		);
+		expect(error.originalError).toBeUndefined();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('fetchCompute — custom fetch', () => {
+	it('sends through ComputeConfig.fetch instead of the global', async () => {
+		const custom = vi.fn().mockResolvedValue(createMockResponse({ ok: true }));
+		await fetchCompute('grasshopper', {}, { ...config, fetch: custom });
+		expect(custom).toHaveBeenCalledTimes(1);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('fetchCompute — error context', () => {
+	it('keeps diagnostic response headers and drops the rest', async () => {
+		fetchMock.mockResolvedValueOnce(
+			new Response('nope', {
+				status: 403,
+				headers: {
+					'Set-Cookie': 'sid=topsecret',
+					'Retry-After': '5',
+					'Content-Type': 'text/plain',
+					'X-Request-ID': 'abc'
+				}
+			})
+		);
+		const error = await rejection(fetchCompute('grasshopper', {}, config));
+		expect(error.context?.responseHeaders).toEqual({
+			'content-type': 'text/plain',
+			'retry-after': '5',
+			'x-request-id': 'abc'
+		});
 	});
 });

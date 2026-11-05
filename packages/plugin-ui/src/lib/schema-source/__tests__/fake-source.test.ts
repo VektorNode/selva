@@ -6,7 +6,11 @@ import type { SolveReporter } from '@selvajs/ui';
 // event emit/subscribe, save settlement, and the vended SolveDriver. These are the contract
 // the GrasshopperSource must also satisfy.
 
-const noopReporter: SolveReporter = { report: () => {}, reportError: () => {} };
+const noopReporter: SolveReporter = {
+	report: () => {},
+	reportError: () => {},
+	reportAborted: () => {}
+};
 
 describe('FakeSource connect', () => {
 	it('reports ok when connected, error when not', async () => {
@@ -64,7 +68,11 @@ describe('FakeSource solve driver', () => {
 	it('exposes the reporter so a test can feed results back', () => {
 		const source = createFakeSource();
 		const reported: unknown[] = [];
-		const reporter: SolveReporter = { report: (r) => reported.push(r), reportError: () => {} };
+		const reporter: SolveReporter = {
+			report: (r) => reported.push(r),
+			reportError: () => {},
+			reportAborted: () => {}
+		};
 		source.makeSolveDriver('s1', () => reporter);
 		source.solveDriver!.reporter.report({ outputs: { out: 1 } });
 		expect(reported).toEqual([{ outputs: { out: 1 } }]);

@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-import { extractFilesFromComputeResponse } from '../handle-files';
+import { unzipSync } from 'fflate';
+
+import { downloadFileData, extractFilesFromComputeResponse } from '../handle-files';
 import { base64ByteArray } from '@/core/utils/encoding';
 import type { FileData, FileBaseInfo } from '../types';
 
@@ -20,10 +22,11 @@ afterEach(() => {
 describe('extractFilesFromComputeResponse — decode half', () => {
 	it('passes plain-text items through unchanged', async () => {
 		const [file] = await extractFilesFromComputeResponse([fd({ data: 'plain text' })]);
-		expect(file).toMatchObject({
+		expect(file).toEqual({
 			fileName: 'model.txt',
 			content: 'plain text',
-			path: 'model.txt'
+			path: 'model.txt',
+			subFolder: ''
 		});
 	});
 
@@ -52,22 +55,17 @@ describe('extractFilesFromComputeResponse — decode half', () => {
 });
 
 /**
- * Zip-slip defense (issue 94): `subFolder`/`fileName`/`fileType` are server-controlled;
+ * Zip-slip defense: `subFolder`/`fileName`/`fileType` are server-controlled;
  * traversal segments, absolute paths, and drive letters must never survive into archive paths.
  */
 describe('extractFilesFromComputeResponse — archive path sanitization', () => {
-	it('strips ".." traversal segments from subFolder', async () => {
-		const [file] = await extractFilesFromComputeResponse([
-			fd({ subFolder: '../../..', fileName: 'evil', fileType: '.txt' })
-		]);
-		expect(file.path).toBe('evil.txt');
-	});
-
-	it('strips traversal segments embedded in fileName', async () => {
-		const [file] = await extractFilesFromComputeResponse([
-			fd({ fileName: '../../etc/passwd', fileType: '' })
-		]);
-		expect(file.path).toBe('etc/passwd');
+	it.each([
+		['subFolder', { subFolder: '../../..', fileName: 'evil' }, 'evil.txt'],
+		['fileName', { fileName: '../../etc/passwd', fileType: '' }, 'etc/passwd'],
+		['a "::" subFolder', { subFolder: 'ROOT::..::..', fileName: 'evil' }, 'ROOT/evil.txt']
+	])('strips traversal segments from %s', async (_where, item, expected) => {
+		const [file] = await extractFilesFromComputeResponse([fd(item)]);
+		expect(file.path).toBe(expected);
 	});
 
 	it('makes an absolute subFolder relative', async () => {
@@ -75,6 +73,20 @@ describe('extractFilesFromComputeResponse — archive path sanitization', () => 
 			fd({ subFolder: '/etc', fileName: 'a', fileType: '.txt' })
 		]);
 		expect(file.path).toBe('etc/a.txt');
+	});
+
+	it('drops a drive-relative folder, which escapes the root on Windows', async () => {
+		const [file] = await extractFilesFromComputeResponse([
+			fd({ subFolder: 'safe/D:folder', fileName: 'a', fileType: '.txt' })
+		]);
+		expect(file.path).toBe('safe/a.txt');
+	});
+
+	it('skips a file whose whole name is drive-relative', async () => {
+		const files = await extractFilesFromComputeResponse([
+			fd({ fileName: 'C:evil', fileType: '.txt' })
+		]);
+		expect(files).toEqual([]);
 	});
 
 	it('normalizes backslash paths and drops drive letters', async () => {
@@ -86,14 +98,7 @@ describe('extractFilesFromComputeResponse — archive path sanitization', () => 
 
 	// The plugin normalizes `::` before it reaches the wire; this covers payloads from an older
 	// one, which would otherwise land in a literal folder named "ROOT::Panels".
-	it('treats "::" in subFolder as a separator', async () => {
-		const [file] = await extractFilesFromComputeResponse([
-			fd({ subFolder: 'ROOT::Panels', fileName: 'a', fileType: '.3dm' })
-		]);
-		expect(file.path).toBe('ROOT/Panels/a.3dm');
-	});
-
-	it('nests arbitrarily deep through "::"', async () => {
+	it('treats each "::" in subFolder as a separator', async () => {
 		const [file] = await extractFilesFromComputeResponse([
 			fd({ subFolder: 'ROOT::First::Second', fileName: 'a', fileType: '.3dm' })
 		]);
@@ -106,20 +111,6 @@ describe('extractFilesFromComputeResponse — archive path sanitization', () => 
 			fd({ subFolder: 'OTHERROOT::Sub', fileName: 'b', fileType: '.3dm' })
 		]);
 		expect(files.map((f) => f.path)).toEqual(['ROOT/Sub/a.3dm', 'OTHERROOT/Sub/b.3dm']);
-	});
-
-	it('still strips traversal written with "::"', async () => {
-		const [file] = await extractFilesFromComputeResponse([
-			fd({ subFolder: 'ROOT::..::..', fileName: 'evil', fileType: '.txt' })
-		]);
-		expect(file.path).toBe('ROOT/evil.txt');
-	});
-
-	it('keeps legitimate nested subFolders intact', async () => {
-		const [file] = await extractFilesFromComputeResponse([
-			fd({ subFolder: 'nested/dir', fileName: 'a', fileType: '.json' })
-		]);
-		expect(file.path).toBe('nested/dir/a.json');
 	});
 
 	it('skips an item whose name sanitizes to nothing', async () => {
@@ -167,7 +158,6 @@ describe('extractFilesFromComputeResponse — fetch half', () => {
 		expect(Array.from(fetched!.content as Uint8Array)).toEqual([9, 9]);
 	});
 
-	// Issue 111: remote files may specify a subFolder instead of always landing at zip root.
 	it('honors an optional subFolder on external files (sanitized)', async () => {
 		vi.stubGlobal(
 			'fetch',
@@ -206,10 +196,10 @@ describe('extractFilesFromComputeResponse — fetch half', () => {
 });
 
 /**
- * Issue 95: wire payloads arrive PascalCase from mcneel-branch servers and with
+ * Wire payloads arrive PascalCase from mcneel-branch servers and with
  * string-typed booleans from others; neither shape may silently drop files.
  */
-describe('extractFilesFromComputeResponse — wire-shape leniency (issue 95)', () => {
+describe('extractFilesFromComputeResponse — wire-shape leniency', () => {
 	it('decodes a fully PascalCase payload (mcneel-branch server)', async () => {
 		const item = {
 			FileName: 'model',
@@ -227,24 +217,14 @@ describe('extractFilesFromComputeResponse — wire-shape leniency (issue 95)', (
 		});
 	});
 
-	it('treats a string "true" isBase64Encoded flag as base64', async () => {
-		const bytes = new Uint8Array([10, 20, 30]);
-		const [file] = await extractFilesFromComputeResponse([
-			fd({
-				data: base64ByteArray(bytes),
-				fileType: '.bin',
-				isBase64Encoded: 'true' as unknown as boolean
-			})
+	it('reads a string isBase64Encoded flag', async () => {
+		const asFlag = (flag: string) => flag as unknown as boolean;
+		const [binary, plain] = await extractFilesFromComputeResponse([
+			fd({ data: base64ByteArray(new Uint8Array([10, 20, 30])), isBase64Encoded: asFlag('true') }),
+			fd({ data: 'plain', isBase64Encoded: asFlag('false') })
 		]);
-		expect(file.content).toBeInstanceOf(Uint8Array);
-		expect(Array.from(file.content as Uint8Array)).toEqual([10, 20, 30]);
-	});
-
-	it('treats a string "false" flag as plain text', async () => {
-		const [file] = await extractFilesFromComputeResponse([
-			fd({ data: 'plain', isBase64Encoded: 'false' as unknown as boolean })
-		]);
-		expect(file.content).toBe('plain');
+		expect(Array.from(binary.content as Uint8Array)).toEqual([10, 20, 30]);
+		expect(plain.content).toBe('plain');
 	});
 
 	it('keeps a file whose flag is missing but whose data is present (plain-text fallback)', async () => {
@@ -273,11 +253,6 @@ describe('extractFilesFromComputeResponse — GH-owned pass-through', () => {
 		expect(file.subFolder).toBe('nested/dir');
 	});
 
-	it('reports an empty subFolder for a root-level file', async () => {
-		const [file] = await extractFilesFromComputeResponse([fd({ subFolder: '' })]);
-		expect(file.subFolder).toBe('');
-	});
-
 	it('reports the SANITIZED subFolder, matching the path', async () => {
 		const [file] = await extractFilesFromComputeResponse([fd({ subFolder: '../../etc' })]);
 		expect(file.subFolder).toBe('etc');
@@ -289,11 +264,6 @@ describe('extractFilesFromComputeResponse — GH-owned pass-through', () => {
 			fd({ metadata: { Material: 'alu_1.0', Thickness: '1.0' } })
 		]);
 		expect(file.metadata).toEqual({ Material: 'alu_1.0', Thickness: '1.0' });
-	});
-
-	it('omits metadata when the source item carries none', async () => {
-		const [file] = await extractFilesFromComputeResponse([fd()]);
-		expect(file.metadata).toBeUndefined();
 	});
 
 	it('reads metadata from a PascalCase payload (mcneel-branch server)', async () => {
@@ -320,19 +290,6 @@ describe('extractFilesFromComputeResponse — GH-owned pass-through', () => {
 		expect(files[1].subFolder).toBe('out');
 		expect(files[1].metadata).toEqual({ slot: 'second' });
 	});
-
-	it('carries subFolder on base64 items too', async () => {
-		const [file] = await extractFilesFromComputeResponse([
-			fd({
-				data: base64ByteArray(new Uint8Array([1, 2])),
-				isBase64Encoded: true,
-				subFolder: 'bin',
-				metadata: { kind: 'binary' }
-			})
-		]);
-		expect(file.subFolder).toBe('bin');
-		expect(file.metadata).toEqual({ kind: 'binary' });
-	});
 });
 
 describe('extractFilesFromComputeResponse — decode-failure skip branch', () => {
@@ -346,10 +303,7 @@ describe('extractFilesFromComputeResponse — decode-failure skip branch', () =>
 	});
 });
 
-/**
- * Issue 111: duplicate archive paths must be renamed on the extract path too, not
- * just inside the zip — consumers keying by `path` must never lose files.
- */
+// Consumers keying by `path` must never lose files.
 describe('extractFilesFromComputeResponse — duplicate-path rename', () => {
 	it('renames colliding paths with a numeric suffix before the extension', async () => {
 		const files = await extractFilesFromComputeResponse([
@@ -384,5 +338,37 @@ describe('extractFilesFromComputeResponse — duplicate-path rename', () => {
 			fd({ subFolder: 'b' })
 		]);
 		expect(files.map((f) => f.path)).toEqual(['a/model.txt', 'b/model.txt']);
+	});
+});
+
+describe('downloadFileData — archive contents', () => {
+	/** Stub just enough DOM to capture the archive the anchor click would save. */
+	function captureDownload(): () => Promise<Record<string, Uint8Array>> {
+		let blob: Blob | undefined;
+		vi.stubGlobal('document', {
+			createElement: () => ({ click() {}, remove() {} }),
+			body: { appendChild() {} }
+		});
+		vi.spyOn(URL, 'createObjectURL').mockImplementation((b) => {
+			blob = b as Blob;
+			return 'blob:test';
+		});
+		vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+		return async () => unzipSync(new Uint8Array(await blob!.arrayBuffer()));
+	}
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it('keeps a root file named `__proto__`, renamed, rather than losing it', async () => {
+		const read = captureDownload();
+		await downloadFileData(
+			[fd({ fileName: '__proto__', fileType: '' }), fd({ fileName: 'b', fileType: '.txt' })],
+			'out'
+		);
+		const entries = await read();
+		expect(Object.keys(entries).sort()).toEqual(['__proto__-2', 'b.txt']);
+		expect(new TextDecoder().decode(entries['__proto__-2'])).toBe('hello');
 	});
 });

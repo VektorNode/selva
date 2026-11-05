@@ -8,6 +8,7 @@ export {
 	SupabaseInviteStore,
 	SupabaseComputeServerStore,
 	SupabaseShareLinkStore,
+	SupabaseApiTokenStore,
 	SupabaseDataProvider,
 	EXPECTED_MIGRATION_HEAD,
 	SupabaseEventSink,
@@ -41,3 +42,5 @@ export { SupabaseAuthProvider } from './auth/index.js';
 export type { SupabaseAuthProviderConfig } from './auth/index.js';
 
 export { SupabasePlatformPermissionStore } from './permissions/index.js';
+
+export { supabaseUpstream } from './upstream.js';

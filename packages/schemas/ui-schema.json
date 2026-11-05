@@ -4,7 +4,9 @@
 	"title": "Selva UI Schema",
 	"description": "Schema definitions for Selva UI configuration",
 	"constants": {
-		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl"]
+		"acceptedFileFormats": [".3dm", ".stp", ".step", ".fbx", ".obj", ".dxf", ".stl"],
+		"maxTags": 5,
+		"maxCategoryLength": 40
 	},
 	"definitions": {
 		"//_PRIMITIVES": "--- PRIMITIVES ---",
@@ -19,9 +21,13 @@
 				"dynamicValueList",
 				"file",
 				"color",
-				"generic"
+				"generic",
+				"geometry",
+				"point",
+				"line",
+				"plane"
 			],
-			"description": "Contextual parameter data types"
+			"description": "Contextual parameter data types. 'geometry', 'point', 'line' and 'plane' come from Rhino's Get Geometry, Get Point, Get Line and Get Plane: the host picks their control from this type, whatever the layout item's widgetType says, and they carry no value from the form."
 		},
 
 		"//_VISIBILITY_RULES": "--- VISIBILITY RULES --- Visibility conditions define when to show/hide/disable parameters based on other parameter values. Can be applied to individual items or entire groups. Ex1: action='disable'+defaultValue=2 when Leg Type='Square'. Ex2: action='hide' when Height>120. Ex3: mode='all'+action='hide'+defaultValue=5 when Width>100 AND Length<100. Ex4: hide entire 'Advanced Options' group when Mode='Basic'",
@@ -131,7 +137,7 @@
 				"renderAsSlider": { "type": "boolean" },
 				"hideRange": {
 					"type": "boolean",
-					"description": "Hide the min/max range hint shown next to the label / under the input"
+					"description": "Never show the min/max hint. Without it, a number box shows the hint beside its label while focused; sliders never show it."
 				}
 			},
 			"additionalProperties": false
@@ -156,6 +162,43 @@
 			},
 			"additionalProperties": false
 		},
+		"OptionMedia": {
+			"type": "object",
+			"description": "The picture an option shows besides its name: an icon or a thumbnail. The builder sets one; if both are set, the thumbnail wins. Each field is the key of an entry in the schema's assets table.",
+			"properties": {
+				"icon": {
+					"type": "string",
+					"description": "Asset holding the option's icon (an OptionAsset with d)."
+				},
+				"image": {
+					"type": "string",
+					"description": "Asset holding the option's thumbnail (an OptionAsset with img)."
+				},
+				"iconName": {
+					"type": "string",
+					"description": "Iconify name the icon was picked as (e.g. 'lucide:house'), so the builder can reopen the picker on it. Never rendered."
+				}
+			},
+			"additionalProperties": false
+		},
+		"OptionAsset": {
+			"type": "object",
+			"description": "An icon or thumbnail shared by any number of options. Exactly one of d and img is set. Stored inline in the .gh, so the builder keeps each one small.",
+			"properties": {
+				"d": {
+					"type": "string",
+					"description": "SVG path data on a 24x24 grid, drawn as a stroke (width 2, round caps and joins, no fill). Rendered as a path's d attribute, never as markup."
+				},
+				"img": {
+					"type": "string",
+					"pattern": "^data:image/(webp|jpeg|png);base64,[A-Za-z0-9+/=]+$",
+					"description": "Thumbnail as a base64 data URI. Only WebP, JPEG and PNG are accepted."
+				},
+				"w": { "type": "integer", "description": "Thumbnail width in pixels" },
+				"h": { "type": "integer", "description": "Thumbnail height in pixels" }
+			},
+			"additionalProperties": false
+		},
 		"DropdownWidgetConfig": {
 			"type": "object",
 			"properties": {
@@ -167,9 +210,14 @@
 				"required": { "type": "boolean" },
 				"displayAs": {
 					"type": "string",
-					"enum": ["dropdown", "checklist"],
+					"enum": ["dropdown", "checklist", "segmented", "tiles"],
 					"default": "dropdown",
-					"description": "How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter."
+					"description": "How to render the value list. 'dropdown' = single-select dropdown (value: string). 'checklist' = multi-select checkboxes (value: string[]); requires list access on the connected parameter. 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails."
+				},
+				"optionMedia": {
+					"type": "object",
+					"additionalProperties": { "$ref": "#/definitions/OptionMedia" },
+					"description": "Icon and thumbnail per option, keyed by option name. Grasshopper owns options; this map is the author's and survives a re-sync."
 				}
 			},
 			"required": ["options"],
@@ -192,9 +240,14 @@
 				},
 				"displayAs": {
 					"type": "string",
-					"enum": ["dropdown", "checklist"],
+					"enum": ["dropdown", "checklist", "segmented", "tiles"],
 					"default": "dropdown",
-					"description": "How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[])."
+					"description": "How to render the value list. 'dropdown' = single-select (value: string). 'checklist' = multi-select (value: string[]). 'segmented' = single-select button row, shown as a dropdown when there are too many options to fit. 'tiles' = single-select grid of thumbnails."
+				},
+				"optionMedia": {
+					"type": "object",
+					"additionalProperties": { "$ref": "#/definitions/OptionMedia" },
+					"description": "Icon and thumbnail per option, keyed by option name. Names without an entry show text only."
 				}
 			},
 			"additionalProperties": false
@@ -214,7 +267,14 @@
 		},
 		"CheckboxWidgetConfig": {
 			"type": "object",
-			"properties": {},
+			"properties": {
+				"displayAs": {
+					"type": "string",
+					"enum": ["checkbox", "button"],
+					"default": "checkbox",
+					"description": "'checkbox' = a toggle whose value is sent with every solve. 'button' = a trigger: a press solves once with true, then the input goes back to false. A button holds no value in the form, so presets and value updates skip it."
+				}
+			},
 			"additionalProperties": false
 		},
 		"FileWidgetConfig": {
@@ -706,18 +766,45 @@
 				"enableLocal": {
 					"type": "boolean",
 					"default": false,
-					"description": "If true, display mesh data is sent to the web preview for local rendering"
+					"description": "If true, the plugin streams display meshes to its local web preview, which then shows the 3D viewer. Selva ignores it."
 				},
 				"enableRemote": {
 					"type": "boolean",
 					"default": false,
-					"description": "If true, enables remote rendering via Rhino Compute"
+					"description": "If true, Selva draws the display meshes in the Rhino.Compute response and shows the 3D viewer. The plugin's local preview ignores it."
 				},
 				"backgroundColor": {
 					"type": "string",
 					"pattern": "^#[0-9A-Fa-f]{6}$",
 					"default": "#ffffff",
 					"description": "Background color for the 3D viewer as hex string (e.g., '#ffffff')"
+				},
+				"look": {
+					"type": "string",
+					"enum": [
+						"technical",
+						"studio",
+						"showcase",
+						"arctic",
+						"xray",
+						"lineart",
+						"wireframe",
+						"night"
+					],
+					"default": "technical",
+					"description": "The viewer look a definition opens in. A viewer can still switch look from its display menu."
+				}
+			},
+			"additionalProperties": false
+		},
+		"LocalOptions": {
+			"type": "object",
+			"description": "Settings only the plugin's local preview uses. Selva ignores them.",
+			"properties": {
+				"trackPickedObjects": {
+					"type": "boolean",
+					"default": false,
+					"description": "If true, geometry picked in the Rhino viewport follows the Rhino objects it came from: editing or moving one re-solves with its new shape, deleting one drops it. If false, a pick is a snapshot."
 				}
 			},
 			"additionalProperties": false
@@ -744,11 +831,11 @@
 				"tags": {
 					"type": "array",
 					"items": { "type": "string" },
-					"description": "User-defined tags for organizing schemas (e.g., ['architecture', 'facade'])"
+					"description": "Tags for the Selva library (e.g., ['architecture', 'facade']). Selva copies them into the definition when it is uploaded; after that the definition's own tags win. At most MAX_TAGS, none containing a comma."
 				},
 				"category": {
 					"type": "string",
-					"description": "Category for organizing schemas (e.g., 'architecture', 'structural', 'mechanical')"
+					"description": "Category for the Selva library (e.g., 'architecture', 'structural'). Selva copies it into the definition when it is uploaded; after that the definition's own category wins. At most MAX_CATEGORY_LENGTH characters."
 				},
 				"author": {
 					"type": "string",
@@ -761,7 +848,7 @@
 				"schemaVersion": {
 					"type": "string",
 					"pattern": "^\\d+\\.\\d+\\.\\d+$",
-					"default": "2.15.0",
+					"default": "2.19.0",
 					"description": "Semantic version of the schema format (MAJOR.MINOR.PATCH)"
 				},
 				"minPluginVersion": {
@@ -779,6 +866,9 @@
 					"$ref": "#/definitions/ViewerOptions",
 					"description": "Configuration for the 3D viewer"
 				},
+				"localOptions": {
+					"$ref": "#/definitions/LocalOptions"
+				},
 				"instanceSolve": {
 					"type": "boolean",
 					"default": true,
@@ -793,7 +883,12 @@
 					"items": { "$ref": "#/definitions/SchemaOutput" },
 					"description": "All output components (print, bake, file download)"
 				},
-				"layout": { "$ref": "#/definitions/LayoutConfig" }
+				"layout": { "$ref": "#/definitions/LayoutConfig" },
+				"assets": {
+					"type": "object",
+					"additionalProperties": { "$ref": "#/definitions/OptionAsset" },
+					"description": "Icons and thumbnails referenced by optionMedia, keyed by a hash of their content so a shared one is stored once."
+				}
 			},
 			"required": ["id", "name", "schemaVersion", "inputs", "outputs", "layout"],
 			"additionalProperties": false

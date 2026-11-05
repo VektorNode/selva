@@ -35,6 +35,8 @@
 		'invite.created': 'Invite · created',
 		'invite.accepted': 'Invite · accepted',
 		'invite.revoked': 'Invite · revoked',
+		'api_token.created': 'API token · created',
+		'api_token.revoked': 'API token · revoked',
 		'user.created': 'User · created',
 		'user.deleted': 'User · deleted',
 		'user.disabled': 'User · disabled',
@@ -129,19 +131,20 @@
 	{#if !data.available}
 		<Card.Root>
 			<Card.Content class="pt-6">
-				<div class="bg-muted/30 flex items-start gap-4 rounded-lg border p-5">
-					<div class="bg-accent text-accent-foreground rounded-md p-2.5">
+				<div class="bg-muted flex items-start gap-4 rounded-lg border p-5">
+					<div class="bg-selected text-foreground rounded-md p-2.5">
 						<ShieldCheck class="h-4 w-4" />
 					</div>
 					<div class="min-w-0 flex-1">
 						<p class="text-sm font-medium">Audit log not available on this deployment</p>
 						<p class="text-muted-foreground mt-1 text-sm">
 							This provider doesn't support audit queries. To enable audit logs, switch to a data
-							provider that supports <code class="bg-muted rounded px-1 py-0.5 font-mono text-xs"
+							provider that supports <code class="bg-muted rounded-sm px-1 py-0.5 font-mono text-xs"
 								>auditQuery</code
 							>
 							by changing
-							<code class="bg-muted rounded px-1 py-0.5 font-mono text-xs">SELVA_DATA_PROVIDER</code
+							<code class="bg-muted rounded-sm px-1 py-0.5 font-mono text-xs"
+								>SELVA_DATA_PROVIDER</code
 							> in your .env.
 						</p>
 					</div>
@@ -255,7 +258,7 @@
 							</thead>
 							<tbody>
 								{#each data.rows as row (row.id)}
-									<tr class="hover:bg-muted/30 border-b">
+									<tr class="hover:bg-hover border-b">
 										<td class="py-2">
 											<button
 												type="button"
@@ -296,7 +299,7 @@
 										<td class="py-2 pr-4">{targetLabel(row)}</td>
 									</tr>
 									{#if expanded[row.id]}
-										<tr class="bg-muted/20 border-b">
+										<tr class="bg-muted border-b">
 											<td></td>
 											<td colspan="4" class="py-2 pr-4">
 												<pre

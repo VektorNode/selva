@@ -1,5 +1,173 @@
 # @selvajs/cli
 
+## 4.20.0
+
+### Minor Changes
+
+- edb568d: Config inspection, safe key rotation, `.env` migration, and updates that catch a database behind the app.
+
+  - `selva config show` lists what `.env` sets, what is default, what is invalid, keys Selva doesn't read (with the likely intended name), and what differs from the last boot. `selva config set KEY=VALUE` validates the value and edits only that line, with a backup.
+  - `selva keys rotate hmac|at-rest` moves the old key to `SELVA_HMAC_KEY_PREVIOUS` / `SELVA_AT_REST_KEY_PREVIOUS`, accepted for 30 days (`<KEY>_PREVIOUS_EXPIRES`). `--finish` ends the overlap early, `--leaked` drops the old key at once. `selva doctor` counts down to expiry.
+  - `selva migrate --dry-run` shows the `.env` rewrite (renamed keys, values a looser reader used to accept) and proves every setting keeps its meaning before writing. `--undo` restores the backup.
+  - `selva update` installs `@selvajs/supabase-provider` on the runtime's channel, polls `/api/health` after the restart, and exits non-zero with the migration commands when the app comes up degraded. `selva doctor` checks the database against the migration head the app expects.
+  - Fixed: rewriting `.env` no longer corrupts JSON values or pulls inline comments into a value. `.env` and its backups are written `0600`. `selva doctor` accepts a 32-byte base64 key.
+
+### Patch Changes
+
+- 420bccb: Deployments pin pm2 7.1.2 (was 7.0.3). It drops the proxy-agent and FTP dependencies behind five high-severity `npm audit` findings (basic-ftp, get-uri, pac-proxy-agent, proxy-agent, js-yaml).
+
+  **Action needed:** the in-app update doesn't change pm2. After updating, run `selva migrate` and then `npx pm2 update` in the deployment, as in [Upgrading pm2](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/deployment/prerequisites.md#upgrading-pm2). Until then `selva doctor` reports the old pm2.
+
+- 5ced834: The in-app update and `selva update` move pm2 to the version the new release pins and swap the daemon, so a pm2 bump needs no `selva migrate`. Under systemd the in-app update can't swap the daemon: it finishes with a warning to run `npx pm2 update` from a shell. `selva doctor` now fails when `selva-compute` is missing from pm2 or not online, which an interrupted `pm2 update` leaves behind while every other check passes.
+
+## 4.20.0-beta.30
+
+### Patch Changes
+
+- 5ced834: The in-app update and `selva update` move pm2 to the version the new release pins and swap the daemon, so a pm2 bump needs no `selva migrate`. Under systemd the in-app update can't swap the daemon: it finishes with a warning to run `npx pm2 update` from a shell. `selva doctor` now fails when `selva-compute` is missing from pm2 or not online, which an interrupted `pm2 update` leaves behind while every other check passes.
+
+## 4.20.0-beta.29
+
+### Patch Changes
+
+- 420bccb: Deployments pin pm2 7.1.2 (was 7.0.3). It drops the proxy-agent and FTP dependencies behind five high-severity `npm audit` findings (basic-ftp, get-uri, pac-proxy-agent, proxy-agent, js-yaml).
+
+  **Action needed:** the in-app update doesn't change pm2. After updating, run `selva migrate` and then `npx pm2 update` in the deployment, as in [Upgrading pm2](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/deployment/prerequisites.md#upgrading-pm2). Until then `selva doctor` reports the old pm2.
+
+## 4.20.0-beta.28
+
+No changes in this release.
+
+## 4.20.0-beta.27
+
+No changes in this release.
+
+## 4.20.0-beta.26
+
+No changes in this release.
+
+## 4.20.0-beta.25
+
+No changes in this release.
+
+## 4.20.0-beta.24
+
+No changes in this release.
+
+## 4.20.0-beta.23
+
+### Patch Changes
+
+- 42fd0e8: `selva update` and `selva doctor` now catch a database that is behind the app. Before, `selva update` moved `@selvajs/selva` past the installed `@selvajs/supabase-provider`, the package that carries the migration SQL, and doctor compared the database only against that stale provider. Both reported success while `/api/health` returned 503 and saves that needed the new schema failed.
+
+  - `@selvajs/selva` writes `build/runtime-meta.json` with the migration head it expects, and doctor checks the database against that.
+  - `selva update` installs the provider on the runtime's channel, polls `/api/health` after the restart, and exits non-zero with the cause and the migration commands when the app comes up degraded.
+
+## 4.20.0-beta.22
+
+No changes in this release.
+
+## 4.20.0-beta.21
+
+### Minor Changes
+
+- 94692f5: Deployment config you can see, change safely and rotate without breaking anything.
+
+  - **Every env var is declared once**, with its type, default, what changing it affects and whether a bad value stops boot (`@selvajs/platform/config`, plus a slice per package: `@selvajs/server/config`, `@selvajs/*-provider/config`). A host app composes the slices it ships and calls `resolveConfig` or `buildConfigReport`.
+  - **`selva config show`** lists what `.env` sets, what is default, what is wrong, keys Selva doesn't read (with the likely intended name), and what differs from what the app last booted with. **`selva config set KEY=VALUE`** checks the value and edits only that line, with a backup. `/admin/system` shows the same report to instance admins, read-only.
+  - **A bad value on a security control now stops boot** instead of silently falling back. `SUPABASE_ALLOW_EMAIL_LINK_SIGNUP` used to read anything but the exact string `false` as on, so `=no` allowed sign-ups; booleans now accept `true|false|1|0|yes|no|on|off` and nothing else.
+  - **Key rotation keeps the old key working.** `selva keys rotate hmac` (or `at-rest`) moves the old key to `SELVA_HMAC_KEY_PREVIOUS` / `SELVA_AT_REST_KEY_PREVIOUS`, which sessions, OAuth/MCP clients, solve-event tokens and stored compute API keys still accept. Boot re-seals API keys under the new at-rest key. The previous key is accepted for 30 days (`<KEY>_PREVIOUS_EXPIRES`), then refused on its own; `/admin/system` and `selva doctor` count down to it. `--finish` ends the overlap early, `--leaked` drops the old key at once.
+  - **Share links expire after 90 days by default.** A link minted without `expiresAt` gets one; an explicit `expiresAt: null` still means never. The mint dialog has expiry on by default.
+  - **Share-link, invite and API tokens are stored as an unkeyed SHA-256.** New tokens no longer depend on `SELVA_HMAC_KEY`; tokens stored before keep resolving under the current or previous key. `createTokenCodec` takes `previousSecret`, and `findByToken` looks a token up by every hash form its record may carry.
+  - **`selva migrate --dry-run`** shows the `.env` rewrite (renamed keys, values a looser reader used to accept, no-op lines, shipped template prose) and proves every setting keeps its meaning before writing. `--undo` restores the backup.
+  - **The CLI no longer corrupts `.env` when it rewrites it.** A JSON value such as `SUPABASE_JWT_SIGNING_KEY` came back as `{\`, and an inline comment ended up inside the value. Rewrites now edit single lines, read back with Node's own parser, and write `.env` and its backups as `0600`.
+  - **An `http://` `ORIGIN` drops the `Secure` cookie flag**, so sign-in over plain HTTP works without `ALLOW_INSECURE_COOKIES`, which still overrides either way.
+  - `selva doctor` accepts a 32-byte base64 key, as the runtime does.
+
+## 4.20.0-beta.20
+
+No changes in this release.
+
+## 4.20.0-beta.19
+
+No changes in this release.
+
+## 4.20.0-beta.18
+
+No changes in this release.
+
+## 4.20.0-beta.17
+
+No changes in this release.
+
+## 4.20.0-beta.16
+
+No changes in this release.
+
+## 4.20.0-beta.15
+
+No changes in this release.
+
+## 4.20.0-beta.14
+
+No changes in this release.
+
+## 4.20.0-beta.13
+
+No changes in this release.
+
+## 4.20.0-beta.12
+
+No changes in this release.
+
+## 4.20.0-beta.11
+
+No changes in this release.
+
+## 4.20.0-beta.10
+
+No changes in this release.
+
+## 4.20.0-beta.9
+
+No changes in this release.
+
+## 4.20.0-beta.8
+
+No changes in this release.
+
+## 4.20.0-beta.7
+
+No changes in this release.
+
+## 4.20.0-beta.6
+
+No changes in this release.
+
+## 4.20.0-beta.5
+
+No changes in this release.
+
+## 4.20.0-beta.4
+
+No changes in this release.
+
+## 4.20.0-beta.3
+
+No changes in this release.
+
+## 4.20.0-beta.2
+
+No changes in this release.
+
+## 4.20.0-beta.1
+
+No changes in this release.
+
+## 4.20.0-beta.0
+
+No changes in this release.
+
 ## 4.19.0
 
 No changes in this release.

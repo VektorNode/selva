@@ -1,8 +1,9 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getAuthProvider } from '$lib/server/providers.server';
-import { issueOAuthState } from '$lib/server/auth/oauthState.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getAuthProvider } from '#lib/server/providers.server.js';
+import { publicUrl } from '#lib/server/origin.js';
+import { issueOAuthState } from '#lib/server/auth/oauthState.server.js';
 
 const ALLOWED_PROVIDERS = ['google', 'github', 'azure', 'gitlab'] as const;
 type AllowedProvider = (typeof ALLOWED_PROVIDERS)[number];
@@ -46,12 +47,13 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	const redirectTo = url.searchParams.get('redirectTo') ?? '/library';
 	// Forward `redirectTo` through the OAuth callback so the post-login redirect
 	// survives the IdP round trip.
-	const callbackUrl = new URL('/auth/supabase/callback', url.origin);
+	const callbackUrl = new URL('/auth/supabase/callback', publicUrl(url).origin);
 	if (redirectTo.startsWith('/')) {
 		callbackUrl.searchParams.set('redirectTo', redirectTo);
 	}
 	callbackUrl.searchParams.set('selva_state', issueOAuthState(cookies));
 
 	const authorizationUrl = await oauth.getOAuthAuthorizationUrl(provider, callbackUrl.toString());
-	redirect(303, authorizationUrl);
+	// The identity provider's sign-in page.
+	redirect(303, authorizationUrl, { external: true });
 };

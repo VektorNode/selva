@@ -1,11 +1,16 @@
 <script lang="ts">
-	import { Card, SectionHeader } from '@selvajs/ui';
+	import { page } from '$app/state';
+	import { replaceState } from '$app/navigation';
+	import { Card, SectionHeader, Tabs } from '@selvajs/ui';
 	import { ChevronRight } from '@lucide/svelte';
 	import UpdateSection from './UpdateSection.svelte';
 	import ChannelSection from './ChannelSection.svelte';
 	import HealthSection from './HealthSection.svelte';
 	import NetworkSection from './NetworkSection.svelte';
-	import { pollForRestart, type RestartHealth } from '$lib/update-restart-poll';
+	import ConfigSection from './ConfigSection.svelte';
+	import type { ConfigChange, ConfigReport, KeyRotation } from '@selvajs/platform/config';
+	import type { ConfigCheck } from '#lib/server/config/checks.js';
+	import { pollForRestart, type RestartHealth } from '#lib/update-restart-poll.js';
 
 	interface PageData {
 		canManageUpdates: boolean;
@@ -17,6 +22,13 @@
 			updateAvailable: boolean;
 			nodeCompatibility: { compatible: boolean | null; required: string | null; running: string };
 		};
+		config: {
+			report: ConfigReport;
+			changes: ConfigChange[];
+			rotation: KeyRotation[];
+			proxied: boolean;
+			checks: ConfigCheck[];
+		} | null;
 		flags: {
 			ALLOW_CROSS_ORG_PUBLIC: boolean;
 			ALLOW_ORG_COMPUTE_OVERRIDE: boolean;
@@ -25,7 +37,6 @@
 			ENABLE_SHARING: boolean;
 		};
 		limits: {
-			SOLVE_DEADLINE_MS: number;
 			RATE_LIMIT_WINDOW_MS: number;
 			RATE_LIMIT_MAX_REQUESTS: number;
 			MAX_DEFINITION_FILE_SIZE: number;
@@ -40,6 +51,27 @@
 		};
 	}
 	let { data }: { data: PageData } = $props();
+
+	// One tab per concern instead of one long page. The tab lives in `?tab=` so a link or a
+	// reload lands on the same one.
+	const tabs = $derived(
+		[
+			{ id: 'updates', label: 'Updates', show: data.canManageUpdates },
+			{ id: 'health', label: 'Health & network', show: data.isInstanceAdmin },
+			{ id: 'config', label: 'Configuration', show: true }
+		].filter((t) => t.show)
+	);
+	let requestedTab = $state(page.url.searchParams.get('tab'));
+	const activeTab = $derived(
+		tabs.find((t) => t.id === requestedTab)?.id ?? tabs[0]?.id ?? 'config'
+	);
+
+	function selectTab(id: string) {
+		requestedTab = id;
+		const url = new URL(page.url.href);
+		url.searchParams.set('tab', id);
+		replaceState(url, page.state);
+	}
 
 	function formatBytes(bytes: number): string {
 		if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
@@ -61,29 +93,22 @@
 	}
 
 	// Display metadata for each resolved limit, in render order. The `value`
-	// thunk picks the right unit formatter; `env` is the override var name.
+	// thunk picks the right unit formatter; `env` is the override var name, absent
+	// for limits fixed in code.
 	// `note` is optional and only carries what the label and value can't: a
 	// multiplier, a disable sentinel, what a limit is keyed on. What each var
 	// means belongs in .env.example, not here.
 	const limitRows: Array<{
 		key: keyof PageData['limits'];
 		label: string;
-		env: string;
+		env?: string;
 		value: (l: PageData['limits']) => string;
 		note?: string;
 	}> = [
 		{
-			key: 'SOLVE_DEADLINE_MS',
-			label: 'Solve deadline',
-			env: 'COMPUTE_SOLVE_DEADLINE_MS',
-			value: (l) => formatMs(l.SOLVE_DEADLINE_MS)
-		},
-		{
 			key: 'RATE_LIMIT_MAX_REQUESTS',
 			label: 'Compute rate limit',
-			// Two vars drive this row: the count and the window. Show both so an
-			// operator who wants to change "/ 1.7 min" knows which knob to set.
-			env: 'COMPUTE_RATE_LIMIT_MAX · COMPUTE_RATE_LIMIT_WINDOW_MS',
+			env: 'COMPUTE_RATE_LIMIT_MAX',
 			value: (l) => `${l.RATE_LIMIT_MAX_REQUESTS} / ${formatMs(l.RATE_LIMIT_WINDOW_MS)}`,
 			note: 'Counted per key — a user or a share link.'
 		},
@@ -96,20 +121,17 @@
 		{
 			key: 'MAX_IMAGE_FILE_SIZE',
 			label: 'Max cover image size',
-			env: 'MAX_IMAGE_FILE_SIZE_BYTES',
 			value: (l) => formatBytes(l.MAX_IMAGE_FILE_SIZE)
 		},
 		{
 			key: 'COMPUTE_REQUEST_MAX_BYTES',
 			label: 'Compute request body cap',
-			env: 'COMPUTE_REQUEST_MAX_BYTES',
 			value: (l) => formatBytes(l.COMPUTE_REQUEST_MAX_BYTES),
 			note: 'Inputs plus base64 file values.'
 		},
 		{
 			key: 'COMPUTE_RESPONSE_MAX_BYTES',
 			label: 'Compute response body cap',
-			env: 'COMPUTE_RESPONSE_MAX_BYTES',
 			value: (l) => formatBytes(l.COMPUTE_RESPONSE_MAX_BYTES)
 		},
 		{
@@ -122,13 +144,11 @@
 		{
 			key: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
 			label: 'Remote definition fetch timeout',
-			env: 'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
 			value: (l) => formatMs(l.REMOTE_DEFINITION_FETCH_TIMEOUT_MS)
 		},
 		{
 			key: 'REMOTE_DEFINITION_CACHE_TTL_MS',
 			label: 'Remote definition cache TTL',
-			env: 'REMOTE_DEFINITION_CACHE_TTL_MS',
 			value: (l) => formatMs(l.REMOTE_DEFINITION_CACHE_TTL_MS),
 			note: 'Remote fetches only — uploads are keyed on an immutable version and never go stale.'
 		},
@@ -227,7 +247,7 @@
 	}
 
 	// Poll until the new process is serving. The loop itself lives in
-	// `$lib/update-restart-poll` so it can be tested against a clock and probes
+	// `#lib/update-restart-poll.js` so it can be tested against a clock and probes
 	// that misbehave on demand; this wrapper owns only the `$state` writes.
 	async function waitForAppRestart(previousInstanceId: string | null | undefined) {
 		// The daemonized runner never streams over SSE, so the SSE `restarting`
@@ -355,101 +375,131 @@
 		description="Updates, health checks, and the instance's env-driven configuration."
 	/>
 
-	{#if data.canManageUpdates}
-		<UpdateSection
-			currentVersion={data.version}
-			latestVersion={data.update.latest}
-			updateAvailable={data.update.updateAvailable}
-			channel={data.channel}
-			isRunning={updateRunning}
-			isRestarting={updateRestarting}
-			logs={updateLogs}
-			exitCode={updateExitCode}
-			nodeCompatibility={data.update.nodeCompatibility}
-			onRun={runUpdate}
-		/>
-		{#key data.channel}
-			<ChannelSection channel={data.channel} disabled={updateRunning} />
-		{/key}
-	{/if}
+	<Tabs.Root value={activeTab} onValueChange={selectTab} class="gap-6">
+		<Tabs.List variant="line" class="border-border border-b px-0">
+			{#each tabs as tab (tab.id)}
+				<Tabs.Trigger value={tab.id} variant="line">{tab.label}</Tabs.Trigger>
+			{/each}
+		</Tabs.List>
 
-	{#if data.isInstanceAdmin}
-		<HealthSection />
-		<NetworkSection />
-	{/if}
+		<Tabs.Content value="updates" class="space-y-6">
+			{#if data.canManageUpdates}
+				<UpdateSection
+					currentVersion={data.version}
+					latestVersion={data.update.latest}
+					updateAvailable={data.update.updateAvailable}
+					channel={data.channel}
+					isRunning={updateRunning}
+					isRestarting={updateRestarting}
+					logs={updateLogs}
+					exitCode={updateExitCode}
+					nodeCompatibility={data.update.nodeCompatibility}
+					onRun={runUpdate}
+				/>
+				{#key data.channel}
+					<ChannelSection channel={data.channel} disabled={updateRunning} />
+				{/key}
+			{/if}
+		</Tabs.Content>
 
-	<Card.Root>
-		<Card.Header>
-			<Card.Title class="text-sm font-medium">Configuration</Card.Title>
-			<Card.Description>
-				Flags and limits resolved from the environment. To change one, set the listed variable in
-				your <code class="font-mono text-xs">.env</code> and restart the app.
-				<code class="font-mono text-xs">.env.example</code> documents what each does.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content class="space-y-3">
-			<details class="group rounded-lg border">
-				<summary
-					class="hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
-				>
-					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
-					Platform flags
-					<span class="text-muted-foreground ml-auto font-mono text-xs">{enabledFlagCount} on</span>
-				</summary>
-				<div class="divide-y border-t">
-					{#each Object.entries(data.flags) as [name, value] (name)}
-						<div class="flex items-center justify-between gap-4 px-4 py-2">
-							<div class="min-w-0 flex-1">
-								<code class="text-foreground font-mono text-xs">{name}</code>
-								{#if flagNotes[name as keyof PageData['flags']]}
-									<p class="text-muted-foreground mt-1 text-xs">
-										{flagNotes[name as keyof PageData['flags']]}
-									</p>
-								{/if}
-							</div>
-							<span
-								class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${
-									value
-										? 'border-success/40 bg-success/10 text-success'
-										: 'border-border text-muted-foreground'
-								}`}
+		<Tabs.Content value="health" class="space-y-6">
+			{#if data.isInstanceAdmin}
+				<HealthSection />
+				<NetworkSection />
+			{/if}
+		</Tabs.Content>
+
+		<Tabs.Content value="config">
+			<Card.Root>
+				<Card.Header>
+					<Card.Title class="text-base font-semibold">Configuration</Card.Title>
+					<Card.Description>
+						What this server runs on, and anything that needs fixing. To change a value, run
+						<code class="font-mono text-xs">npx selva config set KEY=VALUE</code> on the server,
+						then
+						<code class="font-mono text-xs">npx selva restart</code>.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="space-y-6">
+					{#if data.config}
+						<ConfigSection
+							report={data.config.report}
+							changes={data.config.changes}
+							rotation={data.config.rotation}
+							proxied={data.config.proxied}
+							checks={data.config.checks}
+						/>
+					{/if}
+
+					<details class="group rounded-lg border">
+						<summary
+							class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold select-none"
+						>
+							<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+							Platform flags
+							<span class="text-muted-foreground ml-auto font-mono text-xs"
+								>{enabledFlagCount} on</span
 							>
-								{value ? 'On' : 'Off'}
-							</span>
+						</summary>
+						<div class="divide-y border-t">
+							{#each Object.entries(data.flags) as [name, value] (name)}
+								<div class="flex items-center justify-between gap-4 px-4 py-3">
+									<div class="min-w-0 flex-1">
+										{#if flagNotes[name as keyof PageData['flags']]}
+											<p class="text-foreground text-sm leading-snug font-medium">
+												{flagNotes[name as keyof PageData['flags']]}
+											</p>
+										{/if}
+										<code class="text-muted-foreground text-2xs mt-1 block font-mono">{name}</code>
+									</div>
+									<span
+										class={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+											value
+												? 'border-success/40 bg-success/10 text-success'
+												: 'border-border text-muted-foreground'
+										}`}
+									>
+										{value ? 'On' : 'Off'}
+									</span>
+								</div>
+							{/each}
 						</div>
-					{/each}
-				</div>
-			</details>
+					</details>
 
-			<details class="group rounded-lg border">
-				<summary
-					class="hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium select-none"
-				>
-					<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
-					Platform limits
-					<span class="text-muted-foreground ml-auto font-mono text-xs">{limitRows.length}</span>
-				</summary>
-				<div class="divide-y border-t">
-					{#each limitRows as row (row.key)}
-						<div class="flex items-start justify-between gap-4 px-4 py-3">
-							<div class="min-w-0 flex-1">
-								<span class="text-foreground text-sm font-medium">{row.label}</span>
-								<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]"
-									>{row.env}</code
-								>
-								{#if row.note}
-									<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
-								{/if}
-							</div>
-							<span
-								class="border-border text-foreground shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide whitespace-nowrap"
+					<details class="group rounded-lg border">
+						<summary
+							class="hover:bg-hover flex cursor-pointer items-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold select-none"
+						>
+							<ChevronRight class="h-4 w-4 shrink-0 transition-transform group-open:rotate-90" />
+							Platform limits
+							<span class="text-muted-foreground ml-auto font-mono text-xs">{limitRows.length}</span
 							>
-								{row.value(data.limits)}
-							</span>
+						</summary>
+						<div class="divide-y border-t">
+							{#each limitRows as row (row.key)}
+								<div class="flex items-start justify-between gap-4 px-4 py-3">
+									<div class="min-w-0 flex-1">
+										<span class="text-foreground text-sm font-medium">{row.label}</span>
+										{#if row.env}
+											<code class="text-muted-foreground mt-0.5 block font-mono text-[10px]"
+												>{row.env}</code
+											>
+										{/if}
+										{#if row.note}
+											<p class="text-muted-foreground mt-1 text-xs">{row.note}</p>
+										{/if}
+									</div>
+									<span
+										class="bg-muted text-foreground shrink-0 rounded-md px-2 py-0.5 font-mono text-xs whitespace-nowrap"
+									>
+										{row.value(data.limits)}
+									</span>
+								</div>
+							{/each}
 						</div>
-					{/each}
-				</div>
-			</details>
-		</Card.Content>
-	</Card.Root>
+					</details>
+				</Card.Content>
+			</Card.Root>
+		</Tabs.Content>
+	</Tabs.Root>
 </div>

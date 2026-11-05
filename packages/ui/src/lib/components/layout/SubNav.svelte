@@ -31,8 +31,8 @@
 			class={[
 				'h-7 px-3 gap-1.5 text-sm font-medium flex items-center rounded-md transition-colors',
 				active
-					? 'bg-accent text-accent-foreground'
-					: 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+					? 'bg-selected text-foreground'
+					: 'text-muted-foreground hover:bg-hover hover:text-foreground'
 			].join(' ')}
 		>
 			{#if item.icon}

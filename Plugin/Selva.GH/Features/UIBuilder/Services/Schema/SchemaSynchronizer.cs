@@ -8,6 +8,7 @@ using Grasshopper;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Special;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Features.ComputeIO.Components;
 using Selva.GH.Features.UIBuilder.Helpers;
@@ -170,6 +171,27 @@ public class SchemaSynchronizer
         return lookup != null && lookup.TryGetValue(id, out var name) ? name : null;
     }
 
+    // Authors group a Set Dynamic Value List or a file component with its inputs and leave the
+    // bake beside it, so a bake in no group takes the group of the component feeding it.
+    // The producer is looked up by the bake's own type: the Dynamic Value List walk passes
+    // through components, so on a file bake it can reach an unrelated Set.
+    private static string ResolveBakeGroupName(Dictionary<Guid, string> lookup, GH_Component bake)
+    {
+        var own = ResolveGroupName(lookup, bake.InstanceGuid);
+        if (own != null)
+        {
+            return own;
+        }
+
+        var producer = ParameterTypeHelper.ClassifyBakeOutputType(bake) switch
+        {
+            "dynamicValueList" => ParameterTypeHelper.FindUpstreamDynamicValueListOutput(bake),
+            "file" => ParameterTypeHelper.FindUpstreamFileOutput(bake),
+            _ => null
+        };
+        return producer != null ? ResolveGroupName(lookup, producer.InstanceGuid) : null;
+    }
+
     /// <summary>
     ///     Determines which context components are "in scope" for the given owner.
     ///     Null when no owner is specified — everything is in scope.
@@ -281,7 +303,7 @@ public class SchemaSynchronizer
                 Nickname = c.Params.Input[0].NickName,
                 Description = "",
                 Type = "file",
-                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
+                GroupName = ResolveBakeGroupName(groupLookup, c)
             });
         }
     }
@@ -324,7 +346,7 @@ public class SchemaSynchronizer
                 Description = "",
                 Type = "dynamicValueList",
                 TargetInputId = ParameterTypeHelper.ResolveDynamicValueListTargetId(c),
-                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
+                GroupName = ResolveBakeGroupName(groupLookup, c)
             });
         }
     }
@@ -357,6 +379,10 @@ public class SchemaSynchronizer
             ExtractTreeAccess(param, input);
             ParameterTypeHelper.ExtractNumberParameterConstraints(param, ghParam, input);
             PopulateAcceptedFormats(param, input);
+            if (input.Type == "geometry")
+            {
+                input.GeometryTypes = GeometryFilter.KindsOf(param);
+            }
 
             inputs.Add(input);
         }
@@ -393,13 +419,20 @@ public class SchemaSynchronizer
             return;
         }
 
+        // A Rhino object's ScriptVariable serialises as a whole 3dm archive, and after a pick the
+        // volatile data is the picked geometry, which would come back as the "default".
+        if (GeometryParamTypes.Contains(input.Type))
+        {
+            return;
+        }
+
         // TODO: handle tree inputs properly (not a priority for now)
         var raw = ExtractFirstScriptVariable(ghParam);
 
         // GH_Colour.ScriptVariable() returns System.Drawing.Color, which Newtonsoft can't
         // serialize on Mono/macOS (throws ArgumentNullException 'key'). Emit hex instead —
         // GetColorParameter parses hex the same way on the way in.
-        input.Default = raw is Color color ? ColorTranslator.ToHtml(color) : raw;
+        input.Default = raw is Color color ? ColorHex.Of(color) : raw;
     }
 
     /// <summary>
@@ -587,7 +620,7 @@ public class SchemaSynchronizer
     ///     and the target input picked in the web builder is written onto the matching
     ///     GH_DynamicValueListOutput so the component stays the source of truth.
     /// </summary>
-    public void ApplyParameterAccessFromSchema(UISchema schema, GH_Document document)
+    public static void ApplyParameterAccessFromSchema(UISchema schema, GH_Document document)
     {
         if (schema?.Layout == null || document == null)
         {
@@ -876,7 +909,8 @@ public class SchemaSynchronizer
         // fighting the canonicalizer and producing spurious "1 parameter removed" churn.
         var toRemove = schema.Outputs
             .Where(o => bakeComponents.TryGetValue(o.Id, out var c)
-                        && !ParameterTypeHelper.IsQualifyingBakeOutput(c))
+                        && !ParameterTypeHelper.IsQualifyingBakeOutput(c)
+                        && !ParameterTypeHelper.IsAwaitingBakeData(c))
             .Select(o => o.Id)
             .ToList();
 

@@ -64,9 +64,6 @@ describe('resolveComputeLimits', () => {
 				expect(
 					resolveComputeLimits({ COMPUTE_RESPONSE_CACHE_MB: '8' }).computeSolveCacheBytes
 				).toBe(8 * MB);
-				expect(
-					resolveComputeLimits({ DEFINITION_CACHE_TTL_MS: '1234' }).remoteDefinitionCacheTtlMs
-				).toBe(1234);
 			});
 
 			it('honours `0` from an old name (a disable, not an absent value)', () => {
@@ -109,35 +106,6 @@ describe('resolveComputeLimits', () => {
 			});
 		});
 
-		describe('renamed solve deadline (2026-08)', () => {
-			it('honours the old name when the new one is unset', () => {
-				expect(resolveComputeLimits({ MAX_SOLVE_DURATION_MS: '45000' }).solveDeadlineMs).toBe(
-					45_000
-				);
-			});
-
-			it('prefers the new name when both are set', () => {
-				expect(
-					resolveComputeLimits({
-						COMPUTE_SOLVE_DEADLINE_MS: '30000',
-						MAX_SOLVE_DURATION_MS: '99000'
-					}).solveDeadlineMs
-				).toBe(30_000);
-			});
-
-			it('warns when falling back to the old name', () => {
-				const warnings: string[] = [];
-				const logger = {
-					debug: () => {},
-					info: () => {},
-					warn: (msg: string) => warnings.push(msg),
-					error: () => {}
-				};
-				resolveComputeLimits({ MAX_SOLVE_DURATION_MS: '45000' }, logger as never);
-				expect(warnings.some((w) => w.includes('Deprecated env var'))).toBe(true);
-			});
-		});
-
 		it('keeps every payload cap under V8 single-string wall (~512 MB)', () => {
 			const limits = resolveComputeLimits({});
 			// A `file` output is base64-embedded and JSON.stringify'd into ONE string;
@@ -169,15 +137,9 @@ describe('resolveComputeLimits', () => {
 	});
 
 	describe('env overrides', () => {
-		it('honors explicit byte overrides', () => {
-			const limits = resolveComputeLimits({
-				MAX_DEFINITION_FILE_SIZE_BYTES: String(1 * MB),
-				COMPUTE_REQUEST_MAX_BYTES: String(2 * MB),
-				COMPUTE_RESPONSE_MAX_BYTES: String(3 * MB)
-			});
+		it('honors an explicit .gh upload cap', () => {
+			const limits = resolveComputeLimits({ MAX_DEFINITION_FILE_SIZE_BYTES: String(1 * MB) });
 			expect(limits.maxDefinitionFileSize).toBe(1 * MB);
-			expect(limits.computeRequestMaxBytes).toBe(2 * MB);
-			expect(limits.computeResponseMaxBytes).toBe(3 * MB);
 		});
 
 		it('is pure — the same env always resolves to the same limits', () => {

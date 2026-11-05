@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/local-provider",
-	"version": "0.15.3",
+	"version": "0.16.0",
 	"description": "Local filesystem, JSON, and HMAC implementations of @selvajs/platform interfaces",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -56,6 +56,11 @@
 			"selva-source": "./src/userProfile/index.ts",
 			"types": "./dist/userProfile/index.d.ts",
 			"import": "./dist/userProfile/index.js"
+		},
+		"./config": {
+			"selva-source": "./src/config.ts",
+			"types": "./dist/config.d.ts",
+			"import": "./dist/config.js"
 		}
 	},
 	"files": [

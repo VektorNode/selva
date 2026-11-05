@@ -15,6 +15,7 @@ public static class DocumentLayoutPass
 	public static IReadOnlyList<Page> Paginate(DocumentLayout layout)
 	{
 		if (layout == null) throw new ArgumentNullException(nameof(layout));
+		using var layoutScope = LayoutCache.Begin();
 
 		var sections = layout.Sections ?? Array.Empty<Section>();
 
@@ -130,7 +131,11 @@ public static class DocumentLayoutPass
 			// distinct → "As shown", none → empty (renders blank instead of leaking the literal
 			// token). A doc-level/manual {scale} still wins. Harvested before chrome resolves so
 			// the title block's {scale} sees it.
-			var tokens = MergeScaleToken(layout.Tokens, HarvestScaleLabel(rp.Layout.RawContents[rp.ContentIndex]) ?? string.Empty);
+			// Fully laid out first: a layout element nested in another (a title block in a sheet grid)
+			// is still unresolved after pagination, and neither the token walk nor the scale harvest
+			// looks inside one.
+			var body = PaginationPass.ResolveBody(rp.Layout.RawContents[rp.ContentIndex], rp.Layout.ContentRect);
+			var tokens = MergeScaleToken(layout.Tokens, HarvestScaleLabel(body) ?? string.Empty);
 			var resolver = new TokenResolver(i + 1, totalPages, rp.Title, rp.SectionTitle, tokens, now, layout.Culture);
 
 			// Substitute into the raw template first, then lay the result out against the band
@@ -138,7 +143,7 @@ public static class DocumentLayoutPass
 			var pageHeader = PaginationPass.ResolveChromeForPage(rp.RawHeader, rp.Layout.HeaderRect, resolver);
 			var pageFooter = PaginationPass.ResolveChromeForPage(rp.RawFooter, rp.Layout.FooterRect, resolver);
 
-			var rawContent = resolver.ResolveTree(rp.Layout.RawContents[rp.ContentIndex]);
+			var rawContent = resolver.ResolveTree(body);
 			var anchoredContent = PaginationPass.AnchorTopLeft(rawContent, rp.Layout.ContentRect);
 			var anchoredHeader = PaginationPass.AnchorChrome(pageHeader, rp.Layout.HeaderRect, rp.HeaderAlign);
 			var anchoredFooter = PaginationPass.AnchorChrome(

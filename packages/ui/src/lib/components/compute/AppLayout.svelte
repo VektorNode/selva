@@ -1,19 +1,24 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import type { UISchema, SupportedTypes, ParameterPreset } from '@selvajs/schemas';
+	import type { LiveSolveState, SolveSettlement } from '@selvajs/solve/client';
 	import type { ActionButton } from '../../types/actionButton';
 	import type { PresetLabels } from '../../types/presetLabels';
-	import { ChevronUp } from '@lucide/svelte';
+	import { ChevronUp, Download, Ellipsis, Upload } from '@lucide/svelte';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import CalculateButton from '../primitives/CalculateButton.svelte';
 	import SolvingIndicator from '../primitives/SolvingIndicator.svelte';
 	import TabLayout from '../preview/TabLayout.svelte';
 	import CollapsedPanelStrip from './CollapsedPanelStrip.svelte';
-	import * as Resizable from '$lib/components/primitives/resizable';
-	import { Button } from '$lib';
+	import * as Resizable from '#lib/components/primitives/resizable/index.js';
+	import * as DropdownMenu from '#lib/components/primitives/dropdown-menu/index.js';
+	import { Button } from '#lib';
 	import ParameterPresetManager from './ParameterPresetManager.svelte';
+	import { runPanelAction } from '../../compute/run-panel-action';
 	import { getLocaleContext } from '../../i18n/localeContext.svelte';
 	import { buildVisibilityMap, isTabVisible, itemKey } from '../../schema/visibility-rules';
+	import { DEFAULT_PRESET_LABELS } from '../../types/presetLabels';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -22,13 +27,39 @@
 
 	interface Props {
 		schema: UISchema;
+		/**
+		 * Whether to draw the 3D viewer. Each host reads its own switch: the plugin's preview
+		 * `viewerOptions.enableLocal`, a Rhino.Compute host `viewerOptions.enableRemote`.
+		 */
+		showViewer: boolean;
 		meshes?: any[];
 		isSolving: boolean;
+		/**
+		 * `createSolvingIndicator(...).show`, not `isSolving`: grows the action row's solve status,
+		 * which would otherwise flash on every sub-second solve.
+		 */
 		showSolvingIndicator?: boolean;
+		/** `createSolvingIndicator(...).slow`: the solve status grows into a card with progress. */
+		solveIsSlow?: boolean;
+		/** The session's live channel: step, count and bar for that card. */
+		live?: LiveSolveState;
+		/** Abort in that card. The host's `SolveMessages` should then take `progressShownByHost`. */
+		onabort?: () => void;
+		/** As passed to `createSolvingIndicator`. */
+		freezesDuringSolve?: boolean;
+		/** @deprecated Ignored: the solving status always sits in the action row. */
+		solvingIndicatorPlacement?: 'floating' | 'inline';
+		/** Rendered above the action row, for a host that keeps the solve's messages in the flow. */
+		solveMessages?: Snippet;
 		hasPendingChanges?: boolean;
 		hasNeverSolved?: boolean;
 		isViewerFullscreen?: boolean;
 		oncalculate?: () => void;
+		/**
+		 * The result for the current inputs, solving if it must (`session.ensureSolved`). Needed
+		 * by `solvesFirst` actions; without it they run straight away.
+		 */
+		ensureSolved?: () => Promise<SolveSettlement>;
 		values: Record<string, unknown>;
 		onValueChange: (id: string, val: SupportedTypes, forceSolve?: boolean) => void | Promise<void>;
 		onLoadValues?: (values: Record<string, unknown>) => void | Promise<void>;
@@ -45,13 +76,20 @@
 
 	let {
 		schema,
+		showViewer: hasViewer,
 		meshes = [],
 		isSolving,
 		showSolvingIndicator = false,
+		solveIsSlow = false,
+		live,
+		onabort,
+		freezesDuringSolve = false,
+		solveMessages,
 		hasPendingChanges = false,
 		hasNeverSolved = false,
 		isViewerFullscreen = $bindable(false),
 		oncalculate = () => {},
+		ensureSolved,
 		values,
 		onValueChange,
 		onLoadValues,
@@ -66,9 +104,11 @@
 		onViewerReady
 	}: Props = $props();
 
-	const hasViewer = $derived(
-		!!(schema?.viewerOptions?.enableLocal || schema?.viewerOptions?.enableRemote)
-	);
+	const presetText = $derived({ ...DEFAULT_PRESET_LABELS, ...presetLabels });
+	let presets = $state<ParameterPresetManager | null>(null);
+	const hasMenu = $derived(showSaveButton || showLoadButton || panelActions.length > 0);
+	const resultIsStale = $derived(hasPendingChanges || hasNeverSolved);
+
 	const shownTabs = $derived(
 		schema.layout.type === 'tabbed'
 			? schema.layout.tabs.filter((tab) => isTabVisible(tab, values))
@@ -106,9 +146,14 @@
 	const isTwoPanelMode = $derived(!hasViewer && hasLeftPanel && hasRightPanel);
 
 	let isMobile = $state(false);
-	let drawerOpen = $state(false);
+	// Half keeps the model visible above the fields so a change can be watched as it solves;
+	// full is for long forms.
+	type DrawerState = 'closed' | 'half' | 'full';
+	let drawer = $state<DrawerState>('closed');
+	const DRAWER_STATES: DrawerState[] = ['closed', 'half', 'full'];
 
-	const activeLeftTabLabel = $derived(leftTabs[0]?.label ?? t.parametersTab);
+	// With several tabs the first tab's name would mislabel whichever one is showing.
+	const drawerLabel = $derived(leftTabs.length === 1 ? leftTabs[0].label : t.parametersTab);
 
 	$effect(() => {
 		const mqMobile = window.matchMedia('(max-width: 639px)');
@@ -119,6 +164,14 @@
 		mqMobile.addEventListener('change', update);
 		return () => mqMobile.removeEventListener('change', update);
 	});
+
+	// Without a viewer there's nothing to sit beside, so a narrow host (a docked Rhino panel) gets
+	// the phone's single edge-to-edge column instead of a card floating in its own margins.
+	const STACK_BELOW_WIDTH = 900;
+	let rootWidth = $state(0);
+	const stacked = $derived(
+		isMobile || (!hasViewer && rootWidth > 0 && rootWidth < STACK_BELOW_WIDTH)
+	);
 
 	let leftCollapsed = $state(false);
 	let rightCollapsed = $state(false);
@@ -136,186 +189,252 @@
 		await onLoadValues?.(loadedValues);
 	}
 
-	let _touchStartY = 0;
+	let touchStartY = 0;
+
+	function stepDrawer(by: number) {
+		const index = DRAWER_STATES.indexOf(drawer) + by;
+		drawer = DRAWER_STATES[Math.max(0, Math.min(DRAWER_STATES.length - 1, index))];
+	}
 
 	function onDrawerTouchStart(e: TouchEvent) {
-		_touchStartY = e.touches[0].clientY;
+		touchStartY = e.touches[0].clientY;
 	}
 
 	function onDrawerTouchEnd(e: TouchEvent) {
-		const deltaY = e.changedTouches[0].clientY - _touchStartY;
+		const deltaY = e.changedTouches[0].clientY - touchStartY;
 		const SWIPE_THRESHOLD = 40;
 		if (Math.abs(deltaY) > SWIPE_THRESHOLD) {
-			drawerOpen = deltaY < 0; // swipe up → open, swipe down → close
+			// Suppresses the click a short swipe can still end in, which would step the drawer twice.
+			e.preventDefault();
+			stepDrawer(deltaY < 0 ? 1 : -1);
 		}
+	}
+
+	// A tap walks closed → half → full → closed.
+	function onDrawerHandleClick() {
+		drawer = drawer === 'full' ? 'closed' : DRAWER_STATES[DRAWER_STATES.indexOf(drawer) + 1];
 	}
 </script>
 
+<!-- Everything but Calculate: saving and loading inputs, then the host's own actions. -->
+{#snippet actionsMenu()}
+	<DropdownMenu.Root>
+		<DropdownMenu.Trigger>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					variant="outline"
+					size="icon-lg"
+					class="shrink-0"
+					title={t.moreActions}
+					aria-label={t.moreActions}
+				>
+					<Ellipsis />
+				</Button>
+			{/snippet}
+		</DropdownMenu.Trigger>
+		<!-- Above the fullscreen viewer, which sits at z-index 10000. -->
+		<DropdownMenu.Content side="top" align="end" sideOffset={6} class="min-w-56 z-10001 w-auto">
+			{#if showSaveButton}
+				<DropdownMenu.Item onSelect={() => presets?.openSave()}>
+					<Download />
+					{presetText.saveMenuItem}
+				</DropdownMenu.Item>
+			{/if}
+			{#if showLoadButton}
+				<DropdownMenu.Item onSelect={() => presets?.openLoad()}>
+					<Upload />
+					{presetText.loadMenuItem}
+				</DropdownMenu.Item>
+			{/if}
+			{#if (showSaveButton || showLoadButton) && panelActions.length > 0}
+				<DropdownMenu.Separator />
+			{/if}
+			{#each panelActions as action (action.id)}
+				{@const hint =
+					action.hint ?? (action.solvesFirst && resultIsStale ? t.calculatesFirst : undefined)}
+				<DropdownMenu.Item
+					disabled={action.disabled}
+					variant={action.variant ?? 'default'}
+					onSelect={() => runPanelAction(action, ensureSolved)}
+					class="items-start"
+				>
+					{#if action.icon}
+						{@const IconComponent = action.icon}
+						<IconComponent class="mt-0.5" />
+					{/if}
+					<span class="flex flex-col">
+						{action.label}
+						{#if hint}
+							<span class="text-xs leading-snug text-muted-foreground">{hint}</span>
+						{/if}
+					</span>
+				</DropdownMenu.Item>
+			{/each}
+		</DropdownMenu.Content>
+	</DropdownMenu.Root>
+{/snippet}
+
+<!-- One primary action and one menu. A definition that solves on every change has no Calculate,
+     so the menu sits alone at the end of the row. -->
+{#snippet footer()}
+	<!-- No wrapper: it would always render (the messages' live region is never empty) and pick up
+	     the drawer footer's row padding, leaving a gap above Calculate with nothing in it. -->
+	{@render solveMessages?.()}
+	{#if schema.instanceSolve === false}
+		<CalculateButton
+			{hasPendingChanges}
+			{hasNeverSolved}
+			{isSolving}
+			{oncalculate}
+			trailing={hasMenu ? actionsMenu : undefined}
+		/>
+	{:else}
+		<div class="mt-3 pb-3 pt-2 px-2 gap-2 flex items-center border-t border-border">
+			<SolvingIndicator
+				{isSolving}
+				show={showSolvingIndicator}
+				slow={solveIsSlow}
+				{live}
+				{onabort}
+				{freezesDuringSolve}
+			/>
+			{#if hasMenu}
+				{@render actionsMenu()}
+			{/if}
+		</div>
+	{/if}
+{/snippet}
+
+<!-- `hostsFooter` marks the one panel that carries the footer. On a phone the footer moves to the
+     drawer's pinned bottom instead. -->
 {#snippet panelContent(
 	panelFilter: 'left' | 'right' | undefined,
 	requestedTabId: string | null,
-	showParameterStateManager = true,
-	showCalculateButton = true
+	hostsFooter = true
 )}
 	<div class="panel-content-wrapper">
 		{#if schema.layout.type === 'tabbed'}
-			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} />
+			<TabLayout {schema} {values} {onValueChange} {panelFilter} {requestedTabId} bare={stacked} />
 		{/if}
-		{#if showParameterStateManager || (!isMobile && showCalculateButton && schema.instanceSolve === false)}
-			<div class="panel-footer px-3">
-				<div class="gap-2 flex flex-wrap items-center justify-center">
-					{#if showParameterStateManager}
-						<ParameterPresetManager
-							{schema}
-							currentValues={values}
-							onLoadValues={handleLoadValues}
-							{showSaveButton}
-							{showLoadButton}
-							{onSaveState}
-							{onListStates}
-							labels={presetLabels}
-						/>
-					{/if}
-					{#each panelActions as action (action.id)}
-						<Button
-							variant={action.variant ?? 'outline'}
-							size={action.size ?? 'sm'}
-							onclick={action.onclick}
-						>
-							{#if action.icon}
-								{@const IconComponent = action.icon}
-								<IconComponent class="mr-2 h-4 w-4" />
-							{/if}
-							{action.label}
-						</Button>
-					{/each}
-				</div>
-				{#if !isMobile && showCalculateButton && schema.instanceSolve === false}
-					<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
-				{/if}
+		{#if hostsFooter && !stacked}
+			<div class="panel-footer px-1">
+				{@render footer()}
 			</div>
 		{/if}
 	</div>
 {/snippet}
 
-<div
+<!-- Pinned under the scrolling fields, so the primary action never sits at the end of a long list. -->
+{#snippet drawerFooter(isInert: boolean)}
+	<div class="drawer-footer" inert={isInert}>
+		{@render footer()}
+	</div>
+{/snippet}
+
+<main
 	data-layout-root
-	class="min-h-0 sm:flex-row sm:py-(--page-py) flex flex-1 flex-col overflow-hidden {leftCollapsed
-		? 'sm:pl-0'
-		: 'sm:pl-(--page-px)'} {rightCollapsed ? 'sm:pr-0' : 'sm:pr-(--page-px)'}"
+	class="min-h-0 flex flex-1 flex-col overflow-hidden {stacked
+		? ''
+		: `sm:flex-row sm:py-2 ${leftCollapsed ? 'sm:pl-0' : 'sm:pl-2'} ${rightCollapsed ? 'sm:pr-0' : 'sm:pr-2'}`}"
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
+	class:mobile-root={stacked}
+	bind:clientWidth={rootWidth}
 >
-	{#if isMobile}
-		{#if hasViewer}
-			<div class="min-h-0 flex flex-1 flex-col">
+	{#if stacked}
+		{#if isMobile && hasViewer}
+			<!-- Ends above the drawer rather than behind it, so the model stays centred in what is
+			     visible. It jumps straight to its new size: animating it would resize the canvas,
+			     and its render targets, on every frame of the drawer's slide. -->
+			<div class="viewer-region" class:viewer-region-raised={drawer !== 'closed'}>
 				<Viewer
 					{meshes}
 					bind:isFullscreen={isViewerFullscreen}
-					{isSolving}
-					isBlurred={drawerOpen}
-					{drawerOpen}
+					drawerOpen={drawer === 'full'}
 					{logoUrl}
 					{onViewerReady}
 					viewerConfig={{
 						...viewerConfig,
-						backgroundColor: schema?.viewerOptions?.backgroundColor,
+						backgroundColor: schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
+						look: schema?.viewerOptions?.look ?? viewerConfig.look,
 						showSceneManager: false
 					}}
 				/>
 			</div>
 
 			<div
-				class="drawer-container"
-				class:drawer-open={drawerOpen}
-				class:drawer-closed={!drawerOpen}
-				style="z-index: 40;"
+				class="drawer-container z-40 rounded-t-xl border-t bg-background shadow-sheet drawer-{drawer}"
 			>
+				<!-- Named by its visible label; aria-expanded carries the open/closed state. -->
 				<button
-					class="drawer-handle-bar"
-					onclick={() => (drawerOpen = !drawerOpen)}
+					class="drawer-handle-bar touch-none"
+					onclick={onDrawerHandleClick}
 					ontouchstart={onDrawerTouchStart}
 					ontouchend={onDrawerTouchEnd}
-					aria-label={drawerOpen ? t.collapsePanel : t.expandPanel}
-					aria-expanded={drawerOpen}
+					aria-expanded={drawer !== 'closed'}
 				>
 					<div class="drawer-pill"></div>
-					<span class="text-sm font-medium ml-2 text-foreground">{activeLeftTabLabel}</span>
+					<span class="text-sm font-medium ml-2 text-foreground">{drawerLabel}</span>
 					<ChevronUp
 						size={16}
-						class="ml-auto text-muted-foreground transition-transform duration-300 {drawerOpen
-							? ''
-							: 'rotate-180'}"
+						class="ml-auto text-muted-foreground transition-transform duration-300 {drawer ===
+						'full'
+							? 'rotate-180'
+							: ''}"
 					/>
 				</button>
 
-				<div class="drawer-content">
-					<div class="px-3 pb-6">
+				<!-- Inert while closed: the fields are clipped out of view, and tabbing into them
+				     would scroll the drawer's insides around behind the handle. -->
+				<div class="drawer-content" inert={drawer === 'closed'}>
+					<div class="px-2 pb-4">
 						{#if hasLeftPanel}
-							{@render panelContent(
-								hasRightPanel ? 'left' : undefined,
-								requestedLeftTabId,
-								!hasRightPanel,
-								false
-							)}
+							{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
 						{/if}
 						{#if hasRightPanel}
-							<div class="my-4 gap-2 flex items-center">
+							<!-- Decorative: the section below names itself with a heading. -->
+							<div class="my-4 gap-2 flex items-center" aria-hidden="true">
 								<div class="h-px flex-1 bg-border"></div>
 								<span class="text-xs font-medium px-1 text-muted-foreground">
 									{rightTabs[0]?.label ?? t.moreTab}
 								</span>
 								<div class="h-px flex-1 bg-border"></div>
 							</div>
-							{@render panelContent('right', requestedRightTabId, true, false)}
+							{@render panelContent('right', requestedRightTabId, false)}
 						{/if}
 					</div>
 				</div>
 
-				{#if schema.instanceSolve === false}
-					<div class="drawer-footer">
-						<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
-					</div>
-				{/if}
+				{@render drawerFooter(drawer === 'closed')}
 			</div>
 		{:else}
 			<div class="flex flex-1 flex-col overflow-hidden">
-				<div class="px-3 pt-3 flex-1 overflow-y-auto">
+				<div class="px-3 pt-3 sm:px-5 flex-1 overflow-y-auto">
 					{#if hasLeftPanel}
-						{@render panelContent(
-							hasRightPanel ? 'left' : undefined,
-							requestedLeftTabId,
-							!hasRightPanel,
-							false
-						)}
+						{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
 					{/if}
 					{#if hasRightPanel}
-						<div class="my-4 gap-2 flex items-center">
+						<div class="my-4 gap-2 flex items-center" aria-hidden="true">
 							<div class="h-px flex-1 bg-border"></div>
 							<span class="text-xs font-medium px-1 text-muted-foreground">
 								{rightTabs[0]?.label ?? t.moreTab}
 							</span>
 							<div class="h-px flex-1 bg-border"></div>
 						</div>
-						{@render panelContent('right', requestedRightTabId, true, false)}
+						{@render panelContent('right', requestedRightTabId, false)}
 					{/if}
 				</div>
-				{#if schema.instanceSolve === false}
-					<div class="drawer-footer">
-						<CalculateButton {hasPendingChanges} {hasNeverSolved} {isSolving} {oncalculate} />
-					</div>
-				{/if}
+				{@render drawerFooter(false)}
 			</div>
 		{/if}
 	{:else if !hasViewer && !isTwoPanelMode && hasLeftPanel !== hasRightPanel}
 		<!-- Single centered panel (left-only or right-only), no viewer -->
-		<div class="min-h-0 flex h-full flex-1 justify-center">
+		<div class="min-h-0 p-1 flex h-full flex-1 justify-center">
 			<div class="min-h-0 flex h-full w-4/5 flex-col">
 				{@render panelContent(
 					hasRightPanel ? 'right' : undefined,
-					hasRightPanel ? requestedRightTabId : requestedLeftTabId,
-					!hasRightPanel,
-					!hasRightPanel
+					hasRightPanel ? requestedRightTabId : requestedLeftTabId
 				)}
 			</div>
 		</div>
@@ -338,7 +457,7 @@
 			<Resizable.PaneGroup
 				direction="horizontal"
 				autoSaveId="selva-layout-{layoutKey}"
-				class="min-h-0 flex-1"
+				class="min-h-0 m-1 flex-1"
 			>
 				{#if hasLeftPanel}
 					<Resizable.Pane
@@ -351,7 +470,6 @@
 						collapsedSize={0}
 						onCollapse={() => (leftCollapsed = true)}
 						onExpand={() => (leftCollapsed = false)}
-						class="ml-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || leftCollapsed
@@ -363,7 +481,8 @@
 					</Resizable.Pane>
 					<Resizable.Handle
 						withHandle
-						class="bg-transparent"
+						line={false}
+						class="translate-x-1.5 z-20"
 						data-collapsed={leftCollapsed}
 						onclick={() => {
 							if (leftCollapsed) leftPaneRef?.expand();
@@ -372,30 +491,34 @@
 				{/if}
 
 				{#if hasViewer}
-					<Resizable.Pane order={2} minSize={20} class="min-h-0 mx-1 flex flex-col">
+					<Resizable.Pane order={2} minSize={20} class="min-h-0 flex flex-col">
 						<Viewer
 							{meshes}
 							bind:isFullscreen={isViewerFullscreen}
-							{isSolving}
 							{logoUrl}
 							{onViewerReady}
 							viewerConfig={{
 								...viewerConfig,
-								backgroundColor: schema?.viewerOptions?.backgroundColor
+								backgroundColor:
+									schema?.viewerOptions?.backgroundColor ?? viewerConfig.backgroundColor,
+								look: schema?.viewerOptions?.look ?? viewerConfig.look
 							}}
 						/>
 					</Resizable.Pane>
 				{/if}
 
 				{#if hasRightPanel}
-					<Resizable.Handle
-						withHandle
-						class="bg-transparent"
-						data-collapsed={rightCollapsed}
-						onclick={() => {
-							if (rightCollapsed) rightPaneRef?.expand();
-						}}
-					/>
+					{#if hasViewer || !hasLeftPanel}
+						<Resizable.Handle
+							withHandle
+							line={false}
+							class="-translate-x-1.5 z-20"
+							data-collapsed={rightCollapsed}
+							onclick={() => {
+								if (rightCollapsed) rightPaneRef?.expand();
+							}}
+						/>
+					{/if}
 					<Resizable.Pane
 						bind:this={rightPaneRef}
 						order={3}
@@ -406,14 +529,13 @@
 						collapsedSize={0}
 						onCollapse={() => (rightCollapsed = true)}
 						onExpand={() => (rightCollapsed = false)}
-						class="mr-1"
 					>
 						<div
 							class="min-h-0 flex h-full flex-col {isViewerFullscreen || rightCollapsed
 								? 'hidden'
 								: ''}"
 						>
-							{@render panelContent('right', requestedRightTabId, !hasLeftPanel, !hasLeftPanel)}
+							{@render panelContent('right', requestedRightTabId, !hasLeftPanel)}
 						</div>
 					</Resizable.Pane>
 				{/if}
@@ -433,9 +555,18 @@
 			{/if}
 		</div>
 	{/if}
-</div>
+</main>
 
-<SolvingIndicator show={showSolvingIndicator} />
+<!-- The save, load and validation dialogs; the footer's menu opens them. -->
+<ParameterPresetManager
+	bind:this={presets}
+	{schema}
+	currentValues={values}
+	onLoadValues={handleLoadValues}
+	{onSaveState}
+	{onListStates}
+	labels={presetLabels}
+/>
 
 <style>
 	.fullscreen-layout {
@@ -460,11 +591,33 @@
 
 	.panel-footer {
 		flex-shrink: 0;
-		padding-top: 1.5rem;
-		padding-bottom: 1rem;
+		padding-top: 0.75rem;
+		padding-bottom: 0.5rem;
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
+	}
+
+	.mobile-root {
+		--drawer-closed-h: 60px;
+		--drawer-half-h: 60%;
+	}
+
+	/* On a phone the panels stack in one scroller. Held at the scroller's height, a long left
+	   panel would spill over the right panel below it. */
+	.mobile-root .panel-content-wrapper {
+		height: auto;
+	}
+
+	.viewer-region {
+		position: absolute;
+		inset: 0 0 var(--drawer-closed-h) 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.viewer-region-raised {
+		bottom: var(--drawer-half-h);
 	}
 
 	.drawer-container {
@@ -472,22 +625,21 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		z-index: 100;
 		display: flex;
 		flex-direction: column;
-		border-radius: 1rem 1rem 0 0;
-		background: var(--background);
-		border-top: 1px solid var(--border);
-		box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
 		transition: height 0.35s cubic-bezier(0.32, 0.72, 0, 1);
 		overflow: hidden;
 	}
 
 	.drawer-closed {
-		height: 60px;
+		height: var(--drawer-closed-h);
 	}
-	.drawer-open {
-		height: 60svh;
+	.drawer-half {
+		height: var(--drawer-half-h);
+	}
+	/* Leaves a strip of the model showing, so the sheet still reads as sitting over the viewer. */
+	.drawer-full {
+		height: calc(100% - 3rem);
 	}
 
 	.drawer-handle-bar {
@@ -530,6 +682,32 @@
 	.drawer-footer {
 		flex-shrink: 0;
 		padding: 0rem 1rem;
-		border-top: 1px solid var(--border);
+	}
+
+	/* The sheet's top edge already separates it from the model; the desktop footer's extra
+	   spacing only takes rows from the fields. */
+	.drawer-footer :global(> div) {
+		margin-top: 0;
+		padding-block: 0.5rem;
+	}
+
+	/* Touch gets 44px targets on the panel's controls; a fine pointer keeps the denser sizes. */
+	@media (pointer: coarse) {
+		.panel-content-wrapper
+			:global(
+				:is(
+					[data-slot='button'],
+					[data-slot='input'],
+					[data-slot='select-trigger'],
+					[data-slot='input-group']
+				)
+			),
+		.drawer-footer :global([data-slot='button']) {
+			min-height: 2.75rem;
+		}
+		.panel-content-wrapper :global([data-slot='input-group'] > [data-slot='input-group-control']) {
+			align-self: stretch;
+			height: auto;
+		}
 	}
 </style>

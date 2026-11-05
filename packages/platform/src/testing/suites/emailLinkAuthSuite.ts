@@ -21,13 +21,11 @@ export interface EmailLinkAuthConformanceOptions {
 	 * with self-signup enabled or disabled — the suite's tests are robust to
 	 * either, since they don't assume new users get created.
 	 *
-	 * `validEmail` is an address the adapter will accept (must pass adapter
-	 * validation; doesn't need to actually receive mail). `invalidEmail` is
-	 * one the adapter must reject as malformed.
+	 * `invalidEmail` is an address the adapter must reject as malformed. A valid
+	 * send isn't tested here: it needs real mail delivery.
 	 */
 	createAdapter: () => Promise<{
 		adapter: IEmailLinkAuth;
-		validEmail: string;
 		invalidEmail: string;
 	}>;
 }
@@ -67,17 +65,8 @@ export function runEmailLinkAuthConformance(opts: EmailLinkAuthConformanceOption
 			);
 			expect(result.ok).toBe(false);
 			if (!result.ok) {
-				expect(['invalid_email', 'rate_limited']).toContain(result.reason);
+				expect(result.reason).toBe('invalid_email');
 			}
 		});
-
-		// `sendMagicLink` for a valid email is intentionally NOT tested here:
-		// it requires real Supabase project credentials with email delivery
-		// enabled, and we'd be asserting on side-effects (mail sent) we can't
-		// observe. Adapter-specific integration tests cover that path.
-		void '';
 	});
-
-	// keep `createAdapter` referenced for adapters that have nothing more to test
-	void createAdapter;
 }

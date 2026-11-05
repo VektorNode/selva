@@ -39,14 +39,22 @@ public sealed class DocumentSolveRuntime
     private readonly GH_Document _document;
     private readonly ComputeCallbackTransport _compute;
 
+    // Per document, not per process: a player session runs a second bridge while the author's
+    // keeps serving its paused document, and each must keep its own live events.
+    private volatile Action<SolveEvent> _localTransport;
+
     private string _localSolveId = "local";
     private int _localSeq;
 
     // The finished solution's verdict, collected once. Cleared at SolutionStart.
     private SolveDiagnostics _verdict;
 
+    // What this solution runs, for the slowest list at its end.
+    private List<IGH_ActiveObject> _expiredAtStart = new List<IGH_ActiveObject>();
+
     private readonly StepProgress _steps = new StepProgress();
     private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly AbortArm _abortAtStart;
 
     /// <summary>The one bar Report Progress components share.</summary>
     private const string StepsSource = "steps";
@@ -54,6 +62,7 @@ public sealed class DocumentSolveRuntime
     internal DocumentSolveRuntime(GH_Document document)
     {
         _document = document;
+        _abortAtStart = new AbortArm(() => _clock.ElapsedMilliseconds);
         _compute = new ComputeCallbackTransport(document.RequestAbortSolution);
 
         // Subscribed once per document, not per solve: compute.geometry caches the live
@@ -64,12 +73,27 @@ public sealed class DocumentSolveRuntime
     }
 
     /// <summary>
+    ///     Points this document's events at a local bridge. The bridge attaches when its WebSocket
+    ///     server starts and detaches before the socket closes.
+    /// </summary>
+    public void AttachLocalTransport(Action<SolveEvent> send) => _localTransport = send;
+
+    /// <summary>Only if <paramref name="send" /> is still the one attached: a newer bridge may have replaced it.</summary>
+    public void DetachLocalTransport(Action<SolveEvent> send)
+    {
+        if (_localTransport == send)
+        {
+            _localTransport = null;
+        }
+    }
+
+    /// <summary>
     ///     Starts the Compute-side session early (heartbeat, abort polling) without emitting
     ///     anything, so an abort can reach a definition that never emits. No-op outside Compute.
     /// </summary>
     public void EnsureHooked()
     {
-        if (SolveRuntimes.LocalTransport != null || !HeadlessGuard.IsHeadless) return;
+        if (_localTransport != null || !HeadlessGuard.IsHeadless) return;
         _compute.EnsureSession(ReadCallbackTarget());
     }
 
@@ -104,7 +128,8 @@ public sealed class DocumentSolveRuntime
     /// <param name="skipped">It got no data, so the step it describes will not run either.</param>
     public void ReportStep(Guid reporterId, string message, bool skipped)
     {
-        var snapshot = _steps.Step(reporterId, message, skipped, _clock.ElapsedMilliseconds);
+        var snapshot = _steps.Step(reporterId, message, skipped, _clock.ElapsedMilliseconds,
+            _document.AbortRequested);
         if (snapshot is not StepProgress.Snapshot s) return;
         var payload = ProgressFields(StepsSource, s.Fraction, s.Step, s.Total, s.Label);
         payload["nextFraction"] = s.NextFraction;
@@ -120,7 +145,7 @@ public sealed class DocumentSolveRuntime
     {
         if (string.IsNullOrEmpty(type)) return;
 
-        var local = SolveRuntimes.LocalTransport;
+        var local = _localTransport;
         if (local != null)
         {
             try
@@ -154,6 +179,13 @@ public sealed class DocumentSolveRuntime
     public void RequestAbort() => _document.RequestAbortSolution();
 
     /// <summary>
+    ///     For a cancel that lands after a solve is scheduled and before it starts, where
+    ///     <see cref="RequestAbort" /> would be wiped by the start. Callers must arm only while a solve
+    ///     is scheduled: a cancel while idle would abort some later, unrelated solve.
+    /// </summary>
+    public void AbortAtNextStart() => _abortAtStart.Arm();
+
+    /// <summary>
     ///     What the last finished solution reported, and whether its outputs may be shown.
     ///     Collected on first ask after SolutionEnd and kept until the next solution starts, so
     ///     the live <c>solveEnded</c>, the outputs envelope and Compute's constant agree.
@@ -167,6 +199,11 @@ public sealed class DocumentSolveRuntime
         _localSolveId = Guid.NewGuid().ToString("N");
         Interlocked.Exchange(ref _localSeq, 0);
         _verdict = null;
+
+        if (_abortAtStart.Consume())
+        {
+            _document.RequestAbortSolution();
+        }
 
         // A step re-runs whenever any of its inputs changed, not only the one its reporter sits on
         // (a delay slider feeding the step directly). Re-run that reporter too, or the step runs
@@ -182,6 +219,12 @@ public sealed class DocumentSolveRuntime
             if (stepExpired) reporter.ExpireSolution(false);
         }
 
+        // A component that doesn't run keeps the ProcessorTime of the solve it last ran in, so only
+        // the ones expired now are timed at the end.
+        _expiredAtStart = _document.Objects.OfType<IGH_ActiveObject>()
+            .Where(o => o.Phase == GH_SolutionPhase.Blank)
+            .ToList();
+
         // Expired now means it will run this solution; the rest keep last solution's data.
         _steps.Begin(reporters
             .Where(r => r.Phase == GH_SolutionPhase.Blank)
@@ -189,7 +232,7 @@ public sealed class DocumentSolveRuntime
 
         // On Compute the Selva server emits start and end itself: it knows about the solve
         // before Grasshopper does (queueing) and after (a failed request).
-        if (SolveRuntimes.LocalTransport != null)
+        if (_localTransport != null)
         {
             Emit(SolveEventKinds.SolveStarted, new Dictionary<string, object>());
         }
@@ -197,11 +240,18 @@ public sealed class DocumentSolveRuntime
 
     private void OnSolutionEnd(object sender, GH_SolutionEventArgs e)
     {
+        // Armed just after the start it was meant for: it must not carry over to the next solve.
+        _abortAtStart.Clear();
+
         _steps.End(_clock.ElapsedMilliseconds, learn: !_document.AbortRequested);
 
-        if (SolveRuntimes.LocalTransport != null)
+        if (_localTransport != null)
         {
-            Emit(SolveEventKinds.SolveEnded, new Dictionary<string, object> { ["kind"] = Verdict().EndedKind });
+            Emit(SolveEventKinds.SolveEnded, new Dictionary<string, object>
+            {
+                ["kind"] = Verdict().EndedKind,
+                ["slowest"] = Slowest()
+            });
             return;
         }
 
@@ -209,6 +259,17 @@ public sealed class DocumentSolveRuntime
         _compute.OnSolutionEnd();
         WriteOutcomeConstant();
     }
+
+    // Where a slow solve spends its time, for whoever authors the definition. Under a
+    // millisecond is noise.
+    private List<Dictionary<string, object>> Slowest() =>
+        _expiredAtStart
+            .Select(o => (o.NickName, Ms: o.ProcessorTime.TotalMilliseconds))
+            .Where(x => x.Ms >= 1)
+            .OrderByDescending(x => x.Ms)
+            .Take(5)
+            .Select(x => new Dictionary<string, object> { ["source"] = x.NickName, ["ms"] = Math.Round(x.Ms) })
+            .ToList();
 
     private void WriteOutcomeConstant()
     {

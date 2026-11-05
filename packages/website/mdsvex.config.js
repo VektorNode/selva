@@ -1,0 +1,69 @@
+import rehypeSlug from 'rehype-slug';
+import rehypeAutolinkHeadings from 'rehype-autolink-headings';
+import rehypeMermaid from 'rehype-mermaid';
+import rehypeDocLinks from './rehype-doc-links.js';
+import remarkMermaidBlock from './remark-mermaid-block.js';
+import rehypeMermaidSvgHtml from './rehype-mermaid-svg-html.js';
+
+/** @type {import('mdsvex').MdsvexOptions} */
+export const mdsvexOptions = {
+	extensions: ['.md'],
+	// remarkMermaidBlock turns ```mermaid fences into real HAST elements (bypassing
+	// the syntax highlighter); rehypeMermaid then renders them to inline SVG at build
+	// time via Playwright — no client-side JS.
+	remarkPlugins: [remarkMermaidBlock],
+	rehypePlugins: [
+		[
+			rehypeMermaid,
+			{
+				strategy: 'inline-svg',
+				// Themed to the site's dark forest palette (hex equivalents of the
+				// oklch theme tokens — mermaid doesn't accept oklch).
+				mermaidConfig: {
+					theme: 'base',
+					themeVariables: {
+						darkMode: true,
+						background: '#16201a',
+						fontFamily: 'inherit',
+						primaryColor: '#1e2a22', // node fill (card)
+						primaryBorderColor: '#7cc47f', // node border (primary green)
+						primaryTextColor: '#e8ebe3', // node text (foreground)
+						secondaryColor: '#1e2a22',
+						tertiaryColor: '#16201a', // subgraph fill (background)
+						tertiaryBorderColor: '#6f8073', // subgraph border
+						tertiaryTextColor: '#e8ebe3',
+						lineColor: '#7cc47f', // edges
+						textColor: '#e8ebe3',
+						clusterBkg: '#16201a',
+						clusterBorder: '#6f8073',
+						edgeLabelBackground: '#16201a'
+					}
+				}
+			}
+		],
+		rehypeMermaidSvgHtml,
+		rehypeDocLinks,
+		rehypeSlug,
+		[rehypeAutolinkHeadings, { behavior: 'append' }]
+	],
+	highlight: {
+		// Shiki via mdsvex's built-in highlighter, themed dark to match the site.
+		highlighter: async (code, lang = 'text') => {
+			const { codeToHtml, bundledLanguages } = await import('shiki');
+			// Fall back to plaintext for languages Shiki doesn't bundle (e.g. caddyfile).
+			const safeLang = lang in bundledLanguages ? lang : 'text';
+			const shiki = await codeToHtml(code, { lang: safeLang, theme: 'github-dark' });
+			// Wrap in a container and stash the raw source (base64, so quotes/braces
+			// can't break the markup) for the client-side copy button to read back.
+			const encoded = Buffer.from(code, 'utf-8').toString('base64');
+			const html = `<div class="code-block" data-code="${encoded}">${shiki}<button type="button" class="code-copy" aria-label="Copy code">Copy</button></div>`;
+			// Escape curly braces so Svelte doesn't treat them as expressions.
+			const escaped = html.replace(/[{}]/g, (c) => (c === '{' ? '&#123;' : '&#125;'));
+			// Backslash first, or it re-escapes the escapes added below. A code
+			// fence ending in `\` would otherwise close the template literal early
+			// and break the build with an error pointing nowhere near the doc.
+			const literal = escaped.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+			return `{@html \`${literal}\`}`;
+		}
+	}
+};

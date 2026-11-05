@@ -4,20 +4,19 @@ import type { InputParam } from './inputs';
 
 import type { InputParamSchema, OutputParamSchema } from './schema';
 
-/**
- * Parsed input/output structure with raw schemas.
- *
- * `loadWarnings` / `loadErrors` carry the server's definition-load diagnostics
- * (missing plugin, broken component, etc.) from the `/io` response. They are
- * distinct from per-input parse failures (`InputParseError`): these come from
- * the server loading the definition, those from the client typing an input.
- */
+/** Input/output schemas as the `/io` endpoint reports them, keys canonicalized. */
 export interface GrasshopperParsedIORaw {
 	inputs: InputParamSchema[];
 	outputs: OutputParamSchema[];
-	/** Server-side definition-load warnings, if any. */
+	/**
+	 * Warnings the server raised loading the definition (e.g. an obsolete
+	 * component). Distinct from `parseErrors`, the client failing to type an input.
+	 */
 	loadWarnings?: string[];
-	/** Server-side definition-load errors, if any (e.g. missing plugin). */
+	/**
+	 * Errors the server raised loading the definition (e.g. a missing plugin).
+	 * When present, `inputs`/`outputs` may be incomplete.
+	 */
 	loadErrors?: string[];
 }
 
@@ -38,27 +37,12 @@ export interface InputParseError {
 	code?: string;
 }
 
-/**
- * Parsed input/output structure with processed types.
- *
- * `parseErrors` is populated when one or more inputs failed validation and
- * fell back to a safe default. The result is still usable, but the UI should
- * surface these so the user can fix their definition.
- */
-export interface GrasshopperParsedIO {
+/** {@link GrasshopperParsedIORaw} with each input parsed into its typed {@link InputParam}. */
+export interface GrasshopperParsedIO extends Omit<GrasshopperParsedIORaw, 'inputs'> {
 	inputs: InputParam[];
-	outputs: OutputParamSchema[];
+	/**
+	 * Inputs that failed validation and got a safe default. The result is still
+	 * usable, but surface these so the user can fix their definition.
+	 */
 	parseErrors?: InputParseError[];
-	/**
-	 * Server-side definition-load warnings from the `/io` response (e.g. an
-	 * obsolete component). Surface these so the user understands a degraded IO
-	 * list. Distinct from `parseErrors` (client-side input typing failures).
-	 */
-	loadWarnings?: string[];
-	/**
-	 * Server-side definition-load errors from the `/io` response (e.g. a missing
-	 * plugin that left inputs unresolved). When present, the inputs/outputs may
-	 * be incomplete — the user needs to fix their server/definition.
-	 */
-	loadErrors?: string[];
 }

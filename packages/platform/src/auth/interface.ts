@@ -34,9 +34,8 @@ export interface IPasswordAuth {
  *      `getOAuthAuthorizationUrl` and 303s to the result.
  *   2. IdP redirects back to `/auth/{provider}/callback?code=...` → server
  *      calls `exchangeOAuthCode` to mint the session pair.
- *   3. When the access token expires, session-refresh middleware in
- *      `hooks.server.ts` calls `refreshSession` to swap in a fresh pair
- *      without bouncing the user.
+ *
+ * Keeping the session alive afterwards is `ISessionRefresh`'s job.
  *
  * Each method returns `null` rather than throwing on irrecoverable
  * credential failures, so the route layer can pick the right HTTP shape
@@ -70,24 +69,6 @@ export interface IOAuthAuth {
 	 */
 	exchangeOAuthCode(code: string): Promise<{
 		user: AuthUser;
-		sessionToken: string;
-		refreshToken: string;
-	} | null>;
-
-	/**
-	 * Swap a refresh token for a fresh access/refresh pair. Returns null on
-	 * irrecoverable failure (revoked, expired, signed by a different secret);
-	 * the session-refresh middleware treats null as "force re-login" by
-	 * clearing the refresh cookie.
-	 *
-	 * @deprecated Session refresh is session lifecycle, not OAuth — a consumer
-	 * that brokers no OAuth still needs it (refreshing a password session, or
-	 * revoking on logout). Moved to `IAuthProvider.sessionRefresh`
-	 * (`ISessionRefresh`). This member delegates for one release and will be
-	 * removed in the next minor; migrate callers to
-	 * `auth.sessionRefresh?.refreshSession(...)`.
-	 */
-	refreshSession(refreshToken: string): Promise<{
 		sessionToken: string;
 		refreshToken: string;
 	} | null>;
@@ -241,6 +222,32 @@ export interface IProxyAuth {
 	readonly configuredHeaderNames: readonly string[];
 }
 
+export type DelegatedSessionStatus = { ok: true } | { ok: false; message: string };
+
+/**
+ * Signs a short-lived session for a user without their credentials, so an API
+ * token request runs under the same row security as that user's browser
+ * session. Only providers whose stores scope queries by a user session need
+ * it; without it their stores see an anonymous caller.
+ *
+ * Nothing can revoke a minted session before it expires, so callers must
+ * re-check the user (disabled, still a member) before every `mint`.
+ */
+export interface IDelegatedSession {
+	/**
+	 * Whether minting works with the configured key. A failure switches API
+	 * tokens off; browser sign-in is unaffected.
+	 */
+	status(): Promise<DelegatedSessionStatus>;
+
+	/**
+	 * A session token acting as `userId` inside `orgId`, valid for `ttlSeconds`
+	 * (default 60 s). It carries no instance-admin rights, whatever the user holds: those
+	 * never ride on a bearer key. Throws if `status` isn't ok.
+	 */
+	mint(userId: string, opts: { orgId: string }): Promise<string>;
+}
+
 /**
  * Authentication provider — identity verification only. Profile state lives
  * in `IUserProfileStore`, platform permissions in `IPlatformPermissionStore`,
@@ -281,6 +288,12 @@ export interface IAuthProvider {
 	 * the logout button — Selva has no session to destroy.
 	 */
 	readonly proxyAuth?: IProxyAuth;
+
+	/**
+	 * Present for providers whose data stores scope by a user session (row
+	 * security). API token requests use it to act as the token's owner.
+	 */
+	readonly delegatedSession?: IDelegatedSession;
 
 	/** Verify a token (session cookie, JWT, ID token, etc.); null if invalid or expired. */
 	verifyToken(token: string): Promise<AuthUser | null>;

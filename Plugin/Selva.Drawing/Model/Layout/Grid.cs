@@ -79,7 +79,7 @@ public sealed class Grid : LayoutElement
 		public BoundingBox[] CellBounds;          // parallel to Cells
 	}
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var (layout, total) = ComputeLayout(context);
 		var children = new List<DrawElement>(layout.ResolvedCells.Length);

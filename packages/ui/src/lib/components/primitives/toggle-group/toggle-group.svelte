@@ -1,0 +1,75 @@
+<script lang="ts" module>
+	import { getContext, setContext } from 'svelte';
+	import { toggleVariants } from '#lib/components/primitives/toggle/index.js';
+	import type { VariantProps } from 'tailwind-variants';
+
+	type ToggleVariants = VariantProps<typeof toggleVariants>;
+
+	interface ToggleGroupContext extends ToggleVariants {
+		spacing?: number;
+		orientation?: 'horizontal' | 'vertical';
+	}
+
+	export function setToggleGroupCtx(props: ToggleGroupContext) {
+		setContext('toggleGroup', props);
+	}
+
+	export function getToggleGroupCtx() {
+		return getContext<Required<ToggleGroupContext>>('toggleGroup');
+	}
+</script>
+
+<script lang="ts">
+	import { ToggleGroup as ToggleGroupPrimitive } from 'bits-ui';
+	import { cn } from '#lib/utils.js';
+
+	let {
+		ref = $bindable(null),
+		value = $bindable(),
+		class: className,
+		size = 'default',
+		spacing = 0,
+		orientation = 'horizontal',
+		variant = 'default',
+		...restProps
+	}: ToggleGroupPrimitive.RootProps &
+		ToggleVariants & {
+			spacing?: number;
+			orientation?: 'horizontal' | 'vertical';
+		} = $props();
+
+	setToggleGroupCtx({
+		get variant() {
+			return variant;
+		},
+		get size() {
+			return size;
+		},
+		get spacing() {
+			return spacing;
+		},
+		get orientation() {
+			return orientation;
+		}
+	});
+</script>
+
+<!--
+Discriminated Unions + Destructing (required for bindable) do not
+get along, so we shut typescript up by casting `value` to `never`.
+-->
+<ToggleGroupPrimitive.Root
+	bind:value={value as never}
+	bind:ref
+	{orientation}
+	data-slot="toggle-group"
+	data-variant={variant}
+	data-size={size}
+	data-spacing={spacing}
+	style="--gap: calc(var(--spacing) * {spacing})"
+	class={cn(
+		'group/toggle-group data-[variant=segmented]:p-0.5 flex w-fit flex-row items-center gap-(--gap) rounded-md data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch data-[variant=segmented]:rounded-lg data-[variant=segmented]:border data-[variant=segmented]:border-input data-[variant=segmented]:bg-muted',
+		className
+	)}
+	{...restProps}
+/>

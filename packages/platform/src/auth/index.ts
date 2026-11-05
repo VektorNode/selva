@@ -5,5 +5,7 @@ export type {
 	ISessionRefresh,
 	IPasswordAuth,
 	IEmailLinkAuth,
-	IProxyAuth
+	IProxyAuth,
+	IDelegatedSession,
+	DelegatedSessionStatus
 } from './interface.js';

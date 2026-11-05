@@ -1,4 +1,7 @@
-export type PlatformProjectGranteeType = 'org' | 'user';
+import type { z } from 'zod';
+import type { PlatformProjectGranteeTypeSchema } from './schemas.js';
+
+export type PlatformProjectGranteeType = z.infer<typeof PlatformProjectGranteeTypeSchema>;
 
 /**
  * Grants view-only or view+solve access to a `platform`-visibility project

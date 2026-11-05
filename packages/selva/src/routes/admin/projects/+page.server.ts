@@ -2,7 +2,7 @@ import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Organization, Project } from '@selvajs/platform';
 import { hasPermission, SYSTEM_CONTEXT } from '@selvajs/platform';
-import { flag, getOrganizationProvider, getProjectProvider } from '$lib/server/providers.server';
+import { flag, getOrganizationProvider, getProjectProvider } from '#lib/server/providers.server.js';
 
 export interface PlatformProjectRow extends Project {
 	hostOrgName: string;

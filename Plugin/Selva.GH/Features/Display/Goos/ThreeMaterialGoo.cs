@@ -136,7 +136,30 @@ public class ThreeMaterialGoo : IGH_Goo
             return "ThreeMaterial (null)";
         }
 
-        return
+        var text =
             $"ThreeMaterial: color={Value.Color}, metalness={Value.Metalness}, roughness={Value.Roughness}, opacity={Value.Opacity}, transparent={Value.Transparent}";
+
+        text += Describe("map", Value.Map) + Describe("roughnessMap", Value.RoughnessMap) +
+                Describe("normalMap", Value.NormalMap);
+        if (Value.MapSize != null) text += $", mapSize={Value.MapSize}";
+        if (!string.IsNullOrEmpty(Value.Finish)) text += $", finish={Value.Finish}";
+        if (Value.Emissive != null) text += $", emissive={Value.Emissive}";
+        if (Value.Clearcoat != null) text += $", clearcoat={Value.Clearcoat}";
+        if (Value.Anisotropy != null) text += $", anisotropy={Value.Anisotropy}";
+        if (Value.Transmission != null) text += $", transmission={Value.Transmission}";
+        if (Value.Thickness != null) text += $", thickness={Value.Thickness}";
+        if (Value.AttenuationColor != null) text += $", tint={Value.AttenuationColor}";
+        if (Value.Sheen != null) text += $", sheen={Value.Sheen}";
+        return text;
+    }
+
+    // Data URIs are whole images; keep the readout short.
+    private static string Describe(string name, string reference)
+    {
+        if (string.IsNullOrEmpty(reference)) return string.Empty;
+        var shown = reference.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+            ? "data URI"
+            : reference.Length > 60 ? "..." + reference.Substring(reference.Length - 57) : reference;
+        return $", {name}={shown}";
     }
 }

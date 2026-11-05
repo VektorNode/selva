@@ -1,11 +1,10 @@
 <script lang="ts">
 	import type { UISchema, SupportedTypes } from '@selvajs/schemas';
-	import * as Card from '$lib/components/primitives/card';
-	import * as Tabs from '$lib/components/primitives/tabs';
+	import * as Tabs from '#lib/components/primitives/tabs/index.js';
 	import TabBar from './TabBar.svelte';
 	import TabContent from './TabContent.svelte';
-	import { isTabVisible } from '$lib/schema/visibility-rules';
-	import { buildDynamicValueListOptions } from '$lib/schema/dynamic-value-list';
+	import { isTabVisible } from '#lib/schema/visibility-rules.js';
+	import { buildDynamicValueListOptions } from '#lib/schema/dynamic-value-list.js';
 
 	interface Props {
 		schema: UISchema;
@@ -15,9 +14,21 @@
 		panelFilter?: 'left' | 'right';
 		/** Externally request a specific tab to be active (e.g. from collapsed strip click) */
 		requestedTabId?: string | null;
+		/**
+		 * Drops the card frame and the tab's own scroll area, for a container that already frames
+		 * and scrolls it (the phone drawer). Nested, the inner scroll gets only a sliver of height.
+		 */
+		bare?: boolean;
 	}
 
-	let { schema, values, onValueChange, panelFilter, requestedTabId = null }: Props = $props();
+	let {
+		schema,
+		values,
+		onValueChange,
+		panelFilter,
+		requestedTabId = null,
+		bare = false
+	}: Props = $props();
 
 	let activeTabId = $state('');
 	let collapsedGroups = $state<Record<string, boolean>>({});
@@ -66,10 +77,10 @@
 	}
 </script>
 
-<Card.Root class="pt-1 min-h-0 mx-1 flex flex-1 flex-col overflow-hidden">
-	<Tabs.Root value={activeTabId} class="gap-0 min-h-0 flex flex-1 flex-col">
+{#snippet tabs()}
+	<Tabs.Root value={activeTabId} variant="line" class="min-h-0 flex-1">
 		{#if showTabBar}
-			<TabBar tabs={visibleTabs} onTabChange={handleTabChange} />
+			<TabBar tabs={visibleTabs} {activeTabId} onTabChange={handleTabChange} {bare} />
 		{/if}
 
 		{#each visibleTabs as tab (tab.id)}
@@ -82,7 +93,17 @@
 				inputs={schema.inputs}
 				outputs={schema.outputs}
 				{dynamicOptions}
+				assets={schema.assets}
+				{bare}
 			/>
 		{/each}
 	</Tabs.Root>
-</Card.Root>
+{/snippet}
+
+{#if bare}
+	{@render tabs()}
+{:else}
+	<div class="min-h-0 flex flex-1 flex-col">
+		{@render tabs()}
+	</div>
+{/if}

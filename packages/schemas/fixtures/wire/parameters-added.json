@@ -19,7 +19,8 @@
 				"treeAccess": false,
 				"options": null,
 				"acceptedFormats": [],
-				"groupName": null
+				"groupName": null,
+				"geometryTypes": []
 			}
 		],
 		"outputs": [

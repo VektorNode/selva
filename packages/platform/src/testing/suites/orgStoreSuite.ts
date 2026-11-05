@@ -25,6 +25,11 @@ export interface OrgStoreConformanceOptions {
 	 * actually stored — callers use that, not the suggested one.
 	 */
 	seedUser?: SeedUserFn;
+	/**
+	 * Seeds the other party in the ctx-isolation cases. Needed where `seedUser` makes
+	 * instance admins, who see everything by design.
+	 */
+	seedOutsider?: SeedUserFn;
 	/** If true, skip createOrg/deleteOrg tests (e.g. single-org providers). */
 	singleOrgMode?: boolean;
 	/** If true, run ctx-isolation tests (adapters with row-level security). */
@@ -76,11 +81,13 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 		name,
 		createStore,
 		seedUser = noopSeedUser,
+		seedOutsider = seedUser,
 		singleOrgMode = false,
 		ctxIsolation = false,
 		createCompanionStores
 	} = opts;
 	const { seed, ctx } = makeSeedHelpers(seedUser);
+	const outsider = makeSeedHelpers(seedOutsider);
 
 	describe(`IOrgStore conformance: ${name}`, () => {
 		// ============================================================================
@@ -170,7 +177,7 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 				expect(page.nextCursor).toBeTruthy();
 			});
 		} else {
-			it('getOrg returns the default organization', async () => {
+			it('listOrgs returns the default organization', async () => {
 				const store = await createStore();
 				const u1 = await seed();
 				const orgs = await store.listOrgs(ctx(u1));
@@ -252,6 +259,29 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			await store.updateOrgMemberRole(ctx(u1), orgId, u2, 'admin');
 			const got = await store.getOrgMember(ctx(u1), orgId, u2);
 			expect(got?.role).toBe('admin');
+		});
+
+		it('updateOrgMemberPermissions replaces the set and leaves the role', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const u2 = await seed();
+			await store.addOrgMember(ctx(u1), member(orgId, u2));
+			const before = await store.getOrgMember(ctx(u1), orgId, u2);
+
+			await store.updateOrgMemberPermissions(ctx(u1), orgId, u2, ['manage_projects']);
+
+			const after = await store.getOrgMember(ctx(u1), orgId, u2);
+			expect(after?.permissions).toEqual(['manage_projects']);
+			expect(after?.role).toBe(before?.role);
+		});
+
+		it('removeOrgMember throws 404 for someone who is not a member', async () => {
+			const store = await createStore();
+			const { u1, orgId } = await setupOrg(store);
+			const stranger = await seed();
+			await expect(store.removeOrgMember(ctx(u1), orgId, stranger)).rejects.toMatchObject({
+				statusCode: 404
+			});
 		});
 
 		it('removeOrgMember deletes the member', async () => {
@@ -433,28 +463,28 @@ export function runOrgStoreConformance(opts: OrgStoreConformanceOptions): void {
 			it('ctx isolation: orgs created by one user are not visible to another', async () => {
 				const store = await createStore();
 				const userA = await seed();
-				const userB = await seed();
+				const userB = await outsider.seed();
 				const orgA = makeUuid();
 				await store.createOrg(
 					ctx(userA),
 					org(userA, { id: orgA, slug: `org-a-${orgA.slice(0, 8)}` })
 				);
 
-				const page = await store.listOrgs(ctx(userB));
+				const page = await store.listOrgs(outsider.ctx(userB));
 				expect(page.items.map((o) => o.id)).not.toContain(orgA);
 			});
 
 			it('ctx isolation: user cannot get an org they do not own', async () => {
 				const store = await createStore();
 				const userA = await seed();
-				const userB = await seed();
+				const userB = await outsider.seed();
 				const orgA = makeUuid();
 				await store.createOrg(
 					ctx(userA),
 					org(userA, { id: orgA, slug: `org-a-${orgA.slice(0, 8)}` })
 				);
 
-				const got = await store.getOrg(ctx(userB), orgA);
+				const got = await store.getOrg(outsider.ctx(userB), orgA);
 				expect(got).toBeNull();
 			});
 		}

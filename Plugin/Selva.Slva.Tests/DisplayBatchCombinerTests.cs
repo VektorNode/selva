@@ -47,6 +47,15 @@ public class DisplayBatchCombinerTests
             });
     }
 
+    /// <summary>The batch as a file stores it and a loader returns it: blob carrying the units.</summary>
+    private static DisplayBatch LoadedFrom(DisplayBatch batch, string modelUnits)
+    {
+        using var ms = new System.IO.MemoryStream();
+        SlvmFile.Write(ms, batch, modelUnits);
+        ms.Position = 0;
+        return SlvmFile.Read(ms);
+    }
+
     private static List<MeshMetadata> AllMeshes(DisplayBatch batch)
     {
         return batch.Groups.SelectMany(g => g.Meshes).ToList();
@@ -295,5 +304,17 @@ public class DisplayBatchCombinerTests
         Assert.Equal(2, AllMeshes(reread.Batch).Count);
         Assert.Equal(new[] { "src-A/{0}/0", "src-B/{0}/0" },
             AllMeshes(reread.Batch).Select(m => m.Id));
+    }
+
+    [Fact]
+    public void Combine_ReportsTheDistinctUnitsOfItsInputs()
+    {
+        var mm = LoadedFrom(QuadBatch(0, 0, Material(Color.Red), "a", "src/a"), "Millimeters");
+        var mm2 = LoadedFrom(QuadBatch(2, 0, Material(Color.Red), "b", "src/b"), "Millimeters");
+        var live = QuadBatch(4, 0, Material(Color.Red), "c", "src/c");
+
+        var result = DisplayBatchCombiner.Combine(new[] { mm, mm2, live });
+
+        Assert.Equal(new[] { "Millimeters" }, result!.ModelUnits);
     }
 }

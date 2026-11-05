@@ -38,7 +38,9 @@ export interface IPlatformPermissionStore {
 
 	/**
 	 * True if at least one *enabled* user holds `instance_admin`. Adapters
-	 * must exclude disabled users — over-count is safer than under-count.
+	 * must exclude disabled users. One that can't see the disabled flag, like local,
+	 * relies on the routes: disabling revokes `instance_admin` first, and a disabled
+	 * user can't be granted it.
 	 */
 	hasInstanceAdmin(ctx: RequestContext): Promise<boolean>;
 
@@ -58,8 +60,7 @@ export interface IPlatformPermissionStore {
 	 * write: on a fresh single-tenant install with no
 	 * `BOOTSTRAP_INSTANCE_ADMIN_EMAIL` configured, any signer is eligible, so
 	 * two people signing in at the same moment both observe "no admin" and both
-	 * become permanent platform admins. §2 promises "first signer wins" — this
-	 * is what makes that true rather than aspirational.
+	 * become permanent platform admins. This is what makes first signer win.
 	 *
 	 * Same shape as the sole-admin invariant (`set`), pointing the other way:
 	 * that one refuses to drop the last admin, this one refuses to create a

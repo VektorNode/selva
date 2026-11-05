@@ -220,16 +220,6 @@
 			PublicKeyToken=b03f5f7f11d50a3a
 		</value>
 	</data>
-	<data name="Combine" type="System.Resources.ResXFileRef, System.Windows.Forms">
-		<value>..\Resources\Icons\Combine.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
-			PublicKeyToken=b03f5f7f11d50a3a
-		</value>
-	</data>
-	<data name="CurveInfo" type="System.Resources.ResXFileRef, System.Windows.Forms">
-		<value>..\Resources\Icons\CurveInfo.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
-			PublicKeyToken=b03f5f7f11d50a3a
-		</value>
-	</data>
 	<data name="Document" type="System.Resources.ResXFileRef, System.Windows.Forms">
 		<value>..\Resources\Icons\Document.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
 			PublicKeyToken=b03f5f7f11d50a3a
@@ -262,11 +252,6 @@
 	</data>
 	<data name="DrawingView" type="System.Resources.ResXFileRef, System.Windows.Forms">
 		<value>..\Resources\Icons\DrawingView.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
-			PublicKeyToken=b03f5f7f11d50a3a
-		</value>
-	</data>
-	<data name="ExportSVG" type="System.Resources.ResXFileRef, System.Windows.Forms">
-		<value>..\Resources\Icons\ExportSVG.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
 			PublicKeyToken=b03f5f7f11d50a3a
 		</value>
 	</data>
@@ -345,8 +330,73 @@
 			PublicKeyToken=b03f5f7f11d50a3a
 		</value>
 	</data>
-	<data name="SectionSettings" type="System.Resources.ResXFileRef, System.Windows.Forms">
-		<value>..\Resources\Icons\SectionSettings.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+	<data name="GetDynamicValueList" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\GetDynamicValueList.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="SetDynamicValueList" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\SetDynamicValueList.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="GetFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\GetFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="GetImage" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\GetImage.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="GetServerFile" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\GetServerFile.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="CombineDisplay" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\CombineDisplay.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="EmissiveMaterial" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\EmissiveMaterial.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="MaterialPreset" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\MaterialPreset.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="DrawImage" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\DrawImage.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="DocumentInfo" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\DocumentInfo.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="LayoutOverride" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\LayoutOverride.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="TextStyle" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\TextStyle.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="ParamFileData" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\ParamFileData.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
+			PublicKeyToken=b03f5f7f11d50a3a
+		</value>
+	</data>
+	<data name="EvaluateSchema" type="System.Resources.ResXFileRef, System.Windows.Forms">
+		<value>..\Resources\Icons\EvaluateSchema.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral,
 			PublicKeyToken=b03f5f7f11d50a3a
 		</value>
 	</data>

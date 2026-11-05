@@ -7,12 +7,13 @@
 		Label,
 		Tabs,
 		Textarea,
-		ConfirmDialog
+		ConfirmDialog,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Trash2, UserPlus, Users, X } from '@lucide/svelte';
 	import type { ProjectWithMembers, UserListItem } from '../+page.server';
 	import type { ProjectRole, ProjectVisibility } from '@selvajs/platform/projects';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
+	import UserAvatar from '#lib/components/UserAvatar.svelte';
 	import AddMemberPicker from './AddMemberPicker.svelte';
 
 	interface Props {
@@ -51,6 +52,19 @@
 	/* svelte-ignore state_referenced_locally */
 	let visibility = $state<ProjectVisibility>(project.visibility);
 	let saving = $state(false);
+
+	const visibilityItems = $derived([
+		{ id: 'public', label: 'Public' },
+		{ id: 'org', label: 'Org' },
+		{ id: 'private', label: 'Private' },
+		...(visibility === 'platform' ? [{ id: 'platform', label: 'Platform' }] : [])
+	]);
+
+	const ROLE_ITEMS = [
+		{ id: 'owner', label: 'Owner' },
+		{ id: 'editor', label: 'Editor' },
+		{ id: 'viewer', label: 'Viewer' }
+	];
 
 	let tab = $state('general');
 	let showAddForm = $state(false);
@@ -175,18 +189,12 @@
 				</div>
 				<div class="space-y-1.5">
 					<Label for="proj-vis">Visibility</Label>
-					<select
+					<FilterableDropdown
 						id="proj-vis"
-						bind:value={visibility}
-						class="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
-					>
-						<option value="public">Public</option>
-						<option value="org">Org</option>
-						<option value="private">Private</option>
-						{#if visibility === 'platform'}
-							<option value="platform">Platform</option>
-						{/if}
-					</select>
+						items={visibilityItems}
+						value={visibility}
+						onChange={(v) => (visibility = v as ProjectVisibility)}
+					/>
 					<p class="text-muted-foreground text-xs">{visibilityHint}</p>
 				</div>
 			</Tabs.Content>
@@ -198,7 +206,7 @@
 				<p
 					class={`shrink-0 rounded-md border px-3 py-2 text-xs ${
 						membersGrantAccess
-							? 'border-border bg-muted/40 text-muted-foreground'
+							? 'border-border bg-muted text-muted-foreground'
 							: 'border-amber-500/40 bg-amber-500/5 text-amber-700 dark:text-amber-400'
 					}`}
 				>
@@ -229,20 +237,16 @@
 										</p>
 									{/if}
 								</div>
-								<select
+								<FilterableDropdown
+									items={ROLE_ITEMS}
 									value={member.role}
-									onchange={(e) =>
-										onUpdateMemberRole(
-											project.id,
-											member.userId,
-											(e.target as HTMLSelectElement).value as ProjectRole
-										)}
-									class="border-input bg-background h-8 shrink-0 rounded-md border px-2 text-xs outline-none"
-								>
-									<option value="owner">Owner</option>
-									<option value="editor">Editor</option>
-									<option value="viewer">Viewer</option>
-								</select>
+									onChange={(v) => {
+										if (v !== member.role)
+											onUpdateMemberRole(project.id, member.userId, v as ProjectRole);
+									}}
+									size="sm"
+									class="w-28 shrink-0"
+								/>
 								<Button
 									onclick={() => {
 										confirmingRemove = member.userId;

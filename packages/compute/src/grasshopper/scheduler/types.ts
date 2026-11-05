@@ -1,22 +1,23 @@
-// Public declarations for the solve scheduler. The class itself lives in `solve-scheduler.ts`.
-
 import type { ComputeError } from '@/core/errors';
-import type { RetryPolicy } from '@/core/types';
+import type { RetryPolicy, ServerTiming } from '@/core/types';
 
-import type { DataTree, GrasshopperComputeResponse, GrasshopperComputeConfig } from '../types';
+import type {
+	DataTree,
+	GrasshopperComputeResponse,
+	GrasshopperComputeConfig,
+	SelvaEventTarget
+} from '../types';
 import type { SolveDefinition } from '@/core/definition-ref';
 
 /**
- * Scheduling mode — controls how concurrent `solve()` calls interact.
+ * How concurrent `solve()` calls interact.
  *
- * - `latest-wins`: One in flight at a time. New calls supersede any pending
- *   call (in-flight one is aborted). Optimal for slider scrubs / live UIs.
- * - `queue`: FIFO queue. Each solve runs to completion. Concurrency capped
- *   by `maxConcurrent`. Use for "submit job" flows where every request matters.
- * - `parallel`: No scheduling — calls run concurrently up to `maxConcurrent`.
- *   Closest to plain `client.solve()` but with shared cancel/state.
+ * - `latest-wins`: one in flight at a time. A new call supersedes the pending
+ *   one and aborts the one in flight. For slider scrubs and live UIs.
+ * - `queue`: FIFO, every call runs to completion, up to `maxConcurrent` at
+ *   once (default 1). For "submit job" flows where every request matters.
  */
-export type SchedulerMode = 'latest-wins' | 'queue' | 'parallel';
+export type SchedulerMode = 'latest-wins' | 'queue';
 
 export interface CacheOptions {
 	/**
@@ -28,6 +29,8 @@ export interface CacheOptions {
 	 * fetch boundary — no re-serialization); a response without that hint
 	 * (custom executor) is sized by a one-off `JSON.stringify`. A single
 	 * response larger than the whole budget is served but never retained.
+	 * Parsed, a response of many small items holds more heap than its wire size,
+	 * so leave headroom.
 	 *
 	 * Required and must be > 0 — to disable caching, pass `cache: false`.
 	 */
@@ -47,11 +50,19 @@ export interface CacheOptions {
 	 * Cache responses that carry Grasshopper `errors`. Default `true`: an
 	 * errored solve is a valid, deterministic result — definitions raise GH
 	 * errors by design (guarded components, validation branches), so replaying
-	 * one from cache is correct. Set `false` for parity with Rhino's opt-in
-	 * `cacheerroredsolves` server flag, e.g. when a definition's errors are
+	 * one from cache is correct. Set `false` when a definition's errors are
 	 * transient (external data sources) rather than functions of the inputs.
 	 */
 	cacheErroredSolves?: boolean;
+}
+
+/** What {@link SolveScheduler.cacheStats} reports. */
+export interface CacheStats {
+	entries: number;
+	bytes: number;
+	hits: number;
+	misses: number;
+	evictions: number;
 }
 
 export interface SolveSchedulerOptions {
@@ -62,7 +73,7 @@ export interface SolveSchedulerOptions {
 	 * excluding the ones already in flight). When the queue is full, a new
 	 * `solve()` is rejected immediately with `code: QUEUE_FULL` (retryable, meant to
 	 * map to HTTP 503 + Retry-After) instead of piling up unbounded. Bounds the
-	 * miss path under load. Only applies to `queue` / `parallel` modes —
+	 * miss path under load. Only applies to `queue` mode —
 	 * `latest-wins` has an intrinsic depth of 1. Default: unbounded.
 	 */
 	maxQueueDepth?: number;
@@ -70,8 +81,7 @@ export interface SolveSchedulerOptions {
 	 * Backpressure — max time (ms) a call may sit queued before it starts
 	 * executing. If it's still waiting after this long it's rejected with
 	 * `code: QUEUE_TIMEOUT` rather than burning compute on a stale request.
-	 * Bounds tail latency. Only applies to `queue` / `parallel` modes. Default:
-	 * no deadline.
+	 * Bounds tail latency. Only applies to `queue` mode. Default: no deadline.
 	 */
 	queueWaitMs?: number;
 	timeoutMs?: number;
@@ -83,15 +93,11 @@ export interface SolveSchedulerOptions {
 	 */
 	cache?: false | CacheOptions;
 	/**
-	 * Reuse the server's definition cache key so a large (base64/binary)
-	 * definition is uploaded once and subsequent solves reference it by
-	 * `pointer` instead of re-sending the full payload. Hugely cheaper for
-	 * multi-MB definitions on a live UI (slider scrubs, etc.).
-	 *
-	 * Requires a `cacheKeyExecutor` to be supplied (the client wires one). Has no
-	 * effect for URL-pointer definitions (already a reference). On a server-side
-	 * cache miss the executor transparently falls back to a full upload, so this
-	 * is safe to leave on. Default: `true` when a `cacheKeyExecutor` is present.
+	 * Upload a definition once, then solve it by the server's cache key (`pointer`)
+	 * instead of re-sending the bytes; a `DefinitionRef` also skips its `load()`.
+	 * When the server has evicted the key, the solve falls back to a full upload,
+	 * so this is safe to leave on. No effect for URL definitions, which are
+	 * already a reference. Default `true`.
 	 */
 	reuseServerDefinitionCache?: boolean;
 	/** Lifecycle hooks — fired in order. Errors thrown by hooks are logged, not rethrown. */
@@ -116,38 +122,45 @@ export type SolveResult =
 			durationMs: number;
 			fromCache: boolean;
 			/**
-			 * Definition-cache telemetry for a real compute call (not a Selva-cache
-			 * `fromCache` hit). `false` → the server reused its cached definition via
-			 * the pointer (no upload); `true` → the pointer was cold/stale so the full
-			 * definition was re-uploaded. `undefined` when the server-definition-cache
-			 * fast path didn't run (reuse disabled, or a non-reusable definition such
-			 * as a remote URL).
+			 * Whether this solve uploaded the full definition: `true` on its first
+			 * solve or after the server evicted the cache key, `false` when the server
+			 * reused its cached copy via the pointer. `undefined` for a `fromCache`
+			 * hit, or when reuse is off or the definition is a URL.
 			 */
 			definitionReuploaded?: boolean;
 	  }
-	| { status: 'error'; error: ComputeError; durationMs: number }
-	| { status: 'superseded' };
-
-export type SolveExecutor = (
-	definition: SolveDefinition,
-	dataTree: DataTree[],
-	config: GrasshopperComputeConfig
-) => Promise<GrasshopperComputeResponse>;
+	| { status: 'error'; error: ComputeError; durationMs: number };
 
 /**
- * Cache-key-aware executor. When `cacheKey` is provided, the executor solves by
- * reference (`pointer: cacheKey`) and falls back to a full upload on a server
- * cache miss. Always reports the (possibly refreshed) `cacheKey` so the
- * scheduler can update its definition→key map, plus whether the fast path
- * `missed` (for telemetry). When `cacheKey` is null it's a first solve — upload
- * fully and capture the key the server assigns.
- *
- * Supplied by the client (which owns the solve primitives); the scheduler stays
- * decoupled from the transport.
+ * Solves by `cacheKey` when given one, otherwise uploads. Reports the server's
+ * (possibly new) key and whether the full definition was uploaded (`missed`).
+ * The scheduler passes `null` whenever server-definition reuse is off.
  */
-export type CacheKeyExecutor = (
+export type SolveExecutor = (
 	definition: SolveDefinition,
 	dataTree: DataTree[],
 	cacheKey: string | null,
 	config: GrasshopperComputeConfig
 ) => Promise<{ response: GrasshopperComputeResponse; cacheKey: string | null; missed: boolean }>;
+
+export interface SchedulerSolveOptions {
+	signal?: AbortSignal;
+	/** Per-solve live-event callback. Not part of the cache key: it names where events go, not what is solved. */
+	selvaevents?: SelvaEventTarget;
+	/**
+	 * This call's `Server-Timing` breakdown, after the client config's own `onServerTiming`.
+	 * Never fires for a `fromCache` hit, which sends no request.
+	 */
+	onServerTiming?: (timing: ServerTiming, requestId: string) => void;
+}
+
+/** What `solveDetailed()` resolves with: the response plus how this call got it. */
+export interface SolveDetail {
+	response: GrasshopperComputeResponse;
+	/** Served from the scheduler's response cache without a request. */
+	fromCache: boolean;
+	/** Same meaning as on {@link SolveResult}. */
+	definitionReuploaded?: boolean;
+	/** Executor wall time; `0` for a `fromCache` hit. */
+	durationMs: number;
+}

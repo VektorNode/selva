@@ -12,7 +12,7 @@ import type {
 	WebSocketState,
 	WsOutputsMessage,
 	WsSolveEventMessage
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 import type { SolveEvent } from '@selvajs/schemas';
 import { decodeOutcome, finalizeResult, type SolveReporter } from '@selvajs/ui';
 import type { PreviewSolveDriver } from './schema-source';
@@ -22,10 +22,20 @@ import type * as THREE from 'three';
 
 const CLEAN_OUTCOME = { diagnostics: [], blocked: false, aborted: false };
 
-/** Strip file metadata objects — Grasshopper already has the file. */
-function prepareValuesForSend(values: Record<string, unknown>): Record<string, unknown> {
+const NO_INPUTS: ReadonlySet<string> = new Set();
+
+/**
+ * Strip file metadata objects — Grasshopper already has the file — and the inputs Grasshopper
+ * fills itself: a picked geometry stays on its param, and resending a button's `true` would press
+ * it again.
+ */
+function prepareValuesForSend(
+	values: Record<string, unknown>,
+	valueless: ReadonlySet<string>
+): Record<string, unknown> {
 	const prepared: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(values)) {
+		if (valueless.has(key)) continue;
 		let parsed = value;
 		if (typeof value === 'string' && value.trim().startsWith('{')) {
 			try {
@@ -49,7 +59,8 @@ function prepareValuesForSend(values: Record<string, unknown>): Record<string, u
 export function createWebSocketSolveDriver(
 	wsState: WebSocketState,
 	sessionId: string,
-	getReporter: () => SolveReporter
+	getReporter: () => SolveReporter,
+	getValuelessInputs: () => ReadonlySet<string> = () => NO_INPUTS
 ): PreviewSolveDriver {
 	let modelUnits = 'Meters';
 
@@ -137,6 +148,8 @@ export function createWebSocketSolveDriver(
 					if (myToken === outputsToken) {
 						const all: THREE.Object3D[] = [];
 						for (const blob of blobs) {
+							// A parse can't be stopped once running, but a newer solve means the rest of these never show.
+							if (myToken !== outputsToken) break;
 							// Merged by material (the parser's default): an imported building model arrives
 							// as thousands of small meshes, and per-object render cost, not triangle
 							// count, is what makes it unusable. Per-object identity survives the merge
@@ -161,6 +174,7 @@ export function createWebSocketSolveDriver(
 		// Non-mesh display items ride the JSON envelope, already tessellated by the plugin.
 		// Tessellated objects get the same unit scale the mesh blobs received, so items and meshes
 		// share one frame.
+		let displayError: string | undefined;
 		if (hasDisplayItems) {
 			try {
 				if (myToken === outputsToken) {
@@ -174,9 +188,8 @@ export function createWebSocketSolveDriver(
 			} catch (err) {
 				// Surfaced, not just logged: the usual cause is a Display component old enough to emit
 				// untessellated curves, and the fix is on the canvas the author is looking at.
-				const detail = err instanceof Error ? err.message : String(err);
+				displayError = err instanceof Error ? err.message : String(err);
 				console.error('[Preview] Error parsing display items:', err);
-				getReporter().reportError(detail);
 			}
 		}
 
@@ -193,7 +206,13 @@ export function createWebSocketSolveDriver(
 					outputs: { ...(message.outputs ?? {}), ...(message.fileOutputs ?? {}) },
 					meshes: sceneObjects
 				},
-				outcome
+				// A message on the solve: it still applied, and `reportError` would settle it again.
+				displayError
+					? {
+							...outcome,
+							diagnostics: [...outcome.diagnostics, { level: 'error', message: displayError }]
+						}
+					: outcome
 			)
 		);
 	}
@@ -216,9 +235,11 @@ export function createWebSocketSolveDriver(
 		solve(values) {
 			if (!wsState.connected) {
 				console.warn('[Preview] Cannot send values - WebSocket not connected');
+				// Every solve asked for ends in a report, or `session.solve()` never resolves.
+				getReporter().reportError('Not connected to Grasshopper.');
 				return;
 			}
-			wsState.sendValueUpdate(sessionId, prepareValuesForSend(values));
+			wsState.sendValueUpdate(sessionId, prepareValuesForSend(values, getValuelessInputs()));
 		},
 		cancel() {
 			// Nothing to drop client-side (the latest values simply win); the plugin is asked to
@@ -232,11 +253,13 @@ export function createWebSocketSolveDriver(
 			};
 		},
 		get isSolving() {
-			return wsState.isSolving;
+			return wsState.isSolving || wsState.awaitingSolve;
 		},
 		primeFromInitialData(message) {
-			// Same parse-and-report path as a live frame; initialData carries the same
-			// outputs/binaryBatchCount/modelUnits fields.
+			// Same parse-and-report path as a live frame. initialData itself carries no mesh
+			// fields; a real binaryBatchCount only shows up on the outputs broadcast the server
+			// schedules right after connecting (BridgeOrchestrator.ClientConnected), caught by
+			// handleOutputs the normal way once it arrives.
 			void handleOutputs(message);
 		},
 		dispose() {

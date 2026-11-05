@@ -13,10 +13,14 @@
 	// anything, so it appears on its own after the solve and fades.
 
 	import { untrack } from 'svelte';
-	import { CircleAlert, TriangleAlert, Info, LoaderCircle } from '@lucide/svelte';
+	import { LoaderCircle } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
 	import type { LiveSolveState, SolvePhase } from '@selvajs/solve/client';
-	import { Button } from '$lib/components/primitives/button';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import IssueList, { type Issue } from '#lib/components/primitives/IssueList.svelte';
+	import SeverityIcon from '#lib/components/primitives/SeverityIcon.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { createLiveProgress } from '#lib/compute/liveProgress.svelte.js';
 
 	interface Props {
 		/** What the running (or most recent) solve has said over the live channel. */
@@ -28,32 +32,19 @@
 		onabort: () => void;
 		onconfirm: () => void;
 		ondiscard: () => void;
-		labels?: Labels;
+		/**
+		 * See `createSolvingIndicator`. The live panel would only paint once the solve is over, so
+		 * an Esc hint stands in for it; the result's messages still show.
+		 */
+		freezesDuringSolve?: boolean;
+		/** `floating` overlays the bottom centre; `inline` sits in the flow below the host's content. */
+		placement?: 'floating' | 'inline';
+		/**
+		 * The host shows progress and Abort itself (`AppLayout`'s solve status), so the live view
+		 * keeps only the messages that arrive mid-solve.
+		 */
+		progressShownByHost?: boolean;
 	}
-
-	interface Labels {
-		solving: string;
-		blockedTitle: string;
-		messagesTitle: string;
-		blockedDescription: string;
-		messagesDescription: string;
-		confirm: string;
-		discard: string;
-		abort: string;
-		dismiss: string;
-	}
-
-	const DEFAULT_LABELS: Labels = {
-		solving: 'Solving…',
-		blockedTitle: 'Solve stopped',
-		messagesTitle: 'Solve messages',
-		blockedDescription: 'The definition stopped this solve. No results were produced.',
-		messagesDescription: 'This solve reported the following. Continue to see the result.',
-		confirm: 'Continue',
-		discard: 'Discard',
-		abort: 'Abort',
-		dismiss: 'Dismiss'
-	};
 
 	let {
 		live,
@@ -62,55 +53,20 @@
 		onabort,
 		onconfirm,
 		ondiscard,
-		labels = DEFAULT_LABELS
+		freezesDuringSolve = false,
+		placement = 'floating',
+		progressShownByHost = false
 	}: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	const REMARK_LINGER_MS = 6000;
 
-	const progress = $derived([...live.progress.values()]);
-
-	// A report only arrives when a step starts, so a bar that just shows `fraction` stands still
-	// through the step and then jumps. When the plugin knows how long the step took last time, the
-	// bar runs linearly to where the step will end, over that time. Steps are weighted by time, so
-	// linear gives one steady speed across the solve; any easing curve visibly speeds up and
-	// crawls within each step. A slower run waits at the step's end; a faster one snaps ahead.
-	let bars = $state.raw<Record<string, { width: number; ms: number }>>({});
-	// Any live event re-runs the effect below. Only a source with a new report may re-snap;
-	// the rest keep easing where they are.
-	let seen = new Map<string, unknown>();
-	let targets: Record<string, { width: number; ms: number }> = {};
-	$effect(() => {
-		const snapped: Record<string, { width: number; ms: number }> = {};
-		const eased: Record<string, { width: number; ms: number }> = {};
-		const current = untrack(() => bars);
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- bookkeeping for this effect; reactive reads here would re-trigger it
-		const nextSeen = new Map<string, unknown>();
-		for (const p of progress) {
-			if (p.fraction === undefined) continue;
-			const key = p.source ?? '';
-			nextSeen.set(key, p);
-			if (seen.get(key) === p && current[key]) {
-				snapped[key] = current[key];
-				// This run's cleanup cancelled the frame that would have started the ease.
-				if (targets[key] && current[key] !== targets[key]) eased[key] = targets[key];
-				continue;
-			}
-			snapped[key] = { width: p.fraction, ms: 150 };
-			if (p.nextFraction !== undefined && p.stepMs !== undefined) {
-				eased[key] = { width: p.nextFraction, ms: p.stepMs };
-			}
-		}
-		seen = nextSeen;
-		targets = eased;
-		bars = snapped;
-		if (Object.keys(eased).length === 0) return;
-		// Two frames: the snapped width must be painted before the eased one is set, or the
-		// browser folds both into one style change and there is nothing to transition from.
-		let frame = requestAnimationFrame(() => {
-			frame = requestAnimationFrame(() => (bars = { ...snapped, ...eased }));
-		});
-		return () => cancelAnimationFrame(frame);
-	});
+	const liveProgress = createLiveProgress(() => live);
+	const progress = $derived(liveProgress.progress);
+	const bars = $derived(liveProgress.bars);
+	const headline = $derived(liveProgress.headline);
 	// Grasshopper's own complaints stay in the footer log; this panel shows what the author wrote.
 	const authored = $derived(diagnostics.filter((d) => d.isGate));
 
@@ -137,16 +93,30 @@
 	// Keyed on the diagnostics array's identity, which every report renews, rather than on a
 	// solve id: only the live channel has one, and on the Compute path remarks arrive with the
 	// result. Once per array, so remarks that sat behind a review do not reappear after Continue.
+	//
+	// A remark is shown once while it stays raised, not after every solve. Every report repeats
+	// it: Grasshopper keeps runtime messages on a Message component an input change did not
+	// reach, and Compute re-solves the whole definition. It shows again once a solve stops
+	// raising it and a later one raises it anew.
 	let lingering = $state(false);
 	let lingeredFor: SolveDiagnostic[] | null = null;
+	let shownRemarks: ReadonlySet<string> = new Set();
+	let freshRemarks = $state.raw<SolveDiagnostic[]>([]);
+	const remarkKey = (d: SolveDiagnostic) => `${d.source ?? ''}\u0000${d.message}`;
 	$effect(() => {
 		if (phase === 'live') {
 			lingering = false;
 			return;
 		}
-		if (authoredRemarks.length === 0 || lingeredFor === diagnostics) return;
+		if (lingeredFor === diagnostics) return;
 		lingeredFor = diagnostics;
-		if (phase !== 'idle') return;
+		const raised = authoredRemarks.map(remarkKey);
+		const stillShown = raised.filter((k) => shownRemarks.has(k));
+		const fresh = authoredRemarks.filter((d) => !shownRemarks.has(remarkKey(d)));
+		const showNow = phase === 'idle' && fresh.length > 0;
+		shownRemarks = new Set(showNow ? [...stillShown, ...fresh.map(remarkKey)] : stillShown);
+		if (!showNow) return;
+		freshRemarks = fresh;
 		lingering = true;
 		const timer = setTimeout(() => (lingering = false), REMARK_LINGER_MS);
 		return () => clearTimeout(timer);
@@ -165,6 +135,7 @@
 	$effect(() => {
 		if (phase === 'live') {
 			finishing = false;
+			if (freezesDuringSolve) return;
 			const timer = setTimeout(() => {
 				revealed = true;
 				revealedAt = performance.now();
@@ -191,41 +162,37 @@
 	// While solving, the live channel is all there is. Once the result lands it is authoritative
 	// — it carries remarks too — so the live list is dropped entirely and nothing is shown twice.
 	const rows = $derived<SolveDiagnostic[]>(
-		view === 'live' ? [...live.diagnostics] : view === 'idle' ? authoredRemarks : authoredGating
+		view === 'live' ? [...live.diagnostics] : view === 'idle' ? freshRemarks : authoredGating
 	);
 
-	// Steps a few milliseconds long would swap the headline faster than it can be read. Each one
-	// stays up for at least this long; steps that end sooner are skipped in the label but still
-	// count in the bar. The label and its step count move together so they never disagree.
-	const HEADLINE_MIN_MS = 200;
-	let headline = $state.raw<(typeof progress)[number] | undefined>(undefined);
-	let headlineAt = 0;
-	$effect(() => {
-		const next = progress[0];
-		const shown = untrack(() => headline);
-		if (next?.label === shown?.label && next?.done === shown?.done) {
-			headline = next;
-			return;
-		}
-		const show = () => {
-			headline = next;
-			headlineAt = performance.now();
-		};
-		const wait = HEADLINE_MIN_MS - (performance.now() - headlineAt);
-		if (!shown || wait <= 0) {
-			show();
-			return;
-		}
-		const timer = setTimeout(show, wait);
-		return () => clearTimeout(timer);
-	});
+	// A remark states something without asking anything, so it reads as a quiet note.
+	const issues = $derived<Issue[]>(
+		rows.map((d) => ({
+			severity: d.level === 'remark' ? 'note' : d.level,
+			message: d.message,
+			source: d.source
+		}))
+	);
 
 	const visible = $derived(
 		view === 'review' || view === 'blocked'
 			? true
 			: view === 'live'
-				? revealed && (rows.length > 0 || progress.length > 0)
+				? revealed && (rows.length > 0 || (!progressShownByHost && progress.length > 0))
 				: rows.length > 0 && lingering
+	);
+
+	// What a screen reader hears of the passive views, through a region that outlives the panel: one
+	// created together with its text is not announced. The step name, not its counter, so a long
+	// solve announces each step rather than every tick. Review and blocked are alerts of their own.
+	const announcement = $derived(
+		!visible
+			? ''
+			: view === 'live'
+				? ((headline ?? progress[0])?.label ?? t.solveSolving)
+				: view === 'idle'
+					? rows.map((d) => d.message).join(' ')
+					: ''
 	);
 
 	function dismiss() {
@@ -233,33 +200,51 @@
 	}
 
 	// Escape resolves to the safe side — discard, keeping what is on screen — never to silently
-	// applying a result the user has not accepted.
+	// applying a result the user has not accepted. A frozen host gets no keydown until the solve
+	// ends; there the plugin aborts on the key state, which only counts while Rhino is in front, so
+	// a browser tab (local or Compute) has to abort from the page.
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key !== 'Escape') return;
-		if (phase === 'review') ondiscard();
+		if (phase === 'live') {
+			if (!freezesDuringSolve) onabort();
+		} else if (phase === 'review') ondiscard();
 		else if (phase === 'blocked') dismiss();
 	}
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-{#if visible}
+<div class="sr-only" role="status" aria-live="polite">{announcement}</div>
+
+{#if freezesDuringSolve && view === 'live'}
+	<!-- Painted before the solve takes the thread; Abort could not be clicked until it ends. Inline,
+	     the solving chip carries the hint instead: a line here would resize the footer mid-solve. -->
+	{#if placement === 'floating'}
+		<p
+			class="bottom-4 text-xs fixed left-1/2 z-50 -translate-x-1/2 text-muted-foreground"
+			data-testid="solve-esc-hint"
+		>
+			{t.solveMessagesEscHint}
+		</p>
+	{/if}
+{:else if visible}
+	<!-- Inline, it is a row of the host's footer like the Calculate row under it, not a card: a
+	     framed box inside an edge-to-edge column reads as a dialog glued into the page. -->
 	<div
-		class="bottom-4 p-3 shadow-lg fixed left-1/2 z-50 w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 rounded-lg border bg-background {view ===
-		'blocked'
-			? 'border-destructive/50'
-			: ''}"
-		role={view === 'live' || view === 'idle' ? 'status' : 'alert'}
+		class={placement === 'inline'
+			? `px-2 py-2 border-t ${view === 'blocked' ? 'border-destructive/40' : 'border-border'}`
+			: `p-3 bottom-4 shadow-lg w-lg fixed left-1/2 z-50 max-w-screen-inset -translate-x-1/2 rounded-lg border bg-background ${view === 'blocked' ? 'border-destructive/50' : ''}`}
+		role={view === 'review' || view === 'blocked' ? 'alert' : undefined}
 		data-testid="solve-messages"
 		data-view={view}
 	>
-		{#if view === 'live'}
+		{#if view === 'live' && !progressShownByHost}
 			{@const head = headline ?? progress[0]}
 			<div>
 				<div>
 					<div class="gap-2 flex items-center">
 						<LoaderCircle class="h-4 w-4 animate-spin shrink-0 text-muted-foreground" />
-						<span class="min-w-0 text-sm flex-1 truncate">{head?.label ?? labels.solving}</span>
+						<span class="min-w-0 text-sm flex-1 truncate">{head?.label ?? t.solveSolving}</span>
 						{#if head?.done !== undefined && head?.total !== undefined}
 							<span class="text-xs shrink-0 text-muted-foreground tabular-nums">
 								{head.done} / {head.total}
@@ -267,12 +252,17 @@
 						{/if}
 						<Button
 							variant="secondary"
-							size="sm"
-							class="-my-1 h-7 px-3 text-xs shrink-0"
+							size="xs"
+							class="-my-1 shrink-0"
 							disabled={finishing}
 							onclick={onabort}
+							aria-keyshortcuts="Escape"
+							title={t.solveMessagesEscHint}
 						>
-							{labels.abort}
+							{t.solveMessagesAbort}
+							<kbd class="px-1 rounded-sm border border-border font-sans text-2xs opacity-70">
+								Esc
+							</kbd>
 						</Button>
 					</div>
 					{#each progress as p, i (p.source ?? '')}
@@ -289,7 +279,7 @@
 							<div
 								class="h-1 overflow-hidden rounded-full bg-muted"
 								role="progressbar"
-								aria-label={p.label ?? p.source ?? labels.solving}
+								aria-label={p.label ?? p.source ?? t.solveSolving}
 								aria-valuemin={0}
 								aria-valuemax={100}
 								aria-valuenow={p.fraction !== undefined ? Math.round(p.fraction * 100) : undefined}
@@ -299,8 +289,9 @@
 										? { width: 1, ms: FINISH_MS }
 										: (bars[p.source ?? ''] ?? { width: p.fraction, ms: 150 })}
 									<div
-										class="h-full rounded-full bg-primary transition-[width] ease-linear"
-										style="width: {bar.width * 100}%; transition-duration: {bar.ms}ms"
+										class="h-full w-(--bar-width) rounded-full bg-primary transition-all duration-(--bar-ms) ease-linear"
+										style:--bar-width="{bar.width * 100}%"
+										style:--bar-ms="{bar.ms}ms"
 									></div>
 								{:else}
 									<div class="animate-pulse h-full w-1/3 rounded-full bg-primary/60"></div>
@@ -310,56 +301,64 @@
 					{/each}
 				</div>
 			</div>
+		{:else if (view === 'review' || view === 'blocked') && placement === 'inline'}
+			<!-- Each message carries its own icon, so the label goes without one; the buttons share
+			     its row rather than adding one under a single line of text. -->
+			<div class="mb-1.5 gap-2 flex items-center">
+				<span
+					class="min-w-0 text-xs font-medium flex-1 truncate {view === 'blocked'
+						? 'text-destructive'
+						: 'text-muted-foreground'}"
+				>
+					{view === 'blocked' ? t.solveBlockedTitle : t.solveMessagesTitle}
+				</span>
+				{#if view === 'blocked'}
+					<Button variant="ghost" size="xs" class="-my-1 shrink-0" onclick={dismiss}>
+						{t.solveMessagesDismiss}
+					</Button>
+				{:else}
+					<Button variant="ghost" size="xs" class="-my-1 shrink-0" onclick={ondiscard}>
+						{t.solveMessagesDiscard}
+					</Button>
+					<Button size="xs" class="-my-1 shrink-0" onclick={onconfirm}>
+						{t.solveMessagesConfirm}
+					</Button>
+				{/if}
+			</div>
 		{:else if view === 'review' || view === 'blocked'}
 			<div class="mb-2">
 				<div class="gap-2 text-sm font-medium flex items-center">
 					{#if view === 'blocked'}
-						<CircleAlert class="h-4 w-4 shrink-0 text-destructive" />
-						{labels.blockedTitle}
+						<SeverityIcon severity="error" />
+						{t.solveBlockedTitle}
 					{:else}
-						<TriangleAlert class="h-4 w-4 text-amber-500 shrink-0" />
-						{labels.messagesTitle}
+						<SeverityIcon severity="warning" />
+						{t.solveMessagesTitle}
 					{/if}
 				</div>
 				<p class="text-xs text-muted-foreground">
-					{view === 'blocked' ? labels.blockedDescription : labels.messagesDescription}
+					{view === 'blocked' ? t.solveBlocked : t.solveMessagesDescription}
 				</p>
 			</div>
 		{/if}
 
 		{#if rows.length > 0}
-			<ul
-				class="max-h-40 space-y-2 text-sm overflow-y-auto {view === 'live'
+			<div
+				class="max-h-40 overflow-y-auto {view === 'live' && !progressShownByHost
 					? 'mt-3 pt-3 border-t'
 					: ''}"
 			>
-				{#each rows as row, i (i)}
-					<li class="gap-2 flex">
-						{#if row.level === 'error'}
-							<CircleAlert class="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-						{:else if row.level === 'warning'}
-							<TriangleAlert class="mt-0.5 h-4 w-4 text-amber-500 shrink-0" />
-						{:else}
-							<Info class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-						{/if}
-						<div class="min-w-0 flex-1">
-							<p class="wrap-anywhere">{row.message}</p>
-							{#if row.source}
-								<p class="text-xs text-muted-foreground">{row.source}</p>
-							{/if}
-						</div>
-					</li>
-				{/each}
-			</ul>
+				<IssueList {issues} variant="plain" />
+			</div>
 		{/if}
 
-		{#if view === 'review' || view === 'blocked'}
+		{#if (view === 'review' || view === 'blocked') && placement === 'floating'}
 			<div class="mt-3 gap-2 flex justify-end">
 				{#if view === 'blocked'}
-					<Button variant="outline" size="sm" onclick={dismiss}>{labels.dismiss}</Button>
+					<Button variant="outline" size="sm" onclick={dismiss}>{t.solveMessagesDismiss}</Button>
 				{:else}
-					<Button variant="outline" size="sm" onclick={ondiscard}>{labels.discard}</Button>
-					<Button size="sm" onclick={onconfirm}>{labels.confirm}</Button>
+					<Button variant="outline" size="sm" onclick={ondiscard}>{t.solveMessagesDiscard}</Button>
+					<Button size="sm" onclick={onconfirm}>{t.solveMessagesConfirm}</Button>
 				{/if}
 			</div>
 		{/if}

@@ -1,0 +1,123 @@
+import { error, fail, redirect } from '@sveltejs/kit';
+import { requireRecentSignIn } from '#lib/server/signInMaxAge.server.js';
+import { apiScopesFor, isLoopbackRedirect, OAuthError } from '@selvajs/server/oauth';
+import {
+	consentOffer,
+	mintConsentToken,
+	revokeUnredeemedConsentToken
+} from '@selvajs/server/handlers';
+import { isApiError } from '@selvajs/server/api';
+import { toApiRequest } from '#lib/server/api/sveltekit.js';
+import { expectRedemption, oauthServer } from '#lib/server/oauth/server.js';
+import { publicUrl } from '#lib/server/origin.js';
+import type { Actions, PageServerLoad } from './$types';
+
+// The shortest lifetime the token page offers. No refresh tokens: on expiry
+// the client gets a 401 and signs in again.
+const TOKEN_DAYS = 30;
+
+function serverFor(origin: string) {
+	return oauthServer(origin) ?? error(503, 'OAuth is not configured on this server.');
+}
+
+/**
+ * The authorize query without SvelteKit's `/action` key. The forms post to the
+ * same query, so a failed action re-renders this page rather than a bare URL.
+ */
+function authorizeQuery(url: URL): string {
+	const params = new URLSearchParams(url.search);
+	for (const key of [...params.keys()]) if (key.startsWith('/')) params.delete(key);
+	return params.toString();
+}
+
+async function parse(url: URL) {
+	try {
+		const query = new URLSearchParams(authorizeQuery(url));
+		return { request: await serverFor(publicUrl(url).origin).parseAuthorizeRequest(query) };
+	} catch (err) {
+		if (err instanceof OAuthError) return { problem: err.message };
+		throw err;
+	}
+}
+
+export const load: PageServerLoad = async (event) => {
+	const { url, locals } = event;
+	// A bad client or redirect URI is shown, never redirected: the target is what can't be trusted.
+	const { request, problem } = await parse(url);
+	if (!request) return { ok: false as const, problem };
+
+	// The hook gates this page; this covers a session that ended between the two.
+	if (!locals.user || !locals.ctx) {
+		redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname + url.search)}`);
+	}
+	await requireRecentSignIn(event);
+
+	const offer = await consentOffer(toApiRequest(event), request.scopes);
+	if (!offer) {
+		return {
+			ok: false as const,
+			problem: 'Your account can’t give an app this access in your current organization.'
+		};
+	}
+	const actingOrgId = locals.ctx?.actingOrgId;
+
+	return {
+		ok: true as const,
+		query: authorizeQuery(url),
+		clientName: request.client.name,
+		builtIn: request.client.builtIn,
+		redirectHost: new URL(request.redirectUri).host,
+		loopback: isLoopbackRedirect(request.redirectUri),
+		levels: offer.levels.map(({ choice, orgs }) => ({
+			access: choice.access,
+			createsProjects: choice.scopes.includes('create_projects'),
+			orgs,
+			orgId: (orgs.find((o) => o.id === actingOrgId) ?? orgs[0]!).id
+		})),
+		days: TOKEN_DAYS
+	};
+};
+
+export const actions: Actions = {
+	approve: async (event) => {
+		await requireRecentSignIn(event);
+		const form = await event.request.formData();
+		const { request } = await parse(event.url);
+		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
+		if (!event.locals.ctx) return fail(403, { error: 'Sign in first.' });
+
+		const api = toApiRequest(event);
+		const offer = await consentOffer(api, request.scopes);
+		const choice = offer?.levels.find((l) => l.choice.access === form.get('access'))?.choice;
+		if (!choice) return fail(400, { error: 'That access isn’t available to you.' });
+		let minted;
+		try {
+			minted = await mintConsentToken(api, String(form.get('orgId') ?? ''), {
+				name: `${request.client.name} (OAuth)`.slice(0, 100),
+				scopes: apiScopesFor(choice.scopes),
+				expiresInDays: TOKEN_DAYS
+			});
+		} catch (err) {
+			if (isApiError(err)) return fail(err.status, { error: err.message });
+			throw err;
+		}
+		expectRedemption(minted.token.id, () => revokeUnredeemedConsentToken(api, minted.token.id));
+		redirect(
+			303,
+			serverFor(publicUrl(event.url).origin).approve(request, {
+				tokenId: minted.token.id,
+				secret: minted.secret,
+				scopes: choice.scopes,
+				expiresAt: minted.token.expiresAt
+			}),
+			// The client's registered redirect_uri, which the OAuth core already checked.
+			{ external: true }
+		);
+	},
+
+	deny: async ({ url }) => {
+		const { request } = await parse(url);
+		if (!request) return fail(400, { error: 'This sign-in request is no longer valid.' });
+		redirect(303, serverFor(publicUrl(url).origin).deny(request), { external: true });
+	}
+};

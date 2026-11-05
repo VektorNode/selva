@@ -36,12 +36,13 @@ model and frames it. The last argument is `initialPositionSet` — pass `false` 
 camera frames the model, `true` afterwards to leave the user's view alone.
 
 After replacing geometry, also call `viewer.updateShadowBounds()` and `viewer.updateGridScale()` if
-you have sun shadows or the grid on.
+you have sun shadows or the grid on. Call `viewer.syncEmissiveLights()` after hiding or showing
+objects, so `night` drops the light of a hidden lamp.
 
 ## Changing how it looks
 
 ```ts
-viewer.setLook('showcase'); // technical, studio, showcase, arctic, xray, lineart, wireframe
+viewer.setLook('showcase'); // technical, studio, showcase, arctic, xray, lineart, wireframe, night
 viewer.setAmbientOcclusion(true);
 viewer.setToneMappingExposure(1.2);
 viewer.fitToView();
@@ -214,3 +215,5 @@ option exists only for hosts doing their own texture work.
 
 **Every GPU resource has one owner.** Free scene content through `disposeObjectTree` in
 `shared/gpu-dispose.ts` — never a hand-rolled `traverse` + `.dispose()` loop.
+
+While the camera rests, `scene-setup/idle-refine.ts` averages `render.idleRefineFrames` frames with the camera and lights jittered. It needs the composer, so looks without AO or bloom skip it.

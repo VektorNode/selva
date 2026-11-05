@@ -103,6 +103,22 @@ describe('setupEventHandlers click vs double-click', () => {
 		handlers.dispose();
 	});
 
+	it('frames all content on a double-click over empty background', () => {
+		const { canvas, fire } = fakeCanvas();
+		const controller = stubCameraController();
+		const config = {
+			events: { enableClickToFocus: true, enableDoubleClickZoom: true, selectionColor: '#ff0000' }
+		} as unknown as ResolvedOptions;
+		const handlers = setupEventHandlers(canvas, sceneWithCube(), controller, config);
+
+		fire('dblclick', { clientX: 5, clientY: 5 });
+
+		const [box, animate] = vi.mocked(controller.frameBounds).mock.calls[0];
+		expect(box.getSize(new THREE.Vector3()).x).toBe(2);
+		expect(animate).toBe(true);
+		handlers.dispose();
+	});
+
 	it('ignores a click that was really a drag', () => {
 		const { fire, handlers, onMeshMetadataClicked } = setup();
 
@@ -110,6 +126,137 @@ describe('setupEventHandlers click vs double-click', () => {
 		fire('click', { clientX: CENTRE.clientX + 40, clientY: CENTRE.clientY });
 
 		expect(onMeshMetadataClicked).not.toHaveBeenCalled();
+		handlers.dispose();
+	});
+});
+
+describe('setupEventHandlers hover', () => {
+	const config = {
+		events: { enableClickToFocus: true, selectionColor: '#ff0000' }
+	} as unknown as ResolvedOptions;
+
+	it('tints the hovered object and restores its own material when hover moves on', () => {
+		const { canvas } = fakeCanvas();
+		const scene = sceneWithCube();
+		const other = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+		scene.add(other);
+		const cube = scene.children[0] as THREE.Mesh;
+		const original = cube.material;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		handlers.setHover(cube);
+		expect(cube.material).not.toBe(original);
+
+		handlers.setHover(other);
+		expect(cube.material).toBe(original);
+
+		handlers.setHover(null);
+		handlers.dispose();
+	});
+
+	it('leaves the selected object alone', () => {
+		const { canvas, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		fire('mousedown', CENTRE);
+		fire('click', CENTRE);
+		const selected = cube.material;
+		handlers.setHover(cube);
+
+		expect(cube.material).toBe(selected);
+		handlers.dispose();
+	});
+});
+
+describe('setupEventHandlers selectEntries', () => {
+	const config = {
+		events: { enableClickToFocus: true, selectionColor: '#ff0000' }
+	} as unknown as ResolvedOptions;
+
+	function mergedMesh() {
+		const mesh = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
+		mesh.userData.members = [
+			{ name: 'a', layer: '', metadata: {}, indexStart: 0, indexCount: 12 },
+			{ name: 'b', layer: '', metadata: {}, indexStart: 12, indexCount: 12 },
+			{ name: 'c', layer: '', metadata: {}, indexStart: 24, indexCount: 12 }
+		];
+		return mesh;
+	}
+
+	it('hovers one merged member beside a selected one, and restores only the hover', () => {
+		const { canvas } = fakeCanvas();
+		const scene = sceneWithCube();
+		const merged = mergedMesh();
+		scene.add(merged);
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		handlers.selectEntries([{ object: merged, memberIndex: 0 }]);
+		handlers.setHover(merged, 2);
+		expect(merged.material).toHaveLength(3);
+
+		handlers.setHover(null);
+		expect(merged.material).toHaveLength(2);
+		handlers.dispose();
+	});
+
+	it('tints every target and restores them when replaced', () => {
+		const { canvas } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const merged = mergedMesh();
+		scene.add(merged);
+		const cubeMaterial = cube.material;
+		const mergedMaterial = merged.material;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		handlers.selectEntries([
+			{ object: cube, memberIndex: null },
+			{ object: merged, memberIndex: 0 },
+			{ object: merged, memberIndex: 2 }
+		]);
+
+		expect(cube.material).not.toBe(cubeMaterial);
+		expect(merged.material).toHaveLength(2);
+		expect(merged.geometry.groups.filter((g) => g.materialIndex === 1)).toHaveLength(2);
+
+		handlers.selectEntries([]);
+
+		expect(cube.material).toBe(cubeMaterial);
+		expect(merged.material).toBe(mergedMaterial);
+		handlers.dispose();
+	});
+
+	it('leaves a canvas selection alone when told there is nothing to select', () => {
+		const { canvas, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+
+		fire('mousedown', CENTRE);
+		fire('click', CENTRE);
+		const selected = cube.material;
+		handlers.selectEntries([]);
+
+		expect(cube.material).toBe(selected);
+		handlers.dispose();
+	});
+
+	it('treats a click on an entry-selected object as a fresh pick', () => {
+		const { canvas, fire } = fakeCanvas();
+		const scene = sceneWithCube();
+		const cube = scene.children[0] as THREE.Mesh;
+		const onObjectSelected = vi.fn();
+		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), {
+			events: { enableClickToFocus: true, selectionColor: '#ff0000', onObjectSelected }
+		} as unknown as ResolvedOptions);
+
+		handlers.selectEntries([{ object: cube, memberIndex: null }]);
+		fire('mousedown', CENTRE);
+		fire('click', CENTRE);
+
+		expect(onObjectSelected).toHaveBeenCalledWith(cube);
 		handlers.dispose();
 	});
 });

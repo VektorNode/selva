@@ -17,6 +17,7 @@ public static class LayoutPass
 	public static Document Resolve(Document document)
 	{
 		if (document == null) return null;
+		using var scope = LayoutCache.Begin();
 		var pages = new List<Page>(document.Pages.Count);
 		foreach (var page in document.Pages) pages.Add(ResolvePage(page));
 		return new Document
@@ -57,12 +58,17 @@ public static class LayoutPass
 	// layout primitives round-trip unchanged (keeps snapshot tests stable).
 	public static DrawElement Resolve(DrawElement element, LayoutContext context)
 	{
+		using (LayoutCache.Begin()) return ResolveTree(element, context);
+	}
+
+	private static DrawElement ResolveTree(DrawElement element, LayoutContext context)
+	{
 		if (element == null) return null;
 
 		if (element is LayoutElement layout)
 		{
 			var primitive = layout.Resolve(context);
-			return Resolve(primitive, context);
+			return ResolveTree(primitive, context);
 		}
 
 		if (element is GroupElement group)
@@ -72,7 +78,7 @@ public static class LayoutPass
 			for (var i = 0; i < originalChildren.Count; i++)
 			{
 				var child = originalChildren[i];
-				var resolvedChild = Resolve(child, context);
+				var resolvedChild = ResolveTree(child, context);
 				if (rewritten != null)
 				{
 					rewritten.Add(resolvedChild);

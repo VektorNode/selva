@@ -51,11 +51,11 @@ public sealed class InboundMessageParser
         }
 
         var sid = jObj["sessionId"]?.ToString();
-
-        // requestInitialData establishes the session — exempt from the session check.
-        if (msgType != "requestInitialData" && sid != expectedSessionId)
+        if (sid != expectedSessionId)
         {
-            return InboundMessage.Of(InboundKind.SessionMismatch, msgType);
+            // The requestId rides along so a host file request can still be failed.
+            return new InboundMessage
+                { Kind = InboundKind.SessionMismatch, MessageType = msgType, RequestId = RequestIdOf(jObj) };
         }
 
         try
@@ -85,7 +85,12 @@ public sealed class InboundMessageParser
                     return InboundMessage.Of(InboundKind.CancelSolve, msgType);
 
                 case "requestInitialData":
-                    return InboundMessage.Of(InboundKind.RequestInitialData, msgType);
+                    return new InboundMessage
+                    {
+                        Kind = InboundKind.RequestInitialData,
+                        MessageType = msgType,
+                        SchemaOnly = jObj["schemaOnly"]?.Type == JTokenType.Boolean && (bool)jObj["schemaOnly"]
+                    };
 
                 case "saveSchema":
                     {
@@ -136,6 +141,175 @@ public sealed class InboundMessageParser
                         };
                     }
 
+                case "selvaGetAccount":
+                    return InboundMessage.Of(InboundKind.SelvaGetAccount, msgType);
+
+                case "selvaConnect":
+                    {
+                        var origin = jObj["origin"]?.Type == JTokenType.String ? (string)jObj["origin"] : null;
+                        if (string.IsNullOrWhiteSpace(origin))
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.SelvaConnect,
+                            MessageType = msgType,
+                            Origin = origin
+                        };
+                    }
+
+                case "selvaSignIn":
+                    return InboundMessage.Of(InboundKind.SelvaSignIn, msgType);
+
+                case "selvaUseApiKey":
+                    return InboundMessage.Of(InboundKind.SelvaUseApiKey, msgType);
+
+                case "selvaSignOut":
+                    return InboundMessage.Of(InboundKind.SelvaSignOut, msgType);
+
+                case "selvaListTargets":
+                    return InboundMessage.Of(InboundKind.SelvaListTargets, msgType);
+
+                case "selvaUpload":
+                    {
+                        // makeLive is a plain bool once bound, so its presence is checked on the JSON.
+                        var request = jObj["request"] as JObject;
+                        var kind = request?["kind"]?.ToString();
+                        if (request?["makeLive"]?.Type != JTokenType.Boolean ||
+                            (kind != "newDefinition" && kind != "newVersion"))
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.SelvaUpload,
+                            MessageType = msgType,
+                            UploadRequest = request.ToObject<SelvaUploadRequest>(_serializer)
+                        };
+                    }
+
+                case "selvaCancel":
+                    return InboundMessage.Of(InboundKind.SelvaCancel, msgType);
+
+                case "hostSaveFile":
+                    {
+                        var requestId = RequestIdOf(jObj);
+                        var fileName = jObj["fileName"]?.Type == JTokenType.String
+                            ? BareFileName((string)jObj["fileName"])
+                            : null;
+                        if (requestId == null || fileName == null)
+                        {
+                            return new InboundMessage
+                                { Kind = InboundKind.MissingField, MessageType = msgType, RequestId = requestId };
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.HostSaveFile,
+                            MessageType = msgType,
+                            RequestId = requestId,
+                            FileName = fileName
+                        };
+                    }
+
+                case "hostPickFile":
+                    {
+                        var requestId = RequestIdOf(jObj);
+                        if (requestId == null || !(jObj["accept"] is JArray acceptArray))
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        var accept = new List<string>();
+                        foreach (var entry in acceptArray)
+                        {
+                            if (entry.Type == JTokenType.String)
+                            {
+                                accept.Add((string)entry);
+                            }
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.HostPickFile,
+                            MessageType = msgType,
+                            RequestId = requestId,
+                            Accept = accept
+                        };
+                    }
+
+                case "pickGeometry":
+                    {
+                        var requestId = RequestIdOf(jObj);
+                        var paramId = ParamIdOf(jObj);
+                        if (requestId == null || paramId == null)
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = InboundKind.PickGeometry,
+                            MessageType = msgType,
+                            RequestId = requestId,
+                            ParamId = paramId.Value
+                        };
+                    }
+
+                case "clearGeometry":
+                case "trigger":
+                    {
+                        var paramId = ParamIdOf(jObj);
+                        if (paramId == null)
+                        {
+                            return InboundMessage.Of(InboundKind.MissingField, msgType);
+                        }
+
+                        return new InboundMessage
+                        {
+                            Kind = msgType == "trigger" ? InboundKind.Trigger : InboundKind.ClearGeometry,
+                            MessageType = msgType,
+                            ParamId = paramId.Value
+                        };
+                    }
+
+                case "closeDefinition":
+                    return InboundMessage.Of(InboundKind.CloseDefinition, msgType);
+
+                case "editInGrasshopper":
+                    return InboundMessage.Of(InboundKind.EditInGrasshopper, msgType);
+
+                case "draftLayout":
+                    {
+                        var placements = jObj["placements"];
+                        if (placements?.Type == JTokenType.Null)
+                        {
+                            return new InboundMessage { Kind = InboundKind.DraftLayout, MessageType = msgType };
+                        }
+
+                        var locations = placements is JArray array ? DraftLocationsOf(array) : null;
+                        return locations == null
+                            ? InboundMessage.Of(InboundKind.MissingField, msgType)
+                            : new InboundMessage { Kind = InboundKind.DraftLayout, MessageType = msgType, DraftLocations = locations };
+                    }
+
+                case "readLayout":
+                    return new InboundMessage { Kind = InboundKind.ReadLayout, MessageType = msgType, RequestId = RequestIdOf(jObj) };
+
+                case "applyLayout":
+                    return jObj["spec"] is JObject spec
+                        ? new InboundMessage
+                        {
+                            Kind = InboundKind.ApplyLayout,
+                            MessageType = msgType,
+                            RequestId = RequestIdOf(jObj),
+                            LayoutSpec = spec.ToString(Formatting.None)
+                        }
+                        : InboundMessage.Of(InboundKind.MissingField, msgType);
+
                 default:
                     return InboundMessage.Of(InboundKind.Unknown, msgType);
             }
@@ -146,5 +320,61 @@ public sealed class InboundMessageParser
             // contract violation, not a crash — surface it as a missing/invalid field.
             return InboundMessage.Of(InboundKind.MissingField, msgType);
         }
+    }
+
+    // First placement wins, as in LayoutPlacement.Locations. Null when any entry is malformed.
+    private static Dictionary<Guid, LayoutPlacement.Location> DraftLocationsOf(JArray placements)
+    {
+        var locations = new Dictionary<Guid, LayoutPlacement.Location>();
+        foreach (var token in placements)
+        {
+            if (token is not JObject placement
+                || placement["paramId"]?.Type != JTokenType.String
+                || !Guid.TryParse((string)placement["paramId"], out var id)
+                || placement["groupLabel"]?.Type != JTokenType.String)
+            {
+                return null;
+            }
+
+            if (!locations.ContainsKey(id))
+            {
+                locations[id] = new LayoutPlacement.Location
+                {
+                    TabLabel = placement["tabLabel"]?.Type == JTokenType.String ? (string)placement["tabLabel"] : null,
+                    GroupLabel = (string)placement["groupLabel"]
+                };
+            }
+        }
+
+        return locations;
+    }
+
+    private const int MaxRequestIdLength = 64;
+    private const int MaxFileNameLength = 255;
+
+    private static Guid? ParamIdOf(JObject jObj)
+    {
+        return jObj["paramId"]?.Type == JTokenType.String && Guid.TryParse((string)jObj["paramId"], out var id)
+            ? id
+            : null;
+    }
+
+    private static string RequestIdOf(JObject jObj)
+    {
+        var requestId = jObj["requestId"]?.Type == JTokenType.String ? (string)jObj["requestId"] : null;
+        return string.IsNullOrEmpty(requestId) || requestId.Length > MaxRequestIdLength ? null : requestId;
+    }
+
+    // Both separators on every platform: Path.GetFileName on macOS keeps a backslash as part of
+    // the name.
+    private static string BareFileName(string fileName)
+    {
+        var name = fileName.Substring(fileName.LastIndexOfAny(new[] { '/', '\\' }) + 1).Trim();
+        if (name.Length == 0 || name == "." || name == "..")
+        {
+            return "download";
+        }
+
+        return name.Length > MaxFileNameLength ? name.Substring(0, MaxFileNameLength) : name;
     }
 }

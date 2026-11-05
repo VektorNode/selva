@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { CLOUD_STEPS, LOCAL_STEPS, LAYERS, ENV_VAR_GROUPS, type Mode } from '$lib/architecture';
+	import {
+		CLOUD_STEPS,
+		LOCAL_STEPS,
+		LAYERS,
+		ENV_VAR_GROUPS,
+		type Mode
+	} from '#lib/architecture.js';
 	import DetailBlocks from './DetailBlocks.svelte';
 	import SolveWalkthrough from './SolveWalkthrough.svelte';
 	import LocalWalkthrough from './LocalWalkthrough.svelte';
@@ -125,7 +131,7 @@
 					></span>
 					<div class="border-border bg-card overflow-hidden rounded-lg border">
 						<button
-							class="hover:bg-muted/50 block w-full px-4 py-3.5 text-left transition"
+							class="hover:bg-hover block w-full px-4 py-3.5 text-left transition"
 							aria-expanded={expanded === step.id}
 							onclick={() => toggle(step.id)}
 						>

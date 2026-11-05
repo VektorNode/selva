@@ -8,7 +8,7 @@ name: Release
 #
 # Setup this depends on:
 # - npm Trusted Publisher entry per package (repo VektorNode/selva + release.yml),
-#   for EVERY package in `node scripts/publishable-packages.mjs --list`. Missing
+#   for EVERY package in `node scripts/release/publishable-packages.mjs --list`. Missing
 #   entries fail with a misleading 404.
 # - `id-token: write`, or the OIDC exchange is anonymous and 404s.
 # - npm >= 11.5.1 (upgraded below); the Node 20 bundle can't do OIDC.
@@ -55,7 +55,7 @@ jobs:
       # and before the ~5min test gate. A mixed changeset otherwise fails in
       # `changeset version`, after everything expensive has already passed.
       - name: Validate changesets
-        run: node scripts/validate-changesets.mjs
+        run: node scripts/release/validate-changesets.mjs
 
       # Outputs: should_run, is_beta, needs_version.
       - name: Check for pending release work
@@ -64,14 +64,26 @@ jobs:
           if [ "${{ github.ref }}" = "refs/heads/beta" ]; then
             echo "is_beta=true" >> "$GITHUB_OUTPUT"
             if [ ! -f .changeset/pre.json ]; then
-              echo "::error::.changeset/pre.json missing — beta branch is not in pre mode."
-              echo "Run 'pnpm changeset pre enter beta' on the beta branch first."
-              exit 1
+              # Normal between a stable release and `pnpm changeset pre enter beta`. Never version
+              # or publish here: without pre mode both produce stable versions on `latest`.
+              echo "::warning::.changeset/pre.json missing — beta is not in pre mode, so it does not release."
+              echo "Run 'pnpm changeset pre enter beta' on the beta branch to resume beta releases."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            # After `pnpm changeset pre exit`, `changeset version` collapses the betas to stable and
+            # deletes pre.json, and the publish that follows has no prerelease tag left: it goes to
+            # `latest`. A changeset pushed to beta in that window shipped 4.20.0 from beta. Stable
+            # versions are cut on main only.
+            if ! grep -q '"mode": *"pre"' .changeset/pre.json; then
+              echo "::notice::Pre mode is exiting — beta does not release. Merge beta into main to cut the stable version."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
             # In pre mode `changeset version` does NOT delete a consumed .md —
             # it moves it to `.changeset/pre/`. See the script for why this is
             # not read out of pre.json.
-            unconsumed=$(node scripts/unconsumed-changesets.mjs | grep -c . || true)
+            unconsumed=$(node scripts/release/unconsumed-changesets.mjs | grep -c . || true)
             if [ "$unconsumed" -gt 0 ]; then
               echo "Found $unconsumed unconsumed changeset(s) — version + publish."
               echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -86,7 +98,7 @@ jobs:
                 echo "needs_version=false" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-            done < <(node scripts/publishable-packages.mjs --list)
+            done < <(node scripts/release/publishable-packages.mjs --list)
             echo "No unconsumed changesets and all beta versions match npm — skipping."
             echo "should_run=false" >> "$GITHUB_OUTPUT"
             exit 0
@@ -101,6 +113,14 @@ jobs:
             echo "::error::.changeset/pre.json in pre mode on main — pre mode leaked from beta."
             echo "Run 'pnpm changeset pre exit' and commit before releasing from main."
             exit 1
+          fi
+          # After `pnpm changeset pre exit` the betas' changesets stay in .changeset/pre/ as the
+          # stable changelog, and the root holds none. Counting only the root, a promotion
+          # found nothing pending, saw every beta already on npm, and skipped the release.
+          if [ -f .changeset/pre.json ] && grep -q '"mode": *"exit"' .changeset/pre.json; then
+            echo "Pre mode exiting — versioning the betas to stable."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
             ! -name 'README.md' ! -name 'config.md' | wc -l)
@@ -121,7 +141,7 @@ jobs:
               echo "should_run=true" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-          done < <(node scripts/publishable-packages.mjs --list)
+          done < <(node scripts/release/publishable-packages.mjs --list)
           echo "No changesets and all published versions match npm — skipping."
           echo "should_run=false" >> "$GITHUB_OUTPUT"
 
@@ -223,6 +243,18 @@ jobs:
 
       # In pre mode `changeset publish` uses the `beta` dist-tag automatically;
       # passing --tag is rejected. So reuse `pnpm release` (build + publish).
+      # Second line of defence behind the pre-mode check: whatever versioned this tree, beta never
+      # publishes a version without a prerelease suffix, because that publish goes to `latest`.
+      - name: Refuse stable versions on beta
+        if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta == 'true'
+        run: |
+          stable=$(node scripts/release/publishable-packages.mjs --list | awk -F'\t' '$2 !~ /-/ {print $1 "@" $2}')
+          if [ -n "$stable" ]; then
+            echo "::error::Beta would publish stable versions to latest: $(echo $stable)"
+            echo "Stable versions are cut on main. Re-enter pre mode or release through main."
+            exit 1
+          fi
+
       - name: Build & publish beta
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta == 'true'
         run: pnpm release
@@ -236,12 +268,17 @@ jobs:
       - name: Verify no beta work was left behind
         if: steps.check.outputs.is_beta == 'true'
         run: |
+          # Outside pre mode beta releases nothing; its changesets ship through main.
+          if ! grep -qs '"mode": *"pre"' .changeset/pre.json; then
+            echo "Beta is not in pre mode — nothing to verify."
+            exit 0
+          fi
           leftover=0
           while IFS= read -r name; do
             [ -n "$name" ] || continue
             echo "::error::Changeset '$name' is still unconsumed after the release."
             leftover=$((leftover + 1))
-          done < <(node scripts/unconsumed-changesets.mjs)
+          done < <(node scripts/release/unconsumed-changesets.mjs)
           if [ "$leftover" -gt 0 ]; then
             echo "::error::$leftover changeset(s) were not released. The run checked out \
           $(git rev-parse --short HEAD); if newer commits exist on beta, re-run against the tip."

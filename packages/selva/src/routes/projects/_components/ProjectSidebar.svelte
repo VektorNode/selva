@@ -1,8 +1,6 @@
 <script lang="ts">
-	import { Button, Input } from '@selvajs/ui';
-	import { Plus, X, Search, FolderOpen } from '@lucide/svelte';
+	import { Plus, Search, FolderOpen } from '@lucide/svelte';
 	import type { ProjectWithMembers, DefinitionRecord } from '../+page.server';
-	import type { ProjectVisibility } from '@selvajs/platform/projects';
 
 	interface Props {
 		projects: ProjectWithMembers[];
@@ -10,21 +8,11 @@
 		activeProjectId: string | null;
 		canManageProjects: boolean;
 		onSelect: (id: string | null) => void;
-		onCreate: (payload: {
-			name: string;
-			description: string;
-			visibility: ProjectVisibility;
-		}) => Promise<void>;
+		onNewProject: () => void;
 	}
 
-	let { projects, records, activeProjectId, canManageProjects, onSelect, onCreate }: Props =
+	let { projects, records, activeProjectId, canManageProjects, onSelect, onNewProject }: Props =
 		$props();
-
-	let showForm = $state(false);
-	let newName = $state('');
-	let newDescription = $state('');
-	let newVisibility = $state<ProjectVisibility>('public');
-	let creating = $state(false);
 
 	let filterQuery = $state('');
 
@@ -33,35 +21,20 @@
 		if (!q) return projects;
 		return projects.filter((p) => p.name.toLowerCase().includes(q));
 	});
-
-	async function submit() {
-		if (!newName.trim()) return;
-		creating = true;
-		try {
-			await onCreate({
-				name: newName.trim(),
-				description: newDescription,
-				visibility: newVisibility
-			});
-			newName = '';
-			newDescription = '';
-			newVisibility = 'public';
-			showForm = false;
-		} finally {
-			creating = false;
-		}
-	}
 </script>
 
-<aside class="border-border bg-background flex w-60 shrink-0 flex-col overflow-y-auto border-r">
+<!-- Phones get the page's project picker instead: this column would leave the list ~150px. -->
+<aside
+	class="border-border bg-background hidden w-60 shrink-0 flex-col overflow-y-auto border-r sm:flex"
+>
 	<div class="flex items-center justify-between px-4 pt-5 pb-3">
 		<span class="text-muted-foreground text-xs font-medium tracking-wider uppercase">
 			Projects
 		</span>
 		{#if canManageProjects}
 			<button
-				onclick={() => (showForm = !showForm)}
-				class="text-muted-foreground hover:text-foreground rounded p-0.5 transition-colors"
+				onclick={onNewProject}
+				class="text-muted-foreground hover:text-foreground rounded-sm p-0.5 transition-colors"
 				title="New project"
 				aria-label="New project"
 			>
@@ -69,38 +42,6 @@
 			</button>
 		{/if}
 	</div>
-
-	{#if showForm && canManageProjects}
-		<div class="border-border bg-muted/40 mx-3 mb-3 space-y-2 rounded-md border p-3">
-			<Input bind:value={newName} placeholder="Project name" class="h-8 text-xs" />
-			<select
-				bind:value={newVisibility}
-				class="border-input bg-background w-full rounded-md border px-2.5 py-1.5 text-xs outline-none"
-			>
-				<option value="public">Public</option>
-				<option value="org">Org</option>
-				<option value="private">Private</option>
-			</select>
-			<div class="flex gap-1.5">
-				<Button
-					onclick={submit}
-					disabled={creating || !newName.trim()}
-					size="sm"
-					class="h-6 flex-1 text-xs"
-				>
-					{creating ? '…' : 'Create'}
-				</Button>
-				<Button
-					onclick={() => (showForm = false)}
-					variant="ghost"
-					size="sm"
-					class="h-6 px-2 text-xs"
-				>
-					<X class="h-3 w-3" />
-				</Button>
-			</div>
-		</div>
-	{/if}
 
 	{#if projects.length > 4}
 		<div class="relative mx-3 mb-2">
@@ -121,8 +62,8 @@
 			onclick={() => onSelect(null)}
 			class={`group relative flex w-full items-center gap-2 py-1.5 pr-2.5 text-left transition-colors ${
 				activeProjectId === null
-					? 'bg-accent text-accent-foreground rounded-r-md pl-4'
-					: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground mx-2 rounded-md pl-2.5'
+					? 'bg-selected text-foreground rounded-r-md pl-4'
+					: 'text-muted-foreground hover:bg-hover hover:text-foreground mx-2 rounded-md pl-2.5'
 			}`}
 		>
 			{#if activeProjectId === null}
@@ -133,7 +74,7 @@
 		</button>
 
 		{#if filteredProjects.length > 0}
-			<div class="border-border/60 my-2 border-t"></div>
+			<div class="border-border my-2 border-t"></div>
 		{/if}
 
 		{#each filteredProjects as project (project.id)}
@@ -143,8 +84,8 @@
 				onclick={() => onSelect(project.id)}
 				class={`group relative flex w-full items-center gap-2 py-1.5 pr-2.5 text-left transition-colors ${
 					isActive
-						? 'bg-accent text-accent-foreground rounded-r-md pl-4'
-						: 'text-muted-foreground hover:bg-muted/60 hover:text-foreground mx-2 rounded-md pl-2.5'
+						? 'bg-selected text-foreground rounded-r-md pl-4'
+						: 'text-muted-foreground hover:bg-hover hover:text-foreground mx-2 rounded-md pl-2.5'
 				}`}
 			>
 				{#if isActive}

@@ -2,11 +2,10 @@
  * LIVE check that a running compute server's `/grasshopper/schema` body is
  * readable by this client.
  *
- * ## Why a live test, when `server-contract.live.test.ts` already watches drift
+ * ## Why a live test
  *
- * That test parses the server's C# SOURCE. The failure this one guards against
- * is invisible there, because it is not in the source at all — it is an assembly
- * identity problem that only exists at runtime:
+ * The failure this test guards against is invisible in the server's C# source: it
+ * is an assembly identity problem that only exists at runtime:
  *
  * `Selva.gha` ILRepack-merges Newtonsoft.Json, so the `[JsonProperty("inputs")]`
  * attributes on `UISchema` have type `Selva!Newtonsoft.Json.JsonPropertyAttribute`.
@@ -15,30 +14,23 @@
  * `Inputs`, `Layout`, `SchemaVersion`. The C# reads correctly either way; only a
  * real request against a real server reveals which serializer won.
  *
- * Opt-in, following `server-contract.live.test.ts`: needs a compute server, so it
- * self-skips unless RUN_LIVE_SCHEMA=1. Point it at one with COMPUTE_URL
- * (default http://localhost:6001); COMPUTE_API_KEY if the server requires one.
+ *   COMPUTE_LIVE_URL=http://localhost:6500 pnpm test:live
  *
- *   RUN_LIVE_SCHEMA=1 COMPUTE_URL=http://localhost:6001 pnpm test schema-endpoint.live
+ * Pass COMPUTE_LIVE_KEY if the server requires one.
  */
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { normalizeUISchemaCasing } from '../../src/grasshopper/io/normalize-ui-schema';
 import { readSchemaResults } from '../../src/grasshopper/io/schema-endpoint';
 
-const RUN_LIVE = process.env.RUN_LIVE_SCHEMA === '1';
-const COMPUTE_URL = process.env.COMPUTE_URL || 'http://localhost:6001';
-const API_KEY = process.env.COMPUTE_API_KEY;
+const COMPUTE_URL = process.env.COMPUTE_LIVE_URL;
+const API_KEY = process.env.COMPUTE_LIVE_KEY;
 
 // A definition carrying a real embedded Selva schema.
-const FIXTURE = resolve(__dirname, '../../../selva/e2e/fixtures/bench-display.gh');
-
-// `tests/setup.ts` replaces global.fetch with a vi.fn() for unit suites and
-// stashes the real one here for exactly this case.
-const nativeFetch = (globalThis as { __nativeFetch?: typeof fetch }).__nativeFetch ?? fetch;
+const FIXTURE = resolve(__dirname, '../../../schemas/fixtures/definitions/bench-display.gh');
 
 async function postSchema(): Promise<unknown> {
 	const form = new FormData();
@@ -48,7 +40,7 @@ async function postSchema(): Promise<unknown> {
 		'definition.gh'
 	);
 
-	const response = await nativeFetch(new URL('/grasshopper/schema', COMPUTE_URL), {
+	const response = await fetch(new URL('/grasshopper/schema', COMPUTE_URL), {
 		method: 'POST',
 		headers: API_KEY ? { RhinoComputeKey: API_KEY } : {},
 		body: form,
@@ -59,7 +51,9 @@ async function postSchema(): Promise<unknown> {
 	return response.json();
 }
 
-describe.runIf(RUN_LIVE)('live /grasshopper/schema body', () => {
+describe.runIf(Boolean(COMPUTE_URL))('live /grasshopper/schema body', () => {
+	beforeEach(() => vi.unstubAllGlobals());
+
 	it('yields a schema this client can read', async () => {
 		const results = readSchemaResults(await postSchema());
 		const raw = results.flatMap((r) => r.schemas ?? []);
@@ -103,11 +97,4 @@ describe.runIf(RUN_LIVE)('live /grasshopper/schema body', () => {
 
 		expect(keys.length).toBeGreaterThan(0);
 	}, 40_000);
-});
-
-// Always-present marker so the file isn't reported as empty when skipped.
-describe('live schema endpoint test wiring', () => {
-	it('is opt-in via RUN_LIVE_SCHEMA=1', () => {
-		expect(typeof RUN_LIVE).toBe('boolean');
-	});
 });

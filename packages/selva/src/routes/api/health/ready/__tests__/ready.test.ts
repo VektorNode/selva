@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const listUsers = vi.fn();
 
-vi.mock('$lib/server/providers.server', () => ({
+vi.mock('#lib/server/providers.server.js', () => ({
 	providers: {
 		get auth() {
 			return { listUsers };

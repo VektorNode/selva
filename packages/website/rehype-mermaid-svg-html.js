@@ -14,7 +14,10 @@ export default function rehypeMermaidSvgHtml() {
 		visit(tree, 'element', (node, index, parent) => {
 			if (node.tagName !== 'svg' || !parent || index === null) return;
 			const svg = toHtml(node).replace(/\\/g, '\\\\').replace(/`/g, '\\`');
-			parent.children[index] = { type: 'raw', value: `{@html \`${svg}\`}` };
+			parent.children[index] = {
+				type: 'raw',
+				value: `<figure class="diagram">{@html \`${svg}\`}</figure>`
+			};
 			return ['skip'];
 		});
 	};

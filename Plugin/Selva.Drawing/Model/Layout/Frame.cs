@@ -54,7 +54,7 @@ public sealed class Frame : LayoutElement
 		return inner > 0 ? inner : double.PositiveInfinity;
 	}
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var childContext = BuildChildContext(context);
 

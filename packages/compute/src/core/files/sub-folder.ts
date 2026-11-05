@@ -28,7 +28,7 @@ export const subFolderSegments = (subFolder: string | undefined): string[] =>
 		.filter((segment) => segment !== '');
 
 /** First `Sub Folder` segment, or `''` when the file sits at the top level. */
-export const rootOf = (file: Pick<FileData, 'subFolder'>): string =>
+const rootOf = (file: Pick<FileData, 'subFolder'>): string =>
 	subFolderSegments(file.subFolder)[0] ?? '';
 
 /**

@@ -92,6 +92,15 @@ export interface AllowlistStore {
 export function createAllowlistStore(filePath: string): AllowlistStore {
 	const norm = (upn: string) => upn.trim().toLowerCase();
 
+	// Every writer rewrites the whole file through one temp name, so two at once lose
+	// an entry or fail the rename with ENOENT.
+	let queue: Promise<unknown> = Promise.resolve();
+	function locked<T>(fn: () => Promise<T>): Promise<T> {
+		const next = queue.then(fn, fn);
+		queue = next.catch(() => {});
+		return next;
+	}
+
 	return {
 		async findByUpn(upn) {
 			const { users } = await readFile(filePath);
@@ -102,11 +111,10 @@ export function createAllowlistStore(filePath: string): AllowlistStore {
 		async findByEmail(email) {
 			const { users } = await readFile(filePath);
 			const key = norm(email);
-			// Match the `email` column OR the `upn` column: admins pre-allowlist
-			// via `createUser(email)`, which stores the email AS the upn (the
-			// `email` column stays empty until first-login materialization). So
-			// an email-keyed lookup has to consider both.
-			return users.find((u) => norm(u.email ?? '') === key || u.upn === key) ?? null;
+			// Admins pre-allowlist via `createUser(email)`, which stores the email
+			// AS the upn. The `email` column is not searched: proxy headers write
+			// it, so it would hand a reassigned address to the departed holder.
+			return users.find((u) => u.upn === key) ?? null;
 		},
 
 		async findById(id) {
@@ -119,77 +127,89 @@ export function createAllowlistStore(filePath: string): AllowlistStore {
 			return users;
 		},
 
-		async createUser(upn) {
-			const file = await readFile(filePath);
-			const key = norm(upn);
-			if (file.users.some((u) => u.upn === key)) {
-				throw new ProviderError(`User with UPN "${upn}" already exists`, 409);
-			}
-			const entry: AllowlistEntry = {
-				id: randomUUID(),
-				upn: key,
-				createdAt: new Date().toISOString()
-			};
-			file.users.push(entry);
-			await writeFile(filePath, file);
-			return entry;
+		createUser(upn) {
+			return locked(async () => {
+				const file = await readFile(filePath);
+				const key = norm(upn);
+				if (file.users.some((u) => u.upn === key)) {
+					throw new ProviderError(`User with UPN "${upn}" already exists`, 409);
+				}
+				const entry: AllowlistEntry = {
+					id: randomUUID(),
+					upn: key,
+					createdAt: new Date().toISOString()
+				};
+				file.users.push(entry);
+				await writeFile(filePath, file);
+				return entry;
+			});
 		},
 
-		async syncFromHeaders(id, fields) {
-			const file = await readFile(filePath);
-			const user = file.users.find((u) => u.id === id);
-			if (!user) return;
-			let dirty = false;
-			if (fields.email && user.email !== fields.email) {
-				user.email = fields.email;
-				dirty = true;
-			}
-			if (fields.displayName && user.displayName !== fields.displayName) {
-				user.displayName = fields.displayName;
-				dirty = true;
-			}
-			if (dirty) await writeFile(filePath, file);
+		syncFromHeaders(id, fields) {
+			return locked(async () => {
+				const file = await readFile(filePath);
+				const user = file.users.find((u) => u.id === id);
+				if (!user) return;
+				let dirty = false;
+				if (fields.email && user.email !== fields.email) {
+					user.email = fields.email;
+					dirty = true;
+				}
+				if (fields.displayName && user.displayName !== fields.displayName) {
+					user.displayName = fields.displayName;
+					dirty = true;
+				}
+				if (dirty) await writeFile(filePath, file);
+			});
 		},
 
-		async rebindUpn(id, upn) {
-			const file = await readFile(filePath);
-			const key = norm(upn);
-			const user = file.users.find((u) => u.id === id);
-			if (!user || user.upn === key) return;
-			// Don't merge into an existing row — a UPN collision is an operator
-			// data issue, not something to paper over by reassigning identity.
-			if (file.users.some((u) => u.id !== id && u.upn === key)) return;
-			user.upn = key;
-			await writeFile(filePath, file);
+		rebindUpn(id, upn) {
+			return locked(async () => {
+				const file = await readFile(filePath);
+				const key = norm(upn);
+				const user = file.users.find((u) => u.id === id);
+				if (!user || user.upn === key) return;
+				// Don't merge into an existing row — a UPN collision is an operator
+				// data issue, not something to paper over by reassigning identity.
+				if (file.users.some((u) => u.id !== id && u.upn === key)) return;
+				user.upn = key;
+				await writeFile(filePath, file);
+			});
 		},
 
-		async setDisabled(id, disabled) {
-			const file = await readFile(filePath);
-			const user = file.users.find((u) => u.id === id);
-			if (!user) throw new ProviderError(`User "${id}" not found`, 404);
-			user.disabled = disabled;
-			await writeFile(filePath, file);
+		setDisabled(id, disabled) {
+			return locked(async () => {
+				const file = await readFile(filePath);
+				const user = file.users.find((u) => u.id === id);
+				if (!user) throw new ProviderError(`User "${id}" not found`, 404);
+				user.disabled = disabled;
+				await writeFile(filePath, file);
+			});
 		},
 
-		async touchLastLogin(id) {
-			const file = await readFile(filePath);
-			const user = file.users.find((u) => u.id === id);
-			if (!user) return;
-			const now = Date.now();
-			if (user.lastLoginAt) {
-				const prev = Date.parse(user.lastLoginAt);
-				if (Number.isFinite(prev) && now - prev < LAST_LOGIN_DEBOUNCE_MS) return;
-			}
-			user.lastLoginAt = new Date(now).toISOString();
-			await writeFile(filePath, file);
+		touchLastLogin(id) {
+			return locked(async () => {
+				const file = await readFile(filePath);
+				const user = file.users.find((u) => u.id === id);
+				if (!user) return;
+				const now = Date.now();
+				if (user.lastLoginAt) {
+					const prev = Date.parse(user.lastLoginAt);
+					if (Number.isFinite(prev) && now - prev < LAST_LOGIN_DEBOUNCE_MS) return;
+				}
+				user.lastLoginAt = new Date(now).toISOString();
+				await writeFile(filePath, file);
+			});
 		},
 
-		async deleteUser(id) {
-			const file = await readFile(filePath);
-			const before = file.users.length;
-			file.users = file.users.filter((u) => u.id !== id);
-			if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);
-			await writeFile(filePath, file);
+		deleteUser(id) {
+			return locked(async () => {
+				const file = await readFile(filePath);
+				const before = file.users.length;
+				file.users = file.users.filter((u) => u.id !== id);
+				if (file.users.length === before) throw new ProviderError(`User "${id}" not found`, 404);
+				await writeFile(filePath, file);
+			});
 		}
 	};
 }

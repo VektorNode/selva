@@ -1,6 +1,6 @@
 # Selva.Slva
 
-The SLVA mesh format, as a Rhino-free library (`netstandard2.0`, plus a `net7.0` build for
+The SLVA mesh format, as a Rhino-free library (`netstandard2.0`, plus a `net8.0` build for
 the .NET Core legs of the plugin; the csproj says why): encode meshes (plus curves,
 points, materials, and per-object attributes) into one compact self-describing byte stream,
 and read it back. The same bytes travel over Selva's WebSocket, sit inside `.gh` archives,
@@ -62,7 +62,8 @@ Two mechanisms, both already part of the wire format:
   `{"myapp": payloadBytes}` writes one EXTN chunk; `SlvmDocument.Read` returns foreign
   namespaces in `ReadResult.Extensions`, and the rebuild helpers (`Restamp`,
   `StripItems`) preserve them. Selva's own `selva.gh` extension (batch id + Rhino curve
-  JSON) is just the first client of this mechanism.
+  JSON) is just the first client of this mechanism. `SlvmFile.Write` adds `selva.units`, the
+  Rhino unit system name the coordinates are in, and `SlvmFile.Read` reports it.
 
 ## The contract with the TypeScript decoder
 

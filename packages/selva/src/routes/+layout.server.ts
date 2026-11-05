@@ -1,8 +1,10 @@
-import { getBranding, flag, getAuthProvider } from '$lib/server/providers.server';
+import { getBranding, flag, getAuthProvider } from '#lib/server/providers.server.js';
+import { offeredTokenPresets } from '#lib/server/apiTokens/presets.server.js';
 import type { LayoutServerLoad } from './$types';
 
 // Expose the authenticated user to every route in the app.
-export const load: LayoutServerLoad = async ({ locals }) => {
+export const load: LayoutServerLoad = async (event) => {
+	const { locals } = event;
 	return {
 		branding: getBranding(),
 		// Forward-auth providers identify on every request via proxy headers;
@@ -28,7 +30,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			? {
 					orgId: locals.ctx.actingOrgId,
 					platformPermissions: locals.ctx.platformPermissions,
-					orgPermissions: locals.ctx.orgPermissions
+					orgPermissions: locals.ctx.orgPermissions,
+					mayHoldApiTokens: (await offeredTokenPresets(event)).length > 0
 				}
 			: null,
 		flags: {

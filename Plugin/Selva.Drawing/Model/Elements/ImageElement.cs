@@ -16,6 +16,10 @@ public sealed class ImageElement : DrawElement
 	public double Width { get; init; }
 	public double Height { get; init; }
 
+	// PdfRenderer skips the image. Set when the bytes couldn't be re-encoded first, so they never
+	// reach PDFsharp's image parser, which gets no security fixes.
+	public bool SvgOnly { get; init; }
+
 	public override void Accept(IElementVisitor visitor)
 	{
 		if (visitor == null) throw new ArgumentNullException(nameof(visitor));

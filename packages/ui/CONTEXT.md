@@ -33,7 +33,7 @@ schedule.
 
 Two adapters define this seam:
 
-- **Request/response driver** — wraps `createAsyncThrottle` + a `SolveFn` (`onSolve`).
+- **Request/response driver** — wraps a latest-wins throttle + a `SolveFn` (`onSolve`).
   Calls `session.report()` when the solve promise resolves. Lives beside the session in
   `@selvajs/solve/client`; used by `ComputeApp`.
 - **WebSocket driver** — sends values over the socket; reports when output frames
@@ -48,6 +48,14 @@ How a completed solve re-enters the Solve Session. The driver (or its host) call
 result into `values` and applies the post-solve lifecycle transitions (clear pending,
 clear never-solved). Report-based rather than return-based so push transports fit
 without contortion.
+
+## Settlement
+
+How one solve ended, once nothing about it can change: `applied`, `discarded`, `blocked`,
+`aborted` or `failed`. A result held for review settles when the user accepts or rejects it;
+one a queued solve replaces never settles. `session.solve()` resolves with it,
+`session.onSettled` and `ComputeApp`'s `onSolved` report each one, and a footer action marked
+`solvesFirst` runs only on an applied one.
 
 ## Mesh policy
 

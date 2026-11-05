@@ -2,7 +2,7 @@ import { describe, beforeEach, it } from 'vitest';
 import { runProjectStoreConformance } from '@selvajs/platform/testing';
 import { DEFAULT_ORG_PERMISSIONS } from '@selvajs/platform';
 import { SupabaseProjectStore } from '../SupabaseProjectStore.js';
-import { readEnv, resetAllData, seedUser } from './test-helpers.js';
+import { readEnv, resetAllData, seedPlainUser, seedUser } from './test-helpers.js';
 
 const envCtx = readEnv();
 
@@ -51,7 +51,9 @@ if (!envCtx) {
 					ownerSessionToken
 				};
 			},
-			seedUser: (id) => seedUser(envCtx, id)
+			seedUser: (id) => seedUser(envCtx, id),
+			seedOutsider: (id) => seedPlainUser(envCtx, id),
+			ctxIsolation: true
 		});
 	});
 }

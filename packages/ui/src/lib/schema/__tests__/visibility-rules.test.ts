@@ -6,12 +6,14 @@ import {
 	buildVisibilityMap,
 	hasVisibleItems,
 	isTabVisible,
-	itemKey
+	itemKey,
+	visibleInputItems
 } from '../visibility-rules';
 import type {
 	GroupVisibilityCondition,
 	LayoutItem,
 	TabConfig,
+	UISchema,
 	VisibilityRule
 } from '@selvajs/schemas';
 
@@ -241,5 +243,95 @@ describe('isTabVisible', () => {
 				{}
 			)
 		).toBe(false);
+	});
+});
+
+describe('outputs that draw nothing', () => {
+	const output = (widgetType: string) =>
+		({ type: 'output', paramId: 'o', widgetType }) as unknown as LayoutItem;
+	const image = { fileName: 'plan', fileType: '.png', data: 'AAAA', isBase64Encoded: true };
+
+	it('an image output is hidden until a solve returns a file, then shown', () => {
+		expect(evaluateVisibility(output('image'), { o: null }).visible).toBe(false);
+		expect(evaluateVisibility(output('image'), { o: [] }).visible).toBe(false);
+		expect(evaluateVisibility(output('image'), { o: image }).visible).toBe(true);
+		expect(evaluateVisibility(output('image'), { o: [image] }).visible).toBe(true);
+	});
+
+	it('a chart output is hidden until it has data; other outputs show their own placeholder', () => {
+		expect(evaluateVisibility(output('chart'), { o: '' }).visible).toBe(false);
+		expect(evaluateVisibility(output('chart'), { o: '{"data":[]}' }).visible).toBe(true);
+		expect(evaluateVisibility(output('text'), { o: null }).visible).toBe(true);
+	});
+
+	it('a dynamic value list output never draws', () => {
+		expect(evaluateVisibility(output('dynamicValueList'), { o: ['a'] }).visible).toBe(false);
+	});
+
+	it('a tab holding only a pending preview hides, so its pane closes until the image lands', () => {
+		const tab = {
+			id: 't',
+			label: 'Preview',
+			groups: [{ id: 'g', label: 'G', items: [output('image')] }]
+		} as unknown as TabConfig;
+		expect(isTabVisible(tab, { o: null })).toBe(false);
+		expect(isTabVisible(tab, { o: [image] })).toBe(true);
+	});
+});
+
+describe('visibleInputItems', () => {
+	const input = (paramId: string, extra: Record<string, unknown> = {}) =>
+		({
+			type: 'input',
+			id: paramId,
+			paramId,
+			widgetType: 'number',
+			...extra
+		}) as unknown as LayoutItem;
+	const when = (paramId: string, value: unknown) => ({
+		mode: 'all',
+		rules: [{ paramId, operator: 'equals', value }]
+	});
+	const schema = (layout: unknown) => ({ layout }) as unknown as UISchema;
+
+	it('keeps the inputs the form shows: their own condition, their group, their tab', () => {
+		const tabbed = schema({
+			type: 'tabbed',
+			tabs: [
+				{
+					id: 't1',
+					label: 'Form',
+					groups: [
+						{
+							id: 'g1',
+							label: 'G1',
+							items: [
+								input('caps'),
+								input('capLength', { visibilityCondition: when('caps', true) }),
+								{ type: 'output', paramId: 'o', widgetType: 'text' }
+							]
+						},
+						{
+							id: 'g2',
+							label: 'G2',
+							visibilityCondition: when('caps', true),
+							items: [input('capAngle')]
+						}
+					]
+				},
+				{ id: 't2', label: 'Hidden', visible: false, groups: [{ id: 'g3', items: [input('x')] }] }
+			]
+		});
+		const ids = (values: Record<string, unknown>) =>
+			visibleInputItems(tabbed, values).map((i) => i.paramId);
+
+		expect(ids({ caps: false })).toEqual(['caps']);
+		expect(ids({ caps: true })).toEqual(['caps', 'capLength', 'capAngle']);
+	});
+
+	it('walks a flat layout, and answers nothing without one', () => {
+		const flat = schema({ type: 'flat', groups: [{ id: 'g', items: [input('a')] }] });
+		expect(visibleInputItems(flat, {}).map((i) => i.paramId)).toEqual(['a']);
+		expect(visibleInputItems(schema(undefined), {})).toEqual([]);
 	});
 });

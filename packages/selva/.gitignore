@@ -17,7 +17,7 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
-# Provider dev harness (scripts/dev-provider.mjs). Throwaway keys and the
+# Provider dev harness (scripts/develop/dev-provider.mjs). Throwaway keys and the
 # Supabase CLI's published local-dev keys only — tracked so `pnpm dev:<provider>`
 # works on a fresh clone. Never put a real secret in one of these.
 !.env.dev-local
@@ -55,3 +55,6 @@ vite.config.ts.timestamp-*
 /playwright/.cache
 /.e2e
 /e2e/.auth
+
+# Written at boot beside .env (lib/server/config/boot.server.ts).
+.selva-config-snapshot.json

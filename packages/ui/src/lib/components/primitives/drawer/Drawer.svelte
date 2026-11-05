@@ -21,12 +21,12 @@
 	role="button"
 	tabindex="-1"
 	aria-label={ariaLabel}
-	class="inset-0 bg-black/30 fixed z-50"
+	class="inset-0 fixed z-50 bg-overlay"
 	onclick={onClose}
 	onkeydown={handleKey}
 ></div>
 <div
-	class="animate-in slide-in-from-right-4 top-0 right-0 fixed z-50 flex h-full border-border bg-background {width} flex-col overflow-y-auto border-l duration-150"
+	class="animate-in slide-in-from-right-4 top-0 right-0 fixed z-50 flex h-full max-w-full border-border bg-raised {width} flex-col overflow-y-auto border-l duration-150"
 >
 	{@render children()}
 </div>

@@ -15,4 +15,4 @@ keywords:
 
 icon: icon.png
 targetframeworks:
-  - 'net9.0'
+  - 'net10.0'

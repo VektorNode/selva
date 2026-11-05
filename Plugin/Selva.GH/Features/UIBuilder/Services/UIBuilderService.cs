@@ -14,6 +14,8 @@ public class UIBuilderService : IDisposable
     }
 
     public SchemaSynchronizer SchemaSynchronizer { get; private set; }
+    public GeometryPicks GeometryPicks { get; private set; }
+    public TriggerPresses TriggerPresses { get; private set; }
     public ValueApplicator ValueApplicator { get; private set; }
     public ValueCollector ValueCollector { get; private set; }
     public ComponentStateManager StateManager { get; private set; }
@@ -26,13 +28,22 @@ public class UIBuilderService : IDisposable
     public ServerLifecycleManager ServerManager { get; private set; }
     public BridgeOrchestrator BridgeService { get; private set; }
     public DocumentSynchronizationService DocumentSyncService { get; private set; }
+    public SelvaUploadCoordinator SelvaUpload { get; private set; }
 
     public string SessionId { get; }
+
+    /// <summary>
+    ///     What a page must send before the bridge talks to it. Travels only in the fragment of the
+    ///     page URL (the URL output and the Open UI menu items); never logged.
+    /// </summary>
+    public string BridgeSecret { get; } = BridgeAccess.NewSecret();
+
     public Version PluginVersion { get; }
 
     public void Dispose()
     {
         BridgeService?.Dispose();
+        SelvaUpload?.Dispose();
         DocumentSyncService?.Dispose();
         ServerManager?.Dispose();
         WebSocketTransport?.Dispose();
@@ -44,17 +55,20 @@ public class UIBuilderService : IDisposable
     {
         SchemaSynchronizer = new SchemaSynchronizer(SessionId);
         ValueApplicator = new ValueApplicator();
-        ValueCollector = new ValueCollector();
+        GeometryPicks = new GeometryPicks();
+        TriggerPresses = new TriggerPresses();
+        ValueCollector = new ValueCollector(GeometryPicks);
         StateManager = new ComponentStateManager();
-        WebSocketTransport = new WebSocketTransport(SessionId);
+        WebSocketTransport = new WebSocketTransport(SessionId, BridgeSecret);
 
         WebServer = new LocalWebServer();
 
-        EventManager = new DocumentEventManager(SchemaSynchronizer, ValueCollector, WebSocketTransport);
+        var perf = new BridgePerf();
+        EventManager = new DocumentEventManager(SchemaSynchronizer, ValueCollector, WebSocketTransport, perf);
         CleanupService = new SchemaCleanupService();
 
         PersistenceService = new SchemaArchiveSerializer(PluginVersion);
-        ServerManager = new ServerLifecycleManager(WebServer, WebSocketTransport);
+        ServerManager = new ServerLifecycleManager(WebServer, WebSocketTransport, () => EventManager.CurrentDocument);
         BridgeService = new BridgeOrchestrator(
             WebSocketTransport,
             SchemaSynchronizer,
@@ -62,9 +76,13 @@ public class UIBuilderService : IDisposable
             ValueCollector,
             StateManager,
             EventManager,
+            GeometryPicks,
+            TriggerPresses,
+            perf,
             PluginVersion,
             SessionId
         );
+        SelvaUpload = new SelvaUploadCoordinator(WebSocketTransport);
         DocumentSyncService = new DocumentSynchronizationService(
             EventManager,
             SchemaSynchronizer,

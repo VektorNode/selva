@@ -11,6 +11,7 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.FileIO.Goos;
@@ -57,12 +58,14 @@ public class ValueApplicator
 
     private ConcurrentDictionary<string, object> _lastAppliedValues = new ConcurrentDictionary<string, object>();
 
+    /// <param name="scheduleDelayMs">How long the solve waits to start.</param>
     /// <returns>Number of parameters updated</returns>
     public int ApplyValuesAndSchedule(GH_Document document, UISchema schema, Dictionary<string, object> values,
-        Action<GH_RuntimeMessageLevel, string> addMessage)
+        Action<GH_RuntimeMessageLevel, string> addMessage, int scheduleDelayMs)
     {
         var updateCount = 0;
         var pendingExpirations = new HashSet<IGH_ActiveObject>();
+        var ranges = new NumberRanges(schema);
 
         foreach (var input in schema.Inputs)
         {
@@ -70,10 +73,19 @@ public class ValueApplicator
             {
                 var inputKey = input.Id.ToString();
 
-                // Check the payload before the expensive FindObject lookup.
-                if (!values.TryGetValue(inputKey, out var value))
+                // Check the payload before the expensive FindObject lookup. A geometry input's
+                // data comes from a viewport pick, never from the form.
+                if (!values.TryGetValue(inputKey, out var value) || GeometryParamTypes.Contains(input.ParamType))
                 {
                     continue;
+                }
+
+                // Before dedup, so a repeated out-of-range value dedups against the bound it applied.
+                value = ranges.Clamp(input, value, out var clamped);
+                if (clamped)
+                {
+                    addMessage?.Invoke(GH_RuntimeMessageLevel.Warning,
+                        $"'{input.Nickname}' was out of range and was clamped to {Convert.ToString(value, CultureInfo.InvariantCulture)}");
                 }
 
                 var paramObject = document.FindObject(input.Id, false);
@@ -144,7 +156,7 @@ public class ValueApplicator
         if (pendingExpirations.Count > 0)
         {
             var toExpire = pendingExpirations;
-            document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+            document.ScheduleSolution(scheduleDelayMs, doc =>
             {
                 foreach (var obj in toExpire)
                 {
@@ -212,8 +224,8 @@ public class ValueApplicator
         _lastAppliedValues.Clear();
     }
 
-    // Min/max range constraints are enforced at the UI level; this only guards against
-    // oversized strings and unusable numeric values.
+    // Min/max is clamped earlier by NumberRanges; this only guards against oversized strings and
+    // unusable numeric values.
     private bool ValidateValue(SchemaInput input, object value,
         Action<GH_RuntimeMessageLevel, string> addMessage)
     {

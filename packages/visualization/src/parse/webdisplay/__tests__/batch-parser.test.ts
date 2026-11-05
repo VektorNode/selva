@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildMeshBatch, encodeBatchPayload } from '@tests/helpers/mesh-batch-builder';
 import type { MeshBatchBuilderOptions } from '@tests/helpers/mesh-batch-builder';
-import { decodeBase64ToBinary, getLogger, setLogger } from '../../../shared/index.js';
+import { OWN_EMISSIVE, decodeBase64ToBinary, getLogger, setLogger } from '../../../shared/index.js';
 import { getTrackingKey } from '../../../scene/identity.js';
 
 import {
@@ -12,6 +12,7 @@ import {
 	parseMeshBatchBlob,
 	resetUnmergedWarning
 } from '../batch-parser';
+import { createMaterial } from '../batch/materials';
 
 const COORD_TRANSFORM_TOLERANCE = 1e-5;
 
@@ -287,6 +288,22 @@ describe('parseMeshBatchObject', () => {
 			expect(metal.clearcoat).toBe(0); // no automatic coat
 			expect(byMetalness(0).envMapIntensity).toBe(0.5);
 		});
+	});
+
+	it("sets emission from the wire and marks it as the material's own", () => {
+		const material = createMaterial({
+			color: '#ffffff',
+			metalness: 0,
+			roughness: 0.5,
+			opacity: 1,
+			transparent: false,
+			emissive: '#ffd8a0',
+			emissiveIntensity: 4
+		});
+
+		expect(material.emissive.getHexString()).toBe(new THREE.Color('#ffd8a0').getHexString());
+		expect(material.emissiveIntensity).toBe(4);
+		expect(material.userData[OWN_EMISSIVE]).toBe(true);
 	});
 
 	describe('uv and vertex-color attributes', () => {

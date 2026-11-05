@@ -1,22 +1,11 @@
-/**
- * Regression tests for the env-portable base64 helpers.
- *
- * - encodeStringToBase64 must work without Node's `Buffer` (browsers/workers),
- *   falling back to TextEncoder + btoa. It used bare `Buffer` and threw a
- *   ReferenceError in browsers — reachable from prepareGrasshopperArgs'
- *   plain-string path.
- * - decodeBase64ToBinary error paths, pool-copy behavior (issue 107), and the
- *   >32768-byte chunk boundary of the browser encode fallback (issue 108).
- * - utf8ByteLength surrogate handling.
- * - detectBase64Payload heuristic pins (issues 69/92).
- */
+// Every helper must behave the same with and without Node's `Buffer`: the tests delete it to
+// exercise the browser path.
 import { afterEach, describe, expect, it } from 'vitest';
 import {
 	encodeStringToBase64,
 	decodeBase64ToBinary,
 	base64ByteArray,
 	utf8ByteLength,
-	isBase64,
 	detectBase64Payload,
 	BASE64_DETECT_MIN_LENGTH
 } from '../encoding';
@@ -31,42 +20,24 @@ afterEach(() => {
 });
 
 describe('string base64 helpers', () => {
-	it('round-trips with Buffer available (Node path)', () => {
-		const encoded = encodeStringToBase64('hello wörld');
-		expect(decode(encoded)).toBe('hello wörld');
-	});
+	it('encodes the same with and without Buffer, and decodes back on both paths', () => {
+		const text = 'multi-byte: ✓ 日本語';
+		const viaBuffer = encodeStringToBase64(text);
+		expect(decode(viaBuffer)).toBe(text);
 
-	it('round-trips without Buffer (browser fallback path)', () => {
 		delete (globalThis as any).Buffer;
-
-		const encoded = encodeStringToBase64('hello wörld');
-		expect(decode(encoded)).toBe('hello wörld');
-	});
-
-	it('browser fallback produces the same base64 as the Buffer path', () => {
-		const viaBuffer = encodeStringToBase64('multi-byte: ✓ 日本語');
-		delete (globalThis as any).Buffer;
-		const viaFallback = encodeStringToBase64('multi-byte: ✓ 日本語');
-		expect(viaFallback).toBe(viaBuffer);
+		expect(encodeStringToBase64(text)).toBe(viaBuffer);
+		expect(decode(viaBuffer)).toBe(text);
 	});
 });
 
 describe('decodeBase64ToBinary error paths', () => {
 	it('throws ENCODING_ERROR on characters outside the alphabet', () => {
-		expect(() => decodeBase64ToBinary('not base64!!!')).toThrowError(ComputeError);
-		try {
-			decodeBase64ToBinary('####');
-		} catch (error) {
-			expect((error as ComputeError).code).toBe(ErrorCodes.ENCODING_ERROR);
+		for (const input of ['not base64!!!', '####']) {
+			expect(() => decodeBase64ToBinary(input)).toThrowError(
+				expect.objectContaining({ code: ErrorCodes.ENCODING_ERROR })
+			);
 		}
-	});
-
-	it('throws ENCODING_ERROR on an impossible length (len % 4 === 1 after normalization)', () => {
-		expect(() => decodeBase64ToBinary('AAAAA')).toThrowError(ComputeError);
-	});
-
-	it('throws ENCODING_ERROR on misplaced padding', () => {
-		expect(() => decodeBase64ToBinary('AB=AAAAA')).toThrowError(ComputeError);
 	});
 
 	it('throws the SAME error on the browser (atob) path as on the Node path', () => {
@@ -87,24 +58,21 @@ describe('decodeBase64ToBinary error paths', () => {
 	});
 });
 
-describe('decodeBase64ToBinary pool aliasing (issue 107)', () => {
+describe('decodeBase64ToBinary pool aliasing', () => {
 	it('returns bytes backed by an exactly-sized, non-shared ArrayBuffer', () => {
-		const bytes = decodeBase64ToBinary('aGVsbG8='); // "hello", 5 bytes
-		expect(bytes.byteOffset).toBe(0);
-		// A view over Node's shared pool would report the whole 8 KiB slab here.
-		expect(bytes.buffer.byteLength).toBe(bytes.byteLength);
-		expect(bytes.byteLength).toBe(5);
-	});
+		const small = 'aGVsbG8='; // "hello", 5 bytes
+		const large = originalBuffer.alloc(1 << 20, 9).toString('base64') as string;
 
-	it('mutating the result does not corrupt a sibling decode (no shared slab)', () => {
-		const a = decodeBase64ToBinary('AAAAAA=='); // 4 zero bytes
-		const b = decodeBase64ToBinary('AAAAAA==');
-		a.fill(0xff);
-		expect(Array.from(b)).toEqual([0, 0, 0, 0]);
+		for (const base64 of [small, large]) {
+			const bytes = decodeBase64ToBinary(base64);
+			expect(bytes.byteOffset).toBe(0);
+			// A view over Node's shared pool would report the whole 8 KiB slab here.
+			expect(bytes.buffer.byteLength).toBe(bytes.byteLength);
+		}
 	});
 });
 
-describe('base64ByteArray chunk boundaries (issue 108)', () => {
+describe('base64ByteArray chunk boundaries', () => {
 	it('browser fallback matches the Buffer path across the >32768-byte chunk boundary', () => {
 		// Deliberately NOT a multiple of the 32766-byte chunk: exercises several
 		// full chunks plus a ragged final one, and both padded/unpadded tails.
@@ -120,42 +88,26 @@ describe('base64ByteArray chunk boundaries (issue 108)', () => {
 			expect(viaFallback).toBe(viaBuffer);
 		}
 	});
-
-	it('browser fallback round-trips through decode', () => {
-		const bytes = new Uint8Array(70_000);
-		for (let i = 0; i < bytes.length; i++) bytes[i] = (i * 13 + 1) & 0xff;
-		delete (globalThis as any).Buffer;
-		const encoded = base64ByteArray(bytes);
-		(globalThis as any).Buffer = originalBuffer;
-		expect(decodeBase64ToBinary(encoded)).toEqual(bytes);
-	});
 });
 
 describe('utf8ByteLength', () => {
-	const cases = [
+	it.each([
 		'',
 		'ascii only',
 		'wörld', // 2-byte code points
 		'日本語', // 3-byte code points
 		'𐍈 emoji 🦄 pair', // surrogate pairs → 4-byte code points
-		'\uD800', // lone high surrogate
-		'tail\uDC00', // lone low surrogate
-		'\uD800𐀀' // lone high followed by a valid pair
-	];
+		'\uD800' // lone surrogate
+	])('matches TextEncoder for %j, with and without Buffer', (str) => {
+		const expected = new TextEncoder().encode(str).length;
+		expect(utf8ByteLength(str)).toBe(expected);
 
-	it.each(cases)('matches TextEncoder for %j', (str) => {
-		expect(utf8ByteLength(str)).toBe(new TextEncoder().encode(str).length);
-	});
-
-	it('matches on the fallback (no Buffer) path too', () => {
 		delete (globalThis as any).Buffer;
-		for (const str of cases) {
-			expect(utf8ByteLength(str)).toBe(new TextEncoder().encode(str).length);
-		}
+		expect(utf8ByteLength(str)).toBe(expected);
 	});
 });
 
-describe('detectBase64Payload heuristic (issues 69/92)', () => {
+describe('detectBase64Payload heuristic', () => {
 	// 96 chars of canonical base64 (72 bytes), the realistic "definition" shape.
 	const longB64 = originalBuffer
 		.from(new Uint8Array(72).map((_, i) => i * 3 + 1))
@@ -203,19 +155,48 @@ describe('detectBase64Payload heuristic (issues 69/92)', () => {
 		expect(detectBase64Payload(`${'A'.repeat(60)} not base64!`)).toBeNull();
 		expect(detectBase64Payload('')).toBeNull();
 	});
-
-	it('documents the residual ambiguity: a long alphabet-only plain string IS detected', () => {
-		// 64 'A's decode to 48 zero bytes — indistinguishable from real base64.
-		// Callers that must be exact pass Uint8Array; pinned so a change is loud.
-		expect(detectBase64Payload('A'.repeat(64))).toBe('A'.repeat(64));
-	});
 });
 
-describe('isBase64 (syntactic check, unchanged semantics)', () => {
-	it('remains a pure syntax check — short strings like "test" still pass', () => {
-		expect(isBase64('test')).toBe(true);
-		expect(isBase64('SGVsbG8=')).toBe(true);
-		expect(isBase64('not base64!!!')).toBe(false);
-		expect(isBase64('AAA')).toBe(false); // length % 4 !== 0
+describe('decodeBase64ToBinary — strictness on both paths', () => {
+	/** The WHATWG forgiving-base64 rules, spelled out: what both decoders must accept. */
+	function reference(input: string): number[] | null {
+		let data = input.replace(/[\t\n\f\r ]/g, '');
+		if (data.length % 4 === 0) data = data.replace(/={1,2}$/, '');
+		if (data.length % 4 === 1 || !/^[A-Za-z0-9+/]*$/.test(data)) return null;
+		return [...originalBuffer.from(data, 'base64')];
+	}
+	const attempt = (input: string): number[] | null => {
+		try {
+			return [...decodeBase64ToBinary(input)];
+		} catch {
+			return null;
+		}
+	};
+
+	// Valid encodings, then near misses: each mutation splices in a character Buffer decodes
+	// leniently (base64url, the low byte of non-ASCII), stops on, or skips.
+	const tricky = ['A', '+', '/', '=', '-', '_', ' ', '\n', '.', 'é', 'Ł', '\ud800'];
+	let seed = 7;
+	const random = (n: number) => {
+		seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+		return seed % n;
+	};
+	const samples = Array.from({ length: 4000 }, () => {
+		const bytes = Uint8Array.from({ length: random(40) }, () => random(256));
+		let s = originalBuffer.from(bytes).toString('base64');
+		for (let m = random(3); m > 0; m--) {
+			const at = random(s.length + 1);
+			s = s.slice(0, at) + tricky[random(tricky.length)] + s.slice(at + random(2));
+		}
+		return s;
+	});
+
+	it('accepts and rejects exactly what the forgiving-base64 rules do, with Buffer', () => {
+		for (const s of samples) expect(attempt(s), JSON.stringify(s)).toEqual(reference(s));
+	});
+
+	it('accepts and rejects exactly what the forgiving-base64 rules do, with atob', () => {
+		delete (globalThis as any).Buffer;
+		for (const s of samples) expect(attempt(s), JSON.stringify(s)).toEqual(reference(s));
 	});
 });

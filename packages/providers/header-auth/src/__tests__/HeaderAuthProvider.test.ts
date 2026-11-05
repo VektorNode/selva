@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { runAuthCoreConformance } from '@selvajs/platform/testing';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import * as os from 'node:os';
@@ -30,6 +31,14 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	await fs.rm(tempDir, { recursive: true, force: true });
+});
+
+runAuthCoreConformance({
+	name: 'HeaderAuthProvider',
+	createProvider: () => ({
+		provider: new HeaderAuthProvider({ allowlistFilePath }),
+		adminPassword: ''
+	})
 });
 
 // ============================================================================
@@ -325,6 +334,18 @@ describe('HeaderAuthProvider — identifyFromHeaders', () => {
 // ============================================================================
 // Bootstrap-allowlist policy — first-admin auto-allowlist
 // ============================================================================
+
+describe('HeaderAuthProvider — sign-in contract', () => {
+	it('a proxied visit is a sign-in: it stamps lastLoginAt', async () => {
+		const created = await provider.createUser!('alice@example.com');
+		expect((await provider.getUser(created.id))?.lastLoginAt).toBeUndefined();
+		await provider.proxyAuth.identifyFromHeaders(
+			makeRequestHeaders({ 'SELVA-UserPrincipalName': 'alice@example.com' })
+		);
+		const stamped = (await provider.getUser(created.id))?.lastLoginAt;
+		expect(Number.isFinite(Date.parse(stamped ?? ''))).toBe(true);
+	});
+});
 
 describe('HeaderAuthProvider — bootstrap policy', () => {
 	it('auto-allowlists when policy returns true and grants identity in the same call', async () => {

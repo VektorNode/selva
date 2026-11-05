@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/server",
-	"version": "1.4.1",
+	"version": "2.0.0",
 	"description": "Transport-agnostic server building blocks for apps built on the Selva engine (limits, rate limiting, SSRF guard, remote-definition fetch, definition service + render loader); the solve core lives in @selvajs/solve/server",
 	"license": "MIT",
 	"author": "VektorNode",
@@ -31,6 +31,11 @@
 			"types": "./dist/compute/index.d.ts",
 			"import": "./dist/compute/index.js"
 		},
+		"./config": {
+			"selva-source": "./src/config/index.ts",
+			"types": "./dist/config/index.d.ts",
+			"import": "./dist/config/index.js"
+		},
 		"./definitions": {
 			"selva-source": "./src/definitions/index.ts",
 			"types": "./dist/definitions/index.d.ts",
@@ -40,6 +45,11 @@
 			"selva-source": "./src/providers/index.ts",
 			"types": "./dist/providers/index.d.ts",
 			"import": "./dist/providers/index.js"
+		},
+		"./oauth": {
+			"selva-source": "./src/oauth/index.ts",
+			"types": "./dist/oauth/index.d.ts",
+			"import": "./dist/oauth/index.js"
 		},
 		"./tokens": {
 			"selva-source": "./src/tokens/index.ts",
@@ -145,8 +155,9 @@
 		"@selvajs/config": "workspace:*",
 		"@selvajs/local-provider": "workspace:*",
 		"@types/node": "catalog:",
-		"@types/nodemailer": "^8.0.2",
-		"nodemailer": "^10.0.10",
+		"@types/nodemailer": "catalog:",
+		"fast-check": "catalog:",
+		"nodemailer": "catalog:",
 		"typescript": "catalog:",
 		"vitest": "catalog:"
 	}

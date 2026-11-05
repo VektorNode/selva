@@ -19,7 +19,7 @@ import {
 	actAs,
 	callHandler
 } from '../../testing/index.js';
-import { updateProjectMemberRole } from '../projectMembers.js';
+import { removeProjectMember, updateProjectMemberRole } from '../projectMembers.js';
 
 let tp: HandlerHarness | null = null;
 
@@ -137,5 +137,70 @@ describe('PATCH /api/v1/projects/{id}/members/{userId} — owner count', () => {
 		});
 
 		expect(res.status).toBe(204);
+	});
+});
+
+describe('two project owners acting on each other at once', () => {
+	async function coOwners() {
+		tp = await freshHarness();
+		const { acme, alice, bob } = await seedAcme(tp);
+		const project = await seedProject(tp, {
+			orgId: acme.id,
+			name: 'Shared',
+			slug: 'shared',
+			ownerId: alice.id,
+			visibility: 'private'
+		});
+		await seedProjectMember(tp, { projectId: project.id, userId: alice.id, role: 'owner' });
+		await seedProjectMember(tp, { projectId: project.id, userId: bob.id, role: 'owner' });
+		const [la, lb] = await Promise.all([actAs(tp, alice.id), actAs(tp, bob.id)]);
+		return { alice, bob, project, la, lb, query: 'http://t/?confirm=true' };
+	}
+
+	it('leaves one owner when they demote each other', async () => {
+		const { alice, bob, project, la, lb, query } = await coOwners();
+
+		const results = await Promise.all([
+			callHandler(updateProjectMemberRole, {
+				locals: la,
+				method: 'PATCH',
+				url: query,
+				params: { id: project.id, userId: bob.id },
+				body: { role: 'viewer' }
+			}),
+			callHandler(updateProjectMemberRole, {
+				locals: lb,
+				method: 'PATCH',
+				url: query,
+				params: { id: project.id, userId: alice.id },
+				body: { role: 'viewer' }
+			})
+		]);
+
+		const members = await tp!.config.data.projects.listProjectMembers(SYSTEM_CONTEXT, project.id);
+		expect(members.items.filter((m) => m.role === 'owner')).toHaveLength(1);
+		expect(results.filter((r) => r.status === 204)).toHaveLength(1);
+	});
+
+	it('leaves one owner when they remove each other', async () => {
+		const { alice, bob, project, la, lb, query } = await coOwners();
+
+		await Promise.all([
+			callHandler(removeProjectMember, {
+				locals: la,
+				method: 'DELETE',
+				url: query,
+				params: { id: project.id, userId: bob.id }
+			}),
+			callHandler(removeProjectMember, {
+				locals: lb,
+				method: 'DELETE',
+				url: query,
+				params: { id: project.id, userId: alice.id }
+			})
+		]);
+
+		const members = await tp!.config.data.projects.listProjectMembers(SYSTEM_CONTEXT, project.id);
+		expect(members.items.filter((m) => m.role === 'owner')).toHaveLength(1);
 	});
 });

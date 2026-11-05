@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Selva.Schema.Models;
 using Selva.GH.Features.UIBuilder.Services.Schema;
@@ -22,7 +23,7 @@ public enum InboundKind
     /// <summary>`requestCurrentValues` — no payload.</summary>
     RequestCurrentValues,
 
-    /// <summary>`requestInitialData` — establishes the session; exempt from the session-id check.</summary>
+    /// <summary>`requestInitialData`, optionally with `schemaOnly`.</summary>
     RequestInitialData,
 
     /// <summary>`saveSchema` with a non-null schema.</summary>
@@ -37,7 +38,61 @@ public enum InboundKind
     /// <summary>`cancelSolve` — no payload. Handled off the UI thread, which the solver holds.</summary>
     CancelSolve,
 
-    /// <summary>A known type whose `sessionId` didn't match (and isn't `requestInitialData`).</summary>
+    /// <summary>`selvaGetAccount` — no payload. Answered with `selvaAccount`.</summary>
+    SelvaGetAccount,
+
+    /// <summary>`selvaConnect` with the instance URL the user typed, not yet normalised.</summary>
+    SelvaConnect,
+
+    /// <summary>`selvaSignIn` — no payload. Starts the browser sign-in for the active instance.</summary>
+    SelvaSignIn,
+
+    /// <summary>`selvaUseApiKey` — no payload. The key is pasted into a plugin dialog, never the page.</summary>
+    SelvaUseApiKey,
+
+    /// <summary>`selvaSignOut` — no payload.</summary>
+    SelvaSignOut,
+
+    /// <summary>`selvaListTargets` — no payload. Answered with `selvaTargets`.</summary>
+    SelvaListTargets,
+
+    /// <summary>`selvaUpload` with a request whose kind and makeLive are present.</summary>
+    SelvaUpload,
+
+    /// <summary>`selvaCancel` — no payload. Stops a sign-in or upload in flight.</summary>
+    SelvaCancel,
+
+    /// <summary>`hostSaveFile` with a request id and file name. Only valid as a binary frame's header.</summary>
+    HostSaveFile,
+
+    /// <summary>`hostPickFile` with a request id and the page's accept list. Answered with one file or a result.</summary>
+    HostPickFile,
+
+    /// <summary>`pickGeometry` with a request id and a param id. Answered with `pickGeometryResult`.</summary>
+    PickGeometry,
+
+    /// <summary>`clearGeometry` with a param id: drops what a pick put on that param.</summary>
+    ClearGeometry,
+
+    /// <summary>`trigger` with a param id: a button press, one solve with true.</summary>
+    Trigger,
+
+    /// <summary>`closeDefinition` — no payload. Closes the definition a player session opened.</summary>
+    CloseDefinition,
+
+    /// <summary>`editInGrasshopper` — no payload. Shows the editor and turns a player session into an author one.</summary>
+    EditInGrasshopper,
+
+    /// <summary>`draftLayout` with where the editor's unsaved draft places each param, or null once it matches the saved schema.</summary>
+    DraftLayout,
+
+    /// <summary>`readLayout` with a request id: the form as a layout spec, params named by nickname.</summary>
+    ReadLayout,
+
+    /// <summary>`applyLayout` with a request id and a layout spec: lays the form out by nickname.</summary>
+    ApplyLayout,
+
+    /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
     /// <summary>A known type missing a required field (e.g. `valueUpdate` with no `values`).</summary>
@@ -69,6 +124,30 @@ public sealed class InboundMessage
     public string BaseSchemaHash { get; init; }
 
     public List<SyncChange> Changes { get; init; }
+
+    public string Origin { get; init; }
+
+    public SelvaUploadRequest UploadRequest { get; init; }
+
+    /// <summary>Echoed in the reply so the page can match it to its request.</summary>
+    public string RequestId { get; init; }
+
+    /// <summary>The name to suggest in the Save dialog: a bare file name, never a path.</summary>
+    public string FileName { get; init; }
+
+    public List<string> Accept { get; init; }
+
+    /// <summary>The input a geometry pick or a button press is for.</summary>
+    public Guid ParamId { get; init; }
+
+    /// <summary>`draftLayout`: each param's tab and group in the unsaved draft; null when there is no draft.</summary>
+    public Dictionary<Guid, LayoutPlacement.Location> DraftLocations { get; init; }
+
+    /// <summary>`requestInitialData` from a page that only reads the schema: no outputs or display data follow.</summary>
+    public bool SchemaOnly { get; init; }
+
+    /// <summary>`applyLayout`: the layout spec as JSON text, as SchemaLayout takes it.</summary>
+    public string LayoutSpec { get; init; }
 
     // Populated per-Kind, so most instances leave several of these null. The plugin compiles
     // without a nullable context; the test project links this file in under one, hence the

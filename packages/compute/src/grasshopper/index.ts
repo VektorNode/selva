@@ -9,7 +9,7 @@
 // CLIENT API (Recommended)
 // ============================================================================
 export { default as GrasshopperClient } from './client/grasshopper-client';
-export type { SolveOptions } from './client/grasshopper-client';
+export type { SolveOptions, CreateClientOptions } from './client/grasshopper-client';
 export { default as GrasshopperResponseProcessor } from './client/grasshopper-response-processor';
 
 // ============================================================================
@@ -21,12 +21,12 @@ export type {
 	CacheOptions,
 	SolveSchedulerOptions,
 	SolveContext,
-	SolveResult
-} from './scheduler/solve-scheduler';
-
-// Stable keying helpers — exported so an app-layer durable cache or a
-// pre-solved bundle viewer can reproduce the scheduler's exact solve key.
-// See `scheduler/stable-hash.ts` for the key-parity contract.
+	SolveResult,
+	SolveDetail,
+	CacheStats,
+	SchedulerSolveOptions,
+	SolveExecutor
+} from './scheduler/types';
 export { stableStringify, hashDefinition, hashSolveInput } from './scheduler/stable-hash';
 
 // ============================================================================
@@ -34,18 +34,11 @@ export { stableStringify, hashDefinition, hashSolveInput } from './scheduler/sta
 // ============================================================================
 export { solveGrasshopperDefinition } from './solve';
 
-// Backend-agnostic definition forms — they live in `core/` (a second backend must
-// not have to import them from this subpath) and are re-exported here for the
-// existing Grasshopper call sites.
-export { isDefinitionRef } from '@/core/definition-ref';
-export type { DefinitionRef, SolveDefinition } from '@/core/definition-ref';
-
 // ============================================================================
 // SERVER MONITORING
 // ============================================================================
-// rhino.compute's control plane (/activechildren, /plugins/gh/installed,
-// /idlespan) — Grasshopper-specific, so it lives on this subpath, not `/core`.
 export { default as ComputeServerStats } from './server/compute-server-stats';
+export type { ServerVersion, ServerStats, ServerLimits } from './server/compute-server-stats';
 
 // ============================================================================
 // I/O PROCESSING
@@ -60,18 +53,15 @@ export type {
 	GetValuesResult,
 	ParsedContext
 } from './io/output/response-processors';
+export { disposeRhinoObjects, isRhinoDecodeError } from './io/output/rhino-objects';
+export type { RhinoDecodeError } from './io/output/rhino-objects';
+export type { RhinoRuntime } from './io/output/rhino-decoder';
 
 // ============================================================================
 // DATA STRUCTURES
 // ============================================================================
 export { TreeBuilder } from './data-tree/data-tree';
-export type { DataTreeValue } from './data-tree/data-tree';
-
-// ============================================================================
-// FILE HANDLING (generic — implementation lives in core/files)
-// ============================================================================
-export { extractFilesFromComputeResponse, downloadFileData } from '@/core/files/handle-files';
-export type { ProcessedFile, FileData, FileBaseInfo } from '@/core/files/types';
+export type { DataTreeValue, TreeValueEntry } from './data-tree/data-tree';
 
 // ============================================================================
 // TYPES
@@ -83,7 +73,6 @@ export type {
 	DataTreeDefault,
 	InnerTreeData,
 	DataTree,
-	OutputType,
 	DefaultValue,
 	NumericInputType,
 	TextInputType,
@@ -91,14 +80,15 @@ export type {
 	GeometryInputType,
 	ValueListInputType,
 	FileInputType,
+	ColorInputType,
 	InputParam,
 	GrasshopperComputeConfig,
-	GrasshopperRequestSchema,
 	SelvaEventTarget,
 	SelvaResponseBlock,
 	GrasshopperComputeResponse,
 	InputParamSchema,
 	OutputParamSchema,
 	GrasshopperParsedIORaw,
-	GrasshopperParsedIO
+	GrasshopperParsedIO,
+	InputParseError
 } from './types';

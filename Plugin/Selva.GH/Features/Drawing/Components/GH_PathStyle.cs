@@ -7,12 +7,13 @@ using Selva.Drawing.Model.Style;
 using Selva.GH.Features.Drawing.Goos;
 using Selva.GH.Features.Drawing.Params;
 using Selva.GH.Properties;
+using Selva.GH.Utilities;
 using Color = System.Drawing.Color;
 using ModelColor = Selva.Drawing.Model.Style.Color;
 
 namespace Selva.GH.Features.Drawing.Components;
 
-public class GH_PathStyle : GH_Component
+public class GH_PathStyle : SelvaZuiComponent
 {
     public GH_PathStyle()
         : base("Path Style", "Style",
@@ -23,7 +24,10 @@ public class GH_PathStyle : GH_Component
 
     protected override Bitmap Icon => Resources.PathStlye;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
-    public override Guid ComponentGuid => new Guid("3F5C21A9-7D64-4E18-9B02-6C1A4D8E5F37");
+    public override Guid ComponentGuid => new Guid("4CEFA814-76BC-4BC5-AF7D-0BA6F3B48C4E");
+
+    protected override IReadOnlyCollection<string> PrimaryInputs =>
+        new[] { "Stroke Color", "Stroke Width", "Fill Color", "Fill", "Dash Pattern", "Hatch Pattern" };
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
@@ -104,21 +108,21 @@ public class GH_PathStyle : GH_Component
         var patternSpacing = 0.0;
         var patternLineWidth = 0.0;
 
-        DA.GetData(0, ref strokeColor);
-        DA.GetData(1, ref strokeWidth);
-        DA.GetData(2, ref strokeOpacity);
-        DA.GetData(3, ref fillColor);
-        DA.GetData(4, ref fill);
-        DA.GetData(5, ref fillOpacity);
-        DA.GetData(6, ref lineCap);
-        DA.GetData(7, ref lineJoin);
-        DA.GetDataList(8, dashValues);
-        DA.GetData(9, ref fillRuleInt);
-        DA.GetData(10, ref hatchPatternInt);
-        DA.GetData(11, ref patternScale);
-        DA.GetData(12, ref patternAngle);
-        DA.GetData(13, ref patternSpacing);
-        DA.GetData(14, ref patternLineWidth);
+        GetInput(DA, "Stroke Color", ref strokeColor);
+        GetInput(DA, "Stroke Width", ref strokeWidth);
+        GetInput(DA, "Stroke Opacity", ref strokeOpacity);
+        GetInput(DA, "Fill Color", ref fillColor);
+        GetInput(DA, "Fill", ref fill);
+        GetInput(DA, "Fill Opacity", ref fillOpacity);
+        GetInput(DA, "Line Cap", ref lineCap);
+        GetInput(DA, "Line Join", ref lineJoin);
+        GetInputList(DA, "Dash Pattern", dashValues);
+        GetInput(DA, "Fill Rule", ref fillRuleInt);
+        GetInput(DA, "Hatch Pattern", ref hatchPatternInt);
+        GetInput(DA, "Pattern Scale", ref patternScale);
+        GetInput(DA, "Pattern Angle", ref patternAngle);
+        GetInput(DA, "Pattern Spacing", ref patternSpacing);
+        GetInput(DA, "Pattern Line Width", ref patternLineWidth);
 
         double[] dashArray = null;
         if (dashValues.Count > 0)

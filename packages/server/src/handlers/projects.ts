@@ -13,6 +13,7 @@ import {
 	ApiErrorCode,
 	collection,
 	created,
+	defaultProjectCreateLimiter,
 	noContent,
 	parseBody,
 	parseListOptions,
@@ -23,15 +24,15 @@ import {
 	type ApiHandler
 } from '../api/index.js';
 import {
-	canChangeVisibilityToPublic,
+	canCreateDefinition,
 	canEdit,
 	canSolve,
 	canView,
-	hasPermission,
 	slugify,
 	SYSTEM_CONTEXT,
+	outsideTokenOrg,
+	scopeAllows,
 	validateProjectFlags,
-	withAdminBypass,
 	type ProjectVisibility
 } from '@selvajs/platform';
 import { resolveAccessibleProjects } from '../definitions/index.js';
@@ -39,14 +40,21 @@ import {
 	projectAccessInputFromRowsWith,
 	requireCanCreateProject,
 	requireCanEditProjectSettings,
+	requireProjectVisibilityAllowed,
 	requireCanManage
 } from '../access/index.js';
-import { createProjectWithUniqueSlug } from '../projects/index.js';
+import { createProjectWithUniqueSlug, deleteProjectWithBlobs } from '../projects/index.js';
 
+/**
+ * Projects the caller can view. `canCreateDefinitions` says whether
+ * `POST /definitions` would take this project from this caller: the same rule
+ * as the route, and for an API token its `upload` scope there.
+ */
 export const listProjects: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
 
-	const { projects } = await resolveAccessibleProjects(ctx, req.deps);
+	const set = await resolveAccessibleProjects(ctx, req.deps);
+	const { projects } = set;
 	const { limit, cursor } = parseListOptions(req.url);
 	// The accessible set is resolved in-process rather than by the store, so the
 	// cursor is an index into it. Opaque to callers either way.
@@ -57,8 +65,21 @@ export const listProjects: ApiHandler = async (req) => {
 
 	const items = projects.slice(start, start + (limit ?? projects.length));
 	const nextIndex = start + items.length;
+	// The create route names its project in the body, so it checks scope org-wide.
+	const tokenMayUpload = scopeAllows(ctx, 'upload');
 	return collection({
-		items,
+		items: items.map((project) => ({
+			...project,
+			canCreateDefinitions:
+				tokenMayUpload &&
+				canCreateDefinition(
+					projectAccessInputFromRowsWith(req, ctx, project, {
+						member: set.memberByProjectId.get(project.id) ?? null,
+						orgMember: set.orgMemberByOrgId.get(project.orgId) ?? null,
+						platformGrants: set.grantsByProjectId.get(project.id) ?? []
+					})
+				)
+		})),
 		nextCursor: nextIndex < projects.length ? String(nextIndex) : undefined
 	});
 };
@@ -71,17 +92,23 @@ export const createProject: ApiHandler = async (req) => {
 	await requireCanCreateProject(req, ctx.actingOrgId);
 
 	const input = await parseBody(req.request, CreateProjectBodySchema);
-
-	// Same gate as PATCH: a `platform` project belongs to no org, so creating
-	// one here would put it beyond its own org's reach — and beyond anyone's
-	// with ENABLE_PLATFORM_PROJECTS off. Platform projects are created
-	// through /api/admin/projects.
-	if (input.visibility === 'platform' && !hasPermission(ctx, 'instance_admin')) {
-		apiError(
-			403,
-			ApiErrorCode.FORBIDDEN,
-			'Only a platform admin can create a project with platform visibility.'
-		);
+	await requireProjectVisibilityAllowed(req, ctx, ctx.actingOrgId, input);
+	if (ctx.apiScope) {
+		// Per owner, not per key: minting more keys mustn't buy more projects.
+		const limiter =
+			req.deps.projectCreateLimiter === undefined
+				? defaultProjectCreateLimiter()
+				: req.deps.projectCreateLimiter;
+		const verdict = await limiter?.hit(`projects:user:${ctx.userId}`);
+		if (verdict && !verdict.allowed) {
+			apiError(
+				429,
+				ApiErrorCode.RATE_LIMITED,
+				`Too many projects created with API tokens. Retry in ${verdict.retryAfter ?? 1}s.`,
+				undefined,
+				{ retryAfter: String(verdict.retryAfter ?? 1) }
+			);
+		}
 	}
 
 	const autoJoinOnUpload = input.autoJoinOnUpload ?? false;
@@ -127,7 +154,9 @@ export const getProject: ApiHandler = async (req) => {
 	// Read as SYSTEM to decide visibility here rather than let the store decide:
 	// the 404-not-403 rule above needs the row before it can hide it.
 	const project = await req.deps.projects.getProject(SYSTEM_CONTEXT, id);
-	if (!project) apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	if (!project || outsideTokenOrg(ctx, project.orgId)) {
+		apiError(404, ApiErrorCode.NOT_FOUND, 'Project not found');
+	}
 
 	const [orgMembers, projectMembers, grants] = await Promise.all([
 		req.deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [project.orgId], ctx.userId),
@@ -168,31 +197,7 @@ export const updateProject: ApiHandler = async (req) => {
 
 	const input = await parseBody(req.request, UpdateProjectBodySchema);
 
-	// `platform` takes a project out of its org entirely: no org member can
-	// see it, `canReclaim` returns false forever, and with
-	// ENABLE_PLATFORM_PROJECTS off (the default) every rule denies everyone,
-	// including admins. Escalating into it must be instance-admin only.
-	if (input.visibility === 'platform' && existing.visibility !== 'platform') {
-		if (!hasPermission(ctx, 'instance_admin')) {
-			apiError(
-				403,
-				ApiErrorCode.FORBIDDEN,
-				'Only a platform admin can give a project platform visibility.'
-			);
-		}
-	}
-
-	// Flipping *to* public is a disclosure action — a stricter gate than a
-	// normal edit.
-	if (input.visibility === 'public' && existing.visibility !== 'public') {
-		const orgMember = await req.deps.orgs.getOrgMember(ctx, existing.orgId, ctx.userId);
-		const passes = withAdminBypass(ctx.platformPermissions, () =>
-			canChangeVisibilityToPublic({ orgMember })
-		);
-		if (!passes) {
-			apiError(403, ApiErrorCode.FORBIDDEN, 'Only org owners or admins can make a project public.');
-		}
-	}
+	await requireProjectVisibilityAllowed(req, ctx, existing.orgId, input, existing);
 
 	// The flag/visibility invariant runs on the merged post-patch shape, so a
 	// partial update is validated against what the project will become.
@@ -218,7 +223,9 @@ export const updateProject: ApiHandler = async (req) => {
 	// A renamed project gets a re-derived slug; the two must not drift apart.
 	if (input.name !== undefined) {
 		patch.name = input.name;
-		patch.slug = slugify(input.name);
+		// A name with no usable letters yields '', which keeps the current slug.
+		const slug = slugify(input.name);
+		if (slug) patch.slug = slug;
 	}
 	if (input.description !== undefined) patch.description = input.description ?? undefined;
 	if (input.visibility !== undefined) patch.visibility = input.visibility;
@@ -233,6 +240,14 @@ export const deleteProject: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
 	await requireCanManage(req, id);
 
-	await req.deps.projects.deleteProject(ctx, id);
+	await deleteProjectWithBlobs(
+		{
+			projects: req.deps.projects,
+			definitions: req.deps.definitionMeta,
+			storage: req.deps.storage
+		},
+		ctx,
+		id
+	);
 	return noContent();
 };

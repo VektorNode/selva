@@ -11,10 +11,13 @@ using Rhino;
 using Selva.Schema.Models;
 using Selva.Schema.Services;
 using Selva.GH.Config;
+using Selva.GH.Features.SelvaUpload.Services;
 using Selva.GH.Features.SolveRuntime.Services;
 using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services;
+using Selva.GH.Features.UIBuilder.Services.Communication;
+using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Properties;
 using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
@@ -46,11 +49,30 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     // solving. A rename compiles clean and makes every definition report "no embedded schema".
     private UISchema _embeddedSchema;
     private Dictionary<string, object> _embeddedValues;
+
+    // Where this file was last uploaded, one link per Selva instance. Saved beside the schema, not
+    // in it: the schema is shared with every host, a link belongs to one instance.
+    private List<SelvaDefinitionLink> _selvaLinks = new List<SelvaDefinitionLink>();
+    private readonly EscapeAbortWatch _escapeAbort = new EscapeAbortWatch();
     private EventHandler _onDocumentModified;
     private EventHandler _onSolutionEnded;
     private EventHandler _onSolutionStarted;
     private UIBuilderService _service;
     private string _sessionId;
+
+    // Player sessions: set by DefinitionLauncher before the document's first solve. Hosted keeps
+    // the bridge running whatever Enable says, until the document closes or the user changes
+    // Enable. The role says what the session may do, and Edit in Grasshopper flips it while
+    // hosted stays set: clearing hosted there would be a falling edge on a file saved with Enable
+    // off, and stop the servers under the page that is about to reload as an author.
+    private bool _hosted;
+    private bool? _enableWhenHosted;
+    private bool _suppressed;
+    private BridgeRole _role = BridgeRole.Author;
+
+    // A bridge released by Edit in Grasshopper starts without taking the panel from the one the
+    // user was playing. Read by the first solve after the release only.
+    private bool _startOutOfPanel;
 
     public GH_UIBuilderComponent()
         : base("UI Bridge", "UIBridge",
@@ -59,7 +81,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
     }
 
-    private bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
+    internal bool IsConnected => _service?.WebSocketTransport?.IsRunning == true;
 
     public override Guid ComponentGuid => new Guid("593BC967-797A-4B1A-9B76-C2133F6B08E2");
 
@@ -77,6 +99,32 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             ExpireSolution(false);
         }
     }
+
+    /// <summary>
+    ///     A scripted layout or a placement from the canvas is the author's intent, as an editor
+    ///     save is. Goes through the same commit as a save, so an open editor hears of it.
+    /// </summary>
+    internal UISchema CommitAuthoredSchema(UISchema schema, string undoName, Action<UISchema> broadcast = null)
+    {
+        var document = OnPingDocument();
+        if (document != null && _service?.BridgeService?.IsInitialized == true)
+        {
+            return _service.BridgeService.CommitAuthoredSchema(schema, document, undoName, broadcast);
+        }
+
+        // Never enabled in this session: no editor, tombstones or metadata cache exist yet, but
+        // the canvas params still take the access the layout asks for.
+        RecordUndoEvent(undoName);
+        Schema = schema;
+        SchemaSynchronizer.ApplyParameterAccessFromSchema(schema, document);
+        document?.Modified();
+        return schema;
+    }
+
+    internal WebSocketTransport Transport => IsConnected ? _service.WebSocketTransport : null;
+
+    /// <summary>Where the open editor's unsaved draft places each param; null when there is none.</summary>
+    internal Dictionary<Guid, LayoutPlacement.Location> DraftLocations { get; private set; }
 
     protected override Bitmap Icon => Resources.UIBridge;
 
@@ -146,8 +194,21 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             return;
         }
 
-        var enable = false;
-        DA.GetData(0, ref enable);
+        var enableInput = false;
+        DA.GetData(0, ref enableInput);
+
+        if (_hosted)
+        {
+            _enableWhenHosted ??= enableInput;
+            if (_enableWhenHosted != enableInput)
+            {
+                _hosted = false;
+            }
+        }
+
+        var enable = !_suppressed && (enableInput || _hosted);
+        var startOutOfPanel = _startOutOfPanel;
+        _startOutOfPanel = false;
 
         InitializeDependencies();
 
@@ -199,7 +260,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         // Handle current state
         if (enable)
         {
-            HandleEnabledState(DA, document, rebind);
+            HandleEnabledState(DA, document, rebind, startOutOfPanel);
         }
         else
         {
@@ -231,6 +292,21 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             schema => _embeddedSchema = schema
         );
 
+        _service.SelvaUpload.Initialize(
+            this,
+            () => _embeddedSchema,
+            () => _selvaLinks,
+            links => _selvaLinks = links
+        );
+
+        _service.WebSocketTransport.BindRole(() => _role);
+        _service.WebSocketTransport.OnPlayerCommand += HandlePlayerCommand;
+        _service.WebSocketTransport.OnDraftLayout += (_, locations) =>
+        {
+            DraftLocations = locations;
+            Grasshopper.Instances.ActiveCanvas?.Invalidate();
+        };
+
         _service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
         // Keep watched set in sync when new params are merged into the schema
@@ -243,47 +319,42 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             Logger.Log("[UIBuilder] SolutionStart");
 #endif
             _service.StateManager.SetSolving(true);
+            _escapeAbort.Start(OnPingDocument());
         };
         _onSolutionEnded = (s, e) =>
         {
+            _escapeAbort.Stop();
             var wasActuallySolving = _service.StateManager.SetSolving(false);
 #if DEBUG
             Logger.Log($"[UIBuilder] SolutionEnd — wasActuallySolving={wasActuallySolving}");
 #endif
-            if (wasActuallySolving)
+            // A throw escaping into Grasshopper would skip the cleanup below, leaving presses
+            // latched and pending values stranded, so each stage is contained.
+            try
             {
-                _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
-                _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
-
-                // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
-                if (_embeddedSchema != null)
+                if (wasActuallySolving)
                 {
-                    var document = OnPingDocument();
-                    var (addedIds, removedIds) =
-                        _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
-                    if (addedIds.Count > 0 || removedIds.Count > 0)
-                    {
-                        if (addedIds.Count > 0)
-                        {
-                            _service.EventManager.RegisterWatchedIds(addedIds);
-                        }
-
-                        _ = _service.WebSocketTransport
-                            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
-                            .ContinueWith(t =>
-                            {
-                                if (t.IsFaulted)
-                                {
-                                    Logger.Error("Failed to broadcast schema update after bake output sync",
-                                        t.Exception);
-                                }
-                            });
-                        GHDocumentMutator.ScheduleComponentExpire(document, this, true);
-                    }
+                    PublishSolveResults();
                 }
             }
+            catch (Exception ex)
+            {
+                Logger.Error("[UIBuilder] Publishing solve results failed", ex);
+            }
 
-            ClearAllContextualParameters();
+            try
+            {
+                ClearAllContextualParameters();
+                if (_service.TriggerPresses.ResetPressed(OnPingDocument(),
+                        _service.WebSocketTransport.ScheduleSolutionDelayMs))
+                {
+                    _service.StateManager.MarkSolveScheduled();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("[UIBuilder] Resetting inputs after the solve failed", ex);
+            }
 
             // Drain pending values on a fresh UI tick, not inline: draining here would re-schedule
             // a solve from inside the end of this one — under a slider drag that's a non-draining
@@ -307,7 +378,44 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
 
-    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind)
+    private void PublishSolveResults()
+    {
+        _service.EventManager.CollectAndBroadcastOutputs(_embeddedSchema);
+        _service.EventManager.DetectAndBroadcastMetadataChanges(_embeddedSchema);
+
+        // Sync ContextBake outputs: add newly-qualifying, remove unwired ones
+        if (_embeddedSchema == null)
+        {
+            return;
+        }
+
+        var document = OnPingDocument();
+        var (addedIds, removedIds) =
+            _service.SchemaSynchronizer.MergePostSolveBakeOutputs(_embeddedSchema, document);
+        if (addedIds.Count == 0 && removedIds.Count == 0)
+        {
+            return;
+        }
+
+        if (addedIds.Count > 0)
+        {
+            _service.EventManager.RegisterWatchedIds(addedIds);
+        }
+
+        _ = _service.WebSocketTransport
+            .BroadcastSchemaUpdate(_embeddedSchema, removedIds.Count > 0 ? removedIds : null)
+            .ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    Logger.Error("Failed to broadcast schema update after bake output sync", t.Exception);
+                }
+            });
+        GHDocumentMutator.ScheduleComponentExpire(document, this,
+            _service.WebSocketTransport.ScheduleSolutionDelayMs, true);
+    }
+
+    private void HandleEnabledState(IGH_DataAccess DA, GH_Document document, bool rebind, bool startOutOfPanel)
     {
         var wasRunning = _service.ServerManager.IsRunning;
 
@@ -322,15 +430,26 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     var started = await _service.ServerManager.StartServersAsync(_sessionId);
 
-                    // Only post the URL remark on an actual cold start, not a no-op re-confirm.
-                    if (started && !wasRunning && _service.ServerManager.HttpPort.HasValue)
+                    // Only on an actual cold start, not a no-op re-confirm. No URL in the remark: it
+                    // carries the bridge secret, and a balloon ends up in screenshots.
+                    if (started && !wasRunning)
                     {
-                        var wsPort = _service.ServerManager.WebSocketPort ?? AppConfig.WebSocket.DefaultPort;
-                        var httpPort = _service.ServerManager.HttpPort.Value;
                         RhinoApp.InvokeOnUiThread(new Action(() =>
                         {
-                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
-                                $"Web UI available at: http://localhost:{httpPort}/?session={_sessionId}&wsPort={wsPort}");
+                            if (startOutOfPanel)
+                            {
+                                AddRuntimeMessage(GH_RuntimeMessageLevel.Remark,
+                                    "Web UI running. Right-click the component and choose Open UI to show it.");
+                                return;
+                            }
+
+                            var refusal = ShowInPanel(raise: false);
+                            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, refusal ??
+                                "Web UI open in the Selva panel. Right-click the component and choose Open UI to bring it back.");
+                            if (refusal != null)
+                            {
+                                NotifyIfHosted(refusal);
+                            }
                         }));
                     }
 
@@ -338,7 +457,8 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     if (started && !wasRunning)
                     {
                         RhinoApp.InvokeOnUiThread(new Action(() =>
-                            GHDocumentMutator.ScheduleComponentExpire(document, this, true)));
+                            GHDocumentMutator.ScheduleComponentExpire(document, this,
+                                AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, true)));
                     }
                 }
                 catch (Exception ex)
@@ -346,6 +466,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                     RhinoApp.InvokeOnUiThread(new Action(() =>
                     {
                         AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Failed to start servers: {ex.Message}");
+                        NotifyIfHosted($"Could not start the Selva UI: {ex.Message}");
                     }));
                 }
             });
@@ -370,18 +491,18 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     /// <summary>Null while the WebSocket transport isn't running yet.</summary>
-    private string TryBuildSessionUrl()
+    private string TryBuildSessionUrl(string host = null)
     {
         if (_service?.WebSocketTransport?.IsRunning != true)
         {
             return null;
         }
 
-        var wsPort = _service.WebSocketTransport.WebSocketPort;
         var baseUrl = _service.WebServer?.IsRunning == true
             ? _service.WebServer.BaseUrl
-            : "http://localhost:5173";
-        return $"{baseUrl}/?session={_sessionId}&wsPort={wsPort}";
+            : $"http://localhost:{AppConfig.UIBuilder.DevServerPort}";
+        return BridgeAccess.SessionUrl(
+            baseUrl, _sessionId, _service.WebSocketTransport.WebSocketPort, _service.BridgeSecret, host, _role);
     }
 
     /// <summary>Skipped when absent — the obsolete subclass registers only the Schema output.</summary>
@@ -398,16 +519,19 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         _embeddedSchema = other._embeddedSchema;
         _embeddedValues = other._embeddedValues;
+        _selvaLinks = other._selvaLinks;
     }
 
     private void HandleDisablingState(GH_Document document)
     {
+        RhinoPanelHost.Clear(_sessionId);
         CleanupCommunication();
         _service?.EventManager?.UnregisterEvents();
 
         var contextualParams = document.Objects.OfType<IGH_ContextualParameter>().ToList();
         ParameterTypeHelper.ClearContextualParameters(contextualParams, this);
         _service?.ValueApplicator?.Clear();
+        _service?.GeometryPicks.Forget();
     }
 
     private void HandleDisabledState(IGH_DataAccess DA, GH_Document document)
@@ -429,12 +553,104 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         );
     }
 
+    // ============================================================================
+    // Player sessions
+    // ============================================================================
+
+    /// <summary>Called by DefinitionLauncher before the document's first solve.</summary>
+    internal void HostAsPlayer()
+    {
+        _hosted = true;
+        _enableWhenHosted = null;
+        _role = BridgeRole.Player;
+    }
+
+    /// <summary>
+    ///     Another bridge in a player document: kept off whatever its Enable says, so it can't
+    ///     cold-start and retarget the panel to an author URL.
+    /// </summary>
+    internal void Suppress()
+    {
+        _suppressed = true;
+    }
+
+    /// <summary>After Edit in Grasshopper the document is the user's, and Enable counts again.</summary>
+    internal void ReleaseSuppression()
+    {
+        if (!_suppressed)
+        {
+            return;
+        }
+
+        _suppressed = false;
+        _startOutOfPanel = true;
+        ExpireSolution(true);
+    }
+
+    internal bool IsPlayer => _role == BridgeRole.Player;
+
+    /// <summary>The page reloads on the new URL, re-authenticates and is acknowledged as an author.</summary>
+    internal void BecomeAuthor()
+    {
+        _role = BridgeRole.Author;
+
+        // Not running yet: the cold start shows the panel, and reads the role then.
+        if (!IsConnected)
+        {
+            return;
+        }
+
+        var refusal = ShowInPanel(raise: false);
+        if (refusal != null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal);
+        }
+    }
+
+    private void HandlePlayerCommand(object sender, InboundKind command)
+    {
+        // Already refused by the transport outside a player session; checked again because a
+        // command can sit in the queue while Edit in Grasshopper flips the role.
+        if (!IsPlayer)
+        {
+            return;
+        }
+
+        try
+        {
+            if (command == InboundKind.CloseDefinition)
+            {
+                DefinitionLauncher.Close();
+            }
+            else if (command == InboundKind.EditInGrasshopper)
+            {
+                DefinitionLauncher.EditInGrasshopper();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[UIBuilder] Player command {command} failed", ex);
+        }
+    }
+
+    /// <summary>A hosted bridge's canvas is hidden, so its runtime messages reach nobody.</summary>
+    private void NotifyIfHosted(string message)
+    {
+        if (_hosted)
+        {
+            RhinoPanelHost.Notify(message);
+        }
+    }
+
     private void OpenUI()
     {
         try
         {
-            var url = TryBuildSessionUrl()
-                      ?? $"http://localhost:5173/?session={_sessionId}&wsPort={AppConfig.WebSocket.DefaultPort}";
+            var url = TryBuildSessionUrl();
+            if (url == null)
+            {
+                return;
+            }
 
             Process.Start(new ProcessStartInfo
             {
@@ -449,24 +665,76 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
+    /// <summary>Null when the panel took the session; otherwise why not, for the user.</summary>
+    private string ShowInPanel(bool raise)
+    {
+        var url = TryBuildSessionUrl("rhino");
+        var document = OnPingDocument();
+        if (url == null || document == null)
+        {
+            return "The web UI isn't running yet.";
+        }
+
+        try
+        {
+            return RhinoPanelHost.TryShow(url, _sessionId, document, raise);
+        }
+        catch (Exception ex)
+        {
+            return $"Could not open the Selva panel: {ex.Message}";
+        }
+    }
+
+    internal void FollowCanvas()
+    {
+        var url = TryBuildSessionUrl("rhino");
+        var document = OnPingDocument();
+        if (url != null && document != null)
+        {
+            RhinoPanelHost.Follow(url, _sessionId, document);
+        }
+    }
+
+    internal void OpenUIInPanel()
+    {
+        var refusal = ShowInPanel(raise: true);
+        if (refusal != null)
+        {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, refusal +" Opened the browser instead.");
+            OpenUI();
+        }
+    }
+
     public override bool AppendMenuItems(ToolStripDropDown menu)
     {
         base.AppendMenuItems(menu);
 
         menu.Items.Add(new ToolStripSeparator());
 
-        var openUIItem = new ToolStripMenuItem(
-            "Open UI in Browser",
-            null,
-            (s, e) => OpenUI()
-        )
+        var running = _service?.StateManager != null && IsConnected;
+        menu.Items.Add(new ToolStripMenuItem("Open UI", null, (s, e) => OpenUIInPanel())
         {
-            ToolTipText = "Open the interactive UI preview in your default web browser"
-        };
+            ToolTipText = "Show the interactive UI in the Selva panel",
+            Enabled = running
+        });
 
-        openUIItem.Enabled = _service?.StateManager != null && IsConnected;
+        menu.Items.Add(CanvasPlacementHooks.SelectionMenu(this));
+        menu.Items.Add(new ToolStripMenuItem("Show UI placement on canvas", null,
+            (s, e) => CanvasPlacementHooks.ShowPlacement = !CanvasPlacementHooks.ShowPlacement)
+        {
+            Checked = CanvasPlacementHooks.ShowPlacement
+        });
 
-        menu.Items.Add(openUIItem);
+        // Shift-only: the browser stays live during a solve, which the panel can't, so it's the
+        // escape hatch for long solves and for a Rhino where the panel misbehaves.
+        if ((Eto.Forms.Keyboard.Modifiers & Eto.Forms.Keys.Shift) != 0)
+        {
+            menu.Items.Add(new ToolStripMenuItem("Open UI in Browser", null, (s, e) => OpenUI())
+            {
+                ToolTipText = "Open the interactive UI in your default web browser",
+                Enabled = running
+            });
+        }
 
         return true;
     }
@@ -475,6 +743,15 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     {
         base.RemovedFromDocument(document);
         Cleanup();
+    }
+
+    public override void DocumentContextChanged(GH_Document document, GH_DocumentContext context)
+    {
+        base.DocumentContextChanged(document, context);
+        if (context == GH_DocumentContext.Close && _sessionId != null)
+        {
+            RhinoPanelHost.Clear(_sessionId);
+        }
     }
 
     private static readonly Guid BooleanToggleGuid = new Guid("2e78987b-9dfb-42a2-8b76-3923ac8bd91a");
@@ -653,7 +930,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
             {
                 if (obj is IGH_ContextualParameter contextParam)
                 {
-                    ParameterTypeHelper.TryInvokeClearContextualData(contextParam);
+                    if (!_service.GeometryPicks.KeepsContextualData(obj.InstanceGuid))
+                    {
+                        ParameterTypeHelper.TryInvokeClearContextualData(contextParam);
+                    }
+
                     continue;
                 }
 
@@ -687,7 +968,17 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     private void Cleanup()
     {
+        if (_sessionId != null)
+        {
+            RhinoPanelHost.Clear(_sessionId);
+        }
+
         CleanupCommunication();
+
+        if (_service?.WebSocketTransport != null)
+        {
+            _service.WebSocketTransport.OnPlayerCommand -= HandlePlayerCommand;
+        }
 
         if (_service?.EventManager != null)
         {
@@ -700,6 +991,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         _service?.ValueApplicator?.Clear();
         _service?.SchemaSynchronizer?.ClearMetadataCache();
         _service?.StateManager?.Reset();
+        _escapeAbort.Stop();
         _currentDocument = null;
     }
 
@@ -714,6 +1006,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
             Cleanup();
             _service?.Dispose();
+            _escapeAbort.Dispose();
         }
 
         _disposed = true;
@@ -732,6 +1025,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         catch (Exception ex)
         {
             AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"Could not save schema/values: {ex.Message}");
+        }
+
+        if (_selvaLinks.Count > 0)
+        {
+            writer.SetString(SelvaDefinitionLinks.ArchiveItem, SelvaDefinitionLinks.Serialize(_selvaLinks));
         }
 
         // Skip under headless hosts like Rhino.Compute, which never legitimately save back.
@@ -761,6 +1059,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
     public override bool Read(GH_IReader reader)
     {
+        _selvaLinks = SelvaDefinitionLinks.Parse(
+            reader.ItemExists(SelvaDefinitionLinks.ArchiveItem)
+                ? reader.GetString(SelvaDefinitionLinks.ArchiveItem)
+                : null);
+
         if (reader.ItemExists("Schema") || reader.ItemExists("Values"))
         {
             try
@@ -772,6 +1075,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     _embeddedSchema = result.Value.schema;
                     _embeddedValues = result.Value.values;
+
+                    // Undo restores the archived schema through Read.
+                    if (_service?.BridgeService?.IsInitialized == true && _embeddedSchema != null
+                        && OnPingDocument() is { } document)
+                    {
+                        _service.BridgeService.AdoptRestoredSchema(_embeddedSchema, document);
+                    }
 
                     if (!string.IsNullOrEmpty(result.Value.migrationMessage))
                     {

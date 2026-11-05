@@ -82,7 +82,9 @@ function stripComments(source: string): string {
  * assertion below passing vacuously against a one-line route file.
  */
 function mountedSources(source: string): string[] {
-	const appImports = [...source.matchAll(/from\s+'\$lib\/server\/api\/handlers\/([\w.-]+)'/g)];
+	const appImports = [
+		...source.matchAll(/from\s+'#lib\/server\/api\/handlers\/([\w-]+)(?:\.js)?'/g)
+	];
 	const bodies = appImports.map(([, name]) => {
 		const file = join(handlersDir, `${name}.ts`);
 		if (!existsSync(file)) throw new Error(`route mounts a missing handler module: ${file}`);
@@ -168,6 +170,57 @@ describe('every route is in the registry, and every registry entry is a route', 
 		expect(v1Routes.length).toBeGreaterThan(20);
 		expect(adminRoutes.length).toBeGreaterThan(10);
 	});
+
+	it('documents Idempotency-Key exactly where a route honours it', () => {
+		// Each direction fails silently: a spec promising replays the route
+		// ignores duplicates a client's create, and an undocumented one is
+		// never sent.
+		const honoured = v1Routes.flatMap((r) => {
+			const source = stripComments(readFileSync(r.file, 'utf8'));
+			return r.methods
+				.filter((m) => {
+					const start = source.search(new RegExp(`export\\s+const\\s+${m}\\s*:`));
+					const next = source.slice(start + 1).search(/export\s+const\s+[A-Z]+\s*:/);
+					const segment = next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+					return /idempotent:\s*true|runIdempotent\(/.test(segment);
+				})
+				.map((m) => `${m} /${r.routePath}`.replace(/\[(\w+)\]/g, '{$1}'));
+		});
+		const documented = V1_ENDPOINTS.filter((e) => e.idempotent).map((e) =>
+			endpointKey(e.method, e.path)
+		);
+		expect(honoured.sort()).toEqual(documented.sort());
+		expect(documented.length).toBeGreaterThan(0);
+	});
+
+	it('documents the scope each route checks', () => {
+		// MCP tool annotations come from `x-scope`: a solve documented as `write`
+		// ships without the open-world hint, so clients release without confirming.
+		// The plugin's callback takes a per-solve bearer, never an API token.
+		const NO_TOKEN = new Set(['POST /solve-events/{solveId}']);
+		const checked = v1Routes.flatMap((r) => {
+			const source = stripComments(readFileSync(r.file, 'utf8'));
+			return r.methods.map((m) => {
+				const start = source.search(new RegExp(`export\\s+const\\s+${m}\\s*:`));
+				const next = source.slice(start + 1).search(/export\s+const\s+[A-Z]+\s*:/);
+				const segment = next < 0 ? source.slice(start) : source.slice(start, start + 1 + next);
+				const scope =
+					/action:\s*'(\w+)'/.exec(segment)?.[1] ??
+					/assertScope(?:Anywhere)?\(\s*locals\.ctx,\s*'(\w+)'/.exec(segment)?.[1] ??
+					// Open to every key, so it documents the action every key holds.
+					(/anyScope:\s*true/.test(segment) ? 'read' : undefined) ??
+					// `runSolve` asserts `solve` itself.
+					(/runSolve\(/.test(segment) ? 'solve' : m === 'GET' ? 'read' : 'write');
+				return [`${m} /${r.routePath}`.replace(/\[(\w+)\]/g, '{$1}'), scope] as const;
+			});
+		});
+		const documented = new Map(V1_ENDPOINTS.map((e) => [endpointKey(e.method, e.path), e.scope]));
+		const mismatched = checked.filter(
+			([key, scope]) => !NO_TOKEN.has(key) && documented.get(key) !== scope
+		);
+		expect(mismatched).toEqual([]);
+		expect(checked.filter(([, scope]) => scope === 'solve').length).toBeGreaterThan(0);
+	});
 });
 
 // ============================================================================
@@ -200,7 +253,7 @@ describe('openapi/v1.yaml', () => {
 		const expected = toYaml(buildOpenApiDocument());
 
 		// The spec is generated *here* rather than by a standalone script: the
-		// generator needs `$lib` resolution and the workspace `source` condition,
+		// generator needs `#lib` resolution and the workspace `source` condition,
 		// which are configured for vitest. A second runner with its own resolver
 		// could build the document from a different module graph than the check
 		// that verifies it — so generate and verify share one.

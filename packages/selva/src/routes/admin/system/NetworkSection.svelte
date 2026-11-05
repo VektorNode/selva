@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Card } from '@selvajs/ui';
+	import { Button, Card, FilterableDropdown } from '@selvajs/ui';
 	import { ArrowDown, ArrowUp, Gauge } from '@lucide/svelte';
 
 	interface RunResult {
@@ -119,16 +119,15 @@
 	<Card.Content class="space-y-4">
 		<div class="flex flex-wrap items-center gap-2">
 			<label class="text-muted-foreground text-sm" for="throughput-size">Test size</label>
-			<select
+			<FilterableDropdown
 				id="throughput-size"
-				class="border-input bg-background rounded-md border px-2 py-1 text-sm"
-				bind:value={sizeMb}
+				items={SIZES.map((size) => ({ id: String(size), label: `${size} MB` }))}
+				value={String(sizeMb)}
+				onChange={(v) => (sizeMb = Number(v))}
 				disabled={running !== null}
-			>
-				{#each SIZES as size (size)}
-					<option value={size}>{size} MB</option>
-				{/each}
-			</select>
+				size="sm"
+				class="w-28"
+			/>
 			<Button size="sm" variant="outline" onclick={runDownload} disabled={running !== null}>
 				<ArrowDown class="mr-1 size-4" />
 				{running === 'download' ? 'Downloading…' : 'Download test'}

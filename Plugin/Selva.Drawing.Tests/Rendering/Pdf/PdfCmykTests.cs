@@ -1,8 +1,8 @@
 using System.IO;
 using System.Text;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.Advanced;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.Advanced;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -42,12 +42,12 @@ public class PdfCmykTests
 			},
 		};
 
-		// PdfSharpCore has no per-page override: this forces every content-stream
+		// PDFsharp has no per-page override: this forces every content-stream
 		// colour operator to /DeviceCMYK for the whole document.
 		var bytes = new PdfRenderer(new PdfRenderOptions { ColorMode = PdfColorMode.Cmyk }).Render(doc);
 
 		// Reopen as Modify to read the content stream's UnfilteredValue (may be
-		// Flate-compressed). PdfSharpCore writes CMYK via `k`/`K` (fill/stroke) operators.
+		// Flate-compressed). PDFsharp writes CMYK via `k`/`K` (fill/stroke) operators.
 		using var ms = new MemoryStream(bytes);
 		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Modify);
 		Assert.Equal(1, reopened.PageCount);

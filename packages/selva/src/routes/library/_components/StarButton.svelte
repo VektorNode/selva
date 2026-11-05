@@ -29,8 +29,8 @@
 		onToggle();
 	}}
 	class={variant === 'overlay'
-		? `${overlayBase} ${starred ? 'bg-amber-400/90 text-white' : 'bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-black/55'}`
-		: `${chipBase} ${starred ? 'text-amber-500 hover:bg-amber-50' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+		? `${overlayBase} ${starred ? 'bg-amber-400/90 text-white' : 'bg-black/40 text-white opacity-0 group-hover:opacity-100 hover:bg-black/55 pointer-coarse:opacity-100'}`
+		: `${chipBase} ${starred ? 'text-amber-500 hover:bg-amber-50' : 'text-muted-foreground hover:text-foreground hover:bg-hover'}`}
 >
 	<Star class="h-3.5 w-3.5 {starred ? 'fill-current' : ''}" />
 </button>

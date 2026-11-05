@@ -26,8 +26,8 @@ A driver turns its transport's reply into a `SolveResult` with `finalizeResult` 
 `shared/outcome.ts`, after decoding the plugin's verdict with `decodeOutcome`. That is where
 "a blocked or aborted solve has no result" is decided, for every transport.
 
-Adding a live event kind: a case in `reduceLiveSolve` and a field on `LiveSolveState`. Unknown
-kinds already land in `LiveSolveState.other`.
+Adding a live event kind: a case in `reduceLiveSolve` (`events/live-solve.ts`) and a field on
+`LiveSolveState`. Unknown kinds already land in `LiveSolveState.other`.
 
 ## Typical flow
 
@@ -37,8 +37,9 @@ kinds already land in `LiveSolveState.other`.
 4. The UI reads the latest state from the session.
 
 ```ts
-const session = createSolveSession({ driver: createRequestResponseDriver() });
-session.solve({ width: 10, height: 20 });
+const driver = createRequestResponseDriver(onSolve, () => session, { solveDeadlineMs });
+const session = createSolveSession({ schema, scopeKey, driver });
+session.setValue('width', 10);
 ```
 
 ```ts
@@ -52,8 +53,7 @@ session.subscribe(() => {
 
 `values` is the current input map for the active definition. In a real app it usually comes from the
 form state or from a Grasshopper input tree. If you need to build or edit that tree first, see
-[`packages/compute/src/grasshopper/README.md`](../../../compute/src/grasshopper/README.md#data-trees)
-and [`packages/compute/src/grasshopper/data-tree/README.md`](../../../compute/src/grasshopper/data-tree/README.md).
+[Data trees](../../../compute/README.md#data-trees) in the `@selvajs/compute` README.
 
 ## How the session updates the UI
 
@@ -72,6 +72,7 @@ re-renders.
 
 ```ts
 const driver = createRequestResponseDriver(onSolve, () => session, {
+	solveDeadlineMs,
 	onChange: () => session.notify()
 });
 ```
@@ -99,18 +100,24 @@ const myDriver: SolveDriver = {
 getReporter().report({ outputs, meshes, errors, warnings });
 ```
 
-If the transport fails, call `reportError(message)`.
+If the transport fails, call `reportError(message)`. If the solve was cancelled before it produced
+anything, call `reportAborted()`. Every solve the session asks for must end in exactly one of the
+three: `session.solve()` resolves on it, so a dropped request leaves that promise waiting.
+
+A driver with its own queue also exposes `hasQueued`, true while a newer solve waits behind the one
+reporting. The session then holds back that result's settlement, so a host hears about the solve
+that lands, not every one on the way. A push transport without a queue leaves it out.
+
+A driver that owns its solves also exposes `reset()`: the session calls it on rebuild and dispose,
+so a late result can't land in the wrong definition. A push transport leaves it out, because the
+solve it would stop belongs to the Grasshopper canvas.
 
 ## Real-world examples
 
 ### WebSocket app
 
-Use this when a plugin or local service pushes results back to the app.
-
-```ts
-const session = createSolveSession({ driver: createRequestResponseDriver() });
-session.solve(values);
-```
+Use this when a plugin or local service pushes results back to the app. Write a driver as above:
+`packages/plugin-ui/src/lib/schema-source/websocket-solve-driver.ts` is the working example.
 
 ### HTTP app
 
@@ -119,7 +126,9 @@ Use the HTTP solve helper when the server responds to a request.
 ```ts
 const solve = createComputeFetchSolveFn({
 	endpoint: '/api/compute',
-	definitionUrl: () => '/definition.gh'
+	definitionUrl: () => '/definition.gh',
+	inputs: () => schema.inputs,
+	outputs: () => schema.outputs
 });
 ```
 
@@ -138,7 +147,7 @@ needs a policy from the host.
 
 ```ts
 import { meshPolicy } from '@selvajs/visualization/parse';
-const driver = createRequestResponseDriver(onSolve, () => session, { meshPolicy });
+const driver = createRequestResponseDriver(onSolve, () => session, { solveDeadlineMs, meshPolicy });
 ```
 
 Without a policy, the memo stores meshes by reference. That only works when nothing else disposes

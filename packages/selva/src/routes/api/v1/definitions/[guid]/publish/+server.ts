@@ -1,5 +1,11 @@
 import type { RequestHandler } from './$types';
-import { mount } from '$lib/server/api/sveltekit';
+import { mount } from '#lib/server/api/sveltekit.js';
+import { definitionScopeTarget } from '@selvajs/server/api';
 import { publishDefinition } from '@selvajs/server/handlers';
 
-export const POST: RequestHandler = mount('Failed to publish version', publishDefinition);
+const scopeTarget = definitionScopeTarget('guid');
+
+export const POST: RequestHandler = mount('Failed to publish version', publishDefinition, {
+	action: 'upload',
+	scopeTarget
+});

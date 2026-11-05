@@ -53,27 +53,9 @@ describe('Compute8 server-exception body is surfaced to the user', () => {
 			/Radius must be positive/
 		);
 	});
-
-	it('surfaces a malformed-JSON server error message', async () => {
-		fetchMock.mockResolvedValue(
-			createMockResponse(null, {
-				ok: false,
-				status: 500,
-				statusText: 'Internal Server Error',
-				body: serverException('Malformed JSON received: Unexpected character at line 1')
-			})
-		);
-
-		try {
-			await fetchCompute('grasshopper', {}, config);
-			throw new Error('should have thrown');
-		} catch (e) {
-			expect((e as Error).message).toContain('Malformed JSON received');
-		}
-	});
 });
 
-describe('error context.responseBody holds the raw, bounded server body (issue 104)', () => {
+describe('error context.responseBody holds the raw, bounded server body', () => {
 	it('stores the raw wire body, not the synthesized message', async () => {
 		const raw = serverException('Invalid argument: Radius must be positive', true);
 		fetchMock.mockResolvedValueOnce(
@@ -119,27 +101,6 @@ describe('error context.responseBody holds the raw, bounded server body (issue 1
 	});
 });
 
-describe('Grasshopper partial-success (500 with values) still passes through', () => {
-	it('returns the body instead of throwing', async () => {
-		const partial = {
-			values: [{ ParamName: 'out', InnerTree: {} }],
-			errors: ['1. Solution exception: division by zero'],
-			warnings: []
-		};
-		fetchMock.mockResolvedValueOnce(
-			createMockResponse(null, {
-				ok: false,
-				status: 500,
-				statusText: 'Internal Server Error',
-				body: JSON.stringify(partial)
-			})
-		);
-
-		const res = await fetchCompute('grasshopper', {}, config);
-		expect(res).toEqual(partial);
-	});
-});
-
 describe('server error codes are caller-supplied', () => {
 	/** A 502 whose body carries a machine code — status maps to NETWORK_ERROR by default. */
 	const coded = () =>
@@ -156,6 +117,31 @@ describe('server error codes are caller-supplied', () => {
 		expect.assertions(1);
 		try {
 			await fetchCompute('solve', {}, config);
+		} catch (e) {
+			expect((e as ComputeError).code).toBe(ErrorCodes.NETWORK_ERROR);
+		}
+	});
+
+	it('ignores a server code that names an Object.prototype member', async () => {
+		fetchMock.mockResolvedValueOnce(
+			createMockResponse(null, {
+				ok: false,
+				status: 502,
+				statusText: 'Bad Gateway',
+				body: JSON.stringify({ error: 'Bad Gateway', code: 'constructor' })
+			})
+		);
+
+		expect.assertions(1);
+		try {
+			await fetchCompute(
+				'solve',
+				{},
+				{
+					...config,
+					serverErrorCodes: { definition_not_cached: ErrorCodes.DEFINITION_NOT_CACHED }
+				}
+			);
 		} catch (e) {
 			expect((e as ComputeError).code).toBe(ErrorCodes.NETWORK_ERROR);
 		}

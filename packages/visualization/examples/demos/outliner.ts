@@ -19,7 +19,7 @@ import { updateScene } from '@/render/index.js';
 import { getThreeObjectsFromComputeResponse } from '@/parse/index.js';
 import { createSceneOutliner, getObjectLabel, getTypeLabel } from '@/scene/index.js';
 
-import responseUrl from '../shared/samples/compute-response.json?url';
+import responseUrl from '../data/compute-response.json?url';
 
 const pg = createPlayground({
 	title: 'Outliner — Scene Layer',

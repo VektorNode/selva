@@ -18,9 +18,9 @@ export interface EdgeOptions {
 	 */
 	distanceFade?: boolean;
 	/**
-	 * Skip meshes above this triangle count entirely (default 4M) — extraction time is linear in
-	 * triangles, and past this bound even the worker path burns seconds for a look the screen-space
-	 * fallback approximates at constant cost. Skipped meshes are tagged
+	 * Skip meshes above this triangle count entirely (default 8M). Extraction time and memory are
+	 * linear in triangles: 8M is about 0.7 s in the worker and a few hundred MB of scratch, and past it
+	 * the screen-space fallback approximates the look at constant cost. Skipped meshes are tagged
 	 * `userData.edgesSkipped = 'triangle-cap'`.
 	 */
 	maxTriangles?: number;
@@ -57,7 +57,7 @@ export const DEFAULT_EDGE_COLOR = 0x222222;
 const DEFAULT_EDGE_WIDTH = 1.5;
 const DEFAULT_THRESHOLD_ANGLE = 44;
 const DEFAULT_DARKEN = 0.75;
-const DEFAULT_MAX_TRIANGLES = 4_000_000;
+const DEFAULT_MAX_TRIANGLES = 8_000_000;
 const DEFAULT_MAX_SEGMENTS = 2_000_000;
 // Sits above the few hundred objects a Grasshopper solve produces (which must keep real overlays)
 // and below the thousands an imported building model does. At the measured ~6µs per object per

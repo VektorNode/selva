@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/solve",
-	"version": "1.2.2",
+	"version": "2.0.0",
 	"description": "One owner for the Selva solve flow — input change to solve result, on both sides of the wire, with no transport and no UI",
 	"author": "VektorNode",
 	"license": "MIT",
@@ -23,72 +23,48 @@
 	],
 	"exports": {
 		"./client": {
-			"import": {
-				"types": "./dist/client.d.ts",
-				"default": "./dist/client.js"
-			},
-			"require": {
-				"types": "./dist/client.d.cts",
-				"default": "./dist/client.cjs"
-			}
+			"types": "./dist/client.d.ts",
+			"default": "./dist/client.js"
 		},
 		"./server": {
-			"import": {
-				"types": "./dist/server.d.ts",
-				"default": "./dist/server.js"
-			},
-			"require": {
-				"types": "./dist/server.d.cts",
-				"default": "./dist/server.cjs"
-			}
+			"types": "./dist/server.d.ts",
+			"default": "./dist/server.js"
 		},
 		"./shared": {
-			"import": {
-				"types": "./dist/shared.d.ts",
-				"default": "./dist/shared.js"
-			},
-			"require": {
-				"types": "./dist/shared.d.cts",
-				"default": "./dist/shared.cjs"
-			}
+			"types": "./dist/shared.d.ts",
+			"default": "./dist/shared.js"
 		}
 	},
 	"files": [
 		"dist",
-		"README.md",
-		"!**/__tests__/**",
-		"!**/*.test.*",
-		"!**/*.spec.*"
+		"README.md"
 	],
 	"sideEffects": false,
 	"scripts": {
-		"build": "pnpm type-check && tsdown",
+		"build": "tsdown",
 		"dev": "tsdown --watch",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
+		"prepack": "publint --strict",
 		"test": "vitest run",
 		"test:watch": "vitest watch",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.server.json"
 	},
 	"dependencies": {
 		"@selvajs/compute": "workspace:^",
-		"@selvajs/platform": "workspace:^",
-		"@selvajs/schemas": "workspace:*"
+		"@selvajs/schemas": "workspace:^",
+		"undici": "catalog:"
 	},
 	"devDependencies": {
-		"@eslint/js": "^10.0.1",
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"esbuild": "^0.28.2",
 		"eslint": "catalog:",
-		"eslint-config-prettier": "^10.1.8",
-		"globals": "^17.12.0",
 		"prettier": "catalog:",
 		"tsdown": "catalog:",
 		"typescript": "catalog:",
-		"vite": "catalog:",
 		"vitest": "catalog:"
 	},
 	"engines": {

@@ -7,31 +7,29 @@ description: 'The zero-dependency filesystem provider: JSON on disk, HMAC sessio
 
 # Local provider
 
-`@selvajs/local-provider`: filesystem + JSON + HMAC sessions, and the default for all three slots. Every piece of state lives under one directory. No database, no external services.
+`@selvajs/local-provider` is the default for all three slots: JSON files and HMAC sessions, all under one directory. No database, no external services.
 
-Under this provider Selva **is** the auth provider: `auth-users.json` holds email addresses and PBKDF2 password hashes on the deployment's own disk. No third party holds them, and you are the data controller for them.
+Selva is the auth provider here, so `auth-users.json` holds emails and PBKDF2 password hashes on your own disk. See [data privacy](../concepts/data-privacy.md).
 
 ## When to pick it
 
-Local, when you're developing or evaluating Selva; running a single-tenant, single-instance deployment (one VM, PM2); want no external dependencies at all; and are happy with file-based backups.
-
-[Supabase](./supabase.md), when you need several app instances behind a load balancer, managed auth (password reset, MFA, OAuth), managed Postgres and storage with backups and per-row access rules enforced by the database, or a counter several processes can raise at once without losing increments.
+Use local for development, evaluation, or one instance on one VM. Use [Supabase](./supabase.md) for several instances, OAuth sign-in, or database-enforced access rules.
 
 ## Setup
 
-It's the default, so no provider env vars are needed. Set:
+Set:
 
 - `SELVA_HMAC_KEY`: signs session cookies, hashes share-link and invite tokens.
 - `SELVA_AT_REST_KEY`: encrypts the stored Rhino.Compute API key.
-- `DATA_PATH`: a writable directory for users, orgs/projects/definitions JSON, and uploaded `.gh` files. Defaults to `.selva-data/` at the repo root; use an absolute path in production.
+- `DATA_PATH`: a writable directory for users, orgs/projects/definitions JSON, and uploaded `.gh` files. Required; the code has no default (the CLI scaffolds `./.selva-data`). Use an absolute path in production.
 
-Both keys must be 32 bytes and stable across restarts:
+Keep both keys stable across restarts: changing the HMAC key signs everyone out, and changing the at-rest key leaves the stored compute key undecryptable. Formats and rotation: [Secrets](../deployment/security-and-limits.md#secrets). A 32-byte hex key satisfies both:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-Create the first admin through the in-app setup page on first boot; there is no env-var fallback login. Register the Rhino.Compute server URL and API key at `/admin/compute`; they persist to `compute.config.json`, not env vars.
+Create the first admin through the in-app setup page on first boot. Register the Rhino.Compute URL and API key at `/admin/compute`.
 
 ## Backups
 
@@ -39,9 +37,9 @@ Create the first admin through the in-app setup page on first boot; there is no 
 tar -czf backup.tar.gz $DATA_PATH
 ```
 
-Restore is the reverse. No schema migrations, no database to bring up. Stop the app first: the JSON files are written atomically, but a `tar` taken mid-request can still straddle two files.
+Stop the app first so the archive can't straddle two files. Restore is the reverse.
 
-On-disk layout and architecture notes: [local-provider README](https://github.com/VektorNode/selva/blob/main/packages/providers/local/README.md).
+On-disk layout: [local-provider README](https://github.com/VektorNode/selva/blob/main/packages/providers/local/README.md).
 
 ## Next
 

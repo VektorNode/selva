@@ -1,5 +1,271 @@
 # @selvajs/ui
 
+## 7.0.0
+
+### Major Changes
+
+- edb568d: A token-only design system, a reworked parameter panel and solve status, phone layouts, and host seams for the Rhino panel.
+
+  **Removed or changed (check before upgrading)**
+
+  - Tokens: `accent` / `accent-foreground` (use `hover` or `selected`), `sidebar-*`, `inputparam`, `outputparam` and `--radius` are gone, as are the alternate themes (`@selvajs/ui/styles/themes/*`, `ThemeSwitcher`, the theme store). Lint in `@selvajs/ui` rejects raw palette colours, arbitrary values and inline styles.
+  - Components: `Alert` (use `Callout`) and `Card.Action` are removed. `FilterableDropdown` items take `iconClass` only. `ActionButton` loses `size`, and `variant` is `'default' | 'destructive'`. `PageContent` renders a `<div>`, not a `<main>`; don't wrap `ComputeApp` or `AppLayout` in another `<main>`.
+  - `PresetLabels.saveButton` / `loadButton` become `saveMenuItem` / `loadMenuItem`, plus `saveConfirmButton`. The `expandPanel` / `collapsePanel` messages are gone.
+  - `AppLayout` takes a required `showViewer`. `ComputeApp` shows the viewer only for `viewerOptions.enableRemote`. `Viewer`'s `isSolving` is deprecated and ignored.
+  - `createSolvingIndicator` uses a fixed rule (hidden under 400 ms, shown at least 500 ms) and returns `slow`.
+
+  **Added**
+
+  - Surface roles (`raised`, `field`, `hover`, `selected`, `border-strong`, `faint-foreground`, shadows, `rounded-inner`) and utility tokens. Hanken Grotesk, self-hosted, as the UI typeface.
+  - shadcn `Popover`, `Command`, `DropdownMenu`, `ToggleGroup`, `Empty`, `Spinner`, `InputGroup`; new variants on `Card`, `Dialog`, `Tabs` (`line`), `Button` (`xs`) and `Resizable.Handle`. `SeverityIcon` and `IssueList` unify message icons.
+  - Parameter panel: borderless groups, responsive columns, one-box sliders, value-list `segmented` / `tiles` modes with icons and thumbnails, and a footer of Calculate plus one ⋯ menu holding presets and `panelActions` (`disabled`, `hint`, `solvesFirst`).
+  - Solve status grows with the solve in `AppLayout`'s action row (`live`, `onabort`, `progressShownByHost`). Esc aborts a solve in every host.
+  - Host seams: `freezesDuringSolve`, inline placements, one save and one pick function for files and downloads, `messages` overrides on `ComputeApp` (every visible string is in `ViewerMessages`, English and German), `onSolved(settlement)`, and `visibleInputItems`.
+  - Geometry inputs and buttons render only where they work (the Rhino panel).
+  - Viewer: one control dock with overflow, night mode, an in-viewer metadata card instead of a modal, and a fit button on touch. Phone drawer with half and full heights. `DataTableColumn.hideOnMobile`.
+  - Charts use Plotly.js 4.1.2 with SRI, Selva's palette and font, and play animated figures; Plotly's cloud "Share chart" is off.
+
+  **Fixed**
+
+  - Contrast: field borders, focus rings and error text reach WCAG thresholds in both modes. Accessibility: landmarks and headings, persistent live regions for solve progress, 44 px touch targets, named sliders and colour inputs.
+  - `AppShell` uses `dvh`, so iOS no longer hides the footer. Empty image and chart outputs stay hidden until data arrives. SVG outputs show on white. A WebP for an input that accepts PNG is sent as PNG. Closing a `Viewer` no longer loses its WebGL context twice.
+  - Accepts SvelteKit 2 or 3 as a peer.
+
+## 6.6.0-beta.20
+
+### Minor Changes
+
+- 17781ce: The solve status in `AppLayout`'s action row grows with the solve instead of appearing and disappearing. At rest it reads "Up to date", and a solve too short to show makes its dot ping once. Past 400 ms it becomes "Solving 0.6 s", and past 2 s a card with the current step, a progress bar and Abort, growing upward over the fields so the footer keeps its height. A solve that was shown ends on "Done · 3.4 s". The viewer no longer dims its model or runs a line along its bottom edge while solving.
+
+  - `AppLayout` takes `live` and `onabort` for the card's progress and Abort, and `freezesDuringSolve` (as passed to `createSolvingIndicator`), which makes the status say Esc aborts instead of counting seconds.
+  - `SolveMessages` takes `progressShownByHost`: its live view then shows only the messages a solve sends, leaving progress and Abort to the action row. Pass it when the definition solves on change (`schema.instanceSolve !== false`); with a Calculate button there is no solve status, so `SolveMessages` keeps showing progress.
+  - `Viewer`'s `isSolving` and `isSlow` are deprecated and ignored.
+
+### Patch Changes
+
+- 17781ce: Chart outputs render with Plotly.js 4.1.2. Plotly 4's "Share chart" button, which uploads the figure to Plotly's cloud, is turned off. Figures made for Plotly 3 keep their look: scatter-matrix panels stay unlinked, removed `*mapbox` map traces become their `*map` replacements, and colours Plotly 4 rejects (hex without `#`, `hsv()`) are rewritten.
+
+  Charts also use Selva's chart palette and font where the figure doesn't set its own, and animated figures (with `frames`) play.
+
+## 6.6.0-beta.19
+
+### Patch Changes
+
+- 0b4e51e: Built on SvelteKit 3.
+
+  - `@selvajs/selva`: nothing changes for a running deployment; `.env`, the start command and the proxy setup stay as they are. adapter-node 6 no longer reads `ORIGIN`, so Selva applies it itself: links, OAuth metadata and the form-CSRF check use `ORIGIN` when it is set, as before.
+  - `@selvajs/server`: `isCrossSiteFormSubmission` takes an `origin` option for hosts that know their public origin better than `request.url` does.
+  - `@selvajs/ui`: packaged with `@sveltejs/package` 3. The published output is unchanged and still supports SvelteKit 2 and 3.
+
+## 6.6.0-beta.18
+
+### Minor Changes
+
+- 056cb01: One typeface, one content width, one dropdown.
+
+  - **Hanken Grotesk is the UI typeface.** `base.css` loads it from `@fontsource-variable/hanken-grotesk` and sets `--font-sans`, so every app importing it (including the plugin UI embedded in the `.gha`) gets it self-hosted, no network fetch.
+  - **`PageContent` is the shared page frame:** centred, `max-w-6xl`, page padding. It now renders a `<div>` instead of a `<main>`, because `AppShell` already provides the `<main>`. A consumer relying on full width can override it with `class`.
+  - **`FilterableDropdown` gains `name`** (hidden input for a plain form post), **`size`** (`'default' | 'sm'`), **`aria-label`** and a per-item **`disabled`**.
+  - **Selva:** settings, team, Library and Projects share one content width. The Projects page is a single scrolling column titled with the selected project, and new projects are created in a dialog. Every native `<select>` is now a `FilterableDropdown`, and lint rejects new ones. The landing page wires are easier to see and its hero is tighter.
+
+## 6.6.0-beta.17
+
+### Minor Changes
+
+- 57189d6: Export `visibleInputItems(schema, values)`: the input items the form shows for these values, after item, group and tab visibility. For a host that repeats the form back, such as a summary before a commit.
+
+## 6.6.0-beta.16
+
+### Minor Changes
+
+- ebae55e: One surface system for light and dark. Cards, rows, menus and fields sit on a fixed set of roles (canvas, surface, raised, well, field), hover and selection are overlays that work on any surface, and every field edge and slider track reaches 3:1 in both modes. Corners follow one concentric radius scale.
+
+  New tokens: `raised`, `field`, `hover`, `selected`, `border-strong`, `faint-foreground`, `shadow-raised`, `shadow-popover`, `rounded-inner`. Removed: `accent` and `accent-foreground` (use `hover` or `selected`), the `sidebar-*` tokens, `inputparam`, `outputparam` and the `--radius` base variable. The alternate themes are gone too: the `@selvajs/ui/styles/themes/*` export, `ThemeSwitcher` and the theme store.
+
+## 6.6.0-beta.15
+
+### Minor Changes
+
+- 3ff7284: Schema 2.19.0: an optional `viewerOptions.look` sets the look a definition opens in. A new `night` look lights the scene from what the model emits: a material carrying `emissive` and `emissiveIntensity` gets a shadow-casting point light and bloom. `emissiveLight` sets that light's intensity directly. The plugin's new Emissive Material component makes any material glow, from a colour and strength, or from a real source's Kelvin and Lumens.
+
+### Patch Changes
+
+- 3ff7284: A segmented input's selected option now stands out on dark panels, and a tile's label wraps to two lines instead of truncating.
+
+## 6.6.0-beta.14
+
+### Minor Changes
+
+- a9a8704: Scene manager: hovering a row tints that object amber in the viewport, and selecting rows tints them with the selection color. A surface already close to the tint turns blue instead. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 6.6.0-beta.13
+
+### Minor Changes
+
+- b500603: Scene manager: hovering a row outlines that object in the viewport, and selecting rows tints them. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 6.6.0-beta.12
+
+### Patch Changes
+
+- a60f6f4: Image outputs show SVGs on white instead of a checkerboard when no background colour is set. Raster images keep the checkerboard so their transparency stays visible.
+
+## 6.6.0-beta.11
+
+### Minor Changes
+
+- e0aa942: A solve that ends within 400 ms no longer shows a solving indicator. Once shown, the indicator stays for at least 500 ms so it never flashes. `createSolvingIndicator` replaces its averaged adaptive delay with this fixed rule, so a slow solve after a run of fast ones is no longer left without an indicator, and it now also returns `slow` (past 2 s). The viewer shows a thin progress bar along its top edge instead of blurring the model on every solve, and dims the stale result only while a solve is slow (`Viewer` `isSlow`, `AppLayout` `solveIsSlow`). `AppLayout` now hides the solving chip itself when the definition has a Calculate button, so hosts pass `createSolvingIndicator(...).show` without that check. In a host that freezes while it solves (the Rhino panel), the indicator shows on every solve, since a delay can't run there.
+
+### Patch Changes
+
+- e0aa942: Without a viewer, a layout narrower than 900px renders as one edge-to-edge column with the Calculate row pinned underneath, instead of a framed card in its own margins. Fixes the cramped look in a docked Rhino panel. Inline solve messages render as a footer row with their buttons beside the title, not as a framed card.
+- e0aa942: Esc aborts a running solve and says so the same way in every host: the Rhino panel, a browser tab and Rhino.Compute. Before, a browser tab ignored Esc and only the panel showed the hint, and only after a slow solve. The live panel's Abort button and the Calculate button while solving show an Esc key, and the floating solving indicator reads "Esc aborts the solve" instead of "This can take a moment…".
+- e0aa942: Closing a `Viewer` no longer logs "WebGL: INVALID_OPERATION: loseContext: context already lost". It released its WebGL context a second time after `dispose()` had already done so.
+
+## 6.6.0-beta.10
+
+### Patch Changes
+
+- d5376af: Parsing a mesh batch whose geometry is byte-identical to an earlier one reuses its `BufferGeometry` and extracted edges, so a solve that only changed materials, names or layers neither re-decodes the scene nor uploads it to the GPU again. The cache owns those geometries: `updateScene` frees the GPU copy of every cached geometry the new scene doesn't draw, so switching back to a cached variant costs an upload but no decode. New `clearGeometryCache()` from `/parse` empties the cache; `Viewer` calls it when it is destroyed.
+
+  Merging by material now gathers every group of a material, wherever it sits in the batch, into one mesh. The plugin keeps meshes in input order, so a material can head several groups.
+
+## 6.6.0-beta.9
+
+### Minor Changes
+
+- 0cb9545: Schema 2.16.0: `ParamType` gains `geometry`, `point`, `line` and `plane` for Rhino's Get Geometry, Get Point, Get Line and Get Plane, and `CheckboxWidgetConfig` an optional `displayAs: 'button'`. The UI picks a geometry input's control from its `paramType` and renders geometry inputs and buttons only where they work: in Rhino, picking in the viewport and pressing a button. Selva leaves them out for now, and the definition solves with its own values there. Presets skip both. Only the Rhino panel picks; a browser tab shows what the panel picked. While a pick runs, the input says to pick in the viewport, Esc to cancel.
+- 4125e70: A plugin older than this release saves a schema with geometry inputs or buttons without those elements: they are lost, the rest of the schema is kept. Update the plugin on every machine that edits the file.
+- 6b7f1a5: `createSolvingIndicator` and `SolveMessages` take `freezesDuringSolve` for a host that can't repaint while it solves, such as a WebView inside Rhino: the indicator shows for every solve with no delay, and the live progress panel, which could only appear after the solve, gives way to an "Esc aborts the solve" hint. An empty `footerText` now hides the footer's copyright line. `AppLayout` takes `solvingIndicatorPlacement: 'inline'` to show the solving state as a chip in its action row instead of floating it over the bottom-left corner; inline, the chip carries the Esc hint. `SolveMessages` takes `placement: 'inline'` to sit in the flow instead of floating over the page, and `AppLayout` renders it above the action row through its `solveMessages` snippet.
+- 07e6808: File inputs, preset import and every download (output files, archives, presets, viewer screenshots) now go through one save function and one pick function. In a browser nothing changes, except that picking the same file twice in a row now works. A host whose WebView can't download or show a file picker can install its own native dialogs.
+- 33ef891: Schema 2.17.0: value lists gain `segmented` and `tiles` display modes and an optional `optionMedia` map that gives an option an icon or a thumbnail. The icons and thumbnails live in a new root `assets` table, keyed by a hash of their content, so the `.gh` carries each one once. Icons are stored as SVG path data and thumbnails as small WebP, JPEG or PNG data URIs. Each option shows one picture, its thumbnail or else its icon, in every display mode. A button row with more than six options shows as a dropdown. The plugin marks a schema that has assets as needing plugin 0.24.0, so an older plugin refuses it instead of saving it without them. `normalizeUISchemaCasing` keeps option names in `optionMedia` and asset ids as they are.
+
+### Patch Changes
+
+- ee51327: Light theme: cards are white and each group of inputs has a border, so it stands apart from the page. The primary colour is a little darker, so it reaches 4.5:1 as text and under white text.
+- 8a60c6b: File inputs: a WebP picked or fetched for an input that also accepts PNG is sent as PNG. A fetched file counts as WebP by its content, so a URL with no extension or another one still converts. Grasshopper's PDF export can't read WebP; PNG keeps the transparency.
+
+## 6.6.0-beta.8
+
+### Patch Changes
+
+- 7304b28: Internal cleanup of `@selvajs/compute` with no API change. Two things are visible:
+
+  - Transport errors share one `context` shape (`serverUrl`, `url`, `endpoint`, `requestId`, `requestSize`, plus `timeoutMs` on a timeout), so some errors carry more keys than before. Input parse messages name an unnamed input `"unknown"`.
+  - `@selvajs/ui`'s file download decodes base64 with `decodeBase64ToBinary`, so invalid base64 throws a `ComputeError` with code `ENCODING_ERROR` instead of a `DOMException`.
+
+- Updated dependencies [7304b28]
+- Updated dependencies [414e9bc]
+- Updated dependencies [9a7d371]
+- Updated dependencies [9a7d371]
+  - @selvajs/compute@5.0.0-beta.2
+  - @selvajs/solve@2.0.0-beta.4
+
+## 6.6.0-beta.7
+
+### Minor Changes
+
+- 3890e17: Phone and touch fixes for the viewer and the app shell:
+
+  - Tapping a mesh with metadata opens a card inside the viewer instead of a modal dialog. The modal locked the page, and on touch a quick tap outside often failed to close it, leaving the viewer frozen. The card closes on a background tap, on selecting an object without metadata, or when a new solve arrives; its close button also clears the selection highlight.
+  - On touch devices a fit-to-view button sits next to the viewer's tools button. The tools button and logo no longer sit higher on phones to clear the drawer handle.
+  - The phone parameter drawer has a half and a full height. At half height the viewer resizes to the space above it, un-blurred, so the model stays visible while inputs change. Tap the handle to step closed → half → full → closed, or swipe it. The handle reads "Parameters" when there are several tabs.
+  - `AppShell` uses `dvh` instead of `100vh`, so iOS no longer hides the footer and drawer handle behind its toolbar. `--page-px` is 1rem below 640px.
+  - `PageHeader` truncates the title and hides the brand name next to a title on phones. `SideNav` becomes a scrolling strip above the content below 640px. `SectionHeader` stacks its actions under the title.
+  - Dialogs keep a 1rem gutter even when the caller passes a `max-w-*`, alert dialogs scroll when taller than the screen, and `Drawer` is capped at the screen width.
+  - The output copy button and chart toolbar, hover-only before, are always visible on touch devices.
+  - Native `<select>` elements get a drawn chevron with its own right gutter. The browser's arrow sat on the border at the `px-2`/`px-3` padding every caller uses.
+  - `DataTableColumn` takes `hideOnMobile` to drop a column below 640px, and a column without a `width` is `minmax(0, 1fr)` so long values truncate instead of widening their row.
+
+### Patch Changes
+
+- Updated dependencies [3890e17]
+  - @selvajs/visualization@1.6.0-beta.0
+
+## 6.6.0-beta.6
+
+### Minor Changes
+
+- a0e6628: `AppLayout` takes a required `showViewer` prop instead of reading the schema's viewer flags itself, so each host decides from its own switch. `ComputeApp` shows the 3D viewer only when `viewerOptions.enableRemote` is set; `enableLocal`, which belongs to the plugin's local preview, no longer turns it on.
+
+### Patch Changes
+
+- 5b67744: Charts load Plotly with a Subresource Integrity hash, so a changed file on the CDN is refused instead of run. `loadScript` takes an `integrity` option.
+- Updated dependencies [594da9c]
+- Updated dependencies [a0e6628]
+- Updated dependencies [a0e6628]
+  - @selvajs/compute@4.3.0-beta.1
+  - @selvajs/schemas@5.3.0-beta.0
+
+## 6.6.0-beta.5
+
+### Minor Changes
+
+- daf8a99: The panel footer is Calculate plus one ⋯ menu. Saving and loading inputs, and every `panelActions` entry, are items in that menu instead of a row of buttons; on a phone the menu sits in the drawer's pinned footer, so saving and loading are reachable there too.
+
+  - `PresetLabels`: `saveButton` and `loadButton` become `saveMenuItem` and `loadMenuItem` ("Save inputs…", "Load inputs…"); the save dialog's confirm button reads the new `saveConfirmButton`. Dialog copy says "inputs" instead of "parameter state".
+  - `ActionButton`: `size` is gone and `variant` is `'default' | 'destructive'`; `hint` shows under the item's label.
+  - `CalculateButton` takes a `trailing` snippet, drawn beside the button in its row.
+  - New message `moreActions` names the menu.
+
+- daf8a99: `ComputeApp` takes `messages?: Partial<ViewerMessages>`, layered over the `lang` catalog, so a host can reword any string of the app's chrome or supply every string for a language without a built-in catalog. The overrides reach every component inside, the viewer included. `setLocaleContext` takes the same overrides as an optional second getter, for a host that provides the locale at its root or uses `Viewer` on its own.
+
+  Every user-visible string the compute app renders now comes from `ViewerMessages`, with English and German entries: image, chart, file and text outputs, the file, number, text and dropdown inputs, the footer's message counts and copyright line, the message-centre dialog, the dialog close button, the theme toggle, the viewer's display looks and `ErrorScreen`. A `{name}` in a message is a placeholder the component fills in; pairs ending in `One`/`Other` are singular and plural.
+
+- daf8a99: `ActionButton` (the `panelActions` prop) takes `disabled?: boolean` and `hint?: string`. The hint is a short line under the button, linked to it with `aria-describedby`, so a host can show an action as unavailable with its reason instead of hiding it. In click-to-calculate mode the calculate button now sits above the panel actions, in the order they are used. On a phone the panel actions and the calculate button are pinned in the drawer's footer instead of following the last field.
+- daf8a99: - `ComputeApp` takes `onSolved(settlement)`, called once per settled solve.
+  - A `panelActions` entry can set `solvesFirst`: picking it solves when the inputs changed (or waits for a running or held solve), then runs `onclick` with the applied result. A refused or failed solve skips the action; its messages already show. While inputs are stale the item reads "Calculates first" unless it has its own `hint`.
+  - `useSolveSession` forwards `ensureSolved`, `onSettled` and `reportAborted`; `SolveSettlement` is exported.
+
+### Patch Changes
+
+- daf8a99: Accessibility fixes in the compute app. The layout's root is now the page's `<main>` landmark, so don't wrap `ComputeApp` or `AppLayout` in another `<main>`. Each panel has a visually hidden `h2` named after its tab, and each group title is an `h3` around its collapse button, with the group description outside the button. Solve progress is announced through live regions that stay mounted (the solving indicator, the live solve panel's current step, and the calculate button's start and finish), since a region created together with its text is not read out. The field help button and the dialog close button are 24×24 px, with a 44 px hit area on touch; on touch the panel's buttons, inputs and selects are at least 44 px tall. Slider thumbs and colour inputs are named by their field label, the phone drawer's handle is named by its visible label (the `expandPanel`/`collapsePanel` messages are gone; `aria-expanded` carries the state), and the drawer's fields are inert while it is closed. The page footer stays on one line at 320 px.
+- daf8a99: Stronger contrast for control boundaries, focus and error text in `base.css`. `--input` is `oklch(0.62 0 0)` in light mode (was `oklch(0.91 0 0)`, about 1.3:1) and `oklch(1 0 0 / 36%)` in dark mode (was 12%), at least 3:1 against background, card and muted, so field borders and unchecked boxes stay visible. `--ring` and `--sidebar-ring` are `oklch(0.55 0 0)` in light mode (was 0.67), and every primitive now draws its focus ring at full opacity instead of 50%, so the ring reaches 3:1 too; destructive buttons and badges use the same ring as the rest. Light `--destructive` is `oklch(0.55 0.19 27)` (was `oklch(0.6 0.18 27)`), so error text reaches 4.5:1.
+- daf8a99: Plainer default wording for people who don't know how the app computes: the calculate button reads "Berechnen" (it said "Zum Berechnen klicken", wrong on a touch screen), a finished solve reads "Berechnet" instead of "Aktuell", the solving indicator's subtitle no longer names Grasshopper ("This can take a moment…" / "Das kann einen Moment dauern…"), and loading reads "Loading…" / "Wird geladen…" rather than mentioning a schema.
+- daf8a99: An image or chart output without data no longer draws an empty "waiting" box: it stays hidden until a solve returns its data, and a group, tab or side pane holding nothing else closes with it, so an unsolved preview no longer takes a third of the screen. While a returned image is still decoding, its frame shows a loading indicator. A dynamic value list output, which never draws, no longer leaves an empty cell in its group.
+- Updated dependencies [daf8a99]
+  - @selvajs/solve@1.3.0-beta.2
+
+## 6.6.0-beta.4
+
+### Patch Changes
+
+- ef94b55: `DropdownMenu` and `Popover` content now animates open and closed, an open submenu's trigger stays highlighted, and a joined `ToggleGroup` rounds its outer corners and shares one border between items. These styles keyed on attributes bits-ui never sets; they now read its `data-state` and `data-orientation`.
+
+## 6.6.0-beta.3
+
+### Patch Changes
+
+- Updated dependencies [90ba461]
+  - @selvajs/compute@4.2.2-beta.0
+
+## 6.6.0-beta.2
+
+### Minor Changes
+
+- bc2d943: The design system now styles only through theme tokens, and its lint rules are errors in `@selvajs/ui`: a raw palette color, an arbitrary value, an inline style or a restyled primitive fails the build.
+
+  - New tokens in `styles/base.css`: `text-2xs`, `max-w-screen-inset`, `max-h-dialog`, `no-scrollbar`, `no-spinner`, `rounded-inherit`, `shadow-sheet` for bottom sheets, `bg-overlay` for modal scrims, and `destructive-foreground`.
+  - New shadcn components: `Popover`, `Command`, `DropdownMenu`, `ToggleGroup`, `Empty`, `Spinner` and `InputGroup`, which matches `Input`'s height and surface. The slider's value box is now an input group instead of hand-written CSS. `FilterableDropdown` is now a shadcn combobox, `ViewToggle` a toggle group, `StateDisplay` an empty state, and the viewer's tools menu uses checkbox and radio items.
+  - `SeverityIcon`, `IssueList` and the `severity` map give errors, warnings and notes one icon and one color everywhere: `Callout`, the solve messages, the message centre and preset validation.
+  - New variants instead of class overrides: `Card` `flush`, `Dialog.Content` `flush`, `Dialog.Title` `size="sm"`, `Tabs` `line`, `Button` `size="xs"`, `AlertDialog.Action` `variant`, and `Resizable.Handle` `line={false}`.
+  - Removed `Alert` (use `Callout`) and `Card.Action`. `FilterableDropdown` items take `iconClass` only; `iconStyle` is gone.
+  - Fixed: the solving indicator's slide-in and the viewer's fade-in now animate, the scene manager's scrollbar color applies, and `StateDisplay` text is readable in light mode.
+
+- bc2d943: Cleaner parameter panel for definitions with many inputs. Each group is one borderless card on a tinted panel background instead of a bordered card with a grey header, so inputs get more of the panel's width. Multi-column groups drop columns as the panel narrows instead of squeezing every field. Checkboxes sit on one row with their label. A slider is one box with its typed value on the left and the track on the right, at the same height as a number input, so mixed rows line up. Help icons show on hover. The min/max hint no longer shows on sliders, and on number boxes it appears beside the label only while the box has focus. The tab bar uses an underline style with scroll buttons when tabs overflow. `Tabs.List` and `Tabs.Trigger` take a `variant: 'default' | 'line'` prop.
+
+## 6.5.1-beta.1
+
+### Patch Changes
+
+- 4716a53: Accept SvelteKit 3 as a peer (`@sveltejs/kit: ^2 || ^3`). The package only imports `$app/state`, which Kit 3 keeps.
+
+## 6.5.1-beta.0
+
+### Patch Changes
+
+- @selvajs/solve@1.2.3-beta.0
+
 ## 6.5.0
 
 ### Minor Changes

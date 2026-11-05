@@ -8,6 +8,7 @@
  *    getUser at most once per `revalidateMs` per session; a getUser rejection
  *    during that recheck (sign-out / disabled) denies immediately.
  *  - strict: getUser on every request.
+ *  - a symmetric (HS256) token, which has no local check: one getUser per call.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -134,6 +135,44 @@ describe('SupabaseAuthProvider — hybrid token verification', () => {
 		expect(await provider.verifyToken('')).toBeNull();
 		expect(stub.getClaims).not.toHaveBeenCalled();
 		expect(stub.getUser).not.toHaveBeenCalled();
+	});
+});
+
+describe('SupabaseAuthProvider — hybrid with a symmetric (HS256) token', () => {
+	beforeEach(() => vi.restoreAllMocks());
+
+	const hs256 = (payload: object) =>
+		[{ alg: 'HS256', typ: 'JWT' }, payload]
+			.map((part) => Buffer.from(JSON.stringify(part)).toString('base64url'))
+			.concat('sig')
+			.join('.');
+
+	it('asks GoTrue once per verify, since it cannot be checked locally', async () => {
+		const provider = new SupabaseAuthProvider({
+			supabaseUrl: URL,
+			anonKey: ANON,
+			serviceRoleKey: SERVICE
+		});
+		const stub = stubAnonAuth(provider);
+		stub.getUser.mockResolvedValue(okUser());
+		const token = hs256({ sub: 'user-1', session_id: 'sess-1' });
+
+		expect((await provider.verifyToken(token))?.id).toBe('user-1');
+		expect((await provider.verifyToken(token))?.id).toBe('user-1');
+		expect(stub.getUser).toHaveBeenCalledTimes(2);
+		expect(stub.getClaims).not.toHaveBeenCalled();
+	});
+
+	it('denies one GoTrue rejects', async () => {
+		const provider = new SupabaseAuthProvider({
+			supabaseUrl: URL,
+			anonKey: ANON,
+			serviceRoleKey: SERVICE
+		});
+		const stub = stubAnonAuth(provider);
+		stub.getUser.mockResolvedValue({ data: { user: null }, error: { message: 'bad jwt' } });
+
+		expect(await provider.verifyToken(hs256({ sub: 'user-1' }))).toBeNull();
 	});
 });
 

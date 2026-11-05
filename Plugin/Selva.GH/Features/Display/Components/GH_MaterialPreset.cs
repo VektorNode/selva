@@ -21,7 +21,7 @@ public class GH_MaterialPreset : GH_Component
 
     public override Guid ComponentGuid => new Guid("15736FB4-A5A1-48AD-B0EE-A9193DB08DA8");
 
-    protected override Bitmap Icon => Resources.ThreeMaterial;
+    protected override Bitmap Icon => Resources.MaterialPreset;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

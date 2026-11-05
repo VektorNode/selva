@@ -1,11 +1,18 @@
 import { getContext, setContext } from 'svelte';
-import { type Locale, type ViewerMessages, messagesFor, DEFAULT_LOCALE } from './messages';
+import {
+	type Locale,
+	type ViewerMessages,
+	messagesFor,
+	withOverrides,
+	DEFAULT_LOCALE
+} from './messages';
 
 // Carries the UI locale down to the viewer and its panels without threading a
 // `lang` prop through every layer.
 //
 // Resolution order for any consuming component:
 //   explicit `lang` prop  →  nearest locale context  →  English default
+// and the strings are that locale's catalog with any `messages` overrides on top.
 //
 // Two ways to provide it:
 //   - Standalone: <Viewer lang="de" /> — Viewer provides the context itself.
@@ -20,20 +27,48 @@ export interface LocaleContext {
 }
 
 /**
- * Provide the locale to descendants. Pass a getter, not a value: it is re-read on every
+ * Provide the locale to descendants. Pass getters, not values: they are re-read on every
  * consumer render, so a reactive source (a `$state`, the app's Paraglide locale) switches
- * the language live.
+ * the language live. `getOverrides` replaces individual strings of the resolved catalog.
  */
-export function setLocaleContext(getLocale: () => Locale | undefined): void {
+export function setLocaleContext(
+	getLocale: () => Locale | undefined,
+	getOverrides?: () => Partial<ViewerMessages> | undefined
+): void {
 	const ctx: LocaleContext = {
 		get locale() {
 			return getLocale() ?? DEFAULT_LOCALE;
 		},
 		get messages() {
-			return messagesFor(getLocale());
+			return withOverrides(messagesFor(getLocale()), getOverrides?.());
 		}
 	};
 	setContext(LOCALE_CONTEXT_KEY, ctx);
+}
+
+/**
+ * Re-provides the nearest context for a component that takes its own `lang`/`messages` props.
+ * Without `lang`, or with the inherited locale, the subtree keeps the overrides an outer provider
+ * applied; a different `lang` starts from that locale's catalog, since those overrides were
+ * written for another language.
+ */
+export function layerLocaleContext(
+	getLang: () => Locale | undefined,
+	getOverrides?: () => Partial<ViewerMessages> | undefined
+): LocaleContext {
+	const outer = getLocaleContext();
+	const ctx: LocaleContext = {
+		get locale() {
+			return getLang() ?? outer.locale;
+		},
+		get messages() {
+			const lang = getLang();
+			const base = lang === undefined || lang === outer.locale ? outer.messages : messagesFor(lang);
+			return withOverrides(base, getOverrides?.());
+		}
+	};
+	setContext(LOCALE_CONTEXT_KEY, ctx);
+	return ctx;
 }
 
 /**

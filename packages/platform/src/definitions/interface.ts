@@ -25,6 +25,14 @@ export interface IDefinitionStore {
 		opts?: DefinitionListOptions & { orgId?: string }
 	): Promise<Page<DefinitionRecord>>;
 	get(ctx: RequestContext, guid: string): Promise<DefinitionRecord | null>;
+	/**
+	 * `get` for several guids in one read: the live record per guid. A guid with no live
+	 * record (unknown, deleted, or out of the caller's sight) is absent from the map.
+	 */
+	getDefinitionsFor(
+		ctx: RequestContext,
+		guids: readonly string[]
+	): Promise<Map<string, DefinitionRecord>>;
 	create(ctx: RequestContext, record: DefinitionRecord): Promise<void>;
 	update(ctx: RequestContext, guid: string, patch: DefinitionRecordPatch): Promise<void>;
 	delete(ctx: RequestContext, guid: string): Promise<void>;
@@ -61,6 +69,15 @@ export interface IDefinitionStore {
 		definitionId: string,
 		opts?: ListOptions
 	): Promise<Page<DefinitionVersion>>;
+	/**
+	 * Every version of each definition in one read, keyed by definition id, newest first, with
+	 * `schema` left out as in `listVersions`. Every id asked for is a key; one with no versions
+	 * maps to an empty list.
+	 */
+	listVersionsFor(
+		ctx: RequestContext,
+		definitionIds: readonly string[]
+	): Promise<Map<string, DefinitionVersion[]>>;
 	/** The full row, including the cached `schema` when one has been extracted. */
 	getVersion(ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null>;
 

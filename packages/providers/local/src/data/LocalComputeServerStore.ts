@@ -13,11 +13,12 @@ import {
 	type SecretVerificationReport,
 	type ILogger
 } from '@selvajs/platform';
-import { NoopLogger } from '@selvajs/platform';
-import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { NoopLogger, ProviderError } from '@selvajs/platform';
+import { previousKey } from '@selvajs/platform/config';
+import { readJsonFile, withFileLock, writeJsonFile } from './fsJson.js';
 import {
 	decodeSecretKey,
-	decryptSecret,
+	decryptWithKeys,
 	encryptSecret,
 	isEncryptedSecret
 } from './secretCrypto.js';
@@ -46,6 +47,24 @@ interface OnDiskShape {
 // so a shared module-level constant would let mutations bleed across calls.
 const empty = (): OnDiskShape => ({ servers: [], orgDefaults: {} });
 
+// `getServerApiKey` looks a key up by id alone, so an org reusing another
+// scope's id would get that scope's key sent to its own URL.
+function assertIdsFree(
+	incoming: readonly ComputeServerConfig[],
+	otherScopes: readonly ComputeServerConfig[]
+): void {
+	const taken = new Set(otherScopes.map((s) => s.id));
+	if (incoming.some((s) => taken.has(s.id))) {
+		throw new ProviderError('A compute server id is already in use', 409);
+	}
+}
+
+/** SELVA_AT_REST_KEY_PREVIOUS, while within its deadline. */
+function previousAtRestKey(env: Record<string, string | undefined>): Buffer | undefined {
+	const key = previousKey(env, 'SELVA_AT_REST_KEY').key;
+	return key ? decodeSecretKey(key) : undefined;
+}
+
 /**
  * Reads/writes compute.config.json, re-read on every call so edits take
  * effect without a restart. Mutation methods are scope-targeted
@@ -67,18 +86,23 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		return new LocalComputeServerStore(
 			path.join(env.DATA_PATH, 'compute.config.json'),
 			decodeSecretKey(env.SELVA_AT_REST_KEY),
-			logger
+			logger,
+			previousAtRestKey(env)
 		);
 	}
 
 	private readonly logger: ILogger;
+	/** Current key first; the previous one still opens rows sealed before a rotation. */
+	private readonly keys: Buffer[];
 
 	constructor(
 		private readonly configFilePath: string,
 		private readonly secretKey: Buffer,
-		logger?: ILogger
+		logger?: ILogger,
+		previousKey?: Buffer
 	) {
 		this.logger = logger ?? new NoopLogger();
+		this.keys = previousKey ? [secretKey, previousKey] : [secretKey];
 	}
 
 	private async readAll(): Promise<OnDiskShape> {
@@ -112,7 +136,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				);
 			}
 			try {
-				return { ...s, apiKey: decryptSecret(s.apiKey, this.secretKey) };
+				return { ...s, apiKey: decryptWithKeys(s.apiKey, this.keys, s.id).plaintext };
 			} catch (cause) {
 				this.logger.warn(
 					'Could not decrypt apiKey: the stored ciphertext does not match the current SELVA_AT_REST_KEY. ' +
@@ -141,6 +165,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		const all = await this.readAll();
 		const failures: SecretVerificationFailure[] = [];
 		let plaintextFound = false;
+		let onPreviousKey = 0;
 
 		for (const s of all.servers) {
 			if (!s.apiKey) continue;
@@ -154,7 +179,7 @@ export class LocalComputeServerStore implements IComputeServerStore {
 				continue;
 			}
 			try {
-				decryptSecret(s.apiKey, this.secretKey);
+				if (decryptWithKeys(s.apiKey, this.keys, s.id).keyIndex > 0) onPreviousKey += 1;
 			} catch (cause) {
 				failures.push({
 					serverId: s.id,
@@ -165,14 +190,44 @@ export class LocalComputeServerStore implements IComputeServerStore {
 			}
 		}
 
-		return { ok: failures.length === 0, failures, plaintextFound };
+		return {
+			ok: failures.length === 0,
+			failures,
+			plaintextFound,
+			...(this.keys.length > 1 ? { onPreviousKey } : {})
+		};
+	}
+
+	/**
+	 * Re-seal every row that only the previous key opens, under the current one,
+	 * so the previous key can be dropped. Under the file lock, so it can't
+	 * interleave with an admin save. Returns how many rows it re-sealed.
+	 */
+	async reencryptSecrets(): Promise<number> {
+		if (this.keys.length < 2) return 0;
+		return withFileLock(this.configFilePath, async () => {
+			const all = await this.readAll();
+			let changed = 0;
+			const servers = all.servers.map((s) => {
+				if (!s.apiKey || !isEncryptedSecret(s.apiKey)) return s;
+				try {
+					const { plaintext, keyIndex } = decryptWithKeys(s.apiKey, this.keys, s.id);
+					if (keyIndex === 0) return s;
+					changed += 1;
+					return { ...s, apiKey: encryptSecret(plaintext, this.secretKey, s.id) };
+				} catch {
+					return s;
+				}
+			});
+			if (changed > 0) await writeJsonFile<OnDiskShape>(this.configFilePath, { ...all, servers });
+			return changed;
+		});
 	}
 
 	private encryptApiKeys(servers: ComputeServerConfig[]): ComputeServerConfig[] {
 		return servers.map((s) => {
 			if (!s.apiKey) return s;
-			if (isEncryptedSecret(s.apiKey)) return s;
-			return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey) };
+			return { ...s, apiKey: encryptSecret(s.apiKey, this.secretKey, s.id) };
 		});
 	}
 
@@ -208,14 +263,18 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		servers: ComputeServerConfig[],
 		defaultServerId: string | undefined
 	): Promise<void> {
-		const all = await this.readAll();
-		const orgRows = all.servers.filter(isOrgServer);
-		const platformRows = this.encryptApiKeys(servers.filter(isPlatformServer));
+		await withFileLock(this.configFilePath, async () => {
+			const all = await this.readAll();
+			const orgRows = all.servers.filter(isOrgServer);
+			const incoming = servers.filter(isPlatformServer);
+			assertIdsFree(incoming, orgRows);
+			const platformRows = this.encryptApiKeys(incoming);
 
-		await writeJsonFile<OnDiskShape>(this.configFilePath, {
-			servers: [...platformRows, ...orgRows],
-			defaultServerId,
-			orgDefaults: all.orgDefaults
+			await writeJsonFile<OnDiskShape>(this.configFilePath, {
+				servers: [...platformRows, ...orgRows],
+				defaultServerId,
+				orgDefaults: all.orgDefaults
+			});
 		});
 	}
 
@@ -225,74 +284,73 @@ export class LocalComputeServerStore implements IComputeServerStore {
 		servers: ComputeServerConfig[],
 		defaultServerId?: string | null
 	): Promise<void> {
-		const all = await this.readAll();
-		const platformRows = all.servers.filter(isPlatformServer);
-		const otherOrgRows = all.servers.filter((s) => isOrgServer(s) && s.ownerOrgId !== orgId);
-		const thisOrgRows = this.encryptApiKeys(
-			servers
-				.filter((_s): _s is ComputeServerConfig => true)
-				.map((s) =>
-					isOrgServer(s)
-						? { ...s, ownerOrgId: orgId }
-						: // Coerce — caller passed something with the wrong/missing scope.
-							({ ...s, scope: 'org', ownerOrgId: orgId } as ComputeServerConfig)
-				)
-		);
+		await withFileLock(this.configFilePath, async () => {
+			const all = await this.readAll();
+			const platformRows = all.servers.filter(isPlatformServer);
+			const otherOrgRows = all.servers.filter((s) => isOrgServer(s) && s.ownerOrgId !== orgId);
+			const incoming = servers.filter(isOrgServer).map((s) => ({ ...s, ownerOrgId: orgId }));
+			assertIdsFree(incoming, [...platformRows, ...otherOrgRows]);
+			const thisOrgRows = this.encryptApiKeys(incoming);
 
-		const orgDefaults = { ...(all.orgDefaults ?? {}) };
-		if (defaultServerId === null) {
-			delete orgDefaults[orgId];
-		} else if (typeof defaultServerId === 'string') {
-			orgDefaults[orgId] = defaultServerId;
-		}
+			const orgDefaults = { ...(all.orgDefaults ?? {}) };
+			if (defaultServerId === null) {
+				delete orgDefaults[orgId];
+			} else if (typeof defaultServerId === 'string') {
+				orgDefaults[orgId] = defaultServerId;
+			}
 
-		await writeJsonFile<OnDiskShape>(this.configFilePath, {
-			servers: [...platformRows, ...otherOrgRows, ...thisOrgRows],
-			defaultServerId: all.defaultServerId,
-			orgDefaults
+			await writeJsonFile<OnDiskShape>(this.configFilePath, {
+				servers: [...platformRows, ...otherOrgRows, ...thisOrgRows],
+				defaultServerId: all.defaultServerId,
+				orgDefaults
+			});
 		});
 	}
 
 	async setOrgDefault(_ctx: RequestContext, orgId: string, serverId: string | null): Promise<void> {
-		const all = await this.readAll();
-		const orgDefaults = { ...(all.orgDefaults ?? {}) };
-		if (serverId === null) {
-			delete orgDefaults[orgId];
-		} else {
-			orgDefaults[orgId] = serverId;
-		}
-		await writeJsonFile<OnDiskShape>(this.configFilePath, { ...all, orgDefaults });
+		await withFileLock(this.configFilePath, async () => {
+			const all = await this.readAll();
+			const orgDefaults = { ...(all.orgDefaults ?? {}) };
+			if (serverId === null) {
+				delete orgDefaults[orgId];
+			} else {
+				orgDefaults[orgId] = serverId;
+			}
+			await writeJsonFile<OnDiskShape>(this.configFilePath, { ...all, orgDefaults });
+		});
 	}
 
 	async deleteByOrg(_ctx: RequestContext, orgId: string): Promise<void> {
-		const all = await this.readAll();
-		const remaining = all.servers.filter((s) => !(isOrgServer(s) && s.ownerOrgId === orgId));
+		await withFileLock(this.configFilePath, async () => {
+			const all = await this.readAll();
+			const remaining = all.servers.filter((s) => !(isOrgServer(s) && s.ownerOrgId === orgId));
 
-		const cleaned: ComputeServerConfig[] = remaining.map((s) => {
-			if (!isPlatformServer(s)) return s;
-			if (s.sharedWith === 'all') return s;
-			if (!s.sharedWith.includes(orgId)) return s;
-			const next: PlatformComputeServer = {
-				...s,
-				sharedWith: s.sharedWith.filter((id) => id !== orgId)
-			};
-			return next;
-		});
+			const cleaned: ComputeServerConfig[] = remaining.map((s) => {
+				if (!isPlatformServer(s)) return s;
+				if (s.sharedWith === 'all') return s;
+				if (!s.sharedWith.includes(orgId)) return s;
+				const next: PlatformComputeServer = {
+					...s,
+					sharedWith: s.sharedWith.filter((id) => id !== orgId)
+				};
+				return next;
+			});
 
-		const orgDefaults = { ...(all.orgDefaults ?? {}) };
-		const hadDefault = orgId in orgDefaults;
-		delete orgDefaults[orgId];
+			const orgDefaults = { ...(all.orgDefaults ?? {}) };
+			const hadDefault = orgId in orgDefaults;
+			delete orgDefaults[orgId];
 
-		const changed =
-			cleaned.length !== all.servers.length ||
-			hadDefault ||
-			cleaned.some((c, i) => c !== all.servers[i]);
-		if (!changed) return;
+			const changed =
+				cleaned.length !== all.servers.length ||
+				hadDefault ||
+				cleaned.some((c, i) => c !== all.servers[i]);
+			if (!changed) return;
 
-		await writeJsonFile<OnDiskShape>(this.configFilePath, {
-			servers: cleaned,
-			defaultServerId: all.defaultServerId,
-			orgDefaults
+			await writeJsonFile<OnDiskShape>(this.configFilePath, {
+				servers: cleaned,
+				defaultServerId: all.defaultServerId,
+				orgDefaults
+			});
 		});
 	}
 }

@@ -12,18 +12,26 @@ import type { SolveResult } from '../shared/solve-fn.js';
 
 /**
  * Deterministic string key for a set of input values. Sorts object keys at every level so
- * two logically-equal inputs built in different key order collide.
+ * two logically-equal inputs built in different key order collide. Otherwise matches what
+ * `JSON.stringify` sends: `toJSON` is honoured and an `undefined` property is absent, which a
+ * server treats differently from `null`.
+ *
+ * Throws on a `bigint`, as `JSON.stringify` does.
  */
-export function stableInputKey(values: Record<string, unknown>): string {
-	return serialize(values);
-}
+export function stableInputKey(input: unknown): string {
+	const hasToJSON =
+		input !== null &&
+		typeof input === 'object' &&
+		typeof (input as { toJSON?: unknown }).toJSON === 'function';
+	const value = hasToJSON ? (input as { toJSON(): unknown }).toJSON() : input;
 
-function serialize(value: unknown): string {
 	if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
-	if (Array.isArray(value)) return `[${value.map(serialize).join(',')}]`;
+	if (Array.isArray(value)) return `[${value.map(stableInputKey).join(',')}]`;
 	const obj = value as Record<string, unknown>;
-	const keys = Object.keys(obj).sort();
-	return `{${keys.map((k) => `${JSON.stringify(k)}:${serialize(obj[k])}`).join(',')}}`;
+	const keys = Object.keys(obj)
+		.filter((k) => obj[k] !== undefined)
+		.sort();
+	return `{${keys.map((k) => `${JSON.stringify(k)}:${stableInputKey(obj[k])}`).join(',')}}`;
 }
 
 /**
@@ -79,24 +87,20 @@ export function createSolveMemo<TMesh = unknown>(
 			if (hit === undefined) return undefined;
 			entries.delete(key);
 			entries.set(key, hit);
-			console.info(`[Solve/memo] HIT — served from client memo (${entries.size}/${max})`);
+			// eslint-disable-next-line no-console -- fires per frame during a slider scrub
+			console.debug(`[Solve/memo] HIT — served from client memo (${entries.size}/${max})`);
 			return copy(hit);
 		},
 		set(values, result) {
 			const key = stableInputKey(values);
 			evict(key);
 			entries.set(key, copy(result));
-			while (entries.size > max) {
-				const oldest = entries.keys().next().value;
-				if (oldest === undefined) break;
+			for (const oldest of entries.keys()) {
+				if (entries.size <= max) break;
 				evict(oldest);
-				console.info(`[Solve/memo] evicted LRU entry (cap ${max})`);
 			}
 		},
 		clear() {
-			if (entries.size > 0) {
-				console.info(`[Solve/memo] cleared ${entries.size} entries (definition changed)`);
-			}
 			entries.forEach(release);
 			entries.clear();
 		}

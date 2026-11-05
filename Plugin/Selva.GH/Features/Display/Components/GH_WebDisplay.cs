@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Components;
@@ -17,6 +19,7 @@ using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.Drawing.Components;
 using Selva.GH.Properties;
 using Selva.GH.Utilities;
+using Selva.GH.Utilities.Helpers;
 using Selva.Slva;
 
 namespace Selva.GH.Features.Display.Components;
@@ -52,8 +55,9 @@ public sealed class SolveResult
     public SolveResult(List<BranchResult> branches, List<Mesh> previewMeshes,
         List<ThreeMaterial> previewMaterials, List<Curve> previewCurves, List<Color> curveColors,
         List<Point3d> previewPoints, List<Color> pointColors, BoundingBox previewBounds,
-        int skipped = 0)
+        int skipped = 0, DisplayPerf perf = null)
     {
+        Perf = perf;
         Branches = branches;
         PreviewMeshes = previewMeshes;
         PreviewMaterials = previewMaterials;
@@ -81,6 +85,9 @@ public sealed class SolveResult
 
     public int Skipped { get; }
 
+    /// <summary>Null unless <see cref="PerfLog" /> is on.</summary>
+    public DisplayPerf Perf { get; }
+
     public int Count => Branches.Sum(b => b.Count);
 }
 
@@ -91,6 +98,13 @@ public sealed class SolveResult
 /// </summary>
 public class WebDisplay : GH_TaskCapableComponent<SolveResult>
 {
+    private readonly CacheAdmission<MeshItemKey> _meshAdmission = new CacheAdmission<MeshItemKey>();
+
+    // Leaves a core for the UI thread, which the panel's WebView and the solver also need.
+    private static readonly ParallelOptions ParallelLimits = new ParallelOptions
+    {
+        MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1)
+    };
     private BoundingBox _previewBB;
     private List<GH_CustomPreviewItem> _previewItems;
     private List<(Curve curve, Color color)> _previewCurves;
@@ -115,6 +129,12 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         _previewBB = BoundingBox.Empty;
     }
 
+    public override void RemovedFromDocument(Grasshopper.Kernel.GH_Document document)
+    {
+        DisplayPerf.Forget(InstanceGuid.ToString());
+        base.RemovedFromDocument(document);
+    }
+
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {
         pManager.AddGeometryParameter("Geo", "G", "Geometry to display", GH_ParamAccess.tree);
@@ -125,7 +145,7 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         pManager.AddParameter(new Param_ThreeMaterial("Material", "M", "Material for web display", "Selva",
             "Display", GH_ParamAccess.tree));
         pManager.AddParameter(new Param_MeshParameters(), "Meshing Settings", "MS",
-            "Meshing settings to use. Default is FastRenderMesh.", GH_ParamAccess.item);
+            "Meshing settings to use. Default is Rhino's Default meshing.", GH_ParamAccess.item);
 
         pManager[2].Optional = true;
         pManager[3].Optional = true;
@@ -152,7 +172,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<IGH_GeometricGoo> geoTree;
         if (!DA.GetDataTree(0, out geoTree) || geoTree.IsEmpty)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No geometry provided");
+            // A switched-off option leaves this empty on purpose, so it isn't worth warning the page.
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "No geometry provided");
             return;
         }
 
@@ -163,26 +184,37 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_MeshingParameters ghMeshParams = null;
         DA.GetData(5, ref ghMeshParams);
 
-        var meshSettings = ghMeshParams?.Value ?? MeshingParameters.FastRenderMesh;
+        // Not FastRenderMesh: on Rhino 9 it meshes a sphere to ~9,900 vertices against Default's ~560,
+        // which costs ~18x the meshing time, wire bytes and MeshItemCache memory.
+        var meshSettings = ghMeshParams?.Value ?? MeshingParameters.Default;
         var componentId = InstanceGuid.ToString();
         var mmPerUnit = DrawingUnits.ActiveDocMmPerUnit();
+        var metersPerUnit = DisplayUnits.ActiveDocMetersPerUnit();
 
+        var cancel = CancelToken;
         if (InPreSolve)
         {
             TaskList.Add(Task.Run(() =>
-                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit),
-                CancelToken));
+                    ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit,
+                    metersPerUnit, _meshAdmission, cancel),
+                cancel));
             return;
         }
 
         if (!GetSolveResults(DA, out var result))
         {
-            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit);
+            result = ComputeBatch(geoTree, nameTree, layerTree, metaTree, matTree, meshSettings, componentId, mmPerUnit,
+                metersPerUnit, _meshAdmission, cancel);
         }
 
         if (result == null)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
+            // A cancelled pass returns null; the abort is the story, not a missing-geometry warning.
+            if (!cancel.IsCancellationRequested)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
+            }
+
             return;
         }
 
@@ -190,7 +222,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         // mirrored (all-empty) tree so downstream components keep the paths.
         if (result.Count == 0)
         {
-            AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, "No valid geometry could be displayed");
+            AddRuntimeMessage(geoTree.DataCount == 0 ? GH_RuntimeMessageLevel.Remark : GH_RuntimeMessageLevel.Warning,
+                "No valid geometry could be displayed");
         }
         else if (result.Skipped > 0)
         {
@@ -215,6 +248,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         }
 
         DA.SetDataTree(0, output);
+
+        var previewStart = Stopwatch.GetTimestamp();
 
         // Build preview items on the main thread (Rhino display API requirement); clipping box was
         // already unioned in the background pass.
@@ -263,6 +298,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         {
             _previewPoints.Add((result.PreviewPoints[i], result.PointColors[i]));
         }
+
+        result.Perf?.Write(NickName, result.Skipped, PerfLog.MsSince(previewStart), ghMeshParams?.Value == null);
     }
 
     private static List<T> ResolveBranch<T>(IGH_Structure tree, GH_Path path) where T : class
@@ -329,11 +366,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         public string MeshName;
         public float[] MeshVertices;
         public int[] MeshFaces;
+        public MeshItemKey MeshKey;
 
         // Optional per-vertex channels (UVs additionally require ThreeMaterial.NeedsUvs).
         // Null = mesh contributes none.
         public float[] MeshUvs;
         public byte[] MeshColors;
+        public bool MeshClosed;
 
         // Replaces the work item's material for this mesh only; null keeps it.
         public ThreeMaterial Material;
@@ -355,8 +394,13 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
         GH_Structure<ThreeMaterialGoo> matTree,
         MeshingParameters meshSettings,
         string componentId,
-        double mmPerUnit)
+        double mmPerUnit,
+        double metersPerUnit,
+        CacheAdmission<MeshItemKey> meshAdmission,
+        CancellationToken cancel)
     {
+        var perf = DisplayPerf.StartIfEnabled();
+
         // Pass 1 (cheap, sequential): flatten the trees into a work list, resolving each item's
         // attributes, minted identity, and owning branch. Geometry extraction touches GH_Goo
         // wrappers and must not race with the parallel pass, so it stays here; invalid geometry is
@@ -415,12 +459,26 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             }
         }
 
+        perf?.EndPass("extract");
+
         // Pass 2 (expensive, parallel): mesh breps/surfaces and build curve/point items. Each slot
         // writes only its own index, so no locking is needed. Rhino meshing is thread-safe per
-        // geometry; meshSettings is read-only here.
+        // geometry; meshSettings is read-only here. An item whose MeshItemKey matches an earlier
+        // solve's skips all of it.
+        var meshingKey = MeshItemCache.MeshingKey(meshSettings);
         var results = new WorkResult[work.Count];
-        Parallel.For(0, work.Count, idx =>
+        var admission = meshAdmission.Begin();
+
+        // The token is checked per item rather than handed to Parallel: a cancelled loop throws
+        // OperationCanceledException out of the Task, which Grasshopper reads as a fault.
+        Parallel.For(0, work.Count, ParallelLimits, idx =>
         {
+            if (cancel.IsCancellationRequested)
+            {
+                results[idx] = new WorkResult { Skipped = true };
+                return;
+            }
+
             var w = work[idx];
 
             // Curves and points aren't meshable — they travel as JSON display items. Curves are
@@ -449,87 +507,68 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 return;
             }
 
-            var mesh = ConvertSingleGeometry(w.Geom, meshSettings);
-            if (mesh == null || !mesh.IsValid)
-            {
-                results[idx] = new WorkResult { Skipped = true };
-                return;
-            }
-
-            mesh.Normals.ComputeNormals();
             // Only Authored vouches for an input mesh's UVs: a converted Brep carries surface parameters.
             var authoredUvs = w.Material?.ResolvedMapping == UvMapping.Authored
                               && w.Geom is Mesh input && input.TextureCoordinates.Count == input.Vertices.Count;
-            DisplayUvs.Apply(mesh, w.Material, w.Id, mmPerUnit, authoredUvs);
 
-            // UVs are only worth carrying when the material needs them (a texture, anisotropy or a finish) —
-            // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
-            // every plain mesh would inflate the payload for nothing. Vertex colors only exist when
-            // something explicitly set them, so presence alone is the gate.
-            var hasUvs = mesh.TextureCoordinates.Count == mesh.Vertices.Count;
-            var wantUvs = w.Material != null && w.Material.NeedsUvs && hasUvs;
-            var wantColors = mesh.VertexColors.Count == mesh.Vertices.Count
-                             && mesh.VertexColors.Count > 0;
+            var stageStart = Stopwatch.GetTimestamp();
+            var key = MeshItemCache.KeyFor(w.Geom, meshingKey, mmPerUnit, w.Material, authoredUvs, w.Id);
+            perf?.AddKey(Stopwatch.GetTimestamp() - stageStart);
+
+            if (MeshItemCache.TryGet(key, out var meshed))
+            {
+                admission.Hit(key);
+                perf?.MeshCache.Hit();
+            }
+            else
+            {
+                perf?.MeshCache.Miss();
+                meshed = MeshOne(w, meshSettings, mmPerUnit, authoredUvs, perf);
+                if (meshed == null)
+                {
+                    results[idx] = new WorkResult { Skipped = true };
+                    return;
+                }
+
+                if (admission.ShouldStore(key))
+                {
+                    MeshItemCache.Add(key, meshed);
+                }
+            }
 
             // The batch zero-fills UVs for meshes that lack them, and the viewer builds the grain
             // tangent from UVs: zero UVs give it no direction. Drop anisotropy for this mesh.
             ThreeMaterial material = null;
-            if (!hasUvs && w.Material?.Anisotropy > 0)
+            if (!meshed.HasUvs && w.Material?.Anisotropy > 0)
             {
                 material = w.Material.Clone();
                 material.Anisotropy = null;
                 material.AnisotropyRotation = null;
             }
 
-            // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
-            // vertices it needs. Weld coincident vertices to shrink the payload, but respect normals
-            // (ignoreNormals: false): both the web and the C# preview recompute smooth normals via
-            // computeVertexNormals, which averages across every shared vertex, so welding across hard
-            // edges would smear them. Computing normals first lets the weld keep hard-edge vertices
-            // split (different normals) while merging smooth-surface interiors — preserving shading
-            // while still cutting most duplication.
-            //
-            // The weld must also respect any exported channel (ignoreAdditional: false), or vertices
-            // with different UVs/colors would merge and smear texture seams / color boundaries.
-            // Channels NOT being exported are cleared first so stale auto-generated data (brep TCs,
-            // partial color sets) can't block the weld.
-            if (wantUvs || wantColors)
-            {
-                if (!wantUvs && mesh.TextureCoordinates.Count > 0)
-                {
-                    mesh.TextureCoordinates.Clear();
-                }
-
-                if (!wantColors && mesh.VertexColors.Count > 0)
-                {
-                    mesh.VertexColors.Clear();
-                }
-
-                mesh.Vertices.CombineIdentical(false, false);
-            }
-            else
-            {
-                mesh.Vertices.CombineIdentical(false, true);
-            }
-
-            mesh.Compact();
-
-            // Extract the arrays now, off the main thread — the per-vertex copy CreateBatch would
-            // otherwise do serially for every mesh in the batch.
-            var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
-
             results[idx] = new WorkResult
             {
-                Mesh = mesh,
+                Mesh = meshed.Mesh,
                 MeshName = w.Name,
-                MeshVertices = vertices,
-                MeshFaces = faces,
-                MeshUvs = uvs,
-                MeshColors = colors,
+                MeshVertices = meshed.Vertices,
+                MeshFaces = meshed.Faces,
+                MeshKey = key,
+                MeshUvs = meshed.Uvs,
+                MeshColors = meshed.Colors,
+                MeshClosed = meshed.Closed,
                 Material = material,
-                Bounds = mesh.GetBoundingBox(false)
+                Bounds = meshed.Bounds
             };
         });
+
+        // A partial pass would skew the admission's hit statistics.
+        if (cancel.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        admission.End();
+        perf?.EndPass("mesh");
 
         // Pass 3 (cheap, sequential): gather each slot back into its branch in tree order for
         // deterministic output. Preview lists are global (one component draws everything).
@@ -586,6 +625,8 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
                 Faces = r.MeshFaces,
                 Uvs = r.MeshUvs,
                 Colors = r.MeshColors,
+                ContentKey = r.MeshKey,
+                Closed = r.MeshClosed,
                 Name = !string.IsNullOrWhiteSpace(r.MeshName)
                     ? r.MeshName
                     : (branch.Meshes.Count + 1).ToString(),
@@ -605,17 +646,20 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             return null;
         }
 
+        perf?.EndPass("gather");
+
         // Pass 4 (expensive, parallel across branches): encode each branch's batch — combined-array
         // merge, quantization, deflate — still inside the background task, so the solver thread never
-        // pays for the encode.
-        Parallel.ForEach(branches, b =>
+        // pays for the encode. A branch whose meshes and grouping match an earlier solve's skips it.
+        var blobStore = new GeometryBlobStore(perf?.BlobCache);
+        Parallel.ForEach(branches, ParallelLimits, b =>
         {
-            if (b.Count == 0)
+            if (b.Count == 0 || cancel.IsCancellationRequested)
             {
                 return;
             }
 
-            var batch = MeshBatchAssembler.CreateBatch(b.Meshes);
+            var batch = MeshBatchAssembler.CreateBatch(b.Meshes, blobStore, metersPerUnit);
             if (b.Items.Count > 0)
             {
                 batch.Items = b.Items;
@@ -624,8 +668,110 @@ public class WebDisplay : GH_TaskCapableComponent<SolveResult>
             b.Batch = batch;
         });
 
+        if (cancel.IsCancellationRequested)
+        {
+            return null;
+        }
+
+        if (perf != null)
+        {
+            perf.EndPass("encode");
+            perf.BatchesDone(componentId, work.Select(w => w.Geom).ToList(),
+                branches.Where(b => b.Batch != null).Select(b => (b.Path.ToString(), b.Batch)).ToList(),
+                meshSettings);
+        }
+
         return new SolveResult(branches, previewMeshes, previewMaterials, previewCurves, curveColors,
-            previewPoints, pointColors, previewBounds, skipped);
+            previewPoints, pointColors, previewBounds, skipped, perf);
+    }
+
+    /// <summary>
+    ///     Meshes, welds and extracts one item. Null when the geometry doesn't mesh. The result goes
+    ///     into <see cref="MeshItemCache" />, so everything it depends on must be in
+    ///     <see cref="MeshItemKey" />.
+    /// </summary>
+    private static MeshItem MeshOne(WorkItem w, MeshingParameters meshSettings, double mmPerUnit,
+        bool authoredUvs, DisplayPerf perf)
+    {
+        var stageStart = Stopwatch.GetTimestamp();
+        var mesh = ConvertSingleGeometry(w.Geom, meshSettings);
+        perf?.AddMesh(Stopwatch.GetTimestamp() - stageStart);
+        if (mesh == null || !mesh.IsValid)
+        {
+            return null;
+        }
+
+        stageStart = Stopwatch.GetTimestamp();
+        mesh.Normals.ComputeNormals();
+        perf?.AddNormals(Stopwatch.GetTimestamp() - stageStart);
+        stageStart = Stopwatch.GetTimestamp();
+        DisplayUvs.Apply(mesh, w.Material, w.Id, mmPerUnit, authoredUvs);
+        perf?.AddUvs(Stopwatch.GetTimestamp() - stageStart);
+
+        // UVs are only worth carrying when the material needs them (a texture, anisotropy or a finish) —
+        // brep meshing auto-fills TextureCoordinates with surface params, and emitting those for
+        // every plain mesh would inflate the payload for nothing. Vertex colors only exist when
+        // something explicitly set them, so presence alone is the gate.
+        var hasUvs = mesh.TextureCoordinates.Count == mesh.Vertices.Count;
+        var wantUvs = w.Material != null && w.Material.NeedsUvs && hasUvs;
+        var wantColors = mesh.VertexColors.Count == mesh.Vertices.Count
+                         && mesh.VertexColors.Count > 0;
+
+        // Brep meshing emits one vertex per face-corner, so a clean box arrives with ~3x the
+        // vertices it needs. Weld coincident vertices to shrink the payload, but respect normals
+        // (ignoreNormals: false): both the web and the C# preview recompute smooth normals via
+        // computeVertexNormals, which averages across every shared vertex, so welding across hard
+        // edges would smear them. Computing normals first lets the weld keep hard-edge vertices
+        // split (different normals) while merging smooth-surface interiors — preserving shading
+        // while still cutting most duplication.
+        //
+        // The weld must also respect any exported channel (ignoreAdditional: false), or vertices
+        // with different UVs/colors would merge and smear texture seams / color boundaries.
+        // Channels NOT being exported are cleared first so stale auto-generated data (brep TCs,
+        // partial color sets) can't block the weld.
+        stageStart = Stopwatch.GetTimestamp();
+        if (wantUvs || wantColors)
+        {
+            if (!wantUvs && mesh.TextureCoordinates.Count > 0)
+            {
+                mesh.TextureCoordinates.Clear();
+            }
+
+            if (!wantColors && mesh.VertexColors.Count > 0)
+            {
+                mesh.VertexColors.Clear();
+            }
+
+            mesh.Vertices.CombineIdentical(false, false);
+        }
+        else
+        {
+            mesh.Vertices.CombineIdentical(false, true);
+        }
+
+        mesh.Compact();
+        perf?.AddWeld(Stopwatch.GetTimestamp() - stageStart);
+
+        // Extract the arrays now, off the main thread — the per-vertex copy CreateBatch would
+        // otherwise do serially for every mesh in the batch.
+        stageStart = Stopwatch.GetTimestamp();
+        var (vertices, faces, uvs, colors) = GeoMeshProcessor.ConvertMeshToArrays(mesh, wantUvs, wantColors);
+        // Counted with the extraction: it walks the same arrays, and every browser would otherwise
+        // run it on each solve (~600 ms on a 2M-vertex mesh).
+        var closed = ClosedSolid.IsClosed(vertices, faces);
+        perf?.AddArrays(Stopwatch.GetTimestamp() - stageStart);
+
+        return new MeshItem
+        {
+            Mesh = mesh,
+            Vertices = vertices,
+            Faces = faces,
+            Uvs = uvs,
+            Colors = colors,
+            HasUvs = hasUvs,
+            Bounds = mesh.GetBoundingBox(false),
+            Closed = closed
+        };
     }
 
     /// <summary>

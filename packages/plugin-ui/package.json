@@ -5,9 +5,10 @@
 	"version": "0.10.0",
 	"type": "module",
 	"scripts": {
-		"predev": "node ../../scripts/sync-shared-assets.js",
+		"predev": "node ../../scripts/develop/sync-shared-assets.js",
 		"dev": "vite dev",
-		"prebuild": "node ../../scripts/sync-shared-assets.js",
+		"dev:mock": "node dev/mock-grasshopper.ts --with-dev-server",
+		"prebuild": "node ../../scripts/develop/sync-shared-assets.js",
 		"build": "vite build",
 		"preview": "vite preview",
 		"prepare": "svelte-kit sync || echo ''",
@@ -20,14 +21,16 @@
 		"lint:types": "eslint . --config eslint.typed.config.js"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "catalog:",
 		"@lucide/svelte": "catalog:",
 		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",
-		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/adapter-static": "catalog:",
 		"@sveltejs/kit": "catalog:",
 		"svelte-check": "catalog:",
 		"@types/three": "catalog:",
 		"@types/ws": "catalog:",
+		"lucide": "catalog:",
 		"tw-animate-css": "catalog:",
 		"vitest": "catalog:",
 		"ws": "catalog:"
@@ -39,9 +42,12 @@
 		"@selvajs/visualization": "workspace:^",
 		"bits-ui": "catalog:",
 		"mode-watcher": "catalog:",
-		"svelte-dnd-action": "^0.9.79",
+		"svelte-dnd-action": "^0.9.80",
 		"tailwind-variants": "catalog:",
 		"three": "catalog:",
 		"zod": "catalog:"
+	},
+	"imports": {
+		"#lib/*": "./src/lib/*"
 	}
 }

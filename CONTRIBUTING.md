@@ -71,10 +71,10 @@ Copy the result to your Grasshopper libraries folder, then restart Rhino complet
 
 ```bash
 # Windows (Rhino 8)
-copy "Plugin\bin\Release\net7.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
+copy "Plugin\bin\Release\net8.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
 
 # macOS (Rhino 8)
-cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
+cp Plugin/bin/Release/net8.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
 ```
 
 Write tests that cover workflows and integration, not trivial cases. [docs/contributing/testing.md](./docs/contributing/testing.md) covers where tests live and the shared vitest config.

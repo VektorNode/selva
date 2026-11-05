@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import { createTokenCodec, MIN_TOKEN_SECRET_LENGTH } from '../token-codec.js';
 
@@ -33,14 +34,30 @@ describe('createTokenCodec', () => {
 		const hash = codec.hashToken(raw);
 		expect(codec.hashToken(raw)).toBe(hash);
 		expect(hash).not.toContain(raw);
-		expect(hash).toMatch(/^[A-Za-z0-9_-]+$/); // base64url
+		expect(hash).toMatch(/^sha256:[A-Za-z0-9_-]{43}$/);
 	});
 
-	it('produces different hashes under different secrets (rotation invalidates)', () => {
+	it('new hashes do not depend on the secret, so rotating it keeps tokens working', () => {
 		const a = createTokenCodec({ prefix: 'share_', secret: SECRET });
 		const b = createTokenCodec({ prefix: 'share_', secret: SECRET + '-rotated' });
 		const raw = a.mintRawToken();
-		expect(a.hashToken(raw)).not.toBe(b.hashToken(raw));
+		expect(a.hashToken(raw)).toBe(b.hashToken(raw));
+	});
+
+	it('looks up the current form first, then hashes stored by the HMAC scheme under each key', () => {
+		const previous = 'the-previous-secret-also-long-enough-to-pass';
+		const codec = createTokenCodec({ prefix: 'share_', secret: SECRET, previousSecret: previous });
+		const raw = codec.mintRawToken();
+		const legacy = (key: string) => createHmac('sha256', key).update(raw).digest('base64url');
+		expect(codec.lookupHashes(raw)).toEqual([
+			codec.hashToken(raw),
+			legacy(SECRET),
+			legacy(previous)
+		]);
+		expect(createTokenCodec({ prefix: 'share_', secret: SECRET }).lookupHashes(raw)).toEqual([
+			codec.hashToken(raw),
+			legacy(SECRET)
+		]);
 	});
 
 	it('hashesEqual: equal, unequal, and length-mismatch inputs', () => {

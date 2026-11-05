@@ -2,33 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.Advanced;
 using Selva.Drawing.Model;
 
 namespace Selva.Drawing.Rendering.Pdf;
 
-// Builds an XMP packet (RDF/XML) and attaches it as the document's /Metadata stream.
-// PdfSharpCore already writes the legacy /Info dictionary; DAMs and PDF/A-PDF/X readers
-// expect XMP instead, so we mirror the same fields here to keep both in sync.
+// Builds the XMP packet (RDF/XML) for the document's /Metadata stream, mirroring the /Info
+// fields: DAMs and PDF/A or PDF/X readers expect XMP. PdfObjectRewriter puts it in place of the
+// packet PDFsharp writes, which leaves values unescaped and stamps random UUIDs.
 internal static class PdfXmpMetadata
 {
-	public static void Attach(PdfDocument pdf, DocumentMetadata metadata)
-	{
-		if (pdf == null || metadata == null) return;
-
-		var xmp = BuildPacket(metadata);
-		var bytes = Encoding.UTF8.GetBytes(xmp);
-
-		var stream = new PdfDictionary(pdf);
-		stream.Elements.SetName("/Type", "/Metadata");
-		stream.Elements.SetName("/Subtype", "/XML");
-		stream.CreateStream(bytes);
-
-		pdf.Internals.AddObject(stream);
-		pdf.Internals.Catalog.Elements["/Metadata"] = stream.Reference;
-	}
-
 	// Public so tests can check the RDF/XML directly, without round-tripping a full PDF.
 	public static string BuildPacket(DocumentMetadata metadata)
 	{
@@ -93,16 +75,14 @@ internal static class PdfXmpMetadata
 			sb.Append("</xmp:ModifyDate>\n");
 		}
 
-		if (!string.IsNullOrEmpty(metadata.Producer))
-		{
-			sb.Append("  <pdf:Producer>");
-			sb.Append(Escape(metadata.Producer));
-			sb.Append("</pdf:Producer>\n");
-		}
-		if (metadata.Keywords != null && metadata.Keywords.Count > 0)
+		sb.Append("  <pdf:Producer>");
+		sb.Append(Escape(PdfInfo.ProducerOf(metadata)));
+		sb.Append("</pdf:Producer>\n");
+		var keywords = PdfInfo.JoinKeywords(metadata.Keywords);
+		if (keywords != null)
 		{
 			sb.Append("  <pdf:Keywords>");
-			sb.Append(Escape(string.Join("; ", FilterEmpty(metadata.Keywords))));
+			sb.Append(Escape(keywords));
 			sb.Append("</pdf:Keywords>\n");
 		}
 
@@ -115,10 +95,6 @@ internal static class PdfXmpMetadata
 		return sb.ToString();
 	}
 
-	private static IEnumerable<string> FilterEmpty(IReadOnlyList<string> values)
-	{
-		foreach (var v in values) if (!string.IsNullOrEmpty(v)) yield return v;
-	}
 
 	private static string FormatDate(DateTime dt)
 	{

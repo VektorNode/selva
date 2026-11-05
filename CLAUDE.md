@@ -6,6 +6,8 @@ Guidance for Claude Code (claude.ai/code) when working in this repository.
 
 [STRUCTURE.md](./STRUCTURE.md) is authoritative for folder layout, naming, and per-package conventions. Read it before adding files.
 
+[docs/contributing/design-system.md](./docs/contributing/design-system.md) is authoritative for UI colour, radius and spacing. Read it before adding or restyling a component: pick a surface role, never a grey.
+
 ## Never do these
 
 Each of these is silent: nothing fails at build time, and the damage shows up later in someone else's saved file, log collector, or bundle.
@@ -21,7 +23,7 @@ Each of these is silent: nothing fails at build time, and the damage shows up la
 
 Selva is a cross-platform Rhino Grasshopper plugin with a SvelteKit web UI for building Grasshopper-driven web applications. Dual stack:
 
-- **Backend**: C# (.NET multi-target: net48/net7.0/net9.0), Grasshopper plugin
+- **Backend**: C# (.NET multi-target: net10.0 for Rhino 9, net8.0 for Rhino 8), Grasshopper plugin
 - **Frontend**: SvelteKit with TypeScript + Tailwind CSS
 - **Communication**: WebSocket served by the plugin on loopback (8765 by default, a free port if taken) + embedded HTTP server
 
@@ -29,16 +31,18 @@ Monorepo: `packages/` (TypeScript/Svelte workspace) and `Plugin/` (.NET / Grassh
 
 The web app runs in two modes: **Local** (`@selvajs/plugin-ui`, the drag-and-drop schema designer, embedded into `Selva.gha` and served from the plugin's local HTTP port) and **Cloud** (`@selvajs/selva`, standalone, solves through Rhino.Compute, installed via `@selvajs/cli`).
 
+In Rhino, Local runs inside a docked or floating Rhino panel (`Plugin/Selva.Panel`, a `.rhp`) by default. Shift opens it in the browser instead. In the panel, a solve freezes the page, because the WebView shares the UI thread with the solver. The panel also serves player sessions: a definition opened from the panel with the Grasshopper editor hidden. Specs: [rhino-panel](./plans/features/rhino-panel.md), [rhino-player](./plans/features/rhino-player.md).
+
 ## Code Style
 
 - Write self-documenting code. Keep it simple; avoid premature abstractions.
 - Error handling only at system boundaries (user input, external APIs).
 - Section headers: a title between two lines of `// ====...` (76 equals signs).
 - **Route handlers parse, guard, delegate, serialize, and nothing else.** A rule that
-  two endpoints must agree on belongs in `$lib/server/` or `@selvajs/server`, not
+  two endpoints must agree on belongs in `#lib/server/` or `@selvajs/server`, not
   copied into both. `/api/admin/*` and `/api/v1/*` are siblings over one core, so a
   rule duplicated across them drifts silently: the compute-config apiKey merge
-  (`$lib/server/compute/serverConfigWrite.ts`) clears or leaks a stored credential
+  (`#lib/server/compute/serverConfigWrite.ts`) clears or leaks a stored credential
   if the two copies disagree, and nothing fails at build time.
 
 ### Comments
@@ -98,9 +102,9 @@ Two JSON schemas in `packages/schemas/` generate both TypeScript and C# types. `
 
 ### `@selvajs/compute`
 
-`packages/compute`, published to npm. Modular exports for tree-shaking: main (utilities and types), `/grasshopper` (Rhino Compute client, data trees, input/output parsers), `/core` (low-level fetch and error handling). Discriminated unions for type-safe error handling; browser and Node compatible.
+`packages/compute`, published to npm. Two entrypoints: `/grasshopper` (Rhino Compute client, scheduler, data trees, input/output parsers) and `/core` (low-level fetch, errors, config). There is no root entry; import a subpath. Errors are one `ComputeError` class with a typed `code` from `ErrorCodes`. Browser and Node compatible.
 
-Pure solve/data: see the `three` prohibition above. Anything that turns a response into Three.js objects, sets up a viewer, or drives a solve session belongs in `@selvajs/visualization`.
+Pure solve/data: see the `three` prohibition above. Anything that turns a response into Three.js objects or sets up a viewer belongs in `@selvajs/visualization`.
 
 ### `@selvajs/visualization`
 
@@ -122,7 +126,7 @@ Two traps, both of which produce correct values that never re-render:
 
 The Svelte shells stay in `@selvajs/ui`: `Viewer.svelte`, `SceneManager.svelte`, `useSolveSession.svelte.ts`, `solving.svelte.ts`, plus the design system. **Whoever owns the scene owns the outliner:** `Viewer.svelte` creates it and calls `applyTo()` after a solve; the panel only renders it.
 
-The solve session used to be a fifth layer here; it now lives in `@selvajs/solve/client`.
+The solve session is not a layer here: it lives in `@selvajs/solve/client`.
 
 ### `@selvajs/platform`
 
@@ -149,11 +153,11 @@ the Rhino-free `Plugin/Selva.Slva/` library ([README](./Plugin/Selva.Slva/README
 
 ### Production build
 
-`pnpm run build:plugin` produces a **fully self-contained** `.gha`: builds `@selvajs/plugin-ui` assets → copies to `Plugin/Selva.GH/EmbeddedAssets/web/` → embeds them as `EmbeddedResource` → builds multi-target (net48 + net7.0 for Rhino 8, net9.0 for Rhino 9). No external dependencies; LocalWebServer auto-allocates an HTTP port at runtime.
+`pnpm run build:plugin` produces a **fully self-contained** `.gha`: builds `@selvajs/plugin-ui` assets → copies to `Plugin/Selva.GH/EmbeddedAssets/web/` → embeds them as `EmbeddedResource` → builds multi-target (net10.0 for Rhino 9, net8.0 for Rhino 8). No external dependencies; LocalWebServer auto-allocates an HTTP port at runtime.
 
 ## Commands
 
-`pnpm install` first. Builds are orchestrated by Turborepo (see `docs/contributing/turborepo.md`); most scripts run through it, with the exceptions noted.
+`pnpm install` first. Builds are orchestrated by Turborepo (see `docs/contributing/turborepo.md`); most scripts run through it; `dev:*`, `format` and `clean` run directly.
 
 ### Searching the repo
 
@@ -173,10 +177,11 @@ traversal has already happened by then.
 
 ```bash
 pnpm dev:plugin             # plugin-ui dev server (http://localhost:5173)
+pnpm dev:plugin:mock        # same, against a fake Grasshopper (no Rhino)
 pnpm dev:selva              # Selva app, your own .env and .selva-data
 
 # Same app pinned to one auth provider, each on throwaway data:
-# for testing provider behaviour, not for daily work. scripts/DEV-PROVIDERS.md
+# for testing provider behaviour, not for daily work. scripts/develop/DEV-PROVIDERS.md
 pnpm dev:local              # local provider (filesystem + password)
 pnpm dev:supabase           # Supabase CLI stack (Docker)
 pnpm dev:header             # forward-auth, the path Entra reaches (Caddy)
@@ -187,7 +192,7 @@ pnpm run build:plugin       # production .gha with embedded web assets
 
 pnpm check                  # svelte-check
 pnpm type-check             # tsc --noEmit
-pnpm lint                   # ESLint, repo root, NOT via turbo
+pnpm lint                   # ESLint, each package's own config
 pnpm format                 # Prettier
 pnpm test                   # vitest across packages that have tests
 pnpm generate               # regenerate TS + C# from ui-schema.json and wire-schema.json
@@ -210,16 +215,25 @@ Plus `cd Plugin && dotnet build && dotnet test` if C# changed, and `pnpm generat
 
 ### Local development
 
-Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin opens the dev-server URL with its own `wsPort` in the query string, and the page connects back over WebSocket: hot reload on web changes while the plugin stays debuggable.
+Two terminals: `pnpm dev:plugin` (web on :5173), and `cd Plugin && dotnet build` then run in your IDE. The plugin opens the dev-server URL with its own `wsPort` in the query string and a session secret in the fragment, and the page connects back over WebSocket: hot reload on web changes while the plugin stays debuggable.
 
 ### Installing to Grasshopper
 
+Rhino 9 on Windows is the primary platform: develop, debug and test against it first. Rhino 8 stays supported and must not regress.
+
+`pnpm install:plugin` builds the production plugin and installs it into Rhino 8's and 9's package folders, where a released install lives (`--skip-build` reinstalls the last build). Close Rhino first: it locks `Selva.gha`.
+
+To load a build from the Libraries folder instead, uninstall the package first, or Grasshopper loads both. Copy the whole TFM folder: `Selva.Panel.rhp` and the dependencies sit beside `Selva.gha`.
+
 ```bash
+# Windows (Rhino 9)
+xcopy /E /Y "Plugin\Selva.GH\bin\Release\net10.0\*" "%APPDATA%\Grasshopper\Libraries-9\Selva\"
+
 # Windows (Rhino 8)
-copy "Plugin\bin\Release\net7.0\Selva.gha" "%APPDATA%\Grasshopper\Libraries-8\"
+xcopy /E /Y "Plugin\Selva.GH\bin\Release\net8.0\*" "%APPDATA%\Grasshopper\Libraries-8\Selva\"
 
 # macOS (Rhino 8)
-cp Plugin/bin/Release/net7.0/Selva.gha ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/
+cp -R Plugin/Selva.GH/bin/Release/net8.0/ ~/Library/Application\ Support/McNeel/Rhinoceros/8.0/Plug-ins/Grasshopper/Libraries/Selva/
 ```
 
 Restart Rhino completely afterwards.
@@ -241,8 +255,8 @@ The plugin UI needs none (WebSocket port comes from the `wsPort` query param, 87
 
 - [pnpm](https://pnpm.io) >= 11.0.0 (pinned in `packageManager`, activated via Corepack)
 - Node.js >= 24.0.0
-- .NET SDK 7.0+ (plugin development)
-- Rhino 8 or 9 (Rhino 7 is not supported)
+- .NET SDK 10 (plugin development; pinned in `global.json`)
+- Rhino 9 (primary) or Rhino 8.21+ (Rhino 7 is not supported)
 - Rhino.Compute: the [VektorNode fork](https://github.com/VektorNode/compute.rhino3d) is required for block instance support
 
 ## Issues

@@ -4,6 +4,7 @@
 		FileInputWidgetConfig,
 		DynamicValueListWidgetConfig,
 		DropdownWidgetConfig,
+		UISchema,
 		SupportedTypes
 	} from '@selvajs/schemas';
 	import {
@@ -15,19 +16,31 @@
 		isFileWidget,
 		isColorWidget
 	} from '@selvajs/schemas';
-	import * as Field from '$lib/components/primitives/field';
-	import * as Dialog from '$lib/components/primitives/dialog';
-	import { HelpCircle } from '@lucide/svelte';
+	import * as Field from '#lib/components/primitives/field/index.js';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import { toast } from '#lib/components/primitives/sonner/index.js';
+	import HelpButton from './HelpButton.svelte';
 	import {
 		CheckboxInput,
 		ChecklistInput,
 		ColorInput,
 		DropdownInput,
 		FileInput,
+		GeometryInput,
 		NumberInput,
-		TextInput
-	} from '$lib/components/preview/inputs';
-	import { getClientSlot } from '$lib/contexts/clientSlotContext.svelte';
+		SegmentedInput,
+		TextInput,
+		TileInput
+	} from '#lib/components/preview/inputs/index.js';
+	import { getClientSlot } from '#lib/contexts/clientSlotContext.svelte.js';
+	import {
+		getHostContext,
+		type GeometryPickTarget,
+		type PickKind
+	} from '#lib/contexts/hostContext.svelte.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { isGeometryParamType, isTriggerItem } from '#lib/schema/host-support.js';
+	import { resolveOptionDisplay } from '#lib/schema/option-display.js';
 
 	interface Props {
 		item: InputLayoutItem;
@@ -42,6 +55,10 @@
 		disabled?: boolean;
 		/** Runtime-computed options for a dynamic value list input (name -> value). */
 		dynamicOptions?: Record<string, string>;
+		/** The input's paramType: a geometry input gets its control from this, not from the widget type. */
+		paramType?: string;
+		/** The schema's icons and thumbnails, which value-list options point into. */
+		assets?: UISchema['assets'];
 	}
 
 	let {
@@ -50,8 +67,25 @@
 		displayName,
 		onChange,
 		disabled = false,
-		dynamicOptions
+		dynamicOptions,
+		paramType,
+		assets
 	}: Props = $props();
+
+	const locale = getLocaleContext();
+	const hostActions = getHostContext();
+	const { pickGeometry, clearGeometry, onGeometrySummary } = hostActions;
+	const isGeometry = $derived(isGeometryParamType(paramType));
+	const isTrigger = $derived(isTriggerItem(item));
+	const pickTarget = $derived(
+		isGeometry ? hostActions.describeGeometry?.(item.paramId) : undefined
+	);
+
+	// Get Point/Line/Plane take their own kind; Get Geometry takes what its filter allows.
+	function pickKinds(target: GeometryPickTarget | undefined): readonly PickKind[] | undefined {
+		if (paramType === 'point' || paramType === 'line' || paramType === 'plane') return [paramType];
+		return target?.kinds;
+	}
 
 	const inputId = $derived(`input-${item.paramId}`);
 	const label = $derived(displayName || item.displayName || item.paramId);
@@ -65,15 +99,15 @@
 	});
 	const clientSlot = getClientSlot();
 
-	// Min/max hint rendered next to the label. `hideRange` lets the author suppress it.
+	// Sliders never show the hint: the track already conveys the bounds.
 	const numberRangeHint = $derived.by(() => {
 		if (!isNumberWidget(item)) return null;
 		const cfg = item.config;
-		if (cfg?.hideRange) return null;
+		if (cfg?.hideRange || cfg?.renderAsSlider) return null;
 		const hasMin = typeof cfg?.minimum === 'number';
 		const hasMax = typeof cfg?.maximum === 'number';
 		if (!hasMin && !hasMax) return null;
-		if (hasMin && hasMax) return `${cfg!.minimum} to ${cfg!.maximum}`;
+		if (hasMin && hasMax) return `${cfg!.minimum} – ${cfg!.maximum}`;
 		if (hasMin) return `≥ ${cfg!.minimum}`;
 		return `≤ ${cfg!.maximum}`;
 	});
@@ -100,7 +134,8 @@
 	// As a dropdown config so DropdownInput/ChecklistInput can consume it unchanged.
 	const dynamicListAsDropdownConfig = $derived<DropdownWidgetConfig>({
 		options: dynamicListOptions,
-		displayAs: dynamicListConfig?.displayAs ?? 'dropdown'
+		displayAs: dynamicListConfig?.displayAs ?? 'dropdown',
+		optionMedia: dynamicListConfig?.optionMedia
 	});
 	const hideDynamicListWhenEmpty = $derived(
 		isDynamicValueListWidget(item) &&
@@ -171,59 +206,132 @@
 	}
 </script>
 
+{#snippet valueList(config: DropdownWidgetConfig)}
+	{@const display = resolveOptionDisplay(
+		config.displayAs,
+		Object.keys(config.options ?? {}).length
+	)}
+	{@const single = typeof value === 'string' ? value : ''}
+	{#if display === 'checklist'}
+		<ChecklistInput
+			{inputId}
+			value={Array.isArray(value)
+				? (value as string[])
+				: typeof value === 'string' && value
+					? [value]
+					: []}
+			{config}
+			{assets}
+			onChange={commit}
+			{disabled}
+		/>
+	{:else if display === 'segmented'}
+		<SegmentedInput
+			labelId="{inputId}-label"
+			value={single}
+			{config}
+			{assets}
+			onChange={commit}
+			{disabled}
+		/>
+	{:else if display === 'tiles'}
+		<TileInput
+			labelId="{inputId}-label"
+			value={single}
+			{config}
+			{assets}
+			onChange={commit}
+			{disabled}
+		/>
+	{:else}
+		<DropdownInput value={single} {config} {assets} onChange={commit} {disabled} />
+	{/if}
+{/snippet}
+
+{#snippet labelText(forId?: string, tone: 'quiet' | 'strong' = 'quiet')}
+	<Field.Label
+		for={forId}
+		id={forId ? `${forId}-label` : undefined}
+		class="min-w-0 block break-words"
+	>
+		<span
+			class={tone === 'quiet' ? 'font-normal text-muted-foreground' : 'font-normal text-foreground'}
+			>{label}</span
+		>
+	</Field.Label>
+{/snippet}
+
+{#snippet helpButton()}
+	{#if item.description}
+		<HelpButton {label} description={item.description} />
+	{/if}
+{/snippet}
+
+{#snippet fieldHeader(forId?: string)}
+	<div class="gap-1.5 min-h-5 min-w-0 flex items-center">
+		{@render labelText(forId)}
+		{@render helpButton()}
+		{#if showRangeInLabel}
+			<span
+				class="text-xs pl-2 ml-auto hidden shrink-0 whitespace-nowrap text-muted-foreground tabular-nums group-focus-within/field:inline"
+			>
+				{numberRangeHint}
+			</span>
+		{/if}
+	</div>
+{/snippet}
+
 {#if isClientSlot}
 	{#if clientSlot}
-		<Field.Field>
-			<Field.Label class="gap-2 flex items-center">
-				{label}
-				{#if item.description}
-					<Dialog.Root>
-						<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
-							<HelpCircle size={16} />
-						</Dialog.Trigger>
-						<Dialog.Content class="sm:max-w-md">
-							<Dialog.Header>
-								<Dialog.Title>{label}</Dialog.Title>
-								<Dialog.Description>{item.description}</Dialog.Description>
-							</Dialog.Header>
-						</Dialog.Content>
-					</Dialog.Root>
-				{/if}
-			</Field.Label>
+		<div role="group" class="group/field gap-2 min-w-0 flex flex-col">
+			{@render fieldHeader()}
 			{@render clientSlot({
 				inputId: item.paramId,
 				displayName: label,
 				value,
 				onValueChange: commit
 			})}
-		</Field.Field>
+		</div>
 	{/if}
+{:else if isGeometry}
+	<div role="group" class="group/field gap-2 min-w-0 flex flex-col">
+		{@render fieldHeader(inputId)}
+		<GeometryInput
+			{inputId}
+			kinds={pickKinds(pickTarget)}
+			atMost={pickTarget?.atMost}
+			summary={typeof value === 'string' ? value : undefined}
+			onPick={pickGeometry && (() => pickGeometry(item.paramId))}
+			onClear={clearGeometry && (() => clearGeometry(item.paramId))}
+			watchSummary={onGeometrySummary && ((listener) => onGeometrySummary(item.paramId, listener))}
+			onError={(message) => toast.error(message)}
+			{disabled}
+		/>
+	</div>
+{:else if isTrigger}
+	<div role="group" class="group/field gap-1.5 min-w-0 flex items-center" data-control-line>
+		<Button
+			id={inputId}
+			variant="outline"
+			class="min-w-0 flex-1"
+			onclick={() => hostActions.trigger?.(item.paramId)}
+			disabled={disabled || !hostActions.trigger || hostActions.isSolving?.()}
+		>
+			<span class="truncate">{label}</span>
+		</Button>
+		{@render helpButton()}
+	</div>
 {:else if !hideDynamicListWhenEmpty}
-	<Field.Field>
-		<Field.Label for={inputId} class="gap-2 flex items-center">
-			{label}
-			{#if item.description}
-				<Dialog.Root>
-					<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
-						<HelpCircle size={16} />
-					</Dialog.Trigger>
-					<Dialog.Content class="sm:max-w-md">
-						<Dialog.Header>
-							<Dialog.Title>{label}</Dialog.Title>
-							<Dialog.Description>{item.description}</Dialog.Description>
-						</Dialog.Header>
-					</Dialog.Content>
-				</Dialog.Root>
-			{/if}
-			{#if showRangeInLabel}
-				<span class="text-xs font-normal text-muted-foreground">{numberRangeHint}</span>
-			{/if}
-		</Field.Label>
+	<div role="group" class="group/field gap-2 min-w-0 flex flex-col">
+		{#if !isCheckboxWidget(item)}
+			{@render fieldHeader(inputId)}
+		{/if}
 
 		{#if isNumberWidget(item)}
 			{@const config = item.config}
 			<NumberInput
 				{inputId}
+				labelId="{inputId}-label"
 				value={typeof value === 'number' ? value : undefined}
 				{config}
 				onChange={commit}
@@ -235,7 +343,10 @@
 				value={typeof value === 'boolean' ? value : undefined}
 				onChange={commit}
 				{disabled}
-			/>
+			>
+				{@render labelText(inputId, 'strong')}
+				{@render helpButton()}
+			</CheckboxInput>
 		{:else if isTextWidget(item)}
 			{@const config = item.config}
 			<TextInput
@@ -246,51 +357,12 @@
 				{disabled}
 			/>
 		{:else if isDropdownWidget(item)}
-			{@const config = item.config}
-			{#if config.displayAs === 'checklist'}
-				<ChecklistInput
-					{inputId}
-					value={Array.isArray(value)
-						? (value as string[])
-						: typeof value === 'string' && value
-							? [value]
-							: []}
-					{config}
-					onChange={commit}
-					{disabled}
-				/>
-			{:else}
-				<DropdownInput
-					value={typeof value === 'string' ? value : ''}
-					{config}
-					onChange={commit}
-					{disabled}
-				/>
-			{/if}
+			{@render valueList(item.config)}
 		{:else if isDynamicValueListWidget(item)}
 			{#if dynamicListHasOptions}
-				{#if dynamicListAsDropdownConfig.displayAs === 'checklist'}
-					<ChecklistInput
-						{inputId}
-						value={Array.isArray(value)
-							? (value as string[])
-							: typeof value === 'string' && value
-								? [value]
-								: []}
-						config={dynamicListAsDropdownConfig}
-						onChange={commit}
-						{disabled}
-					/>
-				{:else}
-					<DropdownInput
-						value={typeof value === 'string' ? value : ''}
-						config={dynamicListAsDropdownConfig}
-						onChange={commit}
-						{disabled}
-					/>
-				{/if}
+				{@render valueList(dynamicListAsDropdownConfig)}
 			{:else}
-				<p class="text-sm text-muted-foreground">No options available yet.</p>
+				<p class="text-sm text-muted-foreground">{locale.messages.noOptionsYet}</p>
 			{/if}
 		{:else if isFileWidget(item)}
 			{@const config = item.config as FileInputWidgetConfig}
@@ -303,9 +375,11 @@
 			/>
 		{:else if isColorWidget(item)}
 			<ColorInput
+				{inputId}
 				value={typeof value === 'string' ? value : '#000000'}
 				onChange={(newValue) => commit(newValue)}
+				{disabled}
 			/>
 		{/if}
-	</Field.Field>
+	</div>
 {/if}

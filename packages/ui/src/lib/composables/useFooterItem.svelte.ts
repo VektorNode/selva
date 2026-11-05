@@ -3,7 +3,7 @@ import {
 	type FooterStore,
 	type FooterItem,
 	FOOTER_CONTEXT_KEY
-} from '$lib/contexts/footerContext.svelte';
+} from '#lib/contexts/footerContext.svelte.js';
 
 export type FooterItemConfig<P extends Record<string, unknown> = Record<string, unknown>> = Omit<
 	FooterItem<P>,

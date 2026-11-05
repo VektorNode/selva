@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using Grasshopper.Kernel;
+using Grasshopper.Kernel.Types;
 using Rhino;
 using Rhino.DocObjects;
 using Rhino.FileIO;
@@ -17,11 +19,6 @@ namespace Selva.GH.Features.FileIO.Services;
 public static class FileImporter
 {
     private static readonly int MAX_FILE_SIZE_BYTES = AppConfig.ValueLimits.MaxFileSizeBytes;
-
-    private static readonly HttpClient UrlDownloadClient = new HttpClient
-    {
-        Timeout = TimeSpan.FromSeconds(60)
-    };
 
     public static (bool Success, List<GeometryWithName> Geometry, string DetectedFormat, string ErrorMessage)
         ImportFromFileInputData(FileInputData fileData)
@@ -83,6 +80,46 @@ public static class FileImporter
                 }
             }
         }
+    }
+
+    /// <summary>Imports a file as Grasshopper geometry, reporting failures through <paramref name="report" />.</summary>
+    public static List<IGH_GeometricGoo> ImportAsGoo(FileInputData fileData,
+        Action<GH_RuntimeMessageLevel, string> report)
+    {
+        var ghGeometry = new List<IGH_GeometricGoo>();
+        var result = ImportFromFileInputData(fileData);
+        if (!result.Success)
+        {
+            report(GH_RuntimeMessageLevel.Error, result.ErrorMessage);
+            return ghGeometry;
+        }
+
+        foreach (var item in result.Geometry)
+        {
+            IGH_GeometricGoo goo = item.Geometry switch
+            {
+                Curve curve => new GH_Curve(curve),
+                Brep brep => new GH_Brep(brep),
+                Mesh mesh => new GH_Mesh(mesh),
+                Surface surface => new GH_Surface(surface),
+                Point point => new GH_Point(point.Location),
+                _ => null
+            };
+
+            if (goo != null)
+            {
+                ghGeometry.Add(goo);
+            }
+        }
+
+        if (ghGeometry.Count == 0)
+        {
+            report(GH_RuntimeMessageLevel.Warning, "No geometry found in file");
+            return ghGeometry;
+        }
+
+        report(GH_RuntimeMessageLevel.Remark, $"Imported {ghGeometry.Count} objects from {result.DetectedFormat}");
+        return ghGeometry;
     }
 
     public static (bool Success, List<GeometryWithName> Geometry, string DetectedFormat, string ErrorMessage)
@@ -239,11 +276,10 @@ public static class FileImporter
                 return (false, null, extensionError);
             }
 
-            var (client, ownsClient) = CreatePinnedClient(resolvedAddresses);
+            var client = CreatePinnedClient(resolvedAddresses);
             try
             {
-                // net48 has no sync HttpClient API; blocking here is safe since HttpClient
-                // internals use ConfigureAwait(false) throughout.
+                // Blocking is safe: HttpClient internals use ConfigureAwait(false) throughout.
                 using var response = client
                     .GetAsync(uri, HttpCompletionOption.ResponseHeadersRead)
                     .GetAwaiter().GetResult();
@@ -288,7 +324,7 @@ public static class FileImporter
             }
             finally
             {
-                if (ownsClient) client.Dispose();
+                client.Dispose();
             }
         }
         catch (Exception ex)
@@ -306,13 +342,11 @@ public static class FileImporter
     }
 
     /// <summary>
-    ///     On net7+ pins outgoing connections to the already-validated IPs, so a DNS rebind
-    ///     between validation and fetch can't redirect the request to an internal host. net48
-    ///     has no ConnectCallback, so it falls back to the shared client with a narrow rebind window.
+    ///     Pins outgoing connections to the already-validated IPs, so a DNS rebind between
+    ///     validation and fetch can't redirect the request to an internal host.
     /// </summary>
-    private static (HttpClient client, bool ownsClient) CreatePinnedClient(IPAddress[] resolvedAddresses)
+    private static HttpClient CreatePinnedClient(IPAddress[] resolvedAddresses)
     {
-#if NET7_0_OR_GREATER
         var allowed = new HashSet<IPAddress>(resolvedAddresses);
         var handler = new SocketsHttpHandler
         {
@@ -337,13 +371,9 @@ public static class FileImporter
             }
         };
 
-        return (new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) }, true);
-#else
-        return (UrlDownloadClient, false);
-#endif
+        return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(60) };
     }
 
-#if NET7_0_OR_GREATER
     private static async System.Threading.Tasks.Task<Stream> OpenSocket(
         IPAddress address, int port, System.Threading.CancellationToken cancellationToken)
     {
@@ -360,7 +390,6 @@ public static class FileImporter
             throw;
         }
     }
-#endif
 
     /// <summary>
     ///     Checks the extension against the schema-driven allowlist and rejects path-traversal characters.

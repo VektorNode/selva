@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, AlertDialog, toast } from '@selvajs/ui';
 	import { Upload, Play, CloudUpload, Trash2 } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { DefinitionVersion } from '@selvajs/platform';
 	import UploadVersionDialog from './UploadVersionDialog.svelte';
 
@@ -80,7 +80,7 @@
 			const result = await res.json();
 			toast.success(`v${result.version?.versionNumber ?? '?'} is now live`);
 			await loadVersions();
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error('Failed to publish');
 		} finally {
@@ -107,7 +107,7 @@
 			}
 			toast.success(`v${version.versionNumber} deleted`);
 			await loadVersions();
-			await invalidateAll();
+			await refreshAll();
 		} catch {
 			toast.error('Failed to delete version');
 		} finally {
@@ -120,18 +120,16 @@
 <div class="space-y-4">
 	<!-- Status banner -->
 	{#if loading}
-		<div class="border-border bg-muted/30 rounded-md border px-4 py-3">
+		<div class="border-border bg-muted rounded-md border px-4 py-3">
 			<p class="text-muted-foreground text-xs">Loading versions…</p>
 		</div>
 	{:else if versions.length === 0}
-		<div
-			class="border-border bg-muted/30 text-muted-foreground rounded-md border px-4 py-3 text-sm"
-		>
+		<div class="border-border bg-muted text-muted-foreground rounded-md border px-4 py-3 text-sm">
 			No versions yet. Upload one to get started.
 		</div>
 	{:else}
 		<div
-			class="border-border bg-muted/30 flex items-center justify-between gap-3 rounded-md border px-4 py-3"
+			class="border-border bg-muted flex items-center justify-between gap-3 rounded-md border px-4 py-3"
 		>
 			<div class="flex min-w-0 items-center gap-2 text-sm">
 				<span class="bg-success h-2 w-2 shrink-0 rounded-full"></span>
@@ -178,7 +176,7 @@
 				{@const isDraft = version.id === draftVersionId && !isLive}
 				<div
 					class={`rounded-md border p-3 transition-colors ${
-						isLive ? 'border-primary/40 bg-accent/40' : 'border-border bg-card hover:bg-muted/30'
+						isLive ? 'border-primary/40 bg-selected' : 'border-border bg-card hover:bg-hover'
 					}`}
 				>
 					<div class="flex items-start justify-between gap-3">

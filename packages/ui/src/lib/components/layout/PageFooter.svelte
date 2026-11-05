@@ -2,9 +2,11 @@
 	import type { Snippet } from 'svelte';
 	import { CircleAlert, TriangleAlert, Info } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
-	import { useFooter } from '$lib/contexts/footerContext.svelte';
+	import { useFooter } from '#lib/contexts/footerContext.svelte.js';
 	import ComputeMessagesDialog from '../compute/ComputeMessagesDialog.svelte';
 	import FooterItemRenderer from './FooterItemRenderer.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatCount, formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
 		errors?: string[];
@@ -25,6 +27,9 @@
 		footerText,
 		children
 	}: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let footerStore = (() => {
 		try {
@@ -66,16 +71,15 @@
 	const hasMessages = $derived(totalCount > 0);
 
 	const copyrightLine = $derived(
-		footerText
-			? footerText.replace('{name}', copyrightName).replace('{year}', String(_currentYear))
-			: `by ${copyrightName} © ${_currentYear}`
+		formatMessage(footerText ?? t.copyright, { name: copyrightName, year: _currentYear })
 	);
 </script>
 
+<!-- One line at any width: the message counts keep their size and the copyright truncates. -->
 <footer
-	class="px-4 gap-4 text-xs h-7 flex shrink-0 items-center justify-between border-t border-border bg-background text-muted-foreground select-none"
+	class="px-4 gap-4 text-xs h-7 flex shrink-0 items-center justify-between border-t border-border bg-background whitespace-nowrap text-muted-foreground select-none"
 >
-	<div class="gap-4 flex items-center">
+	<div class="gap-4 flex shrink-0 items-center">
 		{#each leftItems as item (item.id)}
 			<FooterItemRenderer {item} />
 		{/each}
@@ -84,17 +88,19 @@
 			<ComputeMessagesDialog {errors} {warnings} {diagnostics}>
 				{#snippet trigger()}
 					<div
-						class="gap-1.5 px-2 py-1 rounded flex cursor-pointer items-center transition-colors hover:bg-muted {errorCount >
+						class="gap-1.5 px-2 py-1 flex cursor-pointer items-center rounded-sm transition-colors hover:bg-hover {errorCount >
 						0
 							? 'text-destructive hover:bg-destructive/10'
 							: warningCount > 0
 								? 'text-warning hover:bg-warning/10'
-								: 'hover:bg-muted'}"
-						title={`${totalCount} ${totalCount === 1 ? 'message' : 'messages'} from the last solve`}
+								: 'hover:bg-hover'}"
+						title={formatCount(totalCount, t.lastSolveMessagesOne, t.lastSolveMessagesOther)}
 					>
 						{#if errorCount > 0}
 							<CircleAlert class="h-3.5 w-3.5" />
-							<span class="font-medium">{errorCount} Error{errorCount !== 1 ? 's' : ''}</span>
+							<span class="font-medium"
+								>{formatCount(errorCount, t.errorCountOne, t.errorCountOther)}</span
+							>
 						{/if}
 
 						{#if warningCount > 0}
@@ -102,12 +108,16 @@
 								<span class="text-border">•</span>
 							{/if}
 							<TriangleAlert class="h-3.5 w-3.5" />
-							<span class="font-medium">{warningCount} Warning{warningCount !== 1 ? 's' : ''}</span>
+							<span class="font-medium"
+								>{formatCount(warningCount, t.warningCountOne, t.warningCountOther)}</span
+							>
 						{/if}
 
 						{#if errorCount === 0 && warningCount === 0}
 							<Info class="h-3.5 w-3.5" />
-							<span class="font-medium">{remarkCount} Note{remarkCount !== 1 ? 's' : ''}</span>
+							<span class="font-medium"
+								>{formatCount(remarkCount, t.noteCountOne, t.noteCountOther)}</span
+							>
 						{/if}
 					</div>
 				{/snippet}
@@ -121,11 +131,13 @@
 		{/if}
 	</div>
 
-	<div class="gap-4 ml-auto flex items-center">
+	<div class="gap-4 min-w-0 ml-auto flex items-center">
 		{#each rightItems as item (item.id)}
 			<FooterItemRenderer {item} />
 		{/each}
 
-		<p>{copyrightLine}</p>
+		{#if copyrightLine}
+			<p class="truncate">{copyrightLine}</p>
+		{/if}
 	</div>
 </footer>

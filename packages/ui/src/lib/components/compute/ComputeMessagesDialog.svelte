@@ -3,14 +3,15 @@
 	//
 	// The counterpart to `SolveMessages`, which interrupts only for what the definition's author
 	// wrote. Everything else — Grasshopper complaining about its own components — lands here,
-	// where it is available without being in the way. One section per level, most severe first, with the
-	// component that raised each message shown as a label rather than spliced into its text.
+	// where it is available without being in the way. Most severe first, with the component that
+	// raised each message on its own line rather than spliced into its text.
 
 	import type { Snippet } from 'svelte';
-	import { CircleAlert, TriangleAlert, Info } from '@lucide/svelte';
 	import type { SolveDiagnostic } from '@selvajs/solve/shared';
-	import * as Dialog from '$lib/components/primitives/dialog';
-	import { Badge } from '$lib/components/primitives/badge';
+	import * as Dialog from '#lib/components/primitives/dialog/index.js';
+	import IssueList, { type Issue } from '#lib/components/primitives/IssueList.svelte';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatCount } from '#lib/i18n/messages.js';
 
 	interface Props {
 		/** The last solve's messages. Preferred over `errors`/`warnings` when both are given. */
@@ -23,6 +24,9 @@
 	}
 
 	let { diagnostics, errors = [], warnings = [], trigger }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let open = $state(false);
 
@@ -42,34 +46,11 @@
 		count: number;
 	}
 
-	// Tone classes are written out, never interpolated: Tailwind scans source text, so a
-	// constructed class name is not emitted and the icon would render colourless.
-	const LEVELS = [
-		{
-			level: 'error',
-			heading: 'Errors',
-			one: 'error',
-			many: 'errors',
-			icon: CircleAlert,
-			tone: 'text-destructive'
-		},
-		{
-			level: 'warning',
-			heading: 'Warnings',
-			one: 'warning',
-			many: 'warnings',
-			icon: TriangleAlert,
-			tone: 'text-amber-500'
-		},
-		{
-			level: 'remark',
-			heading: 'Notes',
-			one: 'note',
-			many: 'notes',
-			icon: Info,
-			tone: 'text-muted-foreground'
-		}
-	] as const;
+	const levels = $derived([
+		{ level: 'error', severity: 'error', one: t.errorCountOne, other: t.errorCountOther },
+		{ level: 'warning', severity: 'warning', one: t.warningCountOne, other: t.warningCountOther },
+		{ level: 'remark', severity: 'note', one: t.noteCountOne, other: t.noteCountOther }
+	] as const);
 
 	/**
 	 * One section per level that has messages, most severe first; within a level, the order the
@@ -77,72 +58,55 @@
 	 * branches raises the same warning 200 times, and an unstacked list buries every other message.
 	 */
 	const sections = $derived(
-		LEVELS.map((meta) => {
-			// A null-prototype object rather than a Map: a local built fresh on each derive, never
-			// reactive state, and the lint rule that steers Map → SvelteMap cannot tell them apart.
-			const byKey: Record<string, Item> = Object.create(null);
-			const items: Item[] = [];
-			for (const d of rows) {
-				if (d.level !== meta.level) continue;
-				const key = `${d.message} ${d.source ?? ''}`;
-				if (byKey[key]) {
-					byKey[key].count++;
-				} else {
-					byKey[key] = { level: d.level, message: d.message, source: d.source, count: 1 };
-					items.push(byKey[key]);
+		levels
+			.map((meta) => {
+				// A null-prototype object rather than a Map: a local built fresh on each derive, never
+				// reactive state, and the lint rule that steers Map → SvelteMap cannot tell them apart.
+				const byKey: Record<string, Item> = Object.create(null);
+				const items: Item[] = [];
+				for (const d of rows) {
+					if (d.level !== meta.level) continue;
+					const key = `${d.message} ${d.source ?? ''}`;
+					if (byKey[key]) {
+						byKey[key].count++;
+					} else {
+						byKey[key] = { level: d.level, message: d.message, source: d.source, count: 1 };
+						items.push(byKey[key]);
+					}
 				}
-			}
-			return { ...meta, items };
-		}).filter((section) => section.items.length > 0)
+				return { ...meta, items };
+			})
+			.filter((section) => section.items.length > 0)
+	);
+
+	const issues = $derived<Issue[]>(
+		sections.flatMap((section) =>
+			section.items.map((item) => ({
+				severity: section.severity,
+				message: item.message,
+				source: item.source,
+				count: item.count
+			}))
+		)
 	);
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Trigger class="focus:outline-none">
+	<Dialog.Trigger>
 		{@render trigger()}
 	</Dialog.Trigger>
 
-	<Dialog.Content class="max-w-lg gap-4">
+	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
-			<Dialog.Title>Messages</Dialog.Title>
+			<Dialog.Title>{t.messagesTitle}</Dialog.Title>
 			<Dialog.Description>
 				{#each sections as section, i (section.level)}
 					{#if i > 0}<span class="mx-1.5">·</span>{/if}
-					<span
-						>{section.items.length} {section.items.length === 1 ? section.one : section.many}</span
-					>
+					<span>{formatCount(section.items.length, section.one, section.other)}</span>
 				{/each}
 			</Dialog.Description>
 		</Dialog.Header>
 
-		<div class="space-y-4 max-h-[60vh] overflow-y-auto">
-			{#each sections as section (section.level)}
-				<section>
-					<h3 class="mb-1.5 gap-1.5 text-xs font-medium flex items-center text-muted-foreground">
-						<section.icon class="h-3.5 w-3.5 {section.tone}" />
-						{section.heading}
-					</h3>
-					<ul class="divide-y rounded-lg border">
-						{#each section.items as item (item.message + (item.source ?? ''))}
-							<li class="gap-3 px-3 py-2 text-sm flex items-start justify-between">
-								<p class="min-w-0 wrap-anywhere">
-									{item.message}
-									{#if item.count > 1}
-										<span class="ml-1 text-xs text-muted-foreground tabular-nums"
-											>×{item.count}</span
-										>
-									{/if}
-								</p>
-								{#if item.source}
-									<Badge variant="secondary" class="font-normal max-w-[40%] shrink-0 truncate">
-										{item.source}
-									</Badge>
-								{/if}
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/each}
-		</div>
+		<IssueList {issues} />
 	</Dialog.Content>
 </Dialog.Root>

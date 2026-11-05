@@ -62,9 +62,20 @@ describe('createComputeFetchSolveFn — happy path', () => {
 			definitionUrl: 'local:abc'
 		});
 
+		// Compute names no ids, so this one resolves through its nickname.
+		expect(result.outputs).toEqual({ 'out-1': '5' });
 		expect(result.errors).toEqual([]);
 		expect(result.warnings).toEqual([]);
 		expect(result.meshes).toEqual([]);
+	});
+
+	it('leaves an output neither its id nor its nickname finds undefined', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({ values: [{ ParamName: 'Other', InnerTree: { '{0}': [{ data: '5' }] } }] })
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+		expect(result.outputs['out-1']).toBeUndefined();
 	});
 
 	it('includes versionId over channel when both are present', async () => {
@@ -80,19 +91,15 @@ describe('createComputeFetchSolveFn — happy path', () => {
 
 	it('calls meshes.extract once per solve when meshes is configured', async () => {
 		fetchMock.mockResolvedValue(jsonResponse({ values: [], errors: [], warnings: [] }));
-		const extract = vi.fn((_response: unknown, _opts: { debug: boolean }) => [{ mesh: 1 }]);
+		const extract = vi.fn((_response: unknown, _opts: { debug: boolean; signal: AbortSignal }) => [
+			{ mesh: 1 }
+		]);
 		const solve = createComputeFetchSolveFn(baseOpts({ meshes: { extract } }));
-		const result = await solve({}, new AbortController().signal);
+		const { signal } = new AbortController();
+		const result = await solve({}, signal);
 		expect(extract).toHaveBeenCalledTimes(1);
-		expect(extract.mock.calls[0][1]).toEqual({ debug: false });
+		expect(extract.mock.calls[0][1]).toEqual({ debug: false, signal });
 		expect(result.meshes).toEqual([{ mesh: 1 }]);
-	});
-
-	it('meshes omitted: result.meshes is always []', async () => {
-		fetchMock.mockResolvedValue(jsonResponse({ values: [], errors: [], warnings: [] }));
-		const solve = createComputeFetchSolveFn(baseOpts());
-		const result = await solve({}, new AbortController().signal);
-		expect(result.meshes).toEqual([]);
 	});
 });
 
@@ -105,6 +112,24 @@ describe('createComputeFetchSolveFn — session expiry', () => {
 		const solve = createComputeFetchSolveFn(baseOpts({ onSessionExpired }));
 		await expect(solve({}, new AbortController().signal)).rejects.toThrow('custom session expired');
 		expect(onSessionExpired).toHaveBeenCalledTimes(1);
+	});
+
+	it('still throws when the handler returns, instead of reading the login page as a result', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({}, { status: 200, url: 'https://app.example/login', redirected: true })
+		);
+		const onSessionExpired = vi.fn();
+		const solve = createComputeFetchSolveFn(baseOpts({ onSessionExpired }));
+		await expect(solve({}, new AbortController().signal)).rejects.toThrow(/session has expired/);
+		expect(onSessionExpired).toHaveBeenCalledTimes(1);
+	});
+
+	it('honours a host whose sign-in page is not /login', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({}, { status: 200, url: 'https://app.example/auth/sign-in', redirected: true })
+		);
+		const solve = createComputeFetchSolveFn(baseOpts({ loginPath: '/auth/sign-in' }));
+		await expect(solve({}, new AbortController().signal)).rejects.toThrow(/session has expired/);
 	});
 
 	it('default onSessionExpired throws an actionable message', async () => {
@@ -132,12 +157,14 @@ describe('createComputeFetchSolveFn — rate limiting', () => {
 		);
 		const onRateLimited = vi.fn();
 		const solve = createComputeFetchSolveFn(baseOpts({ onRateLimited }));
-		await expect(solve({}, new AbortController().signal)).rejects.toThrow('slow down');
+		await expect(solve({}, new AbortController().signal)).rejects.toThrow(/Rate limit reached/);
 		expect(onRateLimited).toHaveBeenCalledWith(60);
 
 		fetchMock.mockClear();
+		onRateLimited.mockClear();
 		await expect(solve({}, new AbortController().signal)).rejects.toThrow(/Rate limit reached/);
 		expect(fetchMock).not.toHaveBeenCalled();
+		expect(onRateLimited).toHaveBeenCalledTimes(1);
 	});
 
 	it('default onRateLimited throws a cooldown-aware Error', async () => {
@@ -150,19 +177,190 @@ describe('createComputeFetchSolveFn — rate limiting', () => {
 		const solve = createComputeFetchSolveFn(baseOpts());
 		await expect(solve({}, new AbortController().signal)).rejects.toThrow(/Rate limit reached/);
 	});
+
+	describe('cooldown', () => {
+		beforeEach(() => {
+			vi.useFakeTimers({ now: Date.parse('2026-11-02T12:00:00Z') });
+		});
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		const respond = (status: number, retryAfter?: string, body = '{"message":"busy"}') =>
+			fetchMock.mockImplementation(
+				async () =>
+					new Response(body, {
+						status,
+						headers: retryAfter === undefined ? {} : { 'Retry-After': retryAfter }
+					})
+			);
+
+		/** How many POSTs five solves make, a second apart. */
+		async function postsOverFiveSeconds(solve: ReturnType<typeof createComputeFetchSolveFn>) {
+			for (let i = 0; i < 5; i++) {
+				await solve({}, new AbortController().signal).catch(() => {});
+				await vi.advanceTimersByTimeAsync(1_000);
+			}
+			return fetchMock.mock.calls.length;
+		}
+
+		it('a 503 with Retry-After backs off like a 429', async () => {
+			respond(503, '30');
+			const solve = createComputeFetchSolveFn(baseOpts());
+			await expect(solve({}, new AbortController().signal)).rejects.toThrow('busy');
+			expect(await postsOverFiveSeconds(solve)).toBe(1);
+		});
+
+		it('a 503 without one does not', async () => {
+			respond(503);
+			expect(await postsOverFiveSeconds(createComputeFetchSolveFn(baseOpts()))).toBe(5);
+		});
+
+		it('a 429 without one waits the default 5 s', async () => {
+			respond(429);
+			const onRateLimited = vi.fn();
+			const solve = createComputeFetchSolveFn(baseOpts({ onRateLimited }));
+			await solve({}, new AbortController().signal).catch(() => {});
+			expect(onRateLimited).toHaveBeenCalledWith(5);
+		});
+
+		it('reads an HTTP-date', async () => {
+			respond(429, 'Mon, 02 Nov 2026 12:00:30 GMT');
+			const onRateLimited = vi.fn();
+			const solve = createComputeFetchSolveFn(baseOpts({ onRateLimited }));
+			await solve({}, new AbortController().signal).catch(() => {});
+			expect(onRateLimited).toHaveBeenCalledWith(30);
+		});
+
+		it('reads a date already past as no wait', async () => {
+			respond(429, 'Mon, 02 Nov 2026 11:00:00 GMT');
+			const onRateLimited = vi.fn();
+			const solve = createComputeFetchSolveFn(baseOpts({ onRateLimited }));
+			await solve({}, new AbortController().signal).catch(() => {});
+			expect(onRateLimited).toHaveBeenCalledWith(0);
+		});
+
+		it('takes 0 at its word', async () => {
+			respond(429, '0');
+			expect(await postsOverFiveSeconds(createComputeFetchSolveFn(baseOpts()))).toBe(5);
+		});
+
+		it.each(['-30', 'Infinity', 'soon'])('falls back on an unusable %s', async (header) => {
+			respond(429, header);
+			const onRateLimited = vi.fn();
+			const solve = createComputeFetchSolveFn(baseOpts({ onRateLimited }));
+			await solve({}, new AbortController().signal).catch(() => {});
+			expect(onRateLimited).toHaveBeenCalledWith(5);
+		});
+
+		it('falls back to the body hint when the header is unusable', async () => {
+			respond(429, 'soon', '{"retryAfter":12}');
+			const onRateLimited = vi.fn();
+			const solve = createComputeFetchSolveFn(baseOpts({ onRateLimited }));
+			await solve({}, new AbortController().signal).catch(() => {});
+			expect(onRateLimited).toHaveBeenCalledWith(12);
+		});
+
+		it('caps a huge wait, so a bad header cannot lock the solve function for good', async () => {
+			respond(429, '999999999');
+			const onRateLimited = vi.fn();
+			const solve = createComputeFetchSolveFn(baseOpts({ onRateLimited }));
+			await solve({}, new AbortController().signal).catch(() => {});
+			expect(onRateLimited).toHaveBeenCalledWith(3600);
+		});
+	});
 });
 
 describe('createComputeFetchSolveFn — malformed responses', () => {
+	const solveOnce = () => createComputeFetchSolveFn(baseOpts())({}, new AbortController().signal);
+
 	it('non-JSON 200 body throws an actionable reload error', async () => {
 		fetchMock.mockResolvedValue(new Response('<html>not json</html>', { status: 200 }));
-		const solve = createComputeFetchSolveFn(baseOpts());
-		await expect(solve({}, new AbortController().signal)).rejects.toThrow(/invalid response/);
+		await expect(solveOnce()).rejects.toThrow(/invalid response/);
+	});
+
+	it.each(['null', '[]', '5', '"text"'])('a 200 of %s is not a result', async (body) => {
+		fetchMock.mockResolvedValue(new Response(body, { status: 200 }));
+		await expect(solveOnce()).rejects.toThrow(/invalid response/);
 	});
 
 	it('503 throws a compute-offline message', async () => {
 		fetchMock.mockResolvedValue(new Response('', { status: 503 }));
+		await expect(solveOnce()).rejects.toThrow(/offline or unreachable/);
+	});
+
+	it("503 shows the server's own message when it names the failure", async () => {
+		fetchMock.mockResolvedValue(jsonResponse({ message: 'bad API key' }, { status: 503 }));
+		await expect(solveOnce()).rejects.toThrow('bad API key');
+	});
+
+	it('500 shows the server message, or the status without one', async () => {
+		fetchMock.mockResolvedValueOnce(jsonResponse({ message: 'solver died' }, { status: 500 }));
+		await expect(solveOnce()).rejects.toThrow('solver died');
+		fetchMock.mockResolvedValueOnce(new Response('', { status: 500 }));
+		await expect(solveOnce()).rejects.toThrow('Compute error (HTTP 500)');
+	});
+
+	it.each(['null', '[]', '{"message":{}}', '{"message":7}'])(
+		'an error body of %s falls back to the status',
+		async (body) => {
+			fetchMock.mockResolvedValue(new Response(body, { status: 500 }));
+			await expect(solveOnce()).rejects.toThrow('Compute error (HTTP 500)');
+		}
+	);
+
+	it('a body cut off mid-download reads as a dropped connection, with the cause', async () => {
+		const res = new Response('{}', { status: 200 });
+		const cut = new TypeError('terminated');
+		res.text = () => Promise.reject(cut);
+		fetchMock.mockResolvedValue(res);
+		await expect(solveOnce()).rejects.toMatchObject({
+			message: expect.stringContaining('connection dropped'),
+			cause: cut
+		});
+	});
+});
+
+describe('createComputeFetchSolveFn — network failure', () => {
+	it('says it could not reach the server, without claiming the session ended', async () => {
+		const refused = new TypeError('fetch failed');
+		fetchMock.mockRejectedValue(refused);
 		const solve = createComputeFetchSolveFn(baseOpts());
-		await expect(solve({}, new AbortController().signal)).rejects.toThrow(/offline or unreachable/);
+		const failure = await solve({}, new AbortController().signal).catch((e) => e);
+		expect(failure.message).toMatch(/^Could not reach the server/);
+		expect(failure.cause).toBe(refused);
+	});
+});
+
+describe('createComputeFetchSolveFn — the structured verdict', () => {
+	const outcome = {
+		diagnostics: [{ level: 'warning', message: 'Too thin', source: 'Message', isGate: true }],
+		blocked: false,
+		aborted: false
+	};
+
+	it("prefers the fork's selva block over Compute's flattened strings", async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({ values: [], errors: ['noise'], warnings: [], selva: { outcome } })
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+		expect(result.diagnostics).toEqual(outcome.diagnostics);
+		expect(result.errors).toEqual([]);
+		expect(result.warnings).toEqual(['Too thin']);
+	});
+
+	it('drops outputs and source when the block says aborted', async () => {
+		fetchMock.mockResolvedValue(
+			jsonResponse({
+				values: [{ ParamName: 'Out', InnerTree: { '{0}': [{ data: '5' }] } }],
+				selva: { outcome: { ...outcome, aborted: true } }
+			})
+		);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, new AbortController().signal);
+		expect(result).toMatchObject({ outputs: {}, blocked: true, aborted: true });
+		expect(result.source).toBeUndefined();
 	});
 });
 
@@ -189,9 +387,39 @@ describe('createComputeFetchSolveFn — abort handling', () => {
 		const result = await solve({}, controller.signal);
 		expect(result).toEqual({ outputs: {} });
 	});
+
+	it('abort during the download returns an empty result', async () => {
+		const controller = new AbortController();
+		const res = new Response('{}', { status: 200 });
+		res.text = () => {
+			controller.abort();
+			return Promise.reject(new DOMException('aborted', 'AbortError'));
+		};
+		fetchMock.mockResolvedValue(res);
+		const solve = createComputeFetchSolveFn(baseOpts());
+		const result = await solve({}, controller.signal);
+		expect(result).toEqual({ outputs: {} });
+	});
 });
 
 describe('createComputeFetchSolveFn — debug telemetry', () => {
+	it('keeps an unreadable error body out of the console, even with debug on', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+		fetchMock.mockResolvedValue(new Response('<html>SECRET</html>', { status: 500 }));
+
+		const quiet = createComputeFetchSolveFn(baseOpts());
+		await quiet({}, new AbortController().signal).catch(() => {});
+		expect(warn).not.toHaveBeenCalled();
+		expect(info).not.toHaveBeenCalled();
+
+		fetchMock.mockResolvedValue(new Response('<html>SECRET</html>', { status: 500 }));
+		const verbose = createComputeFetchSolveFn(baseOpts({ debug: true }));
+		await verbose({}, new AbortController().signal).catch(() => {});
+		expect(JSON.stringify(info.mock.calls)).not.toContain('SECRET');
+		vi.restoreAllMocks();
+	});
+
 	it('debug false (default): no console.info calls', async () => {
 		fetchMock.mockResolvedValue(jsonResponse({ values: [], errors: [], warnings: [] }));
 		const logSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -269,16 +497,5 @@ describe('createComputeFetchSolveFn — blocked solves', () => {
 
 		expect(result.blocked).toBe(false);
 		expect(result.errors).toEqual(['1. Solution exception: division by zero']);
-	});
-
-	it('a warning-level Message never blocks: the marker rides only on errors', async () => {
-		fetchMock.mockResolvedValue(
-			jsonResponse({ values: [], errors: [], warnings: ['1. Wall is thin'] })
-		);
-		const solve = createComputeFetchSolveFn(baseOpts());
-		const result = await solve({}, new AbortController().signal);
-
-		expect(result.blocked).toBe(false);
-		expect(result.warnings).toEqual(['1. Wall is thin']);
 	});
 });

@@ -5,7 +5,7 @@
  * The conformance test owns both halves of the contract: it writes the spec
  * when `UPDATE_OPENAPI` is set and fails when the committed file has drifted
  * otherwise. This wrapper runs that test through vitest instead of a separate
- * generator, so it keeps vitest's module resolution (`$lib`, the workspace
+ * generator, so it keeps vitest's module resolution (`#lib`, the workspace
  * `source` condition) rather than a second, subtly different one.
  */
 

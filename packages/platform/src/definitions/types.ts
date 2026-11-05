@@ -1,10 +1,10 @@
 import type { UISchema } from '@selvajs/schemas';
+import type { z } from 'zod';
+import type { DefinitionChannelSchema } from './schemas.js';
 
 export type DefinitionFileExt = 'gh' | 'ghx';
 
 export const GH_EXTENSIONS: string[] = ['.gh', '.ghx'];
-export const COVER_IMAGE_EXTENSIONS: string[] = ['.jpg', '.jpeg', '.png', '.webp', '.gif'];
-export const ALLOWED_UPLOAD_EXTENSIONS: string[] = [...GH_EXTENSIONS, ...COVER_IMAGE_EXTENSIONS];
 
 export const COVER_IMAGE_CONTENT_TYPES: Record<string, string> = {
 	'.jpg': 'image/jpeg',
@@ -93,6 +93,12 @@ export interface DefinitionRecord {
 	 */
 	liveVersionId: string | null;
 	draftVersionId: string | null;
+	/**
+	 * The Grasshopper document GUID (lowercase) from the schema Compute
+	 * extracted at the last upload that carried one. A copied `.gh` keeps its
+	 * GUID, so this suggests a match and never proves one.
+	 */
+	sourceDocumentId?: string;
 	createdAt: string;
 	updatedAt: string;
 	/** Soft-delete marker, independent of `status`: a store filters this out regardless of `archived`. */
@@ -120,6 +126,8 @@ export interface DefinitionListItem {
 	status: DefinitionStatus;
 	solveCount: number;
 	liveVersionId: string | null;
+	/** See {@link DefinitionRecord.sourceDocumentId}. */
+	sourceDocumentId: string | null;
 	updatedAt: string;
 }
 
@@ -135,6 +143,7 @@ export function toDefinitionListItem(r: DefinitionRecord): DefinitionListItem {
 		status: r.status,
 		solveCount: r.solveCount,
 		liveVersionId: r.liveVersionId,
+		sourceDocumentId: r.sourceDocumentId ?? null,
 		updatedAt: r.updatedAt
 	};
 }
@@ -161,6 +170,7 @@ export interface DefinitionRecordPatch {
 	solveCacheLimit?: number | null;
 	status?: DefinitionStatus;
 	ownerId?: string;
+	sourceDocumentId?: string | null;
 }
 
-export type DefinitionChannel = 'live' | 'draft';
+export type DefinitionChannel = z.infer<typeof DefinitionChannelSchema>;

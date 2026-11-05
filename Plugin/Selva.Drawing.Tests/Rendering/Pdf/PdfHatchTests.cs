@@ -1,6 +1,6 @@
 using System.IO;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -14,7 +14,7 @@ namespace Selva.Drawing.Tests.Rendering.Pdf;
 // Hatch coverage for the PDF renderer. Two paths exercise the same machinery:
 //   * PathElement with Fill.Pattern != None - the user-facing path used by GH_PathStyle.
 //   * HatchElement - the model's first-class hatched-region element.
-// PdfSharpCore stamps dates and trailer IDs into every file, so we can't byte-snapshot;
+// PDFsharp stamps dates and trailer IDs into every file, so we can't byte-snapshot;
 // instead we check structural validity and that hatched output is larger than stroke-only,
 // proving pattern strokes actually reached the page content.
 public class PdfHatchTests
@@ -56,7 +56,7 @@ public class PdfHatchTests
 		var bytes = RenderScene(element);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 		Assert.True(bytes.Length > 0);
 	}
@@ -127,7 +127,7 @@ public class PdfHatchTests
 		var bytes = RenderScene(element);
 
 		using var ms = new MemoryStream(bytes);
-		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var reopened = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, reopened.PageCount);
 		Assert.True(bytes.Length > 0);
 	}

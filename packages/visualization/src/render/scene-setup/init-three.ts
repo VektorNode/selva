@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import { publishMaxAnisotropy } from '../../shared/index.js';
+import { lookPreset, publishMaxAnisotropy } from '../../shared/index.js';
 import { createCameraController } from '../camera-controller.js';
 import {
 	EDGES_SKIPPED_OVERLAY_BUDGET,
@@ -20,16 +20,17 @@ import type { ThreeInitializerOptions } from '../types.js';
 import { upToAxis } from '../up-axis.js';
 import { createViewGizmo } from '../view-gizmo.js';
 import { createAnimationLoop } from './animation-loop.js';
-import { createAppearanceController } from './appearance.js';
+import { createAppearanceController, lookPixelRatio } from './appearance.js';
 import { createCamera } from './create-camera.js';
 import { createScene } from './create-scene.js';
 import { applyDefaults, defaultUp } from './defaults.js';
 import { disposeObjectTree, disposeSceneResources } from './dispose.js';
+import { createIdleRefiner } from './idle-refine.js';
 import { createPipelineController } from './pipeline-controller.js';
 import { setupControls } from './setup-controls.js';
 import { addFloor, setupEnvironment } from './setup-environment.js';
 import { setupEventHandlers } from './setup-events.js';
-import { fitShadowToContent, setupLighting } from './setup-lighting.js';
+import { fitShadowToContent, jitterSun, setupLighting } from './setup-lighting.js';
 import { setupRenderer } from './setup-renderer.js';
 import type { ThreeViewer } from './viewer.js';
 
@@ -41,9 +42,14 @@ export const initThree = function (
 
 	const sceneUp = config.environment?.sceneUp || defaultUp;
 
-	// Single source of truth for DPR (renderer, resize check, AO pipeline); applyDefaults always
-	// sets it, the fallback here is just type narrowing.
-	const pixelRatio = config.render.pixelRatio ?? Math.min(window.devicePixelRatio, 2);
+	// Single source of truth for DPR (renderer, resize check, AO pipeline), kept in config because a
+	// look can cap it; applyDefaults always sets it, the fallback here is just type narrowing.
+	const fullPixelRatio = config.render.pixelRatio ?? Math.min(window.devicePixelRatio, 2);
+	const pixelRatio = lookPixelRatio(
+		fullPixelRatio,
+		lookPreset(config.look!, config.render.lowPower)
+	);
+	config.render.pixelRatio = pixelRatio;
 
 	const scene = createScene(config);
 	const camera = createCamera(config, canvas);
@@ -136,6 +142,8 @@ export const initThree = function (
 				canvas,
 				scene,
 				getActiveCamera,
+				getViewTarget: () => controls.target,
+				requestRender: () => requestRender(),
 				labelLayer,
 				options: {
 					snapPixels: config.measure.snapPixels,
@@ -150,7 +158,13 @@ export const initThree = function (
 	const eventHandlers =
 		config.events.enableEventHandlers !== false
 			? setupEventHandlers(canvas, scene, cameraController, config)
-			: { dispose: () => {}, fitToView: () => {}, clearSelection: () => {} };
+			: {
+					dispose: () => {},
+					fitToView: () => {},
+					clearSelection: () => {},
+					selectEntries: () => {},
+					setHover: () => {}
+				};
 
 	// Built-ins register at the priorities documented on ToolRegistration, so a host tool can slot
 	// above or below them. Listeners are attached unconditionally — a tool can register at any time.
@@ -238,7 +252,6 @@ export const initThree = function (
 		scene,
 		getActiveCamera,
 		getCanvasSize,
-		pixelRatio,
 		config,
 		requestRender: () => requestRender()
 	});
@@ -250,7 +263,25 @@ export const initThree = function (
 		lights,
 		config,
 		pipeline,
+		fullPixelRatio,
 		requestRender: () => requestRender()
+	});
+
+	let restoreSun: (() => void) | undefined;
+	const refiner = createIdleRefiner({
+		scene,
+		renderer,
+		getPipeline: () => pipeline.get(),
+		frames: config.render.idleRefineFrames!,
+		lightOrbitFrameMs: config.render.lightOrbitFrameMs!,
+		jitterLights: (index) => {
+			if (sunlight) restoreSun = jitterSun(sunlight, index);
+			appearance.jitterEmissiveLights(index);
+		},
+		restoreLights: () => {
+			restoreSun?.();
+			appearance.settleEmissiveLights();
+		}
 	});
 
 	const {
@@ -266,14 +297,15 @@ export const initThree = function (
 		cameraController,
 		controls,
 		getCanvasSize,
-		pixelRatio,
+		() => config.render.pixelRatio!,
 		config.events.onFrame,
 		grid,
 		gizmo,
 		() => pipeline.get(),
 		labelLayer,
 		nearFitter,
-		config.render.onDemand ?? true
+		config.render.onDemand ?? true,
+		refiner
 	);
 	requestRender = invalidate;
 	animate();
@@ -362,6 +394,7 @@ export const initThree = function (
 		captureImage,
 		setAmbientOcclusion: pipeline.setAmbientOcclusion,
 		setLook: appearance.setLook,
+		syncEmissiveLights: appearance.syncEmissiveLights,
 		setFillLights: appearance.setFillLights,
 		setEnvironmentIntensity: appearance.setEnvironmentIntensity,
 		setToneMappingExposure: appearance.setToneMappingExposure,
@@ -372,6 +405,14 @@ export const initThree = function (
 		dispose,
 		fitToView: eventHandlers.fitToView,
 		clearSelection: eventHandlers.clearSelection,
+		selectEntries: (targets) => {
+			eventHandlers.selectEntries(targets);
+			invalidate();
+		},
+		setHover: (object, memberIndex) => {
+			eventHandlers.setHover(object, memberIndex);
+			invalidate();
+		},
 		addUserGeometry,
 		removeUserGeometry,
 		clearUserGeometry

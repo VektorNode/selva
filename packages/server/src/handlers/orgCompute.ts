@@ -18,6 +18,7 @@ import {
 	OrgComputePatchBodySchema,
 	OrgComputeResponseSchema,
 	parseBody,
+	requireSession,
 	shaped
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
@@ -29,6 +30,8 @@ import {
 } from '@selvajs/platform';
 import { requireManageOrgCompute, requireActingOrg } from '../access/index.js';
 import {
+	assertKeyNotRetargeted,
+	assertStoredKeysReadable,
 	evictChangedServers,
 	validateIncomingServers,
 	resolveApiKey,
@@ -68,9 +71,7 @@ export const getOrgCompute: ApiHandler = async (req) => {
 		label: s.label,
 		serverUrl: s.serverUrl,
 		scope: s.scope,
-		source: isPlatformServer(s) ? ('platform' as const) : ('org' as const),
-		timeoutMs: s.timeoutMs,
-		retryCount: s.retryCount
+		source: isPlatformServer(s) ? ('platform' as const) : ('org' as const)
 	}));
 
 	return shaped(OrgComputeResponseSchema, {
@@ -82,6 +83,7 @@ export const getOrgCompute: ApiHandler = async (req) => {
 };
 
 export const updateOrgCompute: ApiHandler = async (req) => {
+	requireSession(req, 'Compute servers are managed from the web app, not with an API key.');
 	requireFlag(req);
 	requireManageOrgCompute(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
@@ -93,9 +95,12 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 	const provider = req.deps.computeServer;
 	// Every key is needed: an unchanged server keeps its stored key across the write.
 	const existing = await provider.getConfig(ctx, { includeApiKeys: true });
-	const storedKeys = storedKeysById(
-		existing.servers.filter((s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId)
+	const orgServers = existing.servers.filter(
+		(s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId
 	);
+	assertStoredKeysReadable(incoming.servers, orgServers);
+	assertKeyNotRetargeted(incoming.servers, orgServers);
+	const storedKeys = storedKeysById(orgServers);
 
 	const next: OrgComputeServer[] = incoming.servers.map((s) => ({
 		id: s.id,
@@ -103,8 +108,6 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 		ownerOrgId: orgId,
 		label: s.label,
 		serverUrl: s.serverUrl,
-		timeoutMs: s.timeoutMs,
-		retryCount: s.retryCount,
 		apiKey: resolveApiKey(s.apiKey, storedKeys.get(s.id))
 	}));
 
@@ -131,6 +134,7 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 	}
 
 	await provider.saveOrgServers(ctx, orgId, next, incoming.defaultServerId);
+	req.deps.onComputeConfigSaved();
 	// Drop warm clients for servers whose URL or key rotated, or that were
 	// removed — keyed on `id`, they would not age out on their own.
 	evictChangedServers(

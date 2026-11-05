@@ -1,16 +1,20 @@
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { sveltekit } from '@sveltejs/kit/vite';
 import { createVitestConfig } from '@selvajs/config/vitest';
+
+import { kit } from './kit.config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default createVitestConfig({
+	// Not a merge of vite.config.ts: its dotenv plugin would load a developer's .env
+	// into the test process.
+	plugins: [sveltekit(kit)],
 	resolve: {
 		alias: {
-			// SvelteKit virtual modules — replicate just what server-side tests need.
-			$lib: path.resolve(__dirname, 'src/lib'),
-			'$env/dynamic/private': path.resolve(__dirname, 'src/lib/server/__tests__/env-stub.ts')
+			'#lib/server/env.js': path.resolve(__dirname, 'src/lib/server/__tests__/env-stub.ts')
 		}
 	},
 	test: {

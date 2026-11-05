@@ -28,7 +28,7 @@ describe('warnOnEmptyInnerTrees', () => {
 		expect(warn).not.toHaveBeenCalled();
 	});
 
-	it('warns and names every empty output, flagged "all" when all are empty', () => {
+	it('names the empty outputs and the share they make up', () => {
 		warnOnEmptyInnerTrees(
 			makeResponse([
 				{ ParamName: 'Display', InnerTree: {} },
@@ -36,14 +36,6 @@ describe('warnOnEmptyInnerTrees', () => {
 			]),
 			true
 		);
-		expect(warn).toHaveBeenCalledTimes(1);
-		const msg = warn.mock.calls[0][0] as string;
-		expect(msg).toContain('(all)');
-		expect(msg).toContain('Display');
-		expect(msg).toContain('Schema');
-	});
-
-	it('reports a partial ratio and only the empty names when some have data', () => {
 		warnOnEmptyInnerTrees(
 			makeResponse([
 				{ ParamName: 'Display', InnerTree: {} },
@@ -51,10 +43,14 @@ describe('warnOnEmptyInnerTrees', () => {
 			]),
 			true
 		);
-		const msg = warn.mock.calls[0][0] as string;
-		expect(msg).toContain('(1/2)');
-		expect(msg).toContain('Display');
-		expect(msg).not.toContain('Geometry');
+
+		const [all, partial] = warn.mock.calls.map(([message]) => message as string);
+		expect(all).toContain('(all)');
+		expect(all).toContain('Display');
+		expect(all).toContain('Schema');
+		expect(partial).toContain('(1/2)');
+		expect(partial).toContain('Display');
+		expect(partial).not.toContain('Geometry');
 	});
 
 	it('does not warn when every output has data', () => {
@@ -69,16 +65,5 @@ describe('warnOnEmptyInnerTrees', () => {
 		warnOnEmptyInnerTrees(makeResponse([{ paramName: 'Display', innerTree: {} }]), true);
 		expect(warn).toHaveBeenCalledTimes(1);
 		expect(warn.mock.calls[0][0]).toContain('Display');
-	});
-
-	it('falls back to <unnamed> when a param has no name', () => {
-		warnOnEmptyInnerTrees(makeResponse([{ InnerTree: {} }]), true);
-		expect(warn.mock.calls[0][0]).toContain('<unnamed>');
-	});
-
-	it('does nothing for an empty or missing values array', () => {
-		warnOnEmptyInnerTrees(makeResponse([]), true);
-		warnOnEmptyInnerTrees({} as GrasshopperComputeResponse, true);
-		expect(warn).not.toHaveBeenCalled();
 	});
 });

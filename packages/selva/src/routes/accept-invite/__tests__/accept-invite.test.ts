@@ -20,9 +20,9 @@ import {
 	call,
 	grantPlatformPermissions,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { POST as mintInvite } from '../../api/v1/orgs/[orgId]/invites/+server.js';
-import { hashToken } from '$lib/server/invites/token.server.js';
+import { hashToken } from '#lib/server/invites/token.server.js';
 import { load, actions } from '../+page.server.js';
 import { findAuthUserByEmail } from '@selvajs/server/providers';
 
@@ -287,7 +287,11 @@ describe('accept-invite under forward-auth', () => {
 			name: 'header-auth',
 			createUser,
 			proxyAuth: { hasNoIdentityHeaders: () => false },
-			verifyToken: async () => null
+			verifyToken: async () => null,
+			getUser: async (id: string) => {
+				const user = await providers.authUsers.findById(id);
+				return user && { id: user.id, email: user.email, disabled: user.disabled };
+			}
 		};
 		return createUser;
 	}
@@ -369,6 +373,22 @@ describe('accept-invite grants platform permissions', () => {
 		const { acceptUrl } = res.json as { acceptUrl: string };
 		return new URL(acceptUrl).searchParams.get('token')!;
 	}
+
+	it('adds to the permissions an existing user already holds', async () => {
+		tp = await freshProviders();
+		const token = await mintCarrying(tp, ['manage_instance_users']);
+		const user = await seedUser(tp, INVITEE);
+		await grantPlatformPermissions(tp, user.id, ['manage_updates', 'manage_compute']);
+
+		await submit(token, {}, { user: (await actAs(tp, user.id)).user });
+
+		const perms = await tp.config.data.permissions.getFor(SYSTEM_CONTEXT, user.id);
+		expect([...perms].sort()).toEqual([
+			'manage_compute',
+			'manage_instance_users',
+			'manage_updates'
+		]);
+	});
 
 	it('promotes the invitee to instance_admin on accept', async () => {
 		tp = await freshProviders();

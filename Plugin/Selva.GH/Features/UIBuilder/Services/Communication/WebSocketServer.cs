@@ -22,38 +22,59 @@ public class WebSocketServer : IDisposable
     private const int MAX_CLIENTS = AppConfig.WebSocket.MaxConcurrentClients;
     private const int HEARTBEAT_INTERVAL = AppConfig.WebSocket.HeartbeatIntervalMs;
     private const int BROADCAST_TIMEOUT = AppConfig.WebSocket.BroadcastTimeoutMs;
-    private const int MAX_SEND_QUEUE = 10;
+    private const long MAX_QUEUED_BYTES = AppConfig.WebSocket.MaxQueuedSendBytes;
 
     private readonly object _clientsLock = new object();
 
-    // Tracks per-client pending message count (for backpressure) and a semaphore (to serialize sends).
-    // WebSocket.SendAsync is NOT concurrent-safe: only one send may be in-flight at a time per socket.
     private readonly Dictionary<WebSocket, ClientSendState> _clientState =
         new Dictionary<WebSocket, ClientSendState>();
 
     private readonly List<WebSocket> _connectedClients = new List<WebSocket>();
 
+    private readonly string _secret;
+    private readonly IReadOnlyCollection<string> _allowedOrigins;
+    private readonly Func<string> _acknowledgement;
+
     private CancellationTokenSource _cancellationTokenSource;
     private bool _disposed;
     private Timer _heartbeatTimer;
 
-    // .NET Framework 4.8 ships only the HttpListener-based WebSocket flow; modern .NET
-    // (net7/net9, used by Mac/Linux Rhino) needs the manual TcpListener handshake because
-    // HttpListener depends on the Windows-only Http.sys driver. Both code paths produce a
-    // System.Net.WebSockets.WebSocket so the rest of this class is shared.
-#if NET48
-    private HttpListener _httpListener;
-#else
+    // TcpListener with a manual handshake, not HttpListener: HttpListener's WebSocket support
+    // needs the Windows-only Http.sys driver.
     private TcpListener _tcpListener;
-#endif
 
-    public WebSocketServer(int port = AppConfig.WebSocket.DefaultPort)
+    /// <param name="acknowledgement">The reply to a socket that authenticated, built when it does.</param>
+    public WebSocketServer(
+        string secret,
+        IReadOnlyCollection<string> allowedOrigins,
+        int port = AppConfig.WebSocket.DefaultPort,
+        Func<string> acknowledgement = null)
     {
+        _secret = secret ?? throw new ArgumentNullException(nameof(secret));
+        _allowedOrigins = allowedOrigins ?? throw new ArgumentNullException(nameof(allowedOrigins));
+        _acknowledgement = acknowledgement ?? (() => BridgeAccess.AuthenticatedMessage(BridgeRole.Author));
         Port = port;
     }
 
     public bool IsRunning { get; private set; }
     public int Port { get; private set; }
+
+    /// <summary>Whether an authenticated socket that declared <paramref name="host" /> is connected.</summary>
+    public bool HasClientFrom(string host)
+    {
+        lock (_clientsLock)
+        {
+            foreach (var state in _clientState.Values)
+            {
+                if (state.Host == host)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     public void Dispose()
     {
@@ -70,8 +91,16 @@ public class WebSocketServer : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    public event EventHandler<string> OnMessageReceived;
+    /// <summary>
+    ///     Raised on the socket's receive thread, which waits for the handler: hand the frame off
+    ///     rather than processing it inline.
+    /// </summary>
+    public event EventHandler<ClientFrame> OnMessageReceived;
+
     public event EventHandler<WebSocket> OnClientConnected;
+
+    /// <summary>Raised once per socket that leaves, on whichever thread noticed.</summary>
+    public event EventHandler<WebSocket> OnClientDisconnected;
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -119,23 +148,6 @@ public class WebSocketServer : IDisposable
 
     private bool TryBindListener(int port, out int boundPort)
     {
-#if NET48
-        var listener = new HttpListener();
-        listener.Prefixes.Add($"http://localhost:{port}/");
-        try
-        {
-            listener.Start();
-            _httpListener = listener;
-            boundPort = port;
-            return true;
-        }
-        catch
-        {
-            try { listener.Close(); } catch { /* ignore */ }
-            boundPort = 0;
-            return false;
-        }
-#else
         var listener = new TcpListener(IPAddress.Loopback, port);
         try
         {
@@ -150,7 +162,6 @@ public class WebSocketServer : IDisposable
             boundPort = 0;
             return false;
         }
-#endif
     }
 
     public void Stop()
@@ -171,6 +182,11 @@ public class WebSocketServer : IDisposable
 
             clientsToClose = new List<WebSocket>(_connectedClients);
             _connectedClients.Clear();
+            foreach (var state in _clientState.Values)
+            {
+                state.Close();
+            }
+
             _clientState.Clear();
         }
 
@@ -199,12 +215,7 @@ public class WebSocketServer : IDisposable
 
         try
         {
-#if NET48
-            _httpListener?.Stop();
-            _httpListener?.Close();
-#else
             _tcpListener?.Stop();
-#endif
         }
         catch (Exception ex)
         {
@@ -212,11 +223,7 @@ public class WebSocketServer : IDisposable
         }
         finally
         {
-#if NET48
-            _httpListener = null;
-#else
             _tcpListener = null;
-#endif
         }
     }
 
@@ -229,15 +236,33 @@ public class WebSocketServer : IDisposable
     // Broadcast
     // -------------------------------------------------------------------------
 
-    public Task BroadcastAsync(string message)
+    public Task BroadcastAsync(string message) => BroadcastAsync(message, null);
+
+    /// <summary>
+    ///     Queues <paramref name="message" /> and the <paramref name="binaryFrames" /> after it as one
+    ///     unit per client, so no other broadcast lands between them: the page pairs mesh frames with
+    ///     the `outputs` envelope before them by arrival order.
+    /// </summary>
+    public Task BroadcastAsync(string message, IReadOnlyList<byte[]> binaryFrames)
     {
         if (!IsRunning)
         {
             return Task.CompletedTask;
         }
 
-        var buffer = Encoding.UTF8.GetBytes(message);
-        return BroadcastSegmentAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text);
+        var frames = new List<OutgoingFrame>(1 + (binaryFrames?.Count ?? 0))
+        {
+            new OutgoingFrame(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text)
+        };
+        if (binaryFrames != null)
+        {
+            foreach (var data in binaryFrames)
+            {
+                frames.Add(new OutgoingFrame(data, WebSocketMessageType.Binary));
+            }
+        }
+
+        return Broadcast(frames);
     }
 
     public Task BroadcastBinaryAsync(byte[] data)
@@ -247,112 +272,64 @@ public class WebSocketServer : IDisposable
             return Task.CompletedTask;
         }
 
-        return BroadcastSegmentAsync(new ArraySegment<byte>(data), WebSocketMessageType.Binary);
+        return Broadcast(new[] { new OutgoingFrame(data, WebSocketMessageType.Binary) });
     }
 
-    private async Task BroadcastSegmentAsync(ArraySegment<byte> segment, WebSocketMessageType messageType)
+    // Completes once every client has sent the frames or dropped. Callers need not await it for
+    // ordering: each client sends in the order frames were queued.
+    private Task Broadcast(IReadOnlyList<OutgoingFrame> frames)
     {
-        List<WebSocket> snapshot;
+        List<ClientSendState> states;
         lock (_clientsLock)
         {
-            snapshot = new List<WebSocket>(_connectedClients);
+            states = new List<ClientSendState>(_clientState.Values);
         }
 
-        var tasks = new List<Task>(snapshot.Count);
-        var clientsToRemove = new List<WebSocket>();
-
-        foreach (var client in snapshot)
+        // Outside the lock: an overflowing client drops itself, which takes it.
+        var sends = new List<Task>(states.Count);
+        foreach (var state in states)
         {
-            if (client.State != WebSocketState.Open)
-            {
-                // MarkForRemoval locks: in-flight SendToClientAsync tasks for earlier
-                // clients may append to this list concurrently.
-                MarkForRemoval(client, clientsToRemove);
-                continue;
-            }
-
-            // Single lock acquisition for the backpressure check + increment.
-            lock (_clientsLock)
-            {
-                if (!_clientState.TryGetValue(client, out var state))
-                {
-                    continue;
-                }
-
-                if (state.PendingCount >= MAX_SEND_QUEUE)
-                {
-                    Logger.Warn($"Client send queue full ({state.PendingCount} pending), dropping message.");
-                    continue;
-                }
-
-                state.PendingCount++;
-            }
-
-            tasks.Add(SendToClientAsync(client, segment, messageType, clientsToRemove));
+            sends.Add(state.Enqueue(frames));
         }
 
-        if (tasks.Count > 0)
-        {
-            await Task.WhenAll(tasks).ConfigureAwait(false);
-        }
-
-        RemoveDeadClients(clientsToRemove);
+        return sends.Count == 0 ? Task.CompletedTask : Task.WhenAll(sends);
     }
 
-    private async Task SendToClientAsync(
-        WebSocket client,
-        ArraySegment<byte> segment,
-        WebSocketMessageType messageType,
-        List<WebSocket> clientsToRemove)
+    // -------------------------------------------------------------------------
+    // Reply to one socket
+    // -------------------------------------------------------------------------
+
+    public Task SendAsync(WebSocket client, string message)
     {
-        // Acquire per-client send lock so concurrent broadcast calls never overlap
-        // on the same WebSocket (SendAsync is not concurrent-safe).
+        return SendDirectAsync(client, new OutgoingFrame(Encoding.UTF8.GetBytes(message), WebSocketMessageType.Text));
+    }
+
+    public Task SendBinaryAsync(WebSocket client, byte[] data)
+    {
+        return SendDirectAsync(client, new OutgoingFrame(data, WebSocketMessageType.Binary));
+    }
+
+    private Task SendDirectAsync(WebSocket client, OutgoingFrame frame)
+    {
+        if (!IsRunning)
+        {
+            return Task.CompletedTask;
+        }
+
         ClientSendState state;
         lock (_clientsLock)
         {
             _clientState.TryGetValue(client, out state);
         }
 
-        if (state == null)
-        {
-            return;
-        }
+        return state == null ? Task.CompletedTask : state.Enqueue(new[] { frame });
+    }
 
-        await state.SendLock.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            if (client.State != WebSocketState.Open)
-            {
-                MarkForRemoval(client, clientsToRemove);
-                return;
-            }
-
-            using var cts = new CancellationTokenSource(BROADCAST_TIMEOUT);
-            await client.SendAsync(segment, messageType, true, cts.Token)
-                .ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            Logger.Warn("Broadcast timeout — removing slow client.");
-            MarkForRemoval(client, clientsToRemove);
-        }
-        catch (Exception ex)
-        {
-            Logger.Warn($"Broadcast failed: {ex.Message}");
-            MarkForRemoval(client, clientsToRemove);
-        }
-        finally
-        {
-            state.SendLock.Release();
-
-            lock (_clientsLock)
-            {
-                if (_clientState.TryGetValue(client, out var s))
-                {
-                    s.PendingCount = Math.Max(0, s.PendingCount - 1);
-                }
-            }
-        }
+    // A failed or timed-out send leaves the socket unusable, and a client that stopped reading
+    // would hold everything queued behind it: drop the client, and it reconnects with a replay.
+    private void DropClient(WebSocket client)
+    {
+        RemoveDeadClients(new List<WebSocket> { client });
     }
 
     // -------------------------------------------------------------------------
@@ -361,36 +338,6 @@ public class WebSocketServer : IDisposable
 
     private async Task AcceptConnectionsAsync(CancellationToken cancellationToken)
     {
-#if NET48
-        while (!cancellationToken.IsCancellationRequested && IsRunning)
-        {
-            try
-            {
-                var context = await _httpListener.GetContextAsync().ConfigureAwait(false);
-
-                if (context.Request.IsWebSocketRequest)
-                {
-                    _ = Task.Run(
-                        () => ProcessWebSocketRequestAsync(context, cancellationToken),
-                        cancellationToken);
-                }
-                else
-                {
-                    context.Response.StatusCode = 400;
-                    context.Response.Close();
-                }
-            }
-            catch (HttpListenerException ex)
-            {
-                Logger.Warn($"WebSocket listener stopped: {ex.Message}");
-                break;
-            }
-            catch (Exception ex)
-            {
-                Logger.Error($"Error accepting WebSocket connection: {ex.Message}");
-            }
-        }
-#else
         while (!cancellationToken.IsCancellationRequested && IsRunning)
         {
             TcpClient tcpClient;
@@ -417,47 +364,9 @@ public class WebSocketServer : IDisposable
                 () => ProcessWebSocketRequestAsync(tcpClient, cancellationToken),
                 cancellationToken);
         }
-#endif
     }
 
-#if NET48
-    // HttpListener already negotiated the WebSocket upgrade; just take ownership and receive.
-    private async Task ProcessWebSocketRequestAsync(
-        HttpListenerContext context,
-        CancellationToken cancellationToken)
-    {
-        WebSocket webSocket = null;
-
-        try
-        {
-            var wsContext = await context.AcceptWebSocketAsync(null).ConfigureAwait(false);
-            webSocket = wsContext.WebSocket;
-
-            if (!TryRegisterClient(webSocket))
-            {
-                await webSocket.CloseAsync(
-                    WebSocketCloseStatus.PolicyViolation,
-                    "Maximum client connections reached",
-                    CancellationToken.None).ConfigureAwait(false);
-                webSocket.Dispose();
-                return;
-            }
-
-            OnClientConnected?.Invoke(this, webSocket);
-            await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"WebSocket request processing error: {ex.Message}");
-        }
-        finally
-        {
-            await TeardownClientAsync(webSocket).ConfigureAwait(false);
-        }
-    }
-#else
-    // net7+/net9: HttpListener's WebSocket support is Windows-only, so do the RFC 6455
-    // handshake manually on the raw TCP connection and wrap the stream in a server-side WebSocket.
+    // RFC 6455 handshake on the raw TCP connection, then wrap the stream in a server-side WebSocket.
     private async Task ProcessWebSocketRequestAsync(
         TcpClient tcpClient,
         CancellationToken cancellationToken)
@@ -477,6 +386,15 @@ public class WebSocketServer : IDisposable
             {
                 await WebSocketHandshake
                     .WriteErrorResponseAsync(networkStream, 400, "Bad Request", ex.Message, cancellationToken)
+                    .ConfigureAwait(false);
+                return;
+            }
+
+            if (!IsAllowedUpgrade(request.GetHeader("Host"), request.GetHeader("Origin")))
+            {
+                await WebSocketHandshake
+                    .WriteErrorResponseAsync(networkStream, 403, "Forbidden", "Origin or Host not allowed.",
+                        cancellationToken)
                     .ConfigureAwait(false);
                 return;
             }
@@ -505,18 +423,7 @@ public class WebSocketServer : IDisposable
                 subProtocol: null,
                 keepAliveInterval: TimeSpan.FromMilliseconds(HEARTBEAT_INTERVAL));
 
-            if (!TryRegisterClient(webSocket))
-            {
-                await webSocket.CloseAsync(
-                    WebSocketCloseStatus.PolicyViolation,
-                    "Maximum client connections reached",
-                    CancellationToken.None).ConfigureAwait(false);
-                webSocket.Dispose();
-                return;
-            }
-
-            OnClientConnected?.Invoke(this, webSocket);
-            await ReceiveMessagesAsync(webSocket, cancellationToken).ConfigureAwait(false);
+            await ServeClientAsync(webSocket, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -534,20 +441,139 @@ public class WebSocketServer : IDisposable
             }
         }
     }
-#endif
 
-    // Returns false if MAX_CLIENTS is reached; caller closes the socket in that case.
-    private bool TryRegisterClient(WebSocket webSocket)
+    private bool IsAllowedUpgrade(string host, string origin)
+    {
+        if (BridgeAccess.IsAllowedHost(host, Port) && BridgeAccess.IsAllowedOrigin(origin, _allowedOrigins))
+        {
+            return true;
+        }
+
+        var shown = string.IsNullOrEmpty(origin) ? "(none)" : origin.Length > 100 ? origin.Substring(0, 100) : origin;
+        Logger.Warn($"[WebSocket] Refused a connection from origin {shown}: not this component's web UI.");
+        return false;
+    }
+
+    /// <summary>
+    ///     The socket is registered for broadcasts and handed to <see cref="OnMessageReceived" />
+    ///     only after its first message proves it holds the secret.
+    /// </summary>
+    private async Task ServeClientAsync(WebSocket webSocket, CancellationToken cancellationToken)
+    {
+        var (authenticated, host) = await AuthenticateAsync(webSocket, cancellationToken).ConfigureAwait(false);
+        if (!authenticated)
+        {
+            Logger.Warn("[WebSocket] Closed a socket that did not authenticate.");
+            await CloseOutputQuietlyAsync(
+                webSocket, (WebSocketCloseStatus)BridgeAccess.UnauthorizedCloseCode, "Unauthorized")
+                .ConfigureAwait(false);
+            return;
+        }
+
+        // Registered before the acknowledgement, so a full server refuses instead of acknowledging
+        // and then dropping the socket.
+        var ack = new OutgoingFrame(Encoding.UTF8.GetBytes(_acknowledgement()), WebSocketMessageType.Text);
+        if (!TryRegisterClient(webSocket, host, ack, out var acknowledged))
+        {
+            await CloseOutputQuietlyAsync(
+                webSocket, WebSocketCloseStatus.PolicyViolation, "Maximum client connections reached")
+                .ConfigureAwait(false);
+            return;
+        }
+
+        if (!await acknowledged.ConfigureAwait(false))
+        {
+            return;
+        }
+
+        OnClientConnected?.Invoke(this, webSocket);
+        await ReceiveMessagesAsync(webSocket, host, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<(bool Authenticated, string Host)> AuthenticateAsync(WebSocket webSocket,
+        CancellationToken cancellationToken)
+    {
+        var refused = (false, (string)null);
+        var buffer = new byte[BridgeAccess.MaxAuthenticateBytes];
+        var count = 0;
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(AppConfig.WebSocket.AuthTimeoutMs);
+
+        try
+        {
+            WebSocketReceiveResult result;
+            do
+            {
+                if (count == buffer.Length)
+                {
+                    return refused;
+                }
+
+                result = await webSocket
+                    .ReceiveAsync(new ArraySegment<byte>(buffer, count, buffer.Length - count), timeout.Token)
+                    .ConfigureAwait(false);
+
+                if (result.MessageType != WebSocketMessageType.Text)
+                {
+                    return refused;
+                }
+
+                count += result.Count;
+            } while (!result.EndOfMessage);
+        }
+        catch (OperationCanceledException)
+        {
+            return refused;
+        }
+        catch (WebSocketException)
+        {
+            return refused;
+        }
+
+        var authenticated = BridgeAccess.TryAuthenticate(Encoding.UTF8.GetString(buffer, 0, count), _secret,
+            out var host);
+        return (authenticated, host);
+    }
+
+    // A cancelled receive leaves the socket Aborted, with nothing left to close.
+    private static async Task CloseOutputQuietlyAsync(WebSocket webSocket, WebSocketCloseStatus status,
+        string reason)
+    {
+        if (webSocket.State != WebSocketState.Open)
+        {
+            return;
+        }
+
+        try
+        {
+            using var timeout = new CancellationTokenSource(AppConfig.WebSocket.ClientCloseTimeoutMs);
+            await webSocket.CloseOutputAsync(status, reason, timeout.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.Warn($"Error closing WebSocket: {ex.Message}");
+        }
+    }
+
+    // Returns false if MAX_CLIENTS is reached; caller closes the socket in that case. The
+    // acknowledgement is queued under the same lock that registers the socket, so no broadcast
+    // reaches the page before it.
+    private bool TryRegisterClient(WebSocket webSocket, string host, OutgoingFrame acknowledgement,
+        out Task<bool> acknowledged)
     {
         lock (_clientsLock)
         {
             if (_connectedClients.Count >= MAX_CLIENTS)
             {
+                acknowledged = null;
                 return false;
             }
 
+            var state = new ClientSendState(webSocket, host, DropClient);
             _connectedClients.Add(webSocket);
-            _clientState[webSocket] = new ClientSendState();
+            _clientState[webSocket] = state;
+            acknowledged = state.Enqueue(new[] { acknowledgement });
             return true;
         }
     }
@@ -560,10 +586,20 @@ public class WebSocketServer : IDisposable
             return;
         }
 
+        bool removed;
         lock (_clientsLock)
         {
-            _connectedClients.Remove(webSocket);
-            _clientState.Remove(webSocket);
+            removed = _connectedClients.Remove(webSocket);
+            if (_clientState.TryGetValue(webSocket, out var state))
+            {
+                state.Close();
+                _clientState.Remove(webSocket);
+            }
+        }
+
+        if (removed)
+        {
+            OnClientDisconnected?.Invoke(this, webSocket);
         }
 
         try
@@ -584,7 +620,7 @@ public class WebSocketServer : IDisposable
         }
     }
 
-    private async Task ReceiveMessagesAsync(WebSocket webSocket, CancellationToken cancellationToken)
+    private async Task ReceiveMessagesAsync(WebSocket webSocket, string host, CancellationToken cancellationToken)
     {
         var buffer = new byte[BUFFER_SIZE];
 
@@ -654,7 +690,12 @@ public class WebSocketServer : IDisposable
                     var message = Encoding.UTF8.GetString(
                         messageBuffer.GetBuffer(), 0, (int)messageBuffer.Length);
 
-                    OnMessageReceived?.Invoke(this, message);
+                    OnMessageReceived?.Invoke(this, new ClientFrame(webSocket, host, message, null));
+                }
+                else if (result.MessageType == WebSocketMessageType.Binary)
+                {
+                    // Copied out: the buffer is reused for the next frame.
+                    OnMessageReceived?.Invoke(this, new ClientFrame(webSocket, host, null, messageBuffer.ToArray()));
                 }
             }
             catch (WebSocketException ex)
@@ -718,17 +759,6 @@ public class WebSocketServer : IDisposable
     // Helpers
     // -------------------------------------------------------------------------
 
-    private void MarkForRemoval(WebSocket client, List<WebSocket> clientsToRemove)
-    {
-        lock (_clientsLock)
-        {
-            if (!clientsToRemove.Contains(client))
-            {
-                clientsToRemove.Add(client);
-            }
-        }
-    }
-
     private void RemoveDeadClients(List<WebSocket> clients)
     {
         if (clients.Count == 0)
@@ -736,12 +766,21 @@ public class WebSocketServer : IDisposable
             return;
         }
 
+        var removed = new List<WebSocket>();
         lock (_clientsLock)
         {
             foreach (var client in clients)
             {
-                _connectedClients.Remove(client);
-                _clientState.Remove(client);
+                if (_connectedClients.Remove(client))
+                {
+                    removed.Add(client);
+                }
+
+                if (_clientState.TryGetValue(client, out var state))
+                {
+                    state.Close();
+                    _clientState.Remove(client);
+                }
 
                 try
                 {
@@ -752,6 +791,11 @@ public class WebSocketServer : IDisposable
                     Logger.Warn($"Error disposing WebSocket client: {ex.Message}");
                 }
             }
+        }
+
+        foreach (var client in removed)
+        {
+            OnClientDisconnected?.Invoke(this, client);
         }
     }
 
@@ -770,19 +814,180 @@ public class WebSocketServer : IDisposable
         }
     }
 
+    private readonly struct OutgoingFrame
+    {
+        public OutgoingFrame(byte[] data, WebSocketMessageType type)
+        {
+            Data = data;
+            Type = type;
+        }
+
+        public byte[] Data { get; }
+        public WebSocketMessageType Type { get; }
+    }
+
     /// <summary>
-    ///     Per-client state: pending message count (backpressure) + send semaphore (serialization).
-    ///     WebSocket.SendAsync must never be called concurrently on the same socket.
-    ///
-    ///     Deliberately NOT IDisposable: the semaphore was previously disposed on client removal,
-    ///     which raced in-flight SendToClientAsync tasks — WaitAsync/Release on a disposed
-    ///     SemaphoreSlim throws ObjectDisposedException and faulted whole broadcasts whenever a
-    ///     client disconnected mid-send. A SemaphoreSlim whose AvailableWaitHandle is never touched
-    ///     holds no unmanaged resources, so dropping the reference and letting GC collect it is safe.
+    ///     One client's outgoing queue and the loop that drains it. Each client sends on its own, so
+    ///     a page that stops reading (the panel while Rhino solves) delays only itself, and a queued
+    ///     unit's frames go out back to back. WebSocket.SendAsync allows one send at a time per
+    ///     socket; only the drain loop calls it.
     /// </summary>
     private sealed class ClientSendState
     {
-        public readonly SemaphoreSlim SendLock = new SemaphoreSlim(1, 1);
-        public int PendingCount;
+        private readonly Action<WebSocket> _drop;
+        private readonly Queue<Outgoing> _queue = new Queue<Outgoing>();
+        private readonly WebSocket _socket;
+        private bool _closed;
+        private bool _draining;
+        private long _queuedBytes;
+
+        public ClientSendState(WebSocket socket, string host, Action<WebSocket> drop)
+        {
+            _socket = socket;
+            _drop = drop;
+            Host = host;
+        }
+
+        /// <summary>What the socket declared when it authenticated; null for a browser tab.</summary>
+        public string Host { get; }
+
+        /// <summary>True once the frames are sent, false if the client was dropped first.</summary>
+        public Task<bool> Enqueue(IReadOnlyList<OutgoingFrame> frames)
+        {
+            var item = new Outgoing(frames);
+            var overflow = false;
+            var startDrain = false;
+            lock (_queue)
+            {
+                if (_closed)
+                {
+                    return Task.FromResult(false);
+                }
+
+                // One unit always fits, however large: only a backlog means the page stopped reading.
+                if (_queue.Count > 0 && _queuedBytes + item.Bytes > MAX_QUEUED_BYTES)
+                {
+                    overflow = true;
+                }
+                else
+                {
+                    _queue.Enqueue(item);
+                    _queuedBytes += item.Bytes;
+                    startDrain = !_draining;
+                    _draining = true;
+                }
+            }
+
+            if (overflow)
+            {
+                Logger.Warn($"[WebSocket] Dropped a client with {_queuedBytes / (1024 * 1024)} MB unsent.");
+                _drop(_socket);
+                return Task.FromResult(false);
+            }
+
+            if (startDrain)
+            {
+                _ = Task.Run(DrainAsync);
+            }
+
+            return item.Done.Task;
+        }
+
+        /// <summary>Fails everything still queued. The drain loop stops at its next unit.</summary>
+        public void Close()
+        {
+            Outgoing[] pending;
+            lock (_queue)
+            {
+                _closed = true;
+                pending = _queue.ToArray();
+                _queue.Clear();
+                _queuedBytes = 0;
+            }
+
+            foreach (var item in pending)
+            {
+                item.Done.TrySetResult(false);
+            }
+        }
+
+        private async Task DrainAsync()
+        {
+            while (true)
+            {
+                Outgoing item;
+                lock (_queue)
+                {
+                    if (_closed || _queue.Count == 0)
+                    {
+                        _draining = false;
+                        return;
+                    }
+
+                    item = _queue.Dequeue();
+                    _queuedBytes -= item.Bytes;
+                }
+
+                try
+                {
+                    foreach (var frame in item.Frames)
+                    {
+                        using var timeout = new CancellationTokenSource(BROADCAST_TIMEOUT);
+                        await _socket.SendAsync(new ArraySegment<byte>(frame.Data), frame.Type, true, timeout.Token)
+                            .ConfigureAwait(false);
+                    }
+
+                    item.Done.TrySetResult(true);
+                }
+                catch (Exception ex)
+                {
+                    item.Done.TrySetResult(false);
+                    Logger.Warn(ex is OperationCanceledException
+                        ? "[WebSocket] Send timed out: dropping the client."
+                        : $"[WebSocket] Send failed: {ex.Message}");
+                    _drop(_socket);
+                    return;
+                }
+            }
+        }
+
+        private sealed class Outgoing
+        {
+            public Outgoing(IReadOnlyList<OutgoingFrame> frames)
+            {
+                Frames = frames;
+                foreach (var frame in frames)
+                {
+                    Bytes += frame.Data.Length;
+                }
+            }
+
+            public IReadOnlyList<OutgoingFrame> Frames { get; }
+            public long Bytes { get; }
+
+            public TaskCompletionSource<bool> Done { get; } =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        }
     }
+}
+
+/// <summary>
+///     One whole frame from an authenticated socket: <see cref="Text" /> or <see cref="Data" />,
+///     never both. <see cref="Host" /> is what the socket declared when it authenticated, null for a
+///     browser tab.
+/// </summary>
+public sealed class ClientFrame
+{
+    public ClientFrame(WebSocket client, string host, string text, byte[] data)
+    {
+        Client = client;
+        Host = host;
+        Text = text;
+        Data = data;
+    }
+
+    public WebSocket Client { get; }
+    public string Host { get; }
+    public string Text { get; }
+    public byte[] Data { get; }
 }

@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import type { Organization } from '@selvajs/platform';
 import { hasPermission, SYSTEM_CONTEXT } from '@selvajs/platform';
-import { getOrganizationProvider, getTenancy } from '$lib/server/providers.server';
+import { getOrganizationProvider, getTenancy } from '#lib/server/providers.server.js';
 
 export interface OrgRow extends Organization {
 	memberCount: number;

@@ -3,17 +3,12 @@
 // ============================================================================
 //
 // The schema-driven value and lifecycle state machine, plus the driver seam that gives it a
-// transport. It knows only `SolveResult` from `shared/` — which is what lets the same
-// session drive a WebSocket (the Grasshopper plugin) or an HTTP call (the cloud app), and
-// lets a headless consumer solve without ever rendering.
-//
-// Meshes stay opaque — the ownership policy the memo needs is injected. See ./README.md
-// for how to write a driver.
+// transport. See ./README.md for how to write a driver.
 //
 // Must never import `../server/*`. Enforced by eslint `no-restricted-imports`.
 
 export { createSolveSession } from './session/solve-session.js';
-export type { SolveSession, SolveSessionArgs } from './session/solve-session.js';
+export type { SolveSession, SolveSessionArgs, SolveSettlement } from './session/solve-session.js';
 
 export { createRequestResponseDriver } from './drivers/request-response.js';
 export type { RequestResponseDriverOptions } from './drivers/request-response.js';
@@ -22,38 +17,18 @@ export type { SolveDriver, SolveReporter, SolveEventSource } from './drivers/dri
 export { createSolveEventStream } from './events/solve-event-stream.js';
 export type { SolveEventStream, SolveEventStreamOptions } from './events/solve-event-stream.js';
 
-// Exported for a host that reads a raw event source without a session.
-export { reduceLiveSolve, EMPTY_LIVE_SOLVE } from './events/live-solve.js';
+export { EMPTY_LIVE_SOLVE } from './events/live-solve.js';
 export type { LiveSolveState } from './events/live-solve.js';
 
-// Exported (not just used internally) because an alternative framework's host shell
-// reimplements only state ownership around these transitions, never the decisions themselves.
-export {
-	buildInitialValues,
-	makeInitialFlags,
-	applyValueChange,
-	pickInputValues,
-	applySolveResult,
-	solvePhase
-} from './session/solve-session-core.js';
-export type {
-	SolvePhase,
-	SolveSessionState,
-	ExternalReader,
-	RetainedSolveResult
-} from './session/solve-session-core.js';
-
-export { createAsyncThrottle } from './async-throttle.js';
-export type { AsyncThrottle } from './async-throttle.js';
+export type { SolvePhase, RetainedSolveResult } from './session/solve-session-core.js';
 
 export { createComputeFetchSolveFn } from './compute-fetch-solve-fn.js';
 export type { ComputeFetchSolveFnOptions } from './compute-fetch-solve-fn.js';
 
-export { createSolveMemo, stableInputKey } from './solve-memo.js';
-export type { SolveMemo, SolveMemoOptions, MeshPolicy } from './solve-memo.js';
+export { stableInputKey } from './solve-memo.js';
+export type { MeshPolicy } from './solve-memo.js';
 
-// A pre-step producer route writes a value here and the solver route reads it back —
-// `buildInitialValues` hydrates from it.
+// A pre-step producer route writes a value here and the solver route reads it back.
 export {
 	writeExternalValue,
 	readExternalValue,
@@ -63,6 +38,5 @@ export {
 export type { ExternalValueRef, ExternalInput } from './external-storage.js';
 
 export type { SolveFn, SolveResult, SolveDiagnostic } from '../shared/solve-fn.js';
-// A push driver outside this package (the plugin's WebSocket) decodes its verdict with these.
 export { decodeOutcome, finalizeResult } from '../shared/outcome.js';
 export type { SolveOutcome } from '../shared/outcome.js';

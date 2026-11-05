@@ -300,30 +300,6 @@ namespace Selva.GH.Properties
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap Combine
-        {
-            get
-            {
-                object obj = ResourceManager.GetObject("Combine", resourceCulture);
-                return ((System.Drawing.Bitmap)(obj));
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized resource of type System.Drawing.Bitmap.
-        /// </summary>
-        internal static System.Drawing.Bitmap CurveInfo
-        {
-            get
-            {
-                object obj = ResourceManager.GetObject("CurveInfo", resourceCulture);
-                return ((System.Drawing.Bitmap)(obj));
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized resource of type System.Drawing.Bitmap.
-        /// </summary>
         internal static System.Drawing.Bitmap Document
         {
             get
@@ -401,18 +377,6 @@ namespace Selva.GH.Properties
             get
             {
                 object obj = ResourceManager.GetObject("DrawingView", resourceCulture);
-                return ((System.Drawing.Bitmap)(obj));
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized resource of type System.Drawing.Bitmap.
-        /// </summary>
-        internal static System.Drawing.Bitmap ExportSVG
-        {
-            get
-            {
-                object obj = ResourceManager.GetObject("ExportSVG", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }
@@ -600,11 +564,167 @@ namespace Selva.GH.Properties
         /// <summary>
         ///   Looks up a localized resource of type System.Drawing.Bitmap.
         /// </summary>
-        internal static System.Drawing.Bitmap SectionSettings
+        internal static System.Drawing.Bitmap GetDynamicValueList
         {
             get
             {
-                object obj = ResourceManager.GetObject("SectionSettings", resourceCulture);
+                object obj = ResourceManager.GetObject("GetDynamicValueList", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap SetDynamicValueList
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("SetDynamicValueList", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap GetFile
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("GetFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap GetImage
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("GetImage", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap GetServerFile
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("GetServerFile", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap CombineDisplay
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("CombineDisplay", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap EmissiveMaterial
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("EmissiveMaterial", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap MaterialPreset
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("MaterialPreset", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DrawImage
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DrawImage", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap DocumentInfo
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("DocumentInfo", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap LayoutOverride
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("LayoutOverride", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap TextStyle
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("TextStyle", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap ParamFileData
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("ParamFileData", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized resource of type System.Drawing.Bitmap.
+        /// </summary>
+        internal static System.Drawing.Bitmap EvaluateSchema
+        {
+            get
+            {
+                object obj = ResourceManager.GetObject("EvaluateSchema", resourceCulture);
                 return ((System.Drawing.Bitmap)(obj));
             }
         }

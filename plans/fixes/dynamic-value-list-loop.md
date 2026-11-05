@@ -79,6 +79,11 @@ rules the fixture violated and now satisfies.
 
 ## Design
 
+> [dynamic-value-list-resolution.md](../features/dynamic-value-list-resolution.md) proposes
+> resolving the selection inside Grasshopper when the options are wired into the Get param. That
+> undercuts two decisions below: "not adding a `selected` field" and Phase 3. The reconciler here
+> remains the path for unwired lists.
+
 Two moves, everything else follows:
 
 1. **Reconciliation moves from `InputControl.svelte` into the session** (`@selvajs/solve/client`),
@@ -275,8 +280,7 @@ as a function of the received `valueUpdate`:
 
 ### Fixture — as built
 
-[`fixtures/grasshopper/fixture_dynamic_value_list.ghx`](../../fixtures/grasshopper/fixture_dynamic_value_list.ghx),
-recipe at [`recipes/fixture_dynamic_value_list.json`](../../fixtures/grasshopper/recipes/fixture_dynamic_value_list.json).
+[`dev/grasshopper/dynamic-value-list.ghx`](../../dev/grasshopper/dynamic-value-list.ghx).
 **22 objects, 4 Context Bakes**, 3 groups, 0 runtime errors; read back through Rhino MCP against a
 live Grasshopper, verified surviving a close/reopen cycle.
 

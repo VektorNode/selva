@@ -4,10 +4,10 @@ import { createRenderPipeline, type RenderPipeline } from '../render-pipeline.js
 import type { ResolvedOptions } from './defaults.js';
 
 /**
- * Owns the optional postprocessing composer and the two independent reasons to want one: ambient
- * occlusion (a user/look choice) and the screen-space edge fallback (forced on while meshes over
- * the triangle cap are in the scene). Neither knows about the other, so "is a pipeline wanted, and
- * does it need rebuilding" is reconciled here instead of at each caller.
+ * Owns the optional postprocessing composer and the independent reasons to want one: ambient
+ * occlusion (a user/look choice), bloom (a look choice) and the screen-space edge fallback (forced on
+ * while meshes over the triangle cap are in the scene). None knows about the others, so "is a
+ * pipeline wanted, and does it need rebuilding" is reconciled here instead of at each caller.
  */
 export interface PipelineController {
 	get(): RenderPipeline | null;
@@ -25,19 +25,35 @@ export function createPipelineController(params: {
 	scene: THREE.Scene;
 	getActiveCamera: () => THREE.Camera;
 	getCanvasSize: () => { width: number; height: number };
-	pixelRatio: number;
 	config: ResolvedOptions;
 	requestRender: () => void;
 }): PipelineController {
-	const { renderer, scene, getActiveCamera, getCanvasSize, pixelRatio, config, requestRender } =
-		params;
+	const { renderer, scene, getActiveCamera, getCanvasSize, config, requestRender } = params;
 
 	let pipeline: RenderPipeline | null = null;
 	let aoEnabled = !!config.render.ambientOcclusion;
 	let edgeFallbackActive = false;
-	let builtWithAo = false;
 
-	const build = (withAo: boolean): RenderPipeline => {
+	// Baked in at construction. A look re-applies on every solve, and rebuilding reallocates bloom's
+	// whole render-target chain, so only a real change may rebuild.
+	const bakedOptions = () => ({
+		ambientOcclusion: aoEnabled,
+		bloom: config.render.bloom,
+		toneMapping: config.render.toneMapping,
+		toneMappingExposure: config.render.toneMappingExposure
+	});
+	let baked = bakedOptions();
+	const isStale = () => {
+		const wanted = bakedOptions();
+		return (
+			wanted.ambientOcclusion !== baked.ambientOcclusion ||
+			wanted.bloom !== baked.bloom ||
+			wanted.toneMapping !== baked.toneMapping ||
+			wanted.toneMappingExposure !== baked.toneMappingExposure
+		);
+	};
+
+	const build = (): RenderPipeline => {
 		const { width, height } = getCanvasSize();
 		const built = createRenderPipeline(
 			renderer,
@@ -48,29 +64,30 @@ export function createPipelineController(params: {
 			{
 				toneMapping: config.render.toneMapping ?? THREE.NeutralToneMapping,
 				toneMappingExposure: config.render.toneMappingExposure ?? 1,
-				ambientOcclusion: withAo,
+				ambientOcclusion: aoEnabled,
 				aoIntensity: config.render.aoIntensity,
 				aoPixelRatio: config.render.aoPixelRatio,
+				bloom: config.render.bloom,
 				// Always built disabled; sync() flips it live via setEdgeDetection.
 				edgeDetection: false
 			}
 		);
-		built.setSize(Math.max(1, width), Math.max(1, height), pixelRatio);
+		built.setSize(Math.max(1, width), Math.max(1, height), config.render.pixelRatio!);
 		return built;
 	};
 
 	const sync = () => {
-		const wantPipeline = aoEnabled || edgeFallbackActive;
+		const wantPipeline = aoEnabled || edgeFallbackActive || !!config.render.bloom;
 		if (!wantPipeline) {
 			pipeline?.dispose();
 			pipeline = null;
 			requestRender();
 			return;
 		}
-		if (!pipeline || builtWithAo !== aoEnabled) {
+		if (!pipeline || isStale()) {
 			pipeline?.dispose();
-			pipeline = build(aoEnabled);
-			builtWithAo = aoEnabled;
+			pipeline = build();
+			baked = bakedOptions();
 		}
 		pipeline.setEdgeDetection(edgeFallbackActive);
 		requestRender();

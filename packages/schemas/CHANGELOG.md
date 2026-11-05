@@ -1,5 +1,53 @@
 # Schema Changelog
 
+## 5.3.0
+
+### Minor Changes
+
+- edb568d: Schema 2.19.0: host-aware inputs, value-list media, picked-object tracking and a night look.
+
+  - 2.16.0: `ParamType` gains `geometry`, `point`, `line` and `plane`; `CheckboxWidgetConfig` gains `displayAs: 'button'`. Only the Rhino panel picks geometry and presses buttons; Selva leaves them out and solves with the definition's own values. A plugin older than this release drops these elements on save: update the plugin on every machine that edits the file.
+  - 2.17.0: value lists gain `segmented` and `tiles` modes and an `optionMedia` map of icons and thumbnails, stored once in a root `assets` table. A schema with assets requires plugin 0.24.0.
+  - 2.18.0: `localOptions.trackPickedObjects` keeps picked geometry following its Rhino objects in the local preview.
+  - 2.19.0: `viewerOptions.look` sets the opening look, including the new `night` look.
+  - `MAX_TAGS` and `MAX_CATEGORY_LENGTH` export the limits Selva applies to `tags` and `category`. `enableLocal` / `enableRemote` document which host reads them.
+  - Wire: `SolveEndedPayload.slowest` lists a finished local solve's five slowest components (`SlowComponent`: `source`, `ms`).
+
+## 5.3.0-beta.3
+
+### Minor Changes
+
+- a409b68: A new API scope action, `create_projects`: create private projects that nobody joins on upload, org-wide only. `write` includes it. `POST /projects` now asks for it, so a 403 there names `create_projects:org:<id>` instead of `write:`. The built-in Grasshopper OAuth client may request it; registered clients can't. A key holding it may be held by anyone who may create a project in the org, so an org admin with no projects can sign in the plugin.
+
+  Creating a project checks the same visibility rules as `PATCH`: only org owners and admins create public projects. Project creation through API keys has a per-owner limit (20 an hour by default, `projectCreateLimiter` in deps). `GET /me` returns `capabilities.createProjects`. `DELETE /me/token` works for a key whose owner no longer qualifies to hold it.
+
+  Upload to Selva in the plugin: the connection moves to its own dialog, Upload shows only for a key Selva accepted in this Rhino session, the first connection to an instance is confirmed in Rhino, a pasted key is refused as an address, and an upload can go into a new private project.
+
+## 5.3.0-beta.2
+
+### Minor Changes
+
+- 3ff7284: Schema 2.19.0: an optional `viewerOptions.look` sets the look a definition opens in. A new `night` look lights the scene from what the model emits: a material carrying `emissive` and `emissiveIntensity` gets a shadow-casting point light and bloom. `emissiveLight` sets that light's intensity directly. The plugin's new Emissive Material component makes any material glow, from a colour and strength, or from a real source's Kelvin and Lumens.
+
+## 5.3.0-beta.1
+
+### Minor Changes
+
+- 0cb9545: Schema 2.16.0: `ParamType` gains `geometry`, `point`, `line` and `plane` for Rhino's Get Geometry, Get Point, Get Line and Get Plane, and `CheckboxWidgetConfig` an optional `displayAs: 'button'`. The UI picks a geometry input's control from its `paramType` and renders geometry inputs and buttons only where they work: in Rhino, picking in the viewport and pressing a button. Selva leaves them out for now, and the definition solves with its own values there. Presets skip both. Only the Rhino panel picks; a browser tab shows what the panel picked. While a pick runs, the input says to pick in the viewport, Esc to cancel.
+- 4125e70: A plugin older than this release saves a schema with geometry inputs or buttons without those elements: they are lost, the rest of the schema is kept. Update the plugin on every machine that edits the file.
+- aa0878a: Schema 2.18.0: an optional `localOptions.trackPickedObjects`. When it's on, geometry picked in the Rhino viewport follows the Rhino objects it came from: editing or moving one re-solves with its new shape, and deleting one drops it from the pick. Off, the default, a pick is a snapshot. Only the plugin's local preview reads it; Selva ignores it.
+- 33ef891: Schema 2.17.0: value lists gain `segmented` and `tiles` display modes and an optional `optionMedia` map that gives an option an icon or a thumbnail. The icons and thumbnails live in a new root `assets` table, keyed by a hash of their content, so the `.gh` carries each one once. Icons are stored as SVG path data and thumbnails as small WebP, JPEG or PNG data URIs. Each option shows one picture, its thumbnail or else its icon, in every display mode. A button row with more than six options shows as a dropdown. The plugin marks a schema that has assets as needing plugin 0.24.0, so an older plugin refuses it instead of saving it without them. `normalizeUISchemaCasing` keeps option names in `optionMedia` and asset ids as they are.
+
+## 5.3.0-beta.0
+
+### Minor Changes
+
+- a0e6628: `MAX_TAGS` and `MAX_CATEGORY_LENGTH` export the limits on a schema's `tags` and `category`, the same ones Selva's definition forms apply. The two fields' descriptions say that Selva copies them into a definition on upload and that the definition's own values win after that.
+
+### Patch Changes
+
+- a0e6628: `ViewerOptions.enableLocal` and `enableRemote` describe which host reads them: `enableLocal` the plugin's local preview, `enableRemote` Selva.
+
 ## 5.2.0
 
 ### Minor Changes

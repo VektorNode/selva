@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { AlertDialog as AlertDialogPrimitive } from 'bits-ui';
 	import AlertDialogOverlay from './alert-dialog-overlay.svelte';
-	import { cn, type WithoutChild, type WithoutChildrenOrChild } from '$lib/utils.js';
+	import { cn, type WithoutChild, type WithoutChildrenOrChild } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),
@@ -19,7 +19,7 @@
 		bind:ref
 		data-slot="alert-dialog-content"
 		class={cn(
-			'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 gap-4 p-6 shadow-lg sm:max-w-lg fixed start-[50%] top-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] rounded-lg border bg-background duration-200',
+			'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 gap-4 p-6 sm:max-w-lg fixed start-1/2 top-1/2 z-50 grid max-h-dialog w-screen-inset -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border bg-raised shadow-popover duration-200',
 			className
 		)}
 		{...restProps}

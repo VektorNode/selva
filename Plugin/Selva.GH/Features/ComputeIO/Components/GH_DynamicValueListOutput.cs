@@ -31,7 +31,7 @@ public class GH_DynamicValueListOutput : GH_Component
 
     // A real component (not a contextual input param), so it uses the plain icon — no purple
     // ContextualiseIcon overlay, which is reserved for the "Get …" contextual params.
-    protected override Bitmap Icon => Resources.GetValueList;
+    protected override Bitmap Icon => Resources.SetDynamicValueList;
 
     /// <summary>Instance GUID of the Dynamic Value List input this output's options populate.</summary>
     public Guid TargetInputId

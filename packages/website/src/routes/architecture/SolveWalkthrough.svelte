@@ -37,7 +37,7 @@
 				'Grasshopper addresses inputs by parameter name, and every input is a tree even when it holds one item. So each bare value gets wrapped in the name it is wired to plus a tree with one branch, {0}. The server adds its own key here — the browser never holds it.',
 			headers: ['POST /grasshopper', 'Content-Type: application/json', 'RhinoComputeKey: ••••••'],
 			body: `{
-  "pointer": "md5:7ab3…",
+  "pointer": "md5_7ab3…",
   "values": [
     { "ParamName": "radius",
       "InnerTree": { "{0}": [{ "data": 12.5 }] } },
@@ -120,7 +120,7 @@
 		<div
 			class="rounded-md border p-3 {hop.from === null
 				? 'border-orange-500/30 bg-orange-500/5'
-				: 'border-border bg-muted/30'}"
+				: 'border-border bg-muted'}"
 		>
 			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 				<p class="text-sm font-semibold">
@@ -139,7 +139,7 @@
 			<p class="text-muted-foreground mt-1.5 text-xs leading-relaxed">{hop.explain}</p>
 
 			{#if hop.body}
-				<div class="border-border/60 mt-3 space-y-0.5 border-t pt-2.5">
+				<div class="border-border mt-3 space-y-0.5 border-t pt-2.5">
 					{#each hop.headers as header (header)}
 						<p class="text-muted-foreground font-mono text-[11px] leading-relaxed">{header}</p>
 					{/each}
@@ -151,7 +151,7 @@
 	{/each}
 
 	<!-- Server-Timing, decoded: the same numbers as the last header, one bar each. -->
-	<div class="border-border bg-muted/30 rounded-md border p-3">
+	<div class="border-border bg-muted rounded-md border p-3">
 		<p class="text-sm font-semibold">Where those 23ms went</p>
 		<p class="text-muted-foreground mt-1.5 text-xs leading-relaxed">
 			The <code class="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">Server-Timing</code> header
@@ -162,7 +162,7 @@
 			{#each TIMING as t (t.label)}
 				<div class="flex items-center gap-2">
 					<span class="text-muted-foreground w-36 shrink-0 text-[11px]">{t.label}</span>
-					<div class="bg-border/60 h-2.5 flex-1 overflow-hidden rounded-sm">
+					<div class="bg-border h-2.5 flex-1 overflow-hidden rounded-sm">
 						<div
 							class="h-full rounded-sm bg-sky-500/70"
 							style="width: {Math.max(3, (t.dur / TIMING_TOTAL) * 100)}%"

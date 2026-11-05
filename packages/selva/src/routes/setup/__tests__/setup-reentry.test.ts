@@ -9,7 +9,12 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
-import { freshProviders, seedUser, type TestProviders } from '$lib/server/__tests__/fixtures.js';
+import {
+	freshProviders,
+	seedUser,
+	setEnv,
+	type TestProviders
+} from '#lib/server/__tests__/fixtures.js';
 import { actions } from '../+page.server.js';
 
 let tp: TestProviders | null = null;
@@ -19,6 +24,7 @@ afterEach(async () => {
 		await tp.cleanup();
 		tp = null;
 	}
+	await setEnv('BOOTSTRAP_INSTANCE_ADMIN_EMAIL', undefined);
 });
 
 function formRequest(fields: Record<string, string>): Request {
@@ -73,6 +79,40 @@ describe('/setup action — re-entry after an admin exists', () => {
 		}).catch((thrown) => thrown)) as { status?: number };
 
 		// The happy path ends in `redirect(303, '/admin')`, which SvelteKit throws.
+		expect(result?.status).toBe(303);
+		expect(await tp.config.data.permissions.hasInstanceAdmin(SYSTEM_CONTEXT)).toBe(true);
+	});
+
+	it('refuses any email but the pinned bootstrap admin on a fresh instance', async () => {
+		// An empty instance is claimable by whoever reaches /setup first, so the
+		// pin has to hold for the password form too, not only for OAuth and proxy.
+		await setEnv('BOOTSTRAP_INSTANCE_ADMIN_EMAIL', 'operator@acme.test');
+		tp = await freshProviders();
+		const before = await tp.authUsers.listUsers();
+
+		const result = (await runSetup(tp, {
+			companyName: 'Attacker Co',
+			email: 'attacker@evil.test',
+			password: 'hunter2hunter2',
+			confirm: 'hunter2hunter2'
+		})) as { status?: number };
+
+		expect(result?.status).toBe(403);
+		expect(await tp.authUsers.listUsers()).toHaveLength(before.length);
+		expect(await tp.config.data.permissions.hasInstanceAdmin(SYSTEM_CONTEXT)).toBe(false);
+	});
+
+	it('accepts the pinned bootstrap admin regardless of case', async () => {
+		await setEnv('BOOTSTRAP_INSTANCE_ADMIN_EMAIL', 'Operator@Acme.test');
+		tp = await freshProviders();
+
+		const result = (await runSetup(tp, {
+			companyName: 'Acme',
+			email: 'operator@acme.test',
+			password: 'hunter2hunter2',
+			confirm: 'hunter2hunter2'
+		}).catch((thrown) => thrown)) as { status?: number };
+
 		expect(result?.status).toBe(303);
 		expect(await tp.config.data.permissions.hasInstanceAdmin(SYSTEM_CONTEXT)).toBe(true);
 	});

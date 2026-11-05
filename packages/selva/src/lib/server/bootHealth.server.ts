@@ -39,6 +39,25 @@ async function run(): Promise<BootHealth> {
 	let atRestSecrets: SecretVerificationReport | null = null;
 
 	const store = providers.data.computeServer;
+	// Before verifying: rows sealed under SELVA_AT_REST_KEY_PREVIOUS move to the
+	// current key, so the previous one can be dropped. Once per process, here,
+	// because verifySecrets also serves an admin GET and must not write.
+	if (typeof store.reencryptSecrets === 'function') {
+		try {
+			const resealed = await store.reencryptSecrets();
+			if (resealed > 0) {
+				getLogger().info('Re-sealed compute API keys under the current SELVA_AT_REST_KEY', {
+					component: 'boot',
+					count: resealed
+				});
+			}
+		} catch (err) {
+			getLogger().error('Re-sealing compute API keys failed', {
+				component: 'boot',
+				err: renderThrown(err)
+			});
+		}
+	}
 	if (typeof store.verifySecrets === 'function') {
 		try {
 			atRestSecrets = await store.verifySecrets();

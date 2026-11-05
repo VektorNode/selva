@@ -19,6 +19,12 @@ export interface SerializableMaterial {
 	normalMap?: string;
 	/** Wins over the look's `envMapIntensity` (except in looks that override materials). */
 	envMapIntensity?: number;
+	/** Hex colour the surface emits. Omitted: no emission. */
+	emissive?: string;
+	/** Omitted: 1. Above 1 it blooms in looks with bloom. */
+	emissiveIntensity?: number;
+	/** Light the surface casts in the night look, in candela-scaled units. Omitted: scaled to the model. */
+	emissiveLight?: number;
 	/** Omitted: no coat. */
 	clearcoat?: number;
 	clearcoatRoughness?: number;
@@ -34,13 +40,47 @@ export interface SerializableMaterial {
 	 * when the writer sent UVs in mm. Omitted: maps stretch once over the UVs.
 	 */
 	mapSize?: number;
-	/** Procedural scratch fibres along the grain, from UVs in mm. */
-	finish?: 'brushed' | 'rolled';
+	/** A procedural surface drawn from UVs in mm: grain on metal, a whole material, or `molded` plastic grain. */
+	finish?:
+		| 'brushed'
+		| 'rolled'
+		| 'wood'
+		| 'oak'
+		| 'maple'
+		| 'wenge'
+		| 'walnut'
+		| 'concrete'
+		| 'plaster'
+		| 'brick'
+		| 'corten'
+		| 'molded'
+		| 'limestone'
+		| 'travertine'
+		| 'granite'
+		| 'marble'
+		| 'slate'
+		| 'terrazzo'
+		| 'paving'
+		| 'setts'
+		| 'gravel';
 	/** Scales the finish's streaks; 0 draws none. Omitted: 1. */
 	finishStrength?: number;
 	/** Light passing through (glass); unlike `opacity` it keeps reflections. */
 	transmission?: number;
 	ior?: number;
+	/**
+	 * Glass body depth, in model units. Above 0 the glass refracts and tints, at the cost of drawing
+	 * the scene twice a frame. Omitted: a thin pane.
+	 */
+	thickness?: number;
+	/** Hex colour light takes on after crossing `thickness` of glass. Omitted: clear. */
+	attenuationColor?: string;
+	/** 0 to 1. The soft glow at grazing angles of rubber, soft-touch plastic and cloth. Omitted: none. */
+	sheen?: number;
+	/** Hex colour of the sheen. Omitted: white. */
+	sheenColor?: string;
+	/** 0 to 1. Omitted: 0.5. */
+	sheenRoughness?: number;
 }
 
 /**
@@ -65,6 +105,8 @@ export interface MeshMetadata {
 	indexStart: number;
 	/** Arbitrary key-value pairs from the GH Metadata input. */
 	metadata?: Record<string, string>;
+	/** The writer's closed-solid verdict (see `isClosedSolid`); absent means compute it here. */
+	closed?: boolean;
 }
 
 export interface MaterialGroup {

@@ -3,17 +3,17 @@ import type { RequestHandler } from './$types';
 import { randomUUID } from 'node:crypto';
 import { writeFile, unlink, mkdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { env as privateEnv } from '$env/dynamic/private';
+import { env as privateEnv } from '#lib/server/env.js';
 import { LocalComputeServerStore } from '@selvajs/local-provider';
-import { ComputeServerStats } from '@selvajs/compute/grasshopper';
+import { openServerStats } from '#lib/server/compute/serverStats.server.js';
 import {
 	findServerById,
 	type SchemaVersionReport,
 	type SecretVerificationReport
 } from '@selvajs/platform';
 import { checkDeploymentConfig, type ConfigFinding } from '@selvajs/server/ops';
-import { providers, getComputeServerConfigStore } from '$lib/server/providers.server';
-import { requirePermission } from '$lib/server/access.server';
+import { providers, getComputeServerConfigStore } from '#lib/server/providers.server.js';
+import { requirePermission } from '#lib/server/access.server.js';
 
 /**
  * On-demand admin health check. Unlike `/api/health` (which serves the cached
@@ -37,6 +37,9 @@ import { requirePermission } from '$lib/server/access.server';
  *      reads. These break a running deployment without failing anything at
  *      boot, so a panel that omits them reads as "all clear" while every user
  *      shares one login rate-limit bucket. Same rules `selva doctor` applies.
+ *   5. API token sessions — on Supabase, whether the configured signing key
+ *      is one the project accepts. A bad key turns API tokens off silently
+ *      otherwise: they answer 503 while browser sign-in keeps working.
  *
  * Deliberately NOT covered, because the running process cannot answer them
  * honestly — `selva doctor` owns these, and the panel says so:
@@ -130,6 +133,31 @@ function schemaVersionCheck(report: SchemaVersionReport | null): HealthCheck {
 	};
 }
 
+/** API tokens on a provider with row security need a signing key Supabase trusts. */
+async function delegatedSessionCheck(): Promise<HealthCheck> {
+	const base = { id: 'api-token-sessions', label: 'API token sessions' };
+	const delegated = providers.auth.delegatedSession;
+	if (!delegated) {
+		return {
+			...base,
+			status: 'not_applicable',
+			summary: 'The active auth provider needs no signed sessions for API tokens.'
+		};
+	}
+	const status = await delegated.status();
+	if (status.ok) {
+		return { ...base, status: 'ok', summary: 'API tokens can act as their owners.' };
+	}
+	return {
+		...base,
+		status: 'degraded',
+		summary: `API tokens are off: ${status.message}`,
+		remediation:
+			'Set SUPABASE_JWT_SIGNING_KEY to the private ES256 JWK your Supabase project signs with ' +
+			'(see the Supabase provider docs), then restart. Browser sign-in is unaffected.'
+	};
+}
+
 const COMPUTE_PING_TIMEOUT_MS = 8000;
 
 /**
@@ -169,7 +197,15 @@ async function computeReachabilityCheck(locals: App.Locals): Promise<HealthCheck
 	const apiKey = server.hasApiKey
 		? await getComputeServerConfigStore().getServerApiKey(locals.ctx!, server.id)
 		: undefined;
-	const stats = new ComputeServerStats(server.serverUrl, apiKey ?? undefined);
+	const { stats, misconfigured } = openServerStats(server.serverUrl, apiKey ?? undefined);
+	if (!stats) {
+		return {
+			...base,
+			status: 'error',
+			summary: `"${server.label}" can't be used: ${misconfigured}`,
+			remediation: 'Fix the server URL or API key in /admin/compute.'
+		};
+	}
 	try {
 		const online = await stats.isServerOnline(COMPUTE_PING_TIMEOUT_MS);
 		if (online) {
@@ -286,7 +322,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 
 	// Reachability + writability run in parallel — independent of each other
 	// and of the at-rest check above. Each self-contains its error handling.
-	checks.push(...(await Promise.all([computeReachabilityCheck(locals), dataPathWritableCheck()])));
+	checks.push(
+		...(await Promise.all([
+			computeReachabilityCheck(locals),
+			dataPathWritableCheck(),
+			delegatedSessionCheck()
+		]))
+	);
 
 	checks.push(...deploymentConfigChecks());
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { primaryNav, FOOD4RHINO_URL, GITHUB_URL } from '$lib/nav';
-	import logo from '$lib/assets/selva-logo.svg';
+	import { primaryNav, FOOD4RHINO_URL, GITHUB_URL } from '#lib/nav.js';
+	import logo from '#lib/assets/selva-logo.svg';
 
 	// A nav link is active when the current path matches it, or lives beneath it
 	// (so /docs/... keeps "Docs" lit). "/" only matches exactly.
@@ -36,7 +36,7 @@
 					aria-current={active ? 'page' : undefined}
 					class="shrink-0 rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition {active
 						? 'text-foreground bg-muted'
-						: 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
+						: 'text-muted-foreground hover:text-foreground hover:bg-hover'}"
 				>
 					{link.label}
 				</a>
@@ -49,7 +49,7 @@
 			rel="noreferrer"
 			aria-label="Selva on GitHub"
 			title="Selva on GitHub"
-			class="text-muted-foreground hover:text-foreground hover:bg-muted ml-1 flex shrink-0 items-center justify-center rounded-full p-1.5 transition"
+			class="text-muted-foreground hover:text-foreground hover:bg-hover ml-1 flex shrink-0 items-center justify-center rounded-full p-1.5 transition"
 		>
 			<svg viewBox="0 0 16 16" aria-hidden="true" fill="currentColor" class="h-5 w-5">
 				<path

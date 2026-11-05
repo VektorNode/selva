@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
+import { publicUrl } from '#lib/server/origin.js';
 import type { SolveEndedKind } from '@selvajs/schemas';
 import type { SelvaEventTarget } from '@selvajs/compute/grasshopper';
 import { decodeOutcome } from '@selvajs/solve/shared';
@@ -44,10 +45,9 @@ export function bindLiveSolve(args: {
 	bus.openSolve(solveId, streamId, ownerKey);
 	bus.publish(solveId, [{ type: 'solveStarted', at: new Date().toISOString(), payload: {} }]);
 
-	const origin = (env.SELVA_EVENT_CALLBACK_ORIGIN || new URL(request.url).origin).replace(
-		/\/$/,
-		''
-	);
+	const origin = (
+		env.SELVA_EVENT_CALLBACK_ORIGIN || publicUrl(new URL(request.url)).origin
+	).replace(/\/$/, '');
 	let ended = false;
 	return {
 		selvaEvents: {

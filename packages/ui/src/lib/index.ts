@@ -13,12 +13,25 @@ export { default as ErrorScreen } from './components/ErrorScreen.svelte';
 // Design-system primitives (shadcn-svelte + custom)
 export * from './components/primitives';
 export { default as StateDisplay } from './components/primitives/StateDisplay.svelte';
+export { default as ColorInput } from './components/preview/inputs/ColorInput.svelte';
 
 export { default as Viewer } from './components/viewer/Viewer.svelte';
 
 export * from './schema/defaults';
 export * from './schema/dynamic-value-list';
 export * from './schema/traversal';
+export { visibleInputItems } from './schema/visibility-rules';
+export {
+	type UIHost,
+	type ElementKind,
+	HOST_LABELS,
+	isGeometryParamType,
+	layoutItemKind,
+	hostsFor,
+	isSupportedOn,
+	valuelessInputIds,
+	unsupportedItems
+} from './schema/host-support';
 export * from './compute/solving.svelte';
 
 // Solve Session seam. Re-exported so transports outside this package — e.g.
@@ -30,6 +43,7 @@ export {
 	createRequestResponseDriver,
 	type SolveSession,
 	type SolveSessionArgs,
+	type SolveSettlement,
 	type SolveDriver,
 	type SolveReporter,
 	type LiveSolveState,
@@ -53,10 +67,19 @@ export {
 
 export * from './contexts/footerContext.svelte';
 export * from './contexts/clientSlotContext.svelte';
+export * from './contexts/hostContext.svelte';
 export * from './composables/useFooterItem.svelte';
 
 export * from './utils';
 export { randomId } from './utils/randomId';
+export {
+	saveBlob,
+	pickFile,
+	setBlobSaver,
+	setFilePicker,
+	type BlobSaver,
+	type FilePicker
+} from './utils/host-files';
 
 // UI-specific runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';

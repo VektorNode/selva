@@ -7,8 +7,8 @@ every page load.
 ## Why the version row
 
 Versions are immutable and 1:1 with the `.gh` bytes, so the schema is an immutable property of
-the version. `live`/`draft` on the definition record are just pointers: storing the schema
-there would mean rewriting it on every publish and rollback.
+the version. `liveVersionId`/`draftVersionId` on the definition record are just pointers: storing
+the schema there would mean rewriting it on every publish and rollback.
 
 ## What is cached
 
@@ -18,13 +18,15 @@ color→hex). Caching the merged result would bake defaults in at upload time.
 
 ## Upload is a hard gate
 
-Extraction runs **before** any write: the route resolves the compute server, calls
-[schema-extraction.ts](../../packages/server/src/definitions/schema-extraction.ts), and fails
-the request (503 unreachable / 422 no valid schema) before `DefinitionService` touches storage.
-A failed upload leaves no orphan blob and no version row. `assertSupportedSchemaVersion` also
-rejects a schema format newer than the app supports.
+Extraction runs **before** any write: the upload handlers
+([definitions.ts](../../packages/server/src/handlers/definitions.ts),
+[definitionVersions.ts](../../packages/server/src/handlers/definitionVersions.ts)) resolve the
+compute server and call [schema-extraction.ts](../../packages/server/src/definitions/schema-extraction.ts).
+They fail the request (503 compute unreachable or serving an unreadable schema, 422 no valid
+schema or one newer than the app supports) before `DefinitionService` touches storage. A failed
+upload leaves no orphan blob and no version row.
 
-The service itself does no compute work; it stores what the route hands it.
+The service itself does no compute work; it stores what the handler hands it.
 
 ## Version checking on read
 
@@ -38,9 +40,11 @@ best-effort.
 ## The backfill bridge (temporary)
 
 Versions uploaded before caching landed have no schema. `solve.server.ts` extracts and writes one
-back on first solve, best-effort: a failed backfill never fails the solve. Both sites are marked
-`// BRIDGE: remove ~2026-09`.
+back on first solve, best-effort: a failed backfill never fails the solve. The block carries one
+marker, `// BRIDGE: remove ~2026-09`, and the date has passed.
 
-Removing it: delete the two blocks in
-[solve.server.ts](../../packages/selva/src/lib/server/compute/solve.server.ts), tighten `schema` to required in
-`DefinitionVersion` (types + Zod), and drop the render path's live-fetch fallback.
+Removing it: delete that block in
+[solve.server.ts](../../packages/selva/src/lib/server/compute/solve.server.ts), tighten `schema` to
+required in `DefinitionVersion` (types + Zod), and drop the render path's no-schema case in
+[load-for-render.ts](../../packages/server/src/definitions/load-for-render.ts). Keep its
+re-extract on a `schemaVersion` mismatch: ADR 0005 depends on it.

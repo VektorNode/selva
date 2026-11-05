@@ -1,6 +1,8 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { transcodeImageIfNeeded } from '@selvajs/platform/storage';
+import { renameReplacing } from '../data/fsJson.js';
 import type { IStorageProvider } from '@selvajs/platform/storage';
 
 /**
@@ -35,6 +37,11 @@ export class LocalStorageProvider implements IStorageProvider {
 		if (full !== base && !full.startsWith(base + path.sep)) {
 			throw new Error(`Path escapes base: ${storagePath}`);
 		}
+		// The storage root is `DATA_PATH`, which also holds the stores' JSON files,
+		// `auth-users.json` among them. No asset lives directly in the root.
+		if (path.dirname(full) === base && full.endsWith('.json')) {
+			throw new Error(`Path is a data file, not an asset: ${storagePath}`);
+		}
 		return full;
 	}
 
@@ -48,12 +55,22 @@ export class LocalStorageProvider implements IStorageProvider {
 		}
 	}
 
-	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<void> {
+	async put(storagePath: string, data: Uint8Array, contentType?: string): Promise<string> {
 		// Rewrites images to .webp; non-images pass through untouched.
 		const transcoded = await transcodeImageIfNeeded(data, contentType, storagePath);
 		const fullPath = this.resolvePath(transcoded.path);
 		await fs.mkdir(path.dirname(fullPath), { recursive: true });
-		await fs.writeFile(fullPath, Buffer.from(transcoded.data));
+		// Temp and rename: an in-place overwrite truncates first, so a concurrent `get`
+		// would come back short.
+		const tmp = `${fullPath}.${randomUUID()}.tmp`;
+		try {
+			await fs.writeFile(tmp, Buffer.from(transcoded.data));
+			await renameReplacing(tmp, fullPath);
+		} catch (err) {
+			await fs.rm(tmp, { force: true }).catch(() => {});
+			throw err;
+		}
+		return transcoded.path;
 	}
 
 	async delete(storagePath: string): Promise<void> {
@@ -66,6 +83,10 @@ export class LocalStorageProvider implements IStorageProvider {
 
 	async deletePrefix(prefix: string): Promise<void> {
 		const fullPath = this.resolvePath(prefix);
+		// The root is `DATA_PATH`, so this would take every store with it.
+		if (fullPath === path.resolve(this.basePath)) {
+			throw new Error(`Refusing to delete the whole store: ${JSON.stringify(prefix)}`);
+		}
 		await fs.rm(fullPath, { recursive: true, force: true });
 	}
 

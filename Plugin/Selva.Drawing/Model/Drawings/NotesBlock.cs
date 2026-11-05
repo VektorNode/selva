@@ -30,7 +30,7 @@ public sealed class NotesBlock : LayoutElement
 
 	public Point2D Origin { get; init; } = Point2D.Zero;
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var bodyTextWidth = Math.Max(10, Width - GutterWidth);
 		var markerStyle = MarkerStyle ?? NoteStyle;

@@ -13,14 +13,15 @@ import type {
 	UISchema
 } from '@selvajs/platform';
 import {
+	ERASED_ACTOR_ID,
 	ProviderError,
 	auditUpdate,
 	auditSoftDelete,
-	actorFrom,
+	actorOf,
 	NoopEventSink
 } from '@selvajs/platform';
 import { paginate, applyOrder } from './pagination.js';
-import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { CachedJsonFile } from './fsJson.js';
 
 interface DefinitionsConfig {
 	definitions: Record<string, DefinitionRecord>;
@@ -32,18 +33,9 @@ interface DefinitionsConfig {
 const empty = (): DefinitionsConfig => ({ definitions: {}, definitionVersions: {} });
 
 export class LocalDefinitionStore implements IDefinitionStore {
-	private readonly configPath: string;
+	private readonly file: CachedJsonFile<DefinitionsConfig>;
 	private readonly events: IEventSink;
 	private projectProvider?: IProjectStore;
-
-	// Load-once write-through cache, same idiom as `LocalOrgStoreLoader`. This
-	// store is constructed exactly once per provider and the share-link store
-	// gets that same instance injected (see LocalDataProvider.fromEnv), so
-	// there's exactly one cache over `definitions-config.json` — the in-memory
-	// copy is authoritative and every mutation reads it, mutates it, and
-	// persists via `writeConfig`'s temp+rename.
-	private cache: DefinitionsConfig | null = null;
-	private loading: Promise<DefinitionsConfig> | null = null;
 
 	static fromEnv(env: Record<string, string | undefined>): LocalDefinitionStore {
 		if (!env.DATA_PATH) throw new Error('Missing required env var: DATA_PATH');
@@ -55,7 +47,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		projectProvider?: IProjectStore,
 		events: IEventSink = new NoopEventSink()
 	) {
-		this.configPath = path.join(definitionsPath, 'definitions-config.json');
+		// Constructed once per provider, and the share-link store gets this instance
+		// (see LocalDataProvider.fromEnv), so there is one cache over the file.
+		this.file = new CachedJsonFile(path.join(definitionsPath, 'definitions-config.json'), empty);
 		this.projectProvider = projectProvider;
 		this.events = events;
 	}
@@ -64,14 +58,8 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		this.projectProvider = projectProvider;
 	}
 
-	private async readConfig(): Promise<DefinitionsConfig> {
-		if (this.cache) return this.cache;
-		this.loading ??= readJsonFile<DefinitionsConfig>(this.configPath, empty()).then((data) => {
-			this.cache = data;
-			this.loading = null;
-			return data;
-		});
-		return this.loading;
+	private readConfig(): Promise<DefinitionsConfig> {
+		return this.file.get();
 	}
 
 	/**
@@ -85,9 +73,22 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		return Boolean(record && record.deletedAt == null);
 	}
 
-	private async writeConfig(config: DefinitionsConfig): Promise<void> {
-		this.cache = config;
-		await writeJsonFile(this.configPath, config);
+	private writeConfig(config: DefinitionsConfig): Promise<void> {
+		return this.file.write(config);
+	}
+
+	/** Definitions outlive their uploader, so only the name on them goes. */
+	async eraseUser(userId: string): Promise<void> {
+		const config = await this.readConfig();
+		for (const record of Object.values(config.definitions)) {
+			if (record.ownerId === userId) record.ownerId = ERASED_ACTOR_ID;
+			if (record.createdBy === userId) record.createdBy = ERASED_ACTOR_ID;
+			if (record.updatedBy === userId) record.updatedBy = ERASED_ACTOR_ID;
+		}
+		for (const version of Object.values(config.definitionVersions)) {
+			if (version.uploadedBy === userId) version.uploadedBy = ERASED_ACTOR_ID;
+		}
+		await this.writeConfig(config);
 	}
 
 	private sortedRecords(
@@ -114,6 +115,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		if (opts?.projectIds) {
 			const allowedProjects = new Set(opts.projectIds);
 			filtered = filtered.filter((r) => allowedProjects.has(r.projectId));
+		}
+		if (opts?.sourceDocumentId) {
+			filtered = filtered.filter((r) => r.sourceDocumentId === opts.sourceDocumentId);
 		}
 		if (opts?.statuses?.length) {
 			const allowed = new Set(opts.statuses);
@@ -186,6 +190,19 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		return this.live(r) ? r : null;
 	}
 
+	async getDefinitionsFor(
+		_ctx: RequestContext,
+		guids: readonly string[]
+	): Promise<Map<string, DefinitionRecord>> {
+		const config = await this.readConfig();
+		const found = new Map<string, DefinitionRecord>();
+		for (const guid of guids) {
+			const r = config.definitions[guid];
+			if (this.live(r)) found.set(guid, r);
+		}
+		return found;
+	}
+
 	async create(ctx: RequestContext, record: DefinitionRecord): Promise<void> {
 		const config = await this.readConfig();
 		const actor = ctx.userId || record.ownerId;
@@ -202,7 +219,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			type: 'definition.created',
 			definitionId: record.guid,
 			projectId: record.projectId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -234,6 +251,9 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			}),
 			...(patch.status !== undefined && { status: patch.status }),
 			...(patch.ownerId !== undefined && { ownerId: patch.ownerId }),
+			...(patch.sourceDocumentId !== undefined && {
+				sourceDocumentId: clearable(patch.sourceDocumentId) as string | undefined
+			}),
 			...auditUpdate(ctx, existing.updatedBy ?? existing.ownerId)
 		};
 		await this.writeConfig(config);
@@ -248,7 +268,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition.deleted',
 			definitionId: guid,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -270,7 +290,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			await this.events.emit({
 				type: 'definition.deleted',
 				definitionId: record.guid,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 	}
@@ -334,7 +354,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			type: 'definition_version.created',
 			versionId: version.id,
 			definitionId: version.definitionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -354,6 +374,23 @@ export class LocalDefinitionStore implements IDefinitionStore {
 			.sort((a, b) => b.versionNumber - a.versionNumber)
 			.map(({ schema: _schema, ...rest }) => rest);
 		return paginate(rows, opts);
+	}
+
+	async listVersionsFor(
+		_ctx: RequestContext,
+		definitionIds: readonly string[]
+	): Promise<Map<string, DefinitionVersion[]>> {
+		const config = await this.readConfig();
+		const byDefinition = new Map<string, DefinitionVersion[]>(definitionIds.map((id) => [id, []]));
+		for (const { schema: _schema, ...version } of Object.values(config.definitionVersions)) {
+			if (this.live(config.definitions[version.definitionId])) {
+				byDefinition.get(version.definitionId)?.push(version);
+			}
+		}
+		for (const versions of byDefinition.values()) {
+			versions.sort((a, b) => b.versionNumber - a.versionNumber);
+		}
+		return byDefinition;
 	}
 
 	async getVersion(_ctx: RequestContext, versionId: string): Promise<DefinitionVersion | null> {
@@ -388,7 +425,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 		await this.events.emit({
 			type: 'definition_version.deleted',
 			versionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -458,7 +495,7 @@ export class LocalDefinitionStore implements IDefinitionStore {
 				type: 'definition.published',
 				definitionId,
 				versionId,
-				actorId: actorFrom(ctx)
+				...actorOf(ctx)
 			});
 		}
 	}

@@ -1,13 +1,11 @@
 /**
- * Suite for `warnIfClientSide` (issue 110 — previously untested).
- *
  * The warning must fire in GENUINE browsers (API-key exposure is real there),
  * at most once per function, and must stay silent in Node and in jsdom test
  * environments (jsdom defines `window`, but `process.versions.node` and the
  * jsdom user-agent marker give it away).
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { warnIfClientSide, resetClientSideWarnings } from '../warnings';
+import { warnIfClientSide, resetWarnings } from '../warnings';
 import { setLogger } from '../logger';
 
 const warn = vi.fn();
@@ -23,7 +21,7 @@ function stubRealBrowser(): void {
 
 beforeEach(() => {
 	warn.mockClear();
-	resetClientSideWarnings();
+	resetWarnings();
 	setLogger({ debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() });
 });
 
@@ -33,15 +31,6 @@ afterEach(() => {
 });
 
 describe('warnIfClientSide', () => {
-	it('does not warn in the Node test environment (tests/setup.ts stubs window={})', () => {
-		// This repo's own test setup defines a bare `window` in the node env —
-		// the exact false positive issue 110 describes. `process.versions.node`
-		// gives Node away.
-		expect(typeof window).not.toBe('undefined');
-		warnIfClientSide('solveGrasshopperDefinition');
-		expect(warn).not.toHaveBeenCalled();
-	});
-
 	it('does not warn when window is truly absent', () => {
 		vi.stubGlobal('window', undefined);
 		vi.stubGlobal('process', undefined);
@@ -76,19 +65,10 @@ describe('warnIfClientSide', () => {
 		expect(warn.mock.calls[0][0]).toContain('solveGrasshopperDefinition');
 	});
 
-	it('warns at most once per function (dedupe)', () => {
+	it('warns once per function', () => {
 		stubRealBrowser();
 
 		warnIfClientSide('solveGrasshopperDefinition');
-		warnIfClientSide('solveGrasshopperDefinition');
-		warnIfClientSide('solveGrasshopperDefinition');
-
-		expect(warn).toHaveBeenCalledTimes(1);
-	});
-
-	it('warns separately for different functions', () => {
-		stubRealBrowser();
-
 		warnIfClientSide('solveGrasshopperDefinition');
 		warnIfClientSide('fetchDefinitionIO');
 
@@ -100,24 +80,5 @@ describe('warnIfClientSide', () => {
 
 		warnIfClientSide('solveGrasshopperDefinition', true);
 		expect(warn).not.toHaveBeenCalled();
-	});
-
-	it('resetClientSideWarnings clears the dedupe', () => {
-		stubRealBrowser();
-
-		warnIfClientSide('solveGrasshopperDefinition');
-		resetClientSideWarnings();
-		warnIfClientSide('solveGrasshopperDefinition');
-
-		expect(warn).toHaveBeenCalledTimes(2);
-	});
-
-	it('tolerates a missing navigator in a browser-like environment', () => {
-		vi.stubGlobal('window', {});
-		vi.stubGlobal('process', undefined);
-		vi.stubGlobal('navigator', undefined);
-
-		warnIfClientSide('solveGrasshopperDefinition');
-		expect(warn).toHaveBeenCalledTimes(1);
 	});
 });

@@ -13,6 +13,7 @@ public sealed class Path : IReadOnlyList<PathSegment>, IEquatable<Path>
 	public static readonly Path Empty = new Path(Array.Empty<PathSegment>());
 
 	private readonly PathSegment[] _segments;
+	private readonly BoundingBox _bounds;
 
 	public Path(IEnumerable<PathSegment> segments)
 	{
@@ -20,6 +21,7 @@ public sealed class Path : IReadOnlyList<PathSegment>, IEquatable<Path>
 		_segments = segments.ToArray();
 		foreach (var s in _segments)
 			if (s == null) throw new ArgumentException("Path segments must be non-null.", nameof(segments));
+		_bounds = Bounds(_segments);
 	}
 
 	public int Count => _segments.Length;
@@ -29,18 +31,21 @@ public sealed class Path : IReadOnlyList<PathSegment>, IEquatable<Path>
 
 	public bool IsEmpty => _segments.Length == 0;
 
+	// Cached: nested Grid/Stack measure passes ask the same path for its bounds many times.
+	public BoundingBox ComputeBounds() => _bounds;
+
 	// Computes a tight axis-aligned bounding box. Cubic segments find derivative roots so
 	// curves that bow outside their hull are still bounded correctly. Arc segments use a
 	// safe outer bound (endpoints expanded by the radii); a tight arc bound costs more
 	// trig and isn't needed for layout/viewBox purposes.
-	public BoundingBox ComputeBounds()
+	private static BoundingBox Bounds(PathSegment[] segments)
 	{
 		var bounds = BoundingBox.Empty;
 		var current = Point2D.Zero;
 		var hasCurrent = false;
 		var subpathStart = Point2D.Zero;
 
-		foreach (var seg in _segments)
+		foreach (var seg in segments)
 		{
 			switch (seg)
 			{

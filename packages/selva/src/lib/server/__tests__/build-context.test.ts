@@ -1,17 +1,18 @@
 /**
- * Direct tests for the production `buildContext` from hooks.server.ts. The
+ * Direct tests for `buildRequestContext`, which the hook builds every
+ * session context through. The
  * fixture's `actAs()` reimplements this logic in parallel — a drift risk —
  * so these tests pin the real function against real local stores AND assert
  * it agrees with `actAs()`, so the two can't silently diverge.
  *
- * `buildContext` is a pure function of its inputs (`platformPermissions` +
+ * `buildRequestContext` is a pure function of its inputs (`platformPermissions` +
  * `membership`); these tests fetch those the same way the hook does and feed
  * them in.
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { SYSTEM_CONTEXT, type AuthUser } from '@selvajs/platform';
-import { buildContext } from '../../../hooks.server.js';
+import { SYSTEM_CONTEXT, type AuthUser, type PlatformPermission } from '@selvajs/platform';
+import { buildRequestContext } from '@selvajs/server/http';
 import {
 	freshProviders,
 	seedUser,
@@ -30,13 +31,28 @@ afterEach(async () => {
 	}
 });
 
-/** Fetch the two data-layer inputs the hook passes into buildContext. */
+/** Fetch the two data-layer inputs the hook passes into buildRequestContext. */
 async function bootstrapInputs(t: TestProviders, userId: string) {
 	const [platformPermissions, membership] = await Promise.all([
 		t.config.data.permissions.getFor(SYSTEM_CONTEXT, userId),
 		t.config.data.orgs.findUserMembership(SYSTEM_CONTEXT, userId)
 	]);
 	return { platformPermissions, membership };
+}
+
+/** The call the hook makes. */
+function buildContext(
+	t: TestProviders,
+	user: AuthUser,
+	sessionToken: string | undefined,
+	platformPermissions: PlatformPermission[],
+	membership: Awaited<ReturnType<typeof bootstrapInputs>>['membership'],
+	pinOrg?: boolean
+) {
+	return buildRequestContext(
+		{ user, sessionToken, platformPermissions, membership: membership?.member ?? null, pinOrg },
+		{ orgs: t.config.data.orgs }
+	);
 }
 
 function userFrom(seed: { id: string; email: string }): AuthUser {
@@ -48,7 +64,7 @@ function userFrom(seed: { id: string; email: string }): AuthUser {
 	};
 }
 
-describe('buildContext', () => {
+describe('buildRequestContext', () => {
 	it('resolves acting org + org permissions from a membership', async () => {
 		tp = await freshProviders();
 		const alice = await seedUser(tp, 'alice@acme.test');
@@ -56,7 +72,7 @@ describe('buildContext', () => {
 		await seedOrgMember(tp, { orgId: org.id, userId: alice.id, role: 'owner' });
 
 		const { platformPermissions, membership } = await bootstrapInputs(tp, alice.id);
-		const ctx = await buildContext(userFrom(alice), 'tok', platformPermissions, membership);
+		const ctx = await buildContext(tp, userFrom(alice), 'tok', platformPermissions, membership);
 
 		expect(ctx.userId).toBe(alice.id);
 		expect(ctx.actingOrgId).toBe(org.id);
@@ -69,7 +85,13 @@ describe('buildContext', () => {
 		const nobody = await seedUser(tp, 'nobody@acme.test');
 
 		const { platformPermissions, membership } = await bootstrapInputs(tp, nobody.id);
-		const ctx = await buildContext(userFrom(nobody), undefined, platformPermissions, membership);
+		const ctx = await buildContext(
+			tp,
+			userFrom(nobody),
+			undefined,
+			platformPermissions,
+			membership
+		);
 
 		expect(ctx.actingOrgId).toBeUndefined();
 		expect(ctx.orgPermissions).toEqual([]);
@@ -87,11 +109,30 @@ describe('buildContext', () => {
 
 		const { platformPermissions, membership } = await bootstrapInputs(tp, admin.id);
 		expect(membership).toBeNull();
-		const ctx = await buildContext(userFrom(admin), 'tok', platformPermissions, membership);
+		const ctx = await buildContext(tp, userFrom(admin), 'tok', platformPermissions, membership);
 
 		expect(ctx.platformPermissions).toContain('instance_admin');
 		expect(ctx.actingOrgId).toBe(org.id); // fell back to the only org
 		expect(ctx.orgPermissions).toEqual([]); // fallback grants no org perms
+	});
+
+	it('a pinned context never falls back to another org', async () => {
+		tp = await freshProviders();
+		const owner = await seedUser(tp, 'owner@acme.test');
+		await seedOrg(tp, { name: 'Acme', slug: 'acme', ownerId: owner.id });
+		const admin = await seedUser(tp, 'admin@acme.test', ['instance_admin']);
+
+		const { platformPermissions, membership } = await bootstrapInputs(tp, admin.id);
+		const ctx = await buildContext(
+			tp,
+			userFrom(admin),
+			undefined,
+			platformPermissions,
+			membership,
+			true
+		);
+
+		expect(ctx.actingOrgId).toBeUndefined();
 	});
 
 	it('agrees with the fixture actAs() reimplementation (drift guard)', async () => {
@@ -101,7 +142,13 @@ describe('buildContext', () => {
 		await seedOrgMember(tp, { orgId: org.id, userId: alice.id, role: 'admin' });
 
 		const { platformPermissions, membership } = await bootstrapInputs(tp, alice.id);
-		const prod = await buildContext(userFrom(alice), undefined, platformPermissions, membership);
+		const prod = await buildContext(
+			tp,
+			userFrom(alice),
+			undefined,
+			platformPermissions,
+			membership
+		);
 		const { ctx: fixture } = await actAs(tp, alice.id);
 
 		expect(prod.userId).toBe(fixture.userId);

@@ -5,7 +5,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 
-import { SolveScheduler, type SolveExecutor, type CacheKeyExecutor } from '../solve-scheduler';
+import { SolveScheduler } from '../solve-scheduler';
+import type { SolveExecutor } from '../types';
 import type { DefinitionRef } from '@/core/definition-ref';
 import { ErrorCodes } from '@/core/errors';
 import type { GrasshopperComputeConfig, GrasshopperComputeResponse } from '@/grasshopper/types';
@@ -30,7 +31,11 @@ const makeRef = (key: string): DefinitionRef & { load: ReturnType<typeof vi.fn> 
 
 describe('scheduler + DefinitionRef', () => {
 	it('serves an L1 hit for the same (ref.key, tree) across distinct ref objects, never calling load()', async () => {
-		const executor = vi.fn<SolveExecutor>(async () => makeResponse());
+		const executor = vi.fn<SolveExecutor>(async () => ({
+			response: makeResponse(),
+			cacheKey: null,
+			missed: false
+		}));
 		const s = new SolveScheduler(executor, baseConfig, {
 			mode: 'queue',
 			cache: { maxBytes: 100_000 }
@@ -47,33 +52,6 @@ describe('scheduler + DefinitionRef', () => {
 		expect(refB.load).not.toHaveBeenCalled();
 	});
 
-	it('keys the server-pointer map by ref.key and re-learns on a miss, without materializing', async () => {
-		const executor = vi.fn<SolveExecutor>(async () => makeResponse());
-		const calls: Array<{ cacheKey: string | null }> = [];
-		let next: { cacheKey: string; missed: boolean } = { cacheKey: 'md5_FIRST', missed: false };
-		const ck: CacheKeyExecutor = async (_def, _tree, cacheKey) => {
-			calls.push({ cacheKey });
-			return { response: makeResponse(), ...next };
-		};
-		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' }, ck);
-
-		const refA = makeRef('version-1');
-		const refB = makeRef('version-1');
-
-		// First solve: no known pointer. Distinct trees so no L1 shortcut is possible.
-		await s.solve(refA, [{ ParamName: 'a', InnerTree: {} } as any]);
-		// Second solve, same identity via a different object: learned pointer is passed.
-		next = { cacheKey: 'md5_RELEARNED', missed: true }; // simulate server-side eviction
-		await s.solve(refB, [{ ParamName: 'b', InnerTree: {} } as any]);
-		// Third: the refreshed pointer from the miss is what gets used.
-		await s.solve(makeRef('version-1'), [{ ParamName: 'c', InnerTree: {} } as any]);
-
-		expect(calls.map((c) => c.cacheKey)).toEqual([null, 'md5_FIRST', 'md5_RELEARNED']);
-		expect(refA.load).not.toHaveBeenCalled();
-		expect(refB.load).not.toHaveBeenCalled();
-		expect(executor).not.toHaveBeenCalled(); // fast path took every solve
-	});
-
 	it('settles as ABORTED when the signal fires while load() is pending', async () => {
 		let releaseLoad!: () => void;
 		const ref: DefinitionRef = {
@@ -85,10 +63,10 @@ describe('scheduler + DefinitionRef', () => {
 		};
 		// Mimics the real executors: materialize, then hit the transport, which
 		// rejects immediately when the solve's signal is already aborted.
-		const executor: SolveExecutor = async (def, _tree, config) => {
+		const executor: SolveExecutor = async (def, _tree, _cacheKey, config) => {
 			await (def as DefinitionRef).load();
 			if (config.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-			return makeResponse();
+			return { response: makeResponse(), cacheKey: null, missed: true };
 		};
 		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
 
@@ -103,19 +81,5 @@ describe('scheduler + DefinitionRef', () => {
 		releaseLoad();
 
 		await expectation;
-	});
-
-	it('a Uint8Array caller still round-trips unchanged', async () => {
-		const seen: unknown[] = [];
-		const executor: SolveExecutor = async (def) => {
-			seen.push(def);
-			return makeResponse();
-		};
-		const s = new SolveScheduler(executor, baseConfig, { mode: 'queue' });
-
-		const bytes = new Uint8Array([9, 8, 7]);
-		await s.solve(bytes, []);
-
-		expect(seen).toEqual([bytes]); // same object, no wrapping or copying
 	});
 });

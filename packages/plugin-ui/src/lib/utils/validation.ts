@@ -270,6 +270,16 @@ export function getOperatorsForType(paramType?: ParamType): { value: string; lab
 		return baseOperators;
 	}
 
+	// The form holds no value for a geometry input, so a rule has nothing to compare.
+	if (
+		paramType === 'geometry' ||
+		paramType === 'point' ||
+		paramType === 'line' ||
+		paramType === 'plane'
+	) {
+		return [];
+	}
+
 	// Fallback for unrecognized/generic types: offer every operator.
 	return [
 		...baseOperators,

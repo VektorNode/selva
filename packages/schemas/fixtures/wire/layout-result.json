@@ -1,0 +1,9 @@
+{
+	"type": "layoutResult",
+	"sessionId": "session-fixture",
+	"requestId": "9",
+	"result": {
+		"ok": true,
+		"unplaced": ["Seed"]
+	}
+}

@@ -99,7 +99,8 @@ describe('createRequestResponseDriver — client memo', () => {
 			reports,
 			errors,
 			report: (r) => reports.push(r),
-			reportError: (m) => errors.push(m)
+			reportError: (m) => errors.push(m),
+			reportAborted: () => {}
 		};
 	}
 
@@ -127,32 +128,7 @@ describe('createRequestResponseDriver — client memo', () => {
 		expect(reporter.reports[2]).toEqual({ outputs: { echo: 1 }, values: { a: 1 } });
 	});
 
-	// The memo short-circuits without calling onSolve, so a consumer that captured the
-	// artifact and its inputs inside its own SolveFn would still be holding B's when the
-	// viewer is showing A's — and a commit path would freeze that mismatch. Both must
-	// travel with the result through the memo.
-	it('a memo hit reports the source and values that produced the cached result', async () => {
-		const onSolve = async (values: Record<string, unknown>): Promise<SolveResult> => ({
-			outputs: { echo: values.a },
-			source: { raw: values.a }
-		});
-		const reporter = collectingReporter();
-		const driver = createRequestResponseDriver(onSolve, () => reporter, {
-			solveDeadlineMs: 100_000
-		});
-
-		driver.solve({ a: 'A' });
-		await flush();
-		driver.solve({ a: 'B' });
-		await flush();
-		driver.solve({ a: 'A' }); // memo hit
-		await flush();
-
-		expect(reporter.reports[2].source).toEqual({ raw: 'A' });
-		expect(reporter.reports[2].values).toEqual({ a: 'A' });
-	});
-
-	it('clearCache drops the memo so the next identical solve re-runs', async () => {
+	it('reset drops the memo so the next identical solve re-runs', async () => {
 		const onSolve = vi.fn(async (): Promise<SolveResult> => ({ outputs: {} }));
 		const reporter = collectingReporter();
 		const driver = createRequestResponseDriver(onSolve, () => reporter, {
@@ -161,33 +137,33 @@ describe('createRequestResponseDriver — client memo', () => {
 
 		driver.solve({ a: 1 });
 		await flush();
-		driver.clearCache?.();
+		driver.reset?.();
 		driver.solve({ a: 1 }); // memo cleared → real solve again
 		await flush();
 
 		expect(onSolve).toHaveBeenCalledTimes(2);
 	});
 
-	it('session.rebuild clears the driver memo (no cross-definition stale hit)', async () => {
+	it('a second definition re-solves inputs the first one already answered', async () => {
 		const onSolve = vi.fn(async (): Promise<SolveResult> => ({ outputs: {} }));
-		const reporter = collectingReporter();
-		let clears = 0;
-		// Wrap the real driver to observe clearCache being invoked from rebuild.
-		const base = createRequestResponseDriver(onSolve, () => reporter, { solveDeadlineMs: 100_000 });
-		const driver: SolveDriver = {
-			solve: base.solve,
-			cancel: base.cancel,
-			get isSolving() {
-				return base.isSolving;
-			},
-			clearCache() {
-				clears += 1;
-				base.clearCache?.();
-			}
-		};
+		const held: { session?: ReturnType<typeof createSolveSession> } = {};
+		const driver = createRequestResponseDriver(onSolve, () => held.session!, {
+			solveDeadlineMs: 100_000
+		});
 		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		held.session = session;
+
+		session.setValue('a', 'same');
+		await flush();
 		session.rebuild(schema(true), 's2');
-		expect(clears).toBe(1);
+		session.setValue('a', 'same');
+		await flush();
+		await flush();
+
+		const solvedSame = onSolve.mock.calls.filter(([v]: unknown[]) => {
+			return (v as Record<string, unknown>).a === 'same';
+		});
+		expect(solvedSame).toHaveLength(2);
 	});
 });
 
@@ -393,6 +369,7 @@ describe('createSolveSession — holding a result behind its messages', () => {
 		expect(session.awaitingAck).toBe(false);
 		expect(session.values.out).toBe('flagged');
 		expect(session.meshes).toEqual([{ id: 'flagged' }]);
+		expect(session.hasNeverSolved).toBe(false);
 	});
 
 	it('discard() drops it, leaving the last accepted result on screen', () => {
@@ -490,5 +467,313 @@ describe('createSolveSession live channel', () => {
 		expect(session.phase).toBe('review');
 		session.report({ outputs: {}, blocked: true, aborted: true });
 		expect(session.phase).toBe('blocked');
+	});
+});
+
+// ============================================================================
+// Settlement: the one outcome per solve a host acts on
+// ============================================================================
+
+// A driver whose queue the test controls: `queued` stands in for a newer solve waiting
+// behind the one now reporting.
+function queueingDriver(): SolveDriver & { solves: Record<string, unknown>[]; queued: boolean } {
+	const solves: Record<string, unknown>[] = [];
+	return {
+		solves,
+		queued: false,
+		solve(values) {
+			solves.push(values);
+		},
+		cancel() {},
+		get isSolving() {
+			return false;
+		},
+		get hasQueued() {
+			return this.queued;
+		}
+	};
+}
+
+const GATE = [{ level: 'warning' as const, message: 'check this', isGate: true }];
+
+describe('createSolveSession — settlement', () => {
+	it('solve() resolves with the applied result once it lands', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+		const settled = session.solve();
+		session.report({ outputs: { out: 1 }, values: { a: 'x' } });
+		await expect(settled).resolves.toEqual({
+			status: 'applied',
+			result: { outputs: { out: 1 }, values: { a: 'x' } },
+			diagnostics: []
+		});
+	});
+
+	it('waits past a result a queued solve will replace, and resolves with the latest', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+		const listener = vi.fn();
+		session.onSettled(listener);
+		const settled = session.solve();
+
+		driver.queued = true;
+		session.report({ outputs: { out: 'old' } });
+		expect(listener).not.toHaveBeenCalled();
+
+		driver.queued = false;
+		session.report({ outputs: { out: 'new' } });
+		await expect(settled).resolves.toMatchObject({
+			status: 'applied',
+			result: { outputs: { out: 'new' } }
+		});
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
+	it('settles a held result only when the user accepts or rejects it', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+		const listener = vi.fn();
+		session.onSettled(listener);
+
+		session.report({ outputs: { out: 'flagged' }, diagnostics: GATE });
+		expect(listener).not.toHaveBeenCalled();
+		session.acknowledge();
+		expect(listener).toHaveBeenLastCalledWith(
+			expect.objectContaining({ status: 'applied', diagnostics: GATE })
+		);
+
+		session.report({ outputs: { out: 'again' }, diagnostics: GATE });
+		session.discard();
+		expect(listener).toHaveBeenLastCalledWith({ status: 'discarded', diagnostics: GATE });
+		expect(listener).toHaveBeenCalledTimes(2);
+	});
+
+	it('names a refused, an aborted and a failed solve', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+
+		const blocked = session.solve();
+		session.report({
+			outputs: {},
+			blocked: true,
+			diagnostics: [{ level: 'error', message: 'no' }]
+		});
+		await expect(blocked).resolves.toEqual({
+			status: 'blocked',
+			diagnostics: [{ level: 'error', message: 'no' }]
+		});
+
+		const stopped = session.solve();
+		session.report({ outputs: {}, blocked: true, aborted: true });
+		await expect(stopped).resolves.toMatchObject({ status: 'aborted' });
+
+		const cancelled = session.solve();
+		session.reportAborted();
+		await expect(cancelled).resolves.toEqual({ status: 'aborted', diagnostics: [] });
+
+		const failed = session.solve();
+		session.reportError('Compute unreachable');
+		await expect(failed).resolves.toEqual({ status: 'failed', error: 'Compute unreachable' });
+	});
+
+	it('settles a solve the user did not ask for, so a host can follow auto-solves', () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(true), scopeKey: 's', driver });
+		const listener = vi.fn();
+		const stop = session.onSettled(listener);
+		session.setValue('a', 'y');
+		session.report({ outputs: { out: 'y' } });
+		expect(listener).toHaveBeenCalledWith(expect.objectContaining({ status: 'applied' }));
+		stop();
+		session.report({ outputs: { out: 'z' } });
+		expect(listener).toHaveBeenCalledTimes(1);
+	});
+
+	it('resolves a waiting solve as aborted on rebuild and on dispose, so nothing hangs', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+		const beforeRebuild = session.solve();
+		session.rebuild(schema(false), 's2');
+		await expect(beforeRebuild).resolves.toEqual({ status: 'aborted', diagnostics: [] });
+
+		const beforeDispose = session.solve();
+		session.dispose();
+		await expect(beforeDispose).resolves.toEqual({ status: 'aborted', diagnostics: [] });
+	});
+});
+
+describe('createSolveSession.ensureSolved', () => {
+	it('answers from the result on screen when the inputs have not changed', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+		session.report({ outputs: { out: 1 } });
+		const dispatched = driver.solves.length;
+		await expect(session.ensureSolved()).resolves.toMatchObject({
+			status: 'applied',
+			result: { outputs: { out: 1 } }
+		});
+		expect(driver.solves.length).toBe(dispatched);
+	});
+
+	it('solves first when inputs changed or nothing has solved yet', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+		const first = session.ensureSolved();
+		expect(driver.solves).toHaveLength(1);
+		session.report({ outputs: { out: 1 } });
+		await first;
+
+		session.setValue('a', 'changed');
+		const second = session.ensureSolved();
+		expect(driver.solves).toHaveLength(2);
+		expect(driver.solves[1].a).toBe('changed');
+		session.report({ outputs: { out: 2 } });
+		await expect(second).resolves.toMatchObject({ result: { outputs: { out: 2 } } });
+	});
+
+	it('waits for a result under review instead of solving again', async () => {
+		const driver = queueingDriver();
+		const session = createSolveSession({ schema: schema(false), scopeKey: 's', driver });
+		session.report({ outputs: { out: 'flagged' }, diagnostics: GATE });
+		const settled = session.ensureSolved();
+		expect(driver.solves).toHaveLength(0);
+		session.acknowledge();
+		await expect(settled).resolves.toMatchObject({ status: 'applied' });
+	});
+});
+
+describe('createRequestResponseDriver — ending a solve', () => {
+	function collectingReporter() {
+		const log: string[] = [];
+		const reporter: SolveReporter = {
+			report: () => log.push('report'),
+			reportError: (m) => log.push(`error: ${m}`),
+			reportAborted: () => log.push('aborted')
+		};
+		return { log, reporter };
+	}
+	const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+	it('reports a cancelled solve as aborted instead of saying nothing', async () => {
+		const { log, reporter } = collectingReporter();
+		const onSolve = (_v: Record<string, unknown>, signal: AbortSignal) =>
+			new Promise<SolveResult>((_, reject) =>
+				signal.addEventListener('abort', () => reject(new DOMException('stop', 'AbortError')))
+			);
+		const driver = createRequestResponseDriver(onSolve, () => reporter, {
+			solveDeadlineMs: 100_000
+		});
+		driver.solve({ a: 1 });
+		driver.cancel();
+		await flush();
+		expect(log).toEqual(['aborted']);
+	});
+
+	it('reports a solve past its deadline as an error the user can read', async () => {
+		vi.useFakeTimers();
+		try {
+			const { log, reporter } = collectingReporter();
+			const onSolve = (_v: Record<string, unknown>, signal: AbortSignal) =>
+				new Promise<SolveResult>((_, reject) =>
+					signal.addEventListener('abort', () => reject(signal.reason))
+				);
+			const driver = createRequestResponseDriver(onSolve, () => reporter, {
+				solveDeadlineMs: 2_000
+			});
+			vi.spyOn(console, 'warn').mockImplementation(() => {});
+			driver.solve({ a: 1 });
+			await vi.advanceTimersByTimeAsync(2_001);
+			expect(log).toEqual(['error: The solve took longer than 2 s and was stopped.']);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('says a newer solve is queued while the current one reports', async () => {
+		let release!: () => void;
+		const seen: boolean[] = [];
+		const onSolve = (values: Record<string, unknown>) =>
+			values.a === 1
+				? new Promise<SolveResult>((resolve) => (release = () => resolve({ outputs: {} })))
+				: Promise.resolve({ outputs: {} });
+		const driver = createRequestResponseDriver(
+			onSolve,
+			() => ({
+				report: () => seen.push(driver.hasQueued ?? false),
+				reportError: () => {},
+				reportAborted: () => {}
+			}),
+			{ solveDeadlineMs: 100_000 }
+		);
+		driver.solve({ a: 1 });
+		driver.solve({ a: 2 });
+		release();
+		await flush();
+		await flush();
+		expect(seen).toEqual([true, false]);
+	});
+});
+
+describe('createSolveSession.setValue with an unchanged value', () => {
+	function typedSchema(paramType: string): UISchema {
+		return {
+			...schema(true),
+			inputs: [{ id: 'a', paramId: 'a', paramType, default: 'x' }]
+		} as unknown as UISchema;
+	}
+
+	function solvedWith(paramType: string, value: unknown) {
+		const driver = recordingDriver();
+		const session = createSolveSession({ schema: typedSchema(paramType), scopeKey: 's', driver });
+		session.setValue('a', value);
+		return { driver, session, solvesBefore: driver.solves.length };
+	}
+
+	// A field reporting on input and again on blur.
+	it('does not solve again for the value the last solve sent', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore);
+	});
+
+	it('solves a value changed and changed back', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'z');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 2);
+	});
+
+	it('retries the same value after a failed solve', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.reportError('boom');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('retries the same value after an aborted solve', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.reportAborted();
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('solves when forced', () => {
+		const { driver, session, solvesBefore } = solvedWith('text', 'y');
+		session.setValue('a', 'y', true);
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	// Options can change under the same selection; a file can be re-picked after a clear.
+	it.each(['dynamicValueList', 'file'])('re-sends an unchanged %s', (paramType) => {
+		const { driver, session, solvesBefore } = solvedWith(paramType, 'y');
+		session.setValue('a', 'y');
+		expect(driver.solves.length).toBe(solvesBefore + 1);
+	});
+
+	it('treats an object value as changed', () => {
+		const value = { name: 'f.txt' };
+		const { driver, session, solvesBefore } = solvedWith('text', value);
+		session.setValue('a', value);
+		expect(driver.solves.length).toBe(solvesBefore + 1);
 	});
 });

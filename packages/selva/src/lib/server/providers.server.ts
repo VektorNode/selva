@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { env } from '#lib/server/env.js';
 import type {
 	IErrorReporter,
 	IEventSink,
@@ -18,6 +18,7 @@ import * as local from '@selvajs/local-provider';
 import * as supa from '@selvajs/supabase-provider';
 import * as header from '@selvajs/header-auth-provider';
 import { DefinitionService } from '@selvajs/server/definitions';
+import { MAX_SOLVE_DEADLINE_MS } from '@selvajs/solve/server';
 import { OrgAssetService } from '@selvajs/server/organizations';
 import { SentryErrorReporter } from '@selvajs/server/errors';
 import { SmtpNotificationProvider } from '@selvajs/server/notifications';
@@ -47,7 +48,12 @@ export const lazyLogger: ILogger = {
 const registry: ProviderRegistry = {
 	auth: {
 		local: (e) => local.LocalAuthProvider.fromEnv(e),
-		supabase: (e) => supa.SupabaseAuthProvider.fromEnv(e, lazyLogger),
+		supabase: (e) =>
+			supa.SupabaseAuthProvider.fromEnv(e, lazyLogger, {
+				// The session minted for an API-token request must outlive its solve, whichever
+				// server runs it.
+				delegatedSessionTtlSeconds: MAX_SOLVE_DEADLINE_MS / 1000 + 60
+			}),
 		header: (e) => header.HeaderAuthProvider.fromEnv(e, lazyLogger)
 	},
 	data: {
@@ -276,7 +282,8 @@ if (env.SENTRY_DSN) {
 	void SentryErrorReporter.create({
 		dsn: env.SENTRY_DSN,
 		environment: env.NODE_ENV,
-		release: env.SELVA_RELEASE
+		release: env.SELVA_RELEASE,
+		tracesSampleRate: env.SENTRY_TRACES_SAMPLE_RATE
 	}).then((reporter) => {
 		if (reporter) {
 			_errorReporter = reporter;

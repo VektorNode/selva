@@ -55,6 +55,9 @@ public class MaterialCache
         private readonly string _roughnessMap;
         private readonly string _normalMap;
         private readonly double? _envMapIntensity;
+        private readonly string _emissive;
+        private readonly double? _emissiveIntensity;
+        private readonly double? _emissiveLight;
         private readonly double? _clearcoat;
         private readonly double? _clearcoatRoughness;
         private readonly double? _anisotropy;
@@ -64,6 +67,11 @@ public class MaterialCache
         private readonly double? _finishStrength;
         private readonly double? _transmission;
         private readonly double? _ior;
+        private readonly double? _thickness;
+        private readonly string _attenuationColor;
+        private readonly double? _sheen;
+        private readonly string _sheenColor;
+        private readonly double? _sheenRoughness;
 
         public MaterialKey(ThreeMaterial material)
         {
@@ -76,6 +84,9 @@ public class MaterialCache
             _roughnessMap = material.RoughnessMap;
             _normalMap = material.NormalMap;
             _envMapIntensity = Round(material.EnvMapIntensity);
+            _emissive = material.Emissive;
+            _emissiveIntensity = Round(material.EmissiveIntensity);
+            _emissiveLight = Round(material.EmissiveLight);
             _clearcoat = Round(material.Clearcoat);
             _clearcoatRoughness = Round(material.ClearcoatRoughness);
             _anisotropy = Round(material.Anisotropy);
@@ -85,6 +96,11 @@ public class MaterialCache
             _finishStrength = Round(material.FinishStrength);
             _transmission = Round(material.Transmission);
             _ior = Round(material.Ior);
+            _thickness = Round(material.Thickness);
+            _attenuationColor = material.AttenuationColor;
+            _sheen = Round(material.Sheen);
+            _sheenColor = material.SheenColor;
+            _sheenRoughness = Round(material.SheenRoughness);
         }
 
         private static double? Round(double? value)
@@ -103,6 +119,9 @@ public class MaterialCache
                    && string.Equals(_roughnessMap, other._roughnessMap, StringComparison.Ordinal)
                    && string.Equals(_normalMap, other._normalMap, StringComparison.Ordinal)
                    && _envMapIntensity == other._envMapIntensity
+                   && string.Equals(_emissive, other._emissive, StringComparison.Ordinal)
+                   && _emissiveIntensity == other._emissiveIntensity
+                   && _emissiveLight == other._emissiveLight
                    && _clearcoat == other._clearcoat
                    && _clearcoatRoughness == other._clearcoatRoughness
                    && _anisotropy == other._anisotropy
@@ -111,7 +130,12 @@ public class MaterialCache
                    && string.Equals(_finish, other._finish, StringComparison.Ordinal)
                    && _finishStrength == other._finishStrength
                    && _transmission == other._transmission
-                   && _ior == other._ior;
+                   && _ior == other._ior
+                   && _thickness == other._thickness
+                   && string.Equals(_attenuationColor, other._attenuationColor, StringComparison.Ordinal)
+                   && _sheen == other._sheen
+                   && string.Equals(_sheenColor, other._sheenColor, StringComparison.Ordinal)
+                   && _sheenRoughness == other._sheenRoughness;
         }
 
         public override bool Equals(object obj)
@@ -132,6 +156,9 @@ public class MaterialCache
                 hash = hash * 397 ^ (_roughnessMap != null ? StringComparer.Ordinal.GetHashCode(_roughnessMap) : 0);
                 hash = hash * 397 ^ (_normalMap != null ? StringComparer.Ordinal.GetHashCode(_normalMap) : 0);
                 hash = hash * 397 ^ _envMapIntensity.GetHashCode();
+                hash = hash * 397 ^ (_emissive != null ? StringComparer.Ordinal.GetHashCode(_emissive) : 0);
+                hash = hash * 397 ^ _emissiveIntensity.GetHashCode();
+                hash = hash * 397 ^ _emissiveLight.GetHashCode();
                 hash = hash * 397 ^ _clearcoat.GetHashCode();
                 hash = hash * 397 ^ _clearcoatRoughness.GetHashCode();
                 hash = hash * 397 ^ _anisotropy.GetHashCode();
@@ -141,6 +168,11 @@ public class MaterialCache
                 hash = hash * 397 ^ _finishStrength.GetHashCode();
                 hash = hash * 397 ^ _transmission.GetHashCode();
                 hash = hash * 397 ^ _ior.GetHashCode();
+                hash = hash * 397 ^ _thickness.GetHashCode();
+                hash = hash * 397 ^ (_attenuationColor != null ? StringComparer.Ordinal.GetHashCode(_attenuationColor) : 0);
+                hash = hash * 397 ^ _sheen.GetHashCode();
+                hash = hash * 397 ^ (_sheenColor != null ? StringComparer.Ordinal.GetHashCode(_sheenColor) : 0);
+                hash = hash * 397 ^ _sheenRoughness.GetHashCode();
                 return hash;
             }
         }

@@ -22,31 +22,35 @@
 	"devDependencies": {
 		"@selvajs/config": "workspace:*",
 		"@selvajs/ui": "workspace:*",
-		"@sveltejs/adapter-static": "^3.0.10",
+		"@sveltejs/adapter-static": "catalog:",
 		"@sveltejs/kit": "catalog:",
 		"@sveltejs/vite-plugin-svelte": "catalog:",
 		"@tailwindcss/typography": "^0.5.20",
 		"@tailwindcss/vite": "catalog:",
-		"firebase-tools": "^15.31.0",
-		"hast-util-to-html": "^9.0.5",
+		"firebase-tools": "^15.34.2",
+		"hast-util-to-html": "^9.0.6",
 		"mdsvex": "^0.12.8",
-		"playwright": "^1.63.0",
+		"playwright": "^1.64.1",
 		"rehype-autolink-headings": "^7.1.0",
 		"rehype-mermaid": "^3.0.0",
 		"rehype-raw": "^7.0.0",
 		"rehype-slug": "^6.0.0",
-		"shiki": "^4.4.2",
+		"shiki": "^4.5.0",
 		"svelte": "catalog:",
 		"svelte-check": "catalog:",
 		"tailwindcss": "catalog:",
 		"tw-animate-css": "catalog:",
 		"typescript": "catalog:",
-		"unist-util-visit": "^5.0.0",
+		"unist-util-visit": "^5.2.0",
 		"vite": "catalog:",
 		"vitest": "catalog:"
 	},
 	"dependencies": {
-		"@fontsource-variable/familjen-grotesk": "^5.3.0",
+		"@fontsource-variable/hanken-grotesk": "catalog:",
 		"@lucide/svelte": "catalog:"
+	},
+	"imports": {
+		"#lib": "./src/lib/index.js",
+		"#lib/*": "./src/lib/*"
 	}
 }

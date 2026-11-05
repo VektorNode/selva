@@ -1,6 +1,6 @@
 {
 	"name": "@selvajs/visualization",
-	"version": "1.5.0",
+	"version": "1.6.0",
 	"description": "Headless, extensible viewer core for Selva — parse, render and scene layers over Three.js",
 	"author": "VektorNode",
 	"license": "MIT",
@@ -87,22 +87,29 @@
 		"test": "vitest run",
 		"test:watch": "vitest watch",
 		"bench": "vitest bench --run",
+		"lab": "vite --config lab/vite.config.js",
+		"lab:run": "node lab/run.mjs",
+		"lab:record": "node lab/record.mjs",
+		"lab:diff": "node lab/diff.mjs",
 		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"fflate": "^0.8.2"
+		"fflate": "catalog:",
+		"three-mesh-bvh": "catalog:"
 	},
 	"peerDependencies": {
 		"three": ">=0.179.0"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
+		"@playwright/test": "catalog:",
 		"@selvajs/config": "workspace:*",
 		"@types/node": "catalog:",
 		"@types/three": "catalog:",
 		"eslint": "catalog:",
 		"eslint-config-prettier": "^10.1.8",
-		"globals": "^17.12.0",
+		"fast-check": "catalog:",
+		"globals": "^17.14.0",
 		"prettier": "catalog:",
 		"three": "catalog:",
 		"tsdown": "catalog:",

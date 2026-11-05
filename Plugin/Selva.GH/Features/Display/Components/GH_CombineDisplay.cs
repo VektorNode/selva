@@ -32,7 +32,7 @@ public class GH_CombineDisplay : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.WebDisplay;
+    protected override Bitmap Icon => Resources.CombineDisplay;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("E2BA3FC1-3930-4E34-8034-7E096F419FD3");
 
@@ -85,7 +85,7 @@ public class GH_CombineDisplay : GH_Component
             DisplayBatchCombiner.Result combined;
             try
             {
-                combined = DisplayBatchCombiner.Combine(batches);
+                combined = DisplayBatchCombiner.Combine(batches, DisplayUnits.ActiveDocMetersPerUnit());
             }
             catch (Exception ex)
             {
@@ -102,6 +102,16 @@ public class GH_CombineDisplay : GH_Component
             foreach (var failure in combined.Failures)
             {
                 AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, $"{path}: skipped an unreadable payload — {failure}");
+            }
+
+            var docUnits = DisplayUnits.ActiveDocModelUnits();
+            foreach (var units in combined.ModelUnits)
+            {
+                if (units != docUnits)
+                {
+                    AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                        $"{path}: an input was saved in {units} but the document is in {docUnits}: it will display at the wrong size.");
+                }
             }
 
             output.Append(new WebDisplayGoo(combined.Batch), path);

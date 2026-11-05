@@ -20,7 +20,7 @@ import {
 	call,
 	grantPlatformPermissions,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { POST } from '../+server.js';
 
 let tp: TestProviders | null = null;

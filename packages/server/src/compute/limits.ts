@@ -14,6 +14,13 @@ import { NoopLogger, type ILogger } from '@selvajs/platform';
 
 const MB = 1024 * 1024;
 
+/**
+ * Cap on a solve request body. A `file` input embeds geometry as base64, so the
+ * client's 150 MB raw file is ~200 MB on the wire, plus JSON envelope slack.
+ * adapter-node's `BODY_SIZE_LIMIT` must be at least this, or it rejects first.
+ */
+export const COMPUTE_REQUEST_MAX_BYTES = 256 * MB;
+
 /** Env source: any string→string map. `$env/dynamic/private` satisfies this. */
 export type EnvRecord = Record<string, string | undefined>;
 
@@ -111,17 +118,6 @@ export function readBool(
 
 /** Fully-resolved server-side compute limits. */
 export interface ComputeLimits {
-	/**
-	 * Longest the app waits for one solve. The SolveScheduler (`@selvajs/compute`)
-	 * propagates an AbortSignal into the upstream Compute call, so a timeout
-	 * actually cancels the work. Also forwarded to the client, where it drives the
-	 * in-browser AbortController.
-	 *
-	 * Bounds only the parts of the stack we own. A reverse proxy or serverless
-	 * platform cap may shoot the request sooner; raising this past those caps
-	 * produces 502s, not longer solves.
-	 */
-	solveDeadlineMs: number;
 	/** Fixed-window cap on /api/v1/compute: window length + max requests per window. */
 	rateLimitWindowMs: number;
 	rateLimitMaxRequests: number;
@@ -133,13 +129,7 @@ export interface ComputeLimits {
 	maxDefinitionFileSize: number;
 	/** Largest cover image accepted on upload. */
 	maxImageFileSize: number;
-	/**
-	 * /api/v1/compute JSON *request* body cap (inputs + values, not the .gh). Must
-	 * stay <= adapter-node's global `BODY_SIZE_LIMIT` or that backstop rejects
-	 * first. 256 MB matches the `BODY_SIZE_LIMIT=256M` shipped in `.env.example`:
-	 * a `file` widget embeds geometry as base64 in `values`, so the client's
-	 * 150 MB raw file inflates to ~200 MB on the wire, plus JSON envelope slack.
-	 */
+	/** /api/v1/compute JSON *request* body cap: {@link COMPUTE_REQUEST_MAX_BYTES}. */
 	computeRequestMaxBytes: number;
 	/**
 	 * /api/v1/compute JSON *response* cap. A `file`-typed output is base64-embedded
@@ -169,26 +159,11 @@ export interface ComputeLimits {
 	 */
 	remoteDefinitionCacheTtlMs: number;
 	/**
-	 * Reuse the server's cached definition via a pointer instead of re-uploading
-	 * the binary each solve. SAFE only on a compute server that signals a
-	 * stale-pointer miss (the VektorNode fork, or any fork that throws) — a server
-	 * that returns an empty 200 instead would silently yield EMPTY geometry. Off
-	 * for unknown / standard rhino.compute.
-	 */
-	computeReuseDefinitionCache: boolean;
-	/**
 	 * Ask Rhino.Compute to cache solve RESULTS keyed on the full request and
 	 * return a cached result on an identical repeat. Server-wide (survives Selva
 	 * restarts, spans instances). Only helps IDENTICAL re-solves.
 	 */
 	computeServerCachesolve: boolean;
-	/**
-	 * Also cache solves that reported Grasshopper errors — correct for
-	 * error-by-design definitions (guarded Python, pruned branches) that still
-	 * produce valid geometry. Requires `computeServerCachesolve` and a server
-	 * honoring the flag. Conservative default off.
-	 */
-	computeCacheErroredSolves: boolean;
 	/**
 	 * Backpressure — max solves allowed to WAIT in the per-server FIFO queue. This
 	 * excludes in-flight solves, which the scheduler caps at `maxConcurrent`,
@@ -208,7 +183,7 @@ export interface ComputeLimits {
 	 *
 	 * Bounds tail latency: the scheduler's `timeoutMs` clock starts at execution,
 	 * so without this a solve's total wait is unbounded and invisible. Tune it to
-	 * ≈ `solveDeadlineMs`.
+	 * about the compute server's own timeout.
 	 */
 	computeQueueWaitMs: number;
 	/**
@@ -243,8 +218,6 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 	// solve — rather than a vague "duration". Drop one minor version on.
 	env = readRenamed(env, 'COMPUTE_DEFINITION_CACHE_MB', 'COMPUTE_DEFINITION_BYTE_CACHE_MB', logger);
 	env = readRenamed(env, 'COMPUTE_SOLVE_CACHE_MB', 'COMPUTE_RESPONSE_CACHE_MB', logger);
-	env = readRenamed(env, 'REMOTE_DEFINITION_CACHE_TTL_MS', 'DEFINITION_CACHE_TTL_MS', logger);
-	env = readRenamed(env, 'COMPUTE_SOLVE_DEADLINE_MS', 'MAX_SOLVE_DURATION_MS', logger);
 
 	// Clean-cut rename with no old-name dual-read: deliberate pre-1.0 breaking change.
 	const maxDefinitionFileSize = readPositiveInt(
@@ -254,29 +227,16 @@ export function resolveComputeLimits(env: EnvRecord, logger: ILogger = noop): Co
 		logger
 	);
 	return {
-		solveDeadlineMs: readPositiveInt(env, 'COMPUTE_SOLVE_DEADLINE_MS', 100_000, logger),
-		rateLimitWindowMs: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_WINDOW_MS', 100_000, logger),
+		rateLimitWindowMs: 100_000,
 		rateLimitMaxRequests: readPositiveInt(env, 'COMPUTE_RATE_LIMIT_MAX', 120, logger),
 		maxDefinitionFileSize,
-		maxImageFileSize: readPositiveInt(env, 'MAX_IMAGE_FILE_SIZE_BYTES', 10 * MB, logger),
-		computeRequestMaxBytes: readPositiveInt(env, 'COMPUTE_REQUEST_MAX_BYTES', 256 * MB, logger),
-		computeResponseMaxBytes: readPositiveInt(env, 'COMPUTE_RESPONSE_MAX_BYTES', 300 * MB, logger),
+		maxImageFileSize: 10 * MB,
+		computeRequestMaxBytes: COMPUTE_REQUEST_MAX_BYTES,
+		computeResponseMaxBytes: 300 * MB,
 		remoteDefinitionMaxBytes: maxDefinitionFileSize,
-		remoteDefinitionFetchTimeoutMs: readPositiveInt(
-			env,
-			'REMOTE_DEFINITION_FETCH_TIMEOUT_MS',
-			30_000,
-			logger
-		),
-		remoteDefinitionCacheTtlMs: readPositiveInt(
-			env,
-			'REMOTE_DEFINITION_CACHE_TTL_MS',
-			5 * 60 * 1000,
-			logger
-		),
-		computeReuseDefinitionCache: readBool(env, 'COMPUTE_REUSE_DEFINITION_CACHE', true, logger),
+		remoteDefinitionFetchTimeoutMs: 30_000,
+		remoteDefinitionCacheTtlMs: 5 * 60 * 1000,
 		computeServerCachesolve: readBool(env, 'COMPUTE_SERVER_CACHESOLVE', true, logger),
-		computeCacheErroredSolves: readBool(env, 'COMPUTE_CACHE_ERRORED_SOLVES', false, logger),
 		// Both default to off — nothing is rejected until an operator who has measured
 		// their pool opts in. readNonNegativeInt throughout, so `0` reads as "disabled"
 		// rather than as an invalid value that falls back.

@@ -3,6 +3,9 @@
 	"version": "0.0.4",
 	"private": true,
 	"type": "module",
+	"scripts": {
+		"test": "node --test eslint-rules/*.test.js"
+	},
 	"exports": {
 		"./eslint": "./eslint.config.js",
 		"./vite": "./vite.config.js",
@@ -17,7 +20,19 @@
 		"prettier": "catalog:"
 	},
 	"peerDependenciesMeta": {
+		"eslint": {
+			"optional": true
+		},
+		"vite": {
+			"optional": true
+		},
 		"vitest": {
+			"optional": true
+		},
+		"svelte": {
+			"optional": true
+		},
+		"prettier": {
 			"optional": true
 		}
 	}

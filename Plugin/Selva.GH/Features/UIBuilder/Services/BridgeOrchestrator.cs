@@ -4,6 +4,9 @@ using System.Linq;
 using System.Threading.Tasks;
 using Grasshopper.Kernel;
 using Rhino;
+using Newtonsoft.Json.Linq;
+using Rhino.DocObjects;
+using Selva.Schema.Constants;
 using Selva.Schema.Models;
 using Selva.GH.Config;
 using Selva.GH.Features.SolveRuntime.Services;
@@ -32,11 +35,16 @@ public class BridgeOrchestrator : IDisposable
     private readonly ComponentStateManager _stateManager;
     private readonly ValueApplicator _valueApplicator;
     private readonly ValueCollector _valueCollector;
+    private readonly GeometryPicks _geometryPicks;
+    private readonly TriggerPresses _triggerPresses;
+    private readonly BridgePerf _perf;
+    private readonly HashSet<Guid> _staleTrackedPicks = new HashSet<Guid>();
 
     private GH_Component _component;
     private bool _disposed;
     private Func<UISchema> _getSchema;
     private Action<UISchema> _setSchema;
+    private RhinoDoc _trackedRhinoDoc;
 
     public BridgeOrchestrator(
         WebSocketTransport webSocketTransport,
@@ -45,9 +53,15 @@ public class BridgeOrchestrator : IDisposable
         ValueCollector valueCollector,
         ComponentStateManager stateManager,
         DocumentEventManager eventManager,
+        GeometryPicks geometryPicks,
+        TriggerPresses triggerPresses,
+        BridgePerf perf,
         Version pluginVersion,
         string sessionId)
     {
+        _geometryPicks = geometryPicks ?? throw new ArgumentNullException(nameof(geometryPicks));
+        _triggerPresses = triggerPresses ?? throw new ArgumentNullException(nameof(triggerPresses));
+        _perf = perf ?? throw new ArgumentNullException(nameof(perf));
         _webSocketTransport = webSocketTransport ?? throw new ArgumentNullException(nameof(webSocketTransport));
         _schemaSynchronizer = schemaSynchronizer ?? throw new ArgumentNullException(nameof(schemaSynchronizer));
         _valueApplicator = valueApplicator ?? throw new ArgumentNullException(nameof(valueApplicator));
@@ -71,14 +85,25 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnCurrentValuesRequested -= HandleCurrentValuesRequest;
         _webSocketTransport.OnClientConnected -= HandleClientConnected;
         _webSocketTransport.OnSchemaSaveRequested -= HandleSchemaSave;
+        _webSocketTransport.OnLayoutRequested -= HandleLayoutRequest;
         _webSocketTransport.OnSyncPreviewRequested -= HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply -= HandleApplySyncChanges;
         _webSocketTransport.OnCancelSolveRequested -= HandleCancelSolve;
+        _webSocketTransport.OnPickGeometryRequested -= HandlePickGeometry;
+        _webSocketTransport.OnClearGeometryRequested -= HandleClearGeometry;
+        _webSocketTransport.OnClearGeometryRefused -= BroadcastGeometrySummary;
+        _webSocketTransport.OnTriggerRequested -= HandleTrigger;
+
+        RhinoDoc.ReplaceRhinoObject -= HandleRhinoObjectReplaced;
+        RhinoDoc.DeleteRhinoObject -= HandleRhinoObjectDeleted;
+        RhinoApp.Idle -= RefreshTrackedPicks;
     }
 
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
+
+    public bool IsInitialized => _component != null;
 
     public void Initialize(
         GH_Component component,
@@ -93,9 +118,17 @@ public class BridgeOrchestrator : IDisposable
         _webSocketTransport.OnCurrentValuesRequested += HandleCurrentValuesRequest;
         _webSocketTransport.OnClientConnected += HandleClientConnected;
         _webSocketTransport.OnSchemaSaveRequested += HandleSchemaSave;
+        _webSocketTransport.OnLayoutRequested += HandleLayoutRequest;
         _webSocketTransport.OnSyncPreviewRequested += HandleSyncPreviewRequest;
         _webSocketTransport.OnSyncChangesApply += HandleApplySyncChanges;
         _webSocketTransport.OnCancelSolveRequested += HandleCancelSolve;
+        _webSocketTransport.OnPickGeometryRequested += HandlePickGeometry;
+        _webSocketTransport.OnClearGeometryRequested += HandleClearGeometry;
+        _webSocketTransport.OnClearGeometryRefused += BroadcastGeometrySummary;
+        _webSocketTransport.OnTriggerRequested += HandleTrigger;
+
+        RhinoDoc.ReplaceRhinoObject += HandleRhinoObjectReplaced;
+        RhinoDoc.DeleteRhinoObject += HandleRhinoObjectDeleted;
     }
 
     // -------------------------------------------------------------------------
@@ -107,7 +140,24 @@ public class BridgeOrchestrator : IDisposable
     {
         try
         {
-            SolveRuntimes.For(_eventManager.CurrentDocument)?.RequestAbort();
+            var runtime = SolveRuntimes.For(_eventManager.CurrentDocument);
+            if (runtime == null)
+            {
+                return;
+            }
+
+            // Grasshopper clears the abort flag when the scheduled solve starts, so an abort now would
+            // be lost. Re-checked after arming: if the solve started in between, abort it directly.
+            if (_stateManager.IsStartPending)
+            {
+                runtime.AbortAtNextStart();
+                if (_stateManager.IsStartPending)
+                {
+                    return;
+                }
+            }
+
+            runtime.RequestAbort();
         }
         catch (Exception ex)
         {
@@ -115,8 +165,180 @@ public class BridgeOrchestrator : IDisposable
         }
     }
 
+    private void HandlePickGeometry(object sender, InboundMessage request)
+    {
+        GeometryPickOutcome outcome;
+        try
+        {
+            outcome = PickGeometry(request.ParamId);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] Geometry pick failed: {ex.Message}", ex);
+            outcome = GeometryPickOutcome.Failed($"Could not pick: {ex.Message}");
+        }
+
+        _ = _webSocketTransport.BroadcastPickGeometryResult(request.RequestId, request.ParamId, outcome);
+    }
+
+    private GeometryPickOutcome PickGeometry(Guid paramId)
+    {
+        // The param's prompt runs a modal pick on the UI thread the solver needs.
+        if (_stateManager.IsBusy)
+        {
+            return GeometryPickOutcome.Failed("Grasshopper is still solving. Pick again when it has finished.");
+        }
+
+        if (!IsSchemaInput(paramId, input => GeometryParamTypes.Contains(input.ParamType)))
+        {
+            return GeometryPickOutcome.Failed("That input doesn't take geometry.");
+        }
+
+        var outcome = _geometryPicks.Pick(_component.OnPingDocument(), paramId,
+            _webSocketTransport.ScheduleSolutionDelayMs);
+        if (outcome.Kind == PromptOutcome.Picked)
+        {
+            _stateManager.MarkSolveScheduled();
+        }
+
+        return outcome;
+    }
+
+    private void HandleClearGeometry(object sender, Guid paramId)
+    {
+        try
+        {
+            if (_stateManager.IsBusy)
+            {
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    "Grasshopper is still solving. Clear the input again when it has finished.");
+                return;
+            }
+
+            if (_geometryPicks.Clear(_component.OnPingDocument(), paramId,
+                    _webSocketTransport.ScheduleSolutionDelayMs))
+            {
+                _stateManager.MarkSolveScheduled();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] Clearing a geometry input failed: {ex.Message}", ex);
+        }
+        finally
+        {
+            BroadcastGeometrySummary(this, paramId);
+        }
+    }
+
+    private void BroadcastGeometrySummary(object sender, Guid paramId)
+    {
+        _ = _webSocketTransport.BroadcastGeometrySummary(paramId, _geometryPicks.SummaryOf(paramId));
+    }
+
+    // -------------------------------------------------------------------------
+    // Tracked picks
+    // -------------------------------------------------------------------------
+
+    private void HandleRhinoObjectReplaced(object sender, RhinoReplaceObjectEventArgs e) =>
+        MarkTrackedPicksStale(e.Document, e.ObjectId);
+
+    private void HandleRhinoObjectDeleted(object sender, RhinoObjectEventArgs e) =>
+        MarkTrackedPicksStale(e.TheObject?.Document, e.ObjectId);
+
+    // One edit raises several events (a replace is also a delete and an add), and a solve can't
+    // start inside a document event, so the refresh waits for Rhino to go idle.
+    private void MarkTrackedPicksStale(RhinoDoc rhinoDoc, Guid objectId)
+    {
+        if (_getSchema?.Invoke()?.LocalOptions?.TrackPickedObjects != true)
+        {
+            return;
+        }
+
+        var stale = _geometryPicks.ParamsReferencing(_component?.OnPingDocument(), objectId);
+        if (stale.Count == 0)
+        {
+            return;
+        }
+
+        _trackedRhinoDoc = rhinoDoc;
+        if (_staleTrackedPicks.Count == 0)
+        {
+            RhinoApp.Idle += RefreshTrackedPicks;
+        }
+
+        _staleTrackedPicks.UnionWith(stale);
+    }
+
+    private void RefreshTrackedPicks(object sender, EventArgs e)
+    {
+        // Idle keeps firing; a solve in flight still holds the param's last data, so wait it out.
+        if (_stateManager.IsBusy)
+        {
+            return;
+        }
+
+        RhinoApp.Idle -= RefreshTrackedPicks;
+        var stale = _staleTrackedPicks.ToList();
+        _staleTrackedPicks.Clear();
+
+        foreach (var paramId in stale)
+        {
+            try
+            {
+                if (_geometryPicks.Refresh(_component.OnPingDocument(), paramId, _trackedRhinoDoc,
+                        _webSocketTransport.ScheduleSolutionDelayMs))
+                {
+                    _stateManager.MarkSolveScheduled();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[BridgeOrchestrator] Refreshing a tracked pick failed: {ex.Message}", ex);
+            }
+
+            BroadcastGeometrySummary(this, paramId);
+        }
+    }
+
+    private void HandleTrigger(object sender, Guid paramId)
+    {
+        try
+        {
+            if (_stateManager.IsBusy)
+            {
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Warning,
+                    "Grasshopper is still solving. Press the button again when it has finished.");
+                return;
+            }
+
+            if (!TriggerButtons.IsButton(_getSchema(), paramId) ||
+                !_triggerPresses.Press(_component.OnPingDocument(), paramId,
+                    _webSocketTransport.ScheduleSolutionDelayMs))
+            {
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                    "That button's input is no longer in the definition.");
+                return;
+            }
+
+            _stateManager.MarkSolveScheduled();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] Button press failed: {ex.Message}", ex);
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error,
+                $"Button press failed: {ex.Message}");
+        }
+    }
+
+    private bool IsSchemaInput(Guid paramId, Func<SchemaInput, bool> predicate)
+    {
+        return _getSchema()?.Inputs?.Any(input => input.Id == paramId && predicate(input)) == true;
+    }
+
     private void HandleWebSocketValueUpdate(object sender, Dictionary<string, object> values)
     {
+        _perf.ValuesArrived();
         try
         {
             // A solve is running or scheduled-but-not-started: coalesce (latest wins) instead of
@@ -126,7 +348,22 @@ public class BridgeOrchestrator : IDisposable
             if (_stateManager.IsBusy)
             {
                 _stateManager.MergePendingValues(values);
+                _perf.ValuesCoalesced();
                 return;
+            }
+
+            // Not busy but values are still buffered: the solve they waited for never ended (its
+            // schedule went stale). Apply them beneath this update so the older value of a shared
+            // key can't land after the newer one.
+            var stalePending = _stateManager.TakePendingValues();
+            if (stalePending != null)
+            {
+                foreach (var kvp in values)
+                {
+                    stalePending[kvp.Key] = kvp.Value;
+                }
+
+                values = stalePending;
             }
 
             ApplyValuesAndSchedule(values);
@@ -134,14 +371,13 @@ public class BridgeOrchestrator : IDisposable
         catch (Exception ex)
         {
             Logger.Error($"[BridgeOrchestrator] Error handling value update: {ex.Message}", ex);
-            _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
-            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Error handling value update: {ex.Message}");
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error handling value update: {ex.Message}");
         }
     }
 
     /// <summary>
     ///     Apply a set of values to the live document and schedule a solve. Marks the solve as scheduled
-    ///     (synchronously, before ScheduleSolution's ~10ms defer elapses) so a value update arriving in
+    ///     (synchronously, before ScheduleSolution's delay elapses) so a value update arriving in
     ///     the schedule→start gap coalesces instead of scheduling a competing solve. Re-reads the current
     ///     schema each call — it may have changed via a save mid-drag.
     /// </summary>
@@ -153,19 +389,21 @@ public class BridgeOrchestrator : IDisposable
         if (!DocumentGuards.DocumentAndSchemaValid(document, schema, out _))
         {
             Logger.Warn("[BridgeOrchestrator] Document or schema invalid, skipping value update.");
-            _ = _webSocketTransport.BroadcastRuntimeMessage("error", "Document or schema invalid.");
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, "Document or schema invalid.");
             return;
         }
 
+        // Not a runtime message on the bridge: value solves don't recompute it, so the message would
+        // never clear, and SolveDiagnosticsCollector would report it (an error withholds the result)
+        // on every later solve.
         var updateCount = _valueApplicator.ApplyValuesAndSchedule(document, schema, values, (level, msg) =>
         {
-            _component.AddRuntimeMessage(level, msg);
-
             if (level == GH_RuntimeMessageLevel.Error || level == GH_RuntimeMessageLevel.Warning)
             {
-                _ = _webSocketTransport.BroadcastRuntimeMessage(ConvertMessageLevel(level), msg);
+                Logger.Warn($"[BridgeOrchestrator] {msg}");
+                _ = _webSocketTransport.BroadcastRuntimeMessage(level, msg);
             }
-        });
+        }, _webSocketTransport.ScheduleSolutionDelayMs);
 
         // A non-zero count means a solution was scheduled (ApplyValuesAndSchedule schedules iff at
         // least one parameter expired). Close the schedule→start window before it opens.
@@ -204,7 +442,7 @@ public class BridgeOrchestrator : IDisposable
         }
     }
 
-    private void HandleClientConnected(object sender, EventArgs e)
+    private void HandleClientConnected(object sender, InboundMessage request)
     {
         try
         {
@@ -221,7 +459,7 @@ public class BridgeOrchestrator : IDisposable
             {
                 if (contextBake == null)
                 {
-                    _ = _webSocketTransport.BroadcastRuntimeMessage("error",
+                    _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error,
                         "UIBridge Schema output is not connected to a Context Bake component " +
                         "with param name \"Schema\". Wire it up in Grasshopper first.");
                     _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Warning,
@@ -249,10 +487,15 @@ public class BridgeOrchestrator : IDisposable
 
             _ = _webSocketTransport.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 
+            // The selection goes out only when it changes, and this editor missed the last change.
+            _ = _webSocketTransport.BroadcastCanvasSelection(
+                CanvasPlacement.Resolve(validatedSchema, document.SelectedObjects()));
+
             // Also broadcast when the schema declares no outputs but the 3D viewer is on: the
             // meshes come from ContextBakes, not from declared outputs, so gating on Outputs
             // alone leaves a display-only definition with an empty viewer.
-            if (validatedSchema.Outputs?.Count > 0 || (validatedSchema.ViewerOptions?.EnableLocal ?? false))
+            if (!request.SchemaOnly &&
+                (validatedSchema.Outputs?.Count > 0 || (validatedSchema.ViewerOptions?.EnableLocal ?? false)))
             {
                 ScheduleOutputBroadcast(validatedSchema);
             }
@@ -262,6 +505,27 @@ public class BridgeOrchestrator : IDisposable
             Logger.Error($"[BridgeOrchestrator] Error sending initial data: {ex.Message}", ex);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error sending initial data: {ex.Message}");
         }
+    }
+
+    // The form by param nickname, for scripts and agents outside Rhino; the page itself writes
+    // through saveSchema. Apply commits like a save, so open pages get the new schema.
+    private void HandleLayoutRequest(object sender, WebSocketTransport.LayoutRequest request)
+    {
+        string json;
+        try
+        {
+            var document = _component.OnPingDocument();
+            json = request.Message.Kind == InboundKind.ApplyLayout
+                ? SchemaLayout.Apply(document, request.Message.LayoutSpec)
+                : SchemaLayout.Read(document);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BridgeOrchestrator] {request.Message.MessageType} failed: {ex.Message}");
+            json = new JObject { ["ok"] = false, ["errors"] = new JArray(ex.Message) }.ToString();
+        }
+
+        _ = request.Reply(OutboundEnvelopes.LayoutResult(_sessionId, request.Message.RequestId, JToken.Parse(json)));
     }
 
     private void HandleSchemaSave(object sender, SchemaSaveRequest request)
@@ -317,36 +581,10 @@ public class BridgeOrchestrator : IDisposable
 
             SanitizeSchema(schema);
 
-            // Before validating: the editor's layout is the user's intent, so a widget missing
-            // from it stays missing rather than being restored from a tombstone.
-            _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
-
-            var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
-#if DEBUG
-            Logger.Log($"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, " +
-                       $"outputs={validatedSchema.Outputs?.Count}, " +
-                       $"layout={validatedSchema.Layout?.GetType().Name}");
-#endif
-
-            _component.Attributes?.DocObject?.RecordUndoEvent("Update Schema");
-            _setSchema(validatedSchema);
-            _schemaSynchronizer.ApplyParameterAccessFromSchema(validatedSchema, document);
-            _schemaSynchronizer.ClearMetadataCache();
-            document.Modified();
-
-            // Suppress the re-solve the component expire below triggers, or the frontend
-            // sees a spurious solving-state flash.
-            _webSocketTransport.SuppressSolvingCycles(1);
-
-            // Send the fresh canonical (new hash) before the ack so the UI re-bases its
-            // draft and clears isDirty.
-            _ = _webSocketTransport.BroadcastSchemaUpdate(validatedSchema);
+            // The fresh canonical (new hash) goes out before the ack so the UI re-bases its draft
+            // and clears isDirty.
+            CommitAuthoredSchema(schema, document, "Update Schema");
             _ = _webSocketTransport.BroadcastSchemaSaved(true);
-
-            GHDocumentMutator.ScheduleComponentExpire(document, _component);
-#if DEBUG
-            Logger.Log("[UIBuilder] Save complete — component expire scheduled.");
-#endif
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully.");
         }
         catch (Exception ex)
@@ -355,6 +593,60 @@ public class BridgeOrchestrator : IDisposable
             _ = _webSocketTransport.BroadcastSchemaSaved(false, ex.Message);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    ///     Makes <paramref name="schema" /> the canonical one, as the author's intent: an editor
+    ///     save, a scripted layout, a placement from the canvas. Every such change needs all of
+    ///     this, or an open editor never hears of it and its next save is rejected against a hash
+    ///     it never saw. <paramref name="broadcast" /> replaces the plain schemaUpdated when the
+    ///     change has more to say.
+    /// </summary>
+    public UISchema CommitAuthoredSchema(UISchema schema, GH_Document document, string undoName,
+        Action<UISchema> broadcast = null)
+    {
+        // Before validating: the author's layout is the intent, so a widget missing from it
+        // stays missing rather than being restored from a tombstone.
+        _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
+        var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
+#if DEBUG
+        Logger.Log($"[UIBuilder] Commit '{undoName}' — inputs={validatedSchema.Inputs?.Count}, " +
+                   $"outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
+#endif
+
+        _component.Attributes?.DocObject?.RecordUndoEvent(undoName);
+        _setSchema(validatedSchema);
+        SchemaSynchronizer.ApplyParameterAccessFromSchema(validatedSchema, document);
+        _schemaSynchronizer.ClearMetadataCache();
+        document.Modified();
+
+        // Suppress the re-solve the expire below triggers, or the page sees a spurious
+        // solving-state flash.
+        _webSocketTransport.SuppressSolvingCycles(1);
+        if (broadcast != null)
+        {
+            broadcast(validatedSchema);
+        }
+        else
+        {
+            _ = _webSocketTransport.BroadcastSchemaUpdate(validatedSchema);
+        }
+
+        GHDocumentMutator.ScheduleComponentExpire(document, _component, _webSocketTransport.ScheduleSolutionDelayMs);
+        return validatedSchema;
+    }
+
+    /// <summary>
+    ///     Undo restores an archived schema through the component's Read, past
+    ///     <see cref="CommitAuthoredSchema" />. The canvas params' access, the metadata cache and
+    ///     the tombstones still reflect the undone commit until this brings them back in line.
+    /// </summary>
+    public void AdoptRestoredSchema(UISchema schema, GH_Document document)
+    {
+        _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
+        SchemaSynchronizer.ApplyParameterAccessFromSchema(schema, document);
+        _schemaSynchronizer.ClearMetadataCache();
+        _ = _webSocketTransport.BroadcastSchemaUpdate(schema);
     }
 
     private void HandleCurrentValuesRequest(object sender, EventArgs e)
@@ -385,7 +677,7 @@ public class BridgeOrchestrator : IDisposable
             var document = _component.OnPingDocument();
             if (document == null)
             {
-                _ = _webSocketTransport.BroadcastRuntimeMessage("error", "No document available.");
+                _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, "No document available.");
                 return;
             }
 
@@ -395,7 +687,7 @@ public class BridgeOrchestrator : IDisposable
         catch (Exception ex)
         {
             Logger.Error($"[BridgeOrchestrator] Error computing sync preview: {ex.Message}", ex);
-            _ = _webSocketTransport.BroadcastRuntimeMessage("error", $"Error computing sync preview: {ex.Message}");
+            _ = _webSocketTransport.BroadcastRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error computing sync preview: {ex.Message}");
         }
     }
 
@@ -432,7 +724,8 @@ public class BridgeOrchestrator : IDisposable
                 .ToList();
 
             GHDocumentMutator.RefreshObjectsOnCanvas(document, changedObjects);
-            GHDocumentMutator.ScheduleComponentExpire(document, _component, true);
+            GHDocumentMutator.ScheduleComponentExpire(document, _component, _webSocketTransport.ScheduleSolutionDelayMs,
+                true);
 
             _ = _webSocketTransport.BroadcastSyncApplied(true);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Sync changes applied successfully.");
@@ -449,9 +742,12 @@ public class BridgeOrchestrator : IDisposable
     // ContextBake helpers — single traversal, used by both connect and save
     // -------------------------------------------------------------------------
 
-    private GH_Component FindWiredContextBake()
+    private GH_Component FindWiredContextBake() => FindWiredContextBake(_component);
+
+    /// <summary>The Context Bake nicknamed "Schema" that a bridge's Schema output feeds; null when unwired.</summary>
+    internal static GH_Component FindWiredContextBake(GH_Component bridge)
     {
-        var schemaOutput = _component?.Params.Output.FirstOrDefault(p => p.Name == "Schema");
+        var schemaOutput = bridge?.Params.Output.FirstOrDefault(p => p.Name == "Schema");
         if (schemaOutput == null)
         {
             return null;
@@ -537,7 +833,7 @@ public class BridgeOrchestrator : IDisposable
             return;
         }
 
-        document.ScheduleSolution(AppConfig.ComponentLifecycle.ScheduleSolutionDelayMs, doc =>
+        document.ScheduleSolution(_webSocketTransport.ScheduleSolutionDelayMs, doc =>
         {
             foreach (var bake in bakes)
             {
@@ -612,16 +908,5 @@ public class BridgeOrchestrator : IDisposable
                     .ToList();
             }
         }
-    }
-
-    private static string ConvertMessageLevel(GH_RuntimeMessageLevel level)
-    {
-        return level switch
-        {
-            GH_RuntimeMessageLevel.Error => "error",
-            GH_RuntimeMessageLevel.Warning => "warning",
-            GH_RuntimeMessageLevel.Remark => "info",
-            _ => "info"
-        };
     }
 }

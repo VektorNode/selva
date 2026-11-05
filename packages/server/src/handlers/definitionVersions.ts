@@ -15,6 +15,7 @@ import {
 	noContent,
 	parseListOptions,
 	parseParam,
+	readForm,
 	requireCaller,
 	requireUpload
 } from '../api/index.js';
@@ -49,7 +50,7 @@ export const listVersions: ApiHandler = async (req) => {
 export const uploadVersion: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 
-	const form = await req.request.formData();
+	const form = await readForm(req.request);
 	const { file, extension } = requireUpload(form, 'file', {
 		maxBytes: req.deps.uploadLimits.maxDefinitionFileSize,
 		extensions: GH_EXTENSIONS,

@@ -40,10 +40,18 @@ namespace Selva.Slva;
 ///     MATL  UTF-8 JSON {"materials":[...]}. A material's "map", "roughnessMap" or "normalMap" may be
 ///           "slvm:tex:N", which readers resolve against the Nth TEXR chunk.
 ///     TEXR  one texture: [varint mimeLen][mime utf8][image bytes].
+///     CLSD  optional, one byte per mesh row in table order: 0 = unknown, 1 = open, 2 = closed solid
+///           (see <see cref="ClosedSolid" />). Optionally SLVZ-wrapped. Lets readers skip the
+///           closed-solid test; absent, or 0 for a row, they compute it. Written only when some
+///           mesh carries a verdict.
 ///     EXTN  host extension: [varint nsLen][namespace utf8][payload]. Foreign readers skip it.
 ///           Selva writes namespace "selva.gh" (see <see cref="SelvaExtension" />) with a JSON
 ///           payload {"curves": {"objIndex": "rhino nurbs json", ...}} — only when the batch
-///           actually carries curves; a mesh-only container has no EXTN at all.
+///           actually carries curves.
+///           A file also carries namespace "selva.units" (see <see cref="ModelUnitsNamespace" />):
+///           the UTF-8 Rhino unit system name the coordinates are in ("Millimeters"). The wire has
+///           no use for it, since `modelUnits` travels beside the blob, but a file outlives the
+///           document that wrote it.
 ///
 ///     Object model: one global index space, meshes first, then curves, then points. TABL stores
 ///     per-object counts; vertex/index windows are the prefix sums of those counts in table order —
@@ -62,8 +70,11 @@ public static class SlvmDocument
     public const uint ChunkMatl = 0x4C54414D; // "MATL"
     public const uint ChunkTexr = 0x52584554; // "TEXR"
     public const uint ChunkExtn = 0x4E545845; // "EXTN"
+    public const uint ChunkClsd = 0x44534C43; // "CLSD"
 
     public const string SelvaGhNamespace = "selva.gh";
+
+    public const string ModelUnitsNamespace = "selva.units";
 
     /// <summary>Material "map" prefix that references a TEXR chunk by index.</summary>
     public const string TexRefPrefix = "slvm:tex:";
@@ -77,6 +88,34 @@ public static class SlvmDocument
     /// <summary>Reserved attr keys for curve/point styling — same mechanism as user metadata.</summary>
     public const string StyleColorKey = "style:color";
     public const string StyleOpacityKey = "style:opacity";
+
+    /// <summary>
+    ///     The unit system recorded in a container's "selva.units" chunk, without decoding the
+    ///     rest. Null for a bare SLVA/SLVZ blob or a container that recorded none.
+    /// </summary>
+    public static string ReadModelUnits(byte[] bytes)
+    {
+        if (!IsSlvm(bytes))
+        {
+            return null;
+        }
+
+        foreach (var (type, payload) in SlvmChunks.Read(bytes))
+        {
+            if (type != ChunkExtn)
+            {
+                continue;
+            }
+
+            var (ns, body) = ExtensionChunk.Decode(payload);
+            if (ns == ModelUnitsNamespace)
+            {
+                return Encoding.UTF8.GetString(body);
+            }
+        }
+
+        return null;
+    }
 
     public static bool IsSlvm(byte[] bytes)
     {
@@ -125,6 +164,17 @@ public static class SlvmDocument
 
         chunks.Add((ChunkTabl, SlvzCompressor.Compress(SlvmTable.Write(batch, meshes, curves, points))));
 
+        if (meshes.Any(m => m.Closed.HasValue))
+        {
+            var closed = new byte[meshes.Count];
+            for (var i = 0; i < closed.Length; i++)
+            {
+                closed[i] = meshes[i].Closed switch { true => (byte)2, false => (byte)1, null => (byte)0 };
+            }
+
+            chunks.Add((ChunkClsd, SlvzCompressor.Compress(closed)));
+        }
+
         var (materialsJson, textures) = ExtractTextures(batch.Materials);
         chunks.Add((ChunkMatl, Encoding.UTF8.GetBytes(materialsJson)));
         foreach (var tex in textures)
@@ -157,10 +207,18 @@ public static class SlvmDocument
         return SlvmChunks.Write(chunks);
     }
 
-    /// <summary>Chunk-level copy with the geometry payload swapped — metadata survives byte-exact.</summary>
-    public static byte[] ReplaceGeometry(byte[] slvm, byte[] newGeometryBlob)
+    /// <summary>
+    ///     Chunk-level copy with the geometry payload swapped — metadata survives byte-exact.
+    ///     <paramref name="keepClosed" /> false drops CLSD, for edits that can flip winding.
+    /// </summary>
+    public static byte[] ReplaceGeometry(byte[] slvm, byte[] newGeometryBlob, bool keepClosed = true)
     {
         var chunks = SlvmChunks.Read(slvm);
+        if (!keepClosed)
+        {
+            chunks.RemoveAll(c => c.type == ChunkClsd);
+        }
+
         for (var i = 0; i < chunks.Count; i++)
         {
             if (chunks[i].type == ChunkGeom)
@@ -201,6 +259,15 @@ public static class SlvmDocument
         ///     none. Pass back into <see cref="Write" /> to survive a rebuild.
         /// </summary>
         public Dictionary<string, byte[]> Extensions { get; set; }
+
+        /// <summary>
+        ///     The Rhino unit system name the coordinates are in. Null when the writer recorded
+        ///     none: a wire blob, or a file from before units were stored.
+        /// </summary>
+        public string ModelUnits =>
+            Extensions != null && Extensions.TryGetValue(ModelUnitsNamespace, out var bytes)
+                ? Encoding.UTF8.GetString(bytes)
+                : null;
     }
 
     public static ReadResult Read(byte[] bytes)
@@ -212,6 +279,7 @@ public static class SlvmDocument
         byte[] pntsBlob = null;
         byte[] tableBytes = null;
         string materialsJson = null;
+        byte[] closedFlags = null;
         var textures = new List<byte[]>();
         Dictionary<string, byte[]> extensions = null;
         foreach (var (type, payload) in chunks)
@@ -224,6 +292,7 @@ public static class SlvmDocument
                 case ChunkTabl: tableBytes = SlvzCompressor.MaybeDecompress(payload); break;
                 case ChunkMatl: materialsJson = Encoding.UTF8.GetString(payload); break;
                 case ChunkTexr: textures.Add(payload); break;
+                case ChunkClsd: closedFlags = SlvzCompressor.MaybeDecompress(payload); break;
                 case ChunkExtn:
                     // selva.gh is decoded below; foreign namespaces surface as opaque payloads.
                     var (ns, body) = ExtensionChunk.Decode(payload);
@@ -248,7 +317,7 @@ public static class SlvmDocument
         var batch = new DisplayBatch
         {
             Materials = ParseMaterials(materialsJson, textures),
-            Groups = BuildGroups(table)
+            Groups = BuildGroups(table, closedFlags)
         };
 
         if (table.CurveCount > 0 || table.PointCount > 0)
@@ -268,7 +337,7 @@ public static class SlvmDocument
     // BATCH RECONSTRUCTION
     // ============================================================================
 
-    private static List<MaterialGroup> BuildGroups(SlvmTable.Table t)
+    private static List<MaterialGroup> BuildGroups(SlvmTable.Table t, byte[] closedFlags)
     {
         var groups = new List<MaterialGroup>();
         var meshIndex = 0;
@@ -295,7 +364,10 @@ public static class SlvmDocument
                     IndexCount = t.MeshTriCounts[meshIndex] * 3,
                     VertexStart = vertexStart,
                     IndexStart = indexStart,
-                    Metadata = attrs
+                    Metadata = attrs,
+                    Closed = closedFlags != null && meshIndex < closedFlags.Length
+                        ? closedFlags[meshIndex] switch { 2 => true, 1 => false, _ => (bool?)null }
+                        : null
                 });
                 vertexStart += t.MeshVertexCounts[meshIndex];
                 indexStart += t.MeshTriCounts[meshIndex] * 3;

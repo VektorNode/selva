@@ -14,9 +14,10 @@ Nothing here requires forking this package. Everything is runtime API on the `Th
 | Claim clicks before object selection | `viewer.tools.register(...)`            |
 | Attach text to a 3D position         | `viewer.labelLayer.addLabel(text, pos)` |
 
-Plus one thing that is not optional: **call `viewer.invalidate()` after you touch the scene.** The
-render loop is on-demand. Geometry you add without it is in the scene and invisible until something
-else triggers a repaint.
+Plus one rule: **call `viewer.invalidate()` after you change the scene yourself**, with a direct
+`scene.add` or a buffer edit. The render loop is on-demand, so the change stays invisible until
+something else triggers a repaint. `addUserGeometry`, `removeUserGeometry` and `clearUserGeometry`
+already request one.
 
 ## Getting the handle
 
@@ -40,14 +41,13 @@ called again with a new handle). Don't cache the handle in module scope.
 
 ```ts
 viewer.addUserGeometry(pointCloud, 'cloud'); // userData.source = 'app:cloud'
-viewer.invalidate();
 ```
 
 What the `appId` buys you:
 
-- **It survives solves.** `clearScene` replaces everything tagged `compute` on every solve and
-  spares anything host-owned. Without this your content is destroyed the first time the user moves
-  a slider.
+- **It survives solves.** On every solve `clearScene` removes everything except lights, the
+  viewer's own floor, grid and labels, and host-owned objects, tagged `compute` or not. A plain
+  `scene.add` is destroyed the first time the user moves a slider.
 - **`clearUserGeometry('cloud')` clears yours alone.** Two apps in one viewer don't clobber each
   other. Calling it with no id clears every host-owned object, which is rarely what you want.
 
@@ -59,25 +59,16 @@ Three consequences worth knowing up front:
 - **`setLook` skips your geometry.** Switching render style retunes solve output only; your
   materials are yours. If you _want_ to follow the look, read `viewer.getMaterialAppearance()`.
 - **The scene outliner lists it.** Users can hide and select it like any other object. That's
-  usually right. Hidden state is keyed on `userData.id`, so set a stable one if it should outlive a
-  solve; without it the key falls back to the instance uuid and resets whenever you rebuild.
+  usually right. Hidden state keys on `userData.trackingKey`, then `userData.id`, then name plus
+  `userData.layer`, then the instance uuid. Set a stable `id` if it should outlive a solve: the
+  uuid resets whenever you rebuild, and two objects with the same name and layer share a key.
 - **Fit-to-view frames it.** It counts as content, so a stray far-off object will wreck framing.
 
 ## Writing a tool
 
 A tool is any object with `handleClick(event) => boolean`. Returning `true` means _I consumed this_:
-dispatch stops and object selection doesn't run. Everything else on the interface is optional:
-
-```ts
-interface PointerTool {
-	handleClick(event: MouseEvent): boolean;
-	handleMove?(event: MouseEvent): void; // never consumes
-	setEnabled?(enabled: boolean): void;
-	isEnabled?(): boolean;
-	clear?(): void;
-	dispose?(): void;
-}
-```
+dispatch stops and object selection doesn't run. `handleMove`, `setEnabled`, `isEnabled`, `clear`
+and `dispose` are optional (`PointerTool` in `tool-registry.ts`).
 
 Register it and make it active:
 
@@ -166,12 +157,3 @@ What you don't get: **solves are whole-scene.** Every solve sends the complete i
 replaces all compute content. You can steer _what_ you send (one polyline, a batch, all of them),
 but results don't composite. Solving line 6 alone removes the mesh for lines 1–5. Either include
 everything each time, or hold results as your own app geometry where they're yours to manage.
-
-## Checklist
-
-- [ ] `appId` on every `addUserGeometry` call
-- [ ] `viewer.invalidate()` after every scene mutation
-- [ ] `setActive` once the tool should be live
-- [ ] Cleanup returned from `onViewerReady`: unregister _and_ dispose
-- [ ] Own preview geometry excluded from picking
-- [ ] Stable `userData.id` if hide/select state should survive a solve

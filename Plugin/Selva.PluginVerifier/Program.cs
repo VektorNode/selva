@@ -12,12 +12,13 @@ namespace Selva.PluginVerifier;
 // ============================================================================
 //
 // The Release build ILRepack-merges Newtonsoft.Json + Selva.Schema into
-// Selva.gha (and PdfSharpCore/SharpZipLib/SixLabors into Selva.Drawing.dll).
+// Selva.gha (and PDFsharp with its dependencies into Selva.Drawing.dll).
 // A merge that goes wrong does not fail the build — it produces an assembly
 // whose method references no longer bind, and the first symptom is a
 // MissingMethodException inside a user's Rhino (0.17.1 shipped exactly that).
 //
-// This tool loads every Selva-authored assembly from a plugin output folder on
+// This tool loads every Selva-authored assembly (the .gha, the Selva.Panel.rhp
+// staged beside it, and the Selva*.dll libraries) from a plugin output folder on
 // the same runtime family Rhino uses and force-JITs every method
 // (RuntimeHelpers.PrepareMethod). JIT compilation performs the same member
 // binding Rhino performs when the plugin loads, so a corrupted reference fails
@@ -36,7 +37,7 @@ internal static class Program
     {
         "Selva", "Grasshopper", "GH_IO", "RhinoCommon",
         "Newtonsoft.Json", "System.Drawing.Common", "System.Windows.Forms",
-        "SixLabors", "PdfSharpCore", "ICSharpCode.SharpZipLib",
+        "PdfSharp", "Microsoft.Extensions", "Microsoft.Bcl.AsyncInterfaces",
     };
 
     // References that must NOT survive in the merged assemblies — their
@@ -47,8 +48,10 @@ internal static class Program
         ["Selva"] = new[] { "Newtonsoft.Json", "Selva.Schema" },
         ["Selva.Drawing"] = new[]
         {
-            "PdfSharpCore", "ICSharpCode.SharpZipLib",
-            "SixLabors.ImageSharp", "SixLabors.Fonts",
+            "PdfSharp", "PdfSharp.System", "PdfSharp.Shared",
+            "Microsoft.Extensions.Logging.Abstractions",
+            "Microsoft.Extensions.DependencyInjection.Abstractions",
+            "Microsoft.Bcl.AsyncInterfaces",
         },
     };
 
@@ -69,13 +72,21 @@ internal static class Program
 
         AppDomain.CurrentDomain.AssemblyResolve += (_, e) => ResolveFrom(pluginDir, e.Name);
 
-        var targets = Directory.GetFiles(pluginDir, "*.gha")
+        var ghas = Directory.GetFiles(pluginDir, "*.gha");
+        var rhps = Directory.GetFiles(pluginDir, "*.rhp");
+        var targets = ghas.Concat(rhps)
             .Concat(Directory.GetFiles(pluginDir, "Selva*.dll"))
             .ToArray();
         if (targets.Length == 0)
         {
             Console.Error.WriteLine("No Selva assemblies found in the given directory.");
             return 2;
+        }
+
+        // Selva.gha shows its panel and runs viewport picks through the .rhp; without it they fail.
+        if (ghas.Length > 0 && rhps.Length == 0)
+        {
+            Failures.Add("Selva.Panel.rhp is missing beside the .gha.");
         }
 
         int methodsJitted = 0, typesSeen = 0;

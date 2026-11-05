@@ -14,7 +14,7 @@
 		type FilterableDropdownItem
 	} from '@selvajs/ui';
 	import { Server, Plus, Trash2, Star } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { CatalogEntry, OrgServerListing } from './+page.server';
 
 	const brandName = $derived(page.data.branding.name);
@@ -25,8 +25,6 @@
 		id: string;
 		label: string;
 		serverUrl: string;
-		timeoutMs: number;
-		retryCount: number;
 		apiKey: string;
 		hasApiKey: boolean;
 	}
@@ -52,8 +50,6 @@
 				id: s.id,
 				label: s.label,
 				serverUrl: s.serverUrl,
-				timeoutMs: s.timeoutMs ?? 30000,
-				retryCount: s.retryCount ?? 0,
 				apiKey: '',
 				hasApiKey: s.hasApiKey
 			}));
@@ -88,8 +84,6 @@
 				id: randomId(),
 				label: 'org-server',
 				serverUrl: 'http://localhost:5000',
-				timeoutMs: 30000,
-				retryCount: 0,
 				apiKey: '',
 				hasApiKey: false
 			}
@@ -114,13 +108,9 @@
 		try {
 			const payload = {
 				defaultServerId: orgDefaultServerId === '' ? null : orgDefaultServerId,
-				servers: servers.map(({ apiKey, hasApiKey: _, retryCount, timeoutMs, ...s }) => ({
+				servers: servers.map(({ apiKey, hasApiKey: _, ...s }) => ({
 					...s,
-					timeoutMs: Math.min(300000, Math.max(1000, Number(timeoutMs) || 30000)),
-					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {}),
-					...(Number(retryCount)
-						? { retryCount: Math.min(5, Math.max(0, Number(retryCount))) }
-						: {})
+					...(apiKey === API_KEY_CLEAR ? { apiKey: null } : apiKey ? { apiKey } : {})
 				}))
 			};
 
@@ -132,7 +122,7 @@
 
 			if (res.ok) {
 				toast.success('Compute settings saved');
-				await invalidateAll();
+				await refreshAll();
 				dirty = false;
 			} else {
 				const err = await res.json().catch(() => ({ error: 'Unknown error' }));
@@ -151,7 +141,7 @@
 </svelte:head>
 
 {#snippet serverCard(server: ServerEntry, i: number)}
-	<div class="bg-muted/30 space-y-3 rounded-lg border p-4">
+	<div class="bg-raised shadow-raised space-y-3 rounded-lg border p-4">
 		<div class="flex items-center justify-between">
 			<div class="flex items-center gap-2">
 				<Input
@@ -233,32 +223,6 @@
 						</button>
 					{/if}
 				</div>
-			</div>
-			<div class="space-y-1">
-				<p class="text-muted-foreground text-xs">Timeout (ms)</p>
-				<Input
-					type="number"
-					placeholder="30000"
-					bind:value={server.timeoutMs}
-					oninput={() => (dirty = true)}
-					onblur={() => {
-						server.timeoutMs = Math.min(300000, Math.max(1000, Number(server.timeoutMs) || 30000));
-					}}
-					class="text-xs"
-				/>
-			</div>
-			<div class="space-y-1">
-				<p class="text-muted-foreground text-xs">Retries</p>
-				<Input
-					type="number"
-					placeholder="0"
-					bind:value={server.retryCount}
-					oninput={() => (dirty = true)}
-					onblur={() => {
-						server.retryCount = Math.min(5, Math.max(0, Number(server.retryCount) || 0));
-					}}
-					class="text-xs"
-				/>
 			</div>
 		</div>
 

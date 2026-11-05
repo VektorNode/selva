@@ -101,6 +101,33 @@ describe('extractLoadableValues', () => {
 		} as unknown as Partial<UISchema>);
 		expect(extractLoadableValues(preset(), renamed)).toEqual({ a: 1, b: 2 });
 	});
+
+	it('drops values for inputs that have since become a button or a geometry input', () => {
+		const changed = schema({
+			inputs: [
+				{ id: 'a', nickname: 'A', paramType: 'geometry' },
+				{ id: 'b', nickname: 'B', paramType: 'boolean' }
+			],
+			layout: {
+				type: 'flat',
+				groups: [
+					{
+						id: 'g',
+						items: [
+							{
+								id: 'i',
+								type: 'input',
+								widgetType: 'checkbox',
+								paramId: 'b',
+								config: { displayAs: 'button' }
+							}
+						]
+					}
+				]
+			}
+		} as unknown as Partial<UISchema>);
+		expect(extractLoadableValues(preset(), changed)).toEqual({});
+	});
 });
 
 describe('loadPreset', () => {

@@ -2,7 +2,7 @@
  * Adapter conformance suite for IUserProfileStore.
  *
  * Tests the user-profile mutations (display name, starred definitions,
- * recent runs) that used to live on IAuthProvider. Adapters must seed
+ * recent runs). Adapters must seed
  * a real user before each test since profile mutations target a userId.
  */
 
@@ -11,12 +11,10 @@ import type { IUserProfileStore } from '../../userProfile/interface.js';
 import type { AuthUser } from '../../auth/index.js';
 import type { RecentRun } from '../../userProfile/index.js';
 import { SYSTEM_CONTEXT } from '../../context.js';
-import { makeUuid } from './helpers.js';
+import { makeCtx, makeUuid } from './helpers.js';
 
-// Profile mutations need a ctx scoped to the target user (docs/contributing/permissions.md §9 +
-// the `IUserProfileStore` JSDoc auth-boundary note). The conformance suite
-// uses SYSTEM_CONTEXT throughout so it doesn't need to mint per-user ctxs;
-// the per-user authorization is exercised in adapter-specific tests.
+// SYSTEM_CONTEXT, so most cases don't need a ctx minted per user. The scoping case
+// below builds its own.
 const ctx = SYSTEM_CONTEXT;
 
 export interface UserProfileStoreConformanceOptions {
@@ -37,6 +35,54 @@ export function runUserProfileStoreConformance(opts: UserProfileStoreConformance
 	const { name, createStore } = opts;
 
 	describe(`IUserProfileStore conformance: ${name}`, () => {
+		it('a user cannot read or change someone else through a plain ctx', async () => {
+			const { store, seedUser } = await createStore();
+			const victim = await seedUser('victim@example.com');
+			const other = makeCtx(makeUuid(), { platformPermissions: [] });
+
+			await expect(store.getProfile(other, victim.id)).rejects.toThrow();
+			await expect(
+				store.updateProfile(other, victim.id, { displayName: 'Hacked' })
+			).rejects.toThrow();
+		});
+
+		it('recordRun keeps one entry per definition, newest first', async () => {
+			const { store, seedUser } = await createStore();
+			const user = await seedUser('dedupe@example.com');
+			const run = (definitionId: string, timestamp: string): RecentRun => ({
+				definitionId,
+				runId: makeUuid(),
+				definitionName: 'D',
+				timestamp
+			});
+			const a = makeUuid();
+			const b = makeUuid();
+
+			await store.recordRun(ctx, user.id, run(a, '2026-01-01T00:00:00.000Z'));
+			await store.recordRun(ctx, user.id, run(b, '2026-01-02T00:00:00.000Z'));
+			await store.recordRun(ctx, user.id, run(a, '2026-01-03T00:00:00.000Z'));
+
+			const profile = await store.getProfile(ctx, user.id);
+			expect(profile?.recentRuns.map((r) => r.definitionId)).toEqual([a, b]);
+		});
+
+		it('recordRun caps the list', async () => {
+			const { store, seedUser } = await createStore();
+			const user = await seedUser('cap@example.com');
+
+			for (let i = 0; i < 30; i++) {
+				await store.recordRun(ctx, user.id, {
+					definitionId: makeUuid(),
+					runId: makeUuid(),
+					definitionName: 'D',
+					timestamp: new Date(i).toISOString()
+				});
+			}
+
+			const profile = await store.getProfile(ctx, user.id);
+			expect(profile?.recentRuns.length).toBeLessThan(30);
+		});
+
 		it('getProfile returns null for unknown user', async () => {
 			const { store } = await createStore();
 			const profile = await store.getProfile(ctx, makeUuid());

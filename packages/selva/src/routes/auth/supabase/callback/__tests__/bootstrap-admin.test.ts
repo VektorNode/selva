@@ -17,8 +17,8 @@ import {
 	seedUser,
 	setEnv,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
-import { issueOAuthState } from '$lib/server/auth/oauthState.server.js';
+} from '#lib/server/__tests__/fixtures.js';
+import { issueOAuthState } from '#lib/server/auth/oauthState.server.js';
 import { GET } from '../+server.js';
 
 let tp: TestProviders | null = null;

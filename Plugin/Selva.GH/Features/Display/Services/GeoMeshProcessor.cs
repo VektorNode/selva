@@ -70,15 +70,29 @@ public static class GeoMeshProcessor
             }
         }
 
-        // Triangle -> 3 indices, quad -> 6 (two triangles). TriangleCount/QuadCount are O(1) on
-        // MeshFaceList, so the array is sized exactly without a separate counting pass.
-        var faces = new int[meshFaces.TriangleCount * 3 + meshFaces.QuadCount * 6];
+        // Triangle -> 3 indices, quad -> 6 (two triangles). Counted here, not from
+        // TriangleCount/QuadCount: those leave out faces with a repeated vertex, which the loop
+        // below would still write past the array's end.
+        var indexCount = 0;
+        for (var i = 0; i < faceCount; i++)
+        {
+            var face = meshFaces[i];
+            if (face.IsValid(vertexCount)) indexCount += face.IsQuad ? 6 : 3;
+        }
+
+        var faces = new int[indexCount];
 
         var faceIndex = 0;
         var ngonCount = 0;
         for (var i = 0; i < faceCount; i++)
         {
             var face = meshFaces[i];
+            if (!face.IsValid(vertexCount))
+            {
+                // Degenerate (a repeated or out-of-range vertex): covers nothing.
+                continue;
+            }
+
             if (face.IsTriangle)
             {
                 faces[faceIndex++] = face.A;

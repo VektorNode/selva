@@ -19,9 +19,13 @@ import type {
 	WsCurrentValuesMessage,
 	WsSyncPreviewMessage,
 	WsSyncAppliedMessage,
+	WsLayoutPlacedMessage,
+	WsCanvasSelectionMessage,
+	WsRevealItemMessage,
 	SyncChange
-} from '$lib/websocket/websocket.svelte';
+} from '#lib/websocket/websocket.svelte.js';
 import type { UISchema } from '@selvajs/schemas';
+import type { DraftPlacement } from '#lib/features/builder/operations.js';
 
 /**
  * The push events the builder/preview state subscribes to. Each entry maps an event name to
@@ -41,6 +45,9 @@ export interface SchemaSourceEvents {
 	currentValues: WsCurrentValuesMessage;
 	syncPreview: WsSyncPreviewMessage;
 	syncApplied: WsSyncAppliedMessage;
+	layoutPlaced: WsLayoutPlacedMessage;
+	canvasSelection: WsCanvasSelectionMessage;
+	revealItem: WsRevealItemMessage;
 	/** Builder-only: live output values for the layout editor's read-only previews. */
 	outputs: WsOutputsMessage;
 	/** Preview-only: output-only push (no display payload) outside the solve report path. */
@@ -78,8 +85,11 @@ export interface SchemaSource {
 	 */
 	connect(sessionId: string): Promise<ConnectResult>;
 
-	/** Ask the source to (re)emit `initialData` for this session. */
-	requestInitialData(sessionId: string): void;
+	/**
+	 * Ask the source to (re)emit `initialData` for this session. `schemaOnly` skips the outputs
+	 * and display data that otherwise follow it, which cost Grasshopper a pass over every bake.
+	 */
+	requestInitialData(sessionId: string, options?: { schemaOnly?: boolean }): void;
 
 	/**
 	 * Persist a draft. Resolves once the source acknowledges (ack) or rejects (stale base /
@@ -89,6 +99,12 @@ export interface SchemaSource {
 	save(sessionId: string, draft: UISchema, baseHash: string | null): Promise<SaveResult>;
 
 	requestSyncPreview(sessionId: string, draft: UISchema): void;
+
+	/**
+	 * Tell the plugin where the unsaved draft places each param, so the canvas can show it before
+	 * a save. Null means the draft matches what is saved.
+	 */
+	sendDraftLayout(sessionId: string, placements: DraftPlacement[] | null): void;
 	applySyncChanges(sessionId: string, changes: SyncChange[]): void;
 
 	/**
@@ -96,9 +112,14 @@ export interface SchemaSource {
 	 * The driver sends values on solve() and, as outputs + binary mesh frames arrive, reports
 	 * them back through the reporter. All WebSocket solve quirks — value preparation, the
 	 * monotonic-token mesh-blob streaming, the in-flight `isSolving` mirror — stay inside the
-	 * adapter; the Solve Session never learns them.
+	 * adapter; the Solve Session never learns them. `getValuelessInputs` names the inputs whose
+	 * values never go out: geometry and buttons, which the plugin fills itself.
 	 */
-	makeSolveDriver(sessionId: string, getReporter: () => SolveReporter): PreviewSolveDriver;
+	makeSolveDriver(
+		sessionId: string,
+		getReporter: () => SolveReporter,
+		getValuelessInputs?: () => ReadonlySet<string>
+	): PreviewSolveDriver;
 }
 
 /**
@@ -108,10 +129,13 @@ export interface SchemaSource {
  */
 export interface PreviewSolveDriver extends SolveDriver {
 	/**
-	 * Ingest the outputs/meshes carried *on the initialData frame itself* (the server includes
-	 * the last solve's result so the preview can paint immediately, before any fresh solve).
-	 * Runs the same parse-and-report path as a live outputs frame. The message is the raw
-	 * initialData payload (which is shaped like an outputs envelope for these fields).
+	 * Ingest the output values carried on the initialData frame, so the preview paints those
+	 * before any fresh solve. Runs the same parse-and-report path as a live outputs frame; the
+	 * message is the raw initialData payload, shaped like an outputs envelope for these fields.
+	 *
+	 * Meshes never ride on initialData itself — BridgeOrchestrator.ClientConnected schedules a
+	 * normal outputs broadcast right after it whenever the schema has outputs or the viewer is
+	 * on, and that carries binaryBatchCount/displayItems the usual way.
 	 */
 	primeFromInitialData(message: WsOutputsMessage): void;
 	/** Detach the driver's transport subscriptions (outputs/binary frames). */

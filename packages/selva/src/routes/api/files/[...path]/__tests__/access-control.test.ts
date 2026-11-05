@@ -16,7 +16,7 @@ import {
 	anon,
 	call,
 	type TestProviders
-} from '$lib/server/__tests__/fixtures.js';
+} from '#lib/server/__tests__/fixtures.js';
 import { GET } from '../+server.js';
 
 let tp: TestProviders | null = null;
@@ -184,48 +184,15 @@ describe('GET /api/files/[...path] — org branding (public)', () => {
 	});
 });
 
-// ============================================================================
-// Org-private — members-only asset class (e.g. pricing sheets). Reuses the
-// `orgs/{id}/private/*` tier the registry reserves for future org docs.
-// ============================================================================
-
-describe('GET /api/files/[...path] — org-private (members only)', () => {
-	const privatePath = (orgId: string) => orgPaths.privateAsset(orgId, 'pricing.pdf');
-
-	async function seedPrivateDoc(orgId: string): Promise<string> {
-		const p = privatePath(orgId);
-		await tp!.config.storage.put(p, new TextEncoder().encode('PRICES'), 'application/pdf');
-		return p;
-	}
-
-	it('serves an org-private doc to a member of that org', async () => {
+describe('GET /api/files/[...path] — orgs/{id}/private', () => {
+	it('has no asset class, so even a member gets 404', async () => {
 		tp = await freshProviders();
 		const { acme, bob } = await seedAcme(tp);
-		const path = await seedPrivateDoc(acme.id);
+		const path = `orgs/${acme.id}/private/pricing.pdf`;
+		await tp.config.storage.put(path, new TextEncoder().encode('PRICES'), 'application/pdf');
 
-		const bobLocals = await actAs(tp, bob.id); // bob is an Acme member
-		const res = await call(GET, { locals: bobLocals, params: { path } });
-		expect(res.status).toBe(200);
-		expect(res.headers.get('cache-control')).toContain('private');
-	});
+		const res = await call(GET, { locals: await actAs(tp, bob.id), params: { path } });
 
-	it('blocks a member of a different org', async () => {
-		tp = await freshProviders();
-		const { acme } = await seedAcme(tp);
-		const { carol } = await seedBigClient(tp);
-		const path = await seedPrivateDoc(acme.id);
-
-		const carolLocals = await actAs(tp, carol.id);
-		const res = await call(GET, { locals: carolLocals, params: { path } });
-		expect(res.status).toBe(403);
-	});
-
-	it('blocks an anonymous caller with 401', async () => {
-		tp = await freshProviders();
-		const { acme } = await seedAcme(tp);
-		const path = await seedPrivateDoc(acme.id);
-
-		const res = await call(GET, { locals: anon(tp), params: { path } });
-		expect(res.status).toBe(401);
+		expect(res.status).toBe(404);
 	});
 });

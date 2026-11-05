@@ -19,6 +19,8 @@ import {
 	OrgPermissionSchema,
 	PlatformPermissionSchema,
 	ALL_ORG_PERMISSIONS,
+	ApiScopeStringSchema,
+	API_TOKEN_LIFETIME_DAYS,
 	type OrgPermission
 } from '@selvajs/platform';
 
@@ -27,7 +29,8 @@ import {
 // ============================================================================
 
 export const SolveBodySchema = z.object({
-	inputs: z.array(z.unknown()).default([]),
+	/** Ignored: the solve reads the inputs from the version's stored schema. */
+	inputs: z.array(z.unknown()).optional().meta({ deprecated: true }),
 	values: z.record(z.string(), z.unknown()).default({}),
 	channel: z.enum(['live', 'draft']).default('live'),
 	versionId: z.string().optional(),
@@ -85,9 +88,7 @@ const IncomingComputeServerSchema = z.object({
 	id: z.string().min(1),
 	label: z.string().min(1),
 	serverUrl: z.string().min(1),
-	apiKey: z.string().nullable().optional(),
-	timeoutMs: z.number().optional(),
-	retryCount: z.number().optional()
+	apiKey: z.string().nullable().optional()
 });
 
 export const OrgComputePatchBodySchema = z.object({
@@ -106,3 +107,13 @@ export const UpdateOrgMemberBodySchema = z
 	.refine((b) => b.role !== undefined || b.permissions !== undefined, {
 		message: 'Provide at least one of role, permissions'
 	});
+
+// ============================================================================
+// API tokens
+// ============================================================================
+
+export const CreateApiTokenBodySchema = z.object({
+	name: z.string().trim().min(1, 'Name is required').max(100),
+	scopes: z.array(ApiScopeStringSchema).min(1, 'Pick at least one scope').max(20),
+	expiresInDays: z.union(API_TOKEN_LIFETIME_DAYS.map((d) => z.literal(d)))
+});

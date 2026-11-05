@@ -1,9 +1,12 @@
-import { resolveServerForOrg, ComputeServerUnconfiguredError } from '@selvajs/server/compute';
-import { requireCanCreateDefinition, scoped } from '$lib/server/access.server';
+import { ComputeServerUnconfiguredError } from '@selvajs/server/compute';
+import { serverResolver } from '#lib/server/compute/serverResolver.server.js';
+import { asHttpError, requireCanCreateDefinition, scoped } from '#lib/server/access.server.js';
+import { assertScope } from '@selvajs/server/api';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { requireMaxBodySize } from '$lib/server/admin-auth.server';
-import { MAX_DEFINITION_FILE_SIZE } from '$lib/server/computeLimits';
+import { withApiRateLimit } from '#lib/server/api/sveltekit.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
+import { MAX_DEFINITION_FILE_SIZE } from '#lib/server/computeLimits.js';
 import {
 	assertCamelCaseSchema,
 	postSchemaFormData,
@@ -14,7 +17,7 @@ import {
 // constant overhead on top of the raw .gh bytes; 1 MB clears it comfortably.
 const MULTIPART_OVERHEAD = 1024 * 1024;
 
-export const POST: RequestHandler = async ({ request, locals, url }) => {
+export const POST: RequestHandler = withApiRateLimit(async ({ request, locals, url }) => {
 	const projectId = url.searchParams.get('projectId');
 	if (!projectId) {
 		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'projectId query parameter is required');
@@ -30,7 +33,10 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	// Same gate as POST /api/definitions: container projects need owner/editor;
 	// commons projects (`autoJoinOnUpload=true`) accept any authenticated user.
 	// Eliminates the random-authenticated-drain path the auth-only check left open.
-	const { project } = await requireCanCreateDefinition(scoped(locals), projectId);
+	await asHttpError(() => assertScope(locals.ctx, 'upload', { projectId }));
+	const { project } = await asHttpError(() =>
+		requireCanCreateDefinition(scoped(locals), projectId)
+	);
 
 	// Pin to the same server the upload will use, so schema extraction runs on
 	// the server that later solves the definition - not the org/global default.
@@ -39,7 +45,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 	let server;
 	try {
-		server = await resolveServerForOrg(
+		server = await serverResolver.resolve(
 			locals.ctx!,
 			project.orgId,
 			locals.providers.data.computeServer,
@@ -90,4 +96,4 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 	return new Response(JSON.stringify(schemas), {
 		headers: { 'Content-Type': 'application/json' }
 	});
-};
+});

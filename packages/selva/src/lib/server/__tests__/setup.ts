@@ -1,6 +1,6 @@
 /**
  * Global vitest setup file (wired via `test.setupFiles`). Mocks
- * `$lib/server/providers.server` so every route handler and access helper
+ * `#lib/server/providers.server.js` so every route handler and access helper
  * imports a forwarding stub that reads from `currentTestProviders()` instead
  * of the production singleton initialized from process.env at module load.
  *
@@ -17,7 +17,7 @@ import {
 	NoopNotificationProvider
 } from '@selvajs/platform';
 
-vi.mock('$lib/server/providers.server', async () => {
+vi.mock('#lib/server/providers.server.js', async () => {
 	const { currentTestProviders } = await import('./test-providers.js');
 	const { OrgAssetService } = await import('@selvajs/server/organizations');
 	const testLogger = new NoopLogger();

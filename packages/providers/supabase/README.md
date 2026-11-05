@@ -62,6 +62,8 @@ Images are transcoded to WebP (1200px cap, quality 85) via the shared `transcode
 
 `SupabaseAuthProvider.verifyLogin` wraps `supabase.auth.signInWithPassword`, returning the JWT directly as `sessionToken`. `verifyToken` calls `supabase.auth.getUser(token)` — GoTrue validates the signature for us. Platform permissions merge in from `user_profiles.platform_permissions`.
 
+`delegatedSession` signs a short-lived session JWT (`delegatedSessionTtlSeconds`, default 60) for an API token's owner, so a token request reaches the stores as `adapterContext.sessionToken` and RLS treats it like that user's browser session. It signs ES256 with `SUPABASE_JWT_SIGNING_KEY` (or HS256 with the legacy `SUPABASE_JWT_SECRET`) and checks once, with a PostgREST read, that the project accepts the key. Claims are fixed (`role` and `aud` are `authenticated`, no `session_id`). Operator setup: [API tokens](../../../docs/self-hosting/providers/supabase.md#api-tokens).
+
 MFA methods on `IPasswordAuth` are currently undefined — MFA is deferred. If a user enrolls a factor via the Supabase dashboard, `signInWithPassword` returns an AAL1 session and routes that gate on AAL2 would fail; no route does today.
 
 ### Data + RLS
@@ -98,13 +100,15 @@ cd packages/providers/supabase
 npx supabase start
 
 cat > .env.test <<EOF
-SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_URL=http://127.0.0.1:54421
 SUPABASE_ANON_KEY=<publishable key>
 SUPABASE_SERVICE_ROLE_KEY=<secret key>
 EOF
 
 pnpm test
 ```
+
+CI's `supabase` job does the same, with `SELVA_REQUIRE_SUPABASE=1` so an unreachable stack fails rather than skips.
 
 `.env.test` is gitignored and separate from your app's `.env`. `vitest.config.ts` loads it if present and probes `SUPABASE_URL` before the run; if the file is missing or the stack is unreachable it strips the three vars so every suite takes its no-credentials skip path and prints a warning.
 

@@ -3,18 +3,21 @@
 		TabConfig,
 		SchemaInput,
 		DiscoveredOutput,
+		UISchema,
 		SupportedTypes,
 		InputLayoutItem,
 		OutputLayoutItem
 	} from '@selvajs/schemas';
-	import * as Tabs from '$lib/components/primitives/tabs';
-	import { ScrollArea } from '$lib/components/primitives/scroll-area';
+	import * as Tabs from '#lib/components/primitives/tabs/index.js';
+	import { ScrollArea } from '#lib/components/primitives/scroll-area/index.js';
 	import StateDisplay from '../primitives/StateDisplay.svelte';
 	import Group from './Group.svelte';
 	import InputControl from './InputControl.svelte';
 	import OutputDisplay from './OutputDisplay.svelte';
-	import { evaluateGroupVisibility } from '$lib/schema/visibility-rules';
-	import { getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import { evaluateGroupVisibility } from '#lib/schema/visibility-rules.js';
+	import { isSupportedOn, layoutItemKind } from '#lib/schema/host-support.js';
+	import { getHostContext } from '#lib/contexts/hostContext.svelte.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 
 	const locale = getLocaleContext();
 	const t = $derived(locale.messages);
@@ -29,6 +32,10 @@
 		outputs: DiscoveredOutput[];
 		/** Computed value list options keyed by the target dynamic-value-list input id. */
 		dynamicOptions?: Record<string, Record<string, string>>;
+		/** The schema's icons and thumbnails, which value-list options point into. */
+		assets?: UISchema['assets'];
+		/** No tinted backdrop and no scroll area of its own: the container scrolls. */
+		bare?: boolean;
 	}
 
 	let {
@@ -39,11 +46,24 @@
 		onValueChange,
 		inputs,
 		outputs,
-		dynamicOptions = {}
+		dynamicOptions = {},
+		assets,
+		bare = false
 	}: Props = $props();
 
+	const { host } = getHostContext();
+
+	// An element this host can't render is left out, not shown broken: its input still solves with
+	// the definition's own default. A group left with nothing to show goes too.
 	const visibleGroups = $derived(
-		tab.groups.filter((group) => evaluateGroupVisibility(group, values))
+		tab.groups
+			.filter((group) => evaluateGroupVisibility(group, values))
+			.flatMap((group) => {
+				const items = group.items.filter((item) =>
+					isSupportedOn(host, layoutItemKind(item, inputs))
+				);
+				return items.length > 0 || group.items.length === 0 ? [{ ...group, items }] : [];
+			})
 	);
 
 	function getInputById(paramId: string): SchemaInput | undefined {
@@ -68,6 +88,8 @@
 			onChange={onValueChange}
 			disabled={visibility.disabled}
 			dynamicOptions={dynamicOptions[input.id]}
+			paramType={input.paramType}
+			{assets}
 		/>
 	{/if}
 {/snippet}
@@ -83,60 +105,44 @@
 	{/if}
 {/snippet}
 
-<Tabs.Content value={tab.id} class="min-h-0 p-0 flex-1">
-	<ScrollArea class="h-full" orientation="vertical">
-		<div class="p-4 tab-content-container">
-			{#if visibleGroups.length === 0}
-				<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
-			{:else}
-				<div class="gap-8 flex flex-col">
-					{#each visibleGroups as group (group.id)}
-						<Group
-							label={group.label}
-							description={group.description}
-							items={group.items}
-							columns={group.columns ?? 1}
-							collapsed={collapsedGroups[group.id] ?? false}
-							{values}
-							onToggle={() => onToggleGroup(group.id)}
-							inputSnippet={renderInput}
-							outputSnippet={renderOutput}
-							flat={visibleGroups.length === 1}
-						/>
-					{/each}
-				</div>
-			{/if}
+{#snippet body()}
+	<div class={bare ? 'px-1' : 'px-3'}>
+		<!-- A heading per panel lets a screen reader jump between them; the tab, when shown,
+				     already names it on screen. -->
+		<h2 class="sr-only">{tab.label}</h2>
+		{#if visibleGroups.length === 0}
+			<StateDisplay type="empty" size="medium" message={t.tabNoGroups} />
+		{:else}
+			<div class="gap-4 py-4 flex flex-col">
+				{#each visibleGroups as group (group.id)}
+					<Group
+						label={group.label}
+						description={group.description}
+						items={group.items}
+						columns={group.columns ?? 1}
+						collapsed={collapsedGroups[group.id] ?? false}
+						{values}
+						onToggle={() => onToggleGroup(group.id)}
+						inputSnippet={renderInput}
+						outputSnippet={renderOutput}
+						flat={visibleGroups.length === 1}
+					/>
+				{/each}
+			</div>
+		{/if}
+	</div>
+{/snippet}
+
+<Tabs.Content value={tab.id} class="min-h-0">
+	{#if bare}
+		{@render body()}
+	{:else}
+		<div class="h-full">
+			<!-- `auto`, not the default `hover`: a hover-only bar comes and goes with the pointer,
+			     and a host that freezes mid-solve drops the pointer state with it. -->
+			<ScrollArea class="h-full" orientation="vertical" type="auto">
+				{@render body()}
+			</ScrollArea>
 		</div>
-	</ScrollArea>
+	{/if}
 </Tabs.Content>
-
-<style>
-	.tab-content-container {
-		container-type: inline-size;
-	}
-
-	@container (max-width: 320px) {
-		:global(.schema-grid) {
-			grid-template-columns: 1fr;
-		}
-	}
-	@container (min-width: 321px) and (max-width: 560px) {
-		:global(.schema-grid) {
-			grid-template-columns: repeat(min(2, var(--schema-cols)), minmax(0, 1fr));
-		}
-	}
-
-	/* Fallback for browsers without container query support */
-	@supports not (container-type: inline-size) {
-		@media (max-width: 639px) {
-			:global(.schema-grid) {
-				grid-template-columns: 1fr;
-			}
-		}
-		@media (min-width: 640px) and (max-width: 1023px) {
-			:global(.schema-grid) {
-				grid-template-columns: repeat(min(2, var(--schema-cols)), minmax(0, 1fr));
-			}
-		}
-	}
-</style>

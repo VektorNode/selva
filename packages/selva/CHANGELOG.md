@@ -1,5 +1,519 @@
 # @selvajs/selva
 
+## 4.20.0
+
+### Minor Changes
+
+- edb568d: API tokens, a public `/api/v1`, MCP with OAuth sign-in, Grasshopper plugin upload, and deployment config you can inspect and rotate safely.
+
+  **Action needed when upgrading**
+
+  - Supabase deployments: run `npx selva-supabase`, then `npx supabase db push`, before starting the new version. This release ships several migrations.
+  - Retired env vars are ignored and logged at boot; `selva migrate` removes them. Among them: `COMPUTE_SOLVE_DEADLINE_MS`, `COMPUTE_REUSE_DEFINITION_CACHE`, `COMPUTE_CACHE_ERRORED_SOLVES`, `COMPUTE_REQUEST_MAX_BYTES` (fixed 256 MB), `COMPUTE_RESPONSE_MAX_BYTES` (fixed 300 MB) and `MAX_IMAGE_FILE_SIZE_BYTES` (fixed 10 MB).
+  - A solve's deadline and definition-cache reuse come from the compute server's `GET /limits`. A server that doesn't answer gets a 100 s deadline and a definition re-upload on every solve.
+  - A bad value on a security setting now stops boot instead of falling back: `SELVA_HMAC_KEY` missing or under 32 characters (checked under every auth provider, header auth included), an `SELVA_AT_REST_KEY` that isn't 32 bytes, booleans outside `true|false|1|0|yes|no|on|off`, malformed URLs and out-of-range ports. Run `selva config show` or `selva migrate --dry-run` to check `.env`.
+  - Header auth: the email fallback no longer matches the allowlist's `email` column. API tokens, MCP and plugin upload need Caddy routes that skip `forward_auth` (see the header-auth guide).
+  - A hand-written compute server id that isn't a UUID has to become one before compute config can be saved again. Compute server ids must also be unique across orgs and the platform.
+  - `POST /api/v1/definitions/{guid}/solve` solves a stored definition's inputs from the version's schema. `inputs` in the body is deprecated and ignored; omitting it solves the stored inputs, not the file's defaults. Number widget bounds are enforced on the server.
+  - 429 bodies carry the code `RATE_LIMITED`; the compute route moves `retryAfter` to `details.retryAfter` (the `Retry-After` header is unchanged).
+  - Share links minted without `expiresAt` expire after 90 days. An explicit `expiresAt: null` still means never.
+  - `docs`, `mcp` and `oauth` are reserved org slugs.
+  - A definition with only Local render on (`viewerOptions.enableLocal`) opens without a viewer: Selva's viewer follows Compute render (`enableRemote`) alone.
+
+  **API tokens and `/api/v1`**
+
+  - Org-scoped API keys (`selva_…`) with `read`, `upload`, `create_projects` and `write` actions, managed at `/team/tokens` and through `POST`/`GET /api/v1/orgs/{orgId}/tokens` and `DELETE /api/v1/orgs/{orgId}/tokens/{tokenId}`. Minting a full key needs `manage_api_tokens`; an upload-only key can be held by anyone who may create a definition. The owner gets an email when a key is minted.
+  - A key reaches only its own org and its owner's current rights: removing a member or disabling a user revokes their keys, and the holder rule is re-checked on every request.
+  - Per-key rate limit (600 per 60 s by default, `API_TOKEN_RATE_LIMIT_MAX`, `API_TOKEN_RATE_LIMIT_WINDOW_MS`) with `RateLimit-*` headers, and `Idempotency-Key` on project, definition, version, share-link and solve creates.
+  - `SIGN_IN_MAX_AGE_DAYS` limits how long one identity-provider sign-in lasts for keys, consent and session refresh. `API_TOKEN_SIGN_IN_WINDOW_DAYS` retires keys whose owner stops coming through a header-auth proxy. Both are off unless set.
+  - `GET /api/v1/openapi.json` publishes the spec. `GET /api/v1/me` reports the caller's key, scopes, expiry and `capabilities`. `DELETE /api/v1/me/token` lets a key revoke itself.
+  - Changing or removing org members, and invites, need a browser session; an API key gets 403.
+  - A `SELVA_HMAC_KEY` shorter than 32 characters turns API tokens off (503) instead of failing every request.
+
+  **MCP and OAuth**
+
+  - `/mcp` serves the API as MCP tools: `selva_list_projects`, `selva_list_definitions`, `selva_describe_definition`, `selva_solve` and `selva_publish_definition`, filtered by the key's scopes. `MCP_ALLOWED_ORIGINS` lists extra browser origins it accepts.
+  - MCP clients sign in through the browser: OAuth discovery, registration, a consent page at `/oauth/authorize` and a token endpoint. Approval mints a 30-day key in the acting org.
+  - The Grasshopper plugin signs in through the same flow and uploads definitions, optionally into a new private project. Uploading fills the definition's category from the schema.
+
+  **Deployment and operations**
+
+  - `/admin/system` shows the resolved configuration: what `.env` sets, defaults, invalid values and unknown keys. See `selva config` in `@selvajs/cli`.
+  - Key rotation keeps the old key working for 30 days through `SELVA_HMAC_KEY_PREVIOUS` / `SELVA_AT_REST_KEY_PREVIOUS` (`selva keys rotate`). Boot re-seals stored compute API keys under the new at-rest key.
+  - Share-link, invite and API tokens are stored as unkeyed SHA-256; existing tokens keep resolving.
+  - An `http://` `ORIGIN` drops the `Secure` cookie flag, so sign-in over plain HTTP works without `ALLOW_INSECURE_COOKIES`.
+  - Restarts no longer wait out PM2's `kill_timeout`, and open tabs show a "Selva has been updated" notice with Reload.
+  - `SENTRY_TRACES_SAMPLE_RATE` sets trace sampling; Sentry events are scrubbed of cookies, auth headers, bodies and query strings before they leave. Requests are timed with `Server-Timing` and sampled `[timing]` logs.
+  - Built on SvelteKit 3. `.env`, the start command and the proxy setup are unchanged; Selva applies `ORIGIN` itself.
+
+  **Security**
+
+  - One user can no longer choose what another user's solve returns: the shared solve cache keys on SHA-256 instead of a collidable 32-bit hash.
+  - The Rhino.Compute API key no longer follows a redirect from the compute server; a redirecting server URL fails with a message naming the address to configure.
+  - Changing a compute server's URL requires re-entering or clearing its API key (409 otherwise), so a stored key can't be redirected to another host. Org compute config can no longer be changed with an API key.
+  - Stored compute API keys are bound to their server id, so ciphertext can't be replayed to decrypt another tenant's key. An org admin can no longer reuse another tenant's server id.
+  - Access-rule fixes: commons uploads need `canView`; two admins or owners removing each other can't leave none; invite resend runs the same gates as invite creation; accepting an invite adds permissions instead of replacing them and checks the inviter still vouches; `safeRedirectTarget` refuses control characters.
+  - Form-CSRF moves into the hook, so the OAuth token endpoint and key-authenticated multipart uploads aren't refused in production.
+
+  **Solving**
+
+  - `generic` inputs reach Grasshopper. A number or boolean that can't be coerced is left out so Grasshopper keeps its own value, instead of sending `0` or `false`. Text, colour and file values are sent as entered.
+  - Compute responses past `COMPUTE_RESPONSE_MAX_BYTES` are cut off mid-download. Solves of 300 s or more work. A cached solve reuses its gzipped body, and responses gzip at level 1.
+  - Concurrent requests with an expired session share one token exchange, so a provider that rotates refresh tokens no longer signs the user out.
+  - Fewer sequential reads on the solve, team, members, user-admin and token pages.
+
+  **UI**
+
+  - Hanken Grotesk typeface, one content width, one dropdown component, a new surface system for light and dark, and a phone layout: icon-only nav, one header menu, a project picker on `/projects`, and tables that drop secondary columns.
+  - The admin health page reports whether API token sessions work. The admin compute pages show an unusable stored server URL or key instead of failing with a 500.
+  - `selva update` and `selva doctor` catch a database that is behind the app (`build/runtime-meta.json` records the expected migration head).
+
+  **Erasure**
+
+  - Supabase: erasing a user no longer deletes orgs or projects they created; ownership goes to the erased actor. `DELETE /api/admin/users/[id]` answers 409 for an org's only owner.
+  - Deleting an org or project removes its stored blobs.
+
+  Dependencies updated.
+
+### Patch Changes
+
+- 5ced834: The in-app update and `selva update` move pm2 to the version the new release pins and swap the daemon, so a pm2 bump needs no `selva migrate`. Under systemd the in-app update can't swap the daemon: it finishes with a warning to run `npx pm2 update` from a shell. `selva doctor` now fails when `selva-compute` is missing from pm2 or not online, which an interrupted `pm2 update` leaves behind while every other check passes.
+
+## 4.20.0-beta.30
+
+### Patch Changes
+
+- 5ced834: The in-app update and `selva update` move pm2 to the version the new release pins and swap the daemon, so a pm2 bump needs no `selva migrate`. Under systemd the in-app update can't swap the daemon: it finishes with a warning to run `npx pm2 update` from a shell. `selva doctor` now fails when `selva-compute` is missing from pm2 or not online, which an interrupted `pm2 update` leaves behind while every other check passes.
+
+## 4.20.0-beta.29
+
+No changes in this release.
+
+## 4.20.0-beta.28
+
+### Patch Changes
+
+- dae2ea8: Restarts and updates no longer wait out PM2's full `kill_timeout`: open solve-event streams close on shutdown and browsers reconnect to the new process. Open tabs show a "Selva has been updated" notice with a Reload button once a new version is deployed.
+
+## 4.20.0-beta.27
+
+### Minor Changes
+
+- 0b4e51e: Built on SvelteKit 3.
+
+  - `@selvajs/selva`: nothing changes for a running deployment; `.env`, the start command and the proxy setup stay as they are. adapter-node 6 no longer reads `ORIGIN`, so Selva applies it itself: links, OAuth metadata and the form-CSRF check use `ORIGIN` when it is set, as before.
+  - `@selvajs/server`: `isCrossSiteFormSubmission` takes an `origin` option for hosts that know their public origin better than `request.url` does.
+  - `@selvajs/ui`: packaged with `@sveltejs/package` 3. The published output is unchanged and still supports SvelteKit 2 and 3.
+
+## 4.20.0-beta.26
+
+### Patch Changes
+
+- a565aae: chore(deps): bump the npm group across 1 directory with 20 updates
+
+## 4.20.0-beta.25
+
+### Patch Changes
+
+- a723f1a: Telemetry seams a host wires once: error reports that group and scrub, request and upstream timing, and MCP tool-call records.
+
+  - `@selvajs/platform`: `ErrorContext` takes `level` (`fatal`, `error`, `warning`) and `kind`, which groups reports of one fault whose message varies.
+  - `@selvajs/server/errors`: `scrubEvent`, `scrubBreadcrumb`, `withoutQuery` and `sampleRate` keep cookies, auth headers, bodies, query strings and anything but a user's id out of Sentry-shaped events, server or browser, without importing Sentry. `SentryErrorReporter.create` installs them and takes `tracesSampleRate`. `SentryErrorReporter.fromClient` wraps an SDK the host initialized itself, such as a framework SDK that also traces requests. `capture` sends `level`, tags `kind`, and fingerprints by it.
+  - `@selvajs/server/http`: `createRequestTiming` times a request's spans and every outbound fetch by upstream, stamps `Server-Timing`, and logs a `[timing]` record for a slow, sampled (`sampleRate`, default 0.1) or first request, with each upstream's call count, total, median and max. The first request also logs `[coldstart]` with the boot time `markBooted` recorded. Every record carries a per-process `instance` and the host's `labels`.
+  - `@selvajs/supabase-provider`: `supabaseUpstream` names a Supabase call's service (`db`, `auth`, `storage`) and table or RPC for `createRequestTiming`.
+  - `@selvajs/server/api`: an endpoint with `longRunning` (it runs Compute without the `solve` scope) is emitted with `x-long-running`.
+  - `@selvajs/mcp`: an `x-long-running` operation gets `solveTimeoutMs`, not the default timeout. `ApiClientOptions.onCall` is told of each settled call (operation, status, error code, attempts, duration). `McpServerOptions.onToolCall` is told of each tool call: outcome (`ok`, `error`, `timeout`, `invalid_arguments`), the API calls it made, argument names with their sizes, never values, and the response size.
+  - `@selvajs/selva`: requests are timed through `createRequestTiming`, MCP tool calls log an `[mcp]` record, and `SENTRY_TRACES_SAMPLE_RATE` sets Sentry's trace sampling. Sentry events are scrubbed before they leave.
+
+## 4.20.0-beta.24
+
+### Patch Changes
+
+- 95dbab4: Fewer sequential round trips per request, and helpers so a host gets them too.
+
+  - `@selvajs/platform`: `IDefinitionStore.getDefinitionsFor` reads several definitions in one query, and `listVersionsFor` reads every version of several definitions in one query, newest first and without the schema. A page listing many definitions no longer issues one `get` or `listVersions` per definition. Both providers implement them, and the conformance suite covers them.
+  - `@selvajs/server/http`: `createSessionResolver` turns a session token into a host's session. It reads the user's rows while the token is checked, shares one resolution between requests carrying the same token, and with `freshForMs` reuses a session, re-checking it behind the request once the window has passed. A session is never answered past its token's expiry. `createRequestMemo` shares repeated reads within one GET or HEAD request.
+  - `@selvajs/server/http`: `resolveApiToken` takes a `resolutionCache` (`createApiTokenResolutionCache`, 60 seconds by default). A key seen within the window is answered without reading it or its owner again, and its delegated session is still minted fresh. Pass the same cache as `SelvaDeps.tokens.resolutionCache`: the revoke handlers, a member's removal and `revokeUserApiTokens` then drop the key from it at once. Another instance stops accepting a revoked key within the window.
+  - `@selvajs/server/compute`: `createServerResolver` remembers each caller's resolved compute server for 30 seconds. `SelvaDeps.onComputeConfigSaved` runs after the org compute handler saves, so a host clears it there.
+  - `@selvajs/selva`: a solve reads its definition's version and resolves its compute server while access is checked. The team, members, user-admin and token pages read in parallel. The solve page reads the org logo beside the definition. The session hook reads a JWT session's rows beside its check and shares one resolution between concurrent requests. API keys and compute server choices use the caches above. The hook no longer loads the MCP server at boot.
+
+## 4.20.0-beta.23
+
+### Patch Changes
+
+- 42fd0e8: `selva update` and `selva doctor` now catch a database that is behind the app. Before, `selva update` moved `@selvajs/selva` past the installed `@selvajs/supabase-provider`, the package that carries the migration SQL, and doctor compared the database only against that stale provider. Both reported success while `/api/health` returned 503 and saves that needed the new schema failed.
+
+  - `@selvajs/selva` writes `build/runtime-meta.json` with the migration head it expects, and doctor checks the database against that.
+  - `selva update` installs the provider on the runtime's channel, polls `/api/health` after the restart, and exits non-zero with the cause and the migration commands when the app comes up degraded.
+
+## 4.20.0-beta.22
+
+### Patch Changes
+
+- 056cb01: One typeface, one content width, one dropdown.
+
+  - **Hanken Grotesk is the UI typeface.** `base.css` loads it from `@fontsource-variable/hanken-grotesk` and sets `--font-sans`, so every app importing it (including the plugin UI embedded in the `.gha`) gets it self-hosted, no network fetch.
+  - **`PageContent` is the shared page frame:** centred, `max-w-6xl`, page padding. It now renders a `<div>` instead of a `<main>`, because `AppShell` already provides the `<main>`. A consumer relying on full width can override it with `class`.
+  - **`FilterableDropdown` gains `name`** (hidden input for a plain form post), **`size`** (`'default' | 'sm'`), **`aria-label`** and a per-item **`disabled`**.
+  - **Selva:** settings, team, Library and Projects share one content width. The Projects page is a single scrolling column titled with the selected project, and new projects are created in a dialog. Every native `<select>` is now a `FilterableDropdown`, and lint rejects new ones. The landing page wires are easier to see and its hero is tighter.
+
+## 4.20.0-beta.21
+
+### Minor Changes
+
+- 94692f5: Deployment config you can see, change safely and rotate without breaking anything.
+
+  - **Every env var is declared once**, with its type, default, what changing it affects and whether a bad value stops boot (`@selvajs/platform/config`, plus a slice per package: `@selvajs/server/config`, `@selvajs/*-provider/config`). A host app composes the slices it ships and calls `resolveConfig` or `buildConfigReport`.
+  - **`selva config show`** lists what `.env` sets, what is default, what is wrong, keys Selva doesn't read (with the likely intended name), and what differs from what the app last booted with. **`selva config set KEY=VALUE`** checks the value and edits only that line, with a backup. `/admin/system` shows the same report to instance admins, read-only.
+  - **A bad value on a security control now stops boot** instead of silently falling back. `SUPABASE_ALLOW_EMAIL_LINK_SIGNUP` used to read anything but the exact string `false` as on, so `=no` allowed sign-ups; booleans now accept `true|false|1|0|yes|no|on|off` and nothing else.
+  - **Key rotation keeps the old key working.** `selva keys rotate hmac` (or `at-rest`) moves the old key to `SELVA_HMAC_KEY_PREVIOUS` / `SELVA_AT_REST_KEY_PREVIOUS`, which sessions, OAuth/MCP clients, solve-event tokens and stored compute API keys still accept. Boot re-seals API keys under the new at-rest key. The previous key is accepted for 30 days (`<KEY>_PREVIOUS_EXPIRES`), then refused on its own; `/admin/system` and `selva doctor` count down to it. `--finish` ends the overlap early, `--leaked` drops the old key at once.
+  - **Share links expire after 90 days by default.** A link minted without `expiresAt` gets one; an explicit `expiresAt: null` still means never. The mint dialog has expiry on by default.
+  - **Share-link, invite and API tokens are stored as an unkeyed SHA-256.** New tokens no longer depend on `SELVA_HMAC_KEY`; tokens stored before keep resolving under the current or previous key. `createTokenCodec` takes `previousSecret`, and `findByToken` looks a token up by every hash form its record may carry.
+  - **`selva migrate --dry-run`** shows the `.env` rewrite (renamed keys, values a looser reader used to accept, no-op lines, shipped template prose) and proves every setting keeps its meaning before writing. `--undo` restores the backup.
+  - **The CLI no longer corrupts `.env` when it rewrites it.** A JSON value such as `SUPABASE_JWT_SIGNING_KEY` came back as `{\`, and an inline comment ended up inside the value. Rewrites now edit single lines, read back with Node's own parser, and write `.env` and its backups as `0600`.
+  - **An `http://` `ORIGIN` drops the `Secure` cookie flag**, so sign-in over plain HTTP works without `ALLOW_INSECURE_COOKIES`, which still overrides either way.
+  - `selva doctor` accepts a 32-byte base64 key, as the runtime does.
+
+## 4.20.0-beta.20
+
+### Minor Changes
+
+- a409b68: A new API scope action, `create_projects`: create private projects that nobody joins on upload, org-wide only. `write` includes it. `POST /projects` now asks for it, so a 403 there names `create_projects:org:<id>` instead of `write:`. The built-in Grasshopper OAuth client may request it; registered clients can't. A key holding it may be held by anyone who may create a project in the org, so an org admin with no projects can sign in the plugin.
+
+  Creating a project checks the same visibility rules as `PATCH`: only org owners and admins create public projects. Project creation through API keys has a per-owner limit (20 an hour by default, `projectCreateLimiter` in deps). `GET /me` returns `capabilities.createProjects`. `DELETE /me/token` works for a key whose owner no longer qualifies to hold it.
+
+  Upload to Selva in the plugin: the connection moves to its own dialog, Upload shows only for a key Selva accepted in this Rhino session, the first connection to an instance is confirmed in Rhino, a pasted key is refused as an address, and an upload can go into a new private project.
+
+## 4.20.0-beta.19
+
+### Minor Changes
+
+- 5a42d64: `SIGN_IN_MAX_AGE_DAYS`: how long one sign-in at the identity provider lasts, on every auth provider. Past it, an API token whose owner hasn't signed in again is revoked (reason `sign_in_lapsed`) and answered like an invalid key, minting answers 401 `SIGN_IN_REQUIRED`, the OAuth consent page sends the person to sign in again, and a browser session Selva manages can't be refreshed. Off unless set; a value that isn't a whole number stops the boot. `@selvajs/server/http` exports `resolveSignInMaxAgeMs` and `signInIsStale`; `createSessionRefresher` and `resolveApiToken` take `signInMaxAgeMs`.
+
+  Changing or removing an org member now needs a browser session, like invites and API tokens: an API key gets 403. Accepting an invite checks that the person who sent it is still enabled and in the org, or an instance admin (`inviterStillVouches`). `/login?reauth=1` ends the current session and asks the person to sign in again.
+
+  `AuthUser.lastLoginAt` is documented as the last real sign-in, never a session refresh, and the shared auth suite pins it with `signInContract`.
+
+## 4.20.0-beta.18
+
+### Minor Changes
+
+- ebae55e: `API_TOKEN_SIGN_IN_WINDOW_DAYS` retires API tokens whose owner stops signing in. Behind a header-auth proxy, a token gets 401 once its owner hasn't come through the proxy for that many days, so someone disabled at the identity provider loses their tokens too. Off unless set. `resolveApiToken` takes it as `signInWindowMs`, and `resolveApiTokenSignInWindowMs` reads it from the env.
+
+### Patch Changes
+
+- ebae55e: One surface system for light and dark. Cards, rows, menus and fields sit on a fixed set of roles (canvas, surface, raised, well, field), hover and selection are overlays that work on any surface, and every field edge and slider track reaches 3:1 in both modes. Corners follow one concentric radius scale.
+
+  New tokens: `raised`, `field`, `hover`, `selected`, `border-strong`, `faint-foreground`, `shadow-raised`, `shadow-popover`, `rounded-inner`. Removed: `accent` and `accent-foreground` (use `hover` or `selected`), the `sidebar-*` tokens, `inputparam`, `outputparam` and the `--radius` base variable. The alternate themes are gone too: the `@selvajs/ui/styles/themes/*` export, `ThemeSwitcher` and the theme store.
+
+## 4.20.0-beta.17
+
+### Minor Changes
+
+- 9240690: A review of `@selvajs/solve`: smaller public API, one owner for each solve rule, and the bugs it found.
+
+  **Breaking in `@selvajs/solve`:**
+
+  - The server `SolveOutcome` is now `SolveEngineOutcome`, and `PipelineInput` is gone: use `SolveInput`. The `SolveOutcome` on `/shared` and `/client`, the plugin's verdict, is unchanged.
+  - `/server` no longer exports `runSolvePipeline`, `SolvePipelineArgs`, `adaptEnvelopeToEncoding`, `buildSolveInputTree`, `createClientCache`, `createDefinitionByteCache`, `createSolveCacheSingleFlight`, their handle types, `serverIdentity`, `ServerIdentity` or `isDefinitionRef`. Use `SolveEngine`. `SolveEngine.toResponse` and `FrameworkAgnosticResponse` are gone: use `toWebResponse`.
+  - `definitionSource` no longer takes `{ versionId, load }`: pass `engine.definitionRef(versionId, load)`.
+  - `SolveEngine` drops the `logger` option and the `@selvajs/platform` dependency. A host that passed `logger` must pass `onDebugLog`, or its debug lines stop silently.
+  - `SolveEngine` throws a `RangeError` on a limit that is not a finite number in range.
+  - `/client` no longer exports `applyValueChange`, `makeInitialFlags`, `pickInputValues`, `applySolveResult`, `solvePhase`, `buildInitialValues`, `SolveSessionState`, `ExternalReader`, `reduceLiveSolve`, `createAsyncThrottle`, `AsyncThrottle`, `createSolveMemo`, `SolveMemo` or `SolveMemoOptions`. `/shared` no longer exports `SOLVE_BLOCKED_MARKER` or `outcomeFromComputeMessages`.
+  - `SolveDriver.clearCache` is now `reset`, and also stops the running solve. A custom driver implementing `clearCache` must rename it.
+  - A rejected solve's `SolveResult` no longer carries `source`: it held the outputs the verdict withheld.
+
+  **New:** `solveInputsFromSchema` and `acceptsGzip` on `/server`, `loginPath` on `createComputeFetchSolveFn`, and `signal` passed to `meshes.extract`. `shed` gains the reason `interrupted`, retryable, for a solve that lost its client.
+
+  **Fixed, client:** a hung solve no longer wedges the session; a rebuild stops the old definition's solve and drops its result; `ensureSolved` no longer returns a result for older inputs after an abort or a discard; a value edited during a manual solve stays dirty; an aborted result is not memoized, so a retry solves again; `dispose` stops the running and queued solves; a held result is dropped when a newer solve starts, and settles as `discarded`; a throwing listener or `onChange` no longer breaks a solve's one settlement; a solve started from a subscriber keeps its abort and deadline; a non-200 no longer closes the event stream for good; a 503 with `Retry-After` starts the cooldown, and that header's other forms parse; a network failure no longer claims the session expired; valid but wrong JSON and a truncated body read as errors; `stableInputKey` honours `toJSON` and treats an `undefined` property as absent; blocked or quota-full `sessionStorage` no longer throws; a late `solveEnded` no longer wipes the next solve's state; a verdict of `blocked` with no diagnostics no longer unblocks.
+
+  **Fixed, server:** a flight aborts when its last caller leaves and frees its key then, so an orphaned solve no longer holds a Rhino slot and a live caller no longer gets a 499 from someone else's disconnect; an already-aborted caller doesn't solve; an eviction no longer aborts running solves as a false 504, it drains them; a build in flight when a server is evicted no longer installs old credentials; handshake failures return `compute_error` instead of throwing; `gzip;q=0` is honoured; the response cap counts bytes, not UTF-16 units; concurrent definition loads share one read and honour the signal; a call with no deadline of its own keeps a 300 s ceiling on the long-deadline fetch.
+
+  **`@selvajs/selva`, behaviour change:** a solve of a stored definition reads its inputs from the version's schema and ignores the request's, so a caller can no longer forge a slot or drop a bound. Number widget bounds are enforced on the server. `inputs` on `POST /api/v1/definitions/{guid}/solve` is deprecated and ignored; omitting it now solves the stored inputs instead of the file's defaults. A version whose schema can't be read or backfilled now answers 503 instead of solving on the request's inputs. Remote-URL solves still read `inputs` from the body, and reject a malformed list with a 400. A failed Compute records a `compute_error` metric. A display error in the local preview is shown as a message on an applied solve.
+
+  **`@selvajs/compute`:** a redirect error no longer quotes credentials or a query string from `Location`.
+
+### Patch Changes
+
+- a7c12ee: Shared helpers for what every host was writing itself.
+
+  - `@selvajs/platform`: `walkPages` and `listAll` read a cursor-paged list to its end. One call stops at `MAX_PAGE_LIMIT` without saying so.
+  - `@selvajs/server`: `createBoundedTtlCache` and `createSessionRefresher` in `/http`, and `isUsableCachedSchema` in `/definitions`. `runHandler` now sends a thrown error's `details.retryAfter` as `Retry-After`.
+  - `@selvajs/solve`: `SolvePhaseMetrics` carries everything in the `Server-Timing` header (`defLoadMs`, `rhino`, `settle`, `defBytes`), so a host logs the data rather than parsing the header.
+  - `@selvajs/selva`: requests that arrive together with an expired session share one token exchange. A provider that rotates refresh tokens could otherwise refuse all but the first, which cleared the cookie and signed the user out.
+
+## 4.20.0-beta.16
+
+### Patch Changes
+
+- b6935ce: Access-rule fixes and closed races.
+
+  - `canCreateDefinition` on a commons project now requires `canView`. With `ALLOW_CROSS_ORG_PUBLIC` off, someone outside the org can't upload to a commons project, or move a definition into one.
+  - `canView` passes for a project member at any non-`platform` visibility, so an outside `instance_admin` who reclaimed a project can open it.
+  - `hasPermission` is false for a share-link context, which runs as `system` only to pick the service-role client.
+  - With `ENABLE_PLATFORM_PROJECTS` off, `instance_admin` can no longer edit or delete a platform project.
+  - Two admins deleting each other no longer leave the instance with none: the delete revokes first, through the atomic `set`, and restores the permissions if the delete doesn't happen.
+  - Two project owners demoting or removing each other no longer leave zero owners.
+  - `PATCH /api/admin/users/[id]` refuses to make a disabled user an instance admin.
+  - Accepting an invite adds its platform permissions to what the user already holds instead of replacing them.
+  - A double submit on accept-invite creates one account on local and header-auth, and local `markAccepted` emits once.
+
+- 6efcd98: Erasing a user no longer takes shared data with them, and a compute save can no longer lose servers, keys or defaults.
+
+  Erasure on Supabase: `owner_id` on orgs, projects and definitions and `uploaded_by` on versions now go null when the user is deleted, and the stores read that as the erased actor. An org, or a project someone else works in, used to be deleted along with its creator, and the uploader of someone else's live version couldn't be erased at all. `DELETE /api/admin/users/[id]` now answers 409 for the only owner of an org: make someone else an owner, or delete the org, first.
+
+  Compute saves:
+
+  - On Supabase, `savePlatformServers` and `saveOrgServers` run in one transaction, through the new `save_platform_compute_servers` and `save_org_compute_servers` RPCs. A failed save leaves the stored set alone, and an unchanged server keeps its org defaults.
+  - `validateIncomingServers` refuses a server id that isn't a UUID, a repeated id, a `timeoutMs` outside 1000 to 300000 and a `retryCount` outside 0 to 5. An id already used by another org or the platform answers 409 on Supabase.
+  - A save that leaves `apiKey` out for a key that can't be decrypted answers 409 instead of overwriting the ciphertext. Restore `SELVA_AT_REST_KEY`, or send a new key.
+
+  Apply this release's migrations: run `npx selva-supabase`, then `npx supabase db push`. Local deployments with a hand-written, non-UUID server id have to give it a UUID before they can save compute config.
+
+- cc081b1: Two admins demoting each other on Supabase no longer deadlock. One now gets `last_admin` rather than a 500. Apply this release's migration: run `npx selva-supabase`, then `npx supabase db push`.
+
+  New in `@selvajs/platform`, none of it breaking:
+
+  - `COMPUTE_TIMEOUT_DEFAULT_MS`, `COMPUTE_TIMEOUT_MIN_MS`, `COMPUTE_TIMEOUT_MAX_MS` and `COMPUTE_RETRY_MAX`, plus `clampTimeoutMs` and `clampRetryCount`, so the settings forms and the server agree on one set of limits.
+  - `pickServer`, for a caller that holds an already-filtered server list.
+  - `decodeOffsetCursor`, `encodeOffsetCursor` and `clampPageLimit`, which both providers now use. A `NaN` limit reads as the default.
+  - `assertCanAccessProfile` and `MAX_RECENT_RUNS` from `@selvajs/platform/userProfile`, for adapter authors.
+  - `runOAuthAuthConformance` and `runAuditQueryConformance` in `@selvajs/platform/testing`.
+  - `defineConfig` keeps the type you pass it.
+
+- 77780c7: Smaller fixes across the platform package and its consumers.
+
+  - The solve-metric cap now counts batches waiting to be written, so a hung backend can't grow memory past `maxBufferSize`, and dropped rows are logged.
+  - `@selvajs/platform` declares `sideEffects: false` and no longer names `sharp` statically, so the root barrel bundles for the browser. `instanceof ProviderError` works across two installed copies.
+  - SMTP failures log an error code and a keyed hash of the recipient instead of the address and the raw server message, and `SendResult.reason` carries the code.
+  - `scopeConfigToOrg` drops an org default the org can't see.
+  - `decodeSecretKey` trims whitespace and refuses junk-padded input or a passphrase that isn't really base64.
+  - `slugify` folds accents and never ends in a hyphen. A renamed project with no usable letters keeps its slug. New `orgSlugFromName` moves an org off a reserved word, and setup and bootstrap use it.
+  - `RESERVED_SLUGS` now matches the route tree: `docs`, `mcp` and `oauth` are in, `settings` is out, and a test holds it there.
+  - Org and definition names are trimmed, so a name of only spaces is refused.
+  - `withCacheBust` puts the token before a fragment.
+  - Session refresh uses `auth.sessionRefresh` first, so a provider without OAuth is refreshed too.
+  - `canEdit`, `canManage` and `canEditProjectSettings` refuse a null project, `canEditDefinition` checks the definition belongs to the project, and `canView` on an `org` project requires acting as that org.
+
+- 5ab63df: A clean-up major for the platform contract. Adapters and direct consumers need the changes below. No behaviour changes for an app that only uses the routes.
+
+  Changed signatures:
+
+  - `IStorageProvider.put` returns the path it stored at, since images are rewritten to `.webp`. An adapter has to return it; a caller can use it instead of guessing.
+  - `IInviteStore.markAccepted` returns `true` when this call accepted the invite and `false` when it was already accepted or is gone.
+
+  Removed:
+
+  - `IOAuthAuth.refreshSession`. Use `auth.sessionRefresh?.refreshSession(...)`.
+  - `orgPaths.privateAsset`, `requireCanViewOrg` from `@selvajs/server`, and the `org` value of `AssetVisibility` and `AssetScope`. No asset class serves those paths.
+  - `orgServersFor`, `isPublicAssetPath`, `COVER_IMAGE_EXTENSIONS`, `ALLOWED_UPLOAD_EXTENSIONS`, `DefinitionVersionSchema` and `DefinitionFileExtSchema`, which nothing used.
+
+  No longer exported, though still used inside the package: `ApiTokenRevokeReasonSchema`, `IMAGE_MAX_WIDTH`, `IMAGE_WEBP_QUALITY`, `isImageUpload`, `toWebpPath`, `AssetVisibility`, `AssetScope`, `AssetClass`, `AssetMatch`, `ALL_ORG_ASSET_KINDS`, `CreateOrgInput`, `UpdateOrgInput`, `DefinitionChannelSchema`, `UUID_REGEX`, `PlatformProjectGrantSchema`, `PlatformProjectGranteeTypeSchema`, `PlatformProjectGranteeType`, `AuditUpdate` and `AuditSoftDelete`.
+
+  The root barrel now re-exports each area with `export *`, so a new export reaches it without a second edit. Secret crypto stays out of it, on `@selvajs/platform/computeServer`. `OPERATOR_PLATFORM_PERMISSIONS` is also on `@selvajs/platform/permissions`.
+
+- ff7e2a0: Image uploads have limits, stored images match the docs, and deleted orgs and projects take their blobs with them.
+
+  - `transcodeImageIfNeeded` refuses more than 60 MP, stops after 10 seconds, runs two at a time and checks the real format, so a small upload can no longer eat gigabytes or seconds of CPU. SVG has to be declared as SVG. Anything it won't process throws `ProviderError(422)` rather than a 500.
+  - Stored images apply EXIF orientation and fit within 1200px on both sides, not only the width.
+  - A declared content type now beats the file extension: a PDF named `x.png` is stored as a PDF.
+  - `IStorageProvider.put`'s doc now states that images are stored as WebP at a rewritten path, as part of the contract.
+  - `deletePrefix` refuses an empty prefix and `/` on both providers, and the Supabase listing pages past 1000 entries.
+  - `SupabaseStorageProvider` keeps any unclassified path in the private bucket.
+  - `GuidSchema` lowercases, so one GUID can't become two records on local.
+  - The `definition-cover` class matches `cover.webp` only, and the unused `org-private` class is gone, along with its branch in `/api/files`. `orgPaths.privateAsset` is deprecated.
+  - `deleteProjectWithBlobs` and `deleteOrgWithBlobs` in `@selvajs/server/projects` wipe blobs on delete, and every delete route uses them.
+
+## 4.20.0-beta.15
+
+### Patch Changes
+
+- 111a879: - Resending an invite runs the same owner-only and platform-permission gates as minting one: an admin could resend an owner invite and accept the link it returned.
+  - Invites can't be created or resent with an API key. An accepted invite is an account that outlives a revoked key.
+  - Only the org owner can change an owner's or admin's permissions. A member PATCH now runs every check before writing, so a refused permission set no longer leaves a role change behind.
+  - Member role changes and removals in one org run one at a time, so two owners removing each other can't leave the org with none (per process).
+  - `safeRedirectTarget` refuses control characters: browsers strip `\t` from `/\t/evil.com`, which then redirects to `//evil.com`.
+  - OAuth: a client asking only for scopes it may not have gets `read`, not every scope it is allowed.
+  - `parseBody` answers broken JSON with 400. Only an empty body falls back to `missingAs`, so a truncated rollback can't publish the draft.
+  - `readForm` answers a body that isn't a form with 400, not a 500.
+  - Cover images are type-checked before anything is written, and a definition whose image fails to save is removed instead of left behind.
+  - The idempotency store has a byte budget (`maxWeight`, 256 MB for API stores) on top of its key cap. A retry that joined an attempt ending in 499 runs again instead of inheriting it. Solve replays are keyed per response encoding and charged to the key's rate limit.
+  - `assertScopeAnywhere`: cancelling a solve and opening the solve-event stream need the action on any resource, so a project-scoped key can stop and watch its own solves.
+  - `POST /api/v1/compute/schema` answers refused access with 401, 403 or 404 instead of 500.
+
+## 4.20.0-beta.14
+
+### Patch Changes
+
+- 69ff76a: - **Breaking:** OAuth consent offers and mints a key only in the session's acting org. `consentOrgs` returns at most that org and `mintConsentToken` refuses any other, since the token page can list and revoke keys only there.
+  - `readForm` parses a request's form body once. The idempotency fingerprint and the upload handlers share it, so a definition upload is no longer buffered and parsed twice. On an idempotent route, read forms through it: `request.formData()` throws once the fingerprint has used the body.
+  - The CSRF exemption reads the bearer as `resolveApiToken` does, so `Bearer selva_x extra` no longer skips the Origin check.
+  - OAuth codes are opened with a fixed 16-byte GCM tag.
+  - `@selvajs/mcp` exports `refuseEarly`, the origin and key checks `handle` runs first. Selva's `/mcp` runs it against the configured origins before building a server, so neither an anonymous request nor a page on a rebound name can trigger a build.
+  - Step sizes count decimals at 15 significant digits: `16384.2` gets a step of 0.1, not 1e-12.
+
+## 4.20.0-beta.13
+
+### Patch Changes
+
+- 5bf9949: - **Breaking:** `consentOffer` returns `{ levels: { choice, orgs }[] }`: each access level lists the orgs it may be granted in, so a narrower level can offer orgs the widest one can't.
+  - `revokeUnredeemedConsentToken` and the OAuth server's `onRedeemed` option let a host revoke a consent key whose code is never exchanged.
+  - `createHolderVerdictCache` lets `resolveApiToken` skip the holder check for a token that passed it recently. A withdrawn right then takes effect within the TTL (30s by default).
+
+## 4.20.0-beta.12
+
+### Patch Changes
+
+- e39d929: chore(deps): bump the npm group across 1 directory with 34 updates
+
+## 4.20.0-beta.11
+
+### Patch Changes
+
+- 4125e70: Phones get one header menu with the nav links, the Team and Admin links, the theme switch and log out, in place of the separate user, settings and theme buttons. The light/dark toggle moves into the header's right-hand actions. The desktop nav, the settings menu and the phone menu read their links from one list, so a link gated by permission shows in all of them or none.
+
+## 4.20.0-beta.10
+
+### Patch Changes
+
+- 2322937: When an update rolls back because the database migrations are behind, the fix it prints now installs `@selvajs/supabase-provider` from the channel being updated. On the beta channel it said `@latest`, which installs the stable provider: that ships none of the beta's migrations, so `db push` reported "up to date" and the next update failed the same way.
+- 2322937: Hardening from `@selvajs/compute` and `@selvajs/solve`, for a running instance:
+
+  - One user can no longer choose what another user's solve returns. The shared solve cache keyed inputs by a 32-bit hash, which a crafted input could collide with in milliseconds.
+  - The Rhino.Compute API key no longer follows a redirect from the compute server. A server URL that redirects now fails with a message naming the address to configure instead.
+  - A compute response past `COMPUTE_RESPONSE_MAX_BYTES` is cut off mid-download instead of being held in memory in full first.
+
+## 4.20.0-beta.9
+
+### Minor Changes
+
+- 458d561: Built against `@selvajs/compute` 5 and `@selvajs/solve` 2. What changes for a running instance:
+
+  - What a solve sends to Grasshopper:
+    - `generic` inputs reach Grasshopper; they were dropped.
+    - A number or boolean value that can't be coerced is left out, so Grasshopper keeps its own value. It used to send `0`, the minimum, or `false`.
+    - Text, color and file values are sent as entered.
+  - The `selva_cache`, `def_reupload` and `rhino_*` Server-Timing entries stay correct when solves overlap; they used to be dropped. A definition's first solve reports `def_reupload` as an upload, not a server cache hit.
+  - Hashing a definition for a solve is about 2.8× faster.
+
+## 4.20.0-beta.8
+
+### Minor Changes
+
+- e0c1a56: The MCP server gains `selva_publish_definition`, which makes a version live and marks the definition published. Only keys with `write` or `upload` scope see it.
+
+### Patch Changes
+
+- 3890e17: Phone layout fixes:
+
+  - The main nav is icon-only below 640px, and the version/draft preview badge drops the word "preview", so the header's settings, logout and theme buttons fit.
+  - `/projects` swaps its project sidebar for a project picker on phones, wraps its header actions and search bar, and drops the project, updated and runs columns from the list view, which kept the row's open button off-screen.
+  - The library list drops tags and run count on phones. The star, "Open" and "Resume" affordances, hover-only before, are visible on touch devices.
+  - The login, setup, invite, OAuth and email-sent pages centre against `dvh` instead of `100vh`.
+  - The signed-out landing page shows one "Sign in" button: the header's copy is hidden there, since the page body already offers it.
+  - Admin → Users: a user with Instance admin shows that one chip, not every platform permission it already implies. On phones the chips get their own full-width line under the name instead of wrapping one word per line.
+  - The admin and team tables (organizations, projects, grants, reclaim, share links, API tokens) drop their secondary columns on phones, which pushed the name column to nothing. The team pages' cards no longer double their top padding.
+
+## 4.20.0-beta.7
+
+### Minor Changes
+
+- 2ae4347: The Grasshopper plugin can sign in and upload. The consent page shows built-in apps as such, lets someone in several organizations pick one, and mints through the server core rather than calling back into the app, which fixes approval behind a forward-auth proxy. `/team/tokens` shows to anyone who can create a definition, offering them an "Upload definitions" key, and `DELETE /api/v1/me/token` lets a key revoke itself.
+
+### Patch Changes
+
+- a0e6628: Uploading a definition fills its category from the schema, as it already did its name, description and tags.
+- a0e6628: A definition's viewer and its display meshes follow Compute render (`viewerOptions.enableRemote`) alone. Local render only drives the plugin's preview, so a definition with only Local render on opens without a viewer.
+
+## 4.20.0-beta.6
+
+### Minor Changes
+
+- 873470a: MCP tools: `selva_describe_definition` and `selva_solve` take `definition`, a guid or an exact display name. A read-only key no longer sees `selva_solve`. Long number outputs show their first 50 values. `MCP_ALLOWED_ORIGINS` lists extra browser origins `/mcp` accepts.
+- 0aac511: - MCP clients can sign in through the browser: OAuth discovery, registration, a consent page at `/oauth/authorize` and a token endpoint. Approving mints a 30-day API token named after the client. `/mcp`'s 401 points clients at it.
+  - The form-CSRF check moves from SvelteKit into the hook, so the OAuth token endpoint and API-token multipart uploads (which send no `Origin`) are no longer refused in production.
+
+## 4.20.0-beta.5
+
+### Minor Changes
+
+- ef94b55: - The API token page moves to `/team/tokens`. Its tab shows only for people who may hold keys, and the new-key email links there.
+  - `/api/v1/compute/schema`, `/api/v1/solve-events` and `/api/v1/solve/{solveId}/cancel` now count against the per-token rate limit and send `RateLimit-*` headers.
+  - A `SELVA_HMAC_KEY` shorter than 32 characters turns API tokens off (503) instead of failing every request.
+  - `selva_solve` takes `detail: 'full'` for the raw solve response, and its geometry summary counts mesh vertices.
+  - The MCP server is built once instead of on every `/mcp` request.
+
+## 4.20.0-beta.4
+
+### Patch Changes
+
+- bc2d943: The design system now styles only through theme tokens, and its lint rules are errors in `@selvajs/ui`: a raw palette color, an arbitrary value, an inline style or a restyled primitive fails the build.
+
+  - New tokens in `styles/base.css`: `text-2xs`, `max-w-screen-inset`, `max-h-dialog`, `no-scrollbar`, `no-spinner`, `rounded-inherit`, `shadow-sheet` for bottom sheets, `bg-overlay` for modal scrims, and `destructive-foreground`.
+  - New shadcn components: `Popover`, `Command`, `DropdownMenu`, `ToggleGroup`, `Empty`, `Spinner` and `InputGroup`, which matches `Input`'s height and surface. The slider's value box is now an input group instead of hand-written CSS. `FilterableDropdown` is now a shadcn combobox, `ViewToggle` a toggle group, `StateDisplay` an empty state, and the viewer's tools menu uses checkbox and radio items.
+  - `SeverityIcon`, `IssueList` and the `severity` map give errors, warnings and notes one icon and one color everywhere: `Callout`, the solve messages, the message centre and preset validation.
+  - New variants instead of class overrides: `Card` `flush`, `Dialog.Content` `flush`, `Dialog.Title` `size="sm"`, `Tabs` `line`, `Button` `size="xs"`, `AlertDialog.Action` `variant`, and `Resizable.Handle` `line={false}`.
+  - Removed `Alert` (use `Callout`) and `Card.Action`. `FilterableDropdown` items take `iconClass` only; `iconStyle` is gone.
+  - Fixed: the solving indicator's slide-in and the viewer's fade-in now animate, the scene manager's scrollbar color applies, and `StateDisplay` text is readable in light mode.
+
+## 4.20.0-beta.3
+
+### Minor Changes
+
+- 075919c: New `@selvajs/mcp`: serve a host's `/api/v1` as MCP tools over stdio or streamable HTTP, with key auth, error mapping, 429 handling and annotations from the spec.
+
+  `@selvajs/server/api` exports `buildOpenApiDocument(endpoints, options)` and the `Endpoint` type, so every host publishes the same spec shape. `Endpoint.scope` is required and emitted as `x-scope`.
+
+  Selva serves `GET /api/v1/openapi.json` and an MCP endpoint at `/mcp`: send an API key as `Authorization: Bearer <key>`. Tools: `selva_list_projects`, `selva_list_definitions`, `selva_describe_definition`, `selva_solve`.
+
+## 4.20.0-beta.2
+
+### Minor Changes
+
+- c531085: Per-token rate limit and opt-in `Idempotency-Key` in `runHandler`.
+
+  - `@selvajs/server/api`: `runHandler` charges every API-token request to a per-token bucket (`token:{id}`) before the scope check, answers 429 `RATE_LIMITED` with `Retry-After`, and stamps `RateLimit-Limit`/`RateLimit-Remaining` on token responses. Browser sessions are not charged. Configure through `SelvaDeps.apiRateLimiter` (absent: process-wide default of 600 per 60 s; `null`: off), `createApiRateLimiter`, `resolveApiRateLimitConfig` (`API_TOKEN_RATE_LIMIT_MAX`, `API_TOKEN_RATE_LIMIT_WINDOW_MS`), or your own `ApiRateLimiter`.
+  - `@selvajs/server/api`: `RunHandlerOptions.idempotent` replays a repeated `Idempotency-Key` from the same token (or session user) with `Idempotency-Replayed: true`, refuses a key reused for a different method, path or body with 422, and keeps only responses below 400. `SelvaDeps.idempotency` overrides the default 5-minute in-memory store. `runIdempotent`, `idempotencyCallerId`, `readIdempotencyKey` and `requestFingerprint` serve routes that build their own response.
+  - `@selvajs/server/api`: new `ApiErrorCode.RATE_LIMITED`; `codeForStatus(429)` returns it. `toErrorBody` and `ApiErrorBody` now live in `errors.ts` (same exports).
+  - `@selvajs/selva`: compute and share-cap 429s carry `RATE_LIMITED` (the compute body moves `retryAfter` to `details.retryAfter`; the header is unchanged). Token solves also pay the per-token bucket. Project, definition, version and share-link creates opt into idempotency, and the solve route now namespaces keys per token and fingerprints the body.
+
+## 4.20.0-beta.1
+
+### Patch Changes
+
+- b36ac7d: API tokens stay inside their org and their owner's membership.
+
+  - **A token only reaches its own org.** A key's owner may belong to other orgs; the key no longer lists, reads, solves or edits anything there. Other orgs' projects and definitions answer 404. `@selvajs/platform` exports `outsideTokenOrg(ctx, orgId)` for host routes.
+  - **No instance-admin rights under a key on Supabase.** Delegated sessions carry a `selva_org` claim, and `selva.is_instance_admin()` returns false for them, so an admin's key no longer passes the policies' admin bypass into other orgs. `selva.delegated_org()` exposes the claim to host policies. `IDelegatedSession.mint` now takes `{ orgId }`. **Run `npx selva-supabase` and `npx supabase db push` before updating the app.**
+  - **Keys follow membership.** Removing a member revokes their keys in that org and disabling a user revokes all of theirs, so re-adding them doesn't revive old keys. `revokeUserApiTokens` is exported from `@selvajs/server/handlers` for host routes.
+  - **Moving a definition needs edit rights on the destination.** `PATCH /definitions/{guid}` with a new `projectId` used to check only the source project.
+  - The new-key email links to `SelvaDeps.apiTokenSettingsPath` (default `/settings/tokens`) instead of a hardcoded `/admin/tokens`.
+
+## 4.20.0-beta.0
+
+### Minor Changes
+
+- d50c8fa: API tokens, resolution and enforcement (no minting UI yet).
+
+  - `@selvajs/platform`: `ApiToken`, `IApiTokenStore` (optional `apiTokens` on `IDataProvider`), `scopeAllows`, `narrowApiTokenContext`, `apiScope` on `RequestContext`, the `manage_api_tokens` and `read_all_org_projects` permissions, `api_token.*` events, and `actorOf`, which adds `tokenId` to events written during a token request. `read_all_org_projects` is not in the owner/admin defaults.
+  - `@selvajs/server`: `resolveApiToken` and `buildRequestContext` in `/http`; `createApiTokenCodec` (`selva_` keys with a checksum) in `/tokens`; `runHandler` checks API-token scopes, with `action` and `scopeTarget` options; `ApiError` gains `details`; new code `API_TOKENS_UNAVAILABLE`.
+  - `@selvajs/local-provider`: `LocalApiTokenStore`, wired into the org-delete cascade and user erasure.
+  - `@selvajs/selva`: the hook resolves `Authorization: Bearer selva_…` on `/api/v1/*` before the cookie, and a bad key never falls back to the session.
+
+- 5a96097: Create, list and revoke API tokens.
+
+  - `@selvajs/server`: `createApiToken`, `listApiTokens` and `revokeApiToken` handlers (session-only; minting needs `manage_api_tokens`); `SelvaDeps.tokens.apiTokens`; `scopeRefusalsToday`. Every operation in the spec now documents 403 and 503.
+  - `@selvajs/platform`: `describeApiScope`, and the `api_token.created` notification kind.
+  - `@selvajs/notifications`: `renderApiTokenCreatedEmail`, sent to the owner when a token is minted.
+  - `@selvajs/selva`: `POST`/`GET /api/v1/orgs/{orgId}/tokens`, `DELETE /api/v1/orgs/{orgId}/tokens/{tokenId}`, and an `/admin/tokens` page in the admin side nav. `settings` is now a reserved org slug.
+
+- 5a96097: API tokens on the Supabase provider.
+
+  - `@selvajs/platform`: `IAuthProvider.delegatedSession` (`IDelegatedSession`): signs a short-lived session for a user so a token request runs under their row security.
+  - `@selvajs/server`: `resolveApiToken` signs that session for the owner after re-checking them and puts it in `ctx.adapterContext.sessionToken`. While the provider reports the key broken, every key gets 503 `API_TOKENS_UNAVAILABLE` and `createApiToken` refuses to mint.
+  - `@selvajs/supabase-provider`: `SupabaseApiTokenStore` and the `api_tokens` migration (RLS: own keys, the org roster for `manage_org_members`; sessions can only set `revoked_at` and never read the hash), plus `audit_events.token_id`. `SupabaseAuthProvider` signs ES256 with `SUPABASE_JWT_SIGNING_KEY` or HS256 with the legacy `SUPABASE_JWT_SECRET`, and checks once that PostgREST accepts the key. **Run `npx selva-supabase` and `npx supabase db push` before updating the app.**
+  - `@selvajs/selva`: the admin health page reports whether API token sessions work; `.env.example` documents both keys.
+
 ## 4.19.0
 
 ### Minor Changes

@@ -12,13 +12,60 @@ export {
 	formText,
 	parseBody,
 	parseParam,
+	readForm,
 	requireCaller,
+	requireSession,
 	requireParams,
 	requireUpload,
 	throwZodError
 } from './request.js';
-export { runHandler, toErrorBody, type ApiErrorBody } from './respond.js';
+export { runHandler, toErrorBody, type ApiErrorBody, type RunHandlerOptions } from './respond.js';
+export {
+	createApiRateLimiter,
+	defaultApiRateLimiter,
+	defaultProjectCreateLimiter,
+	resolveApiRateLimitConfig,
+	chargeApiRateLimit,
+	rateLimitHeaders,
+	rateLimitedResponse,
+	withRateLimitHeaders,
+	DEFAULT_API_RATE_LIMIT,
+	DEFAULT_PROJECT_CREATE_LIMIT,
+	type ApiRateLimiter,
+	type ApiRateLimitConfig,
+	type ApiRateLimitVerdict
+} from './rate-limit.js';
+export {
+	createApiIdempotencyStore,
+	defaultApiIdempotencyStore,
+	idempotencyCallerId,
+	readIdempotencyKey,
+	requestFingerprint,
+	runIdempotent,
+	IDEMPOTENCY_KEY_HEADER,
+	MAX_IDEMPOTENCY_KEY_LENGTH,
+	DEFAULT_API_IDEMPOTENCY_TTL_MS,
+	type ApiIdempotencyStore,
+	type IdempotentEntry
+} from './idempotency.js';
+export {
+	assertScope,
+	assertScopeAnywhere,
+	actionForMethod,
+	scopeRefusalsToday,
+	projectScopeTarget,
+	definitionScopeTarget
+} from './scope.js';
 export { mapCoreError } from './map-core-error.js';
+export {
+	buildOpenApiDocument,
+	operationId,
+	type Endpoint,
+	type HttpMethod,
+	type Json,
+	type OpenApiOptions,
+	type ResponseKind
+} from './openapi.js';
 export { parseListOptions, parseDefinitionListOptions } from './pagination.js';
 export {
 	SolveBodySchema,
@@ -28,7 +75,8 @@ export {
 	UpdateProjectMemberBodySchema,
 	CreateInviteBodySchema,
 	OrgComputePatchBodySchema,
-	UpdateOrgMemberBodySchema
+	UpdateOrgMemberBodySchema,
+	CreateApiTokenBodySchema
 } from './bodies.js';
 export {
 	ShareLinkResponseSchema,
@@ -38,5 +86,7 @@ export {
 	OrgComputeServerResponseSchema,
 	ComputeCatalogEntrySchema,
 	OrgComputeResponseSchema,
+	ApiTokenResponseSchema,
+	CreatedApiTokenResponseSchema,
 	type ShareLinkResponse
 } from './responses-schema.js';

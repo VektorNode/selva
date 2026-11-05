@@ -83,7 +83,12 @@ public class GH_RenderPdf : GH_Component, ISelvaFileOutput
             {
                 AutoFitToContent = autoFit,
             };
-            var bytes = new PdfRenderer(options).Render(doc);
+            var renderer = new PdfRenderer(options);
+            var bytes = renderer.Render(doc);
+            foreach (var warning in renderer.Warnings)
+            {
+                AddRuntimeMessage(GH_RuntimeMessageLevel.Warning, warning);
+            }
 
             var fileData = new FileData
             {

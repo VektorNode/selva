@@ -2,7 +2,7 @@
 	import type { VisibilityRule, DiscoveredInput } from '@selvajs/schemas';
 	import { Button, Badge, Input, Select } from '@selvajs/ui';
 	import { X } from '@lucide/svelte';
-	import { validateRuleValue, getOperatorsForType } from '$lib/utils/validation';
+	import { validateRuleValue, getOperatorsForType } from '#lib/utils/validation.js';
 
 	interface RuleRowProps {
 		rule: VisibilityRule;
@@ -24,9 +24,12 @@
 		onRemove
 	}: RuleRowProps = $props();
 
-	// Exclude the parameter this rule lives on, so it can't reference itself.
+	// Exclude the parameter this rule lives on, so it can't reference itself, and inputs with no
+	// operators: there is no value to compare.
 	let filteredInputs = $derived(
-		availableInputs.filter((input) => input.id !== currentParamInfo?.id)
+		availableInputs.filter(
+			(input) => input.id !== currentParamInfo?.id && getOperatorsForType(input.type).length > 0
+		)
 	);
 
 	let selectedParamInfo = $derived(rule.paramId ? getParameterInfo(rule.paramId) : undefined);
@@ -96,8 +99,8 @@
 	}
 </script>
 
-<div class="flex items-start gap-2">
-	<div class="flex flex-1 flex-col gap-1">
+<div class="grid grid-cols-[minmax(0,1fr)_9rem_minmax(0,1fr)_auto] items-start gap-2">
+	<div class="flex min-w-0 flex-col gap-1">
 		<Select.Root
 			type="single"
 			value={rule.paramId}
@@ -107,8 +110,8 @@
 				}
 			}}
 		>
-			<Select.Trigger class="h-9 text-sm">
-				<span>{selectedParamInfo?.nickname || 'Select input...'}</span>
+			<Select.Trigger class="h-9 w-full text-sm">
+				<span class="truncate">{selectedParamInfo?.nickname || 'Select input...'}</span>
 			</Select.Trigger>
 			<Select.Content>
 				{#each filteredInputs as input (input.id)}
@@ -123,7 +126,7 @@
 		</Select.Root>
 	</div>
 
-	<div class="flex flex-none flex-col gap-1">
+	<div class="flex min-w-0 flex-col gap-1">
 		<Select.Root
 			type="single"
 			value={rule.operator}
@@ -133,7 +136,7 @@
 				}
 			}}
 		>
-			<Select.Trigger class="h-9 w-50 text-sm">
+			<Select.Trigger class="h-9 w-full text-sm">
 				<span class="truncate">{rule.operator || 'Op'}</span>
 			</Select.Trigger>
 			<Select.Content>
@@ -144,7 +147,7 @@
 		</Select.Root>
 	</div>
 
-	<div class="flex flex-1 flex-col gap-1">
+	<div class="flex min-w-0 flex-col gap-1">
 		{#if rule.operator === 'between'}
 			<div class="flex gap-2">
 				<Input
@@ -184,7 +187,7 @@
 						}
 					}}
 				>
-					<Select.Trigger class="h-9 text-sm">
+					<Select.Trigger class="h-9 w-full text-sm">
 						{#if rule.values && rule.values.length > 0}
 							{@const selectedNames = (rule.values as string[])
 								.map((val) => {
@@ -233,7 +236,7 @@
 						if (value) updateRuleValue(value === 'true');
 					}}
 				>
-					<Select.Trigger class="h-9 text-sm">
+					<Select.Trigger class="h-9 w-full text-sm">
 						{#if rule.value !== undefined && rule.value !== null}
 							{String(rule.value)}
 						{:else}
@@ -253,7 +256,7 @@
 						if (value) updateRuleValue(value);
 					}}
 				>
-					<Select.Trigger class="h-9 text-sm">
+					<Select.Trigger class="h-9 w-full text-sm">
 						{#if rule.value}
 							{@const optionEntry = Object.entries(selectedParamInfo.options).find(
 								([_, val]) => val === rule.value
@@ -295,7 +298,7 @@
 		{/if}
 	</div>
 
-	<Button variant="ghost" size="icon" class="h-9 w-9 flex-none" onclick={onRemove}>
+	<Button variant="ghost" size="icon" class="h-9 w-9" onclick={onRemove}>
 		<X size={16} />
 	</Button>
 </div>

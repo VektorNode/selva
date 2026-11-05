@@ -40,23 +40,21 @@
 		</p>
 		<div class="gap-1 flex items-center">
 			<Button
-				size="sm"
+				size="icon-sm"
 				variant="outline"
 				disabled={page <= 1}
 				onclick={() => (page -= 1)}
 				aria-label="Previous page"
-				class="h-8 w-8 p-0"
 			>
 				<ChevronLeft class="h-4 w-4" />
 			</Button>
 			<span class="px-2 font-mono text-xs text-muted-foreground">{page} / {pageCount}</span>
 			<Button
-				size="sm"
+				size="icon-sm"
 				variant="outline"
 				disabled={page >= pageCount}
 				onclick={() => (page += 1)}
 				aria-label="Next page"
-				class="h-8 w-8 p-0"
 			>
 				<ChevronRight class="h-4 w-4" />
 			</Button>

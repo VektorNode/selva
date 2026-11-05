@@ -6,14 +6,14 @@ import {
 	getDefinitionMeta,
 	getProjectProvider,
 	getOrganizationProvider
-} from '$lib/server/providers.server';
-import { asHttpError, requireCanSolve, scoped } from '$lib/server/access.server';
-import { tryResolveShareToken } from '$lib/server/shareLinks/resolve.server';
-import { SOLVE_DEADLINE_MS } from '$lib/server/computeLimits';
+} from '#lib/server/providers.server.js';
+import { asHttpError, requireCanSolve, scoped } from '#lib/server/access.server.js';
+import { tryResolveShareToken } from '#lib/server/shareLinks/resolve.server.js';
+import { getClient } from '#lib/server/compute/engine.server.js';
 import {
 	loadDefinitionForRender,
 	DefinitionLoadError
-} from '$lib/server/definitions/loadForRender.server';
+} from '#lib/server/definitions/loadForRender.server.js';
 
 export const load = (async ({ params, locals, request, url }) => {
 	const meta = getDefinitionMeta();
@@ -52,17 +52,21 @@ export const load = (async ({ params, locals, request, url }) => {
 		// Draft channel and explicit-version picks require edit permission on top
 		// of solve.
 		if (channel === 'draft' || explicitVersionId) {
-			const { requireEditableDefinition } = await import('$lib/server/access.server');
+			const { requireEditableDefinition } = await import('#lib/server/access.server.js');
 			await asHttpError(() => requireEditableDefinition(scoped(locals), guid));
 		}
 
-		const loaded = await loadDefinitionForRender(ctx, record, channel, explicitVersionId);
+		// Owning org's logo, for viewer branding, read beside the definition load. Same
+		// `ctx` already authorized to load this definition (user session or share-token
+		// ctx, which carries actingOrgId). Best-effort: a missing project/org or read
+		// failure just yields no logo — branding is non-essential and must never break a solve.
+		const [loaded, orgLogoUrl] = await Promise.all([
+			loadDefinitionForRender(ctx, record, channel, explicitVersionId),
+			resolveOrgLogo(ctx, record.projectId, locals.log)
+		]);
 
-		// Owning org's logo, for viewer branding. Same `ctx` already authorized to
-		// load this definition (user session or share-token ctx, which carries
-		// actingOrgId). Best-effort: a missing project/org or read failure just
-		// yields no logo — branding is non-essential and must never break a solve.
-		const orgLogoUrl = await resolveOrgLogo(ctx, record.projectId, locals.log);
+		// Warm already: loading the definition read its inputs through this client.
+		const { limits } = await getClient(loaded.computeServer, { definitionGuid: guid });
 
 		return {
 			schema: loaded.schema,
@@ -78,9 +82,9 @@ export const load = (async ({ params, locals, request, url }) => {
 			// Forward to the client so /api/compute/solve calls can include it.
 			// Null when the request was user-authenticated (session cookie carries auth).
 			shareToken,
-			// Same deadline the server enforces on /api/compute, so the client's
-			// AbortController matches the server's Promise.race.
-			solveDeadlineMs: SOLVE_DEADLINE_MS
+			// The deadline this definition's compute server sets, so the browser's
+			// AbortController doesn't stop a solve the server would still finish.
+			solveDeadlineMs: limits.solveDeadlineMs
 		};
 	} catch (err) {
 		// Let HttpError (from error() calls) bubble up.

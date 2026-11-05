@@ -6,12 +6,22 @@
 import {
 	WEBSOCKET_MAX_RECONNECT_ATTEMPTS,
 	WEBSOCKET_RECONNECT_INTERVAL,
-	DEFAULT_WEBSOCKET_PORT
-} from '$lib/app.config';
+	DEFAULT_WEBSOCKET_PORT,
+	RHINO_PANEL_HOST
+} from '#lib/app.config.js';
 import type { UISchema } from '@selvajs/schemas';
+import type { DraftPlacement } from '#lib/features/builder/operations.js';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from '@selvajs/ui';
 import { validateInboundMessage } from './messageSchemas';
+import {
+	authenticateMessage,
+	BRIDGE_UNAUTHORIZED_CLOSE_CODE,
+	isAuthenticatedMessage,
+	roleOf,
+	type BridgeRole
+} from './bridge-handshake';
+import { decodeHostFrame, isHostFrame } from './host-frame';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type MessageHandler = (data: any) => void;
@@ -105,6 +115,52 @@ export interface WsCurrentValuesMessage extends WsSessionMessage {
 	values: Record<string, unknown>;
 }
 
+export interface WsSelvaAccountMessage extends WsSessionMessage {
+	account: import('@selvajs/schemas').SelvaAccount;
+}
+
+export interface WsSelvaTargetsMessage extends WsSessionMessage {
+	targets: import('@selvajs/schemas').SelvaTargets;
+}
+
+export interface WsSelvaUploadProgressMessage extends WsSessionMessage {
+	progress: import('@selvajs/schemas').SelvaUploadProgress;
+}
+
+export interface WsSelvaUploadResultMessage extends WsSessionMessage {
+	result: import('@selvajs/schemas').SelvaUploadResult;
+}
+
+/** Where the plugin put one param: appended to `groupId`, which the editor creates if missing. */
+export interface LayoutPlacement {
+	paramId: string;
+	itemType: 'input' | 'output';
+	/** Null in a flat layout. */
+	tabId?: string | null;
+	tabLabel?: string | null;
+	groupId: string;
+	groupLabel: string;
+}
+
+/** The plugin applied a canvas placement to its canonical schema; `schema` is the result. */
+export interface WsLayoutPlacedMessage extends WsSessionMessage {
+	schema: import('@selvajs/schemas').UISchema;
+	schemaHash: string;
+	placements: LayoutPlacement[];
+	/** Params whose layout item was removed. They stay in `schema.inputs`/`outputs`. */
+	removedIds: string[];
+	summary: string;
+}
+
+/** Publishable param ids selected on the canvas, in canvas order. */
+export interface WsCanvasSelectionMessage extends WsSessionMessage {
+	ids: string[];
+}
+
+export interface WsRevealItemMessage extends WsSessionMessage {
+	paramId: string;
+}
+
 /**
  * Represents a single metadata difference between Grasshopper and schema
  * Note: property names match JSON.NET PascalCase serialization of C# classes
@@ -147,16 +203,33 @@ export class WebSocketState {
 	private batchedValues: Record<string, unknown> = {};
 	private currentSessionId: string | null = null;
 	private _hasConnectedBefore = false;
+	private authSecret: string | null = null;
+	private inRhinoPanel = false;
 	private readonly BATCH_DELAY_MS = 50; // Batch updates within 50ms window
+	// A value update that changes nothing starts no solve, so no solvingState ever clears it.
+	private readonly AWAITING_SOLVE_TIMEOUT_MS = 2000;
+	private awaitingSolveTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Reactive state using Svelte 5 runes
 	connected = $state(false);
 	isSolving = $state(false);
+	/**
+	 * In the Rhino panel nothing repaints while Grasshopper solves: both run on Rhino's UI thread.
+	 * The plugin's solvingState arrives once the solve already holds that thread, too late to be
+	 * seen. This is true from the moment values are queued until the plugin reports, so the page
+	 * can show the solve while it can still paint.
+	 */
+	awaitingSolve = $state(false);
+	/** The plugin refused this page's secret: it belongs to another session. Reconnecting won't help. */
+	authRejected = $state(false);
+	/** What the plugin acknowledged this socket as; null until it has. */
+	role = $state<BridgeRole | null>(null);
 
 	constructor(private url: string) {
 		this.on('solvingState', (data) => {
 			if (data && typeof data === 'object' && 'isSolving' in data) {
 				const newState = Boolean(data.isSolving);
+				this.clearAwaitingSolve();
 
 				if (newState !== this.isSolving) {
 					this.isSolving = newState;
@@ -169,6 +242,12 @@ export class WebSocketState {
 
 					// If solving just finished, handle pending/batched updates
 					if (!this.isSolving) {
+						// Either send starts the next solve. The clear above dropped the awaiting flag,
+						// and without it the panel can't show that solve before it freezes the page.
+						if (this.inRhinoPanel && (this.batchTimer || this._pendingValueUpdate)) {
+							this.markAwaitingSolve();
+						}
+
 						// First, flush any batched updates
 						if (this.batchTimer) {
 							clearTimeout(this.batchTimer);
@@ -204,11 +283,25 @@ export class WebSocketState {
 	}
 
 	/**
-	 * Connect to the WebSocket server
+	 * Must be set before `connect()`; the socket sends it as its first message. The Rhino panel says
+	 * so: it is the only page the plugin opens file dialogs and viewport picks for.
+	 */
+	setAuthSecret(secret: string, inRhinoPanel: boolean) {
+		this.authSecret = secret;
+		this.inRhinoPanel = inRhinoPanel;
+		this.authRejected = false;
+	}
+
+	/**
+	 * Connect to the WebSocket server. Resolves true once the plugin has accepted the secret.
 	 */
 	connect(): Promise<boolean> {
-		if (this.socket?.readyState === WebSocket.OPEN) {
+		if (this.connected) {
 			return Promise.resolve(true);
+		}
+		const secret = this.authSecret;
+		if (!secret || this.authRejected) {
+			return Promise.resolve(false);
 		}
 		// If a connect is already in flight, return its promise so concurrent
 		// callers all see the same outcome instead of getting an early `true`.
@@ -233,12 +326,21 @@ export class WebSocketState {
 				// Receive binary frames as ArrayBuffer (the SLVA mesh blob transport).
 				this.socket.binaryType = 'arraybuffer';
 
-				this.socket.onopen = () => {
+				const socket = this.socket;
+				socket.onopen = () => {
 					if (this._shouldReloadOnReconnect) {
 						window.location.reload();
 						return;
 					}
+					socket.send(
+						JSON.stringify(
+							authenticateMessage(secret, this.inRhinoPanel ? RHINO_PANEL_HOST : undefined)
+						)
+					);
+				};
 
+				const onAuthenticated = (role: BridgeRole) => {
+					this.role = role;
 					this.reconnectAttempts = 0;
 					this._serverDisconnected = false;
 					this.connected = true;
@@ -257,6 +359,15 @@ export class WebSocketState {
 				this.socket.onmessage = (event) => {
 					try {
 						if (event.data instanceof ArrayBuffer) {
+							// A host file names itself. It must not reach the mesh collector below,
+							// which takes every binary frame it sees as a mesh blob.
+							if (isHostFrame(event.data)) {
+								const frame = decodeHostFrame(event.data);
+								if (frame) this.handleMessage({ ...frame.header, body: frame.body });
+								else console.error('[WebSocket] Dropped a malformed host file frame.');
+								return;
+							}
+
 							const handlers = this.messageHandlers.get('binaryFrame');
 							if (handlers) {
 								handlers.forEach((handler) => handler(event.data as ArrayBuffer));
@@ -269,6 +380,10 @@ export class WebSocketState {
 						}
 
 						const message = JSON.parse(event.data);
+						if (isAuthenticatedMessage(message)) {
+							onAuthenticated(roleOf(message));
+							return;
+						}
 						this.handleMessage(message);
 					} catch (error) {
 						console.error('[WebSocket] Failed to parse message:', error);
@@ -280,12 +395,17 @@ export class WebSocketState {
 					settle(false);
 				};
 
-				this.socket.onclose = () => {
+				this.socket.onclose = (event) => {
 					this.socket = null;
 					this.connected = false;
-					// If we closed before opening, settle false; otherwise this is a no-op.
+					if (event.code === BRIDGE_UNAUTHORIZED_CLOSE_CODE) {
+						this.authRejected = true;
+					}
+					// If we closed before authenticating, settle false; otherwise this is a no-op.
 					settle(false);
-					this.attemptReconnect();
+					// A reply to a request on this socket can no longer arrive.
+					this.messageHandlers.get('socketClosed')?.forEach((handler) => handler(undefined));
+					if (!this.authRejected) this.attemptReconnect();
 				};
 			} catch (error) {
 				console.error('[WebSocket] Connection failed:', error);
@@ -314,6 +434,8 @@ export class WebSocketState {
 			clearTimeout(this.solvingTimeout);
 			this.solvingTimeout = null;
 		}
+
+		this.clearAwaitingSolve();
 
 		if (this.socket) {
 			this.socket.close();
@@ -350,6 +472,14 @@ export class WebSocketState {
 		}
 	}
 
+	sendBinary(data: Blob) {
+		if (this.socket?.readyState === WebSocket.OPEN) {
+			this.socket.send(data);
+		} else {
+			console.warn('[WebSocket] Cannot send binary frame - not connected');
+		}
+	}
+
 	/**
 	 * Asks the plugin to abort the running solution. Handled on the plugin's socket thread, so it
 	 * lands even while the solver holds the UI thread.
@@ -370,6 +500,8 @@ export class WebSocketState {
 			return;
 		}
 
+		if (this.inRhinoPanel) this.markAwaitingSolve();
+
 		// Batch updates within the time window
 		this.currentSessionId = sessionId;
 		Object.assign(this.batchedValues, values);
@@ -382,6 +514,23 @@ export class WebSocketState {
 		this.batchTimer = setTimeout(() => {
 			this.flushBatchedUpdates();
 		}, this.BATCH_DELAY_MS);
+	}
+
+	private markAwaitingSolve() {
+		this.awaitingSolve = true;
+		if (this.awaitingSolveTimer) clearTimeout(this.awaitingSolveTimer);
+		this.awaitingSolveTimer = setTimeout(
+			() => this.clearAwaitingSolve(),
+			this.AWAITING_SOLVE_TIMEOUT_MS
+		);
+	}
+
+	private clearAwaitingSolve() {
+		if (this.awaitingSolveTimer) {
+			clearTimeout(this.awaitingSolveTimer);
+			this.awaitingSolveTimer = null;
+		}
+		this.awaitingSolve = false;
 	}
 
 	/**
@@ -415,6 +564,22 @@ export class WebSocketState {
 		}, 30000); // 30 second timeout
 	}
 
+	/** Closes the definition this player session opened; the panel goes back to its launcher. */
+	closeDefinition(sessionId: string) {
+		this.send('closeDefinition', { sessionId });
+	}
+
+	/** Shows Grasshopper's editor and turns this player session into an author one. */
+	editInGrasshopper(sessionId: string) {
+		this.send('editInGrasshopper', { sessionId });
+	}
+
+	/** One button press: a solve with `true`, after which the plugin puts `false` back. */
+	sendTrigger(sessionId: string, paramId: string) {
+		if (this.inRhinoPanel) this.markAwaitingSolve();
+		this.send('trigger', { sessionId, paramId });
+	}
+
 	/**
 	 * Request current values from Grasshopper
 	 */
@@ -425,9 +590,12 @@ export class WebSocketState {
 	/**
 	 * Request initial data (schema, available params, current values) from Grasshopper
 	 */
-	requestInitialData(sessionId: string) {
+	requestInitialData(sessionId: string, options?: { schemaOnly?: boolean }) {
 		this.currentSessionId = sessionId;
-		this.send('requestInitialData', { sessionId });
+		this.send(
+			'requestInitialData',
+			options?.schemaOnly ? { sessionId, schemaOnly: true } : { sessionId }
+		);
 	}
 
 	/**
@@ -443,6 +611,10 @@ export class WebSocketState {
 	 */
 	requestSyncPreview(sessionId: string, schema: UISchema) {
 		this.send('requestSyncPreview', { sessionId, schema });
+	}
+
+	sendDraftLayout(sessionId: string, placements: DraftPlacement[] | null) {
+		this.send('draftLayout', { sessionId, placements });
 	}
 
 	/**
@@ -473,7 +645,7 @@ export class WebSocketState {
 	 * Check if connected
 	 */
 	get isConnected(): boolean {
-		return this.socket?.readyState === WebSocket.OPEN;
+		return this.connected;
 	}
 
 	/**
@@ -504,8 +676,10 @@ export class WebSocketState {
 				// Shape only — `issues` carries the offending value in `input`, and
 				// `payload` is the whole message. Neither can reach stdout: erasure
 				// does not follow a log collector.
+				// `type` comes off the wire: a `%s` in it would be read as a format directive.
 				console.error(
-					`[WebSocket] Rejected malformed '${validation.type}' message:`,
+					'[WebSocket] Rejected malformed message of type %s:',
+					validation.type,
 					validation.error.issues.map((i) => ({
 						path: i.path.join('.'),
 						code: i.code,

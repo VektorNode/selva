@@ -189,9 +189,160 @@ const solveEventSchema = baseEnvelope.extend({
 	})
 });
 
+// ============================================================================
+// Selva account and upload (SelvaAccount, SelvaTargets, … in wire-schema.json)
+// ============================================================================
+
+const selvaVersionTargetSchema = z.object({
+	definitionGuid: z.string(),
+	displayName: z.string(),
+	projectName: z.string().nullish(),
+	latestVersionNumber: z.number(),
+	liveVersionNumber: z.number().nullish(),
+	linkedVersionNumber: z.number().nullish(),
+	newerVersions: z.array(
+		z.object({
+			versionNumber: z.number(),
+			uploadedAt: z.string(),
+			byYou: z.boolean(),
+			changeNote: z.string().nullish()
+		})
+	)
+});
+
+const selvaAccountSchema = baseEnvelope.extend({
+	type: z.literal('selvaAccount'),
+	account: z.object({
+		status: z.enum(['signedOut', 'signingIn', 'signedIn']),
+		origin: z.string().nullish(),
+		host: z.string().nullish(),
+		knownOrigins: z.array(z.string()),
+		user: z.object({ email: z.string(), displayName: z.string().nullish() }).nullish(),
+		org: z.object({ id: z.string(), name: z.string() }).nullish(),
+		expiresAt: z.string().nullish(),
+		extraScopes: z.array(z.string()),
+		storage: z.enum(['keychain', 'memory']),
+		message: z.string().nullish()
+	})
+});
+
+const selvaTargetsSchema = baseEnvelope.extend({
+	type: z.literal('selvaTargets'),
+	targets: z.object({
+		origin: z.string(),
+		projects: z.array(z.object({ id: z.string(), name: z.string() })),
+		suggestion: selvaVersionTargetSchema.nullish(),
+		matches: z.array(selvaVersionTargetSchema),
+		defaults: z.object({
+			displayName: z.string(),
+			description: z.string().nullish(),
+			category: z.string().nullish(),
+			tags: z.array(z.string())
+		}),
+		file: z.object({ name: z.string(), sizeBytes: z.number() }),
+		blockedReason: z.string().nullish()
+	})
+});
+
+const selvaUploadProgressSchema = baseEnvelope.extend({
+	type: z.literal('selvaUploadProgress'),
+	progress: z.object({ stage: z.enum(['preparing', 'uploading', 'publishing']) })
+});
+
+const selvaUploadResultSchema = baseEnvelope.extend({
+	type: z.literal('selvaUploadResult'),
+	result: z.object({
+		ok: z.boolean(),
+		definitionGuid: z.string().nullish(),
+		displayName: z.string().nullish(),
+		versionNumber: z.number().nullish(),
+		live: z.boolean(),
+		url: z.string().nullish(),
+		error: z.string().nullish(),
+		cancelled: z.boolean().nullish()
+	})
+});
+
+// ============================================================================
+// Canvas placement (the author places params from Grasshopper's canvas)
+// ============================================================================
+
+const layoutPlacementSchema = z.object({
+	paramId: z.string(),
+	itemType: z.enum(['input', 'output']),
+	tabId: z.string().nullish(),
+	tabLabel: z.string().nullish(),
+	groupId: z.string(),
+	groupLabel: z.string()
+});
+
+const layoutPlacedSchema = baseEnvelope.extend({
+	type: z.literal('layoutPlaced'),
+	schema: z.unknown(),
+	schemaHash: z.string(),
+	placements: z.array(layoutPlacementSchema),
+	removedIds: z.array(z.string()),
+	summary: z.string()
+});
+
+const canvasSelectionSchema = baseEnvelope.extend({
+	type: z.literal('canvasSelection'),
+	ids: z.array(z.string())
+});
+
+const revealItemSchema = baseEnvelope.extend({
+	type: z.literal('revealItem'),
+	paramId: z.string()
+});
+
 // `disconnecting` uses the generic `BroadcastMessage` envelope — payload nested
 // under `data` — and is handled inline in `handleMessage` before validation kicks
 // in. No schema needed.
+
+// ============================================================================
+// Rhino panel file dialogs (replies only ever reach the panel's own socket)
+// ============================================================================
+
+const hostSaveFileResultSchema = baseEnvelope.extend({
+	type: z.literal('hostSaveFileResult'),
+	requestId: z.string(),
+	outcome: z.enum(['saved', 'cancelled', 'failed']),
+	error: z.string().nullish()
+});
+
+const hostPickFileResultSchema = baseEnvelope.extend({
+	type: z.literal('hostPickFileResult'),
+	requestId: z.string(),
+	outcome: z.enum(['cancelled', 'failed']),
+	error: z.string().nullish()
+});
+
+// The header of a binary host-frame.ts frame; the dispatcher adds the file as `body`.
+const hostPickedFileSchema = baseEnvelope.extend({
+	type: z.literal('hostPickedFile'),
+	requestId: z.string(),
+	name: z.string()
+});
+
+// ============================================================================
+// Geometry inputs (answers go to every socket; the page matches its requestId)
+// ============================================================================
+
+const pickGeometryResultSchema = baseEnvelope.extend({
+	type: z.literal('pickGeometryResult'),
+	requestId: z.string(),
+	paramId: z.string(),
+	outcome: z.enum(['picked', 'cancelled', 'failed']),
+	summary: z.string().nullish(),
+	error: z.string().nullish()
+});
+
+// Sent after every clear, refused or not; null when nothing is picked into the param.
+const geometrySummarySchema = baseEnvelope.extend({
+	type: z.literal('geometrySummary'),
+	paramId: z.string(),
+	summary: z.string().nullable()
+});
 
 // ============================================================================
 // Dispatcher entry point
@@ -217,7 +368,19 @@ const schemasByType = {
 	syncApplied: syncAppliedSchema,
 	solvingState: solvingStateSchema,
 	runtimeMessage: runtimeMessageSchema,
-	solveEvent: solveEventSchema
+	solveEvent: solveEventSchema,
+	selvaAccount: selvaAccountSchema,
+	selvaTargets: selvaTargetsSchema,
+	selvaUploadProgress: selvaUploadProgressSchema,
+	selvaUploadResult: selvaUploadResultSchema,
+	hostSaveFileResult: hostSaveFileResultSchema,
+	hostPickFileResult: hostPickFileResultSchema,
+	hostPickedFile: hostPickedFileSchema,
+	pickGeometryResult: pickGeometryResultSchema,
+	geometrySummary: geometrySummarySchema,
+	layoutPlaced: layoutPlacedSchema,
+	canvasSelection: canvasSelectionSchema,
+	revealItem: revealItemSchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

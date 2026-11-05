@@ -1,5 +1,7 @@
 import { randomId } from '../utils/randomId';
+import { saveBlob } from '../utils/host-files';
 import { getGroups } from '@selvajs/schemas';
+import { isValuelessInput, valuelessInputIds } from './host-support';
 import type {
 	UISchema,
 	ParameterPreset,
@@ -24,6 +26,7 @@ export function createSavedState(
 			if (item.type !== 'input') continue;
 			const value = currentValues[item.paramId];
 			const inputDef = schema.inputs.find((i) => i.id === item.paramId);
+			if (isValuelessInput(item, inputDef)) continue;
 			if (value !== undefined && inputDef) {
 				parameters.push({
 					paramId: item.paramId,
@@ -110,15 +113,18 @@ export function validateSavedState(
  * Params the current schema no longer has are dropped. That's the same condition
  * `validateSavedState` flags as an error, but the rule is re-derived from the schema here
  * rather than read back off the issue list — nothing couples to how sentinel ids are encoded.
+ * Valueless inputs are dropped too: a preset saved before an input became a button or a
+ * geometry input still holds a value for it.
  */
 export function extractLoadableValues(
 	savedState: ParameterPreset,
 	currentSchema: UISchema
 ): Record<string, unknown> {
 	const values: Record<string, unknown> = {};
+	const valueless = valuelessInputIds(currentSchema);
 	for (const paramState of savedState.parameters) {
 		const exists = currentSchema.inputs.some((i) => i.id === paramState.paramId);
-		if (exists) {
+		if (exists && !valueless.has(paramState.paramId)) {
 			values[paramState.paramId] = paramState.value;
 		}
 	}
@@ -147,18 +153,15 @@ export function loadPreset(savedState: ParameterPreset, currentSchema: UISchema)
 	};
 }
 
-export function exportStateAsJson(savedState: ParameterPreset): void {
+/** Resolves false when the user cancelled the save. */
+export function exportStateAsJson(savedState: ParameterPreset): Promise<boolean> {
 	const blob = new Blob([JSON.stringify(savedState, null, 2)], { type: 'application/json' });
 	const safeName = savedState.name.replace(/[^a-z0-9]/gi, '_');
 	const date = savedState.timestamp.split('T')[0].replace(/-/g, '_');
 
-	const link = document.createElement('a');
-	link.href = URL.createObjectURL(blob);
 	// .slvp = Selva parameter preset. Import still accepts the pre-rename .sps — same JSON,
 	// only the writer's extension changed.
-	link.download = `${safeName}_${date}.slvp`;
-	link.click();
-	URL.revokeObjectURL(link.href);
+	return saveBlob(blob, `${safeName}_${date}.slvp`);
 }
 
 export async function importStateFromJson(file: File): Promise<ParameterPreset> {

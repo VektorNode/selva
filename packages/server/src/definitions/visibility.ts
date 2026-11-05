@@ -14,7 +14,15 @@
  * per-project `await` inside a loop reintroduces the N+1 this replaced.
  */
 
-import { SYSTEM_CONTEXT, canView } from '@selvajs/platform';
+import {
+	SYSTEM_CONTEXT,
+	canCreateDefinition,
+	canEditDefinition,
+	canView,
+	outsideTokenOrg,
+	scopeAllows,
+	walkPages
+} from '@selvajs/platform';
 import type {
 	DefinitionListOptions,
 	DefinitionRecord,
@@ -59,6 +67,8 @@ export interface AccessibleProjectSet {
 	memberByProjectId: Map<string, ProjectMember | null>;
 	/** The caller's org-membership row per scanned org (`null` = not a member). */
 	orgMemberByOrgId: Map<string, OrgMember | null>;
+	/** Grants per scanned `platform` project; absent for every other visibility. */
+	grantsByProjectId: Map<string, PlatformProjectGrant[]>;
 }
 
 /**
@@ -75,7 +85,8 @@ export async function resolveAccessibleProjects(
 	const grantStore = deps.platformProjectGrants;
 
 	const orgsPage = await orgs.listOrgs(SYSTEM_CONTEXT, { limit: SCAN_LIMIT });
-	const orgIds = orgsPage.items.map((o) => o.id);
+	// An API token sees its own org only, cross-org public projects included.
+	const orgIds = orgsPage.items.map((o) => o.id).filter((id) => !outsideTokenOrg(ctx, id));
 
 	const projectPages = await Promise.all(
 		orgIds.map((orgId) => projectStore.listProjects(SYSTEM_CONTEXT, orgId, { limit: SCAN_LIMIT }))
@@ -108,8 +119,48 @@ export async function resolveAccessibleProjects(
 		projects,
 		allById: new Map(allProjects.map((p) => [p.id, p])),
 		memberByProjectId,
-		orgMemberByOrgId
+		orgMemberByOrgId,
+		grantsByProjectId
 	};
+}
+
+/**
+ * Whether the caller may create a definition in at least one project of
+ * `orgId`, by the same rule `requireCanCreateDefinition` applies. Reads the
+ * org's projects a page at a time and stops at the first that passes.
+ */
+export async function canCreateDefinitionInOrg(
+	ctx: RequestContext,
+	orgId: string,
+	deps: VisibilityDeps
+): Promise<boolean> {
+	const orgMember =
+		(await deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [orgId], ctx.userId)).get(orgId) ?? null;
+	const pages = walkPages((page) => deps.projects.listProjects(SYSTEM_CONTEXT, orgId, page));
+	for await (const page of pages) {
+		const platformIds = page.items.filter((p) => p.visibility === 'platform').map((p) => p.id);
+		const [members, grants] = await Promise.all([
+			deps.projects.getProjectMembersFor(
+				SYSTEM_CONTEXT,
+				page.items.map((p) => p.id),
+				ctx.userId
+			),
+			platformIds.length
+				? deps.platformProjectGrants.listByProjects(SYSTEM_CONTEXT, platformIds)
+				: Promise.resolve(new Map<string, PlatformProjectGrant[]>())
+		]);
+		const allowed = page.items.some((project) =>
+			canCreateDefinition(
+				projectAccessInputFromRowsWith({ deps }, ctx, project, {
+					member: members.get(project.id) ?? null,
+					orgMember,
+					platformGrants: grants.get(project.id) ?? []
+				})
+			)
+		);
+		if (allowed) return true;
+	}
+	return false;
 }
 
 export interface ListVisibleDefinitionsResult extends Page<DefinitionRecord> {
@@ -141,6 +192,55 @@ export async function listVisibleDefinitions(
 }
 
 /**
+ * Editable definitions whose `sourceDocumentId` is `documentId`: the ones the
+ * caller could upload a new version of, by {@link mayUploadToDefinition}.
+ *
+ * Commons projects are scanned too, since a caller owns their own uploads there
+ * without edit rights on the project; rows they can't edit are dropped after
+ * the query, so a page can come back short while `nextCursor` stays valid.
+ */
+export async function listEditableDefinitionsByDocument(
+	ctx: RequestContext,
+	documentId: string,
+	opts: DefinitionListOptions & { projectId?: string },
+	deps: VisibilityDeps
+): Promise<Page<DefinitionRecord>> {
+	const { projectId, ...listOpts } = opts;
+	const set = await resolveAccessibleProjects(ctx, deps);
+	const rowsFor = (project: Project) => ({
+		member: set.memberByProjectId.get(project.id) ?? null,
+		orgMember: set.orgMemberByOrgId.get(project.orgId) ?? null,
+		platformGrants: set.grantsByProjectId.get(project.id) ?? []
+	});
+	const candidates = set.projects.filter(
+		(p) =>
+			(!projectId || p.id === projectId) &&
+			canCreateDefinition(projectAccessInputFromRowsWith({ deps }, ctx, p, rowsFor(p)))
+	);
+
+	const page = await deps.definitionMeta.list(ctx, {
+		...listOpts,
+		sourceDocumentId: documentId,
+		projectIds: candidates.map((p) => p.id)
+	});
+	const items = page.items.filter((record) => {
+		const project = set.allById.get(record.projectId);
+		return project
+			? mayUploadToDefinition(ctx, { record, project, ...rowsFor(project) }, deps)
+			: false;
+	});
+	return { items, nextCursor: page.nextCursor };
+}
+
+/** A visible definition and the caller's rows that decided it. */
+export interface VisibleDefinition {
+	record: DefinitionRecord;
+	project: Project;
+	member: ProjectMember | null;
+	orgMember: OrgMember | null;
+}
+
+/**
  * One definition, or `null` when the caller cannot view its project.
  *
  * Returns `null` rather than throwing 403 so callers surface a 404: a public
@@ -152,6 +252,15 @@ export async function getVisibleDefinition(
 	guid: string,
 	deps: VisibilityDeps
 ): Promise<DefinitionRecord | null> {
+	return (await loadVisibleDefinition(ctx, guid, deps))?.record ?? null;
+}
+
+/** {@link getVisibleDefinition} with the rows it read, for a second rule over the same caller. */
+export async function loadVisibleDefinition(
+	ctx: RequestContext,
+	guid: string,
+	deps: VisibilityDeps
+): Promise<VisibleDefinition | null> {
 	const meta = deps.definitionMeta;
 	const projectStore = deps.projects;
 
@@ -159,7 +268,7 @@ export async function getVisibleDefinition(
 	if (!record) return null;
 
 	const project = await projectStore.getProject(SYSTEM_CONTEXT, record.projectId);
-	if (!project) return null;
+	if (!project || outsideTokenOrg(ctx, project.orgId)) return null;
 
 	const [orgMembers, projectMembers, grants] = await Promise.all([
 		deps.orgs.getOrgMembersFor(SYSTEM_CONTEXT, [project.orgId], ctx.userId),
@@ -169,14 +278,40 @@ export async function getVisibleDefinition(
 			: Promise.resolve([] as PlatformProjectGrant[])
 	]);
 
+	const member = projectMembers.get(project.id) ?? null;
+	const orgMember = orgMembers.get(project.orgId) ?? null;
 	const allowed = canView(
 		projectAccessInputFromRowsWith({ deps }, ctx, project, {
-			member: projectMembers.get(project.id) ?? null,
-			orgMember: orgMembers.get(project.orgId) ?? null,
+			member,
+			orgMember,
 			platformGrants: grants
 		})
 	);
-	return allowed ? record : null;
+	return allowed ? { record, project, member, orgMember } : null;
+}
+
+/**
+ * May the caller upload a version of this definition and make one live? The
+ * rule `requireEditableDefinition` applies, and for an API token its `upload`
+ * scope on the definition, which is what those routes check.
+ */
+export function mayUploadToDefinition(
+	ctx: RequestContext,
+	{ record, project, member, orgMember }: VisibleDefinition,
+	deps: Pick<VisibilityDeps, 'flag'>
+): boolean {
+	return (
+		scopeAllows(ctx, 'upload', { definitionId: record.guid, projectId: project.id }) &&
+		canEditDefinition({
+			project,
+			definition: record,
+			member,
+			orgMember,
+			userId: ctx.userId,
+			platformPermissions: ctx.platformPermissions,
+			enablePlatformProjects: deps.flag('ENABLE_PLATFORM_PROJECTS')
+		})
+	);
 }
 
 /**

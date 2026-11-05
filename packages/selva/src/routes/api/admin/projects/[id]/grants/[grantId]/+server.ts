@@ -1,8 +1,8 @@
 import type { RequestHandler } from './$types';
-import { flag, getPlatformProjectGrantStore } from '$lib/server/providers.server';
-import { requireInstanceAdmin } from '$lib/server/access.server';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { apiRoute, noContent, requireParams } from '$lib/server/api/http';
+import { flag, getPlatformProjectGrantStore } from '#lib/server/providers.server.js';
+import { requireInstanceAdmin } from '#lib/server/access.server.js';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { apiRoute, noContent, requireParams } from '#lib/server/api/http.js';
 import { SYSTEM_CONTEXT } from '@selvajs/platform';
 
 export const DELETE: RequestHandler = apiRoute(

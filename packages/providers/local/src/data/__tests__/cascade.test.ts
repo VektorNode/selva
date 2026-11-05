@@ -17,6 +17,7 @@ import { LocalProjectStore } from '../LocalProjectStore.js';
 import { LocalDefinitionStore } from '../LocalDefinitionStore.js';
 import { LocalShareLinkStore } from '../LocalShareLinkStore.js';
 import { LocalInviteStore } from '../LocalInviteStore.js';
+import { LocalApiTokenStore } from '../LocalApiTokenStore.js';
 import { LocalComputeServerStore } from '../LocalComputeServerStore.js';
 import { LocalPlatformProjectGrantStore } from '../LocalPlatformProjectGrantStore.js';
 
@@ -41,7 +42,13 @@ describe('Cross-store cascade', () => {
 		const grants = new LocalPlatformProjectGrantStore(
 			path.join(tempDir, 'platform-project-grants.json')
 		);
-		orgs = new LocalOrgStore({ loader, invites, computeServer, grants });
+		orgs = new LocalOrgStore({
+			loader,
+			invites,
+			apiTokens: new LocalApiTokenStore(tempDir),
+			computeServer,
+			grants
+		});
 		projects = new LocalProjectStore({ loader, grants });
 		definitions = new LocalDefinitionStore(tempDir);
 		// Mirrors LocalDataProvider wiring: deleteProject's cascade runs through this injected store.

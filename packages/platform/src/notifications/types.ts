@@ -6,7 +6,7 @@
  * The string is persisted in user preferences, so renaming one silently resets
  * that preference for everyone who set it. Add rather than rename.
  */
-export type NotificationKind = 'org.invite' | 'auth.magic-link';
+export type NotificationKind = 'org.invite' | 'auth.magic-link' | 'api_token.created';
 
 /**
  * One message, rendered and addressed, ready for a transport.

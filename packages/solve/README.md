@@ -19,7 +19,7 @@ This package owns everything between those two points. Nothing else.
 | ----------------------- | ----------------------- |
 | A web page with sliders | `@selvajs/solve/client` |
 | An API endpoint         | `@selvajs/solve/server` |
-| Just need the types     | `@selvajs/solve/shared` |
+| Types and verdict logic | `@selvajs/solve/shared` |
 
 There is no `.` export on purpose — see [Why no root export](#why-no-root-export).
 
@@ -75,6 +75,27 @@ manual mode:
 <!-- manual mode: the definition is slow, so the user decides when to run it -->
 <button onclick={() => session.solve()} disabled={!session.hasPendingChanges}> Solve </button>
 ```
+
+### Knowing when a solve is done
+
+`solve()` returns a promise of how the solve ended, and `onSettled` tells you about every solve,
+the ones `setValue` starts included:
+
+```ts
+const settled = await session.solve();
+if (settled.status === 'applied') save(settled.result);
+
+session.onSettled((s) => analytics.track('solve', s.status));
+```
+
+A solve settles once nothing about it can change: a result held for review counts when the user
+accepts or rejects it, and one a queued solve is about to replace never counts. The promise never
+rejects; a failure is a status (`SolveSettlement` in
+[`solve-session.ts`](./src/client/session/solve-session.ts) lists them).
+
+For an action that needs the result for the current inputs, such as an export, use
+`ensureSolved()`: it answers from the result on screen when nothing changed and solves only when
+it must.
 
 ### Why three objects and not one
 
@@ -133,18 +154,20 @@ Both fail silently if you skip them. They are the only two client-side gotchas.
 if rebuilt per request.
 
 ```ts
-// $lib/server/compute/engine.server.ts
+// #lib/server/compute/engine.server.ts
 import { SolveEngine } from '@selvajs/solve/server';
 
-export const engine = new SolveEngine({ limits: computeLimits, logger });
+export const engine = new SolveEngine({ limits: computeLimits });
 ```
 
 ```ts
 // routes/api/v1/compute/+server.ts
+import { solveInputsFromSchema } from '@selvajs/solve/server';
+
 const outcome = await engine.solve({
 	server: serverConfig, // which Rhino.Compute
 	definitionSource, // the .gh file (bytes, URL, or cached ref)
-	inputs, // the definition's input params
+	inputs: solveInputsFromSchema(storedSchema), // yours, never the request's
 	values, // what the browser sent
 	signal: request.signal, // client disconnects → cancel upstream
 	acceptEncoding: request.headers.get('accept-encoding') ?? ''
@@ -152,6 +175,9 @@ const outcome = await engine.solve({
 
 return engine.toWebResponse(outcome);
 ```
+
+Read `inputs` from the schema you stored. A request that supplies them picks the ids, types and
+bounds that reach the definition: it can drop a limit or fill a slot your host reserved.
 
 `solve()` doesn't throw for an expected failure. It returns one of these, so you can branch before
 handing it to `toWebResponse`:
@@ -176,11 +202,11 @@ return engine.toWebResponse(outcome);
 engine.solve()
    │
    ├─ 1. warm client cache ····· reuse the open Rhino.Compute connection
-   ├─ 2. definition bytes ······ already uploaded? send a pointer, not the .gh
+   ├─ 2. build input tree ······ values → Grasshopper DataTree
    ├─ 3. single-flight ········· 5 users, same inputs → 1 actual solve
-   ├─ 4. build input tree ······ values → Grasshopper DataTree
+   ├─ 4. definition bytes ······ already uploaded? send a pointer, not the .gh
    ├─ 5. SOLVE ················· the only slow step
-   └─ 6. gzip + Server-Timing ·· ready-to-send envelope
+   └─ 6. gzip + Server-Timing ·· one envelope per caller
 ```
 
 Each layer is covered in [`src/server/README.md`](./src/server/README.md).
@@ -223,8 +249,8 @@ solve needs.
 
 ## Why no root export
 
-`server/` uses `node:zlib`, `node:crypto`, and reads compute-server credentials. A `.` barrel
-joining both halves would let a browser bundle pull all of that in by accident.
+`server/` uses `node:zlib` and `undici`, and holds compute-server credentials. A `.` barrel joining
+both halves would let a browser bundle pull all of that in by accident.
 
 ```
       shared/          the types both sides speak
@@ -232,7 +258,8 @@ joining both halves would let a browser bundle pull all of that in by accident.
    client/  server/    never import each other
 ```
 
-Enforced by `no-restricted-imports` and a bundle-boundary test, not by convention.
+Enforced by `no-restricted-imports`, a `tsc` pass per half and a bundle-boundary test, not by
+convention.
 
 ## Not in this package
 
@@ -246,4 +273,4 @@ Enforced by `no-restricted-imports` and a bundle-boundary test, not by conventio
 ## Going deeper
 
 - [`src/client/README.md`](./src/client/README.md) — writing your own driver, the value map, mesh ownership
-- [`src/server/README.md`](./src/server/README.md) — cache layers, coalescing, `runSolvePipeline`
+- [`src/server/README.md`](./src/server/README.md) — cache layers, coalescing, encoding

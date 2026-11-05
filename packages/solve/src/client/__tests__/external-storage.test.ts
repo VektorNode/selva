@@ -95,4 +95,35 @@ describe('no-storage guard (SSR / node)', () => {
 		expect(readExternalValue({ scopeKey: '', inputId: 'p1' })).toBeUndefined();
 		expect(readExternalValue({ scopeKey: 's1', inputId: '' })).toBeUndefined();
 	});
+
+	it('survives a browser that blocks storage, where merely reading the global throws', () => {
+		Object.defineProperty(globalThis, 'sessionStorage', {
+			configurable: true,
+			get() {
+				throw new DOMException('blocked', 'SecurityError');
+			}
+		});
+		try {
+			const ref = { scopeKey: 's1', inputId: 'p1' };
+			expect(() => writeExternalValue({ ...ref, value: 1 })).not.toThrow();
+			expect(readExternalValue(ref)).toBeUndefined();
+			expect(() => clearExternalValue(ref)).not.toThrow();
+		} finally {
+			delete (globalThis as { sessionStorage?: unknown }).sessionStorage;
+		}
+	});
+
+	it('survives a full store', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		vi.stubGlobal('sessionStorage', {
+			setItem() {
+				throw new DOMException('full', 'QuotaExceededError');
+			}
+		});
+		expect(() =>
+			writeExternalValue({ scopeKey: 's1', inputId: 'p1', value: 'x'.repeat(10) })
+		).not.toThrow();
+		expect(warn).toHaveBeenCalledTimes(1);
+		warn.mockRestore();
+	});
 });

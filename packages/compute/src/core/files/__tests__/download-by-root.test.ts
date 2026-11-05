@@ -69,6 +69,14 @@ describe('downloadFileDataByRoot', () => {
 		expect(saved[0].entries).toEqual(['Panels/MainBrep.3dm']);
 	});
 
+	it('names the archive after a lone root segment, leaving the files at its top', async () => {
+		const saved = captureDownloads();
+
+		await downloadFileDataByRoot([fd('a', 'Panels')], 'files');
+
+		expect(saved).toEqual([{ name: 'Panels.zip', entries: ['a.3dm'] }]);
+	});
+
 	it('produces one archive per distinct root', async () => {
 		const saved = captureDownloads();
 
@@ -109,28 +117,39 @@ describe('downloadFileDataByRoot', () => {
 		expect(saved[0].name).toBe('RE_VISION_1.zip');
 	});
 
-	it('attaches extra files to the rootless archive', async () => {
+	it.each([
+		['the rootless archive', [fd('a', ''), fd('b', 'ROOT/Panels')], 'files.zip'],
+		['the first archive when all are rooted', [fd('a', 'ROOT/A'), fd('b', 'OTHER/B')], 'ROOT.zip']
+	])('attaches extras to %s', async (_where, files, carrier) => {
 		const saved = captureDownloads();
 
-		await downloadFileDataByRoot([fd('a', ''), fd('b', 'ROOT/Panels')], 'files', {
-			fileName: 'notes.txt',
-			filePath: ''
-		});
+		await downloadFileDataByRoot(files, 'files', { fileName: 'notes.txt', filePath: '' });
 
-		const fallback = saved.find((s) => s.name === 'files.zip');
-		expect(fallback?.entries).toContain('notes.txt');
-		expect(saved.find((s) => s.name === 'ROOT.zip')?.entries).toEqual(['Panels/b.3dm']);
+		expect(saved).toHaveLength(2);
+		for (const { name, entries } of saved) {
+			expect(entries.includes('notes.txt')).toBe(name === carrier);
+		}
 	});
 
-	it('still attaches extras when every file is rooted', async () => {
-		// Otherwise they would be dropped for belonging to no root.
+	it('still produces one archive for extras with no files', async () => {
 		const saved = captureDownloads();
 
-		await downloadFileDataByRoot([fd('a', 'ROOT/Panels')], 'files', {
-			fileName: 'notes.txt',
-			filePath: ''
+		await downloadFileDataByRoot([], 'files', { fileName: 'notes.txt', filePath: '' });
+
+		expect(saved).toEqual([{ name: 'files.zip', entries: ['notes.txt'] }]);
+	});
+
+	it('hands every archive to a supplied saveBlob instead of clicking an anchor', async () => {
+		const anchorSaves = captureDownloads();
+		const handed: string[] = [];
+
+		await downloadFileDataByRoot([fd('a', 'ROOT/Panels'), fd('b', '')], 'files', null, {
+			saveBlob: async (_blob, fileName) => {
+				handed.push(fileName);
+			}
 		});
 
-		expect(saved[0].entries).toContain('notes.txt');
+		expect(handed.sort()).toEqual(['ROOT.zip', 'files.zip']);
+		expect(anchorSaves).toEqual([]);
 	});
 });

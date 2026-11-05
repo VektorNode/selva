@@ -7,7 +7,7 @@
  */
 
 import { created, requireParams, type ApiHandler } from '../api/index.js';
-import { actorFrom, type ProjectMember } from '@selvajs/platform';
+import { actorOf, type ProjectMember } from '@selvajs/platform';
 import { requireCanReclaim } from '../access/index.js';
 
 export const reclaimProject: ApiHandler = async (req) => {
@@ -35,7 +35,7 @@ export const reclaimProject: ApiHandler = async (req) => {
 		type: 'project.reclaimed',
 		projectId: id,
 		orgId: project.orgId,
-		actorId: actorFrom(ctx),
+		...actorOf(ctx),
 		priorVisibility: project.visibility
 	});
 

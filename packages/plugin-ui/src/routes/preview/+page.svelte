@@ -5,28 +5,49 @@
 	import {
 		AppShell,
 		StateDisplay,
-		Button,
 		AppLayout,
 		SolveMessages,
 		createSolvingIndicator,
 		useFooterItem,
 		getExternalInputs,
 		readExternalValue,
+		getHostContext,
+		setHostContext,
 		type ExternalInput
 	} from '@selvajs/ui';
-	import { buildSessionParams } from '$lib/utils/session';
-	import { usePreviewState } from '$lib/composables/usePreviewState.svelte';
-	import WsStatusFooter from '$lib/components/WsStatusFooter.svelte';
+	import { buildSessionParams, getWebSocketPortFromUrl, isRhinoPanel } from '#lib/utils/session.js';
+	import { currentRole } from '#lib/utils/session-role.svelte.js';
+	import { getWebSocketState } from '#lib/websocket/websocket.svelte.js';
+	import { isInRhinoPanel, rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
+	import { usePreviewState } from '#lib/composables/usePreviewState.svelte.js';
+	import WsStatusFooter from '#lib/components/WsStatusFooter.svelte';
+	import ModeHeader from '#lib/components/ModeHeader.svelte';
 
 	const sessionId = $derived(page.url.searchParams.get('session') || '');
+	const panel = isRhinoPanel();
 	let isViewerFullscreen = $state(false);
 
 	const preview = usePreviewState(() => sessionId);
-	const solvingIndicator = createSolvingIndicator(() => preview.isSolving);
+
+	// The layout's host actions, plus what each geometry input lets the user pick. Read from the
+	// canvas on every initialData, so a changed filter shows on the next load.
+	setHostContext({
+		...getHostContext(),
+		describeGeometry: (paramId) => {
+			const input = preview.state.discoveredInputs.find((i) => i.id === paramId);
+			return input && { kinds: input.geometryTypes, atMost: input.atMost };
+		},
+		isSolving: () => preview.isSolving
+	});
+	const solvingIndicator = createSolvingIndicator(() => preview.isSolving, {
+		freezesDuringSolve: panel
+	});
 
 	$effect(() => {
 		if (sessionId) {
-			preview.initialize();
+			// Untracked: initialize reads connection state, and each change of it would otherwise
+			// tear the session down and connect again.
+			untrack(() => preview.initialize());
 			return () => preview.cleanup();
 		}
 	});
@@ -69,6 +90,9 @@
 
 	const homeUrl = $derived(`/?${buildSessionParams()}`);
 
+	const player = $derived(currentRole() === 'player');
+	const wsState = getWebSocketState(getWebSocketPortFromUrl());
+
 	useFooterItem({
 		id: 'ws-status',
 		component: WsStatusFooter,
@@ -78,30 +102,40 @@
 	});
 </script>
 
+{#snippet solveMessages()}
+	<SolveMessages
+		live={preview.live}
+		phase={preview.phase}
+		diagnostics={preview.diagnostics}
+		onabort={() => preview.abort()}
+		onconfirm={() => preview.acknowledge()}
+		ondiscard={() => preview.discard()}
+		freezesDuringSolve={panel}
+		placement={panel ? 'inline' : 'floating'}
+		progressShownByHost={preview.state.schema?.instanceSolve !== false}
+	/>
+{/snippet}
+
 <AppShell
-	{homeUrl}
-	title={preview.state.schema?.name ?? null}
+	{...rhinoShellProps()}
 	mode="fixed"
 	showFooter
 	errors={preview.computeErrors}
 	warnings={preview.computeWarnings}
 	diagnostics={preview.diagnostics}
 >
-	{#snippet navItems()}
-		<Button variant="ghost" size="sm" onclick={() => navigateTo('/builder')}>Schema Builder</Button>
-		<Button variant="default" size="sm">Interactive Preview</Button>
-	{/snippet}
-	{#snippet rightContent()}
-		{#if preview.state.syncNeeded}
-			<Button
-				variant="default"
-				size="sm"
-				onclick={() => preview.syncParameters()}
-				class="animate-pulse bg-amber-500 hover:bg-amber-600"
-			>
-				⚡ Sync Parameters
-			</Button>
-		{/if}
+	{#snippet header()}
+		<ModeHeader
+			{homeUrl}
+			current="preview"
+			{player}
+			onSwitch={() => navigateTo('/builder')}
+			onClose={() => wsState.closeDefinition(sessionId)}
+			onEdit={() => wsState.editInGrasshopper(sessionId)}
+			title={preview.state.schema?.name ?? null}
+			syncNeeded={preview.state.syncNeeded}
+			onSync={() => preview.syncParameters()}
+		/>
 	{/snippet}
 
 	<div class="relative flex flex-1 flex-col overflow-hidden">
@@ -117,10 +151,15 @@
 			{#key preview.state.schema}
 				<AppLayout
 					schema={preview.state.schema}
+					showViewer={!!preview.state.schema.viewerOptions?.enableLocal && !isInRhinoPanel()}
 					meshes={preview.displayMeshes}
 					isSolving={preview.isSolving}
-					showSolvingIndicator={preview.state.schema.instanceSolve !== false &&
-						solvingIndicator.show}
+					showSolvingIndicator={solvingIndicator.show}
+					solveIsSlow={solvingIndicator.slow}
+					live={preview.live}
+					onabort={() => preview.abort()}
+					freezesDuringSolve={panel}
+					solveMessages={panel ? solveMessages : undefined}
 					hasPendingChanges={preview.hasPendingChanges}
 					bind:isViewerFullscreen
 					values={preview.values}
@@ -149,14 +188,9 @@
 	{/if}
 </AppShell>
 
-<SolveMessages
-	live={preview.live}
-	phase={preview.phase}
-	diagnostics={preview.diagnostics}
-	onabort={() => preview.abort()}
-	onconfirm={() => preview.acknowledge()}
-	ondiscard={() => preview.discard()}
-/>
+{#if !panel}
+	{@render solveMessages()}
+{/if}
 
 <style>
 	@keyframes slideInRight {

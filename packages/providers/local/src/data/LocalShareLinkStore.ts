@@ -10,9 +10,9 @@ import type {
 	ListOptions,
 	Page
 } from '@selvajs/platform';
-import { ProviderError, SYSTEM_CONTEXT, actorFrom, NoopEventSink } from '@selvajs/platform';
+import { ProviderError, SYSTEM_CONTEXT, actorOf, NoopEventSink } from '@selvajs/platform';
 import { paginate } from './pagination.js';
-import { readJsonFile, writeJsonFile } from './fsJson.js';
+import { readJsonFile, withFileLock, writeJsonFile } from './fsJson.js';
 
 interface OnDiskShape {
 	links: Record<string, ShareLink>;
@@ -80,6 +80,10 @@ export class LocalShareLinkStore implements IShareLinkStore {
 		await writeJsonFile(this.configFilePath, data);
 	}
 
+	private locked<T>(fn: () => Promise<T>): Promise<T> {
+		return withFileLock(this.configFilePath, fn);
+	}
+
 	// Revoked or expired counts as dead. Both providers filter both fields; a
 	// link that reads live under one and dead under the other is the bug this
 	// prevents.
@@ -89,17 +93,19 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	}
 
 	async create(ctx: RequestContext, link: ShareLink): Promise<void> {
-		const all = await this.readAll();
-		if (all.links[link.id]) {
-			throw new ProviderError(`Share link '${link.id}' already exists`, 409);
-		}
-		all.links[link.id] = { ...link, revokedAt: null };
-		await this.writeAll(all);
+		await this.locked(async () => {
+			const all = await this.readAll();
+			if (all.links[link.id]) {
+				throw new ProviderError(`Share link '${link.id}' already exists`, 409);
+			}
+			all.links[link.id] = { ...link, revokedAt: null };
+			await this.writeAll(all);
+		});
 		await this.events.emit({
 			type: 'share_link.minted',
 			linkId: link.id,
 			definitionId: link.definitionId,
-			actorId: actorFrom(ctx)
+			...actorOf(ctx)
 		});
 	}
 
@@ -180,21 +186,38 @@ export class LocalShareLinkStore implements IShareLinkStore {
 	}
 
 	async revoke(ctx: RequestContext, id: string): Promise<void> {
-		const all = await this.readAll();
-		const l = all.links[id];
-		if (!l || !this.isLive(l)) return; // idempotent
-		l.revokedAt = new Date().toISOString();
-		await this.writeAll(all);
-		await this.events.emit({ type: 'share_link.revoked', linkId: id, actorId: actorFrom(ctx) });
+		const revoked = await this.locked(async () => {
+			const all = await this.readAll();
+			const l = all.links[id];
+			if (!l || !this.isLive(l)) return false; // idempotent
+			l.revokedAt = new Date().toISOString();
+			await this.writeAll(all);
+			return true;
+		});
+		if (!revoked) return;
+		await this.events.emit({ type: 'share_link.revoked', linkId: id, ...actorOf(ctx) });
 	}
 
 	async tryIncrementSolveCount(_ctx: RequestContext, id: string): Promise<number | null> {
-		const all = await this.readAll();
-		const l = all.links[id];
-		if (!l || !this.isLive(l)) return null;
-		if (l.maxSolves != null && l.solveCount >= l.maxSolves) return null;
-		l.solveCount += 1;
-		await this.writeAll(all);
-		return l.solveCount;
+		return this.locked(async () => {
+			const all = await this.readAll();
+			const l = all.links[id];
+			if (!l || !this.isLive(l)) return null;
+			if (l.maxSolves != null && l.solveCount >= l.maxSolves) return null;
+			l.solveCount += 1;
+			await this.writeAll(all);
+			return l.solveCount;
+		});
+	}
+
+	/** A link goes with the user who minted it, as Supabase's `created_by` cascade does. */
+	async eraseUser(userId: string): Promise<void> {
+		await this.locked(async () => {
+			const all = await this.readAll();
+			for (const [id, link] of Object.entries(all.links)) {
+				if (link.createdBy === userId) delete all.links[id];
+			}
+			await this.writeAll(all);
+		});
 	}
 }

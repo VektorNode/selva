@@ -1,7 +1,7 @@
 using System.IO;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.Advanced;
-using PdfSharpCore.Pdf.IO;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.Advanced;
+using PdfSharp.Pdf.IO;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
@@ -135,12 +135,12 @@ public class PdfSymbolDedupeTests
 		Assert.Equal((byte)'P', bytes[1]);
 
 		using var ms = new MemoryStream(bytes);
-		using var pdf = PdfReader.Open(ms, PdfDocumentOpenMode.InformationOnly);
+		using var pdf = PdfReader.Open(ms, PdfDocumentOpenMode.Import);
 		Assert.Equal(1, pdf.PageCount);
 	}
 
 	// Walks every page's resource dictionary and counts Form XObjects. Form XObjects are
-	// PDF objects with /Type /XObject and /Subtype /Form; PdfSharpCore stores them under
+	// PDF objects with /Type /XObject and /Subtype /Form; PDFsharp stores them under
 	// each page's /Resources/XObject dict.
 	private static int CountFormXObjects(PdfDocument pdf)
 	{

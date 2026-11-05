@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { assertAnyPlatformPermission } from '$lib/server/access.server';
-import { flag, getAuditQuery, getTenancy } from '$lib/server/providers.server';
+import { assertAnyPlatformPermission } from '#lib/server/access.server.js';
+import { flag, getAuditQuery, getTenancy } from '#lib/server/providers.server.js';
 import type { LayoutServerLoad } from './$types';
 
 /**

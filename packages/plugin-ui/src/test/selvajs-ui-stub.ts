@@ -3,3 +3,4 @@
 // only the non-UI helpers the pure logic under test actually needs. Re-exported from the
 // source module (not duplicated) so it can't drift from @selvajs/ui.
 export { getDefaultValue } from '../../../ui/src/lib/schema/defaults';
+export { valuelessInputIds, isGeometryParamType } from '../../../ui/src/lib/schema/host-support';

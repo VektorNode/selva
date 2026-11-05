@@ -22,7 +22,7 @@ public class GH_EvaluateSchema : GH_Component
 
     public override Guid ComponentGuid => new Guid("E7611CB2-9BAE-4A88-B47B-A94135394FA3");
 
-    protected override Bitmap Icon => Resources.UIBridge;
+    protected override Bitmap Icon => Resources.EvaluateSchema;
 
     public override GH_Exposure Exposure => GH_Exposure.hidden;
 

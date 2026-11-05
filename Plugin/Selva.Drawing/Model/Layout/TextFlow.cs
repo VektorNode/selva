@@ -106,7 +106,7 @@ public sealed class TextFlow : LayoutElement
 		return SplitResult.Partial(fitsResolved, overflowFlow, fitsHeight);
 	}
 
-	public override DrawElement Resolve(LayoutContext context)
+	protected override DrawElement ResolveCore(LayoutContext context)
 	{
 		var effectiveWidth = ResolveEffectiveWidth(context);
 		var (lines, lineHeight, ascent) = LayoutLines(Style, Text, effectiveWidth);

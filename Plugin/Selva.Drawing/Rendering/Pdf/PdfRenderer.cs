@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using PdfSharpCore.Drawing;
-using PdfSharpCore.Pdf;
+using PdfSharp.Drawing;
+using PdfSharp.Pdf;
 using Selva.Drawing.Fonts;
 using Selva.Drawing.Model;
 using Selva.Drawing.Model.Drawings;
@@ -10,17 +10,17 @@ using Selva.Drawing.Model.Elements;
 using Selva.Drawing.Model.Geometry;
 using Selva.Drawing.Model.Layout;
 using Selva.Drawing.Model.Style;
-using PdfFontStyle = PdfSharpCore.Drawing.XFontStyle;
+using PdfFontStyle = PdfSharp.Drawing.XFontStyleEx;
 using ModelFontStyle = Selva.Drawing.Model.Style.FontStyle;
-using PdfSharpColorMode = PdfSharpCore.Pdf.PdfColorMode;
+using PdfSharpColorMode = PdfSharp.Pdf.PdfColorMode;
 using ModelPath = Selva.Drawing.Model.Geometry.Path;
 
 namespace Selva.Drawing.Rendering.Pdf;
 
-// Walks a Document and emits a PDF byte array via PdfSharpCore.
+// Walks a Document and emits a PDF byte array via PDFsharp.
 //
 // Coordinate system: model is Y-up in millimetres, origin bottom-left of the page.
-// PdfSharpCore's XGraphics is Y-down with origin top-left. We apply one root transform
+// PDFsharp's XGraphics is Y-down with origin top-left. We apply one root transform
 // (translate(0, pageHeight) then scale(1,-1)) so model coordinates flow naturally; every
 // element below sees Y-up model space. Text is the one exception — glyphs would render
 // upside-down under that flip, so each text run counter-flips locally with scale(1,-1)
@@ -28,6 +28,7 @@ namespace Selva.Drawing.Rendering.Pdf;
 public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 {
 	private readonly PdfRenderOptions _options;
+	private readonly List<string> _warnings = new List<string>();
 	private XGraphics _gfx;
 	private double _pageHeightMm;
 
@@ -48,11 +49,15 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	// SymbolDefinition.Id → cached Form XObject, built once per page in a pre-pass.
 	// Visit(SymbolElement) draws the form via _gfx.DrawImage(form,...), which makes
-	// PdfSharpCore share the underlying Form XObject across instances. Form-local interior
+	// PDFsharp share the underlying Form XObject across instances. Form-local interior
 	// is set up Y-up so child draw code works identically to the inline-expansion path.
 	// Anonymous definitions (no Id) keep inline expansion.
 	private Dictionary<string, SymbolFormCache> _symbolForms;
 	private PdfDocument _pdfDocument;
+
+	// PDFsharp embeds one image object per XImage instance, decoding it each time; a page
+	// header logo repeated on every page shares one XImage per document, keyed by array reference.
+	private Dictionary<byte[], XImage> _images;
 
 	private readonly struct SymbolFormCache
 	{
@@ -67,7 +72,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		// Local-space bounds; translates the DrawImage call so the form's bottom-left
 		// lands at the right world position.
 		public BoundingBox Bounds { get; }
-		// Form's actual extent in mm (>= 1mm in each dimension — PdfSharpCore rejects zero).
+		// Form's actual extent in mm (>= 1mm in each dimension — PDFsharp rejects zero).
 		public double WidthMm { get; }
 		public double HeightMm { get; }
 	}
@@ -78,35 +83,49 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		_options = options ?? new PdfRenderOptions();
 	}
 
+	// Problems from the last Render that still produced a usable file.
+	public IReadOnlyList<string> Warnings => _warnings;
+
 	public byte[] Render(Document document)
 	{
 		if (document == null) throw new ArgumentNullException(nameof(document));
+		_warnings.Clear();
 		PdfFontEmbedder.EnsureInstalled();
+		using var layoutScope = LayoutCache.Begin();
 
 		using var pdf = new PdfDocument();
-		// PdfSharpCore has no per-page colour-mode override — every content stream writes
+		// PDFsharp has no per-page colour-mode override — every content stream writes
 		// operators in this mode, converting input colours as needed.
 		pdf.Options.ColorMode = _options.ColorMode == PdfColorMode.Cmyk
 			? PdfSharpColorMode.Cmyk
 			: PdfSharpColorMode.Rgb;
-		ApplyMetadata(pdf, document.Metadata);
+		// PdfObjectRewriter replaces /Info after the save; these keep the text fields if it bails.
+		ApplyInfoFallback(pdf, document.Metadata);
 
 		_pdfDocument = pdf;
 		_renderedPages = new List<PdfPage>();
+		_images = new Dictionary<byte[], XImage>();
 
-		// Zero pages still gets one blank A4 so the file is well-formed (same fallback the
-		// SVG renderer uses).
-		if (document.Pages.Count == 0)
+		try
 		{
-			RenderPage(pdf, document, new Page { Content = new GroupElement() });
+			// Zero pages still gets one blank A4 so the file is well-formed (same fallback the
+			// SVG renderer uses).
+			if (document.Pages.Count == 0)
+			{
+				RenderPage(pdf, document, new Page { Content = new GroupElement() });
+			}
+			else
+			{
+				foreach (var page in document.Pages) RenderPage(pdf, document, page);
+			}
 		}
-		else
+		finally
 		{
-			foreach (var page in document.Pages) RenderPage(pdf, document, page);
+			foreach (var image in _images.Values) image.Dispose();
+			_images = null;
 		}
 
 		// Outlines need page refs, so this runs after all pages exist.
-		if (_options.EmitXmpMetadata) PdfXmpMetadata.Attach(pdf, document.Metadata);
 		if (_options.EmitOutlines) ApplyOutlines(pdf, document, _renderedPages);
 
 		_renderedPages = null;
@@ -114,7 +133,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 		using var ms = new MemoryStream();
 		pdf.Save(ms, false);
-		return ms.ToArray();
+		var xmp = _options.EmitXmpMetadata
+			? System.Text.Encoding.UTF8.GetBytes(PdfXmpMetadata.BuildPacket(document.Metadata ?? new DocumentMetadata()))
+			: null;
+		var bytes = PdfObjectRewriter.ReplaceInfoAndMetadata(ms.ToArray(), PdfInfo.Build(document.Metadata), xmp, _warnings);
+		PdfDeterminism.Apply(bytes);
+		return bytes;
 	}
 
 	private void RenderPage(PdfDocument pdf, Document document, Page page)
@@ -164,7 +188,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		_pageTranslateYMm = translateY;
 		_pendingLinks = _options.EmitHyperlinks ? new List<(BoundingBox, string)>() : null;
 
-		// Built before the page graphics opens. PdfSharpCore reuses a Form XObject when the
+		// Built before the page graphics opens. PDFsharp reuses a Form XObject when the
 		// same XForm instance is drawn multiple times, so each definition's PDF resource is
 		// emitted once.
 		_symbolForms = BuildSymbolForms(pdf, page.Content);
@@ -214,28 +238,27 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	private static bool HasPaperSize(Page page) => page.Size.WidthMm > 0 && page.Size.HeightMm > 0;
 
-	private static void ApplyMetadata(PdfDocument pdf, DocumentMetadata metadata)
+	private static void ApplyInfoFallback(PdfDocument pdf, DocumentMetadata metadata)
 	{
 		if (metadata == null) return;
 		if (!string.IsNullOrEmpty(metadata.Title)) pdf.Info.Title = metadata.Title;
 		if (!string.IsNullOrEmpty(metadata.Author)) pdf.Info.Author = metadata.Author;
 		if (!string.IsNullOrEmpty(metadata.Subject)) pdf.Info.Subject = metadata.Subject;
 		if (!string.IsNullOrEmpty(metadata.Creator)) pdf.Info.Creator = metadata.Creator;
-		// Note: PdfSharpCore stamps its own /Producer; we override only when caller asked.
-		if (!string.IsNullOrEmpty(metadata.Producer)) pdf.Info.Elements.SetString("/Producer", metadata.Producer);
-		if (metadata.Keywords != null && metadata.Keywords.Count > 0)
-			pdf.Info.Keywords = string.Join("; ", metadata.Keywords);
-		if (metadata.CreatedAt.HasValue) pdf.Info.CreationDate = metadata.CreatedAt.Value;
-		if (metadata.ModifiedAt.HasValue) pdf.Info.ModificationDate = metadata.ModifiedAt.Value;
+		var keywords = PdfInfo.JoinKeywords(metadata.Keywords);
+		if (keywords != null) pdf.Info.Keywords = keywords;
 	}
 
-	// One top-level outline entry per Page, named after Page.Title (or "Page N" when
-	// blank), with sub-entries for any DrawingView that has a Caption.
+	// One outline entry per Page, named after Page.Title (or "Page N" when blank), with
+	// sub-entries for any DrawingView that has a Caption. A run of pages sharing a Chapter
+	// nests under one entry pointing at the run's first page.
 	private static void ApplyOutlines(PdfDocument pdf, Document document, IReadOnlyList<PdfPage> pdfPages)
 	{
 		if (pdfPages == null || pdfPages.Count == 0) return;
 		// A zero-page document gets a synthesised blank page with no model Page to name.
 		if (document.Pages.Count == 0) return;
+
+		PdfOutline chapter = null;
 
 		var n = Math.Min(document.Pages.Count, pdfPages.Count);
 		for (var i = 0; i < n; i++)
@@ -243,7 +266,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			var modelPage = document.Pages[i];
 			var pdfPage = pdfPages[i];
 			var title = string.IsNullOrEmpty(modelPage.Title) ? "Page " + (i + 1) : modelPage.Title;
-			var top = pdf.Outlines.Add(title, pdfPage, true);
+
+			if (string.IsNullOrEmpty(modelPage.Chapter)) chapter = null;
+			else if (chapter == null || chapter.Title != modelPage.Chapter)
+				chapter = pdf.Outlines.Add(modelPage.Chapter, pdfPage, true);
+
+			var top = (chapter?.Outlines ?? pdf.Outlines).Add(title, pdfPage, true);
 
 			foreach (var view in EnumerateDrawingViewsWithCaptions(modelPage.Content))
 			{
@@ -355,7 +383,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 				: UnionChildBounds(def.Children);
 			if (bounds.IsEmpty) continue;
 
-			// PdfSharpCore rejects XForms with zero width or height. A zero-area symbol
+			// PDFsharp rejects XForms with zero width or height. A zero-area symbol
 			// (e.g. a single horizontal line) gets a 1mm safety margin so the form is
 			// constructable; the underlying content stays accurate because we use the
 			// real bounds for both the form's translate and the page-side DrawImage call.
@@ -485,7 +513,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		{
 			// Pattern fill: clip to the path, draw repeating pattern strokes inside, then
 			// stroke the boundary if requested. SVG's <pattern> approach maps naturally to
-			// "clip + tile" in PDF since PdfSharpCore doesn't expose tiling-pattern brushes.
+			// "clip + tile" in PDF since PDFsharp doesn't expose tiling-pattern brushes.
 			var xpath = PdfPathBuilder.Build(element.Path);
 			DrawHatchedFill(xpath, element.Path, element.Fill);
 			if (pen != null)
@@ -507,7 +535,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		}
 		else if (pen != null)
 		{
-			// Stroke-only: draw each subpath as its own XGraphicsPath. PdfSharpCore's
+			// Stroke-only: draw each subpath as its own XGraphicsPath. PDFsharp's
 			// StartFigure() boundary inside a single path doesn't reliably prevent disjoint
 			// figures from being stroked as one connected polyline, which manifests as
 			// spurious diagonals (e.g. across cells of a Table border path).
@@ -559,13 +587,13 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 
 	public void Visit(ImageElement element)
 	{
-		if (element?.Data == null || element.Data.Length == 0) return;
+		if (element?.Data == null || element.Data.Length == 0 || element.SvgOnly) return;
 		if (element.Width <= 0 || element.Height <= 0) return;
 
-		// PdfSharpCore (via ImageSharp) decodes PNG/JPEG/WEBP rasters. SVG is a vector
-		// format it can't embed; the GH component validates this up front and warns, so
-		// here we simply skip it rather than throw.
-		if (element.Format == ImageFormat.Svg) return;
+		// PDFsharp embeds PNG and JPEG only. SVG and WEBP are skipped rather than thrown on; the
+		// GH component warns about both up front. The bytes are sniffed, not trusted from Format,
+		// so nothing else ever reaches PDFsharp's image parser.
+		if (!IsPngOrJpeg(element.Data)) return;
 
 		// The page graphics root is Y-up (flipped once at page setup). A raster XImage has
 		// a fixed top-down orientation, so drawn directly it would appear mirrored. Counter-
@@ -579,8 +607,11 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 			_gfx.TranslateTransform(element.Position.X, topY);
 			_gfx.ScaleTransform(1, -1);
 
-			var data = element.Data;
-			using var image = XImage.FromStream(() => new System.IO.MemoryStream(data));
+			if (!_images.TryGetValue(element.Data, out var image))
+			{
+				image = XImage.FromStream(new MemoryStream(element.Data, writable: false));
+				_images[element.Data] = image;
+			}
 			_gfx.DrawImage(image, 0, 0, element.Width, element.Height);
 		}
 		catch
@@ -591,6 +622,24 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		{
 			_gfx.Restore(state);
 		}
+	}
+
+	// Leading bytes that identify each raster format allowed to reach PDFsharp:
+	//   PngSignature:  the full 8-byte PNG file signature, "\x89PNG\r\n\x1A\n".
+	//   JpegSignature: FF D8 is the SOI (start of image) marker; the FF after it opens the
+	//                  first segment marker, which every JPEG has.
+	private static readonly byte[] PngSignature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+	private static readonly byte[] JpegSignature = { 0xFF, 0xD8, 0xFF };
+
+	internal static bool IsPngOrJpeg(byte[] data) =>
+		HasBytesAt(data, 0, PngSignature) || HasBytesAt(data, 0, JpegSignature);
+
+	private static bool HasBytesAt(byte[] data, int offset, byte[] expected)
+	{
+		if (data.Length < offset + expected.Length) return false;
+		for (var i = 0; i < expected.Length; i++)
+			if (data[offset + i] != expected[i]) return false;
+		return true;
 	}
 
 	public void Visit(DimensionElement element)
@@ -663,12 +712,12 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		switch (element.Pattern)
 		{
 			case HatchPatternKind.Solid:
-			{
-				// Fill-only: needs no pen, so a zero-width LineStyle still fills.
-				var solid = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
-				_gfx.DrawPath(solid, xpath);
-				break;
-			}
+				{
+					// Fill-only: needs no pen, so a zero-width LineStyle still fills.
+					var solid = new XSolidBrush(ToXColor(line.Color, (float)line.Opacity));
+					_gfx.DrawPath(solid, xpath);
+					break;
+				}
 			case HatchPatternKind.Lines:
 				if (pen != null) DrawHatchLinesClipped(xpath, bounds, element.AngleDegrees, element.Spacing, pen);
 				break;
@@ -698,7 +747,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (element?.Definition == null) return;
 
 		// When the definition has an Id and a cached Form XObject, draw the shared form
-		// instead of re-emitting children — PdfSharpCore reuses the underlying PDF resource
+		// instead of re-emitting children — PDFsharp reuses the underlying PDF resource
 		// across DrawImage calls. Anonymous definitions (no Id) always inline-expand.
 		var def = element.Definition;
 		if (!string.IsNullOrEmpty(def.Id)
@@ -1022,7 +1071,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		var rightX = baseX + uy * halfW;
 		var rightY = baseY - ux * halfW;
 
-		var brush = pen.Brush ?? new XSolidBrush(pen.Color);
+		var brush = new XSolidBrush(pen.Color);
 		var arrow = new XGraphicsPath();
 		arrow.AddLine(tip.X, tip.Y, leftX, leftY);
 		arrow.AddLine(leftX, leftY, rightX, rightY);
@@ -1160,7 +1209,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 		if (style.Weight == FontWeight.Bold) pdfStyle |= PdfFontStyle.Bold;
 		if (style.Style == ModelFontStyle.Italic) pdfStyle |= PdfFontStyle.Italic;
 		var family = ExtractFirstFamily(style.FontFamily) ?? _options.FontFamily ?? "Inter";
-		// Force Unicode encoding explicitly. PdfSharpCore's default-constructor path picks
+		// Force Unicode encoding explicitly. PDFsharp's default-constructor path picks
 		// up GlobalFontSettings, which leaves the encoding undefined and trips the cmap
 		// lookup for our bundled Inter — every char would otherwise resolve to .notdef
 		// (the "white text" bug).
@@ -1372,7 +1421,7 @@ public sealed class PdfRenderer : IRenderer<byte[]>, IElementVisitor
 	}
 
 	// ============================================================================
-	// Style → PdfSharpCore primitive helpers
+	// Style → PDFsharp primitive helpers
 	// ============================================================================
 
 	// Returns null when the stroke is not visible, so callers skip the draw entirely. Never

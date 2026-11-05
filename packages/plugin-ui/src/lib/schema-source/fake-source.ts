@@ -18,7 +18,8 @@ import type {
 	ConnectResult,
 	PreviewSolveDriver
 } from './schema-source';
-import type { SyncChange } from '$lib/websocket/websocket.svelte';
+import type { SyncChange } from '#lib/websocket/websocket.svelte.js';
+import type { DraftPlacement } from '#lib/features/builder/operations.js';
 
 /** A SolveDriver stand-in that records solves and exposes its reporter for the test to use. */
 export interface FakeSolveDriver extends PreviewSolveDriver {
@@ -45,6 +46,7 @@ export interface FakeSource extends SchemaSource {
 	readonly initialDataRequests: string[];
 	readonly syncPreviewRequests: { sessionId: string; draft: UISchema }[];
 	readonly appliedSyncChanges: { sessionId: string; changes: SyncChange[] }[];
+	readonly draftLayouts: (DraftPlacement[] | null)[];
 	/** Flip connection state to exercise the disconnected path. */
 	setConnected(value: boolean): void;
 	/** The driver handed out by the last makeSolveDriver() call (null if never called). */
@@ -57,6 +59,7 @@ export function createFakeSource(): FakeSource {
 	const initialDataRequests: string[] = [];
 	const syncPreviewRequests: { sessionId: string; draft: UISchema }[] = [];
 	const appliedSyncChanges: { sessionId: string; changes: SyncChange[] }[] = [];
+	const draftLayouts: (DraftPlacement[] | null)[] = [];
 	let connected = true;
 	let solveDriver: FakeSolveDriver | null = null;
 
@@ -141,6 +144,9 @@ export function createFakeSource(): FakeSource {
 		applySyncChanges(sessionId: string, changes: SyncChange[]) {
 			appliedSyncChanges.push({ sessionId, changes });
 		},
+		sendDraftLayout(_sessionId: string, placements: DraftPlacement[] | null) {
+			draftLayouts.push(placements);
+		},
 
 		makeSolveDriver(_sessionId: string, getReporter: () => SolveReporter) {
 			solveDriver = buildSolveDriver(getReporter);
@@ -150,6 +156,7 @@ export function createFakeSource(): FakeSource {
 		saves,
 		initialDataRequests,
 		syncPreviewRequests,
-		appliedSyncChanges
+		appliedSyncChanges,
+		draftLayouts
 	};
 }

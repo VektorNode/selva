@@ -52,6 +52,21 @@ public class ThreeMaterial
     [JsonProperty("envMapIntensity", NullValueHandling = NullValueHandling.Ignore)]
     public double? EnvMapIntensity { get; set; }
 
+    /// <summary>Hex colour the surface emits. Null: no emission.</summary>
+    [JsonProperty("emissive", NullValueHandling = NullValueHandling.Ignore)]
+    public string Emissive { get; set; }
+
+    /// <summary>Above 1 it blooms in the viewer's night look. Null: 1.</summary>
+    [JsonProperty("emissiveIntensity", NullValueHandling = NullValueHandling.Ignore)]
+    public double? EmissiveIntensity { get; set; }
+
+    /// <summary>
+    ///     Intensity of the light this surface casts in the night look. Null: the viewer scales it
+    ///     from <see cref="EmissiveIntensity" /> and the model's size.
+    /// </summary>
+    [JsonProperty("emissiveLight", NullValueHandling = NullValueHandling.Ignore)]
+    public double? EmissiveLight { get; set; }
+
     /// <summary>0.0 to 1.0. Null: no coat.</summary>
     [JsonProperty("clearcoat", NullValueHandling = NullValueHandling.Ignore)]
     public double? Clearcoat { get; set; }
@@ -99,6 +114,29 @@ public class ThreeMaterial
     /// <summary>Index of refraction, 1.0 to 2.333. Null: three's 1.5.</summary>
     [JsonProperty("ior", NullValueHandling = NullValueHandling.Ignore)]
     public double? Ior { get; set; }
+
+    /// <summary>
+    ///     Glass body depth, in model units. Above 0 the glass refracts and tints, but the viewer then
+    ///     draws the scene twice a frame and other glass doesn't show through it. Null: a thin pane.
+    /// </summary>
+    [JsonProperty("thickness", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Thickness { get; set; }
+
+    /// <summary>Hex colour light takes on after crossing <see cref="Thickness" /> of glass. Null: clear.</summary>
+    [JsonProperty("attenuationColor", NullValueHandling = NullValueHandling.Ignore)]
+    public string AttenuationColor { get; set; }
+
+    /// <summary>0.0 to 1.0. The soft glow at grazing angles of rubber and soft-touch plastic. Null: none.</summary>
+    [JsonProperty("sheen", NullValueHandling = NullValueHandling.Ignore)]
+    public double? Sheen { get; set; }
+
+    /// <summary>Hex colour of the <see cref="Sheen" />. Null: white.</summary>
+    [JsonProperty("sheenColor", NullValueHandling = NullValueHandling.Ignore)]
+    public string SheenColor { get; set; }
+
+    /// <summary>0.0 to 1.0. Null: 0.5.</summary>
+    [JsonProperty("sheenRoughness", NullValueHandling = NullValueHandling.Ignore)]
+    public double? SheenRoughness { get; set; }
 
     /// <summary>Where WebDisplay takes the texture coordinates from. Not sent to the viewer.</summary>
     [JsonProperty("mapping", DefaultValueHandling = DefaultValueHandling.Ignore)]

@@ -59,7 +59,7 @@
 					class="flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors {selected ===
 					'stable'
 						? 'border-primary bg-primary/5'
-						: 'border-border hover:bg-muted/50'}"
+						: 'border-border hover:bg-hover'}"
 				>
 					<input
 						type="radio"
@@ -82,7 +82,7 @@
 					class="flex cursor-pointer items-start gap-3 rounded-lg border px-4 py-3 transition-colors {selected ===
 					'beta'
 						? 'border-primary bg-primary/5'
-						: 'border-border hover:bg-muted/50'}"
+						: 'border-border hover:bg-hover'}"
 				>
 					<input
 						type="radio"

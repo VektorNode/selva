@@ -1,17 +1,7 @@
-/**
- * Characterization tests for the output decode pipeline (response-processors.ts).
- *
- * This 285-line module — the output-side mirror of the input parser pipeline —
- * had no test coverage. These pin its CURRENT behavior: per-system-type
- * decoding, the tryDecodeJSON double-parse, the stringOnly filter, byId/byName
- * lookup, duplicate-key aggregation, WebDisplay exclusion, and extractFileData.
- *
- * They assert what the code does today, so any later deepening of the decode
- * dispatch can be proven behavior-identical.
- */
 import { describe, expect, it, vi } from 'vitest';
 import { getValues, getValue, extractFileData } from '@/grasshopper/io/output/response-processors';
-import { disposeRhinoObjects } from '@/grasshopper/io/output/rhino-decoder';
+import type { RhinoRuntime } from '@/grasshopper/io/output/rhino-decoder';
+import { disposeRhinoObjects } from '@/grasshopper/io/output/rhino-objects';
 import type { DataItem, GrasshopperComputeResponse } from '@/grasshopper/types';
 
 // --- local builders ---------------------------------------------------------
@@ -32,30 +22,16 @@ function response(...params: ReturnType<typeof param>[]): GrasshopperComputeResp
 // --- decode by system type ---------------------------------------------------
 
 describe('getValues — system type decoding', () => {
-	it('decodes System.Int32 to a number', () => {
-		const res = response(param('n', [item('System.Int32', '42')]));
-		expect(getValues(res).values.n).toBe(42);
-	});
-
-	it('decodes System.Double to a float', () => {
-		const res = response(param('x', [item('System.Double', '3.14')]));
-		expect(getValues(res).values.x).toBe(3.14);
-	});
-
-	it('decodes System.Boolean to a boolean (case-insensitive)', () => {
-		const res = response(param('b', [item('System.Boolean', 'True')]));
-		expect(getValues(res).values.b).toBe(true);
-	});
-
-	it('strips surrounding quotes from System.String', () => {
-		const res = response(param('s', [item('System.String', '"hello"')]));
-		expect(getValues(res).values.s).toBe('hello');
-	});
-
-	it('leaves an unknown type untouched when no rhino instance is given', () => {
-		const res = response(param('g', [item('Rhino.Geometry.Point3d', '{"X":1,"Y":2,"Z":3}')]));
-		// parseValues default true → tryDecodeJSON parses it; no rhino → returned as the parsed object
-		expect(getValues(res).values.g).toEqual({ X: 1, Y: 2, Z: 3 });
+	it.each([
+		['System.Int32', '42', 42],
+		['System.Double', '3.14', 3.14],
+		['System.Boolean', 'True', true],
+		['System.String', '"hello"', 'hello'],
+		// parseValues default true → tryDecodeJSON parses it; no rhino → the parsed object.
+		['Rhino.Geometry.Point3d', '{"X":1,"Y":2,"Z":3}', { X: 1, Y: 2, Z: 3 }]
+	])('decodes %s %s', (type, data, expected) => {
+		const res = response(param('v', [item(type, data)]));
+		expect(getValues(res).values.v).toEqual(expected);
 	});
 });
 
@@ -99,8 +75,7 @@ describe('getValues — aggregation and keys', () => {
 	});
 
 	it('wraps (not merges) when the first item itself parses to an array', () => {
-		// Regression: Array.isArray-based aggregation pushed the second item INTO
-		// the first item's parsed array — [1,2,3,[4]] instead of [[1,2,3],[4]].
+		// Not [1,2,3,[4]]: a parsed array value must not be mistaken for the aggregate.
 		const res = response(
 			param('lists', [item('System.String', '[1,2,3]'), item('System.String', '[4]')])
 		);
@@ -147,19 +122,14 @@ describe('getValues — filtering', () => {
 // --- getValue ----------------------------------------------------------------
 
 describe('getValue', () => {
-	it('returns a single value byName', () => {
-		const res = response(param('radius', [item('System.Double', '5')]));
-		expect(getValue(res, { byName: 'radius' })).toBe(5);
-	});
-
 	it('returns an array byName when the param has multiple items', () => {
 		const res = response(param('xs', [item('System.Int32', '1'), item('System.Int32', '2')]));
 		expect(getValue(res, { byName: 'xs' })).toEqual([1, 2]);
 	});
 
-	it('returns undefined for an unknown name', () => {
-		const res = response(param('a', [item('System.Int32', '1')]));
-		expect(getValue(res, { byName: 'missing' })).toBeUndefined();
+	it.each([[{ byName: 'missing' }], [{ byId: 'nope' }]])('returns undefined for %j', (selector) => {
+		const res = response(param('a', [item('System.Int32', '1', 'id-a')]));
+		expect(getValue(res, selector)).toBeUndefined();
 	});
 
 	it('returns the matching item byId', () => {
@@ -168,16 +138,11 @@ describe('getValue', () => {
 		);
 		expect(getValue(res, { byId: 'id-b' })).toBe(2);
 	});
-
-	it('returns undefined for an unknown id', () => {
-		const res = response(param('p', [item('System.Int32', '1', 'id-a')]));
-		expect(getValue(res, { byId: 'nope' })).toBeUndefined();
-	});
 });
 
-// --- missing / alternate-cased fields (issue 62) ------------------------------
+// --- missing / alternate-cased fields -----------------------------------------
 
-describe('resilience to missing or alternate-cased response fields — issue 62', () => {
+describe('resilience to missing or alternate-cased response fields', () => {
 	it('skips params with no InnerTree instead of throwing (warnings-only partial success)', () => {
 		// This is exactly what client.solve returns on a warnings-only partial
 		// success: a param that produced nothing ships without InnerTree.
@@ -195,16 +160,14 @@ describe('resilience to missing or alternate-cased response fields — issue 62'
 		expect(extractFileData(res)).toEqual([]);
 	});
 
-	it('reads camelCase paramName/innerTree (server-branch casing drift)', () => {
+	it('reads camelCase fields, and tolerates a null InnerTree or no values array', () => {
 		const res = {
 			values: [{ paramName: 'n', innerTree: { '{0}': [item('System.Int32', '7')] } }]
 		} as unknown as GrasshopperComputeResponse;
 
 		expect(getValues(res).values.n).toBe(7);
 		expect(getValue(res, { byName: 'n' })).toBe(7);
-	});
 
-	it('tolerates a null InnerTree and a response with no values array', () => {
 		const nullTree = {
 			values: [{ ParamName: 'x', InnerTree: null }]
 		} as unknown as GrasshopperComputeResponse;
@@ -233,37 +196,18 @@ describe('resilience to missing or alternate-cased response fields — issue 62'
 	});
 });
 
-// --- memoization (issue 84) ----------------------------------------------------
+// --- repeated reads -----------------------------------------------------------
 
-describe('parsed-JSON memoization — issue 84', () => {
-	it('does not re-run JSON.parse on repeated reads of the same response', () => {
-		const res = response(
-			param('o', [item('SomeType', '{"a":1}')]),
-			param('n', [item('System.Int32', '5')])
-		);
+describe('repeated reads of one response', () => {
+	it('return fresh objects, so mutating one read leaves the next untouched', () => {
+		const res = response(param('o', [item('SomeType', '{"a":1}')]));
 
-		const parseSpy = vi.spyOn(JSON, 'parse');
-		try {
-			const first = getValues(res).values;
-			const callsAfterFirst = parseSpy.mock.calls.length;
-			expect(callsAfterFirst).toBeGreaterThan(0);
+		const first = getValues(res).values.o;
+		first.a = 2;
 
-			const second = getValues(res).values;
-			expect(parseSpy.mock.calls.length).toBe(callsAfterFirst); // no re-parse
-			expect(second).toEqual(first);
-
-			// getValue over the same response reuses the memo too.
-			expect(getValue(res, { byName: 'o' })).toEqual({ a: 1 });
-			expect(parseSpy.mock.calls.length).toBe(callsAfterFirst);
-		} finally {
-			parseSpy.mockRestore();
-		}
-	});
-
-	it('a fresh (structurally identical) response is parsed independently', () => {
-		const make = () => response(param('o', [item('SomeType', '{"a":1}')]));
-		expect(getValues(make()).values.o).toEqual({ a: 1 });
-		expect(getValues(make()).values.o).toEqual({ a: 1 });
+		expect(getValues(res).values.o).toEqual({ a: 1 });
+		expect(getValue(res, { byName: 'o' })).toEqual({ a: 1 });
+		expect(getValue(res, { byName: 'o' })).not.toBe(getValue(res, { byName: 'o' }));
 	});
 });
 
@@ -293,13 +237,7 @@ describe('extractFileData', () => {
 		expect(extractFileData(res)).toEqual([]);
 	});
 
-	/**
-	 * Regression: mcneel-branch servers serialize these PascalCase, and the
-	 * `Selva.FileIO.FileData` payload carries `Id`/`Metadata` alongside. The
-	 * strict camelCase guard dropped every file here — before the tolerant
-	 * decoder in handle-files.ts saw it — so `getAndDownloadFiles` produced a
-	 * silently empty archive (issue 95).
-	 */
+	// mcneel-branch servers serialize these PascalCase, with `Id`/`Metadata` alongside.
 	it('extracts PascalCase FileData and normalizes it to camelCase', () => {
 		const pascal = {
 			Id: 'abc',
@@ -344,13 +282,8 @@ describe('extractFileData', () => {
 		expect(extractFileData(res)[0]).not.toHaveProperty('metadata');
 	});
 
-	/**
-	 * Regression: the issue-95 normalization reached only `extractFileData` (the
-	 * download path). `getValue` — how output *widgets* read their value — left
-	 * the record verbatim, so a PascalCase file failed the camelCase `isFileData`
-	 * guard in @selvajs/ui and rendered an empty placeholder ("Waiting for
-	 * image...") though the bytes had arrived. Both paths must agree.
-	 */
+	// Output widgets read through getValue, and @selvajs/ui's `isFileData` guard
+	// expects camelCase: both read paths must normalize alike.
 	it('normalizes PascalCase FileData read through getValue', () => {
 		const pascal = {
 			Id: 'abc',
@@ -373,7 +306,7 @@ describe('extractFileData', () => {
 	});
 });
 
-// --- WASM disposal (issue 48) --------------------------------------------------
+// --- WASM disposal ------------------------------------------------------------
 
 /**
  * Fake emscripten binding: exposes delete()/isDeleted() like real rhino3dm
@@ -403,7 +336,7 @@ function fakeRhino(created: ReturnType<typeof makeWasmObject>[]) {
 	};
 }
 
-describe('getValues().dispose / disposeRhinoObjects — issue 48', () => {
+describe('getValues().dispose / disposeRhinoObjects', () => {
 	const pointJson = JSON.stringify({ X: 1, Y: 2, Z: 3 });
 
 	it('dispose() deletes every decoded WASM object exactly once, idempotently', () => {
@@ -416,7 +349,7 @@ describe('getValues().dispose / disposeRhinoObjects — issue 48', () => {
 			])
 		);
 
-		const result = getValues(res, false, { rhino: fakeRhino(created) });
+		const result = getValues(res, false, { rhino: fakeRhino(created) as unknown as RhinoRuntime });
 		expect(created).toHaveLength(3);
 		expect(created.every((o) => !o.isDeleted())).toBe(true);
 
@@ -444,7 +377,11 @@ describe('getValues().dispose / disposeRhinoObjects — issue 48', () => {
 			])
 		);
 
-		const value = getValue(res, { byName: 'pts' }, { rhino: fakeRhino(created) });
+		const value = getValue(
+			res,
+			{ byName: 'pts' },
+			{ rhino: fakeRhino(created) as unknown as RhinoRuntime }
+		);
 		expect(Array.isArray(value)).toBe(true);
 
 		disposeRhinoObjects(value);
@@ -455,5 +392,97 @@ describe('getValues().dispose / disposeRhinoObjects — issue 48', () => {
 		const obj = makeWasmObject();
 		disposeRhinoObjects([obj, { nested: obj }]);
 		expect(obj.delete).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('getValues — outputs named after Object.prototype members', () => {
+	it('keeps each value as-is and the result a plain object', () => {
+		const names = ['constructor', 'toString', 'hasOwnProperty', '__proto__'];
+		const wire = JSON.parse(
+			JSON.stringify(response(...names.map((name) => param(name, [item('System.String', name)]))))
+		);
+
+		const { values } = getValues(wire);
+
+		for (const name of names)
+			expect(Object.getOwnPropertyDescriptor(values, name)?.value).toBe(name);
+		expect(Object.getPrototypeOf(values)).toBe(Object.prototype);
+	});
+
+	it('still aggregates repeated names', () => {
+		const wire = response(
+			param('constructor', [item('System.String', 'a')]),
+			param('constructor', [item('System.String', 'b')])
+		);
+		expect(getValues(wire).values.constructor).toEqual(['a', 'b']);
+	});
+});
+
+describe('getValues — text outputs keep their type', () => {
+	const textOutput = (data: string) =>
+		({
+			values: [
+				{ ParamName: 'Out', InnerTree: { '{0}': [{ type: 'System.String', data, id: 'i' }] } }
+			]
+		}) as unknown as GrasshopperComputeResponse;
+
+	it.each([
+		['"12345678901234567890"', '12345678901234567890'],
+		['"123"', '123'],
+		['"true"', 'true'],
+		['"null"', 'null'],
+		['"01234"', '01234']
+	])('leaves %s as a string', (data, expected) => {
+		expect(getValues(textOutput(data)).values.Out).toBe(expected);
+	});
+
+	it('still unwraps JSON held in a JSON string', () => {
+		expect(getValues(textOutput('"{\\"a\\":1}"')).values.Out).toEqual({ a: 1 });
+		expect(getValues(textOutput('"[1,2]"')).values.Out).toEqual([1, 2]);
+	});
+});
+
+describe('getValues — numeric CLR types', () => {
+	it.each([
+		['System.Int64', '42', 42],
+		['System.Single', '1.5', 1.5],
+		['System.Decimal', '2.25', 2.25]
+	])('parses %s', (type, data, expected) => {
+		const response = {
+			values: [{ ParamName: 'Out', InnerTree: { '{0}': [{ type, data, id: 'i' }] } }]
+		} as unknown as GrasshopperComputeResponse;
+		expect(getValues(response).values.Out).toBe(expected);
+	});
+});
+
+describe('getValues — a System.Int64 past the safe integer range', () => {
+	it('keeps the digits as a string rather than rounding them', () => {
+		const data = '12345678901234567890';
+		const res = response(param('Out', [item('System.Int64', data)]));
+		expect(getValues(res).values.Out).toBe(data);
+	});
+});
+
+describe('getValue — scan boundaries', () => {
+	const item = (data: string, id = 'i') => ({ type: 'System.Double', data, id });
+	const duplicated = {
+		values: [
+			{ ParamName: 'Out', InnerTree: { '{0}': [item('1')] } },
+			{ ParamName: 'Out', InnerTree: { '{0}': [item('2')] } }
+		]
+	} as unknown as GrasshopperComputeResponse;
+
+	it('stops at the first param with the name, while getValues aggregates', () => {
+		expect(getValue(duplicated, { byName: 'Out' })).toBe(1);
+		expect(getValues(duplicated).values.Out).toEqual([1, 2]);
+	});
+
+	it('stringOnly filters out FileData', () => {
+		const response = {
+			values: [
+				{ ParamName: 'F', InnerTree: { '{0}': [{ type: 'FileData', data: '{}', id: 'f' }] } }
+			]
+		} as unknown as GrasshopperComputeResponse;
+		expect(getValue(response, { byName: 'F' }, { stringOnly: true })).toBeUndefined();
 	});
 });

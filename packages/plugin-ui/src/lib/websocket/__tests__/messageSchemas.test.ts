@@ -191,3 +191,43 @@ describe('validateInboundMessage — envelope handling', () => {
 		expectFail({ type: 'schemaUpdated', schema: {} });
 	});
 });
+
+describe('validateInboundMessage — canvas placement', () => {
+	it('layoutPlaced accepts null tab fields from a flat layout', () => {
+		expectOk({
+			type: 'layoutPlaced',
+			sessionId: SID,
+			schema: {},
+			schemaHash: 'h',
+			placements: [
+				{
+					paramId: 'p',
+					itemType: 'input',
+					tabId: null,
+					tabLabel: null,
+					groupId: 'g',
+					groupLabel: 'G'
+				}
+			],
+			removedIds: [],
+			summary: 'Added P to G'
+		});
+	});
+
+	it('layoutPlaced rejects an unknown itemType', () => {
+		expectFail({
+			type: 'layoutPlaced',
+			sessionId: SID,
+			schema: {},
+			schemaHash: 'h',
+			placements: [{ paramId: 'p', itemType: 'widget', groupId: 'g', groupLabel: 'G' }],
+			removedIds: [],
+			summary: ''
+		});
+	});
+
+	it('canvasSelection and revealItem accept their flat envelopes', () => {
+		expectOk({ type: 'canvasSelection', sessionId: SID, ids: [] });
+		expectOk({ type: 'revealItem', sessionId: SID, paramId: 'p' });
+	});
+});

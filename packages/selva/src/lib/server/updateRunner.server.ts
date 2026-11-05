@@ -141,6 +141,15 @@ TAG=${distTag}
 PM2="$(dirname "$ECOSYSTEM")/node_modules/.bin/pm2"
 [ -x "$PM2" ] || PM2=pm2
 
+# Under systemd, \`pm2 update\` kills and respawns the daemon. systemd sees its
+# unit's main process die and, with the default KillMode=control-group,
+# SIGTERMs everything in the cgroup — including this runner. setsid escapes
+# PM2's tree-kill but NOT the cgroup, so the runner never runs \`pm2 update\`
+# when this is true.
+pm2_under_systemd() {
+  grep -qs 'pm2.*\\.service' /proc/self/cgroup 2>/dev/null
+}
+
 # Waits for selva-compute to leave the transitional 'stopping' state.
 #
 # \`pm2 stop\` sends SIGINT and returns without waiting for the process to die.
@@ -316,12 +325,7 @@ if echo "$PING_OUT" | grep -q "out-of-date"; then
     exit 8
   fi
 
-  # Under systemd, \`pm2 update\` kills and respawns the daemon. systemd sees its
-  # unit's main process die and, with the default KillMode=control-group,
-  # SIGTERMs everything in the cgroup — including this runner. setsid escapes
-  # PM2's tree-kill but NOT the cgroup, so there is no way to survive it from
-  # here; refuse the resync instead of being killed by it.
-  if grep -qs 'pm2.*\\.service' /proc/self/cgroup 2>/dev/null; then
+  if pm2_under_systemd; then
     echo "[FATAL] SYSTEMD_PM2: this deployment's PM2 is supervised by systemd, and the daemon"
     echo "[FATAL] needs a resync. Running 'pm2 update' here would restart the systemd unit and"
     echo "[FATAL] kill this runner mid-update. Resync manually from a shell, then retry:"
@@ -378,6 +382,36 @@ if [ -n "$BEFORE" ] && [ "$BEFORE" = "$AFTER" ]; then
   echo "[WARN]   npm cache clean --force"
   echo "[WARN]   rm -rf node_modules package-lock.json"
   echo "[WARN]   npm install --prefer-online"
+fi
+
+# ---------------------------------------------------------------------------
+# 4b. Move pm2 onto the version the new CLI pins.
+# ---------------------------------------------------------------------------
+# Only \`selva migrate\` rewrites package.json, so without this a release that
+# bumps pm2 needs a manual migrate on every host. The pin is read from the CLI
+# just installed: its devDependencies.pm2 is what a fresh scaffold gets. The
+# app is stopped, so swapping the daemon here adds no downtime. A failure
+# leaves the old pm2 running the app: warn, never abort. A rollback below
+# keeps the new pm2: reinstalling the old one would leave the daemon newer
+# than the CLI, the one skew \`pm2 update\` cannot repair.
+PM2_DECLARED=$(node -p "require('./package.json').dependencies?.pm2 ?? ''" 2>/dev/null)
+PM2_PIN=$(node -p "require('./node_modules/@selvajs/cli/package.json').devDependencies?.pm2 ?? ''" 2>/dev/null)
+if [ -n "$PM2_PIN" ] && [ "$PM2_PIN" != "$PM2_DECLARED" ]; then
+  echo "[STEP] Moving pm2 \${PM2_DECLARED:-(none)} → $PM2_PIN, the version this release pins"
+  if npm install --save --save-exact --prefer-online "pm2@$PM2_PIN"; then
+    if pm2_under_systemd; then
+      echo "[WARN] PM2_RESYNC_NEEDED: pm2 is now $PM2_PIN, but its daemon still runs the old version."
+      echo "[WARN] Swapping it here would restart the systemd unit and kill this runner. From a shell:"
+      echo "[WARN]   cd $(dirname "$ECOSYSTEM") && npx pm2 update && npx pm2 list"
+      echo "[WARN] Let it finish: interrupting it leaves selva-compute unregistered."
+    elif ! "$PM2" update; then
+      echo "[WARN] PM2_RESYNC_NEEDED: 'pm2 update' failed — the daemon still runs the old pm2."
+      echo "[WARN]   cd $(dirname "$ECOSYSTEM") && npx pm2 update && npx pm2 list"
+    fi
+  else
+    echo "[WARN] PM2_PIN_FAILED: could not install pm2@$PM2_PIN — the previous pm2 still runs the app."
+    echo "[WARN] Retry from a shell: cd $(dirname "$ECOSYSTEM") && npx selva migrate"
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -450,11 +484,11 @@ if [ -f /tmp/selva-health.$$ ]; then
     echo "[FATAL] auto-migrate followed by a rollback would leave code and database on different heads."
     echo "[FATAL] Apply them yourself, then re-run the update:"
     echo "[FATAL]   cd $(dirname "$ECOSYSTEM")"
-    echo "[FATAL]   npm install --prefer-online @selvajs/supabase-provider@latest"
+    echo "[FATAL]   npm install --prefer-online @selvajs/supabase-provider@$TAG"
     echo "[FATAL]   npx selva-supabase"
     echo "[FATAL]   npx supabase db push"
     echo "[FATAL] The provider install is not optional: the migration SQL ships inside that"
-    echo "[FATAL] package, and the rollback just pinned it back to the OLD version — so a sync"
+    echo "[FATAL] package, and the update only moves @selvajs/cli and @selvajs/selva — so a sync"
     echo "[FATAL] without it copies 0 files and the push reports 'up to date' having done nothing."
     echo "[FATAL] If db push asks for credentials, see docs/self-hosting/providers/supabase.md"
     echo "[FATAL] — it needs a Supabase ACCOUNT credential (supabase login, or SUPABASE_ACCESS_TOKEN),"
@@ -511,8 +545,9 @@ exit 6
 // shared with the outcome reconciler and the log path.
 export type UpdatePlan = { cwd: string; args: string[] };
 
-// All @selvajs/* packages move together — fixing a provider-only bug without
-// bumping the runtime is a supported flow.
+// Only the CLI and the runtime move. Provider code is bundled into
+// @selvajs/selva; @selvajs/supabase-provider carries just the migration SQL,
+// which the operator installs and pushes before updating.
 //
 // `npm install` pins to the channel's dist-tag rather than using `npm
 // update`, because `update` only ever moves FORWARD within the installed

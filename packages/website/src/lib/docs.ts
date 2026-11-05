@@ -151,7 +151,7 @@ export function getUnpublishedTitle(slug: string): string | undefined {
 // Fixed group order for both the sidebar and the docs index. Groups not listed
 // here fall to the end, alphabetically. Mirrors the reading order a newcomer
 // wants: what it is, then how to run it, then how to build on it.
-const GROUP_ORDER = ['Overview', 'Get Started', 'Deployment', 'Providers', 'Concepts', 'Build'];
+const GROUP_ORDER = ['Overview', 'Get Started', 'Build', 'Concepts', 'Deployment', 'Providers'];
 
 function groupRank(title: string): number {
 	const i = GROUP_ORDER.indexOf(title);

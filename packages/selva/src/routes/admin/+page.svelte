@@ -2,8 +2,8 @@
 	import { page } from '$app/state';
 	import { Card, SectionHeader } from '@selvajs/ui';
 	import { Users, Server, LayoutDashboard, Package, Building2 } from '@lucide/svelte';
-	import StatCard from '$lib/components/StatCard.svelte';
-	import AssetUpload from '$lib/components/AssetUpload.svelte';
+	import StatCard from '#lib/components/StatCard.svelte';
+	import AssetUpload from '#lib/components/AssetUpload.svelte';
 	import type { PlatformPermission } from '@selvajs/platform';
 
 	const brandName = $derived(page.data.branding.name);

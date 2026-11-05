@@ -1,7 +1,16 @@
 <script lang="ts">
-	import { Button, Callout, Dialog, Input, Label, toast, ConfirmDialog } from '@selvajs/ui';
+	import {
+		Button,
+		Callout,
+		Dialog,
+		Input,
+		Label,
+		toast,
+		ConfirmDialog,
+		FilterableDropdown
+	} from '@selvajs/ui';
 	import { Copy, TriangleAlert, Check } from '@lucide/svelte';
-	import { DEFAULT_SHARE_LINK_MAX_SOLVES } from '@selvajs/platform';
+	import { DEFAULT_SHARE_LINK_MAX_SOLVES, DEFAULT_SHARE_LINK_TTL_DAYS } from '@selvajs/platform';
 
 	type DefinitionChannel = 'live' | 'draft';
 
@@ -18,8 +27,15 @@
 	let channel = $state<DefinitionChannel>('live');
 	let allowSolve = $state(true);
 	let label = $state('');
-	let expiresEnabled = $state(false);
-	let expiresAt = $state('');
+	// The value a datetime-local input takes: local time, no zone, minutes.
+	function defaultExpiry(): string {
+		const at = Date.now() + DEFAULT_SHARE_LINK_TTL_DAYS * 86_400_000;
+		const offsetMs = new Date(at).getTimezoneOffset() * 60_000;
+		return new Date(at - offsetMs).toISOString().slice(0, 16);
+	}
+
+	let expiresEnabled = $state(true);
+	let expiresAt = $state(defaultExpiry());
 	let capEnabled = $state(true);
 	let cap = $state(DEFAULT_SHARE_LINK_MAX_SOLVES);
 
@@ -38,8 +54,8 @@
 		channel = 'live';
 		allowSolve = true;
 		label = '';
-		expiresEnabled = false;
-		expiresAt = '';
+		expiresEnabled = true;
+		expiresAt = defaultExpiry();
 		capEnabled = true;
 		cap = DEFAULT_SHARE_LINK_MAX_SOLVES;
 		mintedToken = null;
@@ -67,7 +83,8 @@
 				allowSolve,
 				...(label.trim() ? { name: label.trim() } : {}),
 				maxSolves: capEnabled ? cap : null,
-				...(expiresEnabled && expiresAt ? { expiresAt: new Date(expiresAt).toISOString() } : {})
+				// null, not absent: absent would get the server's default expiry.
+				expiresAt: expiresEnabled && expiresAt ? new Date(expiresAt).toISOString() : null
 			};
 			const res = await fetch(`/api/v1/definitions/${definitionGuid}/share-links`, {
 				method: 'POST',
@@ -118,14 +135,15 @@
 			<div class="mt-4 space-y-4">
 				<div class="space-y-1.5">
 					<Label for="sl-channel">Channel</Label>
-					<select
+					<FilterableDropdown
 						id="sl-channel"
-						bind:value={channel}
-						class="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
-					>
-						<option value="live">Live — recipients see the published version</option>
-						<option value="draft">Draft — recipients see the unpublished version</option>
-					</select>
+						items={[
+							{ id: 'live', label: 'Live — recipients see the published version' },
+							{ id: 'draft', label: 'Draft — recipients see the unpublished version' }
+						]}
+						value={channel}
+						onChange={(v) => (channel = v as DefinitionChannel)}
+					/>
 					{#if channel === 'draft'}
 						<p class="text-warning flex items-start gap-1.5 text-xs">
 							<TriangleAlert class="mt-0.5 h-3 w-3 shrink-0" />
@@ -174,9 +192,10 @@
 					<label class="flex cursor-pointer items-start gap-3">
 						<input type="checkbox" bind:checked={expiresEnabled} class="mt-0.5 shrink-0" />
 						<div class="min-w-0 flex-1">
-							<p class="text-sm font-medium">Set expiry</p>
+							<p class="text-sm font-medium">Expires</p>
 							<p class="text-muted-foreground mt-0.5 text-xs">
-								The link stops working after this date. Off = never expires.
+								The link stops working after this date. Off = never expires, so it keeps working for
+								anyone it was ever forwarded to.
 							</p>
 						</div>
 					</label>
@@ -216,12 +235,12 @@
 					— revoke it immediately if it's compromised.
 				</Callout>
 
-				<div class="border-border bg-muted/40 rounded-md border p-3">
+				<div class="border-border bg-muted rounded-md border p-3">
 					<p class="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
 						Share URL
 					</p>
 					<div class="flex items-start gap-2">
-						<code class="bg-background min-w-0 flex-1 rounded p-2 font-mono text-xs break-all"
+						<code class="bg-background min-w-0 flex-1 rounded-sm p-2 font-mono text-xs break-all"
 							>{mintedShareUrl}</code
 						>
 						<Button

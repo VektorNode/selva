@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Compile-only references: Rhino supplies Grasshopper, RhinoCommon and Newtonsoft at runtime.
+       TargetFramework and the Grasshopper version must match the running Rhino. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <NoWarn>CA1416</NoWarn>
+    <!-- The generator engine (B, layout, snapshots, typed wrappers, Selva helpers) lives in the
+         grasshopper-definitions Claude skill; this project holds only Selva's definitions.
+         Point elsewhere with -p:GhgenDir=<folder>. -->
+    <GhgenDir Condition="'$(GhgenDir)' == ''">$([System.Environment]::GetFolderPath(SpecialFolder.UserProfile))/.claude/skills/grasshopper-definitions/assets/ghgen</GhgenDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(GhgenDir)/*.cs" Exclude="$(GhgenDir)/Definitions.cs" />
+  </ItemGroup>
+  <Target Name="CheckGhgen" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('$(GhgenDir)/GhBuilder.cs')"
+           Text="No generator engine at $(GhgenDir). Install the grasshopper-definitions skill, or pass -p:GhgenDir=&lt;folder&gt;." />
+  </Target>
+  <ItemGroup>
+    <!-- Canvas types (Snapshot) derive from WinForms controls; Rhino bundles WinForms on macOS too. -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" />
+    <PackageReference Include="Grasshopper" Version="9.0.26300.9401" ExcludeAssets="runtime" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" ExcludeAssets="runtime" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.10" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>

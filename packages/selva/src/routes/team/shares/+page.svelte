@@ -10,7 +10,7 @@
 		toast
 	} from '@selvajs/ui';
 	import { Link2, Trash2, ExternalLink } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { ShareRow } from './+page.server';
 
 	interface PageData {
@@ -46,7 +46,7 @@
 			});
 			if (res.ok) {
 				toast.success('Share link revoked');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Failed to revoke share link');
@@ -72,7 +72,7 @@
 	/>
 
 	<Card.Root>
-		<Card.Content class="space-y-4 pt-6">
+		<Card.Content class="space-y-4">
 			{#if data.rows.length === 0}
 				<EmptyState
 					icon={Link2}
@@ -97,9 +97,9 @@
 						getKey={(r) => r.id}
 						columns={[
 							{ label: 'Link' },
-							{ label: 'Minted by', width: '160px' },
-							{ label: 'Solves', width: '100px', align: 'right' },
-							{ label: 'Expires', width: '120px', align: 'right' },
+							{ label: 'Minted by', width: '160px', hideOnMobile: true },
+							{ label: 'Solves', width: '100px', align: 'right', hideOnMobile: true },
+							{ label: 'Expires', width: '120px', align: 'right', hideOnMobile: true },
 							{ label: '', width: '80px' }
 						]}
 					>

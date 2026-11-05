@@ -7,16 +7,21 @@
  * handler runs under Next or Hono behind a sibling adapter roughly this size.
  */
 
-import { isHttpError, type RequestEvent } from '@sveltejs/kit';
+import { isHttpError, json, type RequestEvent } from '@sveltejs/kit';
+import { publicUrl } from '#lib/server/origin.js';
 import {
 	ApiError,
 	ApiErrorCode,
+	chargeApiRateLimit,
 	codeForStatus,
 	depsFromConfig,
 	mapCoreError,
+	rateLimitedResponse,
 	runHandler,
+	withRateLimitHeaders,
 	type ApiHandler,
 	type ApiRequest,
+	type RunHandlerOptions,
 	type SelvaDeps
 } from '@selvajs/server/api';
 import {
@@ -27,8 +32,12 @@ import {
 } from '../providers.server';
 import { shareLinkCodec } from '../shareLinks/token.server';
 import { inviteCodec } from '../invites/token.server';
+import { apiTokenCodec, apiTokenResolutions } from '../apiTokens/token.server';
 import { MAX_DEFINITION_FILE_SIZE, MAX_IMAGE_FILE_SIZE } from '../computeLimits';
 import { evictComputeClient } from '../compute/engine.server';
+import { serverResolver } from '../compute/serverResolver.server';
+import { apiRateLimiter } from '../computeRateLimit.server';
+import { signInMaxAgeMs } from '../signInMaxAge.server';
 
 /**
  * This app's own errors, folded into the shared envelope.
@@ -47,7 +56,13 @@ export function mapAppError(err: unknown): ApiError | undefined {
 		// form with `fields` (Zod's per-field detail) — both are live, so this
 		// reads the body rather than just the status.
 		const body = err.body as
-			{ message?: string; code?: ApiErrorCode; fields?: Record<string, string> } | string;
+			| {
+					message?: string;
+					code?: ApiErrorCode;
+					fields?: Record<string, string>;
+					details?: Record<string, string>;
+			  }
+			| string;
 		if (typeof body === 'string') {
 			return new ApiError(err.status, codeForStatus(err.status), body);
 		}
@@ -55,7 +70,8 @@ export function mapAppError(err: unknown): ApiError | undefined {
 			err.status,
 			body?.code ?? codeForStatus(err.status),
 			body?.message ?? 'Request failed',
-			body?.fields
+			body?.fields,
+			body?.details
 		);
 	}
 	return mapCoreError(err);
@@ -73,7 +89,13 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 		{
 			// Resolved per request, not captured: both codecs re-key on the secret,
 			// so a rotated SELVA_HMAC_KEY takes effect without a restart.
-			tokens: { shareLinks: shareLinkCodec(), invites: inviteCodec() },
+			tokens: {
+				shareLinks: shareLinkCodec(),
+				invites: inviteCodec(),
+				apiTokens: apiTokenCodec(),
+				signInMaxAgeMs,
+				resolutionCache: apiTokenResolutions
+			},
 			// Passed explicitly — depsFromConfig's defaults would silently ignore
 			// this deployment's MAX_*_FILE_SIZE_BYTES.
 			uploadLimits: {
@@ -83,8 +105,12 @@ function buildDeps(event: RequestEvent): SelvaDeps {
 			// Cache is keyed on server id; without this a compute-config write
 			// leaves a warm client holding a rotated URL or key.
 			evictComputeClient,
+			onComputeConfigSaved: () => serverResolver.forget(),
 			notifications: getNotificationProvider(),
-			instanceName: getBranding().name
+			instanceName: getBranding().name,
+			apiTokenSettingsPath: '/team/tokens',
+			// Module singleton: the limiter must outlive this per-request deps object.
+			apiRateLimiter
 		}
 	);
 }
@@ -96,14 +122,44 @@ export function toApiRequest(event: RequestEvent): ApiRequest {
 		profile: event.locals.profile,
 		log: event.locals.log,
 		params: event.params,
-		url: event.url,
+		url: publicUrl(event.url),
 		request: event.request,
 		deps: buildDeps(event)
 	};
 }
 
-/** Mount a transport-free handler as a SvelteKit `RequestHandler`. */
-export function mount(fallback: string, handler: ApiHandler) {
+/**
+ * Mount a transport-free handler as a SvelteKit `RequestHandler`.
+ *
+ * Routes addressed by a project or definition pass `scopeTarget`, so a key
+ * scoped to that project or definition can reach them; solve routes pass
+ * `action: 'solve'`; creates pass `idempotent: true`.
+ */
+export function mount(
+	fallback: string,
+	handler: ApiHandler,
+	opts: Pick<RunHandlerOptions, 'action' | 'scopeTarget' | 'anyScope' | 'idempotent'> = {}
+) {
 	return (event: RequestEvent): Promise<Response> =>
-		runHandler(handler, toApiRequest(event), { fallback, mapError: mapAppError });
+		runHandler(handler, toApiRequest(event), { fallback, mapError: mapAppError, ...opts });
+}
+
+/**
+ * The per-token rate limit for a route that builds its own `Response` instead
+ * of going through `mount`: charged before the handler runs, and `RateLimit-*`
+ * on every token response, thrown errors included.
+ */
+export function withApiRateLimit<E extends RequestEvent>(
+	handler: (event: E) => Promise<Response>
+): (event: E) => Promise<Response> {
+	return async (event) => {
+		const verdict = await chargeApiRateLimit(event.locals.ctx, apiRateLimiter);
+		if (verdict && !verdict.allowed) return rateLimitedResponse(verdict);
+		try {
+			return withRateLimitHeaders(await handler(event), verdict);
+		} catch (err) {
+			if (!verdict || !isHttpError(err)) throw err;
+			return withRateLimitHeaders(json(err.body, { status: err.status }), verdict);
+		}
+	};
 }

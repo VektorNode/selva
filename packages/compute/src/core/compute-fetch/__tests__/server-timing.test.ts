@@ -24,30 +24,43 @@ describe('parseServerTiming', () => {
 		});
 	});
 
-	it('handles a subset of metrics', () => {
-		expect(parseServerTiming('solve;dur=42')).toEqual({ solve: 42, raw: 'solve;dur=42' });
+	it.each([
+		['a subset of metrics', 'solve;dur=42', { solve: 42 }],
+		['an unknown metric beside a known one', 'cache;dur=5, solve;dur=10', { solve: 10 }]
+	])('parses %s', (_name, header, expected) => {
+		expect(parseServerTiming(header)).toEqual({ ...expected, raw: header });
 	});
 
-	it('tolerates extra whitespace and casing in dur', () => {
-		const t = parseServerTiming('  decode;DUR=1 , solve;dur=2 ');
-		expect(t).toMatchObject({ decode: 1, solve: 2 });
+	it.each([
+		['a missing header', null],
+		['no recognizable metric', 'miss'],
+		['only an unknown metric', 'cache;dur=5'],
+		['a non-numeric dur', 'solve;dur=abc'],
+		['a malformed recomputed count', 'recomputed;desc="n/a"']
+	])('returns null for %s', (_name, header) => {
+		expect(parseServerTiming(header)).toBeNull();
 	});
 
-	it('ignores unknown metrics but still parses known ones', () => {
-		expect(parseServerTiming('cache;dur=5, solve;dur=10')).toMatchObject({ solve: 10 });
+	it("reads the fork compute server's gh time and recomputed count through the proxy", () => {
+		expect(
+			parseServerTiming(
+				'decode;dur=2, solve;dur=900, gh;dur=870, harvest;dur=30, encode;dur=5, ' +
+					'recomputed;desc="4/97", proxy_wait;dur=0, proxy_child;dur=910'
+			)
+		).toMatchObject({
+			decode: 2,
+			solve: 900,
+			gh: 870,
+			encode: 5,
+			recomputed: { ran: 4, total: 97 }
+		});
 	});
 
-	it('returns null for a missing header', () => {
-		expect(parseServerTiming(null)).toBeNull();
-	});
-
-	it('returns null when no recognizable metric is present', () => {
-		expect(parseServerTiming('miss')).toBeNull();
-		expect(parseServerTiming('cache;dur=5')).toBeNull();
-	});
-
-	it('skips a non-numeric dur', () => {
-		expect(parseServerTiming('solve;dur=abc')).toBeNull();
+	it('reads a result-cache hit, which carries no durations', () => {
+		expect(parseServerTiming('cache;desc="hit", proxy_child;dur=12')).toEqual({
+			cacheHit: true,
+			raw: 'cache;desc="hit", proxy_child;dur=12'
+		});
 	});
 });
 
@@ -94,7 +107,7 @@ describe('onServerTiming callback', () => {
 		expect(onServerTiming).not.toHaveBeenCalled();
 	});
 
-	it('fires on the 500 partial-success path too (values + errors — issue 103)', async () => {
+	it('fires on the 500 partial-success path too (values + errors)', async () => {
 		const onServerTiming = vi.fn();
 		fetchMock.mockResolvedValueOnce(
 			createMockResponse(null, {

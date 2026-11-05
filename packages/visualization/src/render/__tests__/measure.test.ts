@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { snapToVertex, makeFormatter, pickThreshold } from '../measure';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
+import { LineSegments2 } from 'three/addons/lines/LineSegments2.js';
+import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js';
+
+import { snapToVertex, makeDefaultFormat, makeFormatter, pickThreshold } from '../measure';
 
 const SCREEN = { width: 800, height: 600 };
 
@@ -209,5 +213,51 @@ describe('pickThreshold', () => {
 
 		expect(atZoom1).toBeCloseTo(4 * FRACTION, 6); // (top − bottom) / zoom = 4
 		expect(atZoom4).toBeCloseTo(atZoom1 / 4, 6); // zooming in shrinks the world-space band
+	});
+});
+
+describe('makeFormatter on large and small values', () => {
+	it('never switches to exponent notation', () => {
+		expect(makeFormatter('Millimeters')(12.345)).toBe('12345 mm');
+		expect(makeFormatter()(1234.5)).toBe('1235 m');
+	});
+
+	it('keeps three significant figures below one unit', () => {
+		expect(makeFormatter()(0.025)).toBe('0.0250 m');
+		expect(makeFormatter()(0)).toBe('0 m');
+	});
+});
+
+describe('makeDefaultFormat', () => {
+	const format = makeDefaultFormat(makeFormatter());
+
+	it('shows only the total for an axis-aligned measurement', () => {
+		expect(format(2, new THREE.Vector3(2, 0, 0))).toBe('2.00 m');
+	});
+
+	it('lists only the axes that change', () => {
+		expect(format(5, new THREE.Vector3(3, 4, 0))).toBe('5.00 m\nΔx 3.00 m  Δy 4.00 m');
+	});
+});
+
+describe('snapToVertex on fat lines', () => {
+	it('snaps to the struck segment endpoint of a LineSegments2', () => {
+		const geometry = new LineSegmentsGeometry();
+		geometry.setPositions([-1, 0, 0, 1, 0, 0]);
+		const line = new LineSegments2(geometry, new LineMaterial());
+		line.updateMatrixWorld(true);
+
+		const hit = {
+			distance: 0,
+			point: new THREE.Vector3(0.96, 0.02, 0),
+			pointOnLine: new THREE.Vector3(0.96, 0, 0),
+			object: line,
+			face: null,
+			faceIndex: 0
+		} as unknown as THREE.Intersection;
+
+		const result = snapToVertex(hit, frontCamera(), SCREEN, 12);
+		expect(result.x).toBeCloseTo(1, 5);
+		expect(result.y).toBeCloseTo(0, 5);
 	});
 });

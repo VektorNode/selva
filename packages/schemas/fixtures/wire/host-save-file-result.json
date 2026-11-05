@@ -1,0 +1,7 @@
+{
+	"type": "hostSaveFileResult",
+	"sessionId": "session-fixture",
+	"requestId": "7",
+	"outcome": "failed",
+	"error": "The file is larger than 150 MB."
+}

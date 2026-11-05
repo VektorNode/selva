@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 
-vi.mock('$env/dynamic/private', () => ({
+vi.mock('#lib/server/env.js', () => ({
 	env: { SELVA_HMAC_KEY: 'test-secret-that-is-at-least-32-chars-long' }
 }));
 

@@ -9,6 +9,7 @@ import type {
 	Page
 } from '@selvajs/platform';
 import { ProviderError } from '@selvajs/platform';
+import { previousKey } from '@selvajs/platform/config';
 import { signHmacToken, verifyHmacToken } from './hmac.js';
 import { verifyPasswordHash, createLocalAuthUserStore } from './users.js';
 import type { LocalAuthUserStore, StoredAuthUser } from './users.js';
@@ -42,6 +43,10 @@ function toAuthUser(
 export interface LocalAuthProviderConfig {
 	/** HMAC signing secret. Pass from env (SELVA_HMAC_KEY). */
 	hmacSecret: string;
+	/** The secret before the last rotation. Sessions it signed stay valid until they expire. */
+	previousHmacSecret?: string;
+	/** Epoch ms after which `previousHmacSecret` is no longer accepted. */
+	previousHmacSecretExpiresAt?: number;
 	/** Absolute path to auth-users.json. Omit for stateless (no-DATA_PATH) mode. */
 	usersFilePath?: string;
 }
@@ -85,6 +90,8 @@ class LocalPasswordAuth implements IPasswordAuth {
 
 export class LocalAuthProvider implements IAuthProvider {
 	private readonly hmacSecret: string;
+	private readonly previousHmacSecret?: string;
+	private readonly previousHmacSecretExpiresAt?: number;
 	private readonly users?: LocalAuthUserStore;
 
 	readonly name = 'Local';
@@ -92,6 +99,8 @@ export class LocalAuthProvider implements IAuthProvider {
 
 	constructor(config: LocalAuthProviderConfig) {
 		this.hmacSecret = config.hmacSecret;
+		this.previousHmacSecret = config.previousHmacSecret;
+		this.previousHmacSecretExpiresAt = config.previousHmacSecretExpiresAt;
 		if (config.usersFilePath) {
 			this.users = createLocalAuthUserStore(config.usersFilePath);
 		}
@@ -125,8 +134,13 @@ export class LocalAuthProvider implements IAuthProvider {
 					`(got ${hmacSecret.length}). Generate one with: openssl rand -base64 32`
 			);
 		}
+		const previous = previousKey(env, 'SELVA_HMAC_KEY');
 		return new LocalAuthProvider({
 			hmacSecret,
+			...(previous.key ? { previousHmacSecret: previous.key } : {}),
+			...(previous.state === 'active'
+				? { previousHmacSecretExpiresAt: Date.parse(previous.expires) }
+				: {}),
 			usersFilePath: env.DATA_PATH ? path.join(env.DATA_PATH, 'auth-users.json') : undefined
 		});
 	}
@@ -140,7 +154,14 @@ export class LocalAuthProvider implements IAuthProvider {
 	 * full file read+parse just to usually decide not to write.
 	 */
 	async verifyToken(token: string): Promise<AuthUser | null> {
-		const { valid, userId } = verifyHmacToken(token, this.hmacSecret);
+		let { valid, userId } = verifyHmacToken(token, this.hmacSecret);
+		const previousAccepted =
+			this.previousHmacSecret !== undefined &&
+			(this.previousHmacSecretExpiresAt === undefined ||
+				Date.now() < this.previousHmacSecretExpiresAt);
+		if (!valid && previousAccepted && this.previousHmacSecret) {
+			({ valid, userId } = verifyHmacToken(token, this.previousHmacSecret));
+		}
 		if (!valid) return null;
 		if (!this.users) return null;
 		const u = await this.users.findById(userId);

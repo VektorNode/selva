@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import {
 	apiError,
 	ApiErrorCode,
+	assertScope,
 	collection,
 	created,
 	formText,
@@ -17,12 +18,13 @@ import {
 	parseBody,
 	parseDefinitionListOptions,
 	parseParam,
+	readForm,
 	requireCaller,
 	requireUpload,
 	throwZodError
 } from '../api/index.js';
 import type { ApiHandler } from '../api/index.js';
-import { toDefinitionListItem, type DefinitionStatus } from '@selvajs/platform';
+import { toDefinitionListItem, toSourceDocumentId, type DefinitionStatus } from '@selvajs/platform';
 import {
 	CreateDefinitionInputSchema,
 	GuidSchema,
@@ -31,13 +33,16 @@ import {
 } from '@selvajs/platform/definitions';
 import type { DefinitionVersion } from '@selvajs/platform';
 import { requireCanCreateDefinition, requireEditableDefinition } from '../access/index.js';
-import { GH_EXTENSIONS } from '@selvajs/platform';
+import { COVER_IMAGE_CONTENT_TYPES, GH_EXTENSIONS } from '@selvajs/platform';
 import { resolveServerForOrg } from '../compute/index.js';
 import {
 	fetchSchemaFromCompute,
 	getVisibleDefinition,
+	listEditableDefinitionsByDocument,
 	listVisibleDefinitions,
+	loadVisibleDefinition,
 	loadVisibleVersion,
+	mayUploadToDefinition,
 	resolveAccessibleProjects
 } from '../definitions/index.js';
 import { definitionService } from './services.js';
@@ -47,9 +52,18 @@ const LISTABLE_STATUSES: DefinitionStatus[] = ['draft', 'published', 'archived']
 /**
  * Definitions the caller can view. Visibility is resolved into the query via
  * `projectIds`, so `limit`/`nextCursor` describe the filtered set.
+ *
+ * `?documentId=<guid>` narrows to definitions uploaded from that Grasshopper
+ * document which the caller can upload a new version of.
  */
 export const listDefinitions: ApiHandler = async (req) => {
 	const { ctx } = requireCaller(req);
+
+	const documentParam = req.url.searchParams.get('documentId');
+	const documentId = documentParam === null ? null : toSourceDocumentId(documentParam);
+	if (documentParam !== null && !documentId) {
+		apiError(400, ApiErrorCode.VALIDATION_FAILED, 'documentId must be a GUID');
+	}
 
 	const statusParam = req.url.searchParams.get('status');
 	if (statusParam && !LISTABLE_STATUSES.includes(statusParam as DefinitionStatus)) {
@@ -60,15 +74,14 @@ export const listDefinitions: ApiHandler = async (req) => {
 		);
 	}
 
-	const page = await listVisibleDefinitions(
-		ctx,
-		{
-			...parseDefinitionListOptions(req.url),
-			projectId: req.url.searchParams.get('projectId') ?? undefined,
-			statuses: statusParam ? [statusParam as DefinitionStatus] : undefined
-		},
-		req.deps
-	);
+	const opts = {
+		...parseDefinitionListOptions(req.url),
+		projectId: req.url.searchParams.get('projectId') ?? undefined,
+		statuses: statusParam ? [statusParam as DefinitionStatus] : undefined
+	};
+	const page = documentId
+		? await listEditableDefinitionsByDocument(ctx, documentId, opts, req.deps)
+		: await listVisibleDefinitions(ctx, opts, req.deps);
 	return collection({ items: page.items.map(toDefinitionListItem), nextCursor: page.nextCursor });
 };
 
@@ -81,10 +94,20 @@ function parseTags(raw: string | undefined): string[] | undefined {
 	return tags.length ? tags : undefined;
 }
 
+const COVER_IMAGE_TYPES = {
+	allowed: new Set(Object.values(COVER_IMAGE_CONTENT_TYPES)),
+	message: 'Unsupported image type. Allowed: PNG, JPEG, WebP, GIF'
+};
+
+function requireCoverImage(form: FormData, maxBytes: number): File {
+	return requireUpload(form, 'image', { maxBytes, contentTypes: COVER_IMAGE_TYPES, label: 'Image' })
+		.file;
+}
+
 /** Create a definition — metadata and the Grasshopper file in one request. */
 export const createDefinition: ApiHandler = async (req) => {
 	const { ctx, user } = requireCaller(req);
-	const form = await req.request.formData();
+	const form = await readForm(req.request);
 
 	const { file, extension } = requireUpload(form, 'file', {
 		maxBytes: req.deps.uploadLimits.maxDefinitionFileSize,
@@ -92,15 +115,12 @@ export const createDefinition: ApiHandler = async (req) => {
 		label: 'Grasshopper (.gh or .ghx) file'
 	});
 
-	const imageFile = form.get('image');
-	const maxImageBytes = req.deps.uploadLimits.maxImageFileSize;
-	if (imageFile instanceof File && imageFile.size > maxImageBytes) {
-		apiError(
-			400,
-			ApiErrorCode.VALIDATION_FAILED,
-			`Image too large. Max size: ${maxImageBytes / (1024 * 1024)} MB`
-		);
-	}
+	// Checked before anything is written, like the file itself.
+	const imageField = form.get('image');
+	const imageFile =
+		imageField instanceof File && imageField.size > 0
+			? requireCoverImage(form, req.deps.uploadLimits.maxImageFileSize)
+			: undefined;
 
 	let projectId = formText(form, 'projectId');
 	if (!projectId) {
@@ -166,9 +186,19 @@ export const createDefinition: ApiHandler = async (req) => {
 	);
 
 	let coverImage = record.coverImage;
-	if (imageFile instanceof File && imageFile.size > 0) {
-		const imageData = new Uint8Array(await imageFile.arrayBuffer());
-		coverImage = await service.saveCoverImage(ctx, guid, imageData);
+	if (imageFile) {
+		try {
+			coverImage = await service.saveCoverImage(
+				ctx,
+				guid,
+				new Uint8Array(await imageFile.arrayBuffer())
+			);
+		} catch (err) {
+			// A failed request must leave nothing behind: the client's retry would
+			// create a second definition next to this one.
+			await service.delete(ctx, guid);
+			throw err;
+		}
 	}
 
 	return created({ guid, version, coverImage });
@@ -185,13 +215,17 @@ function versionSummary(v: DefinitionVersion) {
 	};
 }
 
-/** The record plus its live and draft version summaries. */
+/**
+ * The record plus its live and draft version summaries. `canEdit` says whether
+ * the caller can upload a version and make one live, scope included for a key.
+ */
 export const getDefinition: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 	const { ctx } = requireCaller(req);
 
-	const record = await getVisibleDefinition(ctx, guid, req.deps);
-	if (!record) apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
+	const visible = await loadVisibleDefinition(ctx, guid, req.deps);
+	if (!visible) apiError(404, ApiErrorCode.NOT_FOUND, 'Definition not found');
+	const { record } = visible;
 
 	const meta = req.deps.definitionMeta;
 	const [liveVersion, draftVersion] = await Promise.all([
@@ -202,6 +236,8 @@ export const getDefinition: ApiHandler = async (req) => {
 	return {
 		body: {
 			...record,
+			sourceDocumentId: record.sourceDocumentId ?? null,
+			canEdit: mayUploadToDefinition(ctx, visible, req.deps),
 			liveVersion: liveVersion ? versionSummary(liveVersion) : null,
 			draftVersion: draftVersion ? versionSummary(draftVersion) : null
 		}
@@ -220,8 +256,14 @@ export const deleteDefinition: ApiHandler = async (req) => {
 /** Metadata only. New versions POST to `/versions`. */
 export const updateDefinition: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
-	const { ctx } = await requireEditableDefinition(req, guid);
+	const { ctx, record } = await requireEditableDefinition(req, guid);
 	const patch = await parseBody(req.request, UpdateMetadataInputSchema);
+	// Moving needs the same rights on the destination as uploading there, and a
+	// key scoped to the source project must not carry the definition out of it.
+	if (patch.projectId && patch.projectId !== record.projectId) {
+		assertScope(ctx, 'write', { projectId: patch.projectId });
+		await requireCanCreateDefinition(req, patch.projectId);
+	}
 
 	await definitionService(req.deps).updateMeta(ctx, guid, patch);
 	return noContent();
@@ -266,10 +308,10 @@ export const uploadDefinitionImage: ApiHandler = async (req) => {
 	const guid = parseParam(req.params.guid, GuidSchema, 'GUID');
 	const { ctx } = await requireEditableDefinition(req, guid);
 
-	const { file } = requireUpload(await req.request.formData(), 'image', {
-		maxBytes: req.deps.uploadLimits.maxImageFileSize,
-		label: 'Image'
-	});
+	const file = requireCoverImage(
+		await readForm(req.request),
+		req.deps.uploadLimits.maxImageFileSize
+	);
 
 	const data = new Uint8Array(await file.arrayBuffer());
 	return {

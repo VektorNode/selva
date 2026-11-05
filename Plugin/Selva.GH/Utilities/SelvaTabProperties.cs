@@ -1,8 +1,11 @@
-using System;
-using System.IO;
-using System.Reflection;
+using System.IO.Compression;
 using Grasshopper.Kernel;
+using Rhino;
+using Selva.GH.Features.Display.Services;
+using Selva.GH.Features.SolveRuntime.Services;
+using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Properties;
+using Selva.Slva;
 using Instances = Grasshopper.Instances;
 
 namespace Selva.GH.Utilities;
@@ -16,27 +19,18 @@ public class SelvaTabProperties : GH_AssemblyPriority
         server.AddCategorySymbolName("Selva", 'S');
         server.AddCategoryShortName("Selva", "SV");
 
-#if !NETCOREAPP
-        // net48's fusion loader can refuse to load a strong-named assembly from a private
-        // path if a different version is already loaded in the process. Resolve manually so
-        // Selva's own dependency copies win.
-        AppDomain.CurrentDomain.AssemblyResolve += ResolveFromPluginDirectory;
-#endif
+        // Rhino.Compute loads Selva too, and has no panel to launch from. RhinoApp, not
+        // HeadlessGuard: there may be no Rhino document yet while Grasshopper loads.
+        if (!RhinoApp.IsRunningHeadless)
+        {
+            DefinitionLauncher.Register();
+            PanelCanvasFollower.Register();
+            CanvasPlacementHooks.Register();
+            DisplayCaches.ClearOnDocumentClose();
+            MacSolveActivity.Register();
+            SlvzCompressor.Level = CompressionLevel.Fastest;
+        }
 
         return GH_LoadingInstruction.Proceed;
     }
-
-#if !NETCOREAPP
-#nullable enable
-    private static readonly string PluginDirectory =
-        Path.GetDirectoryName(typeof(SelvaTabProperties).Assembly.Location) ?? "";
-
-    private static Assembly? ResolveFromPluginDirectory(object sender, ResolveEventArgs args)
-    {
-        var name = new AssemblyName(args.Name).Name;
-        var path = Path.Combine(PluginDirectory, name + ".dll");
-        return File.Exists(path) ? Assembly.LoadFrom(path) : null;
-    }
-#nullable disable
-#endif
 }

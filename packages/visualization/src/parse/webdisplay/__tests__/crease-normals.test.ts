@@ -54,6 +54,30 @@ describe('splitCreases', () => {
 		}
 	});
 
+	it('puts split copies into welded-away slots instead of growing the buffers', () => {
+		// Rhino's box render mesh: 24 vertices, four per face. The weld folds them to 8 and the
+		// crease split needs 16 copies, which fit the 16 orphaned slots. Appending them grew it to 40.
+		const box = new THREE.BoxGeometry(1, 1, 1);
+		const positions = new Float32Array(box.getAttribute('position').array);
+		const indices = new Uint32Array(box.index!.array);
+
+		const result = splitCreases(positions, indices, null, null);
+
+		expect(result.positions.length / 3).toBe(24);
+		const used = new Set(result.indices);
+		expect(used.size).toBe(24);
+		for (let t = 0; t < 12; t++) {
+			const a = new THREE.Vector3().fromArray(result.positions, result.indices[t * 3]! * 3);
+			const b = new THREE.Vector3().fromArray(result.positions, result.indices[t * 3 + 1]! * 3);
+			const c = new THREE.Vector3().fromArray(result.positions, result.indices[t * 3 + 2]! * 3);
+			const faceNormal = new THREE.Triangle(a, b, c).getNormal(new THREE.Vector3());
+			for (let k = 0; k < 3; k++) {
+				const n = new THREE.Vector3().fromArray(result.normals, result.indices[t * 3 + k]! * 3);
+				expect(n.dot(faceNormal)).toBeCloseTo(1, 5);
+			}
+		}
+	});
+
 	it('copies uvs and colours onto split vertices', () => {
 		const { positions, indices } = welded(new THREE.BoxGeometry(1, 1, 1));
 		const vertexCount = positions.length / 3;

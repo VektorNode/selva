@@ -3,14 +3,14 @@ import {
 	getComputeServerConfigStore,
 	getOrganizationProvider,
 	getTenancy
-} from '$lib/server/providers.server';
-import { assertManageCompute } from '$lib/server/access.server';
+} from '#lib/server/providers.server.js';
+import { assertManageCompute } from '#lib/server/access.server.js';
 import { platformServers, type Organization } from '@selvajs/platform';
-import { solveCacheStats, definitionByteCacheStats } from '$lib/server/compute/engine.server';
+import { solveCacheStats, definitionByteCacheStats } from '#lib/server/compute/engine.server.js';
 import {
 	COMPUTE_SOLVE_CACHE_BYTES,
 	COMPUTE_DEFINITION_CACHE_BYTES
-} from '$lib/server/computeLimits';
+} from '#lib/server/computeLimits.js';
 
 /**
  * Live counters for the two named caches. Read from the running process, so they

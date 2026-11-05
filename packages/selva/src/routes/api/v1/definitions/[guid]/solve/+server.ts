@@ -1,13 +1,19 @@
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode, handleApiError } from '$lib/server/api-errors';
-import { SolveBodySchema } from '@selvajs/server/api';
-import { parseBody, requireCaller, requireParams } from '$lib/server/api/http';
-import type { PipelineInput } from '@selvajs/solve/server';
-import { COMPUTE_REQUEST_MAX_BYTES } from '$lib/server/computeLimits';
-import { requireMaxBodySize } from '$lib/server/admin-auth.server';
-import { runSolve, mapSolveError } from '$lib/server/compute/solve.server';
-import { withIdempotency } from '$lib/server/computeIdempotency.server';
-import { idempotencyKey, toStoredResponse, fromStoredResponse } from '@selvajs/server/compute';
+import { apiError, ApiErrorCode, handleApiError } from '#lib/server/api-errors.js';
+import { parseBody, requireCaller, requireParams } from '#lib/server/api/http.js';
+import { acceptsGzip } from '@selvajs/solve/server';
+import { COMPUTE_REQUEST_MAX_BYTES } from '#lib/server/computeLimits.js';
+import { requireMaxBodySize } from '#lib/server/admin-auth.server.js';
+import { runSolve, mapSolveError } from '#lib/server/compute/solve.server.js';
+import { solveIdempotencyStore } from '#lib/server/computeIdempotency.server.js';
+import { withApiRateLimit } from '#lib/server/api/sveltekit.js';
+import {
+	SolveBodySchema,
+	idempotencyCallerId,
+	readIdempotencyKey,
+	requestFingerprint,
+	runIdempotent
+} from '@selvajs/server/api';
 
 /**
  * The definition-addressed solve — v1's flagship action, and what the CLI's
@@ -19,7 +25,9 @@ import { idempotencyKey, toStoredResponse, fromStoredResponse } from '@selvajs/s
  * keeps the URL-addressed and share-token flows.
  */
 
-export const POST: RequestHandler = async ({ request, params, locals }) => {
+// Charged here, not in `runSolve`: an idempotent replay never reaches it, so a
+// key could replay one large solve without limit.
+export const POST: RequestHandler = withApiRateLimit(async ({ request, params, locals, url }) => {
 	requireMaxBodySize(request, COMPUTE_REQUEST_MAX_BYTES);
 
 	const loadStart = performance.now();
@@ -58,7 +66,6 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 			// no share-token branch and must never grow one.
 			access: { kind: 'user', ctx, rateLimitKey: `user:${user.id}` },
 			definitionUrl,
-			inputs: body.inputs as PipelineInput[],
 			values: body.values,
 			channel: body.channel,
 			versionId: body.versionId ?? null,
@@ -68,22 +75,30 @@ export const POST: RequestHandler = async ({ request, params, locals }) => {
 			prepMarks,
 			// A guid is guessable, so an unreachable definition must read as
 			// missing rather than forbidden.
-			concealAccessFailure: true
+			concealAccessFailure: true,
+			tokenCharged: true
 		});
 
 	try {
-		const clientKey = request.headers.get('idempotency-key');
+		const clientKey = readIdempotencyKey(request);
 		if (!clientKey) return await solve();
 
-		// Caller identity is part of the key: `Idempotency-Key` is client-chosen,
-		// so two tenants can pick the same string. Once PATs land, the token id
-		// belongs here so two tokens of one user don't share replays.
-		const key = idempotencyKey(user.id, clientKey);
-		const { value, replayed } = await withIdempotency(key, async () =>
-			toStoredResponse(await solve())
+		// The stored body is already encoded, so a gzip reply must never replay to
+		// a client that can't read it.
+		const encoding = acceptsGzip(request.headers.get('accept-encoding') ?? '')
+			? 'gzip'
+			: 'identity';
+		// The body is already consumed, so the fingerprint hashes the parsed value.
+		return await runIdempotent(
+			{
+				store: solveIdempotencyStore,
+				callerId: `${idempotencyCallerId(ctx)} ${encoding}`,
+				clientKey,
+				fingerprint: await requestFingerprint('POST', url, JSON.stringify(body))
+			},
+			solve
 		);
-		return fromStoredResponse(value, replayed);
 	} catch (err) {
 		mapSolveError(err, locals);
 	}
-};
+});

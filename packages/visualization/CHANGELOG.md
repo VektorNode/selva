@@ -1,5 +1,100 @@
 # @selvajs/visualization
 
+## 1.6.0
+
+### Minor Changes
+
+- edb568d: A night look, real-size materials, faster large meshes, and a measure tool that scales.
+
+  - `night` look: emissive materials become shadow-casting point lights with bloom; a lighter tier runs on phones (`render.lowPower`).
+  - Built-in wood, concrete, plaster, brick and corten at real size with no texture files. Softer sun shadows, a softbox studio for metals, and idle refinement that averages frames for true penumbras (`render.idleRefineFrames`, `render.lightOrbitFrameMs`). Lights now survive a solve. three is 0.187.
+  - Measure tool: BVH picking (new `three-mesh-bvh` dependency), a live rubber band, vertex-snap feedback, persistent measurements until Escape, and `MeasureTool.cancel()`. Hidden objects aren't pickable.
+  - Scene manager hover and selection tint objects in the viewport (`setHover`, `selectEntries` on `ThreeViewer`). Double-clicking empty background frames everything.
+  - Byte-identical geometry is reused across solves (`clearGeometryCache()` from `/parse`), and merging by material gathers every group of a material.
+  - Large meshes decompress in a worker: about 20% faster, and under 2 ms of main-thread blocking per solve for 2.7M triangles. Edge overlays build 2–7× faster on dense meshes and cover 8M triangles. Clearing 100k meshes takes 0.2 s instead of 2.9 s, and base64 decoding in Node is about 7× faster. The plugin's optional `CLSD` chunk skips the closed-solid check.
+  - Glass: a pane (transmission without `thickness`) blends instead of using three's transmission, so panes behind panes show, reflections keep full strength, and the scene isn't drawn a second time each frame. Glass with `thickness` refracts and tints by `attenuationColor`. Glass casts no shadow, and AO and the edge pass see through it.
+  - Metal: the studio reflection room grades from dark floor to light ceiling instead of dark walls, and the sun's highlight on metal drops to a tenth, so flat sheet keeps its colour at any angle instead of going muddy standing up and white lying flat.
+  - Plastic: a `molded` finish (spark-eroded mould grain from mm UVs) and `sheen`, `sheenColor`, `sheenRoughness` wire fields for rubber and soft-touch. Transmissive materials with roughness 0.2 and up use transmission without a `thickness`, so frosted glass and plastic blur what is behind.
+  - Wood: the `wood` finish is redrawn as growth rings with flat-sawn arches, ring-to-ring variation, pores and distance-proof streaks, and `oak`, `maple`, `wenge` and `walnut` finishes join it. Ring spacing, pores and colours are matched to photos of each species.
+  - Stone: `limestone`, `travertine`, `granite`, `marble`, `slate` and `terrazzo` finishes, plus `paving` (600 x 400 mm concrete slabs), `setts` and `gravel`.
+  - Fixed: the closed-solid check no longer welds a vertex to two neighbours, and merging 100k+ meshes no longer overflows the stack. `dist` is no longer minified.
+
+## 1.6.0-beta.11
+
+### Minor Changes
+
+- d6c00fd: Measure tool: meshes are picked through a BVH, so hovering stays responsive on large models. Hidden objects and hidden merged members are no longer pickable, the line/point grab band follows the orbit target instead of the world origin, and on-demand rendering now repaints the hover preview. A rubber band with a live readout follows the cursor after the first click, the hover marker shows whether it snapped to a vertex, fat curves snap to their segment endpoints, measurements persist until Escape, and labels no longer switch to exponent notation above 999 units. Adds `MeasureTool.cancel()` and the `three-mesh-bvh` dependency.
+
+## 1.6.0-beta.10
+
+### Patch Changes
+
+- a565aae: chore(deps): bump the npm group across 1 directory with 20 updates
+
+## 1.6.0-beta.9
+
+### Minor Changes
+
+- 3ff7284: Schema 2.19.0: an optional `viewerOptions.look` sets the look a definition opens in. A new `night` look lights the scene from what the model emits: a material carrying `emissive` and `emissiveIntensity` gets a shadow-casting point light and bloom. `emissiveLight` sets that light's intensity directly. The plugin's new Emissive Material component makes any material glow, from a colour and strength, or from a real source's Kelvin and Lumens.
+- 3ff7284: The `night` look now runs lighter on phones: one emissive source casts light, with no bloom or ambient occlusion, capped at 1.5x pixel ratio. A phone is a coarse pointer on a screen under 600px wide. Set `render.lowPower` to force the tier on or off.
+- 3ff7284: Built-in wood, concrete, plaster, brick and corten surfaces, drawn at real size with no texture files. Sun shadows are softer and lighter. Lights now survive a solve: `clearScene` was removing them, which left only the environment map after the first solve. The sun stays outside building-sized scenes, so everything casts a shadow. Night's fill light no longer blows out large models, and a glow spread across a facade no longer burns a hot spot into it.
+
+## 1.6.0-beta.8
+
+### Minor Changes
+
+- a9a8704: Scene manager: hovering a row tints that object amber in the viewport, and selecting rows tints them with the selection color. A surface already close to the tint turns blue instead. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 1.6.0-beta.7
+
+### Minor Changes
+
+- b500603: Scene manager: hovering a row outlines that object in the viewport, and selecting rows tints them. Adds `setHover` and `selectEntries` to `ThreeViewer`.
+
+## 1.6.0-beta.6
+
+### Patch Changes
+
+- 7c8e1e1: Edge overlays build up to 18x faster on dense meshes and now cover meshes up to 8M triangles (was 4M). Dense meshes parse about 2x faster when the plugin sends its closed-solid verdict (new optional `CLSD` container chunk; older containers are computed as before). Clearing a scene of 100k meshes no longer takes seconds, merging 100k+ meshes of one material no longer overflows the stack, and box-like parts carry 40% fewer vertices after crease splitting.
+
+## 1.6.0-beta.5
+
+### Patch Changes
+
+- e0aa942: Large meshes decode faster and no longer freeze the page while they unpack. For a 2.7M-triangle frame, decoding takes about 20% less time and the time the page is blocked per solve drops from about 70 ms to under 2 ms, because the geometry is now decompressed in a worker instead of on the main thread. The decoder also copies roughly 40 MB less per solve.
+
+## 1.6.0-beta.4
+
+### Minor Changes
+
+- d5376af: Parsing a mesh batch whose geometry is byte-identical to an earlier one reuses its `BufferGeometry` and extracted edges, so a solve that only changed materials, names or layers neither re-decodes the scene nor uploads it to the GPU again. The cache owns those geometries: `updateScene` frees the GPU copy of every cached geometry the new scene doesn't draw, so switching back to a cached variant costs an upload but no decode. New `clearGeometryCache()` from `/parse` empties the cache; `Viewer` calls it when it is destroyed.
+
+  Merging by material now gathers every group of a material, wherever it sits in the batch, into one mesh. The plugin keeps meshes in input order, so a material can head several groups.
+
+## 1.6.0-beta.3
+
+### Patch Changes
+
+- e39d929: chore(deps): bump the npm group across 1 directory with 34 updates
+
+## 1.6.0-beta.2
+
+### Patch Changes
+
+- 4125e70: The closed-solid check welds each vertex once per member instead of once per corner, so a vertex can no longer weld to two different neighbours and make a closed part read as open. It is also faster on large meshes. A mesh batch is read once even when the worker declines it; the worker now gets copies of the UVs and colours, so the main-thread fallback still has them if the worker fails.
+
+## 1.6.0-beta.1
+
+### Patch Changes
+
+- 2322937: Decoding a base64 payload in Node is about 4× faster on large inputs, and accepts and rejects exactly the same strings as before.
+
+## 1.6.0-beta.0
+
+### Minor Changes
+
+- 3890e17: With `enableDoubleClickZoom` on, double-clicking empty background frames all content, animated. It is the way back after framing a small part, which on touch otherwise takes many pinches.
+
 ## 1.5.0
 
 ### Minor Changes

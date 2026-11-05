@@ -32,19 +32,24 @@ jobs:
 
       # Publish coverage, bundle-only selva, cli/selva fixed-group.
       - name: Check publish invariants
-        run: node scripts/publishable-packages.mjs --check
+        run: node scripts/release/publishable-packages.mjs --check
 
       # Released Grasshopper components bind wires by parameter index — a
       # changed param list on an existing GUID silently rewires saved
       # definitions. Structural changes must go through the OBSOLETE +
       # upgrader procedure (STRUCTURE.md) with a new GUID.
       - name: Check component signatures
-        run: node scripts/check-component-signatures.mjs --check
+        run: node scripts/plugin/check-component-signatures.mjs --check
+
+      # Test fixtures, examples and dev scenes: allowed folders, kebab-case
+      # names, and the dev/ and examples/ inventories (STRUCTURE.md).
+      - name: Check fixtures
+        run: node scripts/develop/check-fixtures.mjs
 
       # Mixed or misnamed changesets only fail in `changeset version`, i.e. in
       # the release job after the test gate has already passed.
       - name: Validate changeset contents
-        run: node scripts/validate-changesets.mjs
+        run: node scripts/release/validate-changesets.mjs
 
       # Releases are changeset-driven: a publishable-package change without a
       # changeset never ships. `pnpm changeset --empty` is the opt-out.
@@ -55,7 +60,7 @@ jobs:
         if: github.event_name == 'pull_request' && !startsWith(github.head_ref, 'changeset-release/')
         run: |
           git fetch --depth=1 origin "${{ github.base_ref }}"
-          node scripts/check-changesets.mjs --base FETCH_HEAD
+          node scripts/release/check-changesets.mjs --base FETCH_HEAD
 
       # --prod excludes devDeps, so this gates only what actually ships.
       - name: Audit production dependencies
@@ -118,8 +123,8 @@ jobs:
       - run: pnpm check
 
       # Every package's test task. @selvajs/supabase-provider's live-stack
-      # suites self-skip without Supabase creds (no .env.test in CI); its
-      # no-stack unit tests still gate.
+      # suites self-skip without Supabase creds (no .env.test in this job); the
+      # `supabase` job below runs them.
       - run: pnpm exec turbo run test
 
       # actions/cache has no eviction: .turbo/cache would grow by every task
@@ -132,6 +137,36 @@ jobs:
           ls -1t | tail -n +600 | xargs -r rm -f
           echo "turbo cache: $(du -sh . | cut -f1) across $(ls -1 | wc -l) files"
 
+  # The provider's conformance and RLS suites against a real stack: the JS job
+  # above skips them. SELVA_REQUIRE_SUPABASE turns a skip into a failure here.
+  supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup workspace
+        uses: ./.github/actions/setup
+
+      - name: Start Supabase
+        working-directory: packages/providers/supabase
+        run: pnpm exec supabase start -x studio,logflare,vector,imgproxy,edge-runtime,postgres-meta,mailpit
+
+      - name: Write .env.test
+        working-directory: packages/providers/supabase
+        run: |
+          eval "$(pnpm exec supabase status -o env)"
+          {
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "SUPABASE_JWT_SECRET=$JWT_SECRET"
+          } > .env.test
+
+      - name: Test against the stack
+        env:
+          SELVA_REQUIRE_SUPABASE: '1'
+        run: pnpm exec turbo run test --filter=@selvajs/supabase-provider --env-mode=loose --force
+
   # Rhino-free .NET libraries; runs in parallel with the JS job. The
   # Rhino-coupled Selva.GH tests still need a Windows+Rhino runner.
   dotnet:
@@ -141,7 +176,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
       # built-in cache can't be used.

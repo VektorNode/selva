@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Card, SectionHeader } from '@selvajs/ui';
 	import { Users, FolderKanban, Building2 } from '@lucide/svelte';
-	import StatCard from '$lib/components/StatCard.svelte';
+	import StatCard from '#lib/components/StatCard.svelte';
 	import type { Organization } from '@selvajs/platform';
 
 	interface PageData {

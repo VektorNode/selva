@@ -1,0 +1,8 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"types": []
+	},
+	"include": ["src/client/**/*", "src/shared/**/*"],
+	"exclude": ["node_modules", "dist", "src/**/__tests__/**"]
+}

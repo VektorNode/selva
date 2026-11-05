@@ -1,20 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { TreeBuilder } from '../data-tree';
-import type { DataTree, InputParam } from '../../types';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TreeBuilder, type TreeValueEntry } from '../data-tree';
+import { ComputeError, ErrorCodes, setLogger } from '@/core';
+import { processInput } from '../../io/input/input-processors';
+import type { DataTree, InnerTreeData, InputParam } from '../../types';
+import { createInputSchema } from '@tests/helpers/test-data-builders';
 
-/**
- * Characterization tests for TreeBuilder. These pin real-world behavior so a
- * future refactor (collapsing the duplicate `TreeBuilder[]` vs `DataTree[]`
- * paths) doesn't silently change semantics.
- *
- * Scenarios mirror the README examples and the way the library is actually
- * used end-to-end: `getIO` -> `fromInputParams` -> `solve` -> `getTreeValue`,
- * with `replaceTreeValue` patches in between for slider-style updates.
- */
-
-// ---------------------------------------------------------------------------
+// ============================================================================
 // Helpers — build the InputParam shapes that fetchParsedDefinitionIO produces
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 function numericInput(name: string, def: number, opts: Partial<InputParam> = {}): InputParam {
 	return {
@@ -34,6 +27,11 @@ function numericInput(name: string, def: number, opts: Partial<InputParam> = {})
 	} as InputParam;
 }
 
+/** A compiled tree as a solve returns it. Its items carry only `data`, which `DataItem` doesn't model. */
+function dataTree(ParamName: string, branches: Record<string, unknown[]>): DataTree {
+	return { ParamName, InnerTree: branches as unknown as InnerTreeData };
+}
+
 function textInput(name: string, def: string): InputParam {
 	return {
 		name,
@@ -47,15 +45,20 @@ function textInput(name: string, def: string): InputParam {
 	} as InputParam;
 }
 
-// ---------------------------------------------------------------------------
+// ============================================================================
+// Basic building
+// ============================================================================
 
-describe('TreeBuilder — basic building (README scenarios)', () => {
+describe('TreeBuilder — basic building', () => {
 	it('builds a flat tree at path [0]', () => {
 		const tree = new TreeBuilder('MyParam').appendFlat([1, 2, 3, 4, 5]).toComputeFormat();
 
 		expect(tree.ParamName).toBe('MyParam');
 		expect(tree.InnerTree).toEqual({
 			'{0}': [{ data: 1 }, { data: 2 }, { data: 3 }, { data: 4 }, { data: 5 }]
+		});
+		expect(new TreeBuilder('Single').appendFlat(7).toComputeFormat().InnerTree).toEqual({
+			'{0}': [{ data: 7 }]
 		});
 	});
 
@@ -68,20 +71,15 @@ describe('TreeBuilder — basic building (README scenarios)', () => {
 
 		expect(Object.keys(tree.InnerTree)).toEqual(['{0}', '{0;1}', '{1}']);
 		// Object values are JSON-stringified by serializeValue
-		expect((tree.InnerTree as any)['{0}']).toEqual([{ data: '{"x":0,"y":0,"z":0}' }]);
+		expect(tree.InnerTree['{0}']).toEqual([{ data: '{"x":0,"y":0,"z":0}' }]);
 	});
 
 	it('preserves booleans and numbers as primitives (Grasshopper depends on this)', () => {
 		const tree = new TreeBuilder('Mixed').appendFlat([true, 42, 'hello']).toComputeFormat();
-		const items = (tree.InnerTree as any)['{0}'];
+		const items = tree.InnerTree['{0}'];
 		expect(items[0].data).toBe(true);
 		expect(items[1].data).toBe(42);
 		expect(items[2].data).toBe('hello');
-	});
-
-	it('appendFlat with a single (non-array) value still wraps to path [0]', () => {
-		const tree = new TreeBuilder('Single').appendFlat(7).toComputeFormat();
-		expect(tree.InnerTree).toEqual({ '{0}': [{ data: 7 }] });
 	});
 
 	it('fromDataTreeDefault loads an existing branch structure', () => {
@@ -91,9 +89,8 @@ describe('TreeBuilder — basic building (README scenarios)', () => {
 			'{1}': [6, 7, 8]
 		});
 
-		expect(tree.getPaths()).toEqual(['{0}', '{0;0}', '{1}']);
-		expect(tree.getPath([0, 0])).toEqual([4, 5]);
-		expect(tree.flatten()).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+		expect(Object.keys(tree.toComputeFormat().InnerTree)).toEqual(['{0}', '{0;0}', '{1}']);
+		expect(tree.toComputeFormat().InnerTree['{0;0}']).toEqual([{ data: 4 }, { data: 5 }]);
 	});
 });
 
@@ -103,7 +100,7 @@ describe('TreeBuilder.fromInputParams — definition IO -> trees', () => {
 			numericInput('keep', 5),
 			{ ...numericInput('drop1', 0), default: undefined } as InputParam,
 			{ ...numericInput('drop2', 0), default: null } as InputParam,
-			{ ...numericInput('drop3', 0), default: [] as any } as InputParam
+			{ ...numericInput('drop3', 0), default: [] } as InputParam
 		];
 
 		const trees = TreeBuilder.fromInputParams(inputs);
@@ -119,121 +116,122 @@ describe('TreeBuilder.fromInputParams — definition IO -> trees', () => {
 		];
 
 		const trees = TreeBuilder.fromInputParams(inputs);
-		expect((trees[0].InnerTree as any)['{0}'][0].data).toBe(100);
-		expect((trees[1].InnerTree as any)['{0}'][0].data).toBe(0);
-		expect((trees[2].InnerTree as any)['{0}'][0].data).toBe(50);
+		expect(trees[0].InnerTree['{0}'][0].data).toBe(100);
+		expect(trees[1].InnerTree['{0}'][0].data).toBe(0);
+		expect(trees[2].InnerTree['{0}'][0].data).toBe(50);
+	});
+
+	it('clamps a tree default and an Integer default whatever the paramType casing', () => {
+		const trees = TreeBuilder.fromInputParams([
+			numericInput('grid', 0, {
+				paramType: 'number' as 'Number',
+				treeAccess: true,
+				minimum: 0,
+				maximum: 10,
+				default: { '{0}': [-1, 5], '{1}': [20] }
+			}),
+			numericInput('count', 2.6, { paramType: 'Integer', minimum: 0, maximum: 2 })
+		]);
+
+		expect(trees[0].InnerTree).toEqual({
+			'{0}': [{ data: 0 }, { data: 5 }],
+			'{1}': [{ data: 10 }]
+		});
+		expect(trees[1].InnerTree).toEqual({ '{0}': [{ data: 2 }] });
 	});
 
 	it('keeps text values as-is (no clamping)', () => {
 		const trees = TreeBuilder.fromInputParams([textInput('label', 'hello')]);
-		expect((trees[0].InnerTree as any)['{0}'][0].data).toBe('hello');
+		expect(trees[0].InnerTree['{0}'][0].data).toBe('hello');
 	});
 
 	it('expands tree-access inputs whose default is a DataTreeDefault', () => {
-		const input: InputParam = {
-			...numericInput('grid', 0),
+		const input = numericInput('grid', 0, {
 			treeAccess: true,
-			default: {
-				'{0}': [1, 2],
-				'{1}': [3, 4]
-			} as any
-		};
+			default: { '{0}': [1, 2], '{1}': [3, 4] }
+		});
 
 		const trees = TreeBuilder.fromInputParams([input]);
 		expect(Object.keys(trees[0].InnerTree)).toEqual(['{0}', '{1}']);
-		expect((trees[0].InnerTree as any)['{0}']).toEqual([{ data: 1 }, { data: 2 }]);
+		expect(trees[0].InnerTree['{0}']).toEqual([{ data: 1 }, { data: 2 }]);
+	});
+
+	it('expands a list-access default end to end instead of sending it as one JSON string', () => {
+		const input = processInput(
+			createInputSchema({
+				name: 'pts',
+				nickname: 'pts',
+				paramType: 'Number',
+				treeAccess: false,
+				atLeast: 1,
+				atMost: 2147483647,
+				default: {
+					InnerTree: {
+						'{0}': [
+							{ type: 'System.Double', data: '1' },
+							{ type: 'System.Double', data: '2' }
+						]
+					}
+				}
+			})
+		);
+
+		const trees = TreeBuilder.fromInputParams([input]);
+		expect(trees[0].InnerTree).toEqual({ '{0}': [{ data: 1 }, { data: 2 }] });
 	});
 });
 
-// ---------------------------------------------------------------------------
-// replaceTreeValue — both forms used in real flows
-// ---------------------------------------------------------------------------
+// ============================================================================
+// replaceTreeValue
+// ============================================================================
 
-describe('TreeBuilder.replaceTreeValue — TreeBuilder[] form (pre-solve)', () => {
-	it('replaces an existing parameter in-place', () => {
-		const trees = [new TreeBuilder('X').appendFlat(1), new TreeBuilder('Y').appendFlat(2)];
-
-		const updated = TreeBuilder.replaceTreeValue(trees, 'X', 42);
-
-		expect(updated).toHaveLength(2);
-		expect(updated[0].getParamName()).toBe('X');
-		expect(updated[0].flatten()).toEqual([42]);
-		// Y untouched
-		expect(updated[1].flatten()).toEqual([2]);
-	});
-
-	it('appends a new TreeBuilder when paramName not found', () => {
-		const trees = [new TreeBuilder('X').appendFlat(1)];
-
-		const updated = TreeBuilder.replaceTreeValue(trees, 'Y', [10, 20]);
-
-		expect(updated).toHaveLength(2);
-		expect(updated[1].getParamName()).toBe('Y');
-		expect(updated[1].flatten()).toEqual([10, 20]);
-	});
-
-	it('handles a DataTreeDefault structure as newValue (with a non-empty TreeBuilder[])', () => {
-		// Must seed with a TreeBuilder so trees[0] instanceof TreeBuilder is true
-		// — the empty-array case falls into the DataTree[] branch (see audit edge case below).
-		const trees: TreeBuilder[] = [new TreeBuilder('placeholder')];
-		const updated = TreeBuilder.replaceTreeValue(trees, 'Grid', {
-			'{0}': [1, 2],
-			'{1}': [3]
-		} as any);
-
-		const grid = updated.find((t) => t.getParamName() === 'Grid')!;
-		expect(grid.getPaths()).toEqual(['{0}', '{1}']);
-		expect(grid.getPath([0])).toEqual([1, 2]);
-		expect(grid.getPath([1])).toEqual([3]);
-	});
-});
-
-describe('TreeBuilder.replaceTreeValue — DataTree[] form (post-solve / API format)', () => {
+describe('TreeBuilder.replaceTreeValue', () => {
 	it('replaces an existing parameter in compiled InnerTree array', () => {
-		const trees: DataTree[] = [
-			{ ParamName: 'X', InnerTree: { '{0}': [{ data: 1 }] } as any },
-			{ ParamName: 'Y', InnerTree: { '{0}': [{ data: 2 }] } as any }
+		const trees = [
+			dataTree('X', { '{0}': [{ data: 1 }] }),
+			dataTree('Y', { '{0}': [{ data: 2 }] })
 		];
 
 		const updated = TreeBuilder.replaceTreeValue(trees, 'X', 42);
 
 		expect(updated).toHaveLength(2);
 		expect(updated[0].ParamName).toBe('X');
-		expect((updated[0].InnerTree as any)['{0}']).toEqual([{ data: 42 }]);
+		expect(updated[0].InnerTree['{0}']).toEqual([{ data: 42 }]);
 		// Y untouched
-		expect((updated[1].InnerTree as any)['{0}']).toEqual([{ data: 2 }]);
+		expect(updated[1].InnerTree['{0}']).toEqual([{ data: 2 }]);
 	});
 
 	it('appends a new DataTree when paramName not found', () => {
-		const trees: DataTree[] = [{ ParamName: 'X', InnerTree: { '{0}': [{ data: 1 }] } as any }];
+		const trees = [dataTree('X', { '{0}': [{ data: 1 }] })];
 
 		const updated = TreeBuilder.replaceTreeValue(trees, 'Y', [10, 20]);
 
 		expect(updated).toHaveLength(2);
 		expect(updated[1].ParamName).toBe('Y');
-		expect((updated[1].InnerTree as any)['{0}']).toEqual([{ data: 10 }, { data: 20 }]);
-	});
-});
-
-describe('TreeBuilder.replaceTreeValue — copy-on-write (issue 82)', () => {
-	it('does not mutate the caller TreeBuilder[] on replace or append', () => {
-		const original = [new TreeBuilder('X').appendFlat(1), new TreeBuilder('Y').appendFlat(2)];
-		const snapshot = [...original];
-
-		const replaced = TreeBuilder.replaceTreeValue(original, 'X', 42);
-		const appended = TreeBuilder.replaceTreeValue(original, 'Z', 3);
-
-		expect(replaced).not.toBe(original);
-		expect(appended).not.toBe(original);
-		expect(original).toHaveLength(2);
-		expect(original[0]).toBe(snapshot[0]); // pristine X untouched
-		expect(original[0].flatten()).toEqual([1]);
-		expect(replaced[0].flatten()).toEqual([42]);
+		expect(updated[1].InnerTree['{0}']).toEqual([{ data: 10 }, { data: 20 }]);
 	});
 
-	it('does not mutate the caller DataTree[] on replace or append', () => {
+	it('writes a branch-path map as branches', () => {
+		const updated = TreeBuilder.replaceTreeValue([], 'Grid', { '{0}': [1, 2], '{1}': [3] });
+
+		expect(updated[0].InnerTree).toEqual({
+			'{0}': [{ data: 1 }, { data: 2 }],
+			'{1}': [{ data: 3 }]
+		});
+	});
+
+	it('matches a camelCase paramName instead of appending a duplicate', () => {
+		const trees = [{ paramName: 'X', innerTree: { '{0}': [{ data: 1 }] } } as unknown as DataTree];
+
+		const updated = TreeBuilder.replaceTreeValue(trees, 'X', 42);
+
+		expect(updated).toHaveLength(1);
+		expect(updated[0].InnerTree['{0}']).toEqual([{ data: 42 }]);
+	});
+
+	it('returns a new array and leaves the caller array untouched', () => {
 		// Pristine defaults from fromInputParams must survive slider updates.
-		const original: DataTree[] = [{ ParamName: 'X', InnerTree: { '{0}': [{ data: 1 }] } as any }];
+		const original = [dataTree('X', { '{0}': [{ data: 1 }] })];
 
 		const replaced = TreeBuilder.replaceTreeValue(original, 'X', 42);
 		const appended = TreeBuilder.replaceTreeValue(original, 'Y', 2);
@@ -241,170 +239,283 @@ describe('TreeBuilder.replaceTreeValue — copy-on-write (issue 82)', () => {
 		expect(replaced).not.toBe(original);
 		expect(appended).not.toBe(original);
 		expect(original).toHaveLength(1);
-		expect((original[0].InnerTree as any)['{0}']).toEqual([{ data: 1 }]);
-	});
-});
-
-describe('TreeBuilder.replaceTreeValue — empty array (the audit edge case)', () => {
-	it('TreeBuilder[] starting empty: trees[0] is undefined, falls into DataTree[] branch', () => {
-		// This pins the existing behavior. The audit calls out that the
-		// `trees[0] instanceof TreeBuilder` check on an empty array picks the
-		// DataTree[] branch — and since DataTree.findIndex returns -1, the
-		// new entry is pushed. We verify the *resulting shape* matches the
-		// DataTree format (because that's the branch taken).
-		const trees: TreeBuilder[] = [];
-		// The static signature returns TreeBuilder[] for this overload, but the
-		// runtime branch picked is the DataTree[] one (since trees[0] is
-		// undefined). Cast through `unknown` to assert against the actual shape.
-		const updated = TreeBuilder.replaceTreeValue(trees, 'New', 5) as unknown as DataTree[];
-
-		expect(updated).toHaveLength(1);
-		// When the empty-array branch picks DataTree path, the entry has the
-		// compute-format shape (ParamName + InnerTree), NOT a TreeBuilder.
-		expect(updated[0]).toHaveProperty('ParamName', 'New');
-		expect(updated[0]).toHaveProperty('InnerTree');
+		expect(original[0].InnerTree['{0}']).toEqual([{ data: 1 }]);
 	});
 
-	it('DataTree[] starting empty also works', () => {
-		const trees: DataTree[] = [];
-		const updated = TreeBuilder.replaceTreeValue(trees, 'New', 5);
+	it('adds to an empty array', () => {
+		const updated = TreeBuilder.replaceTreeValue([], 'New', 5);
 
 		expect(updated).toHaveLength(1);
 		expect(updated[0].ParamName).toBe('New');
-		expect((updated[0].InnerTree as any)['{0}']).toEqual([{ data: 5 }]);
+		expect(updated[0].InnerTree['{0}']).toEqual([{ data: 5 }]);
 	});
 });
 
-// ---------------------------------------------------------------------------
-// getTreeValue — both forms
-// ---------------------------------------------------------------------------
+// ============================================================================
+// getTree / getTreeValue
+// ============================================================================
 
-describe('TreeBuilder.getTreeValue — TreeBuilder[] form', () => {
+describe('TreeBuilder.getTree', () => {
+	it('returns every branch keyed by path, deserializing each item', () => {
+		const trees = [
+			dataTree('Grid', {
+				'{0;0}': [{ data: '1' }, { data: '2' }],
+				'{0;1}': [{ data: '{"x":1}' }],
+				'{1}': []
+			})
+		];
+
+		const tree = TreeBuilder.getTree(trees, 'Grid');
+
+		expect(tree).toEqual(
+			new Map<string, unknown[]>([
+				['{0;0}', [1, 2]],
+				['{0;1}', [{ x: 1 }]],
+				['{1}', []]
+			])
+		);
+	});
+
+	it('returns null for a missing param', () => {
+		expect(TreeBuilder.getTree([dataTree('X', { '{0}': [{ data: 1 }] })], 'Y')).toBeNull();
+	});
+
+	it('returns an empty Map for a param with no branches', () => {
+		expect(TreeBuilder.getTree([dataTree('Empty', {})], 'Empty')).toEqual(new Map());
+	});
+
+	it('reads ParamName and InnerTree in any casing', () => {
+		const trees = [
+			{ paramName: 'Camel', innerTree: { '{0}': [{ data: 7 }] } },
+			{ PARAMNAME: 'Upper', INNERTREE: { '{0}': [{ data: 8 }] } }
+		] as unknown as DataTree[];
+
+		expect(TreeBuilder.getTree(trees, 'Camel')).toEqual(new Map([['{0}', [7]]]));
+		expect(TreeBuilder.getTree(trees, 'Upper')).toEqual(new Map([['{0}', [8]]]));
+	});
+
+	it('maps an item without data to null in place', () => {
+		const trees = [dataTree('Holey', { '{0}': [{ data: 1 }, {}, { data: null }] })];
+		expect(TreeBuilder.getTree(trees, 'Holey')?.get('{0}')).toEqual([1, null, null]);
+	});
+});
+
+describe('TreeBuilder.getTreeValue', () => {
 	it('unwraps a single value', () => {
-		const trees = [new TreeBuilder('X').appendFlat(42)];
-		expect(TreeBuilder.getTreeValue(trees, 'X')).toBe(42);
-	});
-
-	it('returns array for multiple values', () => {
-		const trees = [new TreeBuilder('Pts').appendFlat([1, 2, 3])];
-		expect(TreeBuilder.getTreeValue(trees, 'Pts')).toEqual([1, 2, 3]);
-	});
-
-	it('returns null when paramName missing', () => {
-		const trees = [new TreeBuilder('X').appendFlat(1)];
-		expect(TreeBuilder.getTreeValue(trees, 'Missing')).toBeNull();
-	});
-
-	it('returns null when the matched tree is empty', () => {
-		const trees = [new TreeBuilder('Empty')];
-		expect(TreeBuilder.getTreeValue(trees, 'Empty')).toBeNull();
-	});
-
-	it('keeps an empty string a string (not numeric 0)', () => {
-		// Regression: Number('') === 0, so !isNaN(Number(data)) turned '' into 0.
-		const trees = [new TreeBuilder('S').appendFlat('')];
-		expect(TreeBuilder.getTreeValue(trees, 'S')).toBe('');
-	});
-
-	it('keeps a whitespace-only string a string', () => {
-		const trees = [new TreeBuilder('S').appendFlat('  ')];
-		expect(TreeBuilder.getTreeValue(trees, 'S')).toBe('  ');
-	});
-
-	it('keeps non-canonical numeric-looking strings as strings (issue 80)', () => {
-		// A string on the wire stays a string unless it is the canonical form
-		// of a finite number ('007' -> 7, '1e5' -> 100000, 'Infinity' were bugs).
-		const trees = [new TreeBuilder('S').appendFlat(['007', '1e5', 'Infinity', '-Infinity', ' 5'])];
-		expect(TreeBuilder.getTreeValue(trees, 'S')).toEqual([
-			'007',
-			'1e5',
-			'Infinity',
-			'-Infinity',
-			' 5'
-		]);
-	});
-
-	it('still round-trips canonical numeric strings to numbers', () => {
-		const trees = [new TreeBuilder('N').appendFlat(['42', '3.14', '-7', '1e+21'])];
-		expect(TreeBuilder.getTreeValue(trees, 'N')).toEqual([42, 3.14, -7, 1e21]);
-	});
-});
-
-describe('TreeBuilder.getTreeValue — DataTree[] form (API responses)', () => {
-	it('unwraps a single value from InnerTree response', () => {
-		const trees: DataTree[] = [{ ParamName: 'X', InnerTree: { '{0}': [{ data: 42 }] } as any }];
+		const trees = [dataTree('X', { '{0}': [{ data: 42 }] })];
 		expect(TreeBuilder.getTreeValue(trees, 'X')).toBe(42);
 	});
 
 	it('returns array for multiple values, deserializing each', () => {
-		const trees: DataTree[] = [
-			{
-				ParamName: 'Pts',
-				InnerTree: { '{0}': [{ data: '1' }, { data: '2' }, { data: '3' }] } as any
-			}
-		];
+		const trees = [dataTree('Pts', { '{0}': [{ data: '1' }, { data: '2' }, { data: '3' }] })];
 		expect(TreeBuilder.getTreeValue(trees, 'Pts')).toEqual([1, 2, 3]);
 	});
 
 	it('returns null when paramName missing', () => {
-		const trees: DataTree[] = [{ ParamName: 'X', InnerTree: { '{0}': [{ data: 1 }] } as any }];
+		const trees = [dataTree('X', { '{0}': [{ data: 1 }] })];
 		expect(TreeBuilder.getTreeValue(trees, 'Missing')).toBeNull();
 	});
 
-	it('reads from the first branch path only (current semantics)', () => {
-		// `{1}` is ignored — getTreeValue uses Object.keys(...)[0]
-		const trees: DataTree[] = [
-			{
-				ParamName: 'X',
-				InnerTree: {
-					'{0}': [{ data: 100 }],
-					'{1}': [{ data: 200 }]
-				} as any
-			}
-		];
-		expect(TreeBuilder.getTreeValue(trees, 'X')).toBe(100);
+	it('returns null when InnerTree has no branches', () => {
+		expect(TreeBuilder.getTreeValue([dataTree('Empty', {})], 'Empty')).toBeNull();
+	});
+
+	it('returns null when the one branch is empty', () => {
+		expect(TreeBuilder.getTreeValue([dataTree('Empty', { '{0}': [] })], 'Empty')).toBeNull();
+	});
+
+	it('throws INVALID_INPUT naming getTree when the param has several branches', () => {
+		const trees = [dataTree('X', { '{0}': [{ data: 100 }], '{1}': [{ data: 200 }] })];
+
+		let caught: unknown;
+		try {
+			TreeBuilder.getTreeValue(trees, 'X');
+		} catch (error) {
+			caught = error;
+		}
+
+		expect(caught).toBeInstanceOf(ComputeError);
+		expect((caught as ComputeError).code).toBe(ErrorCodes.INVALID_INPUT);
+		expect((caught as ComputeError).message).toContain('getTree');
 	});
 
 	it('deserializes JSON-encoded objects', () => {
-		const trees: DataTree[] = [
-			{ ParamName: 'P', InnerTree: { '{0}': [{ data: '{"x":1,"y":2}' }] } as any }
-		];
+		const trees = [dataTree('P', { '{0}': [{ data: '{"x":1,"y":2}' }] })];
 		expect(TreeBuilder.getTreeValue(trees, 'P')).toEqual({ x: 1, y: 2 });
 	});
 
-	it('returns null when InnerTree has no branches', () => {
-		const trees: DataTree[] = [{ ParamName: 'Empty', InnerTree: {} as any }];
-		expect(TreeBuilder.getTreeValue(trees, 'Empty')).toBeNull();
-	});
-
-	it('preserves legitimate null items without shifting indices (issue 81)', () => {
-		const trees: DataTree[] = [
-			{
-				ParamName: 'WithNulls',
-				InnerTree: { '{0}': [{ data: 1 }, { data: null }, { data: 3 }] } as any
-			}
-		];
+	it('preserves legitimate null items without shifting indices', () => {
+		const trees = [dataTree('WithNulls', { '{0}': [{ data: 1 }, { data: null }, { data: 3 }] })];
 		expect(TreeBuilder.getTreeValue(trees, 'WithNulls')).toEqual([1, null, 3]);
 	});
 
-	it('maps items missing a data field to null in place (no index shift)', () => {
-		const trees: DataTree[] = [
-			{ ParamName: 'Holey', InnerTree: { '{0}': [{ data: 1 }, {}, { data: 3 }] } as any }
-		];
-		expect(TreeBuilder.getTreeValue(trees, 'Holey')).toEqual([1, null, 3]);
+	it('an all-null branch reads as nulls, not "param not found"', () => {
+		const trees = [dataTree('AllNull', { '{0}': [{ data: null }, { data: null }] })];
+		expect(TreeBuilder.getTreeValue(trees, 'AllNull')).toEqual([null, null]);
 	});
 
-	it('an all-null branch reads as nulls, not "param not found" (issue 81)', () => {
-		const trees: DataTree[] = [
-			{ ParamName: 'AllNull', InnerTree: { '{0}': [{ data: null }, { data: null }] } as any }
+	it('keeps non-canonical numeric-looking strings as strings', () => {
+		// A string on the wire stays a string unless it is the canonical form of a finite number.
+		// Number('') is 0, so a plain numeric check would turn '' into 0.
+		const strings = ['', '  ', '007', '1e5', 'Infinity', '-Infinity', ' 5'];
+		const trees = [dataTree('S', { '{0}': strings.map((data) => ({ data })) })];
+		expect(TreeBuilder.getTreeValue(trees, 'S')).toEqual(strings);
+	});
+
+	it('still round-trips canonical numeric strings to numbers', () => {
+		const trees = [
+			dataTree('N', { '{0}': ['42', '3.14', '-7', '1e+21'].map((data) => ({ data })) })
 		];
-		expect(TreeBuilder.getTreeValue(trees, 'AllNull')).toEqual([null, null]);
+		expect(TreeBuilder.getTreeValue(trees, 'N')).toEqual([42, 3.14, -7, 1e21]);
 	});
 });
 
-// ---------------------------------------------------------------------------
+// ============================================================================
+// fromValues
+// ============================================================================
+
+describe('TreeBuilder.fromValues', () => {
+	const warn = vi.fn();
+
+	beforeEach(() => {
+		warn.mockClear();
+		setLogger({ debug: vi.fn(), info: vi.fn(), warn, error: vi.fn() });
+	});
+
+	afterEach(() => setLogger(null));
+
+	function entry(partial: Partial<TreeValueEntry>): TreeValueEntry {
+		return { paramName: 'P', paramType: 'Number', value: undefined, ...partial };
+	}
+
+	function only(entries: Partial<TreeValueEntry>[]) {
+		const trees = TreeBuilder.fromValues(entries.map(entry));
+		expect(trees).toHaveLength(1);
+		return trees[0].InnerTree;
+	}
+
+	it('puts a scalar on branch {0}', () => {
+		expect(only([{ value: 5 }])).toEqual({ '{0}': [{ data: 5 }] });
+	});
+
+	it('puts an array on branch {0}', () => {
+		expect(only([{ value: [1, 2, 3] }])).toEqual({
+			'{0}': [{ data: 1 }, { data: 2 }, { data: 3 }]
+		});
+	});
+
+	it('keeps a branch-path map as branches', () => {
+		expect(only([{ value: { '{0;0}': [1, 2], '{0;1}': [3] } }])).toEqual({
+			'{0;0}': [{ data: 1 }, { data: 2 }],
+			'{0;1}': [{ data: 3 }]
+		});
+	});
+
+	it('keeps entry order and names each tree by paramName', () => {
+		const trees = TreeBuilder.fromValues([
+			entry({ paramName: 'A', value: 1 }),
+			entry({ paramName: 'B', value: 2 })
+		]);
+		expect(trees.map((t) => t.ParamName)).toEqual(['A', 'B']);
+	});
+
+	it.each<[string, string, unknown, unknown[]]>([
+		['coerces numeric strings for Number', 'Number', ['1.5', ' 2 '], [1.5, 2]],
+		['rounds Integer items', 'Integer', [1.4, 1.6, '2.5'], [1, 2, 3]],
+		[
+			'coerces Boolean items, keeping an explicit false',
+			'Boolean',
+			[false, 'TRUE', ' false '],
+			[false, true, false]
+		],
+		['matches paramType case-insensitively', 'INTEGER', 2.7, [3]]
+	])('%s', (_name, paramType, value, kept) => {
+		expect(only([{ paramType, value }])).toEqual({ '{0}': kept.map((data) => ({ data })) });
+	});
+
+	it.each<[string, unknown[], unknown[], number]>([
+		['Number', [1, 'abc', Infinity, '0x10', 2], [1, 2], 3],
+		['Boolean', [true, 'yes', 1], [true], 2]
+	])(
+		'drops a %s item its coercion rejects, warning for each',
+		(paramType, value, kept, warnings) => {
+			expect(only([{ paramType, value }])).toEqual({ '{0}': kept.map((data) => ({ data })) });
+			expect(warn).toHaveBeenCalledTimes(warnings);
+			expect(warn.mock.calls[0][0]).toContain('P');
+		}
+	);
+
+	it('clamps Number and Integer items to minimum and maximum', () => {
+		expect(only([{ value: [-5, 50, 500], minimum: 0, maximum: 100 }])).toEqual({
+			'{0}': [{ data: 0 }, { data: 50 }, { data: 100 }]
+		});
+		expect(
+			only([{ paramType: 'Integer', value: { '{1}': [11.6] }, minimum: 0, maximum: 10 }])
+		).toEqual({ '{1}': [{ data: 10 }] });
+	});
+
+	it('ignores null bounds', () => {
+		expect(only([{ value: -5, minimum: null, maximum: null }])).toEqual({
+			'{0}': [{ data: -5 }]
+		});
+	});
+
+	it.each([
+		['Text', 'hello'],
+		['Text', '007'],
+		['Text', ''],
+		['ValueList', '1'],
+		['dynamicValueList', '3.5'],
+		['Color', '255,0,0'],
+		['generic', 'd'],
+		['SomethingNew', 'x']
+	])('passes a %s value of %j through unchanged', (paramType, value) => {
+		expect(only([{ paramType, value }])).toEqual({ '{0}': [{ data: value }] });
+		expect(warn).not.toHaveBeenCalled();
+	});
+
+	it('passes a dynamicValueList checklist through as one branch', () => {
+		expect(only([{ paramType: 'dynamicValueList', value: ['a', 'b'] }])).toEqual({
+			'{0}': [{ data: 'a' }, { data: 'b' }]
+		});
+	});
+
+	it('serializes an object value (File) as JSON', () => {
+		expect(only([{ paramType: 'File', value: { fileName: 'a.3dm' } }])).toEqual({
+			'{0}': [{ data: '{"fileName":"a.3dm"}' }]
+		});
+	});
+
+	it.each([
+		['undefined', undefined],
+		['null', null],
+		['an empty array', []],
+		['an empty object', {}]
+	])('omits an entry whose value is %s', (_label, value) => {
+		expect(TreeBuilder.fromValues([entry({ paramType: 'Text', value })])).toEqual([]);
+	});
+
+	it('omits an entry whose every item is rejected', () => {
+		expect(TreeBuilder.fromValues([entry({ value: ['abc', 'def'] })])).toEqual([]);
+	});
+
+	it('drops null items without a warning', () => {
+		expect(only([{ value: [1, null, undefined, 2] }])).toEqual({
+			'{0}': [{ data: 1 }, { data: 2 }]
+		});
+		expect(warn).not.toHaveBeenCalled();
+	});
+
+	it('omits an empty branch of a branch-path map but keeps the rest', () => {
+		expect(only([{ value: { '{0}': [], '{1}': ['abc'], '{2}': [4] } }])).toEqual({
+			'{2}': [{ data: 4 }]
+		});
+	});
+});
+
+// ============================================================================
 // End-to-end: the slider scrub flow
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 describe('TreeBuilder — slider scrub end-to-end flow', () => {
 	it('build trees from inputs, override one value, read it back', () => {
@@ -424,9 +535,9 @@ describe('TreeBuilder — slider scrub end-to-end flow', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
+// ============================================================================
 // Path string round-trip
-// ---------------------------------------------------------------------------
+// ============================================================================
 
 describe('TreeBuilder — path string parsing', () => {
 	it('round-trips simple and nested paths', () => {
@@ -448,8 +559,6 @@ describe('TreeBuilder — path string parsing', () => {
 	});
 
 	it('throws a descriptive error on malformed paths (no silent [0] fallback)', () => {
-		// Regression (issue 79): malformed keys used to collapse to [0], so two
-		// distinct unparseable keys silently merged their items into one branch.
 		expect(() => TreeBuilder.parsePathString('garbage')).toThrow(
 			/Invalid Grasshopper tree path.*garbage/
 		);
@@ -463,22 +572,44 @@ describe('TreeBuilder — path string parsing', () => {
 		expect(() => TreeBuilder.parsePathString('{0;;1}')).toThrow(/Invalid Grasshopper tree path/);
 	});
 
-	it('never merges two distinct malformed keys into one branch (issue 79)', () => {
-		// Before the fix, both `{-1}` and `{-2}` collapsed to `{0}` and their
-		// items merged. Negatives now parse; each keeps its own branch.
+	it('keeps negative-index branches apart instead of merging them', () => {
 		const tree = new TreeBuilder('Neg').fromDataTreeDefault({
 			'{-1}': [10, 11],
 			'{-2}': [20]
-		} as any);
+		});
 
-		expect(tree.getPaths()).toEqual(['{-1}', '{-2}']);
-		expect(tree.getPath([-1])).toEqual([10, 11]);
-		expect(tree.getPath([-2])).toEqual([20]);
+		expect(tree.toComputeFormat().InnerTree).toEqual({
+			'{-1}': [{ data: 10 }, { data: 11 }],
+			'{-2}': [{ data: 20 }]
+		});
 	});
 
 	it('fromDataTreeDefault throws on a genuinely unparseable key rather than corrupting topology', () => {
 		expect(() =>
-			new TreeBuilder('Bad').fromDataTreeDefault({ '{oops}': [1], '{nope}': [2] } as any)
+			new TreeBuilder('Bad').fromDataTreeDefault({ '{oops}': [1], '{nope}': [2] })
 		).toThrow(/Invalid Grasshopper tree path/);
+	});
+});
+
+describe('TreeBuilder — large branches', () => {
+	it('appends a branch far past the call-stack limit of a spread push', () => {
+		const values = Array.from({ length: 500_000 }, (_, i) => i);
+		const [tree] = TreeBuilder.fromValues([{ paramName: 'P', paramType: 'Number', value: values }]);
+		const branch = (tree.InnerTree as unknown as Record<string, { data: number }[]>)['{0}'];
+		expect(branch).toHaveLength(500_000);
+		expect(branch[499_999]).toEqual({ data: 499_999 });
+	});
+});
+
+describe('TreeBuilder — null values', () => {
+	it('never sends null as the text "null"', () => {
+		expect(new TreeBuilder('x').append([0], [1, null, 2]).toComputeFormat().InnerTree).toEqual({
+			'{0}': [{ data: 1 }, { data: 2 }]
+		});
+	});
+
+	it('replaceTreeValue with null leaves the param with no data', () => {
+		const [tree] = TreeBuilder.replaceTreeValue([], 'x', null);
+		expect(JSON.stringify(tree)).not.toContain('null');
 	});
 });

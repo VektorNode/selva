@@ -1,6 +1,7 @@
-import { downloadFileDataByRoot, type FileData } from '@selvajs/compute/core';
+import { decodeBase64ToBinary, downloadFileDataByRoot, type FileData } from '@selvajs/compute/core';
 import { SvelteMap } from 'svelte/reactivity';
 import { APP_DEFAULTS } from '../constants';
+import { saveBlob } from './host-files';
 
 export const MIME_BY_EXT: Record<string, string> = {
 	'.png': 'image/png',
@@ -19,26 +20,15 @@ export const MIME_BY_EXT: Record<string, string> = {
 	'.stl': 'model/stl'
 };
 
-function saveSingleFile(file: FileData): void {
+function saveSingleFile(file: FileData): Promise<boolean> {
 	const ext = (file.fileType ?? '').toLowerCase();
 	const mime = MIME_BY_EXT[ext] ?? 'application/octet-stream';
 
-	let blob: Blob;
-	if (file.isBase64Encoded) {
-		const binary = atob(file.data);
-		const bytes = new Uint8Array(binary.length);
-		for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-		blob = new Blob([bytes], { type: mime });
-	} else {
-		blob = new Blob([file.data], { type: mime });
-	}
+	const content = file.isBase64Encoded ? decodeBase64ToBinary(file.data) : file.data;
+	// decodeBase64ToBinary returns an ArrayBuffer-backed copy, never a SharedArrayBuffer view.
+	const blob = new Blob([content as BlobPart], { type: mime });
 
-	const fullName = `${file.fileName}${file.fileType ?? ''}`;
-	const a = document.createElement('a');
-	a.href = URL.createObjectURL(blob);
-	a.download = fullName;
-	a.click();
-	URL.revokeObjectURL(a.href);
+	return saveBlob(blob, `${file.fileName}${file.fileType ?? ''}`);
 }
 
 export async function downloadFiles(
@@ -53,14 +43,14 @@ export async function downloadFiles(
 			return;
 		}
 
-		// A lone file is saved as itself rather than zipped — the one case that needs the DOM
-		// directly. Everything else, including the per-root archive split, belongs to compute.
+		// A lone file is saved as itself rather than zipped. Everything else, including the
+		// per-root archive split, belongs to compute.
 		if (filesArray.length === 1) {
-			saveSingleFile(filesArray[0]);
+			await saveSingleFile(filesArray[0]);
 			return;
 		}
 
-		await downloadFileDataByRoot(filesArray, fileName);
+		await downloadFileDataByRoot(filesArray, fileName, null, { saveBlob });
 	} catch (error) {
 		console.error('[FileDownload] Error downloading files:', error);
 		throw error;

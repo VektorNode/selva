@@ -1,70 +1,95 @@
+@import '@fontsource-variable/hanken-grotesk';
+
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Surfaces, edges and states share one set of names in both modes; each mode only changes the
+   values. Ratios are WCAG 2.x. The roles and when to use each: docs/contributing/design-system.md. */
 :root {
-	--radius: 0.625rem;
 	--header-h: 3.5rem;
-	--page-px: 1.5rem;
+	--below-header-h: calc(100svh - var(--header-h));
+	--page-px: 1rem;
 	--page-py: 1.75rem;
-	--background: oklch(0.99 0 0);
-	--foreground: oklch(0.22 0 0);
-	--card: oklch(0.985 0 0);
-	--card-foreground: oklch(0.22 0 0);
-	--popover: oklch(0.99 0 0);
-	--popover-foreground: oklch(0.22 0 0);
-	--primary: oklch(0.57 0.07 135);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.94 0 0);
-	--secondary-foreground: oklch(0.28 0 0);
-	--muted: oklch(0.95 0 0);
+	/* Canvas, then surface (cards, panels), then raised (rows, menus, popovers). Light can't go
+	   lighter than white, so raised is white too and lifts with a border and a shadow instead.
+	   Values follow stock shadcn neutral. */
+	--background: oklch(0.985 0 0);
+	--card: oklch(1 0 0);
+	--raised: oklch(1 0 0);
+	/* Recessed fill for trays, table heads, code and skeletons: darker than the surface around it. */
+	--muted: oklch(0.97 0 0);
+	/* Fill of anything you type into, on a card: recessed, the same step as muted, in both modes.
+	   The edge (`--input`) carries the boundary. */
+	--field: var(--muted);
+	--foreground: oklch(0.145 0 0);
+	--card-foreground: oklch(0.145 0 0);
+	--popover-foreground: oklch(0.145 0 0);
+	/* 4.5:1 on every surface. */
 	--muted-foreground: oklch(0.5 0 0);
-	--accent: oklch(0.93 0 0);
-	--accent-foreground: oklch(0.3 0 0);
-	--destructive: oklch(0.6 0.18 27);
-	--border: oklch(0.86 0 0);
-	--input: oklch(0.91 0 0);
-	--ring: oklch(0.67 0 0);
-	--success: oklch(0.66 0.14 145);
+	/* Icons, placeholders, disabled text: 3:1 on every surface. */
+	--faint-foreground: oklch(0.6 0 0);
+	/* State overlays, laid over whatever surface is underneath. */
+	--hover: oklch(0 0 0 / 4%);
+	--selected: oklch(0 0 0 / 8%);
+	/* Rest fill of a neutral filled control; its hover is `selected`. */
+	--secondary: oklch(0.97 0 0);
+	--secondary-foreground: oklch(0.205 0 0);
+	/* Outlines and separators. */
+	--border: oklch(0 0 0 / 8%);
+	/* Popovers, outline buttons, dashed drop zones. */
+	--border-strong: oklch(0 0 0 / 14%);
+	/* Edge of anything you type into or toggle, slider tracks included. Softer than the 3:1 WCAG
+	   boundary minimum in both modes: the recessed field fill carries the rest of the boundary. */
+	--input: oklch(0 0 0 / 10%);
+	--ring: oklch(0.708 0 0);
+	--elevation-raised: 0 1px 2px oklch(0 0 0 / 5%);
+	--elevation-popover: 0 8px 24px oklch(0 0 0 / 10%);
+	/* 4.5:1 as text on a card and under its foreground; 3:1 as a fill on every surface. */
+	--primary: oklch(0.205 0 0);
+	--primary-foreground: oklch(0.985 0 0);
+	--destructive: #c9302d;
+	--destructive-foreground: #fbfbfb;
+	/* 3:1 on every surface, as icons and dots. */
+	--success: #51a556;
 	--success-foreground: oklch(0.99 0 0);
-	--warning: oklch(0.78 0.12 75);
+	--warning: #bd8630;
 	--warning-foreground: oklch(0.25 0.04 75);
-	--info: oklch(0.68 0.11 245);
+	--info: #5399d1;
 	--info-foreground: oklch(0.99 0 0);
 	--chart-1: oklch(0.65 0.14 135);
 	--chart-2: oklch(0.7 0.11 200);
 	--chart-3: oklch(0.6 0.13 260);
 	--chart-4: oklch(0.78 0.13 80);
 	--chart-5: oklch(0.68 0.15 30);
-	--sidebar: oklch(0.96 0 0);
-	--sidebar-foreground: oklch(0.25 0 0);
-	--sidebar-primary: oklch(0.57 0.07 135);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.93 0 0);
-	--sidebar-accent-foreground: oklch(0.3 0 0);
-	--sidebar-border: oklch(0.88 0 0);
-	--sidebar-ring: oklch(0.67 0 0);
-	--inputparam: oklch(1 0 0);
-	--outputparam: oklch(1 0 0);
+	/* Scrim behind modal dialogs and drawers. */
+	--overlay: oklch(0 0 0 / 50%);
 }
 
 .dark {
-	--background: oklch(0.17 0 0);
-	--foreground: oklch(0.96 0 0);
-	--card: oklch(0.23 0 0);
-	--card-foreground: oklch(0.96 0 0);
-	--popover: oklch(0.23 0 0);
-	--popover-foreground: oklch(0.96 0 0);
-	--primary: oklch(0.74 0.07 135);
-	--primary-foreground: oklch(0.18 0 0);
-	--secondary: oklch(0.3 0 0);
-	--secondary-foreground: oklch(0.96 0 0);
-	--muted: oklch(0.27 0 0);
-	--muted-foreground: oklch(0.72 0 0);
-	--accent: oklch(0.36 0 0);
-	--accent-foreground: oklch(0.92 0 0);
+	--background: oklch(0.145 0 0);
+	--card: oklch(0.205 0 0);
+	--raised: oklch(0.24 0 0);
+	--muted: oklch(0.269 0 0);
+	--foreground: oklch(0.985 0 0);
+	--card-foreground: oklch(0.985 0 0);
+	--popover-foreground: oklch(0.985 0 0);
+	--muted-foreground: oklch(0.708 0 0);
+	--faint-foreground: oklch(0.556 0 0);
+	--hover: oklch(1 0 0 / 6%);
+	--selected: oklch(1 0 0 / 10%);
+	--secondary: oklch(0.269 0 0);
+	--secondary-foreground: oklch(0.985 0 0);
+	--border: oklch(1 0 0 / 10%);
+	--border-strong: oklch(1 0 0 / 18%);
+	--input: oklch(1 0 0 / 15%);
+	--ring: oklch(0.556 0 0);
+	/* Shadows barely show on a dark canvas, so raised things lean on the border instead. */
+	--elevation-raised: none;
+	--elevation-popover: 0 8px 24px oklch(0 0 0 / 50%);
+	--primary: oklch(0.922 0 0);
+	--primary-foreground: oklch(0.205 0 0);
+	/* White text can't reach 4.5:1 on a red light enough to also be text on the dark card. */
 	--destructive: oklch(0.7 0.17 22);
-	--border: oklch(1 0 0 / 14%);
-	--input: oklch(1 0 0 / 12%);
-	--ring: oklch(0.74 0 0);
+	--destructive-foreground: oklch(0.18 0 0);
 	--success: oklch(0.74 0.15 145);
 	--success-foreground: oklch(0.18 0.03 145);
 	--warning: oklch(0.8 0.14 75);
@@ -76,39 +101,39 @@
 	--chart-3: oklch(0.68 0.14 260);
 	--chart-4: oklch(0.78 0.14 80);
 	--chart-5: oklch(0.7 0.16 30);
-	--sidebar: oklch(0.21 0 0);
-	--sidebar-foreground: oklch(0.96 0 0);
-	--sidebar-primary: oklch(0.74 0.07 135);
-	--sidebar-primary-foreground: oklch(0.18 0 0);
-	--sidebar-accent: oklch(0.32 0 0);
-	--sidebar-accent-foreground: oklch(0.92 0 0);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.74 0 0);
-	--inputparam: oklch(0.15 0 0);
-	--outputparam: oklch(0.25 0 0);
 }
 
 @theme inline {
-	--radius-sm: calc(var(--radius) - 4px);
-	--radius-md: calc(var(--radius) - 2px);
-	--radius-lg: var(--radius);
-	--radius-xl: calc(var(--radius) + 4px);
+	/* Concentric: an item inside a padded container takes the container's radius minus the
+	   padding. A 12px menu with 4px padding holds 8px items; a 10px control with 2px padding
+	   holds 8px segments. */
+	--radius-sm: 6px;
+	--radius-inner: 8px;
+	--radius-md: 10px;
+	--radius-lg: 12px;
+	--radius-xl: 16px;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
 	--color-card-foreground: var(--card-foreground);
-	--color-popover: var(--popover);
+	--color-raised: var(--raised);
+	--color-popover: var(--raised);
 	--color-popover-foreground: var(--popover-foreground);
-	--color-primary: var(--primary);
-	--color-primary-foreground: var(--primary-foreground);
-	--color-secondary: var(--secondary);
-	--color-secondary-foreground: var(--secondary-foreground);
+	--color-field: var(--field);
 	--color-muted: var(--muted);
 	--color-muted-foreground: var(--muted-foreground);
-	--color-accent: var(--accent);
-	--color-accent-foreground: var(--accent-foreground);
+	--color-faint-foreground: var(--faint-foreground);
+	--color-hover: var(--hover);
+	--color-selected: var(--selected);
+	--color-secondary: var(--secondary);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
 	--color-destructive: var(--destructive);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-overlay: var(--overlay);
 	--color-border: var(--border);
+	--color-border-strong: var(--border-strong);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
 	--color-success: var(--success);
@@ -122,21 +147,72 @@
 	--color-chart-3: var(--chart-3);
 	--color-chart-4: var(--chart-4);
 	--color-chart-5: var(--chart-5);
-	--color-sidebar: var(--sidebar);
-	--color-sidebar-foreground: var(--sidebar-foreground);
-	--color-sidebar-primary: var(--sidebar-primary);
-	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-	--color-sidebar-accent: var(--sidebar-accent);
-	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-	--color-sidebar-border: var(--sidebar-border);
-	--color-sidebar-ring: var(--sidebar-ring);
-	--color-inputparam: var(--inputparam);
-	--color-outputparam: var(--outputparam);
+	--shadow-raised: var(--elevation-raised);
+	--shadow-popover: var(--elevation-popover);
+}
+
+/* Design tokens beyond Tailwind's defaults. Reach for these before an arbitrary value: the
+   design-system lint rejects `text-[10px]`, `max-h-[85dvh]` and the like. */
+@theme {
+	/* Hanken Grotesk (OFL), self-hosted via Fontsource: the plugin UI runs offline from the .gha. */
+	--font-sans: 'Hanken Grotesk Variable', ui-sans-serif, system-ui, sans-serif;
+	/* Type tags, counters and other dense labels. */
+	--text-2xs: 0.625rem;
+	--text-2xs--line-height: calc(0.875 / 0.625);
+	/* Bottom sheets cast their shadow upward. */
+	--shadow-sheet: 0 -4px 24px oklch(0 0 0 / 12%);
+	/* Width of anything that must keep a 1rem gutter on each side of the viewport. */
+	--container-screen-inset: calc(100% - 2rem);
+}
+
+@utility max-h-dialog {
+	max-height: 85dvh;
+}
+
+@utility no-scrollbar {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+/* Number fields whose value is set elsewhere (a slider, a stepper) drop the browser's spinner. */
+@utility no-spinner {
+	appearance: textfield;
+	&::-webkit-inner-spin-button,
+	&::-webkit-outer-spin-button {
+		appearance: none;
+		margin: 0;
+	}
+}
+
+@utility rounded-inherit {
+	border-radius: inherit;
+}
+
+/* Phones keep a narrower gutter: at 390px every 8px of side padding is 2% of the width. */
+@media (min-width: 40rem) {
+	:root {
+		--page-px: 1.5rem;
+	}
+}
+
+/* A native select draws its arrow inside the right padding, so with the `px-2`/`px-3` every
+   caller uses it sits on the border. A drawn chevron with its own gutter fixes them all. Unlayered
+   on purpose: the gutter has to beat the callers' `px-*` utilities. Mid-grey reads on both themes,
+   since a data URI can't take `currentColor`. */
+select:not([multiple]):not([size]) {
+	appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 0.625rem center;
+	background-size: 1.1em;
+	padding-inline-end: calc(1.1em + 1rem);
 }
 
 @layer base {
 	* {
-		@apply border-border outline-ring/50;
+		@apply border-border outline-ring;
 	}
 	html,
 	body {

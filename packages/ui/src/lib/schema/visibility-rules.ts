@@ -1,10 +1,14 @@
 import type {
+	InputLayoutItem,
 	LayoutItem,
+	OutputLayoutItem,
 	VisibilityRule,
 	VisibilityCondition,
 	GroupVisibilityCondition,
-	TabConfig
+	TabConfig,
+	UISchema
 } from '@selvajs/schemas';
+import { isFileData } from '../utils/file-download';
 
 export interface VisibilityResult {
 	visible: boolean;
@@ -76,6 +80,9 @@ export function evaluateVisibility(
 	if ('visible' in item && item.visible === false) {
 		return { visible: false, disabled: false };
 	}
+	if (item.type === 'output' && drawsNothing(item, values[item.paramId])) {
+		return { visible: false, disabled: false };
+	}
 	if (!item.visibilityCondition?.rules) return { visible: true, disabled: false };
 
 	const { action = 'show', defaultValue } = item.visibilityCondition;
@@ -83,6 +90,24 @@ export function evaluateVisibility(
 	const actionFn = ACTIONS[action] ?? ACTIONS.show;
 
 	return actionFn(met, defaultValue);
+}
+
+/**
+ * An image or chart output has nothing to draw until a solve returns its data, and an empty
+ * preview box would hold its group, tab and pane open; it counts as hidden until then. A dynamic
+ * value list output never draws: it only feeds the options of an input.
+ */
+function drawsNothing(item: OutputLayoutItem, value: unknown): boolean {
+	switch (item.widgetType) {
+		case 'image':
+			return !(Array.isArray(value) ? value.some(isFileData) : isFileData(value));
+		case 'chart':
+			return value === undefined || value === null || value === '';
+		case 'dynamicValueList':
+			return true;
+		default:
+			return false;
+	}
 }
 
 /** Must stay identical to the key the renderers use in their `{#each}` blocks. */
@@ -123,6 +148,30 @@ export function isTabVisible(tab: TabConfig, values: Record<string, unknown>): b
 	return (
 		tab.visible !== false && tab.groups.some((group) => evaluateGroupVisibility(group, values))
 	);
+}
+
+/**
+ * The input items the form shows for these values: each passes its own condition, inside a
+ * shown group and, when tabbed, a shown tab. For a host that repeats the form back, such as a
+ * summary before a commit, without re-deriving the renderer's rules.
+ */
+export function visibleInputItems(
+	schema: UISchema,
+	values: Record<string, unknown>
+): InputLayoutItem[] {
+	const layout = schema?.layout;
+	const groups =
+		layout?.type === 'tabbed'
+			? (layout.tabs ?? []).filter((t) => isTabVisible(t, values)).flatMap((t) => t.groups ?? [])
+			: layout?.type === 'flat'
+				? (layout.groups ?? [])
+				: [];
+	return groups
+		.filter((g) => evaluateGroupVisibility(g, values))
+		.flatMap((g) => g.items ?? [])
+		.filter(
+			(i): i is InputLayoutItem => i.type === 'input' && evaluateVisibility(i, values).visible
+		);
 }
 
 /**

@@ -1,15 +1,18 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { apiError, ApiErrorCode } from '$lib/server/api-errors';
-import { getComputeServerConfigStore } from '$lib/server/providers.server';
-import { requireManageCompute } from '$lib/server/access.server';
+import { apiError, ApiErrorCode } from '#lib/server/api-errors.js';
+import { getComputeServerConfigStore } from '#lib/server/providers.server.js';
+import { requireManageCompute } from '#lib/server/access.server.js';
 import {
 	platformServers,
 	type ComputeServerConfig,
 	type PlatformComputeServer
 } from '@selvajs/platform';
-import { evictChangedServers } from '$lib/server/compute/evictChangedServers';
+import { evictChangedServers } from '#lib/server/compute/evictChangedServers.js';
+import { serverResolver } from '#lib/server/compute/serverResolver.server.js';
 import {
+	assertStoredKeysReadable,
+	assertKeyNotRetargeted,
 	validateIncomingServers,
 	resolveApiKey,
 	storedKeysById,
@@ -105,18 +108,24 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		// One of the few reads that genuinely needs every key: unchanged servers
 		// keep their stored key, and `evictChangedServers` diffs on key rotation.
 		const existing = await provider.getConfig(locals.ctx!, { includeApiKeys: true });
+		assertStoredKeysReadable(incoming.servers, platformServers(existing));
+		assertKeyNotRetargeted(incoming.servers, platformServers(existing));
 		const storedKeys = storedKeysById(platformServers(existing));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(
-			({ apiKey, sharedWith, ...rest }): PlatformComputeServer => ({
-				...rest,
+			// Named fields only: anything else in the body would be written to the store as-is.
+			({ id, label, serverUrl, apiKey, sharedWith }): PlatformComputeServer => ({
+				id,
+				label,
+				serverUrl,
 				scope: 'platform',
 				sharedWith: sharedWith === 'all' ? 'all' : [...sharedWith],
-				apiKey: resolveApiKey(apiKey, storedKeys.get(rest.id))
+				apiKey: resolveApiKey(apiKey, storedKeys.get(id))
 			})
 		);
 
 		await provider.savePlatformServers(locals.ctx!, next, incoming.defaultServerId);
+		serverResolver.forget();
 		// Drop warm clients for servers whose URL/key rotated or that were removed —
 		// keyed on `id`, they wouldn't age out on their own (ADR 0004).
 		evictChangedServers(platformServers(existing), next);

@@ -53,4 +53,33 @@ export {
 	removeProjectMember
 } from './projectMembers.js';
 export { getOrgCompute, updateOrgCompute } from './orgCompute.js';
-export { listInvites, createInvite, revokeInvite, resendInvite } from './invites.js';
+export {
+	listInvites,
+	createInvite,
+	revokeInvite,
+	resendInvite,
+	inviterStillVouches
+} from './invites.js';
+export {
+	listApiTokens,
+	createApiToken,
+	revokeApiToken,
+	revokeOwnApiToken,
+	revokeUserApiTokens,
+	listOrgApiTokens,
+	canManageApiTokenRoster,
+	mintApiToken,
+	mayHoldApiTokens,
+	type ApiTokenRow,
+	type MintApiTokenInput,
+	type MintedApiToken
+} from './apiTokens.js';
+export {
+	consentOffer,
+	consentOrgs,
+	mintConsentToken,
+	revokeUnredeemedConsentToken,
+	type ConsentLevel,
+	type ConsentOffer,
+	type ConsentOrg
+} from './oauthConsent.js';

@@ -17,6 +17,7 @@ import type { IComputeServerStore } from '../computeServer/interface.js';
 import type { IShareLinkStore } from '../shareLinks/interface.js';
 import type { IPlatformProjectGrantStore } from '../platformProjects/interface.js';
 import type { IInviteStore } from '../invites/interface.js';
+import type { IApiTokenStore } from '../apiTokens/interface.js';
 import type { IUserProfileStore } from '../userProfile/interface.js';
 import type { IPlatformPermissionStore } from '../permissions/interface.js';
 import type { IAuditQuery } from '../events/audit.js';
@@ -60,6 +61,12 @@ export interface IDataProvider {
 	userProfile: IUserProfileStore;
 	permissions: IPlatformPermissionStore;
 	platformProjectGrants: IPlatformProjectGrantStore;
+	/**
+	 * Optional: a provider without it has API tokens switched off, and token
+	 * requests get 503 `API_TOKENS_UNAVAILABLE`. A provider whose stores scope
+	 * by a user JWT must also implement `IAuthProvider.delegatedSession`.
+	 */
+	apiTokens?: IApiTokenStore;
 	/**
 	 * Read-side for the persisted event log. Optional — providers whose event
 	 * sink is a noop (local-provider) leave this undefined and the

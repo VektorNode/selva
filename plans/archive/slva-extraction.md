@@ -234,7 +234,7 @@ contract tests must pass **without** regeneration at every step.
 
 - **ILRepack**: the delete-after-merge and the "public API exchanges Newtonsoft
   types" rule are the two ways to ship a broken Release .gha; both are caught
-  by `scripts/build-production.js`'s warning grep + PluginVerifier, but only on
+  by `scripts/plugin/build-production.js`'s warning grep + PluginVerifier, but only on
   Windows. macOS builds net7.0 only — full Release verification happens in the
   release workflow.
 - **Selva.Tests leftover links**: any remaining linked Selva.GH file that references a

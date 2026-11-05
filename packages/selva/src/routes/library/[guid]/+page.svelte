@@ -3,10 +3,10 @@
 	import { ComputeApp } from '@selvajs/ui';
 	import { createComputeFetchSolveFn, createSolveEventStream } from '@selvajs/solve/client';
 	import { getThreeObjectsFromComputeResponse } from '@selvajs/visualization/parse';
-	import ServerFooter from '$lib/components/ServerFooter.svelte';
-	import UserChip from '$lib/components/UserChip.svelte';
-	import MainNav from '$lib/components/MainNav.svelte';
-	import SettingsMenu from '$lib/components/SettingsMenu.svelte';
+	import ServerFooter from '#lib/components/ServerFooter.svelte';
+	import UserChip from '#lib/components/UserChip.svelte';
+	import MainNav from '#lib/components/MainNav.svelte';
+	import SettingsMenu from '#lib/components/SettingsMenu.svelte';
 	import { page } from '$app/state';
 	import { untrack } from 'svelte';
 	import type { OrgPermission, PlatformPermission } from '@selvajs/platform';
@@ -17,23 +17,21 @@
 	const pageData = $derived(
 		page.data as {
 			user?: { platformPermissions?: PlatformPermission[] } | null;
-			ctx?: { orgPermissions?: OrgPermission[] } | null;
+			ctx?: { orgPermissions?: OrgPermission[]; mayHoldApiTokens?: boolean } | null;
 			branding?: { name: string };
 		}
 	);
 	const isAuthed = $derived(!!pageData.user);
 
 	function shouldShowViewer(): boolean {
-		return Boolean(
-			data.schema.viewerOptions?.enableLocal || data.schema.viewerOptions?.enableRemote
-		);
+		return Boolean(data.schema.viewerOptions?.enableRemote);
 	}
 
 	// One SSE stream per tab; the solve fn names it so the server routes each solve's events here.
 	// Anonymous share-token viewers get no stream (the route needs a session) and solve as before.
 	// Built only for a signed-in viewer: the stream connects as soon as it exists, and an
-	// anonymous one would retry a 401 forever. Signing in or out is a navigation, so the initial
-	// value is the only one this page sees.
+	// anonymous one would keep retrying a 401 with backoff. Signing in or out is a navigation, so
+	// the initial value is the only one this page sees.
 	const liveEvents = untrack(() => isAuthed)
 		? createSolveEventStream({
 				endpoint: '/api/v1/solve-events',
@@ -80,15 +78,15 @@
 	{#snippet headerRight()}
 		{#if data.versionId}
 			<span
-				class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase"
+				class="bg-warning/15 text-warning shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide whitespace-nowrap uppercase"
 			>
-				v{data.versionNumber} preview
+				v{data.versionNumber}<span class="hidden sm:inline"> preview</span>
 			</span>
 		{:else if data.channel === 'draft'}
 			<span
-				class="bg-warning/15 text-warning rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide uppercase"
+				class="bg-warning/15 text-warning shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] font-medium tracking-wide whitespace-nowrap uppercase"
 			>
-				Draft preview
+				Draft<span class="hidden sm:inline"> preview</span>
 			</span>
 		{/if}
 		{#if isAuthed}
@@ -96,6 +94,7 @@
 			<SettingsMenu
 				platformPermissions={pageData.user?.platformPermissions ?? []}
 				orgPermissions={pageData.ctx?.orgPermissions ?? []}
+				mayHoldApiTokens={pageData.ctx?.mayHoldApiTokens}
 			/>
 		{/if}
 	{/snippet}

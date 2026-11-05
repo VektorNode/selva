@@ -5,19 +5,20 @@
 // push events to the pure core. All transport quirks live in the GrasshopperSource adapter.
 
 import type { SupportedTypes } from '@selvajs/schemas';
-import type { WsOutputsMessage } from '$lib/websocket/websocket.svelte';
+import type { WsOutputsMessage } from '#lib/websocket/websocket.svelte.js';
 import {
 	createSolveSession,
+	valuelessInputIds,
 	EMPTY_LIVE_SOLVE,
 	type SolvePhase,
 	type SolveSession,
 	type SolveReporter,
 	type SolveDiagnostic
 } from '@selvajs/ui';
-import { getWebSocketPortFromUrl } from '$lib/utils/session';
-import { getGrasshopperSource } from '$lib/schema-source/grasshopper-source';
-import type { SchemaSource, PreviewSolveDriver } from '$lib/schema-source/schema-source';
-import { createNotificationManager } from '$lib/features/preview/notifications.svelte';
+import { getWebSocketPortFromUrl } from '#lib/utils/session.js';
+import { getGrasshopperSource } from '#lib/schema-source/grasshopper-source.js';
+import type { SchemaSource, PreviewSolveDriver } from '#lib/schema-source/schema-source.js';
+import { createNotificationManager } from '#lib/features/preview/notifications.svelte.js';
 import {
 	createInitialPreviewState,
 	handleInitialData as coreHandleInitialData,
@@ -37,6 +38,7 @@ const EMPTY_MESHES: unknown[] = [];
 // every $derived that reads it.
 const EMPTY_MESSAGES: string[] = [];
 const EMPTY_DIAGNOSTICS: SolveDiagnostic[] = [];
+const NO_INPUTS: ReadonlySet<string> = new Set();
 
 /**
  * @param source Defaults to the Grasshopper WebSocket source bound to the URL's wsPort.
@@ -48,8 +50,11 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	const { manager: notification, getMessage: getNotification } = createNotificationManager();
 
 	let session: SolveSession | null = null;
-	let driver: PreviewSolveDriver | null = null;
+	// Reactive on assignment: `isSolving` is first read before the driver exists, and a plain
+	// variable would leave that read, and the solving indicator, subscribed to nothing for good.
+	let driver = $state.raw<PreviewSolveDriver | null>(null);
 	let initialized = false;
+	let initGeneration = 0;
 	let unsubscribeSession: (() => void) | null = null;
 
 	// The Solve Session is framework-free, so its getters are inert on their own. This counter
@@ -64,7 +69,8 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		reportError: (message) => {
 			if (session) session.reportError(message);
 			else state.error = message;
-		}
+		},
+		reportAborted: () => session?.reportAborted()
 	};
 
 	// Built lazily on the first initialData (from inside handleInitialData's loadValues, once
@@ -74,7 +80,11 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	function getOrBuildSession(): SolveSession {
 		if (!session) {
 			const schema = state.schema!; // set by the core before it touches the session
-			driver = schemaSource.makeSolveDriver(getSessionId(), () => reporter);
+			driver = schemaSource.makeSolveDriver(
+				getSessionId(),
+				() => reporter,
+				() => (state.schema ? valuelessInputIds(state.schema) : NO_INPUTS)
+			);
 			session = createSolveSession({ schema, scopeKey: getSessionId(), driver });
 			unsubscribeSession = session.subscribe(() => {
 				sessionVersion += 1;
@@ -143,6 +153,7 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		if (!sessionId) return;
 		if (initialized) return;
 		initialized = true;
+		const generation = ++initGeneration;
 
 		schemaSource.on('initialData', onInitialData);
 		schemaSource.on('currentValues', onCurrentValues);
@@ -152,6 +163,8 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		schemaSource.on('parametersAdded', onParametersAdded);
 
 		const result = await schemaSource.connect(sessionId);
+		// Cleaned up (and maybe initialized again) while connecting: the newer call asks instead.
+		if (generation !== initGeneration) return;
 		if (!result.ok) {
 			state.error = result.error;
 			state.loading = false;
@@ -164,6 +177,7 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 	function cleanup() {
 		if (!initialized) return;
 		initialized = false;
+		initGeneration++;
 
 		notification.clear();
 		schemaSource.off('initialData', onInitialData);
@@ -198,7 +212,7 @@ export function usePreviewState(getSessionId: () => string, source?: SchemaSourc
 		},
 		get isSolving() {
 			// No sessionVersion read here: the WebSocket driver's isSolving is backed by the
-			// socket store's own $state, so it is already reactive on its own.
+			// socket store's own $state.
 			return driver?.isSolving ?? false;
 		},
 		get hasPendingChanges() {

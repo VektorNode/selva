@@ -8,12 +8,14 @@
 		formatFileSize,
 		getBase64FileSize,
 		isFileData
-	} from '$lib/utils/file-download';
+	} from '#lib/utils/file-download.js';
 	import { Button } from '../primitives';
-	import * as Dialog from '$lib/components/primitives/dialog';
-	import { Info, Folder, FolderOpen, FileIcon, ChevronRight } from '@lucide/svelte';
+	import { Folder, FolderOpen, FileIcon, ChevronRight } from '@lucide/svelte';
+	import HelpButton from './HelpButton.svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { Label } from '$lib/components/primitives/label';
+	import { Label } from '#lib/components/primitives/label/index.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatCount, formatMessage } from '#lib/i18n/messages.js';
 
 	interface Props {
 		item: OutputLayoutItem;
@@ -22,6 +24,9 @@
 	}
 
 	let { item, value, displayName }: Props = $props();
+
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
 
 	let copied = $state(false);
 	let copyTimeout: ReturnType<typeof setTimeout>;
@@ -33,7 +38,7 @@
 	);
 	const hasValue = $derived(value != null);
 
-	const boxClass = 'min-h-12.5 rounded px-3 py-3 font-mono text-sm border border-border';
+	const boxClass = 'min-h-12.5 rounded-md px-3 py-3 text-sm border border-border-strong';
 
 	async function copyToClipboard() {
 		try {
@@ -142,7 +147,7 @@
 				await downloadFiles(filesArray, fileName);
 			}
 		} catch (err) {
-			downloadError = err instanceof Error ? err.message : 'Failed to download files';
+			downloadError = err instanceof Error ? err.message : t.downloadFailed;
 			console.error('[OutputDisplayWidget] Download error:', err);
 		} finally {
 			downloading = false;
@@ -152,25 +157,19 @@
 
 {#snippet fieldHeader()}
 	<div class="gap-2 flex items-center">
-		<Label>{label}</Label>
+		<Label>
+			<span class={item.widgetType === 'number' ? 'text-xs font-normal text-muted-foreground' : ''}
+				>{label}</span
+			>
+		</Label>
 		{#if item.description}
-			<Dialog.Root>
-				<Dialog.Trigger class="p-1 cursor-help opacity-60 transition-opacity hover:opacity-100">
-					<Info size={16} />
-				</Dialog.Trigger>
-				<Dialog.Content class="sm:max-w-md">
-					<Dialog.Header>
-						<Dialog.Title>{label}</Dialog.Title>
-						<Dialog.Description>{item.description}</Dialog.Description>
-					</Dialog.Header>
-				</Dialog.Content>
-			</Dialog.Root>
+			<HelpButton {label} description={item.description} />
 		{/if}
 	</div>
 {/snippet}
 
 {#snippet placeholder()}
-	<span class="text-muted-foreground not-italic">Waiting for data...</span>
+	<span class="text-muted-foreground not-italic">{t.waitingForData}</span>
 {/snippet}
 
 {#snippet treeNodes(nodes: Map<string, TreeNode>, path: string)}
@@ -195,7 +194,7 @@
 					<span class="font-medium">{node.name}</span>
 				</button>
 				{#if isOpen}
-					<div class="ml-4 pl-2 border-l border-border/50">
+					<div class="ml-4 pl-2 border-l border-border-strong">
 						{@render treeNodes(node.children, folderPath)}
 					</div>
 				{/if}
@@ -218,17 +217,19 @@
 
 {#snippet fileDisplay()}
 	{#if fileCount === 0}
-		<div class="rounded px-3 py-3 text-sm border border-border bg-muted text-muted-foreground">
-			Waiting for file data...
+		<div
+			class="px-3 py-3 text-sm rounded-md border border-border-strong bg-muted text-muted-foreground"
+		>
+			{t.waitingForFiles}
 		</div>
 	{:else}
 		<div class="gap-2 flex flex-col">
-			<div class="rounded px-3 py-2 border border-border bg-muted">
+			<div class="px-3 py-2 rounded-md border border-border-strong bg-muted">
 				<div class="gap-2 flex items-center justify-between">
 					<span class="min-w-0 text-sm font-medium truncate text-foreground">
 						{fileCount === 1
 							? `${filesArray[0].fileName}${filesArray[0].fileType}`
-							: `${fileCount} files`}
+							: formatMessage(t.fileCount, { count: fileCount })}
 					</span>
 					<span class="text-xs shrink-0 text-muted-foreground">{formatFileSize(totalSize)}</span>
 				</div>
@@ -253,33 +254,33 @@
 			</div>
 			{#if hasDuplicates}
 				<div
-					class="rounded px-3 py-2 text-sm border border-destructive bg-destructive/10 text-destructive"
+					class="px-3 py-2 text-sm rounded-md border border-destructive bg-destructive/10 text-destructive"
 				>
-					<div class="font-medium">Duplicate file names detected</div>
+					<div class="font-medium">{t.duplicateFilesTitle}</div>
 					<div class="mt-1 text-xs">
-						The following {duplicatePaths.length === 1 ? 'path appears' : 'paths appear'} more than once:
+						{formatCount(duplicatePaths.length, t.duplicatePathsOne, t.duplicatePathsOther)}
 					</div>
 					<ul class="mt-1 ml-4 text-xs list-disc">
 						{#each duplicatePaths as path (path)}
 							<li class="truncate"><span class="font-mono">{path}</span></li>
 						{/each}
 					</ul>
-					<div class="mt-1 text-xs">
-						Rename outputs in your Grasshopper definition so each file has a unique name.
-					</div>
+					<div class="mt-1 text-xs">{t.duplicateFilesHint}</div>
 				</div>
 			{/if}
 			{#if downloadError}
 				<div
-					class="rounded px-3 py-2 text-sm border border-destructive bg-destructive/10 text-destructive"
+					class="px-3 py-2 text-sm rounded-md border border-destructive bg-destructive/10 text-destructive"
 				>
 					{downloadError}
 				</div>
 			{/if}
 			<Button onclick={handleDownload} disabled={downloading || hasDuplicates} class="w-full">
 				{downloading
-					? 'Downloading...'
-					: `Download ${fileCount === 1 ? 'File' : `${fileCount} Files`}`}
+					? t.downloading
+					: fileCount === 1
+						? t.downloadFile
+						: formatMessage(t.downloadFiles, { count: fileCount })}
 			</Button>
 		</div>
 	{/if}
@@ -287,7 +288,10 @@
 
 <!-- Dynamic value list outputs are routing sinks (their options feed an input), not displayed. -->
 {#if item.widgetType !== 'dynamicValueList'}
-	<div class="gap-2 flex flex-col">
+	<div
+		role="group"
+		class="group/field flex flex-col {item.widgetType === 'number' ? 'gap-0.5' : 'gap-2'}"
+	>
 		{@render fieldHeader()}
 
 		{#if item.widgetType === 'chart'}
@@ -300,35 +304,35 @@
 		{:else if item.widgetType === 'file'}
 			{@render fileDisplay()}
 		{:else if item.widgetType === 'number'}
-			<div class="{boxClass} flex items-center bg-muted/50 wrap-break-word">
+			<div class="min-h-8 text-2xl font-semibold wrap-break-word text-foreground tabular-nums">
 				{#if hasValue}
-					<span class="font-bold text-primary">{formattedValue}</span>
+					{formattedValue}
 				{:else}
-					{@render placeholder()}
+					<span class="text-base font-normal">{@render placeholder()}</span>
 				{/if}
 			</div>
 		{:else if item.widgetType === 'text'}
 			<div class="group relative">
 				{#if isObjectValue}
 					<pre
-						class="{boxClass} overflow-wrap-anywhere max-h-96 overflow-auto bg-muted/10 text-foreground">{formattedValue}</pre>
+						class="{boxClass} max-h-96 font-mono overflow-auto bg-muted wrap-anywhere text-foreground">{formattedValue}</pre>
 				{:else}
 					<div
-						class="{boxClass} overflow-wrap-anywhere bg-muted/10 wrap-break-word whitespace-pre-wrap text-foreground"
+						class="{boxClass} bg-muted wrap-anywhere wrap-break-word whitespace-pre-wrap text-foreground"
 					>
 						{#if hasValue}{value}{:else}{@render placeholder()}{/if}
 					</div>
 				{/if}
 				{#if hasValue}
-					<Button
-						onclick={copyToClipboard}
+					<div
 						class="right-2 top-2 absolute transition-opacity {copied
 							? 'opacity-100'
-							: 'opacity-0 group-hover:opacity-100'}"
-						size="sm"
+							: 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100'}"
 					>
-						{copied ? 'Copied!' : 'Copy'}
-					</Button>
+						<Button onclick={copyToClipboard} size="sm">
+							{copied ? t.copied : t.copy}
+						</Button>
+					</div>
 				{/if}
 			</div>
 		{/if}

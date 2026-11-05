@@ -1,8 +1,22 @@
-// HMAC token codec for capability-URL tokens (share links, invites, …).
+// Token codec for capability-URL tokens (share links, invites, …).
 
 export {
 	createTokenCodec,
+	findByToken,
 	MIN_TOKEN_SECRET_LENGTH,
 	type TokenCodec,
 	type TokenCodecConfig
 } from './token-codec.js';
+
+// API tokens (`selva_`): the same hash-at-rest scheme, plus a checksum.
+export {
+	createApiTokenCodec,
+	API_TOKEN_PREFIX,
+	looksLikeApiToken,
+	type ApiTokenCodec
+} from './api-token-codec.js';
+export {
+	canHoldApiTokens,
+	type ApiTokenHolderOptions,
+	type ApiTokenHolderPolicy
+} from './api-token-holder.js';

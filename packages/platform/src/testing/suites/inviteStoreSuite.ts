@@ -110,24 +110,38 @@ export function runInviteStoreConformance(opts: InviteStoreConformanceOptions): 
 			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
 			const got = await store.getByTokenHash(SYSTEM_CONTEXT, inv.tokenHash);
 			expect(got).toBeNull();
+
+			const page = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
+			const row = page.items.find((i) => i.id === inv.id);
+			expect(row?.acceptedAt).toBeTruthy();
+			expect(row?.acceptedByUserId).toBe(acceptor);
 		});
 
-		it('markAccepted is idempotent (second call is a no-op)', async () => {
+		it('markAccepted is idempotent: the first acceptor stays', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
 			const { userId: acceptor } = await seedUser(makeUuid());
 			const inv = invite(scope);
 			await store.create(ctx(scope.adminId), inv);
-			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
-			await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor);
+			const { userId: second } = await seedUser(makeUuid());
+			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, acceptor)).toBe(true);
+			expect(await store.markAccepted(SYSTEM_CONTEXT, inv.id, second)).toBe(false);
+
+			const page = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
+			expect(page.items.find((i) => i.id === inv.id)?.acceptedByUserId).toBe(acceptor);
 		});
 
 		it('listByOrg returns invites for the org', async () => {
 			const store = await createStore();
 			const scope = await scopeFor();
-			for (let i = 0; i < 3; i++) await store.create(ctx(scope.adminId), invite(scope));
+			const ids: string[] = [];
+			for (let i = 0; i < 3; i++) {
+				const inv = invite(scope);
+				ids.push(inv.id);
+				await store.create(ctx(scope.adminId), inv);
+			}
 			const page = await store.listByOrg(ctx(scope.adminId), scope.orgId, { limit: 100 });
-			expect(page.items.length).toBeGreaterThanOrEqual(3);
+			expect(page.items.map((i) => i.id)).toEqual(expect.arrayContaining(ids));
 		});
 
 		it('revoke removes a pending invite', async () => {

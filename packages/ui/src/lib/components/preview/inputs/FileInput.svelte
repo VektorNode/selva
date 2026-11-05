@@ -1,10 +1,19 @@
 <script lang="ts">
-	import { Input } from '$lib/components/primitives/input';
-	import { Button } from '$lib/components/primitives/button';
-	import { Label } from '$lib/components/primitives/label';
-	import { toast } from '$lib/components/primitives/sonner';
+	import { Input } from '#lib/components/primitives/input/index.js';
+	import { Button } from '#lib/components/primitives/button/index.js';
+	import { Label } from '#lib/components/primitives/label/index.js';
+	import { toast } from '#lib/components/primitives/sonner/index.js';
 	import { FileUp, Link, CircleAlert, CircleCheck } from '@lucide/svelte';
-	import { APP_DEFAULTS } from '$lib/constants';
+	import { APP_DEFAULTS } from '#lib/constants.js';
+	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { formatMessage } from '#lib/i18n/messages.js';
+	import { pickFile } from '#lib/utils/host-files.js';
+	import {
+		acceptsFileEnding,
+		isWebp,
+		shouldConvertWebp,
+		webpToPng
+	} from '#lib/utils/webp-to-png.js';
 
 	interface Props {
 		value?: string;
@@ -22,6 +31,9 @@
 		onChange
 	}: Props = $props();
 
+	const locale = getLocaleContext();
+	const t = $derived(locale.messages);
+
 	let effectiveModes = $derived(
 		allowedInputModes && allowedInputModes.length > 0
 			? allowedInputModes
@@ -35,7 +47,6 @@
 		activeMode = effectiveModes.includes(preferred) ? preferred : effectiveModes[0];
 	});
 
-	let fileInput: HTMLInputElement | null = $state(null);
 	let uploadedFileName = $state('');
 	let urlInput = $state('');
 	let isDragging = $state(false);
@@ -52,9 +63,12 @@
 				if (parsed.type === 'base64') {
 					if (parsed._isMetadata && parsed._fileSize) {
 						const sizeMB = (parsed._fileSize / 1024 / 1024).toFixed(2);
-						uploadedFileName = `Uploaded file (${parsed.fileEnding}, ${sizeMB}MB)`;
+						uploadedFileName = formatMessage(t.uploadedFileSize, {
+							ext: parsed.fileEnding,
+							size: sizeMB
+						});
 					} else {
-						uploadedFileName = `Uploaded file (${parsed.fileEnding})`;
+						uploadedFileName = formatMessage(t.uploadedFile, { ext: parsed.fileEnding });
 					}
 				} else if (parsed.type === 'url') {
 					urlInput = parsed.file;
@@ -65,6 +79,20 @@
 		}
 	});
 
+	function formatNotAccepted(fileEnding: string): string {
+		return formatMessage(t.fileFormatNotAccepted, {
+			ext: fileEnding,
+			formats: acceptedFormats.join(', ')
+		});
+	}
+
+	function formatTooLarge(bytes: number): string {
+		return formatMessage(t.fileTooLarge, {
+			size: (bytes / 1024 / 1024).toFixed(2),
+			max: APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB
+		});
+	}
+
 	function getFileExtension(filename: string): string {
 		// Strip query strings before extracting extension
 		const cleanPath = filename.split('?')[0];
@@ -72,9 +100,27 @@
 		return ext.toLowerCase();
 	}
 
-	function isValidFileExtension(fileEnding: string): boolean {
-		if (acceptedFormats.length === 0) return true;
-		return acceptedFormats.includes(fileEnding.toLowerCase());
+	// Runs before the size cap: the PNG is larger than the WebP it came from. A WebP already over
+	// the cap is passed through unconverted, so the cap rejects it without a full decode.
+	async function prepare(
+		blob: Blob,
+		fileEnding: string
+	): Promise<{ blob: Blob; fileEnding: string }> {
+		if (blob.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) return { blob, fileEnding };
+		if (!shouldConvertWebp(fileEnding, acceptedFormats)) return { blob, fileEnding };
+		return { blob: await webpToPng(blob), fileEnding: '.png' };
+	}
+
+	function readBase64(blob: Blob): Promise<string> {
+		return new Promise<string>((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				const result = e.target?.result as string;
+				resolve(result.includes(',') ? result.split(',')[1] : result);
+			};
+			reader.onerror = () => reject(new Error(t.fileReadFailed));
+			reader.readAsDataURL(blob);
+		});
 	}
 
 	function isCorsError(error: unknown): boolean {
@@ -96,56 +142,52 @@
 			try {
 				parsedUrl = new URL(urlInput);
 			} catch {
-				urlError = { message: 'Invalid URL — make sure it starts with https://', isCors: false };
+				urlError = { message: t.urlInvalid, isCors: false };
 				return;
 			}
 
 			if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
-				urlError = { message: 'Only http:// and https:// URLs are supported.', isCors: false };
+				urlError = { message: t.urlProtocolUnsupported, isCors: false };
 				return;
 			}
 
 			const response = await fetch(urlInput);
 			if (!response.ok) {
 				urlError = {
-					message: `Server returned ${response.status} ${response.statusText}. Check the URL is correct and publicly accessible.`,
+					message: formatMessage(t.urlServerError, {
+						status: `${response.status} ${response.statusText}`.trim()
+					}),
 					isCors: false
 				};
 				return;
 			}
 
-			const blob = await response.blob();
-			const fileEnding = getFileExtension(urlInput);
+			const fetched = await response.blob();
+			const requestedEnding = (await isWebp(fetched)) ? '.webp' : getFileExtension(urlInput);
 
-			if (!isValidFileExtension(fileEnding)) {
-				urlError = {
-					message: `File format "${fileEnding}" is not accepted. Allowed: ${acceptedFormats.join(', ')}`,
-					isCors: false
-				};
+			if (!acceptsFileEnding(requestedEnding, acceptedFormats)) {
+				urlError = { message: formatNotAccepted(requestedEnding), isCors: false };
 				return;
 			}
+
+			const { blob, fileEnding } = await prepare(fetched, requestedEnding);
 
 			const maxSize = APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES;
 			if (blob.size > maxSize) {
 				urlError = {
-					message: `File too large: ${(blob.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB). Download it and use Upload instead.`,
+					message: `${formatTooLarge(blob.size)} ${t.fileTooLargeUseUpload}`,
 					isCors: false
 				};
 				return;
 			}
 
-			const base64Data = await new Promise<string>((resolve, reject) => {
-				const reader = new FileReader();
-				reader.onload = (e) => {
-					const result = e.target?.result as string;
-					resolve(result.includes(',') ? result.split(',')[1] : result);
-				};
-				reader.onerror = () => reject(new Error('Failed to read the downloaded file.'));
-				reader.readAsDataURL(blob);
-			});
+			const base64Data = await readBase64(blob);
 			const data = JSON.stringify({ file: base64Data, type: 'base64', fileEnding });
 			value = data;
-			urlSuccess = `Loaded ${fileEnding} (${(blob.size / 1024).toFixed(0)} KB)`;
+			urlSuccess = formatMessage(t.fileLoaded, {
+				ext: fileEnding,
+				size: (blob.size / 1024).toFixed(0)
+			});
 			onChange(data);
 		} catch (error) {
 			if (isCorsError(error)) {
@@ -158,26 +200,22 @@
 				})();
 				// The opaque TypeError hides CORS blocks and plain network failures (404, DNS)
 				// alike, so the message has to cover both.
-				let hint =
-					'Check that the URL is correct and the file is publicly accessible. If the server requires login, download the file and use the Upload option instead.';
+				let hint = t.urlUnreachableHint;
 				if (host.includes('sharepoint.com') || host.includes('onedrive.com')) {
-					hint =
-						'SharePoint/OneDrive blocks browser access. Open the file in SharePoint, use "Download" to save it locally, then upload it here.';
+					hint = t.urlHintSharePoint;
 				} else if (host.includes('drive.google.com')) {
-					hint =
-						'Google Drive blocks browser access. Use "Download" in Google Drive to save the file locally, then upload it here.';
+					hint = t.urlHintGoogleDrive;
 				} else if (host.includes('dropbox.com')) {
-					hint =
-						'Dropbox links may block browser access. Try changing "?dl=0" to "?dl=1" in the URL, or download and upload instead.';
+					hint = t.urlHintDropbox;
 				}
 				urlError = {
-					message: `Could not reach "${host}" — the file may not exist, or the server does not allow browser access.`,
+					message: formatMessage(t.urlUnreachable, { host }),
 					isCors: true,
 					hint
 				};
 			} else {
 				urlError = {
-					message: error instanceof Error ? error.message : 'Unknown error',
+					message: error instanceof Error ? error.message : t.unknownError,
 					isCors: false
 				};
 			}
@@ -186,50 +224,39 @@
 		}
 	}
 
-	function handleFileUpload(event: Event) {
-		const target = event.target as HTMLInputElement;
-		const file = target.files?.[0];
-		if (!file) return;
+	async function handleFile(file: File) {
+		const requestedEnding = getFileExtension(file.name);
 
-		const fileEnding = getFileExtension(file.name);
-
-		if (!isValidFileExtension(fileEnding)) {
-			toast.error(`File format not accepted: ${fileEnding}`);
+		if (!acceptsFileEnding(requestedEnding, acceptedFormats)) {
+			toast.error(formatNotAccepted(requestedEnding));
 			return;
 		}
 
-		// The file is base64-embedded into the compute request body, so without a
-		// client-side cap an oversize file comes back as an opaque 413. This cap is
-		// currently LOOSER than the server's COMPUTE_REQUEST_MAX_BYTES (see the TEMP
-		// note in constants.ts) — some files pass here and still 413. The URL import
-		// path applies the same cap.
-		if (file.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
-			toast.error(
-				`File too large: ${(file.size / 1024 / 1024).toFixed(2)}MB (max ${APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_MB}MB).`
-			);
-			return;
-		}
+		try {
+			const { blob, fileEnding } = await prepare(file, requestedEnding);
 
-		uploadedFileName = file.name;
+			// The file is base64-embedded into the compute request body, so without a
+			// client-side cap an oversize file comes back as an opaque 413. This cap is
+			// currently LOOSER than the server's COMPUTE_REQUEST_MAX_BYTES (see the TEMP
+			// note in constants.ts) — some files pass here and still 413. The URL import
+			// path applies the same cap.
+			if (blob.size > APP_DEFAULTS.FILE_UPLOAD.MAX_SIZE_BYTES) {
+				toast.error(formatTooLarge(blob.size));
+				return;
+			}
 
-		const reader = new FileReader();
-		reader.onload = (e) => {
-			const base64 = e.target?.result as string;
-			const base64Data = base64.includes(',') ? base64.split(',')[1] : base64;
-
-			const data = JSON.stringify({
-				file: base64Data,
-				type: 'base64',
-				fileEnding
-			});
+			uploadedFileName = file.name;
+			const data = JSON.stringify({ file: await readBase64(blob), type: 'base64', fileEnding });
 			value = data;
 			onChange(data);
-		};
-		reader.readAsDataURL(file);
+		} catch (error) {
+			toast.error(error instanceof Error ? error.message : t.fileReadFailed);
+		}
 	}
 
-	function openFilePicker() {
-		fileInput?.click();
+	async function openFilePicker() {
+		const file = await pickFile({ accept: acceptAttribute });
+		if (file) handleFile(file);
 	}
 
 	function handleDragOver(e: DragEvent) {
@@ -245,40 +272,28 @@
 		e.preventDefault();
 		isDragging = false;
 
-		const files = e.dataTransfer?.files;
-		if (files?.[0]) {
-			const fakeEvent = new Event('change');
-			const fakeTarget = { files: files } as HTMLInputElement;
-			Object.defineProperty(fakeEvent, 'target', { value: fakeTarget });
-			handleFileUpload(fakeEvent);
-		}
+		const file = e.dataTransfer?.files?.[0];
+		if (file) handleFile(file);
 	}
 
 	const acceptAttribute = $derived(acceptedFormats.length > 0 ? acceptedFormats.join(',') : '*');
 </script>
 
-<div class="gap-4 flex w-full flex-col">
-	<input
-		bind:this={fileInput}
-		type="file"
-		accept={acceptAttribute}
-		onchange={handleFileUpload}
-		class="hidden"
-	/>
-
+<div class="gap-2.5 flex w-full flex-col">
 	{#if showToggle}
-		<div class="rounded text-xs flex overflow-hidden border">
+		<div class="p-0.5 text-xs flex rounded-md bg-muted">
 			{#each effectiveModes as mode (mode)}
 				<button
 					type="button"
 					onclick={() => (activeMode = mode)}
-					class={`px-3 py-1 flex-1 transition-colors ${
+					aria-pressed={activeMode === mode}
+					class={`px-3 py-1 font-medium flex-1 rounded-sm border transition-colors ${
 						activeMode === mode
-							? 'bg-primary text-primary-foreground'
-							: 'text-muted-foreground hover:bg-accent'
+							? 'shadow-xs border-border-strong bg-raised text-foreground'
+							: 'border-transparent text-muted-foreground hover:text-foreground'
 					}`}
 				>
-					{mode === 'upload' ? 'Upload' : 'URL'}
+					{mode === 'upload' ? t.fileModeUpload : t.fileModeUrl}
 				</button>
 			{/each}
 		</div>
@@ -286,9 +301,9 @@
 
 	{#if activeMode === 'url'}
 		<div class="gap-2 flex flex-col">
-			<Label for="url-input" class="gap-2 flex items-center">
+			<Label for="url-input">
 				<Link size={16} />
-				File URL
+				{t.fileUrlLabel}
 			</Label>
 			<div class="gap-2 flex">
 				<Input
@@ -297,7 +312,7 @@
 					bind:value={urlInput}
 					placeholder="https://example.com/model.3dm"
 					disabled={isLoading}
-					class={urlError ? 'border-destructive focus-visible:ring-destructive' : ''}
+					aria-invalid={urlError ? true : undefined}
 					oninput={() => {
 						urlError = null;
 						urlSuccess = '';
@@ -309,7 +324,7 @@
 					disabled={isLoading || !urlInput.trim()}
 					onclick={handleUrlChange}
 				>
-					{isLoading ? 'Fetching...' : 'Fetch'}
+					{isLoading ? t.fetchingFile : t.fetchFile}
 				</Button>
 			</div>
 
@@ -335,32 +350,26 @@
 			{/if}
 
 			{#if !urlError && !urlSuccess}
-				<p class="text-xs text-muted-foreground">
-					URL must be publicly accessible (no login required).
-				</p>
+				<p class="text-xs text-muted-foreground">{t.fileUrlPublic}</p>
 			{/if}
 		</div>
 	{:else}
 		<div class="gap-2 flex flex-col">
-			<Label for="file-upload" class="gap-2 flex items-center">
-				<FileUp size={16} />
-				Upload File
-			</Label>
 			<Button
 				type="button"
-				variant="outline"
-				class="gap-2 w-full {isDragging ? 'border-primary' : ''}"
+				variant={isDragging ? 'secondary' : 'outline'}
+				class="w-full"
 				onclick={openFilePicker}
 				ondragover={handleDragOver}
 				ondragleave={handleDragLeave}
 				ondrop={handleDrop}
 			>
 				<FileUp size={16} />
-				{uploadedFileName || 'Choose File or Drag & Drop'}
+				{uploadedFileName || t.chooseFile}
 			</Button>
 			{#if acceptedFormats.length > 0}
 				<p class="text-xs text-muted-foreground">
-					Accepted formats: {acceptedFormats.join(', ')}
+					{formatMessage(t.acceptedFormats, { formats: acceptedFormats.join(', ') })}
 				</p>
 			{/if}
 		</div>

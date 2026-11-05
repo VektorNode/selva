@@ -1,8 +1,7 @@
 export const APP_DEFAULTS = {
 	// File upload limits
 	// TEMP (dev): raised 150 MB → 300 MB so large dev file-widget inputs aren't
-	// blocked client-side. The server request cap (COMPUTE_REQUEST_MAX_BYTES)
-	// still defaults to 256 MB, and base64 inflates a raw file by ~4/3, so
+	// blocked client-side. The server request cap is 256 MB, and base64 inflates a raw file by ~4/3, so
 	// anything over ~192 MB is rejected with a 413 after the client accepts it.
 	// Revert to 150 before release.
 	FILE_UPLOAD: {
@@ -18,16 +17,14 @@ export const APP_DEFAULTS = {
 		DRAWER_ANIMATION_MS: 350
 	},
 
-	// Solving indicator adaptive thresholds
+	// See createSolvingIndicator.
 	SOLVING_INDICATOR: {
-		/** If solve is faster than this, don't show indicator (ms) */
-		FAST_THRESHOLD_MS: 200,
-		/** If solve is slower than this, show indicator immediately (ms) */
-		SLOW_THRESHOLD_MS: 600,
-		/** Animation delay for solve indicator (ms) */
-		ANIMATION_DELAY: 300,
-		/** Number of solve durations to keep in history for averaging */
-		HISTORY_SIZE: 3
+		/** A solve that ends sooner shows no indicator (ms) */
+		SHOW_AFTER_MS: 400,
+		/** Once shown, the indicator stays at least this long (ms) */
+		MIN_VISIBLE_MS: 500,
+		/** Past this a solve counts as slow and the viewer dims its stale result (ms) */
+		SLOW_AFTER_MS: 2000
 	},
 
 	// File size formatting

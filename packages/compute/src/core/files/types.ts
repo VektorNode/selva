@@ -1,8 +1,4 @@
-/**
- * Raw file data from Grasshopper/Rhino Compute response, with metadata for processing.
- * Files are typically combined with additional files and packaged into a ZIP archive.
- * @see {@link extractFilesFromComputeResponse} for extraction from compute responses
- */
+/** A file as a compute response carries it; {@link extractFilesFromComputeResponse} decodes it. */
 export type FileData = {
 	/** Base filename without extension (e.g., "model") */
 	fileName: string;
@@ -18,39 +14,24 @@ export type FileData = {
 	metadata?: Record<string, string>;
 };
 
-/**
- * Normalized file ready for consumption or archival.
- * Unified intermediate format from FileData or FileBaseInfo, ready to be packaged into archives or returned to callers.
- */
+/** A decoded or fetched file, ready to archive or hand to a caller. */
 export type ProcessedFile = {
-	/** Full filename including extension (e.g., "model.3dm") */
+	/** Filename including extension (e.g., "model.3dm"). Holds a nested path when the name had one. */
 	fileName: string;
 	/** File content as binary data (Uint8Array for decoded base64 or fetched binary) or text */
 	content: Uint8Array | string;
 	/** File path for archive organization (e.g., "subfolder/model.3dm") */
 	path: string;
 	/**
-	 * The sanitized `subFolder` this file came from, separately from `path`.
-	 *
-	 * `path` fuses folder and name for the archive, and a consumer that stores files
-	 * itself (rather than zipping them) otherwise has to re-split it — which is
-	 * ambiguous once a duplicate path has been renamed. `''` means archive root;
-	 * absent means the producer did not record one (hand-built `ProcessedFile`s).
+	 * The sanitized `subFolder`, kept apart from `path` because re-splitting a renamed duplicate
+	 * path is ambiguous. `''` is the archive root; absent on a hand-built `ProcessedFile`.
 	 */
 	subFolder?: string;
-	/**
-	 * Grasshopper-authored metadata carried through from {@link FileData}. Absent when
-	 * the source item had none, or for files fetched via {@link FileBaseInfo} (an
-	 * external URL has no GH metadata).
-	 */
+	/** Carried through from {@link FileData}; absent when it had none, and on fetched files. */
 	metadata?: Record<string, string>;
 };
 
-/**
- * Reference to an external file to be fetched and included in file operations.
- * Specifies additional files (beyond compute response files) to fetch and process as ProcessedFile.
- * @see {@link fetchRemoteFiles} for how FileBaseInfo is fetched and converted
- */
+/** An external file to fetch over HTTP and package alongside the response's own files. */
 export type FileBaseInfo = {
 	/** Destination filename for the file in the archive or result set (e.g., "additional-data.json") */
 	fileName: string;
@@ -58,4 +39,13 @@ export type FileBaseInfo = {
 	filePath: string;
 	/** Optional directory path for archive organization (e.g., "extras/docs"). When omitted, file lands at archive root */
 	subFolder?: string;
+};
+
+export type DownloadOptions = {
+	/**
+	 * Saves each finished archive instead of the default `<a download>` click. For hosts where an
+	 * anchor download doesn't work, such as an embedded WebView that hands saves to native code.
+	 * Awaited when it returns a promise, so archives still save one at a time.
+	 */
+	saveBlob?: (blob: Blob, fileName: string) => unknown;
 };

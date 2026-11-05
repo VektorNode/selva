@@ -1,62 +1,53 @@
 # Documentation
 
-Docs are grouped by audience. Most of what's here also appears on the
-[Selva docs site](https://selva.dev/docs), which builds its nav from the folder
-layout plus each file's `published: true` frontmatter
+Docs are grouped by audience. The [Selva docs site](https://selva.dev/docs) builds its nav from the
+folder layout plus each file's `published: true` frontmatter
 ([`packages/website/src/lib/docs.ts`](../packages/website/src/lib/docs.ts)).
 
 ## Start here
 
-- [what-is-selva.md](./what-is-selva.md): your workflow, everyone's tool — the problem Selva solves and the two halves that make it work
+- [what-is-selva.md](./what-is-selva.md): your workflow, everyone's tool, the problem Selva solves and the two halves that make it work
 - [architecture.md](./architecture.md): how the plugin, app, Rhino.Compute, and providers fit together
-
-The Selva app carries its own internal specs, kept next to the code they
-describe rather than here: they answer "is this route/store/rule correct?",
-not "how does Selva work?":
-
-- **[docs/contributing/selva-architecture.md](./contributing/selva-architecture.md)**: entity model, invariants, provider contracts, and what's designed but not yet wired
-- **[docs/contributing/permissions.md](./contributing/permissions.md)**: the access-control authority; its permission matrix is parsed by the API conformance test
 
 ## [self-hosting/](./self-hosting/): run the Selva app
 
-For operators deploying `@selvajs/selva`.
+For operators deploying `@selvajs/selva`. One folder per sidebar group:
 
-- **get-started/**: [overview](./self-hosting/get-started/overview.md), [quick-start](./self-hosting/get-started/quick-start.md), [cli](./self-hosting/get-started/cli.md), [rhino-compute](./self-hosting/get-started/rhino-compute.md)
-- **deployment/**: [prerequisites](./self-hosting/deployment/prerequisites.md), [reverse-proxy](./self-hosting/deployment/reverse-proxy.md)
-- **providers/**: [overview](./self-hosting/providers/overview.md), [local](./self-hosting/providers/local.md), [supabase](./self-hosting/providers/supabase.md), [header-auth-entra](./self-hosting/providers/header-auth-entra.md), [writing-a-provider](./self-hosting/providers/writing-a-provider.md)
-- **concepts/**: [permissions](./self-hosting/concepts/permissions.md), [caching](./self-hosting/concepts/caching.md), [security-and-limits](./self-hosting/concepts/security-and-limits.md), [data-privacy](./self-hosting/concepts/data-privacy.md), [scaling](./self-hosting/concepts/scaling.md), [admin](./self-hosting/concepts/admin.md)
+- [get-started/](./self-hosting/get-started/): the path from nothing to a running deployment (overview, quick-start, CLI, Rhino.Compute)
+- [deployment/](./self-hosting/deployment/): prerequisites, reverse proxy, security and limits, scaling, admin
+- [providers/](./self-hosting/providers/): the auth, data and storage backends (local, Supabase, header-auth) and how to write one
+- [concepts/](./self-hosting/concepts/): permissions, caching, data privacy
 
-## [packages/](./packages/): build on `@selvajs/*`
+## [packages/build/](./packages/build/): build on `@selvajs/*`
 
-For developers embedding Selva's pieces rather than deploying the app. Each
-package's own README is authoritative for its API.
-
-- [build/overview.md](./packages/build/overview.md): which packages to reach for, and how they fit
+For developers embedding Selva's pieces rather than deploying the app. Start at
+[overview.md](./packages/build/overview.md), which says which packages to reach for. The other
+guides cover `@selvajs/compute` (how it works, data trees, errors, common tasks), signing in from
+apps, MCP, and the [Night look](./packages/build/night-scenes.md). Each package's own README is
+authoritative for its API.
 
 ## [contributing/](./contributing/): work on this repo
 
-Repo-only, never published. No frontmatter: these files are not part of the site
-glob, so the `audience/group/doc.md` rule doesn't apply to them.
+Repo-only. No frontmatter, so `docs.ts` never publishes these (a link into one lands on a "not
+public yet" stub) and the `audience/group/doc.md` rule doesn't apply.
 
 Workflow:
 
 - [turborepo.md](./contributing/turborepo.md): how the monorepo builds and caches
 - [testing.md](./contributing/testing.md): test layout and the shared vitest config
 - [publishing.md](./contributing/publishing.md): releasing npm packages and the Grasshopper plugin
-- [compute-contributing.md](./contributing/compute-contributing.md): export-barrel rules and changeset conventions for `@selvajs/compute`
+- [compute-contributing.md](./contributing/compute-contributing.md): export-barrel rules, error handling and adding an input param type for `@selvajs/compute`
+- [diagrams.md](./contributing/diagrams.md): mermaid versus hand-drawn SVG, and the shared palette
 
 Design references (check code against intent before changing it):
 
 - [selva-architecture.md](./contributing/selva-architecture.md): entity model, org tenancy, and how a solve is orchestrated
-- [permissions.md](./contributing/permissions.md): the access-control contract; source comments cite it by section number, so section numbering is load-bearing
+- [permissions.md](./contributing/permissions.md): the access-control contract; source comments cite it by section number and the API conformance test parses its permission matrix, so section numbering is load-bearing
 - [schema-caching.md](./contributing/schema-caching.md): why the extracted `UISchema` lives on the immutable version row
 - [plugin-context.md](./contributing/plugin-context.md): canvas wiring and schema identity; every rule in it fails silently
 - [slva-format.md](./contributing/slva-format.md): the binary display wire format; the C# encoder and the TS parser must be changed together
 - [viewer-apps.md](./contributing/viewer-apps.md): the `ThreeViewer` seams for drawing your own geometry and tools into the scene
-
-Outstanding work:
-
-- [drawing-backlog.md](./contributing/drawing-backlog.md): what's still missing in the drawing / SVG / PDF pipeline
+- [design-system.md](./contributing/design-system.md): surface roles, states, radius and spacing for every Svelte package; the lint enforces part of it
 - [materials-plan.md](./contributing/materials-plan.md): mapping, tangents, presets and environment for metal, wood and other viewer materials
 
 Package-local `CONTEXT.md` files ([ui](../packages/ui/CONTEXT.md),
@@ -78,9 +69,8 @@ Why things are the way they are. Excluded from the website glob.
 
 ## Conventions
 
-Every doc that can reach the site lives at `audience/group/doc.md`: the folder
-decides its sidebar group, so there is no `group:` frontmatter to drift.
-`contributing/` and `adr/` are exempt; neither reaches the site.
+Published docs live at `audience/group/doc.md`: the folder decides the sidebar group, so there is
+no `group:` frontmatter to drift. `contributing/` and `adr/` are exempt; neither reaches the site.
 
 A published doc's path is its public URL. Moving one after release needs a
 `REDIRECTS` entry in `docs.ts`, or the old link breaks.
@@ -89,5 +79,5 @@ enforces the layout and checks every relative link.
 
 ## Plans
 
-[plans/README.md](../plans/README.md) is the authoritative status and
-implementation order for in-progress and archived work.
+[plans/README.md](../plans/README.md) maps each in-progress and archived plan to the issue that
+tracks it. Status lives on the issue tracker.

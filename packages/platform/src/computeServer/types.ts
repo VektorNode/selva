@@ -30,10 +30,6 @@ interface ComputeServerCommon {
 	 * they'd only throw away.
 	 */
 	hasApiKey?: boolean;
-	/** Default: 30000. */
-	timeoutMs?: number;
-	/** Default: 0. */
-	retryCount?: number;
 }
 
 export interface PlatformComputeServer extends ComputeServerCommon {

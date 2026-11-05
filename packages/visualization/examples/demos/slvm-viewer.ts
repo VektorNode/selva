@@ -31,9 +31,9 @@ import { parseMeshBatchBlob } from '@/parse/index.js';
 import { LOOKS, updateScene, type ThreeInitializerOptions, type Look } from '@/render/index.js';
 
 // Bundled sample mesh files, served by Vite via ?url.
-import sampleSmallUrl from '../fixtures/test_file.slvm?url';
-import sampleMeshUrl from '../fixtures/test_mesh.slvm?url';
-import sampleHouseUrl from '../fixtures/ifc_house.slvm?url';
+import sampleSmallUrl from '../data/test-file.slvm?url';
+import sampleMeshUrl from '../data/test-mesh.slvm?url';
+import sampleHouseUrl from '../data/ifc-house.slvm?url';
 
 // ============================================================================
 // SELVA VIEWER CONFIG — copied verbatim from packages/ui Viewer.svelte onMount
@@ -351,9 +351,9 @@ document.body.appendChild(dmfInput);
 pg.addSection('Mesh file');
 pg.addButton('Load Mesh File…', () => dmfInput.click());
 // One-click samples straight from the repo fixtures — no file dialog needed.
-pg.addButton('Sample: test_file.slvm', () => void loadDmfUrl(sampleSmallUrl, 'test_file.slvm'));
-pg.addButton('Sample: test_mesh.slvm', () => void loadDmfUrl(sampleMeshUrl, 'test_mesh.slvm'));
-pg.addButton('Sample: ifc_house.slvm', () => void loadDmfUrl(sampleHouseUrl, 'ifc_house.slvm'));
+pg.addButton('Sample: test-file.slvm', () => void loadDmfUrl(sampleSmallUrl, 'test-file.slvm'));
+pg.addButton('Sample: test-mesh.slvm', () => void loadDmfUrl(sampleMeshUrl, 'test-mesh.slvm'));
+pg.addButton('Sample: ifc-house.slvm', () => void loadDmfUrl(sampleHouseUrl, 'ifc-house.slvm'));
 
 // ── Merge experiment ──────────────────────────────────────────────────────────
 // Re-parses the last input, so the two configurations can be compared on one file without a reload.

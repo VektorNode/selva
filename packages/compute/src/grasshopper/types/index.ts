@@ -6,7 +6,6 @@ export type {
 	DataTreeDefault,
 	InnerTreeData,
 	DataTree,
-	OutputType,
 	DefaultValue,
 	BaseInputType,
 	NumericInputType,
@@ -21,10 +20,7 @@ export type {
 
 export type {
 	RhinoModelUnit,
-	GrasshopperBaseSchema,
-	GrasshopperDefinitionSource,
 	GrasshopperComputeConfig,
-	IoResponseSchema,
 	GrasshopperRequestSchema,
 	GrasshopperComputeResponse,
 	SelvaEventTarget,

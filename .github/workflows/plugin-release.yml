@@ -10,7 +10,7 @@ name: Plugin Release
 # `credentials.token` from %APPDATA%\McNeel\yak.yml. yak reads the env var
 # directly — no yak.yml needs to exist on the runner.
 #
-# windows-latest is required: net48 needs the .NET Framework targeting pack.
+# windows-latest is required: the Rhino 9 leg and Selva.PluginVerifier need WindowsForms.
 # No Rhino install needed (builds against NuGet, ExcludeAssets=runtime).
 
 on:
@@ -31,6 +31,26 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # the stable-from-main check needs main's history
+
+      # Backstop for scripts/release/release-plugin.js: a hand-pushed tag skips its checks. A stable
+      # version (no -suffix) must sit on main, so nothing on beta can publish one.
+      - name: Stable releases only from main
+        shell: pwsh
+        run: |
+          $ver = $env:GITHUB_REF_NAME -replace '^plugin-v', ''
+          if ($ver -notmatch '^\d+\.\d+\.\d+-beta\.\d+$' -and $ver -notmatch '^\d+\.\d+\.\d+$') {
+            Write-Error "Version ($ver) is neither x.y.z nor x.y.z-beta.N."
+            exit 1
+          }
+          if ($ver -match '-') { exit 0 }
+          git fetch origin main
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Stable tag $env:GITHUB_REF_NAME is not on main. Merge to main first, or use a -beta.N version."
+            exit 1
+          }
 
       # The .yak version comes from the csproj, not the tag — a mismatch would
       # publish a package whose internal version disagrees with its tag.
@@ -52,14 +72,14 @@ jobs:
         shell: pwsh
         run: |
           $ver = $env:GITHUB_REF_NAME -replace '^plugin-v', ''
-          node scripts/plugin-changelog.mjs notes $ver > "$env:RUNNER_TEMP/notes.md"
+          node scripts/release/plugin-changelog.mjs notes $ver > "$env:RUNNER_TEMP/notes.md"
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
-            7.0.x
-            9.0.x
+            8.0.x
+            10.0.x
 
       # Keyed on csproj files: no packages.lock.json exists, so setup-dotnet's
       # built-in cache can't be used.
@@ -87,13 +107,16 @@ jobs:
             turbo-plugin-
 
       # Standalone download (no Rhino required). Must be on PATH so
-      # scripts/build-production.js can shell out to `yak build`.
+      # scripts/plugin/build-production.js can shell out to `yak build`.
+      # Pinned: tools/latest/ is frozen at 0.12.20, which throws a
+      # NullReferenceException in GetInspector on Selva.Panel.rhp. 0.19.1 runs on
+      # .NET 10 (installed above). Versions: developer.rhino3d.com/guides/yak/yak-cli-reference
       - name: Install Yak CLI
         shell: pwsh
         run: |
           $dir = "$env:RUNNER_TEMP\yak"
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          Invoke-WebRequest -Uri 'https://files.mcneel.com/yak/tools/latest/yak.exe' -OutFile "$dir\yak.exe"
+          Invoke-WebRequest -Uri 'https://files.mcneel.com/yak/tools/0.19.1/win-x64/yak.exe' -OutFile "$dir\yak.exe"
           Add-Content -Path $env:GITHUB_PATH -Value $dir
           & "$dir\yak.exe" version
 

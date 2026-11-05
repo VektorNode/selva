@@ -5,6 +5,7 @@ import type {
 	IDefinitionStore,
 	IComputeServerStore,
 	IInviteStore,
+	IApiTokenStore,
 	IShareLinkStore,
 	IUserProfileStore,
 	IPlatformPermissionStore,
@@ -20,11 +21,21 @@ import { LocalProjectStore } from './LocalProjectStore.js';
 import { LocalDefinitionStore } from './LocalDefinitionStore.js';
 import { LocalComputeServerStore } from './LocalComputeServerStore.js';
 import { LocalInviteStore } from './LocalInviteStore.js';
+import { LocalApiTokenStore } from './LocalApiTokenStore.js';
 import { LocalShareLinkStore } from './LocalShareLinkStore.js';
 import { LocalPlatformProjectGrantStore } from './LocalPlatformProjectGrantStore.js';
 import { LocalUserProfileProvider } from '../userProfile/LocalUserProfileProvider.js';
 import { LocalPlatformPermissionStore } from '../permissions/LocalPlatformPermissionStore.js';
 import { createLocalUserDataStore, type LocalUserDataStore } from './userData.js';
+
+/** The concrete stores, for the erasure steps the platform interfaces don't have. */
+interface ErasableStores {
+	orgs: LocalOrgStore;
+	definitions: LocalDefinitionStore;
+	invites: LocalInviteStore;
+	shareLinks: LocalShareLinkStore;
+	platformProjectGrants: LocalPlatformProjectGrantStore;
+}
 
 /**
  * Composition root for every local-provider data store. One
@@ -40,6 +51,7 @@ export class LocalDataProvider implements IDataProvider {
 	readonly definitions: IDefinitionStore;
 	readonly computeServer: IComputeServerStore;
 	readonly invites: IInviteStore;
+	readonly apiTokens: IApiTokenStore;
 	readonly shareLinks: IShareLinkStore;
 	readonly userProfile: IUserProfileStore;
 	readonly permissions: IPlatformPermissionStore;
@@ -47,17 +59,31 @@ export class LocalDataProvider implements IDataProvider {
 	readonly events?: IEventSink;
 
 	private readonly userData: LocalUserDataStore;
+	private readonly erasable: ErasableStores;
 
 	private constructor(
-		stores: Omit<IDataProvider, 'ensureUser' | 'onUserDeleted'>,
+		stores: Omit<
+			IDataProvider,
+			| 'ensureUser'
+			| 'onUserDeleted'
+			| 'apiTokens'
+			| 'orgs'
+			| 'definitions'
+			| 'invites'
+			| 'shareLinks'
+			| 'platformProjectGrants'
+		> &
+			ErasableStores & { apiTokens: IApiTokenStore },
 		userData: LocalUserDataStore
 	) {
+		this.erasable = stores;
 		this.events = stores.events;
 		this.orgs = stores.orgs;
 		this.projects = stores.projects;
 		this.definitions = stores.definitions;
 		this.computeServer = stores.computeServer;
 		this.invites = stores.invites;
+		this.apiTokens = stores.apiTokens;
 		this.shareLinks = stores.shareLinks;
 		this.userProfile = stores.userProfile;
 		this.permissions = stores.permissions;
@@ -78,24 +104,21 @@ export class LocalDataProvider implements IDataProvider {
 
 	/**
 	 * Cascade hook run after the auth provider deletes a user: removes the
-	 * `user-data.json` row and every live org membership, so the roster
-	 * doesn't keep showing a bare user ID forever (Supabase gets this from FK
-	 * constraints; local does it explicitly). Tolerates missing rows.
-	 *
-	 * `opts.email` is unused — the local provider has no audit_events or
-	 * solve_metrics tables to scrub, and its invite set is small and
-	 * operator-visible on disk.
+	 * `user-data.json` row, every membership and everything else that names them
+	 * (Supabase gets most of this from FK constraints). Rows they made stay, under
+	 * `ERASED_ACTOR_ID`. Tolerates missing rows.
 	 */
 	async onUserDeleted(
 		ctx: RequestContext,
 		userId: string,
-		_opts?: UserErasureOptions
+		opts?: UserErasureOptions
 	): Promise<void> {
 		try {
 			await this.userData.deleteUser(userId);
 		} catch {
 			// Already absent — nothing to clean up.
 		}
+		await this.apiTokens.eraseUser(ctx, userId);
 		// `findUserMembership` returns one live membership at a time; removing it
 		// surfaces the next. 100 is far above any real org count — a ceiling in
 		// case a store bug ever turns removal into a no-op.
@@ -104,6 +127,11 @@ export class LocalDataProvider implements IDataProvider {
 			if (!membership) break;
 			await this.orgs.removeOrgMember(ctx, membership.org.id, userId);
 		}
+		await this.erasable.orgs.eraseUser(userId);
+		await this.erasable.definitions.eraseUser(userId);
+		await this.erasable.invites.eraseUser(userId, opts?.email);
+		await this.erasable.shareLinks.eraseUser(userId);
+		await this.erasable.platformProjectGrants.eraseUser(userId);
 	}
 
 	static fromEnv(
@@ -117,6 +145,7 @@ export class LocalDataProvider implements IDataProvider {
 		const loader = new LocalOrgStoreLoader(dataPath);
 		const platformProjectGrants = LocalPlatformProjectGrantStore.fromEnv(env);
 		const invites = LocalInviteStore.fromEnv(env, events);
+		const apiTokens = LocalApiTokenStore.fromEnv(env, events);
 		const computeServer = LocalComputeServerStore.fromEnv(env);
 		const projects = new LocalProjectStore({ loader, grants: platformProjectGrants, events });
 		const definitions = new LocalDefinitionStore(dataPath, undefined, events);
@@ -127,6 +156,7 @@ export class LocalDataProvider implements IDataProvider {
 		const orgs = new LocalOrgStore({
 			loader,
 			invites,
+			apiTokens,
 			computeServer,
 			grants: platformProjectGrants,
 			events
@@ -143,6 +173,7 @@ export class LocalDataProvider implements IDataProvider {
 		shareLinks.setDefinitionProvider(definitions);
 		shareLinks.setProjectProvider(projects);
 		projects.setDefinitionProvider(definitions);
+		orgs.setDefinitionProvider(definitions);
 
 		const userData = createLocalUserDataStore(userDataFilePath);
 
@@ -153,6 +184,7 @@ export class LocalDataProvider implements IDataProvider {
 				definitions,
 				computeServer,
 				invites,
+				apiTokens,
 				shareLinks,
 				userProfile: new LocalUserProfileProvider(userData),
 				permissions: new LocalPlatformPermissionStore(userData),

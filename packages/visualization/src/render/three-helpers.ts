@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-import { computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
+import { cachedSourceOf, computeCombinedBoundingBox, disposeObjectTree } from '../shared/index.js';
 import { isHostOwned } from './scene-ownership.js';
 import { applyReflectionEnvironment } from './scene-setup/reflection-environment.js';
+import { SUN_TARGET_ID } from './scene-setup/setup-lighting.js';
 import { isoOffset } from './up-axis';
 
 const CAMERA_CONFIG = {
@@ -31,7 +32,7 @@ export function updateScene(
 	controls: OrbitControls,
 	initialPositionSet: boolean
 ) {
-	clearScene(scene);
+	clearScene(scene, cachedGeometriesOf(meshes));
 
 	if (meshes.length === 0) return;
 
@@ -80,7 +81,7 @@ export function updateScene(
 // Excluded from every content-bounds query: the grid is a huge plane that re-centers on the
 // camera each frame, so including it would make fit-to-view frame the camera's position instead
 // of the geometry.
-const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure']);
+const VIEWER_AID_IDS = new Set(['grid', 'floor', 'label-layer', 'measure', SUN_TARGET_ID]);
 
 /** True if `object` itself roots a viewer aid; {@link isViewerAid} also checks ancestors. */
 export function isViewerAidRoot(object: THREE.Object3D): boolean {
@@ -116,25 +117,50 @@ export function computeContentBounds(scene: THREE.Scene): THREE.Box3 {
 	return box;
 }
 
-const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer']);
+function cachedGeometriesOf(objects: THREE.Object3D[]): Set<THREE.BufferGeometry> {
+	const cached = new Set<THREE.BufferGeometry>();
+	for (const root of objects) {
+		root.traverse((object) => {
+			const geometry = (object as Partial<THREE.Mesh>).geometry;
+			const source = geometry && cachedSourceOf(geometry);
+			if (source) cached.add(source);
+		});
+	}
+	return cached;
+}
 
-export function clearScene(scene: THREE.Scene): void {
-	// Snapshot — removeFromParent below mutates scene.children during iteration.
-	const topLevel = [...scene.children];
+const PERSISTENT_SCENE_IDS = new Set(['floor', 'grid', 'label-layer', SUN_TARGET_ID]);
 
-	topLevel.forEach((object) => {
+/** Frees the solve content. `keepUploaded` names the cached geometries the next content draws. */
+export function clearScene(
+	scene: THREE.Scene,
+	keepUploaded: ReadonlySet<THREE.BufferGeometry> = new Set()
+): void {
+	const kept: THREE.Object3D[] = [];
+	const removed: THREE.Object3D[] = [];
+	for (const object of scene.children) {
 		// Removing the label-layer group here would orphan it: the CSS2D renderer only finds labels
 		// by walking the live scene, so labels added afterwards would never render.
-		if (PERSISTENT_SCENE_IDS.has(object.userData.id)) return;
-
 		// Host-added geometry (tagged by addUserGeometry, either plain 'user' or an app: scope)
 		// persists across solves so it isn't lost when compute content is replaced.
-		if (isHostOwned(object)) return;
+		// Lights belong to the viewer, not the solve: losing them leaves only the environment map, with
+		// no sun, no shadows and flat upward faces, and nothing errors.
+		const isLight = (object as Partial<THREE.Light>).isLight === true;
+		if (isLight || PERSISTENT_SCENE_IDS.has(object.userData.id) || isHostOwned(object)) {
+			kept.push(object);
+		} else removed.push(object);
+	}
 
+	// One rebuild of the child list, not removeFromParent per object: that is indexOf + splice
+	// each, O(n²), 3.5 s at 100k meshes. The events are the ones Object3D.remove dispatches.
+	scene.children.length = 0;
+	for (const object of kept) scene.children.push(object);
+	for (const object of removed) {
 		// Edge overlays are children of the meshes they outline, so this traversal disposes their
 		// line geometries too — each overlay owns its geometry outright.
-		disposeObjectTree(object);
-
-		object.removeFromParent();
-	});
+		disposeObjectTree(object, { keepUploaded });
+		object.parent = null;
+		object.dispatchEvent({ type: 'removed' });
+		scene.dispatchEvent({ type: 'childremoved', child: object });
+	}
 }

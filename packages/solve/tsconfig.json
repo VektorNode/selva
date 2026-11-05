@@ -4,7 +4,8 @@
 		"target": "ES2022",
 		"lib": ["ES2022", "DOM", "DOM.Iterable"],
 		"outDir": "dist",
-		"types": ["node"]
+		"types": ["node"],
+		"verbatimModuleSyntax": true
 	},
 	"include": ["src/**/*"],
 	"exclude": ["node_modules", "dist"]

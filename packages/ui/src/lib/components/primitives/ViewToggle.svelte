@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Grid2x2, List } from '@lucide/svelte';
+	import * as ToggleGroup from './toggle-group';
 
 	type ViewMode = 'grid' | 'list';
 
@@ -10,38 +11,22 @@
 	}
 
 	let { mode, onChange, size = 'md' }: Props = $props();
-
-	const btnClass = $derived(
-		size === 'sm'
-			? 'flex h-7 w-7 items-center justify-center rounded-md transition-colors'
-			: 'flex h-8 w-8 items-center justify-center rounded-md transition-colors'
-	);
-	const iconClass = $derived(size === 'sm' ? 'h-3.5 w-3.5' : 'h-4 w-4');
 </script>
 
-<div class="gap-0.5 p-0.5 inline-flex rounded-md border border-border bg-card">
-	<button
-		type="button"
-		title="Grid view"
-		aria-label="Grid view"
-		aria-pressed={mode === 'grid'}
-		onclick={() => onChange('grid')}
-		class="{btnClass} {mode === 'grid'
-			? 'bg-muted text-foreground'
-			: 'text-muted-foreground hover:text-foreground'}"
-	>
-		<Grid2x2 class={iconClass} />
-	</button>
-	<button
-		type="button"
-		title="List view"
-		aria-label="List view"
-		aria-pressed={mode === 'list'}
-		onclick={() => onChange('list')}
-		class="{btnClass} {mode === 'list'
-			? 'bg-muted text-foreground'
-			: 'text-muted-foreground hover:text-foreground'}"
-	>
-		<List class={iconClass} />
-	</button>
-</div>
+<ToggleGroup.Root
+	type="single"
+	variant="outline"
+	size={size === 'sm' ? 'sm' : 'default'}
+	value={mode}
+	onValueChange={(next) => {
+		// A single-select group emits '' when the active item is clicked again; keep the mode.
+		if (next === 'grid' || next === 'list') onChange(next);
+	}}
+>
+	<ToggleGroup.Item value="grid" aria-label="Grid view" title="Grid view">
+		<Grid2x2 />
+	</ToggleGroup.Item>
+	<ToggleGroup.Item value="list" aria-label="List view" title="List view">
+		<List />
+	</ToggleGroup.Item>
+</ToggleGroup.Root>

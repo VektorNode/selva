@@ -1,5 +1,5 @@
-import { env } from '$env/dynamic/private';
-import { createTokenCodec, type TokenCodec } from '@selvajs/server/tokens';
+import { createTokenCodec, findByToken, type TokenCodec } from '@selvajs/server/tokens';
+import { hmacKeys } from '#lib/server/keys.server.js';
 
 /**
  * Share-link token primitives — thin binding over `@selvajs/server/tokens`'s
@@ -18,17 +18,22 @@ const TOKEN_PREFIX = 'share_';
 // Codec creation validates the secret, so resolve lazily (env isn't ready at
 // import time in every context) and re-key on the secret so tests that mutate
 // the env stub per-scenario see the change.
-let cached: { secret: string; codec: TokenCodec } | null = null;
+let cached: { cacheKey: string; codec: TokenCodec } | null = null;
 function getCodec(): TokenCodec {
-	const secret = env.SELVA_HMAC_KEY;
+	const { current: secret, previous } = hmacKeys();
 	if (!secret) {
 		throw new Error(
 			'Missing required env var: SELVA_HMAC_KEY. ' +
 				'See packages/selva/.env.example for setup instructions.'
 		);
 	}
-	if (cached?.secret !== secret) {
-		cached = { secret, codec: createTokenCodec({ prefix: TOKEN_PREFIX, secret }) };
+	const cacheKey = `${secret}\n${previous ?? ''}`;
+	if (cached?.cacheKey !== cacheKey) {
+		const previousSecret = previous ? { previousSecret: previous } : {};
+		cached = {
+			cacheKey,
+			codec: createTokenCodec({ prefix: TOKEN_PREFIX, secret, ...previousSecret })
+		};
 	}
 	return cached.codec;
 }
@@ -57,4 +62,12 @@ export function looksLikeShareToken(value: string): boolean {
 	// Doesn't touch the codec, so a missing secret can't turn "is this even a
 	// share token?" into a 500.
 	return value.startsWith(TOKEN_PREFIX);
+}
+
+/** The stored record for `raw`, whichever hash form it was saved under. */
+export function findByRawToken<T>(
+	raw: string,
+	lookup: (hash: string) => Promise<T | null>
+): Promise<T | null> {
+	return findByToken(getCodec(), raw, lookup);
 }

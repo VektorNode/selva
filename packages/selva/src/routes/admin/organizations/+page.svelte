@@ -34,9 +34,9 @@
 					getKey={(o) => o.id}
 					columns={[
 						{ label: 'Organization' },
-						{ label: 'Slug', width: '140px' },
+						{ label: 'Slug', width: '140px', hideOnMobile: true },
 						{ label: 'Members', width: '120px', align: 'right' },
-						{ label: 'Created', width: '140px', align: 'right' }
+						{ label: 'Created', width: '140px', align: 'right', hideOnMobile: true }
 					]}
 				>
 					{#snippet row(org)}

@@ -279,6 +279,68 @@ public class DocumentLayoutPassTests
 	}
 
 	[Fact]
+	public void Tokens_resolve_in_layout_elements_nested_inside_body_content()
+	{
+		// A title block in a sheet grid: the grid resolves whole, leaving the block inside it
+		// unresolved, and the token walk skipped it, printing "{page}/{pages}" literally.
+		var sheetNo = new Selva.Drawing.Model.Drawings.TitleBlock
+		{
+			Rows = new[] { new[] { new Selva.Drawing.Model.Drawings.TitleBlockField { Label = "SHEET", Value = "{page}/{pages}" } } },
+		};
+		var view = new Selva.Drawing.Model.Drawings.DrawingView { Geometry = Rect(100, 50), Length = 20 };
+		var grid = new Grid
+		{
+			Columns = new[] { GridLength.Auto, GridLength.Auto },
+			Rows = new[] { GridLength.Auto },
+			Cells = new[]
+			{
+				new GridCell { Row = 0, Column = 0, Content = view },
+				new GridCell { Row = 0, Column = 1, Content = sheetNo },
+			},
+		};
+		var layout = new DocumentLayout
+		{
+			Sections = new[] { new Section { Content = grid } },
+			PaperSize = new PaperSize(300, 300, "T300"),
+			Margins = NoMargin,
+			Header = ScaleHeader(),
+			HeaderHeight = 5,
+		};
+		var pages = DocumentLayoutPass.Paginate(layout);
+		var texts = new List<string>();
+		CollectTexts(pages[0].Content, texts);
+		Assert.Contains("1/1", texts);
+		Assert.Contains("1:5", texts);
+	}
+
+	[Fact]
+	public void Tokens_resolve_in_a_title_block_nested_in_the_footer()
+	{
+		var titleBlock = new Selva.Drawing.Model.Drawings.TitleBlock
+		{
+			Rows = new[] { new[] { new Selva.Drawing.Model.Drawings.TitleBlockField { Label = "SHEET", Value = "{page}/{pages}" } } },
+		};
+		var layout = new DocumentLayout
+		{
+			Sections = new[] { new Section { Content = Rect(10, 10) } },
+			PaperSize = new PaperSize(300, 300, "T300"),
+			Margins = NoMargin,
+			Footer = new Stack { Orientation = StackOrientation.Horizontal, Children = new DrawElement[] { titleBlock } },
+		};
+		var pages = DocumentLayoutPass.Paginate(layout);
+		var texts = new List<string>();
+		CollectTexts(pages[0].Content, texts);
+		Assert.Contains("1/1", texts);
+	}
+
+	private static void CollectTexts(DrawElement element, List<string> into)
+	{
+		if (element is TextElement t) into.Add(t.Text);
+		if (element is GroupElement g)
+			foreach (var c in g.Children) CollectTexts(c, into);
+	}
+
+	[Fact]
 	public void Explicit_scale_token_is_not_overwritten_by_inference()
 	{
 		var view = new Selva.Drawing.Model.Drawings.DrawingView { Geometry = Rect(100, 50), Length = 20 };

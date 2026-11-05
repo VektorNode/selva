@@ -25,8 +25,8 @@ import {
 	buildLauncher,
 	npmInstallArgs,
 	shellQuote
-} from '$lib/server/updateRunner.server';
-import { deriveOutcome, TIMED_OUT } from '$lib/update-outcome';
+} from '#lib/server/updateRunner.server.js';
+import { deriveOutcome, TIMED_OUT } from '#lib/update-outcome.js';
 
 const ECOSYSTEM = '/srv/selva/ecosystem.config.cjs';
 
@@ -420,6 +420,54 @@ describe('a killed runner is never a green success (issue #118)', () => {
 	});
 });
 
+describe('a release that bumps pm2 needs no manual migrate', () => {
+	const script = runner();
+	const install = script.indexOf('# 4. Run npm update.');
+	const realign = script.indexOf('# 4b. Move pm2 onto the version the new CLI pins.');
+	const start = script.indexOf('# 5. Start selva-compute with the new build.');
+	const block = script.slice(realign, start);
+
+	it('moves the pin after the new CLI is installed and before the app starts', () => {
+		expect(install).toBeGreaterThan(-1);
+		expect(realign).toBeGreaterThan(install);
+		expect(start).toBeGreaterThan(realign);
+		expect(block).toContain('node_modules/@selvajs/cli/package.json');
+		expect(block).toContain('--save-exact');
+	});
+
+	it('never swaps the daemon under systemd', () => {
+		expect(block.indexOf('pm2_under_systemd')).toBeLessThan(block.indexOf('"$PM2" update'));
+		expect(block).toContain('PM2_RESYNC_NEEDED');
+	});
+
+	it('does not abort the update when pm2 cannot move', () => {
+		expect(block).not.toMatch(/\bexit\b/);
+	});
+
+	it('keeps the new pm2 on rollback — the old one would leave the daemon newer', () => {
+		const rollback = script.slice(script.indexOf('# 7. Rollback path.'));
+		expect(rollback).not.toContain('pm2@');
+	});
+
+	it('reports a pending daemon swap as a warning, not a success', () => {
+		const logs =
+			`${emittedLine(script, 'PM2_RESYNC_NEEDED: pm2 is now')}\n` +
+			'[INFO] New @selvajs/selva: 4.20.0\n[DONE] Update complete\n';
+		const outcome = deriveOutcome(0, logs);
+		expect(outcome.severity).toBe('warning');
+		expect(outcome.detail).toContain('npx pm2 update');
+	});
+
+	it('reports a failed pin move as a warning naming the fix', () => {
+		const logs =
+			`${emittedLine(script, 'PM2_PIN_FAILED')}\n` +
+			'[INFO] New @selvajs/selva: 4.20.0\n[DONE] Update complete\n';
+		const outcome = deriveOutcome(0, logs);
+		expect(outcome.severity).toBe('warning');
+		expect(outcome.detail).toContain('npx selva migrate');
+	});
+});
+
 describe('Node engine mismatch is never a green success (issue #176)', () => {
 	// The exact npm warning from the incident: install succeeds, pm2 starts,
 	// /api/health returns 200, so nothing else in the pipeline objects.
@@ -474,7 +522,7 @@ describe('a rollback names the cause the health endpoint reported', () => {
 	 * exercises the emitted bash rather than a hand-copied approximation of it.
 	 * The block is delimited by the two markers it sits between.
 	 */
-	function classify(body: string): string {
+	function classify(body: string, tag = 'latest'): string {
 		const script = runner();
 		const start = script.indexOf('  if echo "$BODY" | grep -q \'"expected":\'');
 		const end = script.indexOf('rm -f /tmp/selva-health.$$', start);
@@ -492,6 +540,7 @@ describe('a rollback names the cause the health endpoint reported', () => {
 					'AFTER=4.14.0',
 					'LATEST=4.14.0',
 					'ECOSYSTEM=/srv/selva/ecosystem.config.cjs',
+					`TAG=${tag}`,
 					script.slice(start, end)
 				].join('\n')
 			);
@@ -516,12 +565,20 @@ describe('a rollback names the cause the health endpoint reported', () => {
 		// The bin takes no subcommand: `... supabase-provider sync-migrations` exits 1.
 		// This block is copy-paste bait, so a form that cannot run must never appear.
 		expect(out).not.toContain('supabase-provider sync-migrations');
-		// The rollback re-pins the OLD provider, whose packaged migrations stop at the
+		// The update never moves the provider, whose packaged migrations stop at the
 		// head already applied — so syncing without reinstalling copies nothing and the
 		// push reports success having done nothing.
 		expect(out).toContain('npm install --prefer-online @selvajs/supabase-provider@latest');
 		// The question the operator actually asked: why not automatically?
 		expect(out).toMatch(/not reversible|cannot be rolled back/i);
+	});
+
+	itParses('names the provider on the channel being updated, not always latest', () => {
+		// provider@latest is the stable line: on a beta deployment it ships none of
+		// the beta's migrations, so the sync copies nothing and the retry fails again.
+		const out = classify(DEGRADED_SCHEMA_BODY, 'beta');
+		expect(out).toContain('npm install --prefer-online @selvajs/supabase-provider@beta');
+		expect(out).not.toContain('supabase-provider@latest');
 	});
 
 	itParses('does not blame at-rest secrets when only the schema is behind', () => {

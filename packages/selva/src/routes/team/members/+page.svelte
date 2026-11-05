@@ -7,10 +7,11 @@
 		SectionHeader,
 		EmptyState,
 		Pagination,
-		ConfirmDialog
+		ConfirmDialog,
+		FilterableDropdown
 	} from '@selvajs/ui';
 	import { Mail, Trash2, Copy, X, UserPlus, Send, Search } from '@lucide/svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { refreshAll } from '$app/navigation';
 	import type { Invite, OrgPermission, OrgRole } from '@selvajs/platform';
 	import {
 		ALL_ORG_PERMISSIONS,
@@ -19,8 +20,8 @@
 	} from '@selvajs/platform';
 	import type { MemberRow } from './+page.server';
 	import { removalBlockReason } from './removal-gate';
-	import UserRowIdentity from '$lib/components/UserRowIdentity.svelte';
-	import { PERMISSION_LABELS, ROLE_TONE, ORG_ROLES } from '$lib/permission-labels';
+	import UserRowIdentity from '#lib/components/UserRowIdentity.svelte';
+	import { PERMISSION_LABELS, ROLE_TONE, ORG_ROLES } from '#lib/permission-labels.js';
 
 	interface PageData {
 		members: MemberRow[];
@@ -56,7 +57,7 @@
 			});
 			if (res.ok) {
 				toast.success('Member updated');
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Could not update member');
@@ -177,7 +178,7 @@
 				inviteRole = 'member';
 				invitePermissions = [];
 				showInviteForm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({ error: 'Unknown error' }));
 				toast.error(err.message || err.error || 'Failed to create invite');
@@ -217,7 +218,7 @@
 			if (res.ok) {
 				toast.success(`${who} removed from the organization`);
 				showRemoveConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Could not remove member');
@@ -247,7 +248,7 @@
 					delivery === 'sent' ? `Invite resent to ${invite.email}` : 'New invite link issued'
 				);
 				showResendConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				const err = await res.json().catch(() => ({}));
 				toast.error(err.message || err.error || 'Could not resend invite');
@@ -266,7 +267,7 @@
 			if (res.ok) {
 				toast.success('Invite revoked');
 				showRevokeConfirm = false;
-				await invalidateAll();
+				await refreshAll();
 			} else {
 				toast.error('Failed to revoke invite');
 			}
@@ -323,14 +324,11 @@
 					</div>
 					<div class="grid gap-3 sm:grid-cols-2">
 						<Input type="email" placeholder="Email" bind:value={inviteEmail} />
-						<select
-							bind:value={inviteRole}
-							class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-						>
-							{#each invitableRoles as role (role)}
-								<option value={role}>{role}</option>
-							{/each}
-						</select>
+						<FilterableDropdown
+							items={invitableRoles.map((r) => ({ id: r, label: r }))}
+							value={inviteRole}
+							onChange={(v) => (inviteRole = v as OrgRole)}
+						/>
 					</div>
 					<div>
 						<p class="mb-2 text-xs font-medium">Permissions</p>
@@ -454,16 +452,17 @@
 									class="pl-9"
 								/>
 							</div>
-							<select
-								bind:value={roleFilter}
+							<FilterableDropdown
 								aria-label="Filter by role"
-								class="border-input bg-background h-9 rounded-md border px-3 text-sm"
-							>
-								<option value="all">All roles</option>
-								{#each ORG_ROLES as role (role)}
-									<option value={role}>{role}</option>
-								{/each}
-							</select>
+								items={[
+									{ id: 'all', label: 'All roles' },
+									...ORG_ROLES.map((r) => ({ id: r, label: r }))
+								]}
+								value={roleFilter}
+								onChange={(v) => (roleFilter = v as OrgRole | 'all')}
+								size="sm"
+								class="w-36"
+							/>
 							{#if filtersActive}
 								<Button variant="ghost" size="sm" onclick={clearFilters}>
 									<X class="mr-1.5 h-3.5 w-3.5" />
@@ -497,17 +496,16 @@
 										>
 											{#snippet roleBadge()}
 												{#if canEditRole}
-													<select
+													<FilterableDropdown
+														items={ORG_ROLES.map((r) => ({ id: r, label: r }))}
 														value={member.role}
 														disabled={savingId === member.userId}
-														onchange={(e) =>
-															changeRole(member, (e.target as HTMLSelectElement).value as OrgRole)}
-														class={`border-input bg-background h-6 rounded-md border px-1.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}
-													>
-														{#each ORG_ROLES as role (role)}
-															<option value={role}>{role}</option>
-														{/each}
-													</select>
+														onChange={(v) => {
+															if (v !== member.role) changeRole(member, v as OrgRole);
+														}}
+														size="sm"
+														class={`w-28 ${ROLE_TONE[member.role]}`}
+													/>
 												{:else}
 													<span
 														class={`rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-wide uppercase ${ROLE_TONE[member.role]}`}

@@ -8,6 +8,8 @@ export function loadScript(
 	src: string,
 	options?: {
 		crossOrigin?: string;
+		/** Subresource Integrity hash. A cross-origin script also needs `crossOrigin`. */
+		integrity?: string;
 		async?: boolean;
 		defer?: boolean;
 	}
@@ -26,6 +28,7 @@ export function loadScript(
 		const script = document.createElement('script');
 		script.src = src;
 		if (options?.crossOrigin) script.crossOrigin = options.crossOrigin;
+		if (options?.integrity) script.integrity = options.integrity;
 		if (options?.async !== undefined) script.async = options.async;
 		if (options?.defer !== undefined) script.defer = options.defer;
 

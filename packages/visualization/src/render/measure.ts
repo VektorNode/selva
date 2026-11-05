@@ -4,14 +4,16 @@ import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 
 import type { LabelLayer, LabelHandle } from './label-layer';
+import { raycastVisible, warmPickIndex } from './scene-pick.js';
 
 /**
- * Two-click distance measurement. Click a point, click a second, read the distance off a label on
- * the connecting line; a third click starts fresh.
+ * Point-to-point distance measurement. Click a start point; a rubber band and live readout follow
+ * the cursor until the second click commits it. Committed measurements stay until Escape (which
+ * first drops an unfinished start point) or until the tool is disabled.
  *
- * Picking snaps to the nearest vertex within {@link MeasureOptions.snapPixels} so measurements
- * land exactly on vertices rather than wherever the ray happened to hit — a cheap local snap
- * against the struck primitive's own vertices, no spatial index.
+ * Picking snaps to the nearest vertex of the struck triangle, segment or point within
+ * {@link MeasureOptions.snapPixels}; the hover marker turns solid when it has snapped. Meshes are
+ * picked through a BVH (`scene-pick.ts`), so hovering stays cheap on large models.
  *
  * Dormant until {@link MeasureTool.setEnabled}(true). While enabled it intercepts clicks (caller
  * forwards them and swallows the event when {@link MeasureTool.handleClick} returns true) so
@@ -23,8 +25,10 @@ export interface MeasureTool {
 	isEnabled(): boolean;
 	/** Returns true if the tool consumed the click (caller should not also select). */
 	handleClick(event: MouseEvent): boolean;
-	/** Preview the next snap point via a ghost marker. No-op when disabled; never consumes the event. */
+	/** Preview the next snap point and the rubber band. No-op when disabled; never consumes the event. */
 	handleMove(event: MouseEvent): void;
+	/** Drops the unfinished start point, or every measurement when there is none. Bound to Escape. */
+	cancel(): void;
 	clear(): void;
 	dispose(): void;
 }
@@ -42,7 +46,8 @@ export interface MeasureOptions {
 	displayUnit?: string;
 	/**
 	 * Format the measurement → label text. Receives `distance` and per-axis `delta` (|b − a|), both
-	 * in meters. May return multi-line text/HTML; default renders total + Δx/Δy/Δz in `displayUnit`.
+	 * in meters. May return multi-line text; default renders the total, plus the non-zero axis
+	 * deltas when more than one axis changes.
 	 */
 	format?: (distance: number, delta: THREE.Vector3) => string;
 }
@@ -57,6 +62,8 @@ interface MeasureDeps {
 	 * Without it, the fallback is distance-to-origin, which misjudges off-origin content.
 	 */
 	getViewTarget?: () => THREE.Vector3;
+	/** Repaint after a hover/click change; an on-demand render loop won't notice them otherwise. */
+	requestRender?: () => void;
 	labelLayer: LabelLayer;
 	options?: MeasureOptions;
 }
@@ -66,6 +73,10 @@ const DEFAULT_COLOR = 0xffcc00;
 // Fraction of view distance used as the line/point raycast threshold: ~1.5% gives a comfortable
 // grab band at typical framing without snapping to far-off geometry.
 const LINE_PICK_FRACTION = 0.015;
+// Marker renderOrders: above scene content, and committed markers above the line they end.
+const RENDER_ORDER_LINE = 998;
+const RENDER_ORDER_MARKER = 999;
+const RENDER_ORDER_HOVER = 1000;
 
 // Scene geometry loads in meters (webdisplay parser scales when `allowScaling` is on). Keep in
 // sync with the webdisplay parser's SCALE_FACTORS.
@@ -77,10 +88,33 @@ const UNIT_DISPLAY: Record<string, { metersPerUnit: number; suffix: string }> = 
 	Feet: { metersPerUnit: 1 / 3.28084, suffix: 'ft' }
 };
 
-/** @internal exported for tests */
+/**
+ * Three significant figures below 1000, whole units above. `toPrecision(3)` alone switches to
+ * exponent notation past 999 ("1.23e+4 mm"), which is unreadable on a building-scale model.
+ *
+ * @internal exported for tests
+ */
 export function makeFormatter(displayUnit?: string): (n: number) => string {
 	const unit = (displayUnit && UNIT_DISPLAY[displayUnit]) || UNIT_DISPLAY.Meters;
-	return (meters: number) => `${(meters / unit.metersPerUnit).toPrecision(3)} ${unit.suffix}`;
+	return (meters: number) => {
+		const value = meters / unit.metersPerUnit;
+		const abs = Math.abs(value);
+		const decimals = abs === 0 ? 0 : Math.min(6, Math.max(0, 2 - Math.floor(Math.log10(abs))));
+		return `${value.toFixed(decimals)} ${unit.suffix}`;
+	};
+}
+
+/** @internal exported for tests */
+export function makeDefaultFormat(
+	fmt: (n: number) => string
+): (distance: number, delta: THREE.Vector3) => string {
+	return (distance, delta) => {
+		// Relative epsilon: float noise on an axis-aligned measurement isn't a real component.
+		const eps = distance * 1e-6;
+		const axes = (['x', 'y', 'z'] as const).filter((axis) => delta[axis] > eps);
+		if (axes.length < 2) return fmt(distance);
+		return `${fmt(distance)}\n${axes.map((axis) => `Δ${axis} ${fmt(delta[axis])}`).join('  ')}`;
+	};
 }
 
 /**
@@ -102,18 +136,43 @@ export function pickThreshold(camera: THREE.Camera, viewTarget?: THREE.Vector3):
 }
 
 /**
- * Vertex indices to consider snapping to, by object type: Mesh → struck triangle's 3 vertices;
- * Line/LineSegments → struck segment's 2 endpoints; Points → the struck vertex. Null when the hit
- * carries no usable index (e.g. a fat `Line2`), so the caller keeps the raw hit point.
+ * Local-space vertices to consider snapping to, by object type: Mesh → struck triangle's 3
+ * vertices; Line/LineSegments and fat Line2/LineSegments2 → struck segment's 2 endpoints; Points →
+ * the struck vertex. Null when the hit carries no usable index, so the caller keeps the raw point.
  */
-function snapCandidateIndices(hit: THREE.Intersection): number[] | null {
-	const obj = hit.object;
+function snapCandidates(hit: THREE.Intersection): THREE.Vector3[] | null {
+	const obj = hit.object as THREE.Object3D & {
+		geometry?: THREE.BufferGeometry;
+		isLineSegments2?: boolean;
+	};
+	const geometry = obj.geometry;
+	if (!geometry) return null;
+
+	// Fat lines store each segment as one instance: `faceIndex` is the segment.
+	if (obj.isLineSegments2) {
+		const start = geometry.attributes.instanceStart as THREE.InterleavedBufferAttribute | undefined;
+		const end = geometry.attributes.instanceEnd as THREE.InterleavedBufferAttribute | undefined;
+		const i = hit.faceIndex;
+		if (!start || !end || i == null || i >= start.count) return null;
+		return [
+			new THREE.Vector3().fromBufferAttribute(start, i),
+			new THREE.Vector3().fromBufferAttribute(end, i)
+		];
+	}
+
+	const pos = geometry.attributes.position as THREE.BufferAttribute | undefined;
+	if (!pos) return null;
+	const at = (indices: number[]) =>
+		indices
+			.filter((i) => i < pos.count)
+			.map((i) => new THREE.Vector3().fromBufferAttribute(pos, i));
+
 	if (obj instanceof THREE.Mesh) {
-		return hit.face ? [hit.face.a, hit.face.b, hit.face.c] : null;
+		return hit.face ? at([hit.face.a, hit.face.b, hit.face.c]) : null;
 	}
 	if (obj instanceof THREE.Points) {
 		// Points.raycast resolves indexed geometry itself: `hit.index` is always a position index.
-		return hit.index != null ? [hit.index] : null;
+		return hit.index != null ? at([hit.index]) : null;
 	}
 	// THREE.Line / LineSegments / LineLoop. For non-indexed geometry `hit.index` is the first
 	// vertex of the struck segment. For indexed geometry it's a cursor into the index buffer, not
@@ -121,14 +180,60 @@ function snapCandidateIndices(hit: THREE.Intersection): number[] | null {
 	// looked up through the index before reading the position attribute.
 	if (obj instanceof THREE.Line) {
 		if (hit.index == null) return null;
-		const index = obj.geometry.index;
+		const index = geometry.index;
 		if (index) {
 			if (hit.index + 1 >= index.count) return null; // stale/inconsistent hit; keep raw point
-			return [index.getX(hit.index), index.getX(hit.index + 1)];
+			return at([index.getX(hit.index), index.getX(hit.index + 1)]);
 		}
-		return [hit.index, hit.index + 1];
+		return at([hit.index, hit.index + 1]);
 	}
 	return null;
+}
+
+function toScreen(
+	world: THREE.Vector3,
+	camera: THREE.Camera,
+	screenSize: { width: number; height: number }
+): THREE.Vector2 {
+	const ndc = world.clone().project(camera);
+	return new THREE.Vector2(
+		((ndc.x + 1) / 2) * screenSize.width,
+		((1 - ndc.y) / 2) * screenSize.height
+	);
+}
+
+/** Where a hit sits on screen: fat lines report the nearest point on the line separately. */
+function hitPoint(hit: THREE.Intersection): THREE.Vector3 {
+	return (hit as THREE.Intersection & { pointOnLine?: THREE.Vector3 }).pointOnLine ?? hit.point;
+}
+
+interface SnapResult {
+	point: THREE.Vector3;
+	snapped: boolean;
+}
+
+function snapHit(
+	hit: THREE.Intersection,
+	camera: THREE.Camera,
+	screenSize: { width: number; height: number },
+	snapPixels: number
+): SnapResult {
+	const raw = hitPoint(hit).clone();
+	const candidates = snapCandidates(hit);
+	if (!candidates) return { point: raw, snapped: false };
+
+	const rawScreen = toScreen(raw, camera, screenSize);
+	let best: SnapResult = { point: raw, snapped: false };
+	let bestPx = snapPixels;
+	for (const local of candidates) {
+		const world = local.applyMatrix4(hit.object.matrixWorld);
+		const px = toScreen(world, camera, screenSize).distanceTo(rawScreen);
+		if (px < bestPx) {
+			bestPx = px;
+			best = { point: world, snapped: true };
+		}
+	}
+	return best;
 }
 
 /** Snap a raycast hit to the nearest geometry vertex within `snapPixels` on screen, else the raw hit point. */
@@ -138,166 +243,194 @@ export function snapToVertex(
 	screenSize: { width: number; height: number },
 	snapPixels: number
 ): THREE.Vector3 {
-	const raw = hit.point.clone();
-	const obj = hit.object as THREE.Object3D & { geometry?: THREE.BufferGeometry };
-	const indices = snapCandidateIndices(hit);
-	if (!indices || !obj.geometry) return raw;
+	return snapHit(hit, camera, screenSize, snapPixels).point;
+}
 
-	const pos = obj.geometry.attributes.position as THREE.BufferAttribute | undefined;
-	if (!pos) return raw;
-
-	const toScreen = (worldP: THREE.Vector3): THREE.Vector2 => {
-		const ndc = worldP.clone().project(camera);
-		return new THREE.Vector2(
-			((ndc.x + 1) / 2) * screenSize.width,
-			((1 - ndc.y) / 2) * screenSize.height
-		);
-	};
-	const rawScreen = toScreen(raw);
-
-	let best = raw;
-	let bestPx = snapPixels;
-	for (const idx of indices) {
-		if (idx >= pos.count) continue; // guard the line `index + 1` against the geometry end
-		const local = new THREE.Vector3().fromBufferAttribute(pos, idx);
-		const world = local.applyMatrix4(obj.matrixWorld);
-		const px = toScreen(world).distanceTo(rawScreen);
-		if (px < bestPx) {
-			bestPx = px;
-			best = world;
-		}
-	}
-	return best;
+interface Measurement {
+	markers: THREE.Points;
+	line: Line2;
+	label: LabelHandle;
 }
 
 export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 	const { canvas, scene, getActiveCamera, getViewTarget, labelLayer, options = {} } = deps;
+	const requestRender = deps.requestRender ?? (() => {});
 	const snapPixels = options.snapPixels ?? DEFAULT_SNAP_PIXELS;
 	const color = new THREE.Color(options.color ?? DEFAULT_COLOR);
-	const fmt = makeFormatter(options.displayUnit);
-	const defaultFormat = (d: number, delta: THREE.Vector3) =>
-		`${fmt(d)}\nΔx ${fmt(delta.x)}  Δy ${fmt(delta.y)}  Δz ${fmt(delta.z)}`;
-	const format = options.format ?? defaultFormat;
+	const format = options.format ?? makeDefaultFormat(makeFormatter(options.displayUnit));
 
 	const raycaster = new THREE.Raycaster();
 	const pointer = new THREE.Vector2();
 
 	let enabled = false;
-	const points: THREE.Vector3[] = [];
+	let start: { point: THREE.Vector3; marker: THREE.Points } | null = null;
+	const measurements: Measurement[] = [];
 
-	const markers: THREE.Points[] = [];
-	let line: Line2 | null = null;
-	let label: LabelHandle | null = null;
-
+	// depthTest off throughout: markers and lines stay visible through geometry, like CAD snap dots.
 	const markerMaterial = new THREE.PointsMaterial({
 		color,
 		size: 8,
 		sizeAttenuation: false,
-		depthTest: false // markers stay visible through geometry, like CAD snap dots
+		depthTest: false
 	});
-
-	// Dimmer + bigger than a committed marker so the next click's snap target is obvious before clicking.
-	const hoverMaterial = new THREE.PointsMaterial({
+	// Solid and larger once snapped to a vertex; small and faint on a free surface point, so the
+	// user sees whether the next click lands on a vertex before clicking.
+	const hoverSnappedMaterial = new THREE.PointsMaterial({
 		color,
-		size: 11,
+		size: 12,
+		sizeAttenuation: false,
+		depthTest: false
+	});
+	const hoverFreeMaterial = new THREE.PointsMaterial({
+		color,
+		size: 7,
 		sizeAttenuation: false,
 		depthTest: false,
 		transparent: true,
-		opacity: 0.5
+		opacity: 0.6
 	});
-	let hoverMarker: THREE.Points | null = null;
 
-	const showHover = (p: THREE.Vector3 | null) => {
-		if (!p) {
-			if (hoverMarker) hoverMarker.visible = false;
+	const tag = <T extends THREE.Object3D>(object: T, renderOrder: number): T => {
+		object.renderOrder = renderOrder;
+		object.userData.id = 'measure';
+		object.raycast = () => {}; // never a measure target itself
+		object.frustumCulled = false; // positions are rewritten in place; a stale sphere would cull
+		return object;
+	};
+
+	const makePoints = (...ps: THREE.Vector3[]): THREE.Points => {
+		const geometry = new THREE.BufferGeometry();
+		geometry.setAttribute(
+			'position',
+			new THREE.Float32BufferAttribute(
+				ps.flatMap((p) => [p.x, p.y, p.z]),
+				3
+			)
+		);
+		const points = tag(new THREE.Points(geometry, markerMaterial), RENDER_ORDER_MARKER);
+		scene.add(points);
+		return points;
+	};
+
+	const makeLine = (a: THREE.Vector3, b: THREE.Vector3, opacity = 1): Line2 => {
+		const geometry = new LineGeometry();
+		geometry.setPositions([a.x, a.y, a.z, b.x, b.y, b.z]);
+		const material = new LineMaterial({ color, transparent: opacity < 1, opacity });
+		(material as LineMaterial & { linewidth: number }).linewidth = 2;
+		material.depthTest = false;
+		const line = tag(new Line2(geometry, material), RENDER_ORDER_LINE);
+		scene.add(line);
+		return line;
+	};
+
+	// Rewrites a two-point Line2 in place. `setPositions` would allocate new GPU buffers per frame.
+	const moveLine = (line: Line2, a: THREE.Vector3, b: THREE.Vector3) => {
+		const startAttr = line.geometry.attributes.instanceStart as THREE.InterleavedBufferAttribute;
+		const buffer = startAttr.data;
+		(buffer.array as Float32Array).set([a.x, a.y, a.z, b.x, b.y, b.z]);
+		buffer.needsUpdate = true;
+	};
+
+	const disposeLine = (line: Line2) => {
+		line.geometry.dispose();
+		(line.material as LineMaterial).dispose();
+		line.removeFromParent();
+	};
+
+	const disposePoints = (points: THREE.Points) => {
+		points.geometry.dispose();
+		points.removeFromParent();
+	};
+
+	const labelText = (a: THREE.Vector3, b: THREE.Vector3) => {
+		const delta = new THREE.Vector3(Math.abs(b.x - a.x), Math.abs(b.y - a.y), Math.abs(b.z - a.z));
+		return format(a.distanceTo(b), delta);
+	};
+	const midpoint = (a: THREE.Vector3, b: THREE.Vector3) => a.clone().add(b).multiplyScalar(0.5);
+
+	// ==========================================================================
+	// Hover preview: snap marker, plus the rubber band while a start point is set
+	// ==========================================================================
+
+	let hoverMarker: THREE.Points | null = null;
+	let rubberBand: Line2 | null = null;
+	let rubberLabel: LabelHandle | null = null;
+
+	const hidePreview = () => {
+		if (hoverMarker) hoverMarker.visible = false;
+		if (rubberBand) rubberBand.visible = false;
+		rubberLabel?.remove();
+		rubberLabel = null;
+	};
+
+	const showPreview = (snap: SnapResult | null) => {
+		if (!snap) {
+			hidePreview();
 			return;
 		}
 		if (!hoverMarker) {
-			const geometry = new THREE.BufferGeometry();
-			geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0], 3));
-			hoverMarker = new THREE.Points(geometry, hoverMaterial);
-			hoverMarker.renderOrder = 1000;
-			hoverMarker.userData.id = 'measure';
-			hoverMarker.raycast = () => {};
-			scene.add(hoverMarker);
+			hoverMarker = makePoints(new THREE.Vector3());
+			hoverMarker.renderOrder = RENDER_ORDER_HOVER;
 		}
-		hoverMarker.position.copy(p);
+		hoverMarker.material = snap.snapped ? hoverSnappedMaterial : hoverFreeMaterial;
+		hoverMarker.position.copy(snap.point);
 		hoverMarker.visible = true;
-	};
 
-	const makeMarker = (p: THREE.Vector3): THREE.Points => {
-		const geometry = new THREE.BufferGeometry();
-		geometry.setAttribute('position', new THREE.Float32BufferAttribute([p.x, p.y, p.z], 3));
-		const marker = new THREE.Points(geometry, markerMaterial);
-		marker.renderOrder = 999;
-		marker.userData.id = 'measure';
-		marker.raycast = () => {}; // don't let markers be measure targets themselves
-		scene.add(marker);
-		return marker;
-	};
-
-	const clear = () => {
-		points.length = 0;
-		markers.forEach((m) => {
-			m.geometry.dispose();
-			m.removeFromParent();
-		});
-		markers.length = 0;
-		if (line) {
-			line.geometry.dispose();
-			(line.material as LineMaterial).dispose();
-			line.removeFromParent();
-			line = null;
+		if (!start) {
+			if (rubberBand) rubberBand.visible = false;
+			rubberLabel?.remove();
+			rubberLabel = null;
+			return;
 		}
-		label?.remove();
-		label = null;
+		if (!rubberBand) rubberBand = makeLine(start.point, snap.point, 0.7);
+		moveLine(rubberBand, start.point, snap.point);
+		rubberBand.visible = true;
+		const text = labelText(start.point, snap.point);
+		const mid = midpoint(start.point, snap.point);
+		if (rubberLabel) {
+			rubberLabel.setText(text);
+			rubberLabel.setPosition(mid);
+		} else {
+			rubberLabel = labelLayer.addLabel(text, mid, options.labelClassName);
+		}
 	};
 
-	const drawMeasurement = () => {
-		if (points.length !== 2) return;
-		const [a, b] = points;
+	// ==========================================================================
+	// Picking
+	// ==========================================================================
 
-		const geometry = new LineGeometry();
-		geometry.setPositions([a.x, a.y, a.z, b.x, b.y, b.z]);
-		const material = new LineMaterial({ color });
-		(material as LineMaterial & { linewidth: number; depthTest: boolean }).linewidth = 2;
-		material.depthTest = false;
-
-		line = new Line2(geometry, material);
-		line.renderOrder = 998;
-		line.userData.id = 'measure';
-		line.raycast = () => {};
-		scene.add(line);
-
-		const mid = a.clone().add(b).multiplyScalar(0.5);
-		const delta = new THREE.Vector3(Math.abs(b.x - a.x), Math.abs(b.y - a.y), Math.abs(b.z - a.z));
-		label = labelLayer.addLabel(format(a.distanceTo(b), delta), mid, options.labelClassName);
-	};
-
-	const pickPoint = (event: MouseEvent): THREE.Vector3 | null => {
+	const pick = (event: MouseEvent): SnapResult | null => {
 		const rect = canvas.getBoundingClientRect();
-		pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-		pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+		const cursorX = event.clientX - rect.left;
+		const cursorY = event.clientY - rect.top;
+		pointer.x = (cursorX / rect.width) * 2 - 1;
+		pointer.y = -(cursorY / rect.height) * 2 + 1;
 
 		const camera = getActiveCamera();
 		raycaster.setFromCamera(pointer, camera);
 
 		// Lines/points have no surface area, so the raycast threshold matters — three's default is
-		// nearly unclickable. pickThreshold scales it with the view so it stays constant on screen.
-		const threshold = pickThreshold(camera, getViewTarget?.());
+		// nearly unclickable. The world-space band is generous (2x); the screen-space test below is
+		// what decides, so it can't grab a line that is far off on screen but near in depth.
+		const threshold = pickThreshold(camera, getViewTarget?.()) * 2;
 		raycaster.params.Line!.threshold = threshold;
 		raycaster.params.Points!.threshold = threshold;
+		// Fat lines (Line2) measure their band in pixels on top of the line width.
+		(raycaster.params as { Line2?: { threshold: number } }).Line2 = { threshold: snapPixels / 2 };
 
-		const hits = raycaster
-			.intersectObjects(scene.children, true)
-			.filter((i) => i.object.userData.id !== 'measure' && i.object.userData.id !== 'grid');
-
-		if (hits.length === 0) return null;
-		return snapToVertex(hits[0], camera, { width: rect.width, height: rect.height }, snapPixels);
+		const screen = { width: rect.width, height: rect.height };
+		const cursor = new THREE.Vector2(cursorX, cursorY);
+		for (const hit of raycastVisible(scene, raycaster)) {
+			const isSurface = (hit.object as THREE.Mesh).isMesh && hit.face != null;
+			if (!isSurface && toScreen(hitPoint(hit), camera, screen).distanceTo(cursor) > snapPixels) {
+				continue;
+			}
+			return snapHit(hit, camera, screen, snapPixels);
+		}
+		return null;
 	};
 
-	// One raycast per animation frame, not per mousemove: a full-scene recursive raycast per event
-	// hitches on large models, and only the latest event matters for the preview.
+	// One pick per animation frame, not per mousemove: only the latest event matters for the preview.
 	let pendingMove: MouseEvent | null = null;
 	let moveRaf = 0;
 
@@ -318,49 +451,124 @@ export function createMeasureTool(deps: MeasureDeps): MeasureTool {
 			const latest = pendingMove;
 			pendingMove = null;
 			if (!enabled || !latest) return;
-			showHover(pickPoint(latest));
+			showPreview(pick(latest));
+			requestRender();
 		});
+	};
+
+	const handleLeave = () => {
+		cancelPendingMove();
+		hidePreview();
+		requestRender();
+	};
+
+	// ==========================================================================
+	// Committing and clearing
+	// ==========================================================================
+
+	const dropStart = () => {
+		if (!start) return;
+		disposePoints(start.marker);
+		start = null;
+	};
+
+	const clear = () => {
+		dropStart();
+		for (const m of measurements) {
+			disposePoints(m.markers);
+			disposeLine(m.line);
+			m.label.remove();
+		}
+		measurements.length = 0;
+		hidePreview();
+		requestRender();
+	};
+
+	const cancel = () => {
+		if (start) {
+			dropStart();
+			hidePreview();
+			requestRender();
+		} else {
+			clear();
+		}
 	};
 
 	const handleClick = (event: MouseEvent): boolean => {
 		if (!enabled) return false;
+		cancelPendingMove(); // a stale preview frame must not redraw the band after commit
 
-		// A third click after a completed measurement starts fresh.
-		if (points.length === 2) clear();
+		const snap = pick(event);
+		if (!snap) return true; // consumed: a measuring click that missed still isn't a select
 
-		const point = pickPoint(event);
-		if (point === null) return true; // consumed: a measuring click that missed still isn't a select
-
-		points.push(point);
-		markers.push(makeMarker(point));
-
-		if (points.length === 2) drawMeasurement();
+		if (!start) {
+			start = { point: snap.point, marker: makePoints(snap.point) };
+		} else if (!snap.point.equals(start.point)) {
+			const a = start.point;
+			const b = snap.point;
+			dropStart();
+			measurements.push({
+				markers: makePoints(a, b),
+				line: makeLine(a, b),
+				label: labelLayer.addLabel(labelText(a, b), midpoint(a, b), options.labelClassName)
+			});
+		}
+		showPreview(snap);
+		requestRender();
 		return true;
 	};
 
+	const handleKey = (event: KeyboardEvent) => {
+		if (event.key !== 'Escape') return;
+		const target = event.target as HTMLElement | null;
+		if (target?.closest?.('input, textarea, select, [contenteditable]')) return;
+		cancel();
+	};
+
+	// ==========================================================================
+	// Enable / dispose
+	// ==========================================================================
+
+	let previousCursor = '';
+	let cancelWarm: (() => void) | null = null;
+
+	const setEnabled = (value: boolean) => {
+		if (value === enabled) return;
+		enabled = value;
+		if (value) {
+			previousCursor = canvas.style.cursor;
+			canvas.style.cursor = 'crosshair';
+			canvas.addEventListener('mouseleave', handleLeave);
+			window.addEventListener('keydown', handleKey);
+			cancelWarm = warmPickIndex(scene);
+		} else {
+			canvas.style.cursor = previousCursor;
+			canvas.removeEventListener('mouseleave', handleLeave);
+			window.removeEventListener('keydown', handleKey);
+			cancelWarm?.();
+			cancelWarm = null;
+			cancelPendingMove();
+			clear();
+		}
+	};
+
 	return {
-		setEnabled: (value) => {
-			enabled = value;
-			if (!value) {
-				cancelPendingMove();
-				clear();
-				showHover(null);
-			}
-		},
+		setEnabled,
 		isEnabled: () => enabled,
 		handleClick,
 		handleMove,
+		cancel,
 		clear,
 		dispose: () => {
-			cancelPendingMove();
+			setEnabled(false);
 			clear();
-			if (hoverMarker) {
-				hoverMarker.geometry.dispose();
-				hoverMarker.removeFromParent();
-				hoverMarker = null;
-			}
+			if (hoverMarker) disposePoints(hoverMarker);
+			if (rubberBand) disposeLine(rubberBand);
+			hoverMarker = null;
+			rubberBand = null;
 			markerMaterial.dispose();
-			hoverMaterial.dispose();
+			hoverSnappedMaterial.dispose();
+			hoverFreeMaterial.dispose();
 		}
 	};
 }

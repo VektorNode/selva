@@ -1,3 +1,4 @@
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Selva.Schema.Constants;
 using Selva.Schema.Models;
@@ -153,6 +154,18 @@ public class SchemaMigratorTests
     }
 
     [Fact]
+    public void MigrateWithTracking_2_17_0_ReachesCurrentWithPicksStillSnapshots()
+    {
+        var schema = new UISchema { Id = "s", SchemaVersion = "2.17.0" };
+
+        var (migratedSchema, changes) = SchemaMigrator.MigrateWithTracking(schema, new Version(99, 0, 0));
+
+        Assert.Equal(SchemaVersion.CURRENT_STRING, migratedSchema.SchemaVersion);
+        Assert.Contains(changes, c => c.Contains("Applied migration from 2.18.0 to 2.19.0"));
+        Assert.Null(migratedSchema.LocalOptions);
+    }
+
+    [Fact]
     public void MigrateWithTracking_LegacySchema_SetsVersion100ThenMigratesToCurrent()
     {
         var schema = new UISchema { Id = "s", SchemaVersion = null };
@@ -259,5 +272,92 @@ public class SchemaMigratorTests
         var migrated = SchemaMigrator.MigrateJson(json);
 
         Assert.Equal("99.0.0", migrated["schemaVersion"]?.Value<string>());
+    }
+
+    [Fact]
+    public void MigrateJson_MinPluginVersionNewerThanPlugin_RefusedBeforeDeserialization()
+    {
+        var json = new JObject
+        {
+            ["schemaVersion"] = "2.16.0",
+            ["minPluginVersion"] = "99.0.0",
+            ["layout"] = new JObject { ["type"] = "flat" }
+        };
+
+        var ex = Assert.Throws<IncompatibleSchemaException>(() =>
+            SchemaMigrator.MigrateJson(json, new Version(1, 0, 0)));
+        Assert.Contains("99.0.0", ex.Message);
+    }
+
+    // -------------------------------------------------------------------------
+    // Layout items this build doesn't know
+    // -------------------------------------------------------------------------
+
+    private const string SchemaWithFutureItem = """
+                                                {
+                                                	"id": "s1",
+                                                	"name": "Future",
+                                                	"schemaVersion": "2.16.0",
+                                                	"inputs": [],
+                                                	"outputs": [],
+                                                	"layout": {
+                                                		"type": "flat",
+                                                		"groups": [
+                                                			{
+                                                				"id": "g1",
+                                                				"label": "Group",
+                                                				"items": [
+                                                					{ "id": "a", "type": "input", "widgetType": "text", "paramId": "11111111-1111-4111-8111-111111111111" },
+                                                					{ "id": "b", "type": "input", "widgetType": "hologram", "paramId": "22222222-2222-4222-8222-222222222222", "config": { "beam": 3 } }
+                                                				]
+                                                			}
+                                                		]
+                                                	}
+                                                }
+                                                """;
+
+    [Fact]
+    public void UnknownLayoutItem_LoadsWithItsIdentity()
+    {
+        var schema = JObject.Parse(SchemaWithFutureItem).ToObject<UISchema>()!;
+
+        var items = ((FlatLayoutConfig)schema.Layout).Groups[0].Items;
+        var unknown = Assert.IsType<UnknownLayoutItem>(items[1]);
+        Assert.Equal("hologram", unknown.WidgetType);
+        Assert.Equal(Guid.Parse("22222222-2222-4222-8222-222222222222"), unknown.ParamId);
+        Assert.IsType<InputTextLayoutItem>(items[0]);
+    }
+
+    [Fact]
+    public void UnknownLayoutItem_SavesBackUnchanged()
+    {
+        var original = JObject.Parse(SchemaWithFutureItem);
+        var schema = original.ToObject<UISchema>()!;
+
+        var saved = JObject.Parse(JsonConvert.SerializeObject(schema, SchemaSerializationSettings.Settings));
+
+        var originalItem = original["layout"]!["groups"]![0]!["items"]![1];
+        var savedItem = saved["layout"]!["groups"]![0]!["items"]![1];
+        Assert.True(JToken.DeepEquals(originalItem, savedItem), savedItem!.ToString());
+    }
+
+    [Fact]
+    public void UnknownLayoutItem_WithBaseFieldsOfAnotherType_StillRoundTrips()
+    {
+        var original = JObject.Parse(SchemaWithFutureItem);
+        var item = (JObject)original["layout"]!["groups"]![0]!["items"]![1]!;
+        item["visible"] = "when-hovered";
+        item["visibilityCondition"] = 7;
+        item["order"] = "first";
+        item["displayName"] = new JObject { ["en"] = "Hologram" };
+
+        var schema = original.ToObject<UISchema>()!;
+        var unknown = Assert.IsType<UnknownLayoutItem>(((FlatLayoutConfig)schema.Layout).Groups[0].Items[1]);
+        Assert.Equal(Guid.Parse("22222222-2222-4222-8222-222222222222"), unknown.ParamId);
+        Assert.Equal(0, unknown.Order);
+
+        var saved = JObject.Parse(JsonConvert.SerializeObject(schema, SchemaSerializationSettings.Settings));
+        var savedItem = saved["layout"]!["groups"]![0]!["items"]![1];
+        Assert.True(JToken.DeepEquals(item, savedItem), savedItem!.ToString());
     }
 }

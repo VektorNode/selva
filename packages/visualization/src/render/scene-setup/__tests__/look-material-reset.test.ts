@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 
-import { LOOK_PRESETS, OWN_ENV_MAP_INTENSITY, type Look } from '../../../shared/index.js';
+import {
+	LOOK_PRESETS,
+	OWN_EMISSIVE,
+	OWN_ENV_MAP_INTENSITY,
+	type Look
+} from '../../../shared/index.js';
 import { applyMaterialOverride, envMapIntensityForLook } from '../appearance.js';
 
 // Switching between two looks that both override used to leave behind whatever the first set and
@@ -106,6 +111,32 @@ describe('a material with its own envMapIntensity', () => {
 		expect(envMapIntensityForLook(parsed(1), LOOK_PRESETS[look])).toBe(
 			LOOK_PRESETS[look].envMapIntensity
 		);
+	});
+});
+
+describe('a material that glows', () => {
+	const lamp = () => {
+		const material = new THREE.MeshPhysicalMaterial({ emissive: 0xffd8a0, emissiveIntensity: 4 });
+		material.userData[OWN_EMISSIVE] = true;
+		return material;
+	};
+
+	it.each(OVERRIDING)('goes dark in %s and glows again after it', (look) => {
+		const material = lamp();
+
+		setLook(material, look);
+		expect(material.emissiveIntensity).toBe(0);
+
+		setLook(material, 'technical');
+		expect(material.emissiveIntensity).toBe(4);
+	});
+
+	it('leaves a selection tint alone', () => {
+		const tinted = new THREE.MeshPhysicalMaterial({ emissive: 0xff0000, emissiveIntensity: 0.6 });
+
+		setLook(tinted, 'arctic');
+
+		expect(tinted.emissiveIntensity).toBe(0.6);
 	});
 });
 

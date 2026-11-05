@@ -55,6 +55,7 @@ export {
 	createRequestResponseDriver,
 	type SolveSession,
 	type SolveSessionArgs,
+	type SolveSettlement,
 	type SolveDriver,
 	type SolveReporter,
 	type LiveSolveState,
@@ -79,6 +80,7 @@ export {
 export * from './schema/defaults';
 export * from './schema/traversal';
 export * from './schema/dynamic-value-list';
+export { visibleInputItems } from './schema/visibility-rules';
 
 // UI-facing runtime types (not from schema)
 export type { ActionButton } from './types/actionButton';

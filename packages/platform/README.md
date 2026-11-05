@@ -1,6 +1,6 @@
 # @selvajs/platform
 
-Pure TypeScript interfaces defining Selva's contract with its backends — no runtime dependency on a specific database, storage, or auth service. Concrete adapters live in their own packages: `@selvajs/local-provider`, `@selvajs/supabase-provider`, `@selvajs/header-auth-provider`.
+Selva's contract with its backends: the interfaces, plus the logic every adapter shares (access rules, API-token scopes, at-rest secret encryption, Zod request schemas, slugs, the image transcoder) and vitest conformance suites. No dependency on a specific database, storage or auth service. Concrete adapters live in their own packages: `@selvajs/local-provider`, `@selvajs/supabase-provider`, `@selvajs/header-auth-provider`.
 
 This README is the contract. Read it before writing an adapter.
 
@@ -20,6 +20,7 @@ This README is the contract. Read it before writing an adapter.
 | `IShareLinkStore`            | Per-definition anonymous-access tokens.                                           | Yes — every method.                                                  |
 | `IInviteStore`               | Pending org-membership invitations.                                               | Yes — every method.                                                  |
 | `IComputeServerStore`        | Global + per-org compute-server config.                                           | No — not tenant-scoped.                                              |
+| `IApiTokenStore`             | API tokens and their revocation.                                                  | Yes — every method.                                                  |
 | `IStorageProvider`           | Path-based blob storage. Authorization is the caller's responsibility.            | No — callers pass already-authorized paths.                          |
 
 `IDataProvider` composes every store, plus optional `auditQuery` / `events` hooks, an optional `verifySchemaVersion` handshake (for adapters whose schema migrates out-of-band), and the `ensureUser` / `onUserDeleted` lifecycle methods. An adapter typically implements one class per store and aggregates them.
@@ -49,12 +50,12 @@ Providers are two-phase: a metadata store (`IDataProvider`) and a blob store (`I
 
 List queries filter `'pending'` and `'archived'` by default (`DefinitionListOptions.includePending` / `includeArchived` opt in). If step 2 fails, the record stays `'pending'` and is invisible to consumers.
 
-**Delete — blob-first:**
+**Delete — metadata-first:**
 
-1. `storage.deletePrefix(prefix)`.
-2. `data.delete(guid)`.
+1. `data.delete(guid)`, which hides the record at once.
+2. `storage.deletePrefix(prefix)`.
 
-If step 2 fails, a retry re-deletes blobs (no-op) and succeeds.
+If step 2 fails, the blobs are orphans no reader can reach. The reverse order would leave a live record with its blobs gone.
 
 ---
 
@@ -84,7 +85,7 @@ The Selva app normally picks bundled providers from `SELVA_AUTH_PROVIDER` / `SEL
 
 ## Testing your adapter
 
-`@selvajs/platform/testing` ships a conformance suite per store. Adapters import it and run it against their own instance — passing means the adapter behaves the same as the in-memory reference.
+`@selvajs/platform/testing` ships a conformance suite per store. Adapters import it and run it against their own instance — passing means the adapter honours the contract the bundled providers do.
 
 ```ts
 import { runDefinitionStoreConformance } from '@selvajs/platform/testing';
@@ -96,7 +97,9 @@ runDefinitionStoreConformance({
 });
 ```
 
-A suite exists per store, plus auth, email-link auth, storage, event sink, and solve-metric sink. They cover `ctx` scoping, `pending` filtering, `includePending` opt-in, and `ProviderError` shapes; they do not cover performance or concurrency.
+A suite exists per store, plus auth, email-link auth, storage, event sink and solve-metric sink. `runAuthProviderConformance` wraps `runAuthCoreConformance` and `runPasswordAuthConformance`, so a provider without passwords can run the core alone or pass `passwordless`. New cases go behind an option, so an upgrade doesn't turn a third-party adapter red. The suites cover `ctx` scoping, `pending` filtering, `includePending` opt-in, `ProviderError` shapes, and the races a store exists to prevent, such as the share-link solve cap. They don't cover performance.
+
+`sharp` is an optional peer dependency. An adapter that calls `transcodeImageIfNeeded` has to install it.
 
 ---
 
@@ -108,7 +111,7 @@ Throw `ProviderError` for user-facing failures (`new ProviderError('...', 404)`)
 
 ## Data privacy
 
-Identity and credentials belong to whichever `IAuthProvider` is configured — for Supabase that's a separate service; for the local provider, Selva itself is the auth provider and holds email addresses and password hashes on disk. This package's own stores hold user IDs, authorization metadata, display names, invite email addresses, and audit payloads. **The operator is the data controller.** See [data privacy](../../docs/self-hosting/concepts/data-privacy.md) for the full inventory and what erasure reaches, plus [providers](../../docs/self-hosting/providers/overview.md) and [security & limits](../../docs/self-hosting/concepts/security-and-limits.md).
+Identity and credentials belong to whichever `IAuthProvider` is configured — for Supabase that's a separate service; for the local provider, Selva itself is the auth provider and holds email addresses and password hashes on disk. This package's own stores hold user IDs, authorization metadata, display names, invite email addresses, and audit payloads. **The operator is the data controller.** See [data privacy](../../docs/self-hosting/concepts/data-privacy.md) for the full inventory and what erasure reaches, plus [providers](../../docs/self-hosting/providers/overview.md) and [security & limits](../../docs/self-hosting/deployment/security-and-limits.md).
 
 ---
 

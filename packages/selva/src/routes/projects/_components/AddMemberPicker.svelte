@@ -1,10 +1,10 @@
 <script lang="ts">
-	import { Button } from '@selvajs/ui';
+	import { Button, FilterableDropdown } from '@selvajs/ui';
 	import { Search, X } from '@lucide/svelte';
 	import type { ProjectRole } from '@selvajs/platform/projects';
 	import type { UserListItem } from '../+page.server';
-	import UserAvatar from '$lib/components/UserAvatar.svelte';
-	import { primaryLabel, emailSubtitle } from '$lib/user-display';
+	import UserAvatar from '#lib/components/UserAvatar.svelte';
+	import { primaryLabel, emailSubtitle } from '#lib/user-display.js';
 
 	interface Props {
 		availableUsers: UserListItem[];
@@ -98,7 +98,7 @@
 			<button
 				type="button"
 				onclick={onCancel}
-				class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded p-1"
+				class="text-muted-foreground hover:text-foreground absolute top-1/2 right-2 -translate-y-1/2 rounded-sm p-1"
 				aria-label="Cancel"
 			>
 				<X class="h-3.5 w-3.5" />
@@ -120,7 +120,7 @@
 						onclick={() => pick(user)}
 						onmouseenter={() => (highlighted = i)}
 						class={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
-							highlighted === i ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/60'
+							highlighted === i ? 'bg-selected text-foreground' : 'hover:bg-hover'
 						}`}
 					>
 						<UserAvatar name={userLabel(user)} size="sm" />
@@ -143,14 +143,17 @@
 					<p class="text-muted-foreground truncate font-mono text-xs">{selected.email}</p>
 				{/if}
 			</div>
-			<select
-				bind:value={role}
-				class="border-input bg-background h-8 rounded-md border px-2 text-xs outline-none"
-			>
-				<option value="owner">Owner</option>
-				<option value="editor">Editor</option>
-				<option value="viewer">Viewer</option>
-			</select>
+			<FilterableDropdown
+				items={[
+					{ id: 'owner', label: 'Owner' },
+					{ id: 'editor', label: 'Editor' },
+					{ id: 'viewer', label: 'Viewer' }
+				]}
+				value={role}
+				onChange={(v) => (role = v as ProjectRole)}
+				size="sm"
+				class="w-28"
+			/>
 			<Button onclick={submit} disabled={adding} size="sm">
 				{adding ? 'Adding…' : 'Add'}
 			</Button>

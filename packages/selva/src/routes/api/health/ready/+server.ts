@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { providers } from '$lib/server/providers.server';
+import { providers } from '#lib/server/providers.server.js';
 
 /**
  * Readiness probe: can this process serve a real route right now?

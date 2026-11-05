@@ -15,32 +15,18 @@
 		type Grid,
 		type ThreeViewer
 	} from '@selvajs/visualization/render';
-	import {
-		Maximize,
-		Minimize,
-		Camera,
-		Layers,
-		Settings2,
-		Box,
-		Square,
-		Frame,
-		Ruler,
-		Grid3x3,
-		Check,
-		ChevronRight,
-		Palette,
-		Spline
-	} from '@lucide/svelte';
-	import { DropdownMenu } from 'bits-ui';
 	import { SvelteSet } from 'svelte/reactivity';
 	import type * as THREE from 'three';
 	import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 	import { createSceneOutliner, type SceneOutliner } from '@selvajs/visualization/scene';
+	import { clearGeometryCache } from '@selvajs/visualization/parse';
 	import SceneManager from './SceneManager.svelte';
-	import MeshMetadataDialog from './MeshMetadataDialog.svelte';
-	import * as Resizable from '$lib/components/primitives/resizable/index.js';
-	import type { Locale } from '$lib/i18n/messages';
-	import { setLocaleContext, getLocaleContext } from '$lib/i18n/localeContext.svelte';
+	import ViewerDock from './ViewerDock.svelte';
+	import MeshMetadataPanel from './MeshMetadataPanel.svelte';
+	import * as Resizable from '#lib/components/primitives/resizable/index.js';
+	import type { Locale } from '#lib/i18n/messages.js';
+	import { layerLocaleContext } from '#lib/i18n/localeContext.svelte.js';
+	import { saveBlob } from '#lib/utils/host-files.js';
 
 	export interface ViewerConfig {
 		showScreenshotButton?: boolean;
@@ -51,6 +37,8 @@
 		showDisplayMenu?: boolean;
 		enableMeshClick?: boolean;
 		backgroundColor?: string;
+		/** The look to open in. Default `technical`. */
+		look?: Look;
 		/** Initial state of the edge overlay and its display-menu checkmark. Default false. */
 		showEdges?: boolean;
 	}
@@ -58,7 +46,10 @@
 	interface Props {
 		meshes: any[];
 		isFullscreen?: boolean;
+		/** @deprecated Ignored: the panel's solve status shows a running solve. */
 		isSolving?: boolean;
+		/** @deprecated Ignored, like `isSolving`. */
+		isSlow?: boolean;
 		isBlurred?: boolean;
 		drawerOpen?: boolean;
 		viewerConfig?: ViewerConfig;
@@ -87,13 +78,13 @@
 		showDisplayMenu: true,
 		enableMeshClick: true,
 		backgroundColor: '#E6E6E6',
+		look: 'technical',
 		showEdges: false
 	};
 
 	let {
 		meshes,
 		isFullscreen = $bindable(false),
-		isSolving = false,
 		isBlurred = false,
 		drawerOpen = false,
 		viewerConfig = {},
@@ -104,12 +95,8 @@
 
 	const config = $derived({ ...defaultViewerConfig, ...viewerConfig });
 
-	// Read the host's locale before overriding it for our subtree.
-	const hostLocale = getLocaleContext();
-
 	// A getter, not a value: it is re-read reactively, so changing `lang` updates the chrome live.
-	setLocaleContext(() => lang ?? hostLocale.locale);
-	const locale = getLocaleContext();
+	const locale = layerLocaleContext(() => lang);
 	const t = $derived(locale.messages);
 
 	let canvas: HTMLCanvasElement;
@@ -123,10 +110,14 @@
 	let clearEdges: ThreeViewer['clearEdges'] | null = null;
 	let invalidate: (() => void) | null = null;
 	let captureImage: ThreeViewer['captureImage'] | null = null;
-	let setLook: ((look: Look) => void) | null = null;
+	let setLook: ThreeViewer['setLook'] | null = null;
+	let syncEmissiveLights: (() => void) | null = null;
 	let updateGridScale: (() => void) | null = null;
 	let updateShadowBounds: (() => void) | null = null;
 	let fitToView: (() => void) | null = null;
+	let clearSelection: (() => void) | null = null;
+	let selectEntries: ThreeViewer['selectEntries'] | null = null;
+	let setHover: ThreeViewer['setHover'] | null = null;
 	let viewerInitialized = false;
 	let sceneVersion = $state(0);
 	let hideButton = $state(false);
@@ -141,22 +132,42 @@
 	let projection: CameraProjection = $state('perspective');
 	let measureActive = $state(false);
 	let gridVisible = $state(false);
-	let renderStyle: Look = $state('technical');
+	// A saved schema can name a look this build doesn't have, and an unknown look throws on mount.
+	const openingLook = untrack(() => {
+		const look = viewerConfig.look;
+		return look && LOOKS.includes(look) ? look : defaultViewerConfig.look;
+	});
+	const opensAsLineDrawing = LOOK_PRESETS[openingLook].requiresEdges === true;
+	const configuredEdges = untrack(() => viewerConfig.showEdges) ?? defaultViewerConfig.showEdges;
+	let renderStyle: Look = $state(openingLook);
 	// Seeded once, then owned by the menu toggle.
-	let edgesVisible = $state(untrack(() => viewerConfig.showEdges) ?? defaultViewerConfig.showEdges);
+	let edgesVisible = $state(opensAsLineDrawing || configuredEdges);
 	let selectedMeshMetadata: Record<string, any> | null = $state(null);
 	let selectedMeshName: string | null = $state(null);
 
-	// Derived from LOOKS so adding a look in @selvajs/visualization shows up here with no edit; the
-	// map only overrides the names that don't survive capitalisation ('xray' → 'X-Ray').
-	const LOOK_LABELS: Partial<Record<Look, string>> = {
-		xray: 'X-Ray',
-		lineart: 'Line Art'
-	};
-	const STYLE_OPTIONS: { look: Look; label: string }[] = LOOKS.map((look) => ({
-		look,
-		label: LOOK_LABELS[look] ?? look.charAt(0).toUpperCase() + look.slice(1)
-	}));
+	// Derived from LOOKS so a look added in @selvajs/visualization shows up here with no edit,
+	// under its capitalised name until it gets a message.
+	const lookLabels = $derived<Partial<Record<Look, string>>>({
+		technical: t.lookTechnical,
+		studio: t.lookStudio,
+		showcase: t.lookShowcase,
+		arctic: t.lookArctic,
+		xray: t.lookXray,
+		lineart: t.lookLineart,
+		wireframe: t.lookWireframe,
+		night: t.lookNight
+	});
+	// Night has its own toggle, so it stays out of the radio list.
+	const styleOptions = $derived<{ look: Look; label: string }[]>(
+		LOOKS.filter((look) => look !== 'night').map((look) => ({
+			look,
+			label: lookLabels[look] ?? look.charAt(0).toUpperCase() + look.slice(1)
+		}))
+	);
+	const nightOn = $derived(renderStyle === 'night');
+
+	// What the night toggle returns to.
+	let dayLook: Look = $state(openingLook === 'night' ? defaultViewerConfig.look : openingLook);
 
 	const VIEW_PRESETS: { preset: ViewPreset; label: () => string }[] = [
 		{ preset: 'top', label: () => t.viewTop },
@@ -192,6 +203,10 @@
 			grid: { enabled: config.showToolsMenu && config.showGridToggle },
 			measure: { enabled: config.showToolsMenu },
 			events: {
+				// Fires before onMeshMetadataClicked, so picking an object without metadata closes the
+				// previous object's panel instead of leaving it describing the wrong thing.
+				onObjectSelected: dropPanelSelection,
+				onBackgroundClicked: dropPanelSelection,
 				onMeshMetadataClicked: config.enableMeshClick
 					? (metadata: Record<string, unknown>) => {
 							if (hasUsefulMetadata(metadata)) {
@@ -219,12 +234,14 @@
 		invalidate = init.invalidate;
 		captureImage = init.captureImage;
 		setLook = init.setLook;
+		syncEmissiveLights = init.syncEmissiveLights;
 		updateGridScale = init.updateGridScale;
 		updateShadowBounds = init.updateShadowBounds;
 		fitToView = init.fitToView;
+		clearSelection = init.clearSelection;
+		selectEntries = init.selectEntries;
+		setHover = init.setHover;
 		projection = init.cameraController.getProjection();
-
-		const renderer = init.renderer;
 
 		// Untracked so the host reading `meshes` or config inside its setup can't re-run onMount's teardown.
 		const hostCleanup = untrack(() => onViewerReady?.(init));
@@ -232,11 +249,10 @@
 		return () => {
 			// Before dispose, so the host can still remove its own objects from a live scene.
 			hostCleanup?.();
+			// Also frees the GL context: a second forceContextLoss() here hits an already-lost one.
 			init.dispose();
-			// `{#key definitionKey}` recreates the canvas + WebGLRenderer + GL context
-			// on every definition switch; browsers cap live contexts (~16). Explicitly
-			// drop this one so the GPU-side context is released now rather than at GC.
-			renderer.forceContextLoss();
+			// Parsed geometry outlives the viewer otherwise: the cache is page-wide.
+			clearGeometryCache();
 		};
 	});
 
@@ -264,12 +280,13 @@
 
 	// Edges the lineart look switched on, so leaving it can put the user's own choice back rather
 	// than stranding them with overlays they never asked for.
-	let edgesBeforeLineDrawing: boolean | null = null;
+	let edgesBeforeLineDrawing: boolean | null = opensAsLineDrawing ? configuredEdges : null;
 
 	function setRenderStyle(look: Look) {
 		if (!setLook || look === renderStyle) return;
 		const wasLineDrawing = LOOK_PRESETS[renderStyle].requiresEdges === true;
 		renderStyle = look;
+		if (look !== 'night') dayLook = look;
 		setLook(look);
 
 		// A look never drives the overlay itself; honouring `requiresEdges` is the host's call. Without
@@ -335,6 +352,10 @@
 		else clearEdges?.(scene);
 	}
 
+	function toggleNight() {
+		setRenderStyle(nightOn ? dayLook : 'night');
+	}
+
 	function toggleEdges() {
 		edgesVisible = !edgesVisible;
 		// Toggling by hand inside lineart overrides what that look forced, so the pre-look value is
@@ -351,7 +372,8 @@
 			untrack(() => {
 				// The new meshes carry the materials the parser built, so a look that overrides them
 				// (arctic, x-ray) has to be re-applied or the solve silently reverts to shaded.
-				setLook?.(renderStyle);
+				// Emissive lights wait for `applyTo` below, or a hidden lamp would count as lit.
+				setLook?.(renderStyle, { deferEmissiveLights: true });
 				// updateScene discarded the previous solve's overlays along with its content.
 				if (edgesVisible) applyEdges?.(scene!, edgeOverrides());
 				// Rescale the grid so cells and fade match the new content's extent.
@@ -362,6 +384,7 @@
 				// The rebuild un-hid everything; the outliner keys hidden state on Grasshopper
 				// identity, not on the instances just discarded, so it can re-hide it.
 				outliner?.applyTo();
+				syncEmissiveLights?.();
 				sceneVersion++;
 				// Repaint now rather than on the render loop's safety interval.
 				invalidate?.();
@@ -373,8 +396,70 @@
 		}
 	});
 
+	function closeMetadata() {
+		selectedMeshMetadata = null;
+		selectedMeshName = null;
+	}
+
+	// A click on the canvas replaces whatever the panel selected: one selection at a time.
+	function dropPanelSelection() {
+		closeMetadata();
+		selectedObjects.clear();
+	}
+
+	// Mirrors the panel's selection into the viewport. The size check skips walking the entries for
+	// the common empty case, which also keeps `has()` from subscribing to every key.
+	$effect(() => {
+		if (selectedObjects.size === 0) {
+			selectEntries?.([]);
+			return;
+		}
+		const chosen = outliner?.entries().filter((entry) => selectedObjects.has(entry.key)) ?? [];
+		closeMetadata();
+		selectEntries?.(chosen);
+	});
+
+	function dismissMetadata() {
+		closeMetadata();
+		clearSelection?.();
+		invalidate?.();
+	}
+
+	// The panel describes an object from the previous solve once new meshes arrive.
+	$effect(() => {
+		void meshes;
+		untrack(closeMetadata);
+	});
+
+	// Dialogs portal to <body>, so one opened over the fullscreen viewer needs lifting above it.
+	$effect(() => {
+		document.body.toggleAttribute('data-viewer-fullscreen', isFullscreen);
+		return () => document.body.removeAttribute('data-viewer-fullscreen');
+	});
+
 	function toggleFullscreen() {
 		isFullscreen = !isFullscreen;
+	}
+
+	// Single letters; F (fit) is handled by the canvas itself. Held back while typing, e.g. in the
+	// scene manager's search box.
+	const SHORTCUTS: Record<string, () => void> = {
+		o: toggleProjection,
+		m: toggleMeasure,
+		g: toggleGrid,
+		n: toggleNight,
+		e: toggleEdges,
+		s: () => (sceneManagerOpen = !sceneManagerOpen)
+	};
+
+	function handleShortcut(event: KeyboardEvent) {
+		if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return;
+		const target = event.target as HTMLElement;
+		if (target.closest('input, textarea, select, [contenteditable]')) return;
+		const action = SHORTCUTS[event.key.toLowerCase()];
+		if (!action) return;
+		event.preventDefault();
+		action();
 	}
 
 	function hasUsefulMetadata(metadata: Record<string, any>): boolean {
@@ -402,22 +487,18 @@
 		const blob = await captureImage?.();
 		if (!blob) return;
 
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement('a');
 		const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-		link.href = url;
-		link.download = `viewer-${timestamp}.png`;
-		document.body.appendChild(link);
-		link.click();
-		document.body.removeChild(link);
-		URL.revokeObjectURL(url);
+		await saveBlob(blob, `viewer-${timestamp}.png`);
 	}
 </script>
 
+<!-- Key events bubble up from the focused canvas or any control inside; the div itself is not interactive. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="min-h-64 sm:min-h-96 lg:min-h-125 relative h-full flex-1 border {isFullscreen
 		? 'fullscreen-viewer'
-		: 'overflow-hidden rounded-[0.625rem]'}"
+		: 'overflow-hidden rounded-lg'}"
+	onkeydown={handleShortcut}
 >
 	<Resizable.PaneGroup direction="horizontal" class="h-full w-full">
 		<!-- `defaultSize` must sum to 100 across the live panes. Panes register a frame before the
@@ -426,12 +507,12 @@
 		     scene pane keeps a sliver of its intended width. Hence 85 + 15, and the explicit id/order
 		     so a conditionally-rendered pane keeps its slot. -->
 		<Resizable.Pane id="viewport" order={1} defaultSize={sceneManagerOpen ? 85 : 100} minSize={40}>
-			<div class="relative h-full w-full" style="touch-action: none;">
+			<div class="relative h-full w-full touch-none">
 				<!-- Mesh count of the geometry currently in the scene. The canvas itself is opaque to
 				     the DOM, so this is the only observable proof a solve's geometry decoded and
 				     rendered; e2e asserts on it. -->
 				<canvas
-					class="block h-full w-full"
+					class="viewer-canvas block h-full w-full outline-none select-none"
 					data-testid="viewer-canvas"
 					data-mesh-count={meshes.length}
 					bind:this={canvas}
@@ -443,20 +524,12 @@
 						: 'blur-overlay-inactive'}"
 				></div>
 
-				{#if isSolving}
-					<div
-						class="inset-0 absolute z-10 animate-[selva-viewer-fade-in_0.2s_ease-out] backdrop-blur-[2px] transition-all duration-300"
-					></div>
-				{/if}
-
 				{#if logoUrl}
-					<!-- Bottom offset matches the tools menu so it clears the mobile drawer handle.
-					     Always pointer-events:none so it never intercepts canvas drags. -->
+					<!-- pointer-events:none so it never intercepts canvas drags. -->
 					<div
-						class="right-4 {isFullscreen ? 'bottom-4' : 'bottom-16 sm:bottom-4'} absolute z-20"
-						style={hideButton
-							? 'opacity: 0; pointer-events: none;'
-							: 'opacity: 1; pointer-events: none;'}
+						class="right-4 bottom-4 pointer-events-none absolute z-20 {hideButton
+							? 'opacity-0'
+							: ''}"
 					>
 						<img
 							src={logoUrl}
@@ -466,174 +539,46 @@
 					</div>
 				{/if}
 
+				{#if selectedMeshMetadata}
+					<MeshMetadataPanel
+						metadata={selectedMeshMetadata}
+						meshName={selectedMeshName}
+						onClose={dismissMetadata}
+						class="top-3 right-3 left-3 sm:right-auto sm:max-h-2/3 sm:w-72 absolute z-30 max-h-1/2"
+					/>
+				{/if}
+
 				{#if config.showToolsMenu}
-					{@const itemClass =
-						'gap-2 px-2 py-1.5 text-sm flex cursor-pointer select-none items-center rounded-sm outline-none transition-colors hover:bg-muted focus:bg-muted'}
-					<div
-						class="left-4 {isFullscreen
-							? 'bottom-4'
-							: 'bottom-16 sm:bottom-4'} absolute z-50 flex items-center"
-						style={hideButton
-							? 'opacity: 0; pointer-events: none;'
-							: 'opacity: 1; pointer-events: auto;'}
-					>
-						<DropdownMenu.Root>
-							<DropdownMenu.Trigger
-								class="h-10 w-10 shadow-lg hover:shadow-xl flex items-center justify-center rounded-lg border border-border bg-card/90 transition-all hover:bg-card active:scale-95 data-[state=open]:bg-secondary/60"
-								title={t.toolsMenu}
-								aria-label={t.toolsMenu}
-							>
-								<Settings2 class="h-5 w-5 text-card-foreground" />
-							</DropdownMenu.Trigger>
-							<DropdownMenu.Portal>
-								<DropdownMenu.Content
-									sideOffset={6}
-									align="start"
-									class="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 min-w-44 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
-								>
-									<DropdownMenu.Item class={itemClass} onSelect={toggleProjection}>
-										{#if projection === 'perspective'}
-											<Square class="h-4 w-4" />
-											{t.switchToOrthographic}
-										{:else}
-											<Box class="h-4 w-4" />
-											{t.switchToPerspective}
-										{/if}
-									</DropdownMenu.Item>
-
-									<DropdownMenu.Item class={itemClass} onSelect={() => fitToView?.()}>
-										<Frame class="h-4 w-4" />
-										{t.fitToView}
-									</DropdownMenu.Item>
-
-									<DropdownMenu.Sub>
-										<DropdownMenu.SubTrigger class="{itemClass} data-[state=open]:bg-muted">
-											<Box class="h-4 w-4" />
-											<span class="flex-1">{t.views}</span>
-											<ChevronRight class="h-4 w-4 text-muted-foreground" />
-										</DropdownMenu.SubTrigger>
-										<DropdownMenu.SubContent
-											sideOffset={4}
-											class="min-w-32 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
-										>
-											{#each VIEW_PRESETS as { preset, label } (preset)}
-												<DropdownMenu.Item
-													class="px-2 py-1.5 text-sm flex cursor-pointer items-center rounded-sm transition-colors outline-none select-none hover:bg-muted focus:bg-muted"
-													onSelect={() => setView(preset)}
-												>
-													{label()}
-												</DropdownMenu.Item>
-											{/each}
-										</DropdownMenu.SubContent>
-									</DropdownMenu.Sub>
-
-									{#if config.showDisplayMenu}
-										<DropdownMenu.Sub>
-											<DropdownMenu.SubTrigger class="{itemClass} data-[state=open]:bg-muted">
-												<Palette class="h-4 w-4" />
-												<span class="flex-1">{t.display}</span>
-												<ChevronRight class="h-4 w-4 text-muted-foreground" />
-											</DropdownMenu.SubTrigger>
-											<DropdownMenu.SubContent
-												sideOffset={4}
-												class="min-w-40 p-1 shadow-md z-10001 rounded-md border bg-popover text-popover-foreground"
-											>
-												{#each STYLE_OPTIONS as { look, label } (look)}
-													<DropdownMenu.Item
-														closeOnSelect={false}
-														class="{itemClass} {renderStyle === look ? 'text-primary' : ''}"
-														onSelect={() => setRenderStyle(look)}
-													>
-														<span class="flex-1">{label}</span>
-														{#if renderStyle === look}
-															<Check class="h-4 w-4" />
-														{/if}
-													</DropdownMenu.Item>
-												{/each}
-
-												<DropdownMenu.Separator class="my-1 h-px bg-border" />
-
-												<DropdownMenu.Item
-													closeOnSelect={false}
-													class="{itemClass} {edgesVisible ? 'text-primary' : ''}"
-													onSelect={toggleEdges}
-												>
-													<Spline class="h-4 w-4" />
-													<span class="flex-1">{t.edges}</span>
-													{#if edgesVisible}
-														<Check class="h-4 w-4" />
-													{/if}
-												</DropdownMenu.Item>
-											</DropdownMenu.SubContent>
-										</DropdownMenu.Sub>
-									{/if}
-
-									<DropdownMenu.Item
-										closeOnSelect={false}
-										class="{itemClass} {measureActive ? 'text-primary' : ''}"
-										onSelect={toggleMeasure}
-									>
-										<Ruler class="h-4 w-4" />
-										<span class="flex-1">{t.measure}</span>
-										{#if measureActive}
-											<Check class="h-4 w-4" />
-										{/if}
-									</DropdownMenu.Item>
-
-									{#if config.showGridToggle}
-										<DropdownMenu.Item
-											closeOnSelect={false}
-											class="{itemClass} {gridVisible ? 'text-primary' : ''}"
-											onSelect={toggleGrid}
-										>
-											<Grid3x3 class="h-4 w-4" />
-											<span class="flex-1">{t.grid}</span>
-											{#if gridVisible}
-												<Check class="h-4 w-4" />
-											{/if}
-										</DropdownMenu.Item>
-									{/if}
-
-									{#if config.showSceneManager || config.showScreenshotButton || config.showFullscreenButton}
-										<DropdownMenu.Separator class="my-1 h-px bg-border" />
-									{/if}
-
-									{#if config.showSceneManager}
-										<DropdownMenu.Item
-											closeOnSelect={false}
-											class="{itemClass} {sceneManagerOpen ? 'text-primary' : ''}"
-											onSelect={() => (sceneManagerOpen = !sceneManagerOpen)}
-										>
-											<Layers class="h-4 w-4" />
-											<span class="flex-1">{t.sceneManager}</span>
-											{#if sceneManagerOpen}
-												<Check class="h-4 w-4" />
-											{/if}
-										</DropdownMenu.Item>
-									{/if}
-
-									{#if config.showScreenshotButton}
-										<DropdownMenu.Item class={itemClass} onSelect={downloadScreenshot}>
-											<Camera class="h-4 w-4" />
-											{t.screenshot}
-										</DropdownMenu.Item>
-									{/if}
-
-									{#if config.showFullscreenButton}
-										<DropdownMenu.Item class={itemClass} onSelect={toggleFullscreen}>
-											{#if isFullscreen}
-												<Minimize class="h-4 w-4" />
-												{t.exitFullscreen}
-											{:else}
-												<Maximize class="h-4 w-4" />
-												{t.fullscreen}
-											{/if}
-										</DropdownMenu.Item>
-									{/if}
-								</DropdownMenu.Content>
-							</DropdownMenu.Portal>
-						</DropdownMenu.Root>
-					</div>
+					<ViewerDock
+						{t}
+						hidden={hideButton}
+						showDisplay={config.showDisplayMenu}
+						showGrid={config.showGridToggle}
+						showSceneManager={config.showSceneManager}
+						showScreenshot={config.showScreenshotButton}
+						showFullscreen={config.showFullscreenButton}
+						{styleOptions}
+						viewPresets={VIEW_PRESETS.map(({ preset, label }) => ({ preset, label: label() }))}
+						{renderStyle}
+						{nightOn}
+						{edgesVisible}
+						{measureActive}
+						{gridVisible}
+						{sceneManagerOpen}
+						{projection}
+						{isFullscreen}
+						onSetLook={setRenderStyle}
+						onToggleNight={toggleNight}
+						onToggleEdges={toggleEdges}
+						onToggleMeasure={toggleMeasure}
+						onToggleGrid={toggleGrid}
+						onToggleSceneManager={() => (sceneManagerOpen = !sceneManagerOpen)}
+						onToggleProjection={toggleProjection}
+						onSetView={setView}
+						onFit={() => fitToView?.()}
+						onScreenshot={downloadScreenshot}
+						onToggleFullscreen={toggleFullscreen}
+					/>
 				{/if}
 			</div>
 		</Resizable.Pane>
@@ -641,33 +586,34 @@
 		{#if sceneManagerOpen && scene && outliner}
 			<Resizable.Handle withHandle />
 			<Resizable.Pane id="scene-manager" order={2} defaultSize={15} minSize={8} maxSize={30}>
-				<SceneManager {outliner} {sceneVersion} onVisibilityChange={() => invalidate?.()} />
+				<SceneManager
+					{outliner}
+					{sceneVersion}
+					onVisibilityChange={() => syncEmissiveLights?.()}
+					onHover={(entry) => setHover?.(entry?.object ?? null, entry?.memberIndex ?? null)}
+				/>
 			</Resizable.Pane>
 		{/if}
 	</Resizable.PaneGroup>
 </div>
 
-<MeshMetadataDialog
-	open={selectedMeshMetadata !== null}
-	metadata={selectedMeshMetadata}
-	meshName={selectedMeshName}
-	{isFullscreen}
-	onOpenChange={(open: boolean) => {
-		if (!open) {
-			setTimeout(() => {
-				selectedMeshMetadata = null;
-				selectedMeshName = null;
-			}, 200);
-		}
-	}}
-/>
-
 <style>
+	:global([data-viewer-fullscreen] [data-slot='dialog-content']),
+	:global([data-viewer-fullscreen] [data-slot='dialog-overlay']) {
+		z-index: 10001;
+	}
+
 	.fullscreen-viewer {
 		position: fixed;
 		inset: 0;
 		z-index: 10000;
 		border-radius: 0 !important;
+	}
+
+	/* A long press on touch otherwise selects the canvas as an image and opens the save/copy callout. */
+	.viewer-canvas {
+		-webkit-touch-callout: none;
+		-webkit-tap-highlight-color: transparent;
 	}
 
 	.blur-overlay {
@@ -697,15 +643,6 @@
 		}
 		to {
 			backdrop-filter: blur(0px);
-		}
-	}
-
-	@keyframes selva-viewer-fade-in {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
 		}
 	}
 </style>

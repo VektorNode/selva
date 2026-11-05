@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { Button, Input, Label, Alert } from '@selvajs/ui';
-	import { CircleAlert } from '@lucide/svelte';
+	import { Button, Input, Label, Callout } from '@selvajs/ui';
 	import { fade } from 'svelte/transition';
 
 	interface ActionData {
@@ -78,7 +77,7 @@
 	Remove once header-auth deployments have stabilized.
 -->
 {#snippet requestHeaderDump(headers: Array<{ name: string; value: string }>)}
-	<details class="border-border rounded border p-3 text-xs">
+	<details class="border-border rounded-sm border p-3 text-xs">
 		<summary class="text-muted-foreground cursor-pointer font-medium">
 			Request headers ({headers.length})
 		</summary>
@@ -93,24 +92,25 @@
 	<title>Login - {page.data.branding.name}</title>
 </svelte:head>
 
-<div class="bg-background flex min-h-screen items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
+<div class="bg-background flex min-h-dvh items-center justify-center px-4 py-12 sm:px-6 lg:px-8">
 	<div class="w-full max-w-sm space-y-6">
 		<div class="space-y-1 text-center">
 			<h2 class="text-foreground text-2xl font-bold tracking-tight">Sign in</h2>
 			<p class="text-muted-foreground text-sm">Sign in to your account</p>
 		</div>
 
+		{#if page.url.searchParams.get('reauth') === '1' && !form?.error}
+			<Callout tone="info">Your sign-in is too old for this. Sign in again to continue.</Callout>
+		{/if}
+
 		{#if form?.error}
 			{#key attempt}
 				<div in:fade={{ duration: 120 }}>
-					<Alert.Root variant="destructive" aria-live="assertive">
-						<CircleAlert />
-						<Alert.Description>
-							{form.error}{#if attempt > 1}
-								<span class="opacity-80"> (attempt {attempt})</span>
-							{/if}
-						</Alert.Description>
-					</Alert.Root>
+					<Callout tone="danger" aria-live="assertive">
+						{form.error}{#if attempt > 1}
+							<span class="opacity-80"> (attempt {attempt})</span>
+						{/if}
+					</Callout>
 				</div>
 			{/key}
 		{/if}
@@ -233,12 +233,9 @@
 				{/if}
 			</div>
 		{:else if noAuthMethods}
-			<Alert.Root variant="destructive">
-				<CircleAlert />
-				<Alert.Description>
-					No login methods are configured. Set up an auth provider before signing in.
-				</Alert.Description>
-			</Alert.Root>
+			<Callout tone="danger">
+				No login methods are configured. Set up an auth provider before signing in.
+			</Callout>
 		{/if}
 	</div>
 </div>

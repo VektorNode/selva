@@ -1,18 +1,7 @@
 /**
- * Side-channel carrying a response's wire size (its JSON text length) alongside
- * the parsed object, so downstream caches can budget by bytes without
- * re-serializing (audit C2/C3 — the response tree can be hundreds of MB, and
- * every extra `JSON.stringify` pass over it is a real cost).
- *
- * A `WeakMap` rather than a property on the response: the response type is the
- * server's schema, and an extra enumerable field would leak into every
- * `JSON.stringify(response)` on the way back out to clients. Derived copies
- * (e.g. the `algo`-stripped shallow copy in `runSolve`) must re-register — the
- * hint follows object identity, not content.
- *
- * The size is `text.length` (UTF-16 code units), not strict UTF-8 bytes —
- * compute responses are ASCII-dominated JSON (base64 + numerals), so the two
- * are interchangeable for budgeting purposes and `.length` is free.
+ * A response's JSON text length, so byte-budgeted caches never re-serialize a huge tree. A WeakMap
+ * rather than a field keeps `JSON.stringify(response)` clean; it is keyed by identity, so a derived
+ * copy must re-register. `.length` stands in for UTF-8 bytes: the JSON is near-pure ASCII.
  */
 
 const wireSizes = new WeakMap<object, number>();

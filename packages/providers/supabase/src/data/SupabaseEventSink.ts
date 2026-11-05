@@ -32,7 +32,10 @@ export class SupabaseEventSink implements IEventSink {
 				type: event.type,
 				actor_id: event.actorId,
 				event_version: AUDIT_EVENT_VERSION,
-				data: event
+				data: event,
+				// Only when set, so session traffic still writes against a database
+				// that predates the column.
+				...(event.tokenId ? { token_id: event.tokenId } : {})
 			});
 			if (error) {
 				// Only the event's identifiers are logged, never the whole event: an

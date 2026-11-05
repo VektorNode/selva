@@ -5,12 +5,12 @@ openapi: "3.1.0"
 info:
   title: Selva API
   version: "1.0.0"
-  description: "The tenant-scoped Selva API. Every endpoint acts as the calling identity and is confined to that identity's organization.\n\n**Stability.** Public endpoints are additive-only within v1: new optional fields and parameters may appear, but nothing is removed, renamed, or changed in type or meaning. A breaking change ships as a new route under `/api/v2` alongside this one. Anything deprecated inside v1 keeps working for a stated window and returns a `Deprecation` header while it does.\n\n**Operations marked `x-internal` carry none of that promise.** They exist to serve the Selva web UI and may change or disappear without notice.\n\n**Existence is never disclosed.** A resource the caller may not see returns `404`, not `403`. `403` means the resource is visible but the action is not allowed.\n\n**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser requests and non-browser clients holding a token.\n\nInstance administration lives at `/api/admin`, is session-only, is never reachable with a bearer token, and is not described here."
+  description: "The tenant-scoped Selva API. Every endpoint acts as the calling identity and is confined to that identity's organization.\n\n**Stability.** Public endpoints are additive-only within v1: new optional fields and parameters may appear, but nothing is removed, renamed, or changed in type or meaning. A breaking change ships as a new route under `/api/v2` alongside this one. Anything deprecated inside v1 keeps working for a stated window and returns a `Deprecation` header while it does.\n\n**Operations marked `x-internal` carry none of that promise.** They exist to serve the Selva web UI and may change or disappear without notice.\n\n**Existence is never disclosed.** A resource the caller may not see returns `404`, not `403`. `403` means the resource is visible but the action is not allowed.\n\n**No CORS.** `/api/v1` sends no cross-origin headers; it serves same-origin browser requests and non-browser clients holding a token.\n\n**Scopes.** Each operation names the API-token scope it needs as `x-scope`: `read`, `write`, `solve` or `upload`. `write`, `solve` and `upload` each include `read`, and `write` includes `upload`. `upload` allows creating definitions, uploading versions, checking a file's schema before upload and making a version live, and nothing else: it cannot edit metadata, delete or share.\n\nInstance administration lives at `/api/admin`, is session-only, is never reachable with a bearer token, and is not described here."
   license:
     name: MIT
 servers:
   - url: /
-    description: The Selva instance serving this document.
+    description: The instance serving this document.
 security:
   - cookieAuth: []
   - bearerAuth: []
@@ -24,7 +24,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: "A personal access token. `/api/v1` is the only prefix that accepts one — `/api/admin` never does."
+      description: "An API token (`selva_…`), sent as `Authorization: Bearer <token>` and never in the URL. It acts as the user who created it, in one org, narrowed by its scopes. `/api/v1` is the only prefix that accepts one; `/api/admin` never does."
   parameters:
     limit:
       name: limit
@@ -61,6 +61,15 @@ components:
         enum:
           - asc
           - desc
+    idempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: "A client-chosen key, 1 to 255 characters. Repeating the request with the same key within the retention window replays the first successful response instead of running it again; the replay carries `Idempotency-Replayed: true`. Keys are scoped to the calling token (or user, for a browser session). Reusing a key with a different method, path or body returns `422`. A failed attempt is not kept, so a corrected retry runs. The store is per-process and in-memory: it absorbs retries, does not survive a restart, and is not shared between app instances."
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 255
   schemas:
     Page:
       type: object
@@ -92,21 +101,31 @@ components:
             - COMPUTE_UNAVAILABLE
             - SETUP_REQUIRED
             - INTERNAL
+            - API_TOKENS_UNAVAILABLE
+            - RATE_LIMITED
+            - API_TOKEN_HOLDER_REFUSED
+            - SIGN_IN_REQUIRED
         fields:
           type: object
           description: "Per-field messages, keyed by dotted path. Present on validation failures."
+          additionalProperties:
+            type: string
+        details:
+          type: object
+          description: "Machine-readable context. A scope refusal carries `requiredScope`, e.g. `write:org:<id>`."
           additionalProperties:
             type: string
       required:
         - message
         - code
 paths:
-  /api/v1/me:
+  /api/v1/openapi.json:
     get:
-      summary: "The calling identity, its acting org, and its effective permissions."
-      operationId: getMe
+      summary: "This document, as JSON."
+      operationId: getOpenapi
       tags:
-        - Me
+        - Openapi
+      x-scope: read
       responses:
         "200":
           description: Success.
@@ -120,8 +139,116 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/me:
+    get:
+      summary: "The calling identity, its acting org, its effective permissions, and for a token its id, scopes and expiry."
+      operationId: getMe
+      tags:
+        - Me
+      x-scope: read
+      responses:
+        "200":
+          description: "`apiToken: { id, scopes, expiresAt }` is present only when the caller is an API token. `capabilities.createProjects` says whether `POST /projects` would accept this caller, narrowed to the key; `orgPermissions` is the owner’s and is not."
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /api/v1/me/token:
+    delete:
+      summary: Revoke the API token that sent this request. A key can revoke itself and nothing else; a browser session gets 400.
+      operationId: deleteMeToken
+      tags:
+        - Me
+      x-scope: read
+      responses:
+        "204":
+          description: Success. No content.
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -132,6 +259,7 @@ paths:
       operationId: putMeStarredByGuid
       tags:
         - Me
+      x-scope: write
       parameters:
         - name: guid
           in: path
@@ -143,6 +271,12 @@ paths:
           description: Success. No content.
         "401":
           description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -153,8 +287,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -164,6 +310,7 @@ paths:
       operationId: deleteMeStarredByGuid
       tags:
         - Me
+      x-scope: write
       parameters:
         - name: guid
           in: path
@@ -179,8 +326,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -191,6 +356,7 @@ paths:
       operationId: getDefinitions
       tags:
         - Definitions
+      x-scope: read
       parameters:
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/cursor"
@@ -208,15 +374,39 @@ paths:
           description: "One of `draft`, `published`, `archived`."
           schema:
             type: string
+        - name: documentId
+          in: query
+          required: false
+          description: "A Grasshopper document GUID. Returns only definitions last uploaded from that document which the caller can upload a new version of. Not a GUID: 400."
+          schema:
+            type: string
       responses:
         "200":
-          description: A page of results.
+          description: "Each item has `sourceDocumentId`: the Grasshopper document GUID the definition was last uploaded from, or null."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Page"
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "401":
           description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -227,11 +417,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create a definition from a Grasshopper file.
       operationId: postDefinitions
       tags:
         - Definitions
+      x-scope: upload
+      parameters:
+        - $ref: "#/components/parameters/idempotencyKey"
       requestBody:
         required: true
         content:
@@ -287,13 +486,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "422":
           description: Well-formed but not processable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -305,7 +510,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -316,6 +521,7 @@ paths:
       operationId: getDefinitionsByGuid
       tags:
         - Definitions
+      x-scope: read
       parameters:
         - name: guid
           in: path
@@ -324,7 +530,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Success.
+          description: "`canEdit` is true when the caller can upload a version and make one live; for an API token that includes its scopes. `sourceDocumentId` is the Grasshopper document GUID it was last uploaded from, or null."
           content:
             application/json:
               schema:
@@ -335,8 +541,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -347,11 +565,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       summary: Update definition metadata.
       operationId: patchDefinitionsByGuid
       tags:
         - Definitions
+      x-scope: write
       parameters:
         - name: guid
           in: path
@@ -373,8 +598,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -385,11 +622,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Soft-delete a definition.
       operationId: deleteDefinitionsByGuid
       tags:
         - Definitions
+      x-scope: write
       parameters:
         - name: guid
           in: path
@@ -405,8 +649,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -417,24 +673,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/solve":
     post:
       summary: Solve a definition. The primary action of the API.
       operationId: postDefinitionsByGuidSolve
       tags:
         - Definitions
+      x-scope: solve
       parameters:
         - name: guid
           in: path
           required: true
           schema:
             type: string
-        - name: Idempotency-Key
-          in: header
-          required: false
-          description: "A client-chosen key. Repeating a request with the same key within the retention window replays the first response instead of solving again; the replay carries `Idempotency-Replayed: true`. The store is per-process and in-memory — it absorbs retries, it is not a durable result cache, and it does not survive a restart or a second app instance."
-          schema:
-            type: string
+        - $ref: "#/components/parameters/idempotencyKey"
       requestBody:
         required: true
         content:
@@ -443,7 +701,7 @@ paths:
               type: object
               properties:
                 inputs:
-                  default: []
+                  deprecated: true
                   type: array
                   items: {}
                 values:
@@ -481,14 +739,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "422":
+          description: Well-formed but not processable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "429":
-          description: "Rate limited. Retry after the interval in `Retry-After`."
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -500,7 +770,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -511,6 +781,7 @@ paths:
       operationId: getDefinitionsByGuidSchema
       tags:
         - Definitions
+      x-scope: read
       parameters:
         - name: guid
           in: path
@@ -530,8 +801,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -542,12 +825,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/versions":
     get:
       summary: "List versions, newest first."
       operationId: getDefinitionsByGuidVersions
       tags:
         - Definitions
+      x-scope: read
       parameters:
         - name: guid
           in: path
@@ -571,8 +861,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -583,17 +885,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Upload a new version.
       operationId: postDefinitionsByGuidVersions
       tags:
         - Definitions
+      x-scope: upload
       parameters:
         - name: guid
           in: path
           required: true
           schema:
             type: string
+        - $ref: "#/components/parameters/idempotencyKey"
       requestBody:
         required: true
         content:
@@ -628,6 +938,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -640,6 +956,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
           content:
@@ -647,7 +969,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -658,6 +980,7 @@ paths:
       operationId: getDefinitionsByGuidVersionsByVersionId
       tags:
         - Definitions
+      x-scope: read
       parameters:
         - name: guid
           in: path
@@ -682,8 +1005,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -694,11 +1029,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     delete:
       summary: Delete a version. 409 when it is the live or draft pointer.
       operationId: deleteDefinitionsByGuidVersionsByVersionId
       tags:
         - Definitions
+      x-scope: write
       parameters:
         - name: guid
           in: path
@@ -719,6 +1061,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -731,8 +1079,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -743,6 +1103,7 @@ paths:
       operationId: getDefinitionsByGuidVersionsByVersionIdSchema
       tags:
         - Definitions
+      x-scope: read
       parameters:
         - name: guid
           in: path
@@ -767,8 +1128,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -779,12 +1152,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/publish":
     post:
       summary: Promote a version to live.
       operationId: postDefinitionsByGuidPublish
       tags:
         - Definitions
+      x-scope: upload
       parameters:
         - name: guid
           in: path
@@ -810,8 +1190,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -822,12 +1214,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/image":
     post:
       summary: Upload a cover image.
       operationId: postDefinitionsByGuidImage
       tags:
         - Definitions
+      x-scope: write
       parameters:
         - name: guid
           in: path
@@ -865,8 +1264,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -877,12 +1288,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/share-links":
     get:
       summary: List share links. 404 when sharing is disabled on the instance.
       operationId: getDefinitionsByGuidShare-links
       tags:
         - Definitions
+      x-scope: read
       parameters:
         - name: guid
           in: path
@@ -906,8 +1324,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -918,17 +1348,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Create a share link. The raw token is returned once and never again.
       operationId: postDefinitionsByGuidShare-links
       tags:
         - Definitions
+      x-scope: write
       parameters:
         - name: guid
           in: path
           required: true
           schema:
             type: string
+        - $ref: "#/components/parameters/idempotencyKey"
       responses:
         "201":
           description: Success.
@@ -948,8 +1386,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "422":
+          description: Well-formed but not processable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -960,12 +1416,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/definitions/{guid}/share-links/{linkId}":
     delete:
       summary: Revoke a share link.
       operationId: deleteDefinitionsByGuidShare-linksByLinkId
       tags:
         - Definitions
+      x-scope: write
       parameters:
         - name: guid
           in: path
@@ -986,14 +1449,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1004,6 +1485,7 @@ paths:
       operationId: getProjects
       tags:
         - Projects
+      x-scope: read
       parameters:
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/cursor"
@@ -1011,7 +1493,7 @@ paths:
         - $ref: "#/components/parameters/orderDir"
       responses:
         "200":
-          description: A page of results.
+          description: "Each item has `canCreateDefinitions`: whether `POST /definitions` would accept this project from the caller, scopes included for an API token."
           content:
             application/json:
               schema:
@@ -1022,17 +1504,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
-      summary: Create a project.
+      summary: "Create a project. A key with `create_projects` but not `write` may create private projects only, with `autoJoinOnUpload` off."
       operationId: postProjects
       tags:
         - Projects
+      x-scope: create_projects
+      parameters:
+        - $ref: "#/components/parameters/idempotencyKey"
       requestBody:
         required: true
         content:
@@ -1079,7 +1582,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1090,8 +1593,26 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "422":
+          description: Well-formed but not processable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1102,6 +1623,7 @@ paths:
       operationId: getProjectsById
       tags:
         - Projects
+      x-scope: read
       parameters:
         - name: id
           in: path
@@ -1121,8 +1643,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -1133,11 +1667,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       summary: Update project settings. Owner-only.
       operationId: patchProjectsById
       tags:
         - Projects
+      x-scope: write
       parameters:
         - name: id
           in: path
@@ -1185,7 +1726,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1202,8 +1743,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1213,6 +1766,7 @@ paths:
       operationId: deleteProjectsById
       tags:
         - Projects
+      x-scope: write
       parameters:
         - name: id
           in: path
@@ -1229,7 +1783,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1240,8 +1794,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1252,6 +1818,7 @@ paths:
       operationId: getProjectsByIdMembers
       tags:
         - Projects
+      x-scope: read
       parameters:
         - name: id
           in: path
@@ -1276,7 +1843,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1287,8 +1854,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1298,6 +1877,7 @@ paths:
       operationId: postProjectsByIdMembers
       tags:
         - Projects
+      x-scope: write
       parameters:
         - name: id
           in: path
@@ -1343,7 +1923,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1354,8 +1934,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1366,6 +1958,7 @@ paths:
       operationId: patchProjectsByIdMembersByUserId
       tags:
         - Projects
+      x-scope: write
       parameters:
         - name: id
           in: path
@@ -1408,7 +2001,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1425,8 +2018,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1436,6 +2041,7 @@ paths:
       operationId: deleteProjectsByIdMembersByUserId
       tags:
         - Projects
+      x-scope: write
       parameters:
         - name: id
           in: path
@@ -1463,7 +2069,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1480,8 +2086,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1492,6 +2110,7 @@ paths:
       operationId: postProjectsByIdReclaim
       tags:
         - Projects
+      x-scope: write
       parameters:
         - name: id
           in: path
@@ -1512,7 +2131,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1529,8 +2148,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1541,6 +2172,7 @@ paths:
       operationId: getOrgsByOrgId
       tags:
         - Orgs
+      x-scope: read
       parameters:
         - name: orgId
           in: path
@@ -1561,7 +2193,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1572,8 +2204,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1584,6 +2228,7 @@ paths:
       operationId: getOrgsByOrgIdMembers
       tags:
         - Orgs
+      x-scope: read
       parameters:
         - name: orgId
           in: path
@@ -1608,7 +2253,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -1619,12 +2270,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/orgs/{orgId}/members/{userId}":
     patch:
       summary: Change an org role or permission set. The sole owner cannot be demoted.
       operationId: patchOrgsByOrgIdMembersByUserId
       tags:
         - Orgs
+      x-scope: write
       parameters:
         - name: orgId
           in: path
@@ -1674,7 +2332,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1691,8 +2349,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1702,6 +2372,7 @@ paths:
       operationId: deleteOrgsByOrgIdMembersByUserId
       tags:
         - Orgs
+      x-scope: write
       parameters:
         - name: orgId
           in: path
@@ -1723,7 +2394,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1740,8 +2411,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1752,6 +2435,7 @@ paths:
       operationId: getOrgsByOrgIdInvites
       tags:
         - Orgs
+      x-scope: read
       parameters:
         - name: orgId
           in: path
@@ -1776,7 +2460,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -1787,11 +2477,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     post:
       summary: Invite someone to the org. The accept URL is returned once.
       operationId: postOrgsByOrgIdInvites
       tags:
         - Orgs
+      x-scope: write
       parameters:
         - name: orgId
           in: path
@@ -1827,6 +2524,7 @@ paths:
                           - manage_compute
                           - manage_instance_users
                           - manage_updates
+                          - manage_api_tokens
                       - type: string
                         enum:
                           - manage_org_members
@@ -1855,7 +2553,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1866,8 +2564,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1878,6 +2588,7 @@ paths:
       operationId: deleteOrgsByOrgIdInvitesById
       tags:
         - Orgs
+      x-scope: write
       parameters:
         - name: orgId
           in: path
@@ -1899,7 +2610,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1910,8 +2621,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1922,6 +2645,7 @@ paths:
       operationId: postOrgsByOrgIdInvitesByIdResend
       tags:
         - Orgs
+      x-scope: write
       parameters:
         - name: orgId
           in: path
@@ -1947,7 +2671,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -1964,8 +2688,224 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/tokens":
+    get:
+      summary: "Your API tokens in this org, revoked and expired included."
+      operationId: getOrgsByOrgIdTokens
+      tags:
+        - Orgs
+      x-scope: read
+      x-internal: true
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/orderBy"
+        - $ref: "#/components/parameters/orderDir"
+        - name: all
+          in: query
+          required: false
+          description: "`true` for every member's tokens. Needs `manage_org_members`."
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Page"
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+    post:
+      summary: "Create an API token acting as you. The raw key is returned once, as `secret`."
+      operationId: postOrgsByOrgIdTokens
+      tags:
+        - Orgs
+      x-scope: write
+      x-internal: true
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 100
+                scopes:
+                  minItems: 1
+                  maxItems: 20
+                  type: array
+                  items:
+                    type: string
+                expiresInDays:
+                  anyOf:
+                    - type: number
+                      const: 30
+                    - type: number
+                      const: 90
+                    - type: number
+                      const: 180
+              required:
+                - name
+                - scopes
+                - expiresInDays
+      responses:
+        "201":
+          description: Success.
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Validation failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  "/api/v1/orgs/{orgId}/tokens/{tokenId}":
+    delete:
+      summary: "Revoke an API token: your own, or any in the org with `manage_org_members`."
+      operationId: deleteOrgsByOrgIdTokensByTokenId
+      tags:
+        - Orgs
+      x-scope: write
+      x-internal: true
+      parameters:
+        - name: orgId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: tokenId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Success. No content.
+        "401":
+          description: Missing or invalid credentials.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          description: "No such resource, or the caller cannot see it."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -1976,6 +2916,7 @@ paths:
       operationId: getOrgsByOrgIdCompute
       tags:
         - Orgs
+      x-scope: read
       x-internal: true
       parameters:
         - name: orgId
@@ -1997,7 +2938,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -2008,11 +2955,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
     patch:
       summary: Replace the org compute-server overrides.
       operationId: patchOrgsByOrgIdCompute
       tags:
         - Orgs
+      x-scope: write
       x-internal: true
       parameters:
         - name: orgId
@@ -2045,10 +2999,6 @@ paths:
                         type:
                           - string
                           - "null"
-                      timeoutMs:
-                        type: number
-                      retryCount:
-                        type: number
                     required:
                       - id
                       - label
@@ -2075,7 +3025,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -2086,12 +3042,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/orgs/{orgId}/assets/{kind}":
     post:
       summary: Upload an org branding asset.
       operationId: postOrgsByOrgIdAssetsByKind
       tags:
         - Orgs
+      x-scope: write
       x-internal: true
       parameters:
         - name: orgId
@@ -2136,7 +3099,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -2147,8 +3110,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2158,6 +3133,7 @@ paths:
       operationId: deleteOrgsByOrgIdAssetsByKind
       tags:
         - Orgs
+      x-scope: write
       x-internal: true
       parameters:
         - name: orgId
@@ -2180,7 +3156,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
@@ -2191,8 +3167,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2203,6 +3191,7 @@ paths:
       operationId: postCompute
       tags:
         - Compute
+      x-scope: solve
       x-internal: true
       responses:
         "200":
@@ -2223,6 +3212,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
@@ -2230,7 +3225,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "429":
-          description: "Rate limited. Retry after the interval in `Retry-After`."
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -2242,7 +3237,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2253,6 +3248,7 @@ paths:
       operationId: postComputeSchema
       tags:
         - Compute
+      x-scope: upload
       x-internal: true
       parameters:
         - name: projectId
@@ -2299,13 +3295,19 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "403":
-          description: "Authenticated, but not permitted to perform this action."
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
         "422":
           description: Well-formed but not processable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -2317,7 +3319,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
         "503":
-          description: The compute server is unconfigured or unreachable.
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:
@@ -2328,6 +3330,7 @@ paths:
       operationId: getSolve-events
       tags:
         - Solve-events
+      x-scope: read
       x-internal: true
       parameters:
         - name: streamId
@@ -2355,8 +3358,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "409":
           description: The request conflicts with the current state.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -2367,12 +3382,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/solve-events/{solveId}":
     post:
       summary: "The plugin's callback from inside a Compute solve. The reply carries `abort`."
       operationId: postSolve-eventsBySolveId
       tags:
         - Solve-events
+      x-scope: write
       x-internal: true
       parameters:
         - name: solveId
@@ -2399,8 +3421,20 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "410":
           description: Error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
           content:
             application/json:
               schema:
@@ -2411,12 +3445,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
   "/api/v1/solve/{solveId}/cancel":
     post:
       summary: "Ask a running solve to abort. Cooperative: it stops at the next component."
       operationId: postSolveBySolveIdCancel
       tags:
         - Solve
+      x-scope: solve
       x-internal: true
       parameters:
         - name: solveId
@@ -2433,14 +3474,32 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "403":
+          description: "Authenticated, but not permitted to perform this action. For an API token, `details.requiredScope` names the scope that would have passed."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "404":
           description: "No such resource, or the caller cannot see it."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
+        "429":
+          description: "Rate limited. Retry after the interval in `Retry-After`. API-token callers have a per-token request budget, reported on every response in `RateLimit-Limit` and `RateLimit-Remaining`; solves also draw on the owner’s compute budget."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
         "500":
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "503":
+          description: "The compute server is unconfigured or unreachable, or API tokens are unavailable on this server (`API_TOKENS_UNAVAILABLE`)."
           content:
             application/json:
               schema:

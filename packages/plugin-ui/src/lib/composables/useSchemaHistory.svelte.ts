@@ -17,6 +17,7 @@ export function useSchemaHistory() {
 	const past: UISchema[] = $state([]);
 	const future: UISchema[] = $state([]);
 	const MAX_HISTORY = 50;
+	let lastCoalesceKey: string | null = null;
 
 	function clone(schema: UISchema): UISchema {
 		return typeof structuredClone === 'function'
@@ -24,7 +25,9 @@ export function useSchemaHistory() {
 			: (JSON.parse(JSON.stringify(schema)) as UISchema);
 	}
 
-	function push(schema: UISchema) {
+	function push(schema: UISchema, coalesceKey?: string) {
+		if (coalesceKey !== undefined && coalesceKey === lastCoalesceKey) return;
+		lastCoalesceKey = coalesceKey ?? null;
 		past.push(clone(schema));
 		if (past.length > MAX_HISTORY) past.shift();
 		future.length = 0;
@@ -32,6 +35,7 @@ export function useSchemaHistory() {
 
 	function undo(current: UISchema): UISchema | null {
 		if (past.length === 0) return null;
+		lastCoalesceKey = null;
 		future.unshift(current);
 		const prev = past.pop()!;
 		return prev;
@@ -39,12 +43,14 @@ export function useSchemaHistory() {
 
 	function redo(current: UISchema): UISchema | null {
 		if (future.length === 0) return null;
+		lastCoalesceKey = null;
 		past.push(current);
 		const next = future.shift()!;
 		return next;
 	}
 
 	function clearHistory() {
+		lastCoalesceKey = null;
 		past.length = 0;
 		future.length = 0;
 	}
