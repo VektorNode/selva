@@ -137,6 +137,12 @@ function runGuard() {
 		}
 	}
 
+	// A package whose CHANGELOG changes in this diff was versioned here, which consumed its
+	// changesets: a PR carrying a version commit has the release but no changeset files left.
+	for (const pkg of readWorkspacePackages()) {
+		if (changedFiles.includes(`${pkg.relDir}/CHANGELOG.md`)) covered.add(pkg.name);
+	}
+
 	const missing = [...touched.entries()].filter(([name]) => !covered.has(name));
 
 	// Checked before the empty-changeset waiver: that waiver forgives a missing

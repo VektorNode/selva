@@ -64,9 +64,12 @@ jobs:
           if [ "${{ github.ref }}" = "refs/heads/beta" ]; then
             echo "is_beta=true" >> "$GITHUB_OUTPUT"
             if [ ! -f .changeset/pre.json ]; then
-              echo "::error::.changeset/pre.json missing — beta branch is not in pre mode."
-              echo "Run 'pnpm changeset pre enter beta' on the beta branch first."
-              exit 1
+              # Normal between a stable release and `pnpm changeset pre enter beta`. Never version
+              # or publish here: without pre mode both produce stable versions on `latest`.
+              echo "::warning::.changeset/pre.json missing — beta is not in pre mode, so it does not release."
+              echo "Run 'pnpm changeset pre enter beta' on the beta branch to resume beta releases."
+              echo "should_run=false" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
             # After `pnpm changeset pre exit`, `changeset version` collapses the betas to stable and
             # deletes pre.json, and the publish that follows has no prerelease tag left: it goes to
@@ -265,6 +268,11 @@ jobs:
       - name: Verify no beta work was left behind
         if: steps.check.outputs.is_beta == 'true'
         run: |
+          # Outside pre mode beta releases nothing; its changesets ship through main.
+          if ! grep -qs '"mode": *"pre"' .changeset/pre.json; then
+            echo "Beta is not in pre mode — nothing to verify."
+            exit 0
+          fi
           leftover=0
           while IFS= read -r name; do
             [ -n "$name" ] || continue
