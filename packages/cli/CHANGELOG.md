@@ -1,5 +1,13 @@
 # @selvajs/cli
 
+## 4.20.0-beta.29
+
+### Patch Changes
+
+- 420bccb: Deployments pin pm2 7.1.2 (was 7.0.3). It drops the proxy-agent and FTP dependencies behind five high-severity `npm audit` findings (basic-ftp, get-uri, pac-proxy-agent, proxy-agent, js-yaml).
+
+  **Action needed:** the in-app update doesn't change pm2. After updating, run `selva migrate` and then `npx pm2 update` in the deployment, as in [Upgrading pm2](https://github.com/VektorNode/selva/blob/main/docs/self-hosting/deployment/prerequisites.md#upgrading-pm2). Until then `selva doctor` reports the old pm2.
+
 ## 4.20.0-beta.28
 
 No changes in this release.
