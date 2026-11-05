@@ -17,6 +17,9 @@ name: Release
 on:
   push:
     branches: [main, beta]
+  # Restarts a release whose push GitHub skipped: a squash message that quotes a
+  # `[skip ci]` commit skips every workflow on that push.
+  workflow_dispatch:
 
 # Cancel superseded beta runs; never interrupt an in-flight main publish.
 concurrency:
@@ -25,6 +28,8 @@ concurrency:
 
 jobs:
   release:
+    # A manual run from any other branch would fall through to the main path and publish.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
