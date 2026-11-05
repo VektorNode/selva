@@ -21,9 +21,10 @@ For a deployment on 4.19 installed with `@selvajs/cli`, on the local provider, w
 4. **Update:** `npm run update` (or `npx selva update`). It stops the app, updates `@selvajs/cli` and `@selvajs/selva`, and starts it again.
 5. **If the app doesn't come up:** `npx selva config show` names each bad value. Fix it with `npx selva config set KEY=VALUE`, then `npm run restart`.
 6. **Clean `.env`:** `npx selva migrate --dry-run`, then `npx selva migrate`. It removes retired keys and keeps every setting's meaning. It also strips the copied template comments from `.env`; short notes directly above a setting stay.
-7. **Header auth only:** update the Caddyfile for the new bypass routes, and check the Caddy and oauth2-proxy versions. See [Header auth (Entra)](#header-auth-entra).
-8. **Check `/admin/system`** (config report, key status) and **`/admin/compute`** (what each compute server reports).
-9. **Update `Selva.gha`** on every machine that edits definitions. See [Grasshopper plugin](#grasshopper-plugin).
+7. **Swap the pm2 daemon:** `npx pm2 update`, then `npx pm2 list` until `selva-compute` is `online`, then `npx pm2 save` and `npm run doctor`. `migrate` pinned pm2 7.1.2, but the running daemon stays on the old version until `pm2 update`. See [pm2 7.1.2](#pm2-712).
+8. **Header auth only:** update the Caddyfile for the new bypass routes, and check the Caddy and oauth2-proxy versions. See [Header auth (Entra)](#header-auth-entra).
+9. **Check `/admin/system`** (config report, key status) and **`/admin/compute`** (what each compute server reports).
+10. **Update `Selva.gha`** on every machine that edits definitions. See [Grasshopper plugin](#grasshopper-plugin).
 
 ## Breaking
 
@@ -91,6 +92,12 @@ Saving on `/admin/compute` now refuses:
 - a changed server URL with the API key left blank (409). Re-enter the key, or clear it, when you move a server.
 
 Stored keys in the old `enc:v1:` format still decrypt and are rewritten as `enc:v2:` the next time that server is saved. Nothing to do.
+
+### pm2 7.1.2
+
+The deployment's pinned pm2 moves from 7.0.3 to 7.1.2. 7.1.2 drops the proxy and FTP dependencies behind five high-severity `npm audit` findings (basic-ftp, get-uri, pac-proxy-agent, proxy-agent, js-yaml); afterwards `npm audit --omit=dev` reports none from pm2.
+
+The in-app update and `npm run update` don't change pm2: only `selva migrate` writes the new pin, and only `npx pm2 update` replaces the running daemon (the app goes down briefly). Run `npx pm2 save` only once `npx pm2 list` shows `selva-compute` online: saving an empty list overwrites the record pm2 restores from. If the list is empty, run `npx pm2 resurrect`. If systemd starts pm2 at boot, run `pm2 update` from a shell; the in-app updater refuses it there. Details: [Upgrading pm2](./prerequisites.md#upgrading-pm2).
 
 ### Viewer follows "Compute render" only
 
