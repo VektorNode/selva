@@ -5,11 +5,14 @@
  * the whole page and the 3D view in each look, for one or more sets of input values.
  *
  *   node scripts/plugin/snap-preview.mjs --url '<UI Bridge URL output>' [--out dir] [--looks showcase,night]
- *        [--values values.json] [--size 1600x1000]
+ *        [--values values.json] [--size 1600x1000] [--zoom 5]
  *
  * values.json: [{ "name": "evening", "values": { "Evening lights": true, "Span": 22 } }, ...]. Keys
  * are input nicknames or ids; a value list takes its option's value. Each set is sent over the
  * bridge like a form edit, and the page shows the solve it starts.
+ *
+ * --zoom scrolls the wheel that many steps over the 3D view before its shots, for a model framed
+ * inside a large context.
  *
  * Pass the whole URL: the page authenticates with the secret in its fragment.
  */
@@ -166,6 +169,15 @@ for (const set of sets) {
 	if (tabCount > 1) await tabs.first().click();
 	for (const look of looks) {
 		await setLook(look);
+		if (opts.zoom && look === looks[0]) {
+			const box = await page.getByTestId('viewer-canvas').boundingBox();
+			await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+			for (let i = 0; i < Number(opts.zoom); i++) {
+				await page.mouse.wheel(0, -240);
+				await page.waitForTimeout(150);
+			}
+			await page.waitForTimeout(1000);
+		}
 		const viewShot = path.join(opts.out, `${set.name}-${look}.png`);
 		// Clipped page shot, not an element shot: Playwright waits for an element to be stable,
 		// and the canvas never is while emissive lights keep the viewer rendering.

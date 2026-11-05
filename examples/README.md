@@ -8,7 +8,7 @@ scripts/develop/check-fixtures.mjs` fails on any file below that this list doesn
 | File                                       | Shows                                                                    | Regenerate                    |
 | ------------------------------------------ | ------------------------------------------------------------------------ | ----------------------------- |
 | `file-import-example.3dm`                  | Not yet described                                                        | by hand                       |
-| `definitions/block-massing-studio.gh`      | Massing in a city block, lit for the night look                          | by hand                       |
+| `definitions/block-massing-studio.gh`      | Massing in a city block: stone, timber and metal finishes, paving, a Canopy floor-area chart, the night look | by hand                       |
 | `definitions/canopy-example.gh`            | Not yet described                                                        | by hand                       |
 | `definitions/display-example.gh`           | Not yet described                                                        | by hand                       |
 | `definitions/dynamic-value-list.gh`        | Dynamic value lists                                                      | by hand                       |
