@@ -288,7 +288,7 @@ why.
 ## What the test branch has to prove
 
 Each item has a pass condition. On Mac, the measurements can be driven through the Rhino MCP tools
-the same way the spike was (see `.claude/skills/rhino-mcp/`). Keyboard items need a person.
+the same way the spike was (see `~/.claude/skills/rhino-mcp/`). Keyboard items need a person.
 
 1. **Keyboard reaches the page**, Mac and Windows. Typing, Backspace, arrows, Tab, Enter and
    Cmd/Ctrl + C/V/X/Z/A act on a focused text input in the panel. Nothing reaches Rhino's command

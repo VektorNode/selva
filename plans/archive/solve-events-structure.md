@@ -382,7 +382,7 @@ an incidental-message switch next to the existing remark, warning, blocking and 
 - **Local:** record the UI Bridge's WebSocket from inside Rhino with the MCP ("Record the bridge's
   WebSocket traffic" in the rhino-mcp skill's `reference.csx`). Send value updates and a
   `cancelSolve` from a background task; never wait on the UI thread, which the solve needs.
-- **Compute:** [`compute-e2e/`](../../.claude/skills/rhino-mcp/compute-e2e/) next to the skill.
+- **Compute:** `~/.claude/skills/rhino-mcp/compute-e2e/` next to the skill.
   `sink.mjs` stands in for the Selva callback route and can answer `abort` or `410` on cue;
   `solve.mjs` posts the showcase to compute.geometry with a `selvaevents` block. This covers
   plugin → fork → callback, not the Selva server's bus, SSE or cancel route.

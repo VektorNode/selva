@@ -221,7 +221,7 @@ Still to verify during the build, because it needs a Compute server:
 
 - In Cloud mode, a hotspot lands on the mesh. That means the Compute document's unit
   system matches the response's `modelunits`.
-- Compute returns N hotspot goos as N items. `.claude/skills/rhino-mcp/compute-e2e/`
+- Compute returns N hotspot goos as N items. `~/.claude/skills/rhino-mcp/compute-e2e/`
   covers both.
 
 ## Build order

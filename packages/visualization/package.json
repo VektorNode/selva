@@ -94,7 +94,8 @@
 		"type-check": "tsc --noEmit"
 	},
 	"dependencies": {
-		"fflate": "catalog:"
+		"fflate": "catalog:",
+		"three-mesh-bvh": "catalog:"
 	},
 	"peerDependencies": {
 		"three": ">=0.179.0"

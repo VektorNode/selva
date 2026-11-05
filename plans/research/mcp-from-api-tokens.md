@@ -290,7 +290,7 @@ Traps that cost a round each:
 - The Rhino MCP's `g1_apply_graph` and `g1_connect` don't work; everything went through
   `run_csharp`. Its `get_viewport_image` returned 240 K characters, too large for a tool result:
   capture to a PNG on disk from `run_csharp` and read the file instead. Rhino-side recipes (C#
-  Script params, plugin discovery, capture) are in `.claude/skills/rhino-mcp/`.
+  Script params, plugin discovery, capture) are in `~/.claude/skills/rhino-mcp/`.
 - When the user names a domain plugin (here, "sheet metal" means SheepMetal), list its components
   by filtering the component server on category first. The tool's name search matches
   descriptions and misses most of them.

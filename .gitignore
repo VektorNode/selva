@@ -63,13 +63,6 @@ ehthumbs.db
 .agents/
 skills-lock.json
 
-# ...except project skills, which are shared tooling and belong in the repo.
-# Git never descends into an excluded directory, so each level must be
-# re-included before the leaf negation can match.
-!.claude/skills/
-.claude/skills/*
-!.claude/skills/rhino-mcp/
-
 # Local environment & config files
 .env
 .env.local

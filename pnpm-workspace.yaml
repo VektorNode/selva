@@ -43,6 +43,7 @@ catalogs:
     tailwind-variants: ^3.3.1
     tailwindcss: ^4.3.3
     three: ^0.187.0
+    three-mesh-bvh: ^0.9.16
     typedoc: ^0.28.17
     undici: ^8.12.2
     tsdown: ^0.23.4

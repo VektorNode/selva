@@ -142,6 +142,8 @@ export const initThree = function (
 				canvas,
 				scene,
 				getActiveCamera,
+				getViewTarget: () => controls.target,
+				requestRender: () => requestRender(),
 				labelLayer,
 				options: {
 					snapPixels: config.measure.snapPixels,

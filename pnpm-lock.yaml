@@ -120,6 +120,9 @@ catalogs:
     three:
       specifier: ^0.187.0
       version: 0.187.0
+    three-mesh-bvh:
+      specifier: ^0.9.16
+      version: 0.9.18
     tsdown:
       specifier: ^0.23.4
       version: 0.23.4
@@ -847,6 +850,9 @@ importers:
       fflate:
         specifier: 'catalog:'
         version: 0.8.3
+      three-mesh-bvh:
+        specifier: 'catalog:'
+        version: 0.9.18(three@0.187.0)
     devDependencies:
       '@eslint/js':
         specifier: ^10.0.1
@@ -6546,6 +6552,11 @@ packages:
   thread-stream@4.2.0:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
+
+  three-mesh-bvh@0.9.18:
+    resolution: {integrity: sha512-S76hOBnsSG4jsuEyCu98K63klONG4NwJANabPY1LUD5l7oUgu2xtKC0IwnX/XyPzo4YZ1D7ZU+gHVA479UdQmA==}
+    peerDependencies:
+      three: '>= 0.159.0'
 
   three@0.187.0:
     resolution: {integrity: sha512-Qiu7R+Cmh8CstZsY1uJOSWnVlfo7ZtNLV7mF8Jltk3LB3AtDu9cRZlcnRKkAk8Y4z6KKw35z7Y7Urd7jWY8etA==}
@@ -12885,6 +12896,10 @@ snapshots:
   thread-stream@4.2.0:
     dependencies:
       real-require: 1.0.0
+
+  three-mesh-bvh@0.9.18(three@0.187.0):
+    dependencies:
+      three: 0.187.0
 
   three@0.187.0: {}
 

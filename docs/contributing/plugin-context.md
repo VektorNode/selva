@@ -93,7 +93,7 @@ And it is permanent: `MergeDiscoveredInputs` skips any ID already present in `sc
 Validate a payload before grafting it:
 
 ```bash
-node .claude/skills/rhino-mcp/validate-ui-schema.mjs <file.json>
+node ~/.claude/skills/rhino-mcp/validate-ui-schema.mjs <file.json>
 ```
 
 ## What the UI Bridge creates by itself
