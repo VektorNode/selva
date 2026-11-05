@@ -30,6 +30,7 @@ import { createPipelineController } from './pipeline-controller.js';
 import { setupControls } from './setup-controls.js';
 import { addFloor, setupEnvironment } from './setup-environment.js';
 import { setupEventHandlers } from './setup-events.js';
+import { trackTaps } from './tap-gesture.js';
 import { fitShadowToContent, jitterSun, setupLighting } from './setup-lighting.js';
 import { setupRenderer } from './setup-renderer.js';
 import type { ThreeViewer } from './viewer.js';
@@ -155,9 +156,10 @@ export const initThree = function (
 			})
 		: null;
 
+	const taps = trackTaps(canvas);
 	const eventHandlers =
 		config.events.enableEventHandlers !== false
-			? setupEventHandlers(canvas, scene, cameraController, config)
+			? setupEventHandlers(canvas, scene, cameraController, config, taps)
 			: {
 					dispose: () => {},
 					fitToView: () => {},
@@ -172,25 +174,12 @@ export const initThree = function (
 	if (measureTool) tools.register({ id: 'measure', tool: measureTool, priority: 0 });
 	if (gizmo) tools.register({ id: 'gizmo', tool: gizmo, priority: -100 });
 
-	// A drag to orbit/pan ends with a `click` on mouseup; without this guard that release would be
-	// mistaken for a measurement point.
-	const DRAG_SLOP_PX = 5;
-	let pressX = 0;
-	let pressY = 0;
-	const handlePointerDown = (event: MouseEvent) => {
-		pressX = event.clientX;
-		pressY = event.clientY;
-	};
-	const wasDrag = (event: MouseEvent) =>
-		Math.hypot(event.clientX - pressX, event.clientY - pressY) > DRAG_SLOP_PX;
-
 	// Capture-phase so tools see the click before bubble-phase selection; the first to claim it
 	// wins, and stopImmediatePropagation keeps selection from also firing.
 	const handleToolClick = (event: MouseEvent) => {
-		if (wasDrag(event)) return;
+		if (!taps.wasTap()) return;
 		if (tools.handleClick(event)) event.stopImmediatePropagation();
 	};
-	canvas.addEventListener('mousedown', handlePointerDown, { capture: true });
 	canvas.addEventListener('click', handleToolClick, { capture: true });
 
 	// Passive: moves only drive previews, never consume, so they can't interfere with orbit/pan.
@@ -353,7 +342,7 @@ export const initThree = function (
 		disposed = true;
 		disposeAnimation();
 		eventHandlers.dispose();
-		canvas.removeEventListener('mousedown', handlePointerDown, { capture: true });
+		taps.dispose();
 		canvas.removeEventListener('click', handleToolClick, { capture: true });
 		canvas.removeEventListener('mousemove', handleToolMove);
 		measureTool?.dispose();

@@ -49,7 +49,7 @@
 <div class="space-y-3">
 	<div class="flex items-center gap-2">
 		<button
-			class="bg-primary text-primary-foreground rounded px-3 py-1.5 text-xs font-medium transition hover:opacity-90"
+			class="bg-primary text-primary-foreground rounded-sm px-3 py-1.5 text-xs font-medium transition hover:opacity-90"
 			onclick={trigger}
 		>
 			change a value
@@ -65,20 +65,20 @@
 
 	<div class="grid grid-cols-2 gap-2">
 		<div class="border-border rounded-md border p-2.5">
-			<p class="text-muted-foreground text-[11px] tracking-wide uppercase">in flight</p>
+			<p class="text-muted-foreground text-xs tracking-wide uppercase">in flight</p>
 			<p class="mt-1 font-mono text-sm tabular-nums">
 				{#if running !== null}
-					<span class="text-sky-600 dark:text-sky-400">value {running}</span>
+					<span class="text-info">value {running}</span>
 				{:else}
 					<span class="text-muted-foreground">idle</span>
 				{/if}
 			</p>
 		</div>
 		<div class="border-border rounded-md border p-2.5">
-			<p class="text-muted-foreground text-[11px] tracking-wide uppercase">pending slot (max 1)</p>
+			<p class="text-muted-foreground text-xs tracking-wide uppercase">pending slot (max 1)</p>
 			<p class="mt-1 font-mono text-sm tabular-nums">
 				{#if slot !== null}
-					<span class="text-amber-600 dark:text-amber-400">value {slot}</span>
+					<span class="text-warning">value {slot}</span>
 				{:else}
 					<span class="text-muted-foreground">empty</span>
 				{/if}
@@ -90,9 +90,7 @@
 		<p class="text-muted-foreground">
 			solved
 			{#each done as value (value)}
-				<span class="ml-1 font-mono text-emerald-600 tabular-nums dark:text-emerald-400"
-					>{value}</span
-				>
+				<span class="text-success ml-1 font-mono tabular-nums">{value}</span>
 			{/each}
 		</p>
 		<p class="text-muted-foreground min-h-4">

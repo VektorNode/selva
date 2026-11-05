@@ -51,7 +51,7 @@
 					<span
 						class="bg-faint-foreground group-hover:bg-primary size-2 rounded-full transition-colors duration-300"
 					></span>
-					<span class="text-muted-foreground font-mono text-[11px] tracking-widest uppercase">
+					<span class="text-muted-foreground font-mono text-xs tracking-widest uppercase">
 						{node.step}
 					</span>
 				</div>

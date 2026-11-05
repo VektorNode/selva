@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 
 import { setupEventHandlers } from '../scene-setup/setup-events';
+import { trackTaps } from '../scene-setup/tap-gesture';
 
 import type { CameraController } from '../camera-controller';
 import type { ResolvedOptions } from '../scene-setup/defaults';
@@ -31,9 +32,29 @@ function fakeCanvas() {
 		getBoundingClientRect: () => ({ left: 0, top: 0, ...CANVAS_SIZE })
 	};
 	const fire = (type: string, event: Record<string, unknown>) => {
-		for (const fn of listeners.get(type) ?? []) fn(event);
+		for (const fn of listeners.get(type) ?? []) fn({ type, ...event });
 	};
-	return { canvas: canvas as unknown as HTMLCanvasElement, fire };
+	/** A press and release in place, then the `click` the browser derives from it. */
+	const click = (
+		at: { clientX: number; clientY: number } = CENTRE,
+		pointerType = 'mouse',
+		timeStamp = 0
+	) => {
+		const pointer = { pointerId: 1, pointerType, timeStamp, ...at };
+		fire('pointerdown', pointer);
+		fire('pointerup', pointer);
+		fire('click', { ...at, timeStamp });
+	};
+	return { canvas: canvas as unknown as HTMLCanvasElement, fire, click };
+}
+
+function setupHandlers(
+	canvas: HTMLCanvasElement,
+	scene: THREE.Scene,
+	controller: CameraController,
+	config: ResolvedOptions
+) {
+	return setupEventHandlers(canvas, scene, controller, config, trackTaps(canvas));
 }
 
 function sceneWithCube(): THREE.Scene {
@@ -58,7 +79,7 @@ function stubCameraController(): CameraController {
 
 describe('setupEventHandlers click vs double-click', () => {
 	function setup() {
-		const { canvas, fire } = fakeCanvas();
+		const { canvas, fire, click } = fakeCanvas();
 		const onMeshMetadataClicked = vi.fn();
 		const onMeshDoubleClicked = vi.fn();
 		const config = {
@@ -72,11 +93,7 @@ describe('setupEventHandlers click vs double-click', () => {
 			}
 		} as unknown as ResolvedOptions;
 
-		const handlers = setupEventHandlers(canvas, sceneWithCube(), stubCameraController(), config);
-		const click = () => {
-			fire('mousedown', CENTRE);
-			fire('click', CENTRE);
-		};
+		const handlers = setupHandlers(canvas, sceneWithCube(), stubCameraController(), config);
 		return { click, fire, handlers, onMeshMetadataClicked, onMeshDoubleClicked };
 	}
 
@@ -104,13 +121,14 @@ describe('setupEventHandlers click vs double-click', () => {
 	});
 
 	it('frames all content on a double-click over empty background', () => {
-		const { canvas, fire } = fakeCanvas();
+		const { canvas, fire, click } = fakeCanvas();
 		const controller = stubCameraController();
 		const config = {
 			events: { enableClickToFocus: true, enableDoubleClickZoom: true, selectionColor: '#ff0000' }
 		} as unknown as ResolvedOptions;
-		const handlers = setupEventHandlers(canvas, sceneWithCube(), controller, config);
+		const handlers = setupHandlers(canvas, sceneWithCube(), controller, config);
 
+		click({ clientX: 5, clientY: 5 });
 		fire('dblclick', { clientX: 5, clientY: 5 });
 
 		const [box, animate] = vi.mocked(controller.frameBounds).mock.calls[0];
@@ -121,11 +139,77 @@ describe('setupEventHandlers click vs double-click', () => {
 
 	it('ignores a click that was really a drag', () => {
 		const { fire, handlers, onMeshMetadataClicked } = setup();
+		const pointer = { pointerId: 1, pointerType: 'mouse', timeStamp: 0 };
 
-		fire('mousedown', CENTRE);
-		fire('click', { clientX: CENTRE.clientX + 40, clientY: CENTRE.clientY });
+		fire('pointerdown', { ...pointer, ...CENTRE });
+		fire('pointermove', { ...pointer, clientX: CENTRE.clientX + 40, clientY: CENTRE.clientY });
+		fire('pointerup', { ...pointer, ...CENTRE });
+		fire('click', CENTRE);
 
 		expect(onMeshMetadataClicked).not.toHaveBeenCalled();
+		handlers.dispose();
+	});
+});
+
+describe('setupEventHandlers touch', () => {
+	function setup() {
+		const { canvas, fire, click } = fakeCanvas();
+		const controller = stubCameraController();
+		const onObjectSelected = vi.fn();
+		const onMeshDoubleClicked = vi.fn();
+		const config = {
+			events: {
+				enableClickToFocus: true,
+				enableDoubleClickZoom: true,
+				selectionColor: '#ff0000',
+				onObjectSelected,
+				onMeshDoubleClicked
+			}
+		} as unknown as ResolvedOptions;
+		const handlers = setupHandlers(canvas, sceneWithCube(), controller, config);
+		return { fire, click, controller, handlers, onObjectSelected, onMeshDoubleClicked };
+	}
+
+	// The cube's front face reaches about 72px either side of the centre at this camera distance.
+	const NEAR_EDGE = { clientX: CENTRE.clientX + 78, clientY: CENTRE.clientY };
+
+	it('picks an object a fingertip lands just beside', () => {
+		const { click, handlers, onObjectSelected } = setup();
+
+		click(NEAR_EDGE, 'touch');
+
+		expect(onObjectSelected).toHaveBeenCalledTimes(1);
+		handlers.dispose();
+	});
+
+	it('keeps a mouse click to the pixel under the cursor', () => {
+		const { click, handlers, onObjectSelected } = setup();
+
+		click(NEAR_EDGE, 'mouse');
+
+		expect(onObjectSelected).not.toHaveBeenCalled();
+		handlers.dispose();
+	});
+
+	it('pairs two quick taps into a double-tap, and ignores the browser dblclick after them', () => {
+		const { click, fire, controller, handlers, onMeshDoubleClicked } = setup();
+
+		click(CENTRE, 'touch', 0);
+		click(CENTRE, 'touch', 200);
+		fire('dblclick', CENTRE);
+
+		expect(onMeshDoubleClicked).toHaveBeenCalledTimes(1);
+		expect(controller.frameBounds).toHaveBeenCalledTimes(1);
+		handlers.dispose();
+	});
+
+	it('treats two slow taps as two taps', () => {
+		const { click, handlers, onMeshDoubleClicked } = setup();
+
+		click(CENTRE, 'touch', 0);
+		click(CENTRE, 'touch', 600);
+
+		expect(onMeshDoubleClicked).not.toHaveBeenCalled();
 		handlers.dispose();
 	});
 });
@@ -142,7 +226,7 @@ describe('setupEventHandlers hover', () => {
 		scene.add(other);
 		const cube = scene.children[0] as THREE.Mesh;
 		const original = cube.material;
-		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+		const handlers = setupHandlers(canvas, scene, stubCameraController(), config);
 
 		handlers.setHover(cube);
 		expect(cube.material).not.toBe(original);
@@ -155,13 +239,12 @@ describe('setupEventHandlers hover', () => {
 	});
 
 	it('leaves the selected object alone', () => {
-		const { canvas, fire } = fakeCanvas();
+		const { canvas, click } = fakeCanvas();
 		const scene = sceneWithCube();
 		const cube = scene.children[0] as THREE.Mesh;
-		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+		const handlers = setupHandlers(canvas, scene, stubCameraController(), config);
 
-		fire('mousedown', CENTRE);
-		fire('click', CENTRE);
+		click();
 		const selected = cube.material;
 		handlers.setHover(cube);
 
@@ -190,7 +273,7 @@ describe('setupEventHandlers selectEntries', () => {
 		const scene = sceneWithCube();
 		const merged = mergedMesh();
 		scene.add(merged);
-		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+		const handlers = setupHandlers(canvas, scene, stubCameraController(), config);
 
 		handlers.selectEntries([{ object: merged, memberIndex: 0 }]);
 		handlers.setHover(merged, 2);
@@ -209,7 +292,7 @@ describe('setupEventHandlers selectEntries', () => {
 		scene.add(merged);
 		const cubeMaterial = cube.material;
 		const mergedMaterial = merged.material;
-		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+		const handlers = setupHandlers(canvas, scene, stubCameraController(), config);
 
 		handlers.selectEntries([
 			{ object: cube, memberIndex: null },
@@ -229,13 +312,12 @@ describe('setupEventHandlers selectEntries', () => {
 	});
 
 	it('leaves a canvas selection alone when told there is nothing to select', () => {
-		const { canvas, fire } = fakeCanvas();
+		const { canvas, click } = fakeCanvas();
 		const scene = sceneWithCube();
 		const cube = scene.children[0] as THREE.Mesh;
-		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), config);
+		const handlers = setupHandlers(canvas, scene, stubCameraController(), config);
 
-		fire('mousedown', CENTRE);
-		fire('click', CENTRE);
+		click();
 		const selected = cube.material;
 		handlers.selectEntries([]);
 
@@ -244,17 +326,16 @@ describe('setupEventHandlers selectEntries', () => {
 	});
 
 	it('treats a click on an entry-selected object as a fresh pick', () => {
-		const { canvas, fire } = fakeCanvas();
+		const { canvas, click } = fakeCanvas();
 		const scene = sceneWithCube();
 		const cube = scene.children[0] as THREE.Mesh;
 		const onObjectSelected = vi.fn();
-		const handlers = setupEventHandlers(canvas, scene, stubCameraController(), {
+		const handlers = setupHandlers(canvas, scene, stubCameraController(), {
 			events: { enableClickToFocus: true, selectionColor: '#ff0000', onObjectSelected }
 		} as unknown as ResolvedOptions);
 
 		handlers.selectEntries([{ object: cube, memberIndex: null }]);
-		fire('mousedown', CENTRE);
-		fire('click', CENTRE);
+		click();
 
 		expect(onObjectSelected).toHaveBeenCalledWith(cube);
 		handlers.dispose();
@@ -263,7 +344,7 @@ describe('setupEventHandlers selectEntries', () => {
 
 describe('setupEventHandlers viewer aids', () => {
 	it('never picks the grid, whose camera-sized box would fling the camera out', () => {
-		const { canvas, fire } = fakeCanvas();
+		const { canvas, fire, click } = fakeCanvas();
 		const scene = sceneWithCube();
 		// As sized in grid.ts: a plane scaled to the fade radius, in front of the content.
 		const grid = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshBasicMaterial());
@@ -283,7 +364,8 @@ describe('setupEventHandlers viewer aids', () => {
 			}
 		} as unknown as ResolvedOptions;
 
-		const handlers = setupEventHandlers(canvas, scene, controller, config);
+		const handlers = setupHandlers(canvas, scene, controller, config);
+		click();
 		fire('dblclick', CENTRE);
 
 		// The cube behind the grid is what gets framed, not the grid.

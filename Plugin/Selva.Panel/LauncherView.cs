@@ -81,7 +81,7 @@ internal sealed class LauncherView : Scrollable
                 Space(22);
                 layout.Items.Add(Text("Recent", SmallBoldFont, Dim));
                 Space(8);
-                var rows = new StackLayout { HorizontalContentAlignment = HorizontalAlignment.Stretch };
+                var rows = new StackLayout { HorizontalContentAlignment = HorizontalAlignment.Stretch, Spacing = 8 };
                 foreach (var path in recent)
                 {
                     var row = new RecentRow(path);
@@ -89,7 +89,7 @@ internal sealed class LauncherView : Scrollable
                     rows.Items.Add(row);
                 }
 
-                layout.Items.Add(new Card(rows, 4));
+                layout.Items.Add(new Card(rows, 8, well: true));
             }
         }
 
@@ -109,14 +109,30 @@ internal sealed class LauncherView : Scrollable
         Content = layout;
     }
 
-    private static Color Fore => Paint(PaintColor.TextEnabled);
-    private static Color Dim => Paint(PaintColor.TextDisabled);
+    // sRGB copies of the tokens in packages/ui/src/lib/styles/base.css, named by role as in
+    // docs/contributing/design-system.md. Eto can't read the CSS, so change both together.
+    private static bool Dark => HostUtils.RunningInDarkMode;
+    private static Color Fore => Dark ? Color.FromArgb(250, 250, 250) : Color.FromArgb(23, 23, 23);
+    private static Color Dim => Dark ? Color.FromArgb(161, 161, 161) : Color.FromArgb(99, 99, 99);
+    private static Color Faint => Dark ? Color.FromArgb(115, 115, 115) : Color.FromArgb(128, 128, 128);
+    private static Color Surface => Dark ? Color.FromArgb(23, 23, 23) : Colors.White;
+    private static Color Raised => Dark ? Color.FromArgb(31, 31, 31) : Colors.White;
+    private static Color Well => Dark ? Color.FromArgb(38, 38, 38) : Color.FromArgb(245, 245, 245);
+    private static Color Edge => Ink(Dark ? 0.10f : 0.08f);
+    private static Color EdgeStrong => Ink(Dark ? 0.18f : 0.14f);
+    private static Color EdgeInput => Ink(Dark ? 0.15f : 0.10f);
+    private static Color HoverOverlay => Ink(Dark ? 0.06f : 0.04f);
+    private static Color SelectedOverlay => Ink(Dark ? 0.10f : 0.08f);
+    private static Color Ring => Dark ? Color.FromArgb(115, 115, 115) : Color.FromArgb(161, 161, 161);
+    private static Color Accent => Dark ? Color.FromArgb(229, 229, 229) : Color.FromArgb(23, 23, 23);
+    private static Color OnAccent => Dark ? Color.FromArgb(23, 23, 23) : Color.FromArgb(250, 250, 250);
+    private static Color Danger => Dark ? Color.FromArgb(246, 108, 109) : Color.FromArgb(201, 48, 45);
 
-    // sRGB copies of --primary, --primary-foreground and --destructive in
-    // packages/ui/src/lib/styles/base.css. Eto can't read the CSS, so change both together.
-    private static Color Accent => HostUtils.RunningInDarkMode ? Color.FromArgb(152, 181, 137) : Color.FromArgb(87, 114, 73);
-    private static Color OnAccent => HostUtils.RunningInDarkMode ? Color.FromArgb(18, 18, 18) : Colors.White;
-    private static Color Danger => HostUtils.RunningInDarkMode ? Color.FromArgb(246, 108, 109) : Color.FromArgb(201, 48, 45);
+    /// <summary>The ink colour (white in dark, black in light) at <paramref name="alpha" />: the token overlays.</summary>
+    private static Color Ink(float alpha)
+    {
+        return new Color(Dark ? Colors.White : Colors.Black, alpha);
+    }
 
     private static (string label, string hint) Describe(OpenStep step)
     {
@@ -220,18 +236,6 @@ internal sealed class LauncherView : Scrollable
                 string.Equals(Path.GetExtension(path), ".ghx", StringComparison.OrdinalIgnoreCase));
     }
 
-    private static Color Paint(PaintColor color)
-    {
-        var c = AppearanceSettings.GetPaintColor(color);
-        return Color.FromArgb(c.R, c.G, c.B, c.A);
-    }
-
-    /// <summary>A tint of the text colour, so fills read on both the light and the dark theme.</summary>
-    private static Color Tint(float alpha)
-    {
-        return new Color(Fore, alpha);
-    }
-
     private static Label Text(string text, Font font, Color? color = null)
     {
         // Eto in Rhino 8 for Mac on Apple silicon defaults labels to right-aligned.
@@ -318,11 +322,13 @@ internal sealed class LauncherView : Scrollable
         g.DrawPath(new Pen(color, Math.Max(1f, 0.07f * s)), wires);
     }
 
-    private static void DrawAccentTile(Graphics g, RectangleF tile)
+    /// <summary>A neutral tile: the accent is for state and action, not decoration.</summary>
+    private static void DrawGlyphTile(Graphics g, RectangleF tile)
     {
-        g.FillPath(new Color(Accent, 0.2f), GraphicsPath.GetRoundRect(tile, tile.Width / 4));
+        g.FillPath(Well, GraphicsPath.GetRoundRect(tile, 8));
+        g.DrawPath(Edge, GraphicsPath.GetRoundRect(tile, 8));
         tile.Inflate(-tile.Width / 4, -tile.Height / 4);
-        DrawDefinitionGlyph(g, tile, Accent);
+        DrawDefinitionGlyph(g, tile, Dim);
     }
 
     /// <summary>A painted control that behaves like a button: hover, press, focus, Enter or Space.</summary>
@@ -435,19 +441,23 @@ internal sealed class LauncherView : Scrollable
             var g = e.Graphics;
             g.AntiAlias = true;
             var width = (float)Width;
-            var card = GraphicsPath.GetRoundRect(new RectangleF(0.5f, 0.5f, width - 1, Height - 1), 10);
+            var card = GraphicsPath.GetRoundRect(new RectangleF(0.5f, 0.5f, width - 1, Height - 1), 12);
 
-            var fill = _dragActive ? new Color(Accent, 0.12f) : Tint(Pressed ? 0.08f : Hover ? 0.06f : 0.035f);
-            g.FillPath(fill, card);
-            var border = _dragActive ? new Pen(Accent, 1.5f) : new Pen(Tint(Hover ? 0.32f : 0.18f), 1f) { DashStyle = new DashStyle(0, 4, 3) };
+            g.FillPath(Well, card);
+            if (_dragActive || Hover || Pressed)
+            {
+                g.FillPath(_dragActive || Pressed ? SelectedOverlay : HoverOverlay, card);
+            }
+
+            var border = _dragActive ? new Pen(Accent, 1.5f) : new Pen(EdgeStrong, 1f) { DashStyle = new DashStyle(0, 4, 3) };
             g.DrawPath(border, card);
             if (HasFocus)
             {
-                g.DrawPath(new Pen(Accent, 2f), GraphicsPath.GetRoundRect(new RectangleF(1, 1, width - 2, Height - 2), 9.5f));
+                g.DrawPath(new Pen(Ring, 2f), GraphicsPath.GetRoundRect(new RectangleF(1, 1, width - 2, Height - 2), 11.5f));
             }
 
             var top = 24f;
-            DrawAccentTile(g, new RectangleF((width - Tile) / 2, top, Tile, Tile));
+            DrawGlyphTile(g, new RectangleF((width - Tile) / 2, top, Tile, Tile));
             top += Tile + 14;
 
             DrawCentered(g, BoldFont, Fore, _dragActive ? "Drop to open" : "Open a definition", width, top);
@@ -459,16 +469,20 @@ internal sealed class LauncherView : Scrollable
             var labelSize = g.MeasureString(BodyFont, label);
             var button = new RectangleF((width - labelSize.Width - 32) / 2, top, labelSize.Width + 32, ButtonHeight);
             var buttonFill = Pressed ? Mix(Accent, Colors.Black, 0.15f) : Hover ? Mix(Accent, Colors.White, 0.12f) : Accent;
-            g.FillPath(buttonFill, GraphicsPath.GetRoundRect(button, 7));
+            g.FillPath(buttonFill, GraphicsPath.GetRoundRect(button, 6));
             g.DrawText(BodyFont, OnAccent,
                 button.X + (button.Width - labelSize.Width) / 2, button.Y + (button.Height - labelSize.Height) / 2, label);
         }
     }
 
+    /// <summary>A surface card, or with <c>well</c> a recessed tray that holds raised rows.</summary>
     private sealed class Card : Drawable
     {
-        public Card(Control content, int padding)
+        private readonly bool _well;
+
+        public Card(Control content, int padding, bool well = false)
         {
+            _well = well;
             Padding = new Padding(padding);
             Content = content;
         }
@@ -477,9 +491,9 @@ internal sealed class LauncherView : Scrollable
         {
             var g = e.Graphics;
             g.AntiAlias = true;
-            var card = GraphicsPath.GetRoundRect(new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 10);
-            g.FillPath(Tint(0.035f), card);
-            g.DrawPath(Tint(0.08f), card);
+            var card = GraphicsPath.GetRoundRect(new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 12);
+            g.FillPath(_well ? Well : Surface, card);
+            g.DrawPath(Edge, card);
         }
     }
 
@@ -512,18 +526,17 @@ internal sealed class LauncherView : Scrollable
             g.AntiAlias = true;
             var active = Hover || Pressed;
 
+            var row = GraphicsPath.GetRoundRect(new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 6);
+            g.FillPath(Raised, row);
             if (active)
             {
-                g.FillPath(Tint(Pressed ? 0.11f : 0.07f), GraphicsPath.GetRoundRect(new RectangleF(Size), 7));
+                g.FillPath(Pressed ? SelectedOverlay : HoverOverlay, row);
             }
 
-            if (HasFocus)
-            {
-                g.DrawPath(Accent, GraphicsPath.GetRoundRect(new RectangleF(0.5f, 0.5f, Width - 1, Height - 1), 7));
-            }
+            g.DrawPath(HasFocus ? new Pen(Ring, 1.5f) : new Pen(EdgeStrong, 1f), row);
 
             var tile = new RectangleF(8, (Height - Tile) / 2f, Tile, Tile);
-            g.FillPath(Tint(active ? 0.1f : 0.06f), GraphicsPath.GetRoundRect(tile, 7));
+            g.FillPath(Well, GraphicsPath.GetRoundRect(tile, 6));
             tile.Inflate(-8, -8);
             DrawDefinitionGlyph(g, tile, active ? Fore : Dim);
 
@@ -540,7 +553,7 @@ internal sealed class LauncherView : Scrollable
                 var cy = Height / 2f;
                 var chevron = new GraphicsPath();
                 chevron.AddLines(new PointF(cx - 2.5f, cy - 4.5f), new PointF(cx + 2f, cy), new PointF(cx - 2.5f, cy + 4.5f));
-                g.DrawPath(new Pen(Dim, 1.5f), chevron);
+                g.DrawPath(new Pen(Faint, 1.5f), chevron);
             }
         }
     }
@@ -562,7 +575,7 @@ internal sealed class LauncherView : Scrollable
             g.AntiAlias = true;
             var width = (float)Width;
             var top = 12f;
-            DrawAccentTile(g, new RectangleF((width - Tile) / 2, top, Tile, Tile));
+            DrawGlyphTile(g, new RectangleF((width - Tile) / 2, top, Tile, Tile));
             top += Tile + 12;
             DrawCentered(g, BoldFont, Fore, _name, width, top);
             top += BoldFont.LineHeight + 3;
@@ -622,7 +635,7 @@ internal sealed class LauncherView : Scrollable
             else
             {
                 dot.Inflate(-0.75f, -0.75f);
-                g.DrawEllipse(new Pen(Tint(0.25f), 1.5f), dot);
+                g.DrawEllipse(new Pen(EdgeInput, 1.5f), dot);
             }
 
             var font = _state == StepState.Active ? BoldFont : BodyFont;
@@ -698,7 +711,7 @@ internal sealed class LauncherView : Scrollable
         {
             var g = e.Graphics;
             g.AntiAlias = true;
-            var shape = GraphicsPath.GetRoundRect(new RectangleF(Size), 8);
+            var shape = GraphicsPath.GetRoundRect(new RectangleF(Size), 6);
             g.FillPath(new Color(Danger, 0.14f), shape);
             g.SetClip(shape);
             g.FillRectangle(Danger, 0, 0, 3, Height);

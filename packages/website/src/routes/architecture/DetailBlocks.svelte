@@ -34,31 +34,31 @@
 				{/each}
 			</dl>
 		{:else if block.kind === 'code'}
-			<pre class="bg-muted overflow-x-auto rounded-md p-3 text-[11px] leading-relaxed"><code
+			<pre class="bg-muted overflow-x-auto rounded-md p-3 text-xs leading-relaxed"><code
 					>{block.text}</code
 				></pre>
 		{:else if block.kind === 'mapping'}
 			<div class="border-border overflow-hidden rounded-md border">
 				<div
-					class="border-border text-muted-foreground grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 border-b px-3 py-1.5 text-[11px] font-medium tracking-wide uppercase"
+					class="border-border text-muted-foreground grid grid-cols-7 items-center gap-x-3 border-b px-3 py-1.5 text-xs font-medium tracking-wide uppercase"
 				>
-					<span>{block.from}</span>
-					<span aria-hidden="true"></span>
-					<span>{block.to}</span>
+					<span class="col-span-3">{block.from}</span>
+					<span class="col-span-1" aria-hidden="true"></span>
+					<span class="col-span-3">{block.to}</span>
 				</div>
 				{#each block.rows as [from, to] (from)}
 					<div
-						class="border-border grid grid-cols-[1fr_auto_1fr] items-center gap-x-3 px-3 py-1.5 not-last:border-b"
+						class="border-border grid grid-cols-7 items-center gap-x-3 px-3 py-1.5 not-last:border-b"
 					>
-						<code class="font-mono text-xs">{from}</code>
-						<span class="text-muted-foreground text-xs" aria-hidden="true">→</span>
-						<code class="text-primary font-mono text-xs">{to}</code>
+						<code class="col-span-3 font-mono text-xs">{from}</code>
+						<span class="text-muted-foreground col-span-1 text-xs" aria-hidden="true">→</span>
+						<code class="text-primary col-span-3 font-mono text-xs">{to}</code>
 					</div>
 				{/each}
 			</div>
 		{:else if block.kind === 'warning'}
-			<div class="rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2.5">
-				<p class="text-xs font-semibold text-amber-700 dark:text-amber-400">{block.title}</p>
+			<div class="border-warning/30 bg-warning/5 rounded-md border px-3 py-2.5">
+				<p class="text-warning text-xs font-semibold">{block.title}</p>
 				<p class="text-muted-foreground mt-1 text-xs leading-relaxed">{block.text}</p>
 			</div>
 		{:else if block.kind === 'pipeline'}
@@ -70,7 +70,7 @@
 							: ''}"
 					>
 						<p class="text-sm font-semibold">{stage.label}</p>
-						<p class="text-muted-foreground mt-0.5 text-[11px] leading-snug">{stage.sub}</p>
+						<p class="text-muted-foreground mt-0.5 text-xs leading-snug">{stage.sub}</p>
 					</div>
 					{#if i < block.stages.length - 1}
 						<span class="text-muted-foreground flex items-center px-0.5" aria-hidden="true">→</span>
@@ -81,7 +81,7 @@
 			{@const Demo = DEMOS[block.component]}
 			{#if Demo}
 				<div class="border-border bg-muted rounded-md border p-3">
-					<p class="text-muted-foreground mb-2.5 text-[11px] font-medium tracking-wide uppercase">
+					<p class="text-muted-foreground mb-2.5 text-xs font-medium tracking-wide uppercase">
 						Try it
 					</p>
 					<Demo />

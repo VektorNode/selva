@@ -245,10 +245,18 @@ jobs:
       # passing --tag is rejected. So reuse `pnpm release` (build + publish).
       # Second line of defence behind the pre-mode check: whatever versioned this tree, beta never
       # publishes a version without a prerelease suffix, because that publish goes to `latest`.
+      # A stable version already on npm is skipped by `changeset publish`, so only unpublished
+      # ones count: right after `pre enter` every package not yet bumped still sits at its stable.
       - name: Refuse stable versions on beta
         if: steps.check.outputs.should_run == 'true' && steps.check.outputs.is_beta == 'true'
         run: |
-          stable=$(node scripts/release/publishable-packages.mjs --list | awk -F'\t' '$2 !~ /-/ {print $1 "@" $2}')
+          stable=""
+          while IFS=$'\t' read -r name ver _dir; do
+            case "$ver" in *-*) continue ;; esac
+            if [ "$(npm view "$name@$ver" version 2>/dev/null)" != "$ver" ]; then
+              stable="$stable $name@$ver"
+            fi
+          done < <(node scripts/release/publishable-packages.mjs --list)
           if [ -n "$stable" ]; then
             echo "::error::Beta would publish stable versions to latest: $(echo $stable)"
             echo "Stable versions are cut on main. Re-enter pre mode or release through main."

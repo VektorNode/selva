@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { buttonVariants } from '@selvajs/ui';
 	import { getDocsFlat, getDocsIndex } from '#lib/docs.js';
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Search from '@lucide/svelte/icons/search';
@@ -35,16 +36,10 @@
 	</p>
 
 	<div class="mt-8 flex flex-wrap gap-3">
-		<a
-			href="/docs/self-hosting/get-started/overview"
-			class="bg-primary text-primary-foreground inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition hover:opacity-90"
-		>
+		<a href="/docs/self-hosting/get-started/overview" class={buttonVariants()}>
 			Get started <ArrowRight class="size-4" />
 		</a>
-		<a
-			href="/docs/packages/build/overview"
-			class="border-border text-foreground hover:bg-hover inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition"
-		>
+		<a href="/docs/packages/build/overview" class={buttonVariants({ variant: 'outline' })}>
 			Build your own app
 		</a>
 	</div>

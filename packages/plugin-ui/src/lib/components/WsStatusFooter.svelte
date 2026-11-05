@@ -37,8 +37,12 @@
 	</div>
 
 	{#if sessionId && !compact}
-		<div class="bg-border h-3 w-px"></div>
-		<span class="text-muted-foreground flex items-center gap-1.5 text-xs">
+		<div
+			class="bg-border h-3 w-px max-sm:hidden [@media(pointer:coarse)_and_(max-height:500px)]:hidden"
+		></div>
+		<span
+			class="text-muted-foreground flex items-center gap-1.5 text-xs max-sm:hidden [@media(pointer:coarse)_and_(max-height:500px)]:hidden"
+		>
 			<span class="shrink-0">Session:</span>
 			<code class="bg-muted text-foreground rounded-sm px-1.5 py-0.5 font-mono text-xs font-medium">
 				{sessionId}

@@ -3,7 +3,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
 import { mdsvex } from 'mdsvex';
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, defaultClientConditions, defaultServerConditions, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { mdsvexOptions } from './mdsvex.config.js';
@@ -58,6 +58,16 @@ export default defineConfig({
 			}
 		})
 	],
+	// Resolve @selvajs/ui through its "selva-source" export condition: the website uses the
+	// full component barrel, not the curated public SDK that npm consumers get.
+	resolve: {
+		conditions: ['selva-source', ...defaultClientConditions],
+		dedupe: ['svelte']
+	},
+	ssr: {
+		resolve: { conditions: ['selva-source', ...defaultServerConditions] },
+		noExternal: ['@selvajs/ui', 'bits-ui', 'mode-watcher', 'paneforge', 'svelte-sonner']
+	},
 	server: {
 		port: 5174,
 		fs: {

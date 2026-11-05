@@ -6,6 +6,7 @@
 		ENV_VAR_GROUPS,
 		type Mode
 	} from '#lib/architecture.js';
+	import { Badge, Tabs } from '@selvajs/ui';
 	import DetailBlocks from './DetailBlocks.svelte';
 	import SolveWalkthrough from './SolveWalkthrough.svelte';
 	import LocalWalkthrough from './LocalWalkthrough.svelte';
@@ -33,7 +34,7 @@
 	/>
 </svelte:head>
 
-<div class="mx-auto max-w-5xl px-6 pt-16 pb-24">
+<div class="mx-auto max-w-(--page-max-w) px-6 pt-16 pb-24">
 	<!-- Intro -->
 	<p class="text-primary text-sm font-semibold tracking-wide uppercase">Architecture</p>
 	<h1 class="mt-2 text-4xl font-bold tracking-tight text-balance">
@@ -46,40 +47,12 @@
 
 	<!-- Mode switcher -->
 	<div class="mt-10 flex flex-wrap items-center gap-6">
-		<div
-			class="border-border bg-card inline-flex rounded-lg border p-1"
-			role="tablist"
-			aria-label="Runtime mode"
-		>
-			<button
-				role="tab"
-				aria-selected={mode === 'cloud'}
-				class="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition
-					{mode === 'cloud'
-					? 'bg-primary text-primary-foreground'
-					: 'text-muted-foreground hover:text-foreground'}"
-				onclick={() => {
-					mode = 'cloud';
-					expanded = null;
-				}}
-			>
-				<Cloud class="size-4" /> Cloud mode
-			</button>
-			<button
-				role="tab"
-				aria-selected={mode === 'local'}
-				class="flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition
-					{mode === 'local'
-					? 'bg-primary text-primary-foreground'
-					: 'text-muted-foreground hover:text-foreground'}"
-				onclick={() => {
-					mode = 'local';
-					expanded = null;
-				}}
-			>
-				<Plug class="size-4" /> Local mode
-			</button>
-		</div>
+		<Tabs.Root bind:value={mode} onValueChange={() => (expanded = null)}>
+			<Tabs.List aria-label="Runtime mode">
+				<Tabs.Trigger value="cloud"><Cloud /> Cloud mode</Tabs.Trigger>
+				<Tabs.Trigger value="local"><Plug /> Local mode</Tabs.Trigger>
+			</Tabs.List>
+		</Tabs.Root>
 	</div>
 
 	<p class="text-muted-foreground mt-4 text-sm leading-relaxed">
@@ -97,11 +70,11 @@
 	<!-- Badge legend — the two kinds of thing that interrupt the straight path. -->
 	<div class="text-muted-foreground mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
 		<span class="flex items-center gap-1.5">
-			<span class="size-2 rounded-full bg-amber-500" aria-hidden="true"></span>
+			<span class="bg-warning size-2 rounded-full" aria-hidden="true"></span>
 			limits when work runs, stores nothing
 		</span>
 		<span class="flex items-center gap-1.5">
-			<span class="size-2 rounded-full bg-violet-500" aria-hidden="true"></span>
+			<span class="bg-chart-3 size-2 rounded-full" aria-hidden="true"></span>
 			a cache — a hit skips what follows
 		</span>
 	</div>
@@ -109,7 +82,7 @@
 	<!-- Step-by-step walkthrough -->
 	<div class="relative mt-8">
 		<!-- Spine -->
-		<div class="bg-border absolute top-2 bottom-2 left-[7px] w-px" aria-hidden="true"></div>
+		<div class="bg-border absolute top-2 bottom-2 left-1.75 w-px" aria-hidden="true"></div>
 
 		<ol class="space-y-3">
 			{#each steps as step, i (step.id)}
@@ -117,16 +90,14 @@
 				{@const prevLayer = i > 0 ? steps[i - 1].layer : null}
 				{#if step.layer !== prevLayer}
 					<li class="flex items-center gap-3 pt-6 pl-8 first:pt-0">
-						<span class="rounded-full px-2.5 py-0.5 text-xs font-semibold {layer.chip}"
-							>{layer.label}</span
-						>
+						<Badge variant="secondary" class={layer.chip}>{layer.label}</Badge>
 						<span class="text-muted-foreground text-xs">{layer.sub}</span>
 					</li>
 				{/if}
 				<li id="step-{step.id}" class="relative scroll-mt-24 pl-8">
 					<!-- Node dot on the spine -->
 					<span
-						class="absolute top-4 left-[3px] size-[9px] rounded-full ring-4 {layer.dot} ring-background"
+						class="absolute top-4 left-0.75 size-2.25 rounded-full ring-4 {layer.dot} ring-background"
 						aria-hidden="true"
 					></span>
 					<div class="border-border bg-card overflow-hidden rounded-lg border">
@@ -141,7 +112,7 @@
 								{#if step.gates}
 									{#each step.gates as gate (gate)}
 										<span
-											class="rounded bg-amber-500/10 px-1.5 py-0.5 font-mono text-[11px] text-amber-600 dark:text-amber-400"
+											class="bg-warning/10 text-warning rounded-sm px-1.5 py-0.5 font-mono text-xs"
 											>{gate}</span
 										>
 									{/each}
@@ -154,9 +125,9 @@
 								<div class="mt-2 flex flex-wrap gap-1.5 pl-5">
 									{#each step.caches as cache (cache.label)}
 										<span
-											class="inline-flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-600 dark:text-violet-400"
+											class="border-chart-3/30 bg-chart-3/10 text-chart-3 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs"
 										>
-											<span class="size-1.5 rounded-full bg-violet-500" aria-hidden="true"></span>
+											<span class="bg-chart-3 size-1.5 rounded-full" aria-hidden="true"></span>
 											{cache.label}<span class="opacity-70"> · {cache.hit}</span>
 										</span>
 									{/each}
@@ -168,7 +139,7 @@
 								<DetailBlocks blocks={step.detail} />
 								<div class="mt-3 flex flex-wrap gap-2">
 									{#each step.files as file (file)}
-										<code class="bg-muted text-muted-foreground rounded px-2 py-0.5 text-[11px]"
+										<code class="bg-muted text-muted-foreground rounded-sm px-2 py-0.5 text-xs"
 											>{file}</code
 										>
 									{/each}
@@ -203,16 +174,16 @@
 		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
 			{#if mode === 'cloud'}
 				The same cloud-mode solve as above, as headers and JSON bodies. One request —
-				<code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
-				<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — from the browser to Grasshopper
-				and back. Read the bodies top to bottom: a flat object becomes a named tree, solves, and comes
-				back flat.
+				<code class="bg-muted rounded-sm px-1 py-0.5 text-xs">radius 12.5</code>,
+				<code class="bg-muted rounded-sm px-1 py-0.5 text-xs">capped true</code> — from the browser to
+				Grasshopper and back. Read the bodies top to bottom: a flat object becomes a named tree, solves,
+				and comes back flat.
 			{:else}
 				The same local-mode solve as above, as the frames that cross the socket. The same two values
-				— <code class="bg-muted rounded px-1 py-0.5 text-xs">radius 12.5</code>,
-				<code class="bg-muted rounded px-1 py-0.5 text-xs">capped true</code> — but no request and no
-				response: four frames in one direction, then the other. Watch where the meshes go, and what keeps
-				them in order.
+				— <code class="bg-muted rounded-sm px-1 py-0.5 text-xs">radius 12.5</code>,
+				<code class="bg-muted rounded-sm px-1 py-0.5 text-xs">capped true</code> — but no request and
+				no response: four frames in one direction, then the other. Watch where the meshes go, and what
+				keeps them in order.
 			{/if}
 		</p>
 
@@ -248,7 +219,7 @@
 		</h2>
 		<p class="text-muted-foreground mt-3 max-w-2xl text-sm leading-relaxed">
 			Each one is an environment variable read once at boot — the limits through <code
-				class="bg-muted rounded px-1 py-0.5 text-xs">resolveComputeLimits</code
+				class="bg-muted rounded-sm px-1 py-0.5 text-xs">resolveComputeLimits</code
 			>, the debug flag alongside the solve engine. Unset, every knob falls back to the default
 			below — nothing here is required to run Selva.
 		</p>
@@ -264,7 +235,7 @@
 									<div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
 										<code class="font-mono text-xs font-semibold">{v.name}</code>
 										<span
-											class="rounded bg-violet-500/10 px-1.5 py-0.5 font-mono text-[11px] text-violet-600 dark:text-violet-400"
+											class="bg-chart-3/10 text-chart-3 rounded-sm px-1.5 py-0.5 font-mono text-xs"
 											>{v.default}</span
 										>
 									</div>

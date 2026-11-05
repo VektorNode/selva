@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { Badge, Card } from '@selvajs/ui';
 	import { apiDocsUrl, npmUrl, packagesByCategory, readmeUrl } from '#lib/packages.js';
 
 	const groups = packagesByCategory();
@@ -22,7 +23,7 @@
 	/>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl px-6 py-16">
+<div class="mx-auto max-w-(--page-max-w) px-6 py-16">
 	<!-- Header -->
 	<div class="max-w-2xl">
 		<h1 class="text-4xl font-bold tracking-tight">Packages</h1>
@@ -49,51 +50,49 @@
 
 				<div class="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
 					{#each group.items as pkg (pkg.name)}
-						<div class="border-border bg-card flex flex-col rounded-xl border p-5">
-							<code class="text-foreground text-sm font-semibold break-all">{pkg.name}</code>
-							<p class="text-primary mt-2 text-sm font-medium">{pkg.tagline}</p>
-							<p class="text-muted-foreground mt-2 flex-1 text-sm leading-relaxed">
-								{pkg.description}
-							</p>
-							<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
-								{#if pkg.badge}
-									<span
-										class="border-border text-muted-foreground inline-flex w-fit items-center rounded-full border px-2.5 py-0.5 text-xs"
-									>
-										{pkg.badge}
-									</span>
-								{/if}
-								<a
-									href={readmeUrl(pkg)}
-									class="text-primary text-xs font-medium hover:underline"
-									rel="noreferrer"
-								>
-									Docs
-								</a>
-								{#if npmUrl(pkg)}
+						<Card.Root>
+							<Card.Content class="flex h-full flex-col">
+								<code class="text-foreground text-sm font-semibold break-all">{pkg.name}</code>
+								<p class="text-primary mt-2 text-sm font-medium">{pkg.tagline}</p>
+								<p class="text-muted-foreground mt-2 flex-1 text-sm leading-relaxed">
+									{pkg.description}
+								</p>
+								<div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+									{#if pkg.badge}
+										<Badge variant="outline">{pkg.badge}</Badge>
+									{/if}
 									<a
-										href={npmUrl(pkg)}
+										href={readmeUrl(pkg)}
 										class="text-primary text-xs font-medium hover:underline"
 										rel="noreferrer"
 									>
-										npm
+										Docs
 									</a>
-								{/if}
-								{#if apiDocsUrl(pkg)}
-									<!-- Typedoc output under static/, not an app route. Without
+									{#if npmUrl(pkg)}
+										<a
+											href={npmUrl(pkg)}
+											class="text-primary text-xs font-medium hover:underline"
+											rel="noreferrer"
+										>
+											npm
+										</a>
+									{/if}
+									{#if apiDocsUrl(pkg)}
+										<!-- Typedoc output under static/, not an app route. Without
 									     data-sveltekit-reload the router claims the URL, matches it
 									     against docs/[...slug], and renders the 404 page instead. -->
-									<a
-										href={apiDocsUrl(pkg)}
-										data-sveltekit-reload
-										class="text-primary text-xs font-medium hover:underline"
-										rel="noreferrer"
-									>
-										API reference
-									</a>
-								{/if}
-							</div>
-						</div>
+										<a
+											href={apiDocsUrl(pkg)}
+											data-sveltekit-reload
+											class="text-primary text-xs font-medium hover:underline"
+											rel="noreferrer"
+										>
+											API reference
+										</a>
+									{/if}
+								</div>
+							</Card.Content>
+						</Card.Root>
 					{/each}
 				</div>
 			</section>

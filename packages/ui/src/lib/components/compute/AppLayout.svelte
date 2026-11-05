@@ -4,7 +4,7 @@
 	import type { LiveSolveState, SolveSettlement } from '@selvajs/solve/client';
 	import type { ActionButton } from '../../types/actionButton';
 	import type { PresetLabels } from '../../types/presetLabels';
-	import { ChevronUp, Download, Ellipsis, Upload } from '@lucide/svelte';
+	import { ChevronLeft, ChevronUp, Download, Ellipsis, Upload } from '@lucide/svelte';
 	import type { ThreeViewer } from '@selvajs/visualization/render';
 	import Viewer, { type ViewerConfig } from '../viewer/Viewer.svelte';
 	import CalculateButton from '../primitives/CalculateButton.svelte';
@@ -155,14 +155,27 @@
 	// With several tabs the first tab's name would mislabel whichever one is showing.
 	const drawerLabel = $derived(leftTabs.length === 1 ? leftTabs[0].label : t.parametersTab);
 
+	// A phone on its side is wide enough for the desktop columns but far too short for them, and a
+	// bottom drawer would leave the model a strip. It gets the phone layout with the drawer moved to
+	// the right edge instead.
+	let sideSheet = $state(false);
+
 	$effect(() => {
-		const mqMobile = window.matchMedia('(max-width: 639px)');
+		const mqNarrow = window.matchMedia('(max-width: 639px)');
+		const mqPhoneLandscape = window.matchMedia(
+			'(pointer: coarse) and (orientation: landscape) and (max-height: 500px)'
+		);
 		function update() {
-			isMobile = mqMobile.matches;
+			sideSheet = mqPhoneLandscape.matches;
+			isMobile = mqNarrow.matches || sideSheet;
 		}
 		update();
-		mqMobile.addEventListener('change', update);
-		return () => mqMobile.removeEventListener('change', update);
+		mqNarrow.addEventListener('change', update);
+		mqPhoneLandscape.addEventListener('change', update);
+		return () => {
+			mqNarrow.removeEventListener('change', update);
+			mqPhoneLandscape.removeEventListener('change', update);
+		};
 	});
 
 	// Without a viewer there's nothing to sit beside, so a narrow host (a docked Rhino panel) gets
@@ -189,30 +202,39 @@
 		await onLoadValues?.(loadedValues);
 	}
 
-	let touchStartY = 0;
+	let touchStart = { x: 0, y: 0 };
 
+	// The side sheet beside the model has no half state: it is open or closed.
 	function stepDrawer(by: number) {
+		if (sideSheet) {
+			drawer = by > 0 ? 'full' : 'closed';
+			return;
+		}
 		const index = DRAWER_STATES.indexOf(drawer) + by;
 		drawer = DRAWER_STATES[Math.max(0, Math.min(DRAWER_STATES.length - 1, index))];
 	}
 
 	function onDrawerTouchStart(e: TouchEvent) {
-		touchStartY = e.touches[0].clientY;
+		touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 	}
 
+	// Toward the open side opens: up for the bottom drawer, left for the side sheet.
 	function onDrawerTouchEnd(e: TouchEvent) {
-		const deltaY = e.changedTouches[0].clientY - touchStartY;
+		const delta = sideSheet
+			? e.changedTouches[0].clientX - touchStart.x
+			: e.changedTouches[0].clientY - touchStart.y;
 		const SWIPE_THRESHOLD = 40;
-		if (Math.abs(deltaY) > SWIPE_THRESHOLD) {
+		if (Math.abs(delta) > SWIPE_THRESHOLD) {
 			// Suppresses the click a short swipe can still end in, which would step the drawer twice.
 			e.preventDefault();
-			stepDrawer(deltaY < 0 ? 1 : -1);
+			stepDrawer(delta < 0 ? 1 : -1);
 		}
 	}
 
-	// A tap walks closed → half → full → closed.
+	// A tap walks closed → half → full → closed; the side sheet just toggles.
 	function onDrawerHandleClick() {
-		drawer = drawer === 'full' ? 'closed' : DRAWER_STATES[DRAWER_STATES.indexOf(drawer) + 1];
+		if (sideSheet) drawer = drawer === 'closed' ? 'full' : 'closed';
+		else drawer = drawer === 'full' ? 'closed' : DRAWER_STATES[DRAWER_STATES.indexOf(drawer) + 1];
 	}
 </script>
 
@@ -340,6 +362,7 @@
 	class:fullscreen-layout={isViewerFullscreen}
 	class:relative={isMobile}
 	class:mobile-root={stacked}
+	class:side-sheet={isMobile && sideSheet}
 	bind:clientWidth={rootWidth}
 >
 	{#if stacked}
@@ -351,7 +374,7 @@
 				<Viewer
 					{meshes}
 					bind:isFullscreen={isViewerFullscreen}
-					drawerOpen={drawer === 'full'}
+					drawerOpen={!sideSheet && drawer === 'full'}
 					{logoUrl}
 					{onViewerReady}
 					viewerConfig={{
@@ -364,7 +387,9 @@
 			</div>
 
 			<div
-				class="drawer-container z-40 rounded-t-xl border-t bg-background shadow-sheet drawer-{drawer}"
+				class="drawer-container z-40 bg-background shadow-sheet drawer-{drawer} {sideSheet
+					? 'rounded-l-xl border-l'
+					: 'rounded-t-xl border-t'}"
 			>
 				<!-- Named by its visible label; aria-expanded carries the open/closed state. -->
 				<button
@@ -375,38 +400,53 @@
 					aria-expanded={drawer !== 'closed'}
 				>
 					<div class="drawer-pill"></div>
-					<span class="text-sm font-medium ml-2 text-foreground">{drawerLabel}</span>
-					<ChevronUp
-						size={16}
-						class="ml-auto text-muted-foreground transition-transform duration-300 {drawer ===
-						'full'
-							? 'rotate-180'
-							: ''}"
-					/>
+					<span class="drawer-label text-sm font-medium text-foreground">{drawerLabel}</span>
+					{#if sideSheet}
+						<ChevronLeft
+							size={16}
+							class="text-muted-foreground transition-transform duration-300 {drawer !== 'closed'
+								? 'rotate-180'
+								: ''}"
+						/>
+					{:else}
+						<ChevronUp
+							size={16}
+							class="ml-auto text-muted-foreground transition-transform duration-300 {drawer ===
+							'full'
+								? 'rotate-180'
+								: ''}"
+						/>
+					{/if}
 				</button>
 
-				<!-- Inert while closed: the fields are clipped out of view, and tabbing into them
+				<div class="drawer-body">
+					<!-- Inert while closed: the fields are clipped out of view, and tabbing into them
 				     would scroll the drawer's insides around behind the handle. -->
-				<div class="drawer-content" inert={drawer === 'closed'}>
-					<div class="px-2 pb-4">
-						{#if hasLeftPanel}
-							{@render panelContent(hasRightPanel ? 'left' : undefined, requestedLeftTabId, false)}
-						{/if}
-						{#if hasRightPanel}
-							<!-- Decorative: the section below names itself with a heading. -->
-							<div class="my-4 gap-2 flex items-center" aria-hidden="true">
-								<div class="h-px flex-1 bg-border"></div>
-								<span class="text-xs font-medium px-1 text-muted-foreground">
-									{rightTabs[0]?.label ?? t.moreTab}
-								</span>
-								<div class="h-px flex-1 bg-border"></div>
-							</div>
-							{@render panelContent('right', requestedRightTabId, false)}
-						{/if}
+					<div class="drawer-content" inert={drawer === 'closed'}>
+						<div class="px-2 pb-4">
+							{#if hasLeftPanel}
+								{@render panelContent(
+									hasRightPanel ? 'left' : undefined,
+									requestedLeftTabId,
+									false
+								)}
+							{/if}
+							{#if hasRightPanel}
+								<!-- Decorative: the section below names itself with a heading. -->
+								<div class="my-4 gap-2 flex items-center" aria-hidden="true">
+									<div class="h-px flex-1 bg-border"></div>
+									<span class="text-xs font-medium px-1 text-muted-foreground">
+										{rightTabs[0]?.label ?? t.moreTab}
+									</span>
+									<div class="h-px flex-1 bg-border"></div>
+								</div>
+								{@render panelContent('right', requestedRightTabId, false)}
+							{/if}
+						</div>
 					</div>
-				</div>
 
-				{@render drawerFooter(drawer === 'closed')}
+					{@render drawerFooter(drawer === 'closed')}
+				</div>
 			</div>
 		{:else}
 			<div class="flex flex-1 flex-col overflow-hidden">
@@ -620,6 +660,12 @@
 		bottom: var(--drawer-half-h);
 	}
 
+	/* The viewer's own minimum height is for a page that scrolls; here the region sets it, and
+	   anything taller would run under the drawer and take the viewer's dock with it. */
+	.viewer-region > :global(*) {
+		min-height: 0;
+	}
+
 	.drawer-container {
 		position: absolute;
 		bottom: 0;
@@ -671,6 +717,77 @@
 		border-radius: 9999px;
 		background: var(--muted-foreground);
 		opacity: 0.4;
+	}
+
+	.drawer-body {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.drawer-label {
+		margin-left: 0.5rem;
+	}
+
+	/* Phone on its side: the drawer becomes a sheet on the right, its handle a strip down its edge. */
+	.side-sheet {
+		--sheet-closed-w: 3.25rem;
+		/* vw, not %: the drawer body resolves this against the sheet, not the layout. */
+		--sheet-open-w: min(22rem, 55vw);
+	}
+
+	.side-sheet .viewer-region {
+		inset: 0 var(--sheet-closed-w) 0 0;
+	}
+
+	.side-sheet .viewer-region-raised {
+		right: var(--sheet-open-w);
+	}
+
+	.side-sheet .drawer-container {
+		top: 0;
+		left: auto;
+		height: auto;
+		flex-direction: row;
+		transition: width 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+	}
+
+	.side-sheet .drawer-closed {
+		width: var(--sheet-closed-w);
+	}
+
+	.side-sheet .drawer-half,
+	.side-sheet .drawer-full {
+		width: var(--sheet-open-w);
+	}
+
+	.side-sheet .drawer-handle-bar {
+		width: var(--sheet-closed-w);
+		height: auto;
+		padding: 0 0 0 0.75rem;
+		flex-direction: column;
+		justify-content: center;
+		gap: 0.75rem;
+	}
+
+	.side-sheet .drawer-pill {
+		top: 50%;
+		left: 8px;
+		transform: translateY(-50%);
+		width: 4px;
+		height: 2.5rem;
+	}
+
+	.side-sheet .drawer-label {
+		margin-left: 0;
+		writing-mode: vertical-rl;
+		transform: rotate(180deg);
+	}
+
+	/* Holds its open width while the sheet slides, so the fields don't reflow on every frame. */
+	.side-sheet .drawer-body {
+		min-width: calc(var(--sheet-open-w) - var(--sheet-closed-w));
 	}
 
 	.drawer-content {

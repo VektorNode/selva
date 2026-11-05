@@ -9,8 +9,8 @@
 /* Docs layout dimensions. The colour tokens live in @selvajs/ui; these only size the
    three columns, so the layout is retuned here without touching the components. */
 :root {
-	/* Widest the three columns may spread; the article is centred between nav and outline. */
-	--docs-max-w: 96rem;
+	/* Content width shared by every page, the footer and the docs columns. */
+	--page-max-w: 80rem;
 	--docs-nav-w: 15rem;
 	--docs-toc-w: 15rem;
 	--docs-measure: 52rem;
@@ -233,4 +233,22 @@
 	font-family: var(--font-sans);
 	font-weight: 600;
 	letter-spacing: -0.025em;
+}
+
+/* Scrollable without a visible scrollbar (the header nav on narrow screens). */
+@utility scrollbar-none {
+	scrollbar-width: none;
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+/* Offset from the bottom edge that clears the iOS home indicator. */
+@utility bottom-safe {
+	bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+/* typography's opt-out marker: the plugin matches it by selector, so Tailwind sees no utility. */
+@utility not-prose {
+	--not-prose: 1;
 }

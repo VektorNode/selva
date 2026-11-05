@@ -100,7 +100,7 @@ frame 2 of 2 — 12 KB`,
 <div class="space-y-3">
 	{#each FRAMES as frame, i (frame.at + frame.title)}
 		{#if frame.transform}
-			<div class="text-muted-foreground flex items-center gap-2 pl-3 text-[11px] italic">
+			<div class="text-muted-foreground flex items-center gap-2 pl-3 text-xs italic">
 				<span aria-hidden="true">↓</span>
 				{frame.transform}
 			</div>
@@ -108,16 +108,15 @@ frame 2 of 2 — 12 KB`,
 
 		<div
 			class="rounded-md border p-3 {frame.kind === 'none'
-				? 'border-orange-500/30 bg-orange-500/5'
+				? 'border-chart-5/30 bg-chart-5/5'
 				: 'border-border bg-muted'}"
 		>
 			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 				<p class="text-sm font-semibold">
-					<span class="text-muted-foreground mr-1.5 font-mono text-[11px] tabular-nums"
-						>{i + 1}</span
+					<span class="text-muted-foreground mr-1.5 font-mono text-xs tabular-nums">{i + 1}</span
 					>{frame.title}
 				</p>
-				<span class="text-muted-foreground font-mono text-[10px]">
+				<span class="text-muted-foreground text-2xs font-mono">
 					{#if frame.from}
 						{frame.from} → {frame.to}
 					{:else}
@@ -130,15 +129,15 @@ frame 2 of 2 — 12 KB`,
 			{#if frame.payload}
 				<div class="border-border mt-3 flex items-center gap-2 border-t pt-2.5">
 					<span
-						class="rounded px-1.5 py-0.5 font-mono text-[10px] {frame.kind === 'binary'
-							? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
-							: 'bg-sky-500/10 text-sky-600 dark:text-sky-400'}"
+						class="text-2xs rounded-sm px-1.5 py-0.5 font-mono {frame.kind === 'binary'
+							? 'bg-success/10 text-success'
+							: 'bg-info/10 text-info'}"
 					>
 						{frame.kind === 'binary' ? 'binary frame' : 'text frame'}
 					</span>
 				</div>
 				<pre
-					class="text-foreground mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed">{frame.payload}</pre>
+					class="text-foreground mt-2 overflow-x-auto font-mono text-xs leading-relaxed">{frame.payload}</pre>
 			{/if}
 		</div>
 	{/each}

@@ -69,36 +69,36 @@ export const LAYERS: Record<Layer, LayerInfo> = {
 		id: 'browser',
 		label: 'Browser',
 		sub: '@selvajs/ui in the user’s tab',
-		dot: 'bg-sky-500',
-		chip: 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+		dot: 'bg-info',
+		chip: 'bg-info/10 text-info'
 	},
 	'selva-server': {
 		id: 'selva-server',
 		label: 'Selva server',
 		sub: 'SvelteKit route + @selvajs/solve',
-		dot: 'bg-emerald-500',
-		chip: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+		dot: 'bg-success',
+		chip: 'bg-success/10 text-success'
 	},
 	'compute-client': {
 		id: 'compute-client',
 		label: 'Compute client',
 		sub: '@selvajs/compute — in the Selva server process',
-		dot: 'bg-cyan-500',
-		chip: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
+		dot: 'bg-chart-2',
+		chip: 'bg-chart-2/10 text-chart-2'
 	},
 	rhino: {
 		id: 'rhino',
 		label: 'Rhino.Compute VM',
 		sub: 'headless Rhino + Grasshopper, separate machine',
-		dot: 'bg-orange-500',
-		chip: 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
+		dot: 'bg-chart-5',
+		chip: 'bg-chart-5/10 text-chart-5'
 	},
 	grasshopper: {
 		id: 'grasshopper',
 		label: 'Grasshopper',
 		sub: 'the live document in Rhino, via the Selva plugin',
-		dot: 'bg-orange-500',
-		chip: 'bg-orange-500/10 text-orange-600 dark:text-orange-400'
+		dot: 'bg-chart-5',
+		chip: 'bg-chart-5/10 text-chart-5'
 	}
 };
 
@@ -470,7 +470,7 @@ export const CLOUD_STEPS: FlowStep[] = [
 				kind: 'demo',
 				component: 'QueueDemo',
 				caption:
-					'Send eight, then change the worker count mid-flight. Selva keeps sending its old number until the next solve finishes and it re-reads — that lag is the amber state.'
+					'Send eight, then change the worker count mid-flight. Selva keeps sending its old number until the next solve finishes and it re-reads — that lag is the warning state.'
 			},
 			{
 				kind: 'facts',

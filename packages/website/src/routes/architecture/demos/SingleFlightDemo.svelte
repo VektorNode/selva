@@ -71,7 +71,7 @@
 <div class="space-y-3">
 	<div class="flex items-center gap-2">
 		<button
-			class="bg-primary text-primary-foreground rounded px-3 py-1.5 text-xs font-medium transition hover:opacity-90"
+			class="bg-primary text-primary-foreground rounded-sm px-3 py-1.5 text-xs font-medium transition hover:opacity-90"
 			onclick={request}
 		>
 			send a request
@@ -91,8 +91,8 @@
 		<!-- The window itself. Riders sit at the fraction of it they arrived in. -->
 		{#if owner !== null}
 			<div
-				class="absolute inset-y-0 left-0 bg-sky-500/10 transition-[width] duration-75 ease-linear"
-				style="width: {progress}%"
+				class="bg-info/10 absolute inset-y-0 left-0 w-(--progress) transition-all duration-75 ease-linear"
+				style="--progress: {progress}%"
 				aria-hidden="true"
 			></div>
 		{/if}
@@ -101,31 +101,25 @@
 			{#if owner !== null}
 				<div class="flex items-baseline justify-between">
 					<p class="font-mono text-xs">
-						<span class="text-sky-600 dark:text-sky-400">request {owner}</span>
+						<span class="text-info">request {owner}</span>
 						<span class="text-muted-foreground"> is solving…</span>
 					</p>
-					<span class="text-muted-foreground font-mono text-[11px] tabular-nums">
+					<span class="text-muted-foreground font-mono text-xs tabular-nums">
 						{Math.round((progress / 100) * RUN_MS) / 1000}s
 					</span>
 				</div>
 
 				<div class="mt-2 flex min-h-6 flex-wrap items-center gap-1.5">
 					{#each joiners as rider (rider.id)}
-						<span
-							class="rounded bg-cyan-500/10 px-2 py-0.5 font-mono text-[11px] text-cyan-600 dark:text-cyan-400"
-						>
+						<span class="bg-chart-2/10 text-chart-2 rounded-sm px-2 py-0.5 font-mono text-xs">
 							{rider.id} joined at {Math.round(rider.joinedAtPct)}%
 						</span>
 					{:else}
-						<span class="text-muted-foreground text-[11px] italic">
-							no one else has joined yet
-						</span>
+						<span class="text-muted-foreground text-xs italic"> no one else has joined yet </span>
 					{/each}
 				</div>
 			{:else}
-				<p
-					class="text-xs {missed ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}"
-				>
+				<p class="text-xs {missed ? 'text-warning' : 'text-muted-foreground'}">
 					{#if missed}
 						Too late — the previous run had already finished, so this one pays full price.
 					{:else if lastFlight}
@@ -145,7 +139,7 @@
 		responses served <span class="text-foreground font-mono tabular-nums">{served}</span>
 		· actual solves <span class="text-foreground font-mono tabular-nums">{solves}</span>
 		{#if served > solves}
-			<span class="text-emerald-600 dark:text-emerald-400">
+			<span class="text-success">
 				· {served - solves} rode along free
 			</span>
 		{/if}

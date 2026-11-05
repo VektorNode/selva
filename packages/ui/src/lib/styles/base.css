@@ -190,6 +190,13 @@
 	border-radius: inherit;
 }
 
+/* A phone, upright or on its side, gives the model the height a full desktop bar would take. */
+@media (max-width: 39.999rem), (pointer: coarse) and (max-height: 500px) {
+	:root {
+		--header-h: 3rem;
+	}
+}
+
 /* Phones keep a narrower gutter: at 390px every 8px of side padding is 2% of the width. */
 @media (min-width: 40rem) {
 	:root {

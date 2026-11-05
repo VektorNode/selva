@@ -7,9 +7,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default [
 	...createConfig(__dirname),
 	{
-		// The marketing site draws its own large, soft cards; only the colour roles apply here.
+		// No unknown classes left here, so a new one fails the lint.
 		files: ['**/*.svelte', '**/*.ts'],
-		rules: { 'selva/surface-roles': ['error', { radius: false }] }
+		rules: { 'shadcn/no-unknown-classes': 'error' }
 	},
 	{
 		// static/docs/api is generated typedoc output (see scripts/build-api-docs.mjs).
