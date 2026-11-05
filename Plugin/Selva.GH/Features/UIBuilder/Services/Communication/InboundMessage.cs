@@ -83,6 +83,9 @@ public enum InboundKind
     /// <summary>`editInGrasshopper` — no payload. Shows the editor and turns a player session into an author one.</summary>
     EditInGrasshopper,
 
+    /// <summary>`draftLayout` with where the editor's unsaved draft places each param, or null once it matches the saved schema.</summary>
+    DraftLayout,
+
     /// <summary>A message whose `sessionId` didn't match this transport's.</summary>
     SessionMismatch,
 
@@ -130,6 +133,9 @@ public sealed class InboundMessage
 
     /// <summary>The input a geometry pick or a button press is for.</summary>
     public Guid ParamId { get; init; }
+
+    /// <summary>`draftLayout`: each param's tab and group in the unsaved draft; null when there is no draft.</summary>
+    public Dictionary<Guid, LayoutPlacement.Location> DraftLocations { get; init; }
 
     /// <summary>`requestInitialData` from a page that only reads the schema: no outputs or display data follow.</summary>
     public bool SchemaOnly { get; init; }

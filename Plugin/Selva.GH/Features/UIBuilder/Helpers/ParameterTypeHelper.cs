@@ -173,7 +173,17 @@ public static class ParameterTypeHelper
     ///     this on a bake already known to carry a DVL: anywhere else the walk can hit a Set whose
     ///     data never reaches the bake.
     /// </summary>
-    public static GH_DynamicValueListOutput FindUpstreamDynamicValueListOutput(GH_Component bakeComponent)
+    public static GH_DynamicValueListOutput FindUpstreamDynamicValueListOutput(GH_Component bakeComponent) =>
+        FindUpstream<GH_DynamicValueListOutput>(bakeComponent, true);
+
+    /// <summary>
+    ///     The Selva file component feeding a ContextBake through wires and relays, or null. Stops
+    ///     at other components: a file component behind one may not be what reaches the bake.
+    /// </summary>
+    public static IGH_DocumentObject FindUpstreamFileOutput(GH_Component bakeComponent) =>
+        FindUpstream<ISelvaFileOutput>(bakeComponent, false) as IGH_DocumentObject;
+
+    private static T FindUpstream<T>(GH_Component bakeComponent, bool throughComponents) where T : class
     {
         if (bakeComponent?.Params.Input == null)
         {
@@ -182,7 +192,7 @@ public static class ParameterTypeHelper
 
         foreach (var inputParam in bakeComponent.Params.Input)
         {
-            var found = WalkUpstreamFor<GH_DynamicValueListOutput>(inputParam, new HashSet<Guid>(), true);
+            var found = WalkUpstreamFor<T>(inputParam, new HashSet<Guid>(), throughComponents);
             if (found != null)
             {
                 return found;

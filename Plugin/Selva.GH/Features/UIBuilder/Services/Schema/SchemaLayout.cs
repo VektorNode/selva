@@ -69,8 +69,7 @@ public static class SchemaLayout
             ? document.Properties.ProjectFileName
             : !string.IsNullOrEmpty(document.FilePath) ? System.IO.Path.GetFileName(document.FilePath) : schema.ProjectFileName;
         schema.LastModified = DateTime.UtcNow;
-        new SchemaSynchronizer("layout").ApplyParameterAccessFromSchema(schema, document);
-        bridge.ApplyAuthoredSchema(schema);
+        bridge.CommitAuthoredSchema(schema, "Apply Layout");
 
         var result = JObject.Parse(Result(true));
         if (outcome.Unplaced.Count > 0)
@@ -92,7 +91,7 @@ public static class SchemaLayout
     }
 
     /// <summary>A copy brought up to the canvas: stale ids purged, new getters and bakes added.</summary>
-    private static UISchema Synced(GH_UIBuilderComponent bridge, GH_Document document)
+    internal static UISchema Synced(GH_UIBuilderComponent bridge, GH_Document document)
     {
         var schema = bridge.Schema != null
             ? LayoutSpec.Clone(bridge.Schema)
@@ -103,12 +102,18 @@ public static class SchemaLayout
         return schema;
     }
 
-    private static JObject CanvasConfig(GH_Document document, Guid id, string widget)
+    internal static JObject CanvasConfig(GH_Document document, Guid id, string widget)
     {
         var found = document.FindObject(id, false);
         if (widget == "dropdown" && found is GetValueListParameter list)
         {
             return new JObject { ["options"] = JObject.FromObject(list.Values) };
+        }
+
+        // The Set component is where the target is authored; the save write-back keys on this.
+        if (widget == "dynamicValueList" && found is GH_Component bake && ParameterTypeHelper.IsContextBakeComponent(bake))
+        {
+            return new JObject { ["targetInputId"] = ParameterTypeHelper.ResolveDynamicValueListTargetId(bake).ToString() };
         }
 
         if (widget != "number" || found is not IGH_ContextualParameter param)

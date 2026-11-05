@@ -46,8 +46,17 @@
 		/** A selected card was dropped here from another group; the rest of the selection follows it. */
 		onCarrySelection?: (anchorItemId: string) => void;
 		onRemove: () => void;
+		/** Group names are unique within a tab: a name a sibling has is never committed. */
+		isLabelTaken: (label: string) => boolean;
 		onAddLineBreak: () => void;
 		onRemoveItem: (itemId: string) => void;
+		/**
+		 * Params selected on the Grasshopper canvas that this group doesn't hold yet. Undefined
+		 * hides the button: nothing is selected there.
+		 */
+		/** What Add here would do with the canvas selection; undefined hides the button. */
+		canvasPlacement?: { add: number; move: number };
+		onAddCanvasSelection?: () => void;
 		availableInputs: DiscoveredInput[];
 		getParameterInfo: (paramId: string) => DiscoveredInput | undefined;
 		outputValues?: Record<string, unknown>;
@@ -67,8 +76,11 @@
 		onParameterDrop,
 		onCarrySelection,
 		onRemove,
+		isLabelTaken,
 		onAddLineBreak,
 		onRemoveItem,
+		canvasPlacement,
+		onAddCanvasSelection,
 		availableInputs,
 		getParameterInfo,
 		outputValues = {},
@@ -77,6 +89,25 @@
 	}: EditableGroupProps = $props();
 
 	const collapsed = $derived(!!group.collapsed && !peekedGroups.has(group.id));
+
+	let labelError = $state<string | null>(null);
+
+	function renameTo(input: HTMLInputElement) {
+		const label = input.value;
+		if (isLabelTaken(label)) {
+			labelError = `This tab already has a group named “${label.trim()}”`;
+			return;
+		}
+		labelError = null;
+		onEdit(() => (group.label = label), `group-label:${group.id}`);
+	}
+
+	// Leaving the field with a taken name puts back the last name that was kept.
+	function settleLabel(input: HTMLInputElement) {
+		if (!labelError) return;
+		input.value = group.label;
+		labelError = null;
+	}
 
 	const visibilityRuleCount = $derived(group.visibilityCondition?.rules?.length ?? 0);
 	function isExpanded(id: string) {
@@ -293,15 +324,21 @@
 					</button>
 					<input
 						type="text"
-						bind:value={
-							() => group.label,
-							(label) => onEdit(() => (group.label = label), `group-label:${group.id}`)
-						}
-						class="text-foreground hover:border-border focus:border-primary min-w-0 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
+						value={group.label}
+						oninput={(e) => renameTo(e.currentTarget)}
+						onblur={(e) => settleLabel(e.currentTarget)}
+						class="text-foreground hover:border-border focus:border-primary aria-invalid:border-destructive min-w-0 flex-1 rounded-sm border border-transparent bg-transparent px-1.5 py-0.5 text-base font-semibold focus:outline-none"
 						placeholder="Group name"
 						aria-label="Group name"
+						aria-invalid={labelError ? true : undefined}
+						aria-describedby={labelError ? `group-name-error-${group.id}` : undefined}
 					/>
 				</div>
+				{#if labelError}
+					<p id="group-name-error-{group.id}" class="text-destructive ml-7 px-1.5 text-xs">
+						{labelError}
+					</p>
+				{/if}
 
 				<input
 					type="text"
@@ -317,6 +354,24 @@
 			</div>
 		</div>
 		<div class="ml-auto flex items-center gap-2">
+			{#if canvasPlacement}
+				{@const { add, move } = canvasPlacement}
+				<Button
+					variant="outline"
+					size="xs"
+					disabled={add + move === 0}
+					title="Place the params selected on the Grasshopper canvas in this group"
+					onclick={onAddCanvasSelection}
+				>
+					{#if move === 0}
+						Add here ({add})
+					{:else if add === 0}
+						Move here ({move})
+					{:else}
+						Add {add}, move {move} here
+					{/if}
+				</Button>
+			{/if}
 			{#if !collapsed}
 				<label class="text-muted-foreground flex items-center gap-1 text-xs">
 					Col:

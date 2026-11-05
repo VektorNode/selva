@@ -99,6 +99,9 @@ public class WebSocketServer : IDisposable
 
     public event EventHandler<WebSocket> OnClientConnected;
 
+    /// <summary>Raised once per socket that leaves, on whichever thread noticed.</summary>
+    public event EventHandler<WebSocket> OnClientDisconnected;
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
@@ -583,14 +586,20 @@ public class WebSocketServer : IDisposable
             return;
         }
 
+        bool removed;
         lock (_clientsLock)
         {
-            _connectedClients.Remove(webSocket);
+            removed = _connectedClients.Remove(webSocket);
             if (_clientState.TryGetValue(webSocket, out var state))
             {
                 state.Close();
                 _clientState.Remove(webSocket);
             }
+        }
+
+        if (removed)
+        {
+            OnClientDisconnected?.Invoke(this, webSocket);
         }
 
         try
@@ -757,11 +766,16 @@ public class WebSocketServer : IDisposable
             return;
         }
 
+        var removed = new List<WebSocket>();
         lock (_clientsLock)
         {
             foreach (var client in clients)
             {
-                _connectedClients.Remove(client);
+                if (_connectedClients.Remove(client))
+                {
+                    removed.Add(client);
+                }
+
                 if (_clientState.TryGetValue(client, out var state))
                 {
                     state.Close();
@@ -777,6 +791,11 @@ public class WebSocketServer : IDisposable
                     Logger.Warn($"Error disposing WebSocket client: {ex.Message}");
                 }
             }
+        }
+
+        foreach (var client in removed)
+        {
+            OnClientDisconnected?.Invoke(this, client);
         }
     }
 

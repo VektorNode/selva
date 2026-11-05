@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Selva.Schema.Models;
 using Selva.GH.Features.Display.Services;
 using Selva.GH.Features.SolveRuntime.Services;
@@ -126,6 +127,41 @@ public static class OutboundEnvelopes
             schemaHash,
             reason = reason ?? "Schema changed in Grasshopper since you started editing."
         };
+
+    /// <summary>
+    ///     A layout change made from the canvas. Carries the new canonical like `schemaUpdated`, plus
+    ///     the placements themselves, so an editor with unsaved edits can replay them on its draft
+    ///     instead of conflicting with them. A new tab or group arrives with the id the plugin gave
+    ///     it, so the replayed draft and the canonical agree.
+    /// </summary>
+    public static object LayoutPlaced(string sessionId, UISchema schema, string schemaHash,
+        IReadOnlyList<LayoutPlacement.Placed> placements, IReadOnlyList<Guid> removedIds, string summary) =>
+        new
+        {
+            type = "layoutPlaced",
+            sessionId,
+            schema,
+            schemaHash,
+            placements = (placements ?? Array.Empty<LayoutPlacement.Placed>()).Select(p => new
+            {
+                paramId = p.ParamId,
+                itemType = p.IsOutput ? "output" : "input",
+                tabId = p.TabId,
+                tabLabel = p.TabLabel,
+                groupId = p.GroupId,
+                groupLabel = p.GroupLabel
+            }).ToList(),
+            removedIds = removedIds ?? Array.Empty<Guid>(),
+            summary
+        };
+
+    /// <summary>The publishable params selected on the canvas, in canvas order.</summary>
+    public static object CanvasSelection(string sessionId, IReadOnlyList<Guid> ids) =>
+        new { type = "canvasSelection", sessionId, ids = ids ?? Array.Empty<Guid>() };
+
+    /// <summary>Asks the editor to show one layout item: its tab, scrolled to and highlighted.</summary>
+    public static object RevealItem(string sessionId, Guid paramId) =>
+        new { type = "revealItem", sessionId, paramId };
 
     public static object SolvingState(string sessionId, bool isSolving) =>
         new { type = "solvingState", sessionId, isSolving };

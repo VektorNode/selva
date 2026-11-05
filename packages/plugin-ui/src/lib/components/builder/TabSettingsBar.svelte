@@ -11,11 +11,31 @@
 		onEdit: (apply: () => void, coalesceKey?: string) => void;
 		onRemove: () => void;
 		onAddGroup: () => void;
+		/** Tab names are unique: a name another tab has is never committed. */
+		isLabelTaken: (label: string) => boolean;
 	}
 
-	let { tab, onEdit, onRemove, onAddGroup }: Props = $props();
+	let { tab, onEdit, onRemove, onAddGroup, isLabelTaken }: Props = $props();
 
 	let iconOpen = $state(false);
+	let labelError = $state<string | null>(null);
+
+	function renameTo(input: HTMLInputElement) {
+		const label = input.value;
+		if (isLabelTaken(label)) {
+			labelError = `A tab named “${label.trim()}” already exists`;
+			return;
+		}
+		labelError = null;
+		onEdit(() => (tab.label = label), `tab-label:${tab.id}`);
+	}
+
+	// Leaving the field with a taken name puts back the last name that was kept.
+	function settleLabel(input: HTMLInputElement) {
+		if (!labelError) return;
+		input.value = tab.label;
+		labelError = null;
+	}
 
 	function setIcon(icon: string | undefined) {
 		onEdit(() => (tab.icon = icon), `tab-icon:${tab.id}`);
@@ -67,16 +87,23 @@
 		</Popover.Content>
 	</Popover.Root>
 
-	<Input
-		aria-label="Tab name"
-		value={tab.label}
-		oninput={(e) => {
-			const label = e.currentTarget.value;
-			onEdit(() => (tab.label = label), `tab-label:${tab.id}`);
-		}}
-		placeholder="Tab name"
-		class="border-border-strong h-9 w-56"
-	/>
+	<div class="relative">
+		<Input
+			aria-label="Tab name"
+			aria-invalid={labelError ? true : undefined}
+			aria-describedby={labelError ? 'tab-name-error' : undefined}
+			value={tab.label}
+			oninput={(e) => renameTo(e.currentTarget)}
+			onblur={(e) => settleLabel(e.currentTarget)}
+			placeholder="Tab name"
+			class="border-border-strong h-9 w-56"
+		/>
+		{#if labelError}
+			<p id="tab-name-error" class="text-destructive absolute top-full left-0 mt-1 text-xs">
+				{labelError}
+			</p>
+		{/if}
+	</div>
 
 	<div class="bg-border hidden h-6 w-px sm:block"></div>
 

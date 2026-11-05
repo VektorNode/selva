@@ -1,3 +1,12 @@
+<script lang="ts" module>
+	export interface CanvasSelectedParam {
+		id: string;
+		label: string;
+		/** Label of the group holding it in the draft, if placed. */
+		placedIn?: string;
+	}
+</script>
+
 <script lang="ts">
 	import type { DiscoveredInput, DiscoveredOutput, TabConfig } from '@selvajs/schemas';
 	import { Button, Callout, Search, Select } from '@selvajs/ui';
@@ -9,6 +18,8 @@
 
 	interface Props {
 		tabs: TabConfig[];
+		/** Params selected on the Grasshopper canvas, in canvas order. */
+		canvasSelection: CanvasSelectedParam[];
 		availableInputs: DiscoveredInput[];
 		availableOutputs: DiscoveredOutput[];
 		placedIds: Set<string>;
@@ -34,6 +45,7 @@
 
 	let {
 		tabs,
+		canvasSelection,
 		availableInputs,
 		availableOutputs,
 		placedIds,
@@ -152,6 +164,23 @@
 			</Button>
 		{/if}
 	</div>
+
+	{#if canvasSelection.length > 0}
+		<section aria-label="Selected on canvas" class="bg-muted flex flex-col gap-2 rounded-md p-3">
+			<p class="text-muted-foreground text-xs font-medium">
+				{canvasSelection.length} selected on canvas
+			</p>
+			<ul class="flex flex-wrap gap-2">
+				{#each canvasSelection as param (param.id)}
+					<li class="bg-raised shadow-raised text-foreground rounded-sm border px-2 py-0.5 text-xs">
+						{param.label}{#if param.placedIn}<span class="text-muted-foreground">
+								· in {param.placedIn}</span
+							>{/if}
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
 
 	<div class="flex flex-col gap-3">
 		<AvailableItemList

@@ -7,6 +7,8 @@
 	import { getLocaleContext } from '#lib/i18n/localeContext.svelte.js';
 	import { formatMessage } from '#lib/i18n/messages.js';
 	import { upgradePlotlyFigure, type PlotlyFigure } from '#lib/features/chart/plotly-compat.js';
+	import { saveBlob } from '#lib/utils/host-files.js';
+	import { toast } from '#lib/components/primitives/sonner/index.js';
 
 	interface Props {
 		item: OutputChartLayoutItem;
@@ -135,6 +137,21 @@
 		return { textColor, gridColor, fontFamily: style.fontFamily, colorway };
 	}
 
+	async function saveChartImage(
+		Plotly: Awaited<ReturnType<typeof loadPlotly>>,
+		gd: HTMLElement,
+		options: { format?: string; filename?: string } = {}
+	) {
+		const format = options.format ?? 'png';
+		try {
+			const dataUrl: string = await Plotly.toImage(gd, { ...options, format });
+			const blob = await (await fetch(dataUrl)).blob();
+			await saveBlob(blob, `${options.filename ?? 'chart'}.${format}`);
+		} catch {
+			toast.error(t.downloadFailed);
+		}
+	}
+
 	async function renderChart() {
 		if (!containerEl || !figData) return;
 		error = null;
@@ -177,6 +194,11 @@
 					: {})
 			};
 
+			const figConfig = (figData.config ?? {}) as {
+				modeBarButtonsToRemove?: string[];
+				modeBarButtonsToAdd?: unknown[];
+				toImageButtonOptions?: { format?: string; filename?: string };
+			};
 			Plotly.react(containerEl, {
 				data: figData.data,
 				layout,
@@ -188,8 +210,25 @@
 					displaylogo: false,
 					// Plotly 4's "Share chart" button uploads the figure to Plotly's cloud.
 					showSendToCloud: false,
-					modeBarButtonsToRemove: ['sendDataToCloud', 'lasso2d', 'select2d'],
-					...figData.config
+					...figConfig,
+					// Plotly's own toImage button downloads through an <a download>, which the Rhino
+					// panel's WebView blocks; this one saves through saveBlob like every other file.
+					modeBarButtonsToRemove: [
+						'sendDataToCloud',
+						'lasso2d',
+						'select2d',
+						'toImage',
+						...(figConfig.modeBarButtonsToRemove ?? [])
+					],
+					modeBarButtonsToAdd: [
+						{
+							name: 'toImage',
+							title: t.downloadChartImage,
+							icon: Plotly.Icons.camera,
+							click: (gd: HTMLElement) => saveChartImage(Plotly, gd, figConfig.toImageButtonOptions)
+						},
+						...(figConfig.modeBarButtonsToAdd ?? [])
+					]
 				}
 			});
 		} catch (e) {

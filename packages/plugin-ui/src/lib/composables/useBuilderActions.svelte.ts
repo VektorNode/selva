@@ -27,7 +27,8 @@ import {
 	reorderGroups,
 	moveGroupToTab,
 	batchSetNumberWidgetType,
-	isInputItem
+	isInputItem,
+	locateParam
 } from '#lib/features/builder/operations.js';
 import { mapParamTypeToWidgetType } from '#lib/features/builder/widget-config.js';
 import type { useBuilderState } from './useBuilderState.svelte';
@@ -224,6 +225,29 @@ export function useBuilderActions(
 		if (added > 0) toast.success(`Added ${added} to ${group.label}`);
 	}
 
+	function onAddCanvasSelection(groupId: string) {
+		const builderState = getBuilderState();
+		const draft = builderState?.state.draft;
+		if (!builderState || !draft) return;
+		const group = getGroups(draft).find((g) => g.id === groupId);
+		if (!group) return;
+		const selection = builderState.state.canvasSelection;
+		const moving = selection.filter((id) => {
+			const at = locateParam(draft, id);
+			return at !== undefined && at.group.id !== groupId;
+		}).length;
+		const count = builderState.placeParamsInGroup(groupId, selection);
+		if (count === 0) return;
+		const added = count - moving;
+		const what =
+			moving === 0
+				? `Added ${added}`
+				: added === 0
+					? `Moved ${moving}`
+					: `Added ${added}, moved ${moving}`;
+		toast.success(`${what} to ${group.label}`);
+	}
+
 	function onMoveSelectedToGroup(groupId: string) {
 		const context = ensureSchema();
 		if (!context) return;
@@ -254,7 +278,7 @@ export function useBuilderActions(
 		if (!context) return;
 		const { builderState, schema } = context;
 
-		builderState.history.push($state.snapshot(schema));
+		builderState.history.push($state.snapshot(schema), builderSelection.dragUndoKey);
 
 		let group: GroupConfig | undefined;
 		if (schema.layout.type === 'tabbed') {
@@ -462,6 +486,12 @@ export function useBuilderActions(
 
 		builderState.history.push($state.snapshot(schema));
 
+		const sourceTab =
+			schema.layout.type === 'tabbed'
+				? schema.layout.tabs.find((t) => t.id === sourceTabId)
+				: undefined;
+		const labelBefore = sourceTab?.groups.find((g) => g.id === groupId)?.label;
+
 		const moved = moveGroupToTab(schema, sourceTabId, groupId, targetTabId);
 		if (!moved) return;
 
@@ -469,7 +499,12 @@ export function useBuilderActions(
 			const targetTab = schema.layout.tabs.find((t) => t.id === targetTabId);
 			if (targetTab) {
 				builderState.state.activeTabId = targetTabId;
-				toast.success(`Moved group to ${targetTab.label}`);
+				const label = targetTab.groups.find((g) => g.id === groupId)?.label;
+				toast.success(
+					label !== labelBefore
+						? `Moved group to ${targetTab.label} as “${label}”: that tab already had a “${labelBefore}”`
+						: `Moved group to ${targetTab.label}`
+				);
 			}
 		}
 	}
@@ -659,6 +694,7 @@ export function useBuilderActions(
 		onAddToGroup,
 		onAddSelectedToGroup,
 		onMoveSelectedToGroup,
+		onAddCanvasSelection,
 		onCarrySelection,
 		onDropOnTab,
 		onAddToNewGroup,

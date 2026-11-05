@@ -159,6 +159,7 @@ public class BridgeAccessTests
         [InboundKind.Trigger] = Gate.Open,
         [InboundKind.SaveSchema] = Gate.AuthorOnly,
         [InboundKind.ApplySyncChanges] = Gate.AuthorOnly,
+        [InboundKind.DraftLayout] = Gate.AuthorOnly,
         [InboundKind.SelvaGetAccount] = Gate.AuthorOnly,
         [InboundKind.SelvaConnect] = Gate.AuthorOnly,
         [InboundKind.SelvaSignIn] = Gate.AuthorOnly,

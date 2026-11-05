@@ -155,6 +155,16 @@ public class WebSocketTransport : IDisposable
     /// </summary>
     public event EventHandler<InboundMessage> OnSelvaCommand;
 
+    /// <summary>
+    ///     Where the open editor's unsaved draft places each param, on the UI thread. Null once the
+    ///     draft matches the saved schema, or when the socket that sent it is gone.
+    /// </summary>
+    public event EventHandler<Dictionary<Guid, LayoutPlacement.Location>> OnDraftLayout;
+
+    // The socket whose draft the canvas shows: with two editors open, the last to send wins, and
+    // only that one leaving clears it.
+    private WebSocket _draftClient;
+
     /// <summary>`pickGeometry`, on the UI thread. Answered with <see cref="BroadcastPickGeometryResult" />.</summary>
     public event EventHandler<InboundMessage> OnPickGeometryRequested;
 
@@ -197,6 +207,7 @@ public class WebSocketTransport : IDisposable
             _webSocketServer = new WebSocketServer(_bridgeSecret, allowedOrigins, _port,
                 () => BridgeAccess.AuthenticatedMessage(_role()));
             _webSocketServer.OnClientConnected += HandleClientConnected;
+            _webSocketServer.OnClientDisconnected += HandleClientDisconnected;
             _webSocketServer.OnMessageReceived += HandleMessageReceived;
 
             var startTask = _webSocketServer.StartAsync();
@@ -237,6 +248,7 @@ public class WebSocketTransport : IDisposable
         finally
         {
             _webSocketServer = null;
+            ClearDraft();
 
             lock (_stateLock)
             {
@@ -363,6 +375,23 @@ public class WebSocketTransport : IDisposable
     {
         return BroadcastAsync(OutboundEnvelopes.SchemaUpdated(
             _sessionId, schema, SchemaHash.Compute(schema), removedIds));
+    }
+
+    public Task BroadcastLayoutPlaced(UISchema schema, IReadOnlyList<LayoutPlacement.Placed> placements,
+        IReadOnlyList<Guid> removedIds, string summary)
+    {
+        return BroadcastAsync(OutboundEnvelopes.LayoutPlaced(
+            _sessionId, schema, SchemaHash.Compute(schema), placements, removedIds, summary));
+    }
+
+    public Task BroadcastCanvasSelection(IReadOnlyList<Guid> ids)
+    {
+        return BroadcastAsync(OutboundEnvelopes.CanvasSelection(_sessionId, ids));
+    }
+
+    public Task BroadcastRevealItem(Guid paramId)
+    {
+        return BroadcastAsync(OutboundEnvelopes.RevealItem(_sessionId, paramId));
     }
 
     public Task BroadcastInitialData(
@@ -551,6 +580,22 @@ public class WebSocketTransport : IDisposable
 
         var json = JsonConvert.SerializeObject(payload, SecureSerializerSettings);
         return server.BroadcastAsync(json, binaryFrames);
+    }
+
+    private void HandleClientDisconnected(object sender, WebSocket client)
+    {
+        if (Interlocked.CompareExchange(ref _draftClient, null, client) == client)
+        {
+            MarshalToMainThread(() => OnDraftLayout?.Invoke(this, null));
+        }
+    }
+
+    private void ClearDraft()
+    {
+        if (Interlocked.Exchange(ref _draftClient, null) != null)
+        {
+            MarshalToMainThread(() => OnDraftLayout?.Invoke(this, null));
+        }
     }
 
     private void HandleClientConnected(object sender, WebSocket _)
@@ -786,6 +831,11 @@ public class WebSocketTransport : IDisposable
                 case InboundKind.CloseDefinition:
                 case InboundKind.EditInGrasshopper:
                     MarshalToMainThread(() => OnPlayerCommand?.Invoke(this, inbound.Kind));
+                    break;
+
+                case InboundKind.DraftLayout:
+                    Volatile.Write(ref _draftClient, inbound.DraftLocations != null ? frame.Client : null);
+                    MarshalToMainThread(() => OnDraftLayout?.Invoke(this, inbound.DraftLocations));
                     break;
 
                 case InboundKind.SessionMismatch:

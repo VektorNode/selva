@@ -123,6 +123,30 @@ public class WireFixtureContractTests
             ["schema-save-rejected.json"] = ("SchemaSaveRejected",
                 OutboundEnvelopes.SchemaSaveRejected(Session, SampleSchema(), "hash-1", null)),
 
+            ["layout-placed.json"] = ("LayoutPlaced",
+                OutboundEnvelopes.LayoutPlaced(Session, SampleSchema(), "hash-2",
+                    new List<LayoutPlacement.Placed>
+                    {
+                        new LayoutPlacement.Placed
+                        {
+                            ParamId = ParamA, IsOutput = false, TabId = "tab-general", TabLabel = "General",
+                            GroupId = "group-size", GroupLabel = "Size"
+                        },
+                        new LayoutPlacement.Placed
+                        {
+                            ParamId = ParamB, IsOutput = true, TabId = null, TabLabel = null,
+                            GroupId = "group-results", GroupLabel = "Results"
+                        }
+                    },
+                    new List<Guid> { RemovedId },
+                    "Added Count, Area to General › Size")),
+
+            ["canvas-selection.json"] = ("CanvasSelection",
+                OutboundEnvelopes.CanvasSelection(Session, new List<Guid> { ParamA, ParamB })),
+
+            ["reveal-item.json"] = ("RevealItem",
+                OutboundEnvelopes.RevealItem(Session, ParamA)),
+
             ["solving-state.json"] = ("SolvingState",
                 OutboundEnvelopes.SolvingState(Session, true)),
 

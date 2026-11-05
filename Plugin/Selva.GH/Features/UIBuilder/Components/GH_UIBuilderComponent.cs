@@ -17,6 +17,7 @@ using Selva.GH.Features.UIBuilder.Helpers;
 using Selva.GH.Features.UIBuilder.Goos;
 using Selva.GH.Features.UIBuilder.Services;
 using Selva.GH.Features.UIBuilder.Services.Communication;
+using Selva.GH.Features.UIBuilder.Services.Schema;
 using Selva.GH.Properties;
 using Selva.GH.Utilities.Guards;
 using Selva.GH.Utilities.Helpers;
@@ -100,16 +101,30 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
     }
 
     /// <summary>
-    ///     A scripted layout is the author's intent, as an editor save is: a widget it leaves out must
-    ///     not spring back from a tombstone.
+    ///     A scripted layout or a placement from the canvas is the author's intent, as an editor
+    ///     save is. Goes through the same commit as a save, so an open editor hears of it.
     /// </summary>
-    internal void ApplyAuthoredSchema(UISchema schema)
+    internal UISchema CommitAuthoredSchema(UISchema schema, string undoName, Action<UISchema> broadcast = null)
     {
-        RecordUndoEvent("Apply Layout");
-        _service?.SchemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
-        _service?.SchemaSynchronizer.ClearMetadataCache();
+        var document = OnPingDocument();
+        if (document != null && _service?.BridgeService?.IsInitialized == true)
+        {
+            return _service.BridgeService.CommitAuthoredSchema(schema, document, undoName, broadcast);
+        }
+
+        // Never enabled in this session: no editor, tombstones or metadata cache exist yet, but
+        // the canvas params still take the access the layout asks for.
+        RecordUndoEvent(undoName);
         Schema = schema;
+        SchemaSynchronizer.ApplyParameterAccessFromSchema(schema, document);
+        document?.Modified();
+        return schema;
     }
+
+    internal WebSocketTransport Transport => IsConnected ? _service.WebSocketTransport : null;
+
+    /// <summary>Where the open editor's unsaved draft places each param; null when there is none.</summary>
+    internal Dictionary<Guid, LayoutPlacement.Location> DraftLocations { get; private set; }
 
     protected override Bitmap Icon => Resources.UIBridge;
 
@@ -286,6 +301,11 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
 
         _service.WebSocketTransport.BindRole(() => _role);
         _service.WebSocketTransport.OnPlayerCommand += HandlePlayerCommand;
+        _service.WebSocketTransport.OnDraftLayout += (_, locations) =>
+        {
+            DraftLocations = locations;
+            Grasshopper.Instances.ActiveCanvas?.Invalidate();
+        };
 
         _service.DocumentSyncService.OnParameterDeletionRequired += HandleParameterDeletion;
 
@@ -675,7 +695,7 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         }
     }
 
-    private void OpenUIInPanel()
+    internal void OpenUIInPanel()
     {
         var refusal = ShowInPanel(raise: true);
         if (refusal != null)
@@ -696,6 +716,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
         {
             ToolTipText = "Show the interactive UI in the Selva panel",
             Enabled = running
+        });
+
+        menu.Items.Add(CanvasPlacementHooks.SelectionMenu(this));
+        menu.Items.Add(new ToolStripMenuItem("Show UI placement on canvas", null,
+            (s, e) => CanvasPlacementHooks.ShowPlacement = !CanvasPlacementHooks.ShowPlacement)
+        {
+            Checked = CanvasPlacementHooks.ShowPlacement
         });
 
         // Shift-only: the browser stays live during a solve, which the panel can't, so it's the
@@ -1048,6 +1075,13 @@ public class GH_UIBuilderComponent : GH_Component, IDisposable
                 {
                     _embeddedSchema = result.Value.schema;
                     _embeddedValues = result.Value.values;
+
+                    // Undo restores the archived schema through Read.
+                    if (_service?.BridgeService?.IsInitialized == true && _embeddedSchema != null
+                        && OnPingDocument() is { } document)
+                    {
+                        _service.BridgeService.AdoptRestoredSchema(_embeddedSchema, document);
+                    }
 
                     if (!string.IsNullOrEmpty(result.Value.migrationMessage))
                     {

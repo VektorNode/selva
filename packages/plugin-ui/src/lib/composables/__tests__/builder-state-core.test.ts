@@ -506,6 +506,48 @@ describe('canvas placement', () => {
 		expect(state.draft!.inputs.some((i) => i.id === 'b')).toBe(true);
 	});
 
+	it('copies a new param’s layout item from the plugin’s canonical, keeping its config', () => {
+		const { state, deps } = ready();
+		markDirty(state);
+		const committed = layoutSchema();
+		committed.outputs = [
+			{ id: 'dvl', nickname: 'Pick', type: 'dynamicValueList', targetInputId: 'a' }
+		] as never;
+		groupsOf(committed)[1].items = [
+			{
+				id: 'item-dvl',
+				type: 'output',
+				paramId: 'dvl',
+				displayName: 'Pick',
+				widgetType: 'dynamicValueList',
+				config: { targetInputId: 'a' }
+			} as never
+		];
+		handleLayoutPlaced(
+			state,
+			deps,
+			placed({
+				schema: committed,
+				placements: [
+					{
+						paramId: 'dvl',
+						itemType: 'output',
+						tabId: 't1',
+						tabLabel: 'General',
+						groupId: 'g2',
+						groupLabel: 'Other'
+					}
+				]
+			})
+		);
+		const item = groupsOf(state.draft).find((g) => g.id === 'g2')!.items[0];
+		expect(item).toMatchObject({ paramId: 'dvl', config: { targetInputId: 'a' } });
+		expect(item).not.toBe(groupsOf(committed)[1].items[0]);
+		expect(state.draft!.outputs).toContainEqual(
+			expect.objectContaining({ id: 'dvl', targetInputId: 'a' })
+		);
+	});
+
 	it('falls back to the dirty warning when the draft has diverged', () => {
 		const { state, deps, notify } = ready();
 		markDirty(state);

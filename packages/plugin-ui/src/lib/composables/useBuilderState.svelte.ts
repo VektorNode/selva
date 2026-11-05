@@ -10,6 +10,7 @@ import { getGrasshopperSource } from '#lib/schema-source/grasshopper-source.js';
 import type { SchemaSource } from '#lib/schema-source/schema-source.js';
 import type { SyncChange } from '#lib/websocket/websocket.svelte.js';
 import { useSchemaHistory } from './useSchemaHistory.svelte';
+import { draftPlacements } from '#lib/features/builder/operations.js';
 import {
 	createInitialBuilderState,
 	markDirty as coreMarkDirty,
@@ -23,6 +24,10 @@ import {
 	handleParametersAdded as coreHandleParametersAdded,
 	handleSyncPreview as coreHandleSyncPreview,
 	handleSyncApplied as coreHandleSyncApplied,
+	handleLayoutPlaced as coreHandleLayoutPlaced,
+	handleCanvasSelection as coreHandleCanvasSelection,
+	handleRevealItem as coreHandleRevealItem,
+	placeParamsInGroup as corePlaceParamsInGroup,
 	syncParameters as coreSyncParameters,
 	requestSyncPreview as coreRequestSyncPreview,
 	applySyncChanges as coreApplySyncChanges,
@@ -62,8 +67,12 @@ export function useBuilderState(sessionId: string, source?: SchemaSource) {
 	// Bound handlers — stable references so on/off pair up across initialize/cleanup.
 	const onOutputs = (m: Parameters<typeof coreHandleOutputs>[2]) =>
 		coreHandleOutputs(state, deps, m);
-	const onInitialData = (m: Parameters<typeof coreHandleInitialData>[2]) =>
+	const onInitialData = (m: Parameters<typeof coreHandleInitialData>[2]) => {
 		coreHandleInitialData(state, deps, m);
+		// A reconnected plugin has forgotten the draft it was last told about.
+		draftLayoutSent = undefined;
+		publishDraftLayout();
+	};
 	const onMetadataUpdated = (m: Parameters<typeof coreHandleMetadataUpdated>[2]) =>
 		coreHandleMetadataUpdated(state, deps, m);
 	const onSchemaUpdated = (m: Parameters<typeof coreHandleSchemaUpdated>[2]) =>
@@ -76,8 +85,30 @@ export function useBuilderState(sessionId: string, source?: SchemaSource) {
 		coreHandleSyncPreview(state, deps, m);
 	const onSyncApplied = (m: Parameters<typeof coreHandleSyncApplied>[2]) =>
 		coreHandleSyncApplied(state, deps, m);
+	const onLayoutPlaced = (m: Parameters<typeof coreHandleLayoutPlaced>[2]) =>
+		coreHandleLayoutPlaced(state, deps, m);
+	const onCanvasSelection = (m: Parameters<typeof coreHandleCanvasSelection>[2]) =>
+		coreHandleCanvasSelection(state, deps, m);
+	const onRevealItem = (m: Parameters<typeof coreHandleRevealItem>[2]) =>
+		coreHandleRevealItem(state, deps, m);
 
 	let initialized = false;
+
+	// What the plugin was last told, as JSON; undefined when it has not been told anything yet.
+	let draftLayoutSent: string | undefined;
+	const NO_DRAFT = JSON.stringify(null);
+
+	/**
+	 * Sends where the unsaved draft places each param, so the canvas labels follow the editor
+	 * before a save. Reads the draft, so calling it from an $effect re-sends on every edit.
+	 */
+	function publishDraftLayout() {
+		const placements = state.isDirty && state.draft ? draftPlacements(state.draft) : null;
+		const key = JSON.stringify(placements);
+		if (key === draftLayoutSent || !schemaSource.connected) return;
+		draftLayoutSent = key;
+		schemaSource.sendDraftLayout(sessionId, placements);
+	}
 
 	/** Connect the source, subscribe to push events, and pull the first schema. */
 	async function initialize() {
@@ -92,6 +123,9 @@ export function useBuilderState(sessionId: string, source?: SchemaSource) {
 		schemaSource.on('parametersAdded', onParametersAdded);
 		schemaSource.on('syncPreview', onSyncPreview);
 		schemaSource.on('syncApplied', onSyncApplied);
+		schemaSource.on('layoutPlaced', onLayoutPlaced);
+		schemaSource.on('canvasSelection', onCanvasSelection);
+		schemaSource.on('revealItem', onRevealItem);
 
 		const result = await schemaSource.connect(sessionId);
 		if (!result.ok) {
@@ -106,6 +140,9 @@ export function useBuilderState(sessionId: string, source?: SchemaSource) {
 	function cleanup() {
 		if (!initialized) return;
 		initialized = false;
+		if (draftLayoutSent !== undefined && draftLayoutSent !== NO_DRAFT && schemaSource.connected)
+			schemaSource.sendDraftLayout(sessionId, null);
+		draftLayoutSent = undefined;
 
 		schemaSource.off('outputs', onOutputs);
 		schemaSource.off('initialData', onInitialData);
@@ -115,6 +152,9 @@ export function useBuilderState(sessionId: string, source?: SchemaSource) {
 		schemaSource.off('parametersAdded', onParametersAdded);
 		schemaSource.off('syncPreview', onSyncPreview);
 		schemaSource.off('syncApplied', onSyncApplied);
+		schemaSource.off('layoutPlaced', onLayoutPlaced);
+		schemaSource.off('canvasSelection', onCanvasSelection);
+		schemaSource.off('revealItem', onRevealItem);
 	}
 
 	return {
@@ -137,6 +177,9 @@ export function useBuilderState(sessionId: string, source?: SchemaSource) {
 		editDraft: (apply: () => void, coalesceKey?: string) =>
 			coreEditDraft(state, deps, apply, coalesceKey),
 		discardDraft: () => coreDiscardDraft(state, deps),
+		placeParamsInGroup: (groupId: string, paramIds: string[]) =>
+			corePlaceParamsInGroup(state, deps, groupId, paramIds),
+		publishDraftLayout,
 		initialize,
 		cleanup
 	};

@@ -4,6 +4,7 @@
 
 import { getWebSocketState, type WebSocketState } from '#lib/websocket/websocket.svelte.js';
 import type { UISchema } from '@selvajs/schemas';
+import type { DraftPlacement } from '#lib/features/builder/operations.js';
 import type { SolveReporter } from '@selvajs/ui';
 import type {
 	SchemaSource,
@@ -114,6 +115,10 @@ export function createGrasshopperSource(wsState: WebSocketState, port: number): 
 
 		requestSyncPreview(sessionId: string, draft: UISchema) {
 			wsState.requestSyncPreview(sessionId, draft);
+		},
+
+		sendDraftLayout(sessionId: string, placements: DraftPlacement[] | null) {
+			wsState.sendDraftLayout(sessionId, placements);
 		},
 
 		applySyncChanges(sessionId: string, changes: SyncChange[]) {

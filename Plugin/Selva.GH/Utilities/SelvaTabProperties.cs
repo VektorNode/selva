@@ -25,6 +25,7 @@ public class SelvaTabProperties : GH_AssemblyPriority
         {
             DefinitionLauncher.Register();
             PanelCanvasFollower.Register();
+            CanvasPlacementHooks.Register();
             DisplayCaches.ClearOnDocumentClose();
             MacSolveActivity.Register();
             SlvzCompressor.Level = CompressionLevel.Fastest;

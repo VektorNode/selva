@@ -10,7 +10,7 @@
 		toast,
 		useFooterItem
 	} from '@selvajs/ui';
-	import { Save, RefreshCw, CloudUpload, PlugZap } from '@lucide/svelte';
+	import { Save, RefreshCw, CloudUpload, PlugZap, Undo2, Redo2 } from '@lucide/svelte';
 	import WsStatusFooter from '#lib/components/WsStatusFooter.svelte';
 	import ModeHeader from '#lib/components/ModeHeader.svelte';
 	import { MediaQuery, SvelteSet } from 'svelte/reactivity';
@@ -21,17 +21,18 @@
 		TabEditor,
 		SyncDialog
 	} from '#lib/components/builder/index.js';
-	import { bringIntoView } from '#lib/components/builder/reveal.js';
+	import { bringIntoView, flashPlaced } from '#lib/components/builder/reveal.js';
 	import type { SearchTarget } from '#lib/features/builder/index.js';
 	import SelvaUploadDialog from '#lib/components/selva-upload/SelvaUploadDialog.svelte';
 	import SelvaConnectionDialog from '#lib/components/selva-upload/SelvaConnectionDialog.svelte';
 	import { buildSessionParams } from '#lib/utils/session.js';
 	import { currentRole } from '#lib/utils/session-role.svelte.js';
 	import { rhinoShellProps } from '#lib/utils/rhino-host.svelte.js';
-	import { onMount, tick } from 'svelte';
+	import { onMount, tick, untrack } from 'svelte';
 	import { useBuilderState } from '#lib/composables/useBuilderState.svelte.js';
 	import { useBuilderActions } from '#lib/composables/useBuilderActions.svelte.js';
 	import { builderSelection } from '#lib/features/builder/selection.svelte.js';
+	import { locateParam } from '#lib/features/builder/operations.js';
 	import { setBuilderDraft } from '#lib/components/builder/draft-context.js';
 	import { putAsset } from '#lib/features/builder/option-assets.js';
 	import { useSelvaUpload, type SelvaUpload } from '#lib/composables/useSelvaUpload.svelte.js';
@@ -151,6 +152,21 @@
 		return ids;
 	});
 
+	const canvasSelection = $derived.by(() => {
+		const state = builderState?.state;
+		const draft = state?.draft;
+		if (!state || !draft) return [];
+		return state.canvasSelection.map((id) => {
+			const label =
+				state.availableInputs.find((p) => p.id === id)?.nickname ||
+				state.availableOutputs.find((o) => o.id === id)?.nickname ||
+				draft.inputs.find((p) => p.id === id)?.nickname ||
+				draft.outputs.find((o) => o.id === id)?.nickname ||
+				id;
+			return { id, label, placedIn: locateParam(draft, id)?.group.label };
+		});
+	});
+
 	const availableInputs = $derived(builderState?.state.availableInputs || []);
 	const availableOutputsUnplaced = $derived(builderState?.state.availableOutputs || []);
 	const allAvailableInputs = $derived(builderState?.state.availableInputs || []);
@@ -169,27 +185,31 @@
 		return promise;
 	}
 
+	function undo() {
+		if (!builderState?.history.canUndo() || !builderState.state.draft) return;
+		const prev = builderState.history.undo($state.snapshot(builderState.state.draft));
+		if (!prev) return;
+		builderState.state.draft = prev;
+		builderState.markDirty();
+		toast.success('Undo');
+	}
+
+	function redo() {
+		if (!builderState?.history.canRedo() || !builderState.state.draft) return;
+		const next = builderState.history.redo($state.snapshot(builderState.state.draft));
+		if (!next) return;
+		builderState.state.draft = next;
+		builderState.markDirty();
+		toast.success('Redo');
+	}
+
 	function handleKeydown(e: KeyboardEvent) {
 		if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
 			e.preventDefault();
-			if (builderState?.history.canUndo() && builderState.state.draft) {
-				const prev = builderState.history.undo($state.snapshot(builderState.state.draft));
-				if (prev) {
-					builderState.state.draft = prev;
-					builderState.markDirty();
-					toast.success('Undo');
-				}
-			}
+			undo();
 		} else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
 			e.preventDefault();
-			if (builderState?.history.canRedo() && builderState.state.draft) {
-				const next = builderState.history.redo($state.snapshot(builderState.state.draft));
-				if (next) {
-					builderState.state.draft = next;
-					builderState.markDirty();
-					toast.success('Redo');
-				}
-			}
+			redo();
 		} else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 			e.preventDefault();
 			saveSchema().catch(() => {});
@@ -198,6 +218,8 @@
 			if (builderState?.state.draft) searchOpen = !searchOpen;
 		}
 	}
+
+	$effect(() => builderState?.publishDraftLayout());
 
 	// A player session has no builder: the plugin would refuse its saves anyway.
 	$effect(() => {
@@ -256,6 +278,30 @@
 		if (target) bringIntoView(target);
 	}
 
+	// Items placed from the canvas or asked for from it: open their groups, scroll to the first, flash all.
+	async function spotlight(itemIds: string[]) {
+		const draft = builderState?.state.draft;
+		if (!draft) return;
+		const groups =
+			draft.layout?.type === 'tabbed' ? draft.layout.tabs.flatMap((t) => t.groups) : [];
+		for (const group of groups) {
+			if (group.items.some((i) => itemIds.includes(i.id))) peekedGroups.add(group.id);
+		}
+		await tick();
+		const targets = itemIds.flatMap((id) => {
+			const el = document.querySelector(`[data-builder-item-id="${CSS.escape(id)}"]`);
+			return el ? [el] : [];
+		});
+		const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+		targets[0]?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+		targets.forEach(flashPlaced);
+	}
+
+	$effect(() => {
+		const request = builderState?.state.spotlight;
+		if (request) untrack(() => spotlight(request.itemIds));
+	});
+
 	function revealSearchResult(target: SearchTarget) {
 		switch (target.kind) {
 			case 'item':
@@ -284,12 +330,34 @@
 </script>
 
 {#snippet headerActions()}
+	<div class="flex items-center">
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			onclick={undo}
+			disabled={!builderState?.history.canUndo()}
+			aria-label="Undo"
+			title="Undo (Ctrl+Z)"
+		>
+			<Undo2 />
+		</Button>
+		<Button
+			variant="ghost"
+			size="icon-sm"
+			onclick={redo}
+			disabled={!builderState?.history.canRedo()}
+			aria-label="Redo"
+			title="Redo (Ctrl+Y)"
+		>
+			<Redo2 />
+		</Button>
+	</div>
 	<Button
 		variant={builderState?.state.isDirty ? 'default' : 'outline'}
 		size="sm"
 		onclick={() => saveSchema().catch(() => {})}
 		disabled={!builderState?.state.draft}
-		title="Save schema (Ctrl+S / ⌘S)"
+		title="Save schema (Ctrl+S)"
 	>
 		<Save class="h-4 w-4" /><span class="max-sm:sr-only">Save</span>
 	</Button>
@@ -359,6 +427,7 @@
 								{availableInputs}
 								availableOutputs={availableOutputsUnplaced}
 								placedIds={placedInLayoutIds}
+								{canvasSelection}
 								syncNeeded={builderState.state.syncNeeded}
 								onSchemaChange={(updatedSchema) => {
 									if (builderState && builderState.state.draft) {
@@ -408,6 +477,8 @@
 									onReorder={actions.onReorder}
 									onRemoveItem={actions.onRemoveItem}
 									onAddLineBreak={actions.onAddLineBreak}
+									canvasSelection={builderState.state.canvasSelection}
+									onAddCanvasSelection={actions.onAddCanvasSelection}
 									onEdit={(apply, coalesceKey) => builderState?.editDraft(apply, coalesceKey)}
 									availableInputs={allAvailableInputs}
 									{getParameterInfo}

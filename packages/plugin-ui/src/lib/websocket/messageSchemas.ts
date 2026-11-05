@@ -263,6 +263,38 @@ const selvaUploadResultSchema = baseEnvelope.extend({
 	})
 });
 
+// ============================================================================
+// Canvas placement (the author places params from Grasshopper's canvas)
+// ============================================================================
+
+const layoutPlacementSchema = z.object({
+	paramId: z.string(),
+	itemType: z.enum(['input', 'output']),
+	tabId: z.string().nullish(),
+	tabLabel: z.string().nullish(),
+	groupId: z.string(),
+	groupLabel: z.string()
+});
+
+const layoutPlacedSchema = baseEnvelope.extend({
+	type: z.literal('layoutPlaced'),
+	schema: z.unknown(),
+	schemaHash: z.string(),
+	placements: z.array(layoutPlacementSchema),
+	removedIds: z.array(z.string()),
+	summary: z.string()
+});
+
+const canvasSelectionSchema = baseEnvelope.extend({
+	type: z.literal('canvasSelection'),
+	ids: z.array(z.string())
+});
+
+const revealItemSchema = baseEnvelope.extend({
+	type: z.literal('revealItem'),
+	paramId: z.string()
+});
+
 // `disconnecting` uses the generic `BroadcastMessage` envelope — payload nested
 // under `data` — and is handled inline in `handleMessage` before validation kicks
 // in. No schema needed.
@@ -345,7 +377,10 @@ const schemasByType = {
 	hostPickFileResult: hostPickFileResultSchema,
 	hostPickedFile: hostPickedFileSchema,
 	pickGeometryResult: pickGeometryResultSchema,
-	geometrySummary: geometrySummarySchema
+	geometrySummary: geometrySummarySchema,
+	layoutPlaced: layoutPlacedSchema,
+	canvasSelection: canvasSelectionSchema,
+	revealItem: revealItemSchema
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ValidatedMessageType = keyof typeof schemasByType;

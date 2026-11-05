@@ -243,6 +243,13 @@ public static class LayoutSpec
             : new FlatLayoutConfig { Groups = groups.Select((g, i) => build.Group(g, i, null, "")).ToList() };
         layout.Gap = schema.Layout?.Gap ?? layout.Gap;
 
+        // Only a duplicate this spec introduces: one a saved form already has must not block every edit.
+        var duplicatedBefore = DuplicateLabels(current?.Layout);
+        foreach (var duplicate in DuplicateLabels(layout).Where(d => !duplicatedBefore.Contains(d)))
+        {
+            outcome.Errors.Add(duplicate);
+        }
+
         if (outcome.Errors.Count > 0)
         {
             return outcome;
@@ -277,6 +284,46 @@ public static class LayoutSpec
             JsonConvert.SerializeObject(schema, SchemaSerializationSettings.Settings),
             SchemaSerializationSettings.Settings);
     }
+
+    // Tab names are unique in the form, group names within their tab.
+    private static HashSet<string> DuplicateLabels(LayoutConfigBase layout)
+    {
+        var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        switch (layout)
+        {
+            case TabbedLayoutConfig tabbed:
+                var tabs = tabbed.Tabs ?? new List<TabConfig>();
+                foreach (var label in Repeated(tabs.Select(t => t.Label)))
+                {
+                    found.Add($"Two tabs are named \"{label}\": tab names must be unique.");
+                }
+
+                foreach (var tab in tabs)
+                {
+                    foreach (var label in Repeated((tab.Groups ?? new List<GroupConfig>()).Select(g => g.Label)))
+                    {
+                        found.Add($"Tab \"{tab.Label}\" has two groups named \"{label}\": group names must be unique within a tab.");
+                    }
+                }
+
+                break;
+            case FlatLayoutConfig flat:
+                foreach (var label in Repeated((flat.Groups ?? new List<GroupConfig>()).Select(g => g.Label)))
+                {
+                    found.Add($"Two groups are named \"{label}\": group names must be unique.");
+                }
+
+                break;
+        }
+
+        return found;
+    }
+
+    private static IEnumerable<string> Repeated(IEnumerable<string> labels) =>
+        labels.Where(l => !string.IsNullOrWhiteSpace(l))
+            .GroupBy(l => l.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key);
 
     private static IEnumerable<string> ValidationErrors(UISchema schema)
     {
@@ -669,24 +716,30 @@ public static class LayoutSpec
         }
     }
 
-    private static string DefaultWidget(Parameter param)
+    private static string DefaultWidget(Parameter param) => DefaultWidgetFor(param.Type, param.IsOutput);
+
+    internal static string DefaultWidgetFor(string type, bool isOutput)
     {
-        if (param.IsOutput)
+        if (isOutput)
         {
-            return param.Type switch
+            return type switch
             {
-                "file" or "chart" or "dynamicValueList" or "number" => param.Type,
+                "file" or "chart" or "dynamicValueList" or "number" => type,
+                "integer" => "number",
                 _ => "text"
             };
         }
 
-        return param.Type switch
+        // Mirrors mapParamTypeToWidgetType in plugin-ui, so a param placed from the canvas or a
+        // script gets the widget a drag in the editor would give it.
+        return type switch
         {
             "number" or "integer" => "number",
             "boolean" => "checkbox",
             "valueList" => "dropdown",
-            "dynamicValueList" or "file" or "color" or "text" => param.Type,
-            "generic" => "text",
+            "dynamicValueList" or "file" or "color" or "text" => type,
+            // No geometry widget exists: the host renders these from paramType.
+            "generic" or "geometry" or "point" or "line" or "plane" => "text",
             _ => null
         };
     }

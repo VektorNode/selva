@@ -235,6 +235,7 @@ export interface ViewerMessages {
 	copied: string;
 	chartReceiving: string;
 	chartRenderFailed: string;
+	downloadChartImage: string;
 	/** `{error}` is replaced with the browser's reason. */
 	fullscreenUnavailable: string;
 	/** `{error}` is replaced with the browser's reason. */
@@ -445,6 +446,7 @@ const en: ViewerMessages = {
 	copied: 'Copied!',
 	chartReceiving: 'Receiving chart data...',
 	chartRenderFailed: 'Failed to render chart',
+	downloadChartImage: 'Download plot as image',
 	fullscreenUnavailable: 'Fullscreen unavailable: {error}',
 	exitFullscreenFailed: 'Exit fullscreen failed: {error}',
 
@@ -652,6 +654,7 @@ const de: ViewerMessages = {
 	copied: 'Kopiert!',
 	chartReceiving: 'Diagrammdaten werden empfangen…',
 	chartRenderFailed: 'Diagramm konnte nicht dargestellt werden',
+	downloadChartImage: 'Diagramm als Bild herunterladen',
 	fullscreenUnavailable: 'Vollbild nicht verfügbar: {error}',
 	exitFullscreenFailed: 'Vollbild konnte nicht beendet werden: {error}',
 

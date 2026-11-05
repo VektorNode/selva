@@ -9,11 +9,15 @@
 //   pnpm dev:plugin:mock                               mock + Vite dev server, opens the page
 //   pnpm dev:plugin:mock --scene lamp                  serve a viewer scene: courtyard, lamp or tower
 //   node dev/mock-grasshopper.ts [--port 0] [--latency 250] [--player] [--scene lamp]   mock only
+//
+// Type into the terminal to act as the canvas: `select` selects a few params, `clear` clears the
+// selection, `place` places the selection the way the canvas menu does, `reveal <paramId>`.
 
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { createInterface } from 'node:readline';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { icons } from 'lucide';
 import { UI_SCHEMA_VERSION } from '@selvajs/schemas';
@@ -1075,6 +1079,7 @@ function send(ws: WebSocket, message: Record<string, unknown>) {
 // The plugin hands the page a fresh secret per session; the mock's is fixed.
 const SECRET = 'mock';
 const authenticated = new WeakSet<WebSocket>();
+const sessionOf = new WeakMap<WebSocket, string>();
 
 function broadcast(wss: WebSocketServer, message: Record<string, unknown>) {
 	for (const client of wss.clients) if (authenticated.has(client)) send(client, message);
@@ -1114,6 +1119,7 @@ wss.on('connection', (ws) => {
 		}
 
 		const sessionId = msg.sessionId ?? '';
+		if (sessionId) sessionOf.set(ws, sessionId);
 
 		switch (msg.type) {
 			case 'requestInitialData':
@@ -1224,6 +1230,81 @@ wss.on('connection', (ws) => {
 	ws.on('close', () => clearTimeout(pendingSolve));
 });
 
+// ============================================================================
+// Canvas actions, typed into the terminal
+// ============================================================================
+
+// Two unplaced inputs, one unplaced output and one input already in Volume.
+const DEMO_SELECTION = ['balconies', 'balcony-depth', 'warnings', 'width'];
+let canvasSelection: string[] = [];
+
+function placeOnCanvas(ids: string[]): Record<string, unknown> {
+	const tab = schema.layout.type === 'tabbed' ? schema.layout.tabs[0] : undefined;
+	const groups = schema.layout.type === 'tabbed' ? (tab?.groups ?? []) : schema.layout.groups;
+	let target = groups.find((g) => g.id === 'g-canvas');
+	if (!target) {
+		target = group('g-canvas', 'From canvas', 2, []);
+		groups.push(target);
+	}
+	for (const g of allGroups()) {
+		g.items = g.items.filter((i) => i.type === 'linebreak' || !ids.includes(i.paramId));
+	}
+	target.items.push(...ids.map((id) => (inputById.has(id) ? placeInput(id) : placeOutput(id))));
+	schemaRevision++;
+	const names = ids.map((id) => (inputById.get(id) ?? outputById.get(id))!.nickname);
+	return {
+		type: 'layoutPlaced',
+		schema,
+		schemaHash: `rev-${schemaRevision}`,
+		placements: ids.map((paramId) => ({
+			paramId,
+			itemType: inputById.has(paramId) ? 'input' : 'output',
+			tabId: tab?.id ?? null,
+			tabLabel: tab?.label ?? null,
+			groupId: target.id,
+			groupLabel: target.label
+		})),
+		removedIds: [],
+		summary: `Added ${names.join(', ')} to ${tab ? `${tab.label} › ` : ''}${target.label}`
+	};
+}
+
+function allGroups(): GroupConfig[] {
+	return schema.layout.type === 'tabbed'
+		? schema.layout.tabs.flatMap((t) => t.groups)
+		: schema.layout.groups;
+}
+
+// Every authenticated page gets these, whatever session it opened with.
+function broadcastToSessions(message: Record<string, unknown>) {
+	for (const client of wss.clients) {
+		if (authenticated.has(client)) send(client, { ...message, sessionId: sessionOf.get(client) });
+	}
+}
+
+createInterface({ input: process.stdin }).on('line', (line) => {
+	const [command, arg] = line.trim().split(/\s+/);
+	switch (command) {
+		case 'select':
+			canvasSelection = DEMO_SELECTION;
+			broadcastToSessions({ type: 'canvasSelection', ids: canvasSelection });
+			break;
+		case 'clear':
+			canvasSelection = [];
+			broadcastToSessions({ type: 'canvasSelection', ids: [] });
+			break;
+		case 'place':
+			broadcastToSessions(placeOnCanvas(canvasSelection.length ? canvasSelection : DEMO_SELECTION));
+			break;
+		case 'reveal':
+			if (arg) broadcastToSessions({ type: 'revealItem', paramId: arg });
+			break;
+		default:
+			if (command)
+				console.info('[mock-grasshopper] commands: select, clear, place, reveal <paramId>');
+	}
+});
+
 wss.on('listening', () => {
 	const boundPort = (wss.address() as { port: number }).port;
 	const pagePath = `/builder?session=dev&wsPort=${boundPort}#s=${SECRET}`;
@@ -1239,7 +1320,8 @@ wss.on('listening', () => {
 			'pnpm',
 			['exec', 'vite', 'dev', '--config', 'vite.mock.config.ts', '--open', openArg],
 			{
-				stdio: 'inherit',
+				// The mock reads the terminal for canvas actions; Vite's shortcuts would race it for input.
+				stdio: ['ignore', 'inherit', 'inherit'],
 				shell: process.platform === 'win32'
 			}
 		);

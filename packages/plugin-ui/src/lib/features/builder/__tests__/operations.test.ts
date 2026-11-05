@@ -8,7 +8,12 @@ import {
 	handleItemDrop,
 	batchSetNumberWidgetType,
 	removeItem,
-	moveItemsToGroup
+	moveItemsToGroup,
+	addTab,
+	nextFreeLabel,
+	isLabelTaken,
+	moveGroupToTab,
+	draftPlacements
 } from '../operations';
 import type { DiscoveredOutput, GroupConfig, UISchema } from '@selvajs/schemas';
 
@@ -58,6 +63,55 @@ describe('handleItemDrop — dynamicValueList output', () => {
 		const added = s.outputs.find((o) => o.id === 'bake-guid');
 		expect(added?.type).toBe('dynamicValueList');
 		expect((added as { targetInputId?: string }).targetInputId).toBe('target-input-guid');
+	});
+});
+
+describe('tab names', () => {
+	const labelled = (id: string, label: string) => ({ id, label, groups: [] });
+
+	it('a new tab takes the first free number, never a name already in use', () => {
+		const s = tabbed([labelled('t1', 'Tab 1'), labelled('t3', 'tab 3')]);
+		const id = addTab(s);
+		const tabs = (s.layout as { tabs: { id: string; label: string }[] }).tabs;
+		expect(tabs.find((t) => t.id === id)?.label).toBe('Tab 2');
+	});
+
+	it('nextFreeLabel ignores case and surrounding spaces', () => {
+		expect(nextFreeLabel([' group 1 ', 'Group 2'], 'Group')).toBe('Group 3');
+	});
+
+	it('a name is taken by another tab, ignoring case and spaces, but not by the tab itself', () => {
+		const tabs = [labelled('t1', 'Test'), labelled('t2', 'Other')] as never;
+		expect(isLabelTaken(tabs, ' TEST ', 't2')).toBe(true);
+		expect(isLabelTaken(tabs, 'test', 't1')).toBe(false);
+	});
+});
+
+describe('draftPlacements', () => {
+	it('names each placed param by tab and group label, skipping line breaks', () => {
+		const s = tabbed([
+			{
+				id: 't1',
+				groups: [
+					{ id: 'g1', label: 'Size', items: [item('i1', 'a'), { id: 'lb', type: 'linebreak' }] }
+				]
+			}
+		]);
+		(s.layout as { tabs: { label: string }[] }).tabs[0].label = 'General';
+		expect(draftPlacements(s)).toEqual([{ paramId: 'a', tabLabel: 'General', groupLabel: 'Size' }]);
+	});
+});
+
+describe('moveGroupToTab', () => {
+	it('renames a group that lands beside one of the same name', () => {
+		const sized = (id: string) => ({ id, label: 'Size', items: [], order: 0 });
+		const s = tabbed([
+			{ id: 't1', groups: [sized('g1')] },
+			{ id: 't2', groups: [sized('g2')] }
+		]);
+		expect(moveGroupToTab(s, 't1', 'g1', 't2')).toBe(true);
+		const tabs = (s.layout as { tabs: { groups: { label: string }[] }[] }).tabs;
+		expect(tabs[1].groups.map((g) => g.label)).toEqual(['Size', 'Size 2']);
 	});
 });
 

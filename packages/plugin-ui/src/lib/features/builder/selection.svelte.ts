@@ -21,6 +21,8 @@ let dragging = $state(false);
 let carried = $state(0);
 let tabDrop = $state<TabDropTarget | null>(null);
 let tabDropHandler: TabDropHandler | null = null;
+// Counts drags, so the commits of one drag can share an undo step.
+let dragSeq = 0;
 
 function toggle(set: SvelteSet<string>, other: SvelteSet<string>, id: string) {
 	other.clear();
@@ -75,7 +77,15 @@ export const builderSelection = {
 	get carried() {
 		return carried;
 	},
+	/**
+	 * Identifies the current or last drag. A card moved between groups commits once from each
+	 * group; both commits push history under this key, so one undo reverts the whole move.
+	 */
+	get dragUndoKey() {
+		return `drag:${dragSeq}`;
+	},
 	startDrag(id: string) {
+		dragSeq++;
 		dragging = true;
 		const size = dragSize(id);
 		carried = size > 1 ? size : 0;

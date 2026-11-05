@@ -73,17 +73,17 @@
 				<span class="text-foreground min-w-0 flex-1 truncate font-medium">{label}</span>
 				{#if isInput}
 					<span
-						class="bg-primary/10 text-primary inline-flex shrink-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase"
+						class="bg-primary/10 text-primary inline-flex min-w-0 items-center gap-1 rounded-sm px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide uppercase"
 					>
-						<ArrowUpFromLine size={10} strokeWidth={2.5} />
-						{item.type}
+						<ArrowUpFromLine size={10} strokeWidth={2.5} class="shrink-0" />
+						<span class="truncate">{item.type}</span>
 					</span>
 				{:else}
 					<span
-						class="inline-flex shrink-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-800 uppercase dark:text-orange-400"
+						class="inline-flex min-w-0 items-center gap-1 rounded-sm bg-orange-500/15 px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wide text-orange-800 uppercase dark:text-orange-400"
 					>
-						<ArrowDownToLine size={10} strokeWidth={2.5} />
-						{item.type || 'unknown'}
+						<ArrowDownToLine size={10} strokeWidth={2.5} class="shrink-0" />
+						<span class="truncate">{item.type || 'unknown'}</span>
 					</span>
 				{/if}
 			</div>

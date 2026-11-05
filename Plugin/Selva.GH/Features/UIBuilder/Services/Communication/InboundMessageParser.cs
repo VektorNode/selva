@@ -282,6 +282,20 @@ public sealed class InboundMessageParser
                 case "editInGrasshopper":
                     return InboundMessage.Of(InboundKind.EditInGrasshopper, msgType);
 
+                case "draftLayout":
+                    {
+                        var placements = jObj["placements"];
+                        if (placements?.Type == JTokenType.Null)
+                        {
+                            return new InboundMessage { Kind = InboundKind.DraftLayout, MessageType = msgType };
+                        }
+
+                        var locations = placements is JArray array ? DraftLocationsOf(array) : null;
+                        return locations == null
+                            ? InboundMessage.Of(InboundKind.MissingField, msgType)
+                            : new InboundMessage { Kind = InboundKind.DraftLayout, MessageType = msgType, DraftLocations = locations };
+                    }
+
                 default:
                     return InboundMessage.Of(InboundKind.Unknown, msgType);
             }
@@ -292,6 +306,33 @@ public sealed class InboundMessageParser
             // contract violation, not a crash — surface it as a missing/invalid field.
             return InboundMessage.Of(InboundKind.MissingField, msgType);
         }
+    }
+
+    // First placement wins, as in LayoutPlacement.Locations. Null when any entry is malformed.
+    private static Dictionary<Guid, LayoutPlacement.Location> DraftLocationsOf(JArray placements)
+    {
+        var locations = new Dictionary<Guid, LayoutPlacement.Location>();
+        foreach (var token in placements)
+        {
+            if (token is not JObject placement
+                || placement["paramId"]?.Type != JTokenType.String
+                || !Guid.TryParse((string)placement["paramId"], out var id)
+                || placement["groupLabel"]?.Type != JTokenType.String)
+            {
+                return null;
+            }
+
+            if (!locations.ContainsKey(id))
+            {
+                locations[id] = new LayoutPlacement.Location
+                {
+                    TabLabel = placement["tabLabel"]?.Type == JTokenType.String ? (string)placement["tabLabel"] : null,
+                    GroupLabel = (string)placement["groupLabel"]
+                };
+            }
+        }
+
+        return locations;
     }
 
     private const int MaxRequestIdLength = 64;

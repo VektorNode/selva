@@ -50,6 +50,40 @@ public class InboundMessageParserTests
     }
 
     // -------------------------------------------------------------------------
+    // draftLayout
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public void DraftLayout_BindsLocations_FirstPlacementWins()
+    {
+        var msg = Parse(@"{ ""type"": ""draftLayout"", ""sessionId"": ""session-1"", ""placements"": [
+                           { ""paramId"": ""00000000-0000-0000-0000-000000000001"", ""tabLabel"": ""General"", ""groupLabel"": ""Size"" },
+                           { ""paramId"": ""00000000-0000-0000-0000-000000000001"", ""tabLabel"": null, ""groupLabel"": ""Other"" } ] }");
+
+        Assert.Equal(InboundKind.DraftLayout, msg.Kind);
+        var location = Assert.Single(msg.DraftLocations).Value;
+        Assert.Equal("General › Size", location.Path);
+    }
+
+    [Fact]
+    public void DraftLayout_Null_ClearsTheDraft()
+    {
+        var msg = Parse(@"{ ""type"": ""draftLayout"", ""sessionId"": ""session-1"", ""placements"": null }");
+
+        Assert.Equal(InboundKind.DraftLayout, msg.Kind);
+        Assert.Null(msg.DraftLocations);
+    }
+
+    [Theory]
+    [InlineData(@"{ ""type"": ""draftLayout"", ""sessionId"": ""session-1"" }")]
+    [InlineData(@"{ ""type"": ""draftLayout"", ""sessionId"": ""session-1"", ""placements"": [ { ""paramId"": ""nope"", ""groupLabel"": ""A"" } ] }")]
+    [InlineData(@"{ ""type"": ""draftLayout"", ""sessionId"": ""session-1"", ""placements"": [ { ""paramId"": {}, ""groupLabel"": ""A"" } ] }")]
+    public void DraftLayout_Malformed_IsMissingField(string json)
+    {
+        Assert.Equal(InboundKind.MissingField, Parse(json).Kind);
+    }
+
+    // -------------------------------------------------------------------------
     // requestCurrentValues / requestInitialData
     // -------------------------------------------------------------------------
 

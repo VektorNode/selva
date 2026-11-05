@@ -171,6 +171,27 @@ public class SchemaSynchronizer
         return lookup != null && lookup.TryGetValue(id, out var name) ? name : null;
     }
 
+    // Authors group a Set Dynamic Value List or a file component with its inputs and leave the
+    // bake beside it, so a bake in no group takes the group of the component feeding it.
+    // The producer is looked up by the bake's own type: the Dynamic Value List walk passes
+    // through components, so on a file bake it can reach an unrelated Set.
+    private static string ResolveBakeGroupName(Dictionary<Guid, string> lookup, GH_Component bake)
+    {
+        var own = ResolveGroupName(lookup, bake.InstanceGuid);
+        if (own != null)
+        {
+            return own;
+        }
+
+        var producer = ParameterTypeHelper.ClassifyBakeOutputType(bake) switch
+        {
+            "dynamicValueList" => ParameterTypeHelper.FindUpstreamDynamicValueListOutput(bake),
+            "file" => ParameterTypeHelper.FindUpstreamFileOutput(bake),
+            _ => null
+        };
+        return producer != null ? ResolveGroupName(lookup, producer.InstanceGuid) : null;
+    }
+
     /// <summary>
     ///     Determines which context components are "in scope" for the given owner.
     ///     Null when no owner is specified — everything is in scope.
@@ -282,7 +303,7 @@ public class SchemaSynchronizer
                 Nickname = c.Params.Input[0].NickName,
                 Description = "",
                 Type = "file",
-                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
+                GroupName = ResolveBakeGroupName(groupLookup, c)
             });
         }
     }
@@ -325,7 +346,7 @@ public class SchemaSynchronizer
                 Description = "",
                 Type = "dynamicValueList",
                 TargetInputId = ParameterTypeHelper.ResolveDynamicValueListTargetId(c),
-                GroupName = ResolveGroupName(groupLookup, c.InstanceGuid)
+                GroupName = ResolveBakeGroupName(groupLookup, c)
             });
         }
     }
@@ -599,7 +620,7 @@ public class SchemaSynchronizer
     ///     and the target input picked in the web builder is written onto the matching
     ///     GH_DynamicValueListOutput so the component stays the source of truth.
     /// </summary>
-    public void ApplyParameterAccessFromSchema(UISchema schema, GH_Document document)
+    public static void ApplyParameterAccessFromSchema(UISchema schema, GH_Document document)
     {
         if (schema?.Layout == null || document == null)
         {

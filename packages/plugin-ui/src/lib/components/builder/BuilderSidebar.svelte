@@ -8,7 +8,7 @@
 	import type { SearchTarget } from '#lib/features/builder/index.js';
 	import { bringIntoView, setSectionOpeners, type SectionOpeners } from './reveal.js';
 	import { SCOPES } from './scope/scopes';
-	import ParameterPanel from './sidebar/ParameterPanel.svelte';
+	import ParameterPanel, { type CanvasSelectedParam } from './sidebar/ParameterPanel.svelte';
 	import AppSettingsPanel from './sidebar/AppSettingsPanel.svelte';
 	import ViewerSettingsPanel from './sidebar/ViewerSettingsPanel.svelte';
 	import LocalSettingsPanel from './sidebar/LocalSettingsPanel.svelte';
@@ -19,6 +19,7 @@
 		availableInputs: DiscoveredInput[];
 		availableOutputs: DiscoveredOutput[];
 		placedIds: Set<string>;
+		canvasSelection: CanvasSelectedParam[];
 		syncNeeded?: boolean;
 		onSchemaChange: (schema: UISchema) => void;
 		onSync: () => void;
@@ -47,6 +48,7 @@
 		availableInputs,
 		availableOutputs,
 		placedIds,
+		canvasSelection,
 		syncNeeded = false,
 		onSchemaChange,
 		onSync,
@@ -171,7 +173,7 @@
 						</button>
 					{/snippet}
 				</Tooltip.Trigger>
-				<Tooltip.Content side="right">Search (Ctrl+K / ⌘K)</Tooltip.Content>
+				<Tooltip.Content side="right">Search (Ctrl+K)</Tooltip.Content>
 			</Tooltip.Root>
 		</Tooltip.Provider>
 	</div>
@@ -189,6 +191,7 @@
 						{availableInputs}
 						{availableOutputs}
 						{placedIds}
+						{canvasSelection}
 						{syncNeeded}
 						{onSync}
 						{onSyncPreview}

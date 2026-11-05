@@ -354,12 +354,38 @@ export function moveItemsToGroup(
 	return moving.length;
 }
 
+/** `stem 1`, `stem 2`… the first not in `taken`, compared as tab names are. */
+export function nextFreeLabel(taken: Iterable<string>, stem: string, from = 1): string {
+	const used = new Set([...taken].map(normalizeLabel));
+	let n = from;
+	while (used.has(normalizeLabel(`${stem} ${n}`))) n++;
+	return `${stem} ${n}`;
+}
+
+const normalizeLabel = (label: string) => label.trim().toLowerCase();
+
+/**
+ * Tab names are unique in the form, group names within their tab, ignoring case and surrounding
+ * spaces. `siblings` are the tabs, or the groups of one tab; `exceptId` is the one being renamed.
+ */
+export function isLabelTaken(
+	siblings: { id: string; label: string }[],
+	label: string,
+	exceptId?: string
+): boolean {
+	const wanted = normalizeLabel(label);
+	return siblings.some((s) => s.id !== exceptId && normalizeLabel(s.label) === wanted);
+}
+
 export function addTab(schema: UISchema): string {
 	if (!schema.layout || schema.layout.type !== 'tabbed') return '';
 
 	const newTab: TabConfig = {
 		id: crypto.randomUUID().substring(0, 8),
-		label: `Tab ${schema.layout.tabs.length + 1}`,
+		label: nextFreeLabel(
+			schema.layout.tabs.map((t) => t.label),
+			'Tab'
+		),
 		icon: '',
 		order: schema.layout.tabs.length,
 		groups: []
@@ -390,7 +416,10 @@ export function addGroup(schema: UISchema, tabId: string) {
 
 	const newGroup: GroupConfig = {
 		id: crypto.randomUUID().substring(0, 8),
-		label: `Group ${container.groups.length + 1}`,
+		label: nextFreeLabel(
+			container.groups.map((g) => g.label),
+			'Group'
+		),
 		description: '',
 		order: container.groups.length,
 		collapsed: false,
@@ -453,6 +482,13 @@ export function moveGroupToTab(
 
 	const sourceGroups = [...sourceTab.groups];
 	const [movedGroup] = sourceGroups.splice(idx, 1);
+	// Group names are unique within a tab: "Size" landing beside a "Size" becomes "Size 2".
+	if (isLabelTaken(targetTab.groups, movedGroup.label))
+		movedGroup.label = nextFreeLabel(
+			targetTab.groups.map((g) => g.label),
+			movedGroup.label.trim(),
+			2
+		);
 
 	const targetGroups = [...targetTab.groups];
 	if (targetIndex === undefined || targetIndex < 0 || targetIndex > targetGroups.length) {
@@ -502,4 +538,212 @@ export function batchSetNumberWidgetType(
 	}
 
 	return { changed: count };
+}
+
+// ============================================================================
+// Placements: put whole params into a group, moving them if placed elsewhere
+// ============================================================================
+
+/** One param to place at the end of `groupId`. A missing tab or group is created with these ids. */
+export interface ParamPlacement {
+	paramId: string;
+	itemType: 'input' | 'output';
+	tabId?: string | null;
+	tabLabel?: string | null;
+	groupId: string;
+	groupLabel: string;
+}
+
+/** What the item factory needs to build a fresh layout item for a param not yet placed. */
+export interface PlacementSources {
+	availableInputs: DiscoveredInput[];
+	availableOutputs: DiscoveredOutput[];
+	/**
+	 * The plugin's newer canonical. Its layout item is copied as is, because the plugin seeds
+	 * config the editor cannot derive (a Dynamic Value List's target input); its inputs and
+	 * outputs cover params discovery hasn't reported yet.
+	 */
+	fallback?: Pick<UISchema, 'inputs' | 'outputs' | 'layout'>;
+}
+
+/** Removes every layout item for `paramId`; the param itself stays in `schema.inputs`/`outputs`. */
+export function removeParamFromLayout(schema: UISchema, paramId: string): LayoutItem[] {
+	const removed: LayoutItem[] = [];
+	for (const group of getGroups(schema)) {
+		const keep = group.items.filter((i) => i.type === 'linebreak' || i.paramId !== paramId);
+		if (keep.length === group.items.length) continue;
+		removed.push(...group.items.filter((i) => !keep.includes(i)));
+		group.items = keep;
+	}
+	return removed;
+}
+
+/** Where a param sits in the layout. `tabId` is null in a flat layout. */
+export function locateParam(
+	schema: Pick<UISchema, 'layout'>,
+	paramId: string
+): { tabId: string | null; group: GroupConfig; item: LayoutItem } | undefined {
+	const layout = schema.layout;
+	const containers: { tabId: string | null; groups: GroupConfig[] }[] =
+		layout?.type === 'tabbed'
+			? layout.tabs.map((t) => ({ tabId: t.id, groups: t.groups }))
+			: layout?.type === 'flat'
+				? [{ tabId: null, groups: layout.groups }]
+				: [];
+	for (const { tabId, groups } of containers) {
+		for (const group of groups) {
+			const item = group.items.find((i) => i.type !== 'linebreak' && i.paramId === paramId);
+			if (item) return { tabId, group, item };
+		}
+	}
+	return undefined;
+}
+
+function ensurePlacementGroup(
+	schema: UISchema,
+	placement: ParamPlacement
+): GroupConfig | undefined {
+	const existing = getGroups(schema).find((g) => g.id === placement.groupId);
+	if (existing) return existing;
+
+	let containerId = '';
+	if (schema.layout?.type === 'tabbed') {
+		const layout = schema.layout;
+		let tab = placement.tabId ? layout.tabs.find((t) => t.id === placement.tabId) : layout.tabs[0];
+		if (!tab) {
+			tab = {
+				id: placement.tabId ?? crypto.randomUUID().substring(0, 8),
+				label: placement.tabLabel ?? `Tab ${layout.tabs.length + 1}`,
+				icon: '',
+				order: layout.tabs.length,
+				groups: []
+			};
+			layout.tabs = [...layout.tabs, tab];
+		}
+		containerId = tab.id;
+	}
+
+	const container = resolveGroupContainer(schema, containerId);
+	if (!container) return undefined;
+	const group: GroupConfig = {
+		id: placement.groupId,
+		label: placement.groupLabel,
+		description: '',
+		order: container.groups.length,
+		collapsed: false,
+		columns: 1,
+		items: []
+	};
+	container.setGroups([...container.groups, group]);
+	// setGroups may have swapped arrays; hand back the object that is actually in the layout.
+	return container.groups.find((g) => g.id === group.id);
+}
+
+function adoptParamEntry(
+	schema: UISchema,
+	from: Pick<UISchema, 'inputs' | 'outputs'>,
+	{ paramId, itemType }: ParamPlacement
+): void {
+	if (itemType === 'input') {
+		const entry = from.inputs.find((p) => p.id === paramId);
+		if (entry && !schema.inputs.some((p) => p.id === paramId))
+			schema.inputs = [...schema.inputs, structuredClone(entry)];
+	} else {
+		const entry = from.outputs.find((o) => o.id === paramId);
+		if (entry && !schema.outputs.some((o) => o.id === paramId))
+			schema.outputs = [...schema.outputs, structuredClone(entry)];
+	}
+}
+
+function buildPlacedItem(
+	schema: UISchema,
+	group: GroupConfig,
+	placement: ParamPlacement,
+	sources: PlacementSources
+): boolean {
+	const { paramId, itemType } = placement;
+	const { availableInputs, availableOutputs, fallback } = sources;
+	const committed = fallback && locateParam(fallback, paramId)?.item;
+	if (committed) {
+		adoptParamEntry(schema, fallback, placement);
+		group.items = [...group.items, structuredClone(committed)];
+		return true;
+	}
+
+	const base = { schema, group, paramId, availableInputs, availableOutputs };
+
+	if (itemType === 'input') {
+		const discovered = availableInputs.find((p) => p.id === paramId);
+		const known = fallback?.inputs.find((p) => p.id === paramId);
+		if (!discovered && !known) return false;
+		handleItemDrop({
+			...base,
+			itemType,
+			displayName: discovered?.nickname || discovered?.name || known?.nickname || 'unnamed',
+			paramType: discovered?.type ?? known?.paramType
+		});
+		return true;
+	}
+
+	const discovered = availableOutputs.find((o) => o.id === paramId);
+	const known = fallback?.outputs.find((o) => o.id === paramId);
+	const outputType = discovered?.type ?? known?.type;
+	if (!outputType) return false;
+	handleItemDrop({
+		...base,
+		itemType,
+		displayName: discovered?.nickname || known?.nickname || 'Unknown',
+		widgetType: mapParamTypeToWidgetType(outputType, 'output'),
+		outputType
+	});
+	return true;
+}
+
+/**
+ * Appends each param to its target group in order. A param already placed is moved, keeping its
+ * layout item and so its config, because a param appears once in the form. Returns the params
+ * that ended up placed; one with no item and nothing to build it from is skipped.
+ */
+export function applyPlacements(
+	schema: UISchema,
+	placements: ParamPlacement[],
+	sources: PlacementSources
+): string[] {
+	const placed: string[] = [];
+	for (const placement of placements) {
+		const group = ensurePlacementGroup(schema, placement);
+		if (!group) continue;
+		const [existing] = removeParamFromLayout(schema, placement.paramId);
+		if (existing) {
+			group.items = [...group.items, existing];
+			placed.push(placement.paramId);
+		} else if (buildPlacedItem(schema, group, placement, sources)) {
+			placed.push(placement.paramId);
+		}
+	}
+	return placed;
+}
+
+/** Where a param sits in a layout, by label: what the canvas draws under the param. */
+export interface DraftPlacement {
+	paramId: string;
+	tabLabel: string | null;
+	groupLabel: string;
+}
+
+export function draftPlacements(schema: Pick<UISchema, 'layout'>): DraftPlacement[] {
+	const layout = schema.layout;
+	const containers: { tabLabel: string | null; groups: GroupConfig[] }[] =
+		layout?.type === 'tabbed'
+			? layout.tabs.map((t) => ({ tabLabel: t.label, groups: t.groups }))
+			: layout?.type === 'flat'
+				? [{ tabLabel: null, groups: layout.groups }]
+				: [];
+	const placements: DraftPlacement[] = [];
+	for (const { tabLabel, groups } of containers)
+		for (const group of groups)
+			for (const item of group.items)
+				if (item.type !== 'linebreak')
+					placements.push({ paramId: item.paramId, tabLabel, groupLabel: group.label });
+	return placements;
 }

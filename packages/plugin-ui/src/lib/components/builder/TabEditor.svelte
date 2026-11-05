@@ -2,6 +2,7 @@
 	import { Card, Button, StateDisplay } from '@selvajs/ui';
 	import { EditableTabNav, EditableGroup } from '#lib/components/builder/index.js';
 	import TabSettingsBar from './TabSettingsBar.svelte';
+	import { isLabelTaken } from '#lib/features/builder/operations.js';
 	import { Plus } from '@lucide/svelte';
 	import type { TabConfig, GroupConfig, DiscoveredInput, LayoutItem } from '@selvajs/schemas';
 	import { dragHandleZone, SHADOW_ITEM_MARKER_PROPERTY_NAME, TRIGGERS } from 'svelte-dnd-action';
@@ -32,6 +33,9 @@
 		onReorder: (items: LayoutItem[], tabId: string, groupId: string) => void;
 		onRemoveItem: (tabId: string, groupId: string, itemId: string) => void;
 		onAddLineBreak: (tabId: string, groupId: string) => void;
+		/** Param ids selected on the Grasshopper canvas; empty when nothing is. */
+		canvasSelection: string[];
+		onAddCanvasSelection: (groupId: string) => void;
 		/** Runs `apply` as an undoable draft edit; see `editDraft`. */
 		onEdit: (apply: () => void, coalesceKey?: string) => void;
 		availableInputs: DiscoveredInput[];
@@ -59,6 +63,8 @@
 		onReorder,
 		onRemoveItem,
 		onAddLineBreak,
+		canvasSelection,
+		onAddCanvasSelection,
 		onEdit,
 		availableInputs,
 		getParameterInfo,
@@ -70,6 +76,18 @@
 	const activeTab = $derived(tabs.find((t) => t.id === activeTabId));
 
 	type ZoneGroup = GroupConfig & { isDndShadowItem?: true };
+
+	const holds = (group: GroupConfig, id: string) =>
+		group.items.some((i) => i.type !== 'linebreak' && i.paramId === id);
+
+	// A selected param already in another group moves rather than adds: a param shows once.
+	function canvasPlacement(group: GroupConfig): { add: number; move: number } | undefined {
+		if (canvasSelection.length === 0) return undefined;
+		const elsewhere = tabs.flatMap((t) => t.groups).filter((g) => g.id !== group.id);
+		const incoming = canvasSelection.filter((id) => !holds(group, id));
+		const move = incoming.filter((id) => elsewhere.some((g) => holds(g, id))).length;
+		return { add: incoming.length - move, move };
+	}
 
 	let localGroups = $state<ZoneGroup[]>([]);
 	let isGroupDragging = $state(false);
@@ -173,6 +191,7 @@
 				{onEdit}
 				onRemove={() => onRemoveTab(activeTab.id)}
 				onAddGroup={() => onAddGroup(activeTab.id)}
+				isLabelTaken={(label) => isLabelTaken(tabs, label, activeTab.id)}
 			/>
 
 			<div class="animate-in fade-in p-4 duration-200 sm:p-6">
@@ -204,8 +223,11 @@
 									onParameterDrop={(e) => onParameterDrop(activeTab.id, group.id, e)}
 									onCarrySelection={(anchorId) => onCarrySelection(group.id, anchorId)}
 									onRemove={() => onRemoveGroup(activeTab.id, group.id)}
+									isLabelTaken={(label) => isLabelTaken(activeTab.groups, label, group.id)}
 									onAddLineBreak={() => onAddLineBreak(activeTab.id, group.id)}
 									onRemoveItem={(itemId) => onRemoveItem(activeTab.id, group.id, itemId)}
+									canvasPlacement={canvasPlacement(group)}
+									onAddCanvasSelection={() => onAddCanvasSelection(group.id)}
 									{availableInputs}
 									{getParameterInfo}
 									{outputValues}

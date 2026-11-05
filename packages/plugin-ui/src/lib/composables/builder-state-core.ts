@@ -4,8 +4,13 @@
 // in useBuilderState.svelte.ts is a thin delegation layer over these; everything testable
 // lives here and runs in the node-env vitest through a FakeSource.
 
-import type { UISchema, DiscoveredInput, DiscoveredOutput } from '@selvajs/schemas';
-import { getAllLayoutItems } from '#lib/features/builder/operations.js';
+import type { UISchema, DiscoveredInput, DiscoveredOutput, GroupConfig } from '@selvajs/schemas';
+import {
+	applyPlacements,
+	getAllLayoutItems,
+	locateParam,
+	removeParamFromLayout
+} from '#lib/features/builder/operations.js';
 import { pruneUnusedMedia } from '#lib/features/builder/option-media.js';
 import { updateParameterMetadata } from '#lib/features/preview/handlers.js';
 import { processInitialDataSchema } from '#lib/utils/schema-defaults.js';
@@ -20,7 +25,10 @@ import type {
 	WsMetadataUpdatedMessage,
 	WsParametersAddedMessage,
 	WsSyncPreviewMessage,
-	WsSyncAppliedMessage
+	WsSyncAppliedMessage,
+	WsLayoutPlacedMessage,
+	WsCanvasSelectionMessage,
+	WsRevealItemMessage
 } from '#lib/websocket/websocket.svelte.js';
 
 export interface BuilderState {
@@ -34,6 +42,11 @@ export interface BuilderState {
 	draft: UISchema | null;
 	/** Flipped on the first mutation of `draft` in a session. Cleared on save / discard. */
 	isDirty: boolean;
+	/**
+	 * Canonical changed under a dirty draft in a way the draft did not follow, so the draft is no
+	 * longer "canonical + my edits" and a canvas placement can't be replayed onto it.
+	 */
+	divergedSinceFork: boolean;
 	/** Bumped by every `markDirty`, so a save can tell whether the draft changed while in flight. */
 	editRevision: number;
 	/** documentId of the currently-loaded Grasshopper definition (carried on the schema). */
@@ -46,6 +59,10 @@ export interface BuilderState {
 	syncDiff: SyncDiff | null;
 	syncLoading: boolean;
 	outputValues: Record<string, unknown>;
+	/** Publishable param ids selected on the Grasshopper canvas, in canvas order. */
+	canvasSelection: string[];
+	/** Layout items to scroll to and flash. `seq` changes on every request, even for the same ids. */
+	spotlight: { itemIds: string[]; seq: number } | null;
 }
 
 /** Toast surface the core talks to; the shell wires it to @selvajs/ui's `toast`. */
@@ -84,6 +101,7 @@ export function createInitialBuilderState(): BuilderState {
 		canonicalHash: null,
 		draft: null,
 		isDirty: false,
+		divergedSinceFork: false,
 		editRevision: 0,
 		documentId: null,
 		loading: true,
@@ -93,7 +111,9 @@ export function createInitialBuilderState(): BuilderState {
 		syncDialogOpen: false,
 		syncDiff: null,
 		syncLoading: false,
-		outputValues: {}
+		outputValues: {},
+		canvasSelection: [],
+		spotlight: null
 	};
 }
 
@@ -129,11 +149,13 @@ export function replaceCanonical(
 	state.documentId = (schema?.documentId as string | undefined) ?? state.documentId;
 
 	if (state.isDirty) {
+		state.divergedSinceFork = true;
 		deps.notify.warning(reason ?? 'Grasshopper changed while you were editing.');
 		return;
 	}
 
 	state.draft = deps.clone(schema);
+	state.divergedSinceFork = false;
 	deps.history.clearHistory();
 }
 
@@ -163,6 +185,7 @@ export function discardDraft(state: BuilderState, deps: BuilderDeps): void {
 	if (!state.canonical) return;
 	state.draft = deps.clone(state.canonical);
 	state.isDirty = false;
+	state.divergedSinceFork = false;
 	deps.history.clearHistory();
 }
 
@@ -199,6 +222,7 @@ export function handleInitialData(
 
 		if (!state.draft || !state.isDirty) {
 			state.draft = deps.clone(schema);
+			state.divergedSinceFork = false;
 			deps.history.clearHistory();
 		}
 	}
@@ -300,10 +324,7 @@ export function handleSchemaUpdated(
 	// availableInputs/Outputs. The plugin auto-merges newly-discovered params into
 	// schema.inputs/outputs and broadcasts schemaUpdated (no separate parametersAdded), so
 	// the sidebar would otherwise miss them.
-	const knownInputIds = state.availableInputs.map((p) => p.id);
-	const knownOutputIds = state.availableOutputs.map((o) => o.id);
-	const hasNewInputs = (message.schema?.inputs ?? []).some((i) => !knownInputIds.includes(i.id));
-	const hasNewOutputs = (message.schema?.outputs ?? []).some((o) => !knownOutputIds.includes(o.id));
+	const hasNewParams = hasUndiscoveredParams(state, message.schema);
 
 	// schemaUpdated is the canonical broadcast — replace wholesale.
 	if (message.schema) {
@@ -329,9 +350,152 @@ export function handleSchemaUpdated(
 
 	// Newly-added params from the canvas: the schema arrived with IDs we have no
 	// availableInputs/Outputs entry for. Refetch so the sidebar shows them.
-	if (hasNewInputs || hasNewOutputs) {
+	if (hasNewParams) {
 		deps.source.requestInitialData(deps.sessionId);
 	}
+}
+
+function hasUndiscoveredParams(state: BuilderState, schema: UISchema | null | undefined): boolean {
+	const knownInputIds = new Set(state.availableInputs.map((p) => p.id));
+	const knownOutputIds = new Set(state.availableOutputs.map((o) => o.id));
+	return (
+		(schema?.inputs ?? []).some((i) => !knownInputIds.has(i.id)) ||
+		(schema?.outputs ?? []).some((o) => !knownOutputIds.has(o.id))
+	);
+}
+
+function spotlightParams(state: BuilderState, paramIds: string[]): void {
+	if (!state.draft) return;
+	const draft = state.draft;
+	const itemIds = paramIds.flatMap((id) => {
+		const found = locateParam(draft, id);
+		return found ? [found.item.id] : [];
+	});
+	if (itemIds.length === 0) return;
+	state.spotlight = { itemIds, seq: (state.spotlight?.seq ?? 0) + 1 };
+}
+
+function showTabOf(state: BuilderState, paramId: string): void {
+	if (state.draft?.layout?.type !== 'tabbed') return;
+	const tabId = locateParam(state.draft, paramId)?.tabId;
+	if (tabId) state.activeTabId = tabId;
+}
+
+/**
+ * The plugin placed params from the canvas and already holds the result as its canonical. A dirty
+ * draft that is still "canonical + my edits" replays the same placement and rebases onto the new
+ * hash, so the author keeps their edits and their next save is accepted.
+ */
+export function handleLayoutPlaced(
+	state: BuilderState,
+	deps: BuilderDeps,
+	message: WsLayoutPlacedMessage
+): void {
+	if (message.sessionId !== deps.sessionId) return;
+
+	const hasNewParams = hasUndiscoveredParams(state, message.schema);
+
+	if (state.isDirty && !state.divergedSinceFork && state.draft) {
+		const draft = state.draft;
+		deps.history.push(deps.clone(draft));
+		for (const id of message.removedIds) removeParamFromLayout(draft, id);
+		applyPlacements(draft, message.placements, {
+			availableInputs: state.availableInputs,
+			availableOutputs: state.availableOutputs,
+			fallback: message.schema
+		});
+		markDirty(state);
+		state.canonical = message.schema;
+		state.canonicalHash = message.schemaHash;
+		state.documentId = (message.schema?.documentId as string | undefined) ?? state.documentId;
+	} else {
+		replaceCanonical(state, deps, message.schema, message.schemaHash);
+	}
+
+	deps.notify.success(message.summary);
+
+	const placedIds = message.placements.map((p) => p.paramId);
+	if (placedIds.length > 0) {
+		showTabOf(state, placedIds[0]);
+		spotlightParams(state, placedIds);
+	}
+
+	if (hasNewParams) deps.source.requestInitialData(deps.sessionId);
+}
+
+export function handleCanvasSelection(
+	state: BuilderState,
+	deps: BuilderDeps,
+	message: WsCanvasSelectionMessage
+): void {
+	if (message.sessionId !== deps.sessionId) return;
+	state.canvasSelection = message.ids;
+}
+
+export function handleRevealItem(
+	state: BuilderState,
+	deps: BuilderDeps,
+	message: WsRevealItemMessage
+): void {
+	if (message.sessionId !== deps.sessionId) return;
+	if (!state.draft || !locateParam(state.draft, message.paramId)) {
+		deps.notify.info('That parameter is not in the form yet.');
+		return;
+	}
+	showTabOf(state, message.paramId);
+	spotlightParams(state, [message.paramId]);
+}
+
+/**
+ * Places the given params at the end of a group as one undo step, moving any placed elsewhere.
+ * Params the editor knows nothing about yet are skipped. Returns how many landed in the group.
+ */
+export function placeParamsInGroup(
+	state: BuilderState,
+	deps: BuilderDeps,
+	groupId: string,
+	paramIds: string[]
+): number {
+	const draft = state.draft;
+	if (!draft) return 0;
+	const found = getAllGroupsWithTab(draft).find(({ group }) => group.id === groupId);
+	if (!found) return 0;
+
+	const isInput = (id: string) =>
+		state.availableInputs.some((p) => p.id === id) || draft.inputs.some((p) => p.id === id);
+	const isOutput = (id: string) =>
+		state.availableOutputs.some((o) => o.id === id) || draft.outputs.some((o) => o.id === id);
+	const toPlace = paramIds.filter(
+		(id) =>
+			!found.group.items.some((i) => i.type !== 'linebreak' && i.paramId === id) &&
+			(isInput(id) || isOutput(id))
+	);
+	if (toPlace.length === 0) return 0;
+
+	let placed: string[] = [];
+	editDraft(state, deps, () => {
+		placed = applyPlacements(
+			draft,
+			toPlace.map((paramId) => ({
+				paramId,
+				itemType: isInput(paramId) ? 'input' : 'output',
+				tabId: found.tabId,
+				groupId,
+				groupLabel: found.group.label
+			})),
+			{ availableInputs: state.availableInputs, availableOutputs: state.availableOutputs }
+		);
+	});
+	spotlightParams(state, placed);
+	return placed.length;
+}
+
+function getAllGroupsWithTab(schema: UISchema): { tabId: string | null; group: GroupConfig }[] {
+	if (schema.layout?.type === 'tabbed')
+		return schema.layout.tabs.flatMap((t) => t.groups.map((group) => ({ tabId: t.id, group })));
+	if (schema.layout?.type === 'flat')
+		return schema.layout.groups.map((group) => ({ tabId: null, group }));
+	return [];
 }
 
 export function handleSchemaSaveRejected(
@@ -346,6 +510,7 @@ export function handleSchemaSaveRejected(
 	// toast tells them what happened.
 	state.canonical = message.schema;
 	state.canonicalHash = message.schemaHash ?? null;
+	state.divergedSinceFork = true;
 
 	deps.notify.error(message.reason ?? 'Grasshopper changed since you started editing.');
 }
@@ -467,6 +632,8 @@ export async function saveDraft(state: BuilderState, deps: BuilderDeps): Promise
 		// Clearing isDirty lets replaceCanonical re-clone the draft cleanly on that broadcast.
 		// Edits made while the save was in flight weren't sent, so they keep the draft dirty.
 		if (state.editRevision === savedRevision) state.isDirty = false;
+		// Grasshopper now holds what was sent, so any divergence before the save is gone.
+		state.divergedSinceFork = false;
 		deps.notify.success('Schema saved successfully');
 		return true;
 	}

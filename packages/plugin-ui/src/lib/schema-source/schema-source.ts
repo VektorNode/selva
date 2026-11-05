@@ -19,9 +19,13 @@ import type {
 	WsCurrentValuesMessage,
 	WsSyncPreviewMessage,
 	WsSyncAppliedMessage,
+	WsLayoutPlacedMessage,
+	WsCanvasSelectionMessage,
+	WsRevealItemMessage,
 	SyncChange
 } from '#lib/websocket/websocket.svelte.js';
 import type { UISchema } from '@selvajs/schemas';
+import type { DraftPlacement } from '#lib/features/builder/operations.js';
 
 /**
  * The push events the builder/preview state subscribes to. Each entry maps an event name to
@@ -41,6 +45,9 @@ export interface SchemaSourceEvents {
 	currentValues: WsCurrentValuesMessage;
 	syncPreview: WsSyncPreviewMessage;
 	syncApplied: WsSyncAppliedMessage;
+	layoutPlaced: WsLayoutPlacedMessage;
+	canvasSelection: WsCanvasSelectionMessage;
+	revealItem: WsRevealItemMessage;
 	/** Builder-only: live output values for the layout editor's read-only previews. */
 	outputs: WsOutputsMessage;
 	/** Preview-only: output-only push (no display payload) outside the solve report path. */
@@ -92,6 +99,12 @@ export interface SchemaSource {
 	save(sessionId: string, draft: UISchema, baseHash: string | null): Promise<SaveResult>;
 
 	requestSyncPreview(sessionId: string, draft: UISchema): void;
+
+	/**
+	 * Tell the plugin where the unsaved draft places each param, so the canvas can show it before
+	 * a save. Null means the draft matches what is saved.
+	 */
+	sendDraftLayout(sessionId: string, placements: DraftPlacement[] | null): void;
 	applySyncChanges(sessionId: string, changes: SyncChange[]): void;
 
 	/**

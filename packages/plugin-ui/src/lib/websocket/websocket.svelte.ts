@@ -10,6 +10,7 @@ import {
 	RHINO_PANEL_HOST
 } from '#lib/app.config.js';
 import type { UISchema } from '@selvajs/schemas';
+import type { DraftPlacement } from '#lib/features/builder/operations.js';
 import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { toast } from '@selvajs/ui';
 import { validateInboundMessage } from './messageSchemas';
@@ -128,6 +129,36 @@ export interface WsSelvaUploadProgressMessage extends WsSessionMessage {
 
 export interface WsSelvaUploadResultMessage extends WsSessionMessage {
 	result: import('@selvajs/schemas').SelvaUploadResult;
+}
+
+/** Where the plugin put one param: appended to `groupId`, which the editor creates if missing. */
+export interface LayoutPlacement {
+	paramId: string;
+	itemType: 'input' | 'output';
+	/** Null in a flat layout. */
+	tabId?: string | null;
+	tabLabel?: string | null;
+	groupId: string;
+	groupLabel: string;
+}
+
+/** The plugin applied a canvas placement to its canonical schema; `schema` is the result. */
+export interface WsLayoutPlacedMessage extends WsSessionMessage {
+	schema: import('@selvajs/schemas').UISchema;
+	schemaHash: string;
+	placements: LayoutPlacement[];
+	/** Params whose layout item was removed. They stay in `schema.inputs`/`outputs`. */
+	removedIds: string[];
+	summary: string;
+}
+
+/** Publishable param ids selected on the canvas, in canvas order. */
+export interface WsCanvasSelectionMessage extends WsSessionMessage {
+	ids: string[];
+}
+
+export interface WsRevealItemMessage extends WsSessionMessage {
+	paramId: string;
 }
 
 /**
@@ -580,6 +611,10 @@ export class WebSocketState {
 	 */
 	requestSyncPreview(sessionId: string, schema: UISchema) {
 		this.send('requestSyncPreview', { sessionId, schema });
+	}
+
+	sendDraftLayout(sessionId: string, placements: DraftPlacement[] | null) {
+		this.send('draftLayout', { sessionId, placements });
 	}
 
 	/**

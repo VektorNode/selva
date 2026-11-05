@@ -25,7 +25,12 @@ params have no `Message` of their own, which is why Selva renders the tab rather
 - **Not placed**: no tab. The tab's presence is the "assigned" signal, and a canvas full of empty
   markers was harder to read than one without.
 - **Hover**: a placed object's tab shows the full path (`General › Size`) when it fits, else keeps
-  the group name. An unplaced one shows a light grey `Not in UI` tab.
+  the group name. An unplaced one shows `Not in UI` in the same dark tab: one tab style
+  everywhere, and only placed objects keep it when the mouse leaves.
+- **Unsaved edits show**: while an open editor has unsaved changes, the tabs follow its draft, not
+  the saved schema, and a param whose place differs from the saved one ends in `*` (`Size*`,
+  `Not in UI*`). The editor sends a `draftLayout` message (param, tab label, group label) on every
+  change and `null` once saved; the plugin drops the draft when the socket that sent it closes.
 - **The box is the object's body**, without a Get param's pointed end or a component's zigzag
   edge, and it never grows to fit the text. A wider box puts the tab's shoulders out in the canvas,
   detached from the object.
@@ -45,9 +50,9 @@ land below the fold. So Selva's lines go right under Enabled, and there are at m
 - one line that opens everything else: `Add to UI ›` for an unplaced param, or `UI: General › Size ›`
   for a placed one, whose submenu holds Move to, Show in UI and Remove from UI.
 
-That needs `AppendMenuItems` overridden on Selva's params rather than `AppendAdditionalMenuItems`,
-which only appends. A Context Bake or Print menu is short (Enabled, Bake…, Runtime warnings,
-Help…), and the menu Selva composes for those puts its lines in the same place.
+Selva composes the menu itself (see "Where the menu items come from"), so it can insert after the
+`Enabled` item on every object; `AppendAdditionalMenuItems` could only append. A Context Bake or
+Print menu is short (Enabled, Bake…, Runtime warnings, Help…), and the lines land in the same place.
 
 ### Right-click a Get param
 
@@ -93,8 +98,10 @@ UI: General › Size       ▸   Move to              ▸   General   ▸   Size
   a tab gets lost.
 - **Order follows the canvas**: top-to-bottom, then left-to-right by pivot, appended after the
   group's existing items. That is the order the author laid the params out in.
-- **New tab… / New group…** open a one-line name prompt and create the container with the items in
-  it. The prompt pre-fills the enclosing GH group's nickname when every selected param shares one.
+- **New group…** opens a one-line name prompt and creates the group with the items in it. **New
+  tab…** asks for two names, the tab's and its first group's, since a tab needs a group to hold
+  the items; it pre-fills the next free `Tab N`. The group name pre-fills the enclosing GH group's
+  nickname when every selected param shares one, else `Group 1`.
 - **Remove from UI** drops the layout items and keeps the inputs in `schema.inputs`: the same as
   deleting the widget in the editor.
 - **Show in UI** opens the panel, switches to the item's tab and flashes the item.
@@ -121,7 +128,7 @@ Right-click a Grasshopper group whose members include inputs or outputs:
 ```
 Publish to UI            ▸   General     (new group "Size", 3 inputs, 1 output)
                              Advanced
-                             New tab "Size"
+                             New tab…
 ```
 
 It creates a UI group labelled with the GH group's nickname, holding every input and output that
@@ -196,30 +203,25 @@ arrives while the editor is dirty replaces `canonical`, keeps the draft, and war
 (`replaceCanonical`). The author's next save is then rejected by `SchemaSaveGuard`: the canvas
 action costs them their pending edits, or a conflict they have to resolve.
 
-So the broadcast carries the operation too: a new wire message `layoutPlaced` with the placement
-request, the hash it applied on (`baseSchemaHash`) and the resulting hash. A dirty editor whose
-`canonicalHash` equals `baseSchemaHash` replays the same placement on its draft through
-`handleItemDrop`, as one history step, and adopts the new hash as its save base. Its draft is then
-exactly "new canonical + my edits", so the next save goes through. If the hashes differ, it falls
-back to today's warning.
+So the plugin sends `layoutPlaced` in place of `schemaUpdated`: the new canonical and its hash,
+plus the placements themselves (param, target tab and group with their ids, removed ids). A dirty
+editor replays them on its draft, as one history step, and takes the new canonical and hash as its
+save base. Its draft is then "new canonical + my edits", so the next save goes through. A new tab or
+group travels with the id the plugin gave it, so draft and canonical agree on it.
 
-Replay has to be idempotent (a param already in the target group is a no-op, which
-`handleItemDrop` already returns as `duplicate`). The message goes in `wire-schema.json`, then
-`pnpm generate`.
+Replay is safe only while the draft has seen every canonical change since it forked. The editor
+keeps a `divergedSinceFork` flag: false when the draft is cloned from canonical, true when a
+`schemaUpdated` arrives while dirty or a save is rejected. Diverged, it falls back to today's
+warning. Comparing hashes does not work here: a rename in Grasshopper patches canonical in place and
+clears `canonicalHash`, and the plugin's hash moves with the rename too, so no hash the editor holds
+would match. Renames are harmless to replay over, because the draft is patched live as well.
 
-`canonicalHash` is the wrong thing to compare against. `handleMetadataUpdated` patches canonical
-in place after a rename in Grasshopper and sets `canonicalHash = null`, so any rename since the last
-broadcast would make every replay fall back. The editor needs a separate `draftBaseHash`: the hash
-of the canonical its draft was cloned from or last rebased onto, which a metadata patch does not
-touch because the plugin's own copy changes the same way.
+The envelopes are flat, like `schemaUpdated`, and pinned by the wire fixtures in
+`packages/schemas/fixtures/wire/` rather than by `wire-schema.json`.
 
 A clean editor needs nothing new: `schemaUpdated` already replaces its draft.
 
 ### Where the menu items come from
-
-`SelvaContextualParameter.AppendAdditionalMenuItems` is ours, so Selva's Get params (color, file,
-image, value list, dynamic value list, server file) get the menu with no risk, and so do Selva's
-output producers through their own `AppendAdditionalMenuItems`.
 
 Rhino's own Get Number, Get String, Get Geometry, Hops' Context Bake and Context Print, and
 `GH_Group` are not Selva's types: Selva cannot override their menus. Those are most of the inputs
@@ -230,14 +232,17 @@ no caller anywhere. The object menu is built inside `GH_Canvas.Canvas_MouseUp`, 
 `MouseUp_Interaction` first, then `FindAttribute` → `IsMenuRegion` → the object's
 `AppendMenuItems` → `ToolStripDropDown.Show`.
 
-What works, tested live on Rhino 8 for Mac against Rhino's Get Number, Hops' Context Print and
-Selva's Get Color: Selva subscribes to the canvas's `MouseDown`. On a right button over a
+What works, tested live on Rhino 8 and Rhino 9 for Mac against Rhino's Get Number, Hops' Context
+Print and Selva's Get Color: Selva subscribes to the canvas's `MouseDown`. On a right button over a
 publishable object it replaces `canvas.ActiveInteraction`, which Grasshopper has just set to a
 `GH_PanInteraction`, with its own interaction. `Canvas_MouseUp` hands the release to that
 interaction and never reaches its own menu code, so exactly one menu opens: the object's own
 `AppendMenuItems`, with Selva's lines inserted after `Enabled`, and clicks on them arrive. If the
 mouse moves more than a few pixels first, the interaction hands over to a new `GH_PanInteraction`,
 so right-drag still pans.
+
+Selva's own Get params and producers take the same path rather than overriding their own menus,
+so one menu builder serves every object.
 
 Two details from the test:
 
@@ -246,11 +251,10 @@ Two details from the test:
 - Menus differ by object: a Get Number's starts with Prompt, then Enabled; a Context Print's with
   Enabled, Bake…. Inserting after the `Enabled` item puts Selva's lines in the same place on each.
 
-Still untested: Windows, Rhino 9, and another plugin that also replaces the interaction on
-right-click. The other entry points stay regardless, because they cost little and cover those
+Still untested: Windows, a right-click on a group frame (no test click landed inside one), and
+another plugin that also replaces the interaction on right-click. The other entry points stay regardless, because they cost little and cover those
 cases:
 
-- Selva's own params and producers, through `AppendMenuItems`;
 - **the canvas selection tray in the editor** (above);
 - a **UI Bridge menu item, `Add selection to UI ▸`**, acting on the canvas selection, plus
   `Publish group to UI ▸` when the selection is exactly one GH group.
@@ -260,9 +264,10 @@ cases:
 One UI Bridge in the document: target it, no question asked. More than one: the first submenu level
 is the bridge's nickname. Zero: the item is disabled with "Add a UI Bridge first".
 
-The tab and group list comes from the bridge's saved schema, not from an open editor's draft. A
-group the author created in the editor and has not saved yet does not show on the canvas; the
-New group… entry covers that case.
+The right-click menu's tab and group list comes from the bridge's saved schema, not from an open
+editor's draft: a placement from the canvas commits against the saved schema. A group the author
+created in the editor and has not saved yet is not offered there; the New group… entry covers that
+case.
 
 ## Decisions
 
@@ -308,10 +313,10 @@ Each can be picked up alone, in this order:
    C#'s widget mapping brought in line with the editor's, with the parity test. Both fix bugs that
    exist today.
 2. `LayoutPlacement` service + tests (Rhino-free, beside `LayoutSpec`).
-3. `layoutPlaced` wire message, `draftBaseHash`, editor replay on a dirty draft, toast and highlight.
-4. Canvas menus on Selva's own params, the Bridge's `Add selection to UI`, multi-select.
+3. `layoutPlaced` wire message, `divergedSinceFork`, editor replay on a dirty draft, toast and highlight.
+4. Canvas menus through the interaction hook, the Bridge's `Add selection to UI`, multi-select.
 5. Placement tabs and hover.
 6. Canvas selection tray in the editor.
 7. Outputs: producer → bake resolution, DVL target, the menus on producers.
 8. Publish GH group to UI, with the producer fallback in `ResolveGroupName`.
-9. The interaction hook for Rhino's and Hops' objects, then its check on Windows and Rhino 9.
+9. A click test of the hook on Windows.

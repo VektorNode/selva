@@ -101,6 +101,8 @@ public class BridgeOrchestrator : IDisposable
     // Lifecycle
     // -------------------------------------------------------------------------
 
+    public bool IsInitialized => _component != null;
+
     public void Initialize(
         GH_Component component,
         Func<UISchema> getSchema,
@@ -482,6 +484,10 @@ public class BridgeOrchestrator : IDisposable
 
             _ = _webSocketTransport.BroadcastInitialData(validatedSchema, currentParams, currentValues);
 
+            // The selection goes out only when it changes, and this editor missed the last change.
+            _ = _webSocketTransport.BroadcastCanvasSelection(
+                CanvasPlacement.Resolve(validatedSchema, document.SelectedObjects()));
+
             // Also broadcast when the schema declares no outputs but the 3D viewer is on: the
             // meshes come from ContextBakes, not from declared outputs, so gating on Outputs
             // alone leaves a display-only definition with an empty viewer.
@@ -551,36 +557,10 @@ public class BridgeOrchestrator : IDisposable
 
             SanitizeSchema(schema);
 
-            // Before validating: the editor's layout is the user's intent, so a widget missing
-            // from it stays missing rather than being restored from a tombstone.
-            _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
-
-            var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
-#if DEBUG
-            Logger.Log($"[UIBuilder] Save — inputs={validatedSchema.Inputs?.Count}, " +
-                       $"outputs={validatedSchema.Outputs?.Count}, " +
-                       $"layout={validatedSchema.Layout?.GetType().Name}");
-#endif
-
-            _component.Attributes?.DocObject?.RecordUndoEvent("Update Schema");
-            _setSchema(validatedSchema);
-            _schemaSynchronizer.ApplyParameterAccessFromSchema(validatedSchema, document);
-            _schemaSynchronizer.ClearMetadataCache();
-            document.Modified();
-
-            // Suppress the re-solve the component expire below triggers, or the frontend
-            // sees a spurious solving-state flash.
-            _webSocketTransport.SuppressSolvingCycles(1);
-
-            // Send the fresh canonical (new hash) before the ack so the UI re-bases its
-            // draft and clears isDirty.
-            _ = _webSocketTransport.BroadcastSchemaUpdate(validatedSchema);
+            // The fresh canonical (new hash) goes out before the ack so the UI re-bases its draft
+            // and clears isDirty.
+            CommitAuthoredSchema(schema, document, "Update Schema");
             _ = _webSocketTransport.BroadcastSchemaSaved(true);
-
-            GHDocumentMutator.ScheduleComponentExpire(document, _component, _webSocketTransport.ScheduleSolutionDelayMs);
-#if DEBUG
-            Logger.Log("[UIBuilder] Save complete — component expire scheduled.");
-#endif
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Remark, "Schema saved successfully.");
         }
         catch (Exception ex)
@@ -589,6 +569,60 @@ public class BridgeOrchestrator : IDisposable
             _ = _webSocketTransport.BroadcastSchemaSaved(false, ex.Message);
             _component.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Error saving schema: {ex.Message}");
         }
+    }
+
+    /// <summary>
+    ///     Makes <paramref name="schema" /> the canonical one, as the author's intent: an editor
+    ///     save, a scripted layout, a placement from the canvas. Every such change needs all of
+    ///     this, or an open editor never hears of it and its next save is rejected against a hash
+    ///     it never saw. <paramref name="broadcast" /> replaces the plain schemaUpdated when the
+    ///     change has more to say.
+    /// </summary>
+    public UISchema CommitAuthoredSchema(UISchema schema, GH_Document document, string undoName,
+        Action<UISchema> broadcast = null)
+    {
+        // Before validating: the author's layout is the intent, so a widget missing from it
+        // stays missing rather than being restored from a tombstone.
+        _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
+        var validatedSchema = _schemaSynchronizer.ValidateSchema(schema, document);
+#if DEBUG
+        Logger.Log($"[UIBuilder] Commit '{undoName}' — inputs={validatedSchema.Inputs?.Count}, " +
+                   $"outputs={validatedSchema.Outputs?.Count}, layout={validatedSchema.Layout?.GetType().Name}");
+#endif
+
+        _component.Attributes?.DocObject?.RecordUndoEvent(undoName);
+        _setSchema(validatedSchema);
+        SchemaSynchronizer.ApplyParameterAccessFromSchema(validatedSchema, document);
+        _schemaSynchronizer.ClearMetadataCache();
+        document.Modified();
+
+        // Suppress the re-solve the expire below triggers, or the page sees a spurious
+        // solving-state flash.
+        _webSocketTransport.SuppressSolvingCycles(1);
+        if (broadcast != null)
+        {
+            broadcast(validatedSchema);
+        }
+        else
+        {
+            _ = _webSocketTransport.BroadcastSchemaUpdate(validatedSchema);
+        }
+
+        GHDocumentMutator.ScheduleComponentExpire(document, _component, _webSocketTransport.ScheduleSolutionDelayMs);
+        return validatedSchema;
+    }
+
+    /// <summary>
+    ///     Undo restores an archived schema through the component's Read, past
+    ///     <see cref="CommitAuthoredSchema" />. The canvas params' access, the metadata cache and
+    ///     the tombstones still reflect the undone commit until this brings them back in line.
+    /// </summary>
+    public void AdoptRestoredSchema(UISchema schema, GH_Document document)
+    {
+        _schemaSynchronizer.AcceptLayoutAsAuthoritative(schema);
+        SchemaSynchronizer.ApplyParameterAccessFromSchema(schema, document);
+        _schemaSynchronizer.ClearMetadataCache();
+        _ = _webSocketTransport.BroadcastSchemaUpdate(schema);
     }
 
     private void HandleCurrentValuesRequest(object sender, EventArgs e)
