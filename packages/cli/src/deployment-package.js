@@ -129,7 +129,9 @@ export function isPrereleasePin(pin) {
  *
  * js-yaml: pm2 <= 7.0.3 pins 4.3.0, which carries the quadratic-complexity
  * DoS advisories (GHSA-5p4m-2wfm-xmqj and friends); the fix landed in 4.3.1.
- * Drop when pm2's own js-yaml dependency reaches >= 4.3.1.
+ * pm2 7.1.2 pins 4.3.2, so this is now redundant. Dropping it rewrites every
+ * deployment's package.json and `doctor` reports the change as drift, so it
+ * goes with the next release that migrates the layout anyway.
  */
 export const OVERRIDES = {
 	'js-yaml': '^4.3.1'
