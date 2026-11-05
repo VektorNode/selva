@@ -2,6 +2,7 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { transcodeImageIfNeeded } from '@selvajs/platform/storage';
+import { renameReplacing } from '../data/fsJson.js';
 import type { IStorageProvider } from '@selvajs/platform/storage';
 
 /**
@@ -64,7 +65,7 @@ export class LocalStorageProvider implements IStorageProvider {
 		const tmp = `${fullPath}.${randomUUID()}.tmp`;
 		try {
 			await fs.writeFile(tmp, Buffer.from(transcoded.data));
-			await fs.rename(tmp, fullPath);
+			await renameReplacing(tmp, fullPath);
 		} catch (err) {
 			await fs.rm(tmp, { force: true }).catch(() => {});
 			throw err;

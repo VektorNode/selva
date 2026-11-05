@@ -273,6 +273,19 @@ describe('SolveEngine.solve — coalescing', () => {
 		await Promise.all([draining, rotated]);
 	});
 
+	it('live solves never coalesce, so one owner cancelling cannot abort another', async () => {
+		const held = heldSolve();
+		const engine = new SolveEngine({ limits: baseLimits() });
+		const live = (solveId: string) => ({ url: 'https://selva.example/cb', solveId, token: 't' });
+		const p1 = engine.solve(solveArgs({ selvaEvents: live('s1') }));
+		const p2 = engine.solve(solveArgs({ selvaEvents: live('s2') }));
+		const p3 = engine.solve(solveArgs());
+		await waitUntil(() => held.runs() === 3);
+		expect(held.runs()).toBe(3);
+		held.release();
+		await Promise.all([p1, p2, p3]);
+	});
+
 	it('different values do not coalesce', async () => {
 		const held = heldSolve();
 		const engine = new SolveEngine({ limits: baseLimits() });

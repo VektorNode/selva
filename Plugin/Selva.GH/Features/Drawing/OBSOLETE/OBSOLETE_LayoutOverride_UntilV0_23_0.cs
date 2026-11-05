@@ -23,7 +23,7 @@ public class OBSOLETE_LayoutOverride_UntilV0_23_0 : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.SectionSettings;
+    protected override Bitmap Icon => Resources.LayoutOverride;
     public override GH_Exposure Exposure => GH_Exposure.hidden;
     public override Guid ComponentGuid => new Guid("3F5F0E10-2A21-4F0E-9F25-7B0F2C7C5E91");
 

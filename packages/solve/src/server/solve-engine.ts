@@ -118,11 +118,7 @@ export interface SolveEngineSolveArgs {
 	loadStartMs?: number;
 	defLoadMs?: number;
 	prepMarks?: PrepMark[];
-	/**
-	 * Per-solve live-event callback. A coalesced waiter shares the first caller's
-	 * compute call, so only that caller's target reaches the definition; the
-	 * others still get the server-emitted start/end events on their own stream.
-	 */
+	/** Per-solve live-event callback. A solve carrying one runs its own compute call, never a shared one. */
 	selvaEvents?: SelvaEventTarget;
 }
 
@@ -233,8 +229,12 @@ export class SolveEngine {
 		}
 		const treeBuildMs = performance.now() - treeBuildStart;
 
+		// A live solve never shares a flight: the request carries its owner's callback, through which
+		// that owner's Esc aborts the Grasshopper solve. Shared, one user's cancel would abort everyone
+		// who joined, and the joiners would get no progress events.
+		const live = args.selvaEvents ? `:live:${args.selvaEvents.solveId}` : '';
 		const flight = await this.singleFlight.run(
-			`${identity}:${args.server.id}:${this.clientGeneration(client)}:${stableStringify(inputTree)}`,
+			`${identity}:${args.server.id}:${this.clientGeneration(client)}:${stableStringify(inputTree)}${live}`,
 			(signal) =>
 				runSolvePipeline({
 					definitionSource,

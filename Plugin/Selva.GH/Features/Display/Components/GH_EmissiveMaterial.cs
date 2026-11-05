@@ -25,7 +25,7 @@ public class GH_EmissiveMaterial : GH_Component
 
     public override Guid ComponentGuid => new Guid("7D3C1F52-9A64-4E0B-8C27-5B1E6A0F42D9");
 
-    protected override Bitmap Icon => Resources.ThreeMaterial;
+    protected override Bitmap Icon => Resources.EmissiveMaterial;
 
     protected override void RegisterInputParams(GH_InputParamManager pManager)
     {

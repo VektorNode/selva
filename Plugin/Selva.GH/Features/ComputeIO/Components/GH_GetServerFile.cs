@@ -52,7 +52,7 @@ public class GetServerFileParameter : SelvaContextualParameter<IGH_GeometricGoo>
     public override string TypeName => "ServerFile";
     public override Guid ComponentGuid => new Guid("C8E1A7F4-2D63-4B95-9E08-7A1C5F3D6B92");
 
-    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.CreateFile);
+    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetServerFile);
 
     /// <summary>Relative path to the file, e.g. "geometry/bracket.3dm".</summary>
     public string RelativePath

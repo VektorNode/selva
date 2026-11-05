@@ -25,7 +25,7 @@ public class OBSOLETE_TextStyle_UntilV0_23_0 : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.PathStlye;
+    protected override Bitmap Icon => Resources.TextStyle;
     public override GH_Exposure Exposure => GH_Exposure.hidden;
     public override Guid ComponentGuid => new Guid("d37b61db-4fc4-4f01-9a76-95da5d719eea");
 

@@ -23,7 +23,7 @@ public class GH_TextStyle : SelvaZuiComponent
     {
     }
 
-    protected override Bitmap Icon => Resources.PathStlye;
+    protected override Bitmap Icon => Resources.TextStyle;
     public override GH_Exposure Exposure => GH_Exposure.tertiary;
     public override Guid ComponentGuid => new Guid("6D5CCE51-0B0D-4936-B076-E7D0DD1B820D");
 

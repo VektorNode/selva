@@ -27,7 +27,7 @@ public class GH_LayoutOverride : SelvaZuiComponent
     {
     }
 
-    protected override Bitmap Icon => Resources.SectionSettings;
+    protected override Bitmap Icon => Resources.LayoutOverride;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("6B443A70-1C56-464B-BBAE-E0AE2E420789");
 

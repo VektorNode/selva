@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" shape-rendering="geometricPrecision">
-  <path d="M4 6h6a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-6a2 2 0 0 1 -2 -2v-8a2 2 0 0 1 2 -2z" fill="#2e4229"/>
-  <path d="M15 2h6a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z" fill="#c9da7a"/>
-  <path d="M15 9h6a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z" fill="#749845"/>
-  <path d="M15 16h6a1 1 0 0 1 1 1v4a1 1 0 0 1 -1 1h-6a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1z" fill="#c9da7a"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"><rect x="2" y="2" width="20" height="20" rx="3" fill="#28231d"/><rect x="4" y="8" width="7" height="8" rx="1" fill="#749843"/><rect x="13" y="4" width="7" height="4" rx="1" fill="#cadc7a"/><rect x="13" y="10" width="7" height="4" rx="1" fill="#749843"/><rect x="13" y="16" width="7" height="4" rx="1" fill="#cadc7a"/></svg>

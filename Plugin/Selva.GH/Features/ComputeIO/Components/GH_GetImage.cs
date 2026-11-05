@@ -26,7 +26,7 @@ public class GetImageParameter : SelvaContextualParameter<FileInputGoo>
     public override string TypeName => "Image";
     public override Guid ComponentGuid => new Guid("D7A2F4C8-3B6E-4A91-8C5D-2E9F7B1A6D04");
 
-    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.CreateFile);
+    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetImage);
 
     public override bool AutoAssignContextualData(GH_ParameterContext context)
     {

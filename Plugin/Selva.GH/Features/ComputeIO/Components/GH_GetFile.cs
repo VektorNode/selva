@@ -27,7 +27,7 @@ public class GetFileParameter : SelvaContextualParameter<IGH_GeometricGoo>
     public override string TypeName => "File";
     public override Guid ComponentGuid => new Guid("B4F6E8D2-9A3C-4E7B-8D1F-5A9C7E2B4D6F");
 
-    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.CreateFile);
+    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetFile);
 
     public override bool AutoAssignContextualData(GH_ParameterContext context)
     {

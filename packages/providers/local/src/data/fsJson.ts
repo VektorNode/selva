@@ -31,6 +31,25 @@ export async function readJsonFile<T>(filePath: string, fallback: T): Promise<T>
 	}
 }
 
+const RENAME_RETRY_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+/**
+ * `rename` over a file another handle has open fails on Windows with EPERM, EACCES or
+ * EBUSY until that handle closes, so a write racing a read would fail. Readers here
+ * close fast; retry briefly, as graceful-fs does. POSIX never hits these codes.
+ */
+export async function renameReplacing(from: string, to: string): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			return await fs.rename(from, to);
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code;
+			if (attempt >= 20 || !code || !RENAME_RETRY_CODES.has(code)) throw err;
+			await new Promise((r) => setTimeout(r, Math.min(10 * (attempt + 1), 100)));
+		}
+	}
+}
+
 /**
  * Writes to a sibling temp file, then renames into place, so a crash mid-write
  * can't corrupt the target. The temp name is random per call: a shared name would
@@ -50,7 +69,7 @@ export async function writeJsonFile<T>(filePath: string, data: T): Promise<void>
 	const tmp = `${filePath}.${randomUUID()}.tmp`;
 	try {
 		await fs.writeFile(tmp, JSON.stringify(data, null, '\t'), { encoding: 'utf-8', mode: 0o600 });
-		await fs.rename(tmp, filePath);
+		await renameReplacing(tmp, filePath);
 	} catch (err) {
 		await fs.rm(tmp, { force: true }).catch(() => {});
 		throw err;

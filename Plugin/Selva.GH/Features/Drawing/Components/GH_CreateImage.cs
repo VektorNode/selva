@@ -35,7 +35,7 @@ public class GH_CreateImage : GH_Component
             "Selva", "Drawing")
     {
     }
-    protected override Bitmap Icon => Resources.CreateFile;
+    protected override Bitmap Icon => Resources.DrawImage;
     public override GH_Exposure Exposure => GH_Exposure.secondary;
     public override Guid ComponentGuid => new Guid("C2E8B1A4-7D3F-4C6E-9B25-8F1D3A7E0C9B");
 

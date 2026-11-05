@@ -32,7 +32,7 @@ public class GH_CombineDisplay : GH_Component
     {
     }
 
-    protected override Bitmap Icon => Resources.WebDisplay;
+    protected override Bitmap Icon => Resources.CombineDisplay;
     public override GH_Exposure Exposure => GH_Exposure.quarternary;
     public override Guid ComponentGuid => new Guid("E2BA3FC1-3930-4E34-8034-7E096F419FD3");
 

@@ -16,10 +16,12 @@ The headless Rhino that solves definitions, on a Windows machine separate from t
 3. **Install the VektorNode fork**, which adds block instances. In PowerShell as Administrator:
 
    ```powershell
-   irm https://raw.githubusercontent.com/VektorNode/compute.rhino3d/8.x.selva/script/update_compute_server/update_compute_selva.ps1 | iex
+   [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+   $url = "https://raw.githubusercontent.com/VektorNode/compute.rhino3d/8.x.selva/script/production/module_update_compute.ps1"
+   & ([scriptblock]::Create((Invoke-RestMethod $url))) -Repository VektorNode/compute.rhino3d -Branch 8.x.selva
    ```
 
-   It backs up the current deployment, swaps in the latest build, restarts IIS, and rolls back on failure. Re-run it to update.
+   It backs up the current deployment, swaps in the latest `8.x.selva` build, restarts IIS, and rolls back on failure. Re-run it to update. Selva reads the server's solve deadline and body cap from its `/limits` endpoint; a build without it gets a 100 s deadline and re-uploads the definition on every solve.
 
 4. **Set environment variables** and restart the service:
    - `RHINO_COMPUTE_CREATE_HEADLESS_DOC=true` enables block instances. Neither fork branch turns it on by default.

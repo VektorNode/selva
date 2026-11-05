@@ -36,7 +36,7 @@ public class GetDynamicValueListParameter : SelvaContextualParameter<GH_ValueLis
     public override string TypeName => "ValueList";
     public override Guid ComponentGuid => new Guid("9F2C4B7E-3A8D-4C1F-B6E5-2D7A9C0E1F34");
 
-    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetValueList);
+    protected override Bitmap Internal_Icon_24x24 => Utils.ContextualiseIcon(Resources.GetDynamicValueList);
 
     [JsonProperty("values")]
     public Dictionary<string, string> Values => DynamicValueListLogic.ToValuesDictionary(_storedItems);
