@@ -18,6 +18,7 @@ import {
 	OrgComputePatchBodySchema,
 	OrgComputeResponseSchema,
 	parseBody,
+	requireSession,
 	shaped
 } from '../api/index.js';
 import type { ApiHandler, ApiRequest } from '../api/index.js';
@@ -29,6 +30,7 @@ import {
 } from '@selvajs/platform';
 import { requireManageOrgCompute, requireActingOrg } from '../access/index.js';
 import {
+	assertKeyNotRetargeted,
 	assertStoredKeysReadable,
 	evictChangedServers,
 	validateIncomingServers,
@@ -81,6 +83,7 @@ export const getOrgCompute: ApiHandler = async (req) => {
 };
 
 export const updateOrgCompute: ApiHandler = async (req) => {
+	requireSession(req, 'Compute servers are managed from the web app, not with an API key.');
 	requireFlag(req);
 	requireManageOrgCompute(req);
 	const { ctx, orgId } = requireActingOrg(req, req.params.orgId);
@@ -96,6 +99,7 @@ export const updateOrgCompute: ApiHandler = async (req) => {
 		(s): s is OrgComputeServer => isOrgServer(s) && s.ownerOrgId === orgId
 	);
 	assertStoredKeysReadable(incoming.servers, orgServers);
+	assertKeyNotRetargeted(incoming.servers, orgServers);
 	const storedKeys = storedKeysById(orgServers);
 
 	const next: OrgComputeServer[] = incoming.servers.map((s) => ({

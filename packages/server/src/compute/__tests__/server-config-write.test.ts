@@ -10,6 +10,7 @@ import {
 	resolveApiKey,
 	storedKeysById,
 	assertStoredKeysReadable,
+	assertKeyNotRetargeted,
 	validateIncomingServers,
 	type IncomingServerBase
 } from '../server-config-write.js';
@@ -159,6 +160,45 @@ describe('validateIncomingServers shape', () => {
 
 	it('refuses the same id twice', () => {
 		expect(() => validateIncomingServers([server, server])).toThrow(/more than once/);
+	});
+});
+
+describe('assertKeyNotRetargeted', () => {
+	const stored = [
+		{ id: 'a', serverUrl: 'http://compute.local:6500', hasApiKey: true, apiKey: 'k' }
+	];
+
+	it('refuses a new URL that would keep the stored key', () => {
+		expect(() =>
+			assertKeyNotRetargeted([{ id: 'a', serverUrl: 'https://evil.example' }], stored)
+		).toThrow(/Re-enter its API key/);
+		expect(() =>
+			assertKeyNotRetargeted([{ id: 'a', serverUrl: 'https://evil.example', apiKey: '' }], stored)
+		).toThrow(/Re-enter its API key/);
+	});
+
+	it('allows a new URL with a new key or a cleared one', () => {
+		expect(() =>
+			assertKeyNotRetargeted([{ id: 'a', serverUrl: 'https://new.example', apiKey: 'n' }], stored)
+		).not.toThrow();
+		expect(() =>
+			assertKeyNotRetargeted([{ id: 'a', serverUrl: 'https://new.example', apiKey: null }], stored)
+		).not.toThrow();
+	});
+
+	it('ignores an unchanged URL, a trailing slash, keyless and new servers', () => {
+		expect(() =>
+			assertKeyNotRetargeted([{ id: 'a', serverUrl: 'http://compute.local:6500/' }], stored)
+		).not.toThrow();
+		expect(() =>
+			assertKeyNotRetargeted(
+				[{ id: 'a', serverUrl: 'https://other.example' }],
+				[{ id: 'a', serverUrl: 'http://compute.local:6500', hasApiKey: false }]
+			)
+		).not.toThrow();
+		expect(() =>
+			assertKeyNotRetargeted([{ id: 'b', serverUrl: 'https://other.example' }], stored)
+		).not.toThrow();
 	});
 });
 

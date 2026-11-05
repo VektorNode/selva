@@ -130,6 +130,41 @@ export function assertStoredKeysReadable(
 }
 
 /**
+ * An omitted key is kept, so without this check anyone who may save the config
+ * could point a server at their own host and have the next solve send them the
+ * stored key, which they never saw. Moving a server needs the key re-entered or
+ * cleared.
+ */
+export function assertKeyNotRetargeted(
+	incoming: readonly Pick<IncomingServerBase, 'id' | 'serverUrl' | 'apiKey'>[],
+	stored: readonly { id: string; serverUrl: string; apiKey?: string; hasApiKey?: boolean }[]
+): void {
+	const byId = new Map(stored.map((s) => [s.id, s]));
+	for (const s of incoming) {
+		const prev = byId.get(s.id);
+		if (!prev || !(prev.hasApiKey || prev.apiKey)) continue;
+		if (s.apiKey === null || (typeof s.apiKey === 'string' && s.apiKey !== '')) continue;
+		if (sameServerUrl(prev.serverUrl, s.serverUrl)) continue;
+		apiError(
+			409,
+			ApiErrorCode.CONFLICT,
+			`Server ${s.id} has a new URL. Re-enter its API key, or clear it, to save.`
+		);
+	}
+}
+
+function sameServerUrl(a: string, b: string): boolean {
+	const normalize = (u: string) => {
+		try {
+			return new URL(u.trim()).href.replace(/\/+$/, '');
+		} catch {
+			return u.trim().replace(/\/+$/, '');
+		}
+	};
+	return normalize(a) === normalize(b);
+}
+
+/**
  * The UI never receives stored keys — it sends back `hasApiKey` and omits the
  * field for servers the operator didn't touch. So "omitted" cannot mean "clear":
  * it has to preserve, or every save through the settings form would wipe the

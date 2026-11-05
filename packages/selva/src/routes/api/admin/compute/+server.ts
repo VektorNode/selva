@@ -12,6 +12,7 @@ import { evictChangedServers } from '#lib/server/compute/evictChangedServers.js'
 import { serverResolver } from '#lib/server/compute/serverResolver.server.js';
 import {
 	assertStoredKeysReadable,
+	assertKeyNotRetargeted,
 	validateIncomingServers,
 	resolveApiKey,
 	storedKeysById,
@@ -108,6 +109,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 		// keep their stored key, and `evictChangedServers` diffs on key rotation.
 		const existing = await provider.getConfig(locals.ctx!, { includeApiKeys: true });
 		assertStoredKeysReadable(incoming.servers, platformServers(existing));
+		assertKeyNotRetargeted(incoming.servers, platformServers(existing));
 		const storedKeys = storedKeysById(platformServers(existing));
 
 		const next: ComputeServerConfig[] = incoming.servers.map(
