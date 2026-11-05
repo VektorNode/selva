@@ -27,7 +27,11 @@ With nvm or fnm, a systemd unit starts before your shell profile, so it may not 
 
 ## Upgrading pm2
 
-pm2 changes only through Selva releases. When the pin changes, `npm run doctor` reports "pm2 X is installed but this scaffold pins Y": the CLI and the running daemon differ.
+pm2 changes only through Selva releases. The in-app update and `npm run update` move it to the release's pin and swap the daemon; under systemd the in-app update leaves the swap to you (`npx pm2 update` from a shell). When the pin and the install differ, `npm run doctor` reports "pm2 X is installed but this scaffold pins Y".
+
+- Don't run `npm audit fix --force` here: it turns the exact pin into a range.
+- Ignore pm2's own hint to `npm install pm2@latest -g`. A global pm2 fights the deployment's (see below).
+- Don't interrupt `pm2 update`. If `npx pm2 list` no longer shows `selva-compute`, run `npx selva start`, then `npx pm2 save`.
 
 ### No global pm2
 

@@ -188,6 +188,8 @@ export async function runUpdate() {
 	const after = readRuntimeVersion(dir);
 	p.log.info(`New @selvajs/selva:     ${after ?? 'unknown'}`);
 
+	realignPm2Pin(dir, s);
+
 	if (supabase) {
 		// Provider code is bundled into @selvajs/selva, but the migration SQL ships
 		// here. Left behind, `selva-supabase` copies nothing new. Installed by tag,
@@ -243,6 +245,53 @@ export async function runUpdate() {
 		)
 	);
 	process.exitCode = 1;
+}
+
+// Moves the deployment onto the pm2 the just-installed CLI pins, then swaps the
+// daemon. Without it a release that bumps pm2 needs `selva migrate` and
+// `pm2 update` by hand on every host. Runs from the OLD CLI, so the pin is read
+// from the new one on disk. The app is stopped here, so the swap costs no
+// extra downtime. A failure leaves the old pm2 working: warn, don't abort.
+function readPm2Pins(dir) {
+	const read = (path) => {
+		try {
+			return JSON.parse(readFileSync(path, 'utf8'));
+		} catch {
+			return null;
+		}
+	};
+	return {
+		declared: read(join(dir, 'package.json'))?.dependencies?.pm2 ?? null,
+		pinned:
+			read(join(dir, 'node_modules', '@selvajs', 'cli', 'package.json'))?.devDependencies?.pm2 ??
+			null
+	};
+}
+
+function realignPm2Pin(dir, s) {
+	const { declared, pinned } = readPm2Pins(dir);
+	if (!pinned || pinned === declared) return;
+
+	s.start(`npm install pm2@${pinned}`);
+	try {
+		execSync(`npm install --save --save-exact --prefer-online pm2@${pinned}`, {
+			cwd: dir,
+			stdio: 'pipe'
+		});
+		s.stop(`pm2 ${declared ?? '(none)'} → ${pinned}`);
+	} catch (err) {
+		s.stop(`npm install pm2@${pinned} failed`);
+		p.log.warn(
+			`${String(err.stderr ?? err.message ?? err).trim()}\n` +
+				'The previous pm2 still runs the app. Retry with `npx selva migrate`.'
+		);
+		return;
+	}
+	try {
+		ensurePm2InSync(dir);
+	} catch (err) {
+		p.log.warn(`${err instanceof Error ? err.message : err}`);
+	}
 }
 
 // The app was stopped before the update, so the first answer is the new process.

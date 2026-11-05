@@ -97,7 +97,11 @@ Stored keys in the old `enc:v1:` format still decrypt and are rewritten as `enc:
 
 The deployment's pinned pm2 moves from 7.0.3 to 7.1.2. 7.1.2 drops the proxy and FTP dependencies behind five high-severity `npm audit` findings (basic-ftp, get-uri, pac-proxy-agent, proxy-agent, js-yaml); afterwards `npm audit --omit=dev` reports none from pm2.
 
-The in-app update and `npm run update` don't change pm2: only `selva migrate` writes the new pin, and only `npx pm2 update` replaces the running daemon (the app goes down briefly). Run `npx pm2 save` only once `npx pm2 list` shows `selva-compute` online: saving an empty list overwrites the record pm2 restores from. If the list is empty, run `npx pm2 resurrect`. If systemd starts pm2 at boot, run `pm2 update` from a shell; the in-app updater refuses it there. Details: [Upgrading pm2](./prerequisites.md#upgrading-pm2).
+This upgrade runs on the 4.19 updater, which doesn't change pm2: `selva migrate` writes the new pin, and `npx pm2 update` replaces the running daemon (the app goes down briefly). Let `pm2 update` finish; interrupting it leaves `selva-compute` unregistered. Run `npx pm2 save` only once `npx pm2 list` shows `selva-compute` online: saving an empty list overwrites the record pm2 restores from. If the list is empty, run `npx selva start`, then save. Details: [Upgrading pm2](./prerequisites.md#upgrading-pm2).
+
+From 4.20 on, the in-app update and `npm run update` move pm2 to the release's pin themselves and swap the daemon. Under systemd the in-app update can't swap it and ends with a warning to run `npx pm2 update` from a shell. `npm run doctor` now also fails when `selva-compute` isn't online.
+
+Don't run `npm audit fix --force` in the deployment: it replaces the exact pm2 pin with a range, and doctor then fails on the pin.
 
 ### Viewer follows "Compute render" only
 

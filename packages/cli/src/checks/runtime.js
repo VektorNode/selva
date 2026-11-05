@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { fixable, green, red, yellow } from './result.js';
 import { PM2_VERSION } from '../deployment-package.js';
+import { APP_NAME } from '../commands/pm2.js';
 
 /** The real OS. Tests pass a stand-in with the same shape. */
 export const runtimeEnv = {
@@ -245,7 +246,12 @@ function checkPm2Daemon(dir, env) {
 	const output = String(probe.stdout ?? '') + String(probe.stderr ?? '');
 
 	if (!/out-of-date/i.test(output)) {
-		if (/pong/i.test(output)) return [green('pm2 daemon responds and matches the local pm2')];
+		if (/pong/i.test(output)) {
+			return [
+				green('pm2 daemon responds and matches the local pm2'),
+				checkAppProcess(bin, dir, env)
+			];
+		}
 		return [yellow('pm2 daemon did not answer `pm2 ping` — check `npx pm2 ping` by hand')];
 	}
 
@@ -267,8 +273,35 @@ function checkPm2Daemon(dir, env) {
 		yellow(
 			`pm2 daemon (v${daemon ?? 'unknown'}) differs from the local pm2 (v${local ?? PM2_VERSION}).\n     ` +
 				'Resync it — this briefly restarts managed processes: npx pm2 update'
-		)
+		),
+		checkAppProcess(bin, dir, env)
 	];
+}
+
+// A live daemon says nothing about the app: an interrupted `pm2 update` leaves
+// the daemon up with an empty process table, and every other check still
+// passes. Only called once the daemon is confirmed alive, so `jlist` can't
+// spawn one.
+function checkAppProcess(bin, dir, env) {
+	const r = env.run(bin, ['jlist'], { cwd: dir });
+	// A skewed daemon prints its out-of-date banner ahead of the JSON.
+	const json = String(r.stdout ?? '')
+		.split('\n')
+		.find((line) => line.trimStart().startsWith('['));
+	let list;
+	try {
+		list = JSON.parse(json ?? '');
+	} catch {
+		return yellow(`could not read the pm2 process list — check \`npx pm2 list\` by hand`);
+	}
+	const app = list.find((proc) => proc.name === APP_NAME);
+	const status = app?.pm2_env?.status;
+	if (status === 'online') return green(`${APP_NAME} is online`);
+	return red(
+		`${APP_NAME} is ${app ? `'${status}'` : 'not registered with pm2'} — the app is down.\n     ` +
+			'Start it, then save the list so a reboot brings it back:\n     ' +
+			'npx selva start && npx pm2 save'
+	);
 }
 
 // ── pm2 log rotation ────────────────────────────────────────────────────
@@ -352,7 +385,6 @@ function installLogRotate(bin, dir, env) {
 }
 
 function parseSkew(output) {
-	// eslint-disable-next-line no-control-regex -- pm2 colourises via chalk on a TTY
 	const clean = output.replace(/\[[0-9;]*m/g, '');
 	return {
 		daemon: /In memory PM2 version:\s*v?(\d+\.\d+\.\d+)/i.exec(clean)?.[1] ?? null,

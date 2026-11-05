@@ -110,3 +110,5 @@ npm run restart
 ```
 
 **pm2 version-skew warning on boot.** The systemd unit points at a different pm2. Rewrite `ExecStart` and `ExecStop` in `/etc/systemd/system/pm2-$USER.service` to the deployment-local `…/node_modules/pm2/bin/pm2`, check them with `grep -E 'ExecStart|ExecStop' /etc/systemd/system/pm2-$USER.service`, then `sudo systemctl daemon-reload && sudo systemctl restart pm2-$USER`. If `selva start` says the running daemon is _newer_ than the local pm2, a global pm2 owns it: don't run `pm2 update`. Find it with `which -a pm2`, `pm2 -v`, `pm2 ping`.
+
+**`doctor` says `selva-compute` is not registered with pm2.** The daemon is up but the app isn't in it, usually after an interrupted `pm2 update`. Run `npx selva start`, check `npx pm2 list` shows it online, then `npx pm2 save`.
