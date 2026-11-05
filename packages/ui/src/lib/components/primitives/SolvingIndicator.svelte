@@ -122,7 +122,7 @@
 	);
 </script>
 
-<div class="h-9 min-w-0 relative flex-1">
+<div class="h-10 min-w-0 relative flex-1">
 	<!-- The live region stays mounted: a screen reader only announces text that changes inside a
 	     region it already knows about, so one created together with its text says nothing. -->
 	<div role="status" aria-live="polite" aria-atomic="true" class="sr-only">{announcement}</div>
@@ -132,8 +132,8 @@
 		'card'
 			? 'h-24 shadow-md rounded-lg bg-card/75'
 			: mode === 'idle'
-				? 'h-9 shadow-sm rounded-md bg-card/90'
-				: 'h-9 shadow-md rounded-md bg-card/75'}"
+				? 'h-10 shadow-sm rounded-md bg-card/90'
+				: 'h-10 shadow-md rounded-md bg-card/75'}"
 		data-testid="solve-status"
 		data-state={mode}
 	>
