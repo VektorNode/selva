@@ -3,9 +3,11 @@ import * as THREE from 'three';
 import { cloneForTint, getBaseMaterial, getLogger } from '../../shared/index.js';
 
 import type { CameraController } from '../camera-controller.js';
-import { computeContentBounds, isViewerAid } from '../three-helpers.js';
+import { raycastVisible } from '../scene-pick.js';
+import { computeContentBounds } from '../three-helpers.js';
 import { highlightMembers, memberBounds, resolveHitMember } from './merged-picking.js';
 import type { ResolvedOptions } from './defaults.js';
+import type { TapTracker } from './tap-gesture.js';
 import type { SelectionTarget } from './viewer.js';
 
 // Tuned against the brightest look (`showcase`, exposure 1.15 + sun 2.6): the highlight has to stay
@@ -23,6 +25,15 @@ const SELECTION_MIN_OPACITY = 1;
  * color blindness, so what tells hover from selected there is brightness.
  */
 const HOVER_COLOR = '#ffb020';
+/**
+ * A fingertip covers far more than the pixel under its centre, so a touch that lands just beside a
+ * thin curve or a narrow part still picks it. Rings are sampled only when the centre misses.
+ */
+const TOUCH_PICK_RADII_PX = [8, 16];
+const TOUCH_PICK_DIRECTIONS = 8;
+/** Two taps closer than this in time and space are a double-tap. */
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_SLOP_PX = 30;
 /** Linear RGB distance. Closer than this, a tint barely changes the surface. */
 const MIN_TINT_DISTANCE = 0.35;
 /** Taken by a surface already close to the tint. Blue stays distinct under every common deficiency. */
@@ -81,7 +92,8 @@ export function setupEventHandlers(
 	canvas: HTMLCanvasElement,
 	scene: THREE.Scene,
 	cameraController: CameraController,
-	config: ResolvedOptions
+	config: ResolvedOptions,
+	taps: TapTracker
 ): {
 	dispose: () => void;
 	fitToView: () => void;
@@ -102,19 +114,7 @@ export function setupEventHandlers(
 	let selectedByEntries = false;
 	const raycaster = new THREE.Raycaster();
 	const mouse = new THREE.Vector2();
-	const mouseDownPosition = new THREE.Vector2();
 	const getActiveCamera = () => cameraController.getActiveCamera();
-
-	// Three.js's recursive intersect hits a visible Mesh inside a hidden Group; this enforces that
-	// every ancestor must also be visible.
-	const isFullyVisible = (object: THREE.Object3D): boolean => {
-		let current: THREE.Object3D | null = object;
-		while (current) {
-			if (!current.visible) return false;
-			current = current.parent;
-		}
-		return true;
-	};
 
 	const fitToView = () => {
 		const box = computeContentBounds(scene);
@@ -295,42 +295,68 @@ export function setupEventHandlers(
 		raycaster.params.Points.threshold = cachedDiagonal * 0.01;
 	};
 
-	/**
-	 * Nearest visible, pickable object under the pointer, or null. Viewer aids are excluded: the grid
-	 * is a huge camera-following plane, so double-clicking through a thin curve onto it would frame a
-	 * box the size of the fade radius and fling the camera out.
-	 */
-	const pickAt = (clientX: number, clientY: number): THREE.Intersection | null => {
+	const setPointerNdc = (clientX: number, clientY: number) => {
 		const rect = canvas.getBoundingClientRect();
 		mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
 		mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+	};
 
+	/**
+	 * Nearest visible, pickable object under the pointer, or null. Goes through the BVH pick, which
+	 * also skips viewer aids: the grid is a huge camera-following plane, so double-clicking through
+	 * a thin curve onto it would frame a box the size of the fade radius and fling the camera out.
+	 */
+	const pickAt = (clientX: number, clientY: number): THREE.Intersection | null => {
+		setPointerNdc(clientX, clientY);
 		updatePickThresholds();
 		raycaster.setFromCamera(mouse, getActiveCamera());
-		// Sorted near-to-far, so the first visible hit is the nearest one.
-		for (const hit of raycaster.intersectObjects(scene.children, true)) {
-			if (isFullyVisible(hit.object) && !isViewerAid(hit.object)) return hit;
+		return raycastVisible(scene, raycaster)[0] ?? null;
+	};
+
+	const pickNear = (clientX: number, clientY: number, touch: boolean) => {
+		const centre = pickAt(clientX, clientY);
+		if (centre || !touch) return centre;
+		for (const radius of TOUCH_PICK_RADII_PX) {
+			let nearest: THREE.Intersection | null = null;
+			for (let i = 0; i < TOUCH_PICK_DIRECTIONS; i++) {
+				const angle = (i / TOUCH_PICK_DIRECTIONS) * Math.PI * 2;
+				const hit = pickAt(clientX + Math.cos(angle) * radius, clientY + Math.sin(angle) * radius);
+				if (hit && (!nearest || hit.distance < nearest.distance)) nearest = hit;
+			}
+			if (nearest) return nearest;
 		}
 		return null;
 	};
 
-	const handleMouseDown = (event: MouseEvent) => {
-		mouseDownPosition.set(event.clientX, event.clientY);
+	let lastTap: { time: number; x: number; y: number } | null = null;
+	/** iOS fires no `dblclick` for a double-tap, so touch pairs its own taps. */
+	const isSecondTap = (event: MouseEvent): boolean => {
+		const previous = lastTap;
+		lastTap = { time: event.timeStamp, x: event.clientX, y: event.clientY };
+		if (!previous) return false;
+		const isDouble =
+			event.timeStamp - previous.time <= DOUBLE_TAP_MS &&
+			Math.hypot(event.clientX - previous.x, event.clientY - previous.y) <= DOUBLE_TAP_SLOP_PX;
+		if (isDouble) lastTap = null;
+		return isDouble;
 	};
 
 	const handleCanvasClick = (event: MouseEvent) => {
-		const currentMousePosition = new THREE.Vector2(event.clientX, event.clientY);
-		if (mouseDownPosition.distanceTo(currentMousePosition) > 5) {
+		if (!taps.wasTap()) return;
+		const touch = taps.pointerType() !== 'mouse';
+		if (touch && isSecondTap(event)) {
+			handleDoubleTap(event.clientX, event.clientY, true);
 			return;
 		}
 
 		// Acted on immediately, including the first press of a double-click: selecting and reporting
 		// metadata are idempotent, so the second press re-reports the same object. Deferring this to
 		// wait out a possible `dblclick` made every selection feel a quarter-second late.
-		const hit = pickAt(event.clientX, event.clientY);
+		const hit = pickNear(event.clientX, event.clientY, touch);
 
 		if (!hit) {
 			clearSelection();
+			setPointerNdc(event.clientX, event.clientY);
 			config.events?.onBackgroundClicked?.({ x: mouse.x, y: mouse.y });
 			return;
 		}
@@ -376,7 +402,13 @@ export function setupEventHandlers(
 	};
 
 	const handleDoubleClick = (event: MouseEvent) => {
-		const hit = pickAt(event.clientX, event.clientY);
+		// Touch double-taps are paired in `handleCanvasClick`; Android's own `dblclick` would repeat it.
+		if (!taps.wasTap() || taps.pointerType() !== 'mouse') return;
+		handleDoubleTap(event.clientX, event.clientY, false);
+	};
+
+	const handleDoubleTap = (clientX: number, clientY: number, touch: boolean) => {
+		const hit = pickNear(clientX, clientY, touch);
 		if (!hit) {
 			// The way back out after framing a part. On touch there is no F key, and a pinch-out
 			// from a small part back to the whole model takes many gestures.
@@ -425,7 +457,6 @@ export function setupEventHandlers(
 	};
 
 	if (config.events?.enableClickToFocus) {
-		canvas.addEventListener('mousedown', handleMouseDown);
 		canvas.addEventListener('click', handleCanvasClick);
 		canvas.addEventListener('dblclick', handleDoubleClick);
 	}
@@ -436,7 +467,6 @@ export function setupEventHandlers(
 	}
 
 	const dispose = () => {
-		canvas.removeEventListener('mousedown', handleMouseDown);
 		canvas.removeEventListener('click', handleCanvasClick);
 		canvas.removeEventListener('dblclick', handleDoubleClick);
 		canvas.removeEventListener('keydown', handleKeydown);

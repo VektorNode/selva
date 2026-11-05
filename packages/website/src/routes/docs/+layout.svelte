@@ -66,9 +66,12 @@
 			for (const timer of timers.values()) clearTimeout(timer);
 		};
 	});
+
+	// The index is a card grid with no headings, so it takes the outline column's width too.
+	const isIndex = $derived(page.url.pathname.replace(/\/$/, '') === '/docs');
 </script>
 
-<div class="mx-auto flex max-w-(--docs-max-w) gap-10 px-4 py-6 md:px-6 md:py-12">
+<div class="mx-auto flex max-w-(--page-max-w) gap-10 px-6 py-6 md:py-12">
 	<!-- Sidebar -->
 	<aside class="hidden w-(--docs-nav-w) shrink-0 md:block">
 		<div class="sticky top-(--docs-top) max-h-(--docs-sticky-h) overflow-y-auto pr-2">
@@ -78,7 +81,7 @@
 
 	<!-- Content -->
 	<div class="min-w-0 flex-1">
-		<div class="mx-auto max-w-(--docs-measure)">
+		<div class={isIndex ? '' : 'mx-auto max-w-(--docs-measure)'}>
 			<DocsBar groups={docsNav} {article} />
 			<Breadcrumbs items={crumbs} />
 			<article bind:this={article} class="prose prose-headings:scroll-mt-32 max-w-none">
@@ -88,9 +91,11 @@
 	</div>
 
 	<!-- On this page -->
-	<aside class="hidden w-(--docs-toc-w) shrink-0 xl:block">
-		<div class="sticky top-(--docs-top) max-h-(--docs-sticky-h) overflow-y-auto">
-			<TableOfContents {article} path={page.url.pathname} />
-		</div>
-	</aside>
+	{#if !isIndex}
+		<aside class="hidden w-(--docs-toc-w) shrink-0 xl:block">
+			<div class="sticky top-(--docs-top) max-h-(--docs-sticky-h) overflow-y-auto">
+				<TableOfContents {article} path={page.url.pathname} />
+			</div>
+		</aside>
+	{/if}
 </div>

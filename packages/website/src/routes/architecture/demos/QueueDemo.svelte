@@ -93,13 +93,13 @@
 <div class="space-y-3">
 	<div class="flex flex-wrap items-center gap-2">
 		<button
-			class="bg-primary text-primary-foreground rounded px-3 py-1.5 text-xs font-medium transition hover:opacity-90"
+			class="bg-primary text-primary-foreground rounded-sm px-3 py-1.5 text-xs font-medium transition hover:opacity-90"
 			onclick={() => send(1)}
 		>
 			one solve
 		</button>
 		<button
-			class="border-border hover:bg-hover rounded border px-3 py-1.5 text-xs font-medium transition"
+			class="border-border hover:bg-hover rounded-sm border px-3 py-1.5 text-xs font-medium transition"
 			onclick={() => send(8)}
 		>
 			eight at once
@@ -115,10 +115,10 @@
 	<!-- The two numbers, side by side: the pool, and what Selva thinks it is. -->
 	<div class="grid grid-cols-2 gap-2">
 		<div class="border-border rounded-md border p-2.5">
-			<p class="text-muted-foreground text-[11px] tracking-wide uppercase">workers on the VM</p>
+			<p class="text-muted-foreground text-xs tracking-wide uppercase">workers on the VM</p>
 			<div class="mt-1.5 flex items-center gap-2">
 				<button
-					class="border-border hover:bg-hover size-6 rounded border font-mono text-xs"
+					class="border-border hover:bg-hover size-6 rounded-sm border font-mono text-xs"
 					onclick={() => (workers = Math.max(1, workers - 1))}
 					aria-label="Remove a worker"
 				>
@@ -126,32 +126,32 @@
 				</button>
 				<span class="w-5 text-center font-mono text-sm tabular-nums">{workers}</span>
 				<button
-					class="border-border hover:bg-hover size-6 rounded border font-mono text-xs"
+					class="border-border hover:bg-hover size-6 rounded-sm border font-mono text-xs"
 					onclick={() => (workers = Math.min(8, workers + 1))}
 					aria-label="Add a worker"
 				>
 					+
 				</button>
-				<span class="text-muted-foreground ml-auto text-[11px]">--childcount</span>
+				<span class="text-muted-foreground ml-auto text-xs">--childcount</span>
 			</div>
 		</div>
 
 		<div
 			class="rounded-md border p-2.5 transition-colors {probedJustNow
-				? 'border-emerald-500/50 bg-emerald-500/5'
+				? 'border-success/50 bg-success/5'
 				: stale
-					? 'border-amber-500/40 bg-amber-500/5'
+					? 'border-warning/40 bg-warning/5'
 					: 'border-border'}"
 		>
-			<p class="text-muted-foreground text-[11px] tracking-wide uppercase">Selva sends at once</p>
+			<p class="text-muted-foreground text-xs tracking-wide uppercase">Selva sends at once</p>
 			<div class="mt-1.5 flex items-center gap-2">
 				<span class="font-mono text-sm tabular-nums">{cap}</span>
 				{#if probedJustNow}
-					<span class="text-[11px] text-emerald-600 dark:text-emerald-400">just re-read</span>
+					<span class="text-success text-xs">just re-read</span>
 				{:else if stale}
-					<span class="text-[11px] text-amber-600 dark:text-amber-400">stale until next solve</span>
+					<span class="text-warning text-xs">stale until next solve</span>
 				{/if}
-				<label class="text-muted-foreground ml-auto flex items-center gap-1 text-[11px]">
+				<label class="text-muted-foreground ml-auto flex items-center gap-1 text-xs">
 					<input type="checkbox" bind:checked={autoDetect} class="accent-primary size-3" />
 					auto
 				</label>
@@ -160,7 +160,7 @@
 	</div>
 
 	<div>
-		<p class="text-muted-foreground mb-1.5 text-[11px] tracking-wide uppercase">
+		<p class="text-muted-foreground mb-1.5 text-xs tracking-wide uppercase">
 			in flight · cap {cap}
 		</p>
 		<div class="grid grid-cols-8 gap-1.5">
@@ -168,24 +168,24 @@
 				{@const job = running[i]}
 				{@const withinCap = i < cap}
 				<div
-					class="relative h-9 overflow-hidden rounded border {withinCap
+					class="relative h-9 overflow-hidden rounded-sm border {withinCap
 						? 'border-border'
 						: 'border-border'}"
 				>
 					{#if job}
 						<div
-							class="absolute inset-y-0 left-0 transition-[width] duration-75 ease-linear {i >=
+							class="absolute inset-y-0 left-0 w-(--progress) transition-all duration-75 ease-linear {i >=
 							workers
-								? 'bg-amber-500/25'
-								: 'bg-sky-500/20'}"
-							style="width: {job.progress}%"
+								? 'bg-warning/25'
+								: 'bg-info/20'}"
+							style="--progress: {job.progress}%"
 							aria-hidden="true"
 						></div>
 						<span
 							class="absolute inset-0 flex items-center justify-center font-mono text-xs {i >=
 							workers
-								? 'text-amber-700 dark:text-amber-300'
-								: 'text-sky-700 dark:text-sky-300'}"
+								? 'text-warning'
+								: 'text-info'}"
 						>
 							{job.id}
 						</span>
@@ -202,23 +202,19 @@
 	</div>
 
 	<div>
-		<p class="text-muted-foreground mb-1.5 text-[11px] tracking-wide uppercase">
-			waiting their turn
-		</p>
-		<div class="bg-muted flex min-h-9 flex-wrap items-center gap-1.5 rounded p-1.5">
+		<p class="text-muted-foreground mb-1.5 text-xs tracking-wide uppercase">waiting their turn</p>
+		<div class="bg-muted flex min-h-9 flex-wrap items-center gap-1.5 rounded-sm p-1.5">
 			{#each waiting as id (id)}
-				<span
-					class="rounded bg-amber-500/10 px-2 py-0.5 font-mono text-[11px] text-amber-600 dark:text-amber-400"
-				>
+				<span class="bg-warning/10 text-warning rounded-sm px-2 py-0.5 font-mono text-xs">
 					{id}
 				</span>
 			{:else}
-				<span class="text-muted-foreground text-[11px] italic">nothing queued</span>
+				<span class="text-muted-foreground text-xs italic">nothing queued</span>
 			{/each}
 		</div>
 	</div>
 
-	<p class="text-xs {overloaded ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}">
+	<p class="text-xs {overloaded ? 'text-warning' : 'text-muted-foreground'}">
 		{#if overloaded}
 			More in flight than there are workers — the extra ones share, so everything runs slower.
 			Nothing failed.

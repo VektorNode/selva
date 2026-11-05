@@ -33,7 +33,7 @@
 	type="button"
 	onclick={() => drawer?.showModal()}
 	aria-label="Open docs navigation"
-	class="border-border bg-background/90 text-foreground fixed bottom-[max(1rem,env(safe-area-inset-bottom))] left-4 z-40 flex size-12 items-center justify-center rounded-full border shadow-lg backdrop-blur active:scale-95 md:hidden"
+	class="border-border bg-background/90 text-foreground bottom-safe fixed left-4 z-40 flex size-12 items-center justify-center rounded-full border shadow-lg backdrop-blur active:scale-95 md:hidden"
 >
 	<Menu class="size-5" aria-hidden="true" />
 </button>

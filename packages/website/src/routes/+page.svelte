@@ -1,9 +1,9 @@
 <script lang="ts">
+	import { buttonVariants } from '@selvajs/ui';
 	import { GITHUB_URL } from '#lib/nav.js';
 
 	// Shared shell for the frosted panels so every card reads as the same glass.
-	const glass =
-		'rounded-3xl border border-white/10 bg-white/[0.045] shadow-[0_12px_50px_rgba(0,0,0,0.35)] backdrop-blur-xl';
+	const glass = 'border-border bg-card shadow-raised rounded-xl border';
 
 	const configurators = [
 		{
@@ -72,17 +72,19 @@
 </svelte:head>
 
 <div class="relative isolate -mt-19 overflow-hidden pt-19">
-	<div class="relative mx-auto max-w-6xl px-6">
+	<div class="relative mx-auto max-w-(--page-max-w) px-6">
 		<!-- ═══ Hero ═══ -->
 		<section class="py-16 sm:py-24">
 			<div class="{glass} p-8 sm:p-12">
-				<p class="text-primary font-mono text-xs tracking-[0.25em] uppercase">open source · MIT</p>
+				<p class="text-muted-foreground font-mono text-xs tracking-widest uppercase">
+					open source · MIT
+				</p>
 				<h1
-					class="font-display mt-6 text-5xl leading-[1.02] tracking-tight text-balance sm:text-6xl"
+					class="font-display mt-6 text-5xl leading-tight tracking-tight text-balance sm:text-6xl"
 				>
 					Your workflow,<br />everyone's tool
 				</h1>
-				<p class="mt-6 max-w-2xl text-lg leading-relaxed text-white/70">
+				<p class="text-muted-foreground mt-6 max-w-2xl text-lg leading-relaxed">
 					Publish a Grasshopper definition as a web app. Sliders in, live 3D out. Colleagues and
 					clients open a link; they don't need Rhino.
 				</p>
@@ -90,18 +92,15 @@
 				<div class="mt-8 flex flex-wrap items-center gap-3">
 					<a
 						href="/docs/self-hosting/get-started/quick-start"
-						class="bg-primary text-primary-foreground rounded-full px-5 py-2.5 text-sm font-semibold transition hover:opacity-90"
+						class={buttonVariants({ size: 'lg' })}
 					>
 						Get started
 					</a>
-					<a
-						href="/docs/what-is-selva"
-						class="rounded-full border border-white/15 px-5 py-2.5 text-sm font-semibold text-white/85 transition hover:bg-white/5"
-					>
+					<a href="/docs/what-is-selva" class={buttonVariants({ variant: 'outline', size: 'lg' })}>
 						How it works
 					</a>
 					<code
-						class="rounded-full border border-white/10 bg-black/30 px-4 py-2.5 font-mono text-xs text-white/70"
+						class="border-input bg-field text-muted-foreground rounded-md border px-4 py-2.5 font-mono text-xs"
 					>
 						npx @selvajs/cli my-deployment
 					</code>
@@ -112,7 +111,7 @@
 					alt="Selva's web app: tabs of controls on the left, and a twisting tower with lit windows at night in the 3D viewer on the right."
 					width="1800"
 					height="973"
-					class="mt-10 w-full rounded-2xl border border-white/10"
+					class="border-border mt-10 w-full rounded-lg border"
 				/>
 			</div>
 		</section>
@@ -123,28 +122,30 @@
 				<h2 class="font-display text-3xl tracking-tight text-balance sm:text-4xl">
 					See what a definition becomes.
 				</h2>
-				<p class="mt-4 max-w-2xl leading-relaxed text-white/60">
+				<p class="text-muted-foreground mt-4 max-w-2xl leading-relaxed">
 					Two example configurators, each one Grasshopper definition. Screenshots are the real app,
 					solved live in Rhino.
 				</p>
 				<div class="mt-10 grid gap-12">
 					{#each configurators as item (item.title)}
 						<article>
-							<p class="text-primary font-mono text-xs tracking-[0.2em] uppercase">
+							<p class="text-muted-foreground font-mono text-xs tracking-widest uppercase">
 								{item.audience}
 							</p>
 							<h3 class="font-display mt-3 text-2xl tracking-tight">{item.title}</h3>
-							<p class="mt-2 max-w-2xl text-sm leading-relaxed text-white/60">{item.body}</p>
+							<p class="text-muted-foreground mt-2 max-w-2xl text-sm leading-relaxed">
+								{item.body}
+							</p>
 							<img
 								src={item.image}
 								alt={item.alt}
 								width="1800"
 								height="973"
 								loading="lazy"
-								class="mt-5 w-full rounded-2xl border border-white/10"
+								class="border-border mt-5 w-full rounded-lg border"
 							/>
-							<figure class="mt-4 grid items-center gap-5 sm:grid-cols-[1fr_1.4fr]">
-								<figcaption class="text-sm leading-relaxed text-white/70">
+							<figure class="mt-4 grid items-center gap-5 sm:grid-cols-5">
+								<figcaption class="text-muted-foreground text-sm leading-relaxed sm:col-span-2">
 									{item.caption}
 								</figcaption>
 								<img
@@ -153,7 +154,7 @@
 									width="1800"
 									height="973"
 									loading="lazy"
-									class="w-full rounded-xl border border-white/10"
+									class="border-border w-full rounded-lg border sm:col-span-3"
 								/>
 							</figure>
 						</article>
@@ -179,9 +180,9 @@
 				<ol class="mt-8 grid gap-8 sm:grid-cols-3">
 					{#each steps as step, i (step.title)}
 						<li>
-							<span class="font-display text-primary/70 text-4xl leading-none">{i + 1}</span>
-							<h3 class="mt-3 font-semibold text-white/90">{step.title}</h3>
-							<p class="mt-2 text-sm leading-relaxed text-white/60">{step.body}</p>
+							<span class="font-display text-faint-foreground text-4xl leading-none">{i + 1}</span>
+							<h3 class="text-foreground mt-3 font-semibold">{step.title}</h3>
+							<p class="text-muted-foreground mt-2 text-sm leading-relaxed">{step.body}</p>
 						</li>
 					{/each}
 				</ol>
@@ -197,8 +198,8 @@
 				<div class="mt-8 grid gap-8 sm:grid-cols-3">
 					{#each audiences as who (who.title)}
 						<div>
-							<h3 class="font-semibold text-white/90">{who.title}</h3>
-							<p class="mt-2 text-sm leading-relaxed text-white/60">{who.body}</p>
+							<h3 class="text-foreground font-semibold">{who.title}</h3>
+							<p class="text-muted-foreground mt-2 text-sm leading-relaxed">{who.body}</p>
 						</div>
 					{/each}
 				</div>
@@ -213,8 +214,8 @@
 				</h2>
 				<div class="mt-8 grid gap-10 sm:grid-cols-2">
 					<div>
-						<h3 class="font-semibold text-white/90">Host it for your team</h3>
-						<p class="mt-3 text-sm leading-relaxed text-white/60">
+						<h3 class="text-foreground font-semibold">Host it for your team</h3>
+						<p class="text-muted-foreground mt-3 text-sm leading-relaxed">
 							One deployment on your hardware. Upload definitions, invite people, set permissions.
 							Rhino.Compute solves behind the scenes, and the CLI scaffolds the whole thing.
 						</p>
@@ -226,8 +227,8 @@
 						</a>
 					</div>
 					<div>
-						<h3 class="font-semibold text-white/90">Or build your own</h3>
-						<p class="mt-3 text-sm leading-relaxed text-white/60">
+						<h3 class="text-foreground font-semibold">Or build your own</h3>
+						<p class="text-muted-foreground mt-3 text-sm leading-relaxed">
 							The same parts ship as npm packages: compute client, 3D viewer, controls. Take what
 							you need and put your own product around it.
 						</p>
@@ -245,10 +246,10 @@
 		<!-- ═══ Trust ═══ -->
 		<section class="py-8 pb-20">
 			<div class="{glass} flex flex-wrap items-center justify-between gap-x-8 gap-y-4 p-8 sm:px-10">
-				<ul class="flex flex-wrap gap-x-8 gap-y-2 text-sm font-semibold text-white/80">
+				<ul class="text-foreground flex flex-wrap gap-x-8 gap-y-2 text-sm font-semibold">
 					{#each trust as item (item)}
 						<li class="flex items-center gap-2">
-							<span class="bg-primary size-1.5 rounded-full"></span>{item}
+							<span class="bg-faint-foreground size-1.5 rounded-full"></span>{item}
 						</li>
 					{/each}
 				</ul>

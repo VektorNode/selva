@@ -137,7 +137,10 @@
 		{/each}
 
 		{#if copyrightLine}
-			<p class="truncate">{copyrightLine}</p>
+			<!-- On a phone, upright or on its side, the row is for status and messages. -->
+			<p class="max-sm:hidden truncate [@media(pointer:coarse)_and_(max-height:500px)]:hidden">
+				{copyrightLine}
+			</p>
 		{/if}
 	</div>
 </footer>

@@ -9,7 +9,7 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<div class="mx-auto flex max-w-7xl flex-col items-start px-6 py-24">
+<div class="mx-auto flex max-w-(--page-max-w) flex-col items-start px-6 py-24">
 	<p class="text-muted-foreground font-mono text-sm">404</p>
 	<h1 class="mt-3 text-4xl font-bold tracking-tight">Page not found</h1>
 	<p class="text-muted-foreground mt-4 max-w-xl text-lg text-pretty">

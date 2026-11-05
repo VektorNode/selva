@@ -111,7 +111,7 @@
 	{#each HOPS as hop, i (hop.at + hop.title)}
 		{#if hop.transform}
 			<!-- What the hop above did, sitting between the two bodies it connects. -->
-			<div class="text-muted-foreground flex items-center gap-2 pl-3 text-[11px] italic">
+			<div class="text-muted-foreground flex items-center gap-2 pl-3 text-xs italic">
 				<span aria-hidden="true">↓</span>
 				{hop.transform}
 			</div>
@@ -119,16 +119,15 @@
 
 		<div
 			class="rounded-md border p-3 {hop.from === null
-				? 'border-orange-500/30 bg-orange-500/5'
+				? 'border-chart-5/30 bg-chart-5/5'
 				: 'border-border bg-muted'}"
 		>
 			<div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
 				<p class="text-sm font-semibold">
-					<span class="text-muted-foreground mr-1.5 font-mono text-[11px] tabular-nums"
-						>{i + 1}</span
+					<span class="text-muted-foreground mr-1.5 font-mono text-xs tabular-nums">{i + 1}</span
 					>{hop.title}
 				</p>
-				<span class="text-muted-foreground font-mono text-[10px]">
+				<span class="text-muted-foreground text-2xs font-mono">
 					{#if hop.from}
 						{hop.from} → {hop.to}
 					{:else}
@@ -141,11 +140,11 @@
 			{#if hop.body}
 				<div class="border-border mt-3 space-y-0.5 border-t pt-2.5">
 					{#each hop.headers as header (header)}
-						<p class="text-muted-foreground font-mono text-[11px] leading-relaxed">{header}</p>
+						<p class="text-muted-foreground font-mono text-xs leading-relaxed">{header}</p>
 					{/each}
 				</div>
 				<pre
-					class="text-foreground mt-2 overflow-x-auto font-mono text-[11px] leading-relaxed">{hop.body}</pre>
+					class="text-foreground mt-2 overflow-x-auto font-mono text-xs leading-relaxed">{hop.body}</pre>
 			{/if}
 		</div>
 	{/each}
@@ -154,28 +153,28 @@
 	<div class="border-border bg-muted rounded-md border p-3">
 		<p class="text-sm font-semibold">Where those 23ms went</p>
 		<p class="text-muted-foreground mt-1.5 text-xs leading-relaxed">
-			The <code class="bg-muted rounded px-1 py-0.5 font-mono text-[11px]">Server-Timing</code> header
+			The <code class="bg-muted rounded-sm px-1 py-0.5 font-mono text-xs">Server-Timing</code> header
 			above, drawn to scale. The solve itself is 4ms of it — most of the time goes into turning the result
 			into JSON and compressing it, which is what you tune when a solve feels slow.
 		</p>
 		<div class="mt-3 space-y-1">
 			{#each TIMING as t (t.label)}
 				<div class="flex items-center gap-2">
-					<span class="text-muted-foreground w-36 shrink-0 text-[11px]">{t.label}</span>
+					<span class="text-muted-foreground w-36 shrink-0 text-xs">{t.label}</span>
 					<div class="bg-border h-2.5 flex-1 overflow-hidden rounded-sm">
 						<div
-							class="h-full rounded-sm bg-sky-500/70"
-							style="width: {Math.max(3, (t.dur / TIMING_TOTAL) * 100)}%"
+							class="bg-info/70 h-full w-(--bar) rounded-sm"
+							style="--bar: {Math.max(3, (t.dur / TIMING_TOTAL) * 100)}%"
 						></div>
 					</div>
 					<span
-						class="text-muted-foreground w-10 shrink-0 text-right font-mono text-[11px] tabular-nums"
+						class="text-muted-foreground w-10 shrink-0 text-right font-mono text-xs tabular-nums"
 					>
 						{t.dur}ms
 					</span>
 				</div>
 			{/each}
-			<p class="text-muted-foreground pt-0.5 text-[11px]">total: {TIMING_TOTAL}ms</p>
+			<p class="text-muted-foreground pt-0.5 text-xs">total: {TIMING_TOTAL}ms</p>
 		</div>
 	</div>
 </div>

@@ -6,7 +6,7 @@
 </script>
 
 <footer class="border-border mt-24 border-t">
-	<div class="mx-auto grid max-w-7xl gap-10 px-6 py-12 sm:grid-cols-2 md:grid-cols-4">
+	<div class="mx-auto grid max-w-(--page-max-w) gap-10 px-6 py-12 sm:grid-cols-2 md:grid-cols-4">
 		<div class="sm:col-span-2 md:col-span-1">
 			<a href="/" class="flex items-center gap-2 text-lg font-bold tracking-tight">
 				<img src={logo} alt="" class="h-7 w-7" />
@@ -50,7 +50,7 @@
 	</div>
 
 	<div class="border-border border-t">
-		<div class="text-muted-foreground mx-auto max-w-7xl px-6 py-6 text-sm">
+		<div class="text-muted-foreground mx-auto max-w-(--page-max-w) px-6 py-6 text-sm">
 			© {year}
 			<a
 				href={VEKTORNODE_URL}

@@ -6,7 +6,11 @@
 		"strict": true,
 		// vite.config.ts imports the untyped mdsvex/rehype plugin scripts at the package root;
 		// src/ has no JavaScript of its own to check.
-		"checkJs": false
+		"checkJs": false,
+		// The website uses @selvajs/ui's full barrel, not the curated public SDK.
+		"paths": {
+			"@selvajs/ui": ["../ui/dist/index.d.ts"]
+		}
 	},
 	"include": ["src", "vite.config.ts", "tests"]
 }

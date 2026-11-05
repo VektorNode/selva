@@ -46,7 +46,7 @@
 			solves <span class="text-foreground font-mono tabular-nums">{commits.length}</span>
 		</span>
 		{#if pending}
-			<span class="font-mono text-amber-600 dark:text-amber-400">waiting {WINDOW_MS} ms…</span>
+			<span class="text-warning font-mono">waiting {WINDOW_MS} ms…</span>
 		{/if}
 		<button class="text-muted-foreground hover:text-foreground ml-auto underline" onclick={reset}>
 			reset
@@ -56,7 +56,7 @@
 	<div class="flex min-h-7 flex-wrap items-center gap-1.5">
 		{#each commits as commit, i (i)}
 			<span
-				class="rounded bg-emerald-500/10 px-2 py-0.5 font-mono text-[11px] text-emerald-600 tabular-nums dark:text-emerald-400"
+				class="bg-success/10 text-success rounded-sm px-2 py-0.5 font-mono text-xs tabular-nums"
 			>
 				{commit}
 			</span>

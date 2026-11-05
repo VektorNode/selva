@@ -105,8 +105,8 @@
 	// Opening leads: the pill grows first and the buttons pop in behind it. Closing mirrors it: the
 	// buttons fade first, then the pill shrinks. Without the delay on close the row is clipped mid-fade.
 	const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
+	const bottom = $derived(touch.current ? 'max(1rem,env(safe-area-inset-bottom))' : '0.75rem');
 	const containerStyle = $derived.by(() => {
-		const bottom = touch.current ? 'max(1rem,env(safe-area-inset-bottom))' : '0.75rem';
 		const geometry = wantOpen
 			? `width:${rowWidth + PAD * 2 + 2}px;height:${EXPANDED_H}px;border-radius:12px;padding:${PAD}px`
 			: `width:${COLLAPSED.w}px;height:${COLLAPSED.h}px;border-radius:${touch.current ? 22 : 99}px;padding:0px`;
@@ -129,7 +129,8 @@
 		`opacity:${touch.current && !wantOpen ? 1 : 0};${reducedMotion.current ? '' : `transition:opacity ${wantOpen ? 100 : 100}ms ease ${wantOpen || dismissed ? 0 : 60}ms`}`
 	);
 
-	function scheduleCollapse(delay = touch.current ? 3500 : 150) {
+	// Touch has no hover to reopen it, so there the dock stays open until a press lands outside it.
+	function scheduleCollapse(delay = 150) {
 		clearTimeout(idleTimer);
 		idleTimer = setTimeout(() => (engaged = false), delay);
 	}
@@ -168,12 +169,45 @@
 	function openFromCollapsed() {
 		if (wantOpen) return;
 		engage();
-		if (touch.current) scheduleCollapse();
 	}
 
-	// Any use of the open dock on touch pushes the idle collapse back.
-	function keepAlive() {
-		if (touch.current && engaged) scheduleCollapse();
+	// ==========================================================================
+	// Long-press labels
+	// ==========================================================================
+
+	// The icons carry no text and touch has no tooltip, so holding a button names it instead of
+	// pressing it.
+	const LONG_PRESS_MS = 450;
+	const HINT_LINGER_MS = 1200;
+	let hint = $state<string | null>(null);
+	let pressTimer: ReturnType<typeof setTimeout> | undefined;
+	let hintTimer: ReturnType<typeof setTimeout> | undefined;
+	let swallowClick = false;
+
+	function startPress(event: PointerEvent) {
+		if (event.pointerType !== 'touch' || !wantOpen || !(event.target instanceof Element)) return;
+		const button = event.target.closest('button[aria-label]');
+		if (!button) return;
+		clearTimeout(pressTimer);
+		pressTimer = setTimeout(() => {
+			// Keyboard shortcuts in the label mean nothing on a phone.
+			hint = (button.getAttribute('aria-label') ?? '').replace(/\s*\([A-Z]\)$/, '');
+			swallowClick = true;
+		}, LONG_PRESS_MS);
+	}
+
+	function endPress() {
+		clearTimeout(pressTimer);
+		if (!hint) return;
+		clearTimeout(hintTimer);
+		hintTimer = setTimeout(() => (hint = null), HINT_LINGER_MS);
+	}
+
+	function swallowLongPressClick(event: MouseEvent) {
+		if (!swallowClick) return;
+		swallowClick = false;
+		event.preventDefault();
+		event.stopPropagation();
 	}
 
 	function trackMenu(open: boolean) {
@@ -210,7 +244,7 @@
 	role="toolbar"
 	aria-label={t.toolsMenu}
 	tabindex="-1"
-	class="backdrop-blur-md absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden transition-colors {hidden
+	class="backdrop-blur-md absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden transition-colors select-none {hidden
 		? 'pointer-events-none opacity-0'
 		: ''} {wantOpen
 		? 'shadow-md border border-border-strong bg-card/75'
@@ -219,14 +253,18 @@
 			: nightOn
 				? 'border-white/25 bg-white/35 hover:bg-white/70 cursor-pointer border'
 				: 'shadow-sm cursor-pointer border border-border-strong bg-card/90 hover:bg-card'}"
-	style={containerStyle}
+	style="{containerStyle};-webkit-touch-callout:none"
 	onclick={openFromCollapsed}
 	onkeydown={(e) => (e.key === 'Escape' ? (engaged = false) : undefined)}
 	onfocusin={() => (focusWithin = true)}
 	onfocusout={(e) => {
 		if (!dockEl?.contains(e.relatedTarget as Node | null)) focusWithin = false;
 	}}
-	onpointerdown={keepAlive}
+	onpointerdown={startPress}
+	onpointerup={endPress}
+	onpointercancel={endPress}
+	onclickcapture={swallowLongPressClick}
+	oncontextmenu={(e) => touch.current && e.preventDefault()}
 >
 	{#if touch.current}
 		<span
@@ -402,3 +440,13 @@
 		</div>
 	</div>
 </div>
+
+{#if hint}
+	<div
+		role="status"
+		class="text-xs font-medium px-2.5 py-1 shadow-md pointer-events-none absolute left-1/2 z-50 -translate-x-1/2 rounded-md border border-border-strong bg-card text-foreground"
+		style="bottom:calc({bottom} + {EXPANDED_H + 8}px)"
+	>
+		{hint}
+	</div>
+{/if}
