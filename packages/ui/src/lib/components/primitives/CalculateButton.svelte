@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
 	import { Button } from './button';
-	import { Zap, Check, Loader, Play } from '@lucide/svelte';
+	import { Zap, LoaderCircle, Play } from '@lucide/svelte';
 	import { getLocaleContext } from '../../i18n/localeContext.svelte';
 
 	const locale = getLocaleContext();
@@ -52,7 +52,7 @@
 			{!hasPendingChanges && !isSolving ? 'text-muted-foreground' : ''}"
 		>
 			{#if isSolving}
-				<Loader class="h-4 w-4 animate-spin" />
+				<LoaderCircle class="h-4 w-4 animate-spin" />
 				{t.solvingEllipsis}
 				<kbd
 					class="px-1 rounded-sm border border-current/30 font-sans text-2xs opacity-70"
@@ -67,7 +67,7 @@
 				<Zap class="h-4 w-4" />
 				{t.calculate}
 			{:else}
-				<Check class="h-4 w-4" />
+				<span class="size-1.5 shrink-0 rounded-full bg-success" aria-hidden="true"></span>
 				{t.upToDate}
 			{/if}
 		</Button>

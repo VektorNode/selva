@@ -598,7 +598,8 @@ internal sealed class LauncherView : Scrollable
             var g = e.Graphics;
             g.AntiAlias = true;
             var cx = 8 + Dot / 2;
-            var cy = Height / 2f;
+            // Whole-pixel center: a .5 centre makes the filled core and the stroked ring round differently.
+            var cy = (float)Math.Floor(Height / 2f);
             var dot = new RectangleF(cx - Dot / 2, cy - Dot / 2, Dot, Dot);
 
             if (_state == StepState.Done)
@@ -610,8 +611,12 @@ internal sealed class LauncherView : Scrollable
             }
             else if (_state == StepState.Active)
             {
-                dot.Inflate(-1, -1);
-                g.DrawEllipse(new Pen(Accent, 2f), dot);
+                // Ring and core are both fills: a stroked ring and a filled core land half a pixel apart.
+                var ring = new GraphicsPath { FillMode = FillMode.Alternate };
+                ring.AddEllipse(dot);
+                dot.Inflate(-2, -2);
+                ring.AddEllipse(dot);
+                g.FillPath(Accent, ring);
                 g.FillEllipse(Accent, new RectangleF(cx - 3.5f, cy - 3.5f, 7, 7));
             }
             else
