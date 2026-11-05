@@ -104,12 +104,14 @@ function runGuard() {
 
 	const touched = touchedPublishablePackages(changedFiles);
 
-	// Which packages do the PR's changesets cover?
+	// Which packages do the PR's changesets cover? A pre-release moves consumed changesets into
+	// .changeset/pre/, where they stay as the stable changelog: an edit there covers its packages,
+	// and a beta-to-main PR carries only those.
 	const covered = new Set();
 	let hasEmptyChangeset = false;
 	const noOpChangesets = []; // { file, packages } — every package ignored
 	for (const file of changedFiles) {
-		if (!/^\.changeset\/[^/]+\.md$/.test(file) || file.endsWith('README.md')) continue;
+		if (!/^\.changeset\/(pre\/)?[^/]+\.md$/.test(file) || file.endsWith('README.md')) continue;
 		let content;
 		try {
 			content = execFileSync('git', ['show', `${headRef}:${file}`], {

@@ -43,11 +43,11 @@ public class GrainUvMathTests
     }
 
     [Fact]
-    public void UnrolledAcross_equals_the_projection_on_a_flat_piece()
+    public void Unrolled_equals_the_projection_on_a_flat_piece()
     {
         var (positions, across, neighbours) = Strip(10, i => (new V3(i * 10.0 - 50, 3, 0), new V3(1, 0, 0)), 100);
 
-        var v = UnrolledAcross(positions, across, neighbours);
+        var v = Unrolled(positions, across, neighbours);
 
         for (var i = 0; i < positions.Length; i++)
         {
@@ -56,7 +56,7 @@ public class GrainUvMathTests
     }
 
     [Fact]
-    public void UnrolledAcross_measures_the_arc_of_a_rolled_face()
+    public void Unrolled_measures_the_arc_of_a_rolled_face()
     {
         // A half tube of radius 100 around the Z grain: the arc is 314 mm, the projection only 200.
         const int segments = 64;
@@ -67,7 +67,7 @@ public class GrainUvMathTests
             return (p, new V3(-Math.Sin(angle), Math.Cos(angle), 0));
         }, 50);
 
-        var v = UnrolledAcross(positions, across, neighbours);
+        var v = Unrolled(positions, across, neighbours);
 
         var span = Math.Abs(v[2 * segments] - v[0]);
         Assert.InRange(span, Math.PI * 100 * 0.99, Math.PI * 100 * 1.01);

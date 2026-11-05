@@ -117,8 +117,8 @@ public static class MaterialPresets
         },
         new()
         {
-            Name = "Walnut", Color = Color.FromArgb(0x6B, 0x47, 0x2E), Metalness = 0,
-            Roughness = 0.5, Mapping = UvMapping.Part, Finish = "wood", Clearcoat = 0.35, ClearcoatRoughness = 0.3
+            Name = "Walnut", Color = Color.FromArgb(0x55, 0x38, 0x26), Metalness = 0,
+            Roughness = 0.5, Mapping = UvMapping.Part, Finish = "walnut", Clearcoat = 0.35, ClearcoatRoughness = 0.3
         },
         new()
         {
@@ -189,6 +189,51 @@ public static class MaterialPresets
         {
             Name = "Wenge, oiled", Color = Color.FromArgb(0x3A, 0x2A, 0x20), Metalness = 0,
             Roughness = 0.65, Mapping = UvMapping.Part, Finish = "wenge"
+        },
+        new()
+        {
+            Name = "Limestone, honed", Color = Color.FromArgb(0xC9, 0xB6, 0x97), Metalness = 0,
+            Roughness = 0.65, Mapping = UvMapping.World, Finish = "limestone"
+        },
+        new()
+        {
+            Name = "Travertine, honed", Color = Color.FromArgb(0xD9, 0xCD, 0xB6), Metalness = 0,
+            Roughness = 0.6, Mapping = UvMapping.World, Finish = "travertine"
+        },
+        new()
+        {
+            Name = "Granite, flamed", Color = Color.FromArgb(0x9A, 0x99, 0x98), Metalness = 0,
+            Roughness = 0.85, Mapping = UvMapping.World, Finish = "granite"
+        },
+        new()
+        {
+            Name = "Marble, polished", Color = Color.FromArgb(0xE6, 0xE7, 0xE8), Metalness = 0,
+            Roughness = 0.12, Mapping = UvMapping.World, Finish = "marble"
+        },
+        new()
+        {
+            Name = "Slate, cleft", Color = Color.FromArgb(0x3F, 0x45, 0x4C), Metalness = 0,
+            Roughness = 0.65, Mapping = UvMapping.World, Finish = "slate"
+        },
+        new()
+        {
+            Name = "Terrazzo", Color = Color.FromArgb(0xD9, 0xD5, 0xCC), Metalness = 0,
+            Roughness = 0.3, Mapping = UvMapping.World, Finish = "terrazzo"
+        },
+        new()
+        {
+            Name = "Concrete paving", Color = Color.FromArgb(0x9A, 0x98, 0x93), Metalness = 0,
+            Roughness = 0.9, Mapping = UvMapping.World, Finish = "paving"
+        },
+        new()
+        {
+            Name = "Granite setts", Color = Color.FromArgb(0x8E, 0x8C, 0x88), Metalness = 0,
+            Roughness = 0.75, Mapping = UvMapping.World, Finish = "setts"
+        },
+        new()
+        {
+            Name = "Gravel", Color = Color.FromArgb(0xBF, 0xAE, 0x98), Metalness = 0,
+            Roughness = 0.9, Mapping = UvMapping.World, Finish = "gravel"
         }
     };
 

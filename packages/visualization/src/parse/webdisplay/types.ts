@@ -48,11 +48,21 @@ export interface SerializableMaterial {
 		| 'oak'
 		| 'maple'
 		| 'wenge'
+		| 'walnut'
 		| 'concrete'
 		| 'plaster'
 		| 'brick'
 		| 'corten'
-		| 'molded';
+		| 'molded'
+		| 'limestone'
+		| 'travertine'
+		| 'granite'
+		| 'marble'
+		| 'slate'
+		| 'terrazzo'
+		| 'paving'
+		| 'setts'
+		| 'gravel';
 	/** Scales the finish's streaks; 0 draws none. Omitted: 1. */
 	finishStrength?: number;
 	/** Light passing through (glass); unlike `opacity` it keeps reflections. */

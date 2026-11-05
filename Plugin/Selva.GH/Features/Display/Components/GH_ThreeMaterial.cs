@@ -29,7 +29,17 @@ public class GH_ThreeMaterial : SelvaZuiComponent
         ("Molded", "molded"),
         ("Oak", "oak"),
         ("Maple", "maple"),
-        ("Wenge", "wenge")
+        ("Wenge", "wenge"),
+        ("Walnut", "walnut"),
+        ("Limestone", "limestone"),
+        ("Travertine", "travertine"),
+        ("Granite", "granite"),
+        ("Marble", "marble"),
+        ("Slate", "slate"),
+        ("Terrazzo", "terrazzo"),
+        ("Paving", "paving"),
+        ("Setts", "setts"),
+        ("Gravel", "gravel")
     };
 
     public GH_ThreeMaterial()
@@ -103,7 +113,9 @@ public class GH_ThreeMaterial : SelvaZuiComponent
             GH_ParamAccess.item);
         pManager.AddIntegerParameter("Finish", "F",
             "A built-in surface, no texture needed (right-click for the list): Brushed, Rolled, Wood, "
-            + "Concrete, Plaster, Brick, Corten, Molded (injection-moulded plastic grain), Oak, Maple or Wenge. Drawn at real size.",
+            + "Concrete, Plaster, Brick, Corten, Molded (injection-moulded plastic grain), Oak, Maple, Wenge, Walnut, "
+            + "Limestone, Travertine, Granite, Marble, Slate, Terrazzo, Paving (concrete slabs), Setts or Gravel. "
+            + "Drawn at real size.",
             GH_ParamAccess.item);
         pManager.AddNumberParameter("Transmission", "TR",
             "Light passing through (0.0 - 1.0), for glass. Unlike Opacity it keeps the reflections.",

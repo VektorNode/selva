@@ -19,13 +19,14 @@ public static class GrainUvMath
     }
 
     /// <summary>
-    ///     V across the grain, unrolled over the surface rather than projected. Projecting onto each
-    ///     vertex's own across direction gives a tube or a bent panel a V that barely changes and jumps
-    ///     between facets. Walking the mesh's edges and adding each step's length across the grain
-    ///     measures the real distance. Exact on a flat piece, where it equals the projection.
+    ///     A texture coordinate along each vertex's own direction, unrolled over the surface rather than
+    ///     projected. Projecting onto a direction that turns with the surface gives a tube or a bent
+    ///     panel a coordinate that barely changes and jumps between facets. Walking the mesh's edges and
+    ///     adding each step's length along the direction measures the real distance. Exact on a flat
+    ///     piece, where it equals the projection.
     /// </summary>
     /// <param name="neighbours">Vertex adjacency from the mesh's edges.</param>
-    public static double[] UnrolledAcross(IReadOnlyList<V3> positions, IReadOnlyList<V3> across,
+    public static double[] Unrolled(IReadOnlyList<V3> positions, IReadOnlyList<V3> across,
         IReadOnlyList<int>[] neighbours)
     {
         var count = positions.Count;

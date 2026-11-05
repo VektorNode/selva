@@ -102,6 +102,14 @@ jobs:
             echo "Run 'pnpm changeset pre exit' and commit before releasing from main."
             exit 1
           fi
+          # After `pnpm changeset pre exit` the betas' changesets stay in .changeset/pre/ as the
+          # stable changelog, and the root holds none. Counting only the root, a promotion
+          # found nothing pending, saw every beta already on npm, and skipped the release.
+          if [ -f .changeset/pre.json ] && grep -q '"mode": *"exit"' .changeset/pre.json; then
+            echo "Pre mode exiting — versioning the betas to stable."
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           count=$(find .changeset -maxdepth 1 -type f -name '*.md' \
             ! -name 'README.md' ! -name 'config.md' | wc -l)
           if [ "$count" -gt 0 ]; then

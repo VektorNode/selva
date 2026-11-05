@@ -11,15 +11,15 @@ const WOODS = [
 	[
 		'walnut-preset',
 		{
-			color: '#6b472e',
+			color: '#553826',
 			metalness: 0,
 			roughness: 0.5,
-			finish: 'wood',
+			finish: 'walnut',
 			clearcoat: 0.35,
 			clearcoatRoughness: 0.3
 		}
 	],
-	['walnut-oiled', { color: '#6b472e', metalness: 0, roughness: 0.7, finish: 'wood' }],
+	['walnut-oiled', { color: '#553826', metalness: 0, roughness: 0.7, finish: 'walnut' }],
 	['oak-oiled', { color: '#b8915e', metalness: 0, roughness: 0.7, finish: 'oak' }],
 	[
 		'maple-lacquered',
@@ -68,7 +68,7 @@ function partUvs(geometry, grain) {
 		u[i] = point.dot(along);
 	}
 
-	// GrainUvMath.UnrolledAcross.
+	// GrainUvMath.Unrolled.
 	const neighbours = Array.from({ length: count }, () => []);
 	const index = geometry.index.array;
 	for (let t = 0; t < index.length; t += 3) {

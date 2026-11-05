@@ -12,14 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The UI Bridge answers `readLayout` and `applyLayout`: scripts and agents read and lay out the form by parameter nickname over the bridge's WebSocket, without the canvas. Player sessions can only read.
 - A finished local solve reports its five slowest components in `solveEnded`, by nickname and milliseconds.
 - Plastic presets in Material Preset: glossy, satin, matte, textured, soft-touch, clear and frosted. Wire one into a Three Material's Base and set its Color. Textured carries a moulded grain, the new Molded finish, which Finish Strength deepens; soft-touch has a soft glow at grazing angles.
-- Wood presets in Material Preset: Oak, oiled; Maple, lacquered; Wenge, oiled. Matching Oak, Maple and Wenge finishes on Three Material. Every wood finish now draws growth rings with the arched figure of a flat-sawn board, in rings a few mm apart, with open pores on oak and wenge.
+- Wood presets in Material Preset: Oak, oiled; Maple, lacquered; Wenge, oiled. Matching Oak, Maple, Wenge and Walnut finishes on Three Material. Every wood finish now draws growth rings with the arched figure of a flat-sawn board, matched to photos of each species: open pores on walnut and oak, hairline rings on maple, high-contrast bands on wenge. The Walnut preset is darker and less red, and uses the Walnut finish.
+- Stone and paving presets in Material Preset: Limestone, honed; Travertine, honed; Granite, flamed; Marble, polished; Slate, cleft; Terrazzo; Concrete paving; Granite setts; Gravel. Matching finishes on Three Material, drawn at real size with World mapping: slab and sett joints, travertine voids, marble veins, cleft relief and pebbles.
 - Three Material has Thickness and Tint inputs for glass. With a Thickness the glass refracts what is behind it and takes on the Tint through its depth.
 
 ### Changed
 
 - Glass without a Thickness (the Glass preset included) renders as a thin pane: panes behind panes now show, reflections stay at full strength, and the viewer no longer draws the scene twice a frame for it. Glass no longer casts a black shadow, darkens what is behind it with ambient occlusion, or gets outlined like a solid.
 - Rough glass and clear plastic (roughness 0.2 and up) render frosted, blurring what is behind them. Frosting redraws the scene a second time each frame, as glass with a Thickness does.
-- Part mapping measures V around curved faces instead of projecting it, so wood grain and brushed or rolled metal no longer jump at every facet of a tube, a turned leg or a bent panel. On a face cut across the grain, U now follows the part's widest direction instead of an arbitrary one.
+- Part mapping measures V around curved faces instead of projecting it, so wood grain and brushed or rolled metal no longer jump at every facet of a tube, a turned leg or a bent panel. On a face cut across the grain, U now follows the part's widest direction instead of an arbitrary one. A bent board's grain follows the board around the bend, where it used to turn 90° at the seam between the bend and a long flat; a folded profile strip keeps its grain along the strip.
 - Metal sheet keeps its colour at every angle. A standing panel no longer turns brass olive or copper brown, and a sheet lying face-up no longer clips to white in the sun.
 
 ### Fixed

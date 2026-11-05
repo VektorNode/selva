@@ -18,13 +18,19 @@ const fixturesDir = new URL('../../../../../schemas/fixtures/wire/', import.meta
 // plugin; there is no C# factory to generate a fixture from.
 const typesWithoutBroadcaster = ['outputUpdate'];
 
+// Replies to a script's own request (readLayout / applyLayout), never sent to the page: no Zod
+// guard here. The C# golden test still pins their shape.
+const scriptOnlyFixtures = ['layout-result.json'];
+
 const kebab = (type: string) => type.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
 
 function loadFixture(name: string): Record<string, unknown> {
 	return JSON.parse(readFileSync(new URL(name, fixturesDir), 'utf-8'));
 }
 
-const fixtureFiles = readdirSync(fixturesDir).filter((f) => f.endsWith('.json'));
+const fixtureFiles = readdirSync(fixturesDir).filter(
+	(f) => f.endsWith('.json') && !scriptOnlyFixtures.includes(f)
+);
 
 describe('wire fixtures (cross-stack with C# WireFixtureContractTests)', () => {
 	it('every validated message type has a fixture', () => {

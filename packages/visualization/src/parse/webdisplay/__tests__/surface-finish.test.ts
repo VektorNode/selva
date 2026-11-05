@@ -23,11 +23,21 @@ describe('surface finishes', () => {
 		'oak',
 		'maple',
 		'wenge',
+		'walnut',
 		'concrete',
 		'plaster',
 		'brick',
 		'corten',
-		'molded'
+		'molded',
+		'limestone',
+		'travertine',
+		'granite',
+		'marble',
+		'slate',
+		'terrazzo',
+		'paving',
+		'setts',
+		'gravel'
 	] as const)('%s drives colour, roughness and relief', (finish) => {
 		const source = patched(finish);
 		expect(source).toContain('diffuseColor.rgb *=');

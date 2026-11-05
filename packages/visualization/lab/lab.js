@@ -4,6 +4,7 @@ import { LOOK_PRESETS } from '../src/shared/index.ts';
 import { buildGlassScene } from './glass-scene.js';
 import { buildMetalScene } from './metal-scene.js';
 import { buildPlasticScene } from './plastic-scene.js';
+import { buildStoneScene } from './stone-scene.js';
 import { buildWoodScene } from './wood-scene.js';
 import { readModelUnits } from './slvm-units.mjs';
 
@@ -48,8 +49,9 @@ async function load(names) {
 	if (names.includes('metals')) glass.push(...buildMetalScene());
 	if (names.includes('plastics')) glass.push(...buildPlasticScene());
 	if (names.includes('wood')) glass.push(...buildWoodScene());
+	if (names.includes('stone')) glass.push(...buildStoneScene());
 	names = names.filter(
-		(name) => !name.startsWith('glass') && !['metals', 'plastics', 'wood'].includes(name)
+		(name) => !name.startsWith('glass') && !['metals', 'plastics', 'wood', 'stone'].includes(name)
 	);
 	if (names.length === 0) return glass;
 	const urls = Object.entries(scenes)
