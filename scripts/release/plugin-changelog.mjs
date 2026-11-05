@@ -3,7 +3,7 @@
 /**
  * Plugin/CHANGELOG.md release sections.
  *
- *   node scripts/plugin-changelog.mjs notes <x.y.z>   print that version's section; exit 1 if missing
+ *   node scripts/release/plugin-changelog.mjs notes <x.y.z>   print that version's section; exit 1 if missing
  *
  * release-plugin.js imports `cutRelease` to turn `## [Unreleased]` into the new version's
  * section; plugin-release.yml runs `notes` so a tag without a section fails before publishing.
@@ -58,7 +58,7 @@ export function cutRelease(
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 	const [command, version] = process.argv.slice(2);
 	if (command !== 'notes' || !version) {
-		console.error('Usage: node scripts/plugin-changelog.mjs notes <x.y.z>');
+		console.error('Usage: node scripts/release/plugin-changelog.mjs notes <x.y.z>');
 		process.exit(2);
 	}
 	const body = sectionBody(readFileSync(changelogPath, 'utf8'), version);

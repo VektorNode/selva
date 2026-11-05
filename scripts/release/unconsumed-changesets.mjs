@@ -8,7 +8,7 @@
 // NOT yet folded into a prerelease, one per line. Exit status is always 0 —
 // callers count the lines.
 //
-//   node scripts/unconsumed-changesets.mjs
+//   node scripts/release/unconsumed-changesets.mjs
 //
 // In pre mode `changeset version` does not delete a consumed .md; it moves it
 // to `.changeset/pre/`. So "unconsumed" = still sitting in `.changeset/` root.

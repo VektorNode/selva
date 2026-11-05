@@ -7,7 +7,7 @@
 // Prints one package name per line — the exact set `check-changesets.mjs`
 // demands a changeset for.
 //
-//   node scripts/changed-publishable-packages.mjs --base <ref> [--head <ref>]
+//   node scripts/release/changed-publishable-packages.mjs --base <ref> [--head <ref>]
 //
 // Used by the Dependabot auto-merge workflow to author a changeset on the bot's
 // behalf. Detection is imported from the guard rather than reimplemented: if

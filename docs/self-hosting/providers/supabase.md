@@ -199,7 +199,7 @@ A project that never moved to signing keys can set `SUPABASE_JWT_SECRET` to its 
 
 ## Local development stack
 
-For contributors: `npx supabase start` in `packages/providers/supabase` (Docker required). `pnpm dev:supabase` and the ports are in [DEV-PROVIDERS.md](https://github.com/VektorNode/selva/blob/main/scripts/DEV-PROVIDERS.md). The API is on `http://127.0.0.1:54421`, not Supabase's default 54321.
+For contributors: `npx supabase start` in `packages/providers/supabase` (Docker required). `pnpm dev:supabase` and the ports are in [DEV-PROVIDERS.md](https://github.com/VektorNode/selva/blob/main/scripts/develop/DEV-PROVIDERS.md). The API is on `http://127.0.0.1:54421`, not Supabase's default 54321.
 
 Auth emails go to Mailpit (port 54424) instead of a real inbox. `config.toml` ships no template overrides, so the template traps from step 6 still apply: a link clicked out of Mailpit fails exactly as it would in production. To exercise the real flow, add the template under `[auth.email.template.magic_link]` and the callback URL under `additional_redirect_urls` in `config.toml`, then `npx supabase stop && npx supabase start` to reload it.
 

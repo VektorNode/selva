@@ -193,7 +193,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
 	} else if (mode === '--check') {
 		check(packages);
 	} else {
-		console.error('Usage: node scripts/publishable-packages.mjs --list | --check');
+		console.error('Usage: node scripts/release/publishable-packages.mjs --list | --check');
 		process.exit(2);
 	}
 }

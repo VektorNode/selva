@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Tests for scripts/changeset-publish.mjs — run: node scripts/changeset-publish.test.mjs
+// Tests for scripts/release/changeset-publish.mjs — run: node scripts/release/changeset-publish.test.mjs
 //
 // Hits the real registry (the point is agreeing with npm), so needs network.
 

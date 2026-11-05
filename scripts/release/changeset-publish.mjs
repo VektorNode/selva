@@ -49,7 +49,7 @@ function publishablePackages() {
 	const lister = process.env.SELVA_FAKE_PACKAGE_LIST;
 	const listArgs = lister
 		? [lister]
-		: [join(repoRoot, 'scripts/publishable-packages.mjs'), '--list'];
+		: [join(repoRoot, 'scripts/release/publishable-packages.mjs'), '--list'];
 	const listed = spawnSync('node', listArgs, {
 		cwd: repoRoot,
 		encoding: 'utf8',

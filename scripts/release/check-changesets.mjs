@@ -9,7 +9,7 @@
 // check fails a PR that modifies a publishable package's shipped surface
 // without naming that package in a changeset.
 //
-//   node scripts/check-changesets.mjs --base <ref>
+//   node scripts/release/check-changesets.mjs --base <ref>
 //
 // <ref> is the base to diff against (CI passes the PR base; the checkout is
 // the PR merge ref, so a plain two-ref diff is exactly the PR's delta and

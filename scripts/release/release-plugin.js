@@ -12,7 +12,7 @@
  * .yak packages, pushes to the Yak registry, and cuts a GitHub Release.
  *
  * Usage:
- *   node scripts/release-plugin.js [major|minor|patch|<x.y.z>] [options]
+ *   node scripts/release/release-plugin.js [major|minor|patch|<x.y.z>] [options]
  *
  *   (no bump arg)   prompt interactively for major / minor / patch
  *   major|minor|patch   bump that part of the current version
