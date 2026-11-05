@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The Rhino panel's launcher page follows the web UI's design tokens: surface, raised and well fills, the shared borders and radii, and a neutral accent. The green accent and the text-colour tints are gone, and the icon tile is neutral.
+
 ## [0.25.0] - 2026-11-05
 
 ### Added
